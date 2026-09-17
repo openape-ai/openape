@@ -192,6 +192,13 @@ async function start(): Promise<void> {
   ipcMain.handle(channels.scripts, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     const command = parseScriptCommand(value)
+    if (command.type === 'prepareDependencies') {
+      const view = await worker.scripts({ type: 'list', podId: command.podId, selection: { kind: 'draft', id: command.draftId } })
+      if (!window || view.pod.revision !== command.revision || view.source?.revision !== command.draftRevision) throw new Error('Draft or pod changed during dependency preparation')
+      const packages = Object.entries(view.source.packages?.dependencies ?? {}).map(([name, version]) => `${name}@${version}`).join('\n')
+      const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Prepare dependencies'), message: t('Download these script dependencies?'), detail: t('Packages: {packages}\n\nThe pod will be paused. Preparation uses only the public npm registry, without secrets or installation scripts. Imported libraries receive the same access as your script. No automatic updates.', { packages }), buttons: [t('Cancel'), t('Prepare dependencies')], defaultId: 0, cancelId: 0 })
+      if (answer.response !== 1) return view
+    }
     if (command.type === 'approveCredentials') {
       const view = await worker.scripts({ type: 'list', podId: command.podId, selection: { kind: 'version', id: command.hash } })
       if (!window || view.pod.revision !== command.revision || view.resourceEpoch !== command.epoch || !view.source?.validated) throw new Error('Pod or resources changed during credential review')

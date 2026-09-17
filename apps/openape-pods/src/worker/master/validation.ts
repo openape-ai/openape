@@ -1,3 +1,4 @@
+import { DependencyStore } from '../dependencies/store'
 import { resolveProgram } from '../../main/programs/session'
 import { programRequest } from '../../main/programs/invoke'
 import { parseHttpRequest, isHttpEffect } from '../../contracts/http'
@@ -28,7 +29,12 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
   if (capabilities.some(capability => capability.startsWith('tool.') && !assignedTools.includes(capability))) throw new Error('No tool assignments are available for this script')
   if (capabilities.includes('mail.read')) assignedMail(resources.list(pod.id))
   const manifest = JSON.parse(await readFile(runtime.manifest, 'utf8')) as { dependencyLockHash: string }
-  const code = `${draft.code as string}\n/* Pods binding: assignment ${pod.bindingRevision}; dependencies ${manifest.dependencyLockHash}; capabilities ${capabilities.join(',')} */\n`
+  const dependencies = new DependencyStore(store); const packages = dependencies.manifest(draftId)
+  const dependencyHash = dependencies.prepared(pod.id, packages)
+  if (Object.keys(packages.dependencies).length && !dependencyHash) throw new Error('Prepare dependencies in Script before validation')
+  const dependencyRoot = dependencyHash ? await dependencies.verify(pod.id, dependencyHash) : undefined
+  const dependencyLockHash = dependencyHash ? digest(`${manifest.dependencyLockHash}:${dependencyHash}`) : manifest.dependencyLockHash
+  const code = `${draft.code as string}\n/* Pods binding: assignment ${pod.bindingRevision}; dependencies ${dependencyLockHash}; capabilities ${capabilities.join(',')} */\n`
   const hash = digest(code)
   const root = join(store.root, 'validation', randomUUID())
   await mkdir(root, { recursive: true, mode: 0o700 }); const artifact = join(root, 'run.mjs'); await writeFile(artifact, code, { mode: 0o400, flag: 'wx' })
@@ -37,7 +43,7 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
   try {
     const home = join(root, 'home'); await mkdir(home, { mode: 0o700 })
     const input = { home, directories: [], variables: new PodVariables(store).values(pod.id), version: 1 as const, runId: randomUUID(), podId: pod.id, scriptHash: hash, assignmentRevision: pod.bindingRevision, reason: 'manual' as const, eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: epoch, workspace: join(root, 'workspace'), references: [], limits: { timeMs: 5000, frameBytes: 256 * 1024 } }
-    const result = await executeScript(runtime, root, artifact, input, signal, { event: () => {}, request: async (operation, payload) => {
+    const result = await executeScript({ ...runtime, dependencyRoot }, root, artifact, input, signal, { event: () => {}, request: async (operation, payload) => {
       if (operation === 'credentials.get') {
         const alias = parseCredentialRead(payload)
         if (!capabilities.includes(`credential.${alias}`)) throw new Error('Credential capability is not declared by this script')
@@ -70,10 +76,11 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
     if (!['completed', 'completedWithGaps'].includes(result.status)) throw new Error('Draft did not complete its synthetic contract check')
     if (result.gapIds.some(id => !fixture.db.prepare('SELECT 1 FROM claims WHERE pod_id=? AND id=? AND kind=\'gap\'').get(fixturePod.id, id))) throw new Error('Draft returned an uncommitted validation gap')
     signal.throwIfAborted()
-    const evidence = JSON.stringify({ kind: 'native-synthetic-contract', draftRevision: revision, assignmentRevision: pod.bindingRevision, resourceEpoch: epoch, dependencyLockHash: manifest.dependencyLockHash, services: 'synthetic credentials, empty synthetic mail and recorded agent output', limits: input.limits, result: result.status })
+    const evidence = JSON.stringify({ kind: 'native-synthetic-contract', draftRevision: revision, assignmentRevision: pod.bindingRevision, resourceEpoch: epoch, dependencyLockHash, services: 'synthetic credentials, empty synthetic mail and recorded agent output', limits: input.limits, result: result.status })
     store.transaction(() => {
       if (store.getPod(pod.id).lifecycle === 'archived' || store.getPod(pod.id).bindingRevision !== pod.bindingRevision || resources.epoch(pod.id) !== epoch || store.db.prepare('SELECT revision FROM script_drafts WHERE id=?').get(draftId)?.revision !== revision) throw new Error('Draft, script binding or permissions changed during validation')
-      store.storeScript(pod.id, { schemaVersion: 1, contentHash: hash, entrypoint: 'run.mjs', dependencyLockHash: manifest.dependencyLockHash, runtimeVersion: 'electron-40.9.3/codex-0.153.4/contract-1', capabilities, triggers: ['manual', 'schedule', 'event'], inputSchemaHash: digest(JSON.stringify(inputSchema)), outputSchemaHash: digest(JSON.stringify(resultSchema)), checkpointSchemaVersion: 1, assignmentRevision: pod.bindingRevision, effects: resources.list(pod.id).some(resource => resource.state === 'ready' && resource.configuration.type === 'http' && capabilities.includes(String(resource.configuration.capability)) && (resource.configuration.methods as string[]).some(isHttpEffect)) ? 'reconciledEffects' : 'readOnly' }, code)
+      store.storeScript(pod.id, { schemaVersion: 1, contentHash: hash, entrypoint: 'run.mjs', dependencyLockHash, runtimeVersion: 'electron-40.9.3/codex-0.153.4/contract-1', capabilities, triggers: ['manual', 'schedule', 'event'], inputSchemaHash: digest(JSON.stringify(inputSchema)), outputSchemaHash: digest(JSON.stringify(resultSchema)), checkpointSchemaVersion: 1, assignmentRevision: pod.bindingRevision, effects: resources.list(pod.id).some(resource => resource.state === 'ready' && resource.configuration.type === 'http' && capabilities.includes(String(resource.configuration.capability)) && (resource.configuration.methods as string[]).some(isHttpEffect)) ? 'reconciledEffects' : 'readOnly' }, code)
+      if (dependencyHash) store.db.prepare('INSERT OR IGNORE INTO script_dependencies VALUES(?,?,?)').run(pod.id, hash, dependencyHash)
       store.db.prepare('INSERT OR REPLACE INTO validations VALUES(?,?,?,?,?)').run(pod.id, hash, pod.bindingRevision, epoch, evidence)
       store.db.prepare('UPDATE script_drafts SET script_hash=?,validation=? WHERE id=? AND revision=?').run(hash, evidence, draftId, revision)
     })

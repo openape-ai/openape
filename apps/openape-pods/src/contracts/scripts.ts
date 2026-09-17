@@ -1,15 +1,18 @@
+import { parsePackages } from './dependencies'
+import type { PackageManifest } from './dependencies'
 import { parseCredentialAlias } from './credentials'
 import { parseMasterAction } from './master'
 import type { StoredPod } from './control'
 import type { ScriptVersion } from './details'
 
 export interface ScriptSelection { kind: 'version' | 'draft', id: string }
-export interface ScriptSource extends ScriptSelection { code: string, capabilities: string[], revision: number, assignmentRevision: number, hash: string | null, validated: boolean, evidence: string | null, credentialAccessApproved: boolean }
+export interface ScriptSource extends ScriptSelection { packages?: PackageManifest, dependenciesPrepared?: boolean, code: string, capabilities: string[], revision: number, assignmentRevision: number, hash: string | null, validated: boolean, evidence: string | null, credentialAccessApproved: boolean }
 export interface ScriptDraftSummary { id: string, revision: number, assignmentRevision: number, validated: boolean }
 export interface ScriptView { resourceEpoch: number, credentialAliases: string[], pod: StoredPod, versions: ScriptVersion[], drafts: ScriptDraftSummary[], source: ScriptSource | null }
 export type ScriptCommand =
   | { type: 'list', podId: string, selection?: ScriptSelection }
-  | { type: 'save', podId: string, revision: number, draftId: string | null, draftRevision: number, code: string, capabilities: string[] }
+  | { type: 'prepareDependencies', podId: string, revision: number, draftId: string, draftRevision: number }
+  | { type: 'save', podId: string, revision: number, draftId: string | null, draftRevision: number, code: string, capabilities: string[], packages?: PackageManifest }
   | { type: 'validate', podId: string, revision: number, draftId: string, draftRevision: number }
   | { type: 'approveCredentials', podId: string, revision: number, hash: string, epoch: number }
   | { type: 'activate', podId: string, revision: number, hash: string, expectedActive: string | null }
@@ -30,7 +33,7 @@ export function parseScriptCommand(value: unknown): ScriptCommand {
   }
   else {
     const { type, ...fields } = item
-    if (!['save', 'validate', 'activate'].includes(type as string)) throw new Error('Unsupported script request')
+    if (!['save', 'validate', 'activate', 'prepareDependencies'].includes(type as string)) throw new Error('Unsupported script request')
     parseMasterAction({ ...fields, action: type === 'save' ? 'draft' : type === 'activate' ? 'rollback' : 'validate' })
   }
   return structuredClone(item) as ScriptCommand
@@ -50,6 +53,8 @@ export function parseScriptView(value: unknown): ScriptView {
   if (view.source !== null) {
     const source = view.source
     if (!source || typeof source.credentialAccessApproved !== 'boolean' || !['version', 'draft'].includes(source.kind) || !(source.kind === 'version' ? hash(source.id) : uuid(source.id)) || typeof source.code !== 'string' || !Array.isArray(source.capabilities) || source.capabilities.some(item => typeof item !== 'string') || !Number.isSafeInteger(source.revision) || !Number.isSafeInteger(source.assignmentRevision) || typeof source.validated !== 'boolean' || (source.hash !== null && !hash(source.hash)) || (source.evidence !== null && typeof source.evidence !== 'string')) throw new Error('Invalid script source')
+    if (source.packages !== undefined) parsePackages(source.packages)
+    if (source.dependenciesPrepared !== undefined && typeof source.dependenciesPrepared !== 'boolean') throw new Error('Invalid script source')
   }
   return view
 }

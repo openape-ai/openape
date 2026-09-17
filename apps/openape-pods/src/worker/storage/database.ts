@@ -35,7 +35,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 17
+export const schemaVersion = 18
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -244,6 +244,15 @@ INSERT INTO resources_v17 SELECT * FROM resources ORDER BY rowid;
 DROP TABLE resources;
 ALTER TABLE resources_v17 RENAME TO resources;
 PRAGMA user_version=17;`)
+      }
+
+      if (version < 18) {
+        this.db.exec(`
+CREATE TABLE draft_packages(draft_id TEXT PRIMARY KEY REFERENCES script_drafts(id) ON DELETE CASCADE, manifest TEXT NOT NULL);
+CREATE TABLE dependency_sets(pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE,hash TEXT NOT NULL,manifest TEXT NOT NULL,lockfile TEXT NOT NULL,files TEXT NOT NULL,PRIMARY KEY(pod_id,hash),UNIQUE(pod_id,manifest));
+CREATE TABLE script_dependencies(pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE,script_hash TEXT NOT NULL,dependency_hash TEXT NOT NULL,PRIMARY KEY(pod_id,script_hash),FOREIGN KEY(pod_id,dependency_hash) REFERENCES dependency_sets(pod_id,hash));
+CREATE TABLE dependency_domains(path TEXT PRIMARY KEY,owner_pid INTEGER NOT NULL);
+PRAGMA user_version=18;`)
       }
 
     })
