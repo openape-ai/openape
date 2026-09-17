@@ -1,3 +1,6 @@
+import { DependencyStore, removePackageTree } from '../dependencies/store'
+import { checkLock, packageDigest, packageFiles } from '../dependencies/tree'
+import { parsePackages } from '../../contracts/dependencies'
 import { chmod, lstat, mkdir, open, readFile, realpath, rename, rm } from 'node:fs/promises'
 import { join, sep } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -10,6 +13,7 @@ import type { FileRecord } from './files'
 interface BackupManifest { format: 'openape-pods-backup', version: 1, schema: number, createdAt: string, sourceRoot: string, files: FileRecord[] }
 const uuid = (value: string) => /^[a-f0-9-]{36}$/.test(value)
 export function assertDataIdle(store: PodDatabase): void {
+  if (store.db.prepare('SELECT 1 FROM dependency_domains LIMIT 1').get()) throw new Error('Finish dependency preparation before changing application data')
   if (store.db.prepare('SELECT 1 FROM pod_descriptions WHERE state=\'running\'').get()) throw new Error('Wait for the description update before changing stored data')
   if (store.db.prepare('SELECT 1 FROM program_leases LIMIT 1').get() || store.db.prepare('SELECT 1 FROM run_leases LIMIT 1').get() || store.db.prepare('SELECT 1 FROM master_session WHERE state=\'running\'').get() || store.db.prepare('SELECT 1 FROM master_actions WHERE state=\'running\' LIMIT 1').get()) throw new Error('Finish or recover active work before changing application data')
 }
@@ -18,6 +22,7 @@ function allowed(path: string): boolean {
   if (path === 'control.sqlite') return true
   const parts = path.split('/')
   if (parts[0] === 'blobs') return parts.length === 2 && /^[a-f0-9]{64}$/.test(parts[1])
+  if (parts[0] === 'dependencies') return uuid(parts[1] ?? '') && /^[a-f0-9]{64}$/.test(parts[2] ?? '') && parts.length > 3
   if (parts[0] === 'pods') return uuid(parts[1] ?? '') && parts[2] === 'workspace' && parts.length > 3
   return parts[0] === 'snapshots' && parts.length === 4 && uuid(parts[1]) && uuid(parts[2]) && (uuid(parts[3]) || parts[3] === 'manifest.json')
 }
@@ -58,6 +63,10 @@ export async function createBackup(store: PodDatabase, parent: string, observe: 
         if (!uuid(row.id as string)) throw new Error('Invalid pod identity in backup')
         for (const path of await files(sourceRoot, `pods/${row.id}/workspace`)) paths.set(path, undefined)
       }
+      for (const set of new DependencyStore(store).inventory()) {
+        await new DependencyStore(store).verify(set.podId, set.hash)
+        for (const file of set.files) paths.set(`dependencies/${set.podId}/${set.hash}/${file.path}`, file.hash)
+      }
       for (const row of database.prepare('SELECT * FROM snapshot_sets').all()) {
         if (!uuid(row.id as string) || !uuid(row.pod_id as string)) throw new Error('Invalid snapshot identity')
         const snapshot = JSON.parse(row.manifest as string) as { files: { id: string, hash: string }[] }
@@ -82,7 +91,7 @@ export async function createBackup(store: PodDatabase, parent: string, observe: 
     await syncTree(stage); observe('publish'); await rename(stage, target); await syncDirectory(destination)
     return target
   }
-  catch (error) { await rm(stage, { recursive: true, force: true }); throw error }
+  catch (error) { await removePackageTree(stage); throw error }
 }
 export async function restoreBackup(backup: string, parent: string, maximumSchema: number): Promise<string> {
   const sourceRoot = await realpath(backup)
@@ -118,6 +127,16 @@ export async function restoreBackup(backup: string, parent: string, maximumSchem
         const directory = join(stage, 'snapshots', row.pod_id as string, row.id as string); await mkdir(directory, { recursive: true, mode: 0o700 })
         await rm(join(directory, 'manifest.json'), { force: true }); await durableJSON(join(directory, 'manifest.json'), snapshot, 0o400)
       }
+      if (manifest.schema >= 18) {
+        database.exec('DELETE FROM dependency_domains;')
+        for (const row of database.prepare('SELECT * FROM dependency_sets').all()) {
+          if (!uuid(row.pod_id as string) || !/^[a-f0-9]{64}$/.test(row.hash as string)) throw new Error('Invalid dependency set identity')
+          const path = join(stage, 'dependencies', row.pod_id as string, row.hash as string)
+          const contents = await packageFiles(path, true)
+          if (packageDigest(contents) !== row.hash || JSON.stringify(contents) !== row.files) throw new Error('Backup omits prepared dependencies')
+          checkLock(JSON.parse(await readFile(join(path, 'package-lock.json'), 'utf8')), parsePackages(JSON.parse(row.manifest as string)))
+        }
+      }
       if (manifest.schema >= 15) database.exec('DELETE FROM summary_domains; UPDATE pod_descriptions SET state=\'failed\',error=\'Restored description update; reconnect and retry.\' WHERE state IN (\'pending\',\'running\');')
       if (manifest.schema >= 13) database.exec('UPDATE master_contexts SET thread_id=NULL,state=\'interrupted\',error=\'Restored chat history; new model context required\';')
       if (manifest.schema >= 12) database.exec('DELETE FROM script_credential_approvals;')
@@ -127,5 +146,5 @@ export async function restoreBackup(backup: string, parent: string, maximumSchem
     finally { database.close() }
     await syncTree(stage); await rename(stage, target); await syncDirectory(await realpath(parent)); return target
   }
-  catch (error) { await rm(stage, { recursive: true, force: true }); throw error }
+  catch (error) { await removePackageTree(stage); throw error }
 }
