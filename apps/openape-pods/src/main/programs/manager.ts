@@ -1,3 +1,4 @@
+import { assignedDirectories, directoryPolicy } from '../../runtime/directories'
 import { ApplicationLaunch } from './launch'
 import { ExternalShell } from '../shell/session'
 import type { ShellRuntime } from '../../runtime/environment'
@@ -82,11 +83,12 @@ export class ProgramManager {
       }
       if (this.sessions.size >= 4) throw new Error('Close another application terminal first')
       const workspace = await podWorkspace(dirname(this.root), command.podId)
+      const directories = directoryPolicy(await assignedDirectories(dirname(this.root), command.podId, (await this.resources(command.podId)).resources))
       const id = randomUUID()
       const resource = await this.dispatch({ type: 'reserve', podId: command.podId, applicationId: command.applicationId, epoch: command.epoch, sessionId: id }) as PodResource
       const check = async () => { await this.dispatch({ type: 'check', podId: command.podId, sessionId: id }) }
       const release = async () => { await this.dispatch({ type: 'release', podId: command.podId, sessionId: id }) }
-      const session = new ProgramSession(id, command.podId, command.applicationId, resource.configuration as unknown as ProgramAssignment, command.argv, this.helper, this.root, this.credentials, check, release, workspace)
+      const session = new ProgramSession(id, command.podId, command.applicationId, resource.configuration as unknown as ProgramAssignment, command.argv, this.helper, this.root, this.credentials, check, release, workspace, directories)
       this.sessions.set(id, session); return session.view()
     }
     const launch = this.launches.get(command.podId)
