@@ -8,11 +8,12 @@ import { t, diagnostic } from './i18n'
 export default defineComponent({
   props: { podId: { type: String, required: true }, state: { type: Object as () => ResourceState, required: true } },
   emits: ['updated'],
-  data() { return { selectedApplication: '', busy: false, openingShell: false, error: '', launch: null as TerminalView | null, pollTimer: undefined as ReturnType<typeof setTimeout> | undefined, disposed: false, origin: '', methods: ['GET'] as string[] } },
+  data() { return { selectedApplication: '', selectedDestination: '', addingHttp: false, busy: false, openingShell: false, error: '', launch: null as TerminalView | null, pollTimer: undefined as ReturnType<typeof setTimeout> | undefined, disposed: false, origin: '', methods: ['GET'] as string[] } },
   computed: {
     selected() { return this.applications.find(item => item.id === this.selectedApplication) },
     applications() { return this.state.resources.filter(item => item.state !== 'revoked' && item.configuration.type === 'program') },
     destinations() { return this.state.resources.filter(item => item.state !== 'revoked' && item.configuration.type === 'http') },
+    selectedHttp() { return this.destinations.find(item => item.id === this.selectedDestination) },
   },
   async mounted() { await this.refreshLaunch() },
   beforeUnmount() { this.disposed = true; clearTimeout(this.pollTimer) },
@@ -40,9 +41,20 @@ export default defineComponent({
       }
       catch (error) { if (!this.disposed) this.error = error instanceof Error ? error.message : 'Application status failed' }
     },
+    async openHttpForm() {
+      this.origin = ''; this.methods = ['GET']; this.error = ''; this.addingHttp = true
+      await this.$nextTick(); (this.$refs.httpOrigin as HTMLInputElement).focus()
+    },
+    async closeHttpForm() {
+      this.addingHttp = false
+      await this.$nextTick(); (this.$refs.addHttp as HTMLButtonElement).focus()
+    },
     async grantHttp() {
       this.busy = true; this.error = ''
-      try { this.$emit('updated', await window.pods.resources({ type: 'assignHttp', podId: this.podId, epoch: this.state.epoch, permission: { origin: this.origin, methods: this.methods } })) }
+      try {
+        this.$emit('updated', await window.pods.resources({ type: 'assignHttp', podId: this.podId, epoch: this.state.epoch, permission: { origin: this.origin, methods: this.methods } }))
+        this.busy = false; await this.closeHttpForm()
+      }
       catch (error) { this.error = error instanceof Error ? error.message : 'HTTP permission failed' }
       finally { this.busy = false }
     },
@@ -113,19 +125,34 @@ export default defineComponent({
     <p class="muted">
       {{ t('Node.js scripts can request these HTTPS destinations. Store API tokens under Variables and secrets.') }}
     </p>
-    <article v-for="destination in destinations" :key="destination.id" class="application-card">
-      <header>
-        <strong>{{ destination.name }}</strong><button class="text-button" :disabled="busy" @click="revoke(destination)">
-          {{ t('Revoke access') }}
+    <div class="application-list http-list" role="group" :aria-label="t('HTTP destinations')">
+      <article v-for="destination in destinations" :key="destination.id" class="application-card" :class="{ selected: destination.id === selectedDestination }">
+        <button class="application-select" :aria-pressed="destination.id === selectedDestination" @click="selectedDestination = destination.id">
+          <svg class="application-icon" aria-hidden="true" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="16" cy="16" r="12" /><ellipse cx="16" cy="16" rx="5" ry="12" /><path d="M4 16h24M7 9h18M7 23h18" /></svg>
+          <span class="destination-label"><span>{{ destination.configuration.origin }}</span><small>{{ (destination.configuration.methods as string[]).join(', ') }}</small></span>
         </button>
-      </header>
-      <p>{{ (destination.configuration.methods as string[]).join(', ') }}</p>
-    </article>
-    <form class="http-form" @submit.prevent="grantHttp">
-      <label>{{ t('HTTPS origin') }}<input v-model="origin" type="url" required :placeholder="t('https://api.example.com')" :disabled="busy"></label>
+      </article>
+      <p v-if="!destinations.length" class="empty-applications">
+        {{ t('No HTTP destinations assigned.') }}
+      </p>
+      <footer class="application-toolbar">
+        <button ref="addHttp" class="text-button" :aria-label="t('Add HTTP destination')" :title="t('Add HTTP destination')" :disabled="busy" :aria-expanded="addingHttp" aria-controls="http-destination-form" @click="openHttpForm">
+          ＋
+        </button>
+        <button class="text-button" :aria-label="t('Remove HTTP destination')" :title="t('Remove HTTP destination')" :disabled="busy || !selectedHttp" @click="selectedHttp && revoke(selectedHttp)">
+          −
+        </button>
+      </footer>
+    </div>
+    <form v-if="addingHttp" id="http-destination-form" class="http-form" @submit.prevent="grantHttp" @keydown.esc.prevent="!busy && closeHttpForm()">
+      <h4>{{ t('Add HTTP destination') }}</h4>
+      <label>{{ t('HTTPS origin') }}<input ref="httpOrigin" v-model="origin" type="url" required :placeholder="t('https://api.example.com')" :disabled="busy"></label>
       <fieldset><legend>{{ t('Allowed methods') }}</legend><label v-for="method in ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']" :key="method"><input v-model="methods" type="checkbox" :value="method" :disabled="busy">{{ method }}</label></fieldset>
       <button :disabled="busy || !methods.length">
         {{ t('Allow HTTP destination') }}
+      </button>
+      <button type="button" class="secondary" :disabled="busy" @click="closeHttpForm">
+        {{ t('Cancel') }}
       </button>
     </form>
   </section>
@@ -153,5 +180,9 @@ input, select { min-width:0; width:100%; box-sizing:border-box; padding:10px; bo
 fieldset { border:0; padding:10px 0; display:flex; flex-wrap:wrap; gap:14px; }
 fieldset label { display:flex; margin:0; align-items:center; }
 fieldset input { width:auto; }
-.http-form { margin-top:14px; }
+.destination-label { display:grid; gap:4px; min-width:0; overflow-wrap:anywhere; }
+.destination-label small { color:var(--muted); font-size:12px; }
+.http-form { margin-top:14px; padding:16px; border:1px solid var(--border); border-radius:12px; }
+.http-form h4 { margin:0; }
+.http-form button + button { margin-left:8px; }
 </style>
