@@ -4,13 +4,17 @@ import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
 
 async function main(): Promise<void> {
-  const config = JSON.parse(await readFile(process.argv[2], 'utf8')) as { endpoint: string, token: string, name: string, podId: string, workspace: string, environment: Record<string, string>, executable: string, cli: string }
+  const config = JSON.parse(await readFile(process.argv[2], 'utf8')) as { endpoint: string, token: string, name: string, podId: string, workspace: string, environment: Record<string, string>, executable: string, cli: string, command?: string }
   const socket = connect(config.endpoint)
   let child: ChildProcess | undefined; let buffer = ''; let completed = false; let killer: ReturnType<typeof setTimeout> | undefined
   const stop = () => {
     if (!child || completed) return
-    child.kill('SIGTERM')
-    killer ??= setTimeout(() => child?.kill('SIGKILL'), 4000)
+    const signal = (value: NodeJS.Signals) => {
+      try { if (config.command && child?.pid) process.kill(-child.pid, value); else child?.kill(value) }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error }
+    }
+    signal('SIGTERM')
+    killer ??= setTimeout(signal, 4000, 'SIGKILL')
   }
   const ignoreInterrupt = () => {}
   process.on('SIGINT', ignoreInterrupt); process.on('SIGTERM', stop); process.on('SIGHUP', stop)
@@ -32,7 +36,7 @@ async function main(): Promise<void> {
           if (!message.ready || child) throw new Error('Unexpected pod terminal response')
           const name = Array.from(config.name).filter((character) => { const code = character.codePointAt(0)!; return code >= 32 && (code < 127 || code > 159) }).join('')
           process.stdout.write(`\u001B]0;OpenApe Pod ${name}\u0007\nPod: ${name} (${config.podId})\nHOME: ${config.environment.HOME}\nWorkspace: ${config.workspace}\nShell: ${config.environment.SHELL}\n\n`)
-          child = spawn(config.executable, [config.cli, '-i'], { cwd: config.workspace, env: { ...config.environment, ELECTRON_RUN_AS_NODE: '1', APES_SHELL_MODE: '1' }, stdio: 'inherit' })
+          child = spawn(config.executable, [config.cli, ...(config.command ? ['-c', config.command] : ['-i'])], { cwd: config.workspace, detached: !!config.command, env: { ...config.environment, ELECTRON_RUN_AS_NODE: '1', APES_SHELL_MODE: '1' }, stdio: 'inherit' })
           child.on('error', reject)
           child.on('close', (code) => {
             completed = true; process.exitCode = code ?? 1

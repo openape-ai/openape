@@ -33,8 +33,10 @@ it('script-editor: edits exact source, preserves navigation, validates and runs 
     expect(await editor().getAttribute('readonly')).toBeNull()
     const divider = page.getByRole('separator', { name: 'Sidebar width' }); await divider.focus(); await page.keyboard.press('ArrowRight')
     expect(await divider.getAttribute('aria-valuenow')).toBe('240')
-    const position = (await divider.boundingBox())!; await page.mouse.move(position.x + 2, position.y + 100); await page.mouse.down(); await page.mouse.move(position.x + 34, position.y + 100); await page.mouse.up()
-    expect(await divider.getAttribute('aria-valuenow')).toBe('272')
+    await divider.hover({ position: { x: 3, y: 100 } })
+    const position = (await divider.boundingBox())!
+    await page.mouse.down(); await page.mouse.move(position.x + 35, position.y + 100, { steps: 4 }); await page.mouse.up()
+    await expect.poll(() => divider.getAttribute('aria-valuenow')).toBe('272')
     await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click(); expect(await page.locator('.pod-navigation').isVisible()).toBe(false)
     await page.getByRole('button', { name: 'Expand sidebar', exact: true }).click()
     await panel.getByText('Available variables and secrets', { exact: true }).click(); await panel.getByRole('button', { name: 'Manage variables and secrets' }).click()

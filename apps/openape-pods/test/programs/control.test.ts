@@ -71,3 +71,10 @@ it('cannot overwrite an application owned by another pod', () => {
   expect(f.resources.list(f.pod.id)[0]?.name).toBe('fixture')
   expect(f.resources.epoch(other.id)).toBe(0)
 })
+
+it('rejects renderer paths and arguments on no-argument application launches', () => {
+  const command = { type: 'launch', podId: randomUUID(), applicationId: randomUUID(), epoch: 1 }
+  expect(parseProgramCommand(command)).toEqual(command)
+  expect(() => parseProgramCommand({ ...command, argv: ['ignored'] })).toThrow('Unsupported')
+  expect(() => parseProgramCommand({ ...command, executable: '/bin/sh' })).toThrow('Unsupported')
+})

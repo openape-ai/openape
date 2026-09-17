@@ -14,9 +14,8 @@ const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); vi.restoreAllMocks() })
 async function fixture(locked = false, architecture = process.arch) {
   const root = await mkdtemp(join(tmpdir(), 'pods-connect-')); const vendor = join(root, 'vendor'); await mkdir(vendor)
-  await writeFile(join(vendor, 'codex'), 'synthetic-codex'); await writeFile(join(vendor, 'o365-cli'), 'synthetic-mail')
+  await writeFile(join(vendor, 'codex'), 'synthetic-codex')
   await writeFile(join(vendor, 'manifest.json'), JSON.stringify({ cli: `0.153.4-${process.platform}-${architecture}`, binaryHash: digest('synthetic-codex') }))
-  await writeFile(join(vendor, 'o365-manifest.json'), JSON.stringify({ platform: process.platform, architecture, binaryHash: digest('synthetic-mail') }))
   const store = new PodDatabase(root); const registry = new ResourceRegistry(store, () => {}); const control = new SetupControl(store, registry)
   const credentials = new CredentialCache(join(root, 'credentials'), { available: () => !locked, encrypt: value => Buffer.from(value), decrypt: value => value.toString() })
   const runtime = { helper: 'unused-fixture-helper', executable: process.execPath, entry: 'unused-entry', runtimeDirectories: [], environment: {}, binary: join(vendor, 'codex'), manifest: join(vendor, 'manifest.json'), catalog: 'unused-catalog', sdkHost: 'unused-host' }
