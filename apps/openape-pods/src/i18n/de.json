@@ -1414,5 +1414,6 @@
   "Pod shell exited unsuccessfully; application setup changes were not saved": "Die Pod-Shell wurde mit einem Fehler beendet; Programmeinstellungen wurden nicht gespeichert",
   "Pod terminal service closed before confirming saved setup": "Der Pod-Terminaldienst wurde vor der Speicherbestätigung beendet",
   "Pod terminal connection was lost before saving setup": "Die Verbindung zum Pod-Terminal wurde vor dem Speichern unterbrochen",
-  "Script artifact does not match the selected source": "Die Skriptdatei entspricht nicht dem ausgewählten Quelltext"
+  "Script artifact does not match the selected source": "Die Skriptdatei entspricht nicht dem ausgewählten Quelltext",
+  "Preparing pod terminal…": "Pod-Terminal wird vorbereitet…"
 }

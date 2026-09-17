@@ -81,6 +81,7 @@ onlyBuiltDependencies:
   - vue-demi
 
 overrides:
+  '@nuxtjs/mdc': 0.22.1
   # Security fixes verified 2026-09-07; both versions exceed the 7-day quarantine.
   browserslist: ">=4.28.7 <5"
   '@babel/plugin-transform-modules-systemjs': '>=7.29.4'
