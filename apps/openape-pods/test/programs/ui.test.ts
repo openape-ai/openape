@@ -33,3 +33,22 @@ it('submits the explicit HTTPS origin and methods without account or token field
   expect(wrapper.find('input[type="password"]').exists()).toBe(false)
   wrapper.unmount()
 })
+
+it('keeps terminal launch progress and failures directly beside the launch control', async () => {
+  let rejectLaunch!: (reason: Error) => void
+  const programs = vi.fn(() => new Promise<ResourceState>((_resolve, reject) => { rejectLaunch = reject }))
+  window.pods = { ...window.pods, programs }
+  const wrapper = mount(ProgramPermissions, { props: { podId, state }, global: { stubs: { ScriptAccess: true } } })
+  const button = wrapper.findAll('button').find(item => item.text() === 'Open Terminal.app')!
+  await button.trigger('click')
+  expect(wrapper.get('[role="status"]').text()).toContain('Preparing pod terminal')
+  expect(button.attributes('disabled')).toBeDefined()
+  rejectLaunch(new Error('Pod identity connection failed (404)'))
+  await flushPromises()
+  const alert = wrapper.get('[role="alert"]')
+  expect(alert.text()).toContain('Pod identity connection failed (404)')
+  const firstApplication = wrapper.get('.application-card').element
+  expect(alert.element.compareDocumentPosition(firstApplication) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(button.attributes('disabled')).toBeUndefined()
+  wrapper.unmount()
+})
