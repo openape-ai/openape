@@ -9,7 +9,7 @@ export default defineComponent({
   components: { ScriptAccess },
   props: { podId: { type: String, required: true }, state: { type: Object as () => ResourceState, required: true } },
   emits: ['updated'],
-  data() { return { busy: false, error: '', source: 'o365-cli' as 'o365-cli' | 'choose', origin: '', methods: ['GET'] as string[] } },
+  data() { return { busy: false, openingShell: false, error: '', source: 'o365-cli' as 'o365-cli' | 'choose', origin: '', methods: ['GET'] as string[] } },
   computed: {
     applications() { return this.state.resources.filter(item => item.state !== 'revoked' && item.configuration.type === 'program') },
     destinations() { return this.state.resources.filter(item => item.state !== 'revoked' && item.configuration.type === 'http') },
@@ -17,13 +17,13 @@ export default defineComponent({
   methods: {
     t, diagnostic,
     async act(command: ProgramCommand) {
-      this.busy = true; this.error = ''
+      this.busy = true; this.openingShell = command.type === 'openShell'; this.error = ''
       try {
         const result = await window.pods.programs(command)
         this.$emit('updated', result)
       }
       catch (error) { this.error = error instanceof Error ? error.message : 'Application operation failed' }
-      finally { this.busy = false }
+      finally { this.busy = false; this.openingShell = false }
     },
     async grantHttp() {
       this.busy = true; this.error = ''
@@ -48,6 +48,12 @@ export default defineComponent({
         {{ t('Open Terminal.app') }}
       </button>
     </header>
+    <p v-if="openingShell" role="status">
+      {{ t('Preparing pod terminal…') }}
+    </p>
+    <p v-if="error" class="error-message" role="alert">
+      {{ diagnostic(error) }}
+    </p>
     <p class="muted">
       {{ t('Open Terminal.app to configure assigned programs with ape-shell. The terminal and scripts share the pod workspace and program setup.') }}
     </p>
@@ -111,9 +117,6 @@ export default defineComponent({
         {{ t('Allow HTTP destination') }}
       </button>
     </form>
-    <p v-if="error" class="error-message" role="alert">
-      {{ diagnostic(error) }}
-    </p>
   </section>
 </template>
 
