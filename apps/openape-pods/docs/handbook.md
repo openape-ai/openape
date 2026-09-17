@@ -166,7 +166,9 @@ Reloading an unchanged editor picks up the current saved source. Saving does not
 
 ## Permissions
 
-Permissions contains directory/file access, executable applications and HTTP destinations. The pod workspace is writable. Reference files are delivered as read-only snapshots; their originals remain outside the workspace.
+Permissions lists HOME and the working directory as permanent writable pod folders. Add additional folders with +, choose Read or Read and write in the native confirmation, and change access with the row selector. Select a row and − to revoke it. These are direct accesses to the original files, including subfolders; write access allows changes and deletion. Existing reference files retain their read-only snapshots. Assignment or access changes pause the pod and invalidate active execution. Missing, replaced or symlinked folders block execution until reassigned; internal app data and runtime folders cannot be assigned.
+
+The macOS sandbox enforces directory read/write permissions for regular scripts and brokered application calls. External setup terminals and Play-launched GUI apps keep the existing Mac-user/ape-shell permission boundary; the directory list does not sandbox those windows. Overlapping folder permissions are additive: an explicitly writable child remains writable inside a read-only parent.
 
 Use + below the application list to select an installed macOS app or CLI. Its name and icon appear with a Play button. Play starts the selected executable without arguments through ape-shell. Select a row and use − to remove its assignment. Existing apes CLI descriptors are detected automatically, or you can select the descriptor file. Applications are not bundled with Pods.
 
@@ -222,7 +224,7 @@ Use the contextual discussion action to ask the master about the selected pod. S
 
 A pod script is a JavaScript ES module exporting async run(context). Await every asynchronous operation before returning. The result includes status, summary, completedInputIds and gapIds. A completedWithGaps result needs committed gap claims.
 
-context.input contains the frozen run metadata, event IDs, prior checkpoint, references and limits. context.workspace is the pod’s writable directory; context.references identifies read-only snapshots. context.log(message) records a run event. context.variables contains the frozen ordinary values captured for this run; values only enter a model prompt when the script explicitly includes them.
+context.input contains the frozen run metadata, event IDs, prior checkpoint, references and limits. context.home and context.workspace are the permanent writable pod directories. context.directories lists assigned original folders as {path, access}, with access read or readWrite; use Node.js filesystem APIs on those paths. context.references identifies read-only snapshots. context.log(message) records a run event. context.variables contains the frozen ordinary values captured for this run; values only enter a model prompt when the script explicitly includes them.
 
 context.progress.commit writes checkpoint, sources and claims atomically using expectedRevision. context.agent.run({ prompt }) invokes Codex with a fresh context. context.tools.invoke({ application: "o365-cli", argv }) executes an assigned read command through apes. context.http.request({ url, method, headers, body, key }) uses an assigned HTTP destination; every mutating method requires a stable effect key. Codex receives ape_shell for assigned reads, but no credential or HTTP tool. Legacy context.mail scripts need migration to an assigned installed application; source and history remain available.
 

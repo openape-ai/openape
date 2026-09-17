@@ -2,9 +2,10 @@ import type { ProgramAssignment } from '../../contracts/programs'
 import { parseHttpPermission } from '../../contracts/http'
 import type { ProgramAuthority } from '../../main/programs/grants'
 import { parseCredentialAlias } from '../../contracts/credentials'
-import type { PodResource } from '../../contracts/resources'
+import type { DirectoryAccess, PodResource } from '../../contracts/resources'
 import { randomUUID } from 'node:crypto'
-import { join } from 'node:path'
+import { inspectDirectory } from '../../runtime/directories'
+import { basename, join } from 'node:path'
 import type { PodDatabase } from '../storage/database'
 import { createSnapshotSet } from './snapshots'
 import type { FileAssignment, SnapshotSet } from './snapshots'
@@ -36,6 +37,21 @@ export class ResourceRegistry {
     })
     this.revokeActive(podId)
     return this.list(podId).find(resource => resource.id === id) as PodResource
+  }
+
+  async assignDirectory(podId: string, path: string, access: DirectoryAccess, expectedEpoch: number): Promise<void> {
+    const configuration = await inspectDirectory(this.store.root, path, access)
+    this.store.transaction(() => {
+      if (this.store.getPod(podId).lifecycle === 'archived' || this.epoch(podId) !== expectedEpoch) throw new Error('Pod or directory permissions changed; reload before assigning access')
+      const current = this.list(podId).filter(item => item.kind === 'directory' && item.state !== 'revoked')
+      const existing = current.find(item => item.configuration.path === path)
+      if (!existing && current.length >= 32) throw new Error('This pod already has 32 directories')
+      if (existing) this.store.db.prepare('UPDATE resources SET configuration=?,revision=revision+1,state=\'ready\' WHERE id=?').run(JSON.stringify(configuration), existing.id)
+      else this.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), podId, 'directory', 'ready', basename(path), JSON.stringify(configuration))
+      this.advance(podId)
+      this.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(podId)
+    })
+    this.revokeActive(podId)
   }
 
   assignCredential(podId: string, value: string, credentialId: string, expectedEpoch: number): void {

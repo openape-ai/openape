@@ -1,3 +1,4 @@
+import { assignedDirectories, directoryPolicy } from '../runtime/directories'
 import { shellIdentity } from './shell/identity'
 import { podEnvironment } from '../runtime/environment'
 import { podWorkspace } from './programs/console'
@@ -294,7 +295,8 @@ export class FixtureWorker {
         const grant = await this.connections!.existingProgramGrant(scope.podId, requested.assignment, requested.argv)
         const resources = state.resources.map(item => item.id === requested.id ? { ...item, configuration: { ...item.configuration, grants: [...requested.assignment.grants.filter(item => item.permission !== grant.permission), grant] } } : item)
         const workspace = await podWorkspace(this.root, scope.podId)
-        const result = await invokeProgram(resources, scope.podId, request.body, join(dist, 'native/pods-helper'), join(this.root, 'runs', scope.runId), this.credentials, { workspace, capabilities: scope.capabilities, signal: controller.signal, assertCurrent: () => controller.signal.throwIfAborted(), registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } })
+        const directories = directoryPolicy(await assignedDirectories(this.root, scope.podId, resources))
+        const result = await invokeProgram(resources, scope.podId, request.body, join(dist, 'native/pods-helper'), join(this.root, 'runs', scope.runId), this.credentials, { ...directories, workspace, capabilities: scope.capabilities, signal: controller.signal, assertCurrent: () => controller.signal.throwIfAborted(), registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } })
         await check(); controller.signal.throwIfAborted(); return result
       }
       const assignment = assignedMail(state.resources)

@@ -20,8 +20,9 @@ export async function executeScript(runtime: ScriptRuntime, directory: string, a
   const config = join(directory, 'input.json')
   await writeFile(config, JSON.stringify({ entry: artifact, input }), { flag: 'wx', mode: 0o400 })
   if (createHash('sha256').update(await readFile(artifact)).digest('hex') !== input.scriptHash) throw new Error('Script artifact does not match the selected source')
-  const policy: RuntimePolicy = { executable: runtime.executable, workspace: input.workspace, readFiles: [artifact, runtime.entry, config, ...input.references.map(reference => reference.path)], runtimeDirectories: runtime.runtimeDirectories, writeDirectories: runtime.home ? [runtime.home] : [] }
-  const domain = await launchSandbox(runtime.helper, directory, policy, [runtime.entry, config], runtime.environment, runtime.registerDomain, runtime.shell)
+  const home = runtime.home ?? input.home ?? input.workspace
+  const policy: RuntimePolicy = { executable: runtime.executable, workspace: input.workspace, readFiles: [artifact, runtime.entry, config, ...input.references.map(reference => reference.path)], runtimeDirectories: runtime.runtimeDirectories, readDirectories: input.directories?.filter(item => item.access === 'read').map(item => item.path), writeDirectories: [home, ...(input.directories ?? []).filter(item => item.access === 'readWrite').map(item => item.path)] }
+  const domain = await launchSandbox(runtime.helper, directory, policy, [runtime.entry, config], { ...runtime.environment, HOME: home, TMPDIR: runtime.environment.TMPDIR ?? home }, runtime.registerDomain, runtime.shell)
   const local = new AbortController()
   const activeSignal = AbortSignal.any([signal, local.signal])
   let requesting = false

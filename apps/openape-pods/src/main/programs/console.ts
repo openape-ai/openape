@@ -1,5 +1,4 @@
-import { lstat, mkdir, realpath } from 'node:fs/promises'
-import { join } from 'node:path'
+import { podDirectories } from '../../runtime/environment'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { ConsoleView, ProgramAssignment } from '../../contracts/programs'
 import { parseCommandLine } from '../../contracts/programs'
@@ -7,16 +6,7 @@ import type { ResourceState } from '../../contracts/resources'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
 
 export async function podWorkspace(root: string, podId: string): Promise<string> {
-  if (!/^[a-f0-9-]{36}$/.test(podId)) throw new Error('Invalid pod workspace identity')
-  let directory = await realpath(root)
-  for (const part of ['pods', podId, 'workspace']) {
-    directory = join(directory, part)
-    try { await mkdir(directory, { mode: 0o700 }) }
-    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error }
-    const info = await lstat(directory)
-    if (info.isSymbolicLink() || !info.isDirectory()) throw new Error('Pod workspace cannot contain symbolic directory links')
-  }
-  return directory
+  return (await podDirectories(root, podId)).workspace
 }
 
 export async function prepareConsole(root: string, podId: string, state: ResourceState, line: string): Promise<ConsoleView> {

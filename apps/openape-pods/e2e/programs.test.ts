@@ -147,6 +147,8 @@ it('packaged program UI: exposes the external terminal and reuses application se
   const setup = f.terminal()
   await expect.poll(() => setup.view().output).toContain('SETUP_READY')
   setup.input('SYNTHETIC_CONFIGURATION\n'); await setup.completed
+  const folder = await realpath(await mkdtemp(join(tmpdir(), 'pods-assigned-folder-')))
+  await writeFile(join(folder, 'input.txt'), 'DIRECT_READ')
   const shellIdentity = await fixtureShellIdentity(f.root)
   const store = new PodDatabase(f.root)
   store.db.prepare('INSERT INTO resources VALUES(?,?,1,\'tool\',\'ready\',?,?)').run(f.applicationId, f.podId, f.assignment.name, JSON.stringify(f.assignment))
@@ -171,7 +173,23 @@ it('packaged program UI: exposes the external terminal and reuses application se
     expect(await page.getByRole('button', { name: 'Open Terminal.app', exact: true }).count()).toBe(1)
     expect(await page.locator('.pod-console').count()).toBe(0)
     await mkdir(resolve('.artifacts'), { recursive: true })
-    const runCode = `export async function run(context) {
+    await app.evaluate(({ dialog }, folder) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder], bookmarks: [] })
+      dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false })
+    }, folder)
+    await page.getByRole('button', { name: 'Add directory', exact: true }).click()
+    await expect.poll(async () => page.locator('.directory-select').count()).toBe(1)
+    expect(await page.locator('.fixed-directory').count()).toBe(2)
+    await page.locator('.directory-list').screenshot({ path: resolve('.artifacts/program-directories-en.png') })
+    const runCode = `import fs from 'node:fs/promises'; import path from 'node:path';
+    export async function run(context) {
+      await fs.writeFile(path.join(context.home, 'home-check.txt'), 'HOME')
+      if (context.directories.length) {
+        const folder = context.directories[0].path
+        if (await fs.readFile(path.join(folder, 'input.txt'), 'utf8') !== 'DIRECT_READ') throw new Error('Missing directory input')
+        try { await fs.writeFile(path.join(folder, 'blocked.txt'), 'SYNTHETIC'); throw new Error('Unexpected directory write') }
+        catch (error) { if (error.code !== 'EPERM') throw error }
+      }
       const result = await context.tools.invoke({ application: 'Synthetic application', argv: ['read'] })
       if (result.exitCode !== 0) throw new Error('Application read failed')
       return { status: 'completed', summary: 'Program read: ' + result.stdout.trim(), completedInputIds: context.input.eventIds, gapIds: [] }
@@ -218,8 +236,11 @@ it('packaged program UI: exposes the external terminal and reuses application se
     expect(await page.getByRole('button', { name: 'Terminal.app öffnen', exact: true }).count()).toBe(1)
     await page.locator('.program-permissions').screenshot({ path: resolve('.artifacts/external-terminal-de-dark.png') })
     await page.locator('.http-list').screenshot({ path: resolve('.artifacts/program-http-de-dark.png') })
+    const folderBounds = await page.locator('.directory-select .directory-label').boundingBox()
+    expect(folderBounds!.width).toBeGreaterThan(120)
+    await page.locator('.directory-list').screenshot({ path: resolve('.artifacts/program-directories-de-dark.png') })
   }
-  finally { await app.close(); await shellIdentity.close(); await f.close() }
+  finally { await app.close(); await shellIdentity.close(); await f.close(); await rm(folder, { recursive: true, force: true }) }
 })
 
 it('HTTP grant boundary: verifies the signed origin and method before transport and cancels on remote revocation', async () => {
