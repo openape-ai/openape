@@ -1,3 +1,4 @@
+import { parsePackageSearch, parsePackageOptions } from '../contracts/package-catalog'
 import { parseProgramCommand, parseTerminalView, parseConsoleView } from '../contracts/programs'
 import { parseLanguage, parseLanguageCommand } from '../contracts/language'
 import { parseScriptCommand, parseScriptView } from '../contracts/scripts'
@@ -15,6 +16,7 @@ import { channels, isPodStatus } from '../contracts/ipc'
 import type { PodsBridge } from '../contracts/ipc'
 
 const bridge: PodsBridge = {
+  async packages(command) { return parsePackageOptions(await ipcRenderer.invoke(channels.packages, parsePackageSearch(command))) },
   async programs(command) {
     const request = parseProgramCommand(command)
     const response: unknown = await ipcRenderer.invoke(channels.programs, request)
