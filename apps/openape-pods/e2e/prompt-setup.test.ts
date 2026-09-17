@@ -28,6 +28,11 @@ it('packaged prompt setup repairs a script, configures a pod and runs through th
   app = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: homedir(), TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, OPENAPE_PODS_FIXTURE_MODEL_PORT: String(address.port), NODE_ENV: 'test' } })
   try {
     const page = await app.firstWindow(); page.setDefaultTimeout(7000); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
+    await app.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0]!
+      window.setFocusable(false)
+      window.webContents.setBackgroundThrottling(false)
+    })
     await page.getByRole('button', { name: 'New pod', exact: false }).click()
     await page.getByLabel('Message this pod').fill(setupPrompt)
     const submittedPrompt = await page.getByLabel('Message this pod').inputValue()
