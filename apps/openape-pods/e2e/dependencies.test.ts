@@ -32,8 +32,18 @@ it('managed dependencies: packaged editor saves, prepares, validates and runs an
     const page = await app.firstWindow(); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
     await page.getByRole('tab', { name: 'Script', exact: true }).click()
     await page.getByLabel('Script source').fill('import answer from \'sample-package\';\n\nexport async function run(context) {\n  return { status: \'completed\', summary: \'Library returned \'+answer, completedInputIds: context.input.eventIds, gapIds: [] }\n}\n')
-    await page.getByText('Dependencies · package.json', { exact: true }).click()
-    await page.getByLabel('Script dependencies').fill(JSON.stringify(packages, null, 2))
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('pods:packages')
+      ipcMain.handle('pods:packages', () => [{ name: 'sample-package', version: '1.0.0', description: 'Synthetic library for the packaged UI check' }])
+    })
+    await page.getByRole('button', { name: 'Add dependency', exact: true }).click()
+    await page.getByLabel('Search npm or paste an npm package URL').fill('sample-package')
+    await page.getByRole('button', { name: 'Search npm', exact: true }).click()
+    await page.locator('.package-result').click()
+    await page.locator('.package-picker').scrollIntoViewIfNeeded()
+    await mkdir(resolve('.artifacts'), { recursive: true })
+    await page.screenshot({ path: resolve('.artifacts/dependency-search-en.png'), fullPage: true })
+    await page.locator('.package-choice').getByRole('button', { name: 'Add dependency', exact: true }).click()
     await page.getByRole('button', { name: 'Save script', exact: true }).click()
     await expect.poll(() => page.getByText('Dependencies prepared', { exact: true }).isVisible()).toBe(true)
     await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false }) })
@@ -54,7 +64,6 @@ it('managed dependencies: packaged editor saves, prepares, validates and runs an
     await page.locator('.program-permissions').scrollIntoViewIfNeeded(); await page.screenshot({ path: resolve('.artifacts/managed-dependencies-permissions-en.png'), fullPage: true })
     await page.evaluate(() => window.pods.language({ type: 'set', language: 'de' })); await page.reload()
     await page.getByRole('tab', { name: 'Skript', exact: true }).click()
-    await page.getByText('Abhängigkeiten · package.json', { exact: true }).click()
     await page.locator('.script-packages').scrollIntoViewIfNeeded(); await page.screenshot({ path: resolve('.artifacts/managed-dependencies-de.png'), fullPage: true })
   }
   finally { await app.close(); await identity.close(); await removePackageTree(root) }

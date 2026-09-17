@@ -1,3 +1,4 @@
+import { searchPackages } from './package-catalog'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { parseProgramCommand } from '../contracts/programs'
@@ -188,6 +189,14 @@ async function start(): Promise<void> {
   ipcMain.handle(channels.master, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     return worker.master(parseMasterCommand(command))
+  })
+  let catalogBusy = false
+  ipcMain.handle(channels.packages, async (event, value: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    if (catalogBusy) throw new Error('An npm search is already running')
+    catalogBusy = true
+    try { return await searchPackages(value) }
+    finally { catalogBusy = false }
   })
   ipcMain.handle(channels.scripts, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
