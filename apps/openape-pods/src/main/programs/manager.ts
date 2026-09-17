@@ -116,10 +116,10 @@ export class ProgramManager {
     const shell = new ExternalShell(command.podId, dirname(this.root), runtime, state, this.credentials, this.connections,
       async () => { await this.dispatch({ type: 'check', podId: command.podId, sessionId: id }) },
       async () => { await this.dispatch({ type: 'release', podId: command.podId, sessionId: id }) }, name, command.applicationId)
-    try { await shell.ready }
-    catch (error) { await shell.completed; await this.dispatch({ type: 'release', podId: command.podId, sessionId: id }); throw error }
     const launch = new ApplicationLaunch(id, command.podId, shell)
     this.launches.set(command.podId, launch)
+    try { await shell.ready }
+    catch (error) { await launch.completed; await this.dispatch({ type: 'release', podId: command.podId, sessionId: id }); throw error }
     return launch.view()
   }
 
