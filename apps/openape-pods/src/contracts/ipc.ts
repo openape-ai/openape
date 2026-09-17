@@ -21,7 +21,7 @@ export interface PodStatus {
   runtime: { electron: string, node: string }
 }
 export interface PodsBridge {
-  programs: (command: ProgramCommand) => Promise<ResourceState | TerminalView | ConsoleView>
+  programs: (command: ProgramCommand) => Promise<ResourceState | TerminalView | ConsoleView | null>
   language: (command: LanguageCommand) => Promise<Language>
   scripts: (command: ScriptCommand) => Promise<ScriptView>
   data: (command: DataCommand) => Promise<DataView>

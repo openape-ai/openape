@@ -184,8 +184,13 @@ it('packaged program UI: exposes the external terminal and reuses application se
     }, { podId: f.podId, capability: f.assignment.capability, code: runCode })
     await expect.poll(async () => { const run = (await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), f.podId)).runs[0]; return run?.error ?? run?.summary }, { timeout: 15000 }).toBe('Program read: STATE_MATCH 1')
     console.info('Program UI: saved script invoked application by name through worker and main broker')
-    await page.getByRole('button', { name: 'Add application', exact: true }).click()
-    await page.getByText('o365-cli', { exact: true }).first().waitFor()
+    await app.evaluate(({ dialog }, paths) => {
+      let selection = 0
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [paths[selection++]!], bookmarks: [] })
+    }, [f.assignment.executable, f.assignment.adapterPath])
+    await page.getByRole('button', { name: 'Add installed application…', exact: true }).click()
+    await page.getByRole('button', { name: 'Open fixture', exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Add installed application…', exact: true }).waitFor()
     await page.locator('.application-card').first().screenshot({ path: resolve('.artifacts/program-permissions-en.png') })
     await page.locator('.program-permissions').screenshot({ path: resolve('.artifacts/external-terminal-en.png') })
     await page.locator('.http-form').screenshot({ path: resolve('.artifacts/program-http-en.png') })

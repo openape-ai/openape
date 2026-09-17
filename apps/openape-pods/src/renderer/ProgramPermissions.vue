@@ -1,7 +1,8 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
 import type { ResourceState, PodResource } from '../contracts/resources'
-import type { ProgramCommand } from '../contracts/programs'
+import { parseTerminalView } from '../contracts/programs'
+import type { ProgramCommand, TerminalView } from '../contracts/programs'
 import { t, diagnostic } from './i18n'
 import ScriptAccess from './ScriptAccess.vue'
 
@@ -9,21 +10,37 @@ export default defineComponent({
   components: { ScriptAccess },
   props: { podId: { type: String, required: true }, state: { type: Object as () => ResourceState, required: true } },
   emits: ['updated'],
-  data() { return { busy: false, openingShell: false, error: '', source: 'o365-cli' as 'o365-cli' | 'choose', origin: '', methods: ['GET'] as string[] } },
+  data() { return { selectedApplication: '', busy: false, openingShell: false, error: '', launch: null as TerminalView | null, pollTimer: undefined as ReturnType<typeof setTimeout> | undefined, disposed: false, origin: '', methods: ['GET'] as string[] } },
   computed: {
+    selected() { return this.applications.find(item => item.id === this.selectedApplication) },
     applications() { return this.state.resources.filter(item => item.state !== 'revoked' && item.configuration.type === 'program') },
     destinations() { return this.state.resources.filter(item => item.state !== 'revoked' && item.configuration.type === 'http') },
   },
+  async mounted() { await this.refreshLaunch() },
+  beforeUnmount() { this.disposed = true; clearTimeout(this.pollTimer) },
   methods: {
     t, diagnostic,
     async act(command: ProgramCommand) {
       this.busy = true; this.openingShell = command.type === 'openShell'; this.error = ''
       try {
         const result = await window.pods.programs(command)
-        this.$emit('updated', result)
+        if (command.type === 'launch' || command.type === 'close') { this.launch = parseTerminalView(result); await this.refreshLaunch() }
+        else {
+          this.$emit('updated', result)
+        }
       }
       catch (error) { this.error = error instanceof Error ? error.message : 'Application operation failed' }
       finally { this.busy = false; this.openingShell = false }
+    },
+    async refreshLaunch() {
+      clearTimeout(this.pollTimer)
+      try {
+        const result = await window.pods.programs({ type: 'launchStatus', podId: this.podId })
+        if (this.disposed) return
+        this.launch = result === null ? null : parseTerminalView(result)
+        if (this.launch && this.launch.state !== 'closed') this.pollTimer = setTimeout(() => { void this.refreshLaunch() }, 1000)
+      }
+      catch (error) { if (!this.disposed) this.error = error instanceof Error ? error.message : 'Application status failed' }
     },
     async grantHttp() {
       this.busy = true; this.error = ''
@@ -57,47 +74,75 @@ export default defineComponent({
     <p class="muted">
       {{ t('Open Terminal.app to configure assigned programs with ape-shell. The terminal and scripts share the pod workspace and program setup.') }}
     </p>
-    <article v-for="application in applications" :key="application.id" class="application-card">
+    <section v-if="launch" class="launch-status" aria-live="polite">
       <header>
-        <strong>{{ application.name }}</strong><button class="text-button" :disabled="busy" @click="revoke(application)">
-          {{ t('Remove application') }}
+        <strong>{{ launch.state === 'closed' ? t('Application session ended') : t('Application session · waiting for approval or running') }}</strong>
+        <button v-if="launch.state !== 'closed'" class="secondary" :disabled="busy" @click="act({ type: 'close', podId, sessionId: launch.sessionId })">
+          {{ t('Stop application') }}
         </button>
       </header>
-      <p class="resource-path">
-        {{ application.configuration.executable }}
+      <p v-if="launch.error" class="error-message">
+        {{ diagnostic(launch.error) }}
       </p>
-      <details>
-        <summary>{{ t('Allowed commands') }}</summary>
-        <p v-if="!(application.configuration.grants as unknown[])?.length">
-          {{ t('No commands allowed yet.') }}
-        </p>
-        <ul>
-          <li v-for="grant in (application.configuration.grants as { permission: string, display: string }[])" :key="grant.permission">
-            {{ grant.display }}
-          </li>
-        </ul>
+      <details v-if="launch.output">
+        <summary>{{ t('Application output') }}</summary><pre>{{ launch.output }}</pre>
       </details>
+    </section>
+    <div class="application-list" role="group" :aria-label="t('Executable applications')">
+      <article v-for="application in applications" :key="application.id" class="application-card" :class="{ selected: application.id === selectedApplication }">
+        <button class="application-select" :aria-pressed="application.id === selectedApplication" @click="selectedApplication = application.id">
+          <img v-if="application.configuration.icon" class="application-icon" :src="String(application.configuration.icon)" alt="">
+          <span v-else class="application-icon fallback-icon" aria-hidden="true">{{ application.configuration.bundlePath ? '▣' : '›_' }}</span>
+          <span>{{ application.name }}</span>
+        </button>
+        <button class="play-button secondary" :aria-label="t('Open {application}', { application: application.name })" :title="t('Open without arguments')" :disabled="busy || !!launch && launch.state !== 'closed'" @click="act({ type: 'launch', podId, applicationId: application.id, epoch: state.epoch })">
+          ▶
+        </button>
+      </article>
+      <p v-if="!applications.length" class="empty-applications">
+        {{ t('Add an installed application to use it in this pod.') }}
+      </p>
+      <footer class="application-toolbar">
+        <button class="text-button" :aria-label="t('Add installed application…')" :title="t('Add installed application…')" :disabled="busy" @click="act({ type: 'add', podId, epoch: state.epoch })">
+          ＋
+        </button>
+        <button class="text-button" :aria-label="t('Remove application')" :title="t('Remove application')" :disabled="busy || !selected" @click="selected && revoke(selected)">
+          −
+        </button>
+      </footer>
+    </div>
+    <details v-if="selected" :key="selected.id" class="application-details">
+      <summary>{{ t('Application details') }} · {{ selected.name }}</summary>
+      <p class="resource-path">
+        {{ selected.configuration.bundlePath || selected.configuration.executable }}
+      </p>
+      <p v-if="selected.configuration.bundlePath" class="muted">
+        {{ t('The application starts with the pod workspace and a private application HOME. Some macOS apps use global profiles or the login Keychain; check the account in the application itself.') }}
+      </p>
+      <h4>{{ t('Allowed commands') }}</h4>
+      <p v-if="!(selected.configuration.grants as unknown[])?.length">
+        {{ t('No commands allowed yet.') }}
+      </p>
+      <ul>
+        <li v-for="grant in (selected.configuration.grants as { permission: string, display: string }[])" :key="grant.permission">
+          {{ grant.display }}
+        </li>
+      </ul>
       <details class="script-reference">
-        <summary>{{ t('Use in script') }}</summary>
-        <code>{{ `context.tools.invoke({ application: ${JSON.stringify(application.name)}, argv: [...] })` }}</code>
+        <summary>{{ t('Use in script') }}</summary><code>{{ `context.tools.invoke({ application: ${JSON.stringify(selected.name)}, argv: [...] })` }}</code>
       </details>
-      <button class="text-button" :disabled="busy" @click="act({ type: 'importState', podId, applicationId: application.id, epoch: state.epoch })">
-        {{ t('Import existing setup') }}
-      </button>
-    </article>
-    <form class="actions" @submit.prevent="act({ type: 'add', podId, epoch: state.epoch, source })">
-      <select v-model="source" :aria-label="t('Application source')" :disabled="busy">
-        <option value="o365-cli">
-          {{ t('o365-cli') }}
-        </option><option value="choose">
-          {{ t('Choose installed CLI…') }}
-        </option>
-      </select>
-      <button :disabled="busy">
-        {{ t('Add application') }}
-      </button>
-    </form>
-    <ScriptAccess :key="state.epoch" :pod-id="podId" kind="tools" />
+      <div class="actions">
+        <button class="text-button" :disabled="busy" @click="act({ type: 'replace', podId, applicationId: selected.id, epoch: state.epoch })">
+          {{ t('Select installed replacement…') }}
+        </button>
+        <button class="text-button" :disabled="busy" @click="act({ type: 'importState', podId, applicationId: selected.id, epoch: state.epoch })">
+          {{ t('Import existing setup') }}
+        </button>
+      </div>
+    </details>
+    <details class="script-permissions">
+      <summary>{{ t('Script access') }}</summary><ScriptAccess :key="state.epoch" :pod-id="podId" kind="tools" />
+    </details>
     <h3>{{ t('HTTP destinations') }}</h3>
     <p class="muted">
       {{ t('Node.js scripts can request these HTTPS destinations. Store API tokens under Variables and secrets.') }}
@@ -122,7 +167,21 @@ export default defineComponent({
 
 <style scoped>
 .program-permissions { margin-top:28px; border-top:1px solid var(--border); padding-top:16px; }
-.application-card { border:1px solid var(--border); border-radius:12px; padding:16px; margin:12px 0; }
+.application-list { background:var(--surface); border:1px solid var(--border); border-radius:12px; margin:16px 0; overflow:hidden; }
+.application-list .application-card { display:flex; align-items:center; gap:12px; padding:12px 18px; border-bottom:1px solid var(--border); }
+.application-card.selected { background:var(--border); }
+.application-select { display:flex; flex:1; gap:14px; align-items:center; text-align:left; min-width:0; background:none; border:0; color:inherit; padding:0; font:inherit; font-size:15px; cursor:pointer; }
+.application-select span:last-child { overflow-wrap:anywhere; }
+.application-icon { width:32px; height:32px; flex-shrink:0; object-fit:contain; }
+.fallback-icon { border:1px solid var(--border); border-radius:8px; display:grid; place-items:center; font-size:17px; background:var(--background); }
+.play-button { width:36px; height:30px; padding:0; flex-shrink:0; border-radius:16px; }
+.application-toolbar { display:flex; align-items:center; padding:6px 12px; gap:0; }
+.application-toolbar button { font-size:23px; line-height:1; padding:2px 10px; margin:0; }
+.application-toolbar button + button { border-left:1px solid var(--border); border-radius:0; }
+.application-details { margin:10px 0 18px; font-size:13px; }
+.empty-applications { padding:10px 18px; }
+.launch-status { border:1px solid var(--border); border-radius:10px; padding:12px; margin:12px 0; }
+.launch-status pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:180px; overflow:auto; }
 header, .actions { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; }
 .actions { justify-content:flex-start; margin-top:12px; }
 label { display:grid; gap:6px; margin-top:12px; }

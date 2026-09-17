@@ -1,6 +1,30 @@
 # OpenApe Pods
 
-OpenApe Pods is the macOS desktop implementation of workspace concept B, using Electron 40.9.3, Vue 3, TypeScript, Vite and SQLite. This development build supports local pods, reference snapshots and manual example scripts. Codex execution uses the pinned TypeScript SDK and native CLI with a synthetic transport in acceptance tests. Owner-driven ChatGPT, OpenApe and Microsoft connection flows are implemented; live provider and tenant acceptance remain unverified. Schedules default to disabled, and new pods are paused.
+OpenApe Pods is the macOS desktop implementation of workspace concept B, using Electron 40.9.3, Vue 3, TypeScript, Vite and SQLite. This development build supports local pods, reference snapshots and manual example scripts. Codex execution uses the pinned TypeScript SDK and native CLI with a synthetic transport in acceptance tests. Owner-driven ChatGPT and OpenApe connection flows are implemented; third-party accounts are configured in assigned applications; live provider and tenant acceptance remain unverified. Schedules default to disabled, and new pods are paused.
+
+
+## Installed applications and owner setup
+
+Permissions presents assigned applications as a selectable icon/name list with
+Play controls, a plus/minus toolbar and one Terminal.app button above it. Play
+starts the verified executable directly through ape-shell with no arguments.
+The application gets the pod workspace and its private application HOME, shared
+with the existing encrypted setup state; Electron's Node-mode variable is removed.
+The default macOS login Keychain stays in use. Application details expose the
+path, grants, state import and installed replacement picker. Replacement preserves
+resource identity and encrypted state while clearing stored command approvals.
+The Play permission includes the executable hash, so replacing its binary cannot
+silently reuse an earlier launch grant.
+
+This is owner-assisted setup with Mac user privileges, not a GUI sandbox.
+An app may ignore HOME, use a global profile/Keychain, or delegate to an existing
+instance. Check its account in its own UI. Only foreground applications that use
+the supplied context can share pod setup reliably; arbitrary detached descendants
+are not contained. Close the application normally to save setup; forced stopping
+or interrupted sessions do not publish setup changes. The current encrypted
+application state limit is 4 MB / 128 files; large browser profiles need a separate
+supported state strategy. Automated script confinement remains unchanged.
+
 
 
 ## External pod terminal
@@ -300,14 +324,16 @@ including keyboard tabs, horizontal overflow and a reachable fixed footer.
 
 ## M8 — Confined read-only mail integration
 
-The bundled o365 CLI is built from the reviewed source archive recorded in
-`runtime-sources/o365-cli.json`, using Go 1.26.0. Its upstream PR is
-https://git.openape.ai/delta-mind/o365-cli/pulls/4, merged at
-`b8b0446660955d15a1fcb109eb20e47db2a67e53`. Runtime execution resolves the packaged
-binary and public CA snapshot by absolute path and checks their recorded hashes.
-No user-installed CLI or ambient home configuration is used by the pod process.
-The existing CLI worktree and its mail-vault branch remain unchanged.
+The historical o365 `pods` protocol is retained only as a synthetic test fixture
+under `.artifacts/o365-fixture`. Production packages do not contain o365-cli,
+its legacy runtime manifest or its CA bundle. Configure an installed executable
+in Permissions and use that executable's supported commands. Old `context.mail`
+scripts report an explicit migration error; their history and source are retained.
+The currently installed Mac CLI uses `auth login` and `mail` commands, not the
+historical `pods` protocol.
 
+The following boundary description applies to the retained legacy protocol tests;
+new pod assignments use the generic application broker.
 Scripts and SDK calls share the declared tool capability and frozen run scope.
 The main broker verifies the pod's signed ape-shell grant, holds a serialized
 connection cache, registers the native domain with the worker before spawning,

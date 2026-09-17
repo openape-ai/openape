@@ -144,14 +144,23 @@ export class FixtureWorker {
   async program(command: ProgramCommand, definition?: ProgramDefinition, file?: string) {
     await this.setupReady
     if (!this.programs) throw new Error('Program service is not ready')
+    if (command.type === 'launchStatus') return this.programs.launchStatus(command.podId)
     if (command.type === 'openShell') {
       const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
       return this.programs.openShell(command.podId, { executable: process.execPath, cli: app.isPackaged ? join(process.resourcesPath, 'apes/ape-shell.mjs') : join(dist, 'vendor/apes/ape-shell.mjs'), client: join(dist, 'runtime/shell-client.mjs') })
+    }
+    if (command.type === 'launch') {
+      const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
+      return this.programs.launch(command, { executable: process.execPath, cli: app.isPackaged ? join(process.resourcesPath, 'apes/ape-shell.mjs') : join(dist, 'vendor/apes/ape-shell.mjs'), client: join(dist, 'runtime/shell-client.mjs') })
     }
     if (command.type === 'prepare') return this.programs.prepare(command.podId, command.line)
     if (command.type === 'add') {
       if (!definition) throw new Error('Choose an application in the owner window')
       await this.programs.add(command.podId, command.epoch, definition)
+    }
+    else if (command.type === 'replace') {
+      if (!definition) throw new Error('Choose an application in the owner window')
+      await this.programs.replace(command.podId, command.applicationId, command.epoch, definition)
     }
     else if (command.type === 'grant') {
       await this.programs.grant(command)

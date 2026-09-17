@@ -7,11 +7,12 @@ const podId = '00000000-0000-4000-8000-000000000001'
 const id = '00000000-0000-4000-8000-000000000002'
 const state: ResourceState = { epoch: 2, resources: [{ id, podId, kind: 'tool', state: 'ready', name: 'Synthetic CLI', revision: 1, configuration: { type: 'program', executable: '/fixture/cli', grants: [{ permission: 'read', display: 'Read assigned data' }] } }] }
 it('opens one external pod terminal without an embedded console or argument form', async () => {
-  const programs = vi.fn().mockResolvedValue(state)
+  const programs = vi.fn(async command => command.type === 'launchStatus' ? null : state)
   window.pods = { ...window.pods, programs }
   const wrapper = mount(ProgramPermissions, { props: { podId, state }, global: { stubs: { PodConsole: true, ScriptAccess: true } } })
   expect(wrapper.text()).toContain('Terminal.app')
   expect(wrapper.text()).not.toContain('Signed in')
+  await wrapper.get('.application-select').trigger('click')
   expect(wrapper.get('code').text()).toContain('application: "Synthetic CLI"')
   await wrapper.findAll('button').find(button => button.text() === 'Open Terminal.app')!.trigger('click')
   await flushPromises()
@@ -36,7 +37,7 @@ it('submits the explicit HTTPS origin and methods without account or token field
 
 it('keeps terminal launch progress and failures directly beside the launch control', async () => {
   let rejectLaunch!: (reason: Error) => void
-  const programs = vi.fn(() => new Promise<ResourceState>((_resolve, reject) => { rejectLaunch = reject }))
+  const programs = vi.fn(command => command.type === 'launchStatus' ? Promise.resolve(null) : new Promise<ResourceState>((_resolve, reject) => { rejectLaunch = reject }))
   window.pods = { ...window.pods, programs }
   const wrapper = mount(ProgramPermissions, { props: { podId, state }, global: { stubs: { ScriptAccess: true } } })
   const button = wrapper.findAll('button').find(item => item.text() === 'Open Terminal.app')!
@@ -50,5 +51,18 @@ it('keeps terminal launch progress and failures directly beside the launch contr
   const firstApplication = wrapper.get('.application-card').element
   expect(alert.element.compareDocumentPosition(firstApplication) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   expect(button.attributes('disabled')).toBeUndefined()
+  wrapper.unmount()
+})
+
+it('starts the selected application with identifiers only and keeps replacement under its details', async () => {
+  const programs = vi.fn(async command => command.type === 'launchStatus' ? null : { sessionId: id, podId, state: 'closed' as const, sequence: 1, output: '', exitCode: 0, error: null })
+  window.pods = { ...window.pods, programs }
+  const wrapper = mount(ProgramPermissions, { props: { podId, state }, global: { stubs: { ScriptAccess: true } } })
+  await flushPromises()
+  await wrapper.get('button[aria-label="Open Synthetic CLI"]').trigger('click'); await flushPromises()
+  expect(programs).toHaveBeenCalledWith({ type: 'launch', podId, applicationId: id, epoch: 2 })
+  expect(wrapper.find('select').exists()).toBe(false)
+  await wrapper.get('.application-select').trigger('click')
+  expect(wrapper.text()).toContain('Select installed replacement')
   wrapper.unmount()
 })

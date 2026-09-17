@@ -19,7 +19,10 @@ export class MailService {
     const { argv, read } = parseMailRequest(request, assignment)
     const grantId = assignment.grants[read.operation]
     if (!grantId) throw new Error('No grant is assigned for this mail operation')
-    const manifest = JSON.parse(await readFile(join(this.vendor, 'o365-manifest.json'), 'utf8')) as { binaryHash: string, rootsHash: string, protocol: number }
+    let manifestBytes: string
+    try { manifestBytes = await readFile(join(this.vendor, 'o365-manifest.json'), 'utf8') }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new Error('The built-in mail program is no longer supplied. Assign an installed CLI in Permissions and update the script to its supported commands.'); throw error }
+    const manifest = JSON.parse(manifestBytes) as { binaryHash: string, rootsHash: string, protocol: number }
     if (manifest.protocol !== 1) throw new Error('Unsupported o365 protocol')
     const roots = join(this.vendor, 'mail-roots.pem')
     await verifyExecutable(roots, manifest.rootsHash)
