@@ -13,7 +13,6 @@ it('opens one external pod terminal without an embedded console or argument form
   expect(wrapper.text()).toContain('Terminal.app')
   expect(wrapper.text()).not.toContain('Signed in')
   await wrapper.get('.application-select').trigger('click')
-  expect(wrapper.get('code').text()).toContain('application: "Synthetic CLI"')
   await wrapper.findAll('button').find(button => button.text() === 'Open Terminal.app')!.trigger('click')
   await flushPromises()
   expect(wrapper.find('pod-console-stub').exists()).toBe(false)
@@ -54,7 +53,7 @@ it('keeps terminal launch progress and failures directly beside the launch contr
   wrapper.unmount()
 })
 
-it('starts the selected application with identifiers only and keeps replacement under its details', async () => {
+it('keeps application selection and launch without local grant details or script-access controls', async () => {
   const programs = vi.fn(async command => command.type === 'launchStatus' ? null : { sessionId: id, podId, state: 'closed' as const, sequence: 1, output: '', exitCode: 0, error: null })
   window.pods = { ...window.pods, programs }
   const wrapper = mount(ProgramPermissions, { props: { podId, state }, global: { stubs: { ScriptAccess: true } } })
@@ -63,6 +62,10 @@ it('starts the selected application with identifiers only and keeps replacement 
   expect(programs).toHaveBeenCalledWith({ type: 'launch', podId, applicationId: id, epoch: 2 })
   expect(wrapper.find('select').exists()).toBe(false)
   await wrapper.get('.application-select').trigger('click')
-  expect(wrapper.text()).toContain('Select installed replacement')
+  expect(wrapper.get('.application-select').attributes('aria-pressed')).toBe('true')
+  for (const text of ['Allowed commands', 'Read assigned data', 'Use in script', 'Select installed replacement', 'Import existing setup', 'Script access']) expect(wrapper.text()).not.toContain(text)
+  expect(wrapper.find('code').exists()).toBe(false)
+  expect(wrapper.find('script-access-stub').exists()).toBe(false)
+  expect(wrapper.get('button[aria-label="Remove application"]').attributes('disabled')).toBeUndefined()
   wrapper.unmount()
 })
