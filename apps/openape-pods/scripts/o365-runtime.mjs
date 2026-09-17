@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-export function bundleO365() {
+export function bundleO365(destinationPath) {
   if (process.platform !== 'darwin') return
   const pin = JSON.parse(readFileSync('runtime-sources/o365-cli.json', 'utf8'))
   const archive = readFileSync('runtime-sources/o365-cli.tar.gz')
@@ -12,7 +12,7 @@ export function bundleO365() {
   const version = execFileSync('go', ['version'], { encoding: 'utf8' }).split(' ')[2]
   if (version !== pin.go) throw new Error(`o365 build requires ${pin.go}; found ${version}`)
   const source = mkdtempSync(join(tmpdir(), 'pods-o365-build-'))
-  const destination = resolve('dist/vendor'); mkdirSync(destination, { recursive: true })
+  const destination = resolve(destinationPath); mkdirSync(destination, { recursive: true })
   try {
     execFileSync('/usr/bin/tar', ['-xzf', resolve('runtime-sources/o365-cli.tar.gz'), '-C', source], { stdio: 'inherit' })
     execFileSync('go', ['build', '-mod=readonly', '-trimpath', '-buildvcs=false', '-ldflags=-s -w', '-o', join(destination, 'o365-cli'), './cmd/o365-cli'], { cwd: source, stdio: 'inherit', env: { ...process.env, CGO_ENABLED: '0', GOTOOLCHAIN: 'local' } })

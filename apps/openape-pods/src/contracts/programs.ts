@@ -2,6 +2,8 @@ import type { ProgramAuthority } from '../main/programs/grants'
 
 export interface ProgramDefinition {
   name: string
+  icon?: string
+  bundlePath?: string
   executable: string
   executableHash: string
   cliId: string
@@ -21,7 +23,10 @@ export interface ProgramAssignment extends ProgramDefinition {
 export type ProgramCommand =
   | { type: 'openShell', podId: string }
   | { type: 'prepare', podId: string, line: string }
-  | { type: 'add', podId: string, epoch: number, source: 'o365-cli' | 'choose' }
+  | { type: 'add', podId: string, epoch: number }
+  | { type: 'replace', podId: string, applicationId: string, epoch: number }
+  | { type: 'launch', podId: string, applicationId: string, epoch: number }
+  | { type: 'launchStatus', podId: string }
   | { type: 'grant', podId: string, applicationId: string, epoch: number, argv: string[] }
   | { type: 'start', podId: string, applicationId: string, epoch: number, argv: string[] }
   | { type: 'importState', podId: string, applicationId: string, epoch: number }
@@ -33,13 +38,12 @@ export interface TerminalView { sessionId: string, podId: string, state: 'starti
 export function parseProgramCommand(value: unknown): ProgramCommand {
   const command = value as ProgramCommand
   if (!command || typeof command !== 'object' || Array.isArray(command) || !/^[a-f0-9-]{36}$/.test(command.podId)) throw new Error('Invalid program command')
-  const keys: Record<ProgramCommand['type'], string[]> = { openShell: [], prepare: ['line'], add: ['epoch', 'source'], grant: ['applicationId', 'epoch', 'argv'], start: ['applicationId', 'epoch', 'argv'], importState: ['applicationId', 'epoch'], poll: ['sessionId', 'after'], input: ['sessionId', 'data'], resize: ['sessionId', 'columns', 'rows'], close: ['sessionId'] }
+  const keys: Record<ProgramCommand['type'], string[]> = { openShell: [], launchStatus: [], prepare: ['line'], add: ['epoch'], replace: ['applicationId', 'epoch'], launch: ['applicationId', 'epoch'], grant: ['applicationId', 'epoch', 'argv'], start: ['applicationId', 'epoch', 'argv'], importState: ['applicationId', 'epoch'], poll: ['sessionId', 'after'], input: ['sessionId', 'data'], resize: ['sessionId', 'columns', 'rows'], close: ['sessionId'] }
   if (!Object.hasOwn(keys, command.type) || Object.keys(command).some(key => !['type', 'podId', ...keys[command.type]].includes(key))) throw new Error('Unsupported program command')
   if (command.type === 'prepare' && (typeof command.line !== 'string' || command.line.length > 16000 || /[\0\r\n]/.test(command.line))) throw new Error('Invalid terminal command')
   if ('epoch' in command && (!Number.isSafeInteger(command.epoch) || command.epoch < 0)) throw new Error('Invalid application permission revision')
   if ('applicationId' in command && !/^[a-f0-9-]{36}$/.test(command.applicationId)) throw new Error('Invalid application identity')
   if ('sessionId' in command && !/^[a-f0-9-]{36}$/.test(command.sessionId)) throw new Error('Invalid terminal session')
-  if (command.type === 'add' && !['o365-cli', 'choose'].includes(command.source)) throw new Error('Unsupported application source')
   if (command.type === 'start' || command.type === 'grant') parseProgramArgv(command.argv)
   if (command.type === 'poll' && (!Number.isSafeInteger(command.after) || command.after < 0)) throw new Error('Invalid terminal cursor')
   if (command.type === 'input' && (typeof command.data !== 'string' || new TextEncoder().encode(command.data).length > 8192)) throw new Error('Terminal input exceeds its limit')
