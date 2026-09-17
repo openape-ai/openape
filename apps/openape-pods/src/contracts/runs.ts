@@ -37,6 +37,8 @@ export function parseRunView(value: unknown): RunView {
   return view
 }
 export interface RunInput {
+  home?: string
+  directories?: { path: string, access: 'read' | 'readWrite' }[]
   variables?: Record<string, string>
   version: 1
   runId: string

@@ -35,7 +35,8 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
   const fixture = new PodDatabase(join(root, 'control'))
   const fixturePod = fixture.createPod({ name: 'Validation fixture' })
   try {
-    const input = { variables: new PodVariables(store).values(pod.id), version: 1 as const, runId: randomUUID(), podId: pod.id, scriptHash: hash, assignmentRevision: pod.bindingRevision, reason: 'manual' as const, eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: epoch, workspace: join(root, 'workspace'), references: [], limits: { timeMs: 5000, frameBytes: 256 * 1024 } }
+    const home = join(root, 'home'); await mkdir(home, { mode: 0o700 })
+    const input = { home, directories: [], variables: new PodVariables(store).values(pod.id), version: 1 as const, runId: randomUUID(), podId: pod.id, scriptHash: hash, assignmentRevision: pod.bindingRevision, reason: 'manual' as const, eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: epoch, workspace: join(root, 'workspace'), references: [], limits: { timeMs: 5000, frameBytes: 256 * 1024 } }
     const result = await executeScript(runtime, root, artifact, input, signal, { event: () => {}, request: async (operation, payload) => {
       if (operation === 'credentials.get') {
         const alias = parseCredentialRead(payload)

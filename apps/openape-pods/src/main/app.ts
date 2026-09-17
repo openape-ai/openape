@@ -231,6 +231,27 @@ async function start(): Promise<void> {
       const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Allow HTTP destination'), message: command.permission.origin, detail: t('Allowed methods: {methods}\n\nScripts with this permission can send data to this destination. Token values remain in Variables and secrets. The pod stays paused.', { methods: command.permission.methods.join(', ') }), buttons: [t('Cancel'), t('Allow HTTP destination')], defaultId: 0, cancelId: 0 })
       if (answer.response !== 1) return worker.resources({ type: 'list', podId: command.podId })
     }
+    if (command.type === 'pickDirectory' || command.type === 'changeDirectory') {
+      if (!window) throw new Error('Owner window is unavailable')
+      const state = await worker.resources({ type: 'list', podId: command.podId })
+      if (state.epoch !== command.epoch) throw new Error('Directory permissions changed; reload before assigning access')
+      let path: string
+      if (command.type === 'pickDirectory') {
+        const selection = await dialog.showOpenDialog(window, { title: t('Add directory'), properties: ['openDirectory'] })
+        if (selection.canceled || selection.filePaths.length !== 1) return state
+        path = await realpath(selection.filePaths[0])
+      }
+      else {
+        const resource = state.resources.find(item => item.id === command.id && item.revision === command.revision && item.kind === 'directory' && item.state === 'ready')
+        if (!resource) throw new Error('Directory permission is no longer available')
+        path = resource.configuration.path as string
+      }
+      const buttons = command.type === 'pickDirectory' ? [t('Cancel'), t('Read'), t('Read and write')] : [t('Cancel'), t(command.access === 'read' ? 'Read' : 'Read and write')]
+      const approval = await dialog.showMessageBox(window, { type: 'question', title: t('Directory permissions'), message: path, detail: t('Allow direct access to this folder and its contents? Read and write also allows changing and deleting files. The pod will be paused.'), buttons, defaultId: 0, cancelId: 0 })
+      if (approval.response === 0) return state
+      const access = command.type === 'changeDirectory' ? command.access : approval.response === 1 ? 'read' : 'readWrite'
+      return worker.resources({ type: 'assignDirectory', podId: command.podId, epoch: command.epoch, path, access })
+    }
     if (command.type !== 'pickReference') return worker.resources(command)
     if (!window) throw new Error('Owner window is unavailable')
     const pods = await worker.request({ type: 'list' })

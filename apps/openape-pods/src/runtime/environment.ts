@@ -17,11 +17,16 @@ export async function podDirectory(parent: string, name: string): Promise<string
 
 export interface ShellRuntime { executable: string, cli: string, client: string }
 export interface PodEnvironment { podId: string, home: string, workspace: string, bin: string, environment: Record<string, string> }
-export async function podEnvironment(root: string, podId: string, runtime: ShellRuntime): Promise<PodEnvironment> {
+export async function podDirectories(root: string, podId: string): Promise<{ home: string, workspace: string }> {
   if (!/^[a-f0-9-]{36}$/.test(podId)) throw new Error('Invalid pod environment identity')
   const canonical = await realpath(root)
   const pods = await podDirectory(canonical, 'pods'); const pod = await podDirectory(pods, podId)
-  const home = await podDirectory(pod, 'home'); const workspace = await podDirectory(pod, 'workspace'); const temporary = await podDirectory(home, 'tmp')
+  return { home: await podDirectory(pod, 'home'), workspace: await podDirectory(pod, 'workspace') }
+}
+export async function podEnvironment(root: string, podId: string, runtime: ShellRuntime): Promise<PodEnvironment> {
+  const { home, workspace } = await podDirectories(root, podId)
+  const canonical = await realpath(root)
+  const temporary = await podDirectory(home, 'tmp')
   const launchers = await podDirectory(canonical, 'shell-launchers'); const scoped = await podDirectory(launchers, podId); const bin = await podDirectory(scoped, 'bin')
   const shell = join(bin, 'ape-shell')
   await writeFile(shell, `#!/bin/sh\nexec /usr/bin/env ELECTRON_RUN_AS_NODE=1 APES_SHELL_MODE=1 ${quoteShell(runtime.executable)} ${quoteShell(runtime.cli)} "$@"\n`, { mode: 0o700 })

@@ -1,4 +1,5 @@
 import { programRequest } from '../main/programs/invoke'
+import { podDirectories } from '../runtime/environment'
 import { ProgramControl } from './resources/programs'
 import type { ProgramInternal } from './resources/programs'
 import { parseHttpReply } from '../contracts/http'
@@ -198,11 +199,15 @@ port.on('message', async (event) => {
       if (resource.type === 'saveVariable') variables.save(resource.podId, resource.name, resource.value, resource.revision)
       if (resource.type === 'removeVariable') variables.remove(resource.podId, resource.name, resource.revision)
       if (resource.type === 'assignCredential') registry.assignCredential(resource.podId, resource.alias, resource.credentialId, resource.epoch)
+      if (resource.type === 'assignDirectory') await registry.assignDirectory(resource.podId, resource.path, resource.access, resource.epoch)
+      if (resource.type === 'pickDirectory' || resource.type === 'changeDirectory') throw new Error('Directory selection requires owner approval')
       if (resource.type === 'assignReference') registry.assignReference(resource.podId, resource.name, resource.path)
       if (resource.type === 'revoke') registry.revoke(resource.podId, resource.id, resource.revision)
       if (resource.type === 'pickReference') throw new Error('File selection requires the owner window')
       const snapshot = resource.type === 'snapshot' ? await registry.capture(resource.podId, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/')) : undefined
-      port.postMessage({ id: request.id, state: { variables: variables.list(resource.podId), resources: registry.list(resource.podId), epoch: registry.epoch(resource.podId), ...(snapshot ? { snapshot } : {}) } })
+      const resources = registry.list(resource.podId)
+      const directories = await podDirectories(store.root, resource.podId)
+      port.postMessage({ id: request.id, state: { directories, variables: variables.list(resource.podId), resources, epoch: registry.epoch(resource.podId), ...(snapshot ? { snapshot } : {}) } })
       return
     }
     const command = parseCommand(request.command)
