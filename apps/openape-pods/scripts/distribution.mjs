@@ -30,15 +30,12 @@ export function inventory() {
   visit(`@lydell/node-pty-${process.platform}-${process.arch}`, pty)
   const electron = dirname(packageFile('electron', parent))
   for (const name of ['LICENSE', 'LICENSES.chromium.html']) notices.push(`\n===== Electron 40.9.3 / ${name} =====\n${readFileSync(join(electron, 'dist', name), 'utf8')}`)
-  const o365 = JSON.parse(readFileSync('dist/vendor/o365-manifest.json', 'utf8'))
   const codex = JSON.parse(readFileSync('dist/vendor/manifest.json', 'utf8'))
   const blockers = [
-    'o365 source revision has no upstream LICENSE file; obtain authoritative text and redistribution review',
     'Review the pinned Codex native Rust dependency notices; npm license metadata is not a complete native dependency inventory',
-    'Review Go module license notices and public CA bundle provenance for redistribution',
     ...[...packages.values()].filter(item => !item.licenses.length).map(item => `No packaged license text: ${item.name}@${item.version}`),
   ]
-  return { bom: { format: 'openape-pods-bom', version: 1, dependencyLockHash: sha256('../../pnpm-lock.yaml'), platform: process.platform, architecture: process.arch, electron: '40.9.3', nativeHelperSha256: sha256('dist/native/pods-helper'), packages: [...packages.values()], o365, codex, goBuild: execFileSync('go', ['version', '-m', 'dist/vendor/o365-cli'], { encoding: 'utf8' }), scope: 'Conservative runtime npm dependency closure, Electron/Chromium notices, pinned native origins and Go build metadata. Native transitive license review remains a release gate.', blockers }, notices: notices.join('\n') }
+  return { bom: { format: 'openape-pods-bom', version: 1, dependencyLockHash: sha256('../../pnpm-lock.yaml'), platform: process.platform, architecture: process.arch, electron: '40.9.3', nativeHelperSha256: sha256('dist/native/pods-helper'), packages: [...packages.values()], codex, scope: 'Conservative runtime npm dependency closure, Electron/Chromium notices, pinned native origins. Native transitive license review remains a release gate.', blockers }, notices: notices.join('\n') }
 }
 export function writeDistribution(releaseReady = false, review = null) {
   const { bom, notices } = inventory(); const version = JSON.parse(readFileSync('package.json', 'utf8')).version

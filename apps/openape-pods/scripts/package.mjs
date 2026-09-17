@@ -12,8 +12,8 @@ let review = null
 if (signed) {
   review = requireReleaseReview(candidate)
   if (!identity?.startsWith('Developer ID Application: ') || !process.env.OPENAPE_PODS_NOTARY_PROFILE) throw new Error('Explicit Developer ID and notary keychain profile are required')
-  for (const path of ['dist/native/pods-helper', 'dist/vendor/codex', 'dist/vendor/o365-cli']) execFileSync('/usr/bin/codesign', ['--force', '--timestamp', '--options', 'runtime', '--sign', identity, path], { stdio: 'inherit' })
-  for (const [manifest, binary] of [['manifest.json', 'codex'], ['o365-manifest.json', 'o365-cli']]) {
+  for (const path of ['dist/native/pods-helper', 'dist/vendor/codex']) execFileSync('/usr/bin/codesign', ['--force', '--timestamp', '--options', 'runtime', '--sign', identity, path], { stdio: 'inherit' })
+  for (const [manifest, binary] of [['manifest.json', 'codex']]) {
     const path = join('dist/vendor', manifest); const value = JSON.parse(readFileSync(path, 'utf8')); value.binaryHash = sha256(join('dist/vendor', binary)); writeFileSync(path, JSON.stringify(value, null, 2))
   }
 }

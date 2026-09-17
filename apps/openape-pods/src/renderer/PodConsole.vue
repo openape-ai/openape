@@ -34,7 +34,7 @@ export default defineComponent({
         const command = context.command
         if (context.needsGrant) {
           const state = await window.pods.programs({ ...command, type: 'grant' })
-          if (!('resources' in state)) throw new Error('Application permission response is missing')
+          if (!state || !('resources' in state)) throw new Error('Application permission response is missing')
           this.$emit('updated', state)
           if (this.disposed) return
           const application = state.resources.find(item => item.id === command.applicationId && item.state === 'ready')
