@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
   finally { await rm(root, { recursive: true, force: true }) }
 })
 
-it('terminal: the bundled o365-cli refreshes and reads through its own persistent application state', async () => {
+it('terminal: the external o365 protocol fixture refreshes and reads through its own persistent application state', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-terminal-o365-')))
   const fixture = await mailTLSFixture(root)
   const key = randomBytes(32)
@@ -97,7 +97,7 @@ it('terminal: the bundled o365-cli refreshes and reads through its own persisten
   try {
     const id = await state.create(binding)
     await state.use(id, binding, async (workspace) => {
-      const domain = await launchTerminal(resolve('dist/native/pods-helper'), root, { executable: resolve('dist/vendor/o365-cli'), workspace, readFiles: [fixture.certificate], runtimeDirectories: [], networkPorts: [fixture.proxy.port] }, ['pods', 'login', '--account', 'pod@example.invalid', '--cache-dir', workspace], { ...fixture.proxy.environment, PODS_CA_FILE: fixture.certificate })
+      const domain = await launchTerminal(resolve('dist/native/pods-helper'), root, { executable: resolve('.artifacts/o365-fixture/o365-cli'), workspace, readFiles: [fixture.certificate], runtimeDirectories: [], networkPorts: [fixture.proxy.port] }, ['pods', 'login', '--account', 'pod@example.invalid', '--cache-dir', workspace], { ...fixture.proxy.environment, PODS_CA_FILE: fixture.certificate })
       let output = ''; domain.stdout.on('data', (bytes) => { output += bytes.toString() }); domain.stderr.resume()
       try {
         await domain.processId; expect(await domain.completed, `${output} ${JSON.stringify(fixture.state)}`).toBe(0)
@@ -108,7 +108,7 @@ it('terminal: the bundled o365-cli refreshes and reads through its own persisten
     let cursor = ''; const ids: string[] = []
     for (let page = 0; page < 2; page++) {
       const reply = await state.use(id, binding, async (workspace) => {
-        const domain = await launchTerminal(resolve('dist/native/pods-helper'), root, { executable: resolve('dist/vendor/o365-cli'), workspace, readFiles: [fixture.certificate], runtimeDirectories: [], networkPorts: [fixture.proxy.port] }, ['pods', 'read', '--account', 'pod@example.invalid', '--cache-dir', workspace, '--operation', 'messages', '--folder', 'inbox', ...(cursor ? ['--cursor', cursor] : [])], { ...fixture.proxy.environment, PODS_CA_FILE: fixture.certificate })
+        const domain = await launchTerminal(resolve('dist/native/pods-helper'), root, { executable: resolve('.artifacts/o365-fixture/o365-cli'), workspace, readFiles: [fixture.certificate], runtimeDirectories: [], networkPorts: [fixture.proxy.port] }, ['pods', 'read', '--account', 'pod@example.invalid', '--cache-dir', workspace, '--operation', 'messages', '--folder', 'inbox', ...(cursor ? ['--cursor', cursor] : [])], { ...fixture.proxy.environment, PODS_CA_FILE: fixture.certificate })
         let output = ''; domain.stdout.on('data', (bytes) => { output += bytes.toString() }); domain.stderr.resume()
         try { await domain.processId; expect(await domain.completed, `${output} ${JSON.stringify(fixture.state)}`).toBe(0); return JSON.parse(output) as { items: { id: string }[], nextCursor?: string } }
         finally { domain.cancel(); await domain.completed }

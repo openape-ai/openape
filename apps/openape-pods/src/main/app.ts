@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { parseProgramCommand } from '../contracts/programs'
+import { applicationDefinition } from './programs/application'
 import { programDefinition } from './programs/definition'
 import { LanguagePreference } from './language'
 import { parseLanguageCommand } from '../contracts/language'
@@ -148,14 +149,17 @@ async function start(): Promise<void> {
       return worker.resources({ type: 'list', podId: command.podId })
     }
     const unchanged = () => worker.resources({ type: 'list', podId: command.podId })
-    if (command.type === 'add') {
-      const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
-      if (command.source === 'o365-cli') return worker.program(command, await programDefinition(join(vendor, 'o365-cli'), join(vendor, 'o365-shapes.toml'), vendor))
-      const executable = await dialog.showOpenDialog(window, { title: t('Choose an executable CLI'), properties: ['openFile'] })
+    if (command.type === 'add' || command.type === 'replace') {
+      const executable = await dialog.showOpenDialog(window, { title: t('Choose an installed application or CLI'), properties: ['openFile'] })
       if (executable.canceled || executable.filePaths.length !== 1) return unchanged()
+      const path = executable.filePaths[0]
+      const icon = (await app.getFileIcon(path, { size: 'normal' })).resize({ width: 32, height: 32 }).toDataURL()
+      if (path.endsWith('.app')) return worker.program(command, { ...await applicationDefinition(path, join(app.getPath('userData'), 'application-definitions')), icon })
+      try { return await worker.program(command, { ...await programDefinition(path), icon }) }
+      catch (error) { if (!(error instanceof Error) || !error.message.startsWith('No adapter found for ')) throw error }
       const adapter = await dialog.showOpenDialog(window, { title: t('Choose its apes command descriptor'), properties: ['openFile'], filters: [{ name: 'apes', extensions: ['toml'] }] })
       if (adapter.canceled || adapter.filePaths.length !== 1) return unchanged()
-      return worker.program(command, await programDefinition(executable.filePaths[0], adapter.filePaths[0]))
+      return worker.program(command, { ...await programDefinition(path, adapter.filePaths[0]), icon })
     }
     if (command.type === 'grant') {
       const resolved = await worker.programPreview(command)

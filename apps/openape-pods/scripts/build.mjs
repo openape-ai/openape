@@ -1,5 +1,4 @@
 import { bundleApes } from './apes-runtime.mjs'
-import { bundleO365 } from './o365-runtime.mjs'
 import { bundleCodex } from './codex-runtime.mjs'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, copyFileSync, readFileSync, writeFileSync } from 'node:fs'
@@ -18,7 +17,7 @@ copyFileSync('node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs', 'dist/runtim
 const parserHash = path => createHash('sha256').update(readFileSync(path)).digest('hex')
 writeFileSync('dist/runtime/parser-manifest.json', JSON.stringify({ entry: parserHash('dist/runtime/mail-parser.mjs'), worker: parserHash('dist/runtime/pdf.worker.mjs') }))
 bundleCodex()
-bundleO365()
+
 await bundleApes()
 copyFileSync('runtime-sources/pod-http-shapes.toml', 'dist/vendor/pod-http-shapes.toml')
 await buildRenderer()
