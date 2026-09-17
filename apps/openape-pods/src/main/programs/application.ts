@@ -30,7 +30,7 @@ export function launchDescriptor(cliId: string, name = cliId): string {
 export async function verifyApplicationBundle(definition: ProgramDefinition): Promise<void> {
   try { await stat(definition.executable) }
   catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new Error('Application is missing. Select its installed replacement in Permissions, then review the script commands.')
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new Error('Application is missing. Assign an installed application in Permissions, then review the script commands.')
     throw error
   }
   if (!definition.bundlePath) return

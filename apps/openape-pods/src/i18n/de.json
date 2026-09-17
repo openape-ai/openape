@@ -1429,7 +1429,7 @@
   "The application starts with the pod workspace and a private application HOME. Some macOS apps use global profiles or the login Keychain; check the account in the application itself.": "Die Anwendung startet im Pod-Arbeitsverzeichnis mit einem eigenen Anwendungs-HOME. Manche macOS-Apps verwenden globale Profile oder den Anmeldeschlüsselbund; prüfe das Konto in der Anwendung selbst.",
   "Add an installed application to use it in this pod.": "Füge eine installierte Anwendung hinzu, um sie in diesem Pod zu verwenden.",
   "Script access": "Skriptzugriffe",
-  "Application is missing. Select its installed replacement in Permissions, then review the script commands.": "Die Anwendung fehlt. Wähle ihren installierten Ersatz unter Berechtigungen und prüfe anschließend die Skriptbefehle.",
+  "Application is missing. Assign an installed application in Permissions, then review the script commands.": "Die Anwendung fehlt. Weise unter Berechtigungen eine installierte Anwendung zu und prüfe anschließend die Skriptbefehle.",
   "The built-in mail program is no longer supplied. Assign an installed CLI in Permissions and update the script to its supported commands.": "Das bisher integrierte Mailprogramm wird nicht mehr mitgeliefert. Weise unter Berechtigungen ein installiertes CLI zu und passe das Skript an dessen Befehle an.",
   "Choose a macOS application bundle": "Wähle eine macOS-Anwendung.",
   "Application has no valid bundle executable": "Die Anwendung enthält keine gültige ausführbare Programmdatei.",

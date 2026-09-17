@@ -168,11 +168,11 @@ Reloading an unchanged editor picks up the current saved source. Saving does not
 
 Permissions contains directory/file access, executable applications and HTTP destinations. The pod workspace is writable. Reference files are delivered as read-only snapshots; their originals remain outside the workspace.
 
-Use + below the application list to select an installed macOS app or CLI. Its name and icon appear with a Play button. Play starts the selected executable without arguments through ape-shell. Select a row to inspect details; use − to remove its assignment. Existing apes CLI descriptors are detected automatically, or you can select the descriptor file. Applications are not bundled with Pods.
+Use + below the application list to select an installed macOS app or CLI. Its name and icon appear with a Play button. Play starts the selected executable without arguments through ape-shell. Select a row and use − to remove its assignment. Existing apes CLI descriptors are detected automatically, or you can select the descriptor file. Applications are not bundled with Pods.
 
 Open Terminal.app opens a separate macOS window above this list. The banner shows the pod HOME, workspace and shell. Run an assigned CLI there using its normal commands, for example o365-cli auth login. Applications manage their own sign-in; Pods does not invent a login-status indicator. Required grants are approved through OpenApe or apes grants approve.
 
-Import existing setup copies a selected state file into protected, encrypted state belonging to this pod and application. The original stays unchanged. Import a token/cache file here, never as a reference snapshot. The program can refresh its private copy; scripts and Codex receive only program output. The app cannot automatically determine whether an imported session remains valid.
+Grants are managed through OpenApe and checked at execution time. Permissions does not display a static command-grant list, script call snippets or a separate application script-access selector. Application assignment does not bypass runtime authorization.
 
 HTTP destinations allow Node.js requests to an explicit HTTPS origin and selected methods through context.http.request. Secrets belong in Variables and secrets. Requests cannot follow redirects or reach private addresses. Current transport uses IPv4 on port 443, a 30-second timeout and bounded responses. Permissions are granted to the pod’s OpenApe agent.
 
@@ -181,8 +181,6 @@ An open terminal holds the pod and pauses automation, including while its prompt
 ape-shell mediates command grants; it does not provide a filesystem sandbox. The setup terminal runs granted commands with your Mac user privileges. A broad session grant permits correspondingly broad shell commands. Use foreground programs; reliable termination of detached background processes is not guaranteed. Automated Node.js scripts retain their additional macOS sandbox, and context.tools.invoke still uses the bounded application broker. Graphical programs and arbitrary child-process trees remain unsupported in that script broker.
 
 Play starts apps directly with the pod workspace and private application HOME, using the normal login Keychain. Some Mac apps ignore HOME or reuse a global profile or existing instance: check the account inside the app. Only programs respecting the supplied context can share setup reliably. Close the app normally to save setup. Interrupted sessions keep the last saved setup. Encrypted state is currently limited to 4 MB and 128 files; large browser profiles are not supported by this storage contract.
-
-When a program is updated or a former bundled path is missing, select the row, expand Application details and choose Select installed replacement. Resource IDs and encrypted setup are preserved; stored command approvals are cleared. The new executable may use different commands or state formats, so review the script before running. Old o365 pods commands and context.mail recipes require migration to the installed program; the old executable is no longer included.
 
 ![Permissions](images/handbook-permissions.png)
 
@@ -259,7 +257,7 @@ After sleep or downtime, one catch-up processes remaining input from saved progr
 
 ## Connections and the mail notification recipe
 
-Connections & setup has two global connections: ChatGPT/Codex for AI execution and OpenApe for pod identities and grants. Other programs authenticate in Permissions, using the pod’s external Terminal.app window or an imported application state file.
+Connections & setup has two global connections: ChatGPT/Codex for AI execution and OpenApe for pod identities and grants. Other programs authenticate in Permissions, using the pod’s external Terminal.app window or the application opened with Play.
 
 For a mail notification pod, select your installed o365-cli in Permissions and configure it through Terminal.app using its own auth commands. Inspect its help and approved apes descriptor before writing the script. Installed versions can differ from the former prototype protocol; do not use o365-cli pods commands unless your selected installation actually supports them.
 
@@ -295,6 +293,6 @@ Syntax or contract errors: correct the JavaScript and ensure run(context) return
 
 No automatic run: check the active script, enabled schedule, pod lifecycle, next-run time, worker status, resource state, queued recovery and whether the Mac is awake.
 
-Application read fails: inspect the exact command grant and program output in Permissions. Set up or import that application’s own state there. An empty result is not proof that all sources were read.
+Application read fails: inspect its current grant in OpenApe and its output in History. Configure the application through the pod terminal or Play. An empty result is not proof that all sources were read.
 
 Storage limit reached: export a backup if needed, remove unwanted archived pods through the confirmation flow, clean unused files or increase the configured limit. Then inspect recovery before retrying interrupted work.

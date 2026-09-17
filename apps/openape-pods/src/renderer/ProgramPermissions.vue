@@ -4,10 +4,8 @@ import type { ResourceState, PodResource } from '../contracts/resources'
 import { parseTerminalView } from '../contracts/programs'
 import type { ProgramCommand, TerminalView } from '../contracts/programs'
 import { t, diagnostic } from './i18n'
-import ScriptAccess from './ScriptAccess.vue'
 
 export default defineComponent({
-  components: { ScriptAccess },
   props: { podId: { type: String, required: true }, state: { type: Object as () => ResourceState, required: true } },
   emits: ['updated'],
   data() { return { selectedApplication: '', busy: false, openingShell: false, error: '', launch: null as TerminalView | null, pollTimer: undefined as ReturnType<typeof setTimeout> | undefined, disposed: false, origin: '', methods: ['GET'] as string[] } },
@@ -111,38 +109,6 @@ export default defineComponent({
         </button>
       </footer>
     </div>
-    <details v-if="selected" :key="selected.id" class="application-details">
-      <summary>{{ t('Application details') }} · {{ selected.name }}</summary>
-      <p class="resource-path">
-        {{ selected.configuration.bundlePath || selected.configuration.executable }}
-      </p>
-      <p v-if="selected.configuration.bundlePath" class="muted">
-        {{ t('The application starts with the pod workspace and a private application HOME. Some macOS apps use global profiles or the login Keychain; check the account in the application itself.') }}
-      </p>
-      <h4>{{ t('Allowed commands') }}</h4>
-      <p v-if="!(selected.configuration.grants as unknown[])?.length">
-        {{ t('No commands allowed yet.') }}
-      </p>
-      <ul>
-        <li v-for="grant in (selected.configuration.grants as { permission: string, display: string }[])" :key="grant.permission">
-          {{ grant.display }}
-        </li>
-      </ul>
-      <details class="script-reference">
-        <summary>{{ t('Use in script') }}</summary><code>{{ `context.tools.invoke({ application: ${JSON.stringify(selected.name)}, argv: [...] })` }}</code>
-      </details>
-      <div class="actions">
-        <button class="text-button" :disabled="busy" @click="act({ type: 'replace', podId, applicationId: selected.id, epoch: state.epoch })">
-          {{ t('Select installed replacement…') }}
-        </button>
-        <button class="text-button" :disabled="busy" @click="act({ type: 'importState', podId, applicationId: selected.id, epoch: state.epoch })">
-          {{ t('Import existing setup') }}
-        </button>
-      </div>
-    </details>
-    <details class="script-permissions">
-      <summary>{{ t('Script access') }}</summary><ScriptAccess :key="state.epoch" :pod-id="podId" kind="tools" />
-    </details>
     <h3>{{ t('HTTP destinations') }}</h3>
     <p class="muted">
       {{ t('Node.js scripts can request these HTTPS destinations. Store API tokens under Variables and secrets.') }}
@@ -178,19 +144,14 @@ export default defineComponent({
 .application-toolbar { display:flex; align-items:center; padding:6px 12px; gap:0; }
 .application-toolbar button { font-size:23px; line-height:1; padding:2px 10px; margin:0; }
 .application-toolbar button + button { border-left:1px solid var(--border); border-radius:0; }
-.application-details { margin:10px 0 18px; font-size:13px; }
 .empty-applications { padding:10px 18px; }
 .launch-status { border:1px solid var(--border); border-radius:10px; padding:12px; margin:12px 0; }
 .launch-status pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:180px; overflow:auto; }
-header, .actions { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; }
-.actions { justify-content:flex-start; margin-top:12px; }
+header { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; }
 label { display:grid; gap:6px; margin-top:12px; }
 input, select { min-width:0; width:100%; box-sizing:border-box; padding:10px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:inherit; font:inherit; }
-.actions select { width:auto; }
 fieldset { border:0; padding:10px 0; display:flex; flex-wrap:wrap; gap:14px; }
 fieldset label { display:flex; margin:0; align-items:center; }
 fieldset input { width:auto; }
-.script-reference code { display:block; overflow-wrap:anywhere; padding:10px 0; user-select:all; }
-.resource-path { overflow-wrap:anywhere; font-size:12px; opacity:.7; }
 .http-form { margin-top:14px; }
 </style>
