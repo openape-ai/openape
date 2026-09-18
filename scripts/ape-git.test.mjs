@@ -134,3 +134,13 @@ describe('native issue relation CLI', () => {
     assert.equal(calls.length, 4)
   })
 })
+
+describe('external-code issue home CLI', () => {
+  it('requires an explicit repository and preserves the external source URL', async () => {
+    const calls = []
+    const request = async (...args) => { calls.push(args); return {} }
+    await assert.rejects(execute(['repo', 'create', '--code-source', 'https://code.example/project'], request), /requires --repo/)
+    await execute(['repo', 'create', '--repo', 'owner/project', '--code-source', 'https://code.example/owner/project'], request)
+    assert.deepEqual(calls, [['POST', '/api/repos', { owner: 'owner', name: 'project', issueHomeOnly: true, codeSourceUrl: 'https://code.example/owner/project' }]])
+  })
+})

@@ -4,7 +4,7 @@ import { createError } from 'h3'
 import { useRuntimeConfig } from 'nitropack/runtime'
 import { accessAllows, accessFromGrants } from './git-access'
 import { useGrantStore } from './grant-store'
-import { findRepo } from './repos'
+import { findRepo, requireGitRepository } from './repos'
 
 /**
  * Session/bearer caller with at least `required` access on the repo: the
@@ -16,7 +16,7 @@ export async function requireRepoAccess(event: H3Event, owner: string, name: str
   const caller = await requireCaller(event)
   const repo = await findRepo(owner, name)
   if (!repo) throw createError({ statusCode: 404, statusMessage: 'repo not found' })
-  if (repo.ownerEmail === caller.email) return { repo, caller, access: 'admin' as GitAccess }
+  if (repo.ownerEmail === caller.email) { requireGitRepository(repo); return { repo, caller, access: 'admin' as GitAccess } }
 
   const config = useRuntimeConfig()
   const clientId = (config.openapeSp as { clientId?: string })?.clientId ?? 'repos.openape.ai'
@@ -25,6 +25,7 @@ export async function requireRepoAccess(event: H3Event, owner: string, name: str
   if (!access) throw createError({ statusCode: 404, statusMessage: 'repo not found' })
   if (!accessAllows(access, required))
     throw createError({ statusCode: 403, statusMessage: `git:${required} required on this repo` })
+  requireGitRepository(repo)
   return { repo, caller, access }
 }
 
