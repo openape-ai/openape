@@ -126,11 +126,27 @@ async function addLabel() {
             <UBadge :color="issue.state === 'open' ? 'success' : 'primary'" variant="subtle">
               {{ issue.state === 'open' ? 'Open' : 'Closed' }}
             </UBadge>
-            <span class="break-all">{{ issue.authorSubject }} opened this issue on {{ issueDate(issue.createdAt) }}</span>
+            <span class="break-all">{{ issue.imported?.label || issue.authorSubject || 'Unknown author' }} opened this issue on {{ issueDate(issue.createdAt) }}</span>
           </div>
         </header>
+        <p v-if="issue.capabilities.migrationLocked" class="my-4 text-sm text-amber-400" role="status">
+          Migration review: discussion and changes are disabled until cutover.
+        </p>
+        <p v-if="issue.imported" class="my-3 text-sm">
+          <a :href="issue.imported.sourceUrl" rel="noopener noreferrer" target="_blank">Original Forgejo issue</a>
+        </p>
         <div class="issue-detail-grid">
           <section class="min-w-0 space-y-4" aria-label="Discussion">
+            <section v-if="issue.attachments?.length" aria-label="Imported attachments" class="issue-comment p-4">
+              <h2 class="font-semibold mb-2">
+                Imported attachments
+              </h2>
+              <ul class="space-y-2 text-sm">
+                <li v-for="asset in issue.attachments" :key="asset.id">
+                  <a :href="asset.url" class="text-amber-400 break-all">{{ asset.filename }}</a> · {{ asset.size }} bytes<span v-if="asset.commentId"> · <a :href="`#comment-${asset.commentId}`">Comment</a></span>
+                </li>
+              </ul>
+            </section>
             <form v-if="editing" class="space-y-3" @submit.prevent="mutate(saveText)">
               <label class="block text-sm">Title<UInput v-model="editTitle" aria-label="Title" class="w-full mt-2" :maxlength="200" required /></label>
               <IssueEditor v-model="editBody" />
@@ -144,7 +160,7 @@ async function addLabel() {
             </form>
             <article v-else class="issue-comment">
               <header class="issue-comment-header">
-                {{ issue.authorSubject }}<span v-if="issue.authorActor !== issue.authorSubject"> via {{ issue.authorActor }}</span>
+                {{ issue.imported?.label || issue.authorSubject || 'Unknown author' }}<span v-if="issue.authorActor && issue.authorActor !== issue.authorSubject"> via {{ issue.authorActor }}</span>
               </header>
               <div class="p-4">
                 <IssueMarkdown :html="issue.bodyHtml" />
@@ -152,7 +168,7 @@ async function addLabel() {
             </article>
             <article v-for="comment in comments" :id="`comment-${comment.id}`" :key="comment.id" class="issue-comment">
               <header class="issue-comment-header flex flex-wrap justify-between gap-2">
-                <span>{{ comment.authorSubject }}<span v-if="comment.authorActor !== comment.authorSubject"> via {{ comment.authorActor }}</span> · <a :href="`#comment-${comment.id}`">{{ issueDate(comment.createdAt) }}</a></span>
+                <span>{{ comment.imported?.label || comment.authorSubject || 'Unknown author' }}<span v-if="comment.authorActor && comment.authorActor !== comment.authorSubject"> via {{ comment.authorActor }}</span> · <a :href="`#comment-${comment.id}`">{{ issueDate(comment.createdAt) }}</a></span>
                 <UButton v-if="comment.canEdit" color="neutral" variant="ghost" size="xs" @click="editComment = comment; editCommentBody = comment.body">
                   Edit comment
                 </UButton>

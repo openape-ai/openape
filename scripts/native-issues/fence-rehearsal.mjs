@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const container = 'openape-issues-m0-forgejo'
-const endpoint = 'http://127.0.0.1:13856'
+let endpoint = 'http://127.0.0.1:13856'
+const proxyEnabled = process.env.OPENAPE_ISSUE_ARCHIVE_PROXY === '1'
+let proxy
 const output = resolve('.openape/native-issues-m0/fixture')
 const token = readFileSync(`${output}/token`, 'utf8').trim()
 const evidence = []
@@ -56,6 +58,16 @@ for (const [table, predicate] of Object.entries(predicates)) {
 const cleanup = Object.keys(predicates).flatMap(table => ['insert', 'update', 'delete'].map(operation => `DROP TRIGGER IF EXISTS m0_freeze_${table}_${operation};`)).join('\n')
 writeFileSync(`${output}/fence.sql`, `BEGIN;\n${triggers.join('\n')}\nCOMMIT;\n`)
 try {
+  if (proxyEnabled) {
+    proxy = spawn(process.execPath, ['scripts/native-issues/archive-proxy-fixture.mjs'], { stdio: ['ignore', 'pipe', 'inherit'] })
+    await new Promise((resolveReady, reject) => {
+      const timer = setTimeout(() => reject(new Error('Archive proxy did not start')), 10000)
+      proxy.once('error', (error) => { clearTimeout(timer); reject(error) })
+      proxy.once('exit', (code) => { clearTimeout(timer); reject(new Error(`Archive proxy exited: ${code}`)) })
+      proxy.stdout.once('data', () => { clearTimeout(timer); resolveReady() })
+    })
+    endpoint = 'http://127.0.0.1:13857'
+  }
   sql(readFileSync(`${output}/fence.sql`, 'utf8'))
   for (const [name, path, method, body] of [
     ['issue-create', '/repos/pilot/pilot/issues', 'POST', { title: 'Must be rejected' }],
@@ -66,8 +78,18 @@ try {
     ['label-create', '/repos/pilot/pilot/labels', 'POST', { name: 'blocked', color: 'ff0000' }],
   ]) {
     const result = await request(path, method, body)
-    assert.equal(result.status, 500, `${name} did not reach the expected database denial`)
+    assert.equal(result.status, proxyEnabled ? 503 : 500, `${name} did not reach the expected database denial`)
     checkpoint(name, { status: result.status })
+  }
+  if (proxyEnabled) {
+    for (const [path, method] of [['/repos/pilot/pilot', 'DELETE'], ['/repos/pilot/pilot/transfer', 'POST'], ['/admin/users/pilot', 'DELETE'], ['/repos/pilot/pilot/issues/1/assets/1', 'DELETE']]) {
+      const result = await request(path, method)
+      assert.equal(result.status, 503)
+      checkpoint('administrative-write-fence', { path, status: result.status })
+    }
+    const upload = await fetch(`${endpoint}/attachments`, { method: 'POST', body: 'synthetic' })
+    assert.equal(upload.status, 503)
+    checkpoint('standalone-upload-fence', { status: upload.status })
   }
   const read = await request('/repos/pilot/pilot/issues/1')
   assert.equal(read.status, 200)
@@ -112,6 +134,8 @@ try {
   checkpoint('frozen-content', { beforeSha256: sourceHash, afterSha256: createHash('sha256').update(after).digest('hex') })
 }
 finally {
+  proxy?.kill('SIGTERM')
+  endpoint = 'http://127.0.0.1:13856'
   sql(`BEGIN;\n${cleanup}\nCOMMIT;`)
   writeFileSync(`${output}/fence-evidence.json`, `${JSON.stringify(evidence, null, 2)}\n`)
 }
