@@ -7,6 +7,8 @@ export interface IssueRecord {
   bodyHtml: string
   state: 'open' | 'closed'
   version: number
+  hidden: number
+  triageState: 'classified' | 'unclassified'
   authorSubject: string
   authorActor: string
   assignee: string | null

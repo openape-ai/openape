@@ -413,6 +413,7 @@ async function onRevoke(id: string) {
           </ul>
         </section>
       </template>
+      <IssuePolicy v-if="useRuntimeConfig().public.issuesEnabled" :owner="owner" :name="name" />
     </main>
   </div>
 </template>
