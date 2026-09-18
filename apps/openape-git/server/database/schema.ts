@@ -9,6 +9,9 @@ export const repos = sqliteTable('repos', {
   name: text('name').notNull(),
   ownerEmail: text('owner_email').notNull(),
   defaultBranch: text('default_branch').notNull().default('main'),
+  reportingEnabled: integer('reporting_enabled').notNull().default(0),
+  issueHomeOnly: integer('issue_home_only').notNull().default(0),
+  codeSourceUrl: text('code_source_url'),
   createdAt: integer('created_at').notNull(),
 }, t => [
   uniqueIndex('idx_repos_owner_name').on(t.owner, t.name),
@@ -159,4 +162,144 @@ export const protectionEvents = sqliteTable('protection_events', {
   id: text('id').primaryKey(), repoId: text('repo_id').notNull(), branch: text('branch').notNull(),
   actor: text('actor').notNull(), reason: text('reason').notNull(),
   configuration: text('configuration').notNull(), createdAt: integer('created_at').notNull(),
+})
+
+export const issueCounters = sqliteTable('issue_counters', {
+  repoId: text('repo_id').notNull(),
+  nextNumber: integer('next_number').notNull(),
+})
+
+export const issues = sqliteTable('issues', {
+  id: text('id').notNull(),
+  repoId: text('repo_id').notNull(),
+  number: integer('number').notNull(),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  state: text('state').notNull(),
+  productKey: text('product_key'),
+  assignee: text('assignee'),
+  authorSubject: text('author_subject'),
+  authorActor: text('author_actor'),
+  version: integer('version').notNull(),
+  hidden: integer('hidden').notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+  closedAt: integer('closed_at'),
+})
+
+export const issueComments = sqliteTable('issue_comments', {
+  id: text('id').notNull(),
+  issueId: text('issue_id').notNull(),
+  body: text('body').notNull(),
+  authorSubject: text('author_subject'),
+  authorActor: text('author_actor'),
+  version: integer('version').notNull(),
+  hidden: integer('hidden').notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at'),
+})
+
+export const issueLabels = sqliteTable('issue_labels', {
+  id: text('id').notNull(),
+  repoId: text('repo_id').notNull(),
+  name: text('name').notNull(),
+  color: text('color').notNull(),
+  description: text('description').notNull(),
+  archived: integer('archived').notNull(),
+  version: integer('version').notNull(),
+})
+
+export const issueLabelLinks = sqliteTable('issue_label_links', {
+  issueId: text('issue_id').notNull(),
+  labelId: text('label_id').notNull(),
+})
+
+export const issueParticipants = sqliteTable('issue_participants', {
+  issueId: text('issue_id').notNull(),
+  subject: text('subject').notNull(),
+  createdBy: text('created_by').notNull(),
+  createdAt: integer('created_at').notNull(),
+})
+
+export const products = sqliteTable('issue_products', {
+  key: text('key').notNull(),
+  name: text('name').notNull(),
+  repoId: text('repo_id').notNull(),
+  routingAdmin: text('routing_admin').notNull(),
+  approvedBy: text('approved_by').notNull(),
+  enabled: integer('enabled').notNull(),
+  version: integer('version').notNull(),
+})
+
+export const issuePullLinks = sqliteTable('issue_pull_links', {
+  issueId: text('issue_id').notNull(),
+  pullId: text('pull_id').notNull(),
+  subject: text('subject').notNull(),
+  actor: text('actor').notNull(),
+  createdAt: integer('created_at').notNull(),
+})
+
+export const issueEvents = sqliteTable('issue_events', {
+  id: text('id').notNull(),
+  issueId: text('issue_id').notNull(),
+  action: text('action').notNull(),
+  subject: text('subject').notNull(),
+  actor: text('actor').notNull(),
+  details: text('details').notNull(),
+  createdAt: integer('created_at').notNull(),
+  importBatchId: text('import_batch_id'),
+})
+
+export const issueAliases = sqliteTable('issue_aliases', {
+  repoId: text('repo_id').notNull(),
+  number: integer('number').notNull(),
+  issueId: text('issue_id').notNull(),
+})
+
+export const legacyReferences = sqliteTable('issue_legacy_references', {
+  sourceKey: text('source_key').notNull(),
+  kind: text('kind').notNull(),
+  issueId: text('issue_id').notNull(),
+  commentId: text('comment_id'),
+})
+
+export const importBatches = sqliteTable('issue_import_batches', {
+  id: text('id').notNull(),
+  source: text('source').notNull(),
+  manifestHash: text('manifest_hash').notNull(),
+  importedBy: text('imported_by').notNull(),
+  createdAt: integer('created_at').notNull(),
+  status: text('status').notNull(),
+})
+
+export const importOrigins = sqliteTable('issue_import_origins', {
+  sourceKey: text('source_key').notNull(),
+  batchId: text('batch_id').notNull(),
+  entityId: text('entity_id').notNull(),
+  kind: text('kind').notNull(),
+  contentHash: text('content_hash').notNull(),
+  provenance: text('provenance').notNull(),
+})
+
+export const issueAttachments = sqliteTable('issue_attachments', {
+  id: text('id').notNull(),
+  issueId: text('issue_id').notNull(),
+  commentId: text('comment_id'),
+  sourceId: text('source_id').notNull(),
+  filename: text('filename').notNull(),
+  mimeType: text('mime_type').notNull(),
+  size: integer('size').notNull(),
+  sha256: text('sha256').notNull(),
+  storageKey: text('storage_key').notNull(),
+  provenance: text('provenance').notNull(),
+})
+
+export const issueWriteRequests = sqliteTable('issue_write_requests', {
+  subject: text('subject').notNull(),
+  actor: text('actor').notNull(),
+  operation: text('operation').notNull(),
+  requestKey: text('request_key').notNull(),
+  payloadHash: text('payload_hash').notNull(),
+  result: text('result').notNull(),
+  createdAt: integer('created_at').notNull(),
 })

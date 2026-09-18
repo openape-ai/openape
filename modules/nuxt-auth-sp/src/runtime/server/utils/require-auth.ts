@@ -71,9 +71,11 @@ export function assertScopeCoversRequest(event: H3Event, scope: string[]): void 
     entry.grants?.some(grant => grantCoversRequest(grant, method, path)))
   if (catalogCovers) return
 
-  const prefix = scope[0]!.split(':')[0]
+  const catalogOnly = (useRuntimeConfig().openapeSp as { catalogOnlyScopes?: string[] })?.catalogOnlyScopes ?? []
+  const conventional = scope.filter(id => !catalogOnly.includes(id))
+  const prefix = conventional[0]?.split(':')[0]
   const needed = method === 'GET' || method === 'HEAD' ? `${prefix}:read` : `${prefix}:write`
-  if (scope.includes(needed)) return
+  if (conventional.includes(needed)) return
 
   throw createError({
     statusCode: 403,
@@ -82,6 +84,15 @@ export function assertScopeCoversRequest(event: H3Event, scope: string[]): void 
       ? `Delegated token scopes (${scope.join(', ')}) do not cover ${method} ${path}: no catalog grant matches this route and conventional scope "${needed}" is not held`
       : `Delegated token lacks required scope "${needed}" for ${method} ${path} (has: ${scope.join(', ')})`,
   })
+}
+
+export function assertCatalogScopeCoversRequest(event: H3Event, scope: string[], required: string[]): void {
+  const method = getMethod(event).toUpperCase()
+  const path = event.path.split('?')[0]!
+  const covered = getCatalogScopes().some(entry => required.includes(entry.id)
+    && scope.includes(entry.id)
+    && entry.grants?.some(grant => grantCoversRequest(grant, method, path)))
+  if (!covered) throw createError({ statusCode: 403, statusMessage: 'Scope does not permit this operation' })
 }
 
 function enforceScope(event: H3Event, caller: Caller): Caller {
