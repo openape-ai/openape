@@ -23,6 +23,7 @@ export interface IssueFilters {
   labels?: string[]
   assignee?: string
   reporter?: string
+  triage?: 'classified' | 'unclassified'
   limit?: number
   cursor?: string
 }
@@ -47,7 +48,7 @@ function fingerprint(value: unknown) {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex')
 }
 
-async function writeOnce<T>(tx: Transaction, principal: IssuePrincipal, operation: string, key: string, input: unknown, action: () => Promise<T>): Promise<T> {
+export async function writeOnce<T>(tx: Transaction, principal: IssuePrincipal, operation: string, key: string, input: unknown, action: () => Promise<T>): Promise<T> {
   if (!/^[\w.-]{8,128}$/.test(key)) failure(400, 'Idempotency-Key must contain 8–128 letters, digits, dots, dashes or underscores')
   const where = and(eq(issueWriteRequests.subject, principal.subject), eq(issueWriteRequests.actor, principal.actor), eq(issueWriteRequests.operation, operation), eq(issueWriteRequests.requestKey, key))
   const hash = fingerprint(input)
@@ -61,7 +62,7 @@ async function writeOnce<T>(tx: Transaction, principal: IssuePrincipal, operatio
   return result
 }
 
-async function nextNumber(tx: Transaction, repoId: string): Promise<number> {
+export async function nextNumber(tx: Transaction, repoId: string): Promise<number> {
   await tx.insert(issueCounters).values({ repoId, nextNumber: 1 }).onConflictDoNothing()
   const row = await tx.update(issueCounters).set({ nextNumber: sql`${issueCounters.nextNumber} + 1` }).where(eq(issueCounters.repoId, repoId)).returning().get()
   return row!.nextNumber - 1
@@ -138,7 +139,7 @@ export function createIssueStore(db: Database, audience: string, principal: Issu
       const labels = await db.select({ id: issueLabels.id, name: issueLabels.name, color: issueLabels.color }).from(issueLabels).innerJoin(issueLabelLinks, eq(issueLabels.id, issueLabelLinks.labelId)).where(eq(issueLabelLinks.issueId, id))
       const product = issue.productKey ? await db.select({ name: products.name }).from(products).where(eq(products.key, issue.productKey)).get() : null
       const { repoId: _repo, number, ...record } = issue
-      return { ...record, number: allowed.repository ? number : null, productName: product?.name ?? 'Unclassified', labels, capabilities: allowed, stableUrl: `/i/${id}`, repositoryUrl: allowed.repository ? `/${allowed.repository.owner}/${allowed.repository.name}/issues/${number}` : null }
+      return { ...record, number: allowed.repository ? number : null, productName: product?.name ?? (issue.triageState === 'unclassified' ? 'Unclassified' : 'No product'), labels, capabilities: allowed, stableUrl: `/i/${id}`, repositoryUrl: allowed.repository ? `/${allowed.repository.owner}/${allowed.repository.name}/issues/${number}` : null }
     },
 
     async resolve(owner: string, name: string, number: number) {
@@ -155,6 +156,7 @@ export function createIssueStore(db: Database, audience: string, principal: Issu
       const hash = fingerprint(search)
       const predicates = [visible]
       if (search.state !== 'all') predicates.push(eq(issues.state, search.state ?? 'open'))
+      if (search.triage) predicates.push(eq(issues.triageState, search.triage))
       if (search.product) predicates.push(eq(issues.productKey, search.product))
       if (search.assignee) predicates.push(eq(issues.assignee, search.assignee === 'me' ? principal.subject : search.assignee))
       if (search.reporter) predicates.push(eq(issues.authorSubject, search.reporter === 'me' ? principal.subject : search.reporter))
