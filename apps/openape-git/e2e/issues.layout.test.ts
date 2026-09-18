@@ -149,6 +149,43 @@ it('keeps product selection across login and gives reporters only their own disc
   finally { await context.close() }
 })
 
+it('shows reciprocal related links and a merged PR without implicitly closing its issue', async () => {
+  const heads = await fixture.seedBranches('owner', 'project')
+  const pull = await (await user.call('POST', '/api/repos/owner/project/pulls', { title: 'Preserve product context', source: 'fix-issue', target: 'main' })).json()
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto(`${fixture.base}/owner/project/issues/1`)
+  await page.getByRole('region', { name: 'Linked pull requests' }).getByText('No visible links.', { exact: true }).waitFor()
+  await page.locator('summary').filter({ hasText: 'Link pull request' }).click()
+  await page.getByLabel('Pull request repository', { exact: true }).fill('owner/project')
+  await page.getByLabel('Pull request number', { exact: true }).fill(String(pull.number))
+  await page.getByRole('button', { name: 'Add related pull request', exact: true }).click()
+  await page.getByRole('link', { name: 'Preserve product context', exact: true }).waitFor()
+  const shots = []
+  for (const [view, path, text] of [
+    ['issue-linked', '/owner/project/issues/1', 'Preserve product context'],
+    ['pull-linked', `/owner/project/pulls/${pull.number}`, 'Report a problem without losing context'],
+  ]) {
+    await page.goto(`${fixture.base}${path}`)
+    await page.getByRole('link', { name: text, exact: true }).waitFor()
+    for (const [size, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]] as const) {
+      await page.setViewportSize({ width, height })
+      await screenshot(`${view}-${size}`)
+      shots.push({ title: `${view} — ${size}`, shot: `${view}-${size}.png`, status: 'passed' })
+    }
+  }
+  const merged = await user.call('POST', `/api/repos/owner/project/pulls/${pull.number}/merge`, { expectedSourceSha: heads.sourceSha, expectedTargetSha: heads.targetSha })
+  expect(merged.status).toBe(200)
+  await page.goto(`${fixture.base}/owner/project/issues/1`)
+  await page.getByRole('region', { name: 'Linked pull requests' }).getByText(/Related.*merged/).waitFor()
+  await page.getByRole('button', { name: 'Close issue', exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Unlink Preserve product context', exact: true }).click()
+  await page.getByRole('region', { name: 'Linked pull requests' }).getByText('No visible links.', { exact: true }).waitFor()
+  const manifest = JSON.parse(readFileSync(`${artifactDir}/testrun.json`, 'utf8'))
+  manifest.tests.push({ id: 'issue-pr-links', title: 'Explicit relation, reciprocal view and manual issue resolution', status: 'passed', steps: shots })
+  writeFileSync(`${artifactDir}/testrun.json`, JSON.stringify(manifest, null, 2))
+  writeFileSync(`${artifactDir}/report.html`, readFileSync(`${artifactDir}/report.html`, 'utf8').replace('</html>', `${shots.map(shot => `<section><h2>${shot.title}</h2><img alt="${shot.title}" src="data:image/png;base64,${readFileSync(`${artifactDir}/${shot.shot}`).toString('base64')}"></section>`).join('')}</html>`))
+})
+
 it('creates an external-code issue home and hides native code, pull and mirror controls', async () => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto(fixture.base)

@@ -186,6 +186,37 @@ Production intake creation, product registration and feature activation remain p
 the separately approved rollout. Reporting links in other app shells and external-code
 issue homes follow as independently reviewable changes.
 
+## M5: explicit pull request relations
+
+An issue's **Linked pull requests** panel adds and removes `Related` relations.
+A reciprocal panel appears on the existing PR detail page. Both panels are behind
+the issue capability flag; PR merge behavior does not depend on issue availability.
+
+`GET/POST I/pulls` and `DELETE I/pulls/:pullId` also exist under the stable
+`/api/issue-records/:id` path. POST accepts `{ repository: "owner/name", number: 7 }`.
+Writes require `issues:triage`, live issue triage permission and write permission on
+the PR repository. Adding the same relation twice is idempotent. Removal is audited.
+`GET R/pulls/:number/issues` returns the reciprocal view. Reads require `issues:read`
+and current read access to both the issue and the PR repository. Inaccessible links
+are omitted entirely, including their count, title, namespace, number and URL.
+
+The PR's current state is read from the existing record. A successful merge never
+closes the issue; maintainers can comment and explicitly close it after verification.
+Closing or reopening either record does not remove its relation.
+
+```sh
+pnpm git:cli -- issue link --id ISSUE_ID --pull-repo owner/repository --pull-number 7
+pnpm git:cli -- issue links --id ISSUE_ID
+pnpm git:cli -- pr issues 7 --repo owner/repository
+pnpm git:cli -- issue unlink --id ISSUE_ID --pull-id PULL_ID
+```
+
+The existing signed HTTP suite covers both access directions, duplicate relations,
+write denial, hidden targets and audit entries. The real IdP/CLI/browser suites
+create a real PR over isolated Git refs, link it, merge the exact reviewed SHAs,
+observe `merged` beside an issue that remains `open`, and remove the relation.
+Existing merge-protection tests remain unchanged and mandatory.
+
 ## External-code issue homes
 
 Create a fresh issue-only repository with `POST /api/repos` using

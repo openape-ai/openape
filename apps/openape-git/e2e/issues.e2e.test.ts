@@ -63,6 +63,21 @@ describe('real DDISA login, native API and CLI', () => {
     expect((await stranger.call('GET', `/api/issue-records/${report.id}`)).status).toBe(404)
   })
 
+  it('links through the CLI and keeps the issue open after a real exact-SHA PR merge', async () => {
+    const heads = await fixture.seedBranches('owner', 'project')
+    const pull = await (await user.call('POST', '/api/repos/owner/project/pulls', { title: 'Related implementation', source: 'fix-issue', target: 'main' })).json()
+    const issue = await user.cli('create', '--repo', 'owner/project', '--title', 'Resolve explicitly', '--body-file', bodyFile, '--idempotency-key', 'link-roundtrip-001')
+    for (let n = 0; n < 2; n++) await user.cli('link', '--id', issue.id, '--pull-repo', 'owner/project', '--pull-number', String(pull.number))
+    const relations = await user.cli('links', '--id', issue.id)
+    expect(relations.pulls).toHaveLength(1)
+    const merged = await user.call('POST', `/api/repos/owner/project/pulls/${pull.number}/merge`, { expectedSourceSha: heads.sourceSha, expectedTargetSha: heads.targetSha })
+    expect(merged.status).toBe(200)
+    expect((await user.cli('links', '--id', issue.id)).pulls[0].state).toBe('merged')
+    expect((await user.cli('show', '--id', issue.id)).state).toBe('open')
+    expect((await (await user.call('GET', `/api/repos/owner/project/pulls/${pull.number}/issues`)).json()).issues[0].id).toBe(issue.id)
+    await user.cli('unlink', '--id', issue.id, '--pull-id', relations.pulls[0].id)
+    expect((await user.cli('links', '--id', issue.id)).pulls).toEqual([])
+  })
   it('registers an issue-only home without Git storage, code writes or mirror configuration', async () => {
     const endpoint = '/api/repos/owner/external'
     const created = await user.call('POST', '/api/repos', { owner: 'owner', name: 'external', issueHomeOnly: true, codeSourceUrl: 'https://code.example/owner/external' })

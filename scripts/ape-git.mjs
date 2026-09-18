@@ -81,7 +81,7 @@ export async function execute(argv, request, sleep = ms => new Promise(resolve =
     }
     return { code: data.state === 'success' ? 0 : data.state === 'failure' ? 1 : 3, data }
   }
-  if (p[0] !== 'pr') throw new ForgeError('USAGE', 'Commands: repo, pr list|show|diff|create|comment|merge, checks SHA, logs SHA, wait SHA')
+  if (p[0] !== 'pr') throw new ForgeError('USAGE', 'Commands: repo, pr list|show|diff|issues|create|comment|merge, checks SHA, logs SHA, wait SHA')
   if (p[1] === 'list') return { code: 0, data: await request('GET', `${base}/pulls?state=${encodeURIComponent(flags.state || 'open')}`) }
   if (p[1] === 'create') {
     if (!flags.title || !flags.source) throw new ForgeError('USAGE', 'pr create requires --title, --source and --body-file')
@@ -89,6 +89,7 @@ export async function execute(argv, request, sleep = ms => new Promise(resolve =
   }
   const number = positive(p[2])
   const path = `${base}/pulls/${number}`
+  if (p[1] === 'issues') return { code: 0, data: await request('GET', `${path}/issues`) }
   if (['show', 'diff'].includes(p[1])) {
     const data = await request('GET', path)
     if (p[1] === 'show') { const { files: _files, ...summary } = data; return { code: 0, data: summary } }

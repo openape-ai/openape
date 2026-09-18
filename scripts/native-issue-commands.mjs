@@ -9,6 +9,9 @@ const commandOptions = {
   'policy-show': [],
   'policy-set': ['enabled', 'expected-version'],
   'report-create': ['product', 'routing-version', 'title', 'body-file', 'idempotency-key'],
+  links: ['id'],
+  link: ['id', 'pull-repo', 'pull-number'],
+  unlink: ['id', 'pull-id'],
   transfer: ['id', 'product', 'label-map-file', 'expected-version'],
   moderate: ['id', 'hidden', 'revoke-participant', 'reason', 'expected-version'],
   show: ['id'],
@@ -106,6 +109,9 @@ export async function executeIssueCommand(args, suppliedRequest) {
   }
   if (positional.length > 1 || (flags.id && positional.length)) usage('Use one issue number or --id')
   const path = flags.id ? `/api/issue-records/${encodeURIComponent(flags.id)}` : `${base}/issues/${positive(positional[0], 'Issue number')}`
+  if (command === 'links') return send('GET', `${path}/pulls`)
+  if (command === 'link') return send('POST', `${path}/pulls`, { repository: parseRepository(required(flags, 'pull-repo')), number: positive(required(flags, 'pull-number'), '--pull-number') })
+  if (command === 'unlink') return send('DELETE', `${path}/pulls/${encodeURIComponent(required(flags, 'pull-id'))}`)
   if (command === 'transfer') {
     let mapping
     try { mapping = JSON.parse(readFileSync(required(flags, 'label-map-file'), 'utf8')) }
