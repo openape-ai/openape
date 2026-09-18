@@ -163,6 +163,9 @@ export class FixtureWorker {
       if (!definition) throw new Error('Choose an application in the owner window')
       await this.programs.replace(command.podId, command.applicationId, command.epoch, definition)
     }
+    else if (command.type === 'network') {
+      await this.programs.network(command.podId, command.applicationId, command.epoch, command.hosts)
+    }
     else if (command.type === 'grant') {
       await this.programs.grant(command)
     }

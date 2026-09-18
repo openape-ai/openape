@@ -78,3 +78,10 @@ it('rejects renderer paths and arguments on no-argument application launches', (
   expect(() => parseProgramCommand({ ...command, argv: ['ignored'] })).toThrow('Unsupported')
   expect(() => parseProgramCommand({ ...command, executable: '/bin/sh' })).toThrow('Unsupported')
 })
+
+it('accepts explicit public application hosts and rejects wildcard or local destinations', () => {
+  const base = { type: 'network', podId: randomUUID(), applicationId: randomUUID(), epoch: 2 }
+  expect(parseProgramCommand({ ...base, hosts: ['Graph.Microsoft.com'] })).toEqual({ ...base, hosts: ['graph.microsoft.com'] })
+  expect(parseProgramCommand({ ...base, hosts: [] })).toEqual({ ...base, hosts: [] })
+  for (const hosts of [['*.example.com'], ['localhost'], ['127.0.0.1'], ['api.local'], ['api.example.com:443'], ['api.example.com/path'], ['api.example.com', 'API.EXAMPLE.COM'], ['https://api.example.com'], Array.from({ length: 17 }).fill('api.example.com')]) expect(() => parseProgramCommand({ ...base, hosts })).toThrow()
+})
