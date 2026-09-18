@@ -118,7 +118,7 @@ export function makeManifest(snapshot, mapping, history) {
   unique(issues, 'number', 'destination issue number'); unique(issues, 'id', 'issue'); unique(comments, 'id', 'comment'); unique(labels, 'name', 'label name'); unique(assets, 'id', 'asset')
   const labelLinks = snapshot.snapshot.issues.flatMap(issue => (issue.labels ?? []).map(label => ({ issue_id: entityId('issue', key('issues', issue.number)), label_id: entityId('label', key('labels', label.id)) })))
   const highWater = Math.max(0, ...snapshot.snapshot.issues.map(issue => issue.number), ...snapshot.snapshot.pulls.map(pull => pull.number), ...issues.map(issue => issue.number))
-  return { format: 1, source, repository, destination: mapping.destination, operator: mapping.operator, snapshotHash: digest(snapshot), historyHash: digest(history), batchId: entityId('batch', `${source}/${repository}:${mapping.destination.id}`), highWater, issues, comments, labels, labelLinks, events, assets, origins, aliases, exceptions }
+  return { format: 1, source, repository, destination: mapping.destination, operator: mapping.operator, snapshotHash: digest(snapshot), historyHash: digest(history), mappingHash: digest(mapping), batchId: entityId('batch', `${source}/${repository}:${mapping.destination.id}`), highWater, issues, comments, labels, labelLinks, events, assets, origins, aliases, exceptions }
 }
 
 export function readJson(path) { return JSON.parse(readFileSync(path, 'utf8')) }

@@ -196,6 +196,8 @@ numbers to explicit new numbers. Optional `identities` entries require `subject`
 or repository grant is imported. `assignees` can select a verified source assignee
 or explicitly null. Current apply supports verified repository-owner assignment;
 other assignments remain unassigned pending a separate eligibility extension.
+The manifest also binds the complete mapping file, including identity proof and
+reviewer fields, by `mappingHash`; bundle and restore checks reject altered proof.
 Each exception needs its exact ID and a reviewed textual disposition. Blocking
 restrictions cannot be waived by filling in that text.
 
