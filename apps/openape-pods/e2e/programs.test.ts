@@ -69,9 +69,10 @@ int main(int argc, char **argv) {
   const server = createServer((request, response) => {
     response.setHeader('Content-Type', 'application/json')
     if (request.url === '/.well-known/jwks.json') { response.end(JSON.stringify({ keys: [{ ...keys.publicKey.export({ format: 'jwk' }), kid: 'key', alg: 'EdDSA', use: 'sig' }] })); return }
-    const index = request.url?.includes('/setup/') ? 0 : 1
-    const grantId = request.url?.includes('/http/') ? 'http' : index === 0 ? 'setup' : 'read'
+    const index = request.url?.split('/')[3] === 'setup' ? 0 : 1
+    const grantId = request.url?.split('/')[3] === 'http' ? 'http' : index === 0 ? 'setup' : 'read'
     if (request.url?.startsWith('/api/pods/agents/')) { response.end(JSON.stringify({ email: 'pod@example.test', owner: 'owner@example.test', active: true, keyIds: ['pod-key'], grantId: new URL(request.url, origin).searchParams.get('grant'), grantActive: state.active })); return }
+    if (request.url === `/api/grants/${grantId}`) { response.end(JSON.stringify({ id: grantId, status: state.active ? 'approved' : 'revoked', request: { requester: 'pod@example.test', audience: 'shapes', target_host: `pods:${podId}`, grant_type: 'always' } })); return }
     if (request.url === `/api/grants/${grantId}/token`) {
       const command = state.signedCommand ?? commands[state.corruptDetail ? 0 : index]!
       const now = Math.floor(Date.now() / 1000)
@@ -137,7 +138,7 @@ it('program boundary: grant revocation stops a waiting terminal before its lease
     expect(terminal.view().error).not.toBeNull()
     expect(f.releases()).toBe(1)
     expect(await readdir(join(f.root, 'credentials/temporary'))).toEqual([])
-    await expect(f.invoke(['read'])).rejects.toThrow('no longer active')
+    await expect(f.invoke(['read'])).rejects.toThrow('Permission revoked')
   }
   finally { terminal.close(); await terminal.completed; await f.close() }
 })
