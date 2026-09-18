@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { parseProgramCommand } from '../contracts/programs'
 import { applicationDefinition } from './programs/application'
-import { programDefinition } from './programs/definition'
+import { programDefinition, suggestedProgram } from './programs/definition'
 import { LanguagePreference } from './language'
 import { parseLanguageCommand } from '../contracts/language'
 import { translate, translateDiagnostic } from '../i18n'
@@ -151,7 +151,8 @@ async function start(): Promise<void> {
     }
     const unchanged = () => worker.resources({ type: 'list', podId: command.podId })
     if (command.type === 'add' || command.type === 'replace') {
-      const executable = await dialog.showOpenDialog(window, { title: t('Choose an installed application or CLI'), properties: ['openFile'] })
+      const defaultPath = command.type === 'add' && command.suggestedName ? await suggestedProgram(command.suggestedName, `${process.env.PATH ?? ''}:/opt/homebrew/bin:/usr/local/bin:${app.getPath('home')}/.local/bin`) : undefined
+      const executable = await dialog.showOpenDialog(window, { title: t('Choose an installed application or CLI'), properties: ['openFile'], ...(defaultPath ? { defaultPath } : {}) })
       if (executable.canceled || executable.filePaths.length !== 1) return unchanged()
       const path = executable.filePaths[0]
       const icon = (await app.getFileIcon(path, { size: 'normal' })).resize({ width: 32, height: 32 }).toDataURL()
@@ -247,7 +248,7 @@ async function start(): Promise<void> {
       const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Allow HTTP destination'), message: command.permission.origin, detail: t('Allowed methods: {methods}\n\nScripts with this permission can send data to this destination. Token values remain in Variables and secrets. The pod stays paused.', { methods: command.permission.methods.join(', ') }), buttons: [t('Cancel'), t('Allow HTTP destination')], defaultId: 0, cancelId: 0 })
       if (answer.response !== 1) return worker.resources({ type: 'list', podId: command.podId })
     }
-    if (command.type === 'pickDirectory' || command.type === 'changeDirectory') {
+    if (command.type === 'pickDirectory' || command.type === 'changeDirectory' || command.type === 'reviewDirectory') {
       if (!window) throw new Error('Owner window is unavailable')
       const state = await worker.resources({ type: 'list', podId: command.podId })
       if (state.epoch !== command.epoch) throw new Error('Directory permissions changed; reload before assigning access')
@@ -257,6 +258,9 @@ async function start(): Promise<void> {
         if (selection.canceled || selection.filePaths.length !== 1) return state
         path = await realpath(selection.filePaths[0])
       }
+      else if (command.type === 'reviewDirectory') {
+        path = await realpath(command.path)
+      }
       else {
         const resource = state.resources.find(item => item.id === command.id && item.revision === command.revision && item.kind === 'directory' && item.state === 'ready')
         if (!resource) throw new Error('Directory permission is no longer available')
@@ -265,7 +269,7 @@ async function start(): Promise<void> {
       const buttons = command.type === 'pickDirectory' ? [t('Cancel'), t('Read'), t('Read and write')] : [t('Cancel'), t(command.access === 'read' ? 'Read' : 'Read and write')]
       const approval = await dialog.showMessageBox(window, { type: 'question', title: t('Directory permissions'), message: path, detail: t('Allow direct access to this folder and its contents? Read and write also allows changing and deleting files. The pod will be paused.'), buttons, defaultId: 0, cancelId: 0 })
       if (approval.response === 0) return state
-      const access = command.type === 'changeDirectory' ? command.access : approval.response === 1 ? 'read' : 'readWrite'
+      const access = command.type !== 'pickDirectory' ? command.access : approval.response === 1 ? 'read' : 'readWrite'
       return worker.resources({ type: 'assignDirectory', podId: command.podId, epoch: command.epoch, path, access })
     }
     if (command.type !== 'pickReference') return worker.resources(command)
