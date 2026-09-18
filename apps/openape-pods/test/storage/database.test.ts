@@ -106,6 +106,6 @@ describe('durable pod state', () => {
     const store = fixture(); store.db.exec('PRAGMA user_version=999'); store.close(); stores.splice(stores.indexOf(store), 1)
     const before = readFileSync(store.path)
     expect(() => new PodDatabase(store.root)).toThrow('newer application')
-    expect(readFileSync(store.path)).toEqual(before)
+    expect(readFileSync(store.path).equals(before)).toBe(true)
   })
 })
