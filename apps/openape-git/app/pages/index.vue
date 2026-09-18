@@ -96,6 +96,9 @@ async function onCreate() {
           🦍 ape-git
         </NuxtLink>
         <div class="flex items-center gap-3 text-sm text-zinc-400">
+          <NuxtLink v-if="useRuntimeConfig().public.issuesEnabled" to="/issues">
+            Issues
+          </NuxtLink>
           <span>{{ identity }}</span>
           <UButton size="xs" color="neutral" variant="ghost" @click="logout()">
             Logout
