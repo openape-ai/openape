@@ -159,6 +159,8 @@ async function onMerge() {
           <div v-if="detail.pull.bodyHtml" class="markdown-body text-sm mt-3" v-html="detail.pull.bodyHtml" />
         </header>
 
+        <PullIssueLinks v-if="useRuntimeConfig().public.issuesEnabled" :endpoint="`/api/repos/${owner}/${name}/pulls/${number}`" />
+
         <section v-if="detail.pull.state === 'merged'" class="border border-violet-900/60 bg-violet-950/20 rounded-lg px-4 py-3 text-sm">
           Merged as
           <NuxtLink :to="`/${owner}/${name}/commits`" class="font-mono text-amber-500">
