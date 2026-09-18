@@ -15,14 +15,18 @@ export class ScriptCredentials {
 
   required(podId: string, capabilities: string[]): PodResource[] { return credentialAliases(capabilities).map(alias => this.assigned(podId, alias)) }
   approved(podId: string, hash: string): boolean {
-    const pod = this.store.getPod(podId)
-    return !!this.store.db.prepare('SELECT 1 FROM script_credential_approvals WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(podId, hash, pod.bindingRevision, this.resources.epoch(podId))
+    const row = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(podId, hash)
+    if (!row) return false
+    const manifest = parseManifest(JSON.parse(row.manifest as string))
+    const aliases = credentialAliases(manifest.capabilities)
+    const assigned = this.resources.list(podId).filter(resource => resource.kind === 'credential' && resource.state === 'ready').map(resource => resource.configuration.alias)
+    return aliases.every(alias => assigned.includes(alias))
   }
 
   assertApproved(podId: string, hash: string, capabilities: string[]): void {
     if (!credentialAliases(capabilities).length) return
     this.required(podId, capabilities)
-    if (!this.approved(podId, hash)) throw new Error('Approve credential access for this exact script version and current resources before activation or execution')
+    if (!this.approved(podId, hash)) throw new Error('Assign the required secrets to this Pod before execution')
   }
 
   approve(podId: string, hash: string, revision: number, epoch: number): void {

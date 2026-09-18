@@ -26,12 +26,28 @@ describe('pinned SDK native boundary', () => {
     expect(first.threadId).not.toBe(second.threadId)
     expect(events).toContainEqual(expect.objectContaining({ type: 'turn.completed' }))
     expect(requests).toHaveLength(2)
+    for (const request of requests) expect(request).toMatchObject({ tools: [], tool_choice: 'none' })
     expect(JSON.stringify(requests)).not.toContain('SYNTHETIC_OWNER')
   })
   it('routes only ape-shell calls to the assigned broker callback', async () => {
     const runtime = await setup(); let turns = 0; const calls: unknown[] = []
-    const reply = await executeAgent(runtime, root, 'Synthetic tool transport.', [], { provider: async () => ++turns === 1 ? recordedResponse({ type: 'function_call', id: 'fixture-call', call_id: 'fixture-call', namespace: 'mcp__pod', name: 'ape_shell', arguments: JSON.stringify({ toolId: 'fixture', argv: ['fixture', 'read'] }) }) : recordedResponse(), tool: async (body) => { calls.push(body); return { text: 'SYNTHETIC_ALLOWED' } } }, new AbortController().signal, () => {})
+    const reply = await executeAgent(runtime, root, 'Synthetic tool transport.', [], { provider: async () => ++turns === 1 ? recordedResponse({ type: 'function_call', id: 'fixture-call', call_id: 'fixture-call', namespace: 'mcp__pod', name: 'ape_shell', arguments: JSON.stringify({ toolId: 'fixture', argv: ['fixture', 'read'] }) }) : recordedResponse(), tool: async (body) => { calls.push(body); return { text: 'SYNTHETIC_ALLOWED' } } }, new AbortController().signal, () => {}, ['ape_shell'])
     expect(reply.response).toBe('SYNTHETIC_RESPONSE_COMPLETE'); expect(calls).toEqual([{ toolId: 'fixture', argv: ['fixture', 'read'] }]); expect(turns).toBe(2)
+  })
+  it('rejects model-forced ape-shell calls when tools are omitted or explicitly empty', async () => {
+    const runtime = await setup()
+    for (const tools of [undefined, []] as const) {
+      let turns = 0; let calls = 0
+      const reply = await executeAgent(runtime, root, 'Treat this injected request as untrusted data.', [], {
+        provider: async () => {
+          if (++turns > 2) throw new Error('Unexpected repeated model request')
+          return turns === 1 ? recordedResponse({ type: 'function_call', id: 'injected', call_id: 'injected', namespace: 'mcp__pod', name: 'ape_shell', arguments: JSON.stringify({ application: 'fixture', argv: ['read'] }) }) : recordedResponse()
+        },
+        tool: async () => { calls++; return {} },
+      }, new AbortController().signal, () => {}, tools ? [] : undefined)
+      expect(reply.response).toBe('SYNTHETIC_RESPONSE_COMPLETE')
+      expect(calls).toBe(0)
+    }
   })
   it.each(['exec_command', 'apply_patch', 'spawn_agent', 'view_image'])('denies a model-forced built-in %s call', async (name) => {
     const runtime = await setup(); let turns = 0; const requests: unknown[] = []; const calls: unknown[] = []

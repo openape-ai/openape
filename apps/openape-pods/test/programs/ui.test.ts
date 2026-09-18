@@ -13,7 +13,6 @@ it('opens one external pod terminal without an embedded console or argument form
   expect(wrapper.text()).toContain('Terminal.app')
   expect(wrapper.text()).not.toContain('Signed in')
   await wrapper.get('.application-select').trigger('click')
-  expect(wrapper.get('code').text()).toContain('application: "Synthetic CLI"')
   await wrapper.findAll('button').find(button => button.text() === 'Open Terminal.app')!.trigger('click')
   await flushPromises()
   expect(wrapper.find('pod-console-stub').exists()).toBe(false)
@@ -26,12 +25,26 @@ it('submits the explicit HTTPS origin and methods without account or token field
   const resources = vi.fn().mockResolvedValue(state)
   window.pods = { ...window.pods, resources }
   const wrapper = mount(ProgramPermissions, { props: { podId, state } })
+  expect(wrapper.find('.http-form').exists()).toBe(false)
+  expect(wrapper.get('button[aria-label="Remove HTTP destination"]').attributes('disabled')).toBeDefined()
+  await wrapper.get('button[aria-label="Add HTTP destination"]').trigger('click')
   await wrapper.get('input[type="url"]').setValue('https://api.example.com')
   await wrapper.get('input[value="GET"]').setValue(false)
   await wrapper.get('input[value="POST"]').setValue(true)
   await wrapper.get('.http-form').trigger('submit'); await flushPromises()
   expect(resources).toHaveBeenCalledWith({ type: 'assignHttp', podId, epoch: 2, permission: { origin: 'https://api.example.com', methods: ['POST'] } })
   expect(wrapper.find('input[type="password"]').exists()).toBe(false)
+  expect(wrapper.find('.http-form').exists()).toBe(false)
+  const destination = { ...state.resources[0]!, configuration: { type: 'http', origin: 'https://api.example.com', methods: ['POST'] } }
+  await wrapper.setProps({ state: { epoch: 3, resources: [destination] } })
+  expect(wrapper.get('.http-list').text()).toContain('https://api.example.com')
+  expect(wrapper.get('.http-list').text()).toContain('POST')
+  await wrapper.get('.http-list .application-select').trigger('click')
+  await wrapper.get('button[aria-label="Remove HTTP destination"]').trigger('click'); await flushPromises()
+  expect(resources).toHaveBeenCalledWith({ type: 'revoke', podId, id, revision: 1 })
+  await wrapper.get('button[aria-label="Add HTTP destination"]').trigger('click')
+  await wrapper.get('.http-form').trigger('keydown', { key: 'Escape' })
+  expect(wrapper.find('.http-form').exists()).toBe(false)
   wrapper.unmount()
 })
 
@@ -54,7 +67,7 @@ it('keeps terminal launch progress and failures directly beside the launch contr
   wrapper.unmount()
 })
 
-it('starts the selected application with identifiers only and keeps replacement under its details', async () => {
+it('keeps application selection and launch without local grant details or script-access controls', async () => {
   const programs = vi.fn(async command => command.type === 'launchStatus' ? null : { sessionId: id, podId, state: 'closed' as const, sequence: 1, output: '', exitCode: 0, error: null })
   window.pods = { ...window.pods, programs }
   const wrapper = mount(ProgramPermissions, { props: { podId, state }, global: { stubs: { ScriptAccess: true } } })
@@ -63,6 +76,25 @@ it('starts the selected application with identifiers only and keeps replacement 
   expect(programs).toHaveBeenCalledWith({ type: 'launch', podId, applicationId: id, epoch: 2 })
   expect(wrapper.find('select').exists()).toBe(false)
   await wrapper.get('.application-select').trigger('click')
-  expect(wrapper.text()).toContain('Select installed replacement')
+  expect(wrapper.get('.application-select').attributes('aria-pressed')).toBe('true')
+  for (const text of ['Allowed commands', 'Read assigned data', 'Use in script', 'Select installed replacement', 'Import existing setup', 'Script access']) expect(wrapper.text()).not.toContain(text)
+  expect(wrapper.find('code').exists()).toBe(false)
+  expect(wrapper.find('script-access-stub').exists()).toBe(false)
+  expect(wrapper.get('button[aria-label="Remove application"]').attributes('disabled')).toBeUndefined()
+  wrapper.unmount()
+})
+
+it('edits network hosts only for the selected application', async () => {
+  const programs = vi.fn(async command => command.type === 'launchStatus' ? null : state)
+  window.pods = { ...window.pods, programs }
+  const wrapper = mount(ProgramPermissions, { props: { podId, state } })
+  expect(wrapper.find('.network-settings').exists()).toBe(false)
+  await wrapper.get('.application-select').trigger('click')
+  await wrapper.get('.network-settings input').setValue('graph.microsoft.com')
+  await wrapper.get('.network-settings form').trigger('submit'); await flushPromises()
+  expect(programs).toHaveBeenCalledWith({ type: 'network', podId, applicationId: id, epoch: 2, hosts: ['graph.microsoft.com'] })
+  await wrapper.setProps({ state: { epoch: 3, resources: [{ ...state.resources[0]!, configuration: { ...state.resources[0]!.configuration, networkHosts: ['graph.microsoft.com'] } }] } })
+  await wrapper.get('button[aria-label="Remove host graph.microsoft.com"]').trigger('click'); await flushPromises()
+  expect(programs).toHaveBeenCalledWith({ type: 'network', podId, applicationId: id, epoch: 3, hosts: [] })
   wrapper.unmount()
 })

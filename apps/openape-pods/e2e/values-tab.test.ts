@@ -26,11 +26,12 @@ it('values tab: exposes empty variables and missing secrets in both languages wi
       expect(await page.locator('.value-row').allTextContents()).toEqual(expect.arrayContaining([expect.stringContaining(language === 'en' ? 'Not set' : 'Nicht hinterlegt')]))
       const secret = page.locator('.resource-row').filter({ hasText: 'notification_token' })
       await secret.getByRole('button', { name: language === 'en' ? 'Set secret' : 'Geheimnis hinterlegen', exact: true }).click()
-      expect(await page.locator('[name="credential-alias"]').inputValue()).toBe('notification_token')
+      await expect.poll(() => page.locator('[name="credential-alias"]').inputValue()).toBe('notification_token')
       expect(await page.locator('[name="credential-value"]').inputValue()).toBe('')
       await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(1100, 1050))
       await page.screenshot({ path: resolve(`.artifacts/values-tab-${language}.png`), fullPage: true })
       await page.getByRole('tab', { name: language === 'en' ? 'Settings' : 'Einstellungen', exact: true }).click()
+      await page.locator('#panel-Settings').waitFor()
       expect(await page.locator('.credential-form').count()).toBe(0)
     }
     await page.getByRole('tab', { name: 'Variablen und Geheimnisse', exact: true }).click()

@@ -10,9 +10,11 @@ Play controls, a plus/minus toolbar and one Terminal.app button above it. Play
 starts the verified executable directly through ape-shell with no arguments.
 The application gets the pod workspace and its private application HOME, shared
 with the existing encrypted setup state; Electron's Node-mode variable is removed.
-The default macOS login Keychain stays in use. Application details expose the
-path, grants, state import and installed replacement picker. Replacement preserves
-resource identity and encrypted state while clearing stored command approvals.
+The default macOS login Keychain stays in use. Selecting a row enables removal
+with the minus control. The UI omits command-grant inventories, script snippets,
+application import/replacement controls and the extra tool script-access selector.
+Grants remain checked at execution time; removing these UI controls does not
+change application assignments, stored state or runtime authorization.
 The Play permission includes the executable hash, so replacing its binary cannot
 silently reuse an earlier launch grant.
 

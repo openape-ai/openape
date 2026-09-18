@@ -58,3 +58,31 @@ describe('fencing and effect reconciliation', () => {
     expect(f.store.db.prepare('SELECT state,result FROM effect_ledger').get()).toMatchObject({ state: 'completed', result: JSON.stringify(externalReceipt.result) })
   })
 })
+
+it('keeps the current approval visible after many earlier grants and removes it after cancellation', () => {
+  const f = fixture()
+  for (let index = 0; index < 40; index++) f.runs.append(f.run.id, 'approval', { grantId: `past-${index}`, issuer: 'https://id.example.test', title: 'Past approval', state: 'approved' })
+  const pending = { grantId: 'current', issuer: 'https://id.example.test', title: 'Current approval', state: 'pending' }
+  f.runs.append(f.run.id, 'approval', pending)
+  f.runs.append(f.run.id, 'approval', { ...pending, openError: 'Browser did not open' })
+  expect(f.runs.approvals(f.pod.id)).toHaveLength(1)
+  expect(f.runs.approvals(f.pod.id)[0]).toMatchObject({ grantId: 'current', openError: 'Browser did not open' })
+  f.runs.finish(f.run.id, 'cancelled', 'Cancelled', null)
+  expect(f.runs.approvals(f.pod.id)).toEqual([])
+})
+
+it('retains complete approval timing when recent diagnostics exceed the visible event page', () => {
+  const f = fixture()
+  f.store.db.prepare('UPDATE runs SET started_at=1000 WHERE id=?').run(f.run.id)
+  const grant = { grantId: 'wait', issuer: 'https://id.example.test', title: 'Permission' }
+  f.runs.append(f.run.id, 'approval', { ...grant, state: 'pending' })
+  f.store.db.prepare('UPDATE run_events SET at=2000 WHERE run_id=? AND type=\'approval\'').run(f.run.id)
+  f.runs.append(f.run.id, 'approval', { ...grant, state: 'approved' })
+  f.store.db.prepare('UPDATE run_events SET at=5000 WHERE run_id=? AND json_extract(data,\'$.state\')=\'approved\'').run(f.run.id)
+  for (let index = 0; index < 510; index++) f.runs.append(f.run.id, 'diagnostic', { text: 'Synthetic progress' })
+  f.runs.finish(f.run.id, 'completed', 'Synthetic', null)
+  f.store.db.prepare('UPDATE runs SET finished_at=10000 WHERE id=?').run(f.run.id)
+  expect(f.runs.timing(f.pod.id, f.run.id)).toEqual({ activeMs: 6000, waitingMs: 3000 })
+  expect(f.runs.recentEvents(f.pod.id, f.run.id)).toHaveLength(500)
+  expect(f.runs.recentEvents(f.pod.id, f.run.id).at(-1)?.type).toBe('finished')
+})

@@ -22,8 +22,8 @@ it.each([false, true])('data: backs up, confirms deletion, restores into a fresh
     const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Recovery fixture' }))).pods[0]
     identity = await fixtureShellIdentity(root); await identity.encrypt(app, true)
     const workspace = join(root, 'pods', pod.id, 'workspace'); await mkdir(workspace, { recursive: true }); await writeFile(join(workspace, 'notes.txt'), 'SYNTHETIC_DURABLE_WORKSPACE')
-    await page.getByRole('tab', { name: 'History', exact: true }).click(); await page.getByRole('button', { name: 'Use local example', exact: true }).click(); await page.getByRole('button', { name: 'Start run', exact: true }).click()
-    await page.getByRole('button', { name: 'Local example completed (1)', exact: true }).waitFor()
+    await page.getByRole('tab', { name: 'History', exact: true }).click(); await page.evaluate(podId => window.pods.runs({ type: 'installExample', podId, variant: 'deterministic' }), pod.id); await page.getByRole('button', { name: 'Run now', exact: true }).click()
+    await page.getByText('Local example completed (1)', { exact: true }).waitFor()
     await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }) }, exports)
     await page.getByRole('button', { name: 'App settings', exact: true }).click(); await page.getByRole('button', { name: 'Data & backups', exact: true }).click(); await page.getByRole('heading', { name: 'Data & backups', exact: true }).waitFor()
     await page.getByRole('button', { name: 'Export backup…', exact: true }).click()

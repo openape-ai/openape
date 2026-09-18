@@ -1,10 +1,11 @@
+import { removePackageTree } from '../dependencies/store'
 import { lstat, readdir, rm, statfs } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { PodDatabase } from '../storage/database'
 import type { DataView } from '../../contracts/data'
 import { assertDataIdle } from './backup'
 import { confirmDomainsStopped } from '../recovery/domains'
-import { files } from './files'
+import { storageBytes } from './files'
 
 export interface DeletionJob { podId: string, runIds: string[], keyIds: string[] }
 const validId = (value: string) => /^[a-f0-9-]{36}$/.test(value)
@@ -12,11 +13,8 @@ export class DataRetention {
   constructor(private readonly store: PodDatabase, private readonly helper: string) {}
   async view(): Promise<DataView> {
     let usedBytes = 0
-    for (const directory of ['blobs', 'pods', 'snapshots', 'runs']) {
-      for (const path of await files(this.store.root, directory, true)) {
-        try { usedBytes += (await lstat(join(this.store.root, path))).size }
-        catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
-      }
+    for (const directory of ['blobs', 'pods', 'snapshots', 'runs', 'dependencies', 'dependency-staging']) {
+      usedBytes += await storageBytes(join(this.store.root, directory))
     }
     for (const name of ['control.sqlite', 'control.sqlite-wal']) {
       try { usedBytes += (await lstat(join(this.store.root, name))).size }
@@ -60,7 +58,7 @@ export class DataRetention {
       if (current.revision !== revision || current.lifecycle !== 'archived' || current.name !== name) throw new Error('Pod changed during deletion review')
       this.store.db.prepare('INSERT INTO deletion_jobs VALUES(?,?,NULL)').run(podId, JSON.stringify({ podId, runIds, keyIds: [...new Set(keyIds)] }))
       for (const table of ['run_events', 'run_inputs', 'execution_domains', 'recovery_reviews']) this.store.db.prepare(`DELETE FROM ${table} WHERE run_id IN (SELECT id FROM runs WHERE pod_id=?)`).run(podId)
-      for (const table of ['program_leases', 'run_leases', 'effect_ledger', 'runs', 'validations', 'scripts', 'assignments', 'checkpoints', 'claims', 'sources', 'mail_inventory', 'mail_items', 'mail_receipts', 'mail_extractions', 'mail_contexts', 'source_derivations', 'resources', 'resource_epochs', 'snapshot_sets', 'schedules', 'accepted_events', 'reference_observations', 'script_drafts', 'access_proposals']) this.store.db.prepare(`DELETE FROM ${table} WHERE pod_id=?`).run(podId)
+      for (const table of ['script_dependencies', 'dependency_sets', 'program_leases', 'run_leases', 'effect_ledger', 'runs', 'validations', 'scripts', 'assignments', 'checkpoints', 'claims', 'sources', 'mail_inventory', 'mail_items', 'mail_receipts', 'mail_extractions', 'mail_contexts', 'source_derivations', 'resources', 'resource_epochs', 'snapshot_sets', 'schedules', 'accepted_events', 'reference_observations', 'script_drafts', 'access_proposals']) this.store.db.prepare(`DELETE FROM ${table} WHERE pod_id=?`).run(podId)
       this.store.db.prepare('DELETE FROM master_messages WHERE id IN (SELECT message_id FROM master_message_scopes WHERE scope=?)').run(podId)
       this.store.db.prepare('DELETE FROM master_contexts WHERE scope=?').run(podId)
       this.store.db.prepare('DELETE FROM pods WHERE id=?').run(podId)
@@ -71,6 +69,7 @@ export class DataRetention {
   async cleanDeletedFiles(): Promise<void> {
     for (const job of this.jobs()) {
       try {
+        await removePackageTree(join(this.store.root, 'dependencies', job.podId))
         await rm(join(this.store.root, 'shell-launchers', job.podId), { recursive: true, force: true })
         await rm(join(this.store.root, 'pods', job.podId), { recursive: true, force: true })
         await rm(join(this.store.root, 'snapshots', job.podId), { recursive: true, force: true })

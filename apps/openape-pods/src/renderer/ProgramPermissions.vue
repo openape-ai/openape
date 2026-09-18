@@ -4,17 +4,17 @@ import type { ResourceState, PodResource } from '../contracts/resources'
 import { parseTerminalView } from '../contracts/programs'
 import type { ProgramCommand, TerminalView } from '../contracts/programs'
 import { t, diagnostic } from './i18n'
-import ScriptAccess from './ScriptAccess.vue'
 
 export default defineComponent({
-  components: { ScriptAccess },
   props: { podId: { type: String, required: true }, state: { type: Object as () => ResourceState, required: true } },
   emits: ['updated'],
-  data() { return { selectedApplication: '', busy: false, openingShell: false, error: '', launch: null as TerminalView | null, pollTimer: undefined as ReturnType<typeof setTimeout> | undefined, disposed: false, origin: '', methods: ['GET'] as string[] } },
+  data() { return { networkHost: '', selectedApplication: '', selectedDestination: '', addingHttp: false, busy: false, openingShell: false, error: '', launch: null as TerminalView | null, pollTimer: undefined as ReturnType<typeof setTimeout> | undefined, disposed: false, origin: '', methods: ['GET'] as string[] } },
   computed: {
     selected() { return this.applications.find(item => item.id === this.selectedApplication) },
     applications() { return this.state.resources.filter(item => item.state !== 'revoked' && item.configuration.type === 'program') },
     destinations() { return this.state.resources.filter(item => item.state !== 'revoked' && item.configuration.type === 'http') },
+    networkHosts(): string[] { return (this.selected?.configuration.networkHosts as string[] | undefined) ?? [] },
+    selectedHttp() { return this.destinations.find(item => item.id === this.selectedDestination) },
   },
   async mounted() { await this.refreshLaunch() },
   beforeUnmount() { this.disposed = true; clearTimeout(this.pollTimer) },
@@ -42,11 +42,27 @@ export default defineComponent({
       }
       catch (error) { if (!this.disposed) this.error = error instanceof Error ? error.message : 'Application status failed' }
     },
+    async openHttpForm() {
+      this.origin = ''; this.methods = ['GET']; this.error = ''; this.addingHttp = true
+      await this.$nextTick(); (this.$refs.httpOrigin as HTMLInputElement).focus()
+    },
+    async closeHttpForm() {
+      this.addingHttp = false
+      await this.$nextTick(); (this.$refs.addHttp as HTMLButtonElement).focus()
+    },
     async grantHttp() {
       this.busy = true; this.error = ''
-      try { this.$emit('updated', await window.pods.resources({ type: 'assignHttp', podId: this.podId, epoch: this.state.epoch, permission: { origin: this.origin, methods: this.methods } })) }
+      try {
+        this.$emit('updated', await window.pods.resources({ type: 'assignHttp', podId: this.podId, epoch: this.state.epoch, permission: { origin: this.origin, methods: this.methods } }))
+        this.busy = false; await this.closeHttpForm()
+      }
       catch (error) { this.error = error instanceof Error ? error.message : 'HTTP permission failed' }
       finally { this.busy = false }
+    },
+    async saveNetwork(hosts: string[]) {
+      if (!this.selected) return
+      await this.act({ type: 'network', podId: this.podId, applicationId: this.selected.id, epoch: this.state.epoch, hosts })
+      if (!this.error) this.networkHost = ''
     },
     async revoke(resource: PodResource) {
       this.busy = true; this.error = ''
@@ -111,61 +127,75 @@ export default defineComponent({
         </button>
       </footer>
     </div>
-    <details v-if="selected" :key="selected.id" class="application-details">
-      <summary>{{ t('Application details') }} · {{ selected.name }}</summary>
-      <p class="resource-path">
-        {{ selected.configuration.bundlePath || selected.configuration.executable }}
+    <section v-if="selected" class="network-settings" :aria-label="t('Application network access')">
+      <h4>{{ t('HTTPS hosts for {application}', { application: selected.name }) }}</h4>
+      <p class="muted">
+        {{ t('Only these hosts are reachable on port 443 during sandboxed application calls. Command grants still apply. Setup windows keep their existing Mac-user permissions.') }}
       </p>
-      <p v-if="selected.configuration.bundlePath" class="muted">
-        {{ t('The application starts with the pod workspace and a private application HOME. Some macOS apps use global profiles or the login Keychain; check the account in the application itself.') }}
-      </p>
-      <h4>{{ t('Allowed commands') }}</h4>
-      <p v-if="!(selected.configuration.grants as unknown[])?.length">
-        {{ t('No commands allowed yet.') }}
-      </p>
-      <ul>
-        <li v-for="grant in (selected.configuration.grants as { permission: string, display: string }[])" :key="grant.permission">
-          {{ grant.display }}
+      <ul v-if="networkHosts.length">
+        <li v-for="host in networkHosts" :key="host">
+          <span>{{ host }}</span><button class="text-button" :disabled="busy" :aria-label="t('Remove host {host}', { host })" @click="saveNetwork(networkHosts.filter(item => item !== host))">
+            −
+          </button>
         </li>
       </ul>
-      <details class="script-reference">
-        <summary>{{ t('Use in script') }}</summary><code>{{ `context.tools.invoke({ application: ${JSON.stringify(selected.name)}, argv: [...] })` }}</code>
-      </details>
-      <div class="actions">
-        <button class="text-button" :disabled="busy" @click="act({ type: 'replace', podId, applicationId: selected.id, epoch: state.epoch })">
-          {{ t('Select installed replacement…') }}
+      <p v-else class="muted">
+        {{ t('No network hosts assigned.') }}
+      </p>
+      <form @submit.prevent="saveNetwork([...networkHosts, networkHost.trim()])">
+        <label>{{ t('HTTPS hostname') }}<input v-model="networkHost" type="text" :placeholder="t('api.example.com')" required :disabled="busy"></label>
+        <button :disabled="busy || !networkHost.trim()">
+          {{ t('Add host') }}
         </button>
-        <button class="text-button" :disabled="busy" @click="act({ type: 'importState', podId, applicationId: selected.id, epoch: state.epoch })">
-          {{ t('Import existing setup') }}
-        </button>
-      </div>
-    </details>
-    <details class="script-permissions">
-      <summary>{{ t('Script access') }}</summary><ScriptAccess :key="state.epoch" :pod-id="podId" kind="tools" />
-    </details>
-    <h3>{{ t('HTTP destinations') }}</h3>
+      </form>
+    </section>
+    <h3 class="http-heading">
+      {{ t('HTTP destinations') }}
+    </h3>
     <p class="muted">
       {{ t('Node.js scripts can request these HTTPS destinations. Store API tokens under Variables and secrets.') }}
     </p>
-    <article v-for="destination in destinations" :key="destination.id" class="application-card">
-      <header>
-        <strong>{{ destination.name }}</strong><button class="text-button" :disabled="busy" @click="revoke(destination)">
-          {{ t('Revoke access') }}
+    <div class="application-list http-list" role="group" :aria-label="t('HTTP destinations')">
+      <article v-for="destination in destinations" :key="destination.id" class="application-card" :class="{ selected: destination.id === selectedDestination }">
+        <button class="application-select" :aria-pressed="destination.id === selectedDestination" @click="selectedDestination = destination.id">
+          <svg class="application-icon" aria-hidden="true" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="16" cy="16" r="12" /><ellipse cx="16" cy="16" rx="5" ry="12" /><path d="M4 16h24M7 9h18M7 23h18" /></svg>
+          <span class="destination-label"><span>{{ destination.configuration.origin }}</span><small>{{ (destination.configuration.methods as string[]).join(', ') }}</small></span>
         </button>
-      </header>
-      <p>{{ (destination.configuration.methods as string[]).join(', ') }}</p>
-    </article>
-    <form class="http-form" @submit.prevent="grantHttp">
-      <label>{{ t('HTTPS origin') }}<input v-model="origin" type="url" required :placeholder="t('https://api.example.com')" :disabled="busy"></label>
+      </article>
+      <p v-if="!destinations.length" class="empty-applications">
+        {{ t('No HTTP destinations assigned.') }}
+      </p>
+      <footer class="application-toolbar">
+        <button ref="addHttp" class="text-button" :aria-label="t('Add HTTP destination')" :title="t('Add HTTP destination')" :disabled="busy" :aria-expanded="addingHttp" aria-controls="http-destination-form" @click="openHttpForm">
+          ＋
+        </button>
+        <button class="text-button" :aria-label="t('Remove HTTP destination')" :title="t('Remove HTTP destination')" :disabled="busy || !selectedHttp" @click="selectedHttp && revoke(selectedHttp)">
+          −
+        </button>
+      </footer>
+    </div>
+    <form v-if="addingHttp" id="http-destination-form" class="http-form" @submit.prevent="grantHttp" @keydown.esc.prevent="!busy && closeHttpForm()">
+      <h4>{{ t('Add HTTP destination') }}</h4>
+      <label>{{ t('HTTPS origin') }}<input ref="httpOrigin" v-model="origin" type="url" required :placeholder="t('https://api.example.com')" :disabled="busy"></label>
       <fieldset><legend>{{ t('Allowed methods') }}</legend><label v-for="method in ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']" :key="method"><input v-model="methods" type="checkbox" :value="method" :disabled="busy">{{ method }}</label></fieldset>
       <button :disabled="busy || !methods.length">
         {{ t('Allow HTTP destination') }}
+      </button>
+      <button type="button" class="secondary" :disabled="busy" @click="closeHttpForm">
+        {{ t('Cancel') }}
       </button>
     </form>
   </section>
 </template>
 
 <style scoped>
+.network-settings { margin:16px 0; padding:16px; border:1px solid var(--border); border-radius:12px; }
+.network-settings h4 { margin:0; }
+.network-settings ul { list-style:none; padding:0; }
+.network-settings li { display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding:6px 0; }
+.network-settings form { display:flex; align-items:end; flex-wrap:wrap; gap:12px; }
+.network-settings label { flex:1; }
+.http-heading { margin-top:36px; }
 .program-permissions { margin-top:28px; border-top:1px solid var(--border); padding-top:16px; }
 .application-list { background:var(--surface); border:1px solid var(--border); border-radius:12px; margin:16px 0; overflow:hidden; }
 .application-list .application-card { display:flex; align-items:center; gap:12px; padding:12px 18px; border-bottom:1px solid var(--border); }
@@ -178,19 +208,18 @@ export default defineComponent({
 .application-toolbar { display:flex; align-items:center; padding:6px 12px; gap:0; }
 .application-toolbar button { font-size:23px; line-height:1; padding:2px 10px; margin:0; }
 .application-toolbar button + button { border-left:1px solid var(--border); border-radius:0; }
-.application-details { margin:10px 0 18px; font-size:13px; }
 .empty-applications { padding:10px 18px; }
 .launch-status { border:1px solid var(--border); border-radius:10px; padding:12px; margin:12px 0; }
 .launch-status pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:180px; overflow:auto; }
-header, .actions { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; }
-.actions { justify-content:flex-start; margin-top:12px; }
+header { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; }
 label { display:grid; gap:6px; margin-top:12px; }
 input, select { min-width:0; width:100%; box-sizing:border-box; padding:10px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:inherit; font:inherit; }
-.actions select { width:auto; }
 fieldset { border:0; padding:10px 0; display:flex; flex-wrap:wrap; gap:14px; }
 fieldset label { display:flex; margin:0; align-items:center; }
 fieldset input { width:auto; }
-.script-reference code { display:block; overflow-wrap:anywhere; padding:10px 0; user-select:all; }
-.resource-path { overflow-wrap:anywhere; font-size:12px; opacity:.7; }
-.http-form { margin-top:14px; }
+.destination-label { display:grid; gap:4px; min-width:0; overflow-wrap:anywhere; }
+.destination-label small { color:var(--muted); font-size:12px; }
+.http-form { margin-top:14px; padding:16px; border:1px solid var(--border); border-radius:12px; }
+.http-form h4 { margin:0; }
+.http-form button + button { margin-left:8px; }
 </style>

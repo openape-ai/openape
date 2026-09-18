@@ -11,8 +11,10 @@ export interface RuntimePolicy {
   workspace: string
   readFiles: string[]
   runtimeDirectories: string[]
+  readDirectories?: string[]
   writeDirectories?: string[]
   networkPorts?: number[]
+  systemTrust?: boolean
 }
 function literal(path: string): string {
   if (!isAbsolute(path) || /[\0\r\n\\"]/.test(path)) throw new Error('Unsupported sandbox path')
@@ -22,6 +24,7 @@ export function sandboxPolicy(policy: RuntimePolicy): string {
   const executable = literal(policy.executable)
   const readFiles = policy.readFiles.map(path => `(literal ${literal(path)})`).join(' ')
   const runtime = policy.runtimeDirectories.map(path => `(subpath ${literal(path)})`).join(' ')
+  const reads = (policy.readDirectories ?? []).map(path => `(subpath ${literal(path)})`).join(' ')
   const writes = (policy.writeDirectories ?? []).map(path => `(subpath ${literal(path)})`).join(' ')
   const network = (policy.networkPorts ?? []).map((port) => {
     if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Invalid broker port')
@@ -32,10 +35,10 @@ export function sandboxPolicy(policy: RuntimePolicy): string {
 (allow process-exec (literal ${executable}))
 (allow signal (target self))
 (allow sysctl-read)
-(allow mach-lookup (global-name "com.apple.system.logger"))
+(allow mach-lookup (global-name "com.apple.system.logger")${policy.systemTrust ? ' (global-name "com.apple.trustd.agent")' : ''})
 (allow file-read-metadata)
 (allow file-map-executable (literal ${executable}) (subpath "/System/Library") (subpath "/usr/lib") ${runtime})
-(allow file-read* (literal "/") (literal "/dev/null") (literal "/dev/urandom") (literal ${executable}) (subpath "/System/Library") (subpath "/usr/lib") ${readFiles} ${runtime})
+(allow file-read* (literal "/") (literal "/dev/null") (literal "/dev/urandom") (literal ${executable}) (subpath "/System/Library") (subpath "/usr/lib") ${readFiles} ${reads} ${runtime})
 (allow file-write* (literal "/dev/null"))
 (allow file-read* file-write* (subpath ${literal(policy.workspace)}) ${writes})
 ${network ? `(allow network-outbound ${network})` : ''}

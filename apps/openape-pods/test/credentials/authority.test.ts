@@ -23,15 +23,15 @@ function version(f: ReturnType<typeof fixture>, code = 'export async function ru
   f.store.db.prepare('INSERT OR REPLACE INTO validations VALUES(?,?,?,?,?)').run(f.pod.id, hash, revision, f.registry.epoch(f.pod.id), '{}')
   return hash
 }
-it('requires exact-source owner approval and invalidates it after credential rotation and rejects stale review metadata', () => {
+it('keeps secret assignment across validated script changes and rejects revoked or stale access', () => {
   const f = fixture(); f.registry.assignCredential(f.pod.id, 'crm', randomUUID(), 0)
   const hash = version(f); const activate = () => new WorkspaceDetails(f.store, f.registry).execute({ type: 'activate', podId: f.pod.id, hash, expectedActive: null, assignmentRevision: 1 })
-  expect(activate).toThrow('Approve credential access')
+  expect(f.authority.approved(f.pod.id, hash)).toBe(true)
   f.authority.approve(f.pod.id, hash, 1, 1); expect(f.authority.approved(f.pod.id, hash)).toBe(true)
   activate(); expect(f.store.getPod(f.pod.id).activeScript).toBe(hash)
   f.store.updatePod(f.pod.id, 1, { name: 'Renamed', lifecycle: 'paused' }); expect(f.authority.approved(f.pod.id, hash)).toBe(true)
-  const changed = version(f, 'export async function run() { return 1 }'); expect(f.authority.approved(f.pod.id, changed)).toBe(false)
-  f.registry.assignCredential(f.pod.id, 'crm', randomUUID(), 1); expect(f.authority.approved(f.pod.id, hash)).toBe(false)
+  const changed = version(f, 'export async function run() { return 1 }'); expect(f.authority.approved(f.pod.id, changed)).toBe(true)
+  f.registry.assignCredential(f.pod.id, 'crm', randomUUID(), 1); expect(f.authority.approved(f.pod.id, hash)).toBe(true)
   expect(() => f.authority.approve(f.pod.id, hash, 1, 1)).toThrow()
   f.store.updatePod(f.pod.id, 2, { name: 'Changed', lifecycle: 'paused' }); expect(() => f.authority.approve(f.pod.id, hash, 1, 2)).toThrow()
 })
@@ -75,7 +75,7 @@ it('migrates schema 11 resources without losing assignments or their revisions',
   previous.exec(`ALTER TABLE pods DROP COLUMN metadata_revision; DROP TABLE pod_chat_origins; DROP TABLE master_creations; DROP TABLE pod_descriptions; DROP TABLE summary_domains; DROP TABLE program_leases; DROP TABLE master_message_scopes; DROP TABLE master_contexts; DROP TABLE pod_variables; DROP TABLE script_credential_approvals;
     ALTER TABLE resources RENAME TO newer_resources;
     CREATE TABLE resources(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), revision INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('reference','tool','connection')), state TEXT NOT NULL CHECK(state IN ('ready','missing','expired','revoked','refreshRequired')), name TEXT NOT NULL, configuration TEXT NOT NULL);
-    INSERT INTO resources SELECT * FROM newer_resources; DROP TABLE newer_resources; PRAGMA user_version=11;`)
+    INSERT INTO resources SELECT * FROM newer_resources; DROP TABLE newer_resources; DROP TABLE script_dependencies; DROP TABLE dependency_sets; DROP TABLE draft_packages; DROP TABLE dependency_domains; PRAGMA user_version=11;`)
   previous.close()
   const migrated = new PodDatabase(root); stores.push(migrated); const registry = new ResourceRegistry(migrated, () => {})
   expect(registry.list(f.pod.id)).toEqual([reference]); expect(registry.epoch(f.pod.id)).toBe(1)

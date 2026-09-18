@@ -8,7 +8,7 @@ import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotSet } from '../src/worker/resources/snapshots'
 import { launchSandbox, verifyExecutable } from '../src/worker/runtime/sandbox'
-import type { ProcessDomain } from '../src/worker/runtime/sandbox'
+import type { ProcessDomain, RuntimePolicy } from '../src/worker/runtime/sandbox'
 
 const roots: string[] = []
 const domains: ProcessDomain[] = []
@@ -20,12 +20,12 @@ async function fixture() {
   return { root, workspace, sibling, broker }
 }
 afterEach(async () => { for (const domain of domains.splice(0)) { domain.cancel(); await domain.completed } for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }) })
-async function runProbe(root: Awaited<ReturnType<typeof fixture>>, script: string, readFiles: string[] = [], packaged = false) {
+async function runProbe(root: Awaited<ReturnType<typeof fixture>>, script: string, readFiles: string[] = [], packaged = false, directories: Pick<RuntimePolicy, 'readDirectories' | 'writeDirectories'> = {}) {
   const file = join(root.broker, `${randomUUID()}.mjs`); await writeFile(file, script)
   const bundle = resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents')
   const executable = packaged ? join(bundle, 'MacOS/OpenApe Pods Fixture') : process.execPath
   const binary = packaged ? join(bundle, 'Resources/app.asar.unpacked/dist/native/pods-helper') : helper
-  const domain = await launchSandbox(binary, root.broker, { executable, workspace: root.workspace, readFiles: [file, ...readFiles], runtimeDirectories: packaged ? [bundle] : [] }, [file], packaged ? { ELECTRON_RUN_AS_NODE: '1' } : {})
+  const domain = await launchSandbox(binary, root.broker, { executable, workspace: root.workspace, ...directories, readFiles: [file, ...readFiles], runtimeDirectories: packaged ? [bundle] : [] }, [file], packaged ? { ELECTRON_RUN_AS_NODE: '1' } : {})
   domains.push(domain)
   let output = ''; let error = ''
   domain.stdout.on('data', (bytes) => { output += bytes.toString() }); domain.stderr.on('data', (bytes) => { error += bytes.toString() })
@@ -144,4 +144,24 @@ describe('native resource boundary', () => {
     }).toBe(true)
   })
 
+})
+
+it('enforces direct directory read/write boundaries with harmless fixture files', async () => {
+  const root = await fixture()
+  const readonly = join(root.root, 'read'); const writable = join(root.root, 'write')
+  await mkdir(readonly); await mkdir(writable)
+  await writeFile(join(readonly, 'input.txt'), 'REFERENCE')
+  await writeFile(join(root.sibling, 'private.txt'), 'UNASSIGNED')
+  await symlink(root.sibling, join(writable, 'escape'))
+  const script = `import fs from 'node:fs'; const result={};
+    result.read=fs.readFileSync(${JSON.stringify(join(readonly, 'input.txt'))},'utf8');
+    for(const [key,path] of Object.entries(${JSON.stringify({ readonly: join(readonly, 'new.txt'), writable: join(writable, 'new.txt'), escape: join(writable, 'escape', 'new.txt'), unassigned: join(root.sibling, 'new.txt') })})) {
+      try {fs.writeFileSync(path,'SYNTHETIC'); result[key]='allowed'} catch(error) {result[key]=error.code}
+    }
+    console.log(JSON.stringify(result));`
+  const result = await runProbe(root, script, [], false, { readDirectories: [readonly], writeDirectories: [writable] })
+  expect(result.exit, result.error).toBe(0)
+  expect(JSON.parse(result.output)).toEqual({ read: 'REFERENCE', readonly: 'EPERM', writable: 'allowed', escape: 'EPERM', unassigned: 'EPERM' })
+  expect(await readFile(join(readonly, 'input.txt'), 'utf8')).toBe('REFERENCE')
+  expect(await readFile(join(writable, 'new.txt'), 'utf8')).toBe('SYNTHETIC')
 })

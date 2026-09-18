@@ -8,7 +8,7 @@ import { expect, it } from 'vitest'
 import { fixtureDirectory } from '../src/main/fixture'
 import { PodDatabase } from '../src/worker/storage/database'
 
-it('credentials: packaged owner flow protects exact source, persists encrypted values and revokes access', async () => {
+it('credentials: packaged owner flow retains assigned secrets across runs and revokes access', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-credentials-ui-'))); fixtureDirectory(root)
   const store = new PodDatabase(root); const pod = store.createPod({ name: 'Customer review' }); store.close()
   const shellIdentity = await fixtureShellIdentity(root)
@@ -72,20 +72,11 @@ export async function run(context) {
     await page.getByRole('button', { name: 'Save script access', exact: true }).click()
     await page.getByText('Script access saved', { exact: true }).waitFor()
     await page.getByRole('tab', { name: 'Script', exact: true }).click()
-    await panel().getByRole('button', { name: 'Run', exact: true }).click(); await panel().getByRole('button', { name: 'Review credential access' }).waitFor()
-    expect((await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), pod.id)).runs).toHaveLength(0)
+    await panel().getByRole('button', { name: 'Run', exact: true }).click()
+    await page.getByText('Credential script completed', { exact: true }).waitFor()
     const validated = await page.evaluate(podId => window.pods.scripts({ type: 'list', podId }), pod.id)
-    const hash = validated.source!.hash!
-    await expect(page.evaluate(({ podId, hash }) => window.pods.scripts({ type: 'activate', podId, revision: 1, hash, expectedActive: null }), { podId: pod.id, hash })).rejects.toThrow('Approve credential access')
-    await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false }) })
-    await panel().getByRole('button', { name: 'Review credential access' }).click()
-    await expect.poll(() => panel().getByRole('button', { name: 'Review credential access' }).isEnabled()).toBe(true)
-    expect((await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), pod.id)).runs).toHaveLength(0)
-    await app.evaluate(({ dialog }) => { dialog.showMessageBox = async (_window: unknown, options?: unknown) => { (globalThis as unknown as { credentialDialog: unknown }).credentialDialog = options; return { response: 1, checkboxChecked: false } } })
-    await panel().getByRole('button', { name: 'Review credential access' }).click()
-    await page.getByRole('button', { name: 'Credential script completed', exact: true }).waitFor()
-    const dialog = await app.evaluate(() => (globalThis as unknown as { credentialDialog: unknown }).credentialDialog)
-    expect(JSON.stringify(dialog)).toContain(hash); expect(JSON.stringify(dialog)).toContain('AI prompts'); expect(JSON.stringify(dialog)).not.toContain('SYNTHETIC_SCRIPT_CREDENTIAL')
+    expect(validated.source!.credentialAccessApproved).toBe(true)
+    expect(await page.getByRole('button', { name: 'Review credential access' }).count()).toBe(0)
     await page.screenshot({ path: resolve('.artifacts/credentials-approved.png') })
     const runs = await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), pod.id)
     expect(runs.runs[0]!.state).toBe('completed')
@@ -99,7 +90,7 @@ export async function run(context) {
     await page.getByRole('tab', { name: 'Variables and secrets', exact: true }).click()
     const rotated = await page.evaluate(({ podId, epoch }) => window.pods.resources({ type: 'saveCredential', podId, alias: 'crm', value: 'ROTATED_SYNTHETIC_VALUE', epoch }), { podId: pod.id, epoch: resources.epoch })
     const current = rotated.resources.find(item => item.state === 'ready')!
-    expect((await page.evaluate(podId => window.pods.scripts({ type: 'list', podId }), pod.id)).source!.credentialAccessApproved).toBe(false)
+    expect((await page.evaluate(podId => window.pods.scripts({ type: 'list', podId }), pod.id)).source!.credentialAccessApproved).toBe(true)
     expect(await readdir(join(root, 'credentials'))).not.toContain(`${id}.encrypted`)
     await page.getByRole('tab', { name: 'Overview', exact: true }).click(); await page.getByRole('tab', { name: 'Variables and secrets', exact: true }).click()
     await page.locator('.resource-row').last().getByRole('button', { name: 'Revoke access' }).click()
@@ -128,6 +119,6 @@ export async function run(context) {
     const process = app.process()
     const cleanup = setTimeout(() => { process.kill('SIGKILL') }, 3000)
     try { await app.close() }
-    finally { clearTimeout(cleanup) }; await rm(root, { recursive: true, force: true })
+    finally { clearTimeout(cleanup) }; await shellIdentity.close(); await rm(root, { recursive: true, force: true })
   }
 })
