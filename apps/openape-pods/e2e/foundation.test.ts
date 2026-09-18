@@ -17,11 +17,11 @@ const executable: string = require('electron')
 const active: { app: ElectronApplication, root: string, process: ChildProcess }[] = []
 const artifacts = resolve('.artifacts')
 function fixtureEnv(root: string) { return { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, PODS_UNASSIGNED_SECRET: 'synthetic-canary', NODE_ENV: 'test' } }
-async function launch(packaged = false) {
+async function launch(packaged = false, reporting = false) {
   if (process.platform !== 'darwin') throw new Error('Electron foundation acceptance requires the macOS runner')
   const root = await mkdtemp(join(tmpdir(), 'pods-e2e-'))
   const binary = packaged ? resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture') : executable
-  const app = await electron.launch({ executablePath: binary, args: packaged ? [] : ['.'], cwd: resolve('.'), env: fixtureEnv(root), timeout: 20000 })
+  const app = await electron.launch({ executablePath: binary, args: packaged ? [] : ['.'], cwd: resolve('.'), env: { ...fixtureEnv(root), OPENAPE_PODS_ISSUE_REPORTING_ENABLED: reporting ? '1' : '0' }, timeout: 20000 })
   active.push({ app, root, process: app.process() })
   const page = await app.firstWindow()
   await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state, { timeout: 20000 }).toBe('ready')
@@ -33,6 +33,22 @@ afterEach(async () => {
   for (const { app, root, process: child } of active.splice(0)) { if (child.exitCode === null && child.signalCode === null) await app.close(); await rm(root, { recursive: true, force: true }) }
 })
 describe('foundation', () => {
+  it('reporting: opens only the fixed product URL through the native menu after opt-in', async () => {
+    const disabled = await launch()
+    expect(await disabled.app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById('report-problem')?.visible)).toBe(false)
+    await disabled.app.close()
+    const enabled = await launch(false, true)
+    expect(await enabled.app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById('report-problem')?.visible)).toBe(true)
+    const destination = await enabled.app.evaluate(async ({ Menu, shell, BrowserWindow }) => {
+      let opened = ''
+      shell.openExternal = async (url) => { opened = url }
+      const item = Menu.getApplicationMenu()!.getMenuItemById('report-problem')!
+      item.click(item, BrowserWindow.getAllWindows()[0], {} as never)
+      return opened
+    })
+    expect(destination).toBe('https://repos.openape.ai/report?product=pods')
+  })
+
   it('packaged: embeds the approved macOS icon referenced by the bundle', async () => {
     const contents = resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents')
     const icon = execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIconFile', join(contents, 'Info.plist')], { encoding: 'utf8' }).trim()

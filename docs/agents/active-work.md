@@ -1,5 +1,10 @@
 # Active work
 
+## Native issue reporting entry points (M4)
+
+`native-issues-entrypoints`, branch `feature/issue-1356-native-issues-entrypoints`, base `9c523ee6`. All 19 app workspaces now have a product reporting entry: the Git app, fourteen web app footers, the Pods native Help menu and agent/Nest/chat CLI help. Web links use `NUXT_PUBLIC_ISSUE_REPORTING_ENABLED=true`; Pods uses `OPENAPE_PODS_ISSUE_REPORTING_ENABLED=1`; daemon/CLI help uses `OPENAPE_ISSUE_REPORTING_ENABLED=1`. Every new entry is off by default. Only the approved product key goes to the fixed native reporting URL; web referrers are suppressed. Full lint/typecheck, all app builds, shared-component browser checks and the real Electron menu flow pass. Native production rollout and source migration remain separately gated.
+
+
 ## Native issues — M4 external issue homes (September 18, 2026)
 
 `openape-monorepo.worktrees/native-issues-apps`, branch `feature/issue-1356-native-issues-apps`, base `674de015` (M4 core). Adds fresh issue-only repository registration with an explicit external HTTPS code URL, private metadata and matching navigation. Real IdP/API/CLI/browser tests prove issues work without creating bare Git storage; Git transport, native PR and mirror writes are refused while normal Git reads still succeed. This is a separate M4 increment from the in-progress app-shell reporting links. Production registration and activation remain gated.
