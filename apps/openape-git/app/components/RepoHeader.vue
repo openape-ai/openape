@@ -2,12 +2,13 @@
 const props = defineProps<{
   owner: string
   name: string
-  tab: 'code' | 'commits' | 'pulls' | 'settings'
+  tab: 'code' | 'commits' | 'issues' | 'pulls' | 'settings'
 }>()
 
 const tabs = computed(() => [
   { key: 'code', label: 'Code', icon: 'i-lucide-folder-git-2', to: `/${props.owner}/${props.name}` },
   { key: 'commits', label: 'Commits', icon: 'i-lucide-history', to: `/${props.owner}/${props.name}/commits` },
+  ...(useRuntimeConfig().public.issuesEnabled ? [{ key: 'issues', label: 'Issues', icon: 'i-lucide-circle-dot', to: `/${props.owner}/${props.name}/issues` }] : []),
   { key: 'pulls', label: 'Pulls', icon: 'i-lucide-git-pull-request', to: `/${props.owner}/${props.name}/pulls` },
   { key: 'settings', label: 'Access', icon: 'i-lucide-key-round', to: `/${props.owner}/${props.name}/settings` },
 ])

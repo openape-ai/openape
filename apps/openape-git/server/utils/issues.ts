@@ -156,7 +156,7 @@ export function createIssueStore(db: Database, audience: string, principal: Issu
       const predicates = [visible]
       if (search.state !== 'all') predicates.push(eq(issues.state, search.state ?? 'open'))
       if (search.product) predicates.push(eq(issues.productKey, search.product))
-      if (search.assignee) predicates.push(eq(issues.assignee, search.assignee))
+      if (search.assignee) predicates.push(eq(issues.assignee, search.assignee === 'me' ? principal.subject : search.assignee))
       if (search.reporter) predicates.push(eq(issues.authorSubject, search.reporter === 'me' ? principal.subject : search.reporter))
       if (search.repo) predicates.push(sql`EXISTS (SELECT 1 FROM ${repos} WHERE ${repos.id} = ${issues.repoId} AND ${repos.owner} || '/' || ${repos.name} = ${search.repo} AND ${repositoryAccessPredicate(principal.subject, audience)})`)
       if (search.q) {
