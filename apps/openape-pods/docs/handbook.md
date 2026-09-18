@@ -66,7 +66,7 @@ Every pod has a Chat tab with its own persisted history and Codex continuation t
 
 The assistant can prepare, validate and activate scripts within existing permissions. Additional access and secret approval remain owner decisions. It cannot enable schedules. Only one assistant turn runs across the app at a time; cancel or finish it before starting another pod conversation.
 
-Cancel turn interrupts the active conversation; Steer adds an instruction to that turn. Text typed while a message is sending is retained. The regular script agent uses fresh context and does not automatically receive this chat, variable values or secrets.
+Write a message in the input at the bottom. Enter sends it; Shift + Enter adds a new line. The stop button interrupts the response. Sending while a response is running adds your instruction to that conversation. Unsent text is retained when you change tabs. The regular script agent uses fresh context and does not automatically receive this chat, variable values or secrets.
 
 App settings → Workspace chat retains the previous global conversation and supports workspace-wide creation. Pod chats provide separate histories and model threads, while using the existing owner-authorized master control capabilities.
 
@@ -74,7 +74,7 @@ The chat can set ordinary variables, assign or create a group, and prepare an in
 
 The assistant reads a runtime reference supplied by the app before writing scripts. It can validate a draft, use the reported error to repair it and activate it within existing permissions. Ask explicitly for a manual run if you want one. Application, HTTPS and file proposals open Permissions; named-secret proposals open Variables and secrets.
 
-Ordinary variable values are visible to the assistant when it inspects the pod. Tokens, passwords and API keys belong in Secrets. A secret proposal contains only its name and purpose. The assistant cannot retrieve its stored value or approve script access to credentials. Review the exact script before granting that access from Script → Run.
+Ordinary variable values are visible to the assistant when it inspects the pod. Tokens, passwords and API keys belong in Secrets. A secret proposal contains only its name and purpose. Assign secret values in Variables and secrets. A validated script can use its declared, assigned secrets; changing the script does not remove those assignments. The chat cannot retrieve stored secret values.
 
 Example prompt: “Create a mail notification pod for phofmann@delta-mind.at. Check for new messages through the assigned o365-cli application every 15 minutes and notify my Telegram chat. Use a quiet first-run baseline and avoid duplicates. Store the Telegram chat ID as an ordinary variable and request bot_token as a secret. Request the application read commands and Telegram HTTPS permission. Prepare the script and interval, but leave automation disabled and do not run it yet.” Supply the missing chat ID, configure o365-cli through its terminal in Permissions and store the token in Variables and secrets.
 
@@ -82,7 +82,7 @@ Synthetic validation exercises one initial path with an empty checkpoint, no ref
 
 The assistant can inspect the current saved script, including a newer saved draft from the editor. Save your manual edits before asking the chat to revise them; unsaved editor text is not available to the assistant.
 
-The original creation message stays with the new pod as a Start request card. Replies and later corrections appear below it. The app follows the created pod automatically, and its conversation remains available after restarting. An older unlinked creation chat can be recovered after reviewing the proposed original requests.
+Your messages appear on the right and assistant replies on the left. The original creation request appears once as an ordinary message in the saved conversation. Technical requests, results and script drafts are collapsed under Technical details. Access proposals remain available for your review. The app opens the created pod automatically and preserves its conversation across restarts. Older unlinked creation history can be recovered after reviewing the proposed requests.
 
 ![Chat and pod creation](images/handbook-chat.png)
 

@@ -121,7 +121,7 @@ export default defineComponent({
     </aside>
     <div v-if="!sidebarCollapsed" class="sidebar-resizer" role="separator" :aria-label="t('Sidebar width')" aria-orientation="vertical" aria-valuemin="176" aria-valuemax="360" :aria-valuenow="sidebarWidth" tabindex="0" @pointerdown="beginResize" @pointermove="resize" @pointerup="persistWidth" @pointercancel="persistWidth" @keydown="resizeKey" />
     <main class="main">
-      <div class="window-drag" /><div class="content">
+      <div class="window-drag" /><div class="content" :class="{ 'chat-open': selected === 'Chat' || selected === 'Workspace chat' }">
         <div class="page-heading">
           <h1>{{ globalPage ? label(selected) : creating ? t('New pod') : pod?.name ?? t('Your pods') }}</h1><span v-if="pod && !globalPage" class="muted">{{ nextRun }}</span>
         </div>
@@ -152,10 +152,12 @@ export default defineComponent({
         </section>
         <DataManagement v-else-if="selected === 'Data'" />
         <Onboarding v-else-if="selected === 'Setup'" :pod="pod" @finished="selected = 'Overview'" @reference="selected = 'Permissions'" />
-        <section v-else-if="selected === 'Chat' || selected === 'Workspace chat'" id="panel-Chat" :role="globalPage ? undefined : 'tabpanel'" :aria-labelledby="globalPage ? undefined : 'tab-Chat'" :aria-label="globalPage ? t('Workspace chat') : undefined" class="card master-panel">
-          <MasterChat :key="creating ? creationId : selected === 'Workspace chat' ? 'workspace' : podId" :creation-id="creating ? creationId : undefined" :pod-id="creating || selected === 'Workspace chat' ? null : podId || null" @created="created" @resources="async id => { await selectPod(id); selected = 'Permissions' }" @settings="async id => { await selectPod(id); openValues() }" /><details v-if="creating">
-            <summary>{{ t('Create without chat') }}</summary><PodSettings key="new" @selected="changed" />
-          </details>
+        <section v-else-if="selected === 'Chat' || selected === 'Workspace chat'" id="panel-Chat" :role="globalPage ? undefined : 'tabpanel'" :aria-labelledby="globalPage ? undefined : 'tab-Chat'" :aria-label="globalPage ? t('Workspace chat') : undefined" class="master-panel">
+          <MasterChat :key="creating ? creationId : selected === 'Workspace chat' ? 'workspace' : podId" :creation-id="creating ? creationId : undefined" :pod-id="creating || selected === 'Workspace chat' ? null : podId || null" @created="created" @resources="async id => { await selectPod(id); selected = 'Permissions' }" @settings="async id => { await selectPod(id); openValues() }">
+            <details v-if="creating" class="chat-manual-create">
+              <summary>{{ t('Create without chat') }}</summary><PodSettings key="new" @selected="changed" />
+            </details>
+          </MasterChat>
         </section>
         <section v-else-if="selected === 'Script'" id="panel-Script" role="tabpanel" aria-labelledby="tab-Script">
           <PodScript v-if="pod" :key="podId" :pod="pod" @changed="refresh" @values="openValues" @ran="selected = 'History'; refresh()" />
