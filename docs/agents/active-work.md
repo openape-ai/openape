@@ -1,5 +1,10 @@
 # Active work
 
+## Pods agent tool selection (September 18, 2026)
+
+`pods-conversation`, issue 1354 / existing PR 56 continuation: `context.agent.run` defaults to no tools and accepts explicit `tools: []` or `tools: ["ape_shell"]`. Runtime validation and the creation-chat reference share this contract. Tool-free calls have no MCP configuration/broker and the provider gateway forces an empty tool list. Both handbooks are updated. Full lint/typecheck, app build, seven focused unit checks and three native SDK transport cases pass; the native cases cover default/explicit no-tools with forced calls plus explicit assigned-tool operation. These security-boundary regression tests are retained. Local delivery is pending; no full E2E, push or merge is authorized while Patrick tests manually. The paused Mail-Kurzbericht draft will use explicit tools: []; its existing network/grant/Telegram readiness gates remain separate.
+
+
 Updated 2026-09-17. This is a handoff index, not an assumption that an old branch
 still matches live main. Re-read the plan and Git refs at session start.
 

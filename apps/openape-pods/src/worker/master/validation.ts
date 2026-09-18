@@ -1,3 +1,4 @@
+import { parseAgentRequest } from '../../contracts/agent'
 import { DependencyStore } from '../dependencies/store'
 import { resolveProgram } from '../../main/programs/session'
 import { programRequest } from '../../main/programs/invoke'
@@ -56,7 +57,7 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
       if (operation === 'progress.commit') return { revision: fixture.commitProgress({ ...parseProgress(payload), podId: fixturePod.id }) }
       if (operation === 'mail.next' && capabilities.includes('mail.read')) return { type: 'done' }
       if (operation === 'agent.run') {
-        if (!payload || typeof payload !== 'object' || Array.isArray(payload) || Object.keys(payload).some(key => key !== 'prompt') || typeof (payload as { prompt?: unknown }).prompt !== 'string') throw new Error('Invalid agent request')
+        parseAgentRequest(payload)
         return { threadId: 'synthetic-validation', response: '{"claims":[]}' }
       }
       if (operation === 'tools.invoke' && payload && typeof payload === 'object' && ('applicationId' in payload || 'application' in payload)) {
