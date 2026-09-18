@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import type { ElectronApplication } from 'playwright'
 import { PodDatabase } from '../../src/worker/storage/database'
 
-export async function fixtureShellIdentity(root: string) {
+export async function fixtureShellIdentity(root: string, ownerPermissions: string[] = []) {
   const fixtureKey = randomBytes(32).toString('hex')
   let origin = ''
   const records: { path: string, value: string }[] = []
@@ -29,7 +29,8 @@ export async function fixtureShellIdentity(root: string) {
         const chunks: Buffer[] = []
         for await (const chunk of request) chunks.push(Buffer.from(chunk))
         const body = JSON.parse(Buffer.concat(chunks).toString())
-        if (!subjects.has(body.requester) || body.command?.[0] !== 'pod-runtime') { response.writeHead(403).end('{}'); return }
+        const reviewed = Array.isArray(body.authorization_details) && body.authorization_details.length > 0 && body.authorization_details.every((detail: { cli_id: string }) => ownerPermissions.includes(detail.cli_id))
+        if (!subjects.has(body.requester) || (body.command?.[0] !== 'pod-runtime' && !reviewed)) { response.writeHead(403).end('{}'); return }
         const id = randomUUID(); grants.set(id, body)
         response.end(JSON.stringify({ id, status: 'approved' }))
       }
@@ -67,7 +68,9 @@ export async function fixtureShellIdentity(root: string) {
       pods[pod.id] = { connectionId: id, prepared: true, identity }
       records.push({ path: join(root, 'credentials', `${id}.encrypted`), value: JSON.stringify({ ...identity, privateKey: 'SYNTHETIC_NOT_A_REAL_KEY', accessToken: 'LOCAL_SYNTHETIC_TOKEN', expiresAt: Date.now() / 1000 + 3600 }) })
     }
-    store.db.prepare('INSERT INTO connections VALUES(?,?,?,?,?,?)').run(randomUUID(), 'openape', 'fixture-owner@example.test', 'ready', null, JSON.stringify({ issuer: origin, pods }))
+    const ownerId = randomUUID()
+    if (ownerPermissions.length) records.push({ path: join(root, 'credentials', `${ownerId}.encrypted`), value: JSON.stringify({ issuer: origin, account: 'fixture-owner@example.test', subject: 'fixture-owner', accessToken: 'SYNTHETIC_OWNER_TOKEN', refreshToken: 'SYNTHETIC_REFRESH_TOKEN', expiresAt: Date.now() / 1000 + 3600 }) })
+    store.db.prepare('INSERT INTO connections VALUES(?,?,?,?,?,?)').run(ownerId, 'openape', 'fixture-owner@example.test', 'ready', null, JSON.stringify({ issuer: origin, pods }))
   }
   finally { store.close() }
   return {

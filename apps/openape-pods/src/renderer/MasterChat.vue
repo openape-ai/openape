@@ -1,12 +1,20 @@
 <script setup lang="ts">
+import { chatModels, parseChatModel } from '../contracts/models'
+import type { ChatModel } from '../contracts/models'
+import ChatSetupReview from './ChatSetupReview.vue'
 import { t, diagnostic, label } from './i18n'
 import { chatDraft } from './chat-buffer'
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import type { MasterCommand, MasterView } from '../contracts/master'
 
 const props = defineProps<{ podId: string | null, creationId?: string }>()
-const emit = defineEmits<{ resources: [podId: string], settings: [podId: string], created: [podId: string] }>()
+const emit = defineEmits<{ resources: [podId: string], settings: [podId: string, alias?: string], created: [podId: string] }>()
 const view = ref<MasterView | null>(null); const text = chatDraft(props.podId ?? props.creationId ?? null); const error = ref(''); const busy = ref(false)
+const model = ref<ChatModel>('gpt-5.5')
+function chooseModel(): void {
+  try { localStorage.setItem('pods-chat-model', model.value) }
+  catch (failure) { error.value = String(failure) }
+}
 const history = ref<HTMLElement>(); const input = ref<HTMLTextAreaElement>(); const followLatest = ref(true)
 const messages = computed(() => {
   const first = view.value?.initialRequest
@@ -36,8 +44,18 @@ async function inputKey(event: KeyboardEvent): Promise<void> {
   await send()
 }
 let closed = false; let timer: ReturnType<typeof setTimeout> | undefined
+async function load(): Promise<void> {
+  view.value = await window.pods.master({ type: 'list', podId: props.podId, ...(props.creationId ? { creationId: props.creationId } : {}) }); if (view.value.boundPodId) emit('created', view.value.boundPodId)
+}
+async function setupUpdated(): Promise<void> {
+  try { await load() }
+  catch (failure) { error.value = failure instanceof Error ? failure.message : 'Could not load master chat' }
+}
+async function resumeSetup(): Promise<void> {
+  await command({ type: 'send', id: crypto.randomUUID(), podId: props.podId, model: model.value, text: t('Continue setting up this pod. Inspect what is saved, finish the requested script and ask me for any missing information. Leave existing schedules unchanged and do not run the script.') })
+}
 async function refresh(): Promise<void> {
-  try { view.value = await window.pods.master({ type: 'list', podId: props.podId, ...(props.creationId ? { creationId: props.creationId } : {}) }); if (view.value.boundPodId) emit('created', view.value.boundPodId) }
+  try { await load() }
   catch (failure) { error.value = failure instanceof Error ? failure.message : 'Could not load master chat' }
   if (!closed) timer = setTimeout(() => { void refresh() }, 500)
 }
@@ -50,10 +68,12 @@ async function command(value: MasterCommand): Promise<void> {
 async function send(): Promise<void> {
   if (!canSend.value) return
   followLatest.value = true
-  await command({ type: view.value?.state === 'running' ? 'steer' : 'send', id: crypto.randomUUID(), text: text.value, podId: props.podId })
+  await command({ type: view.value?.state === 'running' ? 'steer' : 'send', id: crypto.randomUUID(), text: text.value, podId: props.podId, model: model.value })
   await scrollToLatest()
 }
 onMounted(async () => {
+  try { const saved = localStorage.getItem('pods-chat-model'); if (saved) model.value = parseChatModel(saved) }
+  catch (failure) { error.value = String(failure) }
   if (props.creationId) {
     try { await window.pods.master({ type: 'begin', id: props.creationId }) }
     catch (failure) { error.value = String(failure); return }
@@ -63,6 +83,9 @@ onMounted(async () => {
 
 <template>
   <div class="master-chat">
+    <div class="chat-model">
+      <label>{{ t('Chat model') }}<select v-model="model" :aria-label="t('Chat model')" :disabled="busy || view?.state === 'running'" @change="chooseModel"><option v-for="option in chatModels" :key="option.id" :value="option.id">{{ option.name }}</option></select></label>
+    </div>
     <div ref="history" class="chat-scroll" @scroll="trackScroll">
       <div class="chat-conversation">
         <p v-if="view && !view.connected" class="muted chat-notice">
@@ -90,18 +113,24 @@ onMounted(async () => {
             </p>
           </article>
         </div>
-        <div v-if="view && !messages.length" class="chat-empty">
+        <div v-if="view && !messages.length && !view.proposals.length && view.state === 'idle'" class="chat-empty">
           <h2>{{ t('How can I help?') }}</h2>
           <p class="muted">
             {{ t('Describe what you would like to do.') }}
           </p>
         </div>
+        <section v-if="view?.scriptState && (view.state === 'interrupted' || view.state === 'failed' || view.scriptState === 'missing')" class="setup-status" role="status">
+          <p>{{ t(view.scriptState === 'missing' ? 'No script has been saved for this pod yet.' : view.scriptState === 'draft' ? 'Your script draft is saved. Setup may still be incomplete.' : 'An active script is saved. The last conversation may be incomplete.') }}</p>
+          <p v-if="view.state === 'interrupted'">
+            {{ t('The response was interrupted. Saved settings are retained; announced changes may not have been saved.') }}
+          </p>
+        </section>
         <section v-if="view?.proposals.length" :aria-label="t('Access proposals')">
           <h3>{{ t("Resource access for your review") }}</h3><details v-for="proposal in view.proposals" :key="proposal.id" class="chat-access" :open="proposal.state === 'pending'">
             <summary>{{ proposal.body.description }}<span v-if="proposal.state !== 'pending'" class="muted"> · {{ label(proposal.state) }}</span></summary><dl class="proposal-scope">
-              <dt>{{ t("Service") }}</dt><dd>{{ proposal.body.provider === 'credential' ? t('Secrets') : proposal.body.provider === 'reference' ? t("Reference file · read-only snapshots") : proposal.body.provider === 'http' ? t('HTTP destinations') : t('Executable applications') }}</dd>
+              <dt>{{ t("Service") }}</dt><dd>{{ proposal.body.provider === 'credential' ? t('Secrets') : proposal.body.provider === 'directory' ? t('Directory permissions') : proposal.body.provider === 'reference' ? t('Files and folders') : proposal.body.provider === 'variable' ? t('Variables') : proposal.body.provider === 'http' ? t('HTTP destinations') : t('Executable applications') }}</dd>
               <template v-if="proposal.body.alias">
-                <dt>{{ t('Secret name') }}</dt><dd>{{ proposal.body.alias }}</dd>
+                <dt>{{ t(proposal.body.provider === 'variable' ? 'Variable name' : 'Secret name') }}</dt><dd>{{ proposal.body.alias }}</dd>
               </template>
               <template v-if="proposal.body.application">
                 <dt>{{ t('Application') }}</dt><dd>{{ proposal.body.application }}</dd>
@@ -122,8 +151,15 @@ onMounted(async () => {
                 <dt>{{ t("Attachments") }}</dt><dd>{{ proposal.body.attachments ? t("Include readable attachments") : t("Do not read attachments") }}</dd>
               </template>
             </dl>
+            <p v-if="proposal.body.instructions" class="master-text">
+              {{ proposal.body.instructions }}
+            </p>
+            <p v-else-if="proposal.body.provider === 'credential' && proposal.body.alias === 'telegram_bot_token'" class="master-text">
+              {{ t('In Telegram, open @BotFather. Use /newbot to create a bot or /mybots to select an existing bot and its API token. Save the token only in Variables and secrets, never in this chat. Then open your bot and send /start.') }}
+            </p>
             <div v-if="proposal.state === 'pending'" class="overview-actions">
-              <button class="secondary" @click="proposal.body.provider === 'credential' ? emit('settings', proposal.podId) : emit('resources', proposal.podId)">
+              <ChatSetupReview v-if="['http', 'directory', 'reference', 'application', 'variable'].includes(proposal.body.provider)" :proposal="proposal" @updated="setupUpdated" />
+              <button v-else class="secondary" @click="proposal.body.provider === 'credential' ? emit('settings', proposal.podId, proposal.body.alias) : emit('resources', proposal.podId)">
                 {{ proposal.body.provider === 'credential' ? t('Variables and secrets') : t('Review resources') }}
               </button><button class="text-button" :disabled="busy" @click="command({ type: 'decline', id: proposal.id, podId: props.podId })">
                 {{ t("Decline") }}
@@ -132,6 +168,9 @@ onMounted(async () => {
           </details>
         </section>
 
+        <button v-if="view?.scriptState && view.state !== 'running' && (view.state === 'interrupted' || view.state === 'failed' || view.scriptState === 'missing' || view.proposals.length)" class="secondary" :disabled="busy || !view.connected" @click="resumeSetup">
+          {{ t('Continue setup') }}
+        </button>
         <details v-if="activity.length || view?.drafts.length" class="chat-details">
           <summary>{{ t('Technical details') }}</summary>
           <details v-for="message in activity" :key="message.id" class="chat-activity">
@@ -177,6 +216,9 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.chat-model { padding:8px 24px; flex:none; }
+.chat-model label { display:flex; align-items:center; flex-wrap:wrap; gap:10px; color:var(--muted); font-size:13px; }
+.chat-model select { max-width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); font:inherit; }
 .master-chat { display:flex; flex-direction:column; flex:1; min-height:0; min-width:0; }
 .chat-scroll { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; }
 .chat-conversation { max-width:760px; margin:0 auto; padding:16px 16px 28px; }
