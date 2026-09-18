@@ -1,3 +1,5 @@
+import { issueScopes } from './shared/issue-scopes'
+
 export default defineNuxtConfig({
   compatibilityDate: '2025-01-01',
   devtools: { enabled: true },
@@ -15,6 +17,9 @@ export default defineNuxtConfig({
     // `pnpm dev` works without env setup. Production MUST set NUXT_TURSO_URL
     // (path under /srv/ape-git so it lives on the data volume).
     tursoUrl: 'file:./dev.db',
+    issuesEnabled: false,
+    issueIntakeRepoId: '',
+    issueRoutingAdmin: '',
     tursoAuthToken: '',
     // Bare repos live under `${gitDataDir}/repos/<owner>/<name>.git`.
     // Production mounts the block-storage volume here (NUXT_GIT_DATA_DIR=/srv/ape-git).
@@ -39,12 +44,14 @@ export default defineNuxtConfig({
   openapeSp: {
     clientId: process.env.NUXT_OPENAPE_CLIENT_ID || 'repos.openape.ai',
     spName: 'ape-git',
+    catalogOnlyScopes: issueScopes.map(scope => scope.id),
     sessionSecret: process.env.NUXT_OPENAPE_SP_SESSION_SECRET
       || process.env.NUXT_SESSION_SECRET
       || 'dev-session-secret-at-least-32-characters-long',
     fallbackIdpUrl: process.env.NUXT_FALLBACK_IDP_URL || 'https://id.openape.ai',
     manifest: {
       scopes: [
+        ...issueScopes,
         {
           id: 'repos:read',
           description: 'List your repositories and their access grants.',

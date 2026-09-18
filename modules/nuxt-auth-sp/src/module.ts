@@ -6,6 +6,7 @@ import { DEFAULT_POST_LOGIN_REDIRECT } from './runtime/config-defaults'
 // Public type surface — `requireCaller` is auto-imported into SP apps' server
 // context; its `Caller` shape is re-exported here so app code can annotate
 // against it via `import type { Caller } from '@openape/nuxt-auth-sp'`.
+export type { VerifiedPrincipal } from './runtime/server/utils/verified-principal'
 export type { Caller } from './runtime/server/utils/require-auth'
 
 export interface ManifestConfig {
@@ -77,6 +78,8 @@ export interface ModuleOptions {
    * Env: `NUXT_OPENAPE_SP_POST_LOGIN_REDIRECT`.
    */
   postLoginRedirect: string
+  /** Scope IDs that may only authorize their catalog operations, including on legacy handlers. */
+  catalogOnlyScopes?: string[]
   manifest?: ManifestConfig
 }
 
