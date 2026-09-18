@@ -79,7 +79,7 @@ export async function verifyCliToken(token: string): Promise<CliTokenPayload | n
     if (payload.typ !== 'cli') return null
     if (typeof payload.sub !== 'string' || typeof payload.email !== 'string') return null
     if (payload.act !== 'human' && payload.act !== 'agent') return null
-    if (payload.scope !== undefined && !Array.isArray(payload.scope)) return null
+    if (payload.scope !== undefined && (!Array.isArray(payload.scope) || !payload.scope.every(s => typeof s === 'string'))) return null
     if (payload.delegate !== undefined && payload.delegate !== null && typeof payload.delegate !== 'string') return null
     return payload as unknown as CliTokenPayload
   }
