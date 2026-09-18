@@ -78,6 +78,8 @@ export default defineEventHandler(async (event) => {
   if (!accessAllows(access, required))
     return deny(event, 403, `ape-git: grant for ${email} on ${parsed.owner}/${parsed.name} is git:${access} - ${service ?? 'push'} denied`)
 
+  if (repo.issueHomeOnly) return deny(event, 409, 'ape-git: issue-only home; code is hosted externally')
+
   await runGitHttpBackend(event.node.req, event.node.res, {
     projectRoot: reposRoot(),
     pathInfo: pathname,
