@@ -1,5 +1,10 @@
 # Active work
 
+## Native issues — M5 explicit PR relations (September 18, 2026)
+
+`openape-monorepo.worktrees/native-issues-links`, branch `feature/issue-1356-native-issues-links`, base `674de015` (M4 core). Adds reciprocal `Related` links with live access intersection and audited idempotent creation/removal. The actual IdP/CLI fixture successfully merges a real PR through the unchanged exact-SHA endpoint and confirms the linked issue remains open. Signed HTTP denial tests and Vue interaction checks pass. M4 core passed all 17 clean local gates and is pushed at `674de015`; app-shell links and external-code issue homes are still outstanding M4 work. M2 external CI had one unchanged Pods database test timeout; the entire targeted suite passes locally and one exact-source retry is running. Continue through M4/M5 reviews and M6 rehearsal; production cutover remains separately gated.
+
+
 ## Native issues — M4 product reporting (September 18, 2026)
 
 The dependent checkout `openape-monorepo.worktrees/native-issues-reporting`, branch `feature/issue-1356-native-issues-reporting`, starts from M3 source `597de762`. It adds versioned product routing, private report participation, intake-only transfer with explicit label mapping, audited moderation and matching web/CLI flows. The real IdP/CLI suite covers report → transfer → discussion → revocation. Browser checks exercise product preselection through login and responsive reporting. M1 is merged through PR 60 at `048ab8ab`; M2 is in PR 61. Product registration and production intake creation remain disabled until rollout. App-shell links and external-code issue homes follow in a separate M4 increment; continue M5/M6 before requesting the concrete production cutover approval.
