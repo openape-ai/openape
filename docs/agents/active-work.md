@@ -1,5 +1,9 @@
 # Active work
 
+## Native issues — M1 implementation (September 18, 2026)
+
+Patrick requested end-to-end execution of [the approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A5ZAT63A04PWGVBT5M14MW), tracked by [issue 1356](https://git.openape.ai/openape-ai/openape/issues/1356). The isolated checkout is `openape-monorepo.worktrees/native-issues`, branch `feature/issue-1356-native-issues`, based on canonical `0f7425539c81950e54882bd851190f58e9011302`. M0 was already merged through PR 50. M1 adds ordered transactional database migrations, private issue storage, live grant-aware visibility and verified exact-scope principals. Ten focused storage tests, all 153 Git app tests and all 105 auth module tests pass; lint, typecheck, Git build and Doctor pass. The complete merge gate is pending. Continue through M2–M6 after independently reviewed increments; keep the capability disabled until rollout. Production migration/cutover retains its separate M7 approval.
+
 ## Pods publication completed (September 18, 2026)
 
 Patrick requests committing and pushing the current Pods source to the canonical repository and completing the normal PR workflow. Existing [PR 56](https://repos.openape.ai/patrick/monorepo/pulls/56) will contain the accumulated desktop changes: simpler permissions, directory access, immutable dependencies with npm search, explicit agent tools, bounded application HTTPS, owner selection, execution approvals and readable recovery. Canonical main `59e0de19309cc80cb2e1996057f0f981699ff32d` is integrated without product changes; the only merge conflict was this status index. The IdP code is already identical to main.
