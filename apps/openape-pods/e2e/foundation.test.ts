@@ -48,10 +48,12 @@ describe('foundation', () => {
       dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false })
     }, source)
     await page.getByRole('tab', { name: 'Permissions', exact: true }).click()
-    await page.getByRole('button', { name: 'Assign reference file' }).click()
+    await page.evaluate(podId => window.pods.resources({ type: 'pickReference', podId }), pod.id)
+    await page.getByRole('tab', { name: 'Overview', exact: true }).click()
+    await page.getByRole('tab', { name: 'Permissions', exact: true }).click()
     await page.getByText('synthetic-reference.txt', { exact: true }).waitFor()
-    await page.getByRole('button', { name: 'Preview next snapshot' }).click()
-    await page.getByRole('heading', { name: 'Snapshot ready' }).waitFor()
+    const snapshot = await page.evaluate(podId => window.pods.resources({ type: 'snapshot', podId }), pod.id)
+    expect(snapshot.snapshot?.files).toHaveLength(1)
     await mkdir(artifacts, { recursive: true })
     await page.screenshot({ path: join(artifacts, packaged ? 'resources-packaged.png' : 'resources-reference.png') })
     const before = await page.evaluate(podId => window.pods.resources({ type: 'list', podId }), pod.id)
@@ -60,8 +62,9 @@ describe('foundation', () => {
       try { await window.pods.resources({ type: 'assignReference', podId, name: 'Unapproved', path: '/unassigned' } as never); return 'allowed' }
       catch { return 'denied' }
     }, pod.id)).toBe('denied')
-    await page.getByRole('button', { name: 'Revoke access' }).click()
-    await page.getByText('revoked · revision 2', { exact: true }).waitFor()
+    await page.getByRole('button', { name: /synthetic-reference.txt/ }).click()
+    await page.getByRole('button', { name: 'Remove directory access' }).click()
+    await expect.poll(() => page.getByText('synthetic-reference.txt', { exact: true }).count()).toBe(0)
     expect(await readFile(source, 'utf8')).toBe('SYNTHETIC_REFERENCE')
     const after = await page.evaluate(podId => window.pods.resources({ type: 'list', podId }), pod.id)
     expect(after.epoch).toBe(before.epoch + 1)
@@ -71,10 +74,10 @@ describe('foundation', () => {
     const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Local example' }))).pods[0]!
     const identity = await fixtureShellIdentity(root); identities.push(identity); await identity.encrypt(app, true)
     await page.getByRole('tab', { name: 'History', exact: true }).click()
-    await page.getByRole('button', { name: 'Use local example', exact: true }).click()
-    await page.getByRole('button', { name: 'Start run', exact: true }).click()
-    await page.getByRole('button', { name: 'Local example completed (1)', exact: true }).waitFor()
-    await page.getByText('Persisted events', { exact: true }).click()
+    await page.evaluate(podId => window.pods.runs({ type: 'installExample', podId, variant: 'deterministic' }), pod.id)
+    await page.getByRole('button', { name: 'Run now', exact: true }).click()
+    await page.getByText('Local example completed (1)', { exact: true }).waitFor()
+    await page.getByText('Technical details', { exact: true }).click()
     await mkdir(artifacts, { recursive: true })
     await page.screenshot({ path: join(artifacts, packaged ? 'runs-packaged.png' : 'runs-manual.png') })
     const view = await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), pod.id)
@@ -121,7 +124,7 @@ describe('foundation', () => {
   })
   it('boundary: denies renderer Node, external network/navigation, popups and foreign-frame IPC', async () => {
     const { app, page } = await launch()
-    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['data', 'details', 'getStatus', 'language', 'master', 'onStatus', 'onboarding', 'programs', 'resources', 'runs', 'scheduling', 'scripts', 'workspace'] })
+    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['data', 'details', 'getStatus', 'language', 'master', 'onStatus', 'onboarding', 'packages', 'programs', 'resources', 'runs', 'scheduling', 'scripts', 'workspace'] })
     expect(await page.evaluate(async () => {
       try { await fetch('https://unassigned.invalid/'); return 'allowed' }
       catch { return 'denied' }
