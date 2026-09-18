@@ -1635,5 +1635,13 @@
   "Previous runs": "Bisherige Läufe",
   "Unfinished work is waiting. Open run history to prepare a retry.": "Arbeit ist noch offen. Öffne den Laufverlauf, um einen neuen Versuch vorzubereiten.",
   "A temporary AI file triggered an incorrect storage warning. This version fixes that check. You can prepare a retry in History; no new sign-in or permission is needed.": "Eine temporäre KI-Datei hat eine falsche Speicherwarnung ausgelöst. Diese Version behebt die Prüfung. Bereite in der Historie einen neuen Versuch vor; eine neue Anmeldung oder Berechtigung ist dafür nicht nötig.",
-  "Review the technical details for the cause. For a stopped run, prepare a retry in History to check saved progress and possible deliveries.": "Die technischen Details zeigen die Ursache. Bereite bei einem gestoppten Lauf in der Historie einen neuen Versuch vor, um gespeicherten Fortschritt und mögliche Zustellungen zu prüfen."
+  "Review the technical details for the cause. For a stopped run, prepare a retry in History to check saved progress and possible deliveries.": "Die technischen Details zeigen die Ursache. Bereite bei einem gestoppten Lauf in der Historie einen neuen Versuch vor, um gespeicherten Fortschritt und mögliche Zustellungen zu prüfen.",
+  "How can I help?": "Was möchtest du tun?",
+  "Describe what you would like to do.": "Beschreibe, wobei ich dir helfen soll.",
+  "Thinking…": "Ich denke nach…",
+  "Response stopped.": "Antwort angehalten.",
+  "Message": "Nachricht",
+  "Write a message…": "Nachricht schreiben…",
+  "Shift + Enter for a new line": "Umschalt + Enter für eine neue Zeile",
+  "Stop response": "Antwort anhalten"
 }
