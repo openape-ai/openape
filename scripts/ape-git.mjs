@@ -3,39 +3,10 @@ import { readFileSync } from 'node:fs'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { repository } from './repository.mjs'
+import { createClient, ForgeError, parseRepository } from './native-forge-client.mjs'
+import { executeIssueCommand } from './native-issue-commands.mjs'
 
-export class ForgeError extends Error {
-  constructor(code, message, status = 0) { super(message); this.code = code; this.status = status }
-}
-
-export function parseRepository(value = new URL(repository.url).pathname.slice(1).replace(/\.git$/, '')) {
-  if (!/^[a-z0-9][\w.-]*\/[a-z0-9][\w.-]*$/i.test(value)) throw new ForgeError('INVALID_REPOSITORY', 'Use --repo owner/name')
-  return value
-}
-
-export function createClient({ endpoint = new URL(repository.url).origin, authorize, fetcher = fetch } = {}) {
-  return async (method, path, body) => {
-    if (!path.startsWith('/api/')) throw new ForgeError('INVALID_PATH', 'API path required')
-    let authorization
-    try {
-      const getToken = authorize ?? (await import('../packages/cli-auth/dist/index.js')).getAuthorizedBearer
-      authorization = await getToken({ endpoint, aud: new URL(endpoint).host })
-    }
-    catch { throw new ForgeError('AUTH_REQUIRED', 'OpenApe authentication unavailable. Run apes login for your identity, then retry.') }
-    let response
-    try {
-      response = await fetcher(`${endpoint}${path}`, { method, headers: { authorization, 'content-type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), redirect: 'error', signal: AbortSignal.timeout(30_000) })
-    }
-    catch { throw new ForgeError('NETWORK_ERROR', 'The native forge could not be reached. Check the endpoint and connection.') }
-    const data = await response.json().catch(() => ({}))
-    if (!response.ok) {
-      const message = data.statusMessage || data.message || data.title || `HTTP ${response.status}`
-      const code = response.status === 401 ? 'AUTH_REQUIRED' : response.status === 403 ? 'ACCESS_DENIED' : response.status === 404 ? 'NOT_FOUND' : response.status === 409 ? (/check/i.test(message) ? 'CHECKS_BLOCKED' : 'STALE_REVIEW') : 'REQUEST_FAILED'
-      throw new ForgeError(code, message, response.status)
-    }
-    return data
-  }
-}
+export { createClient, ForgeError, parseRepository } from './native-forge-client.mjs'
 
 export function checkState(statuses, contexts, sha, providerErrors = []) {
   const checks = contexts.map((context) => {
@@ -69,8 +40,11 @@ function positive(value, fallback) {
   return n
 }
 
-export async function execute(argv, request = createClient(), sleep = ms => new Promise(resolve => setTimeout(resolve, ms))) {
-  const { flags, positional: p } = options(argv[0] === '--' ? argv.slice(1) : argv)
+export async function execute(argv, request, sleep = ms => new Promise(resolve => setTimeout(resolve, ms))) {
+  const args = argv[0] === '--' ? argv.slice(1) : argv
+  if (args[0] === 'issue') return executeIssueCommand(args.slice(1), request)
+  request ??= createClient()
+  const { flags, positional: p } = options(args)
   const repo = parseRepository(flags.repo)
   const base = `/api/repos/${repo}`
   const bodyText = () => {
