@@ -11,6 +11,8 @@ import IssueMarkdown from '../app/components/IssueMarkdown.vue'
 import IssueReport from '../app/components/IssueReport.vue'
 import IssuePolicy from '../app/components/IssuePolicy.vue'
 import IssueTriage from '../app/components/IssueTriage.vue'
+import IssuePullLinks from '../app/components/IssuePullLinks.vue'
+import PullIssueLinks from '../app/components/PullIssueLinks.vue'
 
 enableAutoUnmount(afterEach)
 
@@ -19,7 +21,7 @@ const input = defineComponent({ props: ['modelValue'], emits: ['update:modelValu
 const textarea = defineComponent({ props: ['modelValue'], emits: ['update:modelValue'], setup: (p, { emit, attrs }) => () => h('textarea', { ...attrs, value: p.modelValue, onInput: (event: Event) => emit('update:modelValue', (event.target as HTMLTextAreaElement).value) }) })
 const link = defineComponent({ props: ['to'], setup: (p, { slots }) => () => h('a', { href: p.to }, slots.default?.()) })
 const alert = defineComponent({ props: ['title'], setup: p => () => h('p', { role: 'alert' }, p.title) })
-const global = { stubs: { UButton: button, UInput: input, UTextarea: textarea, UAlert: alert, UBadge: { render() { return h('span', this.$slots.default?.()) } }, UIcon: true, NuxtLink: link, RepoHeader: true, IssueTriage: true }, components: { IssueEditor, IssueList, IssueMarkdown } }
+const global = { stubs: { UButton: button, UInput: input, UTextarea: textarea, UAlert: alert, UBadge: { render() { return h('span', this.$slots.default?.()) } }, UIcon: true, NuxtLink: link, RepoHeader: true, IssueTriage: true, IssuePullLinks: true }, components: { IssueEditor, IssueList, IssueMarkdown } }
 const record = { id: 'issue-a', number: 1, title: 'Keep context', body: 'Draft', bodyHtml: '<p>Draft</p>', state: 'open', version: 1, authorSubject: 'owner@test', authorActor: 'owner@test', assignee: null, productName: 'Plans', createdAt: 1, updatedAt: 1, labels: [], stableUrl: '/i/issue-a', repositoryUrl: '/owner/project/issues/1', capabilities: { repository: { owner: 'owner', name: 'project' }, edit: true, triage: true, admin: true, comment: true } }
 const fetcher = vi.fn()
 const navigate = vi.fn()
@@ -152,6 +154,36 @@ describe('issue interaction contracts', () => {
     expect(wrapper.emitted('changed')).toHaveLength(1)
     await wrapper.setProps({ issue: { ...record, triageState: 'classified' } as never })
     expect(wrapper.text()).not.toContain('Classify / transfer report')
+  })
+
+  it('renders current PR state and permits explicit linking without closing the issue', async () => {
+    const pull = { id: 'pull', title: 'Fix context', number: 7, state: 'merged', owner: 'owner', name: 'project', url: '/owner/project/pulls/7' }
+    fetcher.mockResolvedValueOnce({ pulls: [] }).mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ pulls: [pull] })
+    const wrapper = mount(IssuePullLinks, { props: { endpoint: '/api/issue-records/issue-a', canLink: true }, global: { ...global, stubs: { ...global.stubs, IssuePullLinks: false } } })
+    await flushPromises()
+    await wrapper.get('input[aria-label="Pull request repository"]').setValue('owner/project')
+    await wrapper.get('input[aria-label="Pull request number"]').setValue('7')
+    await wrapper.get('form').trigger('submit'); await flushPromises()
+    expect(fetcher.mock.calls[1]![1].body).toEqual({ repository: 'owner/project', number: 7 })
+    expect(wrapper.get('a').attributes('href')).toBe(pull.url)
+    expect(wrapper.text()).toContain('merged')
+    expect(fetcher.mock.calls.some(call => call[1]?.method === 'PATCH')).toBe(false)
+    await wrapper.setProps({ canLink: false })
+    expect(wrapper.text()).not.toContain('Unlink')
+    expect(wrapper.find('form').exists()).toBe(false)
+  })
+  it('shows reciprocal issue links and an explicit read failure without disabling PR controls', async () => {
+    fetcher.mockResolvedValueOnce({ issues: [{ id: 'one', title: 'Problem', url: '/i/one', state: 'open' }] })
+    const wrapper = mount(PullIssueLinks, { props: { endpoint: '/api/repos/owner/project/pulls/7' }, global })
+    await flushPromises()
+    expect(wrapper.get('a').attributes('href')).toBe('/i/one')
+    expect(wrapper.text()).toContain('Related · open')
+    wrapper.unmount()
+    fetcher.mockRejectedValueOnce({ statusCode: 403 })
+    const denied = mount(PullIssueLinks, { props: { endpoint: '/api/repos/owner/project/pulls/7' }, global })
+    await flushPromises()
+    expect(denied.text()).toContain('access has changed')
+    expect(denied.find('a').exists()).toBe(false)
   })
 
 })

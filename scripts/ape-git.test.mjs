@@ -117,3 +117,20 @@ describe('native product reporting CLI', () => {
     finally { rmSync(directory, { recursive: true, force: true }) }
   })
 })
+
+describe('native issue relation CLI', () => {
+  it('adds, reads and removes explicit relations using stable IDs', async () => {
+    const calls = []
+    const request = async (...args) => { calls.push(args); return {} }
+    await execute(['issue', 'link', '--id', 'one', '--pull-repo', 'owner/project', '--pull-number', '7'], request)
+    await execute(['issue', 'links', '--id', 'one'], request)
+    await execute(['pr', 'issues', '7', '--repo', 'owner/project'], request)
+    await execute(['issue', 'unlink', '--id', 'one', '--pull-id', 'pull'], request)
+    assert.deepEqual(calls[0].slice(0, 3), ['POST', '/api/issue-records/one/pulls', { repository: 'owner/project', number: 7 }])
+    assert.equal(calls[1][1], '/api/issue-records/one/pulls')
+    assert.equal(calls[2][1], '/api/repos/owner/project/pulls/7/issues')
+    assert.equal(calls[3][0], 'DELETE')
+    await assert.rejects(execute(['issue', 'link', '--id', 'one', '--pull-repo', '../private', '--pull-number', '7'], request), /owner\/name/)
+    assert.equal(calls.length, 4)
+  })
+})
