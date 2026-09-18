@@ -86,3 +86,34 @@ describe('native issue CLI', () => {
     assert.equal(headers.authorization, 'Bearer fixture')
   })
 })
+
+describe('native product reporting CLI', () => {
+  it('requires exact routing and version values before network access', async () => {
+    const calls = []
+    const request = async (...args) => { calls.push(args); return {} }
+    await execute(['issue', 'product', 'list', '--product', 'plans'], request)
+    await execute(['issue', 'product', 'set', '--product', 'plans', '--name', 'Plans', '--enabled', 'true', '--expected-version', '0'], request)
+    await execute(['issue', 'policy', 'set', '--enabled', 'false', '--expected-version', '2'], request)
+    assert.equal(calls[0][1], '/api/products?product=plans')
+    assert.deepEqual(calls[1][2], { name: 'Plans', enabled: true, expectedVersion: 0 })
+    assert.deepEqual(calls[2][2], { reportingEnabled: false, expectedVersion: 2 })
+    await assert.rejects(execute(['issue', 'policy', 'set', '--enabled', 'yes', '--expected-version', '1'], request), /true or false/)
+    assert.equal(calls.length, 3)
+  })
+  it('sends a report through the central alias and rejects malformed transfer mappings', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'report-cli-'))
+    const body = join(directory, 'report.md')
+    const map = join(directory, 'labels.json')
+    writeFileSync(body, 'Expected and actual behavior')
+    writeFileSync(map, '{invalid')
+    const calls = []
+    const request = async (...args) => { calls.push(args); return {} }
+    try {
+      await execute(['report', 'create', '--product', 'plans', '--routing-version', 'reviewed-route', '--title', 'A problem', '--body-file', body, '--idempotency-key', 'report-retry-01'], request)
+      assert.deepEqual(calls[0], ['POST', '/api/reports', { productKey: 'plans', routingVersion: 'reviewed-route', title: 'A problem', body: 'Expected and actual behavior' }, { idempotencyKey: 'report-retry-01' }])
+      await assert.rejects(execute(['issue', 'transfer', '--id', 'one', '--product', 'plans', '--expected-version', '1', '--label-map-file', map], request), /JSON/)
+      assert.equal(calls.length, 1)
+    }
+    finally { rmSync(directory, { recursive: true, force: true }) }
+  })
+})
