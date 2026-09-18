@@ -70,7 +70,7 @@ it('starts a fresh creation chat when New pod is clicked again', async () => {
     expect(beginnings).toHaveLength(2)
     expect(beginnings[0][0].id).not.toBe(beginnings[1][0].id)
     await wrapper.get('textarea').setValue('The second request')
-    await wrapper.get('form').trigger('submit'); await flushPromises()
+    await wrapper.get('form.master-compose').trigger('submit'); await flushPromises()
     expect(master).toHaveBeenCalledWith(expect.objectContaining({ type: 'send', creationId: beginnings[1][0].id, text: 'The second request' }))
   }
   finally { wrapper.unmount(); localStorage.removeItem('pods-creation-id') }
