@@ -7,6 +7,7 @@ import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { ProgramAssignment, TerminalView } from '../../contracts/programs'
 import { launchTerminal } from '../../worker/runtime/terminal'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
+import type { GrantObserver, GrantLookup } from '../broker/authorization'
 import { AgentAuthority } from '../broker/authorization'
 import { PodIdentityManager } from '../connections/agent'
 import type { CredentialCache } from '../connections/cache'
@@ -27,9 +28,9 @@ export async function resolveProgram(assignment: ProgramAssignment, podId: strin
   if (readOnly && !['read', 'list', 'get'].includes(resolved.detail.action)) throw new Error('Only granted read operations are available to scripts; use the owner terminal for setup')
   return { grant, authorization: { grantId: grant.authority.grantId, command: { cliId: assignment.cliId, adapterPath: assignment.adapterPath, adapterDigest: adapter.digest, argv: command, permission: resolved.permission } } }
 }
-export async function prepareProgramAuthorization(assignment: ProgramAssignment, podId: string, argv: string[], credentials: CredentialCache, readOnly = false) {
+export async function prepareProgramAuthorization(assignment: ProgramAssignment, podId: string, argv: string[], credentials: CredentialCache, readOnly = false, observe?: GrantObserver, previous?: GrantLookup) {
   const { grant, authorization } = await resolveProgram(assignment, podId, argv, readOnly)
-  const authority = new AgentAuthority(new PodIdentityManager(credentials).connection(grant.authority.identity, `pods:${podId}`))
+  const authority = new AgentAuthority(new PodIdentityManager(credentials).connection(grant.authority.identity, `pods:${podId}`), observe, previous)
   return { authority, authorization }
 }
 

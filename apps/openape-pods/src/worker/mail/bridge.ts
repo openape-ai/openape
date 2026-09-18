@@ -19,7 +19,7 @@ export class MailBridge {
     if (this.pending.size >= 16) throw new Error('Mail broker queue is full')
     const id = randomUUID()
     const cancel = () => this.send({ serviceCancel: id })
-    const timeout = setTimeout(cancel, 90000)
+    const timeout = setTimeout(cancel, 16 * 60 * 1000)
     signal.addEventListener('abort', cancel, { once: true })
     try {
       return await new Promise((resolve, reject) => { this.pending.set(id, { resolve, reject }); this.send({ service: { id, scope, body, ...(kind ? { kind } : {}) } }); if (signal.aborted) cancel() })

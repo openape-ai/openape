@@ -7,7 +7,7 @@ import { launchSandbox } from '../runtime/sandbox'
 import type { RuntimePolicy, ShellLaunch } from '../runtime/sandbox'
 
 export interface ScriptRuntime { dependencyRoot?: string, shell?: ShellLaunch, home?: string, registerDomain?: (path: string, ownerPid: number) => void | Promise<void>, helper: string, executable: string, entry: string, runtimeDirectories: string[], environment: Record<string, string> }
-export interface ScriptServices { request: (operation: string, payload: unknown, signal: AbortSignal) => Promise<unknown>, event: (type: string, data: unknown) => void }
+export interface ScriptServices { awaitingApproval?: () => boolean,  request: (operation: string, payload: unknown, signal: AbortSignal) => Promise<unknown>, event: (type: string, data: unknown) => void }
 async function interruptible<T>(operation: () => Promise<T>, signal: AbortSignal): Promise<T> {
   signal.throwIfAborted()
   let stop: () => void = () => {}
@@ -29,7 +29,13 @@ export async function executeScript(runtime: ScriptRuntime, directory: string, a
   domain.channel.setEncoding('utf8'); domain.stdout.setEncoding('utf8'); domain.stderr.setEncoding('utf8')
   const stop = () => domain.cancel()
   signal.addEventListener('abort', stop, { once: true }); if (signal.aborted) stop()
-  const timeout = setTimeout(() => { local.abort(new Error('Script exceeded its time limit')); stop() }, input.limits.timeMs)
+  let remaining = input.limits.timeMs; let checkedAt = Date.now()
+  const timeout = setInterval(() => {
+    const now = Date.now()
+    if (!services.awaitingApproval?.()) remaining -= now - checkedAt
+    checkedAt = now
+    if (remaining <= 0) { local.abort(new Error('Script exceeded its time limit')); stop() }
+  }, 250)
   let terminal: ScriptResult | undefined; let failure: Error | undefined; let sequence = 0; let logBytes = 0
   const log = (bytes: Buffer) => {
     logBytes += bytes.length
@@ -49,17 +55,22 @@ export async function executeScript(runtime: ScriptRuntime, directory: string, a
         if (terminal) throw new Error('Script emitted data after its terminal result')
         activeSignal.throwIfAborted()
         if (frame.type === 'result') terminal = parseResult(frame.payload, input)
-        if (frame.type === 'error') throw new Error(`Script failed: ${JSON.stringify(frame.payload).slice(0, 4000)}`)
+        if (frame.type === 'error') {
+          const message = frame.payload && typeof frame.payload === 'object' && 'message' in frame.payload && typeof frame.payload.message === 'string' ? frame.payload.message : 'Script failed without an error message'
+          throw new Error(message.slice(0, 4000))
+        }
         if (frame.type === 'log') services.event('log', frame.payload)
         if (frame.type === 'request') {
           try {
             requesting = true
+            services.event('operation', { id: frame.id, operation: frame.operation, state: 'started' })
             const value = await interruptible(() => services.request(frame.operation!, frame.payload, activeSignal), activeSignal)
+            services.event('operation', { id: frame.id, operation: frame.operation, state: 'completed' })
             const reply = JSON.stringify({ version: 1, runId: input.runId, id: frame.id, ok: true, value })
             if (Buffer.byteLength(reply) > input.limits.frameBytes) throw new Error('Runner response exceeds its size limit')
             domain.channel.write(`${reply}\n`)
           }
-          catch (error) { activeSignal.throwIfAborted(); domain.channel.write(`${JSON.stringify({ version: 1, runId: input.runId, id: frame.id, ok: false, error: error instanceof Error ? error.message : 'Operation failed' })}\n`) }
+          catch (error) { services.event('operation', { id: frame.id, operation: frame.operation, state: 'failed' }); activeSignal.throwIfAborted(); domain.channel.write(`${JSON.stringify({ version: 1, runId: input.runId, id: frame.id, ok: false, error: error instanceof Error ? error.message : 'Operation failed' })}\n`) }
           finally { requesting = false }
         }
       }
@@ -81,5 +92,5 @@ export async function executeScript(runtime: ScriptRuntime, directory: string, a
     if (!terminal) throw new Error('Script exited without a terminal result')
     return terminal
   }
-  finally { local.abort(new Error('Script runtime closed')); clearTimeout(timeout); signal.removeEventListener('abort', stop); stop(); await domain.completed; await frames }
+  finally { local.abort(new Error('Script runtime closed')); clearInterval(timeout); signal.removeEventListener('abort', stop); stop(); await domain.completed; await frames }
 }

@@ -1,3 +1,4 @@
+import type { RunContextRequest, ServiceCheck  } from '../contracts/services'
 import { DependencyStore } from './dependencies/store'
 import { programRequest } from '../main/programs/invoke'
 import { podDirectories } from '../runtime/environment'
@@ -17,7 +18,6 @@ import { parseMasterCommand } from '../contracts/master'
 import { MasterControl } from './master/control'
 import { MasterService } from './master/service'
 import type { AgentRuntime } from './agent/executor'
-import type { ServiceCheck } from '../contracts/services'
 import { authorizeRunService, authorizeCredentialService, assertMailHistory } from './mail/authorization'
 import { MailBridge } from './mail/bridge'
 import { assignedMail } from '../main/mail/assigned'
@@ -163,8 +163,23 @@ port.on('message', async (event) => {
       const check = request.command.credentialCheck as ServiceCheck & { alias: string }
       port.postMessage({ id: request.id, state: authorizeCredentialService(store, registry, dispatcher.runs, check, check.alias) }); return
     }
+    if (request.command && typeof request.command === 'object' && 'runContext' in request.command) {
+      const check = request.command.runContext as RunContextRequest
+      authorizeRunService(store, registry, dispatcher.runs, check)
+      const events = dispatcher.runs.events(check.scope.podId, check.scope.runId)
+      const reason = (events.find(item => item.type === 'started')?.data as { reason?: string } | undefined)?.reason ?? 'manual'
+      if (check.grant) {
+        const { permission, issuer, subject } = check.grant
+        const previous = store.db.prepare('SELECT data FROM run_events JOIN runs ON runs.id=run_events.run_id WHERE runs.pod_id=? AND run_events.type=\'approval\' AND json_extract(data,\'$.permission\')=? AND json_extract(data,\'$.issuer\')=? AND json_extract(data,\'$.subject\')=? ORDER BY run_events.at DESC,sequence DESC LIMIT 1').get(check.scope.podId, permission, issuer, subject)
+        port.postMessage({ id: request.id, state: previous ? JSON.parse(previous.data as string) : null }); return
+      }
+      port.postMessage({ id: request.id, state: { name: store.getPod(check.scope.podId).name, reason } }); return
+    }
     if (request.command && typeof request.command === 'object' && 'serviceCheck' in request.command) {
-      port.postMessage({ id: request.id, state: authorizeRunService(store, registry, dispatcher.runs, request.command.serviceCheck as ServiceCheck) }); return
+      const check = request.command.serviceCheck as ServiceCheck
+      const state = authorizeRunService(store, registry, dispatcher.runs, check)
+      if (check.authorityLost) dispatcher.cancelPod(check.scope.podId, 'Pod execution permission is no longer active; review the Pod permissions before retrying')
+      port.postMessage({ id: request.id, state }); return
     }
     if (request.command && typeof request.command === 'object' && 'scripts' in request.command) {
       const command = parseScriptCommand(request.command.scripts)

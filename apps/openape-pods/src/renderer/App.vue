@@ -14,6 +14,9 @@ import PodSettings from './PodSettings.vue'
 import PodValues from './PodValues.vue'
 import PodResources from './PodResources.vue'
 import PodRuns from './PodRuns.vue'
+import { runFailure } from './run-activity'
+import RunApproval from './RunApproval.vue'
+import type { RunApproval as Approval } from '../contracts/activity'
 import PodKnowledge from './PodKnowledge.vue'
 import type { StoredPod, WorkspaceState } from '../contracts/control'
 import type { PodDetails } from '../contracts/details'
@@ -22,9 +25,9 @@ import type { ScheduleView } from '../contracts/scheduling'
 import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
-  components: { PodDescription, LanguageSwitcher, PodNavigation, DataManagement, Onboarding, MasterChat, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
+  components: { RunApproval, PodDescription, LanguageSwitcher, PodNavigation, DataManagement, Onboarding, MasterChat, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
   data() {
-    return { organization: { revision: 1, groups: [] } as Organization, selected: 'Overview', tabs: ['Overview', 'Chat', 'Script', 'Values', 'Permissions', 'Settings', 'History'], descriptionExpanded: false, sidebarWidth: 224, sidebarCollapsed: false, resizeStart: 0, resizeWidth: 224, resizing: false, pods: [] as StoredPod[], podId: '', creating: false, creationId: '', details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
+    return { approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: 'Overview', tabs: ['Overview', 'Chat', 'Script', 'Values', 'Permissions', 'Settings', 'History'], descriptionExpanded: false, sidebarWidth: 224, sidebarCollapsed: false, resizeStart: 0, resizeWidth: 224, resizing: false, pods: [] as StoredPod[], podId: '', creating: false, creationId: '', details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
   computed: {
     activeTab(): string { return this.selected === 'Knowledge' ? 'Overview' : this.selected },
@@ -46,7 +49,7 @@ export default defineComponent({
   },
   beforeUnmount() { this.closed = true; this.unsubscribe?.(); if (this.timer) clearTimeout(this.timer) },
   methods: {
-    t, diagnostic, label, dateTime, chatDraft,
+    t, runFailure, diagnostic, label, dateTime, chatDraft,
     openValues() { this.selected = 'Values' },
     beginResize(event: PointerEvent) { this.resizing = true; this.resizeStart = event.clientX; this.resizeWidth = this.sidebarWidth; (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId) },
     resize(event: PointerEvent) { if (this.resizing) this.sidebarWidth = Math.max(176, Math.min(360, window.innerWidth - 340, this.resizeWidth + event.clientX - this.resizeStart)) },
@@ -67,16 +70,16 @@ export default defineComponent({
         if (!id) { this.details = null; this.runs = []; this.schedule = null; this.resourceCount = 0; return }
         const [details, runs, schedule, resources] = await Promise.all([window.pods.details({ type: 'list', podId: id }), window.pods.runs({ type: 'list', podId: id }), window.pods.scheduling({ type: 'list', podId: id }), window.pods.resources({ type: 'list', podId: id })])
         if (this.podId !== id) return
-        this.details = details; this.runs = runs.runs; this.schedule = schedule; this.resourceCount = resources.resources.filter(resource => resource.state === 'ready').length; this.dataError = ''
+        this.details = details; this.runs = runs.runs; this.approvals = runs.approvals ?? []; this.schedule = schedule; this.resourceCount = resources.resources.filter(resource => resource.state === 'ready').length; this.dataError = ''
       }
       catch (error) { this.dataError = error instanceof Error ? error.message : 'Could not load workspace' }
       finally { this.busy = false }
     },
-    async selectPod(id: string) { this.podId = id; this.creating = false; this.details = null; this.runs = []; this.schedule = null; this.selected = 'Overview'; await this.refresh() },
+    async selectPod(id: string) { this.podId = id; this.approvals = []; this.creating = false; this.details = null; this.runs = []; this.schedule = null; this.selected = 'Overview'; await this.refresh() },
     async changed(id: string) { this.podId = id; this.creating = !id; await this.refresh() },
     async selectTab(tab: string) { await this.refresh(); this.selected = tab },
     master(create = false) { this.creating = create; if (create) { this.podId = ''; this.creationId = crypto.randomUUID(); localStorage.setItem('pods-creation-id', this.creationId) }; this.selected = 'Chat' },
-    async created(id: string) { this.podId = id; this.creating = false; this.creationId = ''; localStorage.removeItem('pods-creation-id'); this.selected = 'Chat'; await this.refresh() },
+    async created(id: string) { this.podId = id; this.approvals = []; this.creating = false; this.creationId = ''; localStorage.removeItem('pods-creation-id'); this.selected = 'Chat'; await this.refresh() },
     async runOnce() {
       if (!this.pod) return; try { await window.pods.runs({ type: 'start', podId: this.pod.id, expectedScript: this.pod.activeScript ?? undefined }); this.selected = 'History'; await this.refresh() }
       catch (error) { this.dataError = error instanceof Error ? error.message : 'Could not start run' }
@@ -134,6 +137,7 @@ export default defineComponent({
             {{ tab === 'Values' ? t('Variables and secrets') : label(tab) }}
           </button>
         </nav>
+        <RunApproval v-if="!globalPage && selected !== 'History' && podId" :pod-id="podId" :approvals="approvals" />
         <section v-if="selected === 'App settings'" class="card">
           <h2>{{ t('App settings') }}</h2><LanguageSwitcher /><div class="overview-actions">
             <button class="secondary" @click="selected = 'Setup'">
@@ -165,7 +169,7 @@ export default defineComponent({
           <PodResources :key="podId" :selected-pod-id="podId" @discuss="master()" />
         </section>
         <section v-else-if="selected === 'History'" id="panel-History" role="tabpanel" aria-labelledby="tab-History">
-          <PodRuns :key="podId" :selected-pod-id="podId" />
+          <PodRuns :key="podId" :selected-pod-id="podId" @navigate="selected = 'Permissions'" />
         </section>
         <section v-else-if="selected === 'Knowledge'" id="panel-Overview" role="tabpanel" aria-labelledby="tab-Overview">
           <button class="text-button" @click="selected = 'Overview'">
@@ -181,7 +185,7 @@ export default defineComponent({
               </div><p>{{ runs[0]?.summary || t('Ready for its first manual run.') }}</p><p v-if="runs[0]" class="muted">
                 {{ dateTime(runs[0].startedAt) }}
               </p><p v-if="runs[0]?.error" class="error-message">
-                {{ diagnostic(runs[0].error) }}
+                {{ diagnostic(runFailure(runs[0].error)?.title) }} · {{ diagnostic(runFailure(runs[0].error)?.help) }}
               </p><div class="overview-actions">
                 <button class="text-button" @click="selected = 'History'">
                   {{ t('View run trace') }}

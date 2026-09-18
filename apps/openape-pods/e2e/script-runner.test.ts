@@ -62,3 +62,16 @@ it('managed dependencies: resolves ESM and CommonJS imports while keeping packag
   const reply = await executeScript({ ...fixture.runtime, dependencyRoot }, fixture.directory, fixture.artifact, input, new AbortController().signal, { event: () => {}, request: async () => null })
   expect(reply.status).toBe('completed'); expect(await readFile(join(directory, 'index.cjs'), 'utf8')).toBe('module.exports=42')
 })
+
+it('pauses active runtime limits only while a bounded approval wait is recorded', async () => {
+  const fixture = await setup(`export async function run(c){await c.agent.run({prompt:'Synthetic'});return ${result}}`, 700)
+  let waiting = false
+  const events: unknown[] = []
+  const reply = await executeScript(fixture.runtime, fixture.directory, fixture.artifact, fixture.input, new AbortController().signal, {
+    awaitingApproval: () => waiting,
+    event: (type, data) => events.push({ type, data }),
+    request: async () => { waiting = true; await new Promise(resolve => setTimeout(resolve, 1100)); waiting = false; return 'Synthetic result' },
+  })
+  expect(reply.status).toBe('completed')
+  expect(events).toContainEqual({ type: 'operation', data: { id: expect.any(String), operation: 'agent.run', state: 'completed' } })
+})

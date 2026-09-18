@@ -111,24 +111,24 @@ Under Dependencies, the list shows each package and its fixed version. Click + t
 
 Ordinary variables are named strings stored in SQLite for this pod. Use context.variables["name"] in scripts. Up to 32 variables are supported, with values up to 2,048 characters. Values are captured for each run; later edits apply to future runs. These values are not encrypted. Store sensitive values as secrets.
 
-The dedicated tab shows all stored variables and secrets for this pod. Empty variables are marked Not set. Secrets required by the saved script or requested in pending chat proposals also appear before a value has been assigned; choose Set secret to prefill the alias. Filling a value does not approve the script to read it.
+The dedicated tab shows all stored variables and secrets for this pod. Empty variables are marked Not set. Secrets required by the saved script or requested in pending chat proposals also appear before a value has been assigned; choose Set secret to prefill the alias. Assigning a secret authorizes this Pod to read that alias from its validated scripts; removing the assignment revokes access.
 
 Each pod owns its script versions, workspace, persistent checkpoint and credential assignments. Under Variables and secrets, enter a Credential alias and a masked Credential value, then choose Save or replace credential. An alias starts with a lowercase letter and contains at most 64 lowercase letters, digits, underscores or hyphens. Values contain 1–16,384 characters without null bytes. Each pod supports 32 current aliases; a script can declare up to 16 capabilities including assigned application and HTTP capabilities.
 
 Values are encrypted with macOS safeStorage under the active application profile’s credentials directory. Resource records and editor history contain aliases and opaque IDs, never the automatically supplied value. Two pods may use the same alias with different values. ChatGPT and OpenApe tokens stay inside their connection broker. Imported application state is delivered only to its program, separately from script secrets.
 
-await context.credentials.get('crm') returns the string assigned to this pod and alias. Declare credential.crm under Secrets used by the script in Variables and secrets, then save script access. The runtime verifies the current run lease, exact script version, execution binding, resource revision and owner approval before and after reading. Codex has no credentials.get tool. Values are not automatically added to input.json, environment, AI prompts or run logs.
+await context.credentials.get('crm') returns the string assigned to this pod and alias. Declare credential.crm under Secrets used by the script in Variables and secrets, then save script access. The runtime verifies the current run lease, exact script version, execution binding, resource revision and current secret assignment before and after reading. Codex has no credentials.get tool. Values are not automatically added to input.json, environment, AI prompts or run logs.
 
 A script that can read a secret can explicitly put it into a prompt, log, checkpoint or file. Review the full source before granting access. Synthetic validation checks the execution contract with synthetic-credential-<alias> values; it cannot establish that source is safe for every input. A later model call receives whatever prompt the script constructs. Files written by the script and their contents may be included in backups.
 
-Saving or replacing a credential pauses the pod and invalidates prior validation and credential approval. Revoking it cancels affected work and removes its encrypted value. After restore, assign secret values again and revalidate and approve scripts; managed secret values and their recovery records are excluded from backups. An interrupted save is reconciled on restart. New versions prepared by the master cannot grant themselves credential access.
+Saving or replacing a credential pauses the pod and invalidates prior validation. Script source changes alone do not require another secret approval. Revoking it cancels affected work and removes its encrypted value. After restore, assign secret values again and revalidate scripts; managed secret values and their recovery records are excluded from backups. An interrupted save is reconciled on restart. New versions prepared by the master cannot grant themselves credential access.
 
-The example below combines normal Node file IO, durable variables, an explicit credential read and a separate AI call. It deliberately keeps the credential out of the prompt. It requires an assigned crm alias, exact-version approval and a connected model for real execution. Validation uses a synthetic model response. Direct network access and launching child programs remain restricted by the existing runtime; declaring a credential does not grant either.
+The example below combines normal Node file IO, durable variables, an explicit credential read and a separate AI call. It deliberately keeps the credential out of the prompt. It requires an assigned crm alias, Pod execution permission and a connected model for real execution. Validation uses a synthetic model response. Direct network access and launching child programs remain restricted by the existing runtime; declaring a credential does not grant either.
 
 1. Open Variables and secrets. Enter the secret alias and value, then save. The masked field clears after submission, including failures.
 2. In Variables and secrets, select the aliases under Secrets used by the script and save script access. Save unfinished code edits in Script first. Use await context.credentials.get("alias") in the source.
-3. Choose Save and run. After synthetic validation, review the source and confirm Review credential access in the native dialog.
-4. History shows the run. Source or resource changes require renewed validation and secret approval.
+3. Choose Save and run. After synthetic validation, review the Pod execution permission in the browser if requested.
+4. History shows the run. Source or resource changes require validation; existing Pod permissions remain until revoked.
 
 ```javascript
 import { readFile, writeFile } from 'node:fs/promises'
@@ -251,6 +251,14 @@ export async function run(context) {
 }
 ```
 
+## Execution approvals and run activity
+
+Starting a manual run opens any required OpenApe approval in your browser. A waiting card also appears in the Pod workspace with Open approval, so a browser-opening failure does not hide the required action. Background runs show the card without opening the browser automatically. Approval waits last at most 15 minutes and pause the script's active time limit. Cancel run stops waiting. After an application restart, a stopped run requires explicit recovery; approving its old request does not restart it.
+
+The managed execution permission belongs to this Pod and its OpenApe agent. Allow Pod execution creates a revocable standing rule; Once authorizes only the current request. Script edits do not expand directory, application, HTTP or secret assignments. The desktop broker verifies the structured permission through the ape-shell authorization library, then launches the pinned script inside the existing native sandbox. External Terminal.app continues to use the ape-shell CLI.
+
+History shows actual operations, active elapsed time, approval wait time and the run outcome. Application, AI and HTTP steps appear only when called. Technical details contains the original error and event data. If authorization fails, review Permissions and the grant status; a permission-service error does not itself require signing into Microsoft again. For uncertain deliveries, inspect the destination and record the outcome before retrying. The Script tab's Environment disclosure shows the managed process environment without stored secret values.
+
 ## Schedules, events and limits
 
 Under Settings → Schedule and limits, choose At an interval or Daily. Enter Interval in minutes, or Local time and an IANA timezone such as Europe/Vienna. Save the schedule with its explicit enabled setting. A paused pod still requires Resume automatic execution.
@@ -271,7 +279,7 @@ Store telegram_chat_id as a variable and telegram_bot_token as a secret. The sel
 
 Use examples/mail-notification.mjs from the source checkout. The first successful run establishes a quiet baseline over the previous 24 hours. Later runs report new message identities using a five-minute overlap. The recipe caps reads at 20 pages and 1000 messages per window and fails visibly if the window is incomplete. It never sends historical messages on first use and sends only a count and account name.
 
-Validate and run manually before enabling a 15-minute interval in Settings. Review secret access for the exact script. The recipe records a pending notification before sending it and stores the receipt before acknowledging progress. When delivery is uncertain, inspect the destination and resolve the outcome in History before retrying.
+Validate and run manually before enabling a 15-minute interval in Settings. Review the secrets assigned to this Pod. The recipe records a pending notification before sending it and stores the receipt before acknowledging progress. When delivery is uncertain, inspect the destination and resolve the outcome in History before retrying.
 
 ![Connections and the mail notification recipe](images/handbook-setup.png)
 
