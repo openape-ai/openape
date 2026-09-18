@@ -193,6 +193,7 @@ async function addLabel() {
             </form>
           </section>
           <aside class="issue-metadata space-y-5 text-sm" aria-label="Issue details">
+            <IssuePullLinks :key="issue.id" :endpoint="endpoint" :can-link="issue.capabilities.triage" />
             <section>
               <h2 class="font-semibold mb-2">
                 Assignee
