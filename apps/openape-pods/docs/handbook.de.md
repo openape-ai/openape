@@ -186,6 +186,8 @@ ape-shell vermittelt Befehlsfreigaben; es stellt keine Dateisystem-Sandbox berei
 
 Play startet Apps direkt im Pod-Arbeitsverzeichnis mit einem eigenen Anwendungs-HOME und dem normalen Anmeldeschlüsselbund. Manche Mac-Apps ignorieren HOME oder verwenden ein globales Profil oder eine vorhandene Instanz: Prüfe das Konto in der App. Nur Programme, die den übergebenen Kontext beachten, können ihre Einrichtung zuverlässig teilen. Beende die App normal, um die Einrichtung zu speichern. Abgebrochene Sitzungen behalten den letzten gespeicherten Stand. Der verschlüsselte Zustand ist derzeit auf 4 MB und 128 Dateien begrenzt; große Browserprofile werden damit nicht unterstützt.
 
+Wähle eine Anwendung aus, um ihre HTTPS-Hostnamen hinzuzufügen oder zu entfernen. Abgeschottete Anwendungsaufrufe erreichen nur diese öffentlichen Hosts auf Port 443; Befehlsfreigaben gelten weiterhin. Diese Einstellung ist unabhängig von den HTTP-Zielen des Node.js-Skripts. Eine Änderung pausiert den Pod und macht seine bisherige Skriptprüfung ungültig. Einrichtungsterminals und GUI-Fenster behalten ihre bestehenden Mac-Benutzerrechte.
+
 ![Berechtigungen](images/handbook-permissions-de.png)
 
 ## Einstellungen

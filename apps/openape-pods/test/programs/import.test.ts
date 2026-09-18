@@ -41,6 +41,17 @@ it('imports a selected application file without changing its source or exposing 
     expect(replaced.configuration.grants).toEqual([])
     await new ProgramState(credentials).use(stateId, { podId: pod.id, applicationId: resource.id }, async directory => expect(await readFile(join(directory, 'token.json'), 'utf8')).toBe(value))
     await expect(manager.replace(pod.id, resource.id, 1, {} as never)).rejects.toThrow('changed')
+    const epoch = resources.epoch(pod.id)
+    await manager.network(pod.id, resource.id, epoch, ['graph.microsoft.com', 'login.microsoftonline.com'])
+    const network = resources.list(pod.id)[0]!
+    expect(network.configuration.networkHosts).toEqual(['graph.microsoft.com', 'login.microsoftonline.com'])
+    expect(network.configuration.stateId).toBe(stateId)
+    expect(network.configuration.grants).toEqual(replaced.configuration.grants)
+    expect(resources.epoch(pod.id)).toBe(epoch + 1)
+    expect(store.getPod(pod.id).lifecycle).toBe('paused')
+    await expect(manager.network(pod.id, resource.id, epoch, [])).rejects.toThrow('changed')
+    await expect(manager.network(randomUUID(), resource.id, 0, [])).rejects.toThrow()
+
   }
   finally { store.close(); await rm(root, { recursive: true, force: true }) }
 })

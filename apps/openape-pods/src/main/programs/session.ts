@@ -76,7 +76,7 @@ export class ProgramSession {
         await new ProgramState(credentials).use(assignment.stateId, { podId: this.podId, applicationId }, async (workspace) => {
           await check(); signal.throwIfAborted()
           const args = [...argv, ...(assignment.cacheArgument ? [assignment.cacheArgument, workspace] : [])]
-          const domain = await launchTerminal(helper, directory, { executable: assignment.executable, workspace: podWorkspace, readDirectories: directories.readDirectories, writeDirectories: [workspace, ...directories.writeDirectories], readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: [], networkPorts: proxy ? [proxy.port] : [] }, args, { ...assignment.environment, ...proxy?.environment, HOME: workspace, TMPDIR: workspace }, (path, ownerPid) => registerAuthDomain(root, path, ownerPid))
+          const domain = await launchTerminal(helper, directory, { executable: assignment.executable, workspace: podWorkspace, readDirectories: directories.readDirectories, writeDirectories: [workspace, ...directories.writeDirectories], readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: [], networkPorts: proxy ? [proxy.port] : [], systemTrust: Boolean(proxy) }, args, { ...assignment.environment, ...proxy?.environment, HOME: workspace, TMPDIR: workspace }, (path, ownerPid) => registerAuthDomain(root, path, ownerPid))
           this.domain = domain; verifiedClosed = false
           const decoder = new StringDecoder('utf8')
           domain.stdout.on('data', (bytes: Buffer) => this.append(decoder.write(bytes)))

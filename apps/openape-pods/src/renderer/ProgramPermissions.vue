@@ -8,11 +8,12 @@ import { t, diagnostic } from './i18n'
 export default defineComponent({
   props: { podId: { type: String, required: true }, state: { type: Object as () => ResourceState, required: true } },
   emits: ['updated'],
-  data() { return { selectedApplication: '', selectedDestination: '', addingHttp: false, busy: false, openingShell: false, error: '', launch: null as TerminalView | null, pollTimer: undefined as ReturnType<typeof setTimeout> | undefined, disposed: false, origin: '', methods: ['GET'] as string[] } },
+  data() { return { networkHost: '', selectedApplication: '', selectedDestination: '', addingHttp: false, busy: false, openingShell: false, error: '', launch: null as TerminalView | null, pollTimer: undefined as ReturnType<typeof setTimeout> | undefined, disposed: false, origin: '', methods: ['GET'] as string[] } },
   computed: {
     selected() { return this.applications.find(item => item.id === this.selectedApplication) },
     applications() { return this.state.resources.filter(item => item.state !== 'revoked' && item.configuration.type === 'program') },
     destinations() { return this.state.resources.filter(item => item.state !== 'revoked' && item.configuration.type === 'http') },
+    networkHosts(): string[] { return (this.selected?.configuration.networkHosts as string[] | undefined) ?? [] },
     selectedHttp() { return this.destinations.find(item => item.id === this.selectedDestination) },
   },
   async mounted() { await this.refreshLaunch() },
@@ -57,6 +58,11 @@ export default defineComponent({
       }
       catch (error) { this.error = error instanceof Error ? error.message : 'HTTP permission failed' }
       finally { this.busy = false }
+    },
+    async saveNetwork(hosts: string[]) {
+      if (!this.selected) return
+      await this.act({ type: 'network', podId: this.podId, applicationId: this.selected.id, epoch: this.state.epoch, hosts })
+      if (!this.error) this.networkHost = ''
     },
     async revoke(resource: PodResource) {
       this.busy = true; this.error = ''
@@ -121,6 +127,28 @@ export default defineComponent({
         </button>
       </footer>
     </div>
+    <section v-if="selected" class="network-settings" :aria-label="t('Application network access')">
+      <h4>{{ t('HTTPS hosts for {application}', { application: selected.name }) }}</h4>
+      <p class="muted">
+        {{ t('Only these hosts are reachable on port 443 during sandboxed application calls. Command grants still apply. Setup windows keep their existing Mac-user permissions.') }}
+      </p>
+      <ul v-if="networkHosts.length">
+        <li v-for="host in networkHosts" :key="host">
+          <span>{{ host }}</span><button class="text-button" :disabled="busy" :aria-label="t('Remove host {host}', { host })" @click="saveNetwork(networkHosts.filter(item => item !== host))">
+            −
+          </button>
+        </li>
+      </ul>
+      <p v-else class="muted">
+        {{ t('No network hosts assigned.') }}
+      </p>
+      <form @submit.prevent="saveNetwork([...networkHosts, networkHost.trim()])">
+        <label>{{ t('HTTPS hostname') }}<input v-model="networkHost" type="text" :placeholder="t('api.example.com')" required :disabled="busy"></label>
+        <button :disabled="busy || !networkHost.trim()">
+          {{ t('Add host') }}
+        </button>
+      </form>
+    </section>
     <h3 class="http-heading">
       {{ t('HTTP destinations') }}
     </h3>
@@ -161,6 +189,12 @@ export default defineComponent({
 </template>
 
 <style scoped>
+.network-settings { margin:16px 0; padding:16px; border:1px solid var(--border); border-radius:12px; }
+.network-settings h4 { margin:0; }
+.network-settings ul { list-style:none; padding:0; }
+.network-settings li { display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding:6px 0; }
+.network-settings form { display:flex; align-items:end; flex-wrap:wrap; gap:12px; }
+.network-settings label { flex:1; }
 .http-heading { margin-top:36px; }
 .program-permissions { margin-top:28px; border-top:1px solid var(--border); padding-top:16px; }
 .application-list { background:var(--surface); border:1px solid var(--border); border-radius:12px; margin:16px 0; overflow:hidden; }

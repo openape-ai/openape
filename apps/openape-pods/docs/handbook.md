@@ -186,6 +186,8 @@ ape-shell mediates command grants; it does not provide a filesystem sandbox. The
 
 Play starts apps directly with the pod workspace and private application HOME, using the normal login Keychain. Some Mac apps ignore HOME or reuse a global profile or existing instance: check the account inside the app. Only programs respecting the supplied context can share setup reliably. Close the app normally to save setup. Interrupted sessions keep the last saved setup. Encrypted state is currently limited to 4 MB and 128 files; large browser profiles are not supported by this storage contract.
 
+Select an application to add or remove its HTTPS hostnames. Sandboxed application calls can connect only to these public hosts on port 443; command grants still apply. This is separate from Node.js HTTP destinations. Changing hosts pauses the pod and invalidates prior script validation. Setup terminals and GUI windows retain their existing Mac-user permissions.
+
 ![Permissions](images/handbook-permissions.png)
 
 ## Settings

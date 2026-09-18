@@ -1520,5 +1520,16 @@
   "Use an https://www.npmjs.com/package/ link; external package sources are not supported": "Verwende einen https://www.npmjs.com/package/-Link; externe Paketquellen werden nicht unterstützt",
   "npm search failed. Check the package name and connection, then try again.": "npm-Suche fehlgeschlagen. Prüfe Paketname und Verbindung und versuche es erneut.",
   "npm catalog response is too large": "Die Antwort des npm-Katalogs ist zu groß",
-  "An npm search is already running": "Es läuft bereits eine npm-Suche"
+  "An npm search is already running": "Es läuft bereits eine npm-Suche",
+  "Choose up to 16 public HTTPS hostnames": "Wähle bis zu 16 öffentliche HTTPS-Hostnamen",
+  "Enter a hostname without scheme, path or port": "Gib einen Hostnamen ohne Protokoll, Pfad oder Port ein",
+  "Application network hosts must be unique": "Netzwerk-Hostnamen dürfen nicht doppelt vorkommen",
+  "Application network access": "Netzwerkzugriff der Anwendung",
+  "HTTPS hosts for {application}": "HTTPS-Hosts für {application}",
+  "Only these hosts are reachable on port 443 during sandboxed application calls. Command grants still apply. Setup windows keep their existing Mac-user permissions.": "Bei abgeschotteten Anwendungsaufrufen sind nur diese Hosts auf Port 443 erreichbar. Befehlsfreigaben gelten weiterhin. Einrichtungsfenster behalten ihre bestehenden Mac-Benutzerrechte.",
+  "Remove host {host}": "Host {host} entfernen",
+  "No network hosts assigned.": "Noch keine Netzwerk-Hosts zugewiesen.",
+  "HTTPS hostname": "HTTPS-Hostname",
+  "Add host": "Host hinzufügen",
+  "api.example.com": "api.example.com"
 }

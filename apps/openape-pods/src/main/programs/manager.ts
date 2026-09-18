@@ -1,3 +1,4 @@
+import { parseNetworkHosts } from '../../contracts/programs'
 import { assignedDirectories, directoryPolicy } from '../../runtime/directories'
 import { ApplicationLaunch } from './launch'
 import { ExternalShell } from '../shell/session'
@@ -41,6 +42,11 @@ export class ProgramManager {
     await this.dispatch({ type: 'save', podId, id, epoch, configuration: { ...definition, type: 'program', stateId: current.stateId, capability: current.capability, grants: [] } })
   }
 
+  async network(podId: string, id: string, epoch: number, hosts: string[]): Promise<void> {
+    const current = await this.assignment(podId, id, epoch)
+    await this.dispatch({ type: 'save', podId, id, epoch, configuration: { ...current, networkHosts: parseNetworkHosts(hosts) } })
+  }
+
   async prepare(podId: string, line: string) {
     return prepareConsole(dirname(this.root), podId, await this.resources(podId), line)
   }
@@ -75,7 +81,7 @@ export class ProgramManager {
     finally { await this.dispatch({ type: 'release', podId, sessionId }) }
   }
 
-  async terminal(command: Exclude<ProgramCommand, { type: 'openShell' } | { type: 'add' } | { type: 'replace' | 'launch' | 'launchStatus' } | { type: 'importState' } | { type: 'prepare' }>): Promise<TerminalView> {
+  async terminal(command: Exclude<ProgramCommand, { type: 'network' } | { type: 'openShell' } | { type: 'add' } | { type: 'replace' | 'launch' | 'launchStatus' } | { type: 'importState' } | { type: 'prepare' }>): Promise<TerminalView> {
     if (command.type === 'grant') throw new Error('Permission approval requires the owner window')
     if (command.type === 'start') {
       for (const [id, session] of this.sessions) {
