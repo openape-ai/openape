@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, symlinkSync }
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PodDatabase } from '../../src/worker/storage/database'
+import { PodDatabase, schemaVersion } from '../../src/worker/storage/database'
 import { assignedDirectories } from '../../src/runtime/directories'
 import { parseResourceCommand } from '../../src/contracts/resources'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
@@ -64,10 +64,10 @@ it('migrates schema 16 without altering existing resources or pod data', () => {
   registry.assignReference(pod.id, 'Existing reference', '/fixture/reference.txt')
   const resources = registry.list(pod.id); const record = before.getPod(pod.id)
   before.db.exec(`CREATE TABLE resources_v16(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), revision INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('reference','tool','connection','credential')), state TEXT NOT NULL CHECK(state IN ('ready','missing','expired','revoked','refreshRequired')), name TEXT NOT NULL, configuration TEXT NOT NULL);
-INSERT INTO resources_v16 SELECT * FROM resources; DROP TABLE resources; ALTER TABLE resources_v16 RENAME TO resources; DROP TABLE script_dependencies; DROP TABLE dependency_sets; DROP TABLE draft_packages; DROP TABLE dependency_domains; PRAGMA user_version=16;`)
+INSERT INTO resources_v16 SELECT * FROM resources; DROP TABLE resources; ALTER TABLE resources_v16 RENAME TO resources; DROP TABLE script_dependencies; DROP TABLE dependency_sets; DROP TABLE draft_packages; DROP TABLE dependency_domains; ALTER TABLE onboarding DROP COLUMN default_owner; PRAGMA user_version=16;`)
   before.close()
   const after = new PodDatabase(root); stores.push(after)
-  expect(after.db.prepare('PRAGMA user_version').get()?.user_version).toBe(18)
+  expect(after.db.prepare('PRAGMA user_version').get()?.user_version).toBe(schemaVersion)
   expect(new ResourceRegistry(after, () => {}).list(pod.id)).toEqual(resources)
   expect(after.getPod(pod.id)).toEqual(record)
   expect(after.db.prepare('PRAGMA foreign_key_check').all()).toEqual([])

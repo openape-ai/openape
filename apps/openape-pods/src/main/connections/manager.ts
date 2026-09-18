@@ -16,9 +16,9 @@ import { verifyExecutable } from '../../worker/runtime/sandbox'
 import { approveCommands } from '../programs/grants'
 import type { ProgramAuthority } from '../programs/grants'
 
-interface SetupState { connections: ConnectionView[], complete: boolean }
+interface SetupState { connections: ConnectionView[], defaultOwner: string | null, complete: boolean }
 export class ConnectionManager {
-  private jobs = new Map<string, { controller: AbortController, work: Promise<void>, login: ConnectionView['login'] }>()
+  private jobs = new Map<string, { controller: AbortController, work: Promise<void>, login: ConnectionView['login'], owner: boolean }>()
   private runtimeState = { ready: false, error: null as string | null }
   private assigning = false
   private identityTurn: Promise<void> = Promise.resolve()
@@ -74,27 +74,43 @@ export class ConnectionManager {
       }
       return this.view()
     }
+    if (command.type === 'setDefaultOwner') { await this.dispatch({ type: 'setDefaultOwner', id: command.id }); return this.view() }
     if (!this.runtimeState.ready) throw new Error(this.runtimeState.error ?? 'Bundled runtime is not ready')
     if (command.type === 'connect') {
-      if (this.jobs.size >= 3) throw new Error('Finish or cancel another sign-in first')
-      const id = randomUUID(); const connection: ConnectionView = { id, provider: command.provider, account: command.account, state: 'connecting', error: null, login: null }
-      const metadata: Record<string, unknown> = command.issuer ? { issuer: command.issuer } : {}
-      await this.credentials.create(id, '{}'); await this.save(connection, metadata)
-      const controller = new AbortController(); const timer = setTimeout(() => controller.abort(new Error('Sign-in expired; start again')), 15 * 60 * 1000)
-      const job = { controller, work: Promise.resolve(), login: null as ConnectionView['login'] }; this.jobs.set(id, job)
-      job.work = (async () => {
-        try {
-          const present = (login: NonNullable<ConnectionView['login']>) => { job.login = login }
-          if (command.provider === 'chatgpt') { const account = await this.codex.login(id, controller.signal, present); connection.account = account.account; metadata.accountId = account.accountId }
-          if (command.provider === 'openape') Object.assign(metadata, await this.owner.login(id, command.issuer!.replace(/\/$/, ''), command.account, controller.signal, present))
-          controller.signal.throwIfAborted(); await this.save({ ...connection, state: 'ready' }, metadata); await this.availability()
-        }
-        catch (error) { await this.save({ ...connection, state: 'failed', error: error instanceof Error ? error.message : 'Sign-in failed' }, metadata) }
-        finally { clearTimeout(timer); this.jobs.delete(id) }
-      })().catch((error: unknown) => { this.runtimeState = { ready: false, error: error instanceof Error ? error.message : 'Could not persist sign-in outcome' } })
-      return this.view()
+      const connection: ConnectionView = { id: randomUUID(), provider: command.provider, account: command.account, state: 'connecting', error: null, login: null }
+      return this.startLogin(connection, command.issuer ? { issuer: command.issuer.replace(/\/$/, '') } : {}, command.makeDefault === true, true)
+    }
+    if (command.type === 'reconnect') {
+      const connection = await this.connection(command.id, 'openape')
+      if (this.assigning) throw new Error('Another permission review is in progress')
+      return this.startLogin({ ...connection, state: 'connecting', error: null }, await this.metadata(connection.id), false)
     }
     if (command.type === 'finish') await this.dispatch({ type: 'finish' })
+    return this.view()
+  }
+
+  private async startLogin(connection: ConnectionView, metadata: Record<string, unknown>, makeDefault: boolean, fresh = false): Promise<OnboardingView> {
+    if (this.jobs.size >= 3 || this.jobs.has(connection.id)) throw new Error('Finish or cancel another sign-in first')
+    if (connection.provider === 'openape' && [...this.jobs.values()].some(job => job.owner)) throw new Error('Finish or cancel another sign-in first')
+    if (fresh) await this.credentials.create(connection.id, '{}')
+    await this.save(connection, metadata)
+    const controller = new AbortController(); const timer = setTimeout(() => controller.abort(new Error('Sign-in expired; start again')), 15 * 60 * 1000)
+    const job = { controller, work: Promise.resolve(), login: null as ConnectionView['login'], owner: connection.provider === 'openape' }; this.jobs.set(connection.id, job)
+    job.work = (async () => {
+      try {
+        const present = (login: NonNullable<ConnectionView['login']>) => { job.login = login }
+        if (connection.provider === 'chatgpt') { const account = await this.codex.login(connection.id, controller.signal, present); connection.account = account.account; metadata.accountId = account.accountId }
+        if (connection.provider === 'openape') {
+          if (typeof metadata.issuer !== 'string') throw new Error('OpenApe identity provider is required')
+          Object.assign(metadata, await this.owner.login(connection.id, metadata.issuer.replace(/\/$/, ''), connection.account, controller.signal, present))
+        }
+        controller.signal.throwIfAborted(); await this.save({ ...connection, state: 'ready' }, metadata)
+        if (makeDefault) await this.dispatch({ type: 'setDefaultOwner', id: connection.id })
+        await this.availability()
+      }
+      catch (error) { await this.save({ ...connection, state: 'failed', error: error instanceof Error ? error.message : 'Sign-in failed' }, metadata) }
+      finally { clearTimeout(timer); this.jobs.delete(connection.id) }
+    })().catch((error: unknown) => { this.runtimeState = { ready: false, error: error instanceof Error ? error.message : 'Could not persist sign-in outcome' } })
     return this.view()
   }
 
@@ -113,12 +129,14 @@ export class ConnectionManager {
   }
 
   private async preparePodConnection(podId: string) {
-    const owners = (await this.state()).connections.filter(item => item.provider === 'openape' && item.state === 'ready')
+    const state = await this.state()
+    const owners = state.connections.filter(item => item.provider === 'openape')
     const candidates = await Promise.all(owners.map(async owner => ({ owner, metadata: await this.metadata(owner.id) })))
     const bound = candidates.filter(item => Object.hasOwn((item.metadata.pods ?? {}) as object, podId))
     if (bound.length > 1) throw new Error('This pod is assigned to multiple OpenApe accounts; correct its owner before continuing')
-    const selected = bound[0] ?? candidates.at(-1)
-    if (!selected) throw new Error('Connect OpenApe before opening a pod shell')
+    const selected = bound[0] ?? candidates.find(item => item.owner.id === state.defaultOwner)
+    if (!selected) throw new Error('Choose a default OpenApe account before setting up a new pod')
+    if (selected.owner.state !== 'ready') throw new Error('Reconnect this pod’s OpenApe account before continuing')
     const { owner, metadata } = selected
     if (typeof metadata.issuer !== 'string') throw new Error('OpenApe identity provider is required')
     const identities = new PodIdentityManager(this.credentials)

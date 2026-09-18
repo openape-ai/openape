@@ -5,7 +5,7 @@ import type { PodIdentityReference } from '../../main/connections/agent'
 import type { MailAssignment } from '../../main/mail/service'
 import { OnboardingStore } from './store'
 
-export type SetupInternal = { type: 'list' } | { type: 'save', connection: Omit<ConnectionView, 'login'>, metadata: Record<string, unknown> } | { type: 'metadata', id: string } | { type: 'finish' } | { type: 'revoke', id: string } | { type: 'assign', setup: MailSetup, identity: PodIdentityReference, grants: MailAssignment['grants'] }
+export type SetupInternal = { type: 'list' } | { type: 'setDefaultOwner', id: string } | { type: 'save', connection: Omit<ConnectionView, 'login'>, metadata: Record<string, unknown> } | { type: 'metadata', id: string } | { type: 'finish' } | { type: 'revoke', id: string } | { type: 'assign', setup: MailSetup, identity: PodIdentityReference, grants: MailAssignment['grants'] }
 function usesConnection(configuration: Record<string, unknown>, id: string): boolean {
   const authority = configuration.authority as { ownerConnection?: string } | undefined
   const grants = Array.isArray(configuration.grants) ? configuration.grants as { authority?: { ownerConnection?: string } }[] : []
@@ -16,6 +16,7 @@ export class SetupControl {
   readonly connections: OnboardingStore
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry) { this.connections = new OnboardingStore(store) }
   execute(command: SetupInternal): unknown {
+    if (command.type === 'setDefaultOwner') this.connections.setDefaultOwner(command.id)
     if (command.type === 'save') this.connections.save(command.connection, command.metadata)
     if (command.type === 'metadata') return this.connections.metadata(command.id)
     if (command.type === 'finish') this.connections.finish()
@@ -38,6 +39,6 @@ export class SetupControl {
         { kind: 'tool', name: 'Read-only Microsoft mail', configuration: { capability: 'mail.read', account: setup.account, connectionId: setup.mailConnection, folders: setup.folders.map(folder => folder.id), folderNames: setup.folders, since: setup.since, attachments: setup.attachments, grants } },
       ])
     }
-    return { connections: this.connections.connections(), complete: this.connections.complete() }
+    return { connections: this.connections.connections(), defaultOwner: this.connections.defaultOwner(), complete: this.connections.complete() }
   }
 }

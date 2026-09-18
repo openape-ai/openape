@@ -35,7 +35,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 18
+export const schemaVersion = 19
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -255,6 +255,7 @@ CREATE TABLE dependency_domains(path TEXT PRIMARY KEY,owner_pid INTEGER NOT NULL
 PRAGMA user_version=18;`)
       }
 
+      if (version < 19) this.db.exec('ALTER TABLE onboarding ADD COLUMN default_owner TEXT REFERENCES connections(id); PRAGMA user_version=19;')
     })
   }
 

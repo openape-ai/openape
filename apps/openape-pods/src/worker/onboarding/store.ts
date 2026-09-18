@@ -21,6 +21,13 @@ export class OnboardingStore {
     return JSON.parse(row.metadata as string) as Record<string, unknown>
   }
 
+  defaultOwner(): string | null { return this.store.db.prepare('SELECT default_owner FROM onboarding WHERE id=1').get()!.default_owner as string | null }
+  setDefaultOwner(id: string): void {
+    const owner = this.connections().find(item => item.id === id && item.provider === 'openape' && item.state === 'ready')
+    if (!owner) throw new Error('Choose a connected OpenApe account')
+    this.store.db.prepare('UPDATE onboarding SET default_owner=? WHERE id=1').run(id)
+  }
+
   complete(): boolean { return this.store.db.prepare('SELECT complete FROM onboarding WHERE id=1').get()!.complete === 1 }
   finish(): void { this.store.db.prepare('UPDATE onboarding SET complete=1 WHERE id=1').run() }
 }
