@@ -38,6 +38,7 @@ export async function startIssueFixture() {
         NUXT_OPENAPE_CLIENT_ID: new URL(url).host,
         NUXT_OPENAPE_SP_SESSION_SECRET: 'native-issues-e2e-session-secret-at-least-32-characters',
         NUXT_FALLBACK_IDP_URL: idp.url,
+        NUXT_IDP_URL: idp.url,
         OPENAPE_SP_ALLOW_INSECURE_IDP: '1',
         DDISA_MOCK_RECORDS: JSON.stringify({ 'issues.test': { version: 'ddisa1', idp: idp.url, mode: 'open' } }),
       }),
@@ -75,6 +76,7 @@ export async function startIssueFixture() {
       writeFileSync(join(home, '.config/apes/auth.json'), JSON.stringify({ idp: idp.url, email, access_token: idpToken, expires_at: Math.floor(Date.now() / 1000) + 3600 }))
       return {
         token,
+        idpToken,
         cookie: session.jar.headerFor(`${base}/api/issues`)!,
         session,
         async call(method: string, path: string, body?: unknown, extra: Record<string, string> = {}) {
