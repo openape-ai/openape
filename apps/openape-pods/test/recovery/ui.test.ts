@@ -10,12 +10,12 @@ describe('explicit recovery UI', () => {
     window.pods = { packages: async () => { throw new Error('No package search fixture configured') }, programs: async () => { throw new Error('No program fixture configured') }, language: async () => 'en' as const, scripts: async () => { throw new Error('No script fixture configured') }, data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }), onboarding: async () => ({ connections: [], complete: true, runtime: { ready: true, error: null } }), master: async () => ({ connected: false, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }), details: async () => ({ claims: [], total: 0, counts: { finding: 0, question: 0, gap: 0 }, checkpointRevision: 0, versions: [], source: null }), runs, workspace: vi.fn().mockResolvedValue({ organization: { revision: 1, groups: [] }, pods: [{ id: podId, name: 'Fixture', revision: 1, lifecycle: 'paused', activeScript: null }] }), scheduling: vi.fn().mockResolvedValue({ pending: 0, blocked: 1 }), resources: vi.fn(), getStatus: vi.fn(), onStatus: vi.fn() }
     const wrapper = mount(PodRuns); await flushPromises()
     const button = (name: string) => wrapper.findAll('button').find(button => button.text() === name)!
-    expect(wrapper.text()).toContain('External effect is unknown')
-    expect(button('Retry remaining inputs').attributes('disabled')).toBeDefined()
-    await button('Check stopped execution').trigger('click'); await flushPromises()
+    expect(wrapper.text()).toContain('Prepare retry')
+    expect(button('Retry unfinished work')).toBeUndefined()
+    await button('Prepare retry').trigger('click'); await flushPromises()
     expect(runs).toHaveBeenCalledWith({ type: 'recover', podId, runId, action: 'inspect' })
-    expect(button('Retry remaining inputs').attributes('disabled')).toBeUndefined()
-    await button('Retry remaining inputs').trigger('click'); await flushPromises()
+    expect(button('Retry unfinished work').attributes('disabled')).toBeUndefined()
+    await button('Retry unfinished work').trigger('click'); await flushPromises()
     expect(runs).toHaveBeenLastCalledWith({ type: 'recover', podId, runId, action: 'retry' })
     wrapper.unmount()
   })
