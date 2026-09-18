@@ -83,3 +83,18 @@ it('keeps application selection and launch without local grant details or script
   expect(wrapper.get('button[aria-label="Remove application"]').attributes('disabled')).toBeUndefined()
   wrapper.unmount()
 })
+
+it('edits network hosts only for the selected application', async () => {
+  const programs = vi.fn(async command => command.type === 'launchStatus' ? null : state)
+  window.pods = { ...window.pods, programs }
+  const wrapper = mount(ProgramPermissions, { props: { podId, state } })
+  expect(wrapper.find('.network-settings').exists()).toBe(false)
+  await wrapper.get('.application-select').trigger('click')
+  await wrapper.get('.network-settings input').setValue('graph.microsoft.com')
+  await wrapper.get('.network-settings form').trigger('submit'); await flushPromises()
+  expect(programs).toHaveBeenCalledWith({ type: 'network', podId, applicationId: id, epoch: 2, hosts: ['graph.microsoft.com'] })
+  await wrapper.setProps({ state: { epoch: 3, resources: [{ ...state.resources[0]!, configuration: { ...state.resources[0]!.configuration, networkHosts: ['graph.microsoft.com'] } }] } })
+  await wrapper.get('button[aria-label="Remove host graph.microsoft.com"]').trigger('click'); await flushPromises()
+  expect(programs).toHaveBeenCalledWith({ type: 'network', podId, applicationId: id, epoch: 3, hosts: [] })
+  wrapper.unmount()
+})
