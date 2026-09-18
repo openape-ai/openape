@@ -14,7 +14,7 @@ import PodSettings from './PodSettings.vue'
 import PodValues from './PodValues.vue'
 import PodResources from './PodResources.vue'
 import PodRuns from './PodRuns.vue'
-import { runFailure } from './run-activity'
+import { runFailure, runHeadline } from './run-activity'
 import RunApproval from './RunApproval.vue'
 import type { RunApproval as Approval } from '../contracts/activity'
 import PodKnowledge from './PodKnowledge.vue'
@@ -36,6 +36,7 @@ export default defineComponent({
     workerLabel(): string { if (this.connectionError) return t('Unavailable'); return label({ starting: 'Starting', ready: 'Ready', error: 'Needs attention', stopped: 'Stopped' }[this.status?.worker.state ?? 'starting']) },
     attention(): boolean { return !!this.connectionError || this.status?.worker.state === 'error' },
     currentRun(): RunRecord | undefined { return this.runs.find(run => run.state === 'running') },
+    needsRecovery(): boolean { const run = this.runs[0]; return !!run && ['interrupted', 'failed', 'cancelled', 'blocked'].includes(run.state) && run.recovery?.state !== 'retryQueued' },
     nextRun(): string { if (!this.pod || this.pod.lifecycle !== 'active' || !this.schedule?.enabled) return t('Manual only'); return this.schedule.nextAt ? dateTime(this.schedule.nextAt) : t('No scheduled time') },
   },
   async mounted() {
@@ -49,7 +50,7 @@ export default defineComponent({
   },
   beforeUnmount() { this.closed = true; this.unsubscribe?.(); if (this.timer) clearTimeout(this.timer) },
   methods: {
-    t, runFailure, diagnostic, label, dateTime, chatDraft,
+    t, runFailure, runHeadline, diagnostic, label, dateTime, chatDraft,
     openValues() { this.selected = 'Values' },
     beginResize(event: PointerEvent) { this.resizing = true; this.resizeStart = event.clientX; this.resizeWidth = this.sidebarWidth; (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId) },
     resize(event: PointerEvent) { if (this.resizing) this.sidebarWidth = Math.max(176, Math.min(360, window.innerWidth - 340, this.resizeWidth + event.clientX - this.resizeStart)) },
@@ -169,7 +170,7 @@ export default defineComponent({
           <PodResources :key="podId" :selected-pod-id="podId" @discuss="master()" />
         </section>
         <section v-else-if="selected === 'History'" id="panel-History" role="tabpanel" aria-labelledby="tab-History">
-          <PodRuns :key="podId" :selected-pod-id="podId" @navigate="selected = 'Permissions'" />
+          <PodRuns :key="podId" :selected-pod-id="podId" @navigate="selected = $event === 'settings' ? 'App settings' : 'Permissions'" />
         </section>
         <section v-else-if="selected === 'Knowledge'" id="panel-Overview" role="tabpanel" aria-labelledby="tab-Overview">
           <button class="text-button" @click="selected = 'Overview'">
@@ -182,10 +183,10 @@ export default defineComponent({
             <article class="card">
               <div class="card-heading">
                 <h2>{{ t('Last run') }}</h2><span class="badge">{{ label(runs[0]?.state ?? 'Not run yet') }}</span>
-              </div><p>{{ runs[0]?.summary || t('Ready for its first manual run.') }}</p><p v-if="runs[0]" class="muted">
+              </div><p>{{ runs[0] ? diagnostic(runHeadline(runs[0])) : t('Ready for its first manual run.') }}</p><p v-if="runs[0]" class="muted">
                 {{ dateTime(runs[0].startedAt) }}
               </p><p v-if="runs[0]?.error" class="error-message">
-                {{ diagnostic(runFailure(runs[0].error)?.title) }} · {{ diagnostic(runFailure(runs[0].error)?.help) }}
+                {{ diagnostic(runFailure(runs[0].error)?.help) }}
               </p><div class="overview-actions">
                 <button class="text-button" @click="selected = 'History'">
                   {{ t('View run trace') }}
@@ -195,12 +196,15 @@ export default defineComponent({
               </div>
             </article>
             <div class="overview-actions">
-              <button class="primary" :disabled="!pod.activeScript || !!currentRun || pod.lifecycle === 'archived' || attention" @click="runOnce">
+              <button v-if="needsRecovery && !currentRun" class="primary" @click="selected = 'History'">
+                {{ t('Prepare retry') }}
+              </button>
+              <button v-else class="primary" :disabled="!pod.activeScript || !!currentRun || pod.lifecycle === 'archived' || attention" @click="runOnce">
                 {{ t('Run now') }}
               </button><span v-if="!pod.activeScript" class="muted">{{ t('Prepare the script before its first run.') }}</span><span v-else-if="currentRun" class="muted">{{ t('A run is active') }}</span>
             </div>
             <p v-if="schedule?.blocked" class="error-message">
-              {{ t('{p0} inputs awaiting recovery', { p0: schedule.blocked }) }}
+              {{ t('Unfinished work is waiting. Open run history to prepare a retry.') }}
             </p>
           </template><article v-else class="card empty-panel">
             <h2>{{ t('No pods yet') }}</h2><button class="primary" @click="master(true)">

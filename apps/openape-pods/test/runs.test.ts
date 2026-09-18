@@ -11,8 +11,8 @@ describe('manual runs view', () => {
     const wrapper = mount(PodRuns); await flushPromises()
     expect(wrapper.text()).not.toContain('Use local example')
     runs.mockRejectedValueOnce(new Error('Script needs validation'))
-    await wrapper.findAll('button').find(button => button.text() === 'Start run')!.trigger('click'); await flushPromises()
-    expect(wrapper.get('[role="alert"]').text()).toBe('Script needs validation')
+    await wrapper.findAll('button').find(button => button.text() === 'Run now')!.trigger('click'); await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('This run could not finish')
     wrapper.unmount()
   })
   it('rejects injected execution authority and malformed persisted events', () => {
@@ -49,4 +49,20 @@ it('derives elapsed time and activity from observed events without inventing mod
   expect(runTiming(events, 1000, 10000)).toEqual({ active: '0:06', waiting: '0:03' })
   expect(runActivity(events).map(item => item.title)).toEqual(['Run prepared', 'Permission review', 'Application call'])
   expect(runFailure('Script failed: {"message":"Identity authorization failed (400)"}')?.help).toContain('does not mean')
+})
+
+it('summarizes repeated work without approval noise and explains the Codex storage interruption', async () => {
+  const { runSteps, runFailure } = await import('../src/renderer/run-activity')
+  const events = Array.from({ length: 5 }, (_, index) => [
+    { sequence: index * 3 + 1, at: index, type: 'operation', data: { id: String(index), operation: 'tools.invoke', state: 'started' } },
+    { sequence: index * 3 + 2, at: index, type: 'approval', data: { permission: 'o365.account[email=private@example.test].mail-read[*]#read', state: 'approved' } },
+    { sequence: index * 3 + 3, at: index, type: 'operation', data: { id: String(index), operation: 'tools.invoke', state: 'completed' } },
+  ]).flat()
+  expect(runSteps(events)).toEqual([{ title: 'Application call', application: 'o365', completed: 5, failed: 0, running: 0 }])
+  events.push({ sequence: 16, at: 6, type: 'operation', data: { id: 'ai', operation: 'agent.run', state: 'started' } })
+  expect(runSteps(events, 'cancelled')[1]).toMatchObject({ title: 'AI request', completed: 0, failed: 1, running: 0 })
+  const failure = runFailure('Data inventory contains a link or unsupported file: runs/run/agent/confined/home/codex/tmp/arg0/fixture/apply_patch')
+  expect(failure?.title).toContain('Pods stopped')
+  expect(failure?.action).toBeUndefined()
+  expect(runFailure('Permission revoked')?.action).toBe('permissions')
 })

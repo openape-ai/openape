@@ -200,15 +200,15 @@ Unter Weitere Optionen können Sie den Pod archivieren oder einen archivierten P
 
 ## Historie und Wiederherstellung
 
-Läufe zeigt gespeicherte Ausführungszustände und Zusammenfassungen. Wähle einen Lauf, um seine festgelegte Skriptversion, den Fortschrittsstand, Fehler und geordnete Gespeicherte Ereignisse zu prüfen. Das lokale Beispiel ist deterministisch; das Agentenbeispiel benötigt zusätzlich einen verbundenen Codex-Anbieter.
+Die Historie zeigt das Ergebnis, den nächsten Schritt und Was passiert ist. Wiederholte Programmaufrufe und KI-Anfragen werden mit der Anzahl erfolgreicher und nicht abgeschlossener Aufrufe gruppiert. Routinemäßige Berechtigungsprüfungen bleiben zusammen mit der festgelegten Skriptversion und gespeicherten Ereignissen in den aufklappbaren Technischen Details.
 
-Lauf abbrechen stoppt einen aktiven Lauf. Unterbrochene Arbeit bleibt nach Absturz oder Neustart sichtbar. Wähle Gestoppte Ausführung prüfen, um die frühere Ausführung abzugleichen, und anschließend Verbleibende Eingaben erneut versuchen, wenn das Ergebnis dies zulässt. Erfordert das Ergebnis eine Prüfung, kläre die Unsicherheit vor einem erneuten Versuch. Bei einer blockierten Warteschlange wird Nicht gestartete Eingaben erneut versuchen verfügbar.
+Lauf abbrechen stoppt einen aktiven Lauf. Unterbrochene Arbeit bleibt nach Absturz oder Neustart sichtbar. Erneuten Versuch vorbereiten prüft gespeicherten Fortschritt und mögliche Zustellungen, ohne das Skript zu starten. Nach erfolgreicher Prüfung wird Unerledigte Arbeit erneut ausführen verfügbar. Kläre zuerst ungewisse Zustellungen. Nach einem gestoppten Lauf führt auch die Übersicht zu dieser Prüfung.
 
-Pro Pod läuft höchstens eine Ausführung. Weitere angenommene Eingaben bleiben vorgemerkt. Einzelne Ereignisse bleiben erhalten; verpasste Zeitplantermine werden zu einem Nachhollauf zusammengefasst. Fortschrittsstände dokumentieren erfolgreiche Arbeit. Allein das Fortsetzen eines Codex-Gesprächs ist keine Wiederherstellungsentscheidung.
+Pro Pod läuft höchstens eine Ausführung. Weitere wartende Startaufträge zählt vorgemerkte Startanfragen, keine E-Mails oder Dateien. Mehrfaches Starten kann mehrere Anfragen erzeugen. Nicht gestartete Anfragen erneut versuchen gilt für eine blockierte Warteschlange. Fortschrittsstände dokumentieren erfolgreiche Arbeit; allein das Fortsetzen eines Codex-Gesprächs ist keine Wiederherstellungsentscheidung.
 
 Skriptänderungen gelten nur für kommende Läufe und machen frühere Ergebnisse oder Wirkungen nicht rückgängig. Interne Skript-Hashes bleiben zur Nachvollziehbarkeit in den Ausführungsdetails sichtbar.
 
-Unklare HTTP-Zustellungen erscheinen in Historie. Halte fest, was du am Ziel geprüft hast, und wähle Bereits zugestellt oder Erneut senden erlauben. Die erste Auswahl speichert deine Bestätigung, keine Anbieterantwort; die zweite erlaubt einen späteren erneuten Versuch. Bei verlorener Antwort wird nicht automatisch erneut gesendet.
+Unklare HTTP-Zustellungen erscheinen in Historie. Halte fest, was du am Ziel geprüft hast, und wähle Bereits zugestellt oder Nicht zugestellt · erneut versuchen. Die erste Auswahl speichert deine Bestätigung, keine Anbieterantwort; die zweite erlaubt einen späteren erneuten Versuch. Bei verlorener Antwort wird nicht automatisch erneut gesendet.
 
 ![Historie und Wiederherstellung](images/handbook-history-de.png)
 

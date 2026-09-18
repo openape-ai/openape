@@ -29,6 +29,21 @@ export async function files(root: string, subdirectory = '', tolerateRemoval = f
   }
   return result.sort()
 }
+export async function storageBytes(root: string): Promise<number> {
+  let size = 0; let entries = 0
+  const pending = [root]
+  while (pending.length) {
+    const path = pending.pop()!
+    try {
+      const info = await lstat(path)
+      if (++entries > 100000) throw new Error('Data inventory exceeds 100,000 entries')
+      if (!info.isDirectory()) { size += info.size; continue }
+      for (const name of await readdir(path)) pending.push(join(path, name))
+    }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+  }
+  return size
+}
 export async function copyVerified(sourceRoot: string, path: string, destinationRoot: string, expected?: FileRecord): Promise<FileRecord> {
   relativePath(path)
   const source = join(sourceRoot, path); const destination = join(destinationRoot, path)
