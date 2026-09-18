@@ -200,15 +200,15 @@ Expand More options to archive the pod or delete an archived pod through a separ
 
 ## History and recovery
 
-History lists persisted execution states and summaries. Select a run to inspect its pinned script version, checkpoint, error and ordered Persisted events. The local example is deterministic; the agent example additionally needs a connected Codex provider.
+History shows the result, the next action and What happened. Repeated application calls and AI requests are grouped with successful and unfinished counts. Routine permission checks stay in collapsed Technical details, together with the pinned script and persisted events.
 
-Cancel stops an active run. Interrupted work remains visible after a crash or restart. Choose Check stopped execution to reconcile the previous execution, then Retry remaining inputs when the result permits it. If the outcome needs review, resolve that uncertainty before retrying. Retry unstarted inputs becomes available for a blocked queue.
+Cancel run stops an active run. Interrupted work remains visible after a crash or restart. Choose Prepare retry to check saved progress and possible deliveries without starting the script. Retry unfinished work becomes available after a successful check. Resolve uncertain deliveries first. Overview also leads to this check after a stopped run.
 
-At most one run executes per pod. Additional accepted inputs stay queued. Distinct events are preserved, while missed schedule occurrences are coalesced into one catch-up. Checkpoints record successful progress; resuming a Codex thread alone is not a recovery decision.
+At most one run executes per pod. Other waiting starts counts queued start requests, not emails or files. Repeated start clicks may create several requests. Retry unstarted requests applies to a blocked queue. Checkpoints record successful progress; resuming a Codex thread alone is not a recovery decision.
 
 Changing the script only affects subsequent runs and does not undo earlier results or effects. Internal script hashes remain in execution details for auditability.
 
-Unknown HTTP deliveries appear in History. Record what you observed at the destination and choose Already delivered or Allow resend. The former records an owner-attested receipt, not a provider response; the latter permits a subsequent retry. A lost response is never automatically resent.
+Unknown HTTP deliveries appear in History. Record what you observed at the destination and choose Already delivered or Not delivered · allow retry. The former records an owner-attested receipt, not a provider response; the latter permits a subsequent retry. A lost response is never automatically resent.
 
 ![History and recovery](images/handbook-history.png)
 

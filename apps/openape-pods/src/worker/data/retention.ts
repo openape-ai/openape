@@ -5,7 +5,7 @@ import type { PodDatabase } from '../storage/database'
 import type { DataView } from '../../contracts/data'
 import { assertDataIdle } from './backup'
 import { confirmDomainsStopped } from '../recovery/domains'
-import { files } from './files'
+import { storageBytes } from './files'
 
 export interface DeletionJob { podId: string, runIds: string[], keyIds: string[] }
 const validId = (value: string) => /^[a-f0-9-]{36}$/.test(value)
@@ -14,10 +14,7 @@ export class DataRetention {
   async view(): Promise<DataView> {
     let usedBytes = 0
     for (const directory of ['blobs', 'pods', 'snapshots', 'runs', 'dependencies', 'dependency-staging']) {
-      for (const path of await files(this.store.root, directory, true)) {
-        try { usedBytes += (await lstat(join(this.store.root, path))).size }
-        catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
-      }
+      usedBytes += await storageBytes(join(this.store.root, directory))
     }
     for (const name of ['control.sqlite', 'control.sqlite-wal']) {
       try { usedBytes += (await lstat(join(this.store.root, name))).size }
