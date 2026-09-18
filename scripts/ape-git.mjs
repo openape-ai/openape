@@ -19,7 +19,7 @@ export function checkState(statuses, contexts, sha, providerErrors = []) {
 
 function options(args) {
   const flags = {}; const positional = []
-  const allowed = new Set(['repo', 'title', 'body-file', 'source', 'target', 'expected-source', 'expected-target', 'context', 'branch', 'timeout', 'interval', 'path', 'line', 'state'])
+  const allowed = new Set(['repo', 'code-source', 'title', 'body-file', 'source', 'target', 'expected-source', 'expected-target', 'context', 'branch', 'timeout', 'interval', 'path', 'line', 'state'])
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
     if (arg === '--json') continue
@@ -56,6 +56,11 @@ export async function execute(argv, request, sleep = ms => new Promise(resolve =
     const [data, policies] = await Promise.all([request('GET', `${base}/statuses/${sha}`), request('GET', `${base}/protections`)])
     const policy = policies.policies.find(p => p.enabled && p.branch === (flags.branch || repository.defaultBranch))
     return { ...checkState(data.statuses, policy?.contexts ?? [], sha, data.providerErrors), statuses: data.statuses }
+  }
+  if (p[0] === 'repo' && p[1] === 'create') {
+    if (!flags.repo) throw new ForgeError('USAGE', 'repo create requires --repo owner/name')
+    const [owner, name] = repo.split('/')
+    return { code: 0, data: await request('POST', '/api/repos', { owner, name, ...(flags['code-source'] ? { issueHomeOnly: true, codeSourceUrl: flags['code-source'] } : {}) }) }
   }
   if (p[0] === 'repo') {
     const [details, protections] = await Promise.all([request('GET', base), request('GET', `${base}/protections`)])

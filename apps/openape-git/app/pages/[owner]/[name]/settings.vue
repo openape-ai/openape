@@ -58,6 +58,8 @@ interface RepoDetail {
   id: string
   owner: string
   name: string
+  issueHomeOnly: number
+  codeSourceUrl: string | null
   defaultBranch: string
   grants: RepoGrant[]
   webhooks: Webhook[]
@@ -129,7 +131,8 @@ async function onDeleteMirror(id: string) {
 }
 
 onMounted(async () => {
-  await Promise.all([load(), loadMirrors()])
+  await load()
+  if (repo.value && !repo.value.issueHomeOnly) await loadMirrors()
 })
 
 async function load() {
@@ -278,7 +281,7 @@ async function onRevoke(id: string) {
           </ul>
         </section>
 
-        <section>
+        <section v-if="!repo.issueHomeOnly">
           <h2 class="text-xl font-semibold mb-3">
             Push mirrors
           </h2>
@@ -352,7 +355,7 @@ async function onRevoke(id: string) {
           </ul>
         </section>
 
-        <section>
+        <section v-if="!repo.issueHomeOnly">
           <h2 class="text-xl font-semibold mb-3">
             Webhooks
           </h2>

@@ -148,3 +148,33 @@ it('keeps product selection across login and gives reporters only their own disc
   }
   finally { await context.close() }
 })
+
+it('creates an external-code issue home and hides native code, pull and mirror controls', async () => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto(fixture.base)
+  await page.getByLabel('Repository owner', { exact: true }).fill('owner')
+  await page.getByLabel('Repository name', { exact: true }).fill('external')
+  await page.getByLabel('Issues only; keep code at its current host', { exact: true }).check()
+  await page.getByLabel('External code URL', { exact: true }).fill('https://code.example/owner/external')
+  await page.getByRole('button', { name: 'Create', exact: true }).click()
+  await page.waitForURL('**/owner/external/issues')
+  await page.getByRole('link', { name: 'View external code', exact: true }).waitFor()
+  expect(await page.getByRole('link', { name: 'Code', exact: true }).count()).toBe(0)
+  expect(await page.getByRole('link', { name: 'Pulls', exact: true }).count()).toBe(0)
+  const shots = []
+  for (const [size, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]] as const) {
+    await page.setViewportSize({ width, height })
+    await screenshot(`external-home-${size}`)
+    shots.push({ title: `External code issue home — ${size}`, shot: `external-home-${size}.png`, status: 'passed' })
+  }
+  await page.getByRole('link', { name: 'Access', exact: true }).click()
+  await page.getByRole('heading', { name: 'Product issue reporting' }).waitFor()
+  expect(await page.getByText('Push mirrors', { exact: true }).count()).toBe(0)
+  expect(await page.getByText('Webhooks', { exact: true }).count()).toBe(0)
+  await page.goto(`${fixture.base}/owner/external`)
+  await page.waitForURL('**/owner/external/issues')
+  const manifest = JSON.parse(readFileSync(`${artifactDir}/testrun.json`, 'utf8'))
+  manifest.tests.push({ id: 'external-issue-home', title: 'External Git authority retained', status: 'passed', steps: shots })
+  writeFileSync(`${artifactDir}/testrun.json`, JSON.stringify(manifest, null, 2))
+  writeFileSync(`${artifactDir}/report.html`, readFileSync(`${artifactDir}/report.html`, 'utf8').replace('</html>', `${shots.map(shot => `<section><h2>${shot.title}</h2><img alt="${shot.title}" src="data:image/png;base64,${readFileSync(`${artifactDir}/${shot.shot}`).toString('base64')}"></section>`).join('')}</html>`))
+})

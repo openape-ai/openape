@@ -1,5 +1,10 @@
 # Active work
 
+## Native issues — M4 external issue homes (September 18, 2026)
+
+`openape-monorepo.worktrees/native-issues-apps`, branch `feature/issue-1356-native-issues-apps`, base `674de015` (M4 core). Adds fresh issue-only repository registration with an explicit external HTTPS code URL, private metadata and matching navigation. Real IdP/API/CLI/browser tests prove issues work without creating bare Git storage; Git transport, native PR and mirror writes are refused while normal Git reads still succeed. This is a separate M4 increment from the in-progress app-shell reporting links. Production registration and activation remain gated.
+
+
 ## Native issues — M4 product reporting (September 18, 2026)
 
 The dependent checkout `openape-monorepo.worktrees/native-issues-reporting`, branch `feature/issue-1356-native-issues-reporting`, starts from M3 source `597de762`. It adds versioned product routing, private report participation, intake-only transfer with explicit label mapping, audited moderation and matching web/CLI flows. The real IdP/CLI suite covers report → transfer → discussion → revocation. Browser checks exercise product preselection through login and responsive reporting. M1 is merged through PR 60 at `048ab8ab`; M2 is in PR 61. Product registration and production intake creation remain disabled until rollout. App-shell links and external-code issue homes follow in a separate M4 increment; continue M5/M6 before requesting the concrete production cutover approval.

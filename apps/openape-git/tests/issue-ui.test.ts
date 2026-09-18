@@ -11,6 +11,7 @@ import IssueMarkdown from '../app/components/IssueMarkdown.vue'
 import IssueReport from '../app/components/IssueReport.vue'
 import IssuePolicy from '../app/components/IssuePolicy.vue'
 import IssueTriage from '../app/components/IssueTriage.vue'
+import RepoHeader from '../app/components/RepoHeader.vue'
 
 enableAutoUnmount(afterEach)
 
@@ -152,6 +153,18 @@ describe('issue interaction contracts', () => {
     expect(wrapper.emitted('changed')).toHaveLength(1)
     await wrapper.setProps({ issue: { ...record, triageState: 'classified' } as never })
     expect(wrapper.text()).not.toContain('Classify / transfer report')
+  })
+
+  it('labels an external issue home and hides native code and pull tabs', async () => {
+    vi.stubGlobal('useRuntimeConfig', () => ({ public: { issuesEnabled: true } }))
+    fetcher.mockResolvedValueOnce({ issueHomeOnly: 1, codeSourceUrl: 'https://code.example/source' })
+    const wrapper = mount(RepoHeader, { props: { owner: 'owner', name: 'external', tab: 'issues' }, global: { ...global, stubs: { ...global.stubs, RepoHeader: false } } })
+    await flushPromises()
+    expect(wrapper.get('a[href="https://code.example/source"]').text()).toBe('View external code')
+    expect(wrapper.text()).toContain('Issues')
+    expect(wrapper.text()).not.toContain('Commits')
+    expect(wrapper.text()).not.toContain('Pulls')
+    expect(wrapper.find('a[href="/owner/external"]').exists()).toBe(false)
   })
 
 })
