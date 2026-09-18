@@ -26,13 +26,19 @@ Das Handbuch liegt als vollständige deutsche und englische Offline-Fassung mit 
 
 ## Dein erster lokaler Lauf
 
-Probiere dies mit einem neuen Pod. Das lokale Beispiel benötigt keine Kontoverbindung und erhöht einen dauerhaft gespeicherten Zähler. Beim Installieren wird das Beispiel zugleich zum aktiven Skript. Verwende deshalb einen neuen Pod, um kein eingerichtetes Arbeitsskript zu ersetzen.
+Probiere das folgende Beispiel in einem neuen Pod. Es liefert ein lokales Ergebnis ohne Kontoverbindungen. Ein leerer Skripteditor enthält noch keine gespeicherte Implementierung.
 
 1. Wählen Sie Neuer Pod, öffnen Sie Ohne Chat erstellen, tragen Sie den Pod-Namen ein und speichern Sie.
-2. Öffnen Sie Skript. Das Startskript liefert bereits ein gültiges lokales Ergebnis; ändern Sie bei Bedarf dessen Zusammenfassung.
-3. Wählen Sie Speichern und ausführen. Nach der Prüfung mit synthetischen Diensten startet der lokale Lauf ohne Kontoverbindung.
+2. Öffne Skript und füge das folgende Beispiel in den leeren Editor ein.
+3. Wähle Ausführen. Die App speichert und prüft den Code, bevor der lokale Lauf startet.
 4. Prüfen Sie die Historie und das abgeschlossene Ergebnis. Ein ausgewählter Lauf zeigt seine gespeicherten Ereignisse.
 5. Die Übersicht zeigt das letzte Ergebnis. Die Automatik bleibt deaktiviert.
+
+```javascript
+export async function run(context) {
+  return { status: 'completed', summary: 'Local example completed', completedInputIds: context.input.eventIds, gapIds: [] };
+}
+```
 
 ## Pods in Gruppen organisieren
 
@@ -72,7 +78,7 @@ App-Einstellungen → Arbeitsbereich-Chat bewahrt die bisherige globale Unterhal
 
 Der Chat kann gewöhnliche Variablen setzen, eine Gruppe zuordnen oder anlegen und ein Intervall oder einen täglichen Zeitplan vorbereiten. Dabei bleibt der Zeitplan ausgeschaltet und automatische Ausführung wird pausiert. Aktiviere sie nach Prüfung von Skript und Zugriffen selbst in Einstellungen. Der Chat eines ausgewählten Pods kann keinen anderen Pod lesen oder ändern; der Erstellungs-Chat des Arbeitsbereichs kann Pods anlegen.
 
-Der Assistent liest vor dem Schreiben eine von der App bereitgestellte Laufzeitreferenz. Er kann einen Entwurf validieren, anhand der Fehlermeldung verbessern und innerhalb vorhandener Berechtigungen aktivieren. Fordere einen manuellen Lauf ausdrücklich an, wenn du einen möchtest. App-, HTTPS- und Dateivorschläge öffnen Berechtigungen; Vorschläge für benannte Geheimnisse öffnen Variablen und Geheimnisse.
+Der Assistent liest vor dem Schreiben die Laufzeitreferenz der App. Er kann gespeicherte Entwürfe innerhalb bestehender Berechtigungen prüfen und verbessern. Vorschläge für Anwendungen, HTTPS und Verzeichnisse öffnen direkt im Chat vorausgefüllte Prüfformulare. Die native Bestätigung bleibt erforderlich; ein Vorschlag erteilt noch keinen Zugriff. Bei älteren Vorschlägen können Angaben fehlen. Geheimnis-Vorschläge öffnen Variablen und Geheimnisse mit vorausgewähltem Alias.
 
 Gewöhnliche Variablenwerte sind für den Assistenten sichtbar, wenn er den Pod prüft. Tokens, Passwörter und API-Schlüssel gehören in Geheimnisse. Ein Geheimnis-Vorschlag enthält nur Name und Zweck. Hinterlege Werte unter Variablen und Geheimnisse. Ein geprüftes Skript kann seine deklarierten, zugewiesenen Geheimnisse nutzen; eine Skriptänderung entfernt diese Zuweisungen nicht. Der Chat kann gespeicherte Geheimniswerte nicht abrufen.
 
@@ -83,6 +89,12 @@ Die synthetische Validierung prüft einen Anfangspfad mit leerem Checkpoint, ohn
 Der Assistent kann das aktuell gespeicherte Skript lesen, einschließlich eines neueren gespeicherten Entwurfs aus dem Editor. Speichere manuelle Änderungen, bevor du den Chat um eine Überarbeitung bittest; ungespeicherter Editor-Text ist für den Assistenten nicht verfügbar.
 
 Deine Nachrichten stehen rechts, Antworten links. Die ursprüngliche Erstellungsnachricht erscheint einmal als normale Nachricht im gespeicherten Verlauf. Technische Anfragen, Ergebnisse und Skriptentwürfe sind unter Technische Details eingeklappt. Zugriffsvorschläge bleiben zur Prüfung verfügbar. Die App öffnet den erstellten Pod automatisch und bewahrt den Verlauf nach Neustarts. Ältere, noch nicht zugeordnete Erstellungsverläufe lassen sich nach Prüfung der vorgeschlagenen Nachrichten wiederherstellen.
+
+Wähle vor dem Senden das Chat-Modell, darunter GPT-6 Astra. Die App merkt sich die Auswahl auf diesem Mac und verwendet sie beim Erstellen und für weitere Chat-Antworten. Modelle in geplanten Skripten ändern sich dadurch nicht.
+
+Frage beantworten speichert fehlende gewöhnliche Angaben. Trage dort und im Chat keine Geheimnisse ein. Geheimnis-Vorschläge erklären, wo du den Wert erhältst, und öffnen dessen geschütztes Eingabefeld. Nutze nach den Angaben und Freigaben Einrichtung fortsetzen. Der Assistent prüft dann den gespeicherten Stand und vervollständigt das Skript; bestehende Zeitpläne bleiben unverändert und es wird kein Lauf gestartet.
+
+Eine unterbrochene Antwort kann Arbeit angekündigt haben, die noch nicht gespeichert wurde. Der Chat zeigt, ob ein Skript fehlt, ein Entwurf gespeichert ist oder ein aktives Skript vorliegt. Der leere Editor zeigt kein automatisches Beispiel mehr. Einrichtung fortsetzen setzt beim gespeicherten Stand an.
 
 ![Chat und Pod-Erstellung](images/handbook-chat-de.png)
 

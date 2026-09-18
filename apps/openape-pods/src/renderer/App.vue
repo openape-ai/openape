@@ -27,7 +27,7 @@ import type { PodStatus } from '../contracts/ipc'
 export default defineComponent({
   components: { RunApproval, PodDescription, LanguageSwitcher, PodNavigation, DataManagement, Onboarding, MasterChat, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
   data() {
-    return { approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: 'Overview', tabs: ['Overview', 'Chat', 'Script', 'Values', 'Permissions', 'Settings', 'History'], descriptionExpanded: false, sidebarWidth: 224, sidebarCollapsed: false, resizeStart: 0, resizeWidth: 224, resizing: false, pods: [] as StoredPod[], podId: '', creating: false, creationId: '', details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
+    return { requestedSecret: '', approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: 'Overview', tabs: ['Overview', 'Chat', 'Script', 'Values', 'Permissions', 'Settings', 'History'], descriptionExpanded: false, sidebarWidth: 224, sidebarCollapsed: false, resizeStart: 0, resizeWidth: 224, resizing: false, pods: [] as StoredPod[], podId: '', creating: false, creationId: '', details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
   computed: {
     activeTab(): string { return this.selected === 'Knowledge' ? 'Overview' : this.selected },
@@ -51,7 +51,7 @@ export default defineComponent({
   beforeUnmount() { this.closed = true; this.unsubscribe?.(); if (this.timer) clearTimeout(this.timer) },
   methods: {
     t, runFailure, runHeadline, diagnostic, label, dateTime, chatDraft,
-    openValues() { this.selected = 'Values' },
+    openValues(alias = '') { this.requestedSecret = alias; this.selected = 'Values' },
     beginResize(event: PointerEvent) { this.resizing = true; this.resizeStart = event.clientX; this.resizeWidth = this.sidebarWidth; (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId) },
     resize(event: PointerEvent) { if (this.resizing) this.sidebarWidth = Math.max(176, Math.min(360, window.innerWidth - 340, this.resizeWidth + event.clientX - this.resizeStart)) },
     persistWidth() {
@@ -76,7 +76,7 @@ export default defineComponent({
       catch (error) { this.dataError = error instanceof Error ? error.message : 'Could not load workspace' }
       finally { this.busy = false }
     },
-    async selectPod(id: string) { this.podId = id; this.approvals = []; this.creating = false; this.details = null; this.runs = []; this.schedule = null; this.selected = 'Overview'; await this.refresh() },
+    async selectPod(id: string) { this.requestedSecret = ''; this.podId = id; this.approvals = []; this.creating = false; this.details = null; this.runs = []; this.schedule = null; this.selected = 'Overview'; await this.refresh() },
     async changed(id: string) { this.podId = id; this.creating = !id; await this.refresh() },
     async selectTab(tab: string) { await this.refresh(); this.selected = tab },
     master(create = false) { this.creating = create; if (create) { this.podId = ''; this.creationId = crypto.randomUUID(); localStorage.setItem('pods-creation-id', this.creationId) }; this.selected = 'Chat' },
@@ -153,7 +153,7 @@ export default defineComponent({
         <DataManagement v-else-if="selected === 'Data'" />
         <Onboarding v-else-if="selected === 'Setup'" :pod="pod" @finished="selected = 'Overview'" @reference="selected = 'Permissions'" />
         <section v-else-if="selected === 'Chat' || selected === 'Workspace chat'" id="panel-Chat" :role="globalPage ? undefined : 'tabpanel'" :aria-labelledby="globalPage ? undefined : 'tab-Chat'" :aria-label="globalPage ? t('Workspace chat') : undefined" class="master-panel">
-          <MasterChat :key="creating ? creationId : selected === 'Workspace chat' ? 'workspace' : podId" :creation-id="creating ? creationId : undefined" :pod-id="creating || selected === 'Workspace chat' ? null : podId || null" @created="created" @resources="async id => { await selectPod(id); selected = 'Permissions' }" @settings="async id => { await selectPod(id); openValues() }">
+          <MasterChat :key="creating ? creationId : selected === 'Workspace chat' ? 'workspace' : podId" :creation-id="creating ? creationId : undefined" :pod-id="creating || selected === 'Workspace chat' ? null : podId || null" @created="created" @resources="async id => { await selectPod(id); selected = 'Permissions' }" @settings="async (id, alias) => { await selectPod(id); openValues(alias) }">
             <details v-if="creating" class="chat-manual-create">
               <summary>{{ t('Create without chat') }}</summary><PodSettings key="new" @selected="changed" />
             </details>
@@ -163,7 +163,7 @@ export default defineComponent({
           <PodScript v-if="pod" :key="podId" :pod="pod" @changed="refresh" @values="openValues" @ran="selected = 'History'; refresh()" />
         </section>
         <section v-else-if="selected === 'Values'" id="panel-Values" role="tabpanel" aria-labelledby="tab-Values">
-          <PodValues v-if="pod" :key="podId" :pod-id="podId" />
+          <PodValues v-if="pod" :key="podId" :pod-id="podId" :requested-secret="requestedSecret" />
         </section>
         <section v-else-if="selected === 'Settings'" id="panel-Settings" role="tabpanel" aria-labelledby="tab-Settings">
           <PodSettings :key="podId" :selected-pod-id="podId" @selected="changed" />
