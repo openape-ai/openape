@@ -9,7 +9,7 @@ import { recordedResponse } from './fixtures/responses'
 
 it('master-chat: creates a manual pod, validates a draft and shows exact pending access in the packaged owner UI', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-master-ui-')))
-  let calls = 0
+  let calls = 0; const requestedModels: string[] = []
   const server = createServer((request, response) => {
     const respond = async () => {
       let body = ''; for await (const chunk of request) body += String(chunk)
@@ -17,6 +17,7 @@ it('master-chat: creates a manual pod, validates a draft and shows exact pending
         const reply = recordedResponse({ type: 'message', id: 'summary', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify({ description: 'Maintains sourced mail knowledge; access remains pending.' }), annotations: [] }] })
         response.setHeader('Content-Type', 'text/event-stream'); response.end(await reply.text()); return
       }
+      requestedModels.push((JSON.parse(body) as { model: string }).model)
       const index = ++calls; const store = new PodDatabase(root)
       const pod = store.listPods()[0]; const draft = store.db.prepare('SELECT id,revision FROM script_drafts LIMIT 1').get(); store.close()
       const scope = { podId: pod?.id, revision: pod?.revision }
@@ -37,13 +38,14 @@ it('master-chat: creates a manual pod, validates a draft and shows exact pending
   try {
     const page = await app.firstWindow(); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
     await page.getByRole('button', { name: 'New pod', exact: false }).click(); await page.getByLabel('Message', { exact: true }).fill('Create a synthetic mail knowledge pod and prepare a script. Propose the mailbox access for review.')
+    await page.getByLabel('Chat model', { exact: true }).selectOption('gpt-6-astra')
     await page.getByRole('button', { name: 'Send', exact: true }).click()
     await page.getByText('Your pod and validated draft are ready. Microsoft access awaits your review; automatic runs remain disabled.', { exact: true }).waitFor()
     await expect.poll(async () => (await page.evaluate(() => window.pods.master({ type: 'list' }))).state).toBe('idle')
     const pods = (await page.evaluate(() => window.pods.workspace({ type: 'list' }))).pods
     expect(pods).toHaveLength(1); expect(pods[0]!.lifecycle).toBe('paused'); expect(pods[0]!.activeScript).toMatch(/^[a-f0-9]{64}$/)
     expect((await page.evaluate(id => window.pods.scheduling({ type: 'list', podId: id }), pods[0]!.id)).enabled).toBe(false)
-    const view = await page.evaluate(() => window.pods.master({ type: 'list' })); expect(view.drafts[0]?.validation).toContain('native-synthetic-contract'); expect(view.proposals[0]?.state).toBe('pending'); expect(calls).toBe(6)
+    const view = await page.evaluate(() => window.pods.master({ type: 'list' })); expect(view.drafts[0]?.validation).toContain('native-synthetic-contract'); expect(view.proposals[0]?.state).toBe('pending'); expect(calls).toBe(6); expect(requestedModels).toEqual(Array.from({ length: 6 }).fill('gpt-6-astra'))
     await page.getByRole('heading', { name: 'Resource access for your review' }).scrollIntoViewIfNeeded()
     await mkdir(resolve('.artifacts'), { recursive: true }); await page.screenshot({ path: resolve('.artifacts/master-permission.png') })
     await page.locator('.chat-details > summary').click()
@@ -95,6 +97,12 @@ it('master-chat: creates a manual pod, validates a draft and shows exact pending
     await page.getByText('This reply should remain visible at the end of the conversation.', { exact: true }).waitFor()
     await expect.poll(() => scroll.evaluate(element => element.scrollHeight - element.scrollTop - element.clientHeight)).toBeLessThan(2)
     expect(await page.locator('.master-compose').evaluate(element => element.getBoundingClientRect().bottom <= innerHeight)).toBe(true)
+    await page.getByLabel('Chat-Modell', { exact: true }).selectOption('gpt-5.6-sol')
+    await page.getByLabel('Nachricht', { exact: true }).fill('Explain the pending setup without executing anything.')
+    await page.getByRole('button', { name: 'Senden', exact: true }).click()
+    await expect.poll(() => requestedModels.length).toBe(7)
+    expect(requestedModels[6]).toBe('gpt-5.6-sol')
+    await expect.poll(async () => (await page.evaluate(() => window.pods.master({ type: 'list' }))).state).toBe('idle')
   }
   finally { await app.close(); server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); await rm(root, { recursive: true, force: true }) }
 })
