@@ -47,7 +47,7 @@ it('routes named-secret proposals to the values tab without displaying an input 
   const wrapper = mount(MasterChat, { props: { podId } }); await flushPromises()
   expect(wrapper.text()).toContain('bot_token'); expect(wrapper.find('input[type="password"]').exists()).toBe(false)
   await wrapper.findAll('button').find(button => button.text() === 'Variables and secrets')!.trigger('click')
-  expect(wrapper.emitted('settings')).toEqual([[podId]]); expect(wrapper.emitted('resources')).toBeUndefined()
+  expect(wrapper.emitted('settings')).toEqual([[podId, 'bot_token']]); expect(wrapper.emitted('resources')).toBeUndefined()
   applyLanguage('de'); await flushPromises()
   expect(wrapper.text()).toContain('Name des Geheimnisses'); expect(wrapper.text()).toContain('Variablen und Geheimnisse')
   applyLanguage('en'); wrapper.unmount()
@@ -104,4 +104,19 @@ it('sends on Enter, preserves Shift+Enter and composition, and rejects duplicate
   expect(master.mock.calls.filter(([command]) => command.type === 'send')).toHaveLength(1)
   expect(input.element.value).toBe('Keep this draft offline')
   wrapper.unmount()
+})
+
+it('persists the chosen creation model and sends the exact model ID', async () => {
+  localStorage.removeItem('pods-chat-model')
+  const master = vi.fn().mockResolvedValue(empty)
+  window.pods = { master } as unknown as typeof window.pods
+  let wrapper = mount(MasterChat, { props: { podId: null, creationId: crypto.randomUUID() } }); await flushPromises()
+  await wrapper.get('select').setValue('gpt-6-astra')
+  await wrapper.get('textarea').setValue('Create the invoice pod')
+  await wrapper.get('form.master-compose').trigger('submit'); await flushPromises()
+  expect(master).toHaveBeenCalledWith(expect.objectContaining({ type: 'send', model: 'gpt-6-astra' }))
+  wrapper.unmount()
+  wrapper = mount(MasterChat, { props: { podId: crypto.randomUUID() } }); await flushPromises()
+  expect(wrapper.get('select').element.value).toBe('gpt-6-astra')
+  wrapper.unmount(); localStorage.removeItem('pods-chat-model')
 })

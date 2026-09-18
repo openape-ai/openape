@@ -1,5 +1,11 @@
 # Active work
 
+## Pods guided chat setup and model selection (September 18, 2026)
+
+Owner-approved [plan](../../.claude/plans/2026-09-18-pods-guided-setup.md), [issue 1354](https://git.openape.ai/openape-ai/openape/issues/1354), worktree `pods-conversation`, branch `bugfix/issue-1354-chat-setup`, canonical base `0f7425539c81950e54882bd851190f58e9011302`. Concrete HTTP, directory and application reviews now live in chat; ordinary missing values have answer forms, secret proposals explain acquisition and open the protected alias field. Saved script status and continuation replace the misleading automatic sample. GPT-6 Astra and the bundled GPT-5.6 models are selectable and passed through on creation/resume. The two-minute total deadline is replaced by inactivity and total bounds.
+
+Full lint/typecheck/build, 41 focused unit/component checks and 16 synthetic native cases pass. Inspected screenshots cover prefilled HTTP scope, German narrow dark resolved cards and Astra selection. Tests verify native cancellation, persisted real permissions, exact outbound model IDs, secret isolation and zero fixture runs/enabled schedules. Retain permanent tests for these owner-control and routing contracts. No owner profile mutations or real mail/model/Telegram calls. Next: normal commit/push gate, native PR review and exact-source merge checks, then clean packaging and paired app/profile installation. Preserve the owner-enabled schedule. Final SHA/PR, full gates and installation receipts belong to the local `2026-09-18-chat-setup` report.
+
 ## Pods publication completed (September 18, 2026)
 
 Patrick requests committing and pushing the current Pods source to the canonical repository and completing the normal PR workflow. Existing [PR 56](https://repos.openape.ai/patrick/monorepo/pulls/56) will contain the accumulated desktop changes: simpler permissions, directory access, immutable dependencies with npm search, explicit agent tools, bounded application HTTPS, owner selection, execution approvals and readable recovery. Canonical main `59e0de19309cc80cb2e1996057f0f981699ff32d` is integrated without product changes; the only merge conflict was this status index. The IdP code is already identical to main.
