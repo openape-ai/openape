@@ -88,6 +88,12 @@ The complete accessible Forgejo organization list contains 12 repositories. All-
 
 Read-only local origin inventory also found independently hosted `.github`, agent-catalog, coding-agent, claude-plugin-openape-chat, escapes, agent-starter, idp-starter, preview, shapes-registry and website on GitHub; sp-starter points at Forgejo. These are configured origins, not proof of approved issue ownership. Preserve their Git hosting. Owner acceptance, complete GitHub issue inventory and issue-home-only registrations are separate ecosystem batches before claiming ecosystem-wide cutover. The native owner list also contains demonstrations/dotfiles: never classify every returned repository as an OpenApe product.
 
+### Product entry point rollout
+
+After the approved target routes and reporter access have been verified, enable `NUXT_PUBLIC_ISSUE_REPORTING_ENABLED=true` on the web apps. The shared SP module defaults it to false; Docs and the free IdP declare the same public setting. Links open the canonical reporting page in a separate tab with `noopener noreferrer` and `no-referrer`. They send only the fixed product key. Existing task/reminder and plan state remains unchanged.
+
+Pods exposes **Help → Report a problem** only with `OPENAPE_PODS_ISSUE_REPORTING_ENABLED=1`. It opens the fixed `pods` URL from the main process without a new renderer capability. Agent/service/Nest `--help` and chat CLI help expose their `apes`/`chat` links with `OPENAPE_ISSUE_REPORTING_ENABLED=1`. The help path exits before starting the service. Keep all flags off until M7 routing acceptance; no application content, account identifiers or logs are attached automatically.
+
 ### Legacy consumers
 
 Current [contribution guide](../how-to-contribute.md) and [autonomous workflow](../autonomous-workflow.md) query Forgejo's assigned-issue search. [AGENTS.md](../../AGENTS.md), [.openape/repository.json](../../.openape/repository.json), [active work](../agents/active-work.md) and operations documents link Forgejo issues. `apps/openape-chat-cli/package.json` still has a GitHub issue URL; `modules/nuxt-auth-idp/src/runtime/server/routes/authorize.get.ts` references historical GitHub issue 273.
