@@ -86,7 +86,17 @@ export async function startIssueFixture() {
         },
       }
     }
-    return { base, directory, identity, stop: async () => { await app!.stop(); await idp.stop() } }
+    async function seedBranches(repositoryOwner: string, name: string) {
+      const directoryPath = join(directory, 'repos', repositoryOwner, `${name}.git`)
+      const git = async (...args: string[]) => (await run('git', ['-C', directoryPath, ...args], { env: { ...process.env, GIT_AUTHOR_NAME: 'Fixture', GIT_AUTHOR_EMAIL: owner, GIT_COMMITTER_NAME: 'Fixture', GIT_COMMITTER_EMAIL: owner } })).stdout.trim()
+      const tree = await git('hash-object', '-w', '-t', 'tree', '/dev/null')
+      const targetSha = await git('commit-tree', tree, '-m', 'Fixture base')
+      const sourceSha = await git('commit-tree', tree, '-p', targetSha, '-m', 'Fixture implementation')
+      await git('update-ref', 'refs/heads/main', targetSha)
+      await git('update-ref', 'refs/heads/fix-issue', sourceSha)
+      return { sourceSha, targetSha }
+    }
+    return { base, directory, identity, seedBranches, stop: async () => { await app!.stop(); await idp.stop() } }
   }
   catch (error) { if (app) await app.stop(); await idp.stop(); throw error }
 }
