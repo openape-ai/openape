@@ -2,7 +2,7 @@ import { createError, defineEventHandler, getRouterParam, readBody } from 'h3'
 import { ulid } from 'ulid'
 import { useDb } from '../../../../database/drizzle'
 import { webhooks } from '../../../../database/schema'
-import { findRepo } from '../../../../utils/repos'
+import { findRepo, requireGitRepository } from '../../../../utils/repos'
 import { newWebhookSecret, webhookTargetError } from '../../../../utils/webhooks'
 
 /**
@@ -24,6 +24,7 @@ export default defineEventHandler(async (event) => {
   const repo = await findRepo(owner, name)
   if (!repo || repo.ownerEmail !== caller.email)
     throw createError({ statusCode: 404, statusMessage: 'repo not found' })
+  requireGitRepository(repo)
 
   const url = (await readBody<{ url?: string }>(event))?.url?.trim() ?? ''
   const targetError = webhookTargetError(url)

@@ -55,7 +55,7 @@ export default defineNuxtConfig({
         {
           id: 'repos:read',
           description: 'List your repositories and their access grants.',
-          grants: ['GET /api/repos', 'GET /api/repos/:owner/:name'],
+          grants: ['GET /api/repos', 'GET /api/repos/:owner/:name', 'GET /api/repos/:owner/:name/metadata'],
         },
         {
           id: 'repos:write',

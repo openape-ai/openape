@@ -216,3 +216,29 @@ write denial, hidden targets and audit entries. The real IdP/CLI/browser suites
 create a real PR over isolated Git refs, link it, merge the exact reviewed SHAs,
 observe `merged` beside an issue that remains `open`, and remove the relation.
 Existing merge-protection tests remain unchanged and mandatory.
+
+## External-code issue homes
+
+Create a fresh issue-only repository with `POST /api/repos` using
+`{ owner, name, issueHomeOnly: true, codeSourceUrl: "https://code.example/owner/project" }`.
+The signed-in namespace owner needs the existing `repos:write` capability; feature
+activation is required. The normal creation page exposes the same choice. CLI:
+`pnpm git:cli -- repo create --repo owner/project --code-source https://code.example/owner/project`.
+Existing repositories cannot be converted by creation or overwritten. Code URLs require
+HTTPS and reject credentials, queries and fragments. The service never fetches this URL.
+
+No bare Git directory is created. Code reads, Git transport, native PRs, mirrors,
+webhooks and branch protection setup reject the issue-only home. The header shows
+**Development issues** and **View external code**; native Code/Commits/Pulls tabs and
+mirror/webhook controls are hidden. The root repository URL navigates to its issues.
+The existing Git authority and remote pipelines remain unchanged.
+
+`GET R/metadata` exposes only owner/name, issue-home mode and code source after strict
+scope and live repository read checks. It never returns grant or webhook configuration.
+This allows ordinary issue readers to see the right navigation without using the
+owner-only Access endpoint. Reports with participant-only access still get no repo header.
+
+Real authenticated API and browser tests verify fresh registration, no Git storage,
+private metadata, issue creation, external navigation, and denial of Git/mirror writes.
+The same fixture successfully reads a normal Git repository as a control. Initial
+issue-home registration and owner mapping in production remain rollout decisions.

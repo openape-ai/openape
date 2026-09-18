@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs'
+import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { owner, startIssueFixture } from './fixture'
@@ -77,6 +77,31 @@ describe('real DDISA login, native API and CLI', () => {
     expect((await (await user.call('GET', `/api/repos/owner/project/pulls/${pull.number}/issues`)).json()).issues[0].id).toBe(issue.id)
     await user.cli('unlink', '--id', issue.id, '--pull-id', relations.pulls[0].id)
     expect((await user.cli('links', '--id', issue.id)).pulls).toEqual([])
+  })
+  it('registers an issue-only home without Git storage, code writes or mirror configuration', async () => {
+    const endpoint = '/api/repos/owner/external'
+    const created = await user.call('POST', '/api/repos', { owner: 'owner', name: 'external', issueHomeOnly: true, codeSourceUrl: 'https://code.example/owner/external' })
+    expect(created.status).toBe(200)
+    expect(existsSync(join(fixture.directory, 'repos/owner/external.git'))).toBe(false)
+    const metadata = await (await user.call('GET', `${endpoint}/metadata`)).json()
+    expect(metadata).toEqual({ owner: 'owner', name: 'external', issueHomeOnly: 1, codeSourceUrl: 'https://code.example/owner/external' })
+    expect((await stranger.call('GET', `${endpoint}/metadata`)).status).toBe(404)
+    const issue = await user.cli('create', '--repo', 'owner/external', '--title', 'External code issue', '--body-file', bodyFile, '--idempotency-key', 'external-issue-001')
+    expect(issue.repositoryUrl).toBe('/owner/external/issues/1')
+    for (const [method, path, body] of [
+      ['GET', '/browse', undefined], ['GET', '/pulls', undefined],
+      ['POST', '/pulls', { title: 'No native code', source: 'feature', target: 'main' }],
+      ['POST', '/mirrors', { url: 'https://code.example/mirror', username: 'fixture', token: 'fixture' }],
+      ['POST', '/mirrors/reconcile', {}], ['POST', '/protections', {}], ['POST', '/webhooks', {}],
+    ] as const) expect((await user.call(method, `${endpoint}${path}`, body)).status).toBe(409)
+    const git = (name: string) => fetch(`${fixture.base}/owner/${name}.git/info/refs?service=git-upload-pack`, { headers: { authorization: `Basic ${Buffer.from(`x-access-token:${user.idpToken}`).toString('base64')}` } })
+    expect((await git('project')).status).toBe(200)
+    expect((await git('external')).status).toBe(409)
+    expect((await user.call('POST', '/api/repos', { owner: 'owner', name: 'project', issueHomeOnly: true, codeSourceUrl: 'https://code.example/source' })).status).toBe(409)
+    expect((await user.call('GET', '/api/repos/owner/project/metadata')).status).toBe(200)
+    for (const codeSourceUrl of ['javascript:alert(1)', 'https://user:secret@code.example/repo', 'https://code.example/repo?token=secret']) {
+      expect((await user.call('POST', '/api/repos', { owner: 'owner', name: 'invalid', issueHomeOnly: true, codeSourceUrl })).status).toBe(400)
+    }
   })
 
 })
