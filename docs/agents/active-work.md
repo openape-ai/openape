@@ -1,5 +1,9 @@
 # Active work
 
+## Native issues — M3 UI (September 18, 2026)
+
+The approved UI is implemented in `openape-monorepo.worktrees/native-issues-ui`, branch `feature/issue-1356-native-issues-ui`, based on M2 `039e3ad6`. Repository/overview pages, safe previews, discussions, metadata and stable participant links use the private API. Real IdP-backed CLI/session tests and actual-CSS desktop/mobile browser checks are registered in the shared contract; synthetic screenshots and a portable report are generated under the Git app `.artifacts/issues/`. Continue final gates, native diff review and exact-source merge, then product reporting, explicit PR relations and migration rehearsal. Keep production issue data untouched until the separate M7 approval.
+
 ## Native issues — M2 API and CLI (September 18, 2026)
 
 The dependent checkout `openape-monorepo.worktrees/native-issues-api`, branch `feature/issue-1356-native-issues-api`, starts from reviewed M1 source `c5e12cea`. It adds private issue/comment/label routes, safe Markdown rendering, same-origin cookie mutations, bounded inputs/rates and matching native CLI commands. HTTP tests exercise real H3 handlers, file-backed SQLite and signed SP tokens. Root CLI tests preserve literal body-file contents, retry headers and pre-request validation. Full Nuxt/IdP/CLI and UI verification follow in M3 before enabling the capability. Continue through the approved milestones without a per-milestone session handoff; production migration remains gated.

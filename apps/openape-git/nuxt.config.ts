@@ -1,6 +1,7 @@
 import { issueScopes } from './shared/issue-scopes'
 
 export default defineNuxtConfig({
+  vite: { server: { hmr: process.env.E2E_HMR_PORT ? { port: Number(process.env.E2E_HMR_PORT) } : undefined } },
   compatibilityDate: '2025-01-01',
   devtools: { enabled: true },
 
@@ -17,7 +18,6 @@ export default defineNuxtConfig({
     // `pnpm dev` works without env setup. Production MUST set NUXT_TURSO_URL
     // (path under /srv/ape-git so it lives on the data volume).
     tursoUrl: 'file:./dev.db',
-    issuesEnabled: false,
     issueIntakeRepoId: '',
     issueRoutingAdmin: '',
     tursoAuthToken: '',
@@ -36,7 +36,7 @@ export default defineNuxtConfig({
     // this. 36h: a daily backup may skip one run (host reboot) before it counts
     // as broken, but two missed days never pass unnoticed.
     backupMaxAgeSec: 36 * 3600,
-    public: { siteName: 'ape-git' },
+    public: { siteName: 'ape-git', issuesEnabled: false },
   },
 
   colorMode: { preference: 'dark', fallback: 'dark' },
