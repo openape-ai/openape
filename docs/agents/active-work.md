@@ -1,5 +1,10 @@
 # Active work
 
+## Pods central OpenApe account (September 19, 2026)
+
+Issue: https://git.openape.ai/openape-ai/openape/issues/1354. Worktree: `pods-conversation`; branch `feature/issue-1354-central-account`; base `bca8ecc7`. Owner approved central account management and explicit default selection. Implemented persistent sidebar identity, explicit default for newly provisioned Pods, advanced issuer settings, reconnect retaining existing bindings and refusal to transfer disconnected Pods to a different owner. Schema 19 adds nullable `onboarding.default_owner`; existing profiles require one explicit selection, without changing existing Pods or schedules. Full lint (51 tasks), typecheck (72 tasks), app build, 259 unit/component tests and five focused native tests pass. Synthetic-only English/German screenshots, including narrow dark mode, inspected. Native PR review, exact-source external checks, merge and local installation remain. Delivery receipts: `/Users/patrickhofmann/Companies/private/repos/openape/openape-pods/.claude/reports/2026-09-19-central-account/`.
+
+
 ## Native issues: implementation and cutover handoff
 
 The approved private MVP is implemented through M1–M6. API/CLI, UI, product reporting, explicit PR relations and external-code issue homes are merged through native PRs 60–65; canonical checkpoint `d9c7d092e05496a472ef26f38f42c5e5d6c79b28` retains their sources and the full-byte Pods assertion correction. App entry points are reviewed in [PR 66](https://repos.openape.ai/patrick/monorepo/pulls/66); migration/restore tooling is reviewed in [PR 67](https://repos.openape.ai/patrick/monorepo/pulls/67). Read those PRs and the synchronized [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A5ZAT63A04PWGVBT5M14MW) for their current exact source, target, checks and merge receipts.

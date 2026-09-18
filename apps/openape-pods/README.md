@@ -459,9 +459,17 @@ these tests.
 
 ## M11: account onboarding and exact mail scope
 
-Normal first launch opens Connections & setup in a durable private profile.
-The existing five pod views remain unchanged. ChatGPT model login, OpenApe human
-identity and Microsoft Mail.Read consent are separate connections. The renderer
+The sidebar account button opens central OpenApe account management and shows
+its selected identity and connection status. Choose **Use for new pods** on a
+connected OpenApe account, or select that option during sign-in. The choice is
+persisted and used when a new Pod first needs an agent identity. Existing Pods
+retain their original account, including after disconnect or a default change.
+Sign in again reconnects that same account and preserves its Pod bindings;
+revoked permissions still need review. An unavailable owner never falls back to
+another account. Existing profiles require a one-time explicit default choice.
+The identity provider is available under **Advanced**. Each Pod's apes shell
+continues to receive its own agent identity, never the owner's personal token.
+ChatGPT model login, OpenApe human identity and application sign-ins are separate connections. The renderer
 can select a provider, expected email and HTTPS OpenApe issuer, but cannot supply
 tokens, executables or arbitrary provider endpoints. Browser opening uses only a
 currently pending, driver-validated sign-in URL. No startup code logs in or reads
