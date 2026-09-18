@@ -48,6 +48,7 @@ ${slow ? 'setInterval(()=>{},1000);' : ''}`)
     state.requests.push(`${request.method} ${request.url}`); response.setHeader('Content-Type', 'application/json')
     if (request.url === '/.well-known/jwks.json') { response.end(JSON.stringify({ keys: [{ ...keys.publicKey.export({ format: 'jwk' }), kid: 'key', alg: 'EdDSA', use: 'sig' }] })); return }
     if (request.url?.startsWith('/api/pods/agents/')) { response.end(JSON.stringify({ email: 'pod@example.test', owner: 'owner@example.test', active: state.active, keyIds: ['pod-key'], grantId: 'assigned', grantActive: state.grantActive })); return }
+    if (request.url === '/api/grants/assigned') { response.end(JSON.stringify({ id: 'assigned', status: 'approved', request: { requester: 'pod@example.test', audience: 'shapes', target_host: 'fixture-mac', grant_type: 'always' } })); return }
     if (request.url === '/api/grants/assigned/token') {
       const now = Math.floor(Date.now() / 1000)
       const head = Buffer.from(JSON.stringify({ alg: 'EdDSA', kid: 'key' })).toString('base64url')

@@ -1,5 +1,6 @@
 <script lang="ts">
 import ProgramPermissions from './ProgramPermissions.vue'
+import DirectoryPermissions from './DirectoryPermissions.vue'
 import ScriptAccess from './ScriptAccess.vue'
 import { t, diagnostic, label } from './i18n'
 import { defineComponent } from 'vue'
@@ -8,7 +9,7 @@ import type { StoredPod } from '../contracts/control'
 import type { ResourceCommand, ResourceState } from '../contracts/resources'
 
 export default defineComponent({
-  components: { ProgramPermissions, ScriptAccess },
+  components: { ProgramPermissions, DirectoryPermissions, ScriptAccess },
   props: { requiredAliases: { type: Array as PropType<string[]>, default: () => [] }, mode: { type: String, default: 'permissions' }, selectedPodId: { type: String, default: '' } },
   emits: ['selected', 'discuss'],
   data() { return { pods: [] as StoredPod[], podId: '', state: { resources: [], epoch: 0 } as ResourceState, busy: false, error: '', credentialAlias: '', credentialValue: '' } },
@@ -40,27 +41,14 @@ export default defineComponent({
       <h2>{{ t(mode === 'values' ? 'Secrets' : 'Permissions') }}</h2><span class="badge">{{ t("Explicit pod access") }}</span>
     </div>
     <p v-if="mode !== 'values'" class="muted">
-      {{ t('This pod can read and write its own workspace. Additional files are provided as read-only snapshots.') }}
+      {{ t('HOME and the working directory belong to this pod. Choose read or read and write access for additional folders.') }}
     </p>
     <p v-if="!pods.length" class="muted">
       {{ t("Create a local pod in Settings to assign its first reference.") }}
     </p>
     <template v-else>
       <label v-if="!selectedPodId">{{ t("Pod") }}<select v-model="podId" :disabled="busy" @change="load"><option v-for="pod in pods" :key="pod.id" :value="pod.id">{{ pod.name }}</option></select></label>
-      <h3 v-if="mode !== 'values'">
-        {{ t('Directory permissions') }}
-      </h3>
-      <p v-if="mode !== 'values'">
-        {{ t('Pod workspace · read and write') }}
-      </p>
-      <div v-if="mode !== 'values'" class="resource-actions">
-        <button class="secondary" :disabled="busy" @click="act({ type: 'pickReference', podId })">
-          {{ t("Assign reference file") }}
-        </button>
-        <button class="secondary" :disabled="busy || !state.resources.some(resource => resource.state === 'ready')" @click="act({ type: 'snapshot', podId })">
-          {{ t("Preview next snapshot") }}
-        </button>
-      </div>
+      <DirectoryPermissions v-if="mode !== 'values'" :state="state" :busy="busy" @add="act({ type: 'pickDirectory', podId, epoch: state.epoch })" @access="(resource, access) => act({ type: 'changeDirectory', podId, id: resource.id, revision: resource.revision, epoch: state.epoch, access })" @revoke="resource => act({ type: 'revoke', podId, id: resource.id, revision: resource.revision })" />
       <template v-if="mode === 'values'">
         <article v-for="alias in missingAliases" :key="alias" class="resource-row">
           <div>
@@ -84,10 +72,10 @@ export default defineComponent({
           {{ t('Save or replace credential') }}
         </button>
       </form>
-      <p v-if="!visibleResources.length && !missingAliases.length" class="muted">
-        {{ t(mode === 'values' ? 'No secrets assigned.' : 'Nothing assigned. This pod cannot read reference files.') }}
+      <p v-if="mode === 'values' && !visibleResources.length && !missingAliases.length" class="muted">
+        {{ t('No secrets assigned.') }}
       </p>
-      <article v-for="resource in visibleResources" :key="resource.id" class="resource-row">
+      <article v-for="resource in mode === 'values' ? visibleResources : []" :key="resource.id" class="resource-row">
         <div>
           <strong>{{ resource.name }}</strong><p class="resource-path">
             {{ resource.configuration.path ?? resource.configuration.account ?? resource.configuration.scope }}

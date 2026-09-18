@@ -1,6 +1,9 @@
 import type { MessageKey } from './index'
 
 export const diagnosticPatterns = [
+  'The permission service rejected the request ({p0}); inspect the grant before retrying',
+  'Permission {p0}; review this Pod\'s permissions before retrying',
+  'Dependency preparation failed: {p0}',
   'Invalid {p0}',
   'Identity authorization failed ({p0})',
   'Pod identity connection failed ({p0})',

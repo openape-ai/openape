@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest'
+import { parseAgentRequest } from '../src/contracts/agent'
 import { startAgentGateway } from '../src/worker/agent/gateway'
 
 describe('agent capability gateway', () => {
@@ -54,6 +55,28 @@ it('advertises assigned application invocations to the agent without credential 
     expect(tool).toHaveBeenCalledWith(invocation, expect.any(AbortSignal))
     for (const name of ['credentials.get', 'http.request']) expect((await rpc('tools/call', { name, arguments: {} })).error.code).toBe(-32601)
     expect(tool).toHaveBeenCalledTimes(1)
+  }
+  finally { await gateway.close() }
+})
+
+it('defaults to no tools and rejects unknown or ambiguous agent permissions', () => {
+  expect(parseAgentRequest({ prompt: 'Summarize' })).toEqual({ prompt: 'Summarize', tools: [] })
+  expect(parseAgentRequest({ prompt: 'Summarize', tools: [] }).tools).toEqual([])
+  expect(parseAgentRequest({ prompt: 'Read', tools: ['ape_shell'] }).tools).toEqual(['ape_shell'])
+  for (const tools of [true, false, null, 'ape_shell', ['shell'], ['ape_shell', 'ape_shell']]) expect(() => parseAgentRequest({ prompt: 'Read', tools })).toThrow()
+  expect(() => parseAgentRequest({ prompt: 'Read', allowTools: true })).toThrow()
+  expect(() => parseAgentRequest({ prompt: ' ' })).toThrow()
+})
+
+it('removes provider tool declarations and rejects direct tool calls without a broker', async () => {
+  const provider = vi.fn(async () => new Response('{}'))
+  const gateway = await startAgentGateway({ provider }, new AbortController().signal)
+  const request = async (path: string, value: unknown) => (await fetch(`http://127.0.0.1:${gateway.port}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${gateway.capability}` }, body: JSON.stringify(value) })).json()
+  try {
+    expect(await request('/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/list' })).toMatchObject({ result: { tools: [] } })
+    expect(await request('/mcp', { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'ape_shell', arguments: { application: 'fixture', argv: ['read'] } } })).toMatchObject({ error: { code: -32601 } })
+    await request('/v1/responses', { model: 'fixture', tools: [{ type: 'web_search' }], tool_choice: 'required', parallel_tool_calls: true })
+    expect(provider).toHaveBeenCalledExactlyOnceWith({ model: 'fixture', tools: [], tool_choice: 'none', parallel_tool_calls: false }, expect.any(AbortSignal))
   }
   finally { await gateway.close() }
 })

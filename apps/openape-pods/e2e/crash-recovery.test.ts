@@ -119,10 +119,10 @@ describe('checkpoint recovery in Electron', () => {
     const stopped = (await reopened.evaluate(podId => window.pods.runs({ type: 'list', podId }), podId)).runs[0]!
     expect(stopped.state).toBe(target === 'quit' ? 'cancelled' : target === 'script' ? 'failed' : 'interrupted')
     await reopened.getByRole('tab', { name: 'History', exact: true }).click()
-    await reopened.getByRole('button', { name: 'Check stopped execution' }).click()
-    await reopened.getByText('Recovery: ready', { exact: true }).waitFor()
-    await reopened.getByRole('button', { name: 'Retry remaining inputs' }).click()
-    await reopened.getByRole('button', { name: 'Recovered committed unit', exact: true }).waitFor()
+    await reopened.getByRole('button', { name: 'Prepare retry' }).click()
+    await reopened.getByText('The check is complete. You can retry the unfinished work.', { exact: true }).waitFor()
+    await reopened.getByRole('button', { name: 'Retry unfinished work' }).click()
+    await reopened.getByText('Recovered committed unit', { exact: true }).waitFor()
     const store = new PodDatabase(root)
     try {
       expect(store.checkpoint(podId)).toEqual({ revision: 1, body: { unitCommitted: true } })

@@ -7,10 +7,15 @@ type Transport = (url: string, options: RequestInit) => Promise<Response>
 const privateAddresses = new BlockList()
 for (const [network, prefix] of [['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.168.0.0', 16], ['192.0.0.0', 24], ['192.0.2.0', 24], ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24], ['224.0.0.0', 4], ['240.0.0.0', 4]] as const) privateAddresses.addSubnet(network, prefix, 'ipv4')
 
+export async function publicHttpsAddresses(host: string) {
+  const addresses = await lookup(host, { family: 4, all: true })
+  if (!addresses.length || addresses.some(item => privateAddresses.check(item.address, 'ipv4'))) throw new Error('HTTP destination is not a public address')
+  return addresses
+}
+
 async function publicHttps(urlString: string, options: RequestInit): Promise<Response> {
   const url = new URL(urlString)
-  const addresses = await lookup(url.hostname, { family: 4, all: true })
-  if (!addresses.length || addresses.some(item => privateAddresses.check(item.address, 'ipv4'))) throw new Error('HTTP destination is not a public address')
+  const addresses = await publicHttpsAddresses(url.hostname)
   options.signal?.throwIfAborted()
   return new Promise((resolve, reject) => {
     const request = httpsRequest(url, { method: options.method, headers: options.headers as Record<string, string>, signal: options.signal ?? undefined, family: 4, lookup: (_host, _options, callback) => callback(null, addresses[0].address, 4) }, (response) => {

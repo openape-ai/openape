@@ -1,3 +1,5 @@
+import { request as httpRequest } from 'node:http'
+import { startMailProxy } from '../../src/main/mail/proxy'
 // @vitest-environment node
 import { expect, it, vi } from 'vitest'
 import { requestHttp } from '../../src/main/programs/http'
@@ -15,4 +17,21 @@ it('rejects redirects, oversized bodies and oversized headers from a transport',
   for (const reply of [new Response(null, { status: 302, headers: { location: 'https://foreign.example.com' } }), new Response('x'.repeat(20001)), new Response('', { headers: { 'x-large': 'x'.repeat(31000) } })]) {
     await expect(requestHttp(request, signal, async () => reply)).rejects.toThrow('delivery may be uncertain')
   }
+})
+
+it('rejects a private DNS result behind an allowed application proxy hostname', async () => {
+  lookup.mockResolvedValue([{ address: '127.0.0.1', family: 4 }])
+  const proxy = await startMailProxy(new AbortController().signal, undefined, ['api.example.com'])
+  try {
+    const address = new URL(proxy.environment.HTTPS_PROXY)
+    const authorization = `Basic ${Buffer.from(`${address.username}:${address.password}`).toString('base64')}`
+    const status = await new Promise<number>((resolve, reject) => {
+      const request = httpRequest({ host: '127.0.0.1', port: proxy.port, method: 'CONNECT', path: 'api.example.com:443', headers: { 'Proxy-Authorization': authorization } })
+      request.on('connect', (response, socket) => { socket.destroy(); resolve(response.statusCode!) })
+      request.on('error', reject); request.end()
+    })
+    expect(status).toBe(502)
+    expect(lookup).toHaveBeenLastCalledWith('api.example.com', { family: 4, all: true })
+  }
+  finally { await proxy.close() }
 })

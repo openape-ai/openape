@@ -1,3 +1,6 @@
+import { DependencyStore } from '../dependencies/store'
+import type { ScriptRuntime } from '../runs/runner'
+import { assertDataIdle } from '../data/backup'
 import { ScriptCredentials } from '../resources/script-credentials'
 import { randomUUID } from 'node:crypto'
 import type { ScriptCommand, ScriptSelection, ScriptSource, ScriptView } from '../../contracts/scripts'
@@ -10,7 +13,7 @@ import { WorkspaceDetails } from './details'
 
 export class ScriptWorkspace {
   private validating = false
-  constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly control: MasterControl) {}
+  constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly control: MasterControl, private readonly runtime?: ScriptRuntime) {}
 
   async execute(value: ScriptCommand, signal: AbortSignal): Promise<ScriptView> {
     const command = parseScriptCommand(value)
@@ -19,6 +22,20 @@ export class ScriptWorkspace {
     if (command.type === 'approveCredentials') {
       new ScriptCredentials(this.store, this.resources).approve(command.podId, command.hash, command.revision, command.epoch)
       return this.view(command.podId, { kind: 'version', id: command.hash })
+    }
+    if (command.type === 'prepareDependencies') {
+      if (!this.runtime) throw new Error('Dependency preparation runtime is unavailable')
+      assertDataIdle(this.store)
+      const current = () => {
+        signal.throwIfAborted()
+        const pod = this.store.getPod(command.podId)
+        if (pod.lifecycle === 'archived' || pod.revision !== command.revision || !this.store.db.prepare('SELECT 1 FROM script_drafts WHERE id=? AND pod_id=? AND revision=?').get(command.draftId, command.podId, command.draftRevision)) throw new Error('Draft or pod changed during dependency preparation')
+      }
+      current()
+      this.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(command.podId)
+      const dependencies = new DependencyStore(this.store)
+      await dependencies.prepare(this.runtime, command.podId, dependencies.manifest(command.draftId), signal, current)
+      return this.view(command.podId, { kind: 'draft', id: command.draftId })
     }
     const { type, ...fields } = command
     if (command.type === 'validate' && this.validating) throw new Error('Another script validation is running; try again when it finishes')
@@ -44,12 +61,14 @@ export class ScriptWorkspace {
       if (!row) throw new Error('Script version is not assigned to this pod')
       const manifest = parseManifest(JSON.parse(row.manifest as string))
       const evidence = this.evidence(podId, selection.id)
-      return { ...selection, code: this.store.readBlob(selection.id).toString('utf8'), capabilities: manifest.capabilities, revision: 0, assignmentRevision: manifest.assignmentRevision, hash: selection.id, validated: evidence !== null, evidence, credentialAccessApproved: new ScriptCredentials(this.store, this.resources).approved(podId, selection.id) }
+      const packages = new DependencyStore(this.store).scriptManifest(podId, selection.id)
+      return { ...selection, packages, dependenciesPrepared: true, code: this.store.readBlob(selection.id).toString('utf8'), capabilities: manifest.capabilities, revision: 0, assignmentRevision: manifest.assignmentRevision, hash: selection.id, validated: evidence !== null, evidence, credentialAccessApproved: new ScriptCredentials(this.store, this.resources).approved(podId, selection.id) }
     }
     const row = this.store.db.prepare('SELECT * FROM script_drafts WHERE pod_id=? AND id=?').get(podId, selection.id)
     if (!row) throw new Error('Draft is not assigned to this pod')
     const evidence = this.evidence(podId, row.script_hash as string | null)
-    return { ...selection, code: row.code as string, capabilities: JSON.parse(row.capabilities as string) as string[], revision: row.revision as number, assignmentRevision: row.assignment_revision as number, hash: row.script_hash as string | null, validated: evidence !== null, evidence, credentialAccessApproved: !!row.script_hash && new ScriptCredentials(this.store, this.resources).approved(podId, row.script_hash as string) }
+    const dependencies = new DependencyStore(this.store); const packages = dependencies.manifest(selection.id)
+    return { ...selection, packages, dependenciesPrepared: !Object.keys(packages.dependencies).length || !!dependencies.prepared(podId, packages), code: row.code as string, capabilities: JSON.parse(row.capabilities as string) as string[], revision: row.revision as number, assignmentRevision: row.assignment_revision as number, hash: row.script_hash as string | null, validated: evidence !== null, evidence, credentialAccessApproved: !!row.script_hash && new ScriptCredentials(this.store, this.resources).approved(podId, row.script_hash as string) }
   }
 
   view(podId: string, selection?: ScriptSelection): ScriptView {

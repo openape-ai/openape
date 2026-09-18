@@ -1,3 +1,4 @@
+import type { DirectoryPolicy } from '../../runtime/directories'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
@@ -6,6 +7,7 @@ import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { ProgramAssignment, TerminalView } from '../../contracts/programs'
 import { launchTerminal } from '../../worker/runtime/terminal'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
+import type { GrantObserver, GrantLookup } from '../broker/authorization'
 import { AgentAuthority } from '../broker/authorization'
 import { PodIdentityManager } from '../connections/agent'
 import type { CredentialCache } from '../connections/cache'
@@ -26,9 +28,9 @@ export async function resolveProgram(assignment: ProgramAssignment, podId: strin
   if (readOnly && !['read', 'list', 'get'].includes(resolved.detail.action)) throw new Error('Only granted read operations are available to scripts; use the owner terminal for setup')
   return { grant, authorization: { grantId: grant.authority.grantId, command: { cliId: assignment.cliId, adapterPath: assignment.adapterPath, adapterDigest: adapter.digest, argv: command, permission: resolved.permission } } }
 }
-export async function prepareProgramAuthorization(assignment: ProgramAssignment, podId: string, argv: string[], credentials: CredentialCache, readOnly = false) {
+export async function prepareProgramAuthorization(assignment: ProgramAssignment, podId: string, argv: string[], credentials: CredentialCache, readOnly = false, observe?: GrantObserver, previous?: GrantLookup) {
   const { grant, authorization } = await resolveProgram(assignment, podId, argv, readOnly)
-  const authority = new AgentAuthority(new PodIdentityManager(credentials).connection(grant.authority.identity, `pods:${podId}`))
+  const authority = new AgentAuthority(new PodIdentityManager(credentials).connection(grant.authority.identity, `pods:${podId}`), observe, previous)
   return { authority, authorization }
 }
 
@@ -42,8 +44,8 @@ export class ProgramSession {
   private exitCode: number | null = null
   private error: string | null = null
   readonly completed: Promise<void>
-  constructor(readonly id: string, readonly podId: string, applicationId: string, assignment: ProgramAssignment, argv: string[], helper: string, root: string, credentials: CredentialCache, check: () => Promise<void>, release: () => Promise<void>, workspace: string) {
-    this.completed = this.run(applicationId, assignment, argv, helper, root, credentials, check, release, workspace)
+  constructor(readonly id: string, readonly podId: string, applicationId: string, assignment: ProgramAssignment, argv: string[], helper: string, root: string, credentials: CredentialCache, check: () => Promise<void>, release: () => Promise<void>, workspace: string, directories: DirectoryPolicy = { readDirectories: [], writeDirectories: [] }) {
+    this.completed = this.run(applicationId, assignment, argv, helper, root, credentials, check, release, workspace, directories)
   }
 
   view(after = 0): TerminalView { return { sessionId: this.id, podId: this.podId, state: this.state, sequence: this.sequence, output: this.chunks.filter(item => item.sequence > after).map(item => item.text).join(''), exitCode: this.exitCode, error: this.error } }
@@ -61,7 +63,7 @@ export class ProgramSession {
     this.chunks.push({ sequence: ++this.sequence, text })
   }
 
-  private async run(applicationId: string, assignment: ProgramAssignment, argv: string[], helper: string, root: string, credentials: CredentialCache, check: () => Promise<void>, release: () => Promise<void>, podWorkspace: string): Promise<void> {
+  private async run(applicationId: string, assignment: ProgramAssignment, argv: string[], helper: string, root: string, credentials: CredentialCache, check: () => Promise<void>, release: () => Promise<void>, podWorkspace: string, directories: DirectoryPolicy): Promise<void> {
     const signal = this.controller.signal
     const deadline = setTimeout(() => this.controller.abort(new Error('Terminal session expired')), 15 * 60 * 1000)
     const directory = join(root, this.id); let verifiedClosed = true
@@ -75,7 +77,7 @@ export class ProgramSession {
         await new ProgramState(credentials).use(assignment.stateId, { podId: this.podId, applicationId }, async (workspace) => {
           await check(); signal.throwIfAborted()
           const args = [...argv, ...(assignment.cacheArgument ? [assignment.cacheArgument, workspace] : [])]
-          const domain = await launchTerminal(helper, directory, { executable: assignment.executable, workspace: podWorkspace, writeDirectories: [workspace], readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: [], networkPorts: proxy ? [proxy.port] : [] }, args, { ...assignment.environment, ...proxy?.environment, HOME: workspace, TMPDIR: workspace }, (path, ownerPid) => registerAuthDomain(root, path, ownerPid))
+          const domain = await launchTerminal(helper, directory, { executable: assignment.executable, workspace: podWorkspace, readDirectories: directories.readDirectories, writeDirectories: [workspace, ...directories.writeDirectories], readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: [], networkPorts: proxy ? [proxy.port] : [], systemTrust: Boolean(proxy) }, args, { ...assignment.environment, ...proxy?.environment, HOME: workspace, TMPDIR: workspace }, (path, ownerPid) => registerAuthDomain(root, path, ownerPid))
           this.domain = domain; verifiedClosed = false
           const decoder = new StringDecoder('utf8')
           domain.stdout.on('data', (bytes: Buffer) => this.append(decoder.write(bytes)))

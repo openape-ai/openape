@@ -24,7 +24,7 @@ export function inventory() {
     for (const dependency of Object.keys(value.dependencies ?? {})) visit(dependency, file)
   }
   const parent = resolve('package.json')
-  for (const name of ['vue', '@openai/codex-sdk', '@openai/codex', '@openape/apes', 'pdfjs-dist', 'html-to-text', 'fflate']) visit(name, parent)
+  for (const name of ['npm', 'vue', '@openai/codex-sdk', '@openai/codex', '@openape/apes', 'pdfjs-dist', 'html-to-text', 'fflate']) visit(name, parent)
   const apes = packageFile('@openape/apes', parent)
   const pty = packageFile('@lydell/node-pty', apes)
   visit(`@lydell/node-pty-${process.platform}-${process.arch}`, pty)
