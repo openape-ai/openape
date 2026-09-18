@@ -27,15 +27,16 @@
       "id": "first-run",
       "title": "Your first local run",
       "paragraphs": [
-        "Try this with a new pod. The local example needs no account connection and increments a durable counter. Installing an example also makes that example the active script, so use your new pod rather than replacing a configured business script."
+        "Try the explicit example below in a new pod. It returns a local result without account connections. An empty script editor contains no saved implementation."
       ],
       "steps": [
         "Choose New pod, expand Create without chat, enter Pod name, and Save pod.",
-        "Open Script. The starter already returns a valid local result; edit its summary if desired.",
-        "Choose Save and run. Validation uses synthetic services; the real local run then starts without any account connection.",
+        "Open Script and paste the example below into the empty editor.",
+        "Choose Run. The app saves and validates the source before starting the local run.",
         "Inspect History and the completed result. Select a run to inspect persisted events.",
         "Return to Overview for the last result. Automatic execution remains disabled."
-      ]
+      ],
+      "code": "export async function run(context) {\n  return { status: 'completed', summary: 'Local example completed', completedInputIds: context.input.eventIds, gapIds: [] };\n}"
     },
     {
       "id": "groups",
@@ -76,12 +77,15 @@
         "Write a message in the input at the bottom. Enter sends it; Shift + Enter adds a new line. The stop button interrupts the response. Sending while a response is running adds your instruction to that conversation. Unsent text is retained when you change tabs. The regular script agent uses fresh context and does not automatically receive this chat, variable values or secrets.",
         "App settings → Workspace chat retains the previous global conversation and supports workspace-wide creation. Pod chats provide separate histories and model threads, while using the existing owner-authorized master control capabilities.",
         "The chat can set ordinary variables, assign or create a group, and prepare an interval or daily schedule. Schedule preparation leaves automation disabled and pauses automatic execution. Enable it yourself in Settings after reviewing the script and access. A selected pod chat cannot read or change another pod; the workspace creation chat can create pods.",
-        "The assistant reads a runtime reference supplied by the app before writing scripts. It can validate a draft, use the reported error to repair it and activate it within existing permissions. Ask explicitly for a manual run if you want one. Application, HTTPS and file proposals open Permissions; named-secret proposals open Variables and secrets.",
+        "The assistant reads the app runtime reference before writing scripts. It can validate and repair a saved draft within existing permissions. Application, HTTPS and directory proposals open prefilled review forms directly in chat. Native confirmation remains required; a proposal itself grants no access. Legacy proposals may need missing fields. Named-secret proposals open Variables and secrets with the alias selected.",
         "Ordinary variable values are visible to the assistant when it inspects the pod. Tokens, passwords and API keys belong in Secrets. A secret proposal contains only its name and purpose. Assign secret values in Variables and secrets. A validated script can use its declared, assigned secrets; changing the script does not remove those assignments. The chat cannot retrieve stored secret values.",
         "Example prompt: “Create a mail notification pod for phofmann@delta-mind.at. Check for new messages through the assigned o365-cli application every 15 minutes and notify my Telegram chat. Use a quiet first-run baseline and avoid duplicates. Store the Telegram chat ID as an ordinary variable and request bot_token as a secret. Request the application read commands and Telegram HTTPS permission. Prepare the script and interval, but leave automation disabled and do not run it yet.” Supply the missing chat ID, configure o365-cli through its terminal in Permissions and store the token in Variables and secrets.",
         "Synthetic validation exercises one initial path with an empty checkpoint, no reference snapshots and simulated services. It does not prove real authentication, provider response formats, later branches or actual delivery. The automated one-prompt test uses the real packaged chat and Codex process with a recorded model. Actual model generation quality and live integrations require separate acceptance.",
         "The assistant can inspect the current saved script, including a newer saved draft from the editor. Save your manual edits before asking the chat to revise them; unsaved editor text is not available to the assistant.",
-        "Your messages appear on the right and assistant replies on the left. The original creation request appears once as an ordinary message in the saved conversation. Technical requests, results and script drafts are collapsed under Technical details. Access proposals remain available for your review. The app opens the created pod automatically and preserves its conversation across restarts. Older unlinked creation history can be recovered after reviewing the proposed requests."
+        "Your messages appear on the right and assistant replies on the left. The original creation request appears once as an ordinary message in the saved conversation. Technical requests, results and script drafts are collapsed under Technical details. Access proposals remain available for your review. The app opens the created pod automatically and preserves its conversation across restarts. Older unlinked creation history can be recovered after reviewing the proposed requests.",
+        "Choose Chat model before sending, including GPT-6 Astra. The app remembers your selection on this Mac and uses it for creation and subsequent chat turns. Changing this selection does not change models specified in scheduled scripts.",
+        "Answer question saves missing ordinary configuration. Never enter secrets there or in a chat message. Secret proposals explain how to obtain the value and link to its protected input form. After supplying values and approving access, use Continue setup. This asks the assistant to inspect saved progress and finish the script, leaving schedules unchanged and without starting a run.",
+        "An interrupted response may have announced work that was never saved. Chat reports whether a script is missing, a draft is saved or an active script exists. The empty editor no longer displays an automatic example. Continue setup resumes from the saved state."
       ],
       "steps": [],
       "image": "handbook-chat.png"

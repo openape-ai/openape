@@ -1,7 +1,7 @@
-import { mkdtemp, realpath, rm, access } from 'node:fs/promises'
+import { mkdtemp, realpath, rm, access, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, createHash } from 'node:crypto'
 import { afterEach, describe, expect, it } from 'vitest'
 import { PodDatabase } from '../src/worker/storage/database'
 import { ResourceRegistry } from '../src/worker/resources/registry'
@@ -113,7 +113,7 @@ it('keeps model conversation history and continuation threads separate for each 
   expect(master.view(two.id).messages.filter(message => message.role === 'user').map(message => message.text)).toEqual(['ONLY_SECOND_POD_CONTEXT'])
   const threads = store.db.prepare('SELECT thread_id FROM master_contexts WHERE scope IN (?,?)').all(one.id, two.id).map(row => row.thread_id)
   expect(new Set(threads).size).toBe(2)
-  const proposal = randomUUID(); store.db.prepare('INSERT INTO access_proposals VALUES(?,?,?,?)').run(proposal, two.id, '{}', 'pending')
+  const proposal = randomUUID(); store.db.prepare('INSERT INTO access_proposals VALUES(?,?,?,?)').run(proposal, two.id, JSON.stringify({ provider: 'reference', description: 'Read an assigned file' }), 'pending')
   const response = await master.execute({ type: 'decline', id: proposal, podId: two.id })
   expect(response.messages.filter(message => message.role === 'user').map(message => message.text)).toEqual(['ONLY_SECOND_POD_CONTEXT'])
 })
@@ -155,14 +155,18 @@ it('persists ordinary setup, keeps automation disabled and enforces revisions an
   await expect(action({ action: 'setGroup', name: 'Unwanted', organizationRevision: 1 })).rejects.toThrow('Groups changed')
   const credentialId = randomUUID(); registry.assignCredential(pod.id, 'notification_token', credentialId, 0)
   const reference = registry.assignReference(pod.id, 'Read-only reference', '/private/owner-only.txt')
-  store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), pod.id, 'tool', 'ready', 'Synthetic application', JSON.stringify({ type: 'program', cliId: 'fixture', capability: 'tool.fixture.read', stateId: 'PRIVATE_STATE_ID', environment: { TOKEN: 'PRIVATE_ENV_VALUE' }, executable: '/private/host/tool', grants: [{ permission: 'fixture.read', display: 'PRIVATE_COMMAND_DETAIL', authority: { grantId: 'PRIVATE_GRANT_ID' } }] }))
+  const adapterPath = join(root, 'fixture.toml')
+  const adapter = 'schema="openape-shapes/v1"\n[cli]\nid="fixture"\nexecutable="fixture"\naudience="shapes"\n[[operation]]\nid="read"\ncommand=["read"]\ndisplay="Read fixture"\naction="read"\nrisk="low"\nresource_chain=["fixture:*"]\n'
+  await writeFile(adapterPath, adapter)
+  const adapterHash = createHash('sha256').update(adapter).digest('hex')
+  store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), pod.id, 'tool', 'ready', 'Synthetic application', JSON.stringify({ type: 'program', cliId: 'fixture', adapterPath, adapterHash, capability: 'tool.fixture.read', stateId: 'PRIVATE_STATE_ID', environment: { TOKEN: 'PRIVATE_ENV_VALUE' }, executable: '/private/host/tool', grants: [{ permission: 'fixture.read', display: 'PRIVATE_COMMAND_DETAIL', authority: { grantId: 'PRIVATE_GRANT_ID' } }] }))
   const inspected = await action({ action: 'inspect' }) as { variables: unknown[], schedule: { enabled: boolean, spec: unknown }, organization: { revision: number, groups: unknown[] }, resources: { id: string, configuration: unknown }[] }
   expect(inspected.variables).toEqual([{ name: 'greeting', value: 'Hello from chat', revision: 1 }])
   expect(inspected.schedule).toMatchObject({ enabled: false, spec: { kind: 'interval', seconds: 900 } })
   expect(inspected.organization.groups).toEqual([expect.objectContaining({ name: 'Examples', selected: true })])
   expect(inspected.resources.find(resource => resource.id === reference.id)?.configuration).toEqual({})
   expect(JSON.stringify(inspected)).not.toContain(credentialId); expect(JSON.stringify(inspected)).not.toContain('/private/owner-only.txt'); expect(JSON.stringify(inspected)).not.toContain('PRIVATE_'); expect(JSON.stringify(inspected)).not.toContain('/private/host/tool')
-  expect(inspected.resources.find(resource => (resource.configuration as { cliId?: string }).cliId === 'fixture')?.configuration).toEqual({ type: 'program', cliId: 'fixture', capability: 'tool.fixture.read', permissions: ['fixture.read'] })
+  expect(inspected.resources.find(resource => (resource.configuration as { cliId?: string }).cliId === 'fixture')?.configuration).toEqual({ type: 'program', cliId: 'fixture', capability: 'tool.fixture.read', permissions: ['fixture.read'], commands: expect.arrayContaining([expect.objectContaining({ command: ['read'], action: 'read' })]) })
   await action({ action: 'setGroup', name: 'examples', organizationRevision: inspected.organization.revision })
   expect(store.db.prepare('SELECT count(*) AS n FROM pod_groups').get()?.n).toBe(1)
   const epoch = registry.epoch(pod.id)

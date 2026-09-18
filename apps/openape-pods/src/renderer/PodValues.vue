@@ -7,7 +7,7 @@ import PodResources from './PodResources.vue'
 
 export default defineComponent({
   components: { PodResources },
-  props: { podId: { type: String, required: true } },
+  props: { requestedSecret: { type: String, default: '' }, podId: { type: String, required: true } },
   data() { return { variables: [] as PodVariable[], requiredAliases: [] as string[], ...(variableDrafts.get(this.podId) ?? { name: '', value: '', revision: 0 }), busy: false, error: '' } },
   async mounted() { await this.load() },
   beforeUnmount() { variableDrafts.set(this.podId, { name: this.name, value: this.value, revision: this.revision }) },
@@ -73,7 +73,7 @@ export default defineComponent({
         {{ diagnostic(error) }}
       </p>
     </article>
-    <PodResources :selected-pod-id="podId" mode="values" :required-aliases="requiredAliases" />
+    <PodResources :selected-pod-id="podId" mode="values" :required-aliases="requiredAliases" :requested-secret="requestedSecret" />
   </section>
 </template>
 

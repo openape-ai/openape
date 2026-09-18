@@ -16,3 +16,13 @@ export async function programDefinition(executablePath: string, adapterFile?: st
   const environment: Record<string, string> = {}
   return { name: cliId, executable, executableHash: createHash('sha256').update(await readFile(executable)).digest('hex'), cliId: adapter.adapter.cli.executable, adapterPath, adapterHash: adapter.digest.replace('SHA-256:', ''), entryFiles, environment, networkHosts: [] }
 }
+
+export async function suggestedProgram(name: string, searchPath: string): Promise<string | undefined> {
+  if (!/^[\w.-]+$/.test(name)) return undefined
+  for (const directory of searchPath.split(':').filter(path => path.startsWith('/'))) {
+    const candidate = `${directory}/${name}`
+    try { const info = await stat(candidate); if (info.isFile() && (info.mode & 0o111)) return candidate }
+    catch (error) { if (!['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error }
+  }
+  return undefined
+}
