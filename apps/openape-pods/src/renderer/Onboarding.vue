@@ -7,7 +7,7 @@ import type { StoredPod } from '../contracts/control'
 export default defineComponent({
   props: { pod: { type: Object as () => StoredPod, default: undefined } },
   emits: ['finished', 'reference'],
-  data() { return { view: null as OnboardingView | null, provider: 'chatgpt' as 'chatgpt' | 'openape', account: '', issuer: 'https://id.openape.ai', busy: false, error: '', message: '', closed: false, timer: null as ReturnType<typeof setTimeout> | null } },
+  data() { return { view: null as OnboardingView | null, provider: 'openape' as 'chatgpt' | 'openape', account: '', issuer: 'https://id.openape.ai', busy: false, error: '', makeDefault: true, disconnecting: '', closed: false, timer: null as ReturnType<typeof setTimeout> | null } },
   computed: { globalConnections() { return this.view?.connections.filter(item => item.provider === 'chatgpt' || item.provider === 'openape') ?? [] } },
   async mounted() { await this.request({ type: 'list' }); this.poll() },
   beforeUnmount() { this.closed = true; if (this.timer) clearTimeout(this.timer) },
@@ -17,11 +17,12 @@ export default defineComponent({
     async request(command: OnboardingCommand) {
       if (this.busy) return
       this.busy = true
-      try { this.view = await window.pods.onboarding(command); if (command.type !== 'list') this.error = '' }
+      try { const view = await window.pods.onboarding(command); if (!this.view) this.makeDefault = !view.defaultOwner; this.view = view; if (command.type !== 'list') this.error = '' }
       catch (error) { this.error = error instanceof Error ? error.message : 'Setup failed' }
       finally { this.busy = false }
     },
-    async connect() { await this.request({ type: 'connect', provider: this.provider, account: this.account, ...(this.provider === 'openape' ? { issuer: this.issuer } : {}) }) },
+    async connect() { await this.request({ type: 'connect', provider: this.provider, account: this.account, ...(this.provider === 'openape' ? { issuer: this.issuer, makeDefault: this.makeDefault } : {}) }) },
+    async disconnect() { await this.request({ type: 'disconnect', id: this.disconnecting }); if (!this.error) this.disconnecting = '' },
     async finish() { await this.request({ type: 'finish' }); if (!this.error) this.$emit('finished') },
   },
 })
@@ -30,20 +31,30 @@ export default defineComponent({
 <template>
   <section class="setup-view" :aria-label="t('Connections and setup')">
     <article class="card">
-      <h2>{{ t("Connections & setup") }}</h2>
-      <p>{{ t("Connect ChatGPT for AI and OpenApe for pod permissions. Configure other programs in each pod’s Permissions tab.") }}</p>
+      <h2>{{ t("OpenApe account") }}</h2>
+      <p>{{ t("Sign in once with your OpenApe identity. Each pod uses its own agent identity and only the permissions you approve.") }}</p>
       <p v-if="view && !view.runtime.ready" role="alert" class="error-message">
         {{ view.runtime.error ? diagnostic(view.runtime.error) : t("Inspecting bundled tools…") }}
       </p>
       <p v-if="error" role="alert" class="error-message">
         {{ diagnostic(error) }}
       </p>
-      <p v-if="message" role="status">
-        {{ diagnostic(message) }}
+      <p v-if="view && !view.defaultOwner" role="status">
+        {{ t('Choose an account for new pods. Existing pods keep their assigned account.') }}
+      </p>
+      <p v-else>
+        {{ t('Your default account is used when a new pod first needs permissions. Existing pods keep their assigned account.') }}
       </p>
       <div v-for="connection in globalConnections" :key="connection.id" class="setup-connection">
-        <strong>{{ connection.provider === 'chatgpt' ? t("ChatGPT") : connection.provider === 'openape' ? t("OpenApe identity") : t("OpenApe identity") }}</strong>
-        <span>{{ connection.account || t("Account selected during sign-in") }} · {{ label(connection.state) }}</span>
+        <strong>{{ connection.provider === 'chatgpt' ? t('ChatGPT · model execution') : t('OpenApe identity') }}</strong>
+        <span>{{ connection.account || t("Account selected during sign-in") }} · {{ connection.state === 'ready' ? t('Signed in') : label(connection.state) }}</span>
+        <span v-if="connection.id === view?.defaultOwner" class="badge">{{ t('Default for new pods') }}</span>
+        <button v-else-if="connection.provider === 'openape' && connection.state === 'ready'" :disabled="busy" @click="request({ type: 'setDefaultOwner', id: connection.id })">
+          {{ t('Use for new pods') }}
+        </button>
+        <button v-if="connection.provider === 'openape' && ['expired', 'failed', 'revoked'].includes(connection.state)" :disabled="busy" @click="request({ type: 'reconnect', id: connection.id })">
+          {{ t('Sign in again') }}
+        </button>
         <p v-if="connection.error" role="alert">
           {{ diagnostic(connection.error) }}
         </p>
@@ -57,19 +68,33 @@ export default defineComponent({
         <button v-if="connection.state === 'connecting'" :disabled="busy" @click="request({ type: 'cancel', id: connection.id })">
           {{ t("Cancel sign-in") }}
         </button>
-        <button v-if="connection.state === 'ready' || connection.state === 'expired'" :disabled="busy" @click="request({ type: 'disconnect', id: connection.id })">
+        <button v-if="connection.state === 'ready' || connection.state === 'expired'" :disabled="busy" @click="disconnecting = connection.id">
           {{ t("Disconnect") }}
         </button>
+        <div v-if="disconnecting === connection.id" class="disconnect-review">
+          <p>{{ connection.provider === 'openape' ? t('Disconnect this account? Permissions that use it will be revoked and affected pods paused. Their data and account assignments are kept.') : t('Disconnect ChatGPT? AI requests will stop until you connect again.') }}</p>
+          <button :disabled="busy" @click="disconnect">
+            {{ t('Confirm disconnect') }}
+          </button>
+          <button :disabled="busy" @click="disconnecting = ''">
+            {{ t('Cancel') }}
+          </button>
+        </div>
       </div>
+      <h3>{{ t('Connect an account') }}</h3>
       <form class="setup-form" @submit.prevent="connect">
         <label>{{ t("Connection") }}<select v-model="provider" :aria-label="t('Connection')"><option value="chatgpt">{{ t("ChatGPT · model execution") }}</option><option value="openape">{{ t("OpenApe · pod permissions") }}</option></select></label>
         <label v-if="provider !== 'chatgpt'">{{ t("Expected account") }}<input v-model="account" type="email" required autocomplete="email"></label>
-        <label v-if="provider === 'openape'">{{ t("Identity provider") }}<input v-model="issuer" type="url" required></label>
+        <template v-if="provider === 'openape'">
+          <label class="default-choice"><input v-model="makeDefault" type="checkbox">{{ t('Use for new pods after sign-in') }}</label>
+          <details><summary>{{ t('Advanced') }}</summary><label>{{ t("Identity provider") }}<input v-model="issuer" type="url" required></label></details>
+        </template>
         <p>{{ t("Credentials stay in the Mac’s protected connection store. Pods and the master chat receive no account tokens.") }}</p>
         <button class="primary" :disabled="busy || !view?.runtime.ready">
           {{ t("Start sign-in") }}
         </button>
       </form>
+      <p>{{ t('ChatGPT, Microsoft and Telegram have separate connections. Configure application accounts and secrets in each pod when needed.') }}</p>
     </article>
     <article class="card">
       <h2>{{ t("References and first run") }}</h2>
@@ -88,7 +113,9 @@ export default defineComponent({
 .setup-view { display: grid; gap: 20px; }
 .setup-form { display: grid; gap: 14px; }
 .setup-form label { display: grid; gap: 6px; }
-.setup-form label:has(input[type=checkbox]) { display: flex; align-items: start; }
+.setup-form .default-choice { display: flex; align-items: center; }
+.disconnect-review { border-left: 3px solid var(--border); padding-left: 12px; }
+.setup-form details label { margin-top: 12px; }
 .setup-form input:not([type=checkbox]), .setup-form select, .setup-connection input { width: 100%; box-sizing: border-box; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: inherit; }
 .setup-connection { border-top: 1px solid var(--line); padding: 16px 0; display: grid; gap: 8px; overflow-wrap: anywhere; }
 .setup-view button { justify-self: start; margin: 4px 8px 4px 0; }

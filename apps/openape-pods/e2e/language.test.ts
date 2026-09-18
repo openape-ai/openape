@@ -52,7 +52,7 @@ it('language: switches every packaged view and native menus, preserves edits and
       await page.locator('.credential-form').screenshot({ path: resolve(`.artifacts/handbook-credentials${suffix}.png`) })
       for (const [button, german, name] of [['Connections & setup', 'Verbindungen & Einrichtung', 'setup'], ['Workspace chat', 'Arbeitsbereich-Chat', 'master'], ['Data & backups', 'Daten & Sicherungen', 'data']]) {
         await page.locator('.nav-button').click(); await page.getByRole('button', { name: locale === 'de' ? german : button, exact: true }).click()
-        await page.getByRole('heading', { name: locale === 'de' ? german : button, exact: true }).first().waitFor()
+        await page.getByRole('heading', { name: name === 'setup' ? (locale === 'de' ? 'OpenApe-Konto' : 'OpenApe account') : locale === 'de' ? german : button, exact: true }).first().waitFor()
         await page.screenshot({ path: resolve(`.artifacts/handbook-${name}${suffix}.png`) })
       }
       await page.locator('.pod-button').first().click(); await page.screenshot({ path: resolve(`.artifacts/handbook-groups${suffix}.png`) })
