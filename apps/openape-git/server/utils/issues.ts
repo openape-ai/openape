@@ -6,7 +6,7 @@ import { setTimeout } from 'node:timers/promises'
 import { and, asc, desc, eq, sql } from 'drizzle-orm'
 import { createError } from 'h3'
 import { ulid } from 'ulid'
-import { issueAliases, issueComments, issueCounters, issueEvents, issueLabelLinks, issueLabels, issueParticipants, issues, issueWriteRequests, products, repos } from '../database/schema'
+import { issueAliases, issueComments, issueCounters, issueImportTargets, issueEvents, issueLabelLinks, issueLabels, issueParticipants, issues, issueWriteRequests, products, repos } from '../database/schema'
 import { principalAllows, readableIssuePredicate, repositoryAccessPredicate } from './issue-access'
 
 type Database = LibSQLDatabase<typeof schema>
@@ -82,6 +82,8 @@ export async function issueTransaction<T>(db: Database, action: (tx: Transaction
         return await db.transaction(action, { behavior: 'immediate' })
       }
       catch (error) {
+        const cause = (error as { cause?: Error }).cause
+        if (String(error).includes('ISSUE_IMPORT_LOCKED') || String(cause).includes('ISSUE_IMPORT_LOCKED')) failure(503, 'Issue migration is awaiting cutover; writes are disabled')
         const code = (error as { code?: string, cause?: { code?: string } }).code
           ?? (error as { cause?: { code?: string } }).cause?.code
         if (code !== 'SQLITE_BUSY' || attempt >= 7) throw error
@@ -113,13 +115,15 @@ export function createIssueStore(db: Database, audience: string, principal: Issu
   }
 
   async function capabilities(store: Store, issue: Issue) {
+    const locked = await store.select().from(issueImportTargets).where(and(eq(issueImportTargets.repoId, issue.repoId), eq(issueImportTargets.status, 'locked'))).get()
     const [read, write, admin] = await Promise.all([repoAccess(store, issue.repoId), repoAccess(store, issue.repoId, 'write'), repoAccess(store, issue.repoId, 'admin')])
     return {
+      migrationLocked: Boolean(locked),
       repository: read ? { owner: read.owner, name: read.name } : null,
-      comment: principalAllows(principal, 'issues:comment'),
-      edit: (issue.authorSubject === principal.subject && principalAllows(principal, 'issues:edit-own')) || (Boolean(write) && principalAllows(principal, 'issues:triage')),
-      triage: Boolean(write) && principalAllows(principal, 'issues:triage'),
-      admin: Boolean(admin) && principalAllows(principal, 'issues:admin'),
+      comment: !locked && principalAllows(principal, 'issues:comment'),
+      edit: !locked && ((issue.authorSubject === principal.subject && principalAllows(principal, 'issues:edit-own')) || (Boolean(write) && principalAllows(principal, 'issues:triage'))),
+      triage: !locked && Boolean(write) && principalAllows(principal, 'issues:triage'),
+      admin: !locked && Boolean(admin) && principalAllows(principal, 'issues:admin'),
     }
   }
 

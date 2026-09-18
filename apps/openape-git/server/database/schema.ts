@@ -305,3 +305,9 @@ export const issueWriteRequests = sqliteTable('issue_write_requests', {
   result: text('result').notNull(),
   createdAt: integer('created_at').notNull(),
 })
+
+export const issueImportTargets = sqliteTable('issue_import_targets', {
+  repoId: text('repo_id').notNull(),
+  batchId: text('batch_id').notNull(),
+  status: text('status').notNull(),
+})

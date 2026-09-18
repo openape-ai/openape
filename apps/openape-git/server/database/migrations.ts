@@ -7,6 +7,21 @@ export interface DatabaseMigration {
   statements: string[]
 }
 
+const importFenceTables: Record<string, (row: string) => string> = {
+  issues: row => `${row}.repo_id`,
+  issue_labels: row => `${row}.repo_id`,
+  issue_counters: row => `${row}.repo_id`,
+  issue_products: row => `${row}.repo_id`,
+  issue_aliases: row => `${row}.repo_id`,
+  ...Object.fromEntries(['issue_comments', 'issue_label_links', 'issue_participants', 'issue_pull_links', 'issue_events', 'issue_attachments'].map(table => [table, (row: string) => `(SELECT repo_id FROM issues WHERE id = ${row}.issue_id)`])),
+}
+const importFences = Object.entries(importFenceTables).flatMap(([table, repository]) => ['INSERT', 'UPDATE', 'DELETE'].map((operation) => {
+  const rows = operation === 'UPDATE' ? ['OLD', 'NEW'] : [operation === 'INSERT' ? 'NEW' : 'OLD']
+  return `CREATE TRIGGER freeze_${table}_${operation.toLowerCase()} BEFORE ${operation} ON ${table}
+    WHEN ${rows.map(row => `EXISTS (SELECT 1 FROM issue_import_targets WHERE repo_id = ${repository(row)} AND status = 'locked')`).join(' OR ')}
+    BEGIN SELECT RAISE(ABORT, 'ISSUE_IMPORT_LOCKED'); END`
+}))
+
 export const databaseMigrations: DatabaseMigration[] = [
   { version: 1, name: 'Existing Git registry', statements: [
     `CREATE TABLE IF NOT EXISTS repos (
@@ -288,6 +303,10 @@ export const databaseMigrations: DatabaseMigration[] = [
   { version: 3, name: 'Issue reporting policy and triage', statements: [
     `ALTER TABLE repos ADD COLUMN issue_policy_version INTEGER NOT NULL DEFAULT 1`,
     `ALTER TABLE issues ADD COLUMN triage_state TEXT NOT NULL DEFAULT 'classified' CHECK(triage_state IN ('classified', 'unclassified'))`,
+  ] },
+  { version: 4, name: 'Isolated issue import fences', statements: [
+    `CREATE TABLE issue_import_targets (repo_id TEXT PRIMARY KEY REFERENCES repos(id), batch_id TEXT NOT NULL REFERENCES issue_import_batches(id), status TEXT NOT NULL CHECK(status IN ('locked','released')))`,
+    ...importFences,
   ] },
 ]
 

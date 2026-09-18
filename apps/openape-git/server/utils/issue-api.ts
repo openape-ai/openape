@@ -8,7 +8,7 @@ import { repos } from '../database/schema'
 import { repositoryAccessPredicate } from './issue-access'
 import { createIssueStore } from './issues'
 import { createRateLimiter } from './rate-limit'
-import { renderIssueMarkdown } from './render'
+import { importedText } from './issue-imports'
 
 const subjectLimiter = createRateLimiter(120, 60)
 const ipLimiter = createRateLimiter(3000, 60)
@@ -99,5 +99,5 @@ export function issueFilters(event: H3Event): IssueFilters {
 
 export async function issueView(context: Awaited<ReturnType<typeof issueContext>>, id: string) {
   const issue = await context.store.get(id)
-  return { ...issue, bodyHtml: renderIssueMarkdown(issue.body) }
+  return { ...issue, ...await importedText(context, id, issue.body) }
 }

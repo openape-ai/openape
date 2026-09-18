@@ -28,7 +28,7 @@ defineProps<{ issues: IssueRecord[], total: number, loading: boolean }>()
           <p class="text-xs text-zinc-500 mt-2 break-words">
             {{ issue.state }} · <span v-if="issue.number">#{{ issue.number }} · </span>
             <span v-if="issue.capabilities.repository">{{ issue.capabilities.repository.owner }}/{{ issue.capabilities.repository.name }} · </span>
-            {{ issue.productName }} · {{ issue.authorSubject }} · {{ issueDate(issue.createdAt) }}
+            {{ issue.productName }} · {{ issue.imported?.label || issue.authorSubject || 'Unknown author' }} · {{ issueDate(issue.createdAt) }}
           </p>
         </div>
       </li>

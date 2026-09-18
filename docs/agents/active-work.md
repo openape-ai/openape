@@ -1,5 +1,10 @@
 # Active work
 
+## Native issue migration and restore rehearsal (M6)
+
+`native-issues-migration`, branch `feature/issue-1356-native-issues-migration`, starts from app-entry source `bdfbb78e`. The one-way CLI exports, prepares, validates and transactionally applies only an exact approved local bundle; staged targets remain write-fenced. Authenticated downloads, legacy-comment continuation, imported provenance and private Markdown reference resolution are implemented. Full private source rehearsal reconciles 230 issues, 175 comments, 15 labels, three actual assets and 37 edit-history rows; repeated import and actual encrypted restic restore pass. Six operator tests cover interruption/deltas, collisions/restrictions, approvals, byte restore and HTTP fence routing. Seven real IdP/CLI tests and five browser workflows pass. Complete gates and exact-source review remain in progress. The reviewed M2 byte-equality correction is included; no timeout/gate bypass. See [migration runbook](../operations/native-issues-migration.md) for verified production topology, unsupported cases and the concrete M7 prerequisites. No production migration, activation, upstream rebinding or gateway change has occurred.
+
+
 ## Native issue reporting entry points (M4)
 
 `native-issues-entrypoints`, branch `feature/issue-1356-native-issues-entrypoints`, base `9c523ee6`. All 19 app workspaces now have a product reporting entry: the Git app, fourteen web app footers, the Pods native Help menu and agent/Nest/chat CLI help. Web links use `NUXT_PUBLIC_ISSUE_REPORTING_ENABLED=true`; Pods uses `OPENAPE_PODS_ISSUE_REPORTING_ENABLED=1`; daemon/CLI help uses `OPENAPE_ISSUE_REPORTING_ENABLED=1`. Every new entry is off by default. Only the approved product key goes to the fixed native reporting URL; web referrers are suppressed. Full lint/typecheck, all app builds, shared-component browser checks and the real Electron menu flow pass. Native production rollout and source migration remain separately gated.

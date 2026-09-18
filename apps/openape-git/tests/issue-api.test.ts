@@ -1,5 +1,6 @@
+import { createHash } from 'node:crypto'
 import type { Server } from 'node:http'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,6 +21,8 @@ const { issueFacets } = await import('../server/utils/issue-facets')
 const reporting = await import('../server/utils/issue-reporting')
 const labels = await import('../server/utils/issue-labels')
 const links = await import('../server/utils/issue-pulls')
+const imported = await import('../server/utils/issue-imports')
+const { issueContext } = await import('../server/utils/issue-api')
 const { requireScopedPrincipal } = await import('../../../modules/nuxt-auth-sp/src/runtime/server/utils/verified-principal')
 vi.stubGlobal('requireScopedPrincipal', requireScopedPrincipal)
 
@@ -54,11 +57,13 @@ beforeEach(async () => {
   await migrateDatabase(client)
   const db = drizzle(client, { schema })
   getDb.mockReturnValue(db)
-  runtimeConfig.mockReturnValue({ public: { issuesEnabled: true }, issueIntakeRepoId: 'intake', issueRoutingAdmin: owner, openapeSp: { clientId: audience, sessionSecret: secret, catalogOnlyScopes: issueScopes.map(scope => scope.id), manifest: { scopes: issueScopes } } })
+  runtimeConfig.mockReturnValue({ gitDataDir: directory, public: { issuesEnabled: true }, issueIntakeRepoId: 'intake', issueRoutingAdmin: owner, openapeSp: { clientId: audience, sessionSecret: secret, catalogOnlyScopes: issueScopes.map(scope => scope.id), manifest: { scopes: issueScopes } } })
   await db.insert(schema.repos).values({ id: 'repo', owner: 'owner', name: 'project', ownerEmail: owner, createdAt: 1 })
   await db.insert(schema.grants).values({ id: 'reader-grant', status: 'approved', type: 'delegation', requester: owner, targetHost: audience, audience, grantType: 'always', createdAt: 1, request: { delegate: reader, audience, grant_type: 'always', scopes: ['git:read', 'repo:owner/project'] } })
   await db.insert(schema.repos).values({ id: 'intake', owner: 'owner', name: 'intake', ownerEmail: owner, reportingEnabled: 1, createdAt: 1 })
   const router = createRouter()
+  router.get('/api/issue-attachments/:id', defineEventHandler(async event => imported.downloadIssueAttachment(event, await issueContext(event, ['issues:read']))))
+  router.get('/api/issue-legacy', defineEventHandler(async event => imported.resolveLegacyIssue(event, await issueContext(event, ['issues:read']))))
   router.get('/api/products', defineEventHandler(reporting.reportingProducts))
   router.post('/api/reports', defineEventHandler(reporting.createReport))
   router.get('/api/repos/:owner/:name/issue-policy', defineEventHandler(reporting.getIssuePolicy))
@@ -104,6 +109,52 @@ afterEach(async () => {
 })
 
 describe('native issue HTTP contract', () => {
+  it('protects imported bytes and legacy comment links with live issue access and download-only headers', async () => {
+    const issue = await (await call('POST', `${root}/issues`, { title: 'Imported content', body: 'See #7 and `#7`' })).json()
+    const comment = await (await call('POST', `/api/issue-records/${issue.id}/comments`, { body: 'Original discussion' })).json()
+    const bytes = Buffer.from('<script>active content must only download</script>')
+    const hash = createHash('sha256').update(bytes).digest('hex')
+    mkdirSync(join(directory, 'issue-assets')); writeFileSync(join(directory, 'issue-assets', hash), bytes)
+    const db = getDb()
+    await db.insert(schema.issueAttachments).values({ id: 'imported-asset', issueId: issue.id, commentId: comment.id, sourceId: '1', filename: 'original.html', mimeType: 'text/html', size: bytes.length, sha256: hash, storageKey: hash, provenance: '{}' })
+    const old = 'https://git.example.test/team/repo/issues/7'
+    await db.insert(schema.legacyReferences).values([{ sourceKey: old, kind: 'issue', issueId: issue.id }, { sourceKey: `${old}#issuecomment-100`, kind: 'comment', issueId: issue.id, commentId: comment.id }])
+    await db.insert(schema.importBatches).values({ id: 'batch', source: 'source', manifestHash: hash, importedBy: owner, createdAt: 1, status: 'staged' })
+    await db.insert(schema.importOrigins).values({ sourceKey: old, batchId: 'batch', entityId: issue.id, kind: 'issue', contentHash: hash, provenance: JSON.stringify({ source: 'https://git.example.test', sourceKey: old, user: { id: -1, login: 'Ghost' }, references: [{ text: '#7', key: old, kind: 'issue' }] }) })
+    const detail = await (await call('GET', `/api/issue-records/${issue.id}`)).json()
+    expect(detail.imported.label).toBe('Imported from Forgejo: Ghost')
+    expect(detail.bodyHtml).toContain(`href="/i/${issue.id}"`)
+    expect(detail.bodyHtml).toContain('<code>#7</code>')
+    expect(detail.attachments).toHaveLength(1)
+    const asset = await call('GET', '/api/issue-attachments/imported-asset')
+    expect(asset.status).toBe(200)
+    expect(asset.headers.get('content-type')).toBe('application/octet-stream')
+    expect(asset.headers.get('content-disposition')).toContain('attachment;')
+    expect(asset.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(asset.headers.get('cache-control')).toBe('private, no-store')
+    expect(Buffer.from(await asset.arrayBuffer())).toEqual(bytes)
+    const legacy = `/api/issue-legacy?url=${encodeURIComponent(`${old}#issuecomment-100`)}`
+    expect(await (await call('GET', legacy)).json()).toEqual({ url: `/i/${issue.id}#comment-${comment.id}` })
+    const stranger = await bearer('unrelated@e2e.test', ['issues:read'])
+    expect((await call('GET', '/api/issue-attachments/imported-asset', undefined, stranger)).status).toBe(404)
+    expect((await call('GET', legacy, undefined, stranger)).status).toBe(404)
+    await client.execute('UPDATE grants SET status=\'denied\' WHERE id=\'reader-grant\'')
+    expect((await call('GET', '/api/issue-attachments/imported-asset', undefined, await bearer(reader))).status).toBe(404)
+    await client.execute({ sql: 'UPDATE issue_comments SET hidden=1 WHERE id=?', args: [comment.id] })
+    expect((await call('GET', '/api/issue-attachments/imported-asset')).status).toBe(404)
+    expect((await call('GET', legacy)).status).toBe(404)
+  })
+
+  it('keeps staged imports read-only and returns an actionable maintenance response', async () => {
+    const issue = await (await call('POST', `${root}/issues`, { title: 'Staged', body: '' })).json()
+    await client.execute('INSERT INTO issue_import_batches VALUES(\'batch\',\'source\',\'hash\',\'operator\',1,\'staged\')')
+    await client.execute('INSERT INTO issue_import_targets VALUES(\'repo\',\'batch\',\'locked\')')
+    const detail = await (await call('GET', `/api/issue-records/${issue.id}`)).json()
+    expect(detail.capabilities).toMatchObject({ migrationLocked: true, edit: false, triage: false, comment: false })
+    expect((await call('POST', `${root}/issues`, { title: 'Blocked', body: '' }, token, { 'idempotency-key': 'blocked-new-issue' })).status).toBe(503)
+    expect((await call('POST', `/api/issue-records/${issue.id}/comments`, { body: 'Blocked comment' })).status).toBe(503)
+  })
+
   it('roundtrips Markdown, retries once, edits with versions, comments and manually closes', async () => {
     const body = { title: 'A real problem', body: 'First line\n\n`$HOME` **bold** ![Remote](https://example.com/pixel.png) <script>bad()</script>' }
     const created = await call('POST', `${root}/issues`, body)

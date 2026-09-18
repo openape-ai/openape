@@ -26,7 +26,7 @@ write_status() {
 
 trap 'write_status false "" "backup.sh failed at line $LINENO"; exit 1' ERR
 
-mkdir -p "$STAGE_DIR"
+mkdir -p "$STAGE_DIR" "$DATA_DIR/issue-assets" "$DATA_DIR/issue-imports"
 
 # A live SQLite file must not be copied byte-wise: .backup takes a consistent
 # snapshot including the WAL, so the restored registry is never half-written.
@@ -38,7 +38,7 @@ restic snapshots >/dev/null 2>&1 || restic init
 # every repo but reject every webhook delivery. They are small and the restic
 # repository is encrypted.
 out=$(restic backup --host ape-git --tag ape-git \
-  "$DATA_DIR/repos" "$STAGE_DIR/registry.db" "$PROD_DIR")
+  "$DATA_DIR/repos" "$STAGE_DIR/registry.db" "$DATA_DIR/issue-assets" "$DATA_DIR/issue-imports" "$PROD_DIR")
 printf '%s\n' "$out"
 snapshot=$(printf '%s' "$out" | sed -n 's/^snapshot \([0-9a-f]*\) saved$/\1/p' | tail -1)
 
