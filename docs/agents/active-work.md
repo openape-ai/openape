@@ -1,5 +1,12 @@
 # Active work
 
+## Native issues — M4 external issue homes (September 18, 2026)
+
+`openape-monorepo.worktrees/native-issues-apps`, branch `feature/issue-1356-native-issues-apps`, base `674de015` (M4 core). Adds fresh issue-only repository registration with an explicit external HTTPS code URL, private metadata and matching navigation. Real IdP/API/CLI/browser tests prove issues work without creating bare Git storage; Git transport, native PR and mirror writes are refused while normal Git reads still succeed. This is a separate M4 increment from the in-progress app-shell reporting links. Production registration and activation remain gated.
+
+
+
+
 ## Native issues — M5 explicit PR relations (September 18, 2026)
 
 `openape-monorepo.worktrees/native-issues-links`, branch `feature/issue-1356-native-issues-links`, base `674de015` (M4 core). Adds reciprocal `Related` links with live access intersection and audited idempotent creation/removal. The actual IdP/CLI fixture successfully merges a real PR through the unchanged exact-SHA endpoint and confirms the linked issue remains open. Signed HTTP denial tests and Vue interaction checks pass. M4 core passed all 17 clean local gates and is pushed at `674de015`; app-shell links and external-code issue homes are still outstanding M4 work. M2 external CI had one unchanged Pods database test timeout; the entire targeted suite passes locally and one exact-source retry is running. Continue through M4/M5 reviews and M6 rehearsal; production cutover remains separately gated.

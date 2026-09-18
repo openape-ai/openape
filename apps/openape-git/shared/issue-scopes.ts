@@ -3,7 +3,7 @@ const issue = `${repo}/issues/:number`
 const record = '/api/issue-records/:id'
 
 export const issueScopes = [
-  { id: 'issues:read', description: 'Read issues you may access.', grants: ['GET /api/issues', 'GET /api/issue-facets', `GET ${repo}/issues`, `GET ${issue}`, `GET ${record}`, `GET ${issue}/comments`, `GET ${record}/comments`, `GET ${repo}/labels`, `GET ${issue}/pulls`, `GET ${record}/pulls`, `GET ${repo}/pulls/:number/issues`, 'GET /api/issue-attachments/:id'] },
+  { id: 'issues:read', description: 'Read issues you may access.', grants: ['GET /api/issues', `GET ${repo}/metadata`, 'GET /api/issue-facets', `GET ${repo}/issues`, `GET ${issue}`, `GET ${record}`, `GET ${issue}/comments`, `GET ${record}/comments`, `GET ${repo}/labels`, `GET ${issue}/pulls`, `GET ${record}/pulls`, `GET ${repo}/pulls/:number/issues`, 'GET /api/issue-attachments/:id'] },
   { id: 'issues:create', description: 'Open issues in accessible repositories.', grants: ['POST /api/issue-preview', `POST ${repo}/issues`] },
   { id: 'issues:comment', description: 'Comment on accessible issues.', grants: ['POST /api/issue-preview', `POST ${issue}/comments`, `POST ${record}/comments`] },
   { id: 'issues:edit-own', description: 'Edit your own issue and comment text.', grants: ['POST /api/issue-preview', `PATCH ${issue}`, `PATCH ${record}`, `PATCH ${issue}/comments/:commentId`, `PATCH ${record}/comments/:commentId`] },
