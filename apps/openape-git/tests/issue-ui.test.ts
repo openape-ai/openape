@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import IssueBrowser from '../app/components/IssueBrowser.vue'
 import IssueCreate from '../app/components/IssueCreate.vue'
 import IssueDetail from '../app/components/IssueDetail.vue'
+import IssueLegacy from '../app/components/IssueLegacy.vue'
 import IssueEditor from '../app/components/IssueEditor.vue'
 import IssueList from '../app/components/IssueList.vue'
 import IssueMarkdown from '../app/components/IssueMarkdown.vue'
@@ -31,6 +32,25 @@ beforeEach(() => { vi.stubGlobal('$fetch', fetcher); vi.stubGlobal('navigateTo',
 afterEach(() => vi.unstubAllGlobals())
 
 describe('issue interaction contracts', () => {
+  it('shows imported provenance, private downloads and the migration fence without claiming a native author', async () => {
+    fetcher.mockImplementation((url: string) => Promise.resolve(url.endsWith('/comments') ? { comments: [], next: null } : { ...record, authorSubject: null, authorActor: null, imported: { label: 'Imported from Forgejo: Ghost', sourceUrl: 'https://forgejo.test/team/repo/issues/7' }, attachments: [{ id: 'asset', filename: 'original.html', size: 7, url: '/api/issue-attachments/asset' }], capabilities: { ...record.capabilities, migrationLocked: true, edit: false, triage: false, comment: false } }))
+    const wrapper = mount(IssueDetail, { props: { endpoint: '/api/issue-records/issue-a' }, global }); await flushPromises()
+    expect(wrapper.text()).toContain('Imported from Forgejo: Ghost')
+    expect(wrapper.get('[role="status"]').text()).toContain('Migration review')
+    expect(wrapper.get('a[href="/api/issue-attachments/asset"]').text()).toBe('original.html')
+    expect(wrapper.find('textarea').exists()).toBe(false)
+  })
+  it('preserves legacy comment anchors and displays denied or missing links without redirecting', async () => {
+    fetcher.mockResolvedValueOnce({ url: '/i/imported#comment-original' })
+    mount(IssueLegacy, { props: { sourceUrl: 'https://forgejo.test/team/repo/issues/7', fragment: '#issuecomment-99' }, global }); await flushPromises()
+    expect(fetcher).toHaveBeenCalledWith('/api/issue-legacy', { query: { url: 'https://forgejo.test/team/repo/issues/7#issuecomment-99' } })
+    expect(navigate).toHaveBeenCalledWith('/i/imported#comment-original', { replace: true })
+    navigate.mockClear(); fetcher.mockRejectedValueOnce({ data: { statusMessage: 'Legacy issue not found' } })
+    const wrapper = mount(IssueLegacy, { props: { sourceUrl: 'https://forgejo.test/team/repo/issues/8' }, global }); await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('Legacy issue not found')
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
   it('shows loading, empty results and accessible record links', async () => {
     const wrapper = mount(IssueList, { props: { issues: [], total: 0, loading: true }, global })
     expect(wrapper.text()).toContain('Loading issues')

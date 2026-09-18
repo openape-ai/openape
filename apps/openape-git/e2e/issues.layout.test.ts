@@ -215,3 +215,35 @@ it('creates an external-code issue home and hides native code, pull and mirror c
   writeFileSync(`${artifactDir}/testrun.json`, JSON.stringify(manifest, null, 2))
   writeFileSync(`${artifactDir}/report.html`, readFileSync(`${artifactDir}/report.html`, 'utf8').replace('</html>', `${shots.map(shot => `<section><h2>${shot.title}</h2><img alt="${shot.title}" src="data:image/png;base64,${readFileSync(`${artifactDir}/${shot.shot}`).toString('base64')}"></section>`).join('')}</html>`))
 })
+
+it('opens a migrated comment after login and displays original attribution and protected downloads', async () => {
+  const repository = await (await user.call('POST', '/api/repos', { owner: 'owner', name: 'archive' })).json()
+  const imported = await fixture.seedImport({ id: repository.id, owner: 'owner', name: 'archive' })
+  const context = await browser.newContext()
+  const reader = await context.newPage()
+  try {
+    await reader.goto(`${fixture.base}/legacy?url=${encodeURIComponent(imported.sourceUrl)}#issuecomment-99`)
+    await reader.waitForURL(`${fixture.base}/`)
+    await context.addCookies(user.cookie.split('; ').map((cookie) => { const index = cookie.indexOf('='); return { name: cookie.slice(0, index), value: cookie.slice(index + 1), url: fixture.base, httpOnly: true, sameSite: 'Lax' as const } }))
+    await reader.reload()
+    await reader.waitForURL(`**/i/${imported.issueId}#comment-${imported.commentId}`)
+    await reader.getByText('Original comment retained across migration.', { exact: true }).waitFor()
+    await reader.getByText('Imported from Forgejo: Ghost', { exact: true }).waitFor()
+    expect(await reader.getByLabel('Leave a comment', { exact: true }).count()).toBe(0)
+    const shots = []
+    for (const [size, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]] as const) {
+      await reader.setViewportSize({ width, height })
+      await reader.screenshot({ path: `${artifactDir}/imported-${size}.png`, fullPage: true })
+      expect(await reader.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      shots.push({ title: `Imported discussion — ${size}`, shot: `imported-${size}.png`, status: 'passed' })
+    }
+    const download = reader.waitForEvent('download')
+    await reader.getByRole('link', { name: 'diagnostic.html', exact: true }).click()
+    expect((await download).suggestedFilename()).toBe('diagnostic.html')
+    const manifest = JSON.parse(readFileSync(`${artifactDir}/testrun.json`, 'utf8'))
+    manifest.tests.push({ id: 'imported-discussion', title: 'Legacy comment continuation, provenance and protected downloads', status: 'passed', steps: shots })
+    writeFileSync(`${artifactDir}/testrun.json`, JSON.stringify(manifest, null, 2))
+    writeFileSync(`${artifactDir}/report.html`, readFileSync(`${artifactDir}/report.html`, 'utf8').replace('</html>', `${shots.map(shot => `<section><h2>${shot.title}</h2><img alt="${shot.title}" src="data:image/png;base64,${readFileSync(`${artifactDir}/${shot.shot}`).toString('base64')}"></section>`).join('')}</html>`))
+  }
+  finally { await context.close() }
+})

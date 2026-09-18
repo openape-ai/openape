@@ -6,6 +6,7 @@ import { principalAllows } from './issue-access'
 import { issueBody, issueContext, issueFilters, issueIdentity, issueRepository, issueText, issueVersion, issueView } from './issue-api'
 import { issueTransaction, validateCommentText } from './issues'
 import { renderIssueMarkdown } from './render'
+import { attachmentList, importedAttribution, importedText } from './issue-imports'
 
 export async function listIssues(event: H3Event) {
   const context = await issueContext(event, ['issues:read'])
@@ -17,7 +18,7 @@ export async function listIssues(event: H3Event) {
   const page = await context.store.list(filters)
   const issues = await Promise.all(page.ids.map(async (id) => {
     const { body: _body, ...issue } = await context.store.get(id)
-    return issue
+    return { ...issue, imported: await importedAttribution(context, id) }
   }))
   return { issues, total: page.total, cursor: page.cursor }
 }
@@ -27,7 +28,7 @@ export async function getIssue(event: H3Event) {
   const id = await issueIdentity(event, context)
   const issue = await issueView(context, id)
   const events = await context.db.select({ id: issueEvents.id, action: issueEvents.action, actor: issueEvents.actor, subject: issueEvents.subject, createdAt: issueEvents.createdAt }).from(issueEvents).where(eq(issueEvents.issueId, id)).orderBy(issueEvents.createdAt, issueEvents.id).limit(100)
-  return { ...issue, events }
+  return { ...issue, events, attachments: await attachmentList(context, id) }
 }
 
 export async function createIssue(event: H3Event) {
@@ -67,7 +68,7 @@ export async function listIssueComments(event: H3Event) {
   const after = query.after === undefined ? '' : issueText(query.after, 'comment cursor', 100)
   const limit = query.limit === undefined ? 30 : Number(issueText(query.limit, 'limit', 3))
   const comments = await context.store.comments(id, after, limit)
-  return { comments: comments.map(comment => ({ ...comment, canEdit: comment.authorSubject === context.principal.subject && principalAllows(context.principal, 'issues:edit-own'), bodyHtml: renderIssueMarkdown(comment.body) })), next: comments.length === limit ? comments.at(-1)!.id : null }
+  return { comments: await Promise.all(comments.map(async comment => ({ ...comment, canEdit: comment.authorSubject === context.principal.subject && principalAllows(context.principal, 'issues:edit-own'), ...await importedText(context, comment.id, comment.body) }))), next: comments.length === limit ? comments.at(-1)!.id : null }
 }
 
 export async function createIssueComment(event: H3Event) {

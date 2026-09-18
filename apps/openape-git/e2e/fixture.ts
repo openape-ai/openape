@@ -1,7 +1,7 @@
 import type { RunningServer } from 'openape-e2e/lifecycle'
-import { generateKeyPairSync } from 'node:crypto'
+import { createHash, generateKeyPairSync } from 'node:crypto'
 import { execFile } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -98,7 +98,36 @@ export async function startIssueFixture() {
       await git('update-ref', 'refs/heads/fix-issue', sourceSha)
       return { sourceSha, targetSha }
     }
-    return { base, directory, identity, seedBranches, stop: async () => { await app!.stop(); await idp.stop() } }
+    async function seedImport(repo: { id: string, owner: string, name: string }, count = 1) {
+      const area = join(realpathSync(directory), `migration-${repo.id}`)
+      mkdirSync(join(area, 'source/assets'), { recursive: true })
+      const bytes = Buffer.from('<html>Imported synthetic diagnostic attachment</html>')
+      const digest = (value: string | Buffer) => createHash('sha256').update(value).digest('hex')
+      const source = 'https://forgejo.example.test'; const repository = `team/${repo.name}`; const date = '2026-01-01T00:00:00Z'
+      const assetUrl = `${source}/attachments/00000000-0000-0000-0000-000000000001`
+      const snapshot = { format: 1, source, repository, snapshot: { repository: { private: true }, pulls: [{ number: 10 }], labels: [{ id: 1, name: 'imported', color: 'f59e0b' }], issues: [{ id: 7, number: 7, title: 'Imported problem with its original discussion', body: `Original **Markdown**, #7 and \`#7\`.\n\n[Diagnostic attachment](${assetUrl})`, state: 'open', created_at: date, updated_at: date, user: { id: -1, login: 'Ghost' }, labels: [{ id: 1 }], assignees: [], comments: [{ id: 99, body: 'Original comment retained across migration.', created_at: date, updated_at: date, user: { id: 2, login: 'former-maintainer' } }], timeline: [], assets: [], commentAssets: [] }] }, assets: [{ id: 1, issueId: 7, name: 'diagnostic.html', size: bytes.length, sha256: digest(bytes), mimeType: 'text/html', browser_download_url: assetUrl }] }
+      if (count > 1) {
+        const example = snapshot.snapshot.issues[0]!
+        snapshot.snapshot.issues = Array.from({ length: count }, (_, index) => ({ ...example, id: index + 7, number: index + 7, body: 'Synthetic scale issue', comments: [], labels: [], assets: [] }))
+        snapshot.assets = []
+        snapshot.snapshot.pulls = []
+      }
+      const history = { source, repository, rows: [] }
+      const mapping = { snapshotHash: digest(JSON.stringify(snapshot)), destination: repo, operator: owner, exceptions: { [`unresolved-reference:7:${assetUrl}`]: 'Synthetic attachment preserved as a download' } }
+      for (const [path, value] of [['source/snapshot.json', snapshot], ['mapping.json', mapping], ['history.json', history]] as const) writeFileSync(join(area, path), JSON.stringify(value))
+      writeFileSync(join(area, 'source/assets', digest(bytes)), bytes)
+      const migration = async (...args: string[]) => JSON.parse((await run(process.execPath, [join(root, 'scripts/issue-migration.mjs'), ...args], { cwd: root, timeout: 60000 })).stdout)
+      const bundle = join(area, 'bundle')
+      const prepared = await migration('prepare', '--snapshot', join(area, 'source'), '--mapping', join(area, 'mapping.json'), '--history', join(area, 'history.json'), '--output', bundle)
+      const database = join(realpathSync(directory), 'registry.db'); const assetsDirectory = join(realpathSync(directory), 'issue-assets')
+      const approval = { scope: 'isolated', approvedBy: 'synthetic E2E', approvedAt: date, manifestHash: prepared.manifestHash, database, assetsDirectory, destinationId: repo.id }
+      writeFileSync(join(area, 'approval.json'), JSON.stringify(approval))
+      const applied = await migration('apply', '--bundle', bundle, '--database', database, '--assets', assetsDirectory, '--destination', repo.id, '--approval', join(area, 'approval.json'))
+      if (!applied.ok) throw new Error('Synthetic import reconciliation failed')
+      const manifest = JSON.parse(readFileSync(join(bundle, 'manifest.json'), 'utf8'))
+      return { issueId: manifest.issues[0].id as string, commentId: manifest.comments[0]?.id as string | undefined, attachmentId: manifest.assets[0]?.id as string | undefined, sourceUrl: `${source}/${repository}/issues/7`, bytes }
+    }
+    return { base, directory, identity, seedBranches, seedImport, stop: async () => { await app!.stop(); await idp.stop() } }
   }
   catch (error) { if (app) await app.stop(); await idp.stop(); throw error }
 }
