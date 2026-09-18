@@ -2,6 +2,8 @@
 
 ## Native issues — M2 API and CLI (September 18, 2026)
 
+Two exact-source external CI attempts hit the 5-second limit in the unchanged Pods future-database byte assertion. Replace recursive Buffer equality with native `Buffer.equals`, preserving complete byte comparison without per-byte JavaScript traversal; do not increase the timeout or bypass CI.
+
 The dependent checkout `openape-monorepo.worktrees/native-issues-api`, branch `feature/issue-1356-native-issues-api`, starts from reviewed M1 source `c5e12cea`. It adds private issue/comment/label routes, safe Markdown rendering, same-origin cookie mutations, bounded inputs/rates and matching native CLI commands. HTTP tests exercise real H3 handlers, file-backed SQLite and signed SP tokens. Root CLI tests preserve literal body-file contents, retry headers and pre-request validation. Full Nuxt/IdP/CLI and UI verification follow in M3 before enabling the capability. Continue through the approved milestones without a per-milestone session handoff; production migration remains gated.
 
 ## Native issues — M1 implementation (September 18, 2026)
