@@ -49,7 +49,7 @@ it('migrates existing bindings without reviving stale scripts or exposing histor
   const current = store.getPod(pod.id).activeScript!
   const scripts = store.db.prepare('SELECT * FROM scripts').all()
   const validations = store.db.prepare('SELECT * FROM validations').all()
-  store.db.exec('ALTER TABLE pods DROP COLUMN metadata_revision; DROP TABLE script_dependencies; DROP TABLE dependency_sets; DROP TABLE draft_packages; DROP TABLE dependency_domains; PRAGMA user_version=15')
+  store.db.exec('ALTER TABLE pods DROP COLUMN metadata_revision; DROP TABLE script_dependencies; DROP TABLE dependency_sets; DROP TABLE draft_packages; DROP TABLE dependency_domains; ALTER TABLE onboarding DROP COLUMN default_owner; PRAGMA user_version=15')
   const root = store.root; store.close(); stores.splice(stores.indexOf(store), 1)
   store = new PodDatabase(root); stores.push(store)
   expect(store.getPod(pod.id)).toMatchObject({ revision: 7, bindingRevision: 7, activeScript: current })
