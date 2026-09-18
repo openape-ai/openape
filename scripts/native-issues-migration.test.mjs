@@ -78,6 +78,11 @@ test('binds approval to exact source, target and manifest; rejects mutated archi
   const f = fixture(t); const bundle = f.bundle(); const options = f.options(bundle)
   assert.throws(() => applyBundle(bundle, { ...options, approval: { ...options.approval, manifestHash: 'other' } }), /Approval must name/)
   assert.throws(() => applyBundle(bundle, { ...options, production: true }), /scope mismatch/)
+  const mappingPath = join(bundle.root, 'mapping.json'); const originalMapping = readFileSync(mappingPath)
+  const mapping = JSON.parse(originalMapping); mapping.identities = { unused: { subject: 'other@example.test', verifiedBy: 'changed', proof: 'changed' } }
+  writeFileSync(mappingPath, JSON.stringify(mapping))
+  assert.throws(() => loadBundle(bundle.root), /does not reconcile/)
+  writeFileSync(mappingPath, originalMapping)
   const manifest = JSON.parse(readFileSync(join(bundle.root, 'manifest.json'))); manifest.issues[0].title = 'Tampered'
   writeFileSync(join(bundle.root, 'manifest.json'), JSON.stringify(manifest))
   assert.throws(() => loadBundle(bundle.root), /does not reconcile/)
@@ -92,6 +97,10 @@ test('preserves zero-byte assets and restores DB, provenance, aliases and bytes 
   const restored = new DatabaseSync(destination); assert.equal(validateTarget(restored, bundle.manifest, restoredAssets).ok, true); restored.close()
   const proof = JSON.parse(execFileSync('python3', ['apps/openape-git/ops/verify-issue-backup.py', destination, restoredAssets], { encoding: 'utf8' }))
   assert.equal(proof.attachments, 1); assert.equal(proof.ok, true)
+  const mappingPath = join(f.root, 'issue-imports', bundle.manifest.batchId, bundle.hash, 'mapping.json')
+  const mapping = JSON.parse(readFileSync(mappingPath)); mapping.operator = 'changed'
+  writeFileSync(mappingPath, JSON.stringify(mapping))
+  assert.throws(() => execFileSync('python3', ['apps/openape-git/ops/verify-issue-backup.py', destination, restoredAssets], { stdio: 'pipe' }), /Command failed/)
   writeFileSync(join(restoredAssets, digest(bytes)), 'changed')
   const damaged = new DatabaseSync(destination); assert.equal(validateTarget(damaged, bundle.manifest, restoredAssets).ok, false); damaged.close()
 })
