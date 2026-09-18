@@ -110,6 +110,8 @@ export default defineNuxtModule<ModuleOptions>({
       options,
     )
 
+    nuxt.options.runtimeConfig.public.issueReportingEnabled ??= false
+
     // Dev-mode auto-defaults
     if (nuxt.options.dev) {
       const config = nuxt.options.runtimeConfig.openapeSp as ModuleOptions
