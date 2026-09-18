@@ -1,4 +1,4 @@
-import { existsSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { owner, startIssueFixture } from './fixture'
@@ -104,4 +104,42 @@ describe('real DDISA login, native API and CLI', () => {
     }
   })
 
+})
+
+it('imports through the operator CLI and serves private attachments and legacy comment links after real IdP login', async () => {
+  const ownerUser = user
+  const repository = await (await ownerUser.call('POST', '/api/repos', { owner: 'owner', name: 'archive' })).json()
+  const imported = await fixture.seedImport({ id: repository.id, owner: 'owner', name: 'archive' })
+  const detail = await (await ownerUser.call('GET', `/api/issue-records/${imported.issueId}`)).json()
+  expect(detail.imported.label).toBe('Imported from Forgejo: Ghost')
+  expect(detail.capabilities.migrationLocked).toBe(true)
+  expect(detail.bodyHtml).toContain(`/api/issue-attachments/${imported.attachmentId}`)
+  const download = await ownerUser.call('GET', `/api/issue-attachments/${imported.attachmentId}`)
+  expect(download.status).toBe(200)
+  expect(download.headers.get('content-type')).toBe('application/octet-stream')
+  expect(Buffer.from(await download.arrayBuffer())).toEqual(imported.bytes)
+  const link = `/api/issue-legacy?url=${encodeURIComponent(`${imported.sourceUrl}#issuecomment-99`)}`
+  expect(await (await ownerUser.call('GET', link)).json()).toEqual({ url: `/i/${imported.issueId}#comment-${imported.commentId}` })
+  expect((await stranger.call('GET', link)).status).toBe(404)
+  expect((await stranger.call('GET', `/api/issue-attachments/${imported.attachmentId}`)).status).toBe(404)
+})
+
+it('keeps cross-repository counts and pagination private at the pilot corpus size', async () => {
+  const repository = await (await user.call('POST', '/api/repos', { owner: 'owner', name: 'scale', issueHomeOnly: true, codeSourceUrl: 'https://code.example/scale' })).json()
+  await fixture.seedImport({ id: repository.id, owner: 'owner', name: 'scale' }, 230)
+  const path = '/api/issues?q=Synthetic%20scale%20issue&state=all&limit=30'
+  const timings: number[] = []
+  for (let index = 0; index < 10; index++) {
+    const started = performance.now()
+    const result = await (await user.call('GET', path)).json()
+    timings.push(performance.now() - started)
+    expect(result.total).toBe(230)
+    expect(result.issues).toHaveLength(30)
+    expect(result.cursor).toBeTruthy()
+  }
+  const denied = await (await stranger.call('GET', path)).json()
+  expect(denied).toMatchObject({ issues: [], total: 0, cursor: null })
+  timings.sort((a, b) => a - b)
+  mkdirSync('.artifacts/issues', { recursive: true })
+  writeFileSync('.artifacts/issues/search-performance.json', JSON.stringify({ corpus: 230, samples: 10, maxMs: timings.at(-1), medianMs: timings[5], authenticated: true, accessBoundary: 'unrelated principal receives zero issues and zero count', environment: 'isolated local IdP and actual Nuxt HTTP API' }, null, 2))
 })
