@@ -69,7 +69,7 @@ it('managed dependencies: packaged editor saves, prepares, validates and runs an
   finally { await app.close(); await identity.close(); await removePackageTree(root) }
 })
 
-it('managed dependencies: changing a library requires a new validated script and credential approval', async () => {
+it('managed dependencies: changing a library requires a new validated script and retains assigned secrets', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-package-binding-')))
   const store = new PodDatabase(root); const pod = store.createPod({ name: 'Synthetic binding' })
   try {
@@ -92,7 +92,7 @@ it('managed dependencies: changing a library requires a new validated script and
       const result = await validateDraft(store, resources, runtime, draftId, revision, new AbortController().signal)
       expect(dependencies.scriptSet(pod.id, result.hash)).toBe(hash)
       if (revision === 1) { credentials.approve(pod.id, result.hash, pod.revision, resources.epoch(pod.id)); first = result.hash; expect(credentials.approved(pod.id, first)).toBe(true) }
-      else { expect(result.hash).not.toBe(first); expect(credentials.approved(pod.id, result.hash)).toBe(false) }
+      else { expect(result.hash).not.toBe(first); expect(credentials.approved(pod.id, result.hash)).toBe(true) }
     }
   }
   finally { store.close(); await removePackageTree(root) }
