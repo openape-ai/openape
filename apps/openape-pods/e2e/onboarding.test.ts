@@ -4,6 +4,11 @@ import { mkdtemp, realpath, rm, mkdir, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
+import { randomUUID } from 'node:crypto'
+import { PodDatabase } from '../src/worker/storage/database'
+import { SetupControl } from '../src/worker/onboarding/control'
+import { ResourceRegistry } from '../src/worker/resources/registry'
+import { fixtureDirectory } from '../src/main/fixture'
 import { AuthProcess } from '../src/main/connections/process'
 
 const require = createRequire(import.meta.url)
@@ -30,10 +35,12 @@ it.each([false, true])('onboarding: empty setup, explicit continuation and no im
   try {
     const page = await app.firstWindow(); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
     await page.getByRole('button', { name: 'App settings', exact: true }).click(); await page.getByRole('button', { name: 'Connections & setup', exact: true }).click()
-    await page.getByRole('heading', { name: 'Connections & setup', exact: true }).waitFor()
+    await page.getByRole('heading', { name: 'OpenApe account', exact: true }).waitFor()
     expect(await page.evaluate(() => window.pods.onboarding({ type: 'list' }))).toMatchObject({ connections: [], complete: false, runtime: { ready: true, error: null } })
     expect(await page.getByLabel('Connection', { exact: true }).locator('option').evaluateAll(options => options.map(option => (option as HTMLOptionElement).value))).toEqual(['chatgpt', 'openape'])
     await page.getByLabel('Connection', { exact: true }).selectOption('openape')
+    await page.getByRole('button', { name: 'OpenApe account', exact: true }).waitFor()
+    await page.getByText('Choose your account', { exact: true }).waitFor()
     await page.getByLabel('Expected account').fill('synthetic@example.invalid')
     await mkdir(resolve('.artifacts'), { recursive: true })
     await page.screenshot({ path: resolve(`.artifacts/onboarding-${packaged ? 'packaged' : 'desktop'}.png`) })
@@ -47,6 +54,61 @@ it.each([false, true])('onboarding: empty setup, explicit continuation and no im
       try { await window.pods.onboarding({ type: 'save', token: 'not-allowed' } as never); return 'allowed' }
       catch { return 'denied' }
     })).toBe('denied')
+  }
+  finally { await app.close(); await rm(root, { recursive: true, force: true }) }
+})
+
+it('onboarding: central account selection persists without moving existing pods (packaged)', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-account-ui-'))); fixtureDirectory(root)
+  const store = new PodDatabase(root); const pod = store.createPod({ name: 'Existing invoice pod' })
+  const setup = new SetupControl(store, new ResourceRegistry(store, () => {}))
+  const first = randomUUID(); const second = randomUUID()
+  const metadata = { issuer: 'https://identity.example.invalid', pods: { [pod.id]: { connectionId: randomUUID(), prepared: false } } }
+  for (const [id, account] of [[first, 'original@example.invalid'], [second, 'new-default@example.invalid']]) setup.execute({ type: 'save', connection: { id, provider: 'openape', account, state: 'ready', error: null }, metadata: id === first ? metadata : { issuer: metadata.issuer } })
+  store.close()
+  const launch = () => electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
+  let app = await launch()
+  try {
+    let page = await app.firstWindow()
+    await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
+    await page.getByRole('button', { name: 'OpenApe account', exact: true }).click()
+    await page.getByRole('heading', { name: 'OpenApe account', exact: true }).waitFor()
+    const connections = page.locator('.setup-connection')
+    await connections.filter({ hasText: 'original@example.invalid' }).getByRole('button', { name: 'Use for new pods', exact: true }).click()
+    await expect.poll(async () => (await page.evaluate(() => window.pods.onboarding({ type: 'list' }))).defaultOwner).toBe(first)
+    await connections.filter({ hasText: 'new-default@example.invalid' }).getByRole('button', { name: 'Use for new pods', exact: true }).click()
+    await expect.poll(async () => (await page.evaluate(() => window.pods.onboarding({ type: 'list' }))).defaultOwner).toBe(second)
+    await expect.poll(() => page.getByRole('button', { name: 'OpenApe account', exact: true }).textContent()).toContain('new-default@example.invalid')
+    await mkdir(resolve('.artifacts'), { recursive: true })
+    await page.screenshot({ path: resolve('.artifacts/central-account.png') })
+    await app.close(); app = await launch(); page = await app.firstWindow()
+    await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
+    expect((await page.evaluate(() => window.pods.onboarding({ type: 'list' }))).defaultOwner).toBe(second)
+    await expect.poll(() => page.getByRole('button', { name: 'OpenApe account', exact: true }).textContent()).toContain('new-default@example.invalid')
+    await page.locator('.pod-button').first().waitFor()
+    await page.getByRole('button', { name: 'OpenApe account', exact: true }).click()
+    await page.getByRole('heading', { name: 'OpenApe account', exact: true }).waitFor()
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(560, 840)); await page.emulateMedia({ colorScheme: 'dark' })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ path: resolve('.artifacts/central-account-narrow-dark.png') })
+    await page.getByRole('button', { name: 'App settings', exact: true }).click(); await page.getByLabel('Language', { exact: true }).selectOption('de')
+    await page.getByRole('button', { name: 'OpenApe-Konto', exact: true }).click()
+    await page.getByRole('heading', { name: 'OpenApe-Konto', exact: true }).waitFor()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ path: resolve('.artifacts/central-account-narrow-dark-de.png') })
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(1180, 850)); await page.emulateMedia({ colorScheme: 'light' })
+    await page.screenshot({ path: resolve('.artifacts/central-account-de.png') })
+    await page.getByRole('button', { name: 'Sidebar einklappen', exact: true }).click()
+    expect(await page.locator('.account-avatar').isVisible()).toBe(true)
+    await app.close()
+    const reopened = new PodDatabase(root)
+    try {
+      const control = new SetupControl(reopened, new ResourceRegistry(reopened, () => {}))
+      expect(control.connections.metadata(first)).toEqual(metadata)
+      expect(reopened.getPod(pod.id)).toEqual(pod)
+      expect(reopened.db.prepare('SELECT * FROM schedules').all()).toEqual([])
+    }
+    finally { reopened.close() }
   }
   finally { await app.close(); await rm(root, { recursive: true, force: true }) }
 })

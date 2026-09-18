@@ -6,6 +6,7 @@ import PodNavigation from './PodNavigation.vue'
 import type { Organization } from '../contracts/groups'
 import DataManagement from './DataManagement.vue'
 import Onboarding from './Onboarding.vue'
+import AccountStatus from './AccountStatus.vue'
 import MasterChat from './MasterChat.vue'
 import PodDescription from './PodDescription.vue'
 import { chatDraft } from './chat-buffer'
@@ -25,7 +26,7 @@ import type { ScheduleView } from '../contracts/scheduling'
 import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
-  components: { RunApproval, PodDescription, LanguageSwitcher, PodNavigation, DataManagement, Onboarding, MasterChat, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
+  components: { AccountStatus, RunApproval, PodDescription, LanguageSwitcher, PodNavigation, DataManagement, Onboarding, MasterChat, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
   data() {
     return { requestedSecret: '', approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: 'Overview', tabs: ['Overview', 'Chat', 'Script', 'Values', 'Permissions', 'Settings', 'History'], descriptionExpanded: false, sidebarWidth: 224, sidebarCollapsed: false, resizeStart: 0, resizeWidth: 224, resizing: false, pods: [] as StoredPod[], podId: '', creating: false, creationId: '', details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
@@ -114,6 +115,7 @@ export default defineComponent({
         {{ t('＋ New pod') }}
       </button>
       <div class="sidebar-bottom">
+        <AccountStatus :available="status?.worker.state === 'ready'" @open="selected = 'Setup'" />
         <button class="nav-button" :class="{ active: globalPage }" :aria-label="t('App settings')" @click="selected = 'App settings'">
           ⚙ <span>{{ t('App settings') }}</span>
         </button>

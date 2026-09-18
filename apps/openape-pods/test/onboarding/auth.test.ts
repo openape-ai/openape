@@ -25,3 +25,14 @@ it('stops oversized authentication responses before parsing and hides provider e
   await expect(readJSON(new Response(JSON.stringify({ content: 'a'.repeat(130 * 1024) })))).rejects.toThrow('limit')
   await expect(readJSON(new Response('[]'))).rejects.toThrow('Invalid')
 })
+
+it('accepts explicit account actions without accepting identity or token injection', () => {
+  const id = randomUUID()
+  for (const type of ['setDefaultOwner', 'reconnect']) {
+    expect(parseOnboardingCommand({ type, id })).toEqual({ type, id })
+    expect(() => parseOnboardingCommand({ type, id: 'not-an-id' })).toThrow()
+    expect(() => parseOnboardingCommand({ type, id, token: 'forbidden' })).toThrow()
+  }
+  expect(() => parseOnboardingCommand({ type: 'connect', provider: 'chatgpt', account: '', makeDefault: true })).toThrow('OpenApe')
+  expect(() => parseOnboardingCommand({ type: 'connect', provider: 'openape', account: 'owner@example.invalid', issuer: 'https://id.example.invalid', makeDefault: 'yes' })).toThrow('OpenApe')
+})
