@@ -565,6 +565,8 @@
   "Invalid master stream": "Ungültiger Master-Datenstrom",
   "Unsupported master runtime": "Nicht unterstützte Master-Laufzeit",
   "Invalid master frame": "Ungültige Master-Nachricht",
+  "Invalid provider request": "Ungültige Anfrage an den KI-Anbieter",
+  "Agent tools must be [] or [\"ape_shell\"]": "Agenten-Werkzeuge müssen [] oder [\"ape_shell\"] sein",
   "Invalid agent request": "Ungültige Agentenanfrage",
   "Invalid effect identity": "Ungültige Wirkungskennung",
   "Invalid effect input": "Ungültige Wirkungseingabe",

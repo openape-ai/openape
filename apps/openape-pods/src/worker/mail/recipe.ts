@@ -124,7 +124,7 @@ export const mailRecipe = `export async function run(context) {
     const next = await context.mail.next();
     if (next.type === 'done') return result('Mail inventory and supported knowledge are up to date');
     if (next.type === 'inventory') { context.log('Mail inventory: '+next.foldersComplete+'/'+next.folders+' folders'); continue; }
-    const answer = await context.agent.run({prompt:next.prompt});
+    const answer = await context.agent.run({prompt:next.prompt,tools:[]});
     const committed = await context.mail.commit({hash:next.hash,response:answer.response});
     for (const id of committed.gapIds) gaps.add(id);
     context.log('Committed sourced mail knowledge revision '+committed.revision);

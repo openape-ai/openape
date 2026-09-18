@@ -1,3 +1,4 @@
+import { parseAgentRequest } from '../../contracts/agent'
 import { DependencyStore } from '../dependencies/store'
 import { assignedDirectories } from '../../runtime/directories'
 import { podDirectories } from '../../runtime/environment'
@@ -190,8 +191,8 @@ export class RunDispatcher {
           }
           if (operation === 'agent.run') {
             if (!this.services?.provider) throw new Error('Codex is not connected; connect the pod provider before using this script')
-            if (!payload || typeof payload !== 'object' || Array.isArray(payload) || Object.keys(payload).some(key => key !== 'prompt') || typeof (payload as { prompt?: unknown }).prompt !== 'string') throw new Error('Invalid agent request')
-            const operation = executeAgent(runtime, directory, (payload as { prompt: string }).prompt, input.references.map(file => file.path), { provider: this.services.provider, tool: invokeTool }, operationSignal, (event) => { assertCurrent(); this.runs.append(id, 'agent', event) })
+            const request = parseAgentRequest(payload)
+            const operation = executeAgent(runtime, directory, request.prompt, input.references.map(file => file.path), { provider: this.services.provider, tool: invokeTool }, operationSignal, (event) => { assertCurrent(); this.runs.append(id, 'agent', event) }, request.tools)
             pendingAgents.add(operation)
             try { return await operation }
             finally { pendingAgents.delete(operation) }

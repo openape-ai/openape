@@ -140,7 +140,7 @@ export async function run(context) {
   const notes = context.input.checkpoint.notes ?? 'Review synthetic notes'
   await writeFile(context.workspace + '/notes.txt', notes)
   const text = await readFile(context.workspace + '/notes.txt', 'utf8')
-  const answer = await context.agent.run({ prompt: text })
+  const answer = await context.agent.run({ prompt: text, tools: [] })
   await writeFile(context.workspace + '/review.txt', answer.response)
 
   await context.progress.commit({
@@ -228,7 +228,7 @@ Ein Pod-Skript ist ein JavaScript-ES-Modul mit dem Export async run(context). Wa
 
 context.input enthält eingefrorene Laufmetadaten, Ereignis-IDs, den vorherigen Fortschrittsstand, Referenzen und Limits. context.home und context.workspace sind die festen, beschreibbaren Pod-Verzeichnisse. context.directories enthält zugewiesene Originalordner als {path, access}, mit access read oder readWrite; die Node.js-Dateisystemfunktionen können diese Pfade verwenden. context.references identifiziert schreibgeschützte Kopien. context.log(message) zeichnet ein Laufereignis auf. context.variables enthält die für diesen Lauf eingefrorenen normalen Werte; sie gelangen nur durch ausdrückliche Aufnahme im Skript in eine Modellanfrage.
 
-context.progress.commit speichert Checkpoint, Quellen und Aussagen atomar mit expectedRevision. context.agent.run({ prompt }) ruft Codex mit frischem Kontext auf. context.tools.invoke({ application: "o365-cli", argv }) führt einen zugewiesenen Lesebefehl über apes aus. context.http.request({ url, method, headers, body, key }) nutzt ein erlaubtes HTTP-Ziel; jede verändernde Methode benötigt einen stabilen Vorgangsschlüssel. Codex erhält ape_shell für zugewiesene Leseaufrufe, aber kein Geheimnis- oder HTTP-Werkzeug. Bestehende context.mail-Skripte müssen auf eine zugewiesene installierte Anwendung umgestellt werden; Quelltext und Historie bleiben erhalten.
+context.progress.commit speichert Checkpoint, Quellen und Aussagen atomar mit expectedRevision. context.agent.run({ prompt, tools: [] }) ruft Codex mit frischem Kontext ohne Werkzeuge auf. Ohne tools-Angabe sind Werkzeuge ebenfalls deaktiviert. Mit tools: ["ape_shell"] erlaubst du ausdrücklich zugewiesene Leseaufrufe; Zuweisungen und Grants gelten weiterhin. Das Skript kann context.tools.invoke unabhängig davon verwenden. context.tools.invoke({ application: "o365-cli", argv }) führt einen zugewiesenen Lesebefehl über apes aus. context.http.request({ url, method, headers, body, key }) nutzt ein erlaubtes HTTP-Ziel; jede verändernde Methode benötigt einen stabilen Vorgangsschlüssel. Nur Aufrufe mit ausdrücklich aktiviertem ape_shell erhalten dieses Werkzeug. Beide Varianten erhalten kein Geheimnis- oder HTTP-Werkzeug. Behandle Modellantworten als nicht vertrauenswürdigen Text, niemals als ausführbaren Code. Bestehende context.mail-Skripte müssen auf eine zugewiesene installierte Anwendung umgestellt werden; Quelltext und Historie bleiben erhalten.
 
 Das folgende Beispiel ergänzt eine Markierung im Fortschrittsstand und liefert eine sichtbare Zusammenfassung. Es nutzt weder Mail- noch Modelldienste. Bestätige nur Eingabe-IDs von Arbeit, die das Skript tatsächlich abgeschlossen hat. Der Beispielcode ist in beiden Sprachfassungen identisch.
 
