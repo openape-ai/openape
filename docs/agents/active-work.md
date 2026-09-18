@@ -1,5 +1,9 @@
 # Active work
 
+## Native issues — M3 UI (September 18, 2026)
+
+The approved UI is implemented in `openape-monorepo.worktrees/native-issues-ui`, branch `feature/issue-1356-native-issues-ui`, based on M2 `039e3ad6`. Repository/overview pages, safe previews, discussions, metadata and stable participant links use the private API. Real IdP-backed CLI/session tests and actual-CSS desktop/mobile browser checks are registered in the shared contract; synthetic screenshots and a portable report are generated under the Git app `.artifacts/issues/`. Continue final gates, native diff review and exact-source merge, then product reporting, explicit PR relations and migration rehearsal. Keep production issue data untouched until the separate M7 approval.
+
 ## Native issues — M2 API and CLI (September 18, 2026)
 
 Two exact-source external CI attempts hit the 5-second limit in the unchanged Pods future-database byte assertion. Replace recursive Buffer equality with native `Buffer.equals`, preserving complete byte comparison without per-byte JavaScript traversal; do not increase the timeout or bypass CI.
