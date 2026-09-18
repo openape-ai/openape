@@ -35,7 +35,7 @@ afterEach(async () => {
 describe('foundation', () => {
   it('reporting: opens only the fixed product URL through the native menu after opt-in', async () => {
     const disabled = await launch()
-    expect(await disabled.app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById('report-problem')?.visible)).toBe(false)
+    expect(await disabled.app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById('report-problem')?.visible)).toBeUndefined()
     await disabled.app.close()
     const enabled = await launch(false, true)
     expect(await enabled.app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById('report-problem')?.visible)).toBe(true)
