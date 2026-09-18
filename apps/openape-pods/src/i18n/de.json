@@ -1531,5 +1531,6 @@
   "No network hosts assigned.": "Noch keine Netzwerk-Hosts zugewiesen.",
   "HTTPS hostname": "HTTPS-Hostname",
   "Add host": "Host hinzufügen",
-  "api.example.com": "api.example.com"
+  "api.example.com": "api.example.com",
+  "This pod is assigned to multiple OpenApe accounts; correct its owner before continuing": "Dieser Pod ist mehreren OpenApe-Konten zugeordnet. Korrigiere zuerst seinen Besitzer."
 }

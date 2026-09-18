@@ -113,9 +113,13 @@ export class ConnectionManager {
   }
 
   private async preparePodConnection(podId: string) {
-    const owner = (await this.state()).connections.find(item => item.provider === 'openape' && item.state === 'ready')
-    if (!owner) throw new Error('Connect OpenApe before opening a pod shell')
-    const metadata = await this.metadata(owner.id)
+    const owners = (await this.state()).connections.filter(item => item.provider === 'openape' && item.state === 'ready')
+    const candidates = await Promise.all(owners.map(async owner => ({ owner, metadata: await this.metadata(owner.id) })))
+    const bound = candidates.filter(item => Object.hasOwn((item.metadata.pods ?? {}) as object, podId))
+    if (bound.length > 1) throw new Error('This pod is assigned to multiple OpenApe accounts; correct its owner before continuing')
+    const selected = bound[0] ?? candidates.at(-1)
+    if (!selected) throw new Error('Connect OpenApe before opening a pod shell')
+    const { owner, metadata } = selected
     if (typeof metadata.issuer !== 'string') throw new Error('OpenApe identity provider is required')
     const identities = new PodIdentityManager(this.credentials)
     const pods = (metadata.pods ?? {}) as Record<string, { connectionId: string, prepared: boolean, identity?: PodIdentityReference }>
