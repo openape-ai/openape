@@ -14,6 +14,9 @@ import PodSettings from './PodSettings.vue'
 import PodValues from './PodValues.vue'
 import PodResources from './PodResources.vue'
 import PodRuns from './PodRuns.vue'
+import { runFailure, runHeadline } from './run-activity'
+import RunApproval from './RunApproval.vue'
+import type { RunApproval as Approval } from '../contracts/activity'
 import PodKnowledge from './PodKnowledge.vue'
 import type { StoredPod, WorkspaceState } from '../contracts/control'
 import type { PodDetails } from '../contracts/details'
@@ -22,9 +25,9 @@ import type { ScheduleView } from '../contracts/scheduling'
 import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
-  components: { PodDescription, LanguageSwitcher, PodNavigation, DataManagement, Onboarding, MasterChat, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
+  components: { RunApproval, PodDescription, LanguageSwitcher, PodNavigation, DataManagement, Onboarding, MasterChat, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
   data() {
-    return { organization: { revision: 1, groups: [] } as Organization, selected: 'Overview', tabs: ['Overview', 'Chat', 'Script', 'Values', 'Permissions', 'Settings', 'History'], descriptionExpanded: false, sidebarWidth: 224, sidebarCollapsed: false, resizeStart: 0, resizeWidth: 224, resizing: false, pods: [] as StoredPod[], podId: '', creating: false, creationId: '', details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
+    return { approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: 'Overview', tabs: ['Overview', 'Chat', 'Script', 'Values', 'Permissions', 'Settings', 'History'], descriptionExpanded: false, sidebarWidth: 224, sidebarCollapsed: false, resizeStart: 0, resizeWidth: 224, resizing: false, pods: [] as StoredPod[], podId: '', creating: false, creationId: '', details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
   computed: {
     activeTab(): string { return this.selected === 'Knowledge' ? 'Overview' : this.selected },
@@ -33,6 +36,7 @@ export default defineComponent({
     workerLabel(): string { if (this.connectionError) return t('Unavailable'); return label({ starting: 'Starting', ready: 'Ready', error: 'Needs attention', stopped: 'Stopped' }[this.status?.worker.state ?? 'starting']) },
     attention(): boolean { return !!this.connectionError || this.status?.worker.state === 'error' },
     currentRun(): RunRecord | undefined { return this.runs.find(run => run.state === 'running') },
+    needsRecovery(): boolean { const run = this.runs[0]; return !!run && ['interrupted', 'failed', 'cancelled', 'blocked'].includes(run.state) && run.recovery?.state !== 'retryQueued' },
     nextRun(): string { if (!this.pod || this.pod.lifecycle !== 'active' || !this.schedule?.enabled) return t('Manual only'); return this.schedule.nextAt ? dateTime(this.schedule.nextAt) : t('No scheduled time') },
   },
   async mounted() {
@@ -46,7 +50,7 @@ export default defineComponent({
   },
   beforeUnmount() { this.closed = true; this.unsubscribe?.(); if (this.timer) clearTimeout(this.timer) },
   methods: {
-    t, diagnostic, label, dateTime, chatDraft,
+    t, runFailure, runHeadline, diagnostic, label, dateTime, chatDraft,
     openValues() { this.selected = 'Values' },
     beginResize(event: PointerEvent) { this.resizing = true; this.resizeStart = event.clientX; this.resizeWidth = this.sidebarWidth; (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId) },
     resize(event: PointerEvent) { if (this.resizing) this.sidebarWidth = Math.max(176, Math.min(360, window.innerWidth - 340, this.resizeWidth + event.clientX - this.resizeStart)) },
@@ -67,16 +71,16 @@ export default defineComponent({
         if (!id) { this.details = null; this.runs = []; this.schedule = null; this.resourceCount = 0; return }
         const [details, runs, schedule, resources] = await Promise.all([window.pods.details({ type: 'list', podId: id }), window.pods.runs({ type: 'list', podId: id }), window.pods.scheduling({ type: 'list', podId: id }), window.pods.resources({ type: 'list', podId: id })])
         if (this.podId !== id) return
-        this.details = details; this.runs = runs.runs; this.schedule = schedule; this.resourceCount = resources.resources.filter(resource => resource.state === 'ready').length; this.dataError = ''
+        this.details = details; this.runs = runs.runs; this.approvals = runs.approvals ?? []; this.schedule = schedule; this.resourceCount = resources.resources.filter(resource => resource.state === 'ready').length; this.dataError = ''
       }
       catch (error) { this.dataError = error instanceof Error ? error.message : 'Could not load workspace' }
       finally { this.busy = false }
     },
-    async selectPod(id: string) { this.podId = id; this.creating = false; this.details = null; this.runs = []; this.schedule = null; this.selected = 'Overview'; await this.refresh() },
+    async selectPod(id: string) { this.podId = id; this.approvals = []; this.creating = false; this.details = null; this.runs = []; this.schedule = null; this.selected = 'Overview'; await this.refresh() },
     async changed(id: string) { this.podId = id; this.creating = !id; await this.refresh() },
     async selectTab(tab: string) { await this.refresh(); this.selected = tab },
     master(create = false) { this.creating = create; if (create) { this.podId = ''; this.creationId = crypto.randomUUID(); localStorage.setItem('pods-creation-id', this.creationId) }; this.selected = 'Chat' },
-    async created(id: string) { this.podId = id; this.creating = false; this.creationId = ''; localStorage.removeItem('pods-creation-id'); this.selected = 'Chat'; await this.refresh() },
+    async created(id: string) { this.podId = id; this.approvals = []; this.creating = false; this.creationId = ''; localStorage.removeItem('pods-creation-id'); this.selected = 'Chat'; await this.refresh() },
     async runOnce() {
       if (!this.pod) return; try { await window.pods.runs({ type: 'start', podId: this.pod.id, expectedScript: this.pod.activeScript ?? undefined }); this.selected = 'History'; await this.refresh() }
       catch (error) { this.dataError = error instanceof Error ? error.message : 'Could not start run' }
@@ -134,6 +138,7 @@ export default defineComponent({
             {{ tab === 'Values' ? t('Variables and secrets') : label(tab) }}
           </button>
         </nav>
+        <RunApproval v-if="!globalPage && selected !== 'History' && podId" :pod-id="podId" :approvals="approvals" />
         <section v-if="selected === 'App settings'" class="card">
           <h2>{{ t('App settings') }}</h2><LanguageSwitcher /><div class="overview-actions">
             <button class="secondary" @click="selected = 'Setup'">
@@ -165,7 +170,7 @@ export default defineComponent({
           <PodResources :key="podId" :selected-pod-id="podId" @discuss="master()" />
         </section>
         <section v-else-if="selected === 'History'" id="panel-History" role="tabpanel" aria-labelledby="tab-History">
-          <PodRuns :key="podId" :selected-pod-id="podId" />
+          <PodRuns :key="podId" :selected-pod-id="podId" @navigate="selected = $event === 'settings' ? 'App settings' : 'Permissions'" />
         </section>
         <section v-else-if="selected === 'Knowledge'" id="panel-Overview" role="tabpanel" aria-labelledby="tab-Overview">
           <button class="text-button" @click="selected = 'Overview'">
@@ -178,10 +183,10 @@ export default defineComponent({
             <article class="card">
               <div class="card-heading">
                 <h2>{{ t('Last run') }}</h2><span class="badge">{{ label(runs[0]?.state ?? 'Not run yet') }}</span>
-              </div><p>{{ runs[0]?.summary || t('Ready for its first manual run.') }}</p><p v-if="runs[0]" class="muted">
+              </div><p>{{ runs[0] ? diagnostic(runHeadline(runs[0])) : t('Ready for its first manual run.') }}</p><p v-if="runs[0]" class="muted">
                 {{ dateTime(runs[0].startedAt) }}
               </p><p v-if="runs[0]?.error" class="error-message">
-                {{ diagnostic(runs[0].error) }}
+                {{ diagnostic(runFailure(runs[0].error)?.help) }}
               </p><div class="overview-actions">
                 <button class="text-button" @click="selected = 'History'">
                   {{ t('View run trace') }}
@@ -191,12 +196,15 @@ export default defineComponent({
               </div>
             </article>
             <div class="overview-actions">
-              <button class="primary" :disabled="!pod.activeScript || !!currentRun || pod.lifecycle === 'archived' || attention" @click="runOnce">
+              <button v-if="needsRecovery && !currentRun" class="primary" @click="selected = 'History'">
+                {{ t('Prepare retry') }}
+              </button>
+              <button v-else class="primary" :disabled="!pod.activeScript || !!currentRun || pod.lifecycle === 'archived' || attention" @click="runOnce">
                 {{ t('Run now') }}
               </button><span v-if="!pod.activeScript" class="muted">{{ t('Prepare the script before its first run.') }}</span><span v-else-if="currentRun" class="muted">{{ t('A run is active') }}</span>
             </div>
             <p v-if="schedule?.blocked" class="error-message">
-              {{ t('{p0} inputs awaiting recovery', { p0: schedule.blocked }) }}
+              {{ t('Unfinished work is waiting. Open run history to prepare a retry.') }}
             </p>
           </template><article v-else class="card empty-panel">
             <h2>{{ t('No pods yet') }}</h2><button class="primary" @click="master(true)">

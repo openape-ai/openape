@@ -11,7 +11,7 @@ import type { AgentRuntime } from '../../src/worker/agent/executor'
 import type { ProgramAssignment } from '../../src/contracts/programs'
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
-it('adopts a CLI-approved grant only for the current pod agent, host and exact command permission', async () => {
+it('prepares exact command authority for the bound Pod and defers grant acquisition to execution', async () => {
   const root = await mkdtemp(join(tmpdir(), 'pods-cli-grants-'))
   try {
     const adapterPath = join(root, 'fixture.toml')
@@ -24,16 +24,13 @@ it('adopts a CLI-approved grant only for the current pod agent, host and exact c
     const manager = new ConnectionManager(root, {} as AgentRuntime, cache, async () => {}, async () => {})
     vi.spyOn(manager, 'podConnection').mockResolvedValue(connection)
     const permission = (await resolveCommand(loadAdapter('fixture', adapterPath), ['fixture', 'read'])).permission
-    const request = { requester: identity.subject, audience: 'shapes', target_host: connection.targetHost, permissions: [permission] }
-    let data: unknown[] = [null, { id: grantId, status: 'approved', request: { ...request, permissions: 'invalid' } }, { id: grantId, status: 'approved', request: { ...request, target_host: 'another-pod' } }]
-    const fetch = vi.fn(async () => Response.json({ data })); vi.stubGlobal('fetch', fetch)
-    await expect(manager.existingProgramGrant(podId, assignment, ['read'])).rejects.toThrow('Approve this command')
-    data = [{ id: grantId, status: 'approved', request: { ...request, requester: 'another@example.test' } }]
-    await expect(manager.existingProgramGrant(podId, assignment, ['read'])).rejects.toThrow('Approve this command')
-    data.push({ id: grantId, status: 'approved', request })
-    expect(await manager.existingProgramGrant(podId, assignment, ['read'])).toMatchObject({ permission, authority: { identity, grantId } })
-    expect(fetch.mock.calls).toHaveLength(3)
-    expect(JSON.stringify(fetch.mock.calls)).not.toContain('SYNTHETIC_OWNER')
+    const fetch = vi.fn(); vi.stubGlobal('fetch', fetch)
+    expect(await manager.existingProgramGrant(podId, assignment, ['read'])).toMatchObject({ permission, authority: { identity, grantId: '' } })
+    expect(fetch).not.toHaveBeenCalled()
+    const approved = { permission, display: 'Read synthetic state', authority: { identity, ownerConnection: connection.ownerConnection, grantId } }
+    expect(await manager.existingProgramGrant(podId, { ...assignment, grants: [approved] }, ['read'])).toEqual(approved)
+    await writeFile(adapterPath, 'changed')
+    await expect(manager.existingProgramGrant(podId, assignment, ['read'])).rejects.toThrow('integrity')
   }
   finally { await rm(root, { recursive: true, force: true }) }
 })

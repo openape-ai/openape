@@ -1,3 +1,7 @@
+import { parseAgentRequest } from '../../contracts/agent'
+import { DependencyStore } from '../dependencies/store'
+import { assignedDirectories } from '../../runtime/directories'
+import { podDirectories } from '../../runtime/environment'
 import { parseHttpRequest } from '../../contracts/http'
 import type { HttpRequest, HttpReply } from '../../contracts/http'
 import { assignedHttp } from '../../main/programs/http-service'
@@ -37,7 +41,7 @@ export interface RunServiceScope {
   registerDomain: (path: string, ownerPid: number) => void
 }
 export interface RunServices {
-  shell?: (scope: RunServiceScope, signal: AbortSignal) => Promise<{ home: string, environment: Record<string, string>, shell: { cli: string, environment: Record<string, string> } }>
+  shell?: (scope: RunServiceScope, signal: AbortSignal) => Promise<{ home: string, environment: Record<string, string>, shell?: { cli: string, environment: Record<string, string> } }>
   closeShell?: (scope: RunServiceScope) => Promise<void>
   http?: (request: HttpRequest, signal: AbortSignal, scope: RunServiceScope) => Promise<HttpReply>
   credential?: (alias: string, signal: AbortSignal, scope: RunServiceScope) => Promise<string>
@@ -57,7 +61,12 @@ export class RunDispatcher {
     })
   }
 
-  view(podId: string, id?: string, after = 0): RunView { return { effects: this.store.db.prepare('SELECT effect_key AS key,run_id AS runId FROM effect_ledger WHERE pod_id=? AND operation=\'http.request\' AND state=\'unknown\' LIMIT 100').all(podId) as { key: string, runId: string }[], runs: this.runs.list(podId), events: id ? this.runs.events(podId, id, after) : [] } }
+  view(podId: string, id?: string, after = 0): RunView {
+    const runs = this.runs.list(podId)
+    const selectedId = id ?? runs[0]?.id
+    const effects = this.store.db.prepare('SELECT effect_key AS key,run_id AS runId FROM effect_ledger WHERE pod_id=? AND operation=\'http.request\' AND state=\'unknown\' LIMIT 100').all(podId) as { key: string, runId: string }[]
+    return { ...(selectedId ? { timing: this.runs.timing(podId, selectedId) } : {}), approvals: this.runs.approvals(podId), effects, runs, events: selectedId ? (after ? this.runs.events(podId, selectedId, after) : this.runs.recentEvents(podId, selectedId)) : [] }
+  }
 
   async install(podId: string, variant: 'deterministic' | 'agent'): Promise<void> {
     const manifest = JSON.parse(await readFile(this.runtime.manifest, 'utf8')) as { dependencyLockHash: string }
@@ -113,9 +122,14 @@ export class RunDispatcher {
       const snapshots = await this.resources.capture(pod.id, this.runtime.helper)
       assertCurrent()
       const checkpoint = this.store.checkpoint(pod.id)
-      const input: RunInput = { variables: new PodVariables(this.store).values(pod.id), version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.bindingRevision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: join(this.store.root, 'pods', pod.id, 'workspace'), references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: 300000, frameBytes: 256 * 1024 } }
+      const folders = await podDirectories(this.store.root, pod.id)
+      const directories = await assignedDirectories(this.store.root, pod.id, this.resources.list(pod.id))
+      assertCurrent()
+      const input: RunInput = { home: folders.home, directories: directories.map(({ path, access }) => ({ path, access })), variables: new PodVariables(this.store).values(pod.id), version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.bindingRevision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: folders.workspace, references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: 300000, frameBytes: 256 * 1024 } }
       this.runs.append(id, 'snapshot', { id: snapshots.id, files: input.references })
-      const runtime = { ...this.runtime, registerDomain: (path: string, ownerPid: number) => this.runs.registerDomain(id, path, ownerPid) }
+      const dependencies = new DependencyStore(this.store); const dependencyHash = dependencies.scriptSet(pod.id, run.scriptHash)
+      const dependencyRoot = dependencyHash ? await dependencies.verify(pod.id, dependencyHash) : undefined
+      const runtime = { ...this.runtime, dependencyRoot, registerDomain: (path: string, ownerPid: number) => this.runs.registerDomain(id, path, ownerPid) }
       const scope: RunServiceScope = { podId: pod.id, runId: id, epoch, assignmentRevision: pod.bindingRevision, capabilities: manifest.capabilities, root: directory, assertCurrent, registerDomain: runtime.registerDomain }
       const invokeTool = async (body: unknown, toolSignal: AbortSignal) => {
         assertCurrent()
@@ -131,7 +145,9 @@ export class RunDispatcher {
         shellScope = scope
       }
       let mail: MailRecipeSession | undefined
+      this.runs.append(id, 'environment', { script: artifact, workspace: input.workspace, values: Object.fromEntries(Object.entries(runtime.environment).filter(([key]) => ['HOME', 'TMPDIR', 'PATH', 'SHELL', 'PODS_POD_ID', 'LANG', 'TERM'].includes(key))) })
       const result = await executeScript(runtime, directory, artifact, input, signal, {
+        awaitingApproval: () => this.runs.approvals(pod.id).some(item => item.runId === id),
         event: (type, data) => { this.runs.assertLease(id); this.runs.append(id, type, data); if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
         request: async (operation, payload, operationSignal) => {
           assertCurrent()
@@ -182,8 +198,8 @@ export class RunDispatcher {
           }
           if (operation === 'agent.run') {
             if (!this.services?.provider) throw new Error('Codex is not connected; connect the pod provider before using this script')
-            if (!payload || typeof payload !== 'object' || Array.isArray(payload) || Object.keys(payload).some(key => key !== 'prompt') || typeof (payload as { prompt?: unknown }).prompt !== 'string') throw new Error('Invalid agent request')
-            const operation = executeAgent(runtime, directory, (payload as { prompt: string }).prompt, input.references.map(file => file.path), { provider: this.services.provider, tool: invokeTool }, operationSignal, (event) => { assertCurrent(); this.runs.append(id, 'agent', event) })
+            const request = parseAgentRequest(payload)
+            const operation = executeAgent(runtime, directory, request.prompt, input.references.map(file => file.path), { provider: this.services.provider, tool: invokeTool }, operationSignal, (event) => { assertCurrent(); this.runs.append(id, 'agent', event) }, request.tools)
             pendingAgents.add(operation)
             try { return await operation }
             finally { pendingAgents.delete(operation) }

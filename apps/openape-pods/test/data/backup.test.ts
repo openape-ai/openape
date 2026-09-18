@@ -8,6 +8,7 @@ import { PodDatabase, digest, schemaVersion } from '../../src/worker/storage/dat
 import { createBackup, restoreBackup } from '../../src/worker/data/backup'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { PodGroups } from '../../src/worker/workspace/groups'
+import { storageBytes } from '../../src/worker/data/files'
 import { DataRetention } from '../../src/worker/data/retention'
 
 const stores: PodDatabase[] = []; const roots: string[] = []
@@ -113,4 +114,22 @@ it('restores immutable reference snapshots at their new path with read-only perm
   const snapshot = JSON.parse(restored.db.prepare('SELECT manifest FROM snapshot_sets').get()!.manifest as string)
   expect(snapshot.files[0].content).toBe(join(target, 'snapshots', pod.id, id, file))
   expect(await readFile(snapshot.files[0].content, 'utf8')).toBe('REFERENCE_BYTES'); expect((await lstat(snapshot.files[0].content)).mode & 0o777).toBe(0o400)
+})
+
+it('counts runtime links without following them and clears the old inventory warning', async () => {
+  const { store, root, base, runId, exports, workspace } = await fixture()
+  const temporary = join(root, 'runs', runId, 'agent-fixture/confined/home/codex/tmp/arg0/fixture')
+  await mkdir(temporary, { recursive: true })
+  const outside = join(base, 'outside'); await mkdir(outside); await writeFile(join(outside, 'private'), 'x'.repeat(100000))
+  await symlink(join(outside, 'private'), join(temporary, 'apply_patch'))
+  await symlink(outside, join(temporary, 'directory'))
+  await symlink('/missing-fixture-file', join(temporary, 'dangling'))
+  const expected = (await Promise.all(['apply_patch', 'directory', 'dangling'].map(async name => (await lstat(join(temporary, name))).size))).reduce((sum, size) => sum + size, 0)
+  expect(await storageBytes(join(root, 'runs'))).toBe(expected)
+  store.db.prepare('UPDATE data_settings SET error=?').run('Data inventory contains a link or unsupported file: runs/fixture')
+  expect((await new DataRetention(store, 'unused-helper').view()).error).toBeNull()
+  expect(store.db.prepare('SELECT error FROM data_settings').get()?.error).toBeNull()
+  await expect(createBackup(store, exports)).resolves.toBeTruthy()
+  await symlink(outside, join(workspace, 'untrusted'))
+  await expect(createBackup(store, exports)).rejects.toThrow('link or unsupported file')
 })

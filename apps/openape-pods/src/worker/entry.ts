@@ -1,4 +1,7 @@
+import type { RunContextRequest, ServiceCheck  } from '../contracts/services'
+import { DependencyStore } from './dependencies/store'
 import { programRequest } from '../main/programs/invoke'
+import { podDirectories } from '../runtime/environment'
 import { ProgramControl } from './resources/programs'
 import type { ProgramInternal } from './resources/programs'
 import { parseHttpReply } from '../contracts/http'
@@ -15,7 +18,6 @@ import { parseMasterCommand } from '../contracts/master'
 import { MasterControl } from './master/control'
 import { MasterService } from './master/service'
 import type { AgentRuntime } from './agent/executor'
-import type { ServiceCheck } from '../contracts/services'
 import { authorizeRunService, authorizeCredentialService, assertMailHistory } from './mail/authorization'
 import { MailBridge } from './mail/bridge'
 import { assignedMail } from '../main/mail/assigned'
@@ -81,7 +83,7 @@ const scheduler = new Scheduler(store, dispatcher)
 const fixtureProvider = process.env.PODS_FIXTURE_MODEL_PORT ? async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${process.env.PODS_FIXTURE_MODEL_PORT}/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }) : undefined
 runServices.provider = fixtureProvider
 const masterControl = new MasterControl(store, registry, dispatcher, scheduler, runtime)
-const scripts = new ScriptWorkspace(store, registry, masterControl)
+const scripts = new ScriptWorkspace(store, registry, masterControl, runtime)
 const scriptController = new AbortController()
 const master = new MasterService(store, runtime, masterControl, fixtureProvider)
 const recovery = new Recovery(store, registry, scheduler, join(dist, 'native/pods-helper'))
@@ -89,6 +91,7 @@ const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'nat
 let scanAt = 0
 let storageAt = 0
 let maintenance = false
+let preparing: Promise<unknown> | null = null
 let suspended = false
 let startupReady = false
 let ticking: Promise<void> | null = null
@@ -113,7 +116,7 @@ port.on('message', async (event) => {
   if (event.data && typeof event.data === 'object' && 'serviceReply' in event.data) { mailBridge.accept(event.data.serviceReply); return }
   if (event.data === 'suspend') { suspended = true; return }
   if (event.data === 'resume') { suspended = false; scanAt = 0; return }
-  if (event.data === 'stop') { scriptController.abort(); suspended = true; clearInterval(timer); await ticking; await master.stop(); await dispatcher.stop(); store.close(); process.exit(0) }
+  if (event.data === 'stop') { scriptController.abort(); suspended = true; clearInterval(timer); await ticking; await Promise.allSettled(preparing ? [preparing] : []); await master.stop(); await dispatcher.stop(); store.close(); process.exit(0) }
   const request = event.data as { id?: unknown, command?: unknown }
   if (!request || typeof request.id !== 'string') throw new Error('Invalid worker request')
   try {
@@ -148,6 +151,7 @@ port.on('message', async (event) => {
     }
     if (request.command && typeof request.command === 'object' && 'inspectCredentials' in request.command) {
       await inspectDomainRecords(store.db.prepare('SELECT * FROM execution_domains').all(), join(store.root, 'runs'), runtime.helper)
+      await new DependencyStore(store).recover(runtime.helper)
       new ProgramControl(store, registry).execute({ type: 'recover' })
       await data.retention.cleanDeletedFiles(); await data.retention.view()
       port.postMessage({ id: request.id, state: true }); return
@@ -159,11 +163,36 @@ port.on('message', async (event) => {
       const check = request.command.credentialCheck as ServiceCheck & { alias: string }
       port.postMessage({ id: request.id, state: authorizeCredentialService(store, registry, dispatcher.runs, check, check.alias) }); return
     }
+    if (request.command && typeof request.command === 'object' && 'runContext' in request.command) {
+      const check = request.command.runContext as RunContextRequest
+      authorizeRunService(store, registry, dispatcher.runs, check)
+      const events = dispatcher.runs.events(check.scope.podId, check.scope.runId)
+      const reason = (events.find(item => item.type === 'started')?.data as { reason?: string } | undefined)?.reason ?? 'manual'
+      if (check.grant) {
+        const { permission, issuer, subject } = check.grant
+        const previous = store.db.prepare('SELECT data FROM run_events JOIN runs ON runs.id=run_events.run_id WHERE runs.pod_id=? AND run_events.type=\'approval\' AND json_extract(data,\'$.permission\')=? AND json_extract(data,\'$.issuer\')=? AND json_extract(data,\'$.subject\')=? ORDER BY run_events.at DESC,sequence DESC LIMIT 1').get(check.scope.podId, permission, issuer, subject)
+        port.postMessage({ id: request.id, state: previous ? JSON.parse(previous.data as string) : null }); return
+      }
+      port.postMessage({ id: request.id, state: { name: store.getPod(check.scope.podId).name, reason } }); return
+    }
     if (request.command && typeof request.command === 'object' && 'serviceCheck' in request.command) {
-      port.postMessage({ id: request.id, state: authorizeRunService(store, registry, dispatcher.runs, request.command.serviceCheck as ServiceCheck) }); return
+      const check = request.command.serviceCheck as ServiceCheck
+      const state = authorizeRunService(store, registry, dispatcher.runs, check)
+      if (check.authorityLost) dispatcher.cancelPod(check.scope.podId, 'Pod execution permission is no longer active; review the Pod permissions before retrying')
+      port.postMessage({ id: request.id, state }); return
     }
     if (request.command && typeof request.command === 'object' && 'scripts' in request.command) {
-      port.postMessage({ id: request.id, state: await scripts.execute(parseScriptCommand(request.command.scripts), scriptController.signal) }); return
+      const command = parseScriptCommand(request.command.scripts)
+      if (command.type !== 'prepareDependencies') { port.postMessage({ id: request.id, state: await scripts.execute(command, scriptController.signal) }); return }
+      maintenance = true
+      try {
+        await ticking
+        await data.retention.view()
+        preparing = scripts.execute(command, scriptController.signal)
+        port.postMessage({ id: request.id, state: await preparing })
+      }
+      finally { preparing = null; maintenance = false }
+      return
     }
     if (request.command && typeof request.command === 'object' && 'details' in request.command) {
       port.postMessage({ id: request.id, state: details.execute(parseDetailsCommand(request.command.details)) }); return
@@ -198,11 +227,15 @@ port.on('message', async (event) => {
       if (resource.type === 'saveVariable') variables.save(resource.podId, resource.name, resource.value, resource.revision)
       if (resource.type === 'removeVariable') variables.remove(resource.podId, resource.name, resource.revision)
       if (resource.type === 'assignCredential') registry.assignCredential(resource.podId, resource.alias, resource.credentialId, resource.epoch)
+      if (resource.type === 'assignDirectory') await registry.assignDirectory(resource.podId, resource.path, resource.access, resource.epoch)
+      if (resource.type === 'pickDirectory' || resource.type === 'changeDirectory') throw new Error('Directory selection requires owner approval')
       if (resource.type === 'assignReference') registry.assignReference(resource.podId, resource.name, resource.path)
       if (resource.type === 'revoke') registry.revoke(resource.podId, resource.id, resource.revision)
       if (resource.type === 'pickReference') throw new Error('File selection requires the owner window')
       const snapshot = resource.type === 'snapshot' ? await registry.capture(resource.podId, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/')) : undefined
-      port.postMessage({ id: request.id, state: { variables: variables.list(resource.podId), resources: registry.list(resource.podId), epoch: registry.epoch(resource.podId), ...(snapshot ? { snapshot } : {}) } })
+      const resources = registry.list(resource.podId)
+      const directories = await podDirectories(store.root, resource.podId)
+      port.postMessage({ id: request.id, state: { directories, variables: variables.list(resource.podId), resources, epoch: registry.epoch(resource.podId), ...(snapshot ? { snapshot } : {}) } })
       return
     }
     const command = parseCommand(request.command)

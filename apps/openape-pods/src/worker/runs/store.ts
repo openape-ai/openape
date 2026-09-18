@@ -1,3 +1,4 @@
+import { parseRunApproval } from '../../contracts/activity'
 import { basename, join, sep, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { RunEvent, RunRecord, RunState } from '../../contracts/runs'
@@ -40,7 +41,7 @@ export class RunStore {
         if (claimed.changes !== 1) throw new Error('Event is no longer available for this run')
       }
       this.store.db.prepare('INSERT INTO run_leases VALUES(?,?,?,?,?)').run(podId, id, this.bootId, now, null)
-      this.append(id, 'started', { scriptHash, assignmentRevision: pod.bindingRevision, resourceEpoch: epoch })
+      this.append(id, 'started', { scriptHash, assignmentRevision: pod.bindingRevision, resourceEpoch: epoch, reason: trigger.reason })
       return { run: this.get(id), existing: false }
     })
   }
@@ -67,6 +68,34 @@ export class RunStore {
   events(podId: string, id: string, after = 0): RunEvent[] {
     if (this.get(id).podId !== podId) throw new Error('Run belongs to a different pod')
     return this.store.db.prepare('SELECT * FROM run_events WHERE run_id=? AND sequence>? ORDER BY sequence LIMIT 500').all(id, after).map(row => ({ sequence: row.sequence as number, type: row.type as string, data: JSON.parse(row.data as string), at: row.at as number }))
+  }
+
+  timing(podId: string, id: string): { activeMs: number, waitingMs: number } | undefined {
+    const run = this.get(id)
+    if (run.podId !== podId) throw new Error('Run belongs to a different pod')
+    if (!this.store.db.prepare('SELECT 1 FROM run_events WHERE run_id=? AND type=\'started\' AND json_extract(data,\'$.reason\') IS NOT NULL').get(id)) return undefined
+    const lastAt = this.store.db.prepare('SELECT max(at) AS at FROM run_events WHERE run_id=?').get(id)?.at as number | null
+    const end = run.finishedAt ?? (run.state === 'running' ? Date.now() : lastAt ?? run.startedAt)
+    const pending = new Set<string>(); let since: number | undefined; let waitingMs = 0
+    for (const row of this.store.db.prepare('SELECT at,data FROM run_events WHERE run_id=? AND type=\'approval\' ORDER BY sequence').iterate(id)) {
+      const approval = parseRunApproval(JSON.parse(row.data as string)); const at = row.at as number
+      if (approval.state === 'pending') { if (!pending.size) since = at; pending.add(approval.grantId) }
+      else { pending.delete(approval.grantId); if (!pending.size && since !== undefined) { waitingMs += Math.max(0, at - since); since = undefined } }
+    }
+    if (since !== undefined) waitingMs += Math.max(0, end - since)
+    const total = Math.max(0, end - run.startedAt)
+    return { activeMs: Math.max(0, total - waitingMs), waitingMs: Math.min(total, waitingMs) }
+  }
+
+  recentEvents(podId: string, id: string): RunEvent[] {
+    if (this.get(id).podId !== podId) throw new Error('Run belongs to a different pod')
+    const last = this.store.db.prepare('SELECT max(sequence) AS sequence FROM run_events WHERE run_id=?').get(id)?.sequence as number | null
+    return this.events(podId, id, Math.max(0, (last ?? 0) - 500))
+  }
+
+  approvals(podId: string) {
+    const rows = this.store.db.prepare('SELECT e.run_id,e.data FROM run_events e JOIN runs r ON r.id=e.run_id WHERE r.pod_id=? AND r.state=\'running\' AND e.type=\'approval\' AND e.sequence=(SELECT max(newer.sequence) FROM run_events newer WHERE newer.run_id=e.run_id AND newer.type=\'approval\' AND json_extract(newer.data,\'$.grantId\')=json_extract(e.data,\'$.grantId\')) AND json_extract(e.data,\'$.state\')=\'pending\' ORDER BY e.at LIMIT 32').all(podId)
+    return rows.map(row => ({ runId: row.run_id as string, ...parseRunApproval(JSON.parse(row.data as string)) })).filter(item => item.state === 'pending')
   }
 
   interrupt(id: string, error: string): void {

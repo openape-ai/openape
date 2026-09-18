@@ -69,9 +69,10 @@ int main(int argc, char **argv) {
   const server = createServer((request, response) => {
     response.setHeader('Content-Type', 'application/json')
     if (request.url === '/.well-known/jwks.json') { response.end(JSON.stringify({ keys: [{ ...keys.publicKey.export({ format: 'jwk' }), kid: 'key', alg: 'EdDSA', use: 'sig' }] })); return }
-    const index = request.url?.includes('/setup/') ? 0 : 1
-    const grantId = request.url?.includes('/http/') ? 'http' : index === 0 ? 'setup' : 'read'
+    const index = request.url?.split('/')[3] === 'setup' ? 0 : 1
+    const grantId = request.url?.split('/')[3] === 'http' ? 'http' : index === 0 ? 'setup' : 'read'
     if (request.url?.startsWith('/api/pods/agents/')) { response.end(JSON.stringify({ email: 'pod@example.test', owner: 'owner@example.test', active: true, keyIds: ['pod-key'], grantId: new URL(request.url, origin).searchParams.get('grant'), grantActive: state.active })); return }
+    if (request.url === `/api/grants/${grantId}`) { response.end(JSON.stringify({ id: grantId, status: state.active ? 'approved' : 'revoked', request: { requester: 'pod@example.test', audience: 'shapes', target_host: `pods:${podId}`, grant_type: 'always' } })); return }
     if (request.url === `/api/grants/${grantId}/token`) {
       const command = state.signedCommand ?? commands[state.corruptDetail ? 0 : index]!
       const now = Math.floor(Date.now() / 1000)
@@ -137,7 +138,7 @@ it('program boundary: grant revocation stops a waiting terminal before its lease
     expect(terminal.view().error).not.toBeNull()
     expect(f.releases()).toBe(1)
     expect(await readdir(join(f.root, 'credentials/temporary'))).toEqual([])
-    await expect(f.invoke(['read'])).rejects.toThrow('no longer active')
+    await expect(f.invoke(['read'])).rejects.toThrow('Permission revoked')
   }
   finally { terminal.close(); await terminal.completed; await f.close() }
 })
@@ -147,9 +148,12 @@ it('packaged program UI: exposes the external terminal and reuses application se
   const setup = f.terminal()
   await expect.poll(() => setup.view().output).toContain('SETUP_READY')
   setup.input('SYNTHETIC_CONFIGURATION\n'); await setup.completed
+  const folder = await realpath(await mkdtemp(join(tmpdir(), 'pods-assigned-folder-')))
+  await writeFile(join(folder, 'input.txt'), 'DIRECT_READ')
   const shellIdentity = await fixtureShellIdentity(f.root)
   const store = new PodDatabase(f.root)
   store.db.prepare('INSERT INTO resources VALUES(?,?,1,\'tool\',\'ready\',?,?)').run(f.applicationId, f.podId, f.assignment.name, JSON.stringify(f.assignment))
+  store.db.prepare('INSERT INTO resources VALUES(?,?,1,\'tool\',\'ready\',?,?)').run(randomUUID(), f.podId, 'https://api.example.com', JSON.stringify({ type: 'http', origin: 'https://api.example.com', methods: ['GET', 'POST'], capability: 'tool.http_fixture.request', authority: f.assignment.grants[0]!.authority }))
   store.close()
   const app = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: homedir(), TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: f.root, NODE_ENV: 'test' } })
   console.info('Program UI: fixture launched')
@@ -170,7 +174,23 @@ it('packaged program UI: exposes the external terminal and reuses application se
     expect(await page.getByRole('button', { name: 'Open Terminal.app', exact: true }).count()).toBe(1)
     expect(await page.locator('.pod-console').count()).toBe(0)
     await mkdir(resolve('.artifacts'), { recursive: true })
-    const runCode = `export async function run(context) {
+    await app.evaluate(({ dialog }, folder) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder], bookmarks: [] })
+      dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false })
+    }, folder)
+    await page.getByRole('button', { name: 'Add directory', exact: true }).click()
+    await expect.poll(async () => page.locator('.directory-select').count()).toBe(1)
+    expect(await page.locator('.fixed-directory').count()).toBe(2)
+    await page.locator('.directory-list').screenshot({ path: resolve('.artifacts/program-directories-en.png') })
+    const runCode = `import fs from 'node:fs/promises'; import path from 'node:path';
+    export async function run(context) {
+      await fs.writeFile(path.join(context.home, 'home-check.txt'), 'HOME')
+      if (context.directories.length) {
+        const folder = context.directories[0].path
+        if (await fs.readFile(path.join(folder, 'input.txt'), 'utf8') !== 'DIRECT_READ') throw new Error('Missing directory input')
+        try { await fs.writeFile(path.join(folder, 'blocked.txt'), 'SYNTHETIC'); throw new Error('Unexpected directory write') }
+        catch (error) { if (error.code !== 'EPERM') throw error }
+      }
       const result = await context.tools.invoke({ application: 'Synthetic application', argv: ['read'] })
       if (result.exitCode !== 0) throw new Error('Application read failed')
       return { status: 'completed', summary: 'Program read: ' + result.stdout.trim(), completedInputIds: context.input.eventIds, gapIds: [] }
@@ -190,10 +210,21 @@ it('packaged program UI: exposes the external terminal and reuses application se
     }, [f.assignment.executable, f.assignment.adapterPath])
     await page.getByRole('button', { name: 'Add installed application…', exact: true }).click()
     await page.getByRole('button', { name: 'Open fixture', exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Synthetic application', exact: true }).click()
+    expect(await page.getByText('Allowed commands', { exact: true }).count()).toBe(0)
+    expect(await page.getByText('Script access', { exact: true }).count()).toBe(0)
+    expect(await page.getByRole('button', { name: 'Select installed replacement…', exact: true }).count()).toBe(0)
+    expect(await page.getByRole('button', { name: 'Import existing setup', exact: true }).count()).toBe(0)
     await page.getByRole('button', { name: 'Add installed application…', exact: true }).waitFor()
+    await page.getByRole('button', { name: 'https://api.example.com GET, POST', exact: true }).click()
+    expect(await page.getByRole('button', { name: 'Remove HTTP destination', exact: true }).isEnabled()).toBe(true)
     await page.locator('.application-card').first().screenshot({ path: resolve('.artifacts/program-permissions-en.png') })
     await page.locator('.program-permissions').screenshot({ path: resolve('.artifacts/external-terminal-en.png') })
-    await page.locator('.http-form').screenshot({ path: resolve('.artifacts/program-http-en.png') })
+    await page.locator('.http-list').screenshot({ path: resolve('.artifacts/program-http-en.png') })
+    await page.getByRole('button', { name: 'Add HTTP destination', exact: true }).click()
+    await page.getByLabel('HTTPS origin', { exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    expect(await page.locator('.http-form').count()).toBe(0)
     await page.getByRole('button', { name: 'App settings', exact: true }).click()
     await page.getByLabel('Language', { exact: true }).selectOption('de')
     await page.locator('.pod-button').first().click()
@@ -205,9 +236,12 @@ it('packaged program UI: exposes the external terminal and reuses application se
     await page.locator('.application-card').first().screenshot({ path: resolve('.artifacts/program-permissions-de-dark.png') })
     expect(await page.getByRole('button', { name: 'Terminal.app öffnen', exact: true }).count()).toBe(1)
     await page.locator('.program-permissions').screenshot({ path: resolve('.artifacts/external-terminal-de-dark.png') })
-    await page.locator('.http-form').screenshot({ path: resolve('.artifacts/program-http-de-dark.png') })
+    await page.locator('.http-list').screenshot({ path: resolve('.artifacts/program-http-de-dark.png') })
+    const folderBounds = await page.locator('.directory-select .directory-label').boundingBox()
+    expect(folderBounds!.width).toBeGreaterThan(120)
+    await page.locator('.directory-list').screenshot({ path: resolve('.artifacts/program-directories-de-dark.png') })
   }
-  finally { await app.close(); await shellIdentity.close(); await f.close() }
+  finally { await app.close(); await shellIdentity.close(); await f.close(); await rm(folder, { recursive: true, force: true }) }
 })
 
 it('HTTP grant boundary: verifies the signed origin and method before transport and cancels on remote revocation', async () => {

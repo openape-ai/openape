@@ -98,6 +98,8 @@ Verfügbare Variablen und Geheimnisse zeigt aufklappbar kopierbare Zugriffsausdr
 
 Gespeicherte Läufe starten über das mitgelieferte ape-shell mit dem Pod-Agenten. Der Node.js-Vertrag run(context) bleibt erhalten; HOME, Arbeitsverzeichnis und SHELL entsprechen dem Einrichtungsterminal. Eine fehlende Freigabe blockiert die Ausführung. Programmeinstellungen werden über context.tools.invoke wiederverwendet; Geheimnisse werden dadurch nicht automatisch Teil des KI-Kontexts.
 
+Unter Abhängigkeiten zeigt die Liste jedes Paket mit seiner festen Version. Klicke auf +, um die öffentliche npm-Registry zu durchsuchen, einen npm-Paketlink einzufügen oder name@1.2.3 einzugeben. Wähle einen Treffer, prüfe die feste Version und füge ihn hinzu; ein bereits vorhandener Name aktualisiert dessen Eintrag. Wähle eine Zeile und klicke auf −, um das Paket zu entfernen. Änderungen werden mit dem Skript gespeichert. Abhängigkeiten vorbereiten lädt die ausgewählten Pakete nach Bestätigung herunter. Suchen und Hinzufügen installieren noch nichts. Git-, Tarball- und private Registry-URLs werden nicht unterstützt. Bibliotheken teilen die Berechtigungen und den Geheimniszugriff des Skripts. Die Vorbereitung schließt Installationsskripte und native Erweiterungen aus; reguläre Läufe verwenden den geprüften schreibgeschützten Paketbestand ohne Downloads oder Updates. Paketänderungen erfordern Validierung und erneute Geheimnisfreigabe. Die gespeicherte package.json steht weiterhin dem Pod-Chat zur Verfügung.
+
 1. Bearbeiten Sie den Quelltext und wählen Sie Skript speichern, um ihn ohne Ausführung zu sichern.
 2. Wählen Sie Ausführen oder Speichern und ausführen. Geänderter Quelltext wird gespeichert und in der bestehenden Sandbox mit synthetischen Diensten geprüft. Eine fehlgeschlagene Prüfung erhält den Text und lässt das zuvor aktive Skript unverändert.
 3. Bei benötigten Geheimnissen prüfen Sie den vollständigen Quelltext und wählen Zugriff auf Zugangsdaten prüfen. Die native Bestätigung nennt Pod, genauen SHA-256 und Aliase. Abbrechen blockiert weiterhin die Ausführung.
@@ -109,24 +111,24 @@ Gespeicherte Läufe starten über das mitgelieferte ape-shell mit dem Pod-Agente
 
 Normale Variablen sind benannte Zeichenketten in der SQLite-Datenbank dieses Pods. Skripte verwenden context.variables["name"]. Unterstützt werden bis zu 32 Variablen mit jeweils 2.048 Zeichen. Die Werte werden für jeden Lauf festgehalten; spätere Änderungen gelten für kommende Läufe. Diese Werte sind unverschlüsselt. Vertrauliche Werte gehören zu den Geheimnissen.
 
-Der eigene Tab zeigt alle gespeicherten Variablen und Geheimnisse dieses Pods. Leere Variablen sind mit Nicht hinterlegt gekennzeichnet. Vom gespeicherten Skript benötigte oder im Chat angefragte Geheimnisse erscheinen bereits ohne zugewiesenen Wert; Geheimnis hinterlegen übernimmt den Alias ins Formular. Ein gespeicherter Wert erteilt dem Skript noch keine Lesefreigabe.
+Der eigene Tab zeigt alle gespeicherten Variablen und Geheimnisse dieses Pods. Leere Variablen sind mit Nicht hinterlegt gekennzeichnet. Vom gespeicherten Skript benötigte oder im Chat angefragte Geheimnisse erscheinen bereits ohne zugewiesenen Wert; Geheimnis hinterlegen übernimmt den Alias ins Formular. Mit der Zuweisung darf dieser Pod den Alias in seinen geprüften Skripten lesen. Entfernen der Zuweisung widerruft den Zugriff.
 
 Jeder Pod besitzt eigene Skriptversionen, einen Arbeitsbereich, einen dauerhaften Checkpoint und eigene Zugangsdaten-Zuweisungen. Gib unter Variablen und Geheimnisse einen Zugangsdaten-Alias und den verdeckten geheimen Wert ein und wähle Zugangsdaten speichern oder ersetzen. Ein Alias beginnt mit einem Kleinbuchstaben und enthält höchstens 64 Kleinbuchstaben, Ziffern, Unterstriche oder Bindestriche. Werte enthalten 1–16.384 Zeichen ohne Nullbytes. Pro Pod sind 32 aktuelle Aliase möglich; ein Skript darf insgesamt 16 Berechtigungen einschließlich zugewiesener Anwendungs- und HTTP-Berechtigungen deklarieren.
 
 Die Werte werden mit macOS safeStorage im Verzeichnis credentials des aktiven Anwendungsprofils verschlüsselt gespeichert. Ressourcen und Editorverlauf enthalten Aliase und interne Kennungen, niemals automatisch den geheimen Wert. Zwei Pods können denselben Alias mit unterschiedlichen Werten verwenden. ChatGPT- und OpenApe-Tokens bleiben im Verbindungsdienst. Importierter Anwendungszustand wird ausschließlich seinem Programm bereitgestellt, getrennt von Skript-Geheimnissen.
 
-await context.credentials.get('crm') liefert den diesem Pod und Alias zugewiesenen String. Wähle crm unter Vom Skript verwendete Geheimnisse im Tab Variablen und Geheimnisse und speichere die Skriptzugriffe. Vor und nach dem Lesen prüft die Laufzeit den laufenden Auftrag, die exakte Skriptversion, die Skriptbindung und den Ressourcenstand sowie die Freigabe. Codex hat kein Werkzeug credentials.get. Werte werden nicht automatisch in input.json, Umgebungsvariablen, KI-Prompts oder Laufprotokolle aufgenommen.
+await context.credentials.get('crm') liefert den diesem Pod und Alias zugewiesenen String. Wähle crm unter Vom Skript verwendete Geheimnisse im Tab Variablen und Geheimnisse und speichere die Skriptzugriffe. Vor und nach dem Lesen prüft die Laufzeit den laufenden Auftrag, die exakte Skriptversion, die Skriptbindung und den Ressourcenstand sowie die aktuelle Geheimnis-Zuweisung. Codex hat kein Werkzeug credentials.get. Werte werden nicht automatisch in input.json, Umgebungsvariablen, KI-Prompts oder Laufprotokolle aufgenommen.
 
 Ein Skript mit Lesezugriff auf einen geheimen Wert kann ihn ausdrücklich in einen Prompt, ein Protokoll, einen Checkpoint oder eine Datei schreiben. Prüfe vor der Freigabe den vollständigen Quelltext. Die synthetische Prüfung testet den Ausführungsvertrag mit Werten wie synthetic-credential-<alias>; sie beweist nicht, dass der Quelltext für jede Eingabe sicher ist. Ein späterer KI-Aufruf erhält den vom Skript zusammengestellten Prompt. Vom Skript geschriebene Dateien können mit ihrem Inhalt in Sicherungen gelangen.
 
-Speichern oder Ersetzen pausiert den Pod und macht bisherige Prüfungen und Zugangsdaten-Freigaben ungültig. Ein Widerruf bricht betroffene Arbeiten ab und entfernt den verschlüsselten Wert. Weise nach einer Wiederherstellung die Werte erneut zu und prüfe und bestätige die Skripte erneut; verwaltete geheime Werte und ihre Wiederherstellungseinträge fehlen absichtlich in Sicherungen. Unterbrochene Speichervorgänge werden beim Neustart abgeglichen. Neue Skriptversionen des Masters können sich keinen Zugang selbst freigeben.
+Speichern oder Ersetzen pausiert den Pod und macht bisherige Prüfungen ungültig. Eine reine Skriptänderung benötigt keine erneute Geheimnis-Freigabe. Ein Widerruf bricht betroffene Arbeiten ab und entfernt den verschlüsselten Wert. Weise nach einer Wiederherstellung die Werte erneut zu und prüfe die Skripte erneut; verwaltete geheime Werte und ihre Wiederherstellungseinträge fehlen absichtlich in Sicherungen. Unterbrochene Speichervorgänge werden beim Neustart abgeglichen. Neue Skriptversionen des Masters können sich keinen Zugang selbst freigeben.
 
-Das folgende Beispiel kombiniert normales Lesen und Schreiben mit Node.js, dauerhafte Variablen, einen ausdrücklichen Zugriff auf Zugangsdaten und einen getrennten KI-Aufruf. Der geheime Wert wird dabei nicht in den Prompt aufgenommen. Für die echte Ausführung sind ein zugewiesener Alias crm, die Freigabe der exakten Version und eine verbundene KI nötig. Die Prüfung verwendet eine synthetische KI-Antwort. Direkter Netzwerkzugriff und das Starten von Unterprozessen bleiben durch die bestehende Laufzeit beschränkt; eine Zugangsdaten-Deklaration erlaubt beides nicht.
+Das folgende Beispiel kombiniert normales Lesen und Schreiben mit Node.js, dauerhafte Variablen, einen ausdrücklichen Zugriff auf Zugangsdaten und einen getrennten KI-Aufruf. Der geheime Wert wird dabei nicht in den Prompt aufgenommen. Für die echte Ausführung sind ein zugewiesener Alias crm, die Pod-Ausführungsfreigabe und eine verbundene KI nötig. Die Prüfung verwendet eine synthetische KI-Antwort. Direkter Netzwerkzugriff und das Starten von Unterprozessen bleiben durch die bestehende Laufzeit beschränkt; eine Zugangsdaten-Deklaration erlaubt beides nicht.
 
 1. Öffnen Sie Variablen und Geheimnisse. Tragen Sie Alias und Geheimniswert ein und speichern Sie. Das maskierte Feld wird auch bei Fehlern nach dem Absenden geleert.
 2. Wähle unter Variablen und Geheimnisse die vom Skript verwendeten Geheimnisse und speichere die Skriptzugriffe. Speichere zuvor offene Code-Änderungen im Skript-Tab. Verwenden Sie await context.credentials.get("alias") im Quelltext.
-3. Wählen Sie Speichern und ausführen. Nach der synthetischen Prüfung kontrollieren Sie den Quelltext und bestätigen Zugriff auf Zugangsdaten prüfen im nativen Dialog.
-4. Die Historie zeigt den Lauf. Änderungen an Quelltext oder Ressourcen erfordern erneute Prüfung und Freigabe.
+3. Wählen Sie Speichern und ausführen. Nach der synthetischen Prüfung bestätigen Sie die Pod-Ausführungsfreigabe im Browser, falls angefordert.
+4. Die Historie zeigt den Lauf. Änderungen an Quelltext oder Ressourcen erfordern erneute Prüfung; die zugewiesenen Pod-Rechte gelten bis zum Widerruf.
 
 ```javascript
 import { readFile, writeFile } from 'node:fs/promises'
@@ -138,7 +140,7 @@ export async function run(context) {
   const notes = context.input.checkpoint.notes ?? 'Review synthetic notes'
   await writeFile(context.workspace + '/notes.txt', notes)
   const text = await readFile(context.workspace + '/notes.txt', 'utf8')
-  const answer = await context.agent.run({ prompt: text })
+  const answer = await context.agent.run({ prompt: text, tools: [] })
   await writeFile(context.workspace + '/review.txt', answer.response)
 
   await context.progress.commit({
@@ -166,15 +168,17 @@ Ein unveränderter Editor übernimmt beim erneuten Öffnen den aktuellen gespeic
 
 ## Berechtigungen
 
-Berechtigungen enthält Verzeichnis- und Dateizugriffe, ausführbare Anwendungen sowie HTTP-Ziele. Der Arbeitsbereich des Pods ist beschreibbar. Referenzdateien werden als schreibgeschützte Kopien bereitgestellt; ihre Originale bleiben außerhalb des Arbeitsbereichs.
+Berechtigungen zeigt HOME und Arbeitsverzeichnis als feste, beschreibbare Pod-Ordner. Weitere Ordner fügst du mit + hinzu und wählst im Bestätigungsfenster Lesen oder Lesen und Schreiben. Die Auswahl rechts in der Zeile ändert den Zugriff; Zeile auswählen und − entfernt ihn. Dies ist direkter Zugriff auf die Originaldateien einschließlich Unterordnern; Schreibzugriff erlaubt Änderungen und Löschen. Bestehende Referenzdateien behalten ihre schreibgeschützten Kopien. Neue oder geänderte Freigaben pausieren den Pod und beenden aktive Ausführungen. Fehlende, ersetzte oder durch symbolische Links umgeleitete Ordner blockieren die Ausführung bis zur erneuten Zuweisung. Interne App-Daten und Laufzeitverzeichnisse können nicht zugewiesen werden.
 
-Wähle mit + unter der Anwendungsliste eine installierte macOS-App oder ein CLI. Name und Icon erscheinen mit einem Play-Button. Play startet das gewählte Programm ohne Argumente über ape-shell. Wähle eine Zeile für Details; − entfernt die Zuweisung. Vorhandene apes-Befehlsbeschreibungen werden erkannt; andernfalls wählst du die Beschreibungsdatei aus. Pods liefert diese Anwendungen nicht mit.
+Die macOS-Sandbox setzt die Ordnerrechte für reguläre Skripte und vermittelte Programmaufrufe durch. Externe Einrichtungsterminals und über Play gestartete GUI-Apps behalten ihre bestehende Grenze aus Mac-Benutzerrechten und ape-shell-Grants; die Ordnerliste schränkt diese Fenster nicht per Sandbox ein. Überlappende Freigaben gelten gemeinsam: Ein ausdrücklich beschreibbarer Unterordner bleibt innerhalb eines nur lesbaren übergeordneten Ordners beschreibbar.
+
+Wähle mit + unter der Anwendungsliste eine installierte macOS-App oder ein CLI. Name und Icon erscheinen mit einem Play-Button. Play startet das gewählte Programm ohne Argumente über ape-shell. Wähle eine Zeile aus und entferne ihre Zuweisung mit −. Vorhandene apes-Befehlsbeschreibungen werden erkannt; andernfalls wählst du die Beschreibungsdatei aus. Pods liefert diese Anwendungen nicht mit.
 
 Terminal.app öffnen steht über der Liste und öffnet ein eigenes macOS-Fenster. Der Starttext zeigt Pod-HOME, Arbeitsverzeichnis und Shell. Rufe dort das zugewiesene CLI mit seinen üblichen Befehlen auf, beispielsweise o365-cli auth login. Die Anwendung verwaltet ihre Anmeldung selbst; Pods zeigt keinen erfundenen Anmeldestatus. Freigaben bestätigst du über OpenApe oder apes grants approve.
 
-Bestehende Einrichtung importieren kopiert eine gewählte Zustandsdatei in den geschützten, verschlüsselten Zustand dieses Pods und dieser Anwendung. Das Original bleibt unverändert. Importiere Token- und Cache-Dateien hier, niemals als Referenzdatei. Das Programm darf seine private Kopie erneuern; Skript und Codex erhalten nur die Programmausgabe. Die App kann nicht automatisch feststellen, ob eine importierte Anmeldung noch gültig ist.
+Grants werden über OpenApe verwaltet und bei der Ausführung geprüft. Berechtigungen zeigt keine statische Liste von Befehlsfreigaben, keine Skriptaufrufe und keine zusätzliche Auswahl von Skriptzugriffen auf Anwendungen. Die Zuweisung einer Anwendung umgeht die Laufzeitprüfung nicht.
 
-HTTP-Ziele erlauben Node.js-Anfragen über context.http.request an einen ausdrücklich zugewiesenen HTTPS-Ursprung mit ausgewählten Methoden. Geheimnisse gehören in Variablen und Geheimnisse. Anfragen folgen keinen Weiterleitungen und erreichen keine privaten Adressen. Derzeit nutzt der Transport IPv4 auf Port 443, ein Zeitlimit von 30 Sekunden und begrenzte Antworten. Berechtigungen werden dem OpenApe-Agenten des Pods zugewiesen.
+HTTP-Ziele erscheinen als Liste mit Adresse und erlaubten Methoden. Mit + fügst du ein Ziel hinzu; zum Entfernen wählst du die Zeile und −. Das Eingabeformular öffnet sich nur beim Hinzufügen. Diese Berechtigungen erlauben Node.js-Anfragen über context.http.request an einen ausdrücklich zugewiesenen HTTPS-Ursprung mit ausgewählten Methoden. Geheimnisse gehören in Variablen und Geheimnisse. Anfragen folgen keinen Weiterleitungen und erreichen keine privaten Adressen. Derzeit nutzt der Transport IPv4 auf Port 443, ein Zeitlimit von 30 Sekunden und begrenzte Antworten. Berechtigungen werden dem OpenApe-Agenten des Pods zugewiesen.
 
 Das offene Terminal belegt den Pod und pausiert seine Automatik, auch wenn gerade kein Befehl läuft. Beende die Shell mit exit und warte auf das Ende des Prozesses, damit Programmeinstellungen gespeichert werden. Danach bleibt die Automatik pausiert. Zugewiesene Programme erhalten jeweils ihren eigenen temporären HOME mit dem entschlüsselten Anmeldestand; spätere Skriptaufrufe verwenden denselben gespeicherten Stand. Der Shell-HOME liegt unter pods/<pod-id>/home, das Arbeitsverzeichnis unter pods/<pod-id>/workspace im App-Profil. Abbrüche werden nicht als erfolgreiche Einrichtung behandelt.
 
@@ -182,7 +186,7 @@ ape-shell vermittelt Befehlsfreigaben; es stellt keine Dateisystem-Sandbox berei
 
 Play startet Apps direkt im Pod-Arbeitsverzeichnis mit einem eigenen Anwendungs-HOME und dem normalen Anmeldeschlüsselbund. Manche Mac-Apps ignorieren HOME oder verwenden ein globales Profil oder eine vorhandene Instanz: Prüfe das Konto in der App. Nur Programme, die den übergebenen Kontext beachten, können ihre Einrichtung zuverlässig teilen. Beende die App normal, um die Einrichtung zu speichern. Abgebrochene Sitzungen behalten den letzten gespeicherten Stand. Der verschlüsselte Zustand ist derzeit auf 4 MB und 128 Dateien begrenzt; große Browserprofile werden damit nicht unterstützt.
 
-Nach einem Programmupdate oder bei einem fehlenden früher mitgelieferten Programm wählst du die Zeile, öffnest Details zur Anwendung und nutzt Installierten Ersatz wählen. Ressourcen-ID und verschlüsselte Einrichtung bleiben erhalten; gespeicherte Befehlsfreigaben werden gelöscht. Die neue Version kann andere Befehle und Zustandsformate nutzen: Prüfe das Skript vor dem Start. Alte o365-pods-Befehle und context.mail-Rezepte benötigen eine Anpassung; das alte Programm wird nicht mehr mitgeliefert.
+Wähle eine Anwendung aus, um ihre HTTPS-Hostnamen hinzuzufügen oder zu entfernen. Abgeschottete Anwendungsaufrufe erreichen nur diese öffentlichen Hosts auf Port 443; Befehlsfreigaben gelten weiterhin. Diese Einstellung ist unabhängig von den HTTP-Zielen des Node.js-Skripts. Eine Änderung pausiert den Pod und macht seine bisherige Skriptprüfung ungültig. Einrichtungsterminals und GUI-Fenster behalten ihre bestehenden Mac-Benutzerrechte.
 
 ![Berechtigungen](images/handbook-permissions-de.png)
 
@@ -196,15 +200,15 @@ Unter Weitere Optionen können Sie den Pod archivieren oder einen archivierten P
 
 ## Historie und Wiederherstellung
 
-Läufe zeigt gespeicherte Ausführungszustände und Zusammenfassungen. Wähle einen Lauf, um seine festgelegte Skriptversion, den Fortschrittsstand, Fehler und geordnete Gespeicherte Ereignisse zu prüfen. Das lokale Beispiel ist deterministisch; das Agentenbeispiel benötigt zusätzlich einen verbundenen Codex-Anbieter.
+Die Historie zeigt das Ergebnis, den nächsten Schritt und Was passiert ist. Wiederholte Programmaufrufe und KI-Anfragen werden mit der Anzahl erfolgreicher und nicht abgeschlossener Aufrufe gruppiert. Routinemäßige Berechtigungsprüfungen bleiben zusammen mit der festgelegten Skriptversion und gespeicherten Ereignissen in den aufklappbaren Technischen Details.
 
-Lauf abbrechen stoppt einen aktiven Lauf. Unterbrochene Arbeit bleibt nach Absturz oder Neustart sichtbar. Wähle Gestoppte Ausführung prüfen, um die frühere Ausführung abzugleichen, und anschließend Verbleibende Eingaben erneut versuchen, wenn das Ergebnis dies zulässt. Erfordert das Ergebnis eine Prüfung, kläre die Unsicherheit vor einem erneuten Versuch. Bei einer blockierten Warteschlange wird Nicht gestartete Eingaben erneut versuchen verfügbar.
+Lauf abbrechen stoppt einen aktiven Lauf. Unterbrochene Arbeit bleibt nach Absturz oder Neustart sichtbar. Erneuten Versuch vorbereiten prüft gespeicherten Fortschritt und mögliche Zustellungen, ohne das Skript zu starten. Nach erfolgreicher Prüfung wird Unerledigte Arbeit erneut ausführen verfügbar. Kläre zuerst ungewisse Zustellungen. Nach einem gestoppten Lauf führt auch die Übersicht zu dieser Prüfung.
 
-Pro Pod läuft höchstens eine Ausführung. Weitere angenommene Eingaben bleiben vorgemerkt. Einzelne Ereignisse bleiben erhalten; verpasste Zeitplantermine werden zu einem Nachhollauf zusammengefasst. Fortschrittsstände dokumentieren erfolgreiche Arbeit. Allein das Fortsetzen eines Codex-Gesprächs ist keine Wiederherstellungsentscheidung.
+Pro Pod läuft höchstens eine Ausführung. Weitere wartende Startaufträge zählt vorgemerkte Startanfragen, keine E-Mails oder Dateien. Mehrfaches Starten kann mehrere Anfragen erzeugen. Nicht gestartete Anfragen erneut versuchen gilt für eine blockierte Warteschlange. Fortschrittsstände dokumentieren erfolgreiche Arbeit; allein das Fortsetzen eines Codex-Gesprächs ist keine Wiederherstellungsentscheidung.
 
 Skriptänderungen gelten nur für kommende Läufe und machen frühere Ergebnisse oder Wirkungen nicht rückgängig. Interne Skript-Hashes bleiben zur Nachvollziehbarkeit in den Ausführungsdetails sichtbar.
 
-Unklare HTTP-Zustellungen erscheinen in Historie. Halte fest, was du am Ziel geprüft hast, und wähle Bereits zugestellt oder Erneut senden erlauben. Die erste Auswahl speichert deine Bestätigung, keine Anbieterantwort; die zweite erlaubt einen späteren erneuten Versuch. Bei verlorener Antwort wird nicht automatisch erneut gesendet.
+Unklare HTTP-Zustellungen erscheinen in Historie. Halte fest, was du am Ziel geprüft hast, und wähle Bereits zugestellt oder Nicht zugestellt · erneut versuchen. Die erste Auswahl speichert deine Bestätigung, keine Anbieterantwort; die zweite erlaubt einen späteren erneuten Versuch. Bei verlorener Antwort wird nicht automatisch erneut gesendet.
 
 ![Historie und Wiederherstellung](images/handbook-history-de.png)
 
@@ -224,9 +228,9 @@ Verwende die kontextbezogene Gesprächsaktion, um den Master zum gewählten Pod 
 
 Ein Pod-Skript ist ein JavaScript-ES-Modul mit dem Export async run(context). Warte vor der Rückgabe auf jede asynchrone Operation. Das Ergebnis enthält status, summary, completedInputIds und gapIds. Ein completedWithGaps-Ergebnis benötigt gespeicherte Lückenaussagen.
 
-context.input enthält eingefrorene Laufmetadaten, Ereignis-IDs, den vorherigen Fortschrittsstand, Referenzen und Limits. context.workspace ist das beschreibbare Pod-Verzeichnis; context.references identifiziert schreibgeschützte Kopien. context.log(message) zeichnet ein Laufereignis auf. context.variables enthält die für diesen Lauf eingefrorenen normalen Werte; sie gelangen nur durch ausdrückliche Aufnahme im Skript in eine Modellanfrage.
+context.input enthält eingefrorene Laufmetadaten, Ereignis-IDs, den vorherigen Fortschrittsstand, Referenzen und Limits. context.home und context.workspace sind die festen, beschreibbaren Pod-Verzeichnisse. context.directories enthält zugewiesene Originalordner als {path, access}, mit access read oder readWrite; die Node.js-Dateisystemfunktionen können diese Pfade verwenden. context.references identifiziert schreibgeschützte Kopien. context.log(message) zeichnet ein Laufereignis auf. context.variables enthält die für diesen Lauf eingefrorenen normalen Werte; sie gelangen nur durch ausdrückliche Aufnahme im Skript in eine Modellanfrage.
 
-context.progress.commit speichert Checkpoint, Quellen und Aussagen atomar mit expectedRevision. context.agent.run({ prompt }) ruft Codex mit frischem Kontext auf. context.tools.invoke({ application: "o365-cli", argv }) führt einen zugewiesenen Lesebefehl über apes aus. context.http.request({ url, method, headers, body, key }) nutzt ein erlaubtes HTTP-Ziel; jede verändernde Methode benötigt einen stabilen Vorgangsschlüssel. Codex erhält ape_shell für zugewiesene Leseaufrufe, aber kein Geheimnis- oder HTTP-Werkzeug. Bestehende context.mail-Skripte müssen auf eine zugewiesene installierte Anwendung umgestellt werden; Quelltext und Historie bleiben erhalten.
+context.progress.commit speichert Checkpoint, Quellen und Aussagen atomar mit expectedRevision. context.agent.run({ prompt, tools: [] }) ruft Codex mit frischem Kontext ohne Werkzeuge auf. Ohne tools-Angabe sind Werkzeuge ebenfalls deaktiviert. Mit tools: ["ape_shell"] erlaubst du ausdrücklich zugewiesene Leseaufrufe; Zuweisungen und Grants gelten weiterhin. Das Skript kann context.tools.invoke unabhängig davon verwenden. context.tools.invoke({ application: "o365-cli", argv }) führt einen zugewiesenen Lesebefehl über apes aus. context.http.request({ url, method, headers, body, key }) nutzt ein erlaubtes HTTP-Ziel; jede verändernde Methode benötigt einen stabilen Vorgangsschlüssel. Nur Aufrufe mit ausdrücklich aktiviertem ape_shell erhalten dieses Werkzeug. Beide Varianten erhalten kein Geheimnis- oder HTTP-Werkzeug. Behandle Modellantworten als nicht vertrauenswürdigen Text, niemals als ausführbaren Code. Bestehende context.mail-Skripte müssen auf eine zugewiesene installierte Anwendung umgestellt werden; Quelltext und Historie bleiben erhalten.
 
 Das folgende Beispiel ergänzt eine Markierung im Fortschrittsstand und liefert eine sichtbare Zusammenfassung. Es nutzt weder Mail- noch Modelldienste. Bestätige nur Eingabe-IDs von Arbeit, die das Skript tatsächlich abgeschlossen hat. Der Beispielcode ist in beiden Sprachfassungen identisch.
 
@@ -247,6 +251,14 @@ export async function run(context) {
 }
 ```
 
+## Ausführungsfreigaben und Laufansicht
+
+Ein manueller Lauf öffnet benötigte OpenApe-Freigaben im Browser. Gleichzeitig erscheint im Pod eine Karte mit Freigabe öffnen. Damit bleibt die erforderliche Aktion auch sichtbar, wenn sich der Browser nicht öffnen lässt. Hintergrundläufe zeigen die Karte ohne automatischen Browserwechsel. Das Warten dauert höchstens 15 Minuten und pausiert das aktive Skript-Zeitlimit. Lauf abbrechen beendet das Warten. Nach einem App-Neustart ist eine ausdrückliche Wiederherstellung nötig; eine alte Freigabe startet keinen gestoppten Lauf neu.
+
+Die Ausführungserlaubnis gehört zu diesem Pod und seinem OpenApe-Agenten. Pod-Ausführung erlauben erstellt eine widerrufbare dauerhafte Regel; Einmal erlaubt nur die aktuelle Anfrage. Skriptänderungen erweitern keine Verzeichnis-, Anwendungs-, HTTP- oder Geheimnis-Zuweisungen. Der Desktop-Dienst prüft die strukturierte Freigabe mit der ape-shell-Autorisierungsbibliothek und startet das festgehaltene Skript in der bestehenden nativen Sandbox. Das externe Terminal verwendet weiterhin das ape-shell-CLI.
+
+Die Historie zeigt tatsächliche Arbeitsschritte, aktive Laufzeit, Freigabe-Wartezeit und Ergebnis. Anwendungs-, KI- und HTTP-Schritte erscheinen erst bei einem Aufruf. Technische Details enthält Originalfehler und Ereignisdaten. Bei Autorisierungsfehlern prüfe Berechtigungen und Grant-Status; ein Fehler des Freigabedienstes verlangt nicht automatisch einen neuen Microsoft-Login. Prüfe unklare Zustellungen am Ziel und halte das Ergebnis vor einem erneuten Versuch fest. Unter Umgebung im Skript-Tab stehen die verwalteten Prozessvariablen ohne gespeicherte Geheimniswerte.
+
 ## Zeitpläne, Ereignisse und Limits
 
 Wähle unter Zeitplan und Limits entweder In einem Intervall oder Täglich. Gib das Intervall in Minuten oder Ortszeit und eine IANA-Zeitzone wie Europe/Vienna ein. Speichere den Zeitplan mit seiner ausdrücklichen Aktivierungseinstellung. Bei einem pausierten Pod ist zusätzlich Automatische Läufe fortsetzen nötig.
@@ -259,7 +271,7 @@ Nach Ruhezustand oder Ausfall verarbeitet ein Nachhollauf verbleibende Eingaben 
 
 ## Verbindungen und Mail-Benachrichtigungen
 
-Verbindungen & Einrichtung enthält zwei globale Verbindungen: ChatGPT/Codex für KI-Ausführung und OpenApe für Pod-Identitäten und Grants. Weitere Programme werden in Berechtigungen über das externe Terminal.app-Fenster des Pods oder eine importierte Zustandsdatei angemeldet.
+Verbindungen & Einrichtung enthält zwei globale Verbindungen: ChatGPT/Codex für KI-Ausführung und OpenApe für Pod-Identitäten und Grants. Weitere Programme werden in Berechtigungen über das externe Terminal.app-Fenster des Pods oder die mit Play geöffnete Anwendung angemeldet.
 
 Wähle für einen Mail-Benachrichtigungs-Pod dein installiertes o365-cli unter Berechtigungen und richte es über Terminal.app mit seinen eigenen auth-Befehlen ein. Prüfe vor dem Schreiben des Skripts die Hilfe und die freigegebene apes-Befehlsbeschreibung. Installierte Versionen können vom früheren Prototyp-Protokoll abweichen; o365-cli pods ist nur verwendbar, wenn die ausgewählte Installation es tatsächlich unterstützt.
 
@@ -295,6 +307,6 @@ Syntax- oder Vertragsfehler: Korrigiere das JavaScript und stelle sicher, dass r
 
 Kein automatischer Lauf: Prüfe aktives Skript, aktivierten Zeitplan, Pod-Lebenszyklus, nächsten Zeitpunkt, Hintergrundprozess, Ressourcen, ausstehende Wiederherstellung und ob der Mac wach ist.
 
-Anwendungsaufruf schlägt fehl: Prüfe den exakten Grant und die Programmausgabe in Berechtigungen. Richte dort den eigenen Programmzustand ein oder importiere ihn. Ein leeres Ergebnis belegt nicht, dass alle Quellen gelesen wurden.
+Anwendungsaufruf schlägt fehl: Prüfe den aktuellen Grant in OpenApe und die Ausgabe in Historie. Richte die Anwendung über das Pod-Terminal oder Play ein. Ein leeres Ergebnis belegt nicht, dass alle Quellen gelesen wurden.
 
 Speicherlimit erreicht: Exportiere bei Bedarf eine Sicherung, entferne unerwünschte archivierte Pods über den Bestätigungsablauf, bereinige ungenutzte Dateien oder erhöhe das Limit. Prüfe anschließend die Wiederherstellung, bevor du unterbrochene Arbeit erneut versuchst.

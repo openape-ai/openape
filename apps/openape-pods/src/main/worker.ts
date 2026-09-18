@@ -1,5 +1,10 @@
-import { shellIdentity } from './shell/identity'
-import { podEnvironment } from '../runtime/environment'
+import type { RunContextRequest, ServiceCheck, ServiceRequest  } from '../contracts/services'
+import { loadAdapter, resolveCommand } from '@openape/apes'
+import { setTimeout as delay } from 'node:timers/promises'
+import { approvalURL } from '../contracts/activity'
+import type { RunApproval } from '../contracts/activity'
+import { assignedDirectories, directoryPolicy } from '../runtime/directories'
+import { podEnvironment, podEnvironmentValues, visibleEnvironment } from '../runtime/environment'
 import { podWorkspace } from './programs/console'
 import { invokeProgram, programRequest } from './programs/invoke'
 import { ProgramManager } from './programs/manager'
@@ -23,7 +28,6 @@ import { parseMasterView } from '../contracts/master'
 import type { MasterCommand, MasterView } from '../contracts/master'
 import { realpathSync } from 'node:fs'
 import { parseServiceScope } from '../contracts/services'
-import type { ServiceCheck, ServiceRequest } from '../contracts/services'
 import type { CredentialCache } from './connections/cache'
 import { createMacOSCredentialCache } from './connections/macos'
 import { PodIdentityManager } from './connections/agent'
@@ -41,13 +45,14 @@ import type { InternalResourceCommand, ResourceState } from '../contracts/resour
 import { randomUUID } from 'node:crypto'
 import { parseWorkspace } from '../contracts/control'
 import type { WorkspaceCommand, WorkspaceState } from '../contracts/control'
-import { app, utilityProcess } from 'electron'
+import { app, shell, utilityProcess } from 'electron'
 import type { UtilityProcess } from 'electron'
 import { dirname, join } from 'node:path'
 import type { WorkerStatus } from '../contracts/ipc'
 
 export class FixtureWorker {
-  private shellIdentities = new Map<string, Awaited<ReturnType<typeof shellIdentity>>>()
+  private shellIdentities = new Map<string, { close: () => Promise<void> }>()
+  private openedApprovals = new Set<string>()
   private programs: ProgramManager | null = null
   private connections: ConnectionManager | null = null
   private providerGateway: Awaited<ReturnType<typeof startAgentGateway>> | null = null
@@ -162,6 +167,9 @@ export class FixtureWorker {
       if (!definition) throw new Error('Choose an application in the owner window')
       await this.programs.replace(command.podId, command.applicationId, command.epoch, definition)
     }
+    else if (command.type === 'network') {
+      await this.programs.network(command.podId, command.applicationId, command.epoch, command.hosts)
+    }
     else if (command.type === 'grant') {
       await this.programs.grant(command)
     }
@@ -189,7 +197,10 @@ export class FixtureWorker {
 
   async master(command: MasterCommand): Promise<MasterView> { return parseMasterView(await this.dispatch({ master: command })) }
 
-  async scripts(command: ScriptCommand): Promise<ScriptView> { return parseScriptView(await this.dispatch({ scripts: command })) }
+  async scripts(command: ScriptCommand): Promise<ScriptView> {
+    const view = parseScriptView(await this.dispatch({ scripts: command }))
+    return { ...view, environment: visibleEnvironment(podEnvironmentValues(this.root, command.podId)) }
+  }
 
   async details(command: DetailsCommand): Promise<PodDetails> { return parsePodDetails(await this.dispatch({ details: command })) }
 
@@ -232,16 +243,27 @@ export class FixtureWorker {
     return view
   }
 
-  async runs(command: RunCommand): Promise<RunView> { await this.setupReady; return parseRunView(await this.dispatch({ run: command })) }
+  async runs(command: RunCommand): Promise<RunView> {
+    await this.setupReady
+    if (command.type !== 'openApproval') return parseRunView(await this.dispatch({ run: command }))
+    const view = parseRunView(await this.dispatch({ run: { type: 'list', podId: command.podId, runId: command.runId } }))
+    const pending = view.approvals?.find(item => item.runId === command.runId && item.grantId === command.grantId)
+    if (!pending) throw new Error('This approval is no longer waiting; refresh the run status')
+    const connection = await this.connections!.podConnection(command.podId)
+    if (pending.issuer !== connection.issuer || pending.subject !== connection.subject) throw new Error('Approval belongs to a different Pod identity')
+    const { runId: _runId, ...approval } = pending
+    await shell.openExternal(approvalURL(approval))
+    return view
+  }
 
   async scheduling(command: ScheduleCommand): Promise<ScheduleView> { return parseScheduleView(await this.dispatch({ schedule: command })) }
 
-  private dispatch(command: { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('Worker response timed out; reload state before retrying')) }, 'data' in command ? 15 * 60 * 1000 : ('run' in command && command.run.type === 'recover') || 'inspectCredentials' in command ? 30000 : 10000)
+      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('Worker response timed out; reload state before retrying')) }, 'data' in command ? 15 * 60 * 1000 : 'scripts' in command && command.scripts.type === 'prepareDependencies' ? 210000 : ('run' in command && command.run.type === 'recover') || 'inspectCredentials' in command ? 30000 : 10000)
       this.pending.set(id, { resolve, reject, timer }); child.postMessage({ id, command })
     })
   }
@@ -256,17 +278,46 @@ export class FixtureWorker {
       if (request.kind === 'shellClose') {
         await this.shellIdentities.get(scope.runId)?.close(); this.shellIdentities.delete(scope.runId); return true
       }
+      const context = await this.dispatch({ runContext: { scope } }) as { name: string, reason: string }
+      const previous = async (permission: string, connection: { issuer: string, subject: string }) => {
+        const grant = await this.dispatch({ runContext: { scope, grant: { permission, issuer: connection.issuer, subject: connection.subject } } }) as RunApproval | null
+        return grant && !['cancelled', 'expired'].includes(grant.state) ? grant.grantId : undefined
+      }
+      const observe = async (approval: RunApproval) => {
+        await this.dispatch({ serviceCheck: { scope, approval } })
+        if (approval.state !== 'pending' || context.reason !== 'manual' || this.openedApprovals.has(approval.grantId)) return
+        this.openedApprovals.add(approval.grantId)
+        try { await shell.openExternal(approvalURL(approval)) }
+        catch { await this.dispatch({ serviceCheck: { scope, approval: { ...approval, openError: 'The browser could not be opened; use Open approval to try again' } } }) }
+      }
       if (request.kind === 'shell') {
         await check()
-        if (!this.connections || this.shellIdentities.has(scope.runId)) throw new Error('Pod shell identity is unavailable or already in use')
+        if (!this.connections || this.shellIdentities.has(scope.runId)) throw new Error('Pod execution authority is unavailable or already in use')
         const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
         const runtime = { executable: process.execPath, cli: app.isPackaged ? join(process.resourcesPath, 'apes/ape-shell.mjs') : join(dist, 'vendor/apes/ape-shell.mjs'), client: join(dist, 'runtime/shell-client.mjs') }
         const environment = await podEnvironment(this.root, scope.podId, runtime)
-        const identity = await shellIdentity(this.root, scope.podId, this.connections)
-        try { await check(); controller.signal.throwIfAborted() }
-        catch (error) { await identity.close(); throw error }
-        this.shellIdentities.set(scope.runId, identity)
-        return { home: environment.home, environment: environment.environment, shell: { cli: runtime.cli, environment: { ...environment.environment, APES_AUTH_FILE: identity.path } } }
+        const connection = await this.connections.podConnection(scope.podId)
+        const authority = new AgentAuthority(connection, observe, previous)
+        const adapterPath = join(dist, 'vendor/pod-runtime-shapes.toml')
+        const adapter = loadAdapter('pod-runtime', adapterPath)
+        const argv = ['pod-runtime', 'run', '--pod', scope.podId, '--name', context.name, '--script', join(this.root, 'runs', scope.runId, 'run.mjs'), '--workspace', environment.workspace, '--home', environment.home, '--environment', JSON.stringify(visibleEnvironment(environment.environment))]
+        const resolved = await resolveCommand(adapter, argv)
+        const assignment = { grantId: '', command: { cliId: 'pod-runtime', adapterPath, adapterDigest: adapter.digest, argv, permission: resolved.permission } }
+        await authority.authorize(assignment, controller.signal, `Pod: ${context.name}\nRun the stored script inside this Pod's managed runtime. Script changes remain within separately assigned permissions. This approval does not enable a schedule.\nScript: ${join(this.root, 'runs', scope.runId, 'run.mjs')}\nWorkspace: ${environment.workspace}\nHOME: ${environment.home}`)
+        await check(); controller.signal.throwIfAborted()
+        const monitoring = new AbortController()
+        const monitor = (async () => {
+          try { while (!monitoring.signal.aborted) { await delay(1000, undefined, { signal: monitoring.signal }); await authority.assertActive(assignment.grantId, monitoring.signal) } }
+          catch (error) {
+            if (!monitoring.signal.aborted) {
+              console.error('Pod execution authority lost', error)
+              try { await this.dispatch({ serviceCheck: { scope, authorityLost: true } }) }
+              catch (cancelError) { console.error('Could not cancel the revoked Pod run', cancelError) }
+            }
+          }
+        })()
+        this.shellIdentities.set(scope.runId, { close: async () => { monitoring.abort(); await monitor } })
+        return { home: environment.home, environment: environment.environment }
       }
       if (request.kind === 'credential') {
         const alias = parseCredentialRead(request.body)
@@ -284,7 +335,7 @@ export class FixtureWorker {
       if (request.kind === 'http') {
         if (!this.credentials) throw new Error('Credential store is unavailable')
         const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
-        const result = await executeHttp(state.resources, scope, parseHttpRequest(request.body), vendor, this.credentials, controller.signal)
+        const result = await executeHttp(state.resources, scope, parseHttpRequest(request.body), vendor, this.credentials, controller.signal, observe, previous)
         await check(); controller.signal.throwIfAborted(); return result
       }
       if (request.body && typeof request.body === 'object' && ('applicationId' in request.body || 'application' in request.body)) {
@@ -294,7 +345,8 @@ export class FixtureWorker {
         const grant = await this.connections!.existingProgramGrant(scope.podId, requested.assignment, requested.argv)
         const resources = state.resources.map(item => item.id === requested.id ? { ...item, configuration: { ...item.configuration, grants: [...requested.assignment.grants.filter(item => item.permission !== grant.permission), grant] } } : item)
         const workspace = await podWorkspace(this.root, scope.podId)
-        const result = await invokeProgram(resources, scope.podId, request.body, join(dist, 'native/pods-helper'), join(this.root, 'runs', scope.runId), this.credentials, { workspace, capabilities: scope.capabilities, signal: controller.signal, assertCurrent: () => controller.signal.throwIfAborted(), registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } })
+        const directories = directoryPolicy(await assignedDirectories(this.root, scope.podId, resources))
+        const result = await invokeProgram(resources, scope.podId, request.body, join(dist, 'native/pods-helper'), join(this.root, 'runs', scope.runId), this.credentials, { ...directories, workspace, capabilities: scope.capabilities, signal: controller.signal, assertCurrent: () => controller.signal.throwIfAborted(), registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } }, observe, previous)
         await check(); controller.signal.throwIfAborted(); return result
       }
       const assignment = assignedMail(state.resources)
@@ -302,7 +354,7 @@ export class FixtureWorker {
       const credentials = this.credentials
       if (!credentials) throw new Error('Credential store is unavailable')
       const identity = new PodIdentityManager(credentials)
-      const authority = new AgentAuthority(identity.connection(assignment.identity, `pods:${scope.podId}`))
+      const authority = new AgentAuthority(identity.connection(assignment.identity, `pods:${scope.podId}`), observe, previous)
       const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
       const service = new MailService(join(dist, 'native/pods-helper'), join(dist, 'vendor'), authority, credentials)
       const value = await service.execute(assignment.mail, request.body, join(this.root, 'runs', scope.runId), { capabilities: scope.capabilities, assertCurrent: () => controller.signal.throwIfAborted(), signal: controller.signal, registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } })

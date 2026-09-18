@@ -1,3 +1,4 @@
+import { parseRunApproval } from '../../contracts/activity'
 import { ScriptCredentials } from '../resources/script-credentials'
 import { parseCredentialAlias } from '../../contracts/credentials'
 import type { MailRead, MailScope } from '../../main/mail/contract'
@@ -20,6 +21,7 @@ export function authorizeRunService(store: PodDatabase, registry: ResourceRegist
   if (!row) throw new Error('Pinned service script is missing')
   const manifest = parseManifest(JSON.parse(row.manifest as string))
   if (JSON.stringify(manifest.capabilities) !== JSON.stringify(scope.capabilities)) throw new Error('Service capability is not declared by the pinned script')
+  if (check.approval) runs.append(scope.runId, 'approval', parseRunApproval(check.approval))
   if (check.domain) runs.registerDomain(scope.runId, check.domain.path, check.domain.ownerPid)
   return { resources: registry.list(scope.podId), epoch: registry.epoch(scope.podId) }
 }

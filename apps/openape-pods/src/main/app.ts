@@ -1,3 +1,4 @@
+import { searchPackages } from './package-catalog'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { parseProgramCommand } from '../contracts/programs'
@@ -189,9 +190,24 @@ async function start(): Promise<void> {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     return worker.master(parseMasterCommand(command))
   })
+  let catalogBusy = false
+  ipcMain.handle(channels.packages, async (event, value: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    if (catalogBusy) throw new Error('An npm search is already running')
+    catalogBusy = true
+    try { return await searchPackages(value) }
+    finally { catalogBusy = false }
+  })
   ipcMain.handle(channels.scripts, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     const command = parseScriptCommand(value)
+    if (command.type === 'prepareDependencies') {
+      const view = await worker.scripts({ type: 'list', podId: command.podId, selection: { kind: 'draft', id: command.draftId } })
+      if (!window || view.pod.revision !== command.revision || view.source?.revision !== command.draftRevision) throw new Error('Draft or pod changed during dependency preparation')
+      const packages = Object.entries(view.source.packages?.dependencies ?? {}).map(([name, version]) => `${name}@${version}`).join('\n')
+      const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Prepare dependencies'), message: t('Download these script dependencies?'), detail: t('Packages: {packages}\n\nThe pod will be paused. Preparation uses only the public npm registry, without secrets or installation scripts. Imported libraries receive the same access as your script. No automatic updates.', { packages }), buttons: [t('Cancel'), t('Prepare dependencies')], defaultId: 0, cancelId: 0 })
+      if (answer.response !== 1) return view
+    }
     if (command.type === 'approveCredentials') {
       const view = await worker.scripts({ type: 'list', podId: command.podId, selection: { kind: 'version', id: command.hash } })
       if (!window || view.pod.revision !== command.revision || view.resourceEpoch !== command.epoch || !view.source?.validated) throw new Error('Pod or resources changed during credential review')
@@ -230,6 +246,27 @@ async function start(): Promise<void> {
       if (!window) throw new Error('Owner window is unavailable')
       const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Allow HTTP destination'), message: command.permission.origin, detail: t('Allowed methods: {methods}\n\nScripts with this permission can send data to this destination. Token values remain in Variables and secrets. The pod stays paused.', { methods: command.permission.methods.join(', ') }), buttons: [t('Cancel'), t('Allow HTTP destination')], defaultId: 0, cancelId: 0 })
       if (answer.response !== 1) return worker.resources({ type: 'list', podId: command.podId })
+    }
+    if (command.type === 'pickDirectory' || command.type === 'changeDirectory') {
+      if (!window) throw new Error('Owner window is unavailable')
+      const state = await worker.resources({ type: 'list', podId: command.podId })
+      if (state.epoch !== command.epoch) throw new Error('Directory permissions changed; reload before assigning access')
+      let path: string
+      if (command.type === 'pickDirectory') {
+        const selection = await dialog.showOpenDialog(window, { title: t('Add directory'), properties: ['openDirectory'] })
+        if (selection.canceled || selection.filePaths.length !== 1) return state
+        path = await realpath(selection.filePaths[0])
+      }
+      else {
+        const resource = state.resources.find(item => item.id === command.id && item.revision === command.revision && item.kind === 'directory' && item.state === 'ready')
+        if (!resource) throw new Error('Directory permission is no longer available')
+        path = resource.configuration.path as string
+      }
+      const buttons = command.type === 'pickDirectory' ? [t('Cancel'), t('Read'), t('Read and write')] : [t('Cancel'), t(command.access === 'read' ? 'Read' : 'Read and write')]
+      const approval = await dialog.showMessageBox(window, { type: 'question', title: t('Directory permissions'), message: path, detail: t('Allow direct access to this folder and its contents? Read and write also allows changing and deleting files. The pod will be paused.'), buttons, defaultId: 0, cancelId: 0 })
+      if (approval.response === 0) return state
+      const access = command.type === 'changeDirectory' ? command.access : approval.response === 1 ? 'read' : 'readWrite'
+      return worker.resources({ type: 'assignDirectory', podId: command.podId, epoch: command.epoch, path, access })
     }
     if (command.type !== 'pickReference') return worker.resources(command)
     if (!window) throw new Error('Owner window is unavailable')

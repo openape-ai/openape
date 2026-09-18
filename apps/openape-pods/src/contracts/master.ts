@@ -1,3 +1,5 @@
+import { parsePackages } from './dependencies'
+import type { PackageManifest } from './dependencies'
 import type { AdoptionPreview, PodDescription  } from './description'
 import { parseCredentialAlias, parseScriptCapabilities } from './credentials'
 import { parseVariable } from './resources'
@@ -53,7 +55,7 @@ export type MasterAction =
   | { action: 'prepareSchedule', podId: string, revision: number, spec: ScheduleSpec, scheduleRevision: number }
   | { action: 'setGroup', podId: string, revision: number, name: string | null, organizationRevision: number }
   | { action: 'revise', podId: string, revision: number, name: string }
-  | { action: 'draft', podId: string, revision: number, draftId: string | null, draftRevision: number, code: string, capabilities: string[] }
+  | { action: 'draft', podId: string, revision: number, draftId: string | null, draftRevision: number, code: string, capabilities: string[], packages?: PackageManifest }
   | { action: 'validate' | 'activate', podId: string, revision: number, draftId: string, draftRevision: number }
   | { action: 'rollback', podId: string, revision: number, hash: string, expectedActive: string | null }
   | { action: 'requestAccess', podId: string, revision: number, request: { provider: 'application' | 'http' | 'microsoft' | 'reference' | 'credential', alias?: string, application?: string, command?: string, origin?: string, account?: string, folders?: string[], attachments?: boolean, description: string } }
@@ -64,13 +66,13 @@ export function parseMasterAction(value: unknown): MasterAction {
   if (typeof item.action !== 'string' || !Object.hasOwn(extra, item.action)) throw new Error('Master action is not allowed')
   const scoped = !['list', 'runtime', 'create'].includes(item.action)
   const allowed = ['action', ...(scoped ? ['podId', 'revision'] : []), ...extra[item.action]]
-  if (Object.keys(item).some(key => !allowed.includes(key)) || allowed.some(key => !(key in item))) throw new Error('Invalid master action fields')
+  if (Object.keys(item).some(key => !allowed.includes(key) && !(item.action === 'draft' && key === 'packages')) || allowed.some(key => !(key in item))) throw new Error('Invalid master action fields')
   if (scoped && (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId) || !Number.isSafeInteger(item.revision) || (item.revision as number) < 1)) throw new Error('Invalid master pod revision')
   if (['create', 'revise'].includes(item.action) && (typeof item.name !== 'string' || !item.name.trim() || item.name.length > 100)) throw new Error('Invalid pod name')
   if (allowed.includes('draftId') && ((item.action !== 'draft' || item.draftId !== null) && (typeof item.draftId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.draftId)))) throw new Error('Invalid draft identity')
   if (allowed.includes('draftRevision') && (!Number.isSafeInteger(item.draftRevision) || (item.draftRevision as number) < (item.action === 'draft' && item.draftId === null ? 0 : 1))) throw new Error('Invalid draft revision')
   if (item.action === 'draft' && (typeof item.code !== 'string' || !item.code.trim() || item.code.length > 150000)) throw new Error('Invalid draft contract')
-  if (item.action === 'draft') parseScriptCapabilities(item.capabilities)
+  if (item.action === 'draft') { parseScriptCapabilities(item.capabilities); if (item.packages !== undefined) item.packages = parsePackages(item.packages) }
   if (item.action === 'setVariable') {
     if (typeof item.name !== 'string' || typeof item.value !== 'string' || typeof item.variableRevision !== 'number') throw new Error('Invalid pod variable')
     parseVariable({ name: item.name, value: item.value, revision: item.variableRevision })
@@ -100,6 +102,7 @@ export const masterTool = {
       spec: { type: 'object', description: 'Interval {kind:"interval",seconds:60..2592000} or daily {kind:"daily",time:"HH:MM",timezone:"Europe/Vienna"}.' }, scheduleRevision: { type: 'integer', minimum: 0 },
       organizationRevision: { type: 'integer', minimum: 1 },
       draftId: { type: ['string', 'null'] }, draftRevision: { type: 'integer', minimum: 0 }, code: { type: 'string' }, capabilities: { type: 'array', items: { type: 'string' }, maxItems: 16 },
+      packages: { type: 'object', description: 'Optional package.json containing only dependencies with exact npm versions; owner prepares new sets in Script.' },
       hash: { type: 'string' }, expectedActive: { type: ['string', 'null'] },
       request: { type: 'object', description: 'Access proposal: provider (application/http/reference/credential), description, and optional application/command/origin. Credential requires alias, never a value.' },
     },
