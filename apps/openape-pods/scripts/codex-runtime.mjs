@@ -29,10 +29,13 @@ export function bundleCodex() {
     copyFileSync('runtime-sources/master-protocol.json', join(destination, 'master-protocol.json'))
     const raw = execFileSync(binary, ['debug', 'models', '--bundled'], { encoding: 'utf8', timeout: 10000, maxBuffer: 8 * 1024 * 1024, env: { HOME: home, CODEX_HOME: home, PATH: '/usr/bin:/bin' } })
     const catalog = JSON.parse(raw)
-    const model = catalog.models.find(item => item.slug === 'gpt-5.5')
-    if (!model) throw new Error('The pinned model is missing from the bundled catalog')
-    model.apply_patch_tool_type = null; model.experimental_supported_tools = []
-    const content = JSON.stringify({ models: [model] })
+    const selected = ['gpt-6-astra', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5']
+    const models = selected.map((slug) => {
+      const model = catalog.models.find(item => item.slug === slug)
+      if (!model) throw new Error(`The selected model ${slug} is missing from the bundled catalog`)
+      return { ...model, apply_patch_tool_type: null, experimental_supported_tools: [] }
+    })
+    const content = JSON.stringify({ models })
     writeFileSync(join(destination, 'models.json'), content)
     writeFileSync(join(destination, 'manifest.json'), JSON.stringify({ dependencyLockHash: createHash('sha256').update(readFileSync('../../pnpm-lock.yaml')).digest('hex'), sdk: '0.153.4', cli: metadata.version, binaryHash: createHash('sha256').update(readFileSync(binary)).digest('hex'), catalogHash: createHash('sha256').update(content).digest('hex'), origin: '@openai/codex npm platform package; catalog extracted with debug models --bundled' }, null, 2))
   }

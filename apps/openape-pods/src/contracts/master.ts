@@ -1,7 +1,11 @@
+import { parseChatModel } from './models'
+import type { ChatModel } from './models'
+import { parseSetupRequest } from './setup'
+import type { SetupRequest } from './setup'
 import { parsePackages } from './dependencies'
 import type { PackageManifest } from './dependencies'
 import type { AdoptionPreview, PodDescription  } from './description'
-import { parseCredentialAlias, parseScriptCapabilities } from './credentials'
+import { parseScriptCapabilities } from './credentials'
 import { parseVariable } from './resources'
 import { groupName } from './groups'
 import { parseSchedule } from './scheduling'
@@ -9,13 +13,13 @@ import type { ScheduleSpec } from './scheduling'
 
 export interface MasterMessage { id: string, role: 'user' | 'assistant' | 'tool', text: string, state: string, at: number }
 export interface MasterDraft { id: string, podId: string, name: string, revision: number, code: string, capabilities: string[], validation: string | null, hash: string | null }
-export interface AccessProposal { id: string, podId: string, body: Record<string, unknown>, state: 'pending' | 'declined' | 'approved' }
-export interface MasterView { adoption?: AdoptionPreview | null, description?: PodDescription | null, creationId?: string, boundPodId?: string | null, initialRequest?: MasterMessage | null, connected: boolean, state: 'idle' | 'running' | 'interrupted' | 'failed', error: string | null, messages: MasterMessage[], drafts: MasterDraft[], proposals: AccessProposal[] }
-export type MasterCommand = ({ type: 'adopt', podId: string, hash: string } | { type: 'summarize', podId: string } | { type: 'begin', id: string } | { type: 'list', podId?: string | null } | { type: 'send' | 'steer', id: string, text: string, podId: string | null } | { type: 'cancel', podId?: string | null } | { type: 'decline', id: string, podId?: string | null }) & { creationId?: string }
+export interface AccessProposal { id: string, podId: string, body: SetupRequest, state: 'pending' | 'declined' | 'approved' }
+export interface MasterView { scriptState?: 'missing' | 'draft' | 'active', adoption?: AdoptionPreview | null, description?: PodDescription | null, creationId?: string, boundPodId?: string | null, initialRequest?: MasterMessage | null, connected: boolean, state: 'idle' | 'running' | 'interrupted' | 'failed', error: string | null, messages: MasterMessage[], drafts: MasterDraft[], proposals: AccessProposal[] }
+export type MasterCommand = ({ type: 'resolveSetup', id: string, podId: string, resourceId: string, epoch: number, request: SetupRequest } | { type: 'answerSetup', id: string, podId: string, value: string, revision: number } | { type: 'adopt', podId: string, hash: string } | { type: 'summarize', podId: string } | { type: 'begin', id: string } | { type: 'list', podId?: string | null } | { type: 'send' | 'steer', id: string, text: string, podId: string | null, model?: ChatModel } | { type: 'cancel', podId?: string | null } | { type: 'decline', id: string, podId?: string | null }) & { creationId?: string }
 export function parseMasterCommand(value: unknown): MasterCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid master request')
   const item = value as Record<string, unknown>
-  const fields = item.type === 'adopt' ? ['type', 'podId', 'hash'] : item.type === 'summarize' ? ['type', 'podId'] : item.type === 'begin' ? ['type', 'id'] : item.type === 'list' || item.type === 'cancel' ? ['type', 'podId'] : item.type === 'decline' ? ['type', 'id', 'podId'] : item.type === 'send' || item.type === 'steer' ? ['type', 'id', 'text', 'podId'] : []
+  const fields = item.type === 'resolveSetup' ? ['type', 'id', 'podId', 'resourceId', 'epoch', 'request'] : item.type === 'answerSetup' ? ['type', 'id', 'podId', 'value', 'revision'] : item.type === 'adopt' ? ['type', 'podId', 'hash'] : item.type === 'summarize' ? ['type', 'podId'] : item.type === 'begin' ? ['type', 'id'] : item.type === 'list' || item.type === 'cancel' ? ['type', 'podId'] : item.type === 'decline' ? ['type', 'id', 'podId'] : item.type === 'send' || item.type === 'steer' ? ['type', 'id', 'text', 'podId', 'model'] : []
   if (!fields.length || Object.keys(item).some(key => !fields.includes(key) && key !== 'creationId')) throw new Error('Unsupported master request')
   if (['summarize', 'adopt'].includes(item.type as string) && (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId))) throw new Error('Invalid description pod')
   if (item.type === 'adopt' && (typeof item.hash !== 'string' || !/^[a-f0-9]{64}$/.test(item.hash))) throw new Error('Invalid history review hash')
@@ -23,6 +27,17 @@ export function parseMasterCommand(value: unknown): MasterCommand {
   if (item.podId !== undefined && item.podId !== null && (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId))) throw new Error('Invalid chat pod context')
   if (fields.includes('id') && (typeof item.id !== 'string' || !/^[a-f0-9-]{36}$/.test(item.id))) throw new Error('Invalid master request identity')
   if (fields.includes('text') && (typeof item.text !== 'string' || !item.text.trim() || item.text.length > 20000 || (item.podId !== null && (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId))))) throw new Error('Invalid master input')
+  if (item.type === 'resolveSetup' || item.type === 'answerSetup') {
+    if (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId) || item.creationId !== undefined) throw new Error('Invalid setup pod')
+    if (item.type === 'resolveSetup') {
+      if (typeof item.resourceId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.resourceId) || !Number.isSafeInteger(item.epoch) || Number(item.epoch) < 0) throw new Error('Invalid setup resource')
+      item.request = parseSetupRequest(item.request)
+    }
+    else {
+      parseVariable({ name: 'answer', value: item.value as string, revision: item.revision as number })
+    }
+  }
+  if (item.model !== undefined) parseChatModel(item.model)
   return structuredClone(item) as MasterCommand
 }
 export function parseMasterView(value: unknown): MasterView {
@@ -34,6 +49,7 @@ export function parseMasterView(value: unknown): MasterView {
   if (view.initialRequest && (view.initialRequest.role !== 'user' || typeof view.initialRequest.text !== 'string' || !Number.isSafeInteger(view.initialRequest.at))) throw new Error('Invalid initial request')
   if (view.description && (typeof view.description.text !== 'string' || view.description.text.length > 4000 || !['pending', 'running', 'ready', 'failed'].includes(view.description.state) || !Number.isSafeInteger(view.description.revision))) throw new Error('Invalid description view')
   if (view.adoption && (!/^[a-f0-9]{64}$/.test(view.adoption.hash) || !Array.isArray(view.adoption.requests) || view.adoption.requests.some(request => typeof request.id !== 'string' || typeof request.text !== 'string'))) throw new Error('Invalid history recovery view')
+  if (view.scriptState !== undefined && !['missing', 'draft', 'active'].includes(view.scriptState)) throw new Error('Invalid setup script state')
   for (const message of view.messages) {
     if (!message || typeof message.id !== 'string' || typeof message.text !== 'string' || !['user', 'assistant', 'tool'].includes(message.role) || typeof message.state !== 'string' || !Number.isSafeInteger(message.at)) throw new Error('Invalid master message')
   }
@@ -58,7 +74,7 @@ export type MasterAction =
   | { action: 'draft', podId: string, revision: number, draftId: string | null, draftRevision: number, code: string, capabilities: string[], packages?: PackageManifest }
   | { action: 'validate' | 'activate', podId: string, revision: number, draftId: string, draftRevision: number }
   | { action: 'rollback', podId: string, revision: number, hash: string, expectedActive: string | null }
-  | { action: 'requestAccess', podId: string, revision: number, request: { provider: 'application' | 'http' | 'microsoft' | 'reference' | 'credential', alias?: string, application?: string, command?: string, origin?: string, account?: string, folders?: string[], attachments?: boolean, description: string } }
+  | { action: 'requestAccess', podId: string, revision: number, request: SetupRequest }
 export function parseMasterAction(value: unknown): MasterAction {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid master action')
   const item = { ...value } as Record<string, unknown>
@@ -80,13 +96,7 @@ export function parseMasterAction(value: unknown): MasterAction {
   if (item.action === 'prepareSchedule') { parseSchedule(item.spec); if (!Number.isSafeInteger(item.scheduleRevision) || (item.scheduleRevision as number) < 0) throw new Error('Invalid schedule revision') }
   if (item.action === 'setGroup') { if (item.name !== null) item.name = groupName(item.name); if (!Number.isSafeInteger(item.organizationRevision) || (item.organizationRevision as number) < 1) throw new Error('Invalid organization revision') }
   if (item.action === 'rollback' && (typeof item.hash !== 'string' || !/^[a-f0-9]{64}$/.test(item.hash) || (item.expectedActive !== null && (typeof item.expectedActive !== 'string' || !/^[a-f0-9]{64}$/.test(item.expectedActive))))) throw new Error('Invalid rollback version')
-  if (item.action === 'requestAccess') {
-    const request = item.request as Record<string, unknown>
-    if (!request || typeof request !== 'object' || Array.isArray(request) || Object.keys(request).some(key => !['provider', 'alias', 'application', 'command', 'origin', 'account', 'folders', 'attachments', 'description'].includes(key)) || !['application', 'http', 'microsoft', 'reference', 'credential'].includes(request.provider as string) || typeof request.description !== 'string' || !request.description.trim() || request.description.length > 4000 || (request.account !== undefined && (typeof request.account !== 'string' || request.account.length > 254)) || (request.folders !== undefined && (!Array.isArray(request.folders) || request.folders.length > 100 || request.folders.some(folder => typeof folder !== 'string' || !folder || folder.length > 2048))) || (request.attachments !== undefined && typeof request.attachments !== 'boolean')) throw new Error('Invalid resource proposal')
-    if (request.provider === 'credential') parseCredentialAlias(request.alias)
-    else if (request.alias !== undefined) throw new Error('Only credential proposals accept an alias')
-    if (['application', 'command', 'origin'].some(key => request[key] !== undefined && (typeof request[key] !== 'string' || String(request[key]).length > 4000))) throw new Error('Invalid resource proposal')
-  }
+  if (item.action === 'requestAccess') item.request = parseSetupRequest(item.request)
   return structuredClone(item) as MasterAction
 }
 export const masterTool = {
@@ -104,7 +114,7 @@ export const masterTool = {
       draftId: { type: ['string', 'null'] }, draftRevision: { type: 'integer', minimum: 0 }, code: { type: 'string' }, capabilities: { type: 'array', items: { type: 'string' }, maxItems: 16 },
       packages: { type: 'object', description: 'Optional package.json containing only dependencies with exact npm versions; owner prepares new sets in Script.' },
       hash: { type: 'string' }, expectedActive: { type: ['string', 'null'] },
-      request: { type: 'object', description: 'Access proposal: provider (application/http/reference/credential), description, and optional application/command/origin. Credential requires alias, never a value.' },
+      request: { type: 'object', description: 'Owner setup proposal: provider (application/http/directory/reference/credential/variable), description and instructions. HTTP: origin and methods. Directory: path and access (read/readWrite). Application: application, argv and networkHosts. Credential/variable: alias, never a secret value. Variable proposals ask for missing ordinary configuration.' },
     },
   },
 }
