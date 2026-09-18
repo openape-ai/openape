@@ -105,7 +105,7 @@ async function addLabel() {
       </NuxtLink>
     </header>
     <main class="issue-page">
-      <UAlert v-if="error" color="error" :title="error" class="mb-4" />
+      <UAlert v-if="error" role="alert" color="error" :title="error" class="mb-4" />
       <UButton v-if="error" color="neutral" variant="outline" class="mb-4" @click="load">
         Reload current version
       </UButton>
@@ -245,6 +245,7 @@ async function addLabel() {
                 </UButton>
               </form>
             </details>
+            <IssueTriage v-if="issue.capabilities.triage || issue.capabilities.admin" :key="issue.id + issue.version" :issue="issue" :endpoint="endpoint" @changed="load" />
           </aside>
         </div>
       </template>

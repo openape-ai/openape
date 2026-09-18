@@ -86,13 +86,15 @@ export async function issueIdentity(event: H3Event, context: Awaited<ReturnType<
 
 export function issueFilters(event: H3Event): IssueFilters {
   const query = getQuery(event)
-  const allowed = ['q', 'repo', 'product', 'state', 'label', 'assignee', 'reporter', 'limit', 'cursor']
+  const allowed = ['q', 'repo', 'product', 'state', 'label', 'assignee', 'reporter', 'triage', 'limit', 'cursor']
   if (Object.keys(query).some(key => !allowed.includes(key))) throw createError({ statusCode: 400, statusMessage: 'Unknown issue filter' })
   const text = (key: string) => query[key] === undefined ? undefined : issueText(query[key], key, key === 'cursor' ? 1024 : 200)
   const state = text('state') ?? 'open'
   if (!['open', 'closed', 'all'].includes(state)) throw createError({ statusCode: 400, statusMessage: 'Invalid issue state' })
+  const triage = text('triage')
+  if (triage !== undefined && !['classified', 'unclassified'].includes(triage)) throw createError({ statusCode: 400, statusMessage: 'Invalid triage filter' })
   const labels = query.label === undefined ? [] : Array.isArray(query.label) ? query.label : [query.label]
-  return { q: text('q'), repo: text('repo'), product: text('product'), state: state as IssueFilters['state'], labels: labels.map(label => issueText(label, 'label', 100)), assignee: text('assignee'), reporter: text('reporter'), limit: query.limit === undefined ? 30 : Number(text('limit')), cursor: text('cursor') }
+  return { triage: triage as IssueFilters['triage'], q: text('q'), repo: text('repo'), product: text('product'), state: state as IssueFilters['state'], labels: labels.map(label => issueText(label, 'label', 100)), assignee: text('assignee'), reporter: text('reporter'), limit: query.limit === undefined ? 30 : Number(text('limit')), cursor: text('cursor') }
 }
 
 export async function issueView(context: Awaited<ReturnType<typeof issueContext>>, id: string) {

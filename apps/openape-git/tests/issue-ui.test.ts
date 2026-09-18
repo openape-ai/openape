@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, h, reactive } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import IssueBrowser from '../app/components/IssueBrowser.vue'
@@ -8,18 +8,23 @@ import IssueDetail from '../app/components/IssueDetail.vue'
 import IssueEditor from '../app/components/IssueEditor.vue'
 import IssueList from '../app/components/IssueList.vue'
 import IssueMarkdown from '../app/components/IssueMarkdown.vue'
+import IssueReport from '../app/components/IssueReport.vue'
+import IssuePolicy from '../app/components/IssuePolicy.vue'
+import IssueTriage from '../app/components/IssueTriage.vue'
+
+enableAutoUnmount(afterEach)
 
 const button = defineComponent({ props: ['disabled', 'loading'], emits: ['click'], setup: (p, { slots, emit }) => () => h('button', { disabled: p.disabled || p.loading, onClick: () => emit('click') }, slots.default?.()) })
 const input = defineComponent({ props: ['modelValue'], emits: ['update:modelValue'], setup: (p, { emit, attrs }) => () => h('input', { ...attrs, value: p.modelValue, onInput: (event: Event) => emit('update:modelValue', (event.target as HTMLInputElement).value) }) })
 const textarea = defineComponent({ props: ['modelValue'], emits: ['update:modelValue'], setup: (p, { emit, attrs }) => () => h('textarea', { ...attrs, value: p.modelValue, onInput: (event: Event) => emit('update:modelValue', (event.target as HTMLTextAreaElement).value) }) })
 const link = defineComponent({ props: ['to'], setup: (p, { slots }) => () => h('a', { href: p.to }, slots.default?.()) })
 const alert = defineComponent({ props: ['title'], setup: p => () => h('p', { role: 'alert' }, p.title) })
-const global = { stubs: { UButton: button, UInput: input, UTextarea: textarea, UAlert: alert, UBadge: { render() { return h('span', this.$slots.default?.()) } }, UIcon: true, NuxtLink: link, RepoHeader: true }, components: { IssueEditor, IssueList, IssueMarkdown } }
+const global = { stubs: { UButton: button, UInput: input, UTextarea: textarea, UAlert: alert, UBadge: { render() { return h('span', this.$slots.default?.()) } }, UIcon: true, NuxtLink: link, RepoHeader: true, IssueTriage: true }, components: { IssueEditor, IssueList, IssueMarkdown } }
 const record = { id: 'issue-a', number: 1, title: 'Keep context', body: 'Draft', bodyHtml: '<p>Draft</p>', state: 'open', version: 1, authorSubject: 'owner@test', authorActor: 'owner@test', assignee: null, productName: 'Plans', createdAt: 1, updatedAt: 1, labels: [], stableUrl: '/i/issue-a', repositoryUrl: '/owner/project/issues/1', capabilities: { repository: { owner: 'owner', name: 'project' }, edit: true, triage: true, admin: true, comment: true } }
 const fetcher = vi.fn()
 const navigate = vi.fn()
 const route = reactive({ fullPath: '/issues', query: {} as Record<string, string> })
-beforeEach(() => { vi.stubGlobal('$fetch', fetcher); vi.stubGlobal('navigateTo', navigate); vi.stubGlobal('useRoute', () => route); vi.stubGlobal('useRouter', () => ({ push: navigate })); fetcher.mockReset(); navigate.mockReset() })
+beforeEach(() => { vi.stubGlobal('$fetch', fetcher); vi.stubGlobal('navigateTo', navigate); vi.stubGlobal('useRoute', () => route); vi.stubGlobal('useRouter', () => ({ push: navigate })); fetcher.mockReset(); navigate.mockReset(); route.query = {} })
 afterEach(() => vi.unstubAllGlobals())
 
 describe('issue interaction contracts', () => {
@@ -90,4 +95,63 @@ describe('issue interaction contracts', () => {
     expect(wrapper.text()).not.toContain('owner/project')
     expect(wrapper.text()).toContain('access has changed')
   })
+  it('requires a fresh audience review after a routing conflict without losing the report draft', async () => {
+    const catalog = { products: [{ key: 'plans', name: 'Plans' }], selected: { key: 'plans', name: 'Plans', audience: 'Private product discussion', routingVersion: 'first', unclassified: false } }
+    route.query = { product: 'plans' }
+    fetcher.mockResolvedValueOnce(catalog).mockRejectedValueOnce({ statusCode: 409 })
+    const wrapper = mount(IssueReport, { global })
+    await flushPromises()
+    expect(fetcher.mock.calls[0]![1].query.product).toBe('plans')
+    await wrapper.get('input').setValue('Keep this report')
+    await wrapper.get('textarea').setValue('Full reproduction')
+    await wrapper.get('form').trigger('submit'); await flushPromises()
+    expect(wrapper.text()).toContain('destination changed')
+    await wrapper.get('form').trigger('submit'); await flushPromises()
+    expect(fetcher).toHaveBeenCalledTimes(2)
+    fetcher.mockResolvedValueOnce({ ...catalog, selected: { ...catalog.selected, routingVersion: 'second' } })
+    await wrapper.findAll('button').find(b => b.text() === 'Review current destination')!.trigger('click'); await flushPromises()
+    expect(wrapper.get('textarea').element.value).toBe('Full reproduction')
+    fetcher.mockResolvedValueOnce({ stableUrl: '/i/one' })
+    await wrapper.get('form').trigger('submit'); await flushPromises()
+    expect(fetcher.mock.calls[3]![1].body).toMatchObject({ title: 'Keep this report', body: 'Full reproduction', routingVersion: 'second' })
+    expect(navigate).toHaveBeenCalledWith('/i/one')
+  })
+  it('ignores an older product response after the reporter changes product', async () => {
+    let resolveFirst!: (value: unknown) => void
+    fetcher.mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve }))
+    const wrapper = mount(IssueReport, { global })
+    fetcher.mockResolvedValueOnce({ products: [], selected: { key: 'git', name: 'Git', audience: 'Private', routingVersion: 'new' } })
+    route.query = { product: 'git' }
+    await flushPromises()
+    resolveFirst({ products: [], selected: { key: 'plans', name: 'Plans', audience: 'Private', routingVersion: 'old' } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Git — private development discussion')
+    expect(wrapper.text()).not.toContain('Plans — private development discussion')
+  })
+
+  it('retains policy edits on conflict and sends the displayed revision', async () => {
+    fetcher.mockResolvedValueOnce({ reportingEnabled: false, version: 3, products: [], canCreateProduct: false }).mockRejectedValueOnce({ statusCode: 409 })
+    const wrapper = mount(IssuePolicy, { props: { owner: 'owner', name: 'project' }, global })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('Register product')
+    await wrapper.get('input[type="checkbox"]').setValue(true)
+    await wrapper.get('form').trigger('submit'); await flushPromises()
+    expect(fetcher.mock.calls[1]![1].body).toEqual({ reportingEnabled: true, expectedVersion: 3 })
+    expect(wrapper.get('input[type="checkbox"]').element.checked).toBe(true)
+    expect(wrapper.text()).toContain('record changed')
+  })
+  it('transfers an intake report only with explicit label disposition and its current revision', async () => {
+    fetcher.mockResolvedValueOnce({ products: [{ key: 'plans', name: 'Plans', labels: [] }] }).mockResolvedValueOnce({})
+    const wrapper = mount(IssueTriage, { props: { issue: { ...record, triageState: 'unclassified', labels: [{ id: 'old', name: 'triage' }] } as never, endpoint: '/api/issue-records/issue-a' }, global: { ...global, stubs: { ...global.stubs, IssueTriage: false } } })
+    await flushPromises()
+    const choices = wrapper.findAll('select')
+    await choices[0]!.setValue('plans')
+    await choices[1]!.setValue('remove')
+    await wrapper.get('form').trigger('submit'); await flushPromises()
+    expect(fetcher.mock.calls[1]![1].body).toEqual({ productKey: 'plans', labelMap: { old: null }, expectedVersion: 1 })
+    expect(wrapper.emitted('changed')).toHaveLength(1)
+    await wrapper.setProps({ issue: { ...record, triageState: 'classified' } as never })
+    expect(wrapper.text()).not.toContain('Classify / transfer report')
+  })
+
 })

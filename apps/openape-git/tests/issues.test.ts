@@ -51,11 +51,11 @@ describe('private issue storage', () => {
     await db.insert(schema.pulls).values({ id: 'pr', repoId: 'repo', number: 7, title: 'Existing pull', sourceRef: 'feature', targetRef: 'main', authorEmail: owner.subject, createdAt: 1 })
     await grant()
     await migrateDatabase(client)
-    await expect(migrateDatabase(client, [...databaseMigrations, { version: 3, name: 'broken', statements: ['CREATE TABLE should_rollback (id TEXT)', 'INVALID SQL'] }])).rejects.toThrow()
+    await expect(migrateDatabase(client, [...databaseMigrations, { version: databaseMigrations.length + 1, name: 'broken', statements: ['CREATE TABLE should_rollback (id TEXT)', 'INVALID SQL'] }])).rejects.toThrow()
     expect((await client.execute('SELECT name FROM sqlite_master WHERE name=\'should_rollback\'')).rows).toHaveLength(0)
     expect((await db.select().from(schema.pulls))[0]!.title).toBe('Existing pull')
     expect(await db.select().from(schema.grants)).toHaveLength(1)
-    expect((await client.execute('SELECT * FROM schema_migrations')).rows).toHaveLength(2)
+    expect((await client.execute('SELECT * FROM schema_migrations')).rows).toHaveLength(databaseMigrations.length)
   })
 
   it('bounds reads, counts and filters by live access, including revocation', async () => {

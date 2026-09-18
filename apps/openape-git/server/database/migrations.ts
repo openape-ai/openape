@@ -285,6 +285,10 @@ export const databaseMigrations: DatabaseMigration[] = [
     `CREATE INDEX idx_issue_events_order ON issue_events(issue_id, created_at, id)`,
     `CREATE INDEX idx_issue_links_label ON issue_label_links(label_id, issue_id)`,
   ] },
+  { version: 3, name: 'Issue reporting policy and triage', statements: [
+    `ALTER TABLE repos ADD COLUMN issue_policy_version INTEGER NOT NULL DEFAULT 1`,
+    `ALTER TABLE issues ADD COLUMN triage_state TEXT NOT NULL DEFAULT 'classified' CHECK(triage_state IN ('classified', 'unclassified'))`,
+  ] },
 ]
 
 export async function migrateDatabase(client: Client, migrations = databaseMigrations): Promise<void> {

@@ -58,6 +58,12 @@ watch(() => route.fullPath, () => { q.value = String(route.query.q || ''); retur
         <NuxtLink to="/issues?reporter=me" class="block text-sm text-zinc-400 py-2">
           Reported by me
         </NuxtLink>
+        <NuxtLink to="/issues?triage=unclassified" class="block text-sm text-zinc-400 py-2">
+          Unclassified reports
+        </NuxtLink>
+        <NuxtLink to="/report" class="block text-sm text-amber-500 py-2">
+          Report a problem
+        </NuxtLink>
       </aside>
       <div class="min-w-0 space-y-4">
         <header class="flex justify-between items-center gap-4 flex-wrap">
