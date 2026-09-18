@@ -6,6 +6,9 @@ const directory = '.artifacts'
 const result = JSON.parse(readFileSync(join(directory, 'electron-tests.json'), 'utf8'))
 const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
 const shots = [
+  ['chat-setup-http.png', 'Review concrete chat permissions', 'The proposed Telegram origin and POST method are prefilled. Native cancellation and approval are verified without a Telegram request.'],
+  ['chat-setup-resolved-de-dark.png', 'Saved setup in a narrow German window', 'Actual resources and ordinary values are saved; secret presence is checked without returning its value to chat. The interrupted conversation and missing script remain visible.'],
+  ['chat-conversation-de.png', 'Choose GPT-6 Astra for pod creation', 'The selected model survives navigation and restart. The synthetic provider verifies gpt-6-astra on creation and gpt-5.6-sol after an explicit model switch.'],
   ['external-terminal-en.png', 'Open the pod in Terminal.app', 'One button opens the separate macOS terminal with ape-shell. Assigned programs reuse their encrypted setup. This image proves the Pods control; the real client is verified separately through a PTY.'],
   ['external-terminal-de-dark.png', 'Externes Terminal im Pod-Kontext', 'The German control remains readable in a narrow dark window. The terminal holds the pod lease until setup ends.'],
   ['program-permissions-en.png', 'Program permissions and HTTPS destinations', 'Applications receive command grants. Script HTTP access has an explicit origin and method; tokens remain in Variables and secrets.'],

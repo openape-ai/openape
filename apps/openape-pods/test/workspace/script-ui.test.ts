@@ -49,6 +49,10 @@ it('supports indentation and the save shortcut without executing editor text', a
 it('preserves the first unsaved script across tab navigation', async () => {
   const { view, scripts } = fixture(); view.source = null; view.versions = []; view.pod.activeScript = null; scripts.mockResolvedValue(view)
   let wrapper = mount(PodScript, { props: { pod: view.pod } }); await flushPromises()
+  expect(wrapper.get('textarea').element.value).toBe('')
+  expect(wrapper.text()).toContain('No script has been saved')
+  expect(wrapper.text()).not.toContain('Saved locally')
+  expect(wrapper.findAll('button').find(button => button.text() === 'Run')!.attributes('disabled')).toBeDefined()
   await wrapper.get('textarea').setValue('export async function run() { /* first unsaved script */ }')
   wrapper.unmount(); wrapper = mount(PodScript, { props: { pod: view.pod } }); await flushPromises()
   expect(wrapper.get('textarea').element.value).toContain('first unsaved script'); wrapper.unmount()

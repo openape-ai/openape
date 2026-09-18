@@ -1,3 +1,5 @@
+import type { ChatModel } from '../../contracts/models'
+import { MasterDeadline } from './deadline'
 import { LegacyChatAdoption } from './adoption'
 import { PodDescriptions } from './descriptions'
 import { summarizeConversation } from './summarize'
@@ -21,6 +23,7 @@ export class MasterService {
   private finish: ((error?: Error) => void) | null = null
   private context = ''
   private actions = 0
+  private deadline: MasterDeadline | null = null
   private tools = new Set<Promise<void>>()
   constructor(private readonly store: PodDatabase, private readonly runtime: AgentRuntime, private readonly control: MasterControl, private provider?: AgentGatewayServices['provider']) {
     this.descriptions = new PodDescriptions(store, (input, signal) => summarizeConversation(store, runtime, this.provider, input, signal))
@@ -45,15 +48,17 @@ export class MasterService {
     const scope = conversations.resolve(requested)
     const boundPodId = scope && !scope.startsWith('creation:') ? scope : null
     const session = scope === conversations.resolve(this.context) && this.active ? this.store.db.prepare('SELECT * FROM master_session WHERE id=1').get()! : conversations.session(scope)
-    return { adoption: boundPodId ? new LegacyChatAdoption(this.store).preview(boundPodId) : null, ...(requested.startsWith('creation:') ? { creationId: requested.slice(9), boundPodId } : {}), description: boundPodId ? this.descriptions.view(boundPodId) : null, initialRequest: boundPodId ? conversations.initial(boundPodId) : null, connected: !!this.provider, state: session.state as MasterView['state'], error: session.error as string | null,
+    return { adoption: boundPodId ? new LegacyChatAdoption(this.store).preview(boundPodId) : null, ...(requested.startsWith('creation:') ? { creationId: requested.slice(9), boundPodId } : {}), description: boundPodId ? this.descriptions.view(boundPodId) : null, initialRequest: boundPodId ? conversations.initial(boundPodId) : null, ...(boundPodId ? { scriptState: this.control.setup().scriptState(boundPodId) } : {}), connected: !!this.provider, state: session.state as MasterView['state'], error: session.error as string | null,
       messages: conversations.messages(scope),
       drafts: this.store.db.prepare('SELECT d.*,p.name FROM script_drafts d JOIN pods p ON p.id=d.pod_id WHERE (?=\'\' OR d.pod_id=?) ORDER BY d.rowid DESC LIMIT 20').all(scope, scope).map(row => ({ id: row.id as string, podId: row.pod_id as string, name: row.name as string, revision: row.revision as number, code: row.code as string, capabilities: JSON.parse(row.capabilities as string) as string[], validation: row.validation as string | null, hash: row.script_hash as string | null })).filter(draft => !scope || draft.podId === scope),
-      proposals: this.store.db.prepare('SELECT * FROM access_proposals WHERE (?=\'\' OR pod_id=?) ORDER BY rowid DESC LIMIT 100').all(scope, scope).map(row => ({ id: row.id as string, podId: row.pod_id as string, body: JSON.parse(row.body as string) as Record<string, unknown>, state: row.state as 'pending' | 'declined' | 'approved' })).filter(proposal => !scope || proposal.podId === scope),
+      proposals: scope.startsWith('creation:') ? [] : this.control.setup().proposals(scope),
     }
   }
 
   async execute(command: MasterCommand): Promise<MasterView> {
     const conversations = new MasterConversations(this.store)
+    if (command.type === 'answerSetup') { this.control.setup().answer(command); return this.view(command.podId) }
+    if (command.type === 'resolveSetup') { await this.control.setup().resolve(command); return this.view(command.podId) }
     if (command.type === 'adopt') { new LegacyChatAdoption(this.store).adopt(command.podId, command.hash); this.descriptions.request(command.podId); this.descriptions.start(); return this.view(command.podId) }
     if (command.type === 'summarize') { this.descriptions.request(command.podId, true); this.descriptions.start(); return this.view(command.podId) }
     if (command.type === 'begin') { conversations.begin(command.id); return this.view(null, command.id) }
@@ -84,13 +89,13 @@ export class MasterService {
     if (!this.provider) { this.store.db.prepare('UPDATE master_session SET state=\'failed\',error=\'Codex is not connected. Connect your account before sending another message.\' WHERE id=1').run(); new MasterConversations(this.store).capture(this.context); return this.view() }
     this.store.db.prepare('UPDATE master_session SET state=\'running\',error=NULL,active_turn=NULL WHERE id=1').run()
     this.controller = new AbortController(); this.actions = 0
-    this.active = this.run(text).finally(() => { this.active = null; this.controller = null; this.descriptions.start() })
+    this.active = this.run(text, command.model ?? 'gpt-5.5').finally(() => { this.active = null; this.controller = null; this.descriptions.start() })
     new MasterConversations(this.store).capture(this.context)
     return this.view()
   }
 
-  private async run(text: string): Promise<void> {
-    const signal = this.controller!.signal; const deadline = setTimeout(() => this.controller?.abort(new Error('Master turn exceeded two minutes')), 120000)
+  private async run(text: string, model: ChatModel): Promise<void> {
+    const signal = this.controller!.signal; this.deadline = new MasterDeadline(error => this.controller?.abort(error))
     let completionError: Error | undefined
     let outcome: MasterView['state'] = 'idle'; let failure: string | null = null
     const finished = new Promise<void>((resolve) => { this.finish = (error) => { completionError = error; resolve() } })
@@ -102,10 +107,10 @@ export class MasterService {
       this.store.db.prepare('DELETE FROM master_domains').run(); signal.throwIfAborted()
       this.transport = await MasterTransport.start(this.runtime, root, { provider: this.provider!, tool: async () => { throw new Error('Master has no MCP tools') } }, (path, ownerPid) => { this.store.db.prepare('INSERT INTO master_domains VALUES(?,?)').run(path, ownerPid) }, frame => this.notify(frame))
       const previous = this.store.db.prepare('SELECT thread_id FROM master_session WHERE id=1').get()!.thread_id as string | null
-      const threadId = await this.transport.thread(this.runtime, root, previous); signal.throwIfAborted()
+      const threadId = await this.transport.thread(this.runtime, root, previous, false, model); signal.throwIfAborted()
       this.store.db.prepare('UPDATE master_session SET thread_id=? WHERE id=1').run(threadId)
       new MasterConversations(this.store).capture(this.context)
-      await this.transport.request('turn/start', { threadId, input: [{ type: 'text', text }] })
+      await this.transport.request('turn/start', { threadId, model, input: [{ type: 'text', text }] })
       await finished
       if (completionError) throw completionError
       signal.throwIfAborted()
@@ -114,7 +119,7 @@ export class MasterService {
       outcome = signal.aborted ? 'interrupted' : 'failed'; failure = error instanceof Error ? error.message : 'Master failed'
     }
     finally {
-      clearTimeout(deadline); signal.removeEventListener('abort', abort); this.controller?.abort(new Error('Master turn ended'))
+      this.deadline?.close(); this.deadline = null; signal.removeEventListener('abort', abort); this.controller?.abort(new Error('Master turn ended'))
       await Promise.all(this.tools)
       try { await this.transport?.close() }
       catch (error) { outcome = 'failed'; failure = error instanceof Error ? error.message : 'Master cleanup failed' }
@@ -132,10 +137,12 @@ export class MasterService {
     if (frame.method === 'transport/failed') { this.finish?.(new Error(String(frame.params?.message))); return }
     const params = frame.params ?? {}; const session = this.store.db.prepare('SELECT * FROM master_session WHERE id=1').get()!
     if (frame.id !== undefined) {
+      if (params.threadId === session.thread_id && params.turnId === session.active_turn) this.deadline?.progress()
       const task = this.tool(frame).catch((error: unknown) => this.finish?.(error instanceof Error ? error : new Error('Master tool response failed'))).finally(() => this.tools.delete(task))
       this.tools.add(task); return
     }
     if (params.threadId !== session.thread_id) return
+    this.deadline?.progress()
     if (frame.method === 'turn/started') {
       const turn = params.turn as { id?: string }
       if (typeof turn?.id !== 'string') throw new Error('Invalid master turn identity')
@@ -163,7 +170,7 @@ export class MasterService {
     let text: string; let success = false
     const id = `${String(params.threadId)}:${String(params.turnId)}:${String(params.callId)}`
     try {
-      if (frame.method !== 'item/tool/call' || params.tool !== 'pods_control' || params.threadId !== session.thread_id || params.turnId !== session.active_turn || typeof params.callId !== 'string' || params.callId.length > 128 || ++this.actions > 20) throw new Error('Master tool request is outside the active turn or allowed action budget')
+      if (frame.method !== 'item/tool/call' || params.tool !== 'pods_control' || params.threadId !== session.thread_id || params.turnId !== session.active_turn || typeof params.callId !== 'string' || params.callId.length > 128 || ++this.actions > 60) throw new Error('Master tool request is outside the active turn or allowed action budget')
       const result = await this.control.execute(id, params.arguments, this.controller!.signal, this.context.startsWith('creation:') ? null : this.context || null, this.context.startsWith('creation:') ? this.context.slice(9) : null)
       text = JSON.stringify(result); if (Buffer.byteLength(text) > 256 * 1024) throw new Error('Action completed but its result is too large; inspect a smaller portion in the workspace')
       success = true
