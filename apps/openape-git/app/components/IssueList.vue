@@ -8,7 +8,7 @@ defineProps<{ issues: IssueRecord[], total: number, loading: boolean }>()
 <template>
   <section class="border border-zinc-800 rounded-lg overflow-hidden" aria-label="Issue results" :aria-busy="loading">
     <header class="px-4 py-3 bg-zinc-900 border-b border-zinc-800 text-sm text-zinc-400" aria-live="polite">
-      {{ loading ? 'Loading issues…' : `${total} issues` }}
+      {{ loading ? 'Loading issues…' : `${total} ${total === 1 ? 'issue' : 'issues'}` }}
     </header>
     <p v-if="!loading && !issues.length" class="p-10 text-center text-zinc-400">
       No issues match these filters.

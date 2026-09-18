@@ -20,6 +20,9 @@ const tabs = computed(() => [
       <NuxtLink to="/" class="font-bold text-lg shrink-0">
         🦍 ape-git
       </NuxtLink>
+      <NuxtLink v-if="useRuntimeConfig().public.issuesEnabled" to="/report?product=git" class="text-xs text-zinc-400">
+        Report a problem
+      </NuxtLink>
       <span class="font-mono text-sm text-zinc-400 truncate">
         {{ owner }}<span class="text-zinc-600">/</span>{{ name }}
       </span>

@@ -42,6 +42,7 @@ function positive(value, fallback) {
 
 export async function execute(argv, request, sleep = ms => new Promise(resolve => setTimeout(resolve, ms))) {
   const args = argv[0] === '--' ? argv.slice(1) : argv
+  if (args[0] === 'report') return executeIssueCommand(args, request)
   if (args[0] === 'issue') return executeIssueCommand(args.slice(1), request)
   request ??= createClient()
   const { flags, positional: p } = options(args)

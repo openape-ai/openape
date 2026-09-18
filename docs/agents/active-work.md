@@ -1,5 +1,10 @@
 # Active work
 
+## Native issues — M4 product reporting (September 18, 2026)
+
+The dependent checkout `openape-monorepo.worktrees/native-issues-reporting`, branch `feature/issue-1356-native-issues-reporting`, starts from M3 source `597de762`. It adds versioned product routing, private report participation, intake-only transfer with explicit label mapping, audited moderation and matching web/CLI flows. The real IdP/CLI suite covers report → transfer → discussion → revocation. Browser checks exercise product preselection through login and responsive reporting. M1 is merged through PR 60 at `048ab8ab`; M2 is in PR 61. Product registration and production intake creation remain disabled until rollout. App-shell links and external-code issue homes follow in a separate M4 increment; continue M5/M6 before requesting the concrete production cutover approval.
+
+
 ## Native issues — M3 UI (September 18, 2026)
 
 The approved UI is implemented in `openape-monorepo.worktrees/native-issues-ui`, branch `feature/issue-1356-native-issues-ui`, based on M2 `039e3ad6`. Repository/overview pages, safe previews, discussions, metadata and stable participant links use the private API. Real IdP-backed CLI/session tests and actual-CSS desktop/mobile browser checks are registered in the shared contract; synthetic screenshots and a portable report are generated under the Git app `.artifacts/issues/`. Continue final gates, native diff review and exact-source merge, then product reporting, explicit PR relations and migration rehearsal. Keep production issue data untouched until the separate M7 approval.

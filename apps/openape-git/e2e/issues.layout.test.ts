@@ -98,3 +98,53 @@ it('creates, previews, discusses, filters and triages at desktop and phone width
   writeFileSync(`${artifactDir}/testrun.json`, JSON.stringify({ title: 'Native issues: repository and ecosystem UI', project: 'OpenApe', summary: 'Actual Nuxt UI and private SQLite fixture after real DDISA login. Keyboard creation/commenting, Markdown preview, labels, assignment, close/reopen, URL filters and 390/1440px layouts pass. Synthetic data only; production issues are unchanged.', tests: [{ id: 'native-issues-ui', title: 'Find, discuss and triage development issues', status: 'passed', steps: shots }] }, null, 2))
   writeFileSync(`${artifactDir}/report.html`, `<!doctype html><html lang="en"><meta charset="utf-8"><title>Native issues UI verification</title><style>body{background:#09090b;color:#e4e4e7;font:16px system-ui;max-width:1200px;margin:auto;padding:24px}img{max-width:100%}section{border:1px solid #3f3f46;padding:16px;margin:24px 0}b{color:#34d399}</style><h1>Native issues UI verification</h1><p><b>Passed</b> · Real DDISA login → create → preview → comment → triage → filter. Synthetic data.</p>${shots.map(shot => `<section><h2>${shot.title}</h2><img alt="${shot.title}" src="data:image/png;base64,${readFileSync(`${artifactDir}/${shot.shot}`).toString('base64')}"></section>`).join('')}</html>`)
 })
+
+it('keeps product selection across login and gives reporters only their own discussion', async () => {
+  expect((await user.call('PATCH', '/api/repos/owner/project/issue-policy', { reportingEnabled: true, expectedVersion: 1 })).ok).toBe(true)
+  expect((await user.call('PUT', '/api/repos/owner/project/issue-products/plans', { name: 'Plans', enabled: true, expectedVersion: 0 })).ok).toBe(true)
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
+  const reporterPage = await context.newPage()
+  try {
+    await reporterPage.goto(`${fixture.base}/report?product=plans`)
+    await reporterPage.waitForURL(`${fixture.base}/`)
+    const reporter = await fixture.identity('reporter@issues.test')
+    await context.addCookies(reporter.cookie.split('; ').map((cookie) => {
+      const index = cookie.indexOf('=')
+      return { name: cookie.slice(0, index), value: cookie.slice(index + 1), url: fixture.base, httpOnly: true, sameSite: 'Lax' as const }
+    }))
+    await reporterPage.reload()
+    await reporterPage.waitForURL('**/report?product=plans')
+    await reporterPage.getByLabel('What happened?').fill('Plans lost my selected product after login')
+    await reporterPage.getByLabel('Expected and actual behavior', { exact: true }).fill('Expected: retain Plans. Actual: context is missing. Reproduced with a new session.')
+    expect(await reporterPage.getByLabel('Product', { exact: true }).inputValue()).toBe('plans')
+    const shots = []
+    for (const [name, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]] as const) {
+      await reporterPage.setViewportSize({ width, height })
+      await reporterPage.screenshot({ path: `${artifactDir}/report-${name}.png`, fullPage: true })
+      expect(await reporterPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+      shots.push({ title: `Product reporting — ${name}`, shot: `report-${name}.png`, status: 'passed' })
+    }
+    await reporterPage.getByRole('button', { name: 'Submit report', exact: true }).focus()
+    await reporterPage.keyboard.press('Enter')
+    await reporterPage.waitForURL('**/i/*')
+    await reporterPage.getByRole('heading', { name: 'Plans lost my selected product after login' }).waitFor()
+    expect(await reporterPage.locator('body').textContent()).not.toContain('owner/project')
+    expect(await reporterPage.getByRole('button', { name: 'Save metadata' }).count()).toBe(0)
+    await reporterPage.getByLabel('Leave a comment', { exact: true }).fill('I can follow my own report.')
+    await reporterPage.getByRole('button', { name: 'Comment', exact: true }).click()
+    await reporterPage.getByText('I can follow my own report.', { exact: true }).waitFor()
+    expect((await reporter.call('GET', '/api/repos/owner/project/issues')).status).toBe(404)
+    const id = new URL(reporterPage.url()).pathname.split('/').at(-1)
+    const issue = await (await user.call('GET', `/api/issue-records/${id}`)).json()
+    expect((await user.call('POST', `/api/issue-records/${id}/moderation`, { revokeParticipant: 'reporter@issues.test', reason: 'Verify revocation', expectedVersion: issue.version })).ok).toBe(true)
+    await reporterPage.reload()
+    await reporterPage.getByRole('alert').waitFor()
+    expect(await reporterPage.locator('body').textContent()).not.toContain('I can follow my own report.')
+    const manifest = JSON.parse(readFileSync(`${artifactDir}/testrun.json`, 'utf8'))
+    manifest.tests.push({ id: 'product-reporting-ui', title: 'Preselected product, private participant discussion and revocation', status: 'passed', steps: shots })
+    writeFileSync(`${artifactDir}/testrun.json`, JSON.stringify(manifest, null, 2))
+    const report = readFileSync(`${artifactDir}/report.html`, 'utf8')
+    writeFileSync(`${artifactDir}/report.html`, report.replace('</html>', `${shots.map(shot => `<section><h2>${shot.title}</h2><img alt="${shot.title}" src="data:image/png;base64,${readFileSync(`${artifactDir}/${shot.shot}`).toString('base64')}"></section>`).join('')}</html>`))
+  }
+  finally { await context.close() }
+})

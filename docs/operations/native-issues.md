@@ -136,3 +136,52 @@ Layout tests load actual application CSS at 390 and 1440 pixels and emit synthet
 screenshots, `testrun.json` and a self-contained `report.html` under
 `apps/openape-git/.artifacts/issues/`. Unit/component tests additionally protect
 retry keys, draft retention, permission changes and participant-only controls.
+
+## M4: product reporting and intake triage
+
+`/report?product=plans` retains product selection through the existing login return
+path. The form shows a safe product name and audience description before submission.
+No app credentials, diagnostics or page contents are transferred. Unknown or disabled
+products route to the configured private intake, never to a client-selected repository.
+Configure `NUXT_ISSUE_INTAKE_REPO_ID` and `NUXT_ISSUE_ROUTING_ADMIN` explicitly at rollout.
+An unavailable intake returns 503 and keeps the draft; no issue is silently discarded.
+
+`GET /api/products?product=KEY` requires `products:read` and returns enabled product
+names and a versioned audience descriptor without private repository namespaces.
+`POST /api/reports` requires `reports:create`, `Idempotency-Key`, `productKey`
+(or null), `routingVersion`, `title` and `body`. A changed destination returns 409;
+the UI retains the text and requires a new audience review. A retry of a committed
+report still resolves its original identity after the route changes.
+
+Under a repository's Access settings, administrators can enable reporting and maintain
+existing product names. Creating or moving a product route also requires the configured
+routing administrator to hold destination repository administration. Versioned routes:
+`GET/PATCH R/issue-policy` and `PUT R/issue-products/:key`. New products use version zero.
+
+`POST I/transfer` (also `/api/issue-records/:id/transfer`) requires live source triage
+and destination write access, an approved `productKey`, `expectedVersion` and explicit
+`labelMap` from every source label ID to a destination label ID or null. Only configured
+intake issues can move. ID, comments, participant access and old number aliases remain;
+a destination number is allocated, assignment is cleared and the transfer is audited.
+`GET I/transfer-options` offers only destinations writable by the caller.
+The ecosystem list supports `triage=unclassified` for the intake queue.
+
+`POST I/moderation` requires administration, `expectedVersion`, a nonempty `reason`
+and `hidden` and/or `revokeParticipant`. Hidden issues disappear from non-admin reads;
+revoked participants immediately lose their narrow access. Reporter membership never
+confers repository read access. The same commands are available through the CLI:
+
+```sh
+pnpm git:cli -- issue product list --product plans
+pnpm git:cli -- report create --product plans --routing-version REVIEWED_HASH --title 'Describe the problem' --body-file /tmp/report.md --idempotency-key report-retry-001
+pnpm git:cli -- issue policy set --repo owner/repository --enabled true --expected-version 1
+pnpm git:cli -- issue product set --repo owner/repository --product plans --name Plans --enabled true --expected-version 0
+pnpm git:cli -- issue transfer --id ISSUE_ID --product plans --label-map-file /tmp/labels.json --expected-version 1
+pnpm git:cli -- issue moderate --id ISSUE_ID --revoke-participant reporter@example.com --reason 'Access withdrawn' --expected-version 2
+```
+
+Issue timestamps use Unix milliseconds; legacy Git registry timestamps retain their
+existing seconds. Import tooling must convert explicitly rather than copy values blindly.
+Production intake creation, product registration and feature activation remain part of
+the separately approved rollout. Reporting links in other app shells and external-code
+issue homes follow as independently reviewable changes.
