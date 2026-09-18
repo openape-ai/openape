@@ -1,6 +1,9 @@
 // @vitest-environment node
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { randomUUID } from 'node:crypto'
+import { PodIdentityManager } from '../../src/main/connections/agent'
+import { OwnerConnection } from '../../src/main/connections/owner'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { ConnectionManager } from '../../src/main/connections/manager'
@@ -51,4 +54,26 @@ it('fails visibly for a locked credential store and mismatched runtime architect
   const wrong = await fixture(false, process.arch === 'x64' ? 'arm64' : 'x64')
   expect((await wrong.manager.view()).runtime).toMatchObject({ ready: false, error: 'Bundled Codex architecture does not match this Mac' })
   await expect(wrong.manager.execute({ type: 'connect', provider: 'chatgpt', account: '' })).rejects.toThrow('architecture')
+})
+
+it('keeps an existing pod owner while new pods use the most recently connected account', async () => {
+  const { manager, control, store } = await fixture()
+  const existing = store.createPod({ name: 'Existing' }); const fresh = store.createPod({ name: 'New' })
+  const first = randomUUID(); const second = randomUUID()
+  const identity = { connectionId: randomUUID(), podId: existing.id, issuer: 'https://id.example.invalid', owner: 'first@example.invalid', subject: 'pod@example.invalid', keyId: 'key' }
+  for (const [id, account, pods] of [[first, identity.owner, { [existing.id]: { connectionId: identity.connectionId, prepared: true, identity } }], [second, 'second@example.invalid', {}]] as const) control.execute({ type: 'save', connection: { id, provider: 'openape', account, state: 'ready', error: null }, metadata: { issuer: identity.issuer, pods } })
+  expect((await manager.podConnection(existing.id)).identity).toEqual(identity)
+  const bearer = vi.spyOn(OwnerConnection.prototype, 'bearer').mockResolvedValue('synthetic')
+  vi.spyOn(PodIdentityManager.prototype, 'ensurePrepared').mockResolvedValue()
+  vi.spyOn(PodIdentityManager.prototype, 'provision').mockImplementation(async connectionId => ({ ...identity, connectionId, podId: fresh.id, owner: 'second@example.invalid' }))
+  expect((await manager.podConnection(fresh.id)).ownerConnection).toBe(second)
+  expect(bearer).toHaveBeenCalledWith(second, identity.issuer, 'second@example.invalid', expect.any(AbortSignal))
+  expect((await manager.podConnection(existing.id)).ownerConnection).toBe(first)
+})
+it('rejects ambiguous pod ownership without minting another identity', async () => {
+  const { manager, control, store } = await fixture(); const pod = store.createPod({ name: 'Ambiguous' })
+  for (const account of ['first@example.invalid', 'second@example.invalid']) control.execute({ type: 'save', connection: { id: randomUUID(), provider: 'openape', account, state: 'ready', error: null }, metadata: { issuer: 'https://id.example.invalid', pods: { [pod.id]: { prepared: false } } } })
+  const provision = vi.spyOn(PodIdentityManager.prototype, 'provision')
+  await expect(manager.podConnection(pod.id)).rejects.toThrow('multiple OpenApe accounts')
+  expect(provision).not.toHaveBeenCalled()
 })
