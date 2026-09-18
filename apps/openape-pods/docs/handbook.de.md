@@ -111,24 +111,24 @@ Unter Abhängigkeiten zeigt die Liste jedes Paket mit seiner festen Version. Kli
 
 Normale Variablen sind benannte Zeichenketten in der SQLite-Datenbank dieses Pods. Skripte verwenden context.variables["name"]. Unterstützt werden bis zu 32 Variablen mit jeweils 2.048 Zeichen. Die Werte werden für jeden Lauf festgehalten; spätere Änderungen gelten für kommende Läufe. Diese Werte sind unverschlüsselt. Vertrauliche Werte gehören zu den Geheimnissen.
 
-Der eigene Tab zeigt alle gespeicherten Variablen und Geheimnisse dieses Pods. Leere Variablen sind mit Nicht hinterlegt gekennzeichnet. Vom gespeicherten Skript benötigte oder im Chat angefragte Geheimnisse erscheinen bereits ohne zugewiesenen Wert; Geheimnis hinterlegen übernimmt den Alias ins Formular. Ein gespeicherter Wert erteilt dem Skript noch keine Lesefreigabe.
+Der eigene Tab zeigt alle gespeicherten Variablen und Geheimnisse dieses Pods. Leere Variablen sind mit Nicht hinterlegt gekennzeichnet. Vom gespeicherten Skript benötigte oder im Chat angefragte Geheimnisse erscheinen bereits ohne zugewiesenen Wert; Geheimnis hinterlegen übernimmt den Alias ins Formular. Mit der Zuweisung darf dieser Pod den Alias in seinen geprüften Skripten lesen. Entfernen der Zuweisung widerruft den Zugriff.
 
 Jeder Pod besitzt eigene Skriptversionen, einen Arbeitsbereich, einen dauerhaften Checkpoint und eigene Zugangsdaten-Zuweisungen. Gib unter Variablen und Geheimnisse einen Zugangsdaten-Alias und den verdeckten geheimen Wert ein und wähle Zugangsdaten speichern oder ersetzen. Ein Alias beginnt mit einem Kleinbuchstaben und enthält höchstens 64 Kleinbuchstaben, Ziffern, Unterstriche oder Bindestriche. Werte enthalten 1–16.384 Zeichen ohne Nullbytes. Pro Pod sind 32 aktuelle Aliase möglich; ein Skript darf insgesamt 16 Berechtigungen einschließlich zugewiesener Anwendungs- und HTTP-Berechtigungen deklarieren.
 
 Die Werte werden mit macOS safeStorage im Verzeichnis credentials des aktiven Anwendungsprofils verschlüsselt gespeichert. Ressourcen und Editorverlauf enthalten Aliase und interne Kennungen, niemals automatisch den geheimen Wert. Zwei Pods können denselben Alias mit unterschiedlichen Werten verwenden. ChatGPT- und OpenApe-Tokens bleiben im Verbindungsdienst. Importierter Anwendungszustand wird ausschließlich seinem Programm bereitgestellt, getrennt von Skript-Geheimnissen.
 
-await context.credentials.get('crm') liefert den diesem Pod und Alias zugewiesenen String. Wähle crm unter Vom Skript verwendete Geheimnisse im Tab Variablen und Geheimnisse und speichere die Skriptzugriffe. Vor und nach dem Lesen prüft die Laufzeit den laufenden Auftrag, die exakte Skriptversion, die Skriptbindung und den Ressourcenstand sowie die Freigabe. Codex hat kein Werkzeug credentials.get. Werte werden nicht automatisch in input.json, Umgebungsvariablen, KI-Prompts oder Laufprotokolle aufgenommen.
+await context.credentials.get('crm') liefert den diesem Pod und Alias zugewiesenen String. Wähle crm unter Vom Skript verwendete Geheimnisse im Tab Variablen und Geheimnisse und speichere die Skriptzugriffe. Vor und nach dem Lesen prüft die Laufzeit den laufenden Auftrag, die exakte Skriptversion, die Skriptbindung und den Ressourcenstand sowie die aktuelle Geheimnis-Zuweisung. Codex hat kein Werkzeug credentials.get. Werte werden nicht automatisch in input.json, Umgebungsvariablen, KI-Prompts oder Laufprotokolle aufgenommen.
 
 Ein Skript mit Lesezugriff auf einen geheimen Wert kann ihn ausdrücklich in einen Prompt, ein Protokoll, einen Checkpoint oder eine Datei schreiben. Prüfe vor der Freigabe den vollständigen Quelltext. Die synthetische Prüfung testet den Ausführungsvertrag mit Werten wie synthetic-credential-<alias>; sie beweist nicht, dass der Quelltext für jede Eingabe sicher ist. Ein späterer KI-Aufruf erhält den vom Skript zusammengestellten Prompt. Vom Skript geschriebene Dateien können mit ihrem Inhalt in Sicherungen gelangen.
 
-Speichern oder Ersetzen pausiert den Pod und macht bisherige Prüfungen und Zugangsdaten-Freigaben ungültig. Ein Widerruf bricht betroffene Arbeiten ab und entfernt den verschlüsselten Wert. Weise nach einer Wiederherstellung die Werte erneut zu und prüfe und bestätige die Skripte erneut; verwaltete geheime Werte und ihre Wiederherstellungseinträge fehlen absichtlich in Sicherungen. Unterbrochene Speichervorgänge werden beim Neustart abgeglichen. Neue Skriptversionen des Masters können sich keinen Zugang selbst freigeben.
+Speichern oder Ersetzen pausiert den Pod und macht bisherige Prüfungen ungültig. Eine reine Skriptänderung benötigt keine erneute Geheimnis-Freigabe. Ein Widerruf bricht betroffene Arbeiten ab und entfernt den verschlüsselten Wert. Weise nach einer Wiederherstellung die Werte erneut zu und prüfe die Skripte erneut; verwaltete geheime Werte und ihre Wiederherstellungseinträge fehlen absichtlich in Sicherungen. Unterbrochene Speichervorgänge werden beim Neustart abgeglichen. Neue Skriptversionen des Masters können sich keinen Zugang selbst freigeben.
 
-Das folgende Beispiel kombiniert normales Lesen und Schreiben mit Node.js, dauerhafte Variablen, einen ausdrücklichen Zugriff auf Zugangsdaten und einen getrennten KI-Aufruf. Der geheime Wert wird dabei nicht in den Prompt aufgenommen. Für die echte Ausführung sind ein zugewiesener Alias crm, die Freigabe der exakten Version und eine verbundene KI nötig. Die Prüfung verwendet eine synthetische KI-Antwort. Direkter Netzwerkzugriff und das Starten von Unterprozessen bleiben durch die bestehende Laufzeit beschränkt; eine Zugangsdaten-Deklaration erlaubt beides nicht.
+Das folgende Beispiel kombiniert normales Lesen und Schreiben mit Node.js, dauerhafte Variablen, einen ausdrücklichen Zugriff auf Zugangsdaten und einen getrennten KI-Aufruf. Der geheime Wert wird dabei nicht in den Prompt aufgenommen. Für die echte Ausführung sind ein zugewiesener Alias crm, die Pod-Ausführungsfreigabe und eine verbundene KI nötig. Die Prüfung verwendet eine synthetische KI-Antwort. Direkter Netzwerkzugriff und das Starten von Unterprozessen bleiben durch die bestehende Laufzeit beschränkt; eine Zugangsdaten-Deklaration erlaubt beides nicht.
 
 1. Öffnen Sie Variablen und Geheimnisse. Tragen Sie Alias und Geheimniswert ein und speichern Sie. Das maskierte Feld wird auch bei Fehlern nach dem Absenden geleert.
 2. Wähle unter Variablen und Geheimnisse die vom Skript verwendeten Geheimnisse und speichere die Skriptzugriffe. Speichere zuvor offene Code-Änderungen im Skript-Tab. Verwenden Sie await context.credentials.get("alias") im Quelltext.
-3. Wählen Sie Speichern und ausführen. Nach der synthetischen Prüfung kontrollieren Sie den Quelltext und bestätigen Zugriff auf Zugangsdaten prüfen im nativen Dialog.
-4. Die Historie zeigt den Lauf. Änderungen an Quelltext oder Ressourcen erfordern erneute Prüfung und Freigabe.
+3. Wählen Sie Speichern und ausführen. Nach der synthetischen Prüfung bestätigen Sie die Pod-Ausführungsfreigabe im Browser, falls angefordert.
+4. Die Historie zeigt den Lauf. Änderungen an Quelltext oder Ressourcen erfordern erneute Prüfung; die zugewiesenen Pod-Rechte gelten bis zum Widerruf.
 
 ```javascript
 import { readFile, writeFile } from 'node:fs/promises'
@@ -250,6 +250,14 @@ export async function run(context) {
   }
 }
 ```
+
+## Ausführungsfreigaben und Laufansicht
+
+Ein manueller Lauf öffnet benötigte OpenApe-Freigaben im Browser. Gleichzeitig erscheint im Pod eine Karte mit Freigabe öffnen. Damit bleibt die erforderliche Aktion auch sichtbar, wenn sich der Browser nicht öffnen lässt. Hintergrundläufe zeigen die Karte ohne automatischen Browserwechsel. Das Warten dauert höchstens 15 Minuten und pausiert das aktive Skript-Zeitlimit. Lauf abbrechen beendet das Warten. Nach einem App-Neustart ist eine ausdrückliche Wiederherstellung nötig; eine alte Freigabe startet keinen gestoppten Lauf neu.
+
+Die Ausführungserlaubnis gehört zu diesem Pod und seinem OpenApe-Agenten. Pod-Ausführung erlauben erstellt eine widerrufbare dauerhafte Regel; Einmal erlaubt nur die aktuelle Anfrage. Skriptänderungen erweitern keine Verzeichnis-, Anwendungs-, HTTP- oder Geheimnis-Zuweisungen. Der Desktop-Dienst prüft die strukturierte Freigabe mit der ape-shell-Autorisierungsbibliothek und startet das festgehaltene Skript in der bestehenden nativen Sandbox. Das externe Terminal verwendet weiterhin das ape-shell-CLI.
+
+Die Historie zeigt tatsächliche Arbeitsschritte, aktive Laufzeit, Freigabe-Wartezeit und Ergebnis. Anwendungs-, KI- und HTTP-Schritte erscheinen erst bei einem Aufruf. Technische Details enthält Originalfehler und Ereignisdaten. Bei Autorisierungsfehlern prüfe Berechtigungen und Grant-Status; ein Fehler des Freigabedienstes verlangt nicht automatisch einen neuen Microsoft-Login. Prüfe unklare Zustellungen am Ziel und halte das Ergebnis vor einem erneuten Versuch fest. Unter Umgebung im Skript-Tab stehen die verwalteten Prozessvariablen ohne gespeicherte Geheimniswerte.
 
 ## Zeitpläne, Ereignisse und Limits
 

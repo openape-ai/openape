@@ -1,3 +1,4 @@
+import type { GrantObserver, GrantLookup } from '../broker/authorization'
 import { join } from 'node:path'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { PodResource } from '../../contracts/resources'
@@ -19,25 +20,26 @@ export function assignedHttp(resources: PodResource[], scope: Pick<ServiceScope,
   return authority
 }
 
-export async function executeHttp(resources: PodResource[], scope: ServiceScope, request: HttpRequest, vendor: string, credentials: CredentialCache, signal: AbortSignal): Promise<HttpReply> {
+export async function executeHttp(resources: PodResource[], scope: ServiceScope, request: HttpRequest, vendor: string, credentials: CredentialCache, signal: AbortSignal, observe?: GrantObserver, previous?: GrantLookup): Promise<HttpReply> {
   const assignment = assignedHttp(resources, scope, request)
   const identity = new PodIdentityManager(credentials)
-  const authority = new AgentAuthority(identity.connection(assignment.identity, `pods:${scope.podId}`))
+  const authority = new AgentAuthority(identity.connection(assignment.identity, `pods:${scope.podId}`), observe, previous)
   const adapterPath = join(vendor, 'pod-http-shapes.toml')
   const adapter = loadAdapter('pod-http', adapterPath)
   const argv = ['pod-http', 'request', '--origin', new URL(request.url).origin, '--method', request.method]
   const resolved = await resolveCommand(adapter, argv)
-  await authority.authorize({ grantId: assignment.grantId, command: { cliId: 'pod-http', adapterPath, adapterDigest: adapter.digest, argv, permission: resolved.permission } }, signal)
+  const authorization = { grantId: assignment.grantId, command: { cliId: 'pod-http', adapterPath, adapterDigest: adapter.digest, argv, permission: resolved.permission } }
+  await authority.authorize(authorization, signal)
   const controller = new AbortController()
   const combined = AbortSignal.any([signal, controller.signal])
   let checking: Promise<void> | undefined
   const timer = setInterval(() => {
     if (checking) return
-    checking = authority.assertActive(assignment.grantId, combined).catch(() => { controller.abort(new Error('HTTP permission is no longer active')) }).finally(() => { checking = undefined })
+    checking = authority.assertActive(authorization.grantId, combined).catch(() => { controller.abort(new Error('HTTP permission is no longer active')) }).finally(() => { checking = undefined })
   }, 1000)
   try {
     const reply = await requestHttp(request, combined)
-    await authority.assertActive(assignment.grantId, combined)
+    await authority.assertActive(authorization.grantId, combined)
     combined.throwIfAborted()
     return reply
   }

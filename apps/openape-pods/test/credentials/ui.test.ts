@@ -20,7 +20,7 @@ it('saves only a masked pod-scoped value and clears it even when saving fails', 
   expect(wrapper.get('[role="alert"]').text()).toContain('reload')
   wrapper.unmount()
 })
-it('requires owner credential review before Run and preserves declarations when saving', async () => {
+it('directs missing secrets to their assignments without source-bound reapproval', async () => {
   const hash = 'a'.repeat(64)
   const view: ScriptView = { resourceEpoch: 1, credentialAliases: ['crm'], pod: { id: randomUUID(), name: 'One', revision: 1, lifecycle: 'paused', activeScript: null }, drafts: [], versions: [], source: { kind: 'version', id: hash, hash, assignmentRevision: 1, revision: 0, code: 'export async function run() {}', capabilities: ['credential.crm'], validated: true, evidence: '{}', credentialAccessApproved: false } }
   const scripts = vi.fn().mockImplementation(async (command) => { if (command.type === 'approveCredentials') view.source!.credentialAccessApproved = true; if (command.type === 'activate') view.pod.activeScript = hash; return structuredClone(view) }); const runs = vi.fn().mockResolvedValue({ runs: [] })
@@ -29,9 +29,10 @@ it('requires owner credential review before Run and preserves declarations when 
   const button = (name: string) => wrapper.findAll('button').find(item => item.text() === name)!
   await button('Run').trigger('click'); await flushPromises()
   expect(runs).not.toHaveBeenCalled(); expect(scripts.mock.calls.some(([call]) => call.type === 'activate')).toBe(false)
-  await button('Review credential access').trigger('click'); await flushPromises()
-  expect(scripts).toHaveBeenCalledWith({ type: 'approveCredentials', podId: view.pod.id, revision: 1, hash, epoch: 1 })
-  expect(runs).toHaveBeenCalledWith({ type: 'start', podId: view.pod.id, expectedScript: hash })
+  await wrapper.findAll('button').find(item => item.text() === 'Manage variables and secrets')!.trigger('click'); await flushPromises()
+  expect(wrapper.emitted('values')).toHaveLength(1)
+  expect(scripts.mock.calls.some(([call]) => call.type === 'approveCredentials')).toBe(false)
+  expect(runs).not.toHaveBeenCalled()
   wrapper.unmount()
 })
 it('keeps a revoked but selected alias visible so its declaration can be removed', async () => {

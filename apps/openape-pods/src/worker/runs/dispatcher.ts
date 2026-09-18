@@ -41,7 +41,7 @@ export interface RunServiceScope {
   registerDomain: (path: string, ownerPid: number) => void
 }
 export interface RunServices {
-  shell?: (scope: RunServiceScope, signal: AbortSignal) => Promise<{ home: string, environment: Record<string, string>, shell: { cli: string, environment: Record<string, string> } }>
+  shell?: (scope: RunServiceScope, signal: AbortSignal) => Promise<{ home: string, environment: Record<string, string>, shell?: { cli: string, environment: Record<string, string> } }>
   closeShell?: (scope: RunServiceScope) => Promise<void>
   http?: (request: HttpRequest, signal: AbortSignal, scope: RunServiceScope) => Promise<HttpReply>
   credential?: (alias: string, signal: AbortSignal, scope: RunServiceScope) => Promise<string>
@@ -61,7 +61,12 @@ export class RunDispatcher {
     })
   }
 
-  view(podId: string, id?: string, after = 0): RunView { return { effects: this.store.db.prepare('SELECT effect_key AS key,run_id AS runId FROM effect_ledger WHERE pod_id=? AND operation=\'http.request\' AND state=\'unknown\' LIMIT 100').all(podId) as { key: string, runId: string }[], runs: this.runs.list(podId), events: id ? this.runs.events(podId, id, after) : [] } }
+  view(podId: string, id?: string, after = 0): RunView {
+    const runs = this.runs.list(podId)
+    const selectedId = id ?? runs[0]?.id
+    const effects = this.store.db.prepare('SELECT effect_key AS key,run_id AS runId FROM effect_ledger WHERE pod_id=? AND operation=\'http.request\' AND state=\'unknown\' LIMIT 100').all(podId) as { key: string, runId: string }[]
+    return { ...(selectedId ? { timing: this.runs.timing(podId, selectedId) } : {}), approvals: this.runs.approvals(podId), effects, runs, events: selectedId ? (after ? this.runs.events(podId, selectedId, after) : this.runs.recentEvents(podId, selectedId)) : [] }
+  }
 
   async install(podId: string, variant: 'deterministic' | 'agent'): Promise<void> {
     const manifest = JSON.parse(await readFile(this.runtime.manifest, 'utf8')) as { dependencyLockHash: string }
@@ -140,7 +145,9 @@ export class RunDispatcher {
         shellScope = scope
       }
       let mail: MailRecipeSession | undefined
+      this.runs.append(id, 'environment', { script: artifact, workspace: input.workspace, values: Object.fromEntries(Object.entries(runtime.environment).filter(([key]) => ['HOME', 'TMPDIR', 'PATH', 'SHELL', 'PODS_POD_ID', 'LANG', 'TERM'].includes(key))) })
       const result = await executeScript(runtime, directory, artifact, input, signal, {
+        awaitingApproval: () => this.runs.approvals(pod.id).some(item => item.runId === id),
         event: (type, data) => { this.runs.assertLease(id); this.runs.append(id, type, data); if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
         request: async (operation, payload, operationSignal) => {
           assertCurrent()
