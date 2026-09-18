@@ -191,8 +191,12 @@ export function createIssueStore(db: Database, audience: string, principal: Issu
       await requireIssue(db, id)
       if (!Number.isInteger(limit) || limit < 1 || limit > 100) failure(400, 'Invalid comment limit')
       const predicates = [eq(issueComments.issueId, id), eq(issueComments.hidden, 0)]
-      if (after) predicates.push(sql`${issueComments.id} > ${after}`)
-      return db.select().from(issueComments).where(and(...predicates)).orderBy(asc(issueComments.id)).limit(limit)
+      if (after) {
+        const cursor = await db.select().from(issueComments).where(and(eq(issueComments.id, after), eq(issueComments.issueId, id))).get()
+        if (!cursor) failure(400, 'Invalid comment cursor')
+        predicates.push(sql`(${issueComments.createdAt}, ${issueComments.id}) > (${cursor.createdAt}, ${cursor.id})`)
+      }
+      return db.select().from(issueComments).where(and(...predicates)).orderBy(asc(issueComments.createdAt), asc(issueComments.id)).limit(limit)
     },
 
     async comment(id: string, body: string, key: string) {
@@ -216,7 +220,7 @@ export function createIssueStore(db: Database, audience: string, principal: Issu
         const issue = await requireIssue(tx, id)
         const allowed = await capabilities(tx, issue)
         if (!allowed.edit && !allowed.triage) failure(403, 'Editing is not permitted')
-        if (input.expectedVersion !== issue.version) failure(409, 'Issue changed; reload before editing')
+        if (input.expectedVersion !== issue.version) throw createError({ statusCode: 409, statusMessage: 'Issue changed; reload before editing', data: { currentVersion: issue.version } })
         const triage = input.state !== undefined || input.assignee !== undefined || input.labels !== undefined
         if (triage && !allowed.triage) failure(403, 'Issue triage is required')
         const text = validateIssueText({ title: input.title ?? issue.title, body: input.body ?? issue.body })
@@ -236,7 +240,7 @@ export function createIssueStore(db: Database, audience: string, principal: Issu
         }
         const state = input.state ?? issue.state
         await tx.update(issues).set({ ...text, state, assignee: input.assignee === undefined ? issue.assignee : input.assignee, version: issue.version + 1, updatedAt: Date.now(), closedAt: state === 'closed' ? issue.closedAt ?? Date.now() : null }).where(eq(issues.id, id))
-        await event(tx, id, 'updated', { version: issue.version + 1, state, assignee: input.assignee, labels: input.labels })
+        await event(tx, id, 'updated', { version: issue.version + 1, previousState: issue.state, state, previousAssignee: issue.assignee, assignee: input.assignee, labels: input.labels })
       })
     },
     capabilities,

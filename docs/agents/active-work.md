@@ -1,5 +1,11 @@
 # Active work
 
+## Native issues — M2 API and CLI (September 18, 2026)
+
+Two exact-source external CI attempts hit the 5-second limit in the unchanged Pods future-database byte assertion. Replace recursive Buffer equality with native `Buffer.equals`, preserving complete byte comparison without per-byte JavaScript traversal; do not increase the timeout or bypass CI.
+
+The dependent checkout `openape-monorepo.worktrees/native-issues-api`, branch `feature/issue-1356-native-issues-api`, starts from reviewed M1 source `c5e12cea`. It adds private issue/comment/label routes, safe Markdown rendering, same-origin cookie mutations, bounded inputs/rates and matching native CLI commands. HTTP tests exercise real H3 handlers, file-backed SQLite and signed SP tokens. Root CLI tests preserve literal body-file contents, retry headers and pre-request validation. Full Nuxt/IdP/CLI and UI verification follow in M3 before enabling the capability. Continue through the approved milestones without a per-milestone session handoff; production migration remains gated.
+
 ## Native issues — M1 implementation (September 18, 2026)
 
 Patrick requested end-to-end execution of [the approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A5ZAT63A04PWGVBT5M14MW), tracked by [issue 1356](https://git.openape.ai/openape-ai/openape/issues/1356). The isolated checkout is `openape-monorepo.worktrees/native-issues`, branch `feature/issue-1356-native-issues`, based on canonical `0f7425539c81950e54882bd851190f58e9011302`. M0 was already merged through PR 50. M1 adds ordered transactional database migrations, private issue storage, live grant-aware visibility and verified exact-scope principals. Ten focused storage tests, all 153 Git app tests and all 105 auth module tests pass; lint, typecheck, Git build and Doctor pass. Initial source `c5e12cea` passed all 15 local gates and all three external checks; the layout retry passed after an unrelated Pods pointer-drag timing failure. Canonical `6c53b6ec` is integrated, preserving the concurrent Pods work; repeat exact-source verification before merging PR 60. Continue through M2–M6 after independently reviewed increments; keep the capability disabled until rollout. Production migration/cutover retains its separate M7 approval.
