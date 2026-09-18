@@ -42,7 +42,7 @@ try:
                 if digest != manifest_hash:
                     raise ValueError('Import manifest hash mismatch')
                 manifest = value
-            elif name in ['snapshot', 'history'] and digest != manifest[name + 'Hash']:
+            elif digest != manifest[name + 'Hash']:
                 raise ValueError('Import provenance archive hash mismatch')
     print(json.dumps({'ok': True, 'attachments': count, 'issues': connection.execute('SELECT count(*) FROM issues').fetchone()[0], 'origins': connection.execute('SELECT count(*) FROM issue_import_origins').fetchone()[0], 'legacyLinks': connection.execute('SELECT count(*) FROM issue_legacy_references').fetchone()[0]}))
 finally:
