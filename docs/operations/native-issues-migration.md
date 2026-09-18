@@ -156,3 +156,166 @@ Do not authorize cutover until owner/identity exceptions, attachment integrity, 
 Eight behavioral inventory tests cover capped pagination, duplicate IDs, totals, terminal null responses, denied pages, metadata minimization and separating PR comments. The disposable setup and fence were rerun from an empty fixture with the pinned images. Full repository gates and the native PR source are recorded in [active work](../agents/active-work.md).
 
 M0's pilot inventory and feasibility proof are reviewable. Unresolved actor mappings, actual attachment downloads and independent repository owners are retained migration gates. Finish native PR review and required checks before integrating this increment; M1 then adds repository authorization and issue storage without changing production issue authority.
+
+## One-way import operator (M6)
+
+The implementation is `scripts/issue-migration.mjs`. Run `--help` for the actual
+contract. There is no background job, generic API impersonation field or reverse
+synchronizer. It writes only an explicitly selected local SQLite registry and
+immutable private asset directory. It never creates a production repository.
+
+```sh
+node scripts/issue-migration.mjs export --source https://git.openape.ai --repository openape-ai/openape --output RESTRICTED_NEW_DIRECTORY
+node scripts/issue-migration.mjs prepare --snapshot SNAPSHOT_DIRECTORY --mapping REVIEWED_MAPPING.json --history RESTRICTED_HISTORY.json --output NEW_BUNDLE_DIRECTORY
+node scripts/issue-migration.mjs validate --bundle BUNDLE_DIRECTORY
+node scripts/issue-migration.mjs dry-run --bundle BUNDLE_DIRECTORY
+node scripts/issue-migration.mjs apply --bundle BUNDLE_DIRECTORY --database /absolute/registry.db --assets /absolute/issue-assets --destination EXACT_REPOSITORY_ID --approval REVIEWED_APPROVAL.json
+node scripts/issue-migration.mjs validate --bundle BUNDLE_DIRECTORY --database /absolute/registry.db --assets /absolute/issue-assets
+```
+
+`export` takes `FORGEJO_TOKEN` from the environment. It downloads only same-origin
+`/attachments/<uuid>` assets advertised by the approved source, without redirects,
+with a 25 MiB per-file ceiling and exact size/hash checks. It compares two complete
+API snapshots, including comments, timelines and labels. Per-issue comment listing
+ignores pagination on the inspected version; the implementation uses the verified
+paginated repository comment collection and checks each issue's count. Failed or
+changing exports are discarded and retried into a new directory. M7's source fence
+is still necessary: no unfenced multi-request export is a database snapshot.
+
+The separate restricted history input is `{source, repository, rows}` from a
+read-only `issue_content_history` query joined to `issue`, scoped to the source
+repository ID and `is_pull=0`. Include deleted markers and original text. Inspect
+the deployed schema before running it. Do not export the entire Forgejo user/token
+DB. Inventory the other deferred tables again at the final fence: the M0 counts
+are evidence for their capture date, not an enduring zero claim.
+
+A mapping binds `snapshotHash` (SHA-256 of `JSON.stringify(snapshot)`), the exact
+`destination: {id, owner, name}`, and the real operator. Optional `numbers` map source
+numbers to explicit new numbers. Optional `identities` entries require `subject`,
+`verifiedBy` and independent `proof`; logins do not confer identity. No participant
+or repository grant is imported. `assignees` can select a verified source assignee
+or explicitly null. Current apply supports verified repository-owner assignment;
+other assignments remain unassigned pending a separate eligibility extension.
+Each exception needs its exact ID and a reviewed textual disposition. Blocking
+restrictions cannot be waived by filling in that text.
+
+The approval JSON binds `manifestHash`, canonical absolute `database` and
+`assetsDirectory`, `destinationId`, `approvedBy`, `approvedAt`, and `scope`.
+Use `isolated` for rehearsals. Production additionally requires both `--production`
+and `scope: "production", productionCutoverApproved: true`; these fields record an
+actual separate human decision, not permission to manufacture one. No production
+approval file was created in M6. `remove` uses the same binding and refuses a
+released batch or native activity. It preserves immutable assets and archives.
+
+Apply requires an empty issue/label destination, or the unchanged locked batch
+from the same source. It copies verified immutable blobs and the snapshot,
+manifest, mapping and history archive before one SQLite transaction. The batch
+transaction replaces only its issue data, handles source deletions, retains stable
+IDs, reserves numbers above both source issue and PR occupancy, and reconciles all
+rows before commit. A crash resumes by reapplying the complete transaction; there
+is no partially visible issue batch. A repeat with the same bundle is equivalent.
+A second source cannot silently merge into an occupied home. Native Git/PR/grant
+rows and Git refs are outside removal/import statements.
+
+Schema version 4 keeps staged repositories locked. SQL triggers cover issues,
+comments, labels, membership, aliases, counters, PR relations, events and assets,
+including OLD and NEW repository ownership on updates. The operator temporarily
+removes its own lock **inside the same SQLite write transaction** and reinstalls
+it before commit. Native handlers return 503 and the UI identifies migration
+review. The final release of `issue_import_targets.status` is deliberately a
+separately reviewed M7 database operation, after final validation. Once released,
+delta import and batch removal refuse to run; rollback must preserve new data.
+
+Downloads use live issue and comment access, private/no-store responses, immutable
+hash validation, `application/octet-stream`, attachment disposition, `nosniff` and
+sandbox headers. Active files are never served inline. `/api/issue-legacy?url=…`
+returns only authorized stable issue/comment links. `/legacy` preserves the old
+fragment through the existing login return flow. Raw Markdown is retained; rendered
+reference links are resolved from parsed Markdown outside code and only where the
+reader can access the target. Source PR links remain source PR links. Imported
+identities display explicit Forgejo attribution and are not authenticated actors.
+
+### Verified isolated rehearsal, September 18, 2026
+
+The restricted full source export contains 230 issues, 175 comments, 993 timeline
+records, 15 labels, three attachment files and 37 retrievable edit-history rows.
+Import and repeated import both reconcile without mismatches. Initial local apply
+measured 95 ms; this excludes export and operator review and is **not** a promised
+production freeze duration. The first complete manifest hash is
+`08b1b1e6900efd117b82ef5721d900a3062bfba96edbe10270cafd154b170bc0`.
+The 100 recorded rehearsal-only dispositions comprise 81 unchanged external links
+and 19 unassigned source assignments (source IDs 5: eight, 6: two, 1: one, 12: eight).
+Production assignment mapping remains an explicit decision. Source users, source
+content and credentials are not included in public verification reports.
+
+The modified actual `backup.sh` and `restore-probe.sh` ran against an isolated,
+encrypted local restic repository. Restoring into fresh storage verified all 230
+issues, 420 origin records, 408 legacy mappings, three byte-exact assets, source
+archives, and a cloned synthetic Git repository. Its original ref remained
+`cfef76bed51a01ef9048b83cf940de04f3711a64`; snapshot `7c55eba5` is local rehearsal
+only. Restic now includes `issue-assets` and `issue-imports` alongside its SQLite
+backup, Git repositories and configuration. `verify-issue-backup.py` is read-only.
+
+The real IdP/CLI/browser suite includes a CLI import, protected active-content
+download, denied unrelated reader, post-login legacy comment continuation and
+read-only imported discussion. A 230-record synthetic HTTP search measured ten
+requests with 19.4 ms median and 25.9 ms maximum locally, including live access
+filtering and 30-row serialization; another identity receives zero records/count.
+These are local observations, not a cross-host performance guarantee. Existing
+state/repository indexes support the pilot; no external search engine is added.
+
+### Source write fence and old-link handoff
+
+The disposable pinned Forgejo proof now supports
+`OPENAPE_ISSUE_ARCHIVE_PROXY=1 node scripts/native-issues/fence-rehearsal.mjs`.
+It combines the existing database triggers (including background close-on-push)
+with `archive-proxy.mjs`. Issue, label, comment, repository-delete/transfer,
+source-author deletion and attachment mutations receive explicit HTTP 503 before
+reaching Forgejo. A real branch push, main push containing `closes #1`, commit
+status and Actions run all passed; source issue/comment fingerprints matched.
+Removing the disposable fence restored comment writes. The proxy also pauses
+standalone Forgejo attachment uploads/deletes because those routes do not carry a
+repository identity. This temporary host-wide attachment restriction is a cutover
+tradeoff; canonical native PRs and Git/CI remain available. Direct root/database or
+filesystem administration cannot be protected by an application proxy and must
+remain excluded during the approved maintenance window.
+
+Read-only production topology verification found Forgejo's systemd service using
+`/etc/forgejo/app.ini`, listening on `0.0.0.0:3030`, and Coolify Traefik's current
+`/data/coolify/proxy/dynamic/openape-services.yml` routing `git.openape.ai` to
+`http://10.0.1.1:3030`. M7 must review the exact deployment: bind the Forgejo upstream
+to loopback, run the reviewed archive proxy on an explicitly checked private port,
+route only the `forgejo` service through it, and verify that the upstream cannot be
+reached externally. Do not modify the shared HTTP redirect router or other apps.
+`scripts/issue-archive.mjs --config REVIEWED_CONFIG.json` loads the proxy with a
+loopback upstream, explicit source repository, reviewed source actors and private
+listen address/port. No production configuration or service was changed.
+
+After cutover, `legacyPageFile` can serve the checked
+`ops/issue-archive-redirect.html` for the approved source issue HTML routes. The
+page preserves the fragment before source authentication and offers a native
+resolver link; API archive reads remain available. The file is intentionally
+scoped to the primary source repository, not a universal redirect. Another source
+needs its own reviewed compatibility mapping. The page/proxy require deployment
+and direct-path checks in M7 before old-link continuity is claimed in production.
+
+### Unsupported cases and remaining cutover decisions
+
+- Public or anonymous activation, arbitrary existing-home/many-to-one merges,
+  active milestones/projects/reactions/subscriptions/timers, new uploads, and
+  full edit-history UI remain outside this MVP. Metadata remains in the archive.
+- Locked/confidential issues, missing/unsafe/oversized assets, changed snapshots,
+  duplicate labels/numbers and unresolved identity proof block apply. A missing
+  history archive blocks manifest preparation. Unrecoverable deleted history
+  cannot be recreated. Source-side extension/plugin metadata needs a separate
+  inventory before another source is approved.
+- The primary snapshot's 19 assignments need approved verified identities or an
+  explicit unassigned disposition. The source's 81 external links remain links;
+  no external URL was fetched with importer authority.
+- Approve the final source/destination manifest, private intake repository and
+  product routes, actual deployment/backup capacity, source gateway restriction,
+  old-link page and bounded freeze window. Re-inventory Tasks/Plans/worker recipes
+  and independently hosted GitHub repositories before their individual cutovers.
+- After native writes, freeze native writes and retain both histories before
+  deciding forward repair or a reviewed one-time reverse reconciliation. Never
+  restore an old registry over newer PRs/grants or re-enable both writers.

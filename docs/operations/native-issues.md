@@ -242,3 +242,17 @@ Real authenticated API and browser tests verify fresh registration, no Git stora
 private metadata, issue creation, external navigation, and denial of Git/mirror writes.
 The same fixture successfully reads a normal Git repository as a control. Initial
 issue-home registration and owner mapping in production remain rollout decisions.
+
+
+## Imported issues and archive links (M6)
+
+See [the migration operator and rehearsal runbook](native-issues-migration.md).
+Issue detail and comments distinguish original Forgejo authors from native
+identities. Imported files download through authenticated
+`GET /api/issue-attachments/:id` with live access and integrity checks.
+`GET /api/issue-legacy?url=ENCODED_SOURCE_URL` resolves only authorized original
+issue/comment links; `/legacy` preserves comment fragments across sign-in.
+Imported Markdown remains byte-for-byte source text, with authorization-filtered
+rendered references. Staged repositories return 503 for issue writes until the
+separately reviewed cutover releases their database fence. Git/PR operations
+retain their existing lifecycle.
