@@ -3,7 +3,7 @@ import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 
-export interface AgentGatewayServices { provider: (body: unknown, signal: AbortSignal) => Promise<Response>, tool: (body: unknown, signal: AbortSignal) => Promise<unknown> }
+export interface AgentGatewayServices { provider: (body: unknown, signal: AbortSignal) => Promise<Response>, tool?: (body: unknown, signal: AbortSignal) => Promise<unknown> }
 async function body(request: IncomingMessage): Promise<unknown> {
   let bytes = 0; const chunks: Buffer[] = []
   for await (const chunk of request) { bytes += chunk.length; if (bytes > 2 * 1024 * 1024) throw new Error('Agent request exceeds its limit'); chunks.push(Buffer.from(chunk)) }
@@ -22,7 +22,9 @@ export async function startAgentGateway(services: AgentGatewayServices, signal: 
     const activeSignal = AbortSignal.any([signal, closed.signal])
     const value = await body(request)
     if (request.url === '/v1/responses') {
-      const upstream = await services.provider(value, activeSignal)
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid provider request')
+      const providerRequest = services.tool ? value : { ...value, tools: [], tool_choice: 'none', parallel_tool_calls: false }
+      const upstream = await services.provider(providerRequest, activeSignal)
       response.statusCode = upstream.status; response.setHeader('Content-Type', upstream.headers.get('Content-Type') ?? 'text/event-stream')
       if (upstream.body) {
         const reader = upstream.body.getReader()
@@ -61,9 +63,9 @@ export async function startAgentGateway(services: AgentGatewayServices, signal: 
       result = {}
     }
     else if (rpc.method === 'tools/list') {
-      result = { tools: [{ name: 'ape_shell', description: 'Invoke a granted read command of an assigned application using application and argv (or an explicit applicationId). Legacy tools use toolId instead. Authentication state stays inside the application sandbox.', inputSchema: { type: 'object', properties: { application: { type: 'string' }, applicationId: { type: 'string' }, toolId: { type: 'string' }, argv: { type: 'array', items: { type: 'string' } } }, required: ['argv'], oneOf: [{ required: ['application'] }, { required: ['applicationId'] }, { required: ['toolId'] }], additionalProperties: false } }] }
+      result = { tools: services.tool ? [{ name: 'ape_shell', description: 'Invoke a granted read command of an assigned application using application and argv (or an explicit applicationId). Legacy tools use toolId instead. Authentication state stays inside the application sandbox.', inputSchema: { type: 'object', properties: { application: { type: 'string' }, applicationId: { type: 'string' }, toolId: { type: 'string' }, argv: { type: 'array', items: { type: 'string' } } }, required: ['argv'], oneOf: [{ required: ['application'] }, { required: ['applicationId'] }, { required: ['toolId'] }], additionalProperties: false } }] : [] }
     }
-    else if (rpc.method === 'tools/call' && rpc.params?.name === 'ape_shell') {
+    else if (rpc.method === 'tools/call' && rpc.params?.name === 'ape_shell' && services.tool) {
       try {
         const text = JSON.stringify(await services.tool(rpc.params.arguments, activeSignal))
         if (Buffer.byteLength(text) > 256 * 1024) throw new Error('Tool reply exceeds its size limit')
