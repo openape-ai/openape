@@ -9,16 +9,6 @@ import { isDirty, scriptBuffer } from './script-buffer'
 import ScriptCode from './ScriptCode.vue'
 import ScriptPackages from './ScriptPackages.vue'
 
-const starter = `export async function run(context) {
-  context.log('Starting pod script')
-  return {
-    status: 'completed',
-    summary: 'Pod script completed',
-    completedInputIds: context.input.eventIds,
-    gapIds: [],
-  }
-}
-`
 export default defineComponent({
   components: { ScriptCode, ScriptPackages },
   props: { pod: { type: Object as PropType<StoredPod>, required: true } },
@@ -78,7 +68,7 @@ export default defineComponent({
       if (this.buffer.busy) return
       this.pending = null; this.buffer.message = ''
       if (selection !== 'new') { await this.load(selection === 'current' ? undefined : selection); if (!this.buffer.source && this.buffer.view) await this.open('new'); return }
-      this.buffer.source = null; this.buffer.code = starter; this.buffer.packages = JSON.stringify(emptyPackages(), null, 2); this.buffer.toolCapabilities = []; this.buffer.credentialAliases = []; this.buffer.editing = true; this.buffer.compare = null; this.syncChoice()
+      this.buffer.source = null; this.buffer.code = ''; this.buffer.packages = JSON.stringify(emptyPackages(), null, 2); this.buffer.toolCapabilities = []; this.buffer.credentialAliases = []; this.buffer.editing = true; this.buffer.compare = null; this.syncChoice()
     },
     async save(asNew = false) {
       const state = this.buffer
@@ -134,12 +124,15 @@ export default defineComponent({
     <div class="card-heading">
       <div>
         <h2>{{ 'run.mjs' }}</h2><p class="muted">
-          {{ dirty ? t('Unsaved changes') : t('Saved locally') }}
+          {{ dirty ? t('Unsaved changes') : buffer.source ? t('Saved locally') : t('No script saved') }}
         </p>
       </div><button class="primary" :disabled="buffer.busy || readOnly || !buffer.code.trim()" @click="prepareRun">
         {{ buffer.busy ? t('Working…') : dirty ? t('Save and run') : t('Run') }}
       </button>
     </div>
+    <p v-if="!buffer.source && !buffer.code.trim()" class="muted">
+      {{ t('No script has been saved for this pod yet. Continue setup in Chat or write your own script.') }}
+    </p>
     <p v-if="buffer.error" class="error-message" role="alert">
       {{ diagnostic(buffer.error) }}
     </p><p v-if="buffer.message" role="status">

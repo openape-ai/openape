@@ -25,7 +25,7 @@ export type ProgramCommand =
   | { type: 'network', podId: string, applicationId: string, epoch: number, hosts: string[] }
   | { type: 'openShell', podId: string }
   | { type: 'prepare', podId: string, line: string }
-  | { type: 'add', podId: string, epoch: number }
+  | { type: 'add', podId: string, epoch: number, suggestedName?: string }
   | { type: 'replace', podId: string, applicationId: string, epoch: number }
   | { type: 'launch', podId: string, applicationId: string, epoch: number }
   | { type: 'launchStatus', podId: string }
@@ -40,8 +40,9 @@ export interface TerminalView { sessionId: string, podId: string, state: 'starti
 export function parseProgramCommand(value: unknown): ProgramCommand {
   const command = value as ProgramCommand
   if (!command || typeof command !== 'object' || Array.isArray(command) || !/^[a-f0-9-]{36}$/.test(command.podId)) throw new Error('Invalid program command')
-  const keys: Record<ProgramCommand['type'], string[]> = { network: ['applicationId', 'epoch', 'hosts'], openShell: [], launchStatus: [], prepare: ['line'], add: ['epoch'], replace: ['applicationId', 'epoch'], launch: ['applicationId', 'epoch'], grant: ['applicationId', 'epoch', 'argv'], start: ['applicationId', 'epoch', 'argv'], importState: ['applicationId', 'epoch'], poll: ['sessionId', 'after'], input: ['sessionId', 'data'], resize: ['sessionId', 'columns', 'rows'], close: ['sessionId'] }
+  const keys: Record<ProgramCommand['type'], string[]> = { network: ['applicationId', 'epoch', 'hosts'], openShell: [], launchStatus: [], prepare: ['line'], add: ['epoch', 'suggestedName'], replace: ['applicationId', 'epoch'], launch: ['applicationId', 'epoch'], grant: ['applicationId', 'epoch', 'argv'], start: ['applicationId', 'epoch', 'argv'], importState: ['applicationId', 'epoch'], poll: ['sessionId', 'after'], input: ['sessionId', 'data'], resize: ['sessionId', 'columns', 'rows'], close: ['sessionId'] }
   if (!Object.hasOwn(keys, command.type) || Object.keys(command).some(key => !['type', 'podId', ...keys[command.type]].includes(key))) throw new Error('Unsupported program command')
+  if (command.type === 'add' && command.suggestedName !== undefined && (typeof command.suggestedName !== 'string' || command.suggestedName.length > 255 || /[\0\r\n]/.test(command.suggestedName))) throw new Error('Invalid application name')
   if (command.type === 'prepare' && (typeof command.line !== 'string' || command.line.length > 16000 || /[\0\r\n]/.test(command.line))) throw new Error('Invalid terminal command')
   if ('epoch' in command && (!Number.isSafeInteger(command.epoch) || command.epoch < 0)) throw new Error('Invalid application permission revision')
   if ('applicationId' in command && !/^[a-f0-9-]{36}$/.test(command.applicationId)) throw new Error('Invalid application identity')
