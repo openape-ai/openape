@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Development issues have moved</title>
+<main><h1>Development issues have moved</h1><p>Sign in at the native issue service to view this issue.</p><a id="destination">Continue to the issue</a><noscript>JavaScript preserves old comment anchors. Copy this full URL into the native issue link resolver if JavaScript is disabled.</noscript></main>
+<script>
+const source = new URL(location.href)
+const link = document.getElementById('destination')
+if (source.origin === 'https://git.openape.ai' && /^\/openape-ai\/openape\/issues\/[1-9]\d*$/.test(source.pathname)) {
+  source.search = ''
+  link.href = `https://repos.openape.ai/legacy?url=${encodeURIComponent(source.href)}`
+} else {
+  link.textContent = 'This legacy path is not part of the approved migration.'
+}
+</script></html>

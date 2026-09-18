@@ -14,7 +14,7 @@ const ACCESS_RANK: Record<GitAccess, number> = { read: 1, write: 2, admin: 3 }
 // `.well-known` need no entry — the pattern below already rejects a leading
 // underscore and any dot. tests/reserved-owners.test.ts derives the required
 // set from the pages directory, so a new top-level page fails there.
-const RESERVED_OWNERS = new Set(['api', 'issues', 'i', 'report'])
+const RESERVED_OWNERS = new Set(['api', 'issues', 'i', 'report', 'legacy'])
 
 export function isValidOwner(value: string): boolean {
   if (RESERVED_OWNERS.has(value.toLowerCase())) return false
