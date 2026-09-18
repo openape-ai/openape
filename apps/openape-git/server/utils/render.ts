@@ -55,3 +55,13 @@ export async function highlightCode(code: string, lang: string): Promise<string>
     return await codeToHtml(code, { lang: 'text', theme: 'github-dark-default' })
   }
 }
+
+export function renderIssueMarkdown(source: string): string {
+  return sanitizeHtml(marked.parse(source) as string, {
+    ...SANITIZE_OPTIONS,
+    transformTags: {
+      ...SANITIZE_OPTIONS.transformTags,
+      img: (_tag, attributes) => ({ tagName: 'a', attribs: { href: attributes.src ?? '', rel: 'noopener noreferrer', target: '_blank' }, text: attributes.alt || 'Image attachment' }),
+    },
+  })
+}
