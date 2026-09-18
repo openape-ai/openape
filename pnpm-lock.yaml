@@ -707,6 +707,12 @@ importers:
       happy-dom:
         specifier: 'catalog:'
         version: 20.11.1
+      openape-e2e:
+        specifier: workspace:*
+        version: link:../../examples/e2e
+      playwright:
+        specifier: 'catalog:'
+        version: 1.62.1
       typescript:
         specifier: 'catalog:'
         version: 5.9.3

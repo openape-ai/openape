@@ -67,7 +67,7 @@ export async function listIssueComments(event: H3Event) {
   const after = query.after === undefined ? '' : issueText(query.after, 'comment cursor', 100)
   const limit = query.limit === undefined ? 30 : Number(issueText(query.limit, 'limit', 3))
   const comments = await context.store.comments(id, after, limit)
-  return { comments: comments.map(comment => ({ ...comment, bodyHtml: renderIssueMarkdown(comment.body) })), next: comments.length === limit ? comments.at(-1)!.id : null }
+  return { comments: comments.map(comment => ({ ...comment, canEdit: comment.authorSubject === context.principal.subject && principalAllows(context.principal, 'issues:edit-own'), bodyHtml: renderIssueMarkdown(comment.body) })), next: comments.length === limit ? comments.at(-1)!.id : null }
 }
 
 export async function createIssueComment(event: H3Event) {

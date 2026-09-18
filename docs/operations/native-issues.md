@@ -36,7 +36,7 @@ to their individual issue. Reporter serialization omits repository identity and 
 Private issue content is not made public by a code mirror. Labels and assignees require
 triage rights, and assignment never creates an access grant.
 
-The issue capability defaults off (`NUXT_ISSUES_ENABLED=false`). New tables do not move
+The issue capability defaults off (`NUXT_PUBLIC_ISSUES_ENABLED=false`). New tables do not move
 production issue authority or change Git transport, mirror or merge behavior. Reporting
 also needs explicitly configured intake and routing ownership. Reserve the reviewed
 Forgejo number range before enabling native writes in the migration destination.
@@ -49,7 +49,7 @@ follow in the next increments; this foundation alone is not a completed issue tr
 
 ## API and CLI (M2)
 
-Enable only on an isolated fixture until rollout approval: `NUXT_ISSUES_ENABLED=true`.
+Enable only on an isolated fixture until rollout approval: `NUXT_PUBLIC_ISSUES_ENABLED=true`.
 All issue responses are private/no-store. Browser mutations require a matching Origin;
 CLI calls use the existing exchanged bearer token. Mutations are limited to 120 per
 subject per minute, with a separate 3000-per-minute socket-IP boundary before auth.
@@ -102,3 +102,37 @@ Verification extends the existing suites with real HTTP requests through the H3
 handlers, file-backed SQLite and verified signed SP tokens, plus CLI argument/body-file
 and transport checks. M3 adds the actual Nuxt/IdP/CLI exchange and browser-layout suite;
 HTTP fixture evidence alone does not claim that full integration gate.
+
+## M3: repository and ecosystem UI
+
+`NUXT_PUBLIC_ISSUES_ENABLED=true` enables both navigation and issue handlers;
+its default is false. This replaces the earlier server-only development flag.
+It exposes no private configuration or authorization data. Repository owner
+names `issues`, `i` and `report` are reserved; the read-only production inventory
+had no conflicting owner names before these routes were introduced.
+
+The repository Issues tab offers creation, Markdown Write/Preview, discussion,
+versioned edits, close/reopen, labels and assignment. `/issues` carries search,
+state, repository, product, label, assignee and reporter filters in its URL.
+Pagination replaces the displayed page so an older page cannot retain records
+from a repository whose grant was revoked before the next request. Stable
+`/i/:id` links omit repository navigation for participants without code access.
+Comment anchors load the necessary discussion pages before scrolling.
+
+`GET /api/issue-facets` derives choices from live readable records/repositories;
+`POST /api/issue-preview` uses the same sanitizer, scopes, body limits and
+same-origin mutation checks as persisted Markdown. Neither endpoint has a public
+cache. The frontend preserves drafts after network/conflict errors, reuses retry
+keys for unchanged submissions and requires an explicit reload after conflicts.
+Forms accept input only after hydration, avoiding loss of very early input.
+
+The approved `test:e2e` and `test:layout` suites are registered in the shared
+check contract. Both boot the real Nuxt application and the shared disposable
+DDISA IdP. The CLI exchanges a real IdP token; the browser receives only cookies
+produced by a complete OIDC callback. There is no test authentication bypass.
+Playwright uses the repository's existing pinned dependency and installed Chrome;
+the shared fixture dependency avoids a second identity protocol implementation.
+Layout tests load actual application CSS at 390 and 1440 pixels and emit synthetic
+screenshots, `testrun.json` and a self-contained `report.html` under
+`apps/openape-git/.artifacts/issues/`. Unit/component tests additionally protect
+retry keys, draft retention, permission changes and participant-only controls.

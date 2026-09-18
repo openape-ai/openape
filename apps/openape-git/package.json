@@ -10,7 +10,9 @@
     "test": "vitest run",
     "typecheck": "nuxt typecheck",
     "lint": "eslint .",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "test:layout": "vitest run --config vitest.layout.config.ts"
   },
   "dependencies": {
     "@iconify-json/lucide": "catalog:",
@@ -36,6 +38,8 @@
     "happy-dom": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "vue-tsc": "catalog:"
+    "vue-tsc": "catalog:",
+    "openape-e2e": "workspace:*",
+    "playwright": "catalog:"
   }
 }

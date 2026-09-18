@@ -21,7 +21,7 @@ function denyRate(event: H3Event): never {
 export async function issueContext(event: H3Event, scopes: string[]) {
   setHeader(event, 'cache-control', 'private, no-store')
   const config = useRuntimeConfig()
-  if (config.issuesEnabled !== true) throw createError({ statusCode: 404, statusMessage: 'Issue tracking is not enabled' })
+  if (config.public.issuesEnabled !== true) throw createError({ statusCode: 404, statusMessage: 'Issue tracking is not enabled' })
   if (!ipLimiter.hit(event.node.req.socket.remoteAddress ?? 'unknown')) denyRate(event)
   const principal = await requireScopedPrincipal(event, scopes)
   const mutation = !['GET', 'HEAD'].includes(getMethod(event))
