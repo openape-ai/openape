@@ -6,6 +6,7 @@ import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
+import { createClient } from '@libsql/client'
 import { keyObjectToSshString } from 'openape-e2e/constants'
 import { startIdp } from 'openape-e2e/idp-fixture'
 import { loginWithSshKey } from 'openape-e2e/key-auth'
@@ -32,6 +33,8 @@ export async function startIssueFixture() {
         NUXT_TURSO_URL: `file:${directory}/registry.db`,
         NUXT_GIT_DATA_DIR: directory,
         NUXT_PUBLIC_ISSUES_ENABLED: 'true',
+        NUXT_ISSUE_INTAKE_REPO_ID: 'fixture-intake',
+        NUXT_ISSUE_ROUTING_ADMIN: owner,
         NUXT_OPENAPE_CLIENT_ID: new URL(url).host,
         NUXT_OPENAPE_SP_SESSION_SECRET: 'native-issues-e2e-session-secret-at-least-32-characters',
         NUXT_FALLBACK_IDP_URL: idp.url,
@@ -40,6 +43,9 @@ export async function startIssueFixture() {
       }),
     })
     const base = app.url
+    const db = createClient({ url: `file:${directory}/registry.db` })
+    try { await db.execute({ sql: 'INSERT INTO repos (id, owner, name, owner_email, reporting_enabled, created_at) VALUES (?, ?, ?, ?, 1, ?)', args: ['fixture-intake', 'owner', 'intake', owner, Date.now()] }) }
+    finally { db.close() }
     async function identity(email: string) {
       const { publicKey, privateKey } = generateKeyPairSync('ed25519')
       const sshKey = keyObjectToSshString(publicKey, email)
