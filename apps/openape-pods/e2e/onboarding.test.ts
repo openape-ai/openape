@@ -112,3 +112,38 @@ it('onboarding: central account selection persists without moving existing pods 
   }
   finally { await app.close(); await rm(root, { recursive: true, force: true }) }
 })
+
+it('broker provider settings: explicit consent, retained provider and readable narrow layout (packaged)', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-broker-ui-'))); fixtureDirectory(root)
+  const store = new PodDatabase(root)
+  const setup = new SetupControl(store, new ResourceRegistry(store, () => {}))
+  const owner = randomUUID(); const connected = randomUUID()
+  for (const [id, account, metadata] of [
+    [owner, 'new-owner@example.invalid', { issuer: 'https://id.example.invalid' }],
+    [connected, 'connected-owner@example.invalid', { issuer: 'https://id.example.invalid', broker: { issuer: 'https://pods.example.invalid', domain: 'pods.example.invalid', connectionId: randomUUID() } }],
+  ] as const) setup.execute({ type: 'save', connection: { id, provider: 'openape', account, state: 'ready', error: null }, metadata })
+  store.close()
+  const app = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
+  try {
+    const page = await app.firstWindow()
+    await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
+    await page.getByRole('button', { name: 'OpenApe account', exact: true }).click()
+    const fresh = page.locator('.setup-connection').filter({ hasText: 'new-owner@example.invalid' })
+    await fresh.getByRole('button', { name: 'Connect agent provider', exact: true }).click()
+    await fresh.getByText('Decisions remain with new-owner@example.invalid.', { exact: true }).waitFor()
+    expect(await fresh.getByRole('button', { name: 'Allow requests from this provider', exact: true }).isVisible()).toBe(true)
+    expect((await page.evaluate(() => window.pods.onboarding({ type: 'list' }))).connections[0]?.broker).toBeUndefined()
+    await mkdir(resolve('.artifacts'), { recursive: true })
+    await page.screenshot({ path: resolve('.artifacts/broker-provider-consent.png'), fullPage: true })
+    await fresh.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(560, 840)); await page.emulateMedia({ colorScheme: 'dark' })
+    const provider = page.locator('.setup-connection').filter({ hasText: 'connected-owner@example.invalid' })
+    await provider.getByRole('button', { name: 'Revoke agent provider', exact: true }).click()
+    await provider.getByRole('button', { name: 'Confirm revocation', exact: true }).scrollIntoViewIfNeeded()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ path: resolve('.artifacts/broker-provider-connected-dark.png') })
+    expect((await page.evaluate(() => window.pods.onboarding({ type: 'list' }))).connections[1]?.broker?.domain).toBe('pods.example.invalid')
+    expect((await page.evaluate(() => window.pods.workspace({ type: 'list' })))).toMatchObject({ pods: [] })
+  }
+  finally { await app.close(); await rm(root, { recursive: true, force: true }) }
+})

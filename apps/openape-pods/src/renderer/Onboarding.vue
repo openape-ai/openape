@@ -7,7 +7,7 @@ import type { StoredPod } from '../contracts/control'
 export default defineComponent({
   props: { pod: { type: Object as () => StoredPod, default: undefined } },
   emits: ['finished', 'reference'],
-  data() { return { view: null as OnboardingView | null, provider: 'openape' as 'chatgpt' | 'openape', account: '', issuer: 'https://id.openape.ai', busy: false, error: '', makeDefault: true, disconnecting: '', closed: false, timer: null as ReturnType<typeof setTimeout> | null } },
+  data() { return { view: null as OnboardingView | null, provider: 'openape' as 'chatgpt' | 'openape', account: '', issuer: 'https://id.openape.ai', busy: false, error: '', makeDefault: true, disconnecting: '', brokerReview: '', brokerIssuer: 'https://pods.openape.ai', brokerDomain: 'pods.openape.ai', brokerRevoking: '', closed: false, timer: null as ReturnType<typeof setTimeout> | null } },
   computed: { globalConnections() { return this.view?.connections.filter(item => item.provider === 'chatgpt' || item.provider === 'openape') ?? [] } },
   async mounted() { await this.request({ type: 'list' }); this.poll() },
   beforeUnmount() { this.closed = true; if (this.timer) clearTimeout(this.timer) },
@@ -22,6 +22,8 @@ export default defineComponent({
       finally { this.busy = false }
     },
     async connect() { await this.request({ type: 'connect', provider: this.provider, account: this.account, ...(this.provider === 'openape' ? { issuer: this.issuer, makeDefault: this.makeDefault } : {}) }) },
+    async enableBroker(id: string) { await this.request({ type: 'enableBroker', id, issuer: this.brokerIssuer, domain: this.brokerDomain }); if (!this.error) this.brokerReview = '' },
+    async revokeBroker(id: string) { await this.request({ type: 'revokeBroker', id }); if (!this.error) this.brokerRevoking = '' },
     async disconnect() { await this.request({ type: 'disconnect', id: this.disconnecting }); if (!this.error) this.disconnecting = '' },
     async finish() { await this.request({ type: 'finish' }); if (!this.error) this.$emit('finished') },
   },
@@ -55,6 +57,41 @@ export default defineComponent({
         <button v-if="connection.provider === 'openape' && ['expired', 'failed', 'revoked'].includes(connection.state)" :disabled="busy" @click="request({ type: 'reconnect', id: connection.id })">
           {{ t('Sign in again') }}
         </button>
+        <template v-if="connection.provider === 'openape' && connection.state === 'ready'">
+          <template v-if="connection.broker">
+            <p>{{ t('Agent provider: {p0}', { p0: connection.broker.domain }) }}</p>
+            <p>{{ t('Your account decides every new permission. The agent provider can only submit requests.') }}</p>
+            <button :disabled="busy" @click="brokerRevoking = connection.id">
+              {{ t('Revoke agent provider') }}
+            </button>
+            <div v-if="brokerRevoking === connection.id" class="disconnect-review">
+              <p>{{ t('Revoking this provider blocks new requests and further use of its grants, including existing recurring permissions. Existing pod identities and data are retained.') }}</p>
+              <button :disabled="busy" @click="revokeBroker(connection.id)">
+                {{ t('Confirm revocation') }}
+              </button>
+              <button :disabled="busy" @click="brokerRevoking = ''">
+                {{ t('Cancel') }}
+              </button>
+            </div>
+          </template>
+          <template v-else>
+            <button :disabled="busy" @click="brokerReview = connection.id">
+              {{ t('Connect agent provider') }}
+            </button>
+            <form v-if="brokerReview === connection.id" class="setup-form disconnect-review" @submit.prevent="enableBroker(connection.id)">
+              <p>{{ t('Allow this provider to create agent identities for you and submit permission requests to your account? It cannot approve actions. This applies to new pod identities; existing pods keep their assigned provider.') }}</p>
+              <label>{{ t('Agent provider') }}<input v-model="brokerIssuer" type="url" required></label>
+              <label>{{ t('Agent identity domain') }}<input v-model="brokerDomain" required></label>
+              <p>{{ t('Decisions remain with {p0}.', { p0: connection.account }) }}</p>
+              <button class="primary" :disabled="busy">
+                {{ t('Allow requests from this provider') }}
+              </button>
+              <button type="button" :disabled="busy" @click="brokerReview = ''">
+                {{ t('Cancel') }}
+              </button>
+            </form>
+          </template>
+        </template>
         <p v-if="connection.error" role="alert">
           {{ diagnostic(connection.error) }}
         </p>

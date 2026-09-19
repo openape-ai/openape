@@ -22,6 +22,7 @@ const groups = [
   {
     title: 'Who acts as you',
     sections: [
+      { to: '/agent-providers', icon: 'i-lucide-network', title: 'Agent providers', desc: 'External providers allowed to submit requests. You keep every decision.' },
       { to: '/agents', icon: 'i-lucide-bot', title: 'Agents', desc: 'The agents that act under your identity.' },
       { to: '/grants', icon: 'i-lucide-badge-check', title: 'Grants', desc: 'What your agents are allowed to do, and where.' },
       { to: '/delegations', icon: 'i-lucide-shield-check', title: 'Delegations', desc: 'Apps acting on your behalf at another service.' },

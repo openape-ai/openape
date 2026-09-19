@@ -70,3 +70,18 @@ it('shows an account status failure instead of a signed-in claim', async () => {
   expect(wrapper.text()).toContain('Account status unavailable')
   expect(wrapper.text()).not.toContain('Signed in'); wrapper.unmount()
 })
+
+it('requires an explicit provider consent and shows its limited authority before sending it', async () => {
+  const id = state.connections[0].id
+  const onboarding = vi.fn(async command => ({ ...state, connections: [{ ...state.connections[0], ...(command.type === 'enableBroker' ? { broker: { issuer: command.issuer, domain: command.domain, connectionId: id } } : {}) }] }))
+  window.pods = { onboarding } as unknown as typeof window.pods
+  const wrapper = mount(Onboarding); await flushPromises()
+  await wrapper.findAll('button').find(button => button.text() === 'Connect agent provider')!.trigger('click'); await flushPromises()
+  expect(onboarding).toHaveBeenCalledTimes(1)
+  expect(wrapper.text()).toContain('It cannot approve actions')
+  expect(wrapper.text()).toContain('existing pods keep their assigned provider')
+  await wrapper.get('form.disconnect-review').trigger('submit'); await flushPromises()
+  expect(onboarding).toHaveBeenLastCalledWith({ type: 'enableBroker', id, issuer: 'https://pods.openape.ai', domain: 'pods.openape.ai' })
+  expect(wrapper.text()).toContain('Agent provider: pods.openape.ai')
+  wrapper.unmount()
+})
