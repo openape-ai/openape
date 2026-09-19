@@ -5,7 +5,7 @@ import type { ProgramAssignment } from '../../contracts/programs'
 import { randomUUID } from 'node:crypto'
 import { rm, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { ConnectionView, OnboardingCommand, OnboardingView } from '../../contracts/onboarding'
+import type { ConnectionView, OnboardingCommand, OnboardingView, PodIdentityView } from '../../contracts/onboarding'
 import type { AgentRuntime } from '../../worker/agent/executor'
 import type { SetupInternal } from '../../worker/onboarding/control'
 import type { CredentialCache } from './cache'
@@ -58,17 +58,31 @@ export class ConnectionManager {
     await this.dispatch({ type: 'save', connection: record, metadata })
   }
 
-  async view(): Promise<OnboardingView> {
+  private async podIdentity(state: SetupState, podId: string): Promise<PodIdentityView> {
+    const owners = state.connections.filter(item => item.provider === 'openape')
+    const candidates = await Promise.all(owners.map(async owner => ({ owner, metadata: await this.metadata(owner.id) })))
+    const bound = candidates.filter(item => Object.hasOwn((item.metadata.pods ?? {}) as object, podId))
+    if (bound.length > 1) throw new Error('This pod is assigned to multiple OpenApe accounts; correct its owner before continuing')
+    const selected = bound[0] ?? candidates.find(item => item.owner.id === state.defaultOwner)
+    if (!selected) return { podId, bound: false, ownerConnection: null, issuer: null, decisionIssuer: null, subject: null, brokerConnectionId: null }
+    const { owner, metadata } = selected
+    const entry = (metadata.pods as Record<string, { broker?: PodBrokerConnection, identity?: PodIdentityReference }> | undefined)?.[podId]
+    const broker = entry ? entry.broker : metadata.broker as PodBrokerConnection | undefined
+    const decisionIssuer = entry?.identity?.decisionIssuer ?? (typeof metadata.issuer === 'string' ? metadata.issuer : null)
+    return { podId, bound: !!entry, ownerConnection: owner.id, issuer: entry?.identity?.issuer ?? broker?.issuer ?? decisionIssuer, decisionIssuer, subject: entry?.identity?.subject ?? null, brokerConnectionId: entry?.identity?.brokerConnectionId ?? broker?.connectionId ?? null }
+  }
+
+  async view(podId?: string): Promise<OnboardingView> {
     const state = await this.state()
     const connections = await Promise.all(state.connections.map(async (item) => {
       const metadata = item.provider === 'openape' ? await this.metadata(item.id) : {}
       return { ...item, ...(metadata.broker ? { broker: metadata.broker as PodBrokerConnection } : {}), login: this.jobs.get(item.id)?.login ?? null }
     }))
-    return { ...state, connections, runtime: this.runtimeState }
+    return { ...state, connections, runtime: this.runtimeState, ...(podId ? { podIdentity: await this.podIdentity(state, podId) } : {}) }
   }
 
   async execute(command: OnboardingCommand): Promise<OnboardingView> {
-    if (command.type === 'list') return this.view()
+    if (command.type === 'list') return this.view(command.podId)
     if (command.type === 'assign' || command.type === 'folders' || (command.type === 'connect' && command.provider === 'microsoft')) throw new Error('Configure application accounts in the pod Permissions tab')
     if (command.type === 'cancel' || command.type === 'disconnect') {
       const job = this.jobs.get(command.id); job?.controller.abort(new Error('Sign-in cancelled by the owner')); await job?.work

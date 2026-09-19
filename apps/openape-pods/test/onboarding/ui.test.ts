@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import AccountStatus from '../../src/renderer/AccountStatus.vue'
+import PodIdentity from '../../src/renderer/PodIdentity.vue'
 import Onboarding from '../../src/renderer/Onboarding.vue'
 import type { OnboardingView } from '../../src/contracts/onboarding'
 
@@ -16,7 +17,9 @@ it('offers only model and OpenApe accounts and directs program setup to Permissi
   expect(wrapper.text()).toContain('Microsoft and Telegram have separate connections')
   expect(wrapper.text()).not.toContain('mail@example.invalid')
   expect(wrapper.text()).not.toContain('Assign mail')
-  expect(wrapper.text()).toContain('Open pod permissions')
+  expect(wrapper.text()).toContain('Your DDISA identity')
+  expect(wrapper.text()).not.toContain('Connect agent provider')
+  expect(wrapper.text()).not.toContain('References and first run')
   wrapper.unmount()
 })
 it('shows device sign-in and cancels only that pending global connection', async () => {
@@ -73,15 +76,56 @@ it('shows an account status failure instead of a signed-in claim', async () => {
 
 it('requires an explicit provider consent and shows its limited authority before sending it', async () => {
   const id = state.connections[0].id
-  const onboarding = vi.fn(async command => ({ ...state, connections: [{ ...state.connections[0], ...(command.type === 'enableBroker' ? { broker: { issuer: command.issuer, domain: command.domain, connectionId: id } } : {}) }] }))
+  const onboarding = vi.fn(async command => ({ ...state, podIdentity: { podId: id, bound: false, ownerConnection: id, issuer: null, decisionIssuer: null, subject: null, brokerConnectionId: null }, connections: [{ ...state.connections[0], ...(command.type === 'enableBroker' ? { broker: { issuer: command.issuer, domain: command.domain, connectionId: id } } : {}) }] }))
   window.pods = { onboarding } as unknown as typeof window.pods
-  const wrapper = mount(Onboarding); await flushPromises()
+  const wrapper = mount(PodIdentity, { props: { podId: id } }); await flushPromises()
   await wrapper.findAll('button').find(button => button.text() === 'Connect agent provider')!.trigger('click'); await flushPromises()
   expect(onboarding).toHaveBeenCalledTimes(1)
   expect(wrapper.text()).toContain('It cannot approve actions')
   expect(wrapper.text()).toContain('existing pods keep their assigned provider')
-  await wrapper.get('form.disconnect-review').trigger('submit'); await flushPromises()
-  expect(onboarding).toHaveBeenLastCalledWith({ type: 'enableBroker', id, issuer: 'https://pods.openape.ai', domain: 'pods.openape.ai' })
-  expect(wrapper.text()).toContain('Agent provider: pods.openape.ai')
+  await wrapper.get('form').trigger('submit'); await flushPromises()
+  expect(onboarding).toHaveBeenCalledWith({ type: 'enableBroker', id, issuer: 'https://pods.openape.ai', domain: 'pods.openape.ai' })
+  expect(wrapper.text()).toContain('applies across its pods')
+  wrapper.unmount()
+})
+
+it('shows the assigned pod owner rather than the current default and links to personal accounts', async () => {
+  const id = state.connections[0].id
+  const onboarding = vi.fn(async () => ({ ...state, defaultOwner: 'other', connections: [{ ...state.connections[0], state: 'revoked' }, { ...state.connections[0], id: 'other', account: 'other@example.invalid' }], podIdentity: { podId: id, bound: true, ownerConnection: id, issuer: 'https://pods.example.invalid', decisionIssuer: 'https://id.example.invalid', subject: 'agent@pods.example.invalid', brokerConnectionId: 'old-consent' } }))
+  window.pods = { onboarding } as unknown as typeof window.pods
+  const wrapper = mount(PodIdentity, { props: { podId: id } }); await flushPromises()
+  expect(wrapper.text()).toContain('owner@example.invalid')
+  expect(wrapper.text()).not.toContain('other@example.invalid')
+  expect(wrapper.text()).toContain('agent@pods.example.invalid')
+  expect(wrapper.text()).toContain('A new consent does not restore this identity')
+  expect(wrapper.text()).toContain('Sign in to this pod’s assigned DDISA account again')
+  expect(wrapper.get('details').attributes('open')).toBeUndefined()
+  await wrapper.findAll('button').find(button => button.text() === 'Manage your accounts')!.trigger('click')
+  expect(wrapper.emitted('accounts')).toHaveLength(1)
+  expect(onboarding).toHaveBeenCalledExactlyOnceWith({ type: 'list', podId: id })
+  wrapper.unmount()
+})
+it('explains a missing owner without provisioning or offering global sign-in inside the pod', async () => {
+  const id = state.connections[0].id
+  const onboarding = vi.fn(async () => ({ ...state, connections: [], podIdentity: { podId: id, bound: false, ownerConnection: null, issuer: null, decisionIssuer: null, subject: null, brokerConnectionId: null } }))
+  window.pods = { onboarding } as unknown as typeof window.pods
+  const wrapper = mount(PodIdentity, { props: { podId: id } }); await flushPromises()
+  expect(wrapper.text()).toContain('Connect your DDISA account')
+  expect(wrapper.find('form').exists()).toBe(false)
+  await wrapper.get('button').trigger('click')
+  expect(wrapper.emitted('accounts')).toHaveLength(1)
+  expect(onboarding).toHaveBeenCalledTimes(1)
+  wrapper.unmount()
+})
+it('confirms the account-wide impact before revoking provider consent', async () => {
+  const id = state.connections[0].id
+  const onboarding = vi.fn(async () => ({ ...state, connections: [{ ...state.connections[0], broker: { issuer: 'https://pods.example.invalid', domain: 'pods.example.invalid', connectionId: id } }], podIdentity: { podId: id, bound: true, ownerConnection: id, issuer: 'https://pods.example.invalid', decisionIssuer: 'https://id.example.invalid', subject: 'agent@pods.example.invalid', brokerConnectionId: id } }))
+  window.pods = { onboarding } as unknown as typeof window.pods
+  const wrapper = mount(PodIdentity, { props: { podId: id } }); await flushPromises()
+  await wrapper.findAll('button').find(button => button.text() === 'Revoke agent provider')!.trigger('click')
+  expect(onboarding).toHaveBeenCalledTimes(1)
+  expect(wrapper.text()).toContain('This affects all pods')
+  await wrapper.findAll('button').find(button => button.text() === 'Confirm revocation')!.trigger('click'); await flushPromises()
+  expect(onboarding).toHaveBeenCalledWith({ type: 'revokeBroker', id })
   wrapper.unmount()
 })
