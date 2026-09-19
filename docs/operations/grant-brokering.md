@@ -33,3 +33,28 @@ Pods retrieves the original owner-signed authorization token through the agent p
 Permanent tests cover typed signatures, owner-only decisions, direct-path compatibility, durable replay/single-use/revocation, credential isolation, provider consent and assigned-executor substitution. The packaged UI fixture uses synthetic accounts and does not contact a real provider or activate schedules.
 
 The public agent provider needs a separately configured domain and service. Do not describe local implementation tests as a production federation rollout. Deploy only reviewed canonical source through the existing tested-image pipeline, retain the prior owner-IdP image and database backup, and verify discovery before use.
+
+### Production deployment layout
+
+`compose/chatty.yml` defines `idp` on port 3003 and `pods-idp` on port 3027.
+The new instance uses `/home/openape/projects/openape-pods-idp/shared` and the
+`PODS_IDP_TAG` pin. Its environment contains independent generated session
+secret material and `NUXT_TURSO_URL=file:/home/openape/projects/openape-pods-idp/shared/data/idp.db`.
+Set `NUXT_OPENAPE_IDP_ISSUER`, `NUXT_OPENAPE_IDP_RP_ORIGIN` to
+`https://pods.openape.ai`, and `NUXT_OPENAPE_IDP_RP_ID`,
+`NUXT_OPENAPE_IDP_RP_HOST_ALLOW_LIST`, `NUXT_OPENAPE_IDP_BROKER_AGENT_DOMAIN`
+to `pods.openape.ai`. Do not configure mail or Telegram credentials for this instance.
+
+Install `compose/traefik/pods-idp.yml` as its own watched dynamic file. It uses
+the existing wildcard TLS certificate and blocks the public human-registration
+endpoint. Add `pods` A to the current chatty address and `_ddisa.pods` TXT
+`v=ddisa1 idp=https://pods.openape.ai; mode=open` in the authoritative zone.
+Back up configuration and the owner's SQLite database before the first deploy.
+Confirm the live compose still matches the reviewed baseline before syncing it.
+
+From clean canonical main, run `pnpm deploy:image free-idp pods-idp`. The chatty
+connection uses its SSH-config alias (override: `CHATTY_SSH`) and executes Docker
+and file installation as the existing `openape` service account. A failed first
+deployment is stopped; existing services with a previous image are rolled back.
+Keep the retained owner DB backup for explicit recovery; ordinary image rollback
+does not replace the live DB or discard grants created after the snapshot.

@@ -1,0 +1,23 @@
+# Install as /data/coolify/proxy/dynamic/pods-idp.yml on chatty.
+# Human accounts belong to their decision IdP; enrollment uses broker receipts.
+http:
+  services:
+    pods-idp:
+      loadBalancer:
+        servers:
+          - url: http://10.0.1.1:3027
+  routers:
+    pods-idp-http:
+      entryPoints: [http]
+      rule: Host(`pods.openape.ai`)
+      middlewares: [redirect-https@file]
+      service: pods-idp
+    pods-idp-https:
+      entryPoints: [https]
+      rule: Host(`pods.openape.ai`) && !PathPrefix(`/api/register`)
+      service: pods-idp
+      tls:
+        certResolver: dns01
+        domains:
+          - main: openape.ai
+            sans: ['*.openape.ai']

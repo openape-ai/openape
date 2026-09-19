@@ -43,6 +43,28 @@ services:
       retries: 6
       start_period: 10s
 
+  pods-idp:
+    image: registry.openape.ai/openape-pods-idp:${PODS_IDP_TAG:-unset}
+    restart: unless-stopped
+    user: "999:988"
+    env_file: /home/openape/projects/openape-pods-idp/shared/.env
+    environment:
+      HOST: 0.0.0.0
+      NITRO_HOST: 0.0.0.0
+      PORT: "3027"
+      NITRO_PORT: "3027"
+    volumes:
+      - /home/openape/projects/openape-pods-idp/shared:/home/openape/projects/openape-pods-idp/shared
+    ports:
+      - "127.0.0.1:3027:3027"
+      - "10.0.1.1:3027:3027"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3027/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
   troop:
     image: registry.openape.ai/openape-troop:${TROOP_TAG:-unset}
     restart: unless-stopped
