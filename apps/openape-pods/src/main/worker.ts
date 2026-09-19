@@ -250,7 +250,7 @@ export class FixtureWorker {
     const pending = view.approvals?.find(item => item.runId === command.runId && item.grantId === command.grantId)
     if (!pending) throw new Error('This approval is no longer waiting; refresh the run status')
     const connection = await this.connections!.podConnection(command.podId)
-    if (pending.issuer !== connection.issuer || pending.subject !== connection.subject) throw new Error('Approval belongs to a different Pod identity')
+    if (pending.issuer !== (connection.decisionIssuer ?? connection.issuer) || pending.subject !== connection.subject) throw new Error('Approval belongs to a different Pod identity')
     const { runId: _runId, ...approval } = pending
     await shell.openExternal(approvalURL(approval))
     return view
@@ -279,8 +279,8 @@ export class FixtureWorker {
         await this.shellIdentities.get(scope.runId)?.close(); this.shellIdentities.delete(scope.runId); return true
       }
       const context = await this.dispatch({ runContext: { scope } }) as { name: string, reason: string }
-      const previous = async (permission: string, connection: { issuer: string, subject: string }) => {
-        const grant = await this.dispatch({ runContext: { scope, grant: { permission, issuer: connection.issuer, subject: connection.subject } } }) as RunApproval | null
+      const previous = async (permission: string, connection: { issuer: string, decisionIssuer?: string, subject: string }) => {
+        const grant = await this.dispatch({ runContext: { scope, grant: { permission, issuer: connection.decisionIssuer ?? connection.issuer, subject: connection.subject } } }) as RunApproval | null
         return grant && !['cancelled', 'expired'].includes(grant.state) ? grant.grantId : undefined
       }
       const observe = async (approval: RunApproval) => {

@@ -76,3 +76,33 @@ describe('pod identity credential isolation', () => {
     expect(await readdir(join(root, 'temporary'))).toEqual([])
   })
 })
+
+it('enrolls through a receipt without sending owner credentials and pins the separate decision authority', async () => {
+  const { vi } = await import('vitest')
+  root = await mkdtemp(join(tmpdir(), 'pods-federated-agent-'))
+  const cache = new CredentialCache(root, { available: () => true, encrypt: value => Buffer.from(value).reverse(), decrypt: value => Buffer.from(value).reverse().toString() })
+  const manager = new PodIdentityManager(cache)
+  const connectionId = randomUUID(); const podId = randomUUID(); const brokerConnectionId = randomUUID()
+  const issuer = 'https://pods.example.test'; const decisionIssuer = 'https://id.owner.test'; const owner = 'owner@owner.test'
+  await manager.prepare(connectionId, podId, issuer, owner, { decisionIssuer, brokerConnectionId })
+  const calls: Array<{ url: string, body: string, authorization: string | null }> = []
+  const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+    const url = String(input); const body = String(init?.body ?? '')
+    calls.push({ url, body, authorization: new Headers(init?.headers).get('Authorization') })
+    if (url.endsWith('/.well-known/openid-configuration')) return Response.json({ issuer, openape_grant_brokering_version: '1.0', openape_broker_enrollment_endpoint: `${issuer}/api/broker-agents` })
+    const enrollment = JSON.parse(body)
+    expect(enrollment.connection_receipt).toBe('SYNTHETIC_RECEIPT')
+    const keyId = createHash('sha256').update(Buffer.from(enrollment.publicKey.split(' ')[1], 'base64')).digest('hex')
+    return Response.json({ email: 'agent@pods.example.test', owner, keyId, permissions: 'none', decisionIssuer, brokerConnectionId })
+  })
+  try {
+    const reference = await manager.provision(connectionId, 'Fixture', 'SYNTHETIC_OWNER_TOKEN', 'SYNTHETIC_RECEIPT')
+    expect(reference).toMatchObject({ issuer, decisionIssuer, brokerConnectionId, owner })
+    expect(calls.every(call => call.authorization === null && !call.body.includes('SYNTHETIC_OWNER_TOKEN'))).toBe(true)
+    const authority = manager.connection(reference, 'fixture')
+    expect(authority.brokered).toMatchObject({ connection_id: brokerConnectionId, owner, agent_issuer: issuer })
+    await expect(manager.connection({ ...reference, decisionIssuer: 'https://different.test' }, 'fixture').accessToken()).rejects.toThrow('binding mismatch')
+    expect(JSON.stringify(reference)).not.toContain('RECEIPT')
+  }
+  finally { fetch.mockRestore() }
+})
