@@ -585,6 +585,9 @@ importers:
       '@openape/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@openape/grants':
+        specifier: workspace:*
+        version: link:../../packages/grants
       '@openape/nuxt-auth-idp':
         specifier: workspace:*
         version: link:../../modules/nuxt-auth-idp
@@ -885,6 +888,12 @@ importers:
       '@openape/apes':
         specifier: workspace:*
         version: link:../../packages/apes
+      '@openape/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@openape/grants':
+        specifier: workspace:*
+        version: link:../../packages/grants
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.0

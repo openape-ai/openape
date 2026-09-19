@@ -1,3 +1,5 @@
+import { enablePodBroker, revokePodBroker, podBrokerReceipt } from './broker'
+import type { PodBrokerConnection } from './broker'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { ProgramAssignment } from '../../contracts/programs'
 import { randomUUID } from 'node:crypto'
@@ -52,13 +54,17 @@ export class ConnectionManager {
   }
 
   private async save(connection: ConnectionView, metadata: Record<string, unknown>): Promise<void> {
-    const { login: _login, ...record } = connection
+    const { login: _login, broker: _broker, ...record } = connection
     await this.dispatch({ type: 'save', connection: record, metadata })
   }
 
   async view(): Promise<OnboardingView> {
     const state = await this.state()
-    return { ...state, connections: state.connections.map(item => ({ ...item, login: this.jobs.get(item.id)?.login ?? null })), runtime: this.runtimeState }
+    const connections = await Promise.all(state.connections.map(async (item) => {
+      const metadata = item.provider === 'openape' ? await this.metadata(item.id) : {}
+      return { ...item, ...(metadata.broker ? { broker: metadata.broker as PodBrokerConnection } : {}), login: this.jobs.get(item.id)?.login ?? null }
+    }))
+    return { ...state, connections, runtime: this.runtimeState }
   }
 
   async execute(command: OnboardingCommand): Promise<OnboardingView> {
@@ -74,6 +80,7 @@ export class ConnectionManager {
       }
       return this.view()
     }
+    if (command.type === 'enableBroker' || command.type === 'revokeBroker') { await this.configureBroker(command); return this.view() }
     if (command.type === 'setDefaultOwner') { await this.dispatch({ type: 'setDefaultOwner', id: command.id }); return this.view() }
     if (!this.runtimeState.ready) throw new Error(this.runtimeState.error ?? 'Bundled runtime is not ready')
     if (command.type === 'connect') {
@@ -87,6 +94,30 @@ export class ConnectionManager {
     }
     if (command.type === 'finish') await this.dispatch({ type: 'finish' })
     return this.view()
+  }
+
+  private async configureBroker(command: Extract<OnboardingCommand, { type: 'enableBroker' | 'revokeBroker' }>): Promise<void> {
+    if (this.assigning) throw new Error('Another permission review is in progress')
+    this.assigning = true
+    try {
+      const owner = await this.connection(command.id, 'openape')
+      if (owner.state !== 'ready') throw new Error('Sign in before authorizing an agent provider')
+      const metadata = await this.metadata(owner.id)
+      if (typeof metadata.issuer !== 'string') throw new Error('Owner identity provider is missing')
+      const signal = AbortSignal.timeout(120000)
+      const bearer = await this.owner.bearer(owner.id, metadata.issuer, owner.account, signal)
+      if (command.type === 'enableBroker') {
+        if (metadata.broker) throw new Error('Revoke the current agent provider before connecting another')
+        metadata.broker = await enablePodBroker(metadata.issuer, owner.account, command.issuer, command.domain, bearer, signal)
+      }
+      else {
+        if (!metadata.broker) throw new Error('No agent provider is connected')
+        await revokePodBroker(metadata.issuer, metadata.broker as PodBrokerConnection, bearer, signal)
+        delete metadata.broker
+      }
+      await this.save(owner, metadata)
+    }
+    finally { this.assigning = false }
   }
 
   private async startLogin(connection: ConnectionView, metadata: Record<string, unknown>, makeDefault: boolean, fresh = false): Promise<OnboardingView> {
@@ -140,13 +171,14 @@ export class ConnectionManager {
     const { owner, metadata } = selected
     if (typeof metadata.issuer !== 'string') throw new Error('OpenApe identity provider is required')
     const identities = new PodIdentityManager(this.credentials)
-    const pods = (metadata.pods ?? {}) as Record<string, { connectionId: string, prepared: boolean, identity?: PodIdentityReference }>
+    const pods = (metadata.pods ?? {}) as Record<string, { connectionId: string, prepared: boolean, broker?: PodBrokerConnection, identity?: PodIdentityReference }>
     let entry = pods[podId]
-    if (!entry) { entry = { connectionId: randomUUID(), prepared: false }; pods[podId] = entry; metadata.pods = pods; await this.save(owner, metadata) }
-    if (!entry.prepared) { await identities.ensurePrepared(entry.connectionId, podId, metadata.issuer, owner.account); entry.prepared = true; await this.save(owner, metadata) }
+    if (!entry) { entry = { connectionId: randomUUID(), prepared: false, ...(metadata.broker ? { broker: metadata.broker as PodBrokerConnection } : {}) }; pods[podId] = entry; metadata.pods = pods; await this.save(owner, metadata) }
+    if (!entry.prepared) { await identities.ensurePrepared(entry.connectionId, podId, entry.broker?.issuer ?? metadata.issuer, owner.account, entry.broker ? { decisionIssuer: metadata.issuer, brokerConnectionId: entry.broker.connectionId } : undefined); entry.prepared = true; await this.save(owner, metadata) }
     if (!entry.identity) {
       const bearer = await this.owner.bearer(owner.id, metadata.issuer, owner.account, AbortSignal.timeout(120000))
-      entry.identity = await identities.provision(entry.connectionId, `Pod ${podId}`, bearer); await this.save(owner, metadata)
+      const receipt = entry.broker ? await podBrokerReceipt(metadata.issuer, entry.broker, bearer, AbortSignal.timeout(10000)) : undefined
+      entry.identity = await identities.provision(entry.connectionId, `Pod ${podId}`, bearer, receipt); await this.save(owner, metadata)
     }
     return { ...identities.connection(entry.identity, `pods:${podId}`), identity: entry.identity, ownerConnection: owner.id }
   }
@@ -166,7 +198,7 @@ export class ConnectionManager {
     this.assigning = true
     try {
       const signal = AbortSignal.timeout(120000)
-      const bearer = await this.owner.bearer(connection.ownerConnection, connection.issuer, connection.owner, signal)
+      const bearer = await this.owner.bearer(connection.ownerConnection, connection.decisionIssuer ?? connection.issuer, connection.owner, signal)
       const grantId = await approveCommands(connection.identity, new PodIdentityManager(this.credentials), bearer, adapterPath, commands, signal)
       return { identity: connection.identity, ownerConnection: connection.ownerConnection, grantId }
     }

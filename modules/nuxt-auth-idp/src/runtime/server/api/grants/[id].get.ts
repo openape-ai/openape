@@ -1,3 +1,5 @@
+import { maybeForwardBrokerGrant } from '../../utils/broker-forward'
+import { requireBrokerGrantOwner } from '../../utils/broker-owner'
 import type { OpenApeCliAuthorizationDetail } from '@openape/core'
 import { buildWideningSuggestionsForGrant, evaluateStandingGrants, findSimilarCliGrants, introspectGrant } from '@openape/grants'
 import { defineEventHandler, getRequestHeader, getRouterParam, setResponseHeader, setResponseStatus } from 'h3'
@@ -19,9 +21,17 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 400, title: 'Grant ID is required' })
   }
 
+  const forwarded = await maybeForwardBrokerGrant(event, 'get', id)
+  if (forwarded !== undefined) return forwarded
+
   const grant = await introspectGrant(id, grantStore)
   if (!grant) {
     throw createProblemError({ status: 404, title: 'Grant not found', type: 'https://openape.org/errors/grant_not_found' })
+  }
+
+  if (grant.brokered) {
+    await requireBrokerGrantOwner(event, grant, false)
+    return grant
   }
 
   // ETag for efficient polling

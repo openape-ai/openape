@@ -71,3 +71,5 @@ export {
   type WideningScope,
   type WideningSuggestion,
 } from './widening-suggestions.js'
+
+export * from './brokering.js'

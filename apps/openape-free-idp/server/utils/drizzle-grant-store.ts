@@ -1,8 +1,10 @@
 import type { OpenApeGrant, OpenApeGrantRequest, PaginatedResponse } from '@openape/core'
 import type { GrantListParams, GrantStore } from '@openape/grants'
-import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, or, lt, sql } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
-import { grants } from '../database/schema'
+import { brokerAudit, brokerConnections, grants } from '../database/schema'
+import { createError } from 'h3'
+import { brokerAuditRow } from './broker-audit'
 
 interface ExtendedGrantStore extends GrantStore {
   findAll: () => Promise<OpenApeGrant[]>
@@ -12,12 +14,14 @@ interface ExtendedGrantStore extends GrantStore {
 
 type GrantRow = typeof grants.$inferSelect
 
-function grantToRow(grant: OpenApeGrant) {
+export function grantToRow(grant: OpenApeGrant) {
   return {
     id: grant.id,
     status: grant.status,
     type: grant.type ?? null,
     requester: grant.request.requester,
+    brokered: grant.brokered ?? null,
+    brokerOwner: grant.brokered?.owner ?? null,
     targetHost: grant.request.target_host,
     audience: grant.request.audience,
     grantType: grant.request.grant_type ?? 'once',
@@ -32,9 +36,10 @@ function grantToRow(grant: OpenApeGrant) {
   }
 }
 
-function rowToGrant(row: GrantRow): OpenApeGrant {
+export function rowToGrant(row: GrantRow): OpenApeGrant {
   const request = row.request as unknown as OpenApeGrantRequest
   return {
+    ...(row.brokered ? { brokered: row.brokered as OpenApeGrant['brokered'] } : {}),
     id: row.id,
     type: row.type as OpenApeGrant['type'],
     request: {
@@ -61,6 +66,17 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
   return {
     async save(grant) {
       const row = grantToRow(grant)
+      if (grant.brokered) {
+        await db.transaction(async (tx) => {
+          const connection = await tx.select().from(brokerConnections).where(eq(brokerConnections.id, grant.brokered!.connection_id)).get()
+          if (!connection || connection.status !== 'active' || connection.owner !== grant.brokered!.owner) throw createError({ statusCode: 403, statusMessage: 'Broker connection is missing or revoked' })
+          const pending = await tx.select({ count: sql<number>`count(*)` }).from(grants).where(and(eq(grants.brokerOwner, grant.brokered!.owner), eq(grants.status, 'pending'))).get()
+          if ((pending?.count ?? 0) >= 100) throw createError({ statusCode: 429, statusMessage: 'Decide or dismiss existing broker requests before submitting more' })
+          await tx.insert(grants).values(row)
+          await tx.insert(brokerAudit).values(brokerAuditRow(grant, 'created'))
+        }, { behavior: 'immediate' })
+        return
+      }
 
       await db.insert(grants).values(row).onConflictDoUpdate({
         target: grants.id,
@@ -68,6 +84,8 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
           status: row.status,
           type: row.type,
           requester: row.requester,
+          brokered: row.brokered,
+          brokerOwner: row.brokerOwner,
           targetHost: row.targetHost,
           audience: row.audience,
           grantType: row.grantType,
@@ -82,15 +100,6 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
         },
       })
 
-      // Push notifications are no longer fired here. The store's save()
-      // is called BEFORE the index.post.ts handler runs YOLO / standing
-      // grant decisions (which then set status='approved' via a follow-
-      // up updateStatus) — so a push fired here would always go out for
-      // auto-approved grants too, which is exactly the noise we want to
-      // suppress. The handler now fires the push explicitly only on the
-      // fall-through path where the grant remains pending after all
-      // pre-approval hooks have had their say. See `routePushAfterCreate`
-      // in modules/nuxt-auth-idp/src/runtime/server/api/grants/index.post.ts.
     },
 
     async findById(id) {
@@ -99,27 +108,31 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
     },
 
     async updateStatus(id, status, extra?) {
-      const existing = await db.select().from(grants).where(eq(grants.id, id)).get()
-      if (!existing)
-        throw new Error(`Grant not found: ${id}`)
+      await db.transaction(async (tx) => {
+        const existing = await tx.select().from(grants).where(eq(grants.id, id)).get()
+        if (!existing)
+          throw new Error(`Grant not found: ${id}`)
 
-      const updates: Record<string, unknown> = { status }
-      if (extra?.decided_by !== undefined) updates.decidedBy = extra.decided_by
-      if (extra?.decided_at !== undefined) updates.decidedAt = extra.decided_at
-      if (extra?.expires_at !== undefined) updates.expiresAt = extra.expires_at
-      if (extra?.used_at !== undefined) updates.usedAt = extra.used_at
-      if ((extra as Record<string, unknown> | undefined)?.decided_by_standing_grant !== undefined) {
-        updates.decidedByStandingGrant = (extra as Record<string, unknown>).decided_by_standing_grant
-      }
-      if ((extra as Record<string, unknown> | undefined)?.auto_approval_kind !== undefined) {
-        updates.autoApprovalKind = (extra as Record<string, unknown>).auto_approval_kind
-      }
-      if (extra?.request !== undefined) {
-        updates.request = extra.request as unknown as Record<string, unknown>
-        updates.grantType = (extra.request as OpenApeGrantRequest).grant_type ?? 'once'
-      }
+        if (existing.brokered && (status === 'approved' || status === 'denied') && existing.status !== 'pending') throw createError({ statusCode: 409, statusMessage: 'Grant was already decided' })
+        const updates: Record<string, unknown> = { status }
+        if (extra?.decided_by !== undefined) updates.decidedBy = extra.decided_by
+        if (extra?.decided_at !== undefined) updates.decidedAt = extra.decided_at
+        if (extra?.expires_at !== undefined) updates.expiresAt = extra.expires_at
+        if (extra?.used_at !== undefined) updates.usedAt = extra.used_at
+        if ((extra as Record<string, unknown> | undefined)?.decided_by_standing_grant !== undefined) {
+          updates.decidedByStandingGrant = (extra as Record<string, unknown>).decided_by_standing_grant
+        }
+        if ((extra as Record<string, unknown> | undefined)?.auto_approval_kind !== undefined) {
+          updates.autoApprovalKind = (extra as Record<string, unknown>).auto_approval_kind
+        }
+        if (extra?.request !== undefined) {
+          updates.request = extra.request as unknown as Record<string, unknown>
+          updates.grantType = (extra.request as OpenApeGrantRequest).grant_type ?? 'once'
+        }
 
-      await db.update(grants).set(updates).where(eq(grants.id, id))
+        await tx.update(grants).set(updates).where(eq(grants.id, id))
+        if (existing.brokered) await tx.insert(brokerAudit).values(brokerAuditRow(rowToGrant(existing), status))
+      }, { behavior: 'immediate' })
     },
 
     async findPending() {
@@ -157,13 +170,11 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
         conditions.push(eq(grants.status, params.status))
       if (params?.requester) {
         const requesters = Array.isArray(params.requester) ? params.requester : [params.requester]
-        if (requesters.length === 1) {
-          conditions.push(eq(grants.requester, requesters[0]!))
-        }
-        else if (requesters.length > 1) {
-          conditions.push(inArray(grants.requester, requesters))
-        }
+        if (params.brokerOwner === null) conditions.push(and(isNull(grants.brokered), inArray(grants.requester, requesters)))
+        else if (params.brokerOwner) conditions.push(or(and(isNull(grants.brokered), inArray(grants.requester, requesters)), eq(grants.brokerOwner, params.brokerOwner)))
+        else conditions.push(inArray(grants.requester, requesters))
       }
+      if (params?.requesterFilter) conditions.push(eq(grants.requester, params.requesterFilter))
       if (params?.cursor) {
         const cursorTs = Number(params.cursor)
         conditions.push(lt(grants.createdAt, cursorTs))
