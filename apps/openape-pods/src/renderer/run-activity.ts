@@ -24,14 +24,14 @@ export function runActivity(events: RunEvent[]): ActivityItem[] {
   }
   return items
 }
-export function runFailure(error: string | null): { title: string, help: string, action?: 'permissions' | 'settings' } | null {
+export function runFailure(error: string | null): { title: string, help: string, action?: 'permissions' | 'settings' | 'identity' } | null {
   if (!error) return null
   if (/Data inventory contains.*\/codex\/tmp\/arg0\/.*\/apply_patch/.test(error)) return { title: 'Pods stopped the run while checking storage', help: 'A temporary AI file triggered an incorrect storage warning. This version fixes that check. You can prepare a retry in History; no new sign-in or permission is needed.' }
   if (/Data inventory|storage|disk space/i.test(error)) return { title: 'Stored data needs attention', help: 'Open App settings and check storage. Do not delete files from a running Pod.', action: 'settings' }
   if (/Identity authorization failed|permission service rejected/i.test(error)) return { title: 'The permission service rejected this operation', help: 'Review the Pod permissions and grant status. This error alone does not mean that the application needs a new sign-in.', action: 'permissions' }
   if (/Permission (?:denied|revoked)|grant is no longer approved|no longer active/i.test(error)) return { title: 'Permission was not granted', help: 'Review the Pod permissions before starting another run.', action: 'permissions' }
   if (/approval expired/.test(error)) return { title: 'The approval wait expired', help: 'Start another run when you are ready to review the approval.' }
-  if (/OpenApe rejected this Pod identity/.test(error)) return { title: 'The Pod identity needs attention', help: 'Check the OpenApe owner assigned to this Pod in App settings. Application accounts are separate.', action: 'settings' }
+  if (/OpenApe rejected this Pod identity/.test(error)) return { title: 'The Pod identity needs attention', help: 'Check this pod’s identity and assigned DDISA account in its Settings tab.', action: 'identity' }
   if (/fetch failed|network|ECONN|ENOTFOUND/i.test(error)) return { title: 'The service could not be reached', help: 'Check the network connection. Inspect any uncertain delivery before retrying.' }
   if (/OpenApe authentication expired/.test(error)) return { title: 'OpenApe sign-in needs attention', help: 'Reconnect the Pod owner in App settings.', action: 'settings' }
   if (/HTTP delivery|external effect|External effect|outcome.*unknown/.test(error)) return { title: 'Delivery needs review', help: 'Check the destination before retrying to avoid sending the same notification twice.' }
