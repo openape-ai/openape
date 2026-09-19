@@ -39,7 +39,8 @@ const REGISTRY = 'registry.openape.ai'
 // `unitGuard` covers the dormant systemd fallback units that only exist on chatty.
 const HOSTS = {
   chatty: {
-    ssh: `${process.env.CHATTY_USER || 'openape'}@${process.env.CHATTY_HOST || 'chatty.delta-mind.at'}`,
+    ssh: process.env.CHATTY_SSH || 'chatty.delta-mind.at',
+    executeAs: 'openape',
     prodDir: '/home/openape/prod',
     composeFile: 'compose/chatty.yml',
     unitGuard: true,
@@ -67,6 +68,7 @@ const PUSH_ENV = existsSync(join(ISOLATED_DOCKER_CONFIG, 'config.json'))
 
 const TARGETS = {
   'free-idp': { filter: 'openape-free-idp', dir: 'apps/openape-free-idp', image: 'openape-free-idp', port: 3003, compose: 'idp', unit: 'openape-free-idp', domain: 'id.openape.ai', envVar: 'IDP_TAG' },
+  'pods-idp': { filter: 'openape-free-idp', dir: 'apps/openape-free-idp', image: 'openape-pods-idp', port: 3027, compose: 'pods-idp', unit: 'openape-pods-idp', domain: 'pods.openape.ai', envVar: 'PODS_IDP_TAG' },
   'troop': { filter: '@openape/troop', dir: 'apps/openape-troop', image: 'openape-troop', port: 3010, compose: 'troop', unit: 'openape-troop', domain: 'troop.openape.ai', envVar: 'TROOP_TAG' },
   'chat': { filter: '@openape/chat', dir: 'apps/openape-chat', image: 'openape-chat', port: 3007, compose: 'chat', unit: 'openape-chat', domain: 'chat.openape.ai', envVar: 'CHAT_TAG' },
   'testrun': { filter: '@openape-testrun/app', dir: 'apps/openape-testrun', image: 'openape-testrun', port: 3006, compose: 'testrun', unit: 'openape-testrun', domain: 'testrun.openape.ai', envVar: 'TESTRUN_TAG' },
@@ -97,7 +99,7 @@ function out(cmd, args) {
   return execFileSync(cmd, args, { encoding: 'utf8' }).trim()
 }
 function ssh(host, script) {
-  return execFileSync('ssh', ['-o', 'ConnectTimeout=15', '-o', 'BatchMode=yes', host.ssh, 'bash', '-s'], {
+  return execFileSync('ssh', ['-o', 'ConnectTimeout=15', '-o', 'BatchMode=yes', host.ssh, ...(host.executeAs ? ['sudo', '-n', '-u', host.executeAs] : []), 'bash', '-s'], {
     input: script,
     encoding: 'utf8',
   }).trim()
@@ -172,6 +174,20 @@ async function bake(name, sha) {
   console.log(`  ✓ baked ${name} (${tag})`)
 }
 
+export function rollbackScript(prodDir, group, prevMap) {
+  return `
+      set -euo pipefail
+      cd ${prodDir}
+${group.map((t) => {
+  const prev = prevMap[t.name]
+  if (!prev) return `      docker compose --env-file .env -f docker-compose.yml stop ${t.compose}\n      echo "${t.name}: first deployment stopped; no previous image exists"`
+  return `      grep -vE '^${t.envVar}=' .env > .env.new && mv .env.new .env
+      echo "${t.envVar}=${prev}" >> .env`
+}).join('\n')}
+      ${group.filter(t => prevMap[t.name]).length ? `docker compose --env-file .env -f docker-compose.yml up -d ${group.filter(t => prevMap[t.name]).map(t => t.compose).join(' ')}` : ':'}
+    `
+}
+
 async function main() {
   const args = process.argv.slice(2)
   const names = args.includes('--all') ? Object.keys(TARGETS) : args.filter(a => !a.startsWith('--'))
@@ -237,7 +253,15 @@ async function main() {
   for (const [hostKey, group] of groupByHost(targets)) {
     const host = HOSTS[hostKey]
     console.log(`\n━━━ swap on ${hostKey} (one compose up for ${group.map(t => t.name).join(', ')})`)
-    sh('scp', ['-q', host.composeFile, `${host.ssh}:${host.prodDir}/docker-compose.yml`])
+    if (host.executeAs) {
+      const staged = `/tmp/openape-compose-${process.pid}.yml`
+      sh('scp', ['-q', host.composeFile, `${host.ssh}:${staged}`])
+      ssh(host, `set -eu\ninstall -m 644 ${staged} ${host.prodDir}/docker-compose.yml`)
+      sh('ssh', [host.ssh, 'rm', staged])
+    }
+    else {
+      sh('scp', ['-q', host.composeFile, `${host.ssh}:${host.prodDir}/docker-compose.yml`])
+    }
     const composes = group.map(t => t.compose).join(' ')
     const pinScript = `
     set -euo pipefail
@@ -269,17 +293,7 @@ ${group.map(t => `    echo "PREV ${t.name} $OLD_${t.envVar}"`).join('\n')}
     console.error(`\n✗ health gate failed: ${failed.join(', ')} — rolling back`)
     for (const [hostKey, group] of groupByHost(failed.map(n => ({ name: n, ...TARGETS[n] })))) {
       const host = HOSTS[hostKey]
-      const rollScript = `
-      set -euo pipefail
-      cd ${host.prodDir}
-${group.map((t) => {
-  const prev = prevMap[t.name]
-  if (!prev) return `      echo "${t.name}: no previous tag — emergency: (as ubuntu) sudo systemctl start ${t.unit}"`
-  return `      grep -vE '^${t.envVar}=' .env > .env.new && mv .env.new .env
-      echo "${t.envVar}=${prev}" >> .env`
-}).join('\n')}
-      docker compose --env-file .env -f docker-compose.yml up -d ${group.map(t => t.compose).join(' ')}
-    `
+      const rollScript = rollbackScript(host.prodDir, group, prevMap)
       ssh(host, rollScript)
     }
     console.error(`→ rolled back: ${failed.map(n => `${n}→${prevMap[n] || '(none)'}`).join(', ')}`)
