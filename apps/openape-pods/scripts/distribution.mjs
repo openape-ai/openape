@@ -18,7 +18,7 @@ export function inventory() {
     const file = realpathSync(packageFile(name, parent)); const value = JSON.parse(readFileSync(file, 'utf8')); const key = `${value.name}@${value.version}`
     if (packages.has(key)) return
     const directory = dirname(file)
-    const licenses = readdirSync(directory).filter(name => /^(?:license|licence|notice|copying)(?:\.|$)/i.test(name) && statSync(join(directory, name)).isFile()).map(name => ({ name, sha256: sha256(join(directory, name)) }))
+    const licenses = readdirSync(directory).filter(name => /^(?:license|licence|notice|copying)(?:[.-]|$)/i.test(name) && statSync(join(directory, name)).isFile()).map(name => ({ name, sha256: sha256(join(directory, name)) }))
     packages.set(key, { name: value.name, version: value.version, declaredLicense: value.license ?? null, licenses })
     for (const license of licenses) notices.push(`\n===== ${key} / ${license.name} =====\n${readFileSync(join(directory, license.name), 'utf8')}`)
     for (const dependency of Object.keys(value.dependencies ?? {})) visit(dependency, file)
@@ -47,11 +47,17 @@ export function writeDistribution(releaseReady = false, review = null) {
   writeFileSync('dist/distribution/pods-distribution.json', JSON.stringify({ format: 'openape-pods-distribution', version, platform: 'darwin', architecture: process.arch, schema: { minimum: 1, current: schema }, releaseReady, bomHash: sha256('dist/distribution/bom.json') }, null, 2))
   return bom
 }
-export function requireReleaseReview(candidate = false) {
-  const review = JSON.parse(readFileSync(process.env.OPENAPE_PODS_RELEASE_REVIEW ?? 'runtime-sources/distribution-review.json', 'utf8'))
-  if (review.dependencyLockHash !== sha256('../../pnpm-lock.yaml') || review.sourceRevision !== execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()) throw new Error('Signed distribution requires review bound to the exact source and dependency lock')
+export function requireCleanBuild() {
+  const sourceRevision = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const dependencyLockHash = sha256('../../pnpm-lock.yaml')
   const build = JSON.parse(readFileSync('dist/build-inputs.json', 'utf8'))
-  if (!build.clean || build.sourceRevision !== review.sourceRevision || build.dependencyLockHash !== review.dependencyLockHash || execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim()) throw new Error('Signed distribution requires a fresh build of a clean reviewed source')
+  if (!build.clean || build.sourceRevision !== sourceRevision || build.dependencyLockHash !== dependencyLockHash || execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim()) throw new Error('Signing requires a fresh build of a clean source with the current dependency lock')
+  return { sourceRevision, dependencyLockHash }
+}
+export function requireReleaseReview(candidate = false) {
+  const build = requireCleanBuild()
+  const review = JSON.parse(readFileSync(process.env.OPENAPE_PODS_RELEASE_REVIEW ?? 'runtime-sources/distribution-review.json', 'utf8'))
+  if (review.dependencyLockHash !== sha256('../../pnpm-lock.yaml') || review.sourceRevision !== build.sourceRevision) throw new Error('Signed distribution requires review bound to the exact source and dependency lock')
   const gates = candidate ? ['licenses'] : ['licenses', 'signedBoundaries', 'cleanMachine', 'realProvider', 'realTenantRefresh', 'physicalSleepWake', 'osCpuMatrix']
   for (const gate of gates) {
     if (review.gates?.[gate]?.status !== 'passed' || typeof review.gates[gate].evidence !== 'string' || !review.gates[gate].evidence.startsWith('https://')) throw new Error(`Signed distribution gate is pending: ${gate}`)
