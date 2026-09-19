@@ -89,7 +89,7 @@ export default defineComponent({
             {{ label(selectedRun.summary) }}
           </p>
           <button v-if="failure?.action" class="secondary" @click="$emit('navigate', failure.action)">
-            {{ failure.action === 'permissions' ? t('Review permissions') : t('Open App settings') }}
+            {{ failure.action === 'permissions' ? t('Review permissions') : failure.action === 'identity' ? t('Open pod identity') : t('Open App settings') }}
           </button>
           <div v-if="needsRecovery" class="next-action">
             <strong>{{ t('Next step') }}</strong>
@@ -150,7 +150,7 @@ export default defineComponent({
       <div v-if="actionFailure" class="run-problem" role="alert">
         <strong>{{ diagnostic(actionFailure.title) }}</strong><p>{{ diagnostic(actionFailure.help) }}</p>
         <button v-if="actionFailure.action" class="secondary" @click="$emit('navigate', actionFailure.action)">
-          {{ actionFailure.action === 'permissions' ? t('Review permissions') : t('Open App settings') }}
+          {{ actionFailure.action === 'permissions' ? t('Review permissions') : actionFailure.action === 'identity' ? t('Open pod identity') : t('Open App settings') }}
         </button>
       </div>
       <details v-if="blocked || pending" class="queued-starts">

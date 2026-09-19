@@ -111,3 +111,23 @@ it('changes the default only after successful sign-in with explicit selection', 
   await expect.poll(async () => (await manager.view()).connections[2].state).toBe('ready')
   expect((await manager.view()).defaultOwner).toBe(selected)
 })
+
+it('reads a pod identity without creating credentials, changing owners or exposing private metadata', async () => {
+  const { manager, control, store, credentials } = await fixture()
+  const existing = store.createPod({ name: 'Existing' }); const fresh = store.createPod({ name: 'New' })
+  const first = randomUUID(); const second = randomUUID(); const brokerId = randomUUID()
+  const identity = { connectionId: randomUUID(), podId: existing.id, issuer: 'https://pods.example.invalid', decisionIssuer: 'https://id.example.invalid', owner: 'original@example.invalid', subject: 'agent@pods.example.invalid', keyId: 'private-metadata-key', brokerConnectionId: brokerId }
+  const metadata = { issuer: identity.decisionIssuer, privateMetadata: 'must-not-leak', pods: { [existing.id]: { connectionId: identity.connectionId, prepared: true, identity } } }
+  control.execute({ type: 'save', connection: { id: first, provider: 'openape', account: identity.owner, state: 'revoked', error: null }, metadata })
+  control.execute({ type: 'save', connection: { id: second, provider: 'openape', account: 'new@example.invalid', state: 'ready', error: null }, metadata: { issuer: 'https://other.example.invalid', broker: { issuer: 'https://new-pods.example.invalid', domain: 'new-pods.example.invalid', connectionId: randomUUID() } } })
+  await manager.execute({ type: 'setDefaultOwner', id: second })
+  const create = vi.spyOn(credentials, 'create'); const provision = vi.spyOn(PodIdentityManager.prototype, 'provision')
+  const view = await manager.execute({ type: 'list', podId: existing.id })
+  expect(view.podIdentity).toEqual({ podId: existing.id, bound: true, ownerConnection: first, issuer: identity.issuer, decisionIssuer: identity.decisionIssuer, subject: identity.subject, brokerConnectionId: brokerId })
+  expect(JSON.stringify(view)).not.toMatch(/must-not-leak|private-metadata-key/)
+  expect((await manager.execute({ type: 'list', podId: fresh.id })).podIdentity).toMatchObject({ bound: false, ownerConnection: second, issuer: 'https://new-pods.example.invalid', subject: null })
+  expect((await manager.execute({ type: 'list' })).podIdentity).toBeUndefined()
+  expect(create).not.toHaveBeenCalled(); expect(provision).not.toHaveBeenCalled()
+  expect(control.connections.metadata(first)).toEqual(metadata)
+  expect(control.connections.metadata(second).pods).toBeUndefined()
+})
