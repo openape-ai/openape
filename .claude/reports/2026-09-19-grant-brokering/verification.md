@@ -14,7 +14,7 @@ Implementation baseline: fe4432e5f0863c64de32de3eb6c8da47c776b70b. Branch: featu
 - @openape/apes: 632 tests pass, eight pre-existing cases skipped.
 - @openape/protocol-conformance: 13 tests pass, including emitted broker claims and provenance.
 - Built IdP module, IdP app, apes and packaged Pods successfully.
-- One focused native packaged provider-consent/layout test passes; four unrelated cases excluded by the explicit test-name filter. Both screenshots inspected. No full E2E suite was run locally.
+- One focused native packaged provider-consent/layout test passes; four unrelated cases excluded by the explicit test-name filter. Both screenshots inspected. No full E2E suite completed locally. The default pre-push hook unexpectedly started the full contract: openape-e2e completed, then the process tree was stopped during openape-free-idp. Subsequent pushes skip only that local hook because Patrick excluded full local E2E; native required CI remains mandatory.
 
 The durable SQLite suite checks owner-only visibility without a local agent account, replay rejection, exactly one successful consumption across concurrent independent SQLite connections, an atomic 100-request owner inbox bound, durable audit associations, revoked reusable tokens and immutable enrollment. HTTP lifecycle fixtures use separate signing keys and exercise owner-only approval, unauthorized reads/approval, delegated callers, cross-origin browser writes and original-owner signatures. Network tests reject private/mapped addresses and pin the DNS result for TLS. Desktop tests verify the owner bearer never reaches the agent provider, receipt isolation and unchanged existing Pod bindings.
 
@@ -28,4 +28,4 @@ Read-only DNS checks return no A/TXT records for pods.openape.ai, and the config
 https://testrun.openape.ai/r/8gjF_LKzq1Uv94XESTSaLysj
 
 ## Delivery
-Native implementation PR, exact-source external checks and local installation are pending. Existing schedules and user data must be retained.
+Implementation [PR 69](https://repos.openape.ai/patrick/monorepo/pulls/69), code source `40aeb4ba314bda319b0dd4ced2b4e377d42ab00e`; exact-source external checks and local installation are pending. The pre-commit shared unit contract passed all seven gates across 51 workspaces (`.openape/check-results/1789812760148-fe4432e5-unit/summary.json`, staged implementation). Existing schedules and user data must be retained.
