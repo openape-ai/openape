@@ -54,6 +54,11 @@ async function fetchPublicBroker(raw: string, init: BrokerHttpOptions): Promise<
   finally { response.destroy() }
 }
 
+function readBrokerMetadata<T>(read: () => T): T {
+  try { return read() }
+  catch { throw createProblemError({ status: 503, title: 'The identity provider returned invalid broker metadata', type: 'https://openape.org/errors/broker_unavailable' }) }
+}
+
 export async function discoverBroker(issuerInput: string, domainInput: string): Promise<Record<string, unknown>> {
   const issuer = brokerOrigin(issuerInput)
   const domain = brokerDomain(domainInput)
@@ -61,22 +66,28 @@ export async function discoverBroker(issuerInput: string, domainInput: string): 
   try { authoritative = await resolveIdP(domain) }
   catch { throw createProblemError({ status: 503, title: 'DDISA identity discovery is unavailable', type: 'https://openape.org/errors/broker_unavailable' }) }
   if (authoritative !== issuer) throw createProblemError({ status: 403, title: 'The issuer is not authoritative for this identity domain', type: 'https://openape.org/errors/broker_identity_mismatch' })
-  const discovery = brokerObject(await brokerFetch(`${issuer}/.well-known/openid-configuration`))
+  const response = await brokerFetch(`${issuer}/.well-known/openid-configuration`)
+  const discovery = readBrokerMetadata(() => brokerObject(response))
   if (discovery.issuer !== issuer || discovery.openape_grant_brokering_version !== '1.0') throw createProblemError({ status: 503, title: 'The identity provider does not support grant brokering', type: 'https://openape.org/errors/broker_unavailable' })
   return discovery
 }
 
 export function brokerEndpoint(discovery: Record<string, unknown>, field: string): string {
-  const issuer = brokerOrigin(discovery.issuer)
-  const value = discovery[field]
-  if (typeof value !== 'string') throw new Error(`Missing broker endpoint: ${field}`)
-  const url = new URL(value)
-  if (url.origin !== issuer || url.username || url.password || url.search || url.hash) throw new Error('Broker endpoints must use their issuer origin')
-  return url.href
+  return readBrokerMetadata(() => {
+    const issuer = brokerOrigin(discovery.issuer)
+    const value = discovery[field]
+    if (typeof value !== 'string') throw new Error(`Missing broker endpoint: ${field}`)
+    const url = new URL(value)
+    if (url.origin !== issuer || url.username || url.password || url.search || url.hash) throw new Error('Broker endpoints must use their issuer origin')
+    return url.href
+  })
 }
 
 export async function brokerVerificationKey(discovery: Record<string, unknown>) {
-  const jwks = brokerObject(await brokerFetch(brokerEndpoint(discovery, 'jwks_uri')))
-  if (!Array.isArray(jwks.keys)) throw new Error('Invalid broker signing keys')
-  return createLocalJWKSet(jwks as unknown as JSONWebKeySet)
+  const response = await brokerFetch(brokerEndpoint(discovery, 'jwks_uri'))
+  return readBrokerMetadata(() => {
+    const jwks = brokerObject(response)
+    if (!Array.isArray(jwks.keys)) throw new Error('Invalid broker signing keys')
+    return createLocalJWKSet(jwks as unknown as JSONWebKeySet)
+  })
 }
