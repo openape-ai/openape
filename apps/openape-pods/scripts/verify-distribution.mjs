@@ -8,8 +8,10 @@ import { join, resolve } from 'node:path'
 import assert from 'node:assert/strict'
 import { sha256 } from './distribution.mjs'
 
+const signedLocal = process.argv.includes('--signed-local')
+if (process.argv.slice(2).some(argument => argument !== '--signed-local')) throw new Error('Unsupported verification option')
 const version = JSON.parse(await readFile('package.json', 'utf8')).version
-const image = resolve(`release/distribution/OpenApe-Pods-${version}-arm64-unsigned.dmg`)
+const image = resolve(`release/distribution/OpenApe-Pods-${version}-arm64-${signedLocal ? 'signed-local' : 'unsigned'}.dmg`)
 const checksums = await readFile('release/distribution/SHA256SUMS', 'utf8')
 assert.equal(checksums.trim(), `${sha256(image)}  ${image.split('/').at(-1)}`)
 const root = await realpath(await mkdtemp(join(tmpdir(), 'Pods DMG Müller '))); const mount = join(root, 'volume'); const profile = join(root, 'profile')
@@ -19,6 +21,11 @@ try {
   execFileSync('/usr/bin/hdiutil', ['verify', image], { stdio: 'pipe' })
   execFileSync('/usr/bin/hdiutil', ['attach', image, '-readonly', '-nobrowse', '-mountpoint', mount], { stdio: 'pipe' }); attached = true
   const bundle = join(mount, 'OpenApe Pods.app')
+  if (signedLocal) {
+    execFileSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', bundle], { stdio: 'pipe' })
+    execFileSync('/usr/bin/xcrun', ['stapler', 'validate', bundle], { stdio: 'pipe' })
+    execFileSync('/usr/sbin/spctl', ['--assess', '--type', 'execute', '--verbose=2', bundle], { stdio: 'pipe' })
+  }
   const icon = execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIconFile', join(bundle, 'Contents/Info.plist')], { encoding: 'utf8' }).trim()
   assert.equal(icon, 'icon.icns')
   assert.equal(sha256(join(bundle, 'Contents/Resources', icon)), sha256('build/openape-pods.icns'))
@@ -36,7 +43,7 @@ try {
   await page.getByText('Local example completed (1)', { exact: true }).waitFor()
   await page.getByRole('button', { name: 'App settings', exact: true }).click(); await page.getByRole('button', { name: 'Data & backups', exact: true }).click(); await page.getByRole('heading', { name: 'Data & backups', exact: true }).waitFor()
   await mkdir('.artifacts', { recursive: true }); await page.screenshot({ path: '.artifacts/data-dmg.png' })
-  console.log(JSON.stringify({ image, sha256: sha256(image), npmPackages: bom.packages.length, result: 'passed', signed: false, actualProvider: false }))
+  console.log(JSON.stringify({ image, sha256: sha256(image), npmPackages: bom.packages.length, result: 'passed', signed: signedLocal, actualProvider: false }))
 }
 finally {
   if (app) await app.close()
