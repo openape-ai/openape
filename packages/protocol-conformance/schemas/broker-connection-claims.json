@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "$id": "https://openape.org/schemas/broker-connection-claims.json",
+  "title": "Broker enrollment receipt claims",
+  "properties": {
+    "iss": {
+      "type": "string",
+      "format": "uri"
+    },
+    "sub": {
+      "type": "string",
+      "minLength": 1
+    },
+    "aud": {
+      "type": "string",
+      "format": "uri"
+    },
+    "iat": {
+      "type": "integer"
+    },
+    "exp": {
+      "type": "integer"
+    },
+    "jti": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "connection_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "agent_domain": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "iss",
+    "sub",
+    "aud",
+    "iat",
+    "exp",
+    "jti",
+    "connection_id",
+    "agent_domain"
+  ]
+}

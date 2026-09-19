@@ -45,6 +45,7 @@ export async function issueAuthzJWT(
   }
 
   const claims: OpenApeAuthZClaims = {
+    ...(grant.brokered ? { brokered: grant.brokered } : {}),
     iss: issuer,
     sub: grant.request.requester,
     aud: grant.request.audience,

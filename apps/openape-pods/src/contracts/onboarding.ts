@@ -1,8 +1,8 @@
 export type ConnectionProvider = 'chatgpt' | 'openape' | 'microsoft'
-export interface ConnectionView { id: string, provider: ConnectionProvider, account: string, state: 'connecting' | 'ready' | 'failed' | 'expired' | 'revoked', error: string | null, login: { url: string, code?: string } | null }
+export interface ConnectionView { id: string, provider: ConnectionProvider, account: string, broker?: { issuer: string, domain: string, connectionId: string }, state: 'connecting' | 'ready' | 'failed' | 'expired' | 'revoked', error: string | null, login: { url: string, code?: string } | null }
 export interface MailSetup { podId: string, revision: number, ownerConnection: string, mailConnection: string, account: string, folders: { id: string, name: string }[], since: string | null, attachments: boolean }
 export interface OnboardingView { connections: ConnectionView[], defaultOwner: string | null, runtime: { ready: boolean, error: string | null }, complete: boolean, folders?: { connectionId: string, items: { id: string, name: string }[] } }
-export type OnboardingCommand = { type: 'list' } | { type: 'connect', provider: ConnectionProvider, account: string, issuer?: string, makeDefault?: boolean } | { type: 'cancel' | 'disconnect' | 'openLogin' | 'setDefaultOwner' | 'reconnect', id: string } | { type: 'folders', id: string } | { type: 'assign', setup: MailSetup } | { type: 'finish' }
+export type OnboardingCommand = { type: 'enableBroker', id: string, issuer: string, domain: string } | { type: 'revokeBroker', id: string } | { type: 'list' } | { type: 'connect', provider: ConnectionProvider, account: string, issuer?: string, makeDefault?: boolean } | { type: 'cancel' | 'disconnect' | 'openLogin' | 'setDefaultOwner' | 'reconnect', id: string } | { type: 'folders', id: string } | { type: 'assign', setup: MailSetup } | { type: 'finish' }
 export function parseSince(value: unknown): string | null {
   if (value === null) return null
   if (typeof value !== 'string' || !/^\d{4}-\d\d-\d\dT00:00:00Z$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().replace('.000Z', 'Z') !== value) throw new Error('Choose a valid UTC start date or all history')
@@ -12,10 +12,15 @@ const uuid = (value: unknown): value is string => typeof value === 'string' && /
 export function parseOnboardingCommand(value: unknown): OnboardingCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid setup request')
   const item = value as Record<string, unknown>
-  const fields: Record<string, string[]> = { list: [], connect: ['provider', 'account', 'issuer', 'makeDefault'], setDefaultOwner: ['id'], reconnect: ['id'], openLogin: ['id'], cancel: ['id'], disconnect: ['id'], folders: ['id'], assign: ['setup'], finish: [] }
+  const fields: Record<string, string[]> = { enableBroker: ['id', 'issuer', 'domain'], revokeBroker: ['id'], list: [], connect: ['provider', 'account', 'issuer', 'makeDefault'], setDefaultOwner: ['id'], reconnect: ['id'], openLogin: ['id'], cancel: ['id'], disconnect: ['id'], folders: ['id'], assign: ['setup'], finish: [] }
   if (typeof item.type !== 'string' || !Object.hasOwn(fields, item.type) || Object.keys(item).some(key => key !== 'type' && !fields[item.type as string].includes(key))) throw new Error('Unsupported setup request')
   if (item.type === 'assign' || item.type === 'folders' || (item.type === 'connect' && item.provider === 'microsoft')) throw new Error('Configure application accounts in the pod Permissions tab')
   if (fields[item.type].includes('id') && !uuid(item.id)) throw new Error('Invalid connection identity')
+  if (item.type === 'enableBroker') {
+    if (typeof item.issuer !== 'string' || typeof item.domain !== 'string' || item.domain.length > 253 || !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(item.domain)) throw new Error('Enter an exact agent identity domain')
+    const url = new URL(item.issuer)
+    if (url.protocol !== 'https:' || url.origin !== item.issuer || url.username || url.password) throw new Error('Agent provider must be an HTTPS origin')
+  }
   if (item.type === 'connect') {
     if (!['chatgpt', 'openape', 'microsoft'].includes(String(item.provider)) || typeof item.account !== 'string' || (item.provider !== 'chatgpt' && !/^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/.test(item.account)) || item.account.length > 254) throw new Error('Enter the expected account email')
     if (item.makeDefault !== undefined && (item.provider !== 'openape' || typeof item.makeDefault !== 'boolean')) throw new Error('Default account must be an OpenApe identity')
@@ -46,6 +51,7 @@ export function parseOnboardingView(value: unknown): OnboardingView {
   if (view.defaultOwner !== null && (!uuid(view.defaultOwner) || !view.connections.some(item => item.id === view.defaultOwner && item.provider === 'openape'))) throw new Error('Invalid default OpenApe account')
   for (const connection of view.connections) {
     if (!uuid(connection.id) || !['chatgpt', 'openape', 'microsoft'].includes(connection.provider) || typeof connection.account !== 'string' || !['connecting', 'ready', 'failed', 'expired', 'revoked'].includes(connection.state) || (connection.error !== null && typeof connection.error !== 'string')) throw new Error('Invalid connection state')
+    if (connection.broker && (!uuid(connection.broker.connectionId) || typeof connection.broker.issuer !== 'string' || typeof connection.broker.domain !== 'string')) throw new Error('Invalid broker connection')
     if (connection.login && (typeof connection.login.url !== 'string' || (connection.login.code !== undefined && typeof connection.login.code !== 'string'))) throw new Error('Invalid sign-in details')
   }
   return view

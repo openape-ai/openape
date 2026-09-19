@@ -96,8 +96,9 @@ export function createGrantStore(): ExtendedGrantStore {
         if (params?.status && grant.status !== params.status) return false
         if (params?.requester) {
           const requesters = Array.isArray(params.requester) ? params.requester : [params.requester]
-          if (!requesters.includes(grant.request.requester)) return false
+          if (params.brokerOwner !== undefined ? (grant.brokered ? grant.brokered.owner !== params.brokerOwner : !requesters.includes(grant.request.requester)) : !requesters.includes(grant.request.requester)) return false
         }
+        if (params?.requesterFilter && grant.request.requester !== params.requesterFilter) return false
         return true
       })
 

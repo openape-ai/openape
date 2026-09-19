@@ -17,7 +17,7 @@ export async function approveMailGrants(setup: MailSetup, identity: PodIdentityR
     if (typeof created.id !== 'string' || !/^[\w-]{1,128}$/.test(created.id)) throw new Error('Invalid mail permission response; inspect pending grants before retrying')
     if (created.status === 'approved') { grants[operation] = created.id; continue }
     if (created.status !== 'pending') throw new Error('Mail permission was declined or revoked')
-    const approval = await connectionRequest(identity.issuer, `/api/grants/${created.id}/approve`, {}, signal, ownerBearer)
+    const approval = await connectionRequest(identity.decisionIssuer ?? identity.issuer, `/api/grants/${created.id}/approve`, {}, signal, ownerBearer)
     const grant = approval.grant as { id?: string, status?: string } | undefined
     if (grant?.id !== created.id || grant.status !== 'approved') throw new Error('Mail permission was not approved')
     grants[operation] = created.id
