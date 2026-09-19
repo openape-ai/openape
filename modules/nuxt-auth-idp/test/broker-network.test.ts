@@ -7,7 +7,7 @@ const dns = vi.hoisted(() => vi.fn())
 const outgoing = vi.hoisted(() => vi.fn())
 vi.mock('node:dns/promises', () => ({ lookup: dns }))
 vi.mock('node:https', () => ({ request: outgoing }))
-const { brokerFetch } = await import('../src/runtime/server/utils/broker-network')
+const { brokerFetch, brokerEndpoint, brokerVerificationKey } = await import('../src/runtime/server/utils/broker-network')
 afterEach(() => { vi.resetAllMocks() })
 it('pins the validated public address and does not follow redirects or return remote error bodies', async () => {
   dns.mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
@@ -30,4 +30,17 @@ it('rejects loopback, private, IPv4-mapped IPv6 and mixed public/private DNS ans
     await expect(brokerFetch('https://provider.example.test/metadata')).rejects.toThrow('private addresses')
   }
   expect(outgoing).not.toHaveBeenCalled()
+})
+
+it('reports malformed provider endpoints and signing keys as an unavailable dependency', async () => {
+  const discovery = { issuer: 'https://provider.example.test', jwks_uri: 'https://provider.example.test/jwks' }
+  for (const value of [undefined, 'not a URL', 'https://foreign.test/jwks', 'https://provider.example.test/jwks?token=unexpected']) {
+    expect(() => brokerEndpoint({ ...discovery, jwks_uri: value }, 'jwks_uri')).toThrow(expect.objectContaining({ statusCode: 503 }))
+  }
+  dns.mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
+  outgoing.mockImplementation((_url, _options, receive) => {
+    const reply = Object.assign(new PassThrough(), { statusCode: 200 })
+    return Object.assign(new EventEmitter(), { end: () => { receive(reply); reply.end('{"keys":"invalid"}') } })
+  })
+  await expect(brokerVerificationKey(discovery)).rejects.toMatchObject({ statusCode: 503 })
 })

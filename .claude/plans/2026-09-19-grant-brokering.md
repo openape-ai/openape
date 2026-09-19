@@ -36,7 +36,7 @@ Features are additive and capability-advertised. Preserve old connections and ke
 ## Progress
 - 2026-09-19: Approved architecture captured; clean repositories and current canonical bases verified; implementation worktrees prepared.
 - Protocol: complete. Native PR https://repos.openape.ai/patrick/protocol/pulls/1 merged as 25b6d89b8fc6c21f171df6c78cf6a30ca9f1ff99; 13 positive/negative schema checks passed.
-- IdP, Pods and executor: implemented. Full lint/typecheck, 2,135 unit/component/conformance tests and focused packaged UI verification pass. Implementation PR https://repos.openape.ai/patrick/monorepo/pulls/69 contains code source 40aeb4ba314bda319b0dd4ced2b4e377d42ab00e. Review, exact-source gates and local delivery pending. Public pods.openape.ai has no DNS/service; production rollout is separate from these implementation checks.
+- IdP, Pods and executor: implemented. Full lint/typecheck, 2,136 unit/component/conformance tests and focused packaged UI verification pass. Implementation PR https://repos.openape.ai/patrick/monorepo/pulls/69 contains code source 40aeb4ba314bda319b0dd4ced2b4e377d42ab00e. Review, exact-source gates and local delivery pending. Public pods.openape.ai has no DNS/service; production rollout is separate from these implementation checks.
 
 ## Discoveries
 The current grant lifecycle depends on local user rows at list, notification, approval and consumption. Replacing only request authentication would leave the flow broken. The current protocol forbids delegation chaining; request mediation therefore remains distinct from onward delegation of execution rights.
