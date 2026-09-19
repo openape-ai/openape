@@ -125,7 +125,7 @@ export default defineComponent({
     <main class="main">
       <div class="window-drag" /><div class="content" :class="{ 'chat-open': selected === 'Chat' || selected === 'Workspace chat' }">
         <div class="page-heading">
-          <h1>{{ globalPage ? label(selected) : creating ? t('New pod') : pod?.name ?? t('Your pods') }}</h1><span v-if="pod && !globalPage" class="muted">{{ nextRun }}</span>
+          <h1>{{ globalPage ? (selected === 'Setup' ? t('Your accounts') : label(selected)) : creating ? t('New pod') : pod?.name ?? t('Your pods') }}</h1><span v-if="pod && !globalPage" class="muted">{{ nextRun }}</span>
         </div>
         <div v-if="attention" class="fixture-note">
           <strong role="status">{{ workerLabel }}</strong><p role="alert">
@@ -144,7 +144,7 @@ export default defineComponent({
         <section v-if="selected === 'App settings'" class="card">
           <h2>{{ t('App settings') }}</h2><LanguageSwitcher /><div class="overview-actions">
             <button class="secondary" @click="selected = 'Setup'">
-              {{ t('Connections & setup') }}
+              {{ t('Your accounts') }}
             </button><button class="secondary" @click="selected = 'Data'">
               {{ t('Data & backups') }}
             </button><button class="secondary" @click="selected = 'Workspace chat'">
@@ -153,11 +153,11 @@ export default defineComponent({
           </div>
         </section>
         <DataManagement v-else-if="selected === 'Data'" />
-        <Onboarding v-else-if="selected === 'Setup'" :pod="pod" @finished="selected = 'Overview'" @reference="selected = 'Permissions'" />
+        <Onboarding v-else-if="selected === 'Setup'" @finished="selected = 'Overview'" />
         <section v-else-if="selected === 'Chat' || selected === 'Workspace chat'" id="panel-Chat" :role="globalPage ? undefined : 'tabpanel'" :aria-labelledby="globalPage ? undefined : 'tab-Chat'" :aria-label="globalPage ? t('Workspace chat') : undefined" class="master-panel">
           <MasterChat :key="creating ? creationId : selected === 'Workspace chat' ? 'workspace' : podId" :creation-id="creating ? creationId : undefined" :pod-id="creating || selected === 'Workspace chat' ? null : podId || null" @created="created" @resources="async id => { await selectPod(id); selected = 'Permissions' }" @settings="async (id, alias) => { await selectPod(id); openValues(alias) }">
             <details v-if="creating" class="chat-manual-create">
-              <summary>{{ t('Create without chat') }}</summary><PodSettings key="new" @selected="changed" />
+              <summary>{{ t('Create without chat') }}</summary><PodSettings key="new" @selected="changed" @accounts="selected = 'Setup'" />
             </details>
           </MasterChat>
         </section>
@@ -168,13 +168,13 @@ export default defineComponent({
           <PodValues v-if="pod" :key="podId" :pod-id="podId" :requested-secret="requestedSecret" />
         </section>
         <section v-else-if="selected === 'Settings'" id="panel-Settings" role="tabpanel" aria-labelledby="tab-Settings">
-          <PodSettings :key="podId" :selected-pod-id="podId" @selected="changed" />
+          <PodSettings :key="podId" :selected-pod-id="podId" @selected="changed" @accounts="selected = 'Setup'" />
         </section>
         <section v-else-if="selected === 'Permissions'" id="panel-Permissions" role="tabpanel" aria-labelledby="tab-Permissions">
           <PodResources :key="podId" :selected-pod-id="podId" @discuss="master()" />
         </section>
         <section v-else-if="selected === 'History'" id="panel-History" role="tabpanel" aria-labelledby="tab-History">
-          <PodRuns :key="podId" :selected-pod-id="podId" @navigate="selected = $event === 'settings' ? 'App settings' : 'Permissions'" />
+          <PodRuns :key="podId" :selected-pod-id="podId" @navigate="selected = $event === 'identity' ? 'Settings' : $event === 'settings' ? 'App settings' : 'Permissions'" />
         </section>
         <section v-else-if="selected === 'Knowledge'" id="panel-Overview" role="tabpanel" aria-labelledby="tab-Overview">
           <button class="text-button" @click="selected = 'Overview'">

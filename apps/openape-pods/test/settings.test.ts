@@ -34,7 +34,7 @@ it('preserves an active pod lifecycle when saving its name', async () => {
   const pod = { ...saved.pods[0]!, lifecycle: 'active' as const }
   const workspace = vi.fn().mockResolvedValue({ ...saved, pods: [pod] })
   window.pods = { workspace } as unknown as typeof window.pods
-  const wrapper = mount(PodSettings, { props: { selectedPodId: pod.id }, global: { stubs: { PodSchedule: true, PodValues: true } } }); await flushPromises()
+  const wrapper = mount(PodSettings, { props: { selectedPodId: pod.id }, global: { stubs: { PodSchedule: true, PodValues: true, PodIdentity: true } } }); await flushPromises()
   await wrapper.get('input').setValue('Renamed active pod')
   await wrapper.get('form').trigger('submit'); await flushPromises()
   expect(workspace).toHaveBeenLastCalledWith({ type: 'update', id: pod.id, revision: 1, name: 'Renamed active pod', lifecycle: 'active' })

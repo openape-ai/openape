@@ -1,5 +1,13 @@
 # Active work
 
+## Personal accounts and per-Pod identities (September 19, 2026)
+
+Issue: https://git.openape.ai/openape-ai/openape/issues/1354. Native [PR 73](https://repos.openape.ai/patrick/monorepo/pulls/73); worktree `pods-conversation`, branch `feature/issue-1354-pod-identity-settings`, implementation checkpoint `c9c590daf3cec69237bb9571a158bd1112a0a227`, canonical base `25529c59fe4d815232b98128fa8b1955684a96de`.
+
+General account setup now contains personal DDISA and Codex / GPT sign-ins. The Pod Settings tab displays its actual agent identity and deciding owner, with issuer details and account-wide provider consent management collapsed below it. Scoped identity reads expose public fields without provisioning or moving existing bindings. Revocation confirmation explicitly covers all Pods using that consent.
+
+Full lint/typecheck, app build, all 267 Pods unit/component tests and five focused native onboarding cases pass. Inspected English/German and narrow dark screenshots: [verification report](https://testrun.openape.ai/r/1awLyd__KmNbN_1Z07CHexCJ). No full local E2E suite or live mail/model/Telegram test call. Next: retain reviewed source/target SHAs, await exact-source external checks, merge, sign/notarize and install with a paired app/profile backup. The linked PR delivery comment is authoritative for final SHAs, signing and preservation receipts; earlier entries below are historical checkpoints.
+
 ## Pods server rollout and signed local installation (September 19, 2026)
 
 Issue: https://git.openape.ai/openape-ai/openape/issues/1354. Server [PR 70](https://repos.openape.ai/patrick/monorepo/pulls/70) merged as `ce1a8fb87536fb471bbb01dce16884cf098be9d9` after all exact-source external checks passed. Both `id.openape.ai` and the independent `pods.openape.ai` run image pin `prod-ce1a8fb8`. HTTPS health, Grant Brokering 1.0 discovery, independent signing keys and refusal of unauthenticated writes pass. Existing owner identities, passkeys, signing keys and all 47,603 predeployment grant IDs/payloads are preserved.

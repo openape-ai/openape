@@ -65,4 +65,5 @@ it('summarizes repeated work without approval noise and explains the Codex stora
   expect(failure?.title).toContain('Pods stopped')
   expect(failure?.action).toBeUndefined()
   expect(runFailure('Permission revoked')?.action).toBe('permissions')
+  expect(runFailure('OpenApe rejected this Pod identity')?.action).toBe('identity')
 })

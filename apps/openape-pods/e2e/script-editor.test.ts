@@ -111,9 +111,9 @@ it('script-editor: edits exact source, preserves navigation, validates and runs 
     }
     await page.getByRole('tab', { name: 'Overview', exact: true }).click(); await page.getByRole('button', { name: 'Results and sources', exact: true }).click()
     await page.screenshot({ path: resolve('.artifacts/handbook-knowledge.png') })
-    for (const [button, name] of [['Connections & setup', 'setup'], ['Workspace chat', 'master'], ['Data & backups', 'data']]) {
+    for (const [button, name] of [['Your accounts', 'setup'], ['Workspace chat', 'master'], ['Data & backups', 'data']]) {
       await page.getByRole('button', { name: 'App settings', exact: true }).click(); await page.getByRole('button', { name: button!, exact: true }).click()
-      await page.getByRole('heading', { name: name === 'setup' ? 'OpenApe account' : button!, exact: true }).first().waitFor()
+      await page.getByRole('heading', { name: name === 'setup' ? 'Your accounts' : button!, exact: true }).first().waitFor()
       await page.screenshot({ path: resolve(`.artifacts/handbook-${name}.png`) })
     }
     expect((await page.evaluate(id => window.pods.scheduling({ type: 'list', podId: id }), pod.id)).enabled).toBe(false)
