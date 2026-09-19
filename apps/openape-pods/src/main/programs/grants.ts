@@ -11,7 +11,7 @@ export async function approveCommands(identity: PodIdentityReference, identities
   if (typeof created.id !== 'string' || !/^[\w-]{1,128}$/.test(created.id)) throw new Error('Invalid application permission response; inspect pending grants before retrying')
   if (created.status === 'approved') return created.id
   if (created.status !== 'pending') throw new Error('Application permission was declined or revoked')
-  const result = await connectionRequest(identity.issuer, `/api/grants/${created.id}/approve`, {}, signal, bearer)
+  const result = await connectionRequest(identity.decisionIssuer ?? identity.issuer, `/api/grants/${created.id}/approve`, {}, signal, bearer)
   const grant = result.grant as { id?: string, status?: string } | undefined
   if (grant?.id !== created.id || grant.status !== 'approved') throw new Error('Application permission was not approved')
   return created.id
