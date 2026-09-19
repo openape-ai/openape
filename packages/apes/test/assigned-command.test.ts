@@ -58,3 +58,19 @@ describe('assigned ape-shell authorization with signed grants', () => {
     expect(requests.filter(request => request.startsWith('POST'))).toHaveLength(1)
   })
 })
+
+it('pins the owner decision issuer and every broker binding before authoritative consumption', async () => {
+  const brokered = { connection_id: 'owner-consent', agent_issuer: 'https://pods.example.test', broker_issuer: 'https://pods.example.test', owner: 'owner@example.test', key_id: 'agent-key' }
+  scope.brokered = brokered
+  const valid = await token({ brokered, decided_by: brokered.owner })
+  await authorizeAssignedCommand(command, valid, scope)
+  expect(requests.filter(value => value.startsWith('POST'))).toEqual(['POST /grants/assigned-grant/consume'])
+  requests = []
+  for (const field of ['connection_id', 'agent_issuer', 'broker_issuer', 'owner', 'key_id']) {
+    await expect(authorizeAssignedCommand(command, await token({ brokered: { ...brokered, [field]: 'substituted' }, decided_by: brokered.owner }), scope)).rejects.toThrow('broker connection')
+  }
+  await expect(authorizeAssignedCommand(command, await token(), scope)).rejects.toThrow('broker connection')
+  await expect(authorizeAssignedCommand(command, await token({ brokered, decided_by: 'another@example.test' }), scope)).rejects.toThrow('broker connection')
+  await expect(authorizeAssignedCommand(command, valid, { ...scope, brokered: undefined })).rejects.toThrow('broker connection')
+  expect(requests.some(value => value.startsWith('POST'))).toBe(false)
+})

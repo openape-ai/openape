@@ -75,7 +75,8 @@ onMounted(() => {
 onUnmounted(() => clearInterval(clock))
 const liveness = computed(() => callerState(grant.value?.request, grant.value?.created_at ?? 0, nowSec.value))
 
-function toggleAlwaysPanel() {
+async function toggleAlwaysPanel() {
+  if (grant.value?.brokered) { await handleApprove('always'); return }
   alwaysOpen.value = !alwaysOpen.value
   if (alwaysOpen.value && !patternDraft.value) {
     patternDraft.value = commandDisplay.value ? (suggestAllowPattern(commandDisplay.value.text) ?? '') : ''
@@ -390,6 +391,10 @@ function isExactCommand(detail) {
             </template>
           </UAlert>
 
+          <div v-if="grant.brokered" class="mb-4 rounded-lg border border-default p-4 text-sm space-y-2">
+            <p><strong>{{ grant.request?.requester }}</strong> uses the agent provider <strong>{{ grant.brokered.agent_issuer }}</strong>.</p>
+            <p>The request is addressed to {{ grant.brokered.owner }}. Only this account can approve it; the provider cannot decide.</p>
+          </div>
           <PodRunGrant v-if="podRun" :pod="podRun" :german="podGerman" @language="podGerman = $event" />
           <details v-if="podRun">
             <summary class="cursor-pointer text-sm">

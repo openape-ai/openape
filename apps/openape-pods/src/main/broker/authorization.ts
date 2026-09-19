@@ -1,3 +1,5 @@
+import type { BrokeredGrant } from '@openape/core'
+import { sameBrokeredGrant } from '@openape/grants'
 import { authorizeAssignedCommand } from '@openape/apes/assigned'
 import type { AssignedCommand } from '@openape/apes/assigned'
 import type { RunApproval } from '../../contracts/activity'
@@ -7,9 +9,11 @@ import { setTimeout as delay } from 'node:timers/promises'
 export type GrantProgress = RunApproval
 export type GrantObserver = (progress: GrantProgress) => Promise<void>
 export type GrantLookup = (permission: string, connection: AgentConnection) => Promise<string | undefined>
-interface Grant { id: string, status: string, request: { requester: string, audience: string, target_host: string, grant_type: string } }
+interface Grant { brokered?: BrokeredGrant, id: string, status: string, request: { requester: string, audience: string, target_host: string, grant_type: string } }
 
 export interface AgentConnection {
+  decisionIssuer?: string
+  brokered?: BrokeredGrant
   issuer: string
   subject: string
   owner: string
@@ -59,6 +63,7 @@ export class AgentAuthority {
     if (!/^[\w-]{1,128}$/.test(id)) throw new Error('Invalid assigned grant')
     const grant = await this.request(`/api/grants/${encodeURIComponent(id)}`, 'GET', signal) as Grant
     if (!grant || grant.id !== id || !['pending', 'approved', 'used', 'expired', 'denied', 'revoked'].includes(grant.status) || grant.request?.requester !== this.connection.subject || grant.request.audience !== 'shapes' || grant.request.target_host !== this.connection.targetHost) throw new Error('Grant does not belong to this Pod and execution target')
+    if (!sameBrokeredGrant(grant.brokered, this.connection.brokered)) throw new Error('Grant broker binding differs from the assigned identity')
     return grant
   }
 
@@ -76,7 +81,7 @@ export class AgentAuthority {
       grant = await this.grant(created.id, signal)
     }
     const current = grant
-    const publish = async (state: GrantProgress['state']) => this.observe?.({ grantId: current.id, issuer: this.connection.issuer, title: resolved.detail.display, permission: resolved.permission, subject: this.connection.subject, state })
+    const publish = async (state: GrantProgress['state']) => this.observe?.({ grantId: current.id, issuer: this.connection.decisionIssuer ?? this.connection.issuer, title: resolved.detail.display, permission: resolved.permission, subject: this.connection.subject, state })
     if (grant.status === 'pending') {
       if (!this.observe) throw new Error('Permission needs owner approval; open this Pod in OpenApe Pods')
       await publish('pending')
@@ -106,7 +111,7 @@ export class AgentAuthority {
     await this.assertActive(assignment.grantId, signal)
     const reply = await this.request(`/api/grants/${encodeURIComponent(assignment.grantId)}/token`, 'POST', signal) as { authz_jwt?: unknown }
     if (!reply || typeof reply.authz_jwt !== 'string') throw new Error('Missing assigned grant token')
-    const issuer = this.connection.issuer.replace(/\/$/, '')
-    await authorizeAssignedCommand(assignment.command, reply.authz_jwt, { issuer, subject: this.connection.subject, targetHost: this.connection.targetHost, grantId: assignment.grantId, jwksUri: `${issuer}/.well-known/jwks.json`, grantsEndpoint: `${issuer}/api/grants`, signal })
+    const issuer = (this.connection.decisionIssuer ?? this.connection.issuer).replace(/\/$/, '')
+    await authorizeAssignedCommand(assignment.command, reply.authz_jwt, { issuer, brokered: this.connection.brokered, subject: this.connection.subject, targetHost: this.connection.targetHost, grantId: assignment.grantId, jwksUri: `${issuer}/.well-known/jwks.json`, grantsEndpoint: `${issuer}/api/grants`, signal })
   }
 }
