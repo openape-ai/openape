@@ -16,7 +16,7 @@ A fresh agent-provider instance must have its own protected session secret and p
 
 ## Owner workflow
 
-In Pods, sign in to the owner's OpenApe account and select **Connect agent provider**. Review the exact provider, agent domain and deciding account; select **Allow requests from this provider**. Only new Pod identities use this selection. Existing Pods keep their owner, provider, key and grants.
+In Pods, sign in to the owner's DDISA account. In a Pod's **Settings → Pod identity → Agent provider permission**, select **Allow requests from this provider**. Review the exact provider, agent domain and deciding account; select **Confirm permission**. This grants consent through the existing DDISA account; no additional sign-in at the agent provider is needed. Only new Pod identities use this selection. Existing Pods keep their owner, provider, key and grants.
 
 The same connections are visible under **Account & security → Agent providers** at the decision IdP. Revocation blocks requests, token retrieval and further grant consumption, including reusable grants. It cannot recall an already-started command. Reconnecting creates new consent; it does not restore old grants or reassign old agent identities.
 
