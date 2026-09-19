@@ -1,5 +1,11 @@
 # Active work
 
+## Provider consent wording (September 19, 2026)
+
+Issue: https://git.openape.ai/openape-ai/openape/issues/1354. Native [PR 74](https://repos.openape.ai/patrick/monorepo/pulls/74); worktree `pods-conversation`, branch `bugfix/issue-1354-provider-consent-wording`, implementation checkpoint `a79c94425e00d6f059eca56847b3a3cae6468b51`, canonical base `d5aa59c1a6df11189274ada1690b52f176899c4c`.
+
+The provider action now says **Allow requests from this provider** and explains that consent uses the existing DDISA account without another provider sign-in. Confirmation/revocation, German translations and the operator workflow use permission terminology. Full lint/typecheck, app build, 267 unit/component tests and the single focused packaged provider-settings case pass; [inspected English/German and narrow dark evidence](https://testrun.openape.ai/r/FzY7KuWo0P6GAiNJnnni5VLD). No full local E2E suite or live provider test calls. Next: exact-source native review/checks, merge, notarized internal package and paired app/profile installation. The linked PR's delivery comment records final SHAs and preservation receipts.
+
 ## Personal accounts and per-Pod identities (September 19, 2026)
 
 Issue: https://git.openape.ai/openape-ai/openape/issues/1354. Native [PR 73](https://repos.openape.ai/patrick/monorepo/pulls/73); worktree `pods-conversation`, branch `feature/issue-1354-pod-identity-settings`, implementation checkpoint `c9c590daf3cec69237bb9571a158bd1112a0a227`, canonical base `25529c59fe4d815232b98128fa8b1955684a96de`.

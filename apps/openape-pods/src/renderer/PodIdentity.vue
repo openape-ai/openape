@@ -70,7 +70,7 @@ export default defineComponent({
             <dt>{{ t('Decision identity provider') }}</dt><dd>{{ identity.decisionIssuer || t('Not set') }}</dd>
           </dl>
           <p v-if="identity.bound">
-            {{ t('This pod keeps its assigned identity, even if you change your default account or connect another provider.') }}
+            {{ t('This pod keeps its assigned identity, even if you change your default account or allow requests from another provider.') }}
           </p>
         </details>
         <details v-if="owner.state === 'ready'" class="provider-settings">
@@ -79,7 +79,7 @@ export default defineComponent({
           <template v-if="owner.broker">
             <p>{{ t('Agent provider: {p0}', { p0: owner.broker.domain }) }}</p>
             <button :disabled="busy" @click="brokerRevoking = true">
-              {{ t('Revoke agent provider') }}
+              {{ t('Revoke provider permission') }}
             </button>
             <div v-if="brokerRevoking" class="provider-review">
               <p>{{ t('Revoking this provider blocks new requests and further use of its grants, including existing recurring permissions. Existing pod identities and data are retained.') }}</p>
@@ -93,9 +93,10 @@ export default defineComponent({
             </div>
           </template>
           <template v-else>
-            <p>{{ t('No separate agent provider is connected. New identities are created at your DDISA identity provider.') }}</p>
+            <p>{{ t('No separate agent provider has permission yet. New identities are created at your DDISA identity provider.') }}</p>
+            <p>{{ t('You grant this permission with your DDISA account. No additional sign-in at the agent provider is needed.') }}</p>
             <button :disabled="busy" @click="brokerReview = true">
-              {{ t('Connect agent provider') }}
+              {{ t('Allow requests from this provider') }}
             </button>
             <form v-if="brokerReview" class="provider-review" @submit.prevent="request({ type: 'enableBroker', id: owner.id, issuer: brokerIssuer, domain: brokerDomain })">
               <p>{{ t('Allow this provider to create agent identities for you and submit permission requests to your account? It cannot approve actions. This applies to new pod identities; existing pods keep their assigned provider.') }}</p>
@@ -103,7 +104,7 @@ export default defineComponent({
               <label>{{ t('Agent identity domain') }}<input v-model="brokerDomain" required></label>
               <p>{{ t('Decisions remain with {p0}.', { p0: owner.account }) }}</p>
               <button class="primary" :disabled="busy">
-                {{ t('Allow requests from this provider') }}
+                {{ t('Confirm permission') }}
               </button>
               <button type="button" :disabled="busy" @click="brokerReview = false">
                 {{ t('Cancel') }}
