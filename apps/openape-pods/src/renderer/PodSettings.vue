@@ -2,14 +2,15 @@
 import { t, diagnostic, label } from './i18n'
 import { settingsDrafts } from './form-buffer'
 import PodSchedule from './PodSchedule.vue'
+import PodIdentity from './PodIdentity.vue'
 import { defineComponent } from 'vue'
 import type { Organization } from '../contracts/groups'
 import type { StoredPod } from '../contracts/control'
 
 export default defineComponent({
-  components: { PodSchedule },
+  components: { PodSchedule, PodIdentity },
   props: { selectedPodId: { type: String, default: '' } },
-  emits: ['selected'],
+  emits: ['selected', 'accounts'],
   data() { return { confirmReload: false, initialized: false, organization: { revision: 1, groups: [] } as Organization, pods: [] as StoredPod[], selectedId: '', name: '', revision: 0, error: '', message: '', busy: false } },
   computed: { selectedGroup(): string { return this.organization.groups.find(group => group.podIds.includes(this.selectedId))?.id ?? '' }, selectedPod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.selectedId) } },
   watch: { async selectedPodId(id: string) { if (id === this.selectedId) return; await this.reload(); const pod = this.pods.find(pod => pod.id === id); if (pod) this.select(pod); else this.newPod() } },
@@ -131,6 +132,7 @@ export default defineComponent({
       </option>
     </select>
   </article>
+  <PodIdentity v-if="selectedPod" :key="selectedPod.id" :pod-id="selectedPod.id" @accounts="$emit('accounts')" />
   <PodSchedule v-if="selectedPod" :key="selectedPod.id" :pod="selectedPod" @changed="reload" />
   <details v-if="selectedPod" class="card lifecycle-panel">
     <summary>{{ t("More options") }}</summary>
