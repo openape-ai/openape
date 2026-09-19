@@ -1,5 +1,13 @@
 # Active work
 
+## Pods server rollout and signed local installation (September 19, 2026)
+
+Issue: https://git.openape.ai/openape-ai/openape/issues/1354. Server [PR 70](https://repos.openape.ai/patrick/monorepo/pulls/70) merged as `ce1a8fb87536fb471bbb01dce16884cf098be9d9` after all exact-source external checks passed. Both `id.openape.ai` and the independent `pods.openape.ai` run image pin `prod-ce1a8fb8`. HTTPS health, Grant Brokering 1.0 discovery, independent signing keys and refusal of unauthenticated writes pass. Existing owner identities, passkeys, signing keys and all 47,603 predeployment grant IDs/payloads are preserved.
+
+Internal signing [PR 71](https://repos.openape.ai/patrick/monorepo/pulls/71), source `ad93686159a301a9b715a15cdba5cc0d3b20368b`, produced an Apple-accepted, stapled app and DMG. The installed app passes Gatekeeper and the mounted-DMG deterministic check. Four Pods, 107 runs, 13 encrypted credential files and the existing enabled schedule were retained. External candidate/public-release gates remain separate; `releaseReady` is false. No real mail/model/Telegram test request or schedule change.
+
+Worktrees: `pods-conversation` (internal signing) and `pods-rollout` (clean canonical server deployment, then delivery evidence). Exact local checks, submissions, hashes and paired rollback locations: [delivery receipt](../../.claude/reports/2026-09-19-signed-rollout.md). Consult the linked native PRs for their final merge/check receipts. Next user step: explicitly connect the agent provider in Pods for new identities; existing Pods retain their bindings. Earlier implementation checkpoints below are historical.
+
 ## Federated Pods grants (September 19, 2026)
 
 Implementation [PR 69](https://repos.openape.ai/patrick/monorepo/pulls/69), code source `40aeb4ba314bda319b0dd4ced2b4e377d42ab00e`. Issue: https://git.openape.ai/openape-ai/openape/issues/1354. Worktree: `pods-conversation`; branch `feature/issue-1354-federated-grants`; base `fe4432e5`. Approved plan: [grant brokering](../../.claude/plans/2026-09-19-grant-brokering.md). Protocol [PR 1](https://repos.openape.ai/patrick/protocol/pulls/1) merged as `25b6d89b8fc6c21f171df6c78cf6a30ca9f1ff99` and mirrored. Implementation adds durable owner consent, typed broker assertions, immutable external agent bindings, owner-only grant lifecycle, original signatures and direct owner-IdP consumption. Pods separates the agent provider from the deciding account; existing identities remain unchanged.
