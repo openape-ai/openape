@@ -14,7 +14,7 @@ if (signed) {
   if (local) requireCleanBuild()
   else review = requireReleaseReview(candidate)
   if (!identity?.startsWith('Developer ID Application: ') || !process.env.OPENAPE_PODS_NOTARY_PROFILE) throw new Error('Explicit Developer ID and notary keychain profile are required')
-  for (const path of ['dist/native/pods-helper', 'dist/vendor/codex']) execFileSync('/usr/bin/codesign', ['--force', '--timestamp', '--options', 'runtime', '--sign', identity, path], { stdio: 'inherit' })
+  for (const path of ['dist/native/pods-helper', 'dist/vendor/codex']) execFileSync('/usr/bin/codesign', ['--force', '--timestamp', '--options', 'runtime', '--sign', identity, ...(path.endsWith('/codex') ? ['--entitlements', 'runtime-sources/entitlements.mac.plist'] : []), path], { stdio: 'inherit' })
   for (const [manifest, binary] of [['manifest.json', 'codex']]) {
     const path = join('dist/vendor', manifest); const value = JSON.parse(readFileSync(path, 'utf8')); value.binaryHash = sha256(join('dist/vendor', binary)); writeFileSync(path, JSON.stringify(value, null, 2))
   }
@@ -28,7 +28,7 @@ const artifacts = await build({ targets: Platform.MAC.createTarget(distribution 
   // node-pty rewrites app.asar paths even when already unpacked; keep its helper outside that tree.
   extraResources: [{ from: 'dist/vendor/apes', to: 'apes' }, ...['node-pty', `node-pty-${process.platform}-${process.arch}`].map(name => ({ from: `dist/vendor/apes/node_modules/@lydell/${name}`, to: `apes/node_modules/@lydell/${name}` })), ...(distribution ? [{ from: 'dist/distribution', to: '.' }] : [])],
   ...(distribution ? { artifactName: `OpenApe-Pods-\${version}-\${arch}-${local ? 'signed-local' : candidate ? 'signed-candidate' : signed ? 'signed' : 'unsigned'}.\${ext}` } : {}),
-  mac: { icon: 'build/openape-pods.icns', category: 'public.app-category.productivity', identity: signed ? identity : null, hardenedRuntime: signed, notarize: false, minimumSystemVersion: '14.0', ...(signed ? { entitlements: 'runtime-sources/entitlements.mac.plist', entitlementsInherit: 'runtime-sources/entitlements.mac.plist', signIgnore: ['dist/(native|vendor)/'] } : {}) },
+  mac: { icon: 'build/openape-pods.icns', category: 'public.app-category.productivity', identity: signed ? identity.replace('Developer ID Application: ', '') : null, hardenedRuntime: signed, notarize: false, minimumSystemVersion: '14.0', ...(signed ? { entitlements: 'runtime-sources/entitlements.mac.plist', entitlementsInherit: 'runtime-sources/entitlements.mac.plist', signIgnore: ['dist/(native|vendor)/'] } : {}) },
   ...(signed
     ? { afterSign: async (context) => {
         const bundle = join(context.appOutDir, `${productName}.app`); const archive = join(context.appOutDir, 'notarization.zip')
