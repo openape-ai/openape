@@ -46,7 +46,7 @@ describe('master actions and actual app-server', () => {
     expect(store.checkpoint(created.id).body).toEqual({ checked: true })
     await expect(control.execute('expand', { action: 'grant', ...scope }, signal)).rejects.toThrow('not allowed')
     await control.execute('request', { action: 'requestAccess', ...scope, request: { provider: 'microsoft', account: 'synthetic@example.invalid', folders: ['Inbox'], attachments: false, description: 'Read this synthetic mailbox' } }, signal)
-    expect(registry.list(created.id)).toHaveLength(0); expect(master.view().proposals[0]?.state).toBe('pending')
+    expect(registry.list(created.id)).toHaveLength(0); expect(master.view(created.id).proposals[0]?.state).toBe('pending')
     await control.execute('revise', { action: 'revise', ...scope, name: 'Revised' }, signal)
     await expect(control.execute('stale', { action: 'activate', ...draftScope }, signal)).rejects.toThrow('settings changed')
     await expect(control.execute('resume', { action: 'resume', podId: created.id, revision: 2 }, signal)).resolves.toMatchObject({ lifecycle: 'active', activeScript: checked.hash })
@@ -56,7 +56,7 @@ describe('master actions and actual app-server', () => {
     const active = store.getPod(pod.id).activeScript; const signal = new AbortController().signal
     const draft = await control.execute('draft', { action: 'draft', podId: pod.id, revision: 1, draftId: null, draftRevision: 0, code: `import {writeFileSync} from 'node:fs'; export async function run(){writeFileSync(${JSON.stringify(join(root, 'outside'))},'bad')}`, capabilities: [] }, signal) as { draftId: string, draftRevision: number }
     await expect(control.execute('check', { action: 'validate', podId: pod.id, revision: 1, draftId: draft.draftId, draftRevision: draft.draftRevision }, signal)).rejects.toThrow()
-    expect(store.getPod(pod.id).activeScript).toBe(active); expect(master.view().drafts[0]?.validation).toBeNull()
+    expect(store.getPod(pod.id).activeScript).toBe(active); expect(master.view(pod.id).drafts[0]?.validation).toBeNull()
   })
   it.each([false, true])('streams a dynamic action through confined app-server and resumes the same thread (packaged=%s)', async (packaged) => {
     let calls = 0; const requests: unknown[] = []
@@ -129,7 +129,7 @@ it('denies a model-forced read of another pod from a selected pod chat', async (
   await master.execute({ type: 'send', podId: selected.id, text: 'Inspect my configuration', id: randomUUID() })
   await expect.poll(() => master.view(selected.id).state, { timeout: 20000 }).toBe('idle')
   expect(JSON.stringify(requests[1])).not.toContain('CROSS_POD_PRIVATE_ASSIGNMENT')
-  expect(master.view(selected.id).messages.some(message => message.text.includes('outside the selected pod'))).toBe(true)
+  expect(master.view(selected.id).messages.some(message => message.text.includes('context_required'))).toBe(true)
 })
 
 it('persists ordinary setup, keeps automation disabled and enforces revisions and scope before replay', async () => {

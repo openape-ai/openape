@@ -9,6 +9,9 @@ import { createBackup, restoreBackup } from '../../src/worker/data/backup'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { PodGroups } from '../../src/worker/workspace/groups'
 import { storageBytes } from '../../src/worker/data/files'
+import { ChatRegistry } from '../../src/worker/master/chat-registry'
+import { MasterConversations } from '../../src/worker/master/conversations'
+import { ControlChanges } from '../../src/worker/control/changes'
 import { DataRetention } from '../../src/worker/data/retention'
 
 const stores: PodDatabase[] = []; const roots: string[] = []
@@ -151,4 +154,35 @@ it('restores partial workflow history paused while retaining effect receipts and
   expect(restored.db.prepare('SELECT paused,reason FROM workflow_runs').get()).toMatchObject({ paused: 1, reason: 'Restored workflow requires review' })
   expect(restored.db.prepare('SELECT state,output FROM workflow_nodes').get()).toMatchObject({ state: 'completed', output: JSON.stringify({ schema: 'synthetic/v1', data: { receipt: 'confirmed' } }) })
   expect(JSON.parse(restored.db.prepare('SELECT result FROM effect_ledger').get()!.result as string)).toEqual({ state: 'confirmed', receipt: { messageId: 42 } })
+})
+
+it('retains original and shared conversations after Pod deletion with an unavailable target', async () => {
+  const { store, pod } = await fixture(); const registry = new ChatRegistry(store); const conversations = new MasterConversations(store)
+  const original = registry.ensure(pod.id); const id = randomUUID()
+  registry.execute({ type: 'create', id, title: 'Shared work', podIds: [pod.id], workflowId: null, workflowRevision: null })
+  for (const chat of [original, registry.get(id)]) {
+    const messageId = randomUUID()
+    store.db.prepare('INSERT INTO master_messages VALUES(?,?,?,?,?)').run(messageId, 'user', 'Keep this history', 'sent', 1)
+    conversations.assign(messageId, chat.scope)
+  }
+  store.updatePod(pod.id, 1, { name: pod.name, lifecycle: 'archived' })
+  await new DataRetention(store, 'unused-helper').deletePod(pod.id, 2, pod.name)
+  for (const chat of [original, registry.get(id)]) {
+    expect(registry.get(chat.id).unavailablePodIds).toEqual([pod.id])
+    expect(conversations.messages(chat.scope)[0]?.text).toBe('Keep this history')
+  }
+})
+
+it('restores chat history while discarding pending changes and every provider continuation', async () => {
+  const { store, pod, exports } = await fixture(); const registry = new ChatRegistry(store); const chat = registry.ensure(pod.id)
+  const messageId = randomUUID(); store.db.prepare('INSERT INTO master_messages VALUES(?,?,?,?,?)').run(messageId, 'user', 'Saved history', 'sent', 1)
+  new MasterConversations(store).assign(messageId, chat.scope)
+  store.db.prepare('INSERT OR REPLACE INTO master_contexts VALUES(?,?,?,?)').run(chat.scope, 'old-provider-thread', 'idle', null)
+  const changes = new ControlChanges(store, new ResourceRegistry(store, () => {}))
+  changes.prepare(chat, { action: 'setVariable', podId: pod.id, revision: 1, name: 'topic', value: 'new', variableRevision: 0 })
+  const backup = await createBackup(store, exports); const target = await restoreBackup(backup, exports, schemaVersion)
+  const restored = new PodDatabase(target); stores.push(restored)
+  expect(new MasterConversations(restored).messages(chat.scope)[0]?.text).toBe('Saved history')
+  expect(new MasterConversations(restored).session(chat.scope).threadId).toBeNull()
+  expect(new ControlChanges(restored, new ResourceRegistry(restored, () => {})).list(chat.id)[0]?.state).toBe('discarded')
 })

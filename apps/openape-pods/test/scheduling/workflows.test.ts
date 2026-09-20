@@ -183,3 +183,14 @@ it('settles a paused run once all already-started nodes finish and fences cancel
   expect(f.engine.run(next).finishedAt).toBeNull()
   expect(f.store.db.prepare('SELECT * FROM workflow_reservations').all()).toHaveLength(1)
 })
+
+it('correlates accepted workflow runs durably without starting a duplicate graph', () => {
+  const f = fixture(); const pod = f.pod(); const workflow = f.workflow([pod]); const firstOperation = randomUUID(); const secondOperation = randomUUID()
+  const runId = f.engine.start(workflow, 1, 'manual', firstOperation)
+  expect(f.engine.start(workflow, 1, 'manual', secondOperation)).toBe(runId)
+  expect(f.store.db.prepare('SELECT id,run_id,kind FROM control_runs ORDER BY rowid').all()).toEqual([
+    { id: firstOperation, run_id: runId, kind: 'workflow' },
+    { id: secondOperation, run_id: runId, kind: 'workflow' },
+  ])
+  expect(f.engine.view().runs).toHaveLength(1)
+})

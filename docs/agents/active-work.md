@@ -1,5 +1,55 @@
 # Active work
 
+## Central Pod chats (September 20, 2026)
+
+Follow-up: Patrick requested model selection at the composer through `/` and
+`/model`, following the [official Codex command pattern](https://learn.chatgpt.com/docs/reference/slash-commands).
+The existing model catalogue and saved preference now use one searchable picker,
+also opened by the compact model button beside +. Commands stay local, selection
+preserves surrounding draft text, and running responses lock model changes.
+The integrated base is `403ecf68` (PR 79); both concurrent work records are retained.
+Previous source `a704411473bc8635746ad3df9c86f09b05538e7f` passed all local and
+external gates. Follow-up checks and inspected UI evidence belong to PR 78's
+exact-source acceptance record; these previous results do not certify a new head.
+
+Issue: https://repos.openape.ai/patrick/monorepo/issues/1359. Native [PR 78](https://repos.openape.ai/patrick/monorepo/pulls/78). Worktree
+`pods-central-chats`, branch `feature/issue-1359-central-chats`, canonical base
+`934dbcec21cce8e3620ecda51a77aa8458bcfd30` (rechecked during implementation).
+[Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2ZACGJKS6JHH84T22Q48K49).
+Chats is a sibling sidebar destination. The composer + selects explicit Pods
+and one pinned workflow; context changes preserve history and start a fresh
+provider session. Schema 21 retains legacy conversations and historical Pod
+links. Reviewed local changes apply atomically, runs require a separate owner
+action and retain actual run IDs. [Contracts](../../apps/openape-pods/docs/chats.md).
+
+The shared coordinator is `worker/control/changes.ts` over existing domain
+operations, with `contracts/control-api.ts` and authenticated owner-window IPC.
+The separately planned MCP adapter must reuse this writer and existing native
+approval surfaces; no MCP transport is introduced here. Saved Pod draft artifacts
+remain available to selected chats; conversation text, composers and pending
+change sets are separate. Stale changes require discard and deliberate preparation.
+
+Implementation checkpoint `7540e3cc35932ba26c7a6a27af3d1ef4a6e25519` passed the
+complete `pnpm check:ci` contract: full lint/typecheck, unit, web E2E and layout,
+including 334 Pods unit/component and all 135 native tests with no skips.
+Local summary: `.openape/check-results/1789910155897-7540e3cc-all/summary.json`.
+[Inspected packaged UI](https://testrun.openape.ai/r/3Z4ctc_EDtxDgykTyQ2ckcKO)
+covers + context selection, coordinated review and 1060/760/560 px layouts.
+The existing self-contained HTML pipeline includes these screenshots.
+
+Two existing native startup polls required an explicit 10-second readiness
+window; functional assertions remain intact. An unrelated Git login-layout
+check timed out once, then passed both its isolated run and complete unchanged
+retry. Canonical main advanced during handoff to
+`78fad3f1be6c3d67f2f68c50c8b142a0e9a06bb3` (PR 77, including real callback coverage
+for that login path); it was integrated without conflicts or Pods code changes.
+The combined final source must pass the same complete contract before push.
+Final source/target SHAs, native diff review and external-check status belong to
+the PR acceptance record. Next: review PR 78 after those exact-source checks;
+merge, installation and live acceptance are separate decisions. No installed app,
+owner profile, live mailbox, Telegram message or schedule activation was changed.
+Troop/OpenClaw remains paused.
+
 ## Native issue pilot live (September 20, 2026)
 
 [Issue 1356](https://repos.openape.ai/patrick/monorepo/issues/1356) now lives in the native forge. [PR 77](https://repos.openape.ai/patrick/monorepo/pulls/77), reviewed source `6b64f9ded062cc7e281117504fdc88e4b0f130cd` and target `934dbcec21cce8e3620ecda51a77aa8458bcfd30`, merged as `78fad3f1be6c3d67f2f68c50c8b142a0e9a06bb3` after all 17 local gates and exact-source external CI/e2e/layout passed. The approved private pilot activated at 13:36:53 UTC; Forgejo is now its read-only issue archive and unchanged Git/CI mirror.

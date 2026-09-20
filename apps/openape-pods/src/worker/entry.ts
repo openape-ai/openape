@@ -1,3 +1,5 @@
+import { ChatRegistry } from './master/chat-registry'
+import { parseChatsCommand } from '../contracts/chats'
 import { reviewMailBatch, reconcileMailEffect } from './mail/workflow'
 import { confirmDomainsStopped, inspectDomainRecords  } from './recovery/domains'
 import { parseWorkflowCommand } from '../contracts/workflows'
@@ -85,12 +87,13 @@ const details = new WorkspaceDetails(store, registry)
 const scheduler = new Scheduler(store, dispatcher)
 const fixtureProvider = process.env.PODS_FIXTURE_MODEL_PORT ? async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${process.env.PODS_FIXTURE_MODEL_PORT}/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }) : undefined
 runServices.provider = fixtureProvider
-const masterControl = new MasterControl(store, registry, dispatcher, scheduler, runtime)
+const recovery = new Recovery(store, registry, scheduler, join(dist, 'native/pods-helper'))
+const workflows = new WorkflowEngine(store, dispatcher, recovery)
+const masterControl = new MasterControl(store, registry, dispatcher, scheduler, runtime, workflows)
 const scripts = new ScriptWorkspace(store, registry, masterControl, runtime)
 const scriptController = new AbortController()
 const master = new MasterService(store, runtime, masterControl, fixtureProvider)
-const recovery = new Recovery(store, registry, scheduler, join(dist, 'native/pods-helper'))
-const workflows = new WorkflowEngine(store, dispatcher, recovery)
+
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
 let scanAt = 0
 let storageAt = 0
@@ -165,6 +168,9 @@ port.on('message', async (event) => {
       new ProgramControl(store, registry).execute({ type: 'recover' })
       await data.retention.cleanDeletedFiles(); await data.retention.view()
       port.postMessage({ id: request.id, state: true }); return
+    }
+    if (request.command && typeof request.command === 'object' && 'chats' in request.command) {
+      port.postMessage({ id: request.id, state: new ChatRegistry(store).execute(parseChatsCommand(request.command.chats)) }); return
     }
     if (request.command && typeof request.command === 'object' && 'master' in request.command) {
       port.postMessage({ id: request.id, state: await master.execute(parseMasterCommand(request.command.master)) }); return

@@ -67,6 +67,12 @@ export class RunDispatcher {
 
   view(podId: string, id?: string, after = 0): RunView {
     const runs = this.runs.list(podId)
+    if (id && !runs.some(run => run.id === id)) {
+      const selected = this.runs.get(id)
+      if (selected.podId !== podId) throw new Error('Run belongs to another Pod')
+      if (runs.length === 100) runs.pop()
+      runs.unshift(selected)
+    }
     const selectedId = id ?? runs[0]?.id
     const effects = this.store.db.prepare('SELECT effect_key AS key,run_id AS runId FROM effect_ledger WHERE pod_id=? AND operation=\'http.request\' AND state=\'unknown\' LIMIT 100').all(podId) as { key: string, runId: string }[]
     return { ...(selectedId ? { timing: this.runs.timing(podId, selectedId) } : {}), approvals: this.runs.approvals(podId), effects, runs, events: selectedId ? (after ? this.runs.events(podId, selectedId, after) : this.runs.recentEvents(podId, selectedId)) : [] }

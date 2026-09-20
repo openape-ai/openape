@@ -7,7 +7,7 @@ import type { PodDatabase } from '../storage/database'
 function fromRow(row: Record<string, unknown>): RunRecord {
   return { id: row.id as string, podId: row.pod_id as string, scriptHash: row.script_hash as string, state: row.state as RunState, startedAt: row.started_at as number, finishedAt: row.finished_at as number | null, summary: row.summary as string, error: row.error as string | null, checkpointRevision: row.checkpoint_revision as number, recovery: row.recovery_state ? { state: row.recovery_state as 'ready' | 'needsReview' | 'retryQueued', error: row.recovery_error as string | null } : null }
 }
-export interface RunTrigger { reason: 'manual' | 'schedule' | 'event', eventIds: string[], workflowRunId?: string }
+export interface RunTrigger { reason: 'manual' | 'schedule' | 'event', eventIds: string[], workflowRunId?: string, operationId?: string }
 export class RunStore {
   readonly bootId = randomUUID()
   constructor(readonly store: PodDatabase) {}
@@ -40,6 +40,7 @@ export class RunStore {
         this.store.db.prepare('INSERT INTO workflow_attempts VALUES(?,?,?)').run(id, trigger.workflowRunId, podId)
         this.store.db.prepare('UPDATE workflow_nodes SET state=\'running\',run_id=?,reason=NULL WHERE workflow_run_id=? AND pod_id=?').run(id, trigger.workflowRunId, podId)
       }
+      if (trigger.operationId) this.store.db.prepare('INSERT INTO control_runs VALUES(?,?,\'pod\')').run(trigger.operationId, id)
       this.store.db.prepare('INSERT INTO run_inputs VALUES(?,?,?)').run(id, trigger.reason, JSON.stringify(trigger.eventIds))
       for (const eventId of trigger.eventIds) {
         const claimed = this.store.db.prepare('UPDATE accepted_events SET state=\'claimed\',run_id=? WHERE id=? AND pod_id=? AND state=\'pending\'').run(id, eventId, podId)
