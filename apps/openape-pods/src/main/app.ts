@@ -1,3 +1,4 @@
+import { parseWorkflowCommand } from '../contracts/workflows'
 import { searchPackages } from './package-catalog'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -225,6 +226,10 @@ async function start(): Promise<void> {
   ipcMain.handle(channels.workspace, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     return worker.request(parseCommand(command))
+  })
+  ipcMain.handle(channels.workflows, (event, command: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    return worker.workflows(parseWorkflowCommand(command))
   })
   ipcMain.handle(channels.scheduling, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)

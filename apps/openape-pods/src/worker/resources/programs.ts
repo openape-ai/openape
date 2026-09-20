@@ -29,6 +29,7 @@ export class ProgramControl {
       return this.resources.list(pod.id).find(item => item.id === command.id)!
     }
     return this.store.transaction(() => {
+      if (this.store.db.prepare('SELECT 1 FROM workflow_reservations WHERE pod_id=?').get(pod.id)) throw new Error('Pod is reserved by an unfinished workflow')
       if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=?').get(pod.id) || this.store.db.prepare('SELECT 1 FROM program_leases WHERE pod_id=?').get(pod.id)) throw new Error('Finish or recover the current pod run or terminal first')
       if (command.type === 'reserveShell') {
         this.store.db.prepare('INSERT INTO program_leases VALUES(?,?,?,?,?)').run(pod.id, command.sessionId, 'ape-shell', command.epoch, pod.bindingRevision)

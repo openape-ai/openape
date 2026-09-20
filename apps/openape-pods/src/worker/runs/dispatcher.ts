@@ -1,3 +1,7 @@
+import { MailWorkflow } from '../mail/workflow'
+import { createWorkflowMailTransport } from '../mail/workflow-transport'
+import type { WorkflowDefinition } from '../../contracts/workflows'
+import { workflowInput, publishWorkflowOutput } from '../workflows/handoff'
 import { parseAgentRequest } from '../../contracts/agent'
 import { DependencyStore } from '../dependencies/store'
 import { assignedDirectories } from '../../runtime/directories'
@@ -125,7 +129,7 @@ export class RunDispatcher {
       const folders = await podDirectories(this.store.root, pod.id)
       const directories = await assignedDirectories(this.store.root, pod.id, this.resources.list(pod.id))
       assertCurrent()
-      const input: RunInput = { home: folders.home, directories: directories.map(({ path, access }) => ({ path, access })), variables: new PodVariables(this.store).values(pod.id), version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.bindingRevision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: folders.workspace, references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: 300000, frameBytes: 256 * 1024 } }
+      const input: RunInput = { workflow: workflowInput(this.store, id), home: folders.home, directories: directories.map(({ path, access }) => ({ path, access })), variables: new PodVariables(this.store).values(pod.id), version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.bindingRevision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: folders.workspace, references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: 300000, frameBytes: 256 * 1024 } }
       this.runs.append(id, 'snapshot', { id: snapshots.id, files: input.references })
       const dependencies = new DependencyStore(this.store); const dependencyHash = dependencies.scriptSet(pod.id, run.scriptHash)
       const dependencyRoot = dependencyHash ? await dependencies.verify(pod.id, dependencyHash) : undefined
@@ -144,6 +148,7 @@ export class RunDispatcher {
         Object.assign(runtime, { home: environment.home, shell: environment.shell, environment: { ...environment.environment, ...runtime.environment } })
         shellScope = scope
       }
+      let mailWorkflow: MailWorkflow | undefined
       let mail: MailRecipeSession | undefined
       this.runs.append(id, 'environment', { script: artifact, workspace: input.workspace, values: Object.fromEntries(Object.entries(runtime.environment).filter(([key]) => ['HOME', 'TMPDIR', 'PATH', 'SHELL', 'PODS_POD_ID', 'LANG', 'TERM'].includes(key))) })
       const result = await executeScript(runtime, directory, artifact, input, signal, {
@@ -151,6 +156,35 @@ export class RunDispatcher {
         event: (type, data) => { this.runs.assertLease(id); this.runs.append(id, type, data); if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
         request: async (operation, payload, operationSignal) => {
           assertCurrent()
+          if (operation.startsWith('mail.workflow.')) {
+            const attempt = this.store.db.prepare('SELECT w.definition,w.id FROM workflow_attempts a JOIN workflow_runs w ON w.id=a.workflow_run_id WHERE a.run_id=?').get(id)
+            const configuration = attempt ? (JSON.parse(attempt.definition as string) as WorkflowDefinition).mail : null
+            if (!configuration || ![configuration.filterPodId, configuration.notifyPodId].includes(pod.id)) throw new Error('Mail integration is not assigned to this workflow node')
+            if (!mailWorkflow) {
+              mailWorkflow = new MailWorkflow(this.store, attempt!.id as string, pod.id, id, configuration, createWorkflowMailTransport(configuration, {
+                assertCurrent,
+                tool: body => invokeTool(body, signal),
+                credential: async (alias) => {
+                  if (!manifest.capabilities.includes(`credential.${alias}`) || !this.services?.credential) throw new Error('Credential capability is not declared by this script')
+                  new ScriptCredentials(this.store, this.resources).assertApproved(pod.id, run.scriptHash, manifest.capabilities)
+                  return this.services.credential(alias, operationSignal, scope)
+                },
+                http: async (request) => {
+                  if (!this.services?.http) throw new Error('HTTP service is unavailable')
+                  assignedHttp(this.resources.list(pod.id), scope, request)
+                  return this.services.http(request, operationSignal, scope)
+                },
+              }))
+            }
+            const request = payload as { offset?: number, summary?: string }
+            if (!request || typeof request !== 'object' || Array.isArray(request) || Object.keys(request).some(key => !['offset', 'summary'].includes(key))) throw new Error('Invalid mail workflow request')
+            if (operation === 'mail.workflow.remaining') return mailWorkflow.remaining(request.offset)
+            const work = operation === 'mail.workflow.filter' ? mailWorkflow.filter() : mailWorkflow.notify(request.summary!)
+            pendingAgents.add(work)
+            try { return await work }
+            finally { pendingAgents.delete(work) }
+          }
+          if (operation === 'workflow.publish') { publishWorkflowOutput(this.store, id, payload); return { published: true } }
           if (operation === 'mail.next' || operation === 'mail.commit') {
             if (!manifest.capabilities.includes('mail.read')) throw new Error('Mail recipe permission is not assigned')
             if (!mail) {
