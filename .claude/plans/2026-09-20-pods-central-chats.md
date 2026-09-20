@@ -1,6 +1,6 @@
 # Plan: Central Chats for OpenApe Pods
 
-<div class="callout callout-warn"><strong>Approved — implementation in progress.</strong> Patrick approved this plan on September 20, 2026: “Passt so. Leg los”. Product implementation and verification are authorized. Installation, live mailbox actions, Telegram delivery and schedule activation remain excluded. The retired Troop/OpenClaw automation remains paused.</div>
+<div class="callout callout-warn"><strong>Approved — implementation delivered for review.</strong> Patrick approved this plan on September 20, 2026: “Passt so. Leg los”. Product implementation and verification are authorized. Installation, live mailbox actions, Telegram delivery and schedule activation remain excluded. The retired Troop/OpenClaw automation remains paused.</div>
 
 Review: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2ZACGJKS6JHH84T22Q48K49
 
@@ -173,7 +173,7 @@ Recheck main and the MCP plan/PR, agree the shared file ownership, then implemen
 
 Extend `App.vue`, reuse `MasterChat.vue`, and add focused conversation list/context picker components under `src/renderer/`. Change buffers and commands to conversation IDs. Add Pod/workflow backlinks and historical context markers. Implement context snapshots, provenance, drift UI, fresh segment transitions and backend rejection of stale context calls. Use a single active embedded-model turn with an explicit busy destination. Adapt Pod summaries conservatively.
 
-**Acceptance:** Two chats for one Pod have independent drafts/composers/transcripts; existing original chat stays reachable; a shared chat opens unchanged from either Pod. Add/remove starts a new provider thread and sends no previous transcript; history is still readable. Workflow edits show a diff before refreshing context. Empty context cannot inspect a Pod's script. Narrow-layout chips and all actions remain readable and keyboard reachable.
+**Acceptance:** Two chats for one Pod have independent composers/transcripts/reviews and address saved Pod drafts by stable artifact ID; existing original chat stays reachable; a shared chat opens unchanged from either Pod. Add/remove starts a new provider thread and sends no previous transcript; history is still readable. Workflow edits show a diff before refreshing context. Empty context cannot inspect a Pod's script. Narrow-layout chips and all actions remain readable and keyboard reachable.
 
 **Rollback:** Hide the new navigation temporarily while retaining data and the legacy resolver; do not delete conversations or silently flatten their contexts.
 
@@ -191,7 +191,7 @@ Factor a small change-set coordinator around existing draft, validation, activat
 
 **Goal:** One-shot runs and recovery display actual outcomes and honor all existing fences.
 
-Add explicit run intents for embedded chat, delegate to dispatcher/workflow engine and show stable run links. Extend existing synthetic component, native E2E and layout tests; refresh the established handbook source/screenshots after behavior stabilizes. Recheck MCP parity for the shared subset if that adapter is available; otherwise document its unimplemented integration honestly. Record exact source/target SHAs and native PR evidence in `docs/agents/active-work.md` in the implementation checkout.
+Add explicit run intents for embedded chat, delegate to dispatcher/workflow engine and show stable run links. Extend existing synthetic component, native E2E and layout tests; extend the established HTML evidence report and document the contracts in `docs/chats.md`; preserve the bilingual handbook until a coordinated edition refresh. Recheck MCP parity for the shared subset if that adapter is available; otherwise document its unimplemented integration honestly. Record exact source/target SHAs and native PR evidence in `docs/agents/active-work.md` in the implementation checkout.
 
 **Acceptance:** An assistant claim without a tool receipt never displays Saved/Applied/Completed. A workflow with a parallel branch failure keeps successful nodes, blocks descendants and retries only the reviewed node. Missing grants and uncertain effects block. Stop response does not pretend to stop a run. All required CI suites pass on final source; screenshots cover desktop/compact/dark mode and the actual packaged renderer. No real mailbox, Telegram, owner account, installed app or active schedule participates in automated acceptance.
 
@@ -231,7 +231,10 @@ For focused development use existing Vitest file arguments after `pnpm --filter 
 - September 20, 2026: Re-read the parallel MCP plan: milestone 2 remains pending; no competing implementation PR exists. The shared coordinator lives beside the existing worker writer in `worker/control/changes.ts`; `contracts/control-api.ts` is the shared receipt boundary. Future MCP reuses authenticated main-process owner surfaces and this coordinator. Saved Pod drafts retain independent IDs and are shared saved artifacts available to selected chats; transcripts, composers and pending reviews remain conversation-specific.
 - September 20, 2026: Checkpoint `b923685d166a1781e0d09a3d44826c436fb7101a` passed all repository gates before the native Pods step, where 133/135 tests passed; two startup polls expired at `starting` before functional assertions. Increased only those bounded readiness waits to 10 seconds and retained all behavior assertions. Added per-Pod conflict diagnostics during review. Complete gate rerun required; the protected push was correctly blocked.
 - September 20, 2026: Follow-up passed 334 unit/component tests, full lint/typecheck, app build/package and all 4 focused native checks for dependency preparation, terminal feedback and Chats. Final full contract rerun and native PR review remain required.
-- Milestones 1–4: implemented; complete repository verification and native PR review in progress.
+- September 20, 2026: Implementation checkpoint `7540e3cc35932ba26c7a6a27af3d1ef4a6e25519` passed the complete `pnpm check:ci` contract, including 334 Pods unit/component and 135 native tests with no skips. Summary: `.openape/check-results/1789910155897-7540e3cc-all/summary.json`. The earlier unrelated Git login-layout timeout passed both its isolated rerun and the complete unchanged retry.
+- September 20, 2026: Published [PR 78](https://repos.openape.ai/patrick/monorepo/pulls/78) and [actual packaged UI evidence](https://testrun.openape.ai/r/3Z4ctc_EDtxDgykTyQ2ckcKO); visibly opened and inspected the report. The report pipeline produces a standalone HTML document with embedded screenshots.
+- September 20, 2026: Canonical main advanced during handoff to `78fad3f1be6c3d67f2f68c50c8b142a0e9a06bb3` through PR 77. Integrated it without conflicts; its Git login test now exercises real callbacks. The combined final source requires the complete check contract before push; exact final source/target review and checks are retained in PR 78.
+- Milestones 1–4: implemented and verified at the implementation checkpoint; final integrated-source gate and owner PR review remain.
 
 ## Surprises & Discoveries
 
@@ -264,4 +267,6 @@ For focused development use existing Vitest file arguments after `pnpm --filter 
 
 ## Outcomes & Retrospective
 
-Planning deliverables are the baseline assessment, recommended contracts, synthetic mockup and reviewable plan. Product implementation is in progress after recorded approval. Installation and live acceptance remain excluded. Final implementation outcomes and retrospective remain pending.
+Delivered central Chats, composer + context selection, additive history migration, pinned workflow context, atomic reviewed local changes and separately accepted execution receipts. The actual packaged UI and synthetic runtime behavior passed the established test routes. Saved Pod drafts remain shared artifacts; conversations, composers and pending reviews have independent identities. The single active model turn remains the deliberate v1 limit.
+
+[PR 78](https://repos.openape.ai/patrick/monorepo/pulls/78) is the review handoff. The native PR acceptance record carries final integrated source/target SHAs and gate evidence. No MCP transport, installation or live acceptance was performed. Future MCP should reuse `worker/control/changes.ts`, `contracts/control-api.ts` and the existing native owner approvals. Context chips are simple UI, but provider continuation and receiver-side target validation remain essential to their semantics.
