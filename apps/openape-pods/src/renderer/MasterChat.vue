@@ -168,7 +168,7 @@ onMounted(async () => {
               </div>
             </details>
             <p v-if="change.error" role="alert" class="error-message">
-              {{ diagnostic(change.error) }}
+              <strong v-if="change.errorPodId">{{ change.targets.find(target => target.podId === change.errorPodId)?.name }}: </strong>{{ diagnostic(change.error) }}
             </p>
             <p v-if="change.contextRevision !== view.conversation?.revision" class="muted">
               {{ t('Earlier context: inspect and prepare these changes again before applying.') }}
