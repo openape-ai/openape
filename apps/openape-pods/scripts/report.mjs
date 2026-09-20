@@ -6,6 +6,10 @@ const directory = '.artifacts'
 const result = JSON.parse(readFileSync(join(directory, 'electron-tests.json'), 'utf8'))
 const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
 const shots = [
+  ['workflows-1060.png', 'Independent workflow graphs', 'Unchanged Pods form an ALL-success fan-out/fan-in graph with its own disabled cron schedule.'],
+  ['workflows-560.png', 'Workflow graph in a narrow dark window', 'The graph reflows vertically and preserves explicit predecessor labels.'],
+  ['workflows-completed.png', 'Verified workflow completion', 'The packaged worker completed every synthetic node in dependency order without editing Pod scripts or lifecycles.'],
+  ['workflows-mail-policy-de.png', 'Review mailbox policy and protected partners', 'The German editor shows account, rules, partner protection and Telegram destination. Production automatic moves remain blocked pending verified conditional-move support.'],
   ['chat-setup-http.png', 'Review concrete chat permissions', 'The proposed Telegram origin and POST method are prefilled. Native cancellation and approval are verified without a Telegram request.'],
   ['chat-setup-resolved-de-dark.png', 'Saved setup in a narrow German window', 'Actual resources and ordinary values are saved; secret presence is checked without returning its value to chat. The interrupted conversation and missing script remain visible.'],
   ['chat-conversation-de.png', 'Choose GPT-6 Astra for pod creation', 'The selected model survives navigation and restart. The synthetic provider verifies gpt-6-astra on creation and gpt-5.6-sol after an explicit model switch.'],

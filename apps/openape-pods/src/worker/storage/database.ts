@@ -35,7 +35,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 19
+export const schemaVersion = 20
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -256,6 +256,24 @@ PRAGMA user_version=18;`)
       }
 
       if (version < 19) this.db.exec('ALTER TABLE onboarding ADD COLUMN default_owner TEXT REFERENCES connections(id); PRAGMA user_version=19;')
+      if (version < 20) {
+        this.db.exec(`
+CREATE TABLE workflows(id TEXT PRIMARY KEY, revision INTEGER NOT NULL, name TEXT NOT NULL, nodes TEXT NOT NULL, schedule TEXT, enabled INTEGER NOT NULL DEFAULT 0, next_at INTEGER, paused INTEGER NOT NULL DEFAULT 1, mail TEXT, archived INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE workflow_members(workflow_id TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE, pod_id TEXT NOT NULL REFERENCES pods(id), PRIMARY KEY(workflow_id,pod_id));
+CREATE TABLE workflow_runs(id TEXT PRIMARY KEY, workflow_id TEXT NOT NULL REFERENCES workflows(id), revision INTEGER NOT NULL, definition TEXT NOT NULL, trigger TEXT NOT NULL, state TEXT NOT NULL, reason TEXT, started_at INTEGER NOT NULL, finished_at INTEGER, paused INTEGER NOT NULL DEFAULT 0);
+CREATE UNIQUE INDEX workflow_active ON workflow_runs(workflow_id) WHERE finished_at IS NULL;
+CREATE TABLE workflow_nodes(workflow_run_id TEXT NOT NULL REFERENCES workflow_runs(id), pod_id TEXT NOT NULL REFERENCES pods(id), script_hash TEXT, assignment_revision INTEGER NOT NULL, resource_epoch INTEGER NOT NULL, state TEXT NOT NULL, run_id TEXT REFERENCES runs(id), reason TEXT, output TEXT, PRIMARY KEY(workflow_run_id,pod_id));
+CREATE TABLE workflow_reservations(pod_id TEXT PRIMARY KEY REFERENCES pods(id), workflow_run_id TEXT NOT NULL REFERENCES workflow_runs(id));
+CREATE TABLE workflow_attempts(run_id TEXT PRIMARY KEY REFERENCES runs(id), workflow_run_id TEXT NOT NULL REFERENCES workflow_runs(id), pod_id TEXT NOT NULL REFERENCES pods(id));
+CREATE TABLE workflow_mail_scopes(id TEXT PRIMARY KEY, mailbox TEXT NOT NULL, cursor TEXT, baseline_at INTEGER NOT NULL, initialized INTEGER NOT NULL DEFAULT 0, restored INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE workflow_mail_pending(scope_id TEXT NOT NULL REFERENCES workflow_mail_scopes(id), message_id TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(scope_id,message_id));
+CREATE TABLE workflow_mail_processed(scope_id TEXT NOT NULL REFERENCES workflow_mail_scopes(id), message_id TEXT NOT NULL, PRIMARY KEY(scope_id,message_id));
+CREATE TABLE workflow_mail_participants(scope_id TEXT NOT NULL REFERENCES workflow_mail_scopes(id), conversation TEXT NOT NULL, address TEXT NOT NULL, PRIMARY KEY(scope_id,conversation,address));
+CREATE TABLE workflow_mail_batches(id TEXT PRIMARY KEY REFERENCES workflow_runs(id), scope_id TEXT NOT NULL REFERENCES workflow_mail_scopes(id), configuration TEXT NOT NULL, state TEXT NOT NULL);
+CREATE TABLE workflow_mail_audit(sequence INTEGER PRIMARY KEY AUTOINCREMENT, batch_id TEXT NOT NULL REFERENCES workflow_mail_batches(id), effect_key TEXT NOT NULL, kind TEXT NOT NULL, body TEXT NOT NULL, at INTEGER NOT NULL);
+PRAGMA user_version=20;`)
+      }
+
     })
   }
 

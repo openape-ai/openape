@@ -1,6 +1,8 @@
 <script lang="ts">
 import { t, diagnostic, label, dateTime } from './i18n'
 import { defineComponent } from 'vue'
+import WorkflowPanel from './WorkflowPanel.vue'
+import type { WorkflowView } from '../contracts/workflows'
 import LanguageSwitcher from './LanguageSwitcher.vue'
 import PodNavigation from './PodNavigation.vue'
 import type { Organization } from '../contracts/groups'
@@ -26,13 +28,13 @@ import type { ScheduleView } from '../contracts/scheduling'
 import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
-  components: { AccountStatus, RunApproval, PodDescription, LanguageSwitcher, PodNavigation, DataManagement, Onboarding, MasterChat, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
+  components: { WorkflowPanel, AccountStatus, RunApproval, PodDescription, LanguageSwitcher, PodNavigation, DataManagement, Onboarding, MasterChat, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
   data() {
-    return { requestedSecret: '', approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: 'Overview', tabs: ['Overview', 'Chat', 'Script', 'Values', 'Permissions', 'Settings', 'History'], descriptionExpanded: false, sidebarWidth: 224, sidebarCollapsed: false, resizeStart: 0, resizeWidth: 224, resizing: false, pods: [] as StoredPod[], podId: '', creating: false, creationId: '', details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
+    return { workflowId: '', workflows: { workflows: [], runs: [] } as WorkflowView, requestedSecret: '', approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: 'Overview', tabs: ['Overview', 'Chat', 'Script', 'Values', 'Permissions', 'Settings', 'History'], descriptionExpanded: false, sidebarWidth: 224, sidebarCollapsed: false, resizeStart: 0, resizeWidth: 224, resizing: false, pods: [] as StoredPod[], podId: '', creating: false, creationId: '', details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
   computed: {
     activeTab(): string { return this.selected === 'Knowledge' ? 'Overview' : this.selected },
-    globalPage(): boolean { return ['App settings', 'Setup', 'Data', 'Workspace chat'].includes(this.selected) },
+    globalPage(): boolean { return ['App settings', 'Setup', 'Data', 'Workspace chat', 'Workflows'].includes(this.selected) },
     pod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.podId) },
     workerLabel(): string { if (this.connectionError) return t('Unavailable'); return label({ starting: 'Starting', ready: 'Ready', error: 'Needs attention', stopped: 'Stopped' }[this.status?.worker.state ?? 'starting']) },
     attention(): boolean { return !!this.connectionError || this.status?.worker.state === 'error' },
@@ -66,7 +68,8 @@ export default defineComponent({
       if (this.busy || this.status?.worker.state !== 'ready') return
       this.busy = true
       try {
-        this.workspaceChanged(await window.pods.workspace({ type: 'list' }))
+        const [workspace, workflows] = await Promise.all([window.pods.workspace({ type: 'list' }), window.pods.workflows({ type: 'list' })])
+        this.workspaceChanged(workspace); this.workflows = workflows
         if (!this.pods.some(pod => pod.id === this.podId)) this.podId = this.creating ? '' : this.pods[0]?.id ?? ''
         const id = this.podId
         if (!id) { this.details = null; this.runs = []; this.schedule = null; this.resourceCount = 0; return }
@@ -114,9 +117,17 @@ export default defineComponent({
       <button class="new-pod" @click="master(true)">
         {{ t('＋ New pod') }}
       </button>
+      <nav class="workflow-navigation" :aria-label="t('Workflows')">
+        <button class="nav-button" :class="{ active: selected === 'Workflows' && !workflowId }" @click="selected = 'Workflows'; workflowId = ''">
+          {{ t('Workflows') }}
+        </button>
+        <button v-for="workflow in workflows.workflows" :key="workflow.id" class="pod-button" :class="{ active: selected === 'Workflows' && workflowId === workflow.id }" @click="selected = 'Workflows'; workflowId = workflow.id">
+          {{ workflow.name }}
+        </button>
+      </nav>
       <div class="sidebar-bottom">
         <AccountStatus :available="status?.worker.state === 'ready'" @open="selected = 'Setup'" />
-        <button class="nav-button" :class="{ active: globalPage }" :aria-label="t('App settings')" @click="selected = 'App settings'">
+        <button class="nav-button" :class="{ active: globalPage && selected !== 'Workflows' }" :aria-label="t('App settings')" @click="selected = 'App settings'">
           ⚙ <span>{{ t('App settings') }}</span>
         </button>
       </div>
@@ -152,6 +163,7 @@ export default defineComponent({
             </button>
           </div>
         </section>
+        <WorkflowPanel v-else-if="selected === 'Workflows'" :view="workflows" :pods="pods" :selected-id="workflowId" @changed="workflows = $event" @select="workflowId = $event" />
         <DataManagement v-else-if="selected === 'Data'" />
         <Onboarding v-else-if="selected === 'Setup'" @finished="selected = 'Overview'" />
         <section v-else-if="selected === 'Chat' || selected === 'Workspace chat'" id="panel-Chat" :role="globalPage ? undefined : 'tabpanel'" :aria-labelledby="globalPage ? undefined : 'tab-Chat'" :aria-label="globalPage ? t('Workspace chat') : undefined" class="master-panel">

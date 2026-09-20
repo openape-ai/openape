@@ -133,3 +133,22 @@ it('counts runtime links without following them and clears the old inventory war
   await symlink(outside, join(workspace, 'untrusted'))
   await expect(createBackup(store, exports)).rejects.toThrow('link or unsupported file')
 })
+it('restores partial workflow history paused while retaining effect receipts and completed nodes', async () => {
+  const { store, exports, pod, runId } = await fixture()
+  const workflowId = randomUUID(); const workflowRun = randomUUID()
+  const nodes = [{ podId: pod.id, after: [], handoff: false }]
+  const definition = { id: workflowId, revision: 1, name: 'Partial synthetic workflow', nodes, enabled: true, paused: false, schedule: { kind: 'interval', seconds: 60 }, nextAt: 1000 }
+  store.db.prepare('INSERT INTO workflows(id,revision,name,nodes,schedule,enabled,paused) VALUES(?,1,?,?,?,1,0)').run(workflowId, definition.name, JSON.stringify(nodes), JSON.stringify(definition.schedule))
+  store.db.prepare('INSERT INTO workflow_runs(id,workflow_id,revision,definition,trigger,state,started_at) VALUES(?,?,1,?,\'manual\',\'blocked\',1000)').run(workflowRun, workflowId, JSON.stringify(definition))
+  store.db.prepare('INSERT INTO workflow_nodes VALUES(?,?,?,?,?,\'completed\',?,NULL,?)').run(workflowRun, pod.id, store.getPod(pod.id).activeScript, 1, 0, runId, JSON.stringify({ schema: 'synthetic/v1', data: { receipt: 'confirmed' } }))
+  store.db.prepare('INSERT INTO workflow_attempts VALUES(?,?,?)').run(runId, workflowRun, pod.id)
+  store.db.prepare('INSERT INTO effect_ledger VALUES(?,?,?,?,?,\'completed\',?)').run(pod.id, 'synthetic-effect', 'mail.telegram', digest('synthetic'), runId, JSON.stringify({ state: 'confirmed', receipt: { messageId: 42 } }))
+  store.db.prepare('INSERT INTO workflow_mail_scopes(id,mailbox,baseline_at) VALUES(?,?,?)').run('synthetic-scope', 'owner@example.invalid', 1000)
+  const backup = await createBackup(store, exports); const target = await restoreBackup(backup, exports, schemaVersion)
+  const restored = new PodDatabase(target); stores.push(restored)
+  expect(restored.db.prepare('SELECT restored FROM workflow_mail_scopes').get()!.restored).toBe(1)
+  expect(restored.db.prepare('SELECT enabled,paused FROM workflows').get()).toMatchObject({ enabled: 0, paused: 1 })
+  expect(restored.db.prepare('SELECT paused,reason FROM workflow_runs').get()).toMatchObject({ paused: 1, reason: 'Restored workflow requires review' })
+  expect(restored.db.prepare('SELECT state,output FROM workflow_nodes').get()).toMatchObject({ state: 'completed', output: JSON.stringify({ schema: 'synthetic/v1', data: { receipt: 'confirmed' } }) })
+  expect(JSON.parse(restored.db.prepare('SELECT result FROM effect_ledger').get()!.result as string)).toEqual({ state: 'confirmed', receipt: { messageId: 42 } })
+})
