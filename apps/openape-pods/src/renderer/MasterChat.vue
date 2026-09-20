@@ -11,11 +11,69 @@ const props = defineProps<{ podId: string | null, creationId?: string, conversat
 const emit = defineEmits<{ resources: [podId: string], settings: [podId: string, alias?: string], created: [podId: string], openChat: [id: string], context: [id: string], run: [podId: string, runId: string], workflow: [id: string] }>()
 const view = ref<MasterView | null>(null); const text = chatDraft(props.bufferKey ?? props.conversationId ?? props.podId ?? props.creationId ?? null); const error = ref(''); const busy = ref(false)
 const model = ref<ChatModel>('gpt-5.5')
-function chooseModel(): void {
-  try { localStorage.setItem('pods-chat-model', model.value) }
-  catch (failure) { error.value = String(failure) }
-}
 const history = ref<HTMLElement>(); const input = ref<HTMLTextAreaElement>(); const followLatest = ref(true)
+const palette = ref<'commands' | 'models' | null>(null)
+const modelQuery = ref(''); const modelIndex = ref(0)
+const modelSearch = ref<HTMLInputElement>(); const composer = ref<HTMLFormElement>()
+const slashToken = ref<{ start: number, end: number, text: string } | null>(null)
+const modelLocked = computed(() => busy.value || view.value?.state === 'running')
+const selectedModel = computed(() => chatModels.find(option => option.id === model.value)!.name)
+const filteredModels = computed(() => chatModels.filter(option => `${option.name} ${option.id}`.toLowerCase().includes(modelQuery.value.trim().toLowerCase())))
+function closePalette(): void { palette.value = null; slashToken.value = null }
+function slashAtCursor() {
+  const element = input.value
+  if (!element || element.selectionStart !== element.selectionEnd) return null
+  const end = element.selectionStart
+  if (text.value[end] && !/\s/.test(text.value[end]!)) return null
+  const match = text.value.slice(0, end).match(/(?:^|\s)\/(\w*)$/)
+  if (!match || !'model'.startsWith(match[1]!.toLowerCase())) return null
+  const start = end - match[1]!.length - 1
+  return { start, end, text: text.value.slice(start, end) }
+}
+function suggestCommand(): void {
+  slashToken.value = slashAtCursor()
+  palette.value = slashToken.value ? 'commands' : null
+}
+async function openModels(fromCommand = false): Promise<void> {
+  if (!fromCommand) slashToken.value = null
+  modelQuery.value = ''; modelIndex.value = chatModels.findIndex(option => option.id === model.value)
+  palette.value = 'models'
+  await nextTick(); modelSearch.value?.focus()
+  composer.value?.querySelector('[data-highlighted="true"]')?.scrollIntoView({ block: 'nearest' })
+}
+async function chooseModel(value: ChatModel): Promise<void> {
+  if (modelLocked.value) return
+  try { localStorage.setItem('pods-chat-model', value) }
+  catch (failure) { error.value = String(failure); return }
+  model.value = value
+  const token = slashToken.value
+  const cursor = token?.start ?? input.value?.selectionStart ?? text.value.length
+  if (token && text.value.slice(token.start, token.end) === token.text) text.value = text.value.slice(0, token.start) + text.value.slice(token.end)
+  closePalette()
+  await nextTick(); input.value?.focus(); input.value?.setSelectionRange(cursor, cursor)
+}
+async function modelKey(event: KeyboardEvent): Promise<void> {
+  if (event.isComposing || event.keyCode === 229) return
+  if (event.key === 'Escape') { event.preventDefault(); closePalette(); input.value?.focus(); return }
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    const option = filteredModels.value[modelIndex.value]
+    if (option) await chooseModel(option.id)
+    return
+  }
+  const count = filteredModels.value.length
+  if (!count || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+  event.preventDefault()
+  modelIndex.value = event.key === 'Home' ? 0 : event.key === 'End' ? count - 1 : (modelIndex.value + (event.key === 'ArrowDown' ? 1 : -1) + count) % count
+  await nextTick(); composer.value?.querySelector('[data-highlighted="true"]')?.scrollIntoView({ block: 'nearest' })
+}
+function leaveComposer(event: FocusEvent): void {
+  if (!(event.relatedTarget instanceof Node) || !composer.value?.contains(event.relatedTarget)) closePalette()
+}
+function dismissPalette(event: Event): void {
+  if (event.target instanceof Node && !composer.value?.contains(event.target)) closePalette()
+}
+watch(modelQuery, () => { modelIndex.value = 0 })
 const older = ref<MasterView['messages']>([]); const before = ref<number | null>(null)
 const otherActive = computed(() => !!view.value?.activeConversationId && view.value.activeConversationId !== view.value.conversation?.id)
 const messages = computed(() => {
@@ -24,7 +82,7 @@ const messages = computed(() => {
   return first ? [first, ...recent] : recent
 })
 const activity = computed(() => [...older.value, ...view.value?.messages ?? []].filter(message => message.role === 'tool'))
-const canSend = computed(() => !busy.value && !!text.value.trim() && !!view.value?.connected && !otherActive.value)
+const canSend = computed(() => !palette.value && !busy.value && !!text.value.trim() && !!view.value?.connected && !otherActive.value)
 function trackScroll(): void {
   const element = history.value
   if (element) followLatest.value = element.scrollHeight - element.scrollTop - element.clientHeight < 64
@@ -41,7 +99,13 @@ watch(text, async () => {
   input.value.style.height = `${Math.min(input.value.scrollHeight, 160)}px`
 }, { immediate: true })
 async function inputKey(event: KeyboardEvent): Promise<void> {
-  if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229) return
+  if (event.isComposing || event.keyCode === 229) return
+  if (palette.value === 'commands') {
+    if (event.key === 'Escape') { event.preventDefault(); closePalette(); return }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); return }
+    if ((event.key === 'Enter' || event.key === 'Tab') && !event.shiftKey) { event.preventDefault(); await openModels(true); return }
+  }
+  if (event.key !== 'Enter' || event.shiftKey) return
   event.preventDefault()
   await send()
 }
@@ -80,19 +144,23 @@ async function command(value: MasterCommand): Promise<void> {
   finally { busy.value = false }
 }
 async function send(): Promise<void> {
+  if (palette.value === 'models') return
+  const token = slashAtCursor()
+  if (token) { slashToken.value = token; await openModels(true); return }
   if (!canSend.value) return
   followLatest.value = true
   await command({ type: view.value?.state === 'running' ? 'steer' : 'send', id: crypto.randomUUID(), text: text.value, podId: props.podId, model: model.value })
   await scrollToLatest()
 }
 onMounted(async () => {
+  document.addEventListener('pointerdown', dismissPalette)
   try { const saved = localStorage.getItem('pods-chat-model'); if (saved) model.value = parseChatModel(saved) }
   catch (failure) { error.value = String(failure) }
   if (props.creationId) {
     try { await window.pods.master({ type: 'begin', id: props.creationId }) }
     catch (failure) { error.value = String(failure); return }
   }; await refresh()
-}); onBeforeUnmount(() => { closed = true; clearTimeout(timer) })
+}); onBeforeUnmount(() => { closed = true; clearTimeout(timer); document.removeEventListener('pointerdown', dismissPalette) })
 </script>
 
 <template>
@@ -104,9 +172,6 @@ onMounted(async () => {
     </div>
     <div v-if="view?.conversation && !conversationId" class="context-chips">
       <span v-if="view.conversation.context.workflow">{{ view.conversation.context.workflow.name }}</span><span v-for="pod in view.conversation.context.pods" :key="pod.id">{{ pod.name }}<span v-if="view.conversation.unavailablePodIds.includes(pod.id)"> · {{ t('Unavailable') }}</span></span><span v-if="view.conversation.workflowChanged">{{ t('Workflow changed. Use + to review its current members.') }}</span><span v-if="!view.conversation.context.pods.length">{{ t('Workspace context') }}</span>
-    </div>
-    <div class="chat-model">
-      <label>{{ t('Chat model') }}<select v-model="model" :aria-label="t('Chat model')" :disabled="busy || view?.state === 'running'" @change="chooseModel"><option v-for="option in chatModels" :key="option.id" :value="option.id">{{ option.name }}</option></select></label>
     </div>
     <div ref="history" class="chat-scroll" @scroll="trackScroll">
       <div class="chat-conversation">
@@ -283,14 +348,43 @@ onMounted(async () => {
         </p>
       </div>
     </div>
-    <form class="master-compose" @submit.prevent="send">
+    <form ref="composer" class="master-compose" @submit.prevent="send" @focusout="leaveComposer">
+      <div v-if="palette" class="composer-palette" :aria-label="t(palette === 'commands' ? 'Chat commands' : 'Choose model')">
+        <div v-if="palette === 'commands'" id="chat-command-options" role="listbox" :aria-label="t('Chat commands')">
+          <button id="model-command" type="button" role="option" aria-selected="true" class="command-option" @mousedown.prevent @click="openModels(true)">
+            <strong>{{ t('/model') }}</strong><span>{{ t('Choose model') }}</span><small>{{ selectedModel }}</small>
+          </button>
+        </div>
+        <template v-else>
+          <div class="palette-heading">
+            <strong>{{ t('Choose model') }}</strong><button type="button" class="text-button" :aria-label="t('Close model picker')" @click="closePalette(); input?.focus()">
+              ×
+            </button>
+          </div>
+          <input ref="modelSearch" v-model="modelQuery" role="combobox" :aria-label="t('Search models')" aria-autocomplete="list" aria-expanded="true" aria-controls="chat-model-options" :aria-activedescendant="filteredModels[modelIndex] ? `chat-model-${filteredModels[modelIndex]!.id}` : undefined" :placeholder="t('Search models…')" @keydown="modelKey">
+          <p v-if="modelLocked" class="palette-notice" role="status">
+            {{ t('Wait for the current response to finish before changing model.') }}
+          </p>
+          <div id="chat-model-options" class="model-options" role="listbox" :aria-label="t('Chat model')">
+            <button v-for="(option, index) in filteredModels" :id="`chat-model-${option.id}`" :key="option.id" type="button" role="option" :aria-selected="model === option.id" :data-highlighted="index === modelIndex" :disabled="modelLocked" tabindex="-1" @mousedown.prevent @click="chooseModel(option.id)">
+              <span>{{ option.name }}</span><span v-if="model === option.id" aria-hidden="true">✓</span>
+            </button>
+            <p v-if="!filteredModels.length" class="palette-notice" role="status">
+              {{ t('No matching models') }}
+            </p>
+          </div>
+        </template>
+      </div>
       <label for="master-input" class="chat-sr-only">{{ t('Message') }}</label>
-      <textarea id="master-input" ref="input" v-model="text" rows="2" maxlength="20000" :placeholder="t('Write a message…')" @keydown="inputKey" />
+      <textarea id="master-input" ref="input" v-model="text" rows="2" maxlength="20000" :placeholder="t('Write a message…')" :aria-expanded="palette === 'commands'" :aria-controls="palette === 'commands' ? 'chat-command-options' : undefined" @input="suggestCommand" @click="suggestCommand" @keydown="inputKey" />
       <div class="compose-actions">
-        <button v-if="view?.conversation && !creationId" type="button" class="chat-add-context" :aria-label="t('Add context')" :title="t('Add context')" :disabled="busy || !!view.activeConversationId" @click="emit('context', view.conversation.id)">
+        <button v-if="view?.conversation && !creationId" type="button" class="chat-add-context" :aria-label="t('Add context')" :title="t('Add context')" :disabled="busy || !!view.activeConversationId" @click="closePalette(); emit('context', view.conversation.id)">
           +
         </button>
-        <span class="compose-hint">{{ t('Shift + Enter for a new line') }}</span>
+        <button type="button" class="composer-model" :aria-label="t('Chat model')" :title="t('Choose model with /model')" aria-haspopup="listbox" :aria-expanded="palette === 'models'" :disabled="modelLocked" @click="palette === 'models' ? closePalette() : openModels()">
+          {{ selectedModel }} <span aria-hidden="true">⌄</span>
+        </button>
+        <span class="compose-hint">{{ t('/ for commands') }}</span>
         <button v-if="view?.state === 'running'" type="button" class="chat-stop" :disabled="busy" :aria-label="t('Stop response')" :title="t('Stop response')" @click="command({ type: 'cancel', podId: props.podId })">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" /></svg>
         </button>
@@ -312,9 +406,20 @@ onMounted(async () => {
 .context-chips { display:flex; flex-wrap:wrap; gap:8px; padding:6px 24px; color:var(--muted); font-size:13px; }
 .context-notice { font-size:13px; color:var(--muted); line-height:1.5; }
 .chat-access pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:320px; overflow:auto; }
-.chat-model { padding:8px 24px; flex:none; }
-.chat-model label { display:flex; align-items:center; flex-wrap:wrap; gap:10px; color:var(--muted); font-size:13px; }
-.chat-model select { max-width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); font:inherit; }
+.composer-palette { position:absolute; bottom:calc(100% + 8px); left:0; right:0; z-index:5; display:flex; flex-direction:column; gap:8px; max-height:min(320px,45vh); padding:10px; border:1px solid var(--border); border-radius:14px; background:var(--surface); box-shadow:0 8px 28px #0002; font-size:13px; }
+.composer-palette button { color:var(--text); font:inherit; }
+.command-option { display:flex; align-items:center; gap:12px; flex-wrap:wrap; width:100%; padding:10px; border:0; border-radius:8px; text-align:left; background:var(--sidebar); cursor:pointer; }
+.command-option small { margin-left:auto; color:var(--muted); }
+.palette-heading { display:flex; align-items:center; justify-content:space-between; padding:0 6px; }
+.palette-heading button { font-size:20px; }
+.composer-palette input { width:100%; min-width:0; flex:none; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text); font:inherit; }
+.model-options { min-height:0; overflow-y:auto; }
+.model-options button { display:flex; align-items:center; justify-content:space-between; width:100%; min-height:38px; padding:8px 10px; border:0; border-radius:8px; background:transparent; text-align:left; cursor:pointer; }
+.model-options button[data-highlighted="true"], .model-options button:hover { background:var(--sidebar); }
+.model-options button:disabled { opacity:.5; cursor:default; }
+.palette-notice { margin:4px 6px; color:var(--muted); font-size:12px; }
+.composer-model { display:flex; align-items:center; gap:6px; min-width:0; padding:6px; border:0; background:transparent; color:var(--muted); font:inherit; font-size:12px; cursor:pointer; }
+.composer-model:disabled { opacity:.5; cursor:default; }
 .master-chat { display:flex; flex-direction:column; flex:1; min-height:0; min-width:0; }
 .chat-scroll { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; }
 .chat-conversation { max-width:760px; margin:0 auto; padding:16px 16px 28px; }
@@ -334,7 +439,7 @@ onMounted(async () => {
 .chat-details .master-message { margin:12px 0; }
 .chat-access { border:1px solid var(--border); border-radius:12px; padding:14px; }
 .chat-access summary { line-height:1.6; }
-.master-compose { width:calc(100% - 32px); max-width:728px; margin:12px auto 4px; flex-shrink:0; border:1px solid var(--border); background:var(--surface); border-radius:24px; padding:14px 16px 10px; box-shadow:0 2px 8px #00000008; }
+.master-compose { position:relative; width:calc(100% - 32px); max-width:728px; margin:12px auto 4px; flex-shrink:0; border:1px solid var(--border); background:var(--surface); border-radius:24px; padding:14px 16px 10px; box-shadow:0 2px 8px #00000008; }
 .master-compose:focus-within { border-color:var(--accent); }
 .master-compose textarea { display:block; width:100%; min-height:48px; max-height:160px; resize:none; padding:0; border:0; outline:none; background:transparent; color:inherit; font:inherit; font-size:15px; line-height:1.6; }
 .compose-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-top:8px; }
@@ -348,6 +453,7 @@ onMounted(async () => {
   .master-compose { width:100%; padding:12px; border-radius:20px; }
   .master-message.user { max-width:92%; }
   .master-text { font-size:14px; }
-  .compose-hint { font-size:10px; }
+  .compose-hint { display:none; }
+  .composer-model { margin-right:auto; font-size:11px; }
 }
 </style>

@@ -1,8 +1,69 @@
 # Native issues: M0 inventory and migration rehearsal
 
-This is the first implementation increment of the [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A5ZAT63A04PWGVBT5M14MW), tracked in [issue 1356](https://git.openape.ai/openape-ai/openape/issues/1356).
-It adds read-only inventory tooling and a disposable source-fence experiment.
-Native issue endpoints, application UI and production imports are not implemented here.
+This runbook records the implementation and pilot rollout of the [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A5ZAT63A04PWGVBT5M14MW), tracked in [issue 1356](https://repos.openape.ai/patrick/monorepo/issues/1356).
+The September 20 production receipt below supersedes the dated M0 inventory and
+preparation checkpoints retained for audit context.
+
+## Production pilot: September 20, 2026
+
+Patrick approved the concrete M7 pilot before production changes. Native issues
+became the monorepo's sole issue writer at **13:36:53 UTC**, using image
+`prod-78fad3f1` from [PR 77](https://repos.openape.ai/patrick/monorepo/pulls/77).
+Reviewed source `6b64f9ded062cc7e281117504fdc88e4b0f130cd` and target
+`934dbcec21cce8e3620ecda51a77aa8458bcfd30` passed all 17 clean local gates and
+all required exact-source external CI/e2e/layout checks. The final layout check
+passed on its second attempt after an unchanged Pods polling timeout; a focused
+reproduction also passed without weakening assertions.
+
+| Verified concern | Result |
+| --- | --- |
+| Frozen import | 233 issues, 23 open, 175 comments, 15 labels, three attachments, 37 archived history rows; zero reconciliation mismatches before release |
+| Source high-water / native creation | Source numbers through 1359 reserved; first native issue is 1360 |
+| Approved exceptions | 19 assignments unassigned with provenance; 86 external references retained without fetching |
+| Manifest SHA-256 | `404718feef440a34c5117a645774f471e08c972a65e260574899a90acb3effcd` |
+| Source freeze | 39 SQL triggers; HTTP maintenance gateway; Forgejo loopback-only upstream; issue/blob mutation probes return 503 |
+| Legacy consumers | 110 authenticated resolutions from Tasks, Plans and native PRs; normal DDISA login preserves an old comment fragment |
+| Native access | Owner reads and all three byte-exact downloads pass; anonymous list/detail/facets/downloads denied |
+| Reporting | Private intake and 17 product routes; retry idempotency, intake transfer with stable ID/old alias, comments, explicit closure and stale-edit refusal pass |
+| PR relation | PR 77 is reciprocally linked to issue 1356; merged PR leaves the issue open |
+| Off-site recovery | Snapshot `0cc0862b` independently restored on the Mac: 235 issues including two closed acceptance records, 423 origins, 411 legacy links, three assets, archive hashes and Git clone pass |
+| Web entry points | 13 web services passed tested-image smoke/deploy/HTTPS health gates on `prod-78fad3f1`; native Git also enabled |
+
+The HTTP gateway listens on `10.0.1.1:33030`; Forgejo listens on
+`127.0.0.1:3030`. The verified Coolify bridge is `10.0.1.0/24`. Permit only that
+bridge to the gateway in the host firewall and probe from the actual proxy
+container before switching Traefik. A host-local curl alone misses firewall
+failures. The former bridge-facing Forgejo listener must remain unreachable.
+Standalone attachment writes remain unavailable host-wide under the approved
+archive tradeoff; attachment reads remain available and protected.
+
+Run the reviewed import operator inside a read-only, network-disabled container
+with a bounded writable temporary mount:
+`--tmpfs /tmp:rw,noexec,nosuid,size=256m`. SQLite validation can spill temporary
+storage on a larger registry. The first production attempt without that mount
+automatically rolled back with a disk I/O error and left zero issue rows. The
+same-image isolated reproduction passed with the mount, then production import
+and independent validation succeeded. The operator preserves the original error
+when SQLite has already rolled back; the retained regression test verifies zero
+partial records, intact PRs and a successful retry.
+
+The source backup and immutable export remain restricted. Native issue writes
+have occurred: automatic batch removal/reimport is forbidden. Preserve both
+stores and new native activity during recovery; prefer fixing/restoring native
+service and rolling forward. Never restore an older complete registry over new
+PRs, grants or issues. There is no reverse synchronization.
+
+[Worker handoff](native-issue-workers.md) defines the bounded current-configuration
+switch and preserves worker exclusions. Tasks owns reminders, Plans owns proposals,
+and native issues own development discussion/resolution. Existing historical URLs
+remain valid; do not bulk rewrite their content or copy their statuses.
+
+The seven-day observation ends no earlier than **September 27, 13:36:53 UTC**.
+Monitor health/backup freshness, denied source writes, authorized legacy navigation,
+private access, native conflict/error rates and unchanged Git mirrors/CI. Retain
+the archive for at least 90 days and until recovery/link-retention sign-off.
+Individual external repositories and the source-unmapped legacy Space deployment
+remain separate owner inventory rows. Public/anonymous activation remains deferred.
 
 ## Scope and evidence identity
 
