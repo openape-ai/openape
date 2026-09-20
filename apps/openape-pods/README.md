@@ -708,3 +708,12 @@ Verification covers scoped creation/replay, preservation of the original request
 Pod creation requires a name. Chat and the original request guide script creation; the script and its explicit AI prompts control execution. Settings has no separate execution assignment. Names are metadata: renaming preserves lifecycle, running work, script validation and credential approval. Overview descriptions remain informational. Pods without a conversation description link to Chat.
 
 Schema 16 adds `pods.metadata_revision` for optimistic metadata updates. The historical `pods.revision` is retained as an immutable execution binding, exposed internally as `bindingRevision`. Existing manifest, run, validation and credential-approval fields named `assignmentRevision` or `assignment_revision` remain byte-compatible with their original bindings. They are not instructions and do not follow name edits. Old assignment text is retained only in historical storage, excluded from current Pod/tool responses and the legacy mail-knowledge analysis context. Permission epochs, exact-source validation, lease checks and revocation still apply. Migration does not revive artifacts invalidated before upgrade or rewrite script hashes.
+
+## Workflow graphs and mail filtering
+
+Workflows connect unchanged Pods in an ALL-success dependency graph with their own
+schedules, shared reservations, durable handoff and recovery. The optional mail
+integration provides a frozen batch, protected partners and a receipt-backed
+outbox. Production autonomous moves remain blocked pending a verified provider
+concurrency guarantee. See [execution contract and disabled pilot](docs/workflows.md)
+and the workflow chapter in the shared handbook.

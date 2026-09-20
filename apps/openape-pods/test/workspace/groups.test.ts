@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { removeWorkflowSchema } from '../storage/legacy'
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -15,6 +16,7 @@ function fixture() { const root = mkdtempSync(join(tmpdir(), 'pods-groups-')); r
 function apply(groups: PodGroups, action: GroupAction) { groups.execute({ type: 'organize', revision: groups.view().revision, ...action }) }
 it('migrates an existing profile without changing pods and persists groups across reopening', () => {
   let store = fixture(); const pod = store.createPod({ name: 'Orders' })
+  removeWorkflowSchema(store.db)
   store.db.exec('ALTER TABLE pods DROP COLUMN metadata_revision; DROP TABLE pod_chat_origins; DROP TABLE master_creations; DROP TABLE pod_descriptions; DROP TABLE summary_domains; DROP TABLE program_leases; DROP TABLE master_message_scopes; DROP TABLE master_contexts; DROP TABLE pod_variables; DROP TABLE script_credential_approvals; DROP TABLE pod_memberships; DROP TABLE pod_groups; DROP TABLE pod_organization; DROP TABLE script_dependencies; DROP TABLE dependency_sets; DROP TABLE draft_packages; DROP TABLE dependency_domains; ALTER TABLE onboarding DROP COLUMN default_owner; PRAGMA user_version=10;')
   store.close(); stores.pop(); store = new PodDatabase(store.root); stores.push(store)
   const groups = new PodGroups(store); expect(groups.view()).toEqual({ revision: 1, groups: [] }); expect(store.getPod(pod.id)).toEqual(pod)

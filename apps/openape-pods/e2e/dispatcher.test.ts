@@ -178,3 +178,39 @@ it('finishes a native run across a rename while still rejecting revoked resource
   resources.assignReference(pod.id, 'New permission', join(root, 'missing.txt'))
   expect(() => dispatcher.start(pod.id)).toThrow('validation')
 })
+it('runs mail workflow recipes through native script IPC with a quiet baseline and a frozen preview batch', async () => {
+  const { WorkflowEngine } = await import('../src/worker/workflows/engine')
+  const { reviewMailBatch } = await import('../src/worker/mail/workflow')
+  const calls: string[][] = []; const applicationId = randomUUID()
+  const f = await setup({ tool: async (body, _signal, scope) => {
+    const request = body as { applicationId: string, argv: string[] }
+    expect(request.applicationId).toBe(applicationId)
+    expect(scope.capabilities).toContain('mail.read'); scope.assertCurrent()
+    expect(request.argv.slice(0, 4)).toEqual(['workflow', 'delta', '--account', 'owner@example.invalid'])
+    calls.push(request.argv)
+    const baseline = calls.length === 1
+    return { exitCode: 0, stdout: JSON.stringify({ protocol: 'pods-mail/v1', account: 'owner@example.invalid', operation: 'delta', outcome: 'confirmed', delta: `boundary-${calls.length}`, items: [{ id: baseline ? 'historical' : 'new-important', changeKey: 'v1', parentFolderId: 'inbox', conversationId: 'conversation', from: { emailAddress: { address: 'person@example.invalid' } }, toRecipients: [], subject: 'Synthetic personal message', body: { content: 'Please review the synthetic proposal.' }, receivedDateTime: new Date(baseline ? 1000 : Date.now()).toISOString(), hasAttachments: false, importance: 'normal', flag: { flagStatus: 'notFlagged' }, internetMessageHeaders: [] }] }) }
+  } })
+  const notify = f.store.createPod({ name: 'Frozen batch notification' })
+  const filterCode = await readFile(resolve('examples/mail-workflow-filter.mjs'), 'utf8')
+  const notifyCode = `export async function run(c) { const batch=await c.mail.workflow.remaining(0); await c.progress.commit({expectedRevision:c.input.checkpointRevision,checkpoint:{ids:batch.messages.map(m=>m.id),baseline:batch.baseline},sources:[],claims:[]}); await c.mail.workflow.notify('Synthetic preview summary'); return {status:'completed',summary:'Frozen batch inspected',completedInputIds:[],gapIds:[]}; }`
+  for (const [podId, code] of [[f.pod.id, filterCode], [notify.id, notifyCode]] as const) {
+    f.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), podId, 'tool', 'ready', 'Synthetic mail transport', '{"capability":"mail.read"}')
+    await f.dispatcher.install(podId, 'deterministic')
+    const previous = JSON.parse(f.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=?').get(podId)!.manifest as string)
+    const hash = digest(code); f.store.storeScript(podId, { ...previous, contentHash: hash, capabilities: ['mail.read'] }, code)
+    f.store.db.prepare('INSERT INTO validations VALUES(?,?,?,?,?)').run(podId, hash, 1, 0, '{}')
+    f.store.db.prepare('UPDATE pods SET active_script=? WHERE id=?').run(hash, podId)
+  }
+  const engine = new WorkflowEngine(f.store, f.dispatcher, { inspect: async () => {} })
+  const id = randomUUID()
+  engine.save({ type: 'save', id, revision: 0, name: 'Synthetic native mail workflow', nodes: [{ podId: f.pod.id, after: [], handoff: false }, { podId: notify.id, after: [f.pod.id], handoff: true }], enabled: false, schedule: null, mail: { mailbox: 'owner@example.invalid', filterPodId: f.pod.id, notifyPodId: notify.id, applicationId, telegramCredential: 'telegram_bot_token', telegramChatId: '12345', protectedPartners: [], rules: [], mode: 'preview' } })
+  for (let index = 0; index < 2; index++) {
+    const run = engine.start(id, 1)
+    await expect.poll(() => { engine.tick(); return engine.run(run) }, { timeout: 5000 }).toMatchObject({ state: 'completed' })
+    expect(f.store.checkpoint(notify.id).body).toEqual({ baseline: index === 0, ids: index === 0 ? [] : ['new-important'] })
+    expect(reviewMailBatch(f.store, run)?.deliveries).toEqual([])
+  }
+  expect(calls).toHaveLength(2)
+  expect(f.store.db.prepare('SELECT * FROM effect_ledger').all()).toEqual([])
+})

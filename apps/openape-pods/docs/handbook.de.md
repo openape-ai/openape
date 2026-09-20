@@ -378,3 +378,15 @@ Speichere telegram_chat_id als Variable und telegram_bot_token als Geheimnis. Da
 Verwende examples/mail-notification.mjs aus dem Quellcode. Der erste erfolgreiche Lauf speichert still eine Ausgangsbasis der letzten 24 Stunden. Spätere Läufe melden neue Nachrichtenkennungen mit fünf Minuten Überlappung. Das Rezept begrenzt ein Zeitfenster auf 20 Seiten und 1000 Nachrichten und bricht bei unvollständiger Abfrage sichtbar ab. Beim ersten Einsatz werden keine historischen Nachrichten gemeldet; gesendet werden nur Anzahl und Kontoname.
 
 Prüfe das Skript und führe es manuell aus, bevor du in Einstellungen ein 15-Minuten-Intervall aktivierst. Bestätige den Geheimniszugriff für den exakten Quelltext. Das Rezept speichert eine ausstehende Meldung vor dem Versand und die Empfangsbestätigung vor dem Fortschritt. Bei unklarem Versand prüfst du das Ziel und klärst das Ergebnis in Historie, bevor du erneut startest.
+
+## Pods in Workflows verbinden
+
+Workflows steht neben den Gruppen in der Seitenleiste. Wähle vorhandene Pods und für jeden Pod Startet nach. Ein Pod wartet, bis alle ausgewählten Vorgänger erfolgreich fertig sind. Unabhängige Zweige können parallel laufen. Das Verbinden ändert weder Skripte und Berechtigungen noch die eigenen Zeitpläne der Pods.
+
+Ein Workflow besitzt einen eigenen Intervall-, Tages-, Einmal- oder Cron-Zeitplan. Neue Zeitpläne sind ausgeschaltet. Einmal ausführen funktioniert auch bei pausierten Workflows und Pods. Pausieren verhindert neue Starts; bereits laufende Pods können abschließen. Der Verlauf zeigt Warte- und Sperrgründe. Wiederholen erhält fertige Schritte; unklare externe Ergebnisse müssen zuerst geklärt werden.
+
+Mail-Workflows benötigen separat geprüfte Skripte für feste Nachrichtenpakete. Prüfe Postfach, zugewiesene Anwendung, Archivregeln, geschützte Kommunikationspartner und Telegram-Ziel. Der erste Lauf setzt einen stillen Ausgangspunkt. Die Vorschau verschiebt nichts und sendet nichts über Telegram. Geschützte Absender, Empfänger und bekannte Unterhaltungen bleiben zur menschlichen Prüfung erhalten. Autonomes Archivieren bleibt gesperrt, bis bedingte Verschiebungen beim Anbieter verifiziert sind.
+
+1. Wähle Workflows → Neuer Workflow, gib einen Namen ein und füge vorhandene Pods hinzu.
+2. Wähle alle erforderlichen Vorgänger, prüfe den Graphen und die nächsten Termine und speichere mit ausgeschaltetem Zeitplan. Zyklen lassen sich nicht speichern.
+3. Prüfe einen synthetischen Lauf und jeden Mail-Beleg vor einer Live-Einrichtung. Installation, Postfachänderungen, Telegram-Nachrichten und Aktivierung benötigen eine gesonderte Freigabe.

@@ -1,3 +1,4 @@
+import { parseWorkflowOutput } from '../../contracts/workflows'
 import { parseAgentRequest } from '../../contracts/agent'
 import { DependencyStore } from '../dependencies/store'
 import { resolveProgram } from '../../main/programs/session'
@@ -45,6 +46,10 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
     const home = join(root, 'home'); await mkdir(home, { mode: 0o700 })
     const input = { home, directories: [], variables: new PodVariables(store).values(pod.id), version: 1 as const, runId: randomUUID(), podId: pod.id, scriptHash: hash, assignmentRevision: pod.bindingRevision, reason: 'manual' as const, eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: epoch, workspace: join(root, 'workspace'), references: [], limits: { timeMs: 5000, frameBytes: 256 * 1024 } }
     const result = await executeScript({ ...runtime, dependencyRoot }, root, artifact, input, signal, { event: () => {}, request: async (operation, payload) => {
+      if (operation === 'workflow.publish') { parseWorkflowOutput(payload); return { published: true } }
+      if (operation === 'mail.workflow.filter') return { complete: true, output: { schema: 'mail-filter-result/v1', batchId: 'synthetic', mailbox: 'fixture@example.invalid', baseline: true, mode: 'preview', retained: [], archived: [], reportReceipts: [] } }
+      if (operation === 'mail.workflow.remaining') return { baseline: true, complete: true, messages: [] }
+      if (operation === 'mail.workflow.notify') return { delivered: true }
       if (operation === 'credentials.get') {
         const alias = parseCredentialRead(payload)
         if (!capabilities.includes(`credential.${alias}`)) throw new Error('Credential capability is not declared by this script')

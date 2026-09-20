@@ -1,5 +1,28 @@
 # Active work
 
+## Pod workflow graphs and conservative mail filtering (September 20, 2026)
+
+Issue: https://git.openape.ai/openape-ai/openape/issues/1358. Worktree
+`pods-conversation`, branch `feature/issue-1358-pod-workflow-graphs`, canonical
+base `77c6b22aa959b60402a22e4cc34700f74ebe8d47`.
+[Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2YXXAP6HC15CBQR5DV8XVHM).
+Implemented first-class workflow graphs, independent schedules, atomic reservations,
+immutable handoff/recovery, protected mail partners, frozen batches and durable
+move/Telegram reconciliation. [Execution contract and disabled pilot](../../apps/openape-pods/docs/workflows.md).
+Companion [CLI PR 8](https://git.openape.ai/delta-mind/o365-cli/pulls/8), source
+`6617d2a6f14aa4d3df5eef2b1621eaf9ccbba05b`; vet/build/race tests pass.
+Production autonomous archive remains blocked: Graph does not document the
+required atomic conditional-move guarantee. Controlled transports prove local
+recovery only. Restored mail scopes require a new quiet-baseline workflow.
+
+Verification: full repository lint/typecheck pass; 312 Pods unit/component tests
+pass. The full merge contract passed at the working-tree checkpoint recorded in
+`.openape/check-results/1789899602956-77c6b22a-all/summary.json`, including all
+134 native Pods tests. The final restored-mail fence has additional passing
+unit coverage; final committed-state verification and PR evidence follow.
+No live profile, mailbox, Telegram delivery or schedule activation was changed.
+The retired Troop/OpenClaw mail automation remains paused.
+
 ## Pods user guide (September 20, 2026)
 
 Issue: https://git.openape.ai/openape-ai/openape/issues/1357. Native [PR 75](https://repos.openape.ai/patrick/monorepo/pulls/75). Worktree
