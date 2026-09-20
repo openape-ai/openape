@@ -1,3 +1,4 @@
+import { parseChatsCommand } from '../contracts/chats'
 import { parseWorkflowCommand } from '../contracts/workflows'
 import { searchPackages } from './package-catalog'
 import { execFile } from 'node:child_process'
@@ -187,6 +188,10 @@ async function start(): Promise<void> {
       await shell.openExternal(login.url); return state
     }
     return worker.onboarding(command)
+  })
+  ipcMain.handle(channels.chats, (event, command: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    return worker.chats(parseChatsCommand(command))
   })
   ipcMain.handle(channels.master, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)

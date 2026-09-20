@@ -71,14 +71,18 @@ export class WorkflowEngine {
     })
   }
 
-  start(id: string, revision: number, trigger = 'manual'): string {
+  start(id: string, revision: number, trigger = 'manual', operationId?: string): string {
     return this.store.transaction(() => {
       const definition = this.definition(id)
       if (definition.revision !== revision) throw new Error('Workflow changed; reload before running')
       const active = this.store.db.prepare('SELECT id FROM workflow_runs WHERE workflow_id=? AND finished_at IS NULL').get(id)
-      if (active) return active.id as string
+      if (active) {
+        if (operationId) this.store.db.prepare('INSERT INTO control_runs VALUES(?,?,\'workflow\')').run(operationId, active.id)
+        return active.id as string
+      }
       const runId = randomUUID()
       this.store.db.prepare('INSERT INTO workflow_runs(id,workflow_id,revision,definition,trigger,state,reason,started_at,finished_at) VALUES(?,?,?,?,?,?,NULL,?,NULL)').run(runId, id, revision, JSON.stringify(definition), trigger, 'waiting', this.now())
+      if (operationId) this.store.db.prepare('INSERT INTO control_runs VALUES(?,?,\'workflow\')').run(operationId, runId)
       for (const node of definition.nodes) {
         const pod = this.store.getPod(node.podId)
         const epoch = this.store.db.prepare('SELECT epoch FROM resource_epochs WHERE pod_id=?').get(pod.id)?.epoch as number ?? 0

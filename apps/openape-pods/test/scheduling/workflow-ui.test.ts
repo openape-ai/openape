@@ -35,7 +35,7 @@ it('shows blocking reasons and routes retry through the workflow while retaining
   wrapper.unmount()
 })
 it('keeps an unsaved graph intact when history polling supplies a newer revision', async () => {
-  window.pods = { workflows: vi.fn() } as unknown as typeof window.pods
+  window.pods = { chats: async () => ({ conversations: [], activeConversationId: null }), workflows: vi.fn() } as unknown as typeof window.pods
   const wrapper = mount(WorkflowPanel, { props: { view, pods, selectedId: id } })
   await wrapper.findAll('button').find(button => button.text() === 'Edit workflow')!.trigger('click')
   await wrapper.get('input[maxlength="100"]').setValue('Unsaved owner edit')

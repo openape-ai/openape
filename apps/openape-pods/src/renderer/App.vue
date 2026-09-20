@@ -1,6 +1,8 @@
 <script lang="ts">
 import { t, diagnostic, label, dateTime } from './i18n'
 import { defineComponent } from 'vue'
+import ChatsPanel from './ChatsPanel.vue'
+import type { ChatsView } from '../contracts/chats'
 import WorkflowPanel from './WorkflowPanel.vue'
 import type { WorkflowView } from '../contracts/workflows'
 import LanguageSwitcher from './LanguageSwitcher.vue'
@@ -28,13 +30,13 @@ import type { ScheduleView } from '../contracts/scheduling'
 import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
-  components: { WorkflowPanel, AccountStatus, RunApproval, PodDescription, LanguageSwitcher, PodNavigation, DataManagement, Onboarding, MasterChat, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
+  components: { ChatsPanel, WorkflowPanel, AccountStatus, RunApproval, PodDescription, LanguageSwitcher, PodNavigation, DataManagement, Onboarding, MasterChat, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
   data() {
-    return { workflowId: '', workflows: { workflows: [], runs: [] } as WorkflowView, requestedSecret: '', approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: 'Overview', tabs: ['Overview', 'Chat', 'Script', 'Values', 'Permissions', 'Settings', 'History'], descriptionExpanded: false, sidebarWidth: 224, sidebarCollapsed: false, resizeStart: 0, resizeWidth: 224, resizing: false, pods: [] as StoredPod[], podId: '', creating: false, creationId: '', details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
+    return { requestedRun: '', chatSeed: { podId: '', workflowId: '', key: '', edit: false }, chatId: '', chats: { conversations: [], activeConversationId: null } as ChatsView, workflowId: '', workflows: { workflows: [], runs: [] } as WorkflowView, requestedSecret: '', approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: 'Overview', tabs: ['Overview', 'Chat', 'Script', 'Values', 'Permissions', 'Settings', 'History'], descriptionExpanded: false, sidebarWidth: 224, sidebarCollapsed: false, resizeStart: 0, resizeWidth: 224, resizing: false, pods: [] as StoredPod[], podId: '', creating: false, creationId: '', details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
   computed: {
     activeTab(): string { return this.selected === 'Knowledge' ? 'Overview' : this.selected },
-    globalPage(): boolean { return ['App settings', 'Setup', 'Data', 'Workspace chat', 'Workflows'].includes(this.selected) },
+    globalPage(): boolean { return ['App settings', 'Setup', 'Data', 'Workspace chat', 'Chats', 'Workflows'].includes(this.selected) },
     pod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.podId) },
     workerLabel(): string { if (this.connectionError) return t('Unavailable'); return label({ starting: 'Starting', ready: 'Ready', error: 'Needs attention', stopped: 'Stopped' }[this.status?.worker.state ?? 'starting']) },
     attention(): boolean { return !!this.connectionError || this.status?.worker.state === 'error' },
@@ -54,6 +56,13 @@ export default defineComponent({
   beforeUnmount() { this.closed = true; this.unsubscribe?.(); if (this.timer) clearTimeout(this.timer) },
   methods: {
     t, runFailure, runHeadline, diagnostic, label, dateTime, chatDraft,
+    openChat(id = '') { this.chatSeed = { podId: '', workflowId: '', key: '', edit: false }; this.chatId = id; this.selected = 'Chats' },
+    async openChatContext(id: string) {
+      try { this.chats = await window.pods.chats({ type: 'list' }); this.chatId = id; this.chatSeed = { podId: '', workflowId: '', key: crypto.randomUUID(), edit: true }; this.selected = 'Chats' }
+      catch (failure) { this.dataError = String(failure) }
+    },
+    newChat(podId = '', workflowId = '') { this.chatSeed = { podId, workflowId, key: crypto.randomUUID(), edit: false }; this.chatId = ''; this.selected = 'Chats' },
+    async openRun(podId: string, runId: string) { await this.selectPod(podId); this.requestedRun = runId; this.selected = 'History' },
     openValues(alias = '') { this.requestedSecret = alias; this.selected = 'Values' },
     beginResize(event: PointerEvent) { this.resizing = true; this.resizeStart = event.clientX; this.resizeWidth = this.sidebarWidth; (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId) },
     resize(event: PointerEvent) { if (this.resizing) this.sidebarWidth = Math.max(176, Math.min(360, window.innerWidth - 340, this.resizeWidth + event.clientX - this.resizeStart)) },
@@ -68,8 +77,8 @@ export default defineComponent({
       if (this.busy || this.status?.worker.state !== 'ready') return
       this.busy = true
       try {
-        const [workspace, workflows] = await Promise.all([window.pods.workspace({ type: 'list' }), window.pods.workflows({ type: 'list' })])
-        this.workspaceChanged(workspace); this.workflows = workflows
+        const [workspace, workflows, chats] = await Promise.all([window.pods.workspace({ type: 'list' }), window.pods.workflows({ type: 'list' }), window.pods.chats({ type: 'list' })])
+        this.workspaceChanged(workspace); this.workflows = workflows; this.chats = chats
         if (!this.pods.some(pod => pod.id === this.podId)) this.podId = this.creating ? '' : this.pods[0]?.id ?? ''
         const id = this.podId
         if (!id) { this.details = null; this.runs = []; this.schedule = null; this.resourceCount = 0; return }
@@ -80,7 +89,7 @@ export default defineComponent({
       catch (error) { this.dataError = error instanceof Error ? error.message : 'Could not load workspace' }
       finally { this.busy = false }
     },
-    async selectPod(id: string) { this.requestedSecret = ''; this.podId = id; this.approvals = []; this.creating = false; this.details = null; this.runs = []; this.schedule = null; this.selected = 'Overview'; await this.refresh() },
+    async selectPod(id: string) { this.requestedRun = ''; this.requestedSecret = ''; this.podId = id; this.approvals = []; this.creating = false; this.details = null; this.runs = []; this.schedule = null; this.selected = 'Overview'; await this.refresh() },
     async changed(id: string) { this.podId = id; this.creating = !id; await this.refresh() },
     async selectTab(tab: string) { await this.refresh(); this.selected = tab },
     master(create = false) { this.creating = create; if (create) { this.podId = ''; this.creationId = crypto.randomUUID(); localStorage.setItem('pods-creation-id', this.creationId) }; this.selected = 'Chat' },
@@ -113,6 +122,13 @@ export default defineComponent({
       <button class="collapse-sidebar" :aria-label="t(sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar')" @click="sidebarCollapsed = !sidebarCollapsed">
         {{ sidebarCollapsed ? '⇥' : '⇤' }}
       </button>
+      <nav class="workflow-navigation" :aria-label="t('Chats')">
+        <button class="nav-button" :class="{ active: selected === 'Chats' }" @click="openChat()">
+          {{ t('Chats') }}
+        </button><button v-for="chat in chats.conversations.slice(0, 3)" :key="chat.id" class="chat-link" :class="{ active: selected === 'Chats' && chatId === chat.id }" @click="openChat(chat.id)">
+          {{ chat.title }}
+        </button>
+      </nav>
       <PodNavigation hide-group-picker :pods="pods" :pod-id="podId" :organization="organization" :available="status?.worker.state === 'ready' && !attention" :highlight="!globalPage" @select="selectPod" @updated="workspaceChanged" />
       <button class="new-pod" @click="master(true)">
         {{ t('＋ New pod') }}
@@ -127,14 +143,14 @@ export default defineComponent({
       </nav>
       <div class="sidebar-bottom">
         <AccountStatus :available="status?.worker.state === 'ready'" @open="selected = 'Setup'" />
-        <button class="nav-button" :class="{ active: globalPage && selected !== 'Workflows' }" :aria-label="t('App settings')" @click="selected = 'App settings'">
+        <button class="nav-button" :class="{ active: globalPage && !['Workflows', 'Chats'].includes(selected) }" :aria-label="t('App settings')" @click="selected = 'App settings'">
           ⚙ <span>{{ t('App settings') }}</span>
         </button>
       </div>
     </aside>
     <div v-if="!sidebarCollapsed" class="sidebar-resizer" role="separator" :aria-label="t('Sidebar width')" aria-orientation="vertical" aria-valuemin="176" aria-valuemax="360" :aria-valuenow="sidebarWidth" tabindex="0" @pointerdown="beginResize" @pointermove="resize" @pointerup="persistWidth" @pointercancel="persistWidth" @keydown="resizeKey" />
     <main class="main">
-      <div class="window-drag" /><div class="content" :class="{ 'chat-open': selected === 'Chat' || selected === 'Workspace chat' }">
+      <div class="window-drag" /><div class="content" :class="{ 'chat-open': selected === 'Chat' || selected === 'Workspace chat' || selected === 'Chats' }">
         <div class="page-heading">
           <h1>{{ globalPage ? (selected === 'Setup' ? t('Your accounts') : label(selected)) : creating ? t('New pod') : pod?.name ?? t('Your pods') }}</h1><span v-if="pod && !globalPage" class="muted">{{ nextRun }}</span>
         </div>
@@ -158,16 +174,34 @@ export default defineComponent({
               {{ t('Your accounts') }}
             </button><button class="secondary" @click="selected = 'Data'">
               {{ t('Data & backups') }}
-            </button><button class="secondary" @click="selected = 'Workspace chat'">
+            </button><button class="secondary" @click="openChat(chats.conversations.find(chat => chat.scope === '')?.id)">
               {{ t('Workspace chat') }}
             </button>
           </div>
         </section>
-        <WorkflowPanel v-else-if="selected === 'Workflows'" :view="workflows" :pods="pods" :selected-id="workflowId" @changed="workflows = $event" @select="workflowId = $event" />
+        <ChatsPanel v-else-if="selected === 'Chats'" :key="chatSeed.key" :initial-edit="chatSeed.edit" :initial-pod-id="chatSeed.podId" :initial-workflow-id="chatSeed.workflowId" :view="chats" :pods="pods" :workflows="workflows" :selected-id="chatId" @run="openRun" @select="openChat" @changed="chats = $event" @pod="selectPod" @workflow="id => { selected = 'Workflows'; workflowId = id }" @resources="async id => { await selectPod(id); selected = 'Permissions' }" @settings="async (id, alias) => { await selectPod(id); openValues(alias) }" />
+        <template v-else-if="selected === 'Workflows'">
+          <nav v-if="workflowId" class="overview-actions" :aria-label="t('Related chats')">
+            <button class="secondary" @click="newChat('', workflowId)">
+              {{ t('New chat') }}
+            </button><button v-for="chat in chats.conversations.filter(chat => chat.relatedWorkflowIds.includes(workflowId))" :key="chat.id" class="text-button" @click="openChat(chat.id)">
+              {{ chat.title }}
+            </button>
+          </nav>
+          <WorkflowPanel :view="workflows" :pods="pods" :selected-id="workflowId" @changed="workflows = $event" @select="workflowId = $event" />
+        </template>
         <DataManagement v-else-if="selected === 'Data'" />
         <Onboarding v-else-if="selected === 'Setup'" @finished="selected = 'Overview'" />
         <section v-else-if="selected === 'Chat' || selected === 'Workspace chat'" id="panel-Chat" :role="globalPage ? undefined : 'tabpanel'" :aria-labelledby="globalPage ? undefined : 'tab-Chat'" :aria-label="globalPage ? t('Workspace chat') : undefined" class="master-panel">
-          <MasterChat :key="creating ? creationId : selected === 'Workspace chat' ? 'workspace' : podId" :creation-id="creating ? creationId : undefined" :pod-id="creating || selected === 'Workspace chat' ? null : podId || null" @created="created" @resources="async id => { await selectPod(id); selected = 'Permissions' }" @settings="async (id, alias) => { await selectPod(id); openValues(alias) }">
+          <div v-if="!creating && podId" class="overview-actions">
+            <button class="secondary" @click="newChat(podId)">
+              {{ t('New chat') }}
+            </button>
+            <button v-for="chat in chats.conversations.filter(chat => chat.relatedPodIds.includes(podId))" :key="chat.id" class="text-button" @click="openChat(chat.id)">
+              {{ chat.title }} · {{ t(chat.context.pods.some(item => item.id === podId) ? 'Current context' : 'Previously included') }}
+            </button>
+          </div>
+          <MasterChat :key="creating ? creationId : selected === 'Workspace chat' ? 'workspace' : podId" :creation-id="creating ? creationId : undefined" :pod-id="creating || selected === 'Workspace chat' ? null : podId || null" @run="openRun" @context="openChatContext" @created="created" @resources="async id => { await selectPod(id); selected = 'Permissions' }" @settings="async (id, alias) => { await selectPod(id); openValues(alias) }">
             <details v-if="creating" class="chat-manual-create">
               <summary>{{ t('Create without chat') }}</summary><PodSettings key="new" @selected="changed" @accounts="selected = 'Setup'" />
             </details>
@@ -186,7 +220,12 @@ export default defineComponent({
           <PodResources :key="podId" :selected-pod-id="podId" @discuss="master()" />
         </section>
         <section v-else-if="selected === 'History'" id="panel-History" role="tabpanel" aria-labelledby="tab-History">
-          <PodRuns :key="podId" :selected-pod-id="podId" @navigate="selected = $event === 'identity' ? 'Settings' : $event === 'settings' ? 'App settings' : 'Permissions'" />
+          <nav class="overview-actions" :aria-label="t('Related chats')">
+            <button v-for="chat in chats.conversations.filter(chat => chat.relatedPodIds.includes(podId))" :key="chat.id" class="text-button" @click="openChat(chat.id)">
+              {{ chat.title }}
+            </button>
+          </nav>
+          <PodRuns :key="`${podId}:${requestedRun}`" :selected-run-id="requestedRun" :selected-pod-id="podId" @navigate="selected = $event === 'identity' ? 'Settings' : $event === 'settings' ? 'App settings' : 'Permissions'" />
         </section>
         <section v-else-if="selected === 'Knowledge'" id="panel-Overview" role="tabpanel" aria-labelledby="tab-Overview">
           <button class="text-button" @click="selected = 'Overview'">
