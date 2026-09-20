@@ -14,6 +14,12 @@ export class MailBridge {
     else pending.resolve(reply.value)
   }
 
+  async remoteProgramState(body: { operation: 'create', podId: string, applicationId: string } | { operation: 'discard', podId: string, stateId: string }): Promise<unknown> {
+    if (this.pending.size >= 16) throw new Error('Mail broker queue is full')
+    const id = randomUUID()
+    return new Promise((resolve, reject) => { this.pending.set(id, { resolve, reject }); this.send({ remoteProgramState: { id, ...body } }) })
+  }
+
   async execute(scope: ServiceScope, body: unknown, signal: AbortSignal, kind?: 'credential' | 'http' | 'shell' | 'shellClose'): Promise<unknown> {
     signal.throwIfAborted()
     if (this.pending.size >= 16) throw new Error('Mail broker queue is full')
