@@ -42,6 +42,18 @@ it('records explicit sign-in cancellation and supports a separate retry without 
   expect((await manager.view()).complete).toBe(false)
   await manager.execute({ type: 'disconnect', id: (await manager.view()).connections[1].id }); expect(await manager.providerReady()).toBe(false)
 })
+it('keeps an opaque owner subject separate from its discovery email when enrolling existing Pods', async () => {
+  const { manager, control, store } = await fixture()
+  const pod = store.createPod({ name: 'Existing opaque-subject owner' })
+  const id = randomUUID(); const account = 'human@example.test'
+  const owner = { issuer: 'https://id.example', subject: 'stable-user-id' }
+  const identity = { connectionId: randomUUID(), podId: pod.id, issuer: owner.issuer, owner: account, subject: 'pod@example.test', keyId: 'existing-key' }
+  control.execute({ type: 'save', connection: { id, provider: 'openape', account, state: 'ready', error: null }, metadata: { ...owner, pods: { [pod.id]: { connectionId: identity.connectionId, prepared: true, identity } } } })
+  await manager.execute({ type: 'setDefaultOwner', id })
+  expect(await manager.remoteOwner()).toEqual({ owner, email: account })
+  expect(await manager.existingRemotePods(owner)).toEqual([{ podId: pod.id, identity }])
+  expect(await manager.existingRemotePods({ ...owner, subject: account })).toEqual([])
+})
 it('rejects global Microsoft setup without touching its cache or starting login', async () => {
   const { manager } = await fixture()
   await expect(manager.execute({ type: 'connect', provider: 'microsoft', account: 'mail@example.invalid' })).rejects.toThrow('Permissions')

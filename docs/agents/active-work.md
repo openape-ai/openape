@@ -12,16 +12,20 @@ Central Chats PR 78 was reviewed at source
 CI/E2E/layout and merged through the protected native API against
 `403ecf6832426203bc98b527690f3b1cd48640fe`. Other worktrees remain untouched.
 
-M1 is in progress, not accepted. Draft changes add an encrypted TypeScript/Swift
+Foundation commit `5f39e87a3d7a13732cd488a588cb3ef5a828c653` is local.
+M1 is in progress, not accepted. Changes add an encrypted TypeScript/Swift
 transport, separate default-disabled relay, owner-bound desktop worker adapter
 and native SwiftUI application. [Application contract](../architecture/pods-mobile-protocol.md).
 Real disposable DDISA callback enrollment and WSS encrypted routing/revocation
 passed; signed native login UI passed on iPhone and iPad with inspected screenshots.
-The desktop suite now passes 351 tests; root lint passes all 54 workspaces and full typecheck passes 76 tasks. The initial complete `pnpm check:ci` passed (`1789931690129-5e620681-all`); later deployment/restore changes also passed focused checks and require exact-head external gates.
+The desktop suite now passes 352 tests; root lint passes all 54 workspaces and full typecheck passes 76 tasks. The initial complete `pnpm check:ci` passed (`1789931690129-5e620681-all`); later deployment/restore changes also passed focused checks and require exact-head external gates.
 Multipart checks caught a millisecond expiry boundary and variable-width Node
 P-256 scalars; both are corrected, with six protocol contracts passing. Seven native core contracts pass, including
 cross-language ciphertexts, chunk assembly and per-entry cache expiry.
 These results do not establish native provisioning/chat/authorized run acceptance.
+
+DDISA enrollment uses the verified issuer/subject tuple, including opaque subjects;
+the account email is only the discovery hint. Eight relay unit contracts pass.
 
 Remote CLI reviews now reject concurrent denial/expiry/revocation without adding grants. Device management, capability negotiation and renewed-registration fences are implemented. An unprivileged, read-only linux/amd64 relay image passed a SQLite-backed health/capability smoke check. The independent deployment target and router are prepared in Git only; see [rollout](../operations/pods-mobile.md).
 

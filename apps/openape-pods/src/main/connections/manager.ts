@@ -84,20 +84,20 @@ export class ConnectionManager {
         if (seen.has(podId)) throw new Error('This pod is assigned to multiple OpenApe accounts; correct its owner before continuing')
         seen.add(podId)
         if (entry.metadata.issuer !== owner.issuer || entry.metadata.subject !== owner.subject || !pod.identity) continue
-        if (pod.identity.podId !== podId || pod.identity.owner !== owner.subject || (pod.identity.decisionIssuer ?? pod.identity.issuer) !== owner.issuer) throw new Error('Existing pod identity belongs to a different setup')
+        if (pod.identity.podId !== podId || pod.identity.owner !== entry.connection.account || (pod.identity.decisionIssuer ?? pod.identity.issuer) !== owner.issuer) throw new Error('Existing pod identity belongs to a different setup')
         bound.push({ podId, identity: pod.identity })
       }
     }
     return bound
   }
 
-  async remoteOwner(): Promise<Owner> {
+  async remoteOwner(): Promise<{ owner: Owner, email: string }> {
     const state = await this.state()
     const selected = state.connections.find(item => item.id === state.defaultOwner && item.provider === 'openape' && item.state === 'ready')
     if (!selected) throw new Error('Connect and select your OpenApe owner account on desktop first')
     const metadata = await this.metadata(selected.id)
     if (typeof metadata.issuer !== 'string' || typeof metadata.subject !== 'string') throw new Error('Reconnect your owner account to verify its identity')
-    return { issuer: metadata.issuer, subject: metadata.subject }
+    return { owner: { issuer: metadata.issuer, subject: metadata.subject }, email: selected.account }
   }
 
   async view(podId?: string): Promise<OnboardingView> {

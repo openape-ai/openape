@@ -54,11 +54,12 @@ export class RemoteController {
     return response.json()
   }
 
-  async enable(owner: Owner): Promise<void> {
+  async enable({ owner, email }: { owner: Owner, email: string }): Promise<void> {
     await this.load()
     if (this.saved!.tokens && sameOwner(this.saved!.tokens.registration.owner, owner)) {
+      await this.disable(); await this.runner
       try {
-        if (!this.runner) await this.refresh()
+        await this.refresh()
         const path = '/api/runtime/v1/registration'
         const id = randomUUID(); const at = new Date().toISOString(); const token = this.saved!.tokens.accessToken
         const signature = signBytes(proofBytes('api-request', id, JSON.stringify(['GET', path, sha256(token), at, sha256('')])), this.saved!.signing)
@@ -78,7 +79,7 @@ export class RemoteController {
     }
     const verifier = randomBytes(32).toString('base64url')
     const pkce = challenge(verifier)
-    const begin = await this.post('/api/mobile/v1/session/begin', { deviceId: this.saved!.id, kind: 'runtime', keys: this.keys(), challenge: pkce, email: owner.subject }) as { id: string, browserUrl: string }
+    const begin = await this.post('/api/mobile/v1/session/begin', { deviceId: this.saved!.id, kind: 'runtime', keys: this.keys(), challenge: pkce, email }) as { id: string, browserUrl: string }
     if (!begin.browserUrl.startsWith(`${this.origin}/mobile-auth/start?`)) throw new Error('Invalid enrollment URL')
     await shell.openExternal(begin.browserUrl)
     const expires = Date.now() + 300000

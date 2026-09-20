@@ -74,7 +74,6 @@ export class RelayAuth {
     const verified = await validateAssertion(assertion, { publicKey, expectedIss: flow.idpUrl, expectedAud: new URL(this.origin).host, expectedNonce: flow.nonce })
     const claims = verified.claims
     if (!verified.valid || !claims || claims.act !== 'human' || claims.delegate || claims.delegation_grant || !Number.isSafeInteger(claims.iat) || !Number.isSafeInteger(claims.exp) || claims.iat > Math.floor(this.store.now() / 1000) + 30 || claims.exp <= claims.iat) throw new ProtocolError('direct_human_required', 403)
-    if (claims.sub !== transaction.email) throw new ProtocolError('identity_subject_mismatch', 403)
     transaction.owner = parseOwner({ issuer: claims.iss, subject: claims.sub })
     if (!this.ownerAllowed(transaction.owner)) throw new ProtocolError('enrollment_closed', 403)
     delete transaction.flow; delete transaction.browserHash
