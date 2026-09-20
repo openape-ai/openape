@@ -3,6 +3,7 @@ import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { sourceFence } from './source-fence.mjs'
 
 const container = 'openape-issues-m0-forgejo'
 let endpoint = 'http://127.0.0.1:13856'
@@ -32,31 +33,8 @@ assert.equal(seed.issue, 1)
 const before = sql('SELECT id,content,is_closed,num_comments FROM issue WHERE id=1; SELECT id,content FROM comment WHERE issue_id=1 ORDER BY id;')
 const sourceHash = createHash('sha256').update(before).digest('hex')
 
-const issueMatch = alias => `${alias}.repo_id=1 AND ${alias}.is_pull=0`
-const childMatch = alias => `${alias}.issue_id IN (SELECT id FROM issue WHERE repo_id=1 AND is_pull=0)`
-const predicates = {
-  issue: issueMatch,
-  comment: childMatch,
-  issue_assignees: childMatch,
-  issue_label: childMatch,
-  issue_content_history: childMatch,
-  project_issue: childMatch,
-  reaction: childMatch,
-  stopwatch: childMatch,
-  tracked_time: childMatch,
-  issue_dependency: alias => `(${childMatch(alias)}) OR ${alias}.dependency_id IN (SELECT id FROM issue WHERE repo_id=1 AND is_pull=0)`,
-  label: alias => `${alias}.repo_id=1`,
-  attachment: alias => `(${childMatch(alias)}) OR ${alias}.comment_id IN (SELECT id FROM comment WHERE issue_id IN (SELECT id FROM issue WHERE repo_id=1 AND is_pull=0))`,
-}
-const triggers = []
-for (const [table, predicate] of Object.entries(predicates)) {
-  for (const operation of ['INSERT', 'UPDATE', 'DELETE']) {
-    const matches = operation === 'UPDATE' ? `(${predicate('OLD')}) OR (${predicate('NEW')})` : predicate(operation === 'DELETE' ? 'OLD' : 'NEW')
-    triggers.push(`CREATE TRIGGER m0_freeze_${table}_${operation.toLowerCase()} BEFORE ${operation} ON ${table} WHEN ${matches} BEGIN SELECT RAISE(ABORT, 'M0 issue archive is read-only'); END;`)
-  }
-}
-const cleanup = Object.keys(predicates).flatMap(table => ['insert', 'update', 'delete'].map(operation => `DROP TRIGGER IF EXISTS m0_freeze_${table}_${operation};`)).join('\n')
-writeFileSync(`${output}/fence.sql`, `BEGIN;\n${triggers.join('\n')}\nCOMMIT;\n`)
+const fence = sourceFence(1)
+writeFileSync(`${output}/fence.sql`, fence.install)
 try {
   if (proxyEnabled) {
     proxy = spawn(process.execPath, ['scripts/native-issues/archive-proxy-fixture.mjs'], { stdio: ['ignore', 'pipe', 'inherit'] })
@@ -136,7 +114,7 @@ try {
 finally {
   proxy?.kill('SIGTERM')
   endpoint = 'http://127.0.0.1:13856'
-  sql(`BEGIN;\n${cleanup}\nCOMMIT;`)
+  sql(fence.remove)
   writeFileSync(`${output}/fence-evidence.json`, `${JSON.stringify(evidence, null, 2)}\n`)
 }
 const restored = await request('/repos/pilot/pilot/issues/1/comments', 'POST', { body: 'Writes restored after removing disposable fence' })
