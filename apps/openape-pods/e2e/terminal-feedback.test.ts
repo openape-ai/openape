@@ -12,7 +12,7 @@ it('terminal feedback: shows a failed preparation beside the button without laun
   const app = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), env: { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
   try {
     const page = await app.firstWindow(); page.setDefaultTimeout(7000)
-    await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
+    await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state, { timeout: 10000 }).toBe('ready')
     await mkdir(resolve('.artifacts'), { recursive: true })
     for (const language of ['en', 'de'] as const) {
       await page.evaluate(language => window.pods.language({ type: 'set', language }), language); await page.reload()

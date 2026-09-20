@@ -7,22 +7,82 @@ import { chatDraft } from './chat-buffer'
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import type { MasterCommand, MasterView } from '../contracts/master'
 
-const props = defineProps<{ podId: string | null, creationId?: string }>()
-const emit = defineEmits<{ resources: [podId: string], settings: [podId: string, alias?: string], created: [podId: string] }>()
-const view = ref<MasterView | null>(null); const text = chatDraft(props.podId ?? props.creationId ?? null); const error = ref(''); const busy = ref(false)
+const props = defineProps<{ podId: string | null, creationId?: string, conversationId?: string, bufferKey?: string }>()
+const emit = defineEmits<{ resources: [podId: string], settings: [podId: string, alias?: string], created: [podId: string], openChat: [id: string], context: [id: string], run: [podId: string, runId: string], workflow: [id: string] }>()
+const view = ref<MasterView | null>(null); const text = chatDraft(props.bufferKey ?? props.conversationId ?? props.podId ?? props.creationId ?? null); const error = ref(''); const busy = ref(false)
 const model = ref<ChatModel>('gpt-5.5')
-function chooseModel(): void {
-  try { localStorage.setItem('pods-chat-model', model.value) }
-  catch (failure) { error.value = String(failure) }
-}
 const history = ref<HTMLElement>(); const input = ref<HTMLTextAreaElement>(); const followLatest = ref(true)
+const palette = ref<'commands' | 'models' | null>(null)
+const modelQuery = ref(''); const modelIndex = ref(0)
+const modelSearch = ref<HTMLInputElement>(); const composer = ref<HTMLFormElement>()
+const slashToken = ref<{ start: number, end: number, text: string } | null>(null)
+const modelLocked = computed(() => busy.value || view.value?.state === 'running')
+const selectedModel = computed(() => chatModels.find(option => option.id === model.value)!.name)
+const filteredModels = computed(() => chatModels.filter(option => `${option.name} ${option.id}`.toLowerCase().includes(modelQuery.value.trim().toLowerCase())))
+function closePalette(): void { palette.value = null; slashToken.value = null }
+function slashAtCursor() {
+  const element = input.value
+  if (!element || element.selectionStart !== element.selectionEnd) return null
+  const end = element.selectionStart
+  if (text.value[end] && !/\s/.test(text.value[end]!)) return null
+  const match = text.value.slice(0, end).match(/(?:^|\s)\/(\w*)$/)
+  if (!match || !'model'.startsWith(match[1]!.toLowerCase())) return null
+  const start = end - match[1]!.length - 1
+  return { start, end, text: text.value.slice(start, end) }
+}
+function suggestCommand(): void {
+  slashToken.value = slashAtCursor()
+  palette.value = slashToken.value ? 'commands' : null
+}
+async function openModels(fromCommand = false): Promise<void> {
+  if (!fromCommand) slashToken.value = null
+  modelQuery.value = ''; modelIndex.value = chatModels.findIndex(option => option.id === model.value)
+  palette.value = 'models'
+  await nextTick(); modelSearch.value?.focus()
+  composer.value?.querySelector('[data-highlighted="true"]')?.scrollIntoView({ block: 'nearest' })
+}
+async function chooseModel(value: ChatModel): Promise<void> {
+  if (modelLocked.value) return
+  try { localStorage.setItem('pods-chat-model', value) }
+  catch (failure) { error.value = String(failure); return }
+  model.value = value
+  const token = slashToken.value
+  const cursor = token?.start ?? input.value?.selectionStart ?? text.value.length
+  if (token && text.value.slice(token.start, token.end) === token.text) text.value = text.value.slice(0, token.start) + text.value.slice(token.end)
+  closePalette()
+  await nextTick(); input.value?.focus(); input.value?.setSelectionRange(cursor, cursor)
+}
+async function modelKey(event: KeyboardEvent): Promise<void> {
+  if (event.isComposing || event.keyCode === 229) return
+  if (event.key === 'Escape') { event.preventDefault(); closePalette(); input.value?.focus(); return }
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    const option = filteredModels.value[modelIndex.value]
+    if (option) await chooseModel(option.id)
+    return
+  }
+  const count = filteredModels.value.length
+  if (!count || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+  event.preventDefault()
+  modelIndex.value = event.key === 'Home' ? 0 : event.key === 'End' ? count - 1 : (modelIndex.value + (event.key === 'ArrowDown' ? 1 : -1) + count) % count
+  await nextTick(); composer.value?.querySelector('[data-highlighted="true"]')?.scrollIntoView({ block: 'nearest' })
+}
+function leaveComposer(event: FocusEvent): void {
+  if (!(event.relatedTarget instanceof Node) || !composer.value?.contains(event.relatedTarget)) closePalette()
+}
+function dismissPalette(event: Event): void {
+  if (event.target instanceof Node && !composer.value?.contains(event.target)) closePalette()
+}
+watch(modelQuery, () => { modelIndex.value = 0 })
+const older = ref<MasterView['messages']>([]); const before = ref<number | null>(null)
+const otherActive = computed(() => !!view.value?.activeConversationId && view.value.activeConversationId !== view.value.conversation?.id)
 const messages = computed(() => {
   const first = view.value?.initialRequest
-  const recent = view.value?.messages.filter(message => message.role !== 'tool' && message.id !== first?.id) ?? []
+  const recent = [...older.value, ...view.value?.messages ?? []].filter(message => message.role !== 'tool' && message.id !== first?.id) ?? []
   return first ? [first, ...recent] : recent
 })
-const activity = computed(() => view.value?.messages.filter(message => message.role === 'tool') ?? [])
-const canSend = computed(() => !busy.value && !!text.value.trim() && !!view.value?.connected)
+const activity = computed(() => [...older.value, ...view.value?.messages ?? []].filter(message => message.role === 'tool'))
+const canSend = computed(() => !palette.value && !busy.value && !!text.value.trim() && !!view.value?.connected && !otherActive.value)
 function trackScroll(): void {
   const element = history.value
   if (element) followLatest.value = element.scrollHeight - element.scrollTop - element.clientHeight < 64
@@ -39,13 +99,31 @@ watch(text, async () => {
   input.value.style.height = `${Math.min(input.value.scrollHeight, 160)}px`
 }, { immediate: true })
 async function inputKey(event: KeyboardEvent): Promise<void> {
-  if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229) return
+  if (event.isComposing || event.keyCode === 229) return
+  if (palette.value === 'commands') {
+    if (event.key === 'Escape') { event.preventDefault(); closePalette(); return }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); return }
+    if ((event.key === 'Enter' || event.key === 'Tab') && !event.shiftKey) { event.preventDefault(); await openModels(true); return }
+  }
+  if (event.key !== 'Enter' || event.shiftKey) return
   event.preventDefault()
   await send()
 }
 let closed = false; let timer: ReturnType<typeof setTimeout> | undefined
 async function load(): Promise<void> {
-  view.value = await window.pods.master({ type: 'list', podId: props.podId, ...(props.creationId ? { creationId: props.creationId } : {}) }); if (view.value.boundPodId) emit('created', view.value.boundPodId)
+  const result = await window.pods.master({ type: 'list', podId: props.podId, ...(props.conversationId ? { conversationId: props.conversationId } : {}), ...(props.creationId ? { creationId: props.creationId } : {}) })
+  if (older.value.length) older.value = [...older.value, ...view.value?.messages ?? []].filter((message, index, all) => all.findIndex(item => item.id === message.id) === index)
+  older.value = older.value.filter(message => !result.messages.some(item => item.id === message.id))
+  view.value = result; if (!older.value.length) before.value = result.nextBefore ?? null
+  if (result.boundPodId) emit('created', result.boundPodId)
+}
+async function loadEarlier(): Promise<void> {
+  if (!before.value) return
+  try {
+    const result = await window.pods.master({ type: 'list', podId: props.podId, ...(view.value?.conversation && !props.creationId ? { conversationId: view.value.conversation.id } : {}), before: before.value })
+    older.value = [...result.messages, ...older.value]; before.value = result.nextBefore ?? null; followLatest.value = false
+  }
+  catch (failure) { error.value = String(failure) }
 }
 async function setupUpdated(): Promise<void> {
   try { await load() }
@@ -61,30 +139,39 @@ async function refresh(): Promise<void> {
 }
 async function command(value: MasterCommand): Promise<void> {
   busy.value = true; error.value = ''
-  try { view.value = await window.pods.master({ ...value, ...(props.creationId ? { creationId: props.creationId } : {}) }); if ((value.type === 'send' || value.type === 'steer') && text.value === value.text) text.value = '' }
+  try { view.value = await window.pods.master({ ...value, ...(view.value?.conversation && !props.creationId ? { conversationId: view.value.conversation.id, contextRevision: view.value.conversation.revision } : {}), ...(props.creationId ? { creationId: props.creationId } : {}) }); if ((value.type === 'send' || value.type === 'steer') && text.value === value.text) text.value = '' }
   catch (failure) { error.value = failure instanceof Error ? failure.message : 'Master request failed' }
   finally { busy.value = false }
 }
 async function send(): Promise<void> {
+  if (palette.value === 'models') return
+  const token = slashAtCursor()
+  if (token) { slashToken.value = token; await openModels(true); return }
   if (!canSend.value) return
   followLatest.value = true
   await command({ type: view.value?.state === 'running' ? 'steer' : 'send', id: crypto.randomUUID(), text: text.value, podId: props.podId, model: model.value })
   await scrollToLatest()
 }
 onMounted(async () => {
+  document.addEventListener('pointerdown', dismissPalette)
   try { const saved = localStorage.getItem('pods-chat-model'); if (saved) model.value = parseChatModel(saved) }
   catch (failure) { error.value = String(failure) }
   if (props.creationId) {
     try { await window.pods.master({ type: 'begin', id: props.creationId }) }
     catch (failure) { error.value = String(failure); return }
   }; await refresh()
-}); onBeforeUnmount(() => { closed = true; clearTimeout(timer) })
+}); onBeforeUnmount(() => { closed = true; clearTimeout(timer); document.removeEventListener('pointerdown', dismissPalette) })
 </script>
 
 <template>
   <div class="master-chat">
-    <div class="chat-model">
-      <label>{{ t('Chat model') }}<select v-model="model" :aria-label="t('Chat model')" :disabled="busy || view?.state === 'running'" @change="chooseModel"><option v-for="option in chatModels" :key="option.id" :value="option.id">{{ option.name }}</option></select></label>
+    <div v-if="otherActive" role="status" class="chat-notice">
+      {{ t('Another chat is running') }} <button class="text-button" @click="emit('openChat', view!.activeConversationId!)">
+        {{ t('Open chat') }}
+      </button>
+    </div>
+    <div v-if="view?.conversation && !conversationId" class="context-chips">
+      <span v-if="view.conversation.context.workflow">{{ view.conversation.context.workflow.name }}</span><span v-for="pod in view.conversation.context.pods" :key="pod.id">{{ pod.name }}<span v-if="view.conversation.unavailablePodIds.includes(pod.id)"> · {{ t('Unavailable') }}</span></span><span v-if="view.conversation.workflowChanged">{{ t('Workflow changed. Use + to review its current members.') }}</span><span v-if="!view.conversation.context.pods.length">{{ t('Workspace context') }}</span>
     </div>
     <div ref="history" class="chat-scroll" @scroll="trackScroll">
       <div class="chat-conversation">
@@ -106,9 +193,15 @@ onMounted(async () => {
           </button>
         </section>
 
+        <button v-if="before" class="text-button" @click="loadEarlier">
+          {{ t('Load earlier messages') }}
+        </button>
+        <p v-if="(view?.conversation?.revision ?? 1) > 1" class="context-notice">
+          {{ t('This context began with a fresh model session. Messages from earlier contexts stay readable here and are not sent again.') }}
+        </p>
         <div class="master-history" role="log" :aria-label="t('Pod conversation')" aria-live="polite" aria-relevant="additions text">
           <article v-for="message in messages" :key="message.id" class="master-message" :class="message.role" :aria-label="message.role === 'user' ? t('You') : t('Pod assistant')">
-            <p class="master-text">
+            <small v-if="message.contextRevision" class="muted">{{ t('Context {p0}', { p0: message.contextRevision }) }}</small><p class="master-text">
               {{ message.text }}
             </p>
           </article>
@@ -124,6 +217,62 @@ onMounted(async () => {
           <p v-if="view.state === 'interrupted'">
             {{ t('The response was interrupted. Saved settings are retained; announced changes may not have been saved.') }}
           </p>
+        </section>
+        <details v-if="view?.drafts.length" class="chat-access">
+          <summary>{{ t('Saved Pod drafts') }}</summary><p v-for="draft in view.drafts" :key="draft.id">
+            <strong>{{ draft.name }}</strong> · {{ t(draft.validation ? 'Validated with synthetic services' : 'Unvalidated draft') }}<span v-if="draft.validationError" class="error-message"> · {{ diagnostic(draft.validationError) }}</span>
+          </p>
+        </details>
+        <section v-if="view?.changes?.length" :aria-label="t('Changes for review')">
+          <h3>{{ t('Changes for review') }}</h3>
+          <details v-for="change in view.changes" :key="change.id" class="chat-access" :open="change.state === 'pending'">
+            <summary>{{ t(change.kind === 'run' ? 'Run once' : 'Saved changes') }} · {{ change.targets.map(target => target.name).join(', ') }} · {{ change.kind === 'run' && change.state === 'applied' ? t('Run requested') : label(change.state) }}</summary>
+            <details v-if="change.workflow">
+              <summary>{{ change.workflow.before.name }} · {{ t('Workflow changes') }}</summary><div class="change-columns">
+                <section><h5>{{ t('Before') }}</h5><pre>{{ JSON.stringify(change.workflow.before, null, 2) }}</pre></section><section><h5>{{ t('Proposed') }}</h5><pre>{{ JSON.stringify(change.workflow.command, null, 2) }}</pre></section>
+              </div>
+            </details>
+            <p v-if="change.error" role="alert" class="error-message">
+              <strong v-if="change.errorPodId">{{ change.targets.find(target => target.podId === change.errorPodId)?.name }}: </strong>{{ diagnostic(change.error) }}
+            </p>
+            <p v-if="change.contextRevision !== view.conversation?.revision" class="muted">
+              {{ t('Earlier context: inspect and prepare these changes again before applying.') }}
+            </p>
+            <article v-for="target in change.targets" :key="target.podId">
+              <h4>{{ target.name }}</h4>
+              <details v-for="(review, index) in target.review" :key="index" class="change-diff">
+                <summary>{{ t(review.action.startsWith('setVariable') ? 'Change variable' : review.action === 'activate' ? 'Use script version' : review.action === 'rollback' ? 'Restore script version' : review.action === 'revise' ? 'Rename Pod' : review.action === 'setGroup' ? 'Change group' : review.action === 'prepareSchedule' ? 'Prepare disabled schedule' : review.action === 'pause' ? 'Pause Pod' : 'Run once') }}{{ review.action.includes(':') ? review.action.slice(review.action.indexOf(':')) : '' }}</summary>
+                <div class="change-columns">
+                  <section><h5>{{ t('Before') }}</h5><pre>{{ review.before || t('none') }}</pre></section><section><h5>{{ t('Proposed') }}</h5><pre>{{ review.after || t('none') }}</pre></section>
+                </div>
+                <details v-if="review.evidence">
+                  <summary>{{ t('Validation details') }}</summary><pre>{{ review.evidence }}</pre>
+                </details>
+              </details>
+              <p v-if="change.state === 'applied' && change.kind !== 'run'">
+                {{ t(target.changedSinceApply ? 'Applied then; configuration changed later' : 'Applied with a saved receipt') }}
+              </p>
+              <div v-for="execution in change.execution?.filter(item => item.podId === target.podId)" :key="execution.runId ?? execution.podId" class="run-receipt">
+                <strong>{{ label(execution.state) }}</strong><p v-if="execution.error" class="error-message">
+                  {{ diagnostic(execution.error) }}
+                </p><button v-if="execution.runId" class="text-button" @click="emit('run', execution.podId, execution.runId)">
+                  {{ t('View run trace') }}
+                </button><button v-else-if="execution.workflowId" class="text-button" @click="emit('workflow', execution.workflowId!)">
+                  {{ t('Open workflow') }}
+                </button>
+              </div>
+              <details v-if="change.results.some(result => result.podId === target.podId)">
+                <summary>{{ t('Receipt') }}</summary><pre>{{ JSON.stringify(change.results.filter(result => result.podId === target.podId), null, 2) }}</pre>
+              </details>
+            </article>
+            <div v-if="change.state === 'pending' && change.contextRevision === view.conversation?.revision" class="overview-actions">
+              <button class="primary" :disabled="busy || !!view.activeConversationId" @click="command({ type: 'applyChanges', id: change.id, revision: change.revision })">
+                {{ t(change.kind === 'run' ? 'Run once' : 'Apply changes together') }}
+              </button><button class="secondary" :disabled="busy" @click="command({ type: 'discardChanges', id: change.id, revision: change.revision })">
+                {{ t('Discard changes') }}
+              </button>
+            </div>
+          </details>
         </section>
         <section v-if="view?.proposals.length" :aria-label="t('Access proposals')">
           <h3>{{ t("Resource access for your review") }}</h3><details v-for="proposal in view.proposals" :key="proposal.id" class="chat-access" :open="proposal.state === 'pending'">
@@ -161,7 +310,7 @@ onMounted(async () => {
               <ChatSetupReview v-if="['http', 'directory', 'reference', 'application', 'variable'].includes(proposal.body.provider)" :proposal="proposal" @updated="setupUpdated" />
               <button v-else class="secondary" @click="proposal.body.provider === 'credential' ? emit('settings', proposal.podId, proposal.body.alias) : emit('resources', proposal.podId)">
                 {{ proposal.body.provider === 'credential' ? t('Variables and secrets') : t('Review resources') }}
-              </button><button class="text-button" :disabled="busy" @click="command({ type: 'decline', id: proposal.id, podId: props.podId })">
+              </button><button class="text-button" :disabled="busy" @click="command({ type: 'decline', id: proposal.id, podId: proposal.podId })">
                 {{ t("Decline") }}
               </button>
             </div>
@@ -199,11 +348,43 @@ onMounted(async () => {
         </p>
       </div>
     </div>
-    <form class="master-compose" @submit.prevent="send">
+    <form ref="composer" class="master-compose" @submit.prevent="send" @focusout="leaveComposer">
+      <div v-if="palette" class="composer-palette" :aria-label="t(palette === 'commands' ? 'Chat commands' : 'Choose model')">
+        <div v-if="palette === 'commands'" id="chat-command-options" role="listbox" :aria-label="t('Chat commands')">
+          <button id="model-command" type="button" role="option" aria-selected="true" class="command-option" @mousedown.prevent @click="openModels(true)">
+            <strong>{{ t('/model') }}</strong><span>{{ t('Choose model') }}</span><small>{{ selectedModel }}</small>
+          </button>
+        </div>
+        <template v-else>
+          <div class="palette-heading">
+            <strong>{{ t('Choose model') }}</strong><button type="button" class="text-button" :aria-label="t('Close model picker')" @click="closePalette(); input?.focus()">
+              ×
+            </button>
+          </div>
+          <input ref="modelSearch" v-model="modelQuery" role="combobox" :aria-label="t('Search models')" aria-autocomplete="list" aria-expanded="true" aria-controls="chat-model-options" :aria-activedescendant="filteredModels[modelIndex] ? `chat-model-${filteredModels[modelIndex]!.id}` : undefined" :placeholder="t('Search models…')" @keydown="modelKey">
+          <p v-if="modelLocked" class="palette-notice" role="status">
+            {{ t('Wait for the current response to finish before changing model.') }}
+          </p>
+          <div id="chat-model-options" class="model-options" role="listbox" :aria-label="t('Chat model')">
+            <button v-for="(option, index) in filteredModels" :id="`chat-model-${option.id}`" :key="option.id" type="button" role="option" :aria-selected="model === option.id" :data-highlighted="index === modelIndex" :disabled="modelLocked" tabindex="-1" @mousedown.prevent @click="chooseModel(option.id)">
+              <span>{{ option.name }}</span><span v-if="model === option.id" aria-hidden="true">✓</span>
+            </button>
+            <p v-if="!filteredModels.length" class="palette-notice" role="status">
+              {{ t('No matching models') }}
+            </p>
+          </div>
+        </template>
+      </div>
       <label for="master-input" class="chat-sr-only">{{ t('Message') }}</label>
-      <textarea id="master-input" ref="input" v-model="text" rows="2" maxlength="20000" :placeholder="t('Write a message…')" @keydown="inputKey" />
+      <textarea id="master-input" ref="input" v-model="text" rows="2" maxlength="20000" :placeholder="t('Write a message…')" :aria-expanded="palette === 'commands'" :aria-controls="palette === 'commands' ? 'chat-command-options' : undefined" @input="suggestCommand" @click="suggestCommand" @keydown="inputKey" />
       <div class="compose-actions">
-        <span class="compose-hint">{{ t('Shift + Enter for a new line') }}</span>
+        <button v-if="view?.conversation && !creationId" type="button" class="chat-add-context" :aria-label="t('Add context')" :title="t('Add context')" :disabled="busy || !!view.activeConversationId" @click="closePalette(); emit('context', view.conversation.id)">
+          +
+        </button>
+        <button type="button" class="composer-model" :aria-label="t('Chat model')" :title="t('Choose model with /model')" aria-haspopup="listbox" :aria-expanded="palette === 'models'" :disabled="modelLocked" @click="palette === 'models' ? closePalette() : openModels()">
+          {{ selectedModel }} <span aria-hidden="true">⌄</span>
+        </button>
+        <span class="compose-hint">{{ t('/ for commands') }}</span>
         <button v-if="view?.state === 'running'" type="button" class="chat-stop" :disabled="busy" :aria-label="t('Stop response')" :title="t('Stop response')" @click="command({ type: 'cancel', podId: props.podId })">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" /></svg>
         </button>
@@ -216,9 +397,29 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.chat-model { padding:8px 24px; flex:none; }
-.chat-model label { display:flex; align-items:center; flex-wrap:wrap; gap:10px; color:var(--muted); font-size:13px; }
-.chat-model select { max-width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); font:inherit; }
+.chat-add-context { flex:none; width:34px; height:34px; padding:0; border:0; border-radius:50%; background:var(--sidebar); color:var(--text); font-size:26px; cursor:pointer; line-height:1; }
+.chat-add-context:disabled { opacity:.5; cursor:default; }
+.change-columns { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.change-columns section { min-width:0; }
+.change-diff { margin:10px 0; }
+@media(max-width:760px) { .change-columns { grid-template-columns:1fr; } }
+.context-chips { display:flex; flex-wrap:wrap; gap:8px; padding:6px 24px; color:var(--muted); font-size:13px; }
+.context-notice { font-size:13px; color:var(--muted); line-height:1.5; }
+.chat-access pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:320px; overflow:auto; }
+.composer-palette { position:absolute; bottom:calc(100% + 8px); left:0; right:0; z-index:5; display:flex; flex-direction:column; gap:8px; max-height:min(320px,45vh); padding:10px; border:1px solid var(--border); border-radius:14px; background:var(--surface); box-shadow:0 8px 28px #0002; font-size:13px; }
+.composer-palette button { color:var(--text); font:inherit; }
+.command-option { display:flex; align-items:center; gap:12px; flex-wrap:wrap; width:100%; padding:10px; border:0; border-radius:8px; text-align:left; background:var(--sidebar); cursor:pointer; }
+.command-option small { margin-left:auto; color:var(--muted); }
+.palette-heading { display:flex; align-items:center; justify-content:space-between; padding:0 6px; }
+.palette-heading button { font-size:20px; }
+.composer-palette input { width:100%; min-width:0; flex:none; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text); font:inherit; }
+.model-options { min-height:0; overflow-y:auto; }
+.model-options button { display:flex; align-items:center; justify-content:space-between; width:100%; min-height:38px; padding:8px 10px; border:0; border-radius:8px; background:transparent; text-align:left; cursor:pointer; }
+.model-options button[data-highlighted="true"], .model-options button:hover { background:var(--sidebar); }
+.model-options button:disabled { opacity:.5; cursor:default; }
+.palette-notice { margin:4px 6px; color:var(--muted); font-size:12px; }
+.composer-model { display:flex; align-items:center; gap:6px; min-width:0; padding:6px; border:0; background:transparent; color:var(--muted); font:inherit; font-size:12px; cursor:pointer; }
+.composer-model:disabled { opacity:.5; cursor:default; }
 .master-chat { display:flex; flex-direction:column; flex:1; min-height:0; min-width:0; }
 .chat-scroll { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; }
 .chat-conversation { max-width:760px; margin:0 auto; padding:16px 16px 28px; }
@@ -238,7 +439,7 @@ onMounted(async () => {
 .chat-details .master-message { margin:12px 0; }
 .chat-access { border:1px solid var(--border); border-radius:12px; padding:14px; }
 .chat-access summary { line-height:1.6; }
-.master-compose { width:calc(100% - 32px); max-width:728px; margin:12px auto 4px; flex-shrink:0; border:1px solid var(--border); background:var(--surface); border-radius:24px; padding:14px 16px 10px; box-shadow:0 2px 8px #00000008; }
+.master-compose { position:relative; width:calc(100% - 32px); max-width:728px; margin:12px auto 4px; flex-shrink:0; border:1px solid var(--border); background:var(--surface); border-radius:24px; padding:14px 16px 10px; box-shadow:0 2px 8px #00000008; }
 .master-compose:focus-within { border-color:var(--accent); }
 .master-compose textarea { display:block; width:100%; min-height:48px; max-height:160px; resize:none; padding:0; border:0; outline:none; background:transparent; color:inherit; font:inherit; font-size:15px; line-height:1.6; }
 .compose-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-top:8px; }
@@ -252,6 +453,7 @@ onMounted(async () => {
   .master-compose { width:100%; padding:12px; border-radius:20px; }
   .master-message.user { max-width:92%; }
   .master-text { font-size:14px; }
-  .compose-hint { font-size:10px; }
+  .compose-hint { display:none; }
+  .composer-model { margin-right:auto; font-size:11px; }
 }
 </style>
