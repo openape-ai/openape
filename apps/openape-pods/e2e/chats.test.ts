@@ -94,6 +94,15 @@ it('central chats: scopes tools, reviews both Pods, starts a separate run and re
       await page.emulateMedia({ colorScheme: width === 560 ? 'dark' : 'light' })
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
       expect(await page.locator('.master-compose').evaluate(element => element.getBoundingClientRect().bottom <= innerHeight)).toBe(true)
+      if (width === 1060) {
+        await page.getByLabel('Message', { exact: true }).fill('Keep this unsent note.')
+        await page.getByRole('button', { name: 'Chat model', exact: true }).click()
+        await page.getByRole('combobox', { name: 'Search models', exact: true }).waitFor()
+        await page.screenshot({ path: resolve('.artifacts/chats-central-model-picker.png') })
+        await page.getByRole('option', { name: 'GPT-5.5', exact: true }).click()
+        expect(await page.getByLabel('Message', { exact: true }).inputValue()).toBe('Keep this unsent note.')
+        await page.getByLabel('Message', { exact: true }).fill('')
+      }
       await page.screenshot({ path: resolve(`.artifacts/chats-${width}.png`) })
     }
   }

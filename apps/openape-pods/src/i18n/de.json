@@ -2068,5 +2068,15 @@
   "Change decision conflicts with its completed receipt": "Diese Entscheidung widerspricht der bereits gespeicherten Entscheidung",
   "Applied then; configuration changed later": "Damals übernommen; Konfiguration später geändert",
   "This context began with a fresh model session. Messages from earlier contexts stay readable here and are not sent again.": "Dieser Kontext hat eine neue Modellsitzung begonnen. Nachrichten früherer Kontexte bleiben hier lesbar und werden nicht erneut gesendet.",
-  "Selected Pods: {p0}": "Ausgewählte Pods: {p0}"
+  "Selected Pods: {p0}": "Ausgewählte Pods: {p0}",
+  "Chat commands": "Chat-Befehle",
+  "Choose model": "Modell auswählen",
+  "Close model picker": "Modellauswahl schließen",
+  "Search models": "Modelle suchen",
+  "Search models…": "Modelle suchen…",
+  "Wait for the current response to finish before changing model.": "Warte auf das Ende der aktuellen Antwort, bevor du das Modell wechselst.",
+  "No matching models": "Keine passenden Modelle",
+  "Choose model with /model": "Modell mit /model auswählen",
+  "/ for commands": "/ für Befehle",
+  "/model": "/model"
 }

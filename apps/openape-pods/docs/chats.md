@@ -3,7 +3,14 @@
 Chats is a sidebar destination alongside Pods and Workflows. New chat opens a
 workspace conversation immediately. Use **+** beside the message box to choose
 Pods and optionally one workflow. Selected context stays visible as removable
-chips. Each Pod's Chat tab and History link to the same related conversations;
+chips. The current model is shown beside + in the composer. Click it or type `/`,
+then choose `/model` to open the same searchable model list. Arrow keys and Enter
+select; Escape closes the list. A completed selection removes only the command
+token and keeps the rest of the draft. Recognized model commands never become model requests,
+normal paths remain message text, and model changes wait for the active response.
+The existing saved model preference and model catalogue remain unchanged.
+
+Each Pod's Chat tab and History link to the same related conversations;
 a workflow exposes its related chats. The original Pod chat remains available.
 
 Workspace context exposes catalogue metadata, not arbitrary saved Pod content.
