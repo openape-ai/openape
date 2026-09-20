@@ -2,7 +2,7 @@
 
 ## Pod workflow graphs and conservative mail filtering (September 20, 2026)
 
-Issue: https://git.openape.ai/openape-ai/openape/issues/1358. Worktree
+Issue: https://git.openape.ai/openape-ai/openape/issues/1358. Native [PR 76](https://repos.openape.ai/patrick/monorepo/pulls/76). Worktree
 `pods-conversation`, branch `feature/issue-1358-pod-workflow-graphs`, canonical
 base `77c6b22aa959b60402a22e4cc34700f74ebe8d47`.
 [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2YXXAP6HC15CBQR5DV8XVHM).
@@ -15,13 +15,25 @@ Production autonomous archive remains blocked: Graph does not document the
 required atomic conditional-move guarantee. Controlled transports prove local
 recovery only. Restored mail scopes require a new quiet-baseline workflow.
 
-Verification: full repository lint/typecheck pass; 312 Pods unit/component tests
-pass. The full merge contract passed at the working-tree checkpoint recorded in
-`.openape/check-results/1789899602956-77c6b22a-all/summary.json`, including all
-134 native Pods tests. The final restored-mail fence has additional passing
-unit coverage; final committed-state verification and PR evidence follow.
+Implementation commit: `2bfbdc34e649fb8ea8f5477a625c1a34417c6bc6`.
+Reviewed native PR target: `77c6b22aa959b60402a22e4cc34700f74ebe8d47`;
+the complete 79-file diff was available without truncation.
+Full repository lint/typecheck, 312 Pods unit/component tests and app build pass.
+Full `pnpm check:ci` passes on that commit, including all 134 native Pods tests:
+`.openape/check-results/1789900150785-2bfbdc34-all/summary.json`.
+[Inspected checkpoint report](https://testrun.openape.ai/r/r9EqNUJHuw5V-JIGRha12EAV).
+The compact graph follow-up wraps at 760 px and asserts every node fits the
+visible content width. Final source/target SHAs, complete gate results and the
+latest visual evidence are recorded in PR 76's acceptance comment.
+External forge checks are separate from this local evidence; do not merge until
+they match the final source and succeed. Next: owner review of PR 76 and CLI PR 8;
+then separate pilot setup and provider-concurrency decisions.
+The concrete local review draft is
+`apps/openape-pods/.artifacts/mail-workflow-pilot.json`; no Pod/application IDs
+are invented and no protected partner or archive rule is silently approved.
 No live profile, mailbox, Telegram delivery or schedule activation was changed.
-The retired Troop/OpenClaw mail automation remains paused.
+The retired Troop/OpenClaw mail automation remains paused; its `kpi-mail` schedule
+was read-only verified `enabled=false` at 2026-09-20T10:34:09Z.
 
 ## Pods user guide (September 20, 2026)
 
