@@ -321,3 +321,54 @@ and direct-path checks in M7 before old-link continuity is claimed in production
 - After native writes, freeze native writes and retain both histories before
   deciding forward repair or a reviewed one-time reverse reconciliation. Never
   restore an old registry over newer PRs/grants or re-enable both writers.
+
+## Approved production pilot (M7)
+
+Patrick approved the concrete pilot on September 20, 2026. Preserve the 19
+unverified source assignments in provenance and leave their native assignments
+empty. Preserve external references without fetching external content. Register
+the 17 monorepo product keys and Patrick's private `issue-intake` repository.
+Keep source attachments read-only host-wide; also deny source organization
+removal and self-service account removal during archive maintenance. Other
+repository owners retain separate migration decisions.
+
+Use `sourceFence(verifiedRepositoryId)` from
+`scripts/native-issues/source-fence.mjs` to generate the reviewed install and
+rollback SQL. This is the same generator exercised against disposable Forgejo
+by `fence-rehearsal.mjs`; it additionally protects source repository identity and
+source actor deletion. Verify the exact tables/columns on the current source
+before applying it. Keep the generated SQL, configuration, actor inventory,
+backup identifiers and approvals in the restricted operator evidence directory.
+Never infer the source ID from a URL or transplant fixture SQL.
+
+`ops/issue-archive.service` is the systemd unit for the existing gateway.
+Verify the host Node path before installation. Install its scripts read-only
+under `/opt/openape-issue-archive`, with the reviewed configuration at
+`/etc/openape-issue-archive.json` (root-owned, readable by `git`). The example
+configuration deliberately omits historical actors and the legacy page: populate
+actors from the verified source inventory; enable the fixed-source legacy page
+only after the native import and its authentication checks pass. Start and probe
+the gateway before switching only Traefik's Forgejo upstream to port 33030.
+Rebind Forgejo to `127.0.0.1:3030` so its old bridge address cannot bypass the
+fence. Direct database/filesystem administration remains excluded during the
+maintenance window. Keep a configuration backup and generated fence-removal SQL
+available, but never restore the entire Forgejo/native database over newer Git
+or PR activity.
+
+Capture a fresh frozen export and edit-history/deferred-metadata census. New
+issues since the September 18 rehearsal must be reconciled and retain numbers.
+Only the approved exception types may receive dispositions; other restrictions
+halt activation. Apply the bound production manifest to a staged locked target,
+validate every row and file, test authenticated legacy navigation, and only then
+release the import lock in an explicit transaction. Run another off-site backup
+and an independent restore probe. The seven-day observation starts at actual
+activation, not at plan approval or merge.
+
+Forgejo 15.0.5 increments `attachment.download_count` before serving the file and
+returns HTTP 500 if that update is denied. The source fence therefore permits
+only download-count changes: every observed identity, ownership, filename, size,
+creation and external-URL column remains immutable. The actual Forgejo rehearsal
+uploads a synthetic attachment before fencing and checks its authenticated,
+byte-exact download while fenced. The initial blanket update fence reproduced
+HTTP 500; the narrowed metadata fence returns HTTP 200. Recheck attachment schema
+columns before installing the generated SQL on another Forgejo version.

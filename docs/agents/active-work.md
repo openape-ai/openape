@@ -2,7 +2,7 @@
 
 ## Central Pod chats (September 20, 2026)
 
-Issue: https://git.openape.ai/openape-ai/openape/issues/1359. Worktree
+Issue: https://git.openape.ai/openape-ai/openape/issues/1359. Native [PR 78](https://repos.openape.ai/patrick/monorepo/pulls/78). Worktree
 `pods-central-chats`, branch `feature/issue-1359-central-chats`, canonical base
 `934dbcec21cce8e3620ecda51a77aa8458bcfd30` (rechecked during implementation).
 [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2ZACGJKS6JHH84T22Q48K49).
@@ -19,21 +19,26 @@ approval surfaces; no MCP transport is introduced here. Saved Pod draft artifact
 remain available to selected chats; conversation text, composers and pending
 change sets are separate. Stale changes require discard and deliberate preparation.
 
-Verification checkpoint: 334 unit/component tests, full lint (51 tasks), full
-typecheck (72 tasks), build and fixture package passed. Focused native regression
-suite passed 16 tests across Chats, foundation/foreign-window boundaries, groups,
-languages and script editor. It caught and fixed a narrow-sidebar group-confirmation
-overlap; legacy Workspace chat navigation now opens Chats. The complete final-source
-CI contract and native PR review remain the next gate. Implementation checkpoint
-`b923685d166a1781e0d09a3d44826c436fb7101a` passed all suites up to the Pods native
-step; two existing startup polls expired with worker state `starting` before their
-functional assertions. Their bounded startup window is now 10 seconds; the full
-contract must pass again before push. Targeted dependency preparation, terminal
-feedback and central-chat native checks passed (3 files, 4 tests). The follow-up also names the failed Pod
-in coordinated change diagnostics and adds Chats to the existing HTML report. Final SHAs and complete gate
-logs will be retained in the native PR acceptance record; partial checks do not
-constitute merge approval. No installed app, owner profile, live mailbox, Telegram
-message or schedule activation was changed. Troop/OpenClaw remains paused.
+Implementation checkpoint `7540e3cc35932ba26c7a6a27af3d1ef4a6e25519` passed the
+complete `pnpm check:ci` contract: full lint/typecheck, unit, web E2E and layout,
+including 334 Pods unit/component and all 135 native tests with no skips.
+Local summary: `.openape/check-results/1789910155897-7540e3cc-all/summary.json`.
+[Inspected packaged UI](https://testrun.openape.ai/r/3Z4ctc_EDtxDgykTyQ2ckcKO)
+covers + context selection, coordinated review and 1060/760/560 px layouts.
+The existing self-contained HTML pipeline includes these screenshots.
+
+Two existing native startup polls required an explicit 10-second readiness
+window; functional assertions remain intact. An unrelated Git login-layout
+check timed out once, then passed both its isolated run and complete unchanged
+retry. Canonical main advanced during handoff to
+`78fad3f1be6c3d67f2f68c50c8b142a0e9a06bb3` (PR 77, including real callback coverage
+for that login path); it was integrated without conflicts or Pods code changes.
+The combined final source must pass the same complete contract before push.
+Final source/target SHAs, native diff review and external-check status belong to
+the PR acceptance record. Next: review PR 78 after those exact-source checks;
+merge, installation and live acceptance are separate decisions. No installed app,
+owner profile, live mailbox, Telegram message or schedule activation was changed.
+Troop/OpenClaw remains paused.
 
 
 ## Pod workflow graphs and conservative mail filtering (September 20, 2026)
@@ -260,3 +265,22 @@ to resume or remove them. Do not delete a worktree on the strength of this index
 
 At handoff, record the actual branch and SHA, PR URL, exact successful/failed
 checks and their log paths, remaining blockers and the next concrete action.
+
+## Native issue production pilot — September 20, 2026
+
+Patrick approved the concrete M7 pilot in the existing plan. Work starts at
+canonical main `934dbcec21cce8e3620ecda51a77aa8458bcfd30` in
+`native-issues-cutover`, branch `feature/issue-1356-native-issues-cutover`.
+The preflight source now contains 233 issues, 175 comments and three assets;
+three new Pods issues explain the change since rehearsal. Nineteen assignments
+remain unverified. Source restrictions/dependencies/projects/reactions/time
+entries remain absent in the scoped database census. An off-site native-registry
+backup completed before preparation. Production issue writes remain on Forgejo
+until the frozen manifest passes reconciliation and the native lock is released.
+
+This increment prepares reviewed source SQL and gateway service configuration.
+The same SQL generator now passes the disposable real Forgejo Git/Actions proof
+and an explicit removal/rollback check. Production operations, exact source/target
+hashes, native activation and seven-day observation will be recorded in the
+synchronized plan and restricted operator receipts. No issue authority changes
+are implied by merging this preparation increment.
