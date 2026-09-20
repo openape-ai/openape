@@ -226,7 +226,7 @@ export class FixtureWorker {
   }
 
   async remote(command: RemoteInternal): Promise<unknown> { return this.dispatch({ remote: command }) }
-  async remoteOwner(): Promise<Owner> {
+  async remoteOwner(): Promise<{ owner: Owner, email: string }> {
     await this.setupReady
     if (!this.connections) throw new Error('Connection service unavailable')
     return this.connections.remoteOwner()
