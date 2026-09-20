@@ -7,8 +7,12 @@ sibling repositories and linked worktrees have their own checkout state.
 
 - Source of truth: `.openape/repository.json`. Code, pushes and PRs belong to
   `https://repos.openape.ai/patrick/monorepo.git`. Forgejo and GitHub are mirrors.
-- Issues remain at `https://git.openape.ai/openape-ai/openape/issues`.
-  Always link the full issue URL across forges; a bare `Closes #N` is ambiguous.
+- Development issues live at `https://repos.openape.ai/patrick/monorepo/issues`.
+  Use the native [issue CLI](docs/operations/native-issues.md); Forgejo retains
+  the read-only issue archive and CI. Link the full issue URL and add an explicit
+  PR relation. Merging a PR never closes an issue automatically.
+- Tasks owns general work/reminders; Plans owns approved proposals. Link the
+  development issue instead of duplicating its discussion or resolution state.
 - Run `git status --short` and `git branch --show-current`. In each tool shell,
   run `. ./scripts/activate-node.sh` from the checkout before `pnpm run doctor`.
   Use the explicit `run`: `pnpm doctor` is pnpm's own command. For restricted
