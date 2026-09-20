@@ -1,3 +1,8 @@
+import { parseWorkflowCommand } from './workflows'
+import type { WorkflowCommand } from './workflows'
+import type { ChangeSet } from './control-api'
+import { chatId } from './chats'
+import type { Conversation } from './chats'
 import { parseChatModel } from './models'
 import type { ChatModel } from './models'
 import { parseSetupRequest } from './setup'
@@ -11,19 +16,29 @@ import { groupName } from './groups'
 import { parseSchedule } from './scheduling'
 import type { ScheduleSpec } from './scheduling'
 
-export interface MasterMessage { id: string, role: 'user' | 'assistant' | 'tool', text: string, state: string, at: number }
-export interface MasterDraft { id: string, podId: string, name: string, revision: number, code: string, capabilities: string[], validation: string | null, hash: string | null }
+export interface MasterMessage { sequence?: number, contextRevision?: number, id: string, role: 'user' | 'assistant' | 'tool', text: string, state: string, at: number }
+export interface MasterDraft { validationError?: string | null, id: string, podId: string, name: string, revision: number, code: string, capabilities: string[], validation: string | null, hash: string | null }
 export interface AccessProposal { id: string, podId: string, body: SetupRequest, state: 'pending' | 'declined' | 'approved' }
-export interface MasterView { scriptState?: 'missing' | 'draft' | 'active', adoption?: AdoptionPreview | null, description?: PodDescription | null, creationId?: string, boundPodId?: string | null, initialRequest?: MasterMessage | null, connected: boolean, state: 'idle' | 'running' | 'interrupted' | 'failed', error: string | null, messages: MasterMessage[], drafts: MasterDraft[], proposals: AccessProposal[] }
-export type MasterCommand = ({ type: 'resolveSetup', id: string, podId: string, resourceId: string, epoch: number, request: SetupRequest } | { type: 'answerSetup', id: string, podId: string, value: string, revision: number } | { type: 'adopt', podId: string, hash: string } | { type: 'summarize', podId: string } | { type: 'begin', id: string } | { type: 'list', podId?: string | null } | { type: 'send' | 'steer', id: string, text: string, podId: string | null, model?: ChatModel } | { type: 'cancel', podId?: string | null } | { type: 'decline', id: string, podId?: string | null }) & { creationId?: string }
+export interface MasterView { changes?: ChangeSet[], conversation?: Conversation, nextBefore?: number | null, activeConversationId?: string | null, scriptState?: 'missing' | 'draft' | 'active', adoption?: AdoptionPreview | null, description?: PodDescription | null, creationId?: string, boundPodId?: string | null, initialRequest?: MasterMessage | null, connected: boolean, state: 'idle' | 'running' | 'interrupted' | 'failed', error: string | null, messages: MasterMessage[], drafts: MasterDraft[], proposals: AccessProposal[] }
+export type MasterCommand = ({ type: 'applyChanges', id: string, revision: number } | { type: 'discardChanges', id: string, revision: number } | { type: 'resolveSetup', id: string, podId: string, resourceId: string, epoch: number, request: SetupRequest } | { type: 'answerSetup', id: string, podId: string, value: string, revision: number } | { type: 'adopt', podId: string, hash: string } | { type: 'summarize', podId: string } | { type: 'begin', id: string } | { type: 'list', podId?: string | null } | { type: 'send' | 'steer', id: string, text: string, podId: string | null, model?: ChatModel } | { type: 'cancel', podId?: string | null } | { type: 'decline', id: string, podId?: string | null }) & { creationId?: string, conversationId?: string, contextRevision?: number, before?: number }
 export function parseMasterCommand(value: unknown): MasterCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid master request')
   const item = value as Record<string, unknown>
-  const fields = item.type === 'resolveSetup' ? ['type', 'id', 'podId', 'resourceId', 'epoch', 'request'] : item.type === 'answerSetup' ? ['type', 'id', 'podId', 'value', 'revision'] : item.type === 'adopt' ? ['type', 'podId', 'hash'] : item.type === 'summarize' ? ['type', 'podId'] : item.type === 'begin' ? ['type', 'id'] : item.type === 'list' || item.type === 'cancel' ? ['type', 'podId'] : item.type === 'decline' ? ['type', 'id', 'podId'] : item.type === 'send' || item.type === 'steer' ? ['type', 'id', 'text', 'podId', 'model'] : []
-  if (!fields.length || Object.keys(item).some(key => !fields.includes(key) && key !== 'creationId')) throw new Error('Unsupported master request')
+  const fields = item.type === 'applyChanges' || item.type === 'discardChanges' ? ['type', 'id', 'revision'] : item.type === 'resolveSetup' ? ['type', 'id', 'podId', 'resourceId', 'epoch', 'request'] : item.type === 'answerSetup' ? ['type', 'id', 'podId', 'value', 'revision'] : item.type === 'adopt' ? ['type', 'podId', 'hash'] : item.type === 'summarize' ? ['type', 'podId'] : item.type === 'begin' ? ['type', 'id'] : item.type === 'list' || item.type === 'cancel' ? ['type', 'podId'] : item.type === 'decline' ? ['type', 'id', 'podId'] : item.type === 'send' || item.type === 'steer' ? ['type', 'id', 'text', 'podId', 'model'] : []
+  if (!fields.length || Object.keys(item).some(key => !fields.includes(key) && !['creationId', 'conversationId', 'contextRevision', 'before'].includes(key))) throw new Error('Unsupported master request')
   if (['summarize', 'adopt'].includes(item.type as string) && (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId))) throw new Error('Invalid description pod')
   if (item.type === 'adopt' && (typeof item.hash !== 'string' || !/^[a-f0-9]{64}$/.test(item.hash))) throw new Error('Invalid history review hash')
+  if (['applyChanges', 'discardChanges'].includes(item.type as string) && (typeof item.conversationId !== 'string' || !Number.isSafeInteger(item.revision) || Number(item.revision) < 1)) throw new Error('Current change review required')
   if (item.creationId !== undefined && (typeof item.creationId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.creationId) || item.podId)) throw new Error('Invalid creation conversation')
+  if (item.conversationId !== undefined) {
+    chatId(item.conversationId)
+    if (item.creationId !== undefined) throw new Error('Choose a conversation or creation scope')
+    if (item.type !== 'list' && (!Number.isSafeInteger(item.contextRevision) || Number(item.contextRevision) < 1)) throw new Error('Current conversation context revision required')
+  }
+  else if (item.contextRevision !== undefined) {
+    throw new Error('Conversation identity required')
+  }
+  if (item.before !== undefined && (item.type !== 'list' || !Number.isSafeInteger(item.before) || Number(item.before) < 1)) throw new Error('Invalid history cursor')
   if (item.podId !== undefined && item.podId !== null && (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId))) throw new Error('Invalid chat pod context')
   if (fields.includes('id') && (typeof item.id !== 'string' || !/^[a-f0-9-]{36}$/.test(item.id))) throw new Error('Invalid master request identity')
   if (fields.includes('text') && (typeof item.text !== 'string' || !item.text.trim() || item.text.length > 20000 || (item.podId !== null && (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId))))) throw new Error('Invalid master input')
@@ -63,6 +78,8 @@ export function parseMasterView(value: unknown): MasterView {
   return view
 }
 export type MasterAction =
+  | { action: 'inspectWorkflow' | 'runWorkflow' }
+  | { action: 'saveWorkflow', definition: Extract<WorkflowCommand, { type: 'save' }> }
   | { action: 'list' }
   | { action: 'runtime' }
   | { action: 'create', name: string }
@@ -78,6 +95,16 @@ export type MasterAction =
 export function parseMasterAction(value: unknown): MasterAction {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid master action')
   const item = { ...value } as Record<string, unknown>
+  if (['inspectWorkflow', 'runWorkflow', 'saveWorkflow'].includes(String(item.action))) {
+    const allowed = item.action === 'saveWorkflow' ? ['action', 'definition'] : ['action']
+    if (Object.keys(item).some(key => !allowed.includes(key))) throw new Error('Invalid workflow action fields')
+    if (item.action === 'saveWorkflow') {
+      const definition = parseWorkflowCommand(item.definition)
+      if (definition.type !== 'save') throw new Error('Workflow save definition required')
+      return { action: 'saveWorkflow', definition }
+    }
+    return { action: item.action as 'inspectWorkflow' | 'runWorkflow' }
+  }
   const extra: Record<string, string[]> = { list: [], runtime: [], setVariable: ['name', 'value', 'variableRevision'], prepareSchedule: ['spec', 'scheduleRevision'], setGroup: ['name', 'organizationRevision'], create: ['name'], inspect: [], run: [], pause: [], resume: [], installMailRecipe: [], revise: ['name'], draft: ['draftId', 'draftRevision', 'code', 'capabilities'], validate: ['draftId', 'draftRevision'], activate: ['draftId', 'draftRevision'], rollback: ['hash', 'expectedActive'], requestAccess: ['request'] }
   if (typeof item.action !== 'string' || !Object.hasOwn(extra, item.action)) throw new Error('Master action is not allowed')
   const scoped = !['list', 'runtime', 'create'].includes(item.action)
@@ -101,11 +128,12 @@ export function parseMasterAction(value: unknown): MasterAction {
 }
 export const masterTool = {
   type: 'function', name: 'pods_control',
-  description: 'Configure OpenApe Pods using revision-checked actions. First call runtime for the script API and action formats, then list/inspect for current IDs and revisions. A selected pod chat can only manage that pod. New pods and prepared schedules remain paused. Ordinary variables are model-visible; secret values must never be supplied in tool arguments or chat. requestAccess creates an owner-reviewed proposal, never a permission or credential approval. Validate, repair failures and activate only with the current script and permissions. Synthetic validation does not prove live provider behavior. Do not run without a user request.',
+  description: 'Configure OpenApe Pods using revision-checked actions. First call runtime for the script API and action formats, then list/inspect for current IDs and revisions. Only explicit conversation context may be inspected or changed. activate/configuration actions prepare a change set awaiting owner review. run prepares an explicit Run once request. The owner applies or runs through the review UI; the model cannot approve its own work. New pods and prepared schedules remain paused. Ordinary variables are model-visible; secret values must never be supplied in tool arguments or chat. requestAccess creates an owner-reviewed proposal, never a permission or credential approval. Validate, repair failures and activate only with the current script and permissions. Synthetic validation does not prove live provider behavior. Do not run without a user request.',
   inputSchema: {
     type: 'object', required: ['action'], additionalProperties: false,
     properties: {
-      action: { type: 'string', enum: ['runtime', 'list', 'create', 'inspect', 'revise', 'setVariable', 'prepareSchedule', 'setGroup', 'draft', 'validate', 'activate', 'run', 'pause', 'resume', 'rollback', 'requestAccess', 'installMailRecipe'] },
+      action: { type: 'string', enum: ['inspectWorkflow', 'saveWorkflow', 'runWorkflow', 'runtime', 'list', 'create', 'inspect', 'revise', 'setVariable', 'prepareSchedule', 'setGroup', 'draft', 'validate', 'activate', 'run', 'pause', 'resume', 'rollback', 'requestAccess', 'installMailRecipe'] },
+      definition: { type: 'object', description: 'Existing selected workflow save command: type save, id, revision, name, nodes, schedule, enabled. Preserve enabled/paused schedules; added members must already be explicitly selected. Owner reviews before apply.' },
       podId: { type: 'string', description: 'Exact pod UUID from list/create.' }, revision: { type: 'integer', minimum: 1, description: 'Current pod settings revision.' },
       name: { type: ['string', 'null'], description: 'Pod/variable/group name; null only removes group membership.' },
       value: { type: 'string', description: 'Ordinary, non-secret variable value only.' }, variableRevision: { type: 'integer', minimum: 0 },

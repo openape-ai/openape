@@ -139,6 +139,7 @@ export async function restoreBackup(backup: string, parent: string, maximumSchem
         }
       }
       if (manifest.schema >= 15) database.exec('DELETE FROM summary_domains; UPDATE pod_descriptions SET state=\'failed\',error=\'Restored description update; reconnect and retry.\' WHERE state IN (\'pending\',\'running\');')
+      if (manifest.schema >= 21) database.exec('UPDATE chat_contexts SET retired_thread=NULL; UPDATE chat_active SET conversation_id=NULL; UPDATE control_changes SET body=json_set(body,\'$.state\',\'discarded\',\'$.error\',\'Restored change requires a new review\') WHERE json_extract(body,\'$.state\') IN (\'pending\',\'running\');')
       if (manifest.schema >= 13) database.exec('UPDATE master_contexts SET thread_id=NULL,state=\'interrupted\',error=\'Restored chat history; new model context required\';')
       if (manifest.schema >= 12) database.exec('DELETE FROM script_credential_approvals;')
       if (manifest.schema >= 10) database.exec('DELETE FROM deletion_jobs; UPDATE data_settings SET used_bytes=0,error=NULL;')
