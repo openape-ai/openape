@@ -83,13 +83,17 @@ export class RunDispatcher {
     installExample(this.store, this.resources, podId, variant, manifest.dependencyLockHash)
   }
 
-  start(podId: string, trigger: RunTrigger = { reason: 'manual', eventIds: [] }): string {
+  start(podId: string, trigger: RunTrigger = { reason: 'manual', eventIds: [] }, accepted?: (runId: string) => void): string {
     this.store.assertStorage()
     if (this.store.db.prepare('SELECT 1 FROM effect_ledger WHERE pod_id=? AND state IN (\'intent\',\'unknown\')').get(podId)) throw new Error('An HTTP delivery needs review before this pod can run again')
     const pod = this.store.getPod(podId)
     if (!pod.activeScript) throw new Error('Choose and validate a script before running this pod')
     const epoch = this.resources.epoch(podId)
-    const reservation = this.runs.reserve(podId, pod.activeScript, epoch, trigger)
+    const reservation = this.store.transaction(() => {
+      const reserved = this.runs.reserve(podId, pod.activeScript!, epoch, trigger)
+      accepted?.(reserved.run.id)
+      return reserved
+    })
     if (reservation.existing) return reservation.run.id
     const controller = new AbortController()
     const work = this.execute(reservation.run.id, epoch, controller.signal, trigger)
