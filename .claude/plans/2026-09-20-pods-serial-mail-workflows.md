@@ -194,6 +194,10 @@ Acceptance is observable behavior: an item is never silently dropped, a successo
 
 ## Progress
 
+- Implementation is available in native [PR 76](https://repos.openape.ai/patrick/monorepo/pulls/76), with companion CLI [PR 8](https://git.openape.ai/delta-mind/o365-cli/pulls/8). Implementation commit `2bfbdc34e649fb8ea8f5477a625c1a34417c6bc6` passes the full repository unit/E2E/layout contract, 312 Pods unit/component tests and 134 native tests. The compact graph follow-up and final source evidence are documented in PR 76's acceptance comment.
+- M1–M4 implementation is delivered: DAG composition, explicit schedules, owner UI/history, durable handoff/recovery, protected mail policy, batch/outbox integration, migration/restore fences, shared handbook and synthetic evidence. M0's production concurrency limitation remains explicit and fail-closed. No live activation is claimed or requested by implementation acceptance.
+- The pilot review draft is `apps/openape-pods/.artifacts/mail-workflow-pilot.json`; mailbox and Telegram destination are explicit, while owner-reviewed partners, rules, actual application/Pod bindings and folder verification remain pending. It is not installed, runs in preview only and has no schedule. The old Troop schedule was read-only verified disabled at 2026-09-20T10:34:09Z.
+
 - Verification checkpoint: full repository lint/typecheck and 312 Pods unit/component tests pass. Full `pnpm check:ci` passed all unit/E2E/layout steps, including 134 native Pods tests. Restored mail scopes now require a new quiet-baseline workflow to prevent replay after an old backup. Final committed-state run, visual report and native PR are next.
 
 - Implementation checkpoint: reusable graph engine, workflow-owned schedules, sidebar/editor/history, immutable handoff, shared reservations, recovery and removal are implemented. Protected mail policy, frozen delta batches, durable move/Telegram ledgers, owner reconciliation and opt-in recipes are implemented. Unit/component and packaged tests use synthetic data only. Full repository verification is in progress.

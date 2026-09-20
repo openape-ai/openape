@@ -256,5 +256,5 @@ export default defineComponent({
 .workflow-run-nodes { padding-left:22px; }
 .workflow-run-nodes li { padding:12px 0; }
 .workflow-run-nodes p { margin:6px 0; }
-@media (max-width:700px) { .workflow-graph { flex-direction:column; align-items:stretch; overflow:visible; } .workflow-layer { flex:auto; max-width:none; } .workflow-layer+.workflow-layer::before { content:'↓'; left:50%; top:-24px; } }
+@media (max-width:900px) { .workflow-graph { flex-direction:column; align-items:stretch; overflow:visible; } .workflow-layer { flex:auto; max-width:none; } .workflow-layer+.workflow-layer::before { content:'↓'; left:50%; top:-24px; } }
 </style>

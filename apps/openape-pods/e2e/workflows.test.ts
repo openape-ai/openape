@@ -35,7 +35,7 @@ it('workflow graph: runs unchanged pods through the real worker and renders depe
       await app.evaluate(({ BrowserWindow }, width) => BrowserWindow.getAllWindows()[0]!.setContentSize(width, 900), width)
       await page.emulateMedia({ colorScheme: width === 560 ? 'dark' : 'light' })
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-      expect(await page.locator('.workflow-node').evaluateAll(nodes => nodes.every(node => node.getBoundingClientRect().width >= 170))).toBe(true)
+      expect(await page.locator('.workflow-node').evaluateAll(nodes => nodes.every((node) => { const box = node.getBoundingClientRect(); return box.width >= 170 && box.right <= innerWidth }))).toBe(true)
       await page.screenshot({ path: resolve(`.artifacts/workflows-${width}.png`), fullPage: true })
     }
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(1060, 950))
