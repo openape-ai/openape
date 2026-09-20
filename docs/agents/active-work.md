@@ -224,3 +224,22 @@ to resume or remove them. Do not delete a worktree on the strength of this index
 
 At handoff, record the actual branch and SHA, PR URL, exact successful/failed
 checks and their log paths, remaining blockers and the next concrete action.
+
+## Native issue production pilot — September 20, 2026
+
+Patrick approved the concrete M7 pilot in the existing plan. Work starts at
+canonical main `934dbcec21cce8e3620ecda51a77aa8458bcfd30` in
+`native-issues-cutover`, branch `feature/issue-1356-native-issues-cutover`.
+The preflight source now contains 233 issues, 175 comments and three assets;
+three new Pods issues explain the change since rehearsal. Nineteen assignments
+remain unverified. Source restrictions/dependencies/projects/reactions/time
+entries remain absent in the scoped database census. An off-site native-registry
+backup completed before preparation. Production issue writes remain on Forgejo
+until the frozen manifest passes reconciliation and the native lock is released.
+
+This increment prepares reviewed source SQL and gateway service configuration.
+The same SQL generator now passes the disposable real Forgejo Git/Actions proof
+and an explicit removal/rollback check. Production operations, exact source/target
+hashes, native activation and seven-day observation will be recorded in the
+synchronized plan and restricted operator receipts. No issue authority changes
+are implied by merging this preparation increment.
