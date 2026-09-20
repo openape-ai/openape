@@ -46,3 +46,6 @@ docs/local-stack/manifest-*.json
 
 # Restricted full issue exports and migration rehearsals.
 .openape/native-issues-migration/
+
+# Restricted production issue cutover evidence
+.openape/native-issues-m7/
