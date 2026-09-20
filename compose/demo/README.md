@@ -55,3 +55,11 @@ captions and structure) is the source of truth to review in a diff; commit
 screenshot updates when the flow or UI actually changed, not for a
 timestamp-only delta. Freezing server time would need a container-level clock
 shim (e.g. libfaketime) and isn't worth it for a cosmetic diff.
+
+## Native Pods guide
+
+Pods uses the shared English offline handbook and isolated Electron screenshot
+fixtures instead of a web-stack story. The final aggregate step includes it on
+every run. Follow [the Docs workflow](../../apps/docs/README.md#app-guides-and-pods)
+to update both handbook languages and recapture the native UI. Do not add Pods
+to `distribute-docs.mjs` as a web app or edit its generated Apps page directly.

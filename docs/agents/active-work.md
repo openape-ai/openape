@@ -1,5 +1,34 @@
 # Active work
 
+## Pods user guide (September 20, 2026)
+
+Issue: https://git.openape.ai/openape-ai/openape/issues/1357. Native [PR 75](https://repos.openape.ai/patrick/monorepo/pulls/75). Worktree
+`openape-monorepo.worktrees/pods-user-guide`, branch
+`feature/issue-1357-pods-user-guide`, canonical base
+`cf19d3773f45dc9a5d8cd0cc8099fb5a76134cc0` (merged PR 74). Implementation
+checkpoint: `e55edc4d98123a732c500fca61f25003448849c9`. [Inspected visual
+evidence](https://testrun.openape.ai/r/TzIMdYOoh7dD-x10bUpV2Kfc).
+
+The Apps generator now includes `/apps/pods` from the same English handbook
+source and section renderer as the offline edition. Both English and German
+handbooks explain current accounts/provider consent, saved chat setup, access,
+manual verification, schedule catch-up, revocation and recovery. The internal
+notarized build is explicitly not a public release. Twelve native screenshots
+per language come from an isolated fixture without service calls or execution.
+
+Verification: full lint (51 tasks), typecheck (72 tasks), Pods build and fixture
+package, Docs build (179 prerendered routes), two generator contracts, two offline
+browser cases and twelve scheduler tests passed. The affected unit contract
+passed at `.openape/check-results/1789883759993-cf19d377-unit/summary.json`.
+Desktop 1440px and narrow 390/560px renders, guide images, Apps navigation and
+internal links were inspected. Raw browser evidence is in
+`.openape/check-results/pods-guide/`; no full local E2E suite was run.
+
+Next: native PR review and exact-source external CI/E2E/layout gates, then deploy
+only Docs from clean canonical main using `pnpm run deploy:docs-site`. Record the
+PR, reviewed source/target, final evidence and deployment result in its timeline.
+Existing owner app/data/accounts and schedules remain untouched.
+
 ## Provider consent wording (September 19, 2026)
 
 Issue: https://git.openape.ai/openape-ai/openape/issues/1354. Native [PR 74](https://repos.openape.ai/patrick/monorepo/pulls/74); worktree `pods-conversation`, branch `bugfix/issue-1354-provider-consent-wording`, implementation checkpoint `a79c94425e00d6f059eca56847b3a3cae6468b51`, canonical base `d5aa59c1a6df11189274ada1690b52f176899c4c`.
