@@ -6,6 +6,11 @@ const directory = '.artifacts'
 const result = JSON.parse(readFileSync(join(directory, 'electron-tests.json'), 'utf8'))
 const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
 const shots = [
+  ['chats-plus-context.png', 'Add context with the composer +', 'The compact picker previews the removal of Mail filter while retaining Short report. Confirming preserves local history and starts a fresh model context.'],
+  ['chats-review.png', 'Review changes for both Pods', 'Saved drafts and validation evidence are shown per Pod before one explicit local apply. Starting a run remains a separate owner decision.'],
+  ['chats-1060.png', 'Central conversations and explicit context', 'Chats is a sibling sidebar destination. Selected Pods remain visible and earlier applied reviews remain inspectable.'],
+  ['chats-760.png', 'Context and composer at compact width', 'The context header and message box remain reachable at 760 pixels with the actual packaged CSS.'],
+  ['chats-560.png', 'Central chat in a narrow dark window', 'Chips and reviews wrap without horizontal page overflow. The + control remains available after the model response settles.'],
   ['workflows-1060.png', 'Independent workflow graphs', 'Unchanged Pods form an ALL-success fan-out/fan-in graph with its own disabled cron schedule.'],
   ['workflows-560.png', 'Workflow graph in a narrow dark window', 'The graph reflows vertically and preserves explicit predecessor labels.'],
   ['workflows-completed.png', 'Verified workflow completion', 'The packaged worker completed every synthetic node in dependency order without editing Pod scripts or lifecycles.'],

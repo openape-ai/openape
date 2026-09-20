@@ -21,6 +21,7 @@ export interface ChangeSet {
   state: 'pending' | 'applied' | 'discarded' | 'running' | 'failed'
   targets: ChangeTarget[]
   error: string | null
+  errorPodId?: string
   execution?: { podId: string, runId: string | null, workflowId?: string, state: string, error: string | null }[]
   workflow?: { before: WorkflowDefinition, command: Extract<WorkflowCommand, { type: 'save' | 'start' }> }
   results: { podId: string, action: string, result: unknown }[]

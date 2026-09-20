@@ -45,3 +45,13 @@ it('does not turn an assistant claim into a saved-change receipt', async () => {
   expect(wrapper.findAll('button').some(button => button.text() === 'Apply changes together')).toBe(false)
   wrapper.unmount()
 })
+
+it('names the failed target while retaining an unapplied review', async () => {
+  const change = { id, conversationId: id, contextRevision: 1, revision: 1, kind: 'changes', state: 'pending', targets: [{ podId, name: 'Mail filter', base: 'before', before: {}, actions: [], review: [], draftHashes: {} }], results: [], error: 'Pod configuration changed; inspect the current state and prepare this change again', errorPodId: podId }
+  window.pods = { master: vi.fn().mockResolvedValue({ ...master, changes: [change] }) } as unknown as typeof window.pods
+  const wrapper = mount(MasterChat, { props: { podId: null, conversationId: id } }); await flushPromises()
+  expect(wrapper.get('[role="alert"]').text()).toContain('Mail filter:')
+  expect(wrapper.get('[role="alert"]').text()).toContain('changed')
+  expect(wrapper.text()).not.toContain('Applied with a saved receipt')
+  wrapper.unmount()
+})
