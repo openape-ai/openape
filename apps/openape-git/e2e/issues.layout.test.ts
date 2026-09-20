@@ -29,6 +29,16 @@ afterEach(async ({ task }) => { if (task.result?.state === 'fail' && page) { awa
 afterAll(async () => { await browser?.close(); await fixture?.stop() })
 
 async function visible(text: string) { await page.getByText(text, { exact: true }).first().waitFor() }
+async function signIn(reader: Page, email: string, idpToken: string) {
+  const login = await reader.request.post(`${fixture.base}/api/login`, { data: { email } })
+  expect(login.status()).toBe(200)
+  const { redirectUrl } = await login.json()
+  const authorization = await reader.request.get(redirectUrl, { headers: { authorization: `Bearer ${idpToken}` }, maxRedirects: 0 })
+  expect(authorization.status()).toBe(302)
+  const callback = authorization.headers().location
+  expect(callback).toContain(`${fixture.base}/api/callback?`)
+  await reader.goto(callback!)
+}
 async function screenshot(name: string) {
   await page.screenshot({ path: `${artifactDir}/${name}.png`, fullPage: true })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
@@ -108,11 +118,7 @@ it('keeps product selection across login and gives reporters only their own disc
     await reporterPage.goto(`${fixture.base}/report?product=plans`)
     await reporterPage.waitForURL(`${fixture.base}/`)
     const reporter = await fixture.identity('reporter@issues.test')
-    await context.addCookies(reporter.cookie.split('; ').map((cookie) => {
-      const index = cookie.indexOf('=')
-      return { name: cookie.slice(0, index), value: cookie.slice(index + 1), url: fixture.base, httpOnly: true, sameSite: 'Lax' as const }
-    }))
-    await reporterPage.reload()
+    await signIn(reporterPage, 'reporter@issues.test', reporter.idpToken)
     await reporterPage.waitForURL('**/report?product=plans')
     await reporterPage.getByLabel('What happened?').fill('Plans lost my selected product after login')
     await reporterPage.getByLabel('Expected and actual behavior', { exact: true }).fill('Expected: retain Plans. Actual: context is missing. Reproduced with a new session.')
@@ -224,8 +230,7 @@ it('opens a migrated comment after login and displays original attribution and p
   try {
     await reader.goto(`${fixture.base}/legacy?url=${encodeURIComponent(imported.sourceUrl)}#issuecomment-99`)
     await reader.waitForURL(`${fixture.base}/`)
-    await context.addCookies(user.cookie.split('; ').map((cookie) => { const index = cookie.indexOf('='); return { name: cookie.slice(0, index), value: cookie.slice(index + 1), url: fixture.base, httpOnly: true, sameSite: 'Lax' as const } }))
-    await reader.reload()
+    await signIn(reader, owner, user.idpToken)
     await reader.waitForURL(`**/i/${imported.issueId}#comment-${imported.commentId}`)
     await reader.getByText('Original comment retained across migration.', { exact: true }).waitFor()
     await reader.getByText('Imported from Forgejo: Ghost', { exact: true }).waitFor()
