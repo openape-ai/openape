@@ -1,3 +1,5 @@
+import { parseWorkflowView } from '../contracts/workflows'
+import type { WorkflowCommand, WorkflowView } from '../contracts/workflows'
 import type { RunContextRequest, ServiceCheck, ServiceRequest  } from '../contracts/services'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -256,9 +258,11 @@ export class FixtureWorker {
     return view
   }
 
+  async workflows(command: WorkflowCommand): Promise<WorkflowView> { return parseWorkflowView(await this.dispatch({ workflow: command })) }
+
   async scheduling(command: ScheduleCommand): Promise<ScheduleView> { return parseScheduleView(await this.dispatch({ schedule: command })) }
 
-  private dispatch(command: { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()

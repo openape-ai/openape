@@ -1,3 +1,4 @@
+import { removeWorkflowSchema } from '../storage/legacy'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -72,6 +73,7 @@ it('migrates schema 11 resources without losing assignments or their revisions',
   const f = fixture(); const reference = f.registry.assignReference(f.pod.id, 'Notes', join(f.store.root, 'notes.txt'))
   const root = f.store.root; f.store.close(); stores.pop()
   const previous = new DatabaseSync(join(root, 'control.sqlite'))
+  removeWorkflowSchema(previous)
   previous.exec(`ALTER TABLE pods DROP COLUMN metadata_revision; DROP TABLE pod_chat_origins; DROP TABLE master_creations; DROP TABLE pod_descriptions; DROP TABLE summary_domains; DROP TABLE program_leases; DROP TABLE master_message_scopes; DROP TABLE master_contexts; DROP TABLE pod_variables; DROP TABLE script_credential_approvals;
     ALTER TABLE resources RENAME TO newer_resources;
     CREATE TABLE resources(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), revision INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('reference','tool','connection')), state TEXT NOT NULL CHECK(state IN ('ready','missing','expired','revoked','refreshRequired')), name TEXT NOT NULL, configuration TEXT NOT NULL);

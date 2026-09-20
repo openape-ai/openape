@@ -55,6 +55,7 @@ export class Scheduler {
   }
 
   requestManual(podId: string, expectedScript?: string): void {
+    if (this.store.db.prepare('SELECT 1 FROM workflow_reservations WHERE pod_id=?').get(podId)) throw new Error('Pod is reserved by an unfinished workflow')
     if (expectedScript) {
       if (this.store.getPod(podId).activeScript !== expectedScript) throw new Error('Script changed; review before running')
       if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=?').get(podId)) throw new Error('No execution slot available; try again after the active run')
@@ -85,7 +86,7 @@ export class Scheduler {
 
   drain(): void {
     const available = () => (this.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count as number) < (this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency as number)
-    const ready = this.store.db.prepare('SELECT e.pod_id,min(e.sequence) AS first FROM accepted_events e JOIN pods p ON p.id=e.pod_id WHERE e.state=\'pending\' AND p.lifecycle!=\'archived\' AND (p.lifecycle=\'active\' OR e.source=\'manual\') AND NOT EXISTS(SELECT 1 FROM run_leases l WHERE l.pod_id=e.pod_id) AND NOT EXISTS(SELECT 1 FROM accepted_events b WHERE b.pod_id=e.pod_id AND b.state IN (\'blocked\',\'claimed\')) GROUP BY e.pod_id ORDER BY first').all()
+    const ready = this.store.db.prepare('SELECT e.pod_id,min(e.sequence) AS first FROM accepted_events e JOIN pods p ON p.id=e.pod_id WHERE e.state=\'pending\' AND p.lifecycle!=\'archived\' AND (p.lifecycle=\'active\' OR e.source=\'manual\') AND NOT EXISTS(SELECT 1 FROM workflow_reservations w WHERE w.pod_id=e.pod_id) AND NOT EXISTS(SELECT 1 FROM run_leases l WHERE l.pod_id=e.pod_id) AND NOT EXISTS(SELECT 1 FROM accepted_events b WHERE b.pod_id=e.pod_id AND b.state IN (\'blocked\',\'claimed\')) GROUP BY e.pod_id ORDER BY first').all()
     for (const row of ready) {
       if (!available()) break
       const podId = row.pod_id as string

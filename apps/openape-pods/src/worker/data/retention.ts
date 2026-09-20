@@ -37,6 +37,7 @@ export class DataRetention {
 
   async deletePod(podId: string, revision: number, name: string): Promise<void> {
     assertDataIdle(this.store)
+    if (this.store.db.prepare('SELECT 1 FROM workflow_members WHERE pod_id=? UNION ALL SELECT 1 FROM workflow_nodes WHERE pod_id=? LIMIT 1').get(podId, podId)) throw new Error('Pod is referenced by workflow configuration or history')
     const pod = this.store.getPod(podId)
     if (pod.lifecycle !== 'archived' || pod.revision !== revision || pod.name !== name) throw new Error('Archive and review the current pod before deleting it')
     const runIds = this.store.db.prepare('SELECT id FROM runs WHERE pod_id=?').all(podId).map(row => row.id as string)
