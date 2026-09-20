@@ -17,6 +17,7 @@ export function sourceFence(repositoryId) {
     attachment: alias => `(${child(alias)}) OR ${alias}.comment_id IN (SELECT id FROM comment WHERE issue_id IN (${issues}))`,
   }
   const names = []; const statements = []
+  const immutableAttachmentColumns = ['id', 'uuid', 'uploader_id', 'repo_id', 'issue_id', 'release_id', 'comment_id', 'name', 'size', 'created_unix', 'external_url']
   function trigger(name, operation, table, condition) {
     const fullName = `openape_issue_archive_${repositoryId}_${name}`
     names.push(fullName)
@@ -24,7 +25,8 @@ export function sourceFence(repositoryId) {
   }
   for (const [table, predicate] of Object.entries(predicates)) {
     for (const operation of ['INSERT', 'UPDATE', 'DELETE']) {
-      const condition = operation === 'UPDATE' ? `(${predicate('OLD')}) OR (${predicate('NEW')})` : predicate(operation === 'DELETE' ? 'OLD' : 'NEW')
+      let condition = operation === 'UPDATE' ? `(${predicate('OLD')}) OR (${predicate('NEW')})` : predicate(operation === 'DELETE' ? 'OLD' : 'NEW')
+      if (table === 'attachment' && operation === 'UPDATE') condition = `(${condition}) AND (${immutableAttachmentColumns.map(column => `OLD.${column} IS NOT NEW.${column}`).join(' OR ')})`
       trigger(`${table}_${operation.toLowerCase()}`, operation, table, condition)
     }
   }

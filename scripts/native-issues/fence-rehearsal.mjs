@@ -30,6 +30,12 @@ assert.equal((await request('/version')).data.version, '15.0.5+gitea-1.22.0')
 assert.equal((await request('/repos/pilot/pilot')).data.id, 1)
 const seed = JSON.parse(readFileSync(`${output}/seed.json`, 'utf8'))
 assert.equal(seed.issue, 1)
+const attachmentBytes = 'Archived attachment remains downloadable\n'
+const uploadBody = new FormData()
+uploadBody.append('attachment', new Blob([attachmentBytes], { type: 'text/plain' }), 'archive-proof.txt')
+const uploaded = await fetch(`${endpoint}/api/v1/repos/pilot/pilot/issues/1/assets`, { method: 'POST', headers: { Authorization: `token ${token}` }, body: uploadBody })
+assert.equal(uploaded.status, 201)
+const attachment = await uploaded.json()
 const before = sql('SELECT id,content,is_closed,num_comments FROM issue WHERE id=1; SELECT id,content FROM comment WHERE issue_id=1 ORDER BY id;')
 const sourceHash = createHash('sha256').update(before).digest('hex')
 
@@ -72,6 +78,10 @@ try {
   const read = await request('/repos/pilot/pilot/issues/1')
   assert.equal(read.status, 200)
   checkpoint('issue-read', { status: read.status, state: read.data.state })
+  const download = await fetch(`${endpoint}/attachments/${attachment.uuid}`, { headers: { Authorization: `token ${token}` } })
+  assert.equal(download.status, 200, 'Archived attachment must remain downloadable through its access check')
+  assert.equal(await download.text(), attachmentBytes)
+  checkpoint('attachment-read', { status: download.status, sha256: createHash('sha256').update(attachmentBytes).digest('hex') })
 
   const gitDirectory = `${output}/git`
   mkdirSync(gitDirectory, { recursive: true })
