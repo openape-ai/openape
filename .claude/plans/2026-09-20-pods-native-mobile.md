@@ -1,0 +1,442 @@
+# Plan: Native mobile access to OpenApe Pods
+
+<span class="badge badge-info">Approved — implementation in progress</span> <span class="badge badge-neutral">Implementation 0/6</span> <span class="badge badge-info">First proof: register → sign in → create → chat → authorized run → result</span>
+
+<p class="lead">Use the same Pods and conversations from iPhone, iPad and desktop. The registered desktop continues to run every script and program and hold local files and provider credentials. A new service at pods.openape.ai mediates authenticated traffic over an outbound desktop connection.</p>
+
+<p class="meta">Revision 2 · September 20, 2026 · <a href="https://repos.openape.ai/patrick/monorepo/issues/1362">Development issue #1362</a> · Review: <a href="https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2ZQTVS90HK79ZWQW973Y8HP">Published review</a> · Implementation approved by Patrick; milestone acceptance and external release gates remain distinct.</p>
+
+## Purpose / Big Picture
+
+**Goal.** A user registers an existing desktop, signs in with their existing DDISA/OpenApe identity on iPhone or iPad, selects a runtime, creates a Pod, completes supported setup through chat, approves an exact action, starts an authorized run and reads its result. The desktop shows the same saved Pod, conversation and run. Sleeping or disconnected desktops are visibly unavailable for execution.
+
+**Context.** Pods already has local execution, durable storage, typed operations and federated per-Pod identities. Mobile access needs a separate transport, authenticated ownership, explicit remote approval surfaces and durable delivery semantics. It does not need a cloud execution environment.
+
+**Confirmed decisions — supplied by the owner.** Swift/SwiftUI on iPhone and iPad; TestFlight first and later App Store submission; no Android initially. Execution, scripts, installed programs, local files and provider credentials stay on the desktop. The desktop initiates its authenticated outbound connection; no inbound desktop port is required. Users retain existing DDISA identity. Every Pod has its own user-associated agent identity, provisioned behind the scenes through existing provisioning and explicit consent mechanisms, without per-Pod login. User ownership and runtime placement are separate. Mobile and desktop share existing Pods/conversations. Existing identity bindings, ownership, permissions and grant enforcement remain authoritative. Mobile access never implicitly adds execution capabilities.
+
+**Scope.** Registration/revocation, same-owner Pod inventory, remote creation, shared chat/setup, results/status, explicit execution control and supported approval handling. Initial runs are single-Pod runs on one runtime. Existing workflows continue on desktop; mobile workflow editing, cross-runtime workflows, runtime migration, shared/team Pod ownership, remote terminals, arbitrary filesystem browsing and executable installation are later work. No automatic desktop wake, iOS script execution, background iOS agent, cloud Pod backup or full transcript upload is assumed.
+
+**Approved implementation recommendations (2026-09-20).** Reuse central Chats after its own review/merge; a separate mediation process under the existing hostname; desktop-owned command receipts and event outbox; online-only mutation admission in v1; a minimal server inventory and short replay buffer; content encryption from the first implementation slice, with synthetic identities for M1; typed native UI and an explicit desktop-required setup state. Patrick approved implementation from beginning to end; the defaults below are adopted.
+
+### Review mockup — proposed native screens
+
+<div class="grid">
+<div class="card"><span class="badge badge-success">Desktop online</span><h3>Pods</h3><p><strong>Work Mac</strong> · Last seen now</p><p>Daily summary · Paused<br>Invoice review · Waiting for approval</p><p><strong>New Pod</strong> → Choose runtime → Describe what it should do</p><span class="meta">iPhone navigation; iPad uses a sidebar and detail column.</span></div>
+<div class="card"><h3>Daily summary · Chat</h3><p>You: Summarize the test status.</p><p>Pod: A script is ready to review. It uses the selected status program.</p><p><span class="badge badge-warn">Owner review</span> Exact script and permission → Apply setup → Start run</p><p>Messages and saved reviews also appear on desktop.</p></div>
+<div class="card"><h3>Run result</h3><p><span class="badge badge-success">Completed</span> Status received</p><p>Runtime: Work Mac<br>Run: stable ID · Verified completion time</p><p>Result · Activity · Authorization</p><p><span class="badge badge-neutral">Offline</span> Previously viewed result remains readable; updated results require the desktop.</p></div>
+</div>
+
+## Repository Orientation
+
+### Checkout, source and workflow
+
+The requested path `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo` is a bare Git repository with stale loose source files; those files are not the inspected implementation baseline. Planning uses the new isolated checkout `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-mobile-plan`, branch `feature/issue-1362-pods-mobile-plan`, canonical main `403ecf6832426203bc98b527690f3b1cd48640fe`. No unrelated worktree is switched, cleaned, merged or edited.
+
+Canonical code/issues/PRs: `https://repos.openape.ai/patrick/monorepo`. Forgejo retains mirrored CI and the historical issue archive. Project memory resolves through `~/.claude/projects/-Users-patrickhofmann-Companies-private-repos-openape-openape-monorepo/memory` to the Obsidian silo `private-openape-openape-monorepo`; relevant note: `pods-chat-setup-contracts.md`. This document contains the operative facts rather than requiring the note to execute it.
+
+Use separate issue-linked implementation branches and native PRs. Record exact source/target SHAs and explicit issue relations; merging never closes the issue automatically. PR 78 was subsequently reviewed and merged under the implementation authorization; see Progress. Public release remains a separate concrete release gate. The local plan and Plans body must remain byte-identical after each update. Re-read the published version before editing; reconcile concurrent reviewer edits instead of replacing them silently.
+
+### Verified current behavior and reusable boundaries
+
+Paths below are repository-relative. Unless explicitly marked PR 78, they describe the inspected main SHA.
+
+| Area | Verified implementation and consequence |
+| --- | --- |
+| Electron/Vue boundary | `apps/openape-pods/src/main/app.ts` registers validated owner-window IPC; `src/preload/index.ts` exposes `PodsBridge`; `src/contracts/ipc.ts` defines channels. Vue cannot directly access arbitrary Node execution. Keep this boundary; add a remote adapter, not network access to raw IPC. |
+| Main process | `src/main/worker.ts` owns `FixtureWorker` (also used in local mode), Electron utility-process communication, connection management and privileged program/provider services. `src/main/app.ts` owns native permission dialogs. Remote callers must enter an authenticated, allowlisted operation coordinator before these services. |
+| Single storage writer | `src/worker/entry.ts` routes commands to `PodDatabase`, `MasterService`, `RunDispatcher`, `ResourceRegistry`, scheduler and workflow engine. `src/worker/storage/database.ts` uses SQLite WAL, foreign keys and synchronous FULL, content-addressed blobs, transactions and schema 20. There is no remote command journal or fleet registry. |
+| Pod creation | `PodDatabase.createPod` generates a UUID and atomically inserts a paused Pod plus checkpoint. The Pod row has revisions and script state, but no explicit user/runtime ownership columns. Identity association lives in connection metadata and is prepared lazily. Add explicit bindings without changing existing IDs. |
+| Chat today | `src/contracts/master.ts`, `src/worker/master/{service,conversations,control,setup,transport}.ts`: creation scopes can bind to a Pod; messages and provider continuations are local; `MasterService.execute` deduplicates message IDs with a request hash and permits one active model turn. Current view returns the latest 100 messages. Streaming is persisted locally and the renderer polls. This is not an outbound mobile event protocol. |
+| Central Chats dependency | [Issue 1359](https://repos.openape.ai/patrick/monorepo/issues/1359), [PR 78](https://repos.openape.ai/patrick/monorepo/pulls/78), source `a704411473bc8635746ad3df9c86f09b05538e7f`: stable conversation IDs, context revisions, pagination, shared drafts and `src/worker/control/changes.ts` / `src/contracts/control-api.ts` review receipts. Inspected read-only from Git objects. Live PR is still open; CI/E2E/layout are successful for that source, but `docs/agents/active-work.md` conflicts with the current target. Neither merged nor installed behavior is implied. Rebase/review belongs to that workstream. |
+| Run/recovery | `src/worker/runs/{dispatcher,store,runner}.ts`, `src/worker/recovery/{reconcile,effects}.ts`: run IDs, leases, script hashes, permission epochs, checkpoints, event sequences, cancellation and unknown HTTP effects already exist. `RunDispatcher.start` reserves before dispatch; restart fences old leases and requires explicit recovery. These do not promise exactly-once external program effects. |
+| Owner and agent | `src/main/connections/manager.ts`: `ConnectionManager.podConnection` selects an existing binding before the default owner, including disconnected owners. `PodIdentityManager.ensurePrepared/provision` in `connections/agent.ts` persists a key and verifies issuer/owner/key/connection. Existing bindings cannot silently move to another owner or provider. |
+| Provisioning | `modules/nuxt-auth-idp/src/runtime/server/api/pods/agents.post.ts` and `api/broker-agents.post.ts` derive stable subjects from owner plus Pod ID, verify the owner or receipt and return `permissions: none`. Broker enrollment binds the same key/owner/connection immutably. Retrying the same identity is useful; replacing a lost key is not a retry. |
+| Credentials | `src/main/connections/{cache,macos}.ts` encrypts credential files using Electron safeStorage; `withCache` creates scoped temporary plaintext for local subprocess use and removes it afterward. Local SQLite/blobs are not thereby end-to-end encrypted. Never serialize connection caches, private keys, provider tokens or protected program state to mobile. |
+| Execution authority | `src/main/broker/authorization.ts` uses `AgentAuthority` and `@openape/apes/assigned`; the executor checks active identity/key, original decision-IdP signature, exact target/action/provenance and direct authoritative grant consumption. `src/main/programs/grants.ts` and local resources impose additional constraints. Relay authentication cannot replace any check. |
+| Approval surfaces | `src/main/app.ts` uses local dialogs for directories, program selection/assignment, HTTP permission, dependency preparation, script-secret access, backups and effect reconciliation. `RunCommand.openApproval` opens the decision provider. Chat proposals alone are not saved permissions. Remote handling needs typed reviews or an explicit desktop handoff. |
+| Shared auth | `packages/auth/src/idp/client-metadata.ts` verifies exact redirect membership and has a special static native public-client map. Desktop `connections/owner.ts` uses `apes-cli` and localhost:9876; do not copy that callback into iOS. `modules/nuxt-auth-sp/.../verified-principal.ts` provides strict exchanged-SP-token/session checks, but its principal omits issuer provenance; extend deliberately for issuer+subject ownership. |
+
+### Verified deployment versus proposed service
+
+Read-only checks on September 20 returned `GET https://pods.openape.ai/api/health` → `{"ok":true,"service":"openape-free-idp"}`. Discovery reports issuer `https://pods.openape.ai`, agent domain `pods.openape.ai`, Grant Brokering `1.0`, enrollment `/api/broker-agents` and grant API `/api/grants`.
+
+Live container inspection through `ssh chatty.delta-mind.at` found `openape-prod-pods-idp-1` on `registry.openape.ai/openape-pods-idp:prod-ce1a8fb8`, healthy. The owner IdP is independently running `openape-free-idp:prod-78fad3f1`, healthy. This is more recent than the dated note that both used `ce1a8fb8`. The watched Traefik file `/data/coolify/proxy/dynamic/pods-idp.yml` routes the hostname to `http://10.0.1.1:3027`, excluding public `/api/register`. `compose/chatty.yml` mounts `/home/openape/projects/openape-pods-idp/shared`; `scripts/deploy-image.mjs` has the `pods-idp` target. Existing provider keys/database stay separate from the owner's IdP.
+
+**Not present in inspected code/configuration:** desktop registration, mobile sessions, outbound runtime sockets, routed Pod commands or a mobile synchronization store. The provider is deployed; the proposed mediation service is new. Health/discovery/container checks do not establish an installed desktop version or a full production grant round trip. No owner profile, mailbox, schedule, live grant or consent was modified.
+
+### Toolchain and commands
+
+Node 24.15.0 and pnpm 10.29.3 are pinned. The desktop uses Electron 40.9.3, Vue, TypeScript, SQLite and a bundled Codex runtime. Server apps use Nuxt/H3. SwiftUI/Swift, URLSession, AuthenticationServices, CryptoKit, Keychain and XCTest are the proposed native stack. Recommend iOS/iPadOS 18 minimum, subject to device coverage confirmation; verify the required shipping Xcode/SDK at distribution time.
+
+From the dedicated checkout:
+
+```sh
+export PATH=/Users/patrickhofmann/Companies/private/repos/openape/.toolchains/pnpm/10.29.3/bin:$PATH
+. ./scripts/activate-node.sh
+pnpm install --frozen-lockfile
+pnpm run doctor
+pnpm check:affected --base origin/main --head HEAD --dry-run
+pnpm --filter @openape/pods dev
+```
+
+For implementation, use an isolated synthetic profile through the existing Electron harness; do not start development against the installed owner's profile. Existing focused commands are `pnpm --filter @openape/pods test`, `pnpm --filter @openape/pods build`, `pnpm --filter @openape/pods package:mac`, `pnpm --filter @openape/pods test:e2e` and `pnpm --filter @openape/protocol-conformance test`. The complete repository gate remains `pnpm check:ci`; full `pnpm lint` and `pnpm typecheck` are required before implementation commits/deploys. Prebuild consumed workspaces serially using the existing check runner. No fake success from skipped suites.
+
+## Milestones
+
+Each milestone is a separate review/deployment unit; M1 is the first vertical slice, not a server-only foundation. Its three PR-sized changes can be reviewed independently behind disabled flags, with integrated acceptance required before calling M1 complete. Proceed through the milestones sequentially under Patrick’s end-to-end implementation authorization; record external release gates separately.
+
+### Milestone 1: Complete native vertical slice with isolated identities
+
+**Goal.** Register desktop → log in on mobile → create a Pod remotely → chat → explicitly authorize and start a harmless run → view its real result on mobile and desktop.
+
+**Steps.**
+
+1. Resolve the central Chats dependency by consuming its approved merged implementation, preserving IDs/history/context checks. If its review remains blocked, stop the dependent implementation and update this plan; do not copy the branch wholesale or build a second conversation model.
+2. Add the versioned schemas/fixtures described below, a proposed `apps/openape-pods-relay` Nuxt service, and registration/session/routing persistence. Default remote capability off. Use the existing Nuxt/Vitest/E2E patterns and serial SQLite transaction approach. Do not extend IdP code into a general execution server.
+3. Add desktop `src/main/remote/` transport/auth and `src/worker/remote/` journal/outbox/ownership modules. Refactor only the necessary local operation boundaries so local UI and remote adapters call the same services. Add a single allowed catalog-backed program assignment review needed by the fixture, plus script apply and run approval. All other unsupported sensitive setup returns `desktop_action_required`.
+4. Add `apps/openape-pods-ios/OpenApePods.xcodeproj`, shared scheme `OpenApePods`, native sign-in/runtime picker/Pod list/creation/chat/review/run detail. M1 uses encrypted synthetic content over TLS, requires both devices online, and has no APNs dependency. App-to-relay login uses the normal human SP flow; agent provisioning occurs on desktop.
+5. The desktop fixture has a connected disposable owner/decision IdP, a separate disposable agent provider, a recorded model and an already installed harmless fixture CLI with an apes descriptor. After mobile creation, the mobile user explicitly assigns that catalog item to this Pod, reviews the generated exact script, requests and approves a one-shot grant at the decision IdP, then starts the run. Registration does not preapprove capabilities. Add one live controlled model smoke check using disposable data separately from deterministic CI.
+
+**Acceptance and focused tests.** New Pod appears once, paused, on both clients with the same UUID, owner, agent identity and conversation ID. Chat persists through both app restarts. The authorization round trip uses two independent signing authorities and consumes the one-shot grant once. Exactly one run ID completes with the harmless CLI's expected result. Denial, wrong owner, expired command, revoked runtime, unavailable decision IdP and duplicate creation must fail safely. A TLS interception fixture sees no provider token, owner refresh token or agent private key. No inbound desktop listener is added for this feature.
+
+**Proof.** Extend existing `apps/openape-pods/test/{onboarding,master,storage}` and `e2e/` suites, plus existing IdP/Grants suites. Run the focused commands above after lint/typecheck/build; server runs its proposed `pnpm --filter @openape/pods-relay test` and real boot fixture. Native XCTest uses the shared wire fixtures and an integrated disposable stack. Run `xcodebuild -list -project apps/openape-pods-ios/OpenApePods.xcodeproj`, `xcrun simctl list devices available`, then `xcodebuild test -project apps/openape-pods-ios/OpenApePods.xcodeproj -scheme OpenApePods -destination "platform=iOS Simulator,id=$PODS_SIMULATOR_ID"`, with `PODS_SIMULATOR_ID` set to an ID from that inventory. Capture inspected iPhone/iPad and desktop proof; publish harmless evidence through ape-testruns. These proposed app/scheme/filter names become real in M1, not before.
+
+**Compatibility/deploy/rollback.** Merge contracts and disabled server first, compatible opt-in desktop second, development iOS build third. Keep private fixture access. Stop routing/revoke pilot enrollment to roll back the feature; existing local Pods, grants and provider routes continue. Retain additive server tables. A desktop schema upgrade needs its paired pre-upgrade app/profile backup because older Pods refuses newer schema versions; never install an old binary over an upgraded live profile.
+
+### Milestone 2: Delivery, recovery and shared editing
+
+**Goal.** Network loss, restarts, duplicate requests and simultaneous desktop/mobile editing do not lose acknowledged work or silently repeat actions.
+
+**Steps.** Complete persistent command state transitions, creation saga recovery, gap-aware event replay, snapshot watermarks, registration epochs, session revocation, lease fencing and concurrency handling. Add owner-safe enrollment of existing Pods and reconnect/backoff behavior. Expose stale/offline/uncertain/reconciliation states in SwiftUI. Apply bounds and fair per-runtime queues.
+
+**Acceptance and tests.** Disconnect before admission, after desktop journal commit, after run reservation and before result acknowledgement; reopen both apps. Each operation resolves to its original IDs or explicit unknown state. Same idempotency key/different payload returns 409. A duplicate non-idempotent program effect is never automatically replayed. Simultaneous script/context edits produce a visible conflict; applying old approval fails. Two sockets with one runtime identity cannot execute concurrently. Revoked device/runtime cannot reconnect, list, receive buffered content or submit commands. A different DDISA issuer using the same subject string cannot access the owner's Pods. Backup restore rotates runtime generation and never replays pending commands.
+
+**Proof.** Extend existing recovery/conversation/DB and Electron suites; reuse relay Vitest/real-stack tests and XCTest established in M1. Test cursor compaction and `resync_required`, retention and database restart with two SQLite connections. Run the complete repository gate and native suite against the reviewed SHA.
+
+**Deploy/rollback.** Server accepts previous minor clients; require the new desktop capability only for new operations. Disable new mutation kinds on failure, preserve receipts for reconciliation, and allow read/status compatibility. Do not drain a queue into an older client or downgrade receipts into new requests.
+
+### Milestone 3: Private content and real-data pilot
+
+**Goal.** Ship the approved content visibility model, with auditable retention and recovery, before external real-data testing.
+
+**Steps.** Implement the chosen envelope mode. Recommendation: authenticated per-device encryption, desktop-approved mobile key binding, encrypted snapshots/results, rotation/removal and same-user pairing recovery. Add mobile protected cache/purge behavior, no-content logging and retention jobs. Complete the threat review and direct owner-IdP consent/approval handoff. Publish accurate disclosures distinguishing relay, owner IdP, local LLM provider and APNs visibility.
+
+**Acceptance and tests.** Relay storage/network capture cannot recover chat/script/result content in encrypted mode. Substituted keys, modified route/operation metadata, replayed approvals and wrong key epochs fail on desktop. Revoked phone loses new keys/events; already downloaded content cannot be recalled and this is stated. Purge and expiry remove content from live replay storage; backup restore does not resurrect access. New phone with desktop offline cannot silently obtain old encrypted history. Physical iPhone/iPad sign-in, lock/unlock, logout and offline cached-read tests pass.
+
+**Proof.** Cross-language cryptographic vectors, tampering tests, server storage/log inspection and device tests. Use CryptoKit and Node standard cryptographic primitives; choose a standard, reviewed HPKE implementation only if native interop needs it, with explicit dependency review. No bespoke cipher or unaudited key wrapping.
+
+**Deploy/rollback.** Capability-negotiate encryption; freeze plaintext mode to synthetic/internal accounts. For real-content accounts, encryption is a minimum required capability with no downgrade fallback. If encryption fails, disable remote content/mutations and retain local work; do not fall back to readable relay payloads. A decision to ship TLS-only instead requires recorded owner approval of the visibility/retention tradeoff.
+
+### Milestone 4: Complete supported mobile operations and approval UX
+
+**Goal.** Existing Pods, historical conversations, run status/results and safe execution controls are useful on both native form factors, with clear desktop handoffs.
+
+**Steps.** Complete pagination and scoped result retrieval, setup review/proposal tracking, grant approval/denial links, explicit cancel/pause/resume and recovery inspect flows. Add typed remote reviews for approved HTTP destinations, existing program permissions and pinned dependencies only after matching desktop semantics. Script-secret capability reviews require full exact source/hash/aliases; entering/importing credentials stays on desktop in v1. Keep deletion/restore/update and uncertain external-effect reconciliation desktop-only initially. Native UI must explain unsupported steps without reporting success.
+
+**Acceptance and tests.** An existing Pod retains its exact agent/owner/permissions and desktop transcript. No cross-owner conversation or embedded tool target is visible. Both clients see the same terminal run state; cancel acknowledgement does not claim a stopped process before confirmation. iPad split view, iPhone navigation, Dynamic Type, VoiceOver, keyboard, safe areas, large transcripts and lost connection during review work. External grant approval is verified from the decision IdP; a browser return/deep link alone changes no permission.
+
+**Proof.** Existing Electron component/native suites protect refactored owner reviews; XCTest/XCUITest covers native states and interaction. Use device screenshots and the packaged Electron build to inspect actual layout. No replacement of behavioral checks with screenshot-only tests.
+
+**Deploy/rollback.** Advertise operation capabilities individually; unavailable capability shows the desktop handoff. Roll back individual commands behind server capability flags without hiding committed outcomes or modifying existing desktop authority.
+
+### Milestone 5: Notifications and TestFlight
+
+**Goal.** An authorized user can receive a useful notification, open the relevant Pod and test distributed builds on iPhone/iPad.
+
+**Steps.** Add opt-in APNs registration per mobile installation/user/environment, opaque event references, topic/collapse/expiry controls and notification preferences. Add App Store Connect app/bundle identifiers, signing/provisioning and internal TestFlight distribution, then external beta after privacy/security readiness and Beta App Review. Desktop Developer ID/notarization assets are evidence of a team, not iOS signing profiles.
+
+**Acceptance and tests.** Notification opens a freshly authorized screen; it does not approve or execute. Generic lock-screen wording contains no prompt, result, account email or secret. Duplicate/missing/late APNs notifications do not affect command truth. Logout/revocation unbinds the token; rotation and APNs 410 remove stale registrations. Test production APNs with TestFlight on physical devices and background/terminated app states. The foreground app resyncs even when no notification arrives.
+
+**Proof.** APNs mocked transport tests plus controlled device delivery; archive/distribution receipts and a tester checklist recording actual build/runtime versions. Background refresh is opportunistic, never an execution or delivery guarantee. Apple documents the background-delivery constraints in [Pushing background updates](https://developer.apple.com/documentation/usernotifications/pushing-background-updates-to-your-app).
+
+**Deploy/rollback.** Deploy notification API and sender disabled; ship capability-bearing beta; enable for opted-in pilot users. Disable APNs independently if broken. Pause a TestFlight build and offer a compatible newer build; a shipped iOS binary cannot be remotely downgraded.
+
+### Milestone 6: App Store and operational readiness
+
+**Goal.** A reviewable production release with a tested compatibility/rollback policy and an honest description of desktop dependency.
+
+**Steps.** Finalize privacy policy/data disclosures, encryption/export classification, accessibility, support and app-review notes/demo environment. Decide paid-service handling if relevant. Complete abuse/size/rate limits, monitoring without content, backup/restore drills, storage capacity, session/key recovery and release support windows. Provide a reviewer-owned or explicitly authorized disposable runtime and precise login/setup instructions; never expose the owner's production runtime. Re-check current Apple rules and SDK requirements at submission.
+
+**Acceptance and tests.** Minimum-supported and current client/runtime matrix passes; new server with older clients, older compatible server with new client and unsupported-version failure all behave as documented. A staging rollout failure restores the previous service image/route without disturbing IdP endpoints. Public metadata, privacy labels and actual retention agree. Real iPhone/iPad distribution smoke tests pass with poor network, IPv6-only networking and suspended app. Record App Review outcome separately; build readiness is not approval.
+
+**App Review risk.** Apple restricts downloaded executable behavior in §2.5.2 and imposes LAN/host constraints on the specific remote-desktop category in §4.2.7. This proposal is a native task client rather than screen mirroring; classification is an inference that needs early review feedback, not an exemption we can promise. Seek feedback with the M1/M5 demonstration; if Apple classifies it under §4.2.7, record a concrete blocker and revisit distribution with the owner. Keep agreed SwiftUI/desktop/relay architecture unless that blocker actually occurs. See [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/).
+
+**Rollback.** Stop new enrollment or affected commands by capability/version policy, retain support for existing safe reads, withdraw the rollout and publish a fixed compatible build. Preserve independent IdP/grant service and local execution. Restore service data only from a reviewed recovery point; do not overwrite newer commands, grant decisions or runtime revocations with an old backup.
+
+## Architecture and Authority
+
+<div class="callout callout-danger"><p><strong>Execution authority stays unchanged.</strong> A mobile login permits control requests for that user's enabled runtimes/Pods. It does not authorize a program, filesystem path, network destination, script-secret access or grant. Only the desktop's existing resource checks plus the original decision-IdP grant can authorize execution. Neither relay operators, a model tool call nor a transport acknowledgement can approve an action.</p></div>
+
+The logical path is SwiftUI ↔ HTTPS/foreground event stream ↔ mediation service ↔ desktop-initiated WSS ↔ authenticated desktop command adapter ↔ existing worker/coordinator. Local Vue goes through its existing main-process bridge into the same coordinator. Run services call the existing provider/decision IdPs independently. There is no cloud worker executing Pod code.
+
+### Responsibilities and persistent state
+
+| Owner | Authoritative state and duties |
+| --- | --- |
+| Desktop | Pod objects/scripts/resources/credentials, conversations/messages/provider continuation, setup proposals, reviews, runs/checkpoints/effects and detailed results. Add owner/runtime bindings, durable command inbox/receipts and event outbox transactionally beside the existing writer. Execute and independently authorize every action. |
+| Mediation service | Human/mobile sessions, owner-linked runtime public keys, approved device bindings/revocation epochs, routing leases, minimal Pod placement index, short delivery/replay buffers and access audit. Not authoritative for Pod configuration, transcript or run completion. A server projection records the desktop revision and last observed time. |
+| Existing agent provider | Agent identity/key/owner binding and signed grant-request mediation at the existing endpoints. It does not become the Pod database, mobile session issuer or runtime registry by implication. |
+| Owner decision IdP | Direct human login, broker consent, grant approval/denial/revocation/signature and atomic consumption. Neither runtime enrollment nor mobile session may mint that authority. |
+| SwiftUI | Session and device keys in Keychain; bounded protected cache of viewed Pod metadata/messages/results and unsent composer drafts. No execution/provider credentials. Optimistic local draft is not committed server/desktop truth. |
+
+**Proposed persistence.** Use a separate relay SQLite database/WAL and one process on chatty initially, with bounded transactional queues, indexes and backups. Match the established service operations instead of adding Redis or a distributed bus for one pilot. Scale to multiple workers only with explicit distributed leases/queue ownership. Tables: human/mobile sessions, device registrations, runtime registrations, ownership assertions, Pod locations, commands, event cursors/buffers, audit, later push registrations. Encrypt disks/backups and exclude short-lived content spool from backup. Capacity and retention failures reject admission with a visible 503; no silent event loss.
+
+**Minimum server inventory.** `(ownerIssuer, ownerSubject, runtimeId, runtimeGeneration, podId, placementEpoch, revision, lastSeen, availability)` plus public identity provenance when needed. Pod titles, conversation titles, scripts and result summaries are content, not harmless routing metadata: serve on demand or as encrypted display projections. No blanket sync of local files, SQLite databases, program catalog paths or old transcripts. Fetch paginated content from the online desktop; a short encrypted replay cache is delivery assistance, not a historical cloud archive.
+
+**Offline policy.** iOS reads previously viewed cache with a visible timestamp, keeps unsent text drafts, and disables create/run/apply/approve controls when the target runtime is offline. V1 does not enqueue new destructive/execution commands for a sleeping desktop. Commands accepted immediately before disconnect may finish; UI queries the existing operation ID rather than sending a replacement. Desktop can continue already authorized runs and normal local schedules through a relay outage. Approval/consume authority unavailability still fails closed. iOS backgrounding closes its stream; foreground resume uses cursors/snapshots. There is no reliable always-on mobile socket or guaranteed wake of a sleeping Mac.
+
+### Registration, identity and authorization
+
+1. **Desktop enrollment:** From a connected owner account, the user enables remote access and sees the account/runtime label and data-visibility policy. Generate a distinct installation/profile runtime UUID and device authentication key in local protected storage. This key is not a Pod agent key. Create a short-lived enrollment challenge at the relay, authenticate the owner through DDISA, bind owner issuer+subject and runtime public key atomically, and return a revocable runtime registration. Prove possession with a signed single-use relay nonce. A second connected owner on the same Mac needs its own owner binding; one owner never inherits other local accounts' Pods.
+2. **Lease:** Runtime authenticates each outbound WSS with a short-lived, audience-bound session obtained by nonce proof. Server checks registration/revocation, returns a new connection epoch and closes/fences the old socket. Desktop singleton plus durable operation ledger prevent old/new connection delivery races. A cloned backup cannot become a second executor: after restore, remote enrollment is disabled, generation rotated and new registration required.
+3. **Human mobile login:** Use `ASWebAuthenticationSession` with system passkeys/browser. The mediation service is a normal DDISA SP with exact HTTPS callback, state, nonce and PKCE. It returns a single-use, short-lived app handoff code bound to the app-generated PKCE challenge and mobile installation key; the app redeems via POST. No token in URLs, no client secret in the app, no copied CLI session. Keychain stores the limited relay session/refresh material. Prefer a claimed HTTPS app callback/associated domain; validate its full path and originating transaction. The app must reject unsolicited callbacks. Apple documents the browser-session mechanism in [ASWebAuthenticationSession](https://developer.apple.com/documentation/authenticationservices/aswebauthenticationsession).
+4. **Session policy:** Proposed relay access TTL 5 minutes, rotating refresh family maximum 30 days with 7-day idle expiry, replay detection, server-side revocation and device binding. Check active account/device/runtime on every API call/subscription and before dispatch. These are relay sessions, not DDISA assertions; Core's assertion lifetime remains ≤300 seconds. Desktop session reauth is automatic only while its registration remains active. Revocation closes streams and rejects refresh immediately at the service.
+5. **Pod ownership:** A new remote Pod explicitly binds the verified owner to the chosen owner-authorized runtime in the desktop transaction before provisioning. Existing bound Pods are indexed using their persisted owner/agent bindings; do not rewrite them. A locally created but unbound Pod must be claimed through an explicit local owner action; the current default account alone cannot establish retrospective ownership. Validate runtime announcements against local binding and owner-approved registration; arbitrary socket metadata cannot claim another owner's Pod or existing global ID.
+6. **Authorization matrix:** Direct human can list/read/control only own registered runtimes and own remotely enabled Pods. Runtime credential can update its presence, announce its own placements and receive/report its routed operations; it cannot act as human, approve grants or read another runtime's data. Pod agent credentials have no mobile-control authority. Delegated/agent sessions cannot enroll devices, claim Pods or approve; third-party automation is out of v1. Each chat context must include only authorized Pods on that runtime; reject mixed-owner contexts entirely. Remote workspace chat cannot list other local owners or tools. The desktop adapter and embedded model tools recheck every target, not only the relay's outer Pod ID.
+7. **Revocation:** Owner can revoke phone session/device or runtime independently through an authenticated account surface. Runtime revocation removes its lease, drops pending undelivered operations and future content delivery, increments epoch and requires local re-enrollment. Desktop's local “Disable remote access” immediately stops remote admission and requests remote revocation when possible. Already started side effects cannot be recalled. Attempt cancellation of tracked remote runs when connected, record actual stop outcome; local schedules are unchanged. Broker consent/agent/grant revocation remains a separate authority action with its existing wider consequences.
+
+Revocation during a network partition is not magically instantaneous at the disconnected machine. Admit remote commands only under a live, ≤30-second dispatch lease and recheck before irreversible dispatch. After that window, no new remote-started action may begin without reconnecting. Operations already started follow existing cancellation/recovery rules; execution grants are checked at their authority at point of use. UI states this limit, and audit records authorization/dispatch times.
+
+### Command routing and delivery contract
+
+Use an allowlist of product operations, not generic RPC, shell strings, process spawn, raw worker messages or arbitrary SQL. Proposed commands are `pod.create`, `pod.rename`, `chat.send`, `chat.cancel`, `changes.apply`, `changes.discard`, `setup.respond`, `review.decide`, `run.start`, `run.cancel`, `pod.pause` and `pod.resume`; expose only implemented/authorized capabilities. Read projections use typed requests for inventory, conversations, run detail and selected result artifacts.
+
+Every mutation carries `operationId` (UUID), `clientRequestId`, runtime ID/generation/placement epoch, optional Pod/conversation/run IDs, operation schema version, issued/expiry time, expected revisions and payload. Actor/owner/session are derived from authentication, never client-supplied authority. Browser writes require same-origin/CSRF checks; native bearer requests never inherit ambient browser cookies. Auth/content replies are private/no-store. Validate discovery destinations against SSRF and reject unsafe redirects, private networks and oversized responses outside isolated fixtures. Server binds idempotency to verified owner+mobile device+operation ID+canonical payload hash. Same key/same request returns its receipt; changed payload returns 409. Desktop persists the same identity/hash and checks authority again before invocation.
+
+**State machine:** `accepted` (relay durably stored) → `received` (desktop journal committed) → `applied` or `started` (local effect committed/run ID reserved) → `completed`/`failed`/`cancelled`. Terminal alternatives are `rejected`, `expired` and `unknown`. A provisioning operation can additionally expose `needs_user_action`/`needs_desktop_action` stages without pretending it completed. Every receipt reports the stage and source. An HTTP 202 or WSS acknowledgement is not proof of Pod creation, grant approval or run completion.
+
+Use at-least-once transport and exactly-once *local command acceptance* through a unique journal row, transaction and replayed receipt. The coordinator commits configuration changes plus receipt/outbox together. Run acceptance stores the dispatcher run ID inside the reservation transaction (following central Chats' durable run correlation). Never await network side effects inside a SQLite transaction. Across a provider/program boundary, uncertain completion is reconciled by existing effect records; do not promise exactly-once email, HTTP or installed-program actions. A command timeout cannot automatically cancel a committed run.
+
+**Defaults proposed for review:** 60-second expiry for run/apply/review commands; five minutes for creation/chat delivery; approvals also cannot outlive the underlying grant/review. Enforce at server admission, desktop receipt and before first side effect; do not expire an already started run because its delivery deadline passed. Limit clock skew to 30 seconds and fail visibly if time cannot be trusted. No “retry with fresh ID” after an uncertain result. Cancellation has its own stable ID, targets one run/turn and becomes terminal only after the worker confirms stop; cancellation cannot undo an external effect.
+
+**Reconnect:** heartbeat every 15 seconds, offline after 45 seconds without contact; reconnect exponential backoff with jitter from 1 to 30 seconds, honor Retry-After. Reauthenticate and negotiate protocol, receive connection epoch, reconcile unresolved operations by ID, then replay outbox events from last acknowledged cursor. Old-generation messages fail. Use bounded backpressure: 64 KiB ordinary frames, paginated/bounded larger text or artifact chunks, 100 pending operations/runtime and rate limits per owner/device. No unlimited accumulation while offline. Artifact routes resolve authorized artifact IDs/hash/length, not caller-controlled filesystem paths; arbitrary local file access is not exposed.
+
+**Events:** Desktop durably assigns event IDs and decimal-string monotonic sequences per runtime generation, with Pod/conversation/run revision and operation correlation. Commit state plus outbox together. Relay durably acknowledges before desktop compacts replayable payloads; mobile deduplicates and stores its cursor only after its cache transaction commits. Terminal events and approval changes are reliable/replayable; token streaming deltas may be coalesced and repaired from saved message snapshots. A missing sequence or expired cursor returns `resync_required` with a current snapshot watermark, never a silently truncated history. Snapshot+cursor must be read consistently; subscribe after the watermark and replay the gap. No global ordering is promised across runtimes.
+
+**Concurrent edits:** Desktop remains the serialization authority for desktop and mobile. Mutations carry Pod/config revision, conversation context revision, draft hash/revision, resource epoch and review revision as appropriate. A stale base returns 409 plus safe current revision; preserve the unsent edit for explicit re-review. Never silently last-write-win scripts, ownership, permissions or schedules. Appending chat uses stable message IDs and serialized ordering; one active provider turn remains the first supported limit, with `busy`/explicit steer or cancel instead of hidden concurrent turns. Context change invalidates old pending execution/review intents and retires provider continuation per central Chats. Applying configuration and starting a run remain distinct user actions.
+
+### Complete remote Pod creation and failure recovery
+
+1. Mobile lists available owner-authorized runtimes and chooses one with `pod.create.v1`. It submits a name and stable operation ID, with an optional initial message; no agent ID, owner override, credential or local path. Runtime must currently accept remote work. If offline, retain a local creation draft and send nothing.
+2. Relay validates session/runtime access/quota/expiry, stores admission and routes to the correct live generation. It returns an operation receipt, not a fabricated Pod row.
+3. Desktop validates owner identity against its explicitly registered local account and reserves a UUID. One SQLite transaction records the command, paused Pod, checkpoint, explicit immutable owner/runtime binding, setup stage and conversation/origin association. Refactor `createPod` to accept an internally reserved UUID or reserve it inside the same transaction; do not expose arbitrary UUID creation through legacy IPC. Save the initial chat message with its own stable ID if provided. Extend the internal identity preparation boundary to accept the already verified owner connection explicitly; remote creation must not call the current default-owner selector and hope it selects the same user. Existing default-owner changes must not race this binding.
+4. Persist the identity preparation intent/credential reference before side effects. Reuse `ensurePrepared` with the same Pod ID and key; pin the selected provider and owner decision issuer. If the owner already consented to `pods.openape.ai`, use `podBrokerReceipt` and receipt-only enrollment. Otherwise expose a directly authenticated owner-IdP consent handoff or `desktop_action_required`; do not infer consent from mobile login or runtime enrollment. Consent is account/provider-wide and explicitly names its effect on future Pods.
+5. Desktop obtains needed owner bearer locally to request a short-lived enrollment receipt; only that restricted receipt reaches the broker. Neither mobile nor mediation persistence receives the owner bearer/private key. If a new mobile-side consent is used, desktop still independently discovers/verifies it under its existing owner account before requesting a receipt. A disconnected desktop owner account requires reconnect on desktop. Existing directly provisioned Pods stay on their original issuer.
+6. Agent enrollment derives the deterministic subject, validates unchanged owner/key/connection and returns `permissions: none`. Persist identity reference and provisioning completion, then emit the saved creation receipt. User sees one Pod and setup progress, never a second per-Pod login. Pod creation remains successful-but-not-ready if a provider is temporarily unavailable; separate `pod_created`, `identity_ready` and `ready_to_run` states.
+7. Continue the same conversation with the desktop's current model/provider connection. Missing model login reports `needs_desktop_action`; the relay never runs the model on behalf of desktop. Generated script/draft, resource proposals and revisions are persisted before claiming setup success. User explicitly reviews configuration, capability assignment and grant action; run readiness is derived from actual saved script/resource/identity checks.
+8. Request run using the reviewed script hash/resource epoch, reserve the existing dispatcher run ID and apply existing grant checks. A mobile browser can display and approve/deny the exact request at the original decision IdP. Desktop polls/validates the authoritative result and consumes there. Browser “done” and push notifications are hints only. Stream status and retrieve the real desktop result on mobile.
+
+| Failure point | Required recovery |
+| --- | --- |
+| Admission reply lost | Mobile queries/retries same ID; it does not generate a new creation. |
+| Crash during local create | SQLite transaction yields either no Pod or exactly one Pod+receipt. Replay uses the same UUID. |
+| Key written, metadata interrupted | Recover the prewritten intent/credential reference; `ensurePrepared` reuses the existing key and validates ownership. Never generate replacement keys under a bound subject. |
+| Enrollment response lost | Retry exact Pod/key/owner/connection; broker binding is idempotent for that tuple. Reconcile deterministic subject. Conflicting key/owner blocks with actionable recovery. |
+| Consent/session expires | Keep the paused Pod and saved chat. Ask for the existing owner's reconnect/consent; no default-account reassignment and no copied human bearer through relay. |
+| Broker consent revoked | Stop provisioning/execution. Reconnect creates a new connection ID but must not rebind an existing identity. Existing identities require the separate explicit migration/recovery path; never silently “repair” immutable broker bindings. |
+| Model disconnect/crash | Retain accepted message and drafts with interrupted/uncertain state. Inspect before explicitly continuing; do not replay an uncertain provider turn automatically. |
+| Run reply lost or desktop restarts | Query receipt/run ID and existing recovery/effect state. Show interrupted/unknown when appropriate; no new run solely because mobile timed out. |
+| Owner cancels partial creation | Mark local Pod archived/paused and preserve identity audit. Do not automatically delete a provisioned agent or reusable consent; explicit cleanup policy is separate. |
+
+**Desktop-required setup in v1:** first local owner/model login or expired local provider credentials; choosing a local file/folder/executable/adapter; OS/keychain prompts; installing programs; importing program login state; entering secrets; backup/restore/update; confirmation of uncertain external effects. Mobile may ask for these through saved proposals and resume after the desktop reports completion. It may view an already authorized runtime catalog and review an exact existing assignment without receiving paths or credentials. No remote operation can click through a native dialog or treat its absence as approval.
+
+### Approval categories
+
+**Execution grants:** Show original owner/agent/broker/action/target/duration and open the verified owner decision-IdP page in the system authentication browser. Only direct human authority decides. No relay `/approve` pretending to be the owner; no forwarding the owner's IdP bearer to the broker. Mobile refetches and desktop verifies/consumes the grant independently.
+
+**Pod configuration/resource reviews:** The shared coordinator creates a review containing immutable ID, action, exact diff/hash, base revisions, expiry and required authority. The phone must render all decision-relevant details and return a device/session-bound explicit decision; the desktop validates again and commits through the same service used after local dialog approval. A model or chat instruction cannot create this receipt. M1 implements only its bounded fixture assignment/script review; M4 extends categories after parity tests. A raw `approved: true` argument, omitted confirmation or copied IPC method is never sufficient.
+
+**Local OS/credential/effect decisions:** Persist a desktop action and reflect its status on mobile. Approval and actual completion are different; native OS interaction remains local.
+
+## Versioned API and DDISA Assessment
+
+### Application protocol proposal
+
+Keep wire schemas independent of Electron classes and internal worker wrappers. Proposed source: `packages/pods-protocol/schema/` (JSON Schema), `openapi.yaml` (HTTP routes), canonical positive/negative JSON fixtures and TypeScript exports. Swift uses Codable DTOs with boundary validation against those fixtures; build-time code generation is optional only if it reduces measured drift. Do not make Swift depend on a JS runtime. New package/test runner wiring is a specific M1 plan-approval item; reuse Vitest and native XCTest, without replacing existing suite routing.
+
+| Surface | Proposed contract |
+| --- | --- |
+| `GET /api/mobile/v1/capabilities` | Authenticated server versions/features/limits; no owner data without session. |
+| `/mobile-auth/start`, `/mobile-auth/callback`, `/api/mobile/v1/session/exchange`, `/refresh`, `/revoke` | DDISA login and PKCE-bound one-time native session handoff; refresh rotation/revocation. |
+| `POST /api/mobile/v1/runtime-enrollments` and confirm route | Short-lived owner-approved enrollment and runtime public-key proof; idempotent completion. |
+| `GET /api/mobile/v1/runtimes`, `DELETE /.../runtimes/:id` | Owner-bound presence and revocation. |
+| `GET /api/mobile/v1/pods` | Minimal authorized placement inventory/cursor with stale indicators. |
+| `POST /api/mobile/v1/operations`, `GET /.../operations/:id` | Typed commands plus durable stage receipt; ownership filters apply to lookup too. |
+| `GET /api/mobile/v1/events?cursor=...` | Foreground resumable SSE or bounded long-poll fallback, both with Authorization header; no bearer query parameter. |
+| `POST /api/mobile/v1/queries` | Bounded typed on-demand snapshot/history/result request to runtime; 503 `runtime_offline` if unavailable and no suitable cache. |
+| `WSS /api/runtime/v1/connect` | Desktop outbound channel, first-frame authentication with tight timeout/size limits, challenge/session proof, version negotiation and replay cursors. No human cookie accepted as runtime identity. |
+| `/.well-known/apple-app-site-association` | Fixed app association for the native callback; independent of IdP discovery/JWKS. |
+
+HTTP replies use RFC 7807 problem details plus stable application code, operation ID, retryability and safe current revisions. Distinguish 401 unauthenticated, 403 denied, non-enumerating 404, 409 conflict/busy, 410 expired/revoked/cursor gone, 426 unsupported major/minimum security capability, 429 rate limited and 503 runtime/authority unavailable. Clients must not automatically retry a non-idempotent operation under a new ID.
+
+Example semantic envelope (JSON object before optional content encryption):
+
+```json
+{
+  "protocol": "pods-mobile",
+  "major": 1,
+  "minor": 0,
+  "operationId": "uuid",
+  "runtimeId": "uuid",
+  "runtimeGeneration": "uuid",
+  "placementEpoch": 1,
+  "kind": "run.start",
+  "kindVersion": 1,
+  "expiresAt": "2026-09-20T16:00:00Z",
+  "target": { "podId": "uuid" },
+  "expected": { "podRevision": 7, "resourceEpoch": 4, "scriptHash": "sha256" },
+  "body": {},
+  "contentMode": "encrypted-v1"
+}
+```
+
+This example is illustrative, not a valid fixture: M1 fixtures use actual UUID/hash values. Authentication provenance is injected after verification. For encrypted mode, sensitive `body`, expected configuration details and human-readable labels are inside the ciphertext; the routing header contains only required opaque IDs/kind/version/expiry and is bound as authenticated associated data. The desktop validates the full inner schema; the relay validates the bounded routing envelope. Use UUIDs as strings, SHA-256 as lowercase hex, RFC3339 UTC timestamps and decimal-string cursors to avoid JS/Swift integer overflow. Money/large integers, if later introduced, are strings with explicit units. Define absent versus null and enum-unknown behavior.
+
+**Version negotiation:** Server, runtime and mobile advertise supported major/minor ranges and operation/content capabilities. Negotiate their intersection for each runtime; server support alone does not imply desktop support. Unknown response fields/events may be ignored safely; unknown commands/security-required fields/enum decisions fail closed. Additive fields only within a minor. Major changes run on parallel URLs with an announced minimum version. Proposed maintenance policy: current and previous app release for at least 90 days, contingent on security; unsupported runtimes retain local operation and show “update desktop” on mobile. Do not backport semantics by dropping revision, grant or approval fields. No encryption downgrade.
+
+### Specifications read and impact
+
+Protocol remote main was verified at `25b6d89b8fc6c21f171df6c78cf6a30ca9f1ff99`. The local protocol working checkout remained at `678a1e2`; fetch plus `git show` was used to read the added Grant Brokering profile without switching it. Read Core §§2–5/7, Grants discovery/approval/signing/consumption/permissions, Delegation human creation/no chaining and SP Data Access issuer/scopes/consume rules, plus the complete Grant Brokering profile. The profile is merged but its header still says `1.0-draft`; distinguish that from the advertised capability `1.0`.
+
+| Specification | Constraint and proposed change |
+| --- | --- |
+| Core §§2–5, 7 | Discover the human's issuer through DDISA; check signature, exact issuer/audience, nonce/state, PKCE and assertion lifetime. Normal HTTPS SP callback plus app-bound handoff fits existing Core. **No normative Core change required for the recommended flow.** Publish an application login profile explaining the two PKCE transactions. A direct native client/custom scheme registered under a new DDISA native-client model would require an explicit interoperability/spec clarification first; do not silently reuse `apes-cli`. |
+| Grants §§2, 4, 6, 8 | Owner decision IdP signs and consumes; requester identity and command/host/audience remain bound. Mobile owner-browser approval uses existing endpoints. **No execution-grant type/signing/consumption change proposed.** Relay status events are product notifications, not a new Grants callback mechanism. |
+| Grant Brokering §§2–8 | Exact broker issuer/domain, direct-human consent, ≤300s enrollment receipt, immutable binding, signed ≤60s broker assertion, replay rejection, original owner signature and direct consume. Runtime registration/mobile enrollment are not broker consent. **No new broker approval/consume relay operation.** Existing API retries must retain these semantics. |
+| Delegation §7 / SP Data Access | No chained delegation, no unbounded actor, subject-domain issuer authority plus resource RBAC. V1 permits direct owner humans and bound runtime devices; it does not use a Pod as a human delegate. New relay scope catalog entries for `pods:read`, `pods:control`, `runtimes:manage` are app metadata; they do not widen existing IdP execution grants. |
+| New Pods application protocol | **Required new application specification:** runtime/device enrollment, session/handoff semantics, ownership assertions, versioned command/event/approval envelopes, encryption, revocation/lease windows and test vectors. Keep it in `docs/architecture/pods-mobile-protocol.md` plus schema package. It is not a covert extension to DDISA. If a generic native-client or device delegation standard is desired later, propose it separately in the protocol repository. |
+
+Core discovery in a shared hostname requires deliberate routing: existing `/.well-known/openid-configuration`, `/.well-known/jwks.json`, `/authorize`, `/token`, `/api/agent/*`, `/api/broker-*` and `/api/grants*` continue to reach the provider. Add only higher-priority exact prefixes for `/api/mobile/v1`, `/api/runtime/v1`, `/mobile-auth` and the Apple association. Publish/merge SP client metadata deliberately at its well-known path without overwriting IdP discovery or claiming a second issuer. The relay has its own session signing key/cookie names/database; it cannot read the provider signing key. Verify all legacy paths after every route change.
+
+## Content Encryption, Credentials and Retention
+
+| Option | Benefit and cost |
+| --- | --- |
+| TLS + encrypted server disk, no persistent content | Simplest synthetic M1; relay still sees plaintext while routing and could log it or alter display/reviews. No-storage does not mean end-to-end confidentiality. Real use requires explicit owner acceptance of that trust. |
+| Application E2EE + TLS — recommended for real-data beta | Desktop/mobile hold content keys; server sees routing metadata, timing and size, but not chat/script/result bodies. Requires key pairing, recovery/rotation, encrypted per-device fan-out and desktop-online first device enrollment. No server content search or rich push preview. |
+| Durable cloud transcript/result replica | Better offline availability across new devices, but duplicates local data, expands retention/key/restore scope and can be mistaken for backup. Outside v1; must be separately approved. |
+
+**Proposed encryption design.** Use independent mobile/runtime content keys and a standard authenticated encryption envelope with version/key ID. The desktop confirms a newly logged-in phone's public key with a short matching code or QR on both devices; identity login is still the existing DDISA login, and this one-time key binding is not a per-Pod login. This prevents the relay from silently substituting recipients. Send per-device encrypted content/session keys using a reviewed standard construction; choose the exact cross-language suite and vectors in M1's contract review before M3 implementation. Bind owner, runtime/generation, recipient device, operation/event ID, expiry and sequence as associated data; sign every mobile mutation and its sensitive approval with the paired device key so the relay cannot invent owner intent. Encryption alone without authenticated device binding does not protect against a compromised relay.
+
+New phones need the online desktop to gain keys/history; loss of all authorized devices requires explicit desktop recovery and new keys. Revocation excludes a device from future key epochs and drops pending encrypted deliveries; it cannot erase content already decrypted on a lost phone. Avoid iCloud synchronization of private device keys/cache by default. Biometric gating can protect opening/review on the phone but is not DDISA consent. The endpoint, local model provider and any grant decision page still see the information they need; E2EE of mediation does not hide grant command details from the owner IdP or prompts from the selected LLM provider.
+
+**Proposed retention defaults, to approve before real-data pilot.**
+
+| Data | Location / retention |
+| --- | --- |
+| Pod files/scripts/provider credentials/transcript | Existing desktop policy only. No automatic cloud copy. Local backup remains separate and controlled. |
+| Relay content buffer | Synthetic plaintext or approved encrypted envelopes: delete on delivery to addressed active recipients, otherwise ≤24h; never backup content spool. A lagging/offline phone uses desktop resync. |
+| Command receipt metadata | Relay 30 days; desktop deduplication tombstone (ID/hash/final disposition, no content) until runtime generation retired. An expired original request stays rejected even after relay compaction. |
+| Access/security audit | Relay 30 days initially, IDs/actions/outcomes/times only; no prompt/result/code/receipt/token. No body logging in edge/app/APM. Document backup expiry separately. |
+| Session/registration | Active until revoked/expired; revocation tombstone retained while any associated session/lease could survive, plus audit period. Restore must preserve newer revocation state or revoke all affected sessions. |
+| Mobile cache | Only fetched content, protected local storage, proposed 50 MiB / 7-day LRU; pinning/download export requires an explicit later choice. Composer drafts remain local until sent. Logout/account change wipes credentials, cache and drafts after offering explicit handling of unsent text. |
+| Result artifacts | Fetch only user-selected bounded artifacts by authorized ID. No generic local-file URLs or public object links. Clear application cache per policy; an explicit OS share/export is a user-controlled copy. |
+
+Known credentials are excluded from projections and diagnostics. Redaction is defense in depth, not a proof that script output contains no secret: current script-secret capabilities allow scripts to print secrets. Exportable run output and chat are sensitive content; use the chosen content mode and tell users which content is cached/shared. Service secrets/APNs key requests go through secrets.openape.ai, not ordinary chat or the plan.
+
+## Native App and Operations Design
+
+**Minimal structure.** One SwiftUI app target for both form factors; `App/` composition and scene handling; `Auth/` system login/Keychain/session lifecycle; `Protocol/` DTOs, transport, crypto and API errors; `Sync/` one actor owning cursors/cache/receipts; `Features/Runtimes`, `Pods`, `Chats`, `Reviews`, `Runs`; `Storage/` protected cache; `Tests/` established native target for wire/behavior/UI contracts. Use a single URLSession HTTP client and foreground event task with cancellation. No Redux-style framework, JS bridge or shared UI layer is required. iPad uses NavigationSplitView; iPhone uses stack navigation and tabs appropriate to runtime/Pod/chat/review tasks. Treat APNs as an optional wake/navigation hint after the foreground experience works.
+
+**New service placement.** Recommend `apps/openape-pods-relay`, image/deploy target `pods-relay`, private proposed port 3028 only after confirming availability. Keep provider `pods-idp` at 3027. Add paths with higher Traefik priority; no host-wide cutover. Deployment scripts must support long-lived WSS upgrades, bounded proxy timeouts, draining old sockets and readiness that distinguishes database health from connected desktops. Two services share the public hostname but have separate process identities, directories, keys, health paths and stores. Do not reuse `pods-idp`'s volume or unrestricted IdP session cookies.
+
+**Order.** Contract and integration tests → additive server with remote flag off → route/discovery tests → compatible opt-in signed desktop → simulator/internal native build → delivery/revocation hardening → chosen privacy mode → real-data private pilot → APNs/TestFlight → public readiness. Reuse the tested-image deployment pipeline on clean canonical main, native PR/mirror gates and automatic previous-tag rollback. Configure secrets through established secure channels. Back up independent databases before migrations and rehearse recovery; server rollback does not justify restoring stale grants or runtime access.
+
+**Observability.** Count active runtimes, connection age, admission/receipt lag, operation outcomes, rejected authorization, cursor gaps, dedup hits, queue depth, spool bytes, expiry and APNs errors. Use operation IDs across logs. Exclude human content, tokens and local paths. Distinguish server healthy/runtime offline/provider unavailable and show it in mobile. Alert on sustained receipt lag and capacity before rejecting work; no unattended command retries intended to “heal” unknown effects.
+
+### End-to-end evidence script
+
+Run this sequence against disposable identities and fixture data first; record exact server image, desktop source/build, mobile build, schema/protocol versions and original decision-provider authority.
+
+1. Start the separate disposable decision IdP, agent provider and relay with independent keys and empty stores; publish their fixture discovery through the existing explicitly allowed loopback E2E configuration. Use production-style HTTPS for physical-device acceptance.
+2. Start packaged desktop in a fresh test profile, connect its owner and model fixture, and register its runtime. Confirm the runtime shows online without opening an inbound port.
+3. Log in on iPhone/iPad as that owner, bind the mobile key when encrypted mode is enabled, choose runtime, create a Pod and record the creation operation ID. Verify a single paused local Pod with explicit owner and per-Pod agent `permissions: none`.
+4. Send a message; review the saved script and exact harmless fixture-program assignment from mobile. Continue the same conversation on desktop and verify the same message IDs/context revision on mobile.
+5. Request/start the run and show the original owner-IdP one-shot approval page. Deny once and verify no program invocation; request the intended run explicitly, approve its exact action, and observe one authoritative consumption and one invocation.
+6. Lose the mobile connection just after run acceptance, reconnect with the same operation ID/cursor and verify the original run completes once. Show the result and completion time on both clients.
+7. Change script/resources on desktop while mobile holds a review; mobile apply returns conflict without execution. Revoke the mobile device, try its former token/socket and verify refusal. Register a second account and verify zero visibility into the first owner's Pods/conversations/results.
+8. Preserve the check results and inspected screenshots in a shareable ape-testruns report. This is evidence for the tested build/profile only, not the owner's installed app or production mail/LLM behavior.
+
+## Progress
+
+- **2026-09-20 — Planning complete, awaiting approval:** Resolved project memory and instructions, created isolated planning checkout, inspected main and central Chats branch without modifying unrelated work, read protocol specifications, checked live provider discovery and read-only deployment state, created native issue #1362 and prepared this synchronized review plan.
+- **2026-09-20 — Approved:** Patrick requested “Zieh den Plan von Anfang bis Ende durch”. Adopted recommended E2EE/pairing, iOS 18, retention and compatibility defaults. Implementation uses the isolated `pods-mobile` worktree and `feature/issue-1362-pods-mobile` branch.
+- **M1 — In progress:** Reviewed Central Chats PR 78 at `512efc8cf8ff574a2c36990b159c422f0209c236`; all exact-source CI/E2E/layout checks passed. Merged through the protected native API against `403ecf6832426203bc98b527690f3b1cd48640fe`, producing `5e620681d29b5ab1660e9c96b67047bbc37bed81`. Mobile branch now builds on that canonical merge. Other worktrees and installed profiles remain untouched.
+- **2026-09-20 — M1 checkpoint, not acceptance:** Added the shared encrypted TypeScript/Swift wire contract, separate relay, desktop owner-bound adapter and native SwiftUI application. The real disposable DDISA IdP callback test passed for desktop/mobile enrollment and rejected missing browser binding, bad PKCE and handoff replay. Desktop unit suite passed 342 tests; protocol suite passed four including a retained CryptoKit-to-TypeScript vector; relay store suite passed six; native core passed four and the signed iPhone Simulator login UI test passed with an inspected screenshot. These checks do not yet demonstrate remote provisioning/chat/authorized execution from native UI. Delivery reconciliation, iPad acceptance, full repository gates and deployment are still pending. No production profile or service changed.
+- **2026-09-20 — M1 hardening checkpoint:** Full root lint passed all 54 workspaces. Desktop unit suite passed 344 tests; the protocol passed five tests including fixed-width P-256 generation and both-language fixtures; native core passed six. The mandatory native layout script passed real signed iPhone and iPad login UI tests with inspected screenshots. The real relay E2E now covers pilot allowlisting, DDISA enrollment, per-request device signatures/replay refusal, encrypted WSS routing and runtime revocation. Larger responses use authenticated multipart transfer; existing Pods are indexed only from saved owner/agent bindings; interrupted initial provisioning resumes with the same local identity. Shared dependency re-resolution was removed from the lockfile and the narrowed lockfile passed frozen installation. At that checkpoint full typecheck/build/gates, native end-to-end creation/setup/run proof, deployment and distribution remained pending.
+- **2026-09-20 — Review and revocation checkpoint:** Root lint (54 tasks), full typecheck (76 tasks), desktop/relay builds and 349 desktop tests passed. The native login UI passed again on real signed iPhone and iPad simulators; seven Swift core tests cover interop, protected cache retention and runtime-content deletion. Remote installed-CLI assignment now binds a desktop-offered executable to an exact expiring review and creates no grants or copied credentials; tests reject concurrent denial, expiry, withdrawal and authorization loss. Added desktop unpairing, mobile device/runtime revocation, re-registration pairing fences, and explicit runtime/service capability intersection. The complete repository check is now running; these additions still require its final result and integrated native acceptance. No mobile PR, production deployment, TestFlight upload or milestone acceptance is claimed.
+- **2026-09-20 — Foundation committed:** Implementation commit `5f39e87a3d7a13732cd488a588cb3ef5a828c653` contains the default-disabled foundation. The first complete `pnpm check:ci` passed (`1789931690129-5e620681-all`), including web E2E and signed iPhone/iPad layout suites. The later isolated restore/deployment contracts passed; the read-only unprivileged Linux relay image passed SQLite-backed health and capability checks. A DDISA Core §6.1 follow-up separates opaque signed subjects from email discovery hints; root lint/typecheck, both builds, 352 desktop tests and eight relay unit tests pass. Final-source push/external gates and integrated native acceptance remain required; no production deployment, TestFlight upload or milestone acceptance is claimed.
+- **M2 — Pending:** Delivery/recovery/concurrency.
+- **M3 — Pending:** Content protection/retention and real-data pilot.
+- **M4 — Pending:** Supported operation/approval UX completeness.
+- **M5 — Pending:** APNs/TestFlight.
+- **M6 — Pending:** App Store and operational readiness.
+
+**Planning verification scope.** Frozen dependency install and CLI-auth prebuild support read-only repository tooling and plan rendering. Initial doctor correctly reported missing dependencies/build before setup. This paragraph records the initial planning checks; implementation checks are recorded separately below. The exact Plans Markdown/sanitizer rendered 38 headings and three mockup cards without unsafe elements. Local desktop (1440 px) and mobile (390 px) previews were inspected; document width matched each viewport. Source/path checks were performed and publication is verified by full body readback equality; implementation acceptance remains entirely pending. The plan remains uncommitted in its dedicated worktree until the repository's required commit gates are performed; publication is the requested proposal-review surface, not a code merge.
+
+## Surprises & Discoveries
+
+- **Bare checkout:** `git rev-parse --is-bare-repository` returned `true`; stale loose files omit modern Pods code. Canonical main in a new worktree, not those files, is the source inspected.
+- **Ownership is not a fleet model yet:** `PodDatabase.createPod` stores no human/runtime binding; `ConnectionManager.preparePodConnection` establishes the identity later. A user/runtime/Pod registry is new work even though per-Pod agents already exist.
+- **Shared operation boundary:** Central Chats is now merged in canonical main at `5e620681`; installation/profile migration has not been performed by this task.
+- **Provider deployment is real and separate:** Public health returns Free IdP, discovery advertises brokering, and the healthy live provider image is `prod-ce1a8fb8`. Owner IdP has advanced to `prod-78fad3f1`. Neither is the proposed mediation process.
+- **Rollback is asymmetric:** Current desktop refuses a database with a higher schema version; additive migration alone does not make binary downgrade safe. A paired app/profile rollback must preserve any post-upgrade data before restoration.
+
+## Decision Log
+
+| Date | Status / decision | Reason and alternatives |
+| --- | --- | --- |
+| 2026-09-20 | **Confirmed:** native SwiftUI, desktop execution, mediation at pods.openape.ai, existing DDISA/per-Pod/grant model | Owner's agreed direction; Android/cloud execution/per-Pod human login are out of scope. |
+| 2026-09-20 | **Approved recommendation:** separate relay process under explicit path prefixes | Protect the already deployed provider/decision authority and permit independent rollback. Extending the provider into a desktop control plane would couple security and availability unnecessarily. |
+| 2026-09-20 | **Approved recommendation:** consume central Chats once separately approved/merged | One conversation and operation model, preserved history and revision semantics. No duplicate mobile chat storage authority. |
+| 2026-09-20 | **Approved recommendation:** online-only admission, durable receipts, replay plus resync | Avoid delayed surprise execution; recover uncertain delivery without resubmitting effects. Offline composition remains useful. |
+| 2026-09-20 | **Approved recommendation:** E2EE before real-data external beta; synthetic TLS-only M1 | Keeps M1 demonstrable while requiring an explicit content-visibility choice before sensitive content is involved. |
+| 2026-09-20 | **Approved recommendation:** original owner-IdP browser decisions | Preserves direct human/grant authority without exposing owner tokens to mediation or inventing a broker approval endpoint. |
+| 2026-09-20 | **Approved recommendation:** first-class desktop-required steps | OS/credential/local-path operations are not safely made remote by forwarding IPC. |
+
+### Open questions and approval conditions
+
+1. **Content visibility — approved default:** E2EE with one-time desktop confirmation. No relay-readable real-data fallback.
+2. **Distribution/device coverage — before M1 project setup/M5 external beta:** iOS/iPadOS 18 is adopted. Verified team Delta Mind GmbH `Q994DN23WB`; signing/distribution and tester enrollment still need the normal Apple workflow. Existing Mac signing does not establish iOS entitlements. Early Apple classification feedback is a release risk, not a reason to replace SwiftUI now.
+3. **Retention/support defaults — before real-data pilot:** Adopted 24-hour replay buffer, 30-day receipt/audit period, 7-day/50-MiB viewed cache and 90-day previous-release support window.
+4. **Dependencies — technical gate:** Central Chats must be reviewed/merged independently; inspect the final merged contract before coding. Confirm a free private service port and current deployment/SDK constraints during rollout. No owner answer is needed for routine port selection.
+
+Approval of this plan authorizes the specified implementation scope only when explicitly given. It does not by itself approve new provider consent, live mailbox actions, production schedule changes, public data upload or public release. Those remain the product's existing concrete approval/release steps.
+
+## Session Checklist
+
+1. Read this plan and published review; reconcile updates and check Progress/owner approval.
+2. Inspect canonical main/log and own worktree status; preserve unrelated worktrees and re-resolve instructions/memory on checkout changes.
+3. Record issue/PR/source SHA and next milestone in `docs/agents/active-work.md`; start activity logging. Activate pinned toolchain and run doctor/baseline relevant checks.
+4. Verify central Chats dependency and protocol revision; do not treat a plan or passing branch test as deployed functionality.
+5. Implement only the next approved milestone, reusing established suites; record permanent consequential contract tests in its PR. New relay/native test-target registration is part of M1 review.
+6. Run required lint/typecheck/build/behavior/E2E gates in dependency order; stop at first failure. Inspect UI evidence and publish harmless proof. Record exact source/target and external mirror checks before merge.
+7. Update Progress, findings and decision records; synchronize local/published plan and verify equality. Deploy only the approved milestone with the recorded rollback pair. Leave actionable handoff state.
+
+## Outcomes & Retrospective
+
+**Current outcome:** Planning was approved. M1 implementation is in progress in the isolated mobile worktree; no milestone is accepted yet. Complete this section with actual delivery, deviations and lessons only after implementation acceptance. No claimed native app, relay deployment, TestFlight build or App Store acceptance exists yet.
+
+### Evidence and primary references
+
+- Native issue: https://repos.openape.ai/patrick/monorepo/issues/1362
+- Central Chats issue/PR: https://repos.openape.ai/patrick/monorepo/issues/1359 · https://repos.openape.ai/patrick/monorepo/pulls/78
+- Central Chats review: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2ZACGJKS6JHH84T22Q48K49
+- Provider implementation/deployment: https://repos.openape.ai/patrick/monorepo/pulls/69 · https://repos.openape.ai/patrick/monorepo/pulls/70
+- DDISA Core: https://git.openape.ai/openape-ai/protocol/src/branch/main/core.md
+- Grants: https://git.openape.ai/openape-ai/protocol/src/branch/main/grants.md
+- Grant Brokering: https://git.openape.ai/openape-ai/protocol/src/branch/main/grant-brokering.md
+- Delegation / SP Data Access: https://git.openape.ai/openape-ai/protocol/src/branch/main/delegation.md · https://git.openape.ai/openape-ai/protocol/src/branch/main/sp-data-access.md
+- Native login: https://developer.apple.com/documentation/authenticationservices/aswebauthenticationsession
+- TestFlight distribution: https://developer.apple.com/testflight/
+- Apple submission/review rules: https://developer.apple.com/app-store/review/guidelines/
+
+## Changelog
+
+- 2026-09-20: Revision 1, initial implementation proposal based on canonical main, independently inspected pending Chats implementation, current protocol and read-only provider deployment checks. Awaiting owner review; no implementation.
+
+- 2026-09-20: Revision 2 records implementation approval, reviewed central Chats merge and the first implementation checkpoint. Encryption was brought forward into M1 to avoid a plaintext transport mode. No mobile milestone or production release is claimed complete.
+
+- 2026-09-20: Recorded real socket/device-proof acceptance, native iPad evidence, root lint, fixed-width scalar regression and bounded content transfers. Implementation remains in M1.
+
+- 2026-09-20: Recorded program-review concurrency, native device management, version negotiation, root typecheck/build evidence and start of the complete repository gate.

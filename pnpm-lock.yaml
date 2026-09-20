@@ -897,6 +897,9 @@ importers:
       '@openape/grants':
         specifier: workspace:*
         version: link:../../packages/grants
+      '@openape/pods-protocol':
+        specifier: workspace:*
+        version: link:../../packages/pods-protocol
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.0
@@ -948,6 +951,42 @@ importers:
       vue-tsc:
         specifier: 'catalog:'
         version: 3.3.5(typescript@5.9.3)
+
+  apps/openape-pods-ios: {}
+
+  apps/openape-pods-relay:
+    dependencies:
+      '@openape/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@openape/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@openape/pods-protocol':
+        specifier: workspace:*
+        version: link:../../packages/pods-protocol
+      h3:
+        specifier: 'catalog:'
+        version: 1.15.11
+      jose:
+        specifier: 'catalog:'
+        version: 5.10.0
+      nuxt:
+        specifier: 'catalog:'
+        version: 4.5.2(b160ccb43fc266624c2f929ad51ac29c)
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.20.0
+      openape-e2e:
+        specifier: workspace:*
+        version: link:../../examples/e2e
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@22.20.0)(@vitest/browser-playwright@4.1.10)(@vitest/coverage-istanbul@4.1.10)(happy-dom@20.11.1)(vite@8.2.1(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
 
   apps/openape-pr:
     dependencies:
@@ -2082,6 +2121,21 @@ importers:
       '@types/shell-quote':
         specifier: 'catalog:'
         version: 1.7.5
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.25)(tsx@4.22.4)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@22.20.0)(@vitest/browser-playwright@4.1.10)(@vitest/coverage-istanbul@4.1.10)(happy-dom@20.11.1)(vite@8.2.1(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
+
+  packages/pods-protocol:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.20.0
       tsup:
         specifier: 'catalog:'
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.25)(tsx@4.22.4)(typescript@5.9.3)(yaml@2.9.0)

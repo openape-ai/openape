@@ -1,3 +1,5 @@
+import { RemoteControl } from './remote/control'
+import type { RemoteInternal } from './remote/control'
 import { ChatRegistry } from './master/chat-registry'
 import { parseChatsCommand } from '../contracts/chats'
 import { reviewMailBatch, reconcileMailEffect } from './mail/workflow'
@@ -94,6 +96,7 @@ const scripts = new ScriptWorkspace(store, registry, masterControl, runtime)
 const scriptController = new AbortController()
 const master = new MasterService(store, runtime, masterControl, fixtureProvider)
 
+const remote = new RemoteControl(store, master, dispatcher, registry, scheduler, Date.now, { create: async (podId, applicationId) => String(await mailBridge.remoteProgramState({ operation: 'create', podId, applicationId })), discard: async (podId, stateId) => { await mailBridge.remoteProgramState({ operation: 'discard', podId, stateId }) } })
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
 let scanAt = 0
 let storageAt = 0
@@ -168,6 +171,9 @@ port.on('message', async (event) => {
       new ProgramControl(store, registry).execute({ type: 'recover' })
       await data.retention.cleanDeletedFiles(); await data.retention.view()
       port.postMessage({ id: request.id, state: true }); return
+    }
+    if (request.command && typeof request.command === 'object' && 'remote' in request.command) {
+      port.postMessage({ id: request.id, state: await remote.execute(request.command.remote as RemoteInternal) }); return
     }
     if (request.command && typeof request.command === 'object' && 'chats' in request.command) {
       port.postMessage({ id: request.id, state: new ChatRegistry(store).execute(parseChatsCommand(request.command.chats)) }); return

@@ -1,3 +1,4 @@
+import { migrateRemote } from '../remote/migration.ts'
 import { migrateChats } from '../master/chat-migration.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, statfsSync, writeFileSync } from 'node:fs'
@@ -36,7 +37,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 21
+export const schemaVersion = 22
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -276,6 +277,7 @@ PRAGMA user_version=20;`)
       }
 
       if (version < 21) { migrateChats(this.db); this.db.exec('PRAGMA user_version=21;') }
+      if (version < 22) { migrateRemote(this.db); this.db.exec('PRAGMA user_version=22;') }
     })
   }
 
