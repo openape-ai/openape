@@ -1,5 +1,38 @@
 # Active work
 
+## Native mobile Pods (September 20, 2026)
+
+[Issue 1362](https://repos.openape.ai/patrick/monorepo/issues/1362),
+[approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2ZQTVS90HK79ZWQW973Y8HP).
+Patrick authorized implementation from beginning to end. Worktree `pods-mobile`,
+branch `feature/issue-1362-pods-mobile`, base
+`5e620681d29b5ab1660e9c96b67047bbc37bed81`. No mobile PR or deployment yet.
+Central Chats PR 78 was reviewed at source
+`512efc8cf8ff574a2c36990b159c422f0209c236` with successful exact-source external
+CI/E2E/layout and merged through the protected native API against
+`403ecf6832426203bc98b527690f3b1cd48640fe`. Other worktrees remain untouched.
+
+M1 is in progress, not accepted. Draft changes add an encrypted TypeScript/Swift
+transport, separate default-disabled relay, owner-bound desktop worker adapter
+and native SwiftUI application. [Application contract](../architecture/pods-mobile-protocol.md).
+Real disposable DDISA callback enrollment and WSS encrypted routing/revocation
+passed; signed native login UI passed on iPhone and iPad with inspected screenshots.
+The desktop suite now passes 351 tests; root lint passes all 54 workspaces and full typecheck passes 76 tasks. The initial complete `pnpm check:ci` passed (`1789931690129-5e620681-all`); later deployment/restore changes also passed focused checks and require exact-head external gates.
+Multipart checks caught a millisecond expiry boundary and variable-width Node
+P-256 scalars; both are corrected, with six protocol contracts passing. Seven native core contracts pass, including
+cross-language ciphertexts, chunk assembly and per-entry cache expiry.
+These results do not establish native provisioning/chat/authorized run acceptance.
+
+Remote CLI reviews now reject concurrent denial/expiry/revocation without adding grants. Device management, capability negotiation and renewed-registration fences are implemented. An unprivileged, read-only linux/amd64 relay image passed a SQLite-backed health/capability smoke check. The independent deployment target and router are prepared in Git only; see [rollout](../operations/pods-mobile.md).
+
+Next: prove native
+creation through original-IdP authorized execution/result using isolated fixtures;
+run complete repository gates; create independently reviewable PRs and record exact
+source external checks before merge. Then deploy the disabled relay through the
+existing tested-image workflow, preserve provider routes, and proceed through the
+remaining approved milestones. Installed owner profiles, real grants/mailboxes,
+production services and public releases have not been changed by mobile work.
+
 ## Central Pod chats (September 20, 2026)
 
 Follow-up: Patrick requested model selection at the composer through `/` and
