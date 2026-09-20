@@ -8,7 +8,7 @@ it('shows storage limits, preserves recovery access after an unavailable worker 
     if (command.type === 'backup') throw new Error('Disk full; last backup retained')
     return { usedBytes: 1024 ** 3, freeBytes: 5 * 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 1, busy: false, error: null }
   })
-  window.pods = { packages: async () => { throw new Error('No package search fixture configured') }, programs: async () => { throw new Error('No program fixture configured') }, language: async () => 'en' as const, data } as unknown as typeof window.pods
+  window.pods = { workflows: async () => ({ workflows: [], runs: [] }), packages: async () => { throw new Error('No package search fixture configured') }, programs: async () => { throw new Error('No program fixture configured') }, language: async () => 'en' as const, data } as unknown as typeof window.pods
   const wrapper = mount(DataManagement); await flushPromises()
   expect(wrapper.text()).toContain('1.00 GiB'); expect(wrapper.text()).toContain('Pending local deletions')
   await wrapper.get('input').setValue(12); await wrapper.get('form').trigger('submit'); await flushPromises()
@@ -21,7 +21,7 @@ it('shows storage limits, preserves recovery access after an unavailable worker 
   unavailable.unmount()
 })
 it('disables maintenance while work is active', async () => {
-  window.pods = { packages: async () => { throw new Error('No package search fixture configured') }, programs: async () => { throw new Error('No program fixture configured') }, language: async () => 'en' as const, scripts: async () => { throw new Error('No script fixture configured') }, data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: true, error: null }) } as unknown as typeof window.pods
+  window.pods = { workflows: async () => ({ workflows: [], runs: [] }), packages: async () => { throw new Error('No package search fixture configured') }, programs: async () => { throw new Error('No program fixture configured') }, language: async () => 'en' as const, scripts: async () => { throw new Error('No script fixture configured') }, data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: true, error: null }) } as unknown as typeof window.pods
   const wrapper = mount(DataManagement); await flushPromises()
   for (const text of ['Export backup…', 'Clean unused files', 'Verify update and back up…']) expect(wrapper.findAll('button').find(item => item.text() === text)!.attributes('disabled')).toBeDefined()
   wrapper.unmount()

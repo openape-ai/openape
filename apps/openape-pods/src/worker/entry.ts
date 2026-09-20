@@ -1,3 +1,7 @@
+import { reviewMailBatch, reconcileMailEffect } from './mail/workflow'
+import { confirmDomainsStopped, inspectDomainRecords  } from './recovery/domains'
+import { parseWorkflowCommand } from '../contracts/workflows'
+import { WorkflowEngine } from './workflows/engine'
 import type { RunContextRequest, ServiceCheck  } from '../contracts/services'
 import { DependencyStore } from './dependencies/store'
 import { programRequest } from '../main/programs/invoke'
@@ -13,7 +17,6 @@ import { DataControl } from './data/control'
 import type { DataInternal } from './data/control'
 import { SetupControl } from './onboarding/control'
 import type { SetupInternal } from './onboarding/control'
-import { inspectDomainRecords } from './recovery/domains'
 import { parseMasterCommand } from '../contracts/master'
 import { MasterControl } from './master/control'
 import { MasterService } from './master/service'
@@ -87,6 +90,7 @@ const scripts = new ScriptWorkspace(store, registry, masterControl, runtime)
 const scriptController = new AbortController()
 const master = new MasterService(store, runtime, masterControl, fixtureProvider)
 const recovery = new Recovery(store, registry, scheduler, join(dist, 'native/pods-helper'))
+const workflows = new WorkflowEngine(store, dispatcher, recovery)
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
 let scanAt = 0
 let storageAt = 0
@@ -94,6 +98,7 @@ let maintenance = false
 let preparing: Promise<unknown> | null = null
 let suspended = false
 let startupReady = false
+let preferWorkflow = true
 let ticking: Promise<void> | null = null
 const timer = setInterval(() => {
   if (ticking || suspended || !startupReady || maintenance) return
@@ -107,7 +112,12 @@ const timer = setInterval(() => {
       const error = store.db.prepare('SELECT error FROM data_settings WHERE id=1').get()?.error
       if (error) { for (const pod of store.listPods()) dispatcher.cancelPod(pod.id, String(error)); await master.stop(); return }
       if (Date.now() >= scanAt) { await watcher.scan(); scanAt = Date.now() + 15000 }
-      if (!suspended) scheduler.tick()
+      if (!suspended) {
+        const before = store.db.prepare('SELECT count(*) AS count FROM runs').get()!.count
+        if (preferWorkflow) { workflows.tick(); scheduler.tick() }
+        else { scheduler.tick(); workflows.tick() }
+        if (store.db.prepare('SELECT count(*) AS count FROM runs').get()!.count !== before) preferWorkflow = !preferWorkflow
+      }
     }
     catch (error) { console.error('Scheduler stopped', error); process.exit(1) }
   })().finally(() => { ticking = null })
@@ -196,6 +206,28 @@ port.on('message', async (event) => {
     }
     if (request.command && typeof request.command === 'object' && 'details' in request.command) {
       port.postMessage({ id: request.id, state: details.execute(parseDetailsCommand(request.command.details)) }); return
+    }
+    if (request.command && typeof request.command === 'object' && 'workflow' in request.command) {
+      const command = parseWorkflowCommand(request.command.workflow)
+      if (command.type !== 'list') store.assertStorage()
+      if (command.type === 'mailReview') { port.postMessage({ id: request.id, state: { ...workflows.view(), mailReview: reviewMailBatch(store, command.batchId) } }); return }
+      if (command.type === 'mailResolve') {
+        const review = reviewMailBatch(store, command.resolution.batchId)
+        const effect = review?.effects.find(item => item.key === command.resolution.key)
+        if (!effect) throw new Error('Mail effect is not awaiting owner reconciliation')
+        await confirmDomainsStopped(store, effect.runId, runtime.helper)
+        reconcileMailEffect(store, command.resolution)
+        port.postMessage({ id: request.id, state: { ...workflows.view(), mailReview: reviewMailBatch(store, command.resolution.batchId) } }); return
+      }
+      if (command.type === 'save') workflows.save(command)
+      if (command.type === 'delete') workflows.delete(command.id, command.revision)
+      if (command.type === 'start') workflows.start(command.id, command.revision)
+      if (command.type === 'pause') workflows.pause(command.id, command.revision, command.paused)
+      if (command.type === 'retry') await workflows.retry(command.runId, command.podId)
+      if (command.type === 'cancel') await workflows.cancel(command.runId)
+      if (command.type !== 'list') workflows.tick()
+      port.postMessage({ id: request.id, state: workflows.view() })
+      return
     }
     if (request.command && typeof request.command === 'object' && 'schedule' in request.command) {
       const command = parseScheduleCommand(request.command.schedule)

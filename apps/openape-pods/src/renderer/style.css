@@ -551,3 +551,6 @@ input:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-vi
 @media(max-width:760px){.content{padding:16px}.page-heading{flex-wrap:wrap;gap:8px}.tabs{gap:0 16px}.page-heading h1{font-size:21px}.card{padding:18px}}
 
 .sidebar-collapsed .sidebar-bottom .account-status .account-avatar { display:grid; }
+
+.workflow-navigation { border-top:1px solid var(--border); margin-top:18px; padding-top:14px; }
+.sidebar-collapsed .workflow-navigation { display:none; }

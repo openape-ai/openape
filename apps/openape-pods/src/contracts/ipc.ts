@@ -1,3 +1,4 @@
+import type { WorkflowCommand, WorkflowView } from './workflows'
 import type { PackageSearch, PackageOption } from './package-catalog'
 import type { ProgramCommand, TerminalView, ConsoleView } from './programs'
 import type { LanguageCommand, Language } from './language'
@@ -11,7 +12,7 @@ import type { RunCommand, RunView } from './runs'
 import type { ResourceCommand, ResourceState } from './resources'
 import type { WorkspaceCommand, WorkspaceState } from './control'
 
-export const channels = { packages: 'pods:packages', programs: 'pods:programs', language: 'pods:language', scripts: 'pods:scripts', data: 'pods:data', onboarding: 'pods:onboarding', master: 'pods:master', details: 'pods:details', status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs', scheduling: 'pods:scheduling' } as const
+export const channels = { workflows: 'pods:workflows', packages: 'pods:packages', programs: 'pods:programs', language: 'pods:language', scripts: 'pods:scripts', data: 'pods:data', onboarding: 'pods:onboarding', master: 'pods:master', details: 'pods:details', status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs', scheduling: 'pods:scheduling' } as const
 export type WorkerState = 'starting' | 'ready' | 'error' | 'stopped'
 export interface WorkerStatus { state: WorkerState, pid: number | null, error: string | null }
 export interface PodStatus {
@@ -22,6 +23,7 @@ export interface PodStatus {
   runtime: { electron: string, node: string }
 }
 export interface PodsBridge {
+  workflows: (command: WorkflowCommand) => Promise<WorkflowView>
   packages: (command: PackageSearch) => Promise<PackageOption[]>
   programs: (command: ProgramCommand) => Promise<ResourceState | TerminalView | ConsoleView | null>
   language: (command: LanguageCommand) => Promise<Language>

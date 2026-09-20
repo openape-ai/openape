@@ -32,7 +32,7 @@ it('language: switches every packaged view and native menus, preserves edits and
     expect(await page.getByLabel('Skriptquelltext', { exact: true }).inputValue()).toBe(code)
     await page.getByRole('button', { name: 'Skript speichern', exact: true }).click(); await page.getByRole('status').waitFor()
     for (const locale of ['de', 'en'] as const) {
-      await page.locator('.nav-button').click(); await page.locator('.language-control select').selectOption(locale)
+      await page.locator('.nav-button[aria-label]').click(); await page.locator('.language-control select').selectOption(locale)
       await expect.poll(() => page.locator('html').getAttribute('lang')).toBe(locale)
       await page.locator('.pod-button').first().click()
       const suffix = locale === 'de' ? '-de' : '-en'
@@ -51,13 +51,13 @@ it('language: switches every packaged view and native menus, preserves edits and
       await page.getByRole('tab', { name: locale === 'de' ? 'Variablen und Geheimnisse' : 'Variables and secrets', exact: true }).click()
       await page.locator('.credential-form').screenshot({ path: resolve(`.artifacts/handbook-credentials${suffix}.png`) })
       for (const [button, german, name] of [['Your accounts', 'Deine Konten', 'setup'], ['Workspace chat', 'Arbeitsbereich-Chat', 'master'], ['Data & backups', 'Daten & Sicherungen', 'data']]) {
-        await page.locator('.nav-button').click(); await page.getByRole('button', { name: locale === 'de' ? german : button, exact: true }).click()
+        await page.locator('.nav-button[aria-label]').click(); await page.getByRole('button', { name: locale === 'de' ? german : button, exact: true }).click()
         await page.getByRole('heading', { name: name === 'setup' ? (locale === 'de' ? 'Deine Konten' : 'Your accounts') : locale === 'de' ? german : button, exact: true }).first().waitFor()
         await page.screenshot({ path: resolve(`.artifacts/handbook-${name}${suffix}.png`) })
       }
       await page.locator('.pod-button').first().click(); await page.screenshot({ path: resolve(`.artifacts/handbook-groups${suffix}.png`) })
     }
-    await page.locator('.nav-button').click(); await page.getByLabel('Language', { exact: true }).selectOption('de')
+    await page.locator('.nav-button[aria-label]').click(); await page.getByLabel('Language', { exact: true }).selectOption('de')
     await app.evaluate(({ dialog }) => {
       dialog.showMessageBox = async (first: unknown, second?: import('electron').MessageBoxOptions) => { const options = second ?? first as import('electron').MessageBoxOptions; if (options.title !== 'Lokalen Pod löschen' || options.buttons?.[0] !== 'Abbrechen' || !options.message.startsWith('Order review')) throw new Error('Native dialog was not German'); return { response: 0, checkboxChecked: false } }
     })
@@ -67,7 +67,7 @@ it('language: switches every packaged view and native menus, preserves edits and
     expect(await bounds()).toBe(true); await switcher.evaluate(element => (element as HTMLElement).style.minWidth = '1200px'); expect(await bounds()).toBe(false); await switcher.evaluate(element => (element as HTMLElement).style.removeProperty('min-width'))
     await page.screenshot({ path: resolve('.artifacts/language-narrow-dark.png') })
     await app.close(); app = await launch(); page = await app.firstWindow(); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
-    await page.locator('.nav-button').click(); expect(await page.locator('.language-control select').inputValue()).toBe('de')
+    await page.locator('.nav-button[aria-label]').click(); expect(await page.locator('.language-control select').inputValue()).toBe('de')
     expect((await page.evaluate(() => window.pods.workspace({ type: 'list' }))).pods[0]).toEqual(original)
     await page.locator('.pod-button').first().click(); await page.getByRole('tab', { name: 'Skript', exact: true }).click()
     await expect.poll(() => page.getByLabel('Skriptquelltext', { exact: true }).inputValue()).toBe(code)
