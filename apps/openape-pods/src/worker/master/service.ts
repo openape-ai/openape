@@ -1,3 +1,4 @@
+import { ChatRegistry } from './chat-registry'
 import type { ChatModel } from '../../contracts/models'
 import { MasterDeadline } from './deadline'
 import { LegacyChatAdoption } from './adoption'
@@ -28,6 +29,7 @@ export class MasterService {
   constructor(private readonly store: PodDatabase, private readonly runtime: AgentRuntime, private readonly control: MasterControl, private provider?: AgentGatewayServices['provider']) {
     this.descriptions = new PodDescriptions(store, (input, signal) => summarizeConversation(store, runtime, this.provider, input, signal))
     store.transaction(() => {
+      store.db.prepare('UPDATE control_changes SET body=json_set(body,\'$.state\',\'failed\',\'$.error\',\'Run was interrupted; inspect run history before preparing another request\') WHERE json_extract(body,\'$.state\')=\'running\'').run()
       store.db.prepare('UPDATE master_contexts SET state=\'interrupted\',error=\'Previous chat was interrupted.\' WHERE state=\'running\'').run()
       store.db.prepare('UPDATE master_session SET state=\'interrupted\',error=\'Previous chat was interrupted. Inspect its actions before continuing.\',active_turn=NULL WHERE state=\'running\'').run()
       store.db.prepare('UPDATE master_messages SET state=\'interrupted\' WHERE state=\'streaming\'').run()
@@ -42,37 +44,51 @@ export class MasterService {
     }
   }
 
-  view(podId: string | null = this.context, creationId?: string): MasterView {
+  view(podId: string | null = this.context, creationId?: string, before?: number): MasterView {
     const conversations = new MasterConversations(this.store)
     const requested = creationId ? `creation:${creationId}` : podId ?? ''
     const scope = conversations.resolve(requested)
-    const boundPodId = scope && !scope.startsWith('creation:') ? scope : null
+    const conversation = new ChatRegistry(this.store).ensure(scope)
+    const podIds = conversation.context.pods.map(pod => pod.id)
+    const boundPodId = conversation.originPodId && podIds.includes(conversation.originPodId) && !conversation.unavailablePodIds.includes(conversation.originPodId) ? conversation.originPodId : null
+    const messages = conversations.messages(scope, before)
     const session = scope === conversations.resolve(this.context) && this.active ? this.store.db.prepare('SELECT * FROM master_session WHERE id=1').get()! : conversations.session(scope)
-    return { adoption: boundPodId ? new LegacyChatAdoption(this.store).preview(boundPodId) : null, ...(requested.startsWith('creation:') ? { creationId: requested.slice(9), boundPodId } : {}), description: boundPodId ? this.descriptions.view(boundPodId) : null, initialRequest: boundPodId ? conversations.initial(boundPodId) : null, ...(boundPodId ? { scriptState: this.control.setup().scriptState(boundPodId) } : {}), connected: !!this.provider, state: session.state as MasterView['state'], error: session.error as string | null,
-      messages: conversations.messages(scope),
-      drafts: this.store.db.prepare('SELECT d.*,p.name FROM script_drafts d JOIN pods p ON p.id=d.pod_id WHERE (?=\'\' OR d.pod_id=?) ORDER BY d.rowid DESC LIMIT 20').all(scope, scope).map(row => ({ id: row.id as string, podId: row.pod_id as string, name: row.name as string, revision: row.revision as number, code: row.code as string, capabilities: JSON.parse(row.capabilities as string) as string[], validation: row.validation as string | null, hash: row.script_hash as string | null })).filter(draft => !scope || draft.podId === scope),
-      proposals: scope.startsWith('creation:') ? [] : this.control.setup().proposals(scope),
+    return { changes: this.control.changes().list(conversation.id), conversation, activeConversationId: new ChatRegistry(this.store).view().activeConversationId, nextBefore: messages.length === 100 ? messages[0]!.sequence : null, adoption: boundPodId ? new LegacyChatAdoption(this.store).preview(boundPodId) : null, ...(requested.startsWith('creation:') ? { creationId: requested.slice(9), boundPodId } : {}), description: boundPodId ? this.descriptions.view(boundPodId) : null, initialRequest: boundPodId ? conversations.initial(boundPodId) : null, ...(boundPodId ? { scriptState: this.control.setup().scriptState(boundPodId) } : {}), connected: !!this.provider, state: session.state as MasterView['state'], error: session.error as string | null,
+      messages,
+      drafts: this.store.db.prepare('SELECT d.*,p.name FROM script_drafts d JOIN pods p ON p.id=d.pod_id WHERE d.pod_id IN (SELECT value FROM json_each(?)) ORDER BY d.rowid DESC LIMIT 20').all(JSON.stringify(podIds)).map(row => ({ validationError: this.store.db.prepare('SELECT error FROM master_actions WHERE json_extract(request,\'$.action\')=\'validate\' AND json_extract(request,\'$.draftId\')=? AND json_extract(request,\'$.draftRevision\')=? ORDER BY rowid DESC LIMIT 1').get(row.id, row.revision)?.error as string | null ?? null, id: row.id as string, podId: row.pod_id as string, name: row.name as string, revision: row.revision as number, code: row.code as string, capabilities: JSON.parse(row.capabilities as string) as string[], validation: row.validation as string | null, hash: row.script_hash as string | null })),
+      proposals: podIds.flatMap(id => this.control.setup().proposals(id)).slice(0, 100),
     }
   }
 
   async execute(command: MasterCommand): Promise<MasterView> {
     const conversations = new MasterConversations(this.store)
-    if (command.type === 'answerSetup') { this.control.setup().answer(command); return this.view(command.podId) }
-    if (command.type === 'resolveSetup') { await this.control.setup().resolve(command); return this.view(command.podId) }
-    if (command.type === 'adopt') { new LegacyChatAdoption(this.store).adopt(command.podId, command.hash); this.descriptions.request(command.podId); this.descriptions.start(); return this.view(command.podId) }
-    if (command.type === 'summarize') { this.descriptions.request(command.podId, true); this.descriptions.start(); return this.view(command.podId) }
+    const registry = new ChatRegistry(this.store)
+    const selected = command.conversationId ? command.type === 'list' ? registry.get(command.conversationId) : registry.assertRevision(command.conversationId, command.contextRevision!) : null
+    if (command.type === 'applyChanges' || command.type === 'discardChanges') {
+      if (!selected) throw new Error('Current change review required')
+      this.control.decide(selected, command.id, command.revision, command.type); return this.view(selected.scope)
+    }
+    if (selected && 'podId' in command && ['answerSetup', 'resolveSetup', 'adopt', 'summarize'].includes(command.type) && !selected.context.pods.some(pod => pod.id === command.podId)) throw new Error('Setup action is outside the conversation context')
+    if (command.type === 'answerSetup') { this.control.setup().answer(command); return this.view(selected?.scope ?? command.podId) }
+    if (command.type === 'resolveSetup') { await this.control.setup().resolve(command); return this.view(selected?.scope ?? command.podId) }
+    if (command.type === 'adopt') { new LegacyChatAdoption(this.store).adopt(command.podId, command.hash); this.descriptions.request(command.podId); this.descriptions.start(); return this.view(selected?.scope ?? command.podId) }
+    if (command.type === 'summarize') { this.descriptions.request(command.podId, true); this.descriptions.start(); return this.view(selected?.scope ?? command.podId) }
     if (command.type === 'begin') { conversations.begin(command.id); return this.view(null, command.id) }
-    if (command.type === 'list') return this.view(command.podId === undefined ? this.context : command.podId, command.creationId)
-    const requestedScope = command.creationId ? `creation:${command.creationId}` : command.podId ?? ''
+    if (command.type === 'list') return this.view(selected?.scope ?? (command.podId === undefined ? this.context : command.podId), command.creationId, command.before)
+    const requestedScope = selected?.scope ?? (command.creationId ? `creation:${command.creationId}` : command.podId ?? '')
     const scope = conversations.resolve(requestedScope)
-    const selectedPod = scope && !scope.startsWith('creation:') ? scope : null
-    if (command.type === 'decline') { if (command.podId && this.store.db.prepare('SELECT pod_id FROM access_proposals WHERE id=?').get(command.id)?.pod_id !== command.podId) throw new Error('Access proposal belongs to another pod'); this.store.db.prepare('UPDATE access_proposals SET state=\'declined\' WHERE id=? AND state=\'pending\'').run(command.id); return this.view(command.podId === undefined ? this.context : command.podId) }
-    if (command.type === 'cancel') { if (command.podId !== undefined && scope !== conversations.resolve(this.context)) throw new Error('Another pod owns the active chat'); await this.stop(); return this.view() }
-    const context = selectedPod ? this.store.getPod(selectedPod) : null
-    const text = `${command.text}\n\nSelected context: ${context ? JSON.stringify({ podId: context.id, revision: context.revision, name: context.name }) : 'workspace / new pod'}`
+    const conversation = registry.ensure(scope)
+    if (command.type === 'decline') {
+      const proposal = this.store.db.prepare('SELECT pod_id FROM access_proposals WHERE id=?').get(command.id)
+      if (!proposal || !conversation.context.pods.some(pod => pod.id === proposal.pod_id)) throw new Error('Access proposal is outside the conversation context')
+      this.store.db.prepare('UPDATE access_proposals SET state=\'declined\' WHERE id=? AND state=\'pending\'').run(command.id)
+      return this.view(scope)
+    }
+    if (command.type === 'cancel') { if (scope !== conversations.resolve(this.context)) throw new Error('Another pod owns the active chat'); await this.stop(); return this.view() }
+    const text = `${command.text}\n\nSelected context (application metadata): ${JSON.stringify({ conversationId: conversation.id, contextRevision: conversation.revision, pods: conversation.context.pods, workflow: conversation.context.workflow ? { id: conversation.context.workflow.id, revision: conversation.context.workflow.revision, name: conversation.context.workflow.name } : null })}`
     const requestHash = digest(JSON.stringify(command))
     const prior = this.store.db.prepare('SELECT request_hash FROM master_inputs WHERE id=?').get(command.id)
-    if (prior) { if (prior.request_hash !== requestHash) throw new Error('Message identity reused with different input'); return this.view(command.podId, command.creationId) }
+    if (prior) { if (prior.request_hash !== requestHash) throw new Error('Message identity reused with different input'); return this.view(scope) }
     if (command.type === 'steer') {
       if (scope !== conversations.resolve(this.context)) throw new Error('Another pod owns the active chat')
       const session = this.store.db.prepare('SELECT * FROM master_session WHERE id=1').get()!
@@ -128,7 +144,7 @@ export class MasterService {
       const conversations = new MasterConversations(this.store)
       conversations.capture(this.context)
       const scope = conversations.resolve(this.context)
-      if (outcome === 'idle' && scope && !scope.startsWith('creation:')) this.descriptions.request(scope)
+      if (outcome === 'idle' && scope && !scope.startsWith('creation:') && !scope.startsWith('chat:') && new ChatRegistry(this.store).ensure(scope).revision === 1) this.descriptions.request(scope)
       this.store.db.prepare('UPDATE master_messages SET state=\'interrupted\' WHERE state=\'streaming\'').run()
     }
   }
@@ -171,7 +187,7 @@ export class MasterService {
     const id = `${String(params.threadId)}:${String(params.turnId)}:${String(params.callId)}`
     try {
       if (frame.method !== 'item/tool/call' || params.tool !== 'pods_control' || params.threadId !== session.thread_id || params.turnId !== session.active_turn || typeof params.callId !== 'string' || params.callId.length > 128 || ++this.actions > 60) throw new Error('Master tool request is outside the active turn or allowed action budget')
-      const result = await this.control.execute(id, params.arguments, this.controller!.signal, this.context.startsWith('creation:') ? null : this.context || null, this.context.startsWith('creation:') ? this.context.slice(9) : null)
+      const result = await this.control.execute(id, params.arguments, this.controller!.signal, null, this.context.startsWith('creation:') ? this.context.slice(9) : null, new ChatRegistry(this.store).ensure(new MasterConversations(this.store).resolve(this.context)))
       text = JSON.stringify(result); if (Buffer.byteLength(text) > 256 * 1024) throw new Error('Action completed but its result is too large; inspect a smaller portion in the workspace')
       success = true
     }

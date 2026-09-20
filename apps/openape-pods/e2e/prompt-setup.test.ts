@@ -40,9 +40,14 @@ it('packaged prompt setup repairs a script, configures a pod and runs through th
     const started = Date.now(); await page.getByRole('button', { name: 'Send', exact: true }).click()
     await expect.poll(async () => ({ failures, state: (await page.evaluate(() => window.pods.master({ type: 'list' }))).state }), { timeout: 30000 }).toEqual({ failures: [], state: 'idle' })
     await page.getByText(setupAnswer, { exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Apply changes together', exact: true }).click()
     const workspace = await page.evaluate(() => window.pods.workspace({ type: 'list' }))
     const pod = workspace.pods.find(item => item.name === 'Greeting')!
     expect(pod.activeScript).toMatch(/^[a-f0-9]{64}$/); expect(pod.lifecycle).toBe('paused'); expect(workspace.pods.find(item => item.id === other.id)).toEqual(other)
+    expect((await page.evaluate(id => window.pods.runs({ type: 'list', podId: id }), pod.id)).runs).toHaveLength(0)
+    await page.getByRole('tab', { name: 'Overview', exact: true }).click()
+    await page.getByRole('button', { name: 'Run now', exact: true }).click()
+    await page.getByRole('tab', { name: 'Chat', exact: true }).click()
     await expect.poll(async () => (await page.evaluate(id => window.pods.runs({ type: 'list', podId: id }), pod.id)).runs[0]?.state).toBe('completed')
     const run = (await page.evaluate(id => window.pods.runs({ type: 'list', podId: id }), pod.id)).runs[0]!
     expect(run.summary).toBe('Hello from my pod (1)')
@@ -57,7 +62,8 @@ it('packaged prompt setup repairs a script, configures a pod and runs through th
     await expect.poll(async () => (await page.evaluate(id => window.pods.master({ type: 'list', podId: id }), pod.id)).description?.state).toBe('ready')
     expect(await page.locator('.master-message.user').count()).toBe(1)
     const inspected = model.results.get(13)!
-    expect(inspected.variables).toEqual([{ name: 'greeting', value: 'Hello from my pod', revision: 1 }])
+    expect(inspected.variables).toEqual([])
+    expect(chat.changes?.some(change => change.kind === 'changes' && change.state === 'applied')).toBe(true)
     const persisted = new PodDatabase(root)
     try { expect(persisted.checkpoint(pod.id).body).toEqual({ count: 1 }) }
     finally { persisted.close() }

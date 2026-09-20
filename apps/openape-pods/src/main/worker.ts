@@ -1,3 +1,5 @@
+import { parseChatsView } from '../contracts/chats'
+import type { ChatsCommand, ChatsView } from '../contracts/chats'
 import { parseWorkflowView } from '../contracts/workflows'
 import type { WorkflowCommand, WorkflowView } from '../contracts/workflows'
 import type { RunContextRequest, ServiceCheck, ServiceRequest  } from '../contracts/services'
@@ -197,6 +199,7 @@ export class FixtureWorker {
     return this.connections.execute(command)
   }
 
+  async chats(command: ChatsCommand): Promise<ChatsView> { return parseChatsView(await this.dispatch({ chats: command })) }
   async master(command: MasterCommand): Promise<MasterView> { return parseMasterView(await this.dispatch({ master: command })) }
 
   async scripts(command: ScriptCommand): Promise<ScriptView> {
@@ -262,7 +265,7 @@ export class FixtureWorker {
 
   async scheduling(command: ScheduleCommand): Promise<ScheduleView> { return parseScheduleView(await this.dispatch({ schedule: command })) }
 
-  private dispatch(command: { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()

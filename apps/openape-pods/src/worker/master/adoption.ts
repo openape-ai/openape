@@ -1,3 +1,4 @@
+import { ChatRegistry } from './chat-registry'
 import { digest } from '../storage/database'
 import type { PodDatabase } from '../storage/database'
 
@@ -36,6 +37,8 @@ export class LegacyChatAdoption {
       const first = this.store.db.prepare('SELECT rowid AS sequence FROM master_messages WHERE id=?').get(preview.firstMessageId)!
       const last = this.store.db.prepare('SELECT rowid AS sequence FROM master_messages WHERE id=?').get(preview.lastMessageId)!
       this.store.db.prepare('UPDATE master_message_scopes SET scope=? WHERE scope=\'\' AND message_id IN (SELECT id FROM master_messages WHERE rowid BETWEEN ? AND ?)').run(podId, first.sequence, last.sequence)
+      const conversation = new ChatRegistry(this.store).ensure(podId)
+      this.store.db.prepare('UPDATE chat_message_context SET conversation_id=?,revision=1 WHERE message_id IN (SELECT message_id FROM master_message_scopes WHERE scope=?)').run(conversation.id, podId)
       this.store.db.prepare('INSERT INTO pod_chat_origins VALUES(?,?)').run(podId, preview.firstMessageId)
       const other = this.store.db.prepare('SELECT 1 FROM master_message_scopes WHERE scope=\'\' LIMIT 1').get()
       if (!other) this.store.db.prepare('UPDATE master_contexts SET scope=? WHERE scope=\'\' ').run(podId)

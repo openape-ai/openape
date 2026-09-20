@@ -29,7 +29,7 @@ it('managed dependencies: packaged editor saves, prepares, validates and runs an
   const app = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: homedir(), TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
   try {
     await identity.encrypt(app, true)
-    const page = await app.firstWindow(); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
+    const page = await app.firstWindow(); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state, { timeout: 10000 }).toBe('ready')
     await page.getByRole('tab', { name: 'Script', exact: true }).click()
     await page.getByLabel('Script source').fill('import answer from \'sample-package\';\n\nexport async function run(context) {\n  return { status: \'completed\', summary: \'Library returned \'+answer, completedInputIds: context.input.eventIds, gapIds: [] }\n}\n')
     await app.evaluate(({ ipcMain }) => {

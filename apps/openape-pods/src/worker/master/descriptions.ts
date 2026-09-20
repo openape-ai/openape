@@ -19,7 +19,7 @@ export class PodDescriptions {
 
   request(podId: string, refresh = false): void {
     this.store.getPod(podId)
-    const row = this.store.db.prepare('SELECT MAX(m.rowid) AS latest FROM master_messages m JOIN master_message_scopes s ON s.message_id=m.id WHERE s.scope=? AND m.role IN (\'user\',\'assistant\') AND m.state IN (\'sent\',\'completed\')').get(podId)
+    const row = this.store.db.prepare('SELECT MAX(m.rowid) AS latest FROM master_messages m JOIN master_message_scopes s ON s.message_id=m.id WHERE s.scope=? AND NOT EXISTS(SELECT 1 FROM chat_message_context c WHERE c.message_id=m.id AND c.revision>1) AND m.role IN (\'user\',\'assistant\') AND m.state IN (\'sent\',\'completed\')').get(podId)
     if (!row?.latest) return
     const current = this.store.db.prepare('SELECT covered_row,state FROM pod_descriptions WHERE pod_id=?').get(podId)
     if (refresh && current?.state === 'ready') this.store.db.prepare('UPDATE pod_descriptions SET covered_row=0,work_row=0,work_offset=0,work_body=\'\' WHERE pod_id=?').run(podId)
@@ -49,7 +49,7 @@ export class PodDescriptions {
 
   private async update(podId: string, signal: AbortSignal): Promise<void> {
     const row = this.store.db.prepare('SELECT * FROM pod_descriptions WHERE pod_id=?').get(podId)!
-    const messages = this.store.db.prepare('SELECT m.rowid AS sequence,m.role,m.body FROM master_messages m JOIN master_message_scopes s ON s.message_id=m.id WHERE s.scope=? AND (m.rowid>? OR (m.rowid=? AND ?>0)) AND m.rowid<=? AND m.role IN (\'user\',\'assistant\') AND m.state IN (\'sent\',\'completed\') ORDER BY m.rowid LIMIT 100').all(podId, row.work_row, row.work_row, row.work_offset, row.requested_row)
+    const messages = this.store.db.prepare('SELECT m.rowid AS sequence,m.role,m.body FROM master_messages m JOIN master_message_scopes s ON s.message_id=m.id WHERE s.scope=? AND NOT EXISTS(SELECT 1 FROM chat_message_context c WHERE c.message_id=m.id AND c.revision>1) AND (m.rowid>? OR (m.rowid=? AND ?>0)) AND m.rowid<=? AND m.role IN (\'user\',\'assistant\') AND m.state IN (\'sent\',\'completed\') ORDER BY m.rowid LIMIT 100').all(podId, row.work_row, row.work_row, row.work_offset, row.requested_row)
     let bytes = 0; const segment: { role: string, text: string, continuation: boolean }[] = []; let covered = row.work_row as number; let offset = row.work_offset as number
     for (const message of messages) {
       const start = message.sequence === row.work_row ? offset : 0

@@ -8,7 +8,7 @@ import type { RunCommand, RunView } from '../contracts/runs'
 
 export default defineComponent({
   components: { RunApproval },
-  props: { selectedPodId: { type: String, default: '' } },
+  props: { selectedPodId: { type: String, default: '' }, selectedRunId: { type: String, default: '' } },
   emits: ['selected', 'navigate'],
   data() {
     return { now: Date.now(), pods: [] as StoredPod[], podId: '', runId: '', observations: {} as Record<string, string>, view: { runs: [], events: [] } as RunView, busy: false, error: '', scheduleError: '', pending: 0, blocked: 0, timer: null as ReturnType<typeof setTimeout> | null, closed: false }
@@ -24,7 +24,7 @@ export default defineComponent({
     failure() { return runFailure(this.selectedRun?.error ?? null) },
   },
   async mounted() {
-    try { this.pods = (await window.pods.workspace({ type: 'list' })).pods; this.podId = this.selectedPodId || this.pods[0]?.id || ''; if (this.podId) await this.load() }
+    try { this.pods = (await window.pods.workspace({ type: 'list' })).pods; this.runId = this.selectedRunId; this.podId = this.selectedPodId || this.pods[0]?.id || ''; if (this.podId) await this.load() }
     catch (error) { this.error = error instanceof Error ? error.message : 'Could not load runs' }
     this.scheduleRefresh()
   },

@@ -99,7 +99,7 @@ button:not(:disabled):hover {
   justify-content:space-between;
   font-weight:650;
 }
-.pod-button {
+.pod-button, .chat-link {
   width:100%;
   display:flex;
   align-items:center;
