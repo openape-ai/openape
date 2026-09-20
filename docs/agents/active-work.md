@@ -1,5 +1,35 @@
 # Active work
 
+## Central Pod chats (September 20, 2026)
+
+Issue: https://git.openape.ai/openape-ai/openape/issues/1359. Worktree
+`pods-central-chats`, branch `feature/issue-1359-central-chats`, canonical base
+`934dbcec21cce8e3620ecda51a77aa8458bcfd30` (rechecked during implementation).
+[Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2ZACGJKS6JHH84T22Q48K49).
+Chats is a sibling sidebar destination. The composer + selects explicit Pods
+and one pinned workflow; context changes preserve history and start a fresh
+provider session. Schema 21 retains legacy conversations and historical Pod
+links. Reviewed local changes apply atomically, runs require a separate owner
+action and retain actual run IDs. [Contracts](../../apps/openape-pods/docs/chats.md).
+
+The shared coordinator is `worker/control/changes.ts` over existing domain
+operations, with `contracts/control-api.ts` and authenticated owner-window IPC.
+The separately planned MCP adapter must reuse this writer and existing native
+approval surfaces; no MCP transport is introduced here. Saved Pod draft artifacts
+remain available to selected chats; conversation text, composers and pending
+change sets are separate. Stale changes require discard and deliberate preparation.
+
+Verification checkpoint: 333 unit/component tests, full lint (51 tasks), full
+typecheck (72 tasks), build and fixture package passed. Focused native regression
+suite passed 16 tests across Chats, foundation/foreign-window boundaries, groups,
+languages and script editor. It caught and fixed a narrow-sidebar group-confirmation
+overlap; legacy Workspace chat navigation now opens Chats. The complete final-source
+CI contract and native PR review remain the next gate. Final SHAs and complete gate
+logs will be retained in the native PR acceptance record; partial checks do not
+constitute merge approval. No installed app, owner profile, live mailbox, Telegram
+message or schedule activation was changed. Troop/OpenClaw remains paused.
+
+
 ## Pod workflow graphs and conservative mail filtering (September 20, 2026)
 
 Issue: https://git.openape.ai/openape-ai/openape/issues/1358. Native [PR 76](https://repos.openape.ai/patrick/monorepo/pulls/76). Worktree

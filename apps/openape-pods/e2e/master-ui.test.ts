@@ -42,6 +42,8 @@ it('master-chat: creates a manual pod, validates a draft and shows exact pending
     await page.getByRole('button', { name: 'Send', exact: true }).click()
     await page.getByText('Your pod and validated draft are ready. Microsoft access awaits your review; automatic runs remain disabled.', { exact: true }).waitFor()
     await expect.poll(async () => (await page.evaluate(() => window.pods.master({ type: 'list' }))).state).toBe('idle')
+    expect((await page.evaluate(() => window.pods.workspace({ type: 'list' }))).pods[0]?.activeScript).toBeNull()
+    await page.getByRole('button', { name: 'Apply changes together', exact: true }).click()
     const pods = (await page.evaluate(() => window.pods.workspace({ type: 'list' }))).pods
     expect(pods).toHaveLength(1); expect(pods[0]!.lifecycle).toBe('paused'); expect(pods[0]!.activeScript).toMatch(/^[a-f0-9]{64}$/)
     expect((await page.evaluate(id => window.pods.scheduling({ type: 'list', podId: id }), pods[0]!.id)).enabled).toBe(false)

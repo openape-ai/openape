@@ -1,3 +1,4 @@
+import { ChatRegistry } from './chat-registry'
 import type { MasterView } from '../../contracts/master'
 import type { PodDatabase } from '../storage/database'
 
@@ -29,6 +30,7 @@ export class MasterConversations {
       const scope = `creation:${id}`
       const first = this.store.db.prepare('SELECT m.id FROM master_messages m JOIN master_message_scopes s ON m.id=s.message_id WHERE s.scope=? AND m.role=\'user\' ORDER BY m.rowid LIMIT 1').get(scope)
       if (!first) throw new Error('Creation conversation has no initial request')
+      new ChatRegistry(this.store).bind(scope, podId)
       this.store.db.prepare('UPDATE master_creations SET pod_id=? WHERE id=?').run(podId, id)
       this.store.db.prepare('UPDATE master_message_scopes SET scope=? WHERE scope=?').run(podId, scope)
       this.store.db.prepare('UPDATE master_contexts SET scope=? WHERE scope=?').run(podId, scope)
@@ -43,7 +45,7 @@ export class MasterConversations {
 
   session(scope: string): { threadId: string | null, state: MasterView['state'], error: string | null } {
     scope = this.resolve(scope)
-    if (scope && !scope.startsWith('creation:')) this.store.getPod(scope)
+    new ChatRegistry(this.store).ensure(scope)
     const row = this.store.db.prepare('SELECT * FROM master_contexts WHERE scope=?').get(scope)
     return row ? { threadId: row.thread_id as string | null, state: row.state as MasterView['state'], error: row.error as string | null } : { threadId: null, state: 'idle', error: null }
   }
@@ -54,6 +56,8 @@ export class MasterConversations {
   }
 
   select(scope: string): void {
+    const conversation = new ChatRegistry(this.store).ensure(this.resolve(scope))
+    this.store.db.prepare('UPDATE chat_active SET conversation_id=? WHERE id=1').run(conversation.id)
     const session = this.session(scope)
     this.store.db.prepare('UPDATE master_session SET thread_id=?,active_turn=NULL,state=?,error=? WHERE id=1').run(session.threadId, session.state, session.error)
   }
@@ -61,10 +65,11 @@ export class MasterConversations {
   assign(messageId: string, scope: string): void {
     scope = this.resolve(scope)
     this.store.db.prepare('INSERT INTO master_message_scopes VALUES(?,?) ON CONFLICT(message_id) DO NOTHING').run(messageId, scope)
+    new ChatRegistry(this.store).record(messageId, scope)
   }
 
-  messages(scope: string): MasterView['messages'] {
+  messages(scope: string, before = Number.MAX_SAFE_INTEGER): MasterView['messages'] {
     scope = this.resolve(scope)
-    return this.store.db.prepare('SELECT m.* FROM master_messages m JOIN master_message_scopes s ON s.message_id=m.id WHERE s.scope=? ORDER BY m.created_at DESC,m.rowid DESC LIMIT 100').all(scope).reverse().map(row => ({ id: row.id as string, role: row.role as 'user' | 'assistant' | 'tool', text: row.body as string, state: row.state as string, at: row.created_at as number }))
+    return this.store.db.prepare('SELECT m.*,m.rowid AS sequence,c.revision AS context_revision FROM master_messages m JOIN master_message_scopes s ON s.message_id=m.id LEFT JOIN chat_message_context c ON c.message_id=m.id WHERE s.scope=? AND m.rowid<? ORDER BY m.rowid DESC LIMIT 100').all(scope, before).reverse().map(row => ({ sequence: row.sequence as number, contextRevision: row.context_revision as number | undefined, id: row.id as string, role: row.role as 'user' | 'assistant' | 'tool', text: row.body as string, state: row.state as string, at: row.created_at as number }))
   }
 }

@@ -1,17 +1,18 @@
 export const runtimeReference = {
   contractVersion: 1,
   workflow: [
-    'Read runtime, then list and inspect the target pod. In a selected pod chat, all actions are restricted to that pod. Workspace chat can create pods.',
+    'Read runtime, then list and inspect the target pod. Only explicitly selected Pods may be inspected or changed. The owner selects context with +. Workspace context can list catalogue metadata and create paused Pods.',
     'inspect.script is the same saved working source shown by the editor, including a newer saved draft. If kind=draft, use its id and revision as draftId/draftRevision when editing; if kind=version or null, create a new draft. Unsaved editor text is unavailable to this assistant and must be saved first.',
     'Use current revisions from inspect. Save ordinary variables only; their values are visible to this assistant. For secrets, propose an alias for the owner to fill in Variables and secrets. Never accept or echo secret values in chat.',
-    'Prepare the requested group and schedule. prepareSchedule saves enabled=false and pauses automation; it does not cancel a running manual run. Only the owner enables a schedule in Settings.',
+    'Prepare the requested group and schedule. prepareSchedule saves a proposal with enabled=false; Apply changes together commits it. Existing lifecycle is preserved. Replacing an enabled schedule requires separate review in Pod settings. Only the owner enables a schedule in Settings.',
     'A setup proposal appears as a review form in chat. Use description for the question/reason and instructions for concrete next steps, including how to obtain a missing secret. Ask unknown ordinary values with provider=variable instead of saving placeholders. Never claim setup or a script is complete until inspect confirms it.',
     'Request missing permissions before validation. The owner grants applications/commands and HTTPS methods in Permissions, configures program authentication in the foreground terminal, and stores named secrets in Variables and secrets. Do not infer a login status.',
     'draft accepts optional packages: {dependencies:{name:exactVersion}}. Preserve inspect.script.packages when editing. Public npm pure JavaScript libraries only. New package sets need owner preparation from Script; you cannot download them or enable install scripts. Once prepared, validate and run reuse the exact set. Packages share the script permissions and secret access.',
-    'Save a complete implementation as a draft before saying it is saved; a pending permission does not prevent saving unvalidated code. Never substitute the runtime example for the requested implementation. After required inputs and permissions exist, validate it, inspect the error and repair that same draft with its current revision. Activate only a successful validation; credential-reading scripts additionally require owner approval of that exact code from Script → Run.',
-    'Start a manual run only when requested, then inspect the result. State precisely what ran and which live-provider checks remain. Never claim that synthetic validation proves every branch or real delivery.',
+    'Save a complete implementation as a draft before saying it is saved; a pending permission does not prevent saving unvalidated code. Never substitute the runtime example for the requested implementation. After required inputs and permissions exist, validate it, inspect the error and repair that same draft with its current revision. activate prepares owner review of a successful validation; credential-reading scripts additionally require owner approval of that exact code from Script → Run.',
+    'run and runWorkflow prepare a separate Run once review. They do not execute until the owner clicks Run once. Inspect the actual run result after review. State precisely what ran and which live-provider checks remain. Never claim that synthetic validation proves every branch or real delivery.',
   ],
   actions: {
+    inspectWorkflow: {}, runWorkflow: {}, saveWorkflow: { definition: 'Existing workflow save command: type, id, revision, name, nodes, schedule, enabled; preserve activation and select every proposed member first. Saved atomically with other pending changes after owner review.' },
     runtime: {}, list: {}, create: { name: 'string' },
     inspect: { podId: 'UUID', revision: 'current pod settings revision' },
     revise: { podId: 'UUID', revision: 'current pod settings revision', name: 'string' },

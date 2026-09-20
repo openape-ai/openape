@@ -111,7 +111,8 @@ async function drop(groupId: string) {
 </template>
 
 <style scoped>
-.pod-navigation{display:flex;flex-direction:column;min-height:0;flex:1;margin-top:24px;gap:10px}
+.pod-navigation{display:flex;flex-direction:column;min-height:100px;flex:1;margin-top:24px;gap:10px}
+.pod-navigation:has(.group-form){flex-shrink:0;min-height:min-content}
 .group-tools,.group-heading,.group-toggle,.group-actions{display:flex;align-items:center;gap:6px}
 .group-tools{justify-content:space-between;font-size:11px;flex-shrink:0}
 .pod-list{overflow:auto;min-height:60px;flex:1}
