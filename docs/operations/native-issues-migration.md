@@ -363,3 +363,12 @@ validate every row and file, test authenticated legacy navigation, and only then
 release the import lock in an explicit transaction. Run another off-site backup
 and an independent restore probe. The seven-day observation starts at actual
 activation, not at plan approval or merge.
+
+Forgejo 15.0.5 increments `attachment.download_count` before serving the file and
+returns HTTP 500 if that update is denied. The source fence therefore permits
+only download-count changes: every observed identity, ownership, filename, size,
+creation and external-URL column remains immutable. The actual Forgejo rehearsal
+uploads a synthetic attachment before fencing and checks its authenticated,
+byte-exact download while fenced. The initial blanket update fence reproduced
+HTTP 500; the narrowed metadata fence returns HTTP 200. Recheck attachment schema
+columns before installing the generated SQL on another Forgejo version.
