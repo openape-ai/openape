@@ -1,0 +1,30 @@
+{
+  "name": "@openape-pods-relay/app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Outbound desktop mediation for native OpenApe Pods clients",
+  "scripts": {
+    "dev": "nuxt dev --port 3028",
+    "build": "nuxt build",
+    "typecheck": "nuxt typecheck",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "postinstall": "nuxt prepare",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts"
+  },
+  "dependencies": {
+    "@openape/auth": "workspace:*",
+    "@openape/core": "workspace:*",
+    "@openape/pods-protocol": "workspace:*",
+    "h3": "catalog:",
+    "jose": "catalog:",
+    "nuxt": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "openape-e2e": "workspace:*"
+  }
+}

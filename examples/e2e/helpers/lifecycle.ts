@@ -260,7 +260,9 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
     ?? ['pnpm', 'exec', 'nuxt', 'dev', '--port', String(port), '--host', host]
   const extraEnv = typeof opts.env === 'function' ? opts.env({ url, port }) : opts.env
 
-  const child = spawn(command[0], command.slice(1), {
+  const executable = command[0]
+  if (!executable) throw new Error('A server command must contain an executable')
+  const child = spawn(executable, command.slice(1), {
     cwd: opts.cwd,
     detached: true, // own process group → the whole tree dies on stop()
     stdio: ['ignore', 'pipe', 'pipe'],

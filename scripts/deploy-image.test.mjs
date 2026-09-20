@@ -10,7 +10,13 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resolveTruthRemote, rollbackScript } from './deploy-image.mjs'
+import { healthyResponse, resolveTruthRemote, rollbackScript } from './deploy-image.mjs'
+
+it('does not mistake the existing provider for a successful relay deployment', () => {
+  assert.equal(healthyResponse({ ok: true, service: 'openape-free-idp' }, 'openape-pods-relay'), false)
+  assert.equal(healthyResponse({ ok: true, service: 'openape-pods-relay' }, 'openape-pods-relay'), true)
+  assert.equal(healthyResponse({ ok: false, service: 'openape-pods-relay' }, 'openape-pods-relay'), false)
+})
 
 describe('resolveTruthRemote', () => {
   it('finds the authoritative remote by URL, whatever it is called locally', () => {
