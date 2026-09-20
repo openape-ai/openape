@@ -64,6 +64,19 @@ test('imports sparse numbers, provenance and ordered comments atomically; repeat
   const removed = new DatabaseSync(f.database); assert.equal(removed.prepare('SELECT count(*) AS total FROM issues').get().total, 0); assert.equal(removed.prepare('SELECT count(*) AS total FROM pulls').get().total, 1); removed.close()
 })
 
+test('preserves the original failure after SQLite automatically rolls back an import', (t) => {
+  const f = fixture(t); const bundle = f.bundle()
+  const db = new DatabaseSync(f.database)
+  db.exec("CREATE TRIGGER abort_import BEFORE INSERT ON issues BEGIN SELECT RAISE(ROLLBACK, 'Import storage failure'); END")
+  assert.throws(() => applyBundle(bundle, f.options(bundle)), /Import storage failure/)
+  assert.equal(db.prepare('SELECT count(*) AS total FROM issues').get().total, 0)
+  assert.equal(db.prepare('SELECT count(*) AS total FROM issue_import_batches').get().total, 0)
+  assert.equal(db.prepare('SELECT count(*) AS total FROM pulls').get().total, 1)
+  db.exec('DROP TRIGGER abort_import')
+  db.close()
+  assert.equal(applyBundle(bundle, f.options(bundle)).ok, true)
+})
+
 test('blocks collisions, locked sources, unverified identities and writes after native activation', (t) => {
   const f = fixture(t)
   assert.throws(() => f.bundle([issue(2), issue(7)], { mapping: { numbers: { 7: 2 } } }), /Duplicate destination/)

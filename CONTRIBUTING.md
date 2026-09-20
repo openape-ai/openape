@@ -5,9 +5,12 @@ Start with [AGENTS.md](AGENTS.md) and the generated
 
 Code, pushes and pull requests use
 [repos.openape.ai/patrick/monorepo](https://repos.openape.ai/patrick/monorepo).
-[Forgejo issues](https://git.openape.ai/openape-ai/openape/issues) remain the
-tracker. Forgejo and GitHub contain mirrors of the monorepo. `gh` is not a
-client for the native forge.
+[Native issues](https://repos.openape.ai/patrick/monorepo/issues) own development
+discussion and resolution. Forgejo retains the read-only issue archive and CI;
+Forgejo and GitHub remain code mirrors. `gh` is not a client for the native forge.
+Use [the issue CLI](docs/operations/native-issues.md) with your DDISA identity.
+General tasks/reminders remain in Tasks and approved proposals remain in Plans;
+link their canonical issue instead of copying its lifecycle.
 
 1. Select an issue and inspect the existing checkout status.
 2. Create a branch `<type>/issue-<number>-<description>` from canonical main,
@@ -19,7 +22,8 @@ client for the native forge.
    build and relevant tests. The shared merge gate is `pnpm check:ci` (unit,
    E2E and layout). [Check details and logs](docs/operations/checks.md).
 5. Push the branch to the canonical remote and open a native PR. Include the
-   complete Forgejo issue URL, behavior change and actual validation evidence.
+   complete native issue URL, behavior change and actual validation evidence.
+   Add an explicit issue/PR relation; closing keywords do not change issue state.
 6. Review the exact source/target pair and wait for all required external
    checks. Merge with that expected pair; if either changes, review again.
    [Branch policy and recovery](docs/operations/branch-protection.md).
