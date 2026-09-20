@@ -1,8 +1,11 @@
 # Native development issues
 
 Implementation follows [the approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A5ZAT63A04PWGVBT5M14MW)
-and [issue 1356](https://git.openape.ai/openape-ai/openape/issues/1356).
-Forgejo remains the production issue authority until the separately approved cutover.
+and [issue 1356](https://repos.openape.ai/patrick/monorepo/issues/1356).
+The approved private monorepo pilot is live since September 20, 2026. Forgejo
+retains the read-only issue archive and CI; native issues own development state.
+See the [cutover receipt](native-issues-migration.md#production-pilot-september-20-2026)
+for verified counts, recovery constraints and the observation period.
 
 ## Storage and authentication foundation (M1)
 
@@ -49,7 +52,7 @@ follow in the next increments; this foundation alone is not a completed issue tr
 
 ## API and CLI (M2)
 
-Enable only on an isolated fixture until rollout approval: `NUXT_PUBLIC_ISSUES_ENABLED=true`.
+Enable only for an approved rollout or isolated fixture: `NUXT_PUBLIC_ISSUES_ENABLED=true`.
 All issue responses are private/no-store. Browser mutations require a matching Origin;
 CLI calls use the existing exchanged bearer token. Mutations are limited to 120 per
 subject per minute, with a separate 3000-per-minute socket-IP boundary before auth.

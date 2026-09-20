@@ -148,7 +148,7 @@ export function applyBundle(bundle, { database, assetsDirectory, approval, produ
     db.exec('COMMIT')
     return { ...result, batchId: manifest.batchId, manifestHash: bundle.hash, writeFence: 'locked' }
   }
-  catch (error) { db.exec('ROLLBACK'); throw error }
+  catch (error) { if (db.isTransaction) db.exec('ROLLBACK'); throw error }
   finally { db.close() }
 }
 
@@ -165,6 +165,6 @@ export function removeBatch(bundle, options) {
     db.exec('COMMIT')
     return { ok: true, removedBatch: bundle.manifest.batchId, retainedImmutableAssets: true }
   }
-  catch (error) { db.exec('ROLLBACK'); throw error }
+  catch (error) { if (db.isTransaction) db.exec('ROLLBACK'); throw error }
   finally { db.close() }
 }

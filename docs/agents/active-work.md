@@ -1,5 +1,15 @@
 # Active work
 
+## Native issue pilot live (September 20, 2026)
+
+[Issue 1356](https://repos.openape.ai/patrick/monorepo/issues/1356) now lives in the native forge. [PR 77](https://repos.openape.ai/patrick/monorepo/pulls/77), reviewed source `6b64f9ded062cc7e281117504fdc88e4b0f130cd` and target `934dbcec21cce8e3620ecda51a77aa8458bcfd30`, merged as `78fad3f1be6c3d67f2f68c50c8b142a0e9a06bb3` after all 17 local gates and exact-source external CI/e2e/layout passed. The approved private pilot activated at 13:36:53 UTC; Forgejo is now its read-only issue archive and unchanged Git/CI mirror.
+
+The final import reconciled 233 issues, 175 comments, 15 labels, three attachment byte streams and 37 history rows. Nineteen unresolved assignments retain provenance without native permissions. All 110 inventoried Tasks/Plans/PR links resolve; actual DDISA login retains old comment anchors. Private intake and 17 product routes are active. Synthetic live acceptance records 1360/1361 are closed; tracking issue 1356 remains open through observation. Off-site snapshot `0cc0862b` independently restored 235 issues, 423 origins, 411 legacy links, all assets/archives and a Git clone. [Operational receipt](../operations/native-issues-migration.md#production-pilot-september-20-2026).
+
+Closeout checkout: `native-issues-cutover`, branch `feature/issue-1356-native-issues-authority`, base `78fad3f1`. This change switches current guidance and CLI issue entry points, documents the bounded worker handoff and preserves original SQLite errors after automatic rollback. Eight retained operator contracts pass; full final-head gates and native PR review remain required. The extra rollback regression covers the observed production failure, atomicity and retry, rather than an implementation detail. Thirteen web app image deployments are healthy. Next: final closeout review, Docs entry point, guarded central configuration update and seven-day observation through September 27. Do not resume excluded workers, change installed Pods profiles or claim external-repository/public rollout completion.
+
+Earlier entries below are dated implementation checkpoints; this receipt supersedes their monorepo issue authority statements.
+
 ## Pod workflow graphs and conservative mail filtering (September 20, 2026)
 
 Issue: https://git.openape.ai/openape-ai/openape/issues/1358. Native [PR 76](https://repos.openape.ai/patrick/monorepo/pulls/76). Worktree
