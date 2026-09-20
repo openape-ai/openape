@@ -10,6 +10,7 @@ import { databaseMigrations } from '../apps/openape-git/server/database/migratio
 import { digest } from './native-issues/export.mjs'
 import { makeManifest, references } from './native-issues/manifest.mjs'
 import { applyBundle, loadBundle, removeBatch, validateTarget } from './native-issues/import.mjs'
+import { sourceFence } from './native-issues/source-fence.mjs'
 
 const source = 'https://forgejo.example.test'
 const repository = 'team/project'
@@ -115,9 +116,29 @@ test('classifies references outside fenced/inline code without confusing source 
 
 test('archive HTTP fence distinguishes issue/admin/blob mutations from Git, Actions and other repos', async () => {
   const { frozenIssueWrite } = await import('./native-issues/archive-proxy.mjs')
-  const scope = { repository: 'team/project', attachments: ['known-asset'], actors: [{ id: 1, login: 'source-owner' }] }
-  for (const path of ['/api/v1/repos/team/project/issues', '/api/v1/repos/team/project/issues/comments/1/assets/2', '/team/project/issues/1/title', '/team/project/settings', '/api/v1/repos/team/project/transfer', '/attachments/known-asset', '/api/v1/admin/users/source-owner', '/admin/users/1/delete']) assert.equal(frozenIssueWrite('DELETE', path, scope), true, path)
+  const scope = { repository: 'team/project', attachments: ['known-asset'], actors: [{ id: 1, login: 'source-owner' }], comments: [19] }
+  for (const path of ['/api/v1/repos/team/project/issues', '/api/v1/repos/team/project/issues/comments/1/assets/2', '/team/project/issues/1/title', '/team/project/settings', '/api/v1/repos/team/project/transfer', '/attachments/known-asset', '/api/v1/admin/users/source-owner', '/admin/users/1/delete', '/api/v1/orgs/team', '/org/team/settings/delete', '/user/settings/account/delete', '/team/project/comments/19', '/team/project/comments/19/delete']) assert.equal(frozenIssueWrite('DELETE', path, scope), true, path)
   assert.equal(frozenIssueWrite('POST', '/api/v1/repos/team%2fproject/issues', scope), true)
-  for (const path of ['/team/project.git/git-receive-pack', '/api/v1/repos/team/project/statuses/sha', '/api/actions/runner.v1.RunnerService/FetchTask', '/api/v1/repos/team/other/issues', '/user/login']) assert.equal(frozenIssueWrite('POST', path, scope), false, path)
+  for (const path of ['/team/project.git/git-receive-pack', '/api/v1/repos/team/project/statuses/sha', '/api/actions/runner.v1.RunnerService/FetchTask', '/api/v1/repos/team/other/issues', '/user/login', '/user/settings/account', '/team/project/comments/20']) assert.equal(frozenIssueWrite('POST', path, scope), false, path)
   assert.equal(frozenIssueWrite('GET', '/api/v1/repos/team/project/issues/1', scope), false)
+})
+
+test('source fence retains issue data and parent identities while PRs and Git metadata remain writable', () => {
+  const db = new DatabaseSync(':memory:')
+  try {
+    db.exec('CREATE TABLE issue(id INTEGER PRIMARY KEY, repo_id INTEGER, is_pull INTEGER, poster_id INTEGER, content TEXT); CREATE TABLE repository(id INTEGER PRIMARY KEY, owner_id INTEGER, owner_name TEXT, name TEXT, lower_name TEXT, is_private INTEGER, updated_unix INTEGER); CREATE TABLE user(id INTEGER PRIMARY KEY);')
+    for (const table of ['comment', 'issue_assignees', 'issue_label', 'issue_content_history', 'project_issue', 'reaction', 'stopwatch', 'tracked_time', 'issue_dependency', 'label']) db.exec(`CREATE TABLE ${table}(id INTEGER PRIMARY KEY, issue_id INTEGER, dependency_id INTEGER, comment_id INTEGER, repo_id INTEGER, poster_id INTEGER)`)
+    db.exec('CREATE TABLE attachment(id INTEGER PRIMARY KEY, uuid TEXT, uploader_id INTEGER, repo_id INTEGER, issue_id INTEGER, release_id INTEGER, comment_id INTEGER, name TEXT, download_count INTEGER DEFAULT 0, size INTEGER, created_unix INTEGER, external_url TEXT); INSERT INTO attachment(id, issue_id, name) VALUES(1,10,\'proof.txt\')')
+    db.exec("INSERT INTO repository VALUES(9,1,'team','project','project',1,0); INSERT INTO user VALUES(1),(2),(3); INSERT INTO issue VALUES(10,9,0,2,'original'),(11,9,1,3,'pull'),(12,8,0,3,'other'); INSERT INTO comment(id,issue_id,poster_id) VALUES(1,10,2)")
+    const fence = sourceFence(9); db.exec(fence.install)
+    for (const sql of ["UPDATE issue SET content='changed' WHERE id=10", 'UPDATE issue SET repo_id=8 WHERE id=10', 'UPDATE issue SET repo_id=9 WHERE id=12', 'DELETE FROM comment WHERE id=1', 'DELETE FROM user WHERE id=2', 'DELETE FROM repository WHERE id=9', "UPDATE repository SET name='moved' WHERE id=9", 'INSERT INTO attachment(issue_id) VALUES(10)', "UPDATE attachment SET name='changed' WHERE id=1", 'UPDATE attachment SET download_count=1, size=99 WHERE id=1']) assert.throws(() => db.exec(sql), /OPENAPE_ISSUE_ARCHIVE_READ_ONLY/)
+    db.exec('UPDATE attachment SET download_count=download_count+1 WHERE id=1')
+    assert.equal(db.prepare('SELECT download_count FROM attachment WHERE id=1').get().download_count, 1)
+    db.exec("UPDATE issue SET content='PR remains writable' WHERE id=11; UPDATE repository SET updated_unix=42 WHERE id=9; INSERT INTO comment(issue_id,poster_id) VALUES(11,3); DELETE FROM user WHERE id=3")
+    assert.equal(db.prepare('SELECT content FROM issue WHERE id=10').get().content, 'original')
+    db.exec(fence.remove); db.exec("UPDATE issue SET content='restored' WHERE id=10")
+    assert.equal(db.prepare('SELECT content FROM issue WHERE id=10').get().content, 'restored')
+    assert.throws(() => sourceFence('9; DROP TABLE issue'), /verified positive/)
+  }
+  finally { db.close() }
 })

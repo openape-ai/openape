@@ -1,0 +1,9 @@
+{
+  "upstream": "http://127.0.0.1:3030",
+  "repository": "openape-ai/openape",
+  "listenAddress": "10.0.1.1",
+  "listenPort": 33030,
+  "actors": [],
+  "comments": [],
+  "attachments": []
+}
