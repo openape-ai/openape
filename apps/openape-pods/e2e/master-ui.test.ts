@@ -1,6 +1,6 @@
 import { _electron as electron } from 'playwright'
 import { createServer } from 'node:http'
-import { mkdtemp, realpath, rm, mkdir } from 'node:fs/promises'
+import { mkdtemp, realpath, rm, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
@@ -119,9 +119,21 @@ it('master-chat: creates a manual pod, validates a draft and shows exact pending
     expect(calls).toBe(6)
     await page.getByLabel('Nachricht', { exact: true }).fill('Explain the pending setup without executing anything.')
     await page.getByRole('button', { name: 'Senden', exact: true }).click()
-    await expect.poll(() => requestedModels.length).toBe(7)
+    await expect.poll(async () => {
+      const view = await page.evaluate(() => window.pods.master({ type: 'list' }))
+      const visibleError = await page.locator('.error-message[role="alert"]').allTextContents()
+      return { models: requestedModels.length, accepted: view.messages.some(message => message.role === 'user' && message.text === 'Explain the pending setup without executing anything.'), error: view.error, visibleError }
+    }, { timeout: 10000 }).toEqual({ models: 7, accepted: true, error: null, visibleError: [] })
     expect(requestedModels[6]).toBe('gpt-5.6-sol')
     await expect.poll(async () => (await page.evaluate(() => window.pods.master({ type: 'list' }))).state).toBe('idle')
+  }
+  catch (error) {
+    const page = await app.firstWindow()
+    await mkdir(resolve('.artifacts'), { recursive: true })
+    await page.screenshot({ path: resolve('.artifacts/master-ui-failure.png') })
+    const diagnostics = await page.evaluate(async () => ({ text: document.body.textContent, view: await window.pods.master({ type: 'list' }) }))
+    await writeFile(resolve('.artifacts/master-ui-failure.json'), JSON.stringify({ requestedModels, ...diagnostics }, null, 2))
+    throw error
   }
   finally { await app.close(); server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); await rm(root, { recursive: true, force: true }) }
 })
