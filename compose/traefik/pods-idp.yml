@@ -2,11 +2,25 @@
 # Human accounts belong to their decision IdP; enrollment uses broker receipts.
 http:
   services:
+    pods-relay:
+      loadBalancer:
+        servers:
+          - url: http://10.0.1.1:3028
     pods-idp:
       loadBalancer:
         servers:
           - url: http://10.0.1.1:3027
   routers:
+    pods-relay-https:
+      entryPoints: [https]
+      rule: Host(`pods.openape.ai`) && (PathPrefix(`/api/mobile/v1/`) || PathPrefix(`/api/runtime/v1/`) || PathPrefix(`/mobile-auth/`) || Path(`/.well-known/apple-app-site-association`) || Path(`/.well-known/oauth-client-metadata`))
+      priority: 200
+      service: pods-relay
+      tls:
+        certResolver: dns01
+        domains:
+          - main: openape.ai
+            sans: ['*.openape.ai']
     pods-idp-http:
       entryPoints: [http]
       rule: Host(`pods.openape.ai`)

@@ -1,3 +1,4 @@
+import type { Owner } from '@openape/pods-protocol'
 import { enablePodBroker, revokePodBroker, podBrokerReceipt } from './broker'
 import type { PodBrokerConnection } from './broker'
 import { loadAdapter, resolveCommand } from '@openape/apes'
@@ -70,6 +71,33 @@ export class ConnectionManager {
     const broker = entry ? entry.broker : metadata.broker as PodBrokerConnection | undefined
     const decisionIssuer = entry?.identity?.decisionIssuer ?? (typeof metadata.issuer === 'string' ? metadata.issuer : null)
     return { podId, bound: !!entry, ownerConnection: owner.id, issuer: entry?.identity?.issuer ?? broker?.issuer ?? decisionIssuer, decisionIssuer, subject: entry?.identity?.subject ?? null, brokerConnectionId: entry?.identity?.brokerConnectionId ?? broker?.connectionId ?? null }
+  }
+
+  async existingRemotePods(owner: Owner): Promise<{ podId: string, identity: PodIdentityReference }[]> {
+    const state = await this.state()
+    const owners = state.connections.filter(item => item.provider === 'openape')
+    const entries = await Promise.all(owners.map(async connection => ({ connection, metadata: await this.metadata(connection.id) })))
+    const seen = new Set<string>(); const bound: { podId: string, identity: PodIdentityReference }[] = []
+    for (const entry of entries) {
+      const pods = (entry.metadata.pods ?? {}) as Record<string, { identity?: PodIdentityReference }>
+      for (const [podId, pod] of Object.entries(pods)) {
+        if (seen.has(podId)) throw new Error('This pod is assigned to multiple OpenApe accounts; correct its owner before continuing')
+        seen.add(podId)
+        if (entry.metadata.issuer !== owner.issuer || entry.metadata.subject !== owner.subject || !pod.identity) continue
+        if (pod.identity.podId !== podId || pod.identity.owner !== entry.connection.account || (pod.identity.decisionIssuer ?? pod.identity.issuer) !== owner.issuer) throw new Error('Existing pod identity belongs to a different setup')
+        bound.push({ podId, identity: pod.identity })
+      }
+    }
+    return bound
+  }
+
+  async remoteOwner(): Promise<{ owner: Owner, email: string }> {
+    const state = await this.state()
+    const selected = state.connections.find(item => item.id === state.defaultOwner && item.provider === 'openape' && item.state === 'ready')
+    if (!selected) throw new Error('Connect and select your OpenApe owner account on desktop first')
+    const metadata = await this.metadata(selected.id)
+    if (typeof metadata.issuer !== 'string' || typeof metadata.subject !== 'string') throw new Error('Reconnect your owner account to verify its identity')
+    return { owner: { issuer: metadata.issuer, subject: metadata.subject }, email: selected.account }
   }
 
   async view(podId?: string): Promise<OnboardingView> {
@@ -159,7 +187,7 @@ export class ConnectionManager {
     return this.view()
   }
 
-  async podConnection(podId: string) {
+  async podConnection(podId: string, requestedOwner?: Owner) {
     const previous = this.identityTurn
     let release!: () => void
     this.identityTurn = new Promise<void>((resolve) => { release = resolve })
@@ -167,19 +195,21 @@ export class ConnectionManager {
     try {
       if (this.assigning) throw new Error('Another permission review is in progress')
       this.assigning = true
-      try { return await this.preparePodConnection(podId) }
+      try { return await this.preparePodConnection(podId, requestedOwner) }
       finally { this.assigning = false }
     }
     finally { release() }
   }
 
-  private async preparePodConnection(podId: string) {
+  private async preparePodConnection(podId: string, requestedOwner?: Owner) {
     const state = await this.state()
     const owners = state.connections.filter(item => item.provider === 'openape')
     const candidates = await Promise.all(owners.map(async owner => ({ owner, metadata: await this.metadata(owner.id) })))
     const bound = candidates.filter(item => Object.hasOwn((item.metadata.pods ?? {}) as object, podId))
     if (bound.length > 1) throw new Error('This pod is assigned to multiple OpenApe accounts; correct its owner before continuing')
-    const selected = bound[0] ?? candidates.find(item => item.owner.id === state.defaultOwner)
+    const matches = (item: typeof candidates[number]) => item.metadata.issuer === requestedOwner?.issuer && (item.metadata.subject ?? item.owner.account) === requestedOwner?.subject
+    if (requestedOwner && bound.length && !matches(bound[0])) throw new Error('Pod belongs to another owner')
+    const selected = bound[0] ?? candidates.find(item => requestedOwner ? matches(item) : item.owner.id === state.defaultOwner)
     if (!selected) throw new Error('Choose a default OpenApe account before setting up a new pod')
     if (selected.owner.state !== 'ready') throw new Error('Reconnect this pod’s OpenApe account before continuing')
     const { owner, metadata } = selected

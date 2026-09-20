@@ -1,3 +1,7 @@
+import { object as remoteObject, uuid as remoteUuid } from '@openape/pods-protocol'
+import { ProgramState } from './programs/state'
+import type { RemoteInternal } from '../worker/remote/control'
+import type { Owner } from '@openape/pods-protocol'
 import { parseChatsView } from '../contracts/chats'
 import type { ChatsCommand, ChatsView } from '../contracts/chats'
 import { parseWorkflowView } from '../contracts/workflows'
@@ -83,6 +87,28 @@ export class FixtureWorker {
     child.on('message', (message: unknown) => {
       if (message && typeof message === 'object' && 'programCancel' in message) { this.programs?.cancelPod(String(message.programCancel)); return }
       if (message && typeof message === 'object' && 'serviceCancel' in message) { this.services.get(String(message.serviceCancel))?.abort(new Error('Pod tool call cancelled')); return }
+      if (message && typeof message === 'object' && 'remoteProgramState' in message) {
+        const respond = async () => {
+          const request = remoteObject(message.remoteProgramState, ['id', 'operation', 'podId', 'applicationId', 'stateId'])
+          const id = remoteUuid(request.id)
+          let reply: { id: string, value?: unknown, error?: string }
+          try {
+            if (!this.credentials) throw new Error('Connection service unavailable')
+            const podId = remoteUuid(request.podId)
+            if (request.operation === 'create') {
+              reply = { id, value: await new ProgramState(this.credentials).create({ podId, applicationId: remoteUuid(request.applicationId) }) }
+            }
+            else if (request.operation === 'discard') { await this.credentials.erasePodKey(remoteUuid(request.stateId), podId); reply = { id, value: true } }
+            else {
+              throw new Error('Unsupported broker service')
+            }
+          }
+          catch (error) { reply = { id, error: error instanceof Error ? error.message : 'Connection service unavailable' } }
+          if (this.child === child) child.postMessage({ serviceReply: reply })
+        }
+        void respond().catch((error: unknown) => { console.error('Remote program state failed', error); child.kill() })
+        return
+      }
       if (message && typeof message === 'object' && 'service' in message) {
         const request = message.service as ServiceRequest
         const respond = async () => {
@@ -199,6 +225,25 @@ export class FixtureWorker {
     return this.connections.execute(command)
   }
 
+  async remote(command: RemoteInternal): Promise<unknown> { return this.dispatch({ remote: command }) }
+  async remoteOwner(): Promise<{ owner: Owner, email: string }> {
+    await this.setupReady
+    if (!this.connections) throw new Error('Connection service unavailable')
+    return this.connections.remoteOwner()
+  }
+
+  async indexRemotePods(owner: Owner): Promise<void> {
+    await this.setupReady
+    if (!this.connections) throw new Error('Connection service unavailable')
+    for (const binding of await this.connections.existingRemotePods(owner)) await this.remote({ type: 'claim', podId: binding.podId, owner, identity: binding.identity })
+  }
+
+  async provisionRemotePod(podId: string, owner: Owner) {
+    await this.setupReady
+    if (!this.connections) throw new Error('Connect the owner account on desktop')
+    return (await this.connections.podConnection(podId, owner)).identity
+  }
+
   async chats(command: ChatsCommand): Promise<ChatsView> { return parseChatsView(await this.dispatch({ chats: command })) }
   async master(command: MasterCommand): Promise<MasterView> { return parseMasterView(await this.dispatch({ master: command })) }
 
@@ -265,7 +310,7 @@ export class FixtureWorker {
 
   async scheduling(command: ScheduleCommand): Promise<ScheduleView> { return parseScheduleView(await this.dispatch({ schedule: command })) }
 
-  private dispatch(command: { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { remote: RemoteInternal } | { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()

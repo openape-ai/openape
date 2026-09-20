@@ -1,3 +1,4 @@
+import { RemoteController } from './remote/controller'
 import { parseChatsCommand } from '../contracts/chats'
 import { parseWorkflowCommand } from '../contracts/workflows'
 import { searchPackages } from './package-catalog'
@@ -47,10 +48,51 @@ let stopped = false
 let preference: LanguagePreference
 function t(key: MessageKey, parameters?: Parameters): string { return translate(preference.language, key, parameters) }
 const status: PodStatus = { version: 1, mode: fixture ? 'fixture' : 'local', executionEnabled: true, worker: { state: 'starting', pid: null, error: null }, runtime: { electron: process.versions.electron, node: process.versions.node } }
+let remote: RemoteController
 const worker = new FixtureWorker((next) => {
   status.worker = next
+  if (next.state === 'ready' && process.env.OPENAPE_PODS_REMOTE_ENABLED === '1') void remote.resume().catch((error: unknown) => { remote.error = error instanceof Error ? error.message : 'Remote access unavailable' })
   if (window && !window.isDestroyed()) window.webContents.send(channels.changed, status)
 })
+remote = new RemoteController(root, worker)
+async function manageRemote(): Promise<void> {
+  if (!window) return
+  const action = await dialog.showMessageBox(window, { title: t('Mobile access'), message: t('OpenApe Pods on iPhone and iPad'), detail: translateDiagnostic(preference.language, remote.error) || t('Execution and credentials stay on this desktop. Mobile devices must be paired here before accessing Pods.'), buttons: [t('Cancel'), t('Register desktop'), t('Pair mobile device'), t('Disable mobile access'), t('Offer installed CLI'), t('Withdraw offered CLI'), t('Remove paired device')], defaultId: 0, cancelId: 0 })
+  if (action.response === 1) { await remote.enable(await worker.remoteOwner()); return }
+  if (action.response === 3) { await remote.disable(); return }
+  if (action.response === 4) {
+    const selected = await dialog.showOpenDialog(window, { title: t('Choose an installed application or CLI'), properties: ['openFile'] })
+    if (selected.canceled || selected.filePaths.length !== 1) return
+    const descriptor = await dialog.showOpenDialog(window, { title: t('Choose its apes command descriptor'), properties: ['openFile'], filters: [{ name: 'apes', extensions: ['toml'] }] })
+    if (descriptor.canceled || descriptor.filePaths.length !== 1) return
+    const definition = await programDefinition(selected.filePaths[0], descriptor.filePaths[0])
+    const confirm = await dialog.showMessageBox(window, { title: t('Offer program to paired devices'), message: definition.name, detail: `${definition.executable}\nSHA-256: ${definition.executableHash}\n\n${t('Paired devices can review assignment to your Pods. Execution still requires existing grant checks.')}`, buttons: [t('Cancel'), t('Offer for review')], defaultId: 0, cancelId: 0 })
+    if (confirm.response === 1) await worker.remote({ type: 'offerProgram', definition })
+    return
+  }
+  if (action.response === 5) {
+    const offered = await worker.remote({ type: 'programs' }) as { id: string, program: { name: string, executable: string } }[]
+    for (const item of offered) {
+      const confirm = await dialog.showMessageBox(window, { title: t('Withdraw program offer'), message: item.program.name, detail: `${item.program.executable}\n\n${t('This prevents new mobile assignments. Review existing Pod permissions separately.')}`, buttons: [t('Keep'), t('Withdraw offer')], defaultId: 0, cancelId: 0 })
+      if (confirm.response === 1) await worker.remote({ type: 'revokeProgram', id: item.id })
+    }
+    return
+  }
+  if (action.response === 6) {
+    for (const device of await remote.pairedDevices()) {
+      const confirm = await dialog.showMessageBox(window, { title: t('Remove paired device'), message: device.id, detail: t('This device can no longer access this desktop. Authorized runs already started continue; cancel them separately.'), buttons: [t('Keep'), t('Remove pairing')], defaultId: 0, cancelId: 0 })
+      if (confirm.response === 1) await remote.unpair(device.id)
+    }
+    return
+  }
+  if (action.response !== 2) return
+  const candidates = remote.devices()
+  if (!candidates.length) throw new Error('Sign in on your iPhone or iPad with the same owner first')
+  for (const candidate of candidates) {
+    const result = await dialog.showMessageBox(window, { title: t('Pair mobile device'), message: candidate.code, detail: `${t('Confirm only if this exact code appears in the app on your device.')}\n${t('Device: {id}', { id: candidate.device.id })}\n${t('Owner: {subject}', { subject: candidate.device.owner.subject })}`, buttons: [t('Skip'), t('Codes match — pair device')], defaultId: 0, cancelId: 0 })
+    if (result.response === 1) await remote.pair(candidate.device)
+  }
+}
 function showWindow(): void {
   if (!window) throw new Error('Pods window is not ready')
   if (window.isMinimized()) window.restore()
@@ -71,7 +113,7 @@ function createWindow(): BrowserWindow {
 function updateMenus(): void {
   tray?.setToolTip(fixture ? t('OpenApe Pods · Fixture mode') : 'OpenApe Pods')
   tray?.setContextMenu(Menu.buildFromTemplate([{ label: t('Open Pods'), click: showWindow }, { label: t('Pause automatic runs'), click: () => { void worker.request({ type: 'pauseAll' }).catch((error: unknown) => dialog.showErrorBox(t('Could not pause Pods'), translateDiagnostic(preference.language, error instanceof Error ? error.message : 'Worker unavailable'))) } }, { label: t('Quit Pods'), click: () => app.quit() }]))
-  Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'OpenApe Pods', submenu: [{ label: t('Open Pods'), click: showWindow }, { label: t('Quit Pods'), role: 'quit' }] }, { label: t('Edit'), submenu: [{ label: t('Undo'), role: 'undo' }, { label: t('Redo'), role: 'redo' }, { type: 'separator' }, { label: t('Cut'), role: 'cut' }, { label: t('Copy'), role: 'copy' }, { label: t('Paste'), role: 'paste' }, { label: t('Paste and match style'), role: 'pasteAndMatchStyle' }, { label: t('Delete'), role: 'delete' }, { label: t('Select all'), role: 'selectAll' }] }, { label: t('Window'), submenu: [{ label: t('Minimize'), role: 'minimize' }, { label: t('Close window'), role: 'close' }] }, ...(process.env.OPENAPE_PODS_ISSUE_REPORTING_ENABLED === '1' ? [{ label: t('Help'), submenu: [{ id: 'report-problem', label: t('Report a problem'), click: () => { void shell.openExternal('https://repos.openape.ai/report?product=pods').catch((error: unknown) => dialog.showErrorBox(t('Could not open issue reporting'), translateDiagnostic(preference.language, error instanceof Error ? error.message : 'Browser unavailable'))) } }] }] : [])]))
+  Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'OpenApe Pods', submenu: [{ label: t('Open Pods'), click: showWindow }, ...(process.env.OPENAPE_PODS_REMOTE_ENABLED === '1' ? [{ label: t('Mobile access…'), click: () => { void manageRemote().catch((error: unknown) => dialog.showErrorBox(t('Mobile access'), translateDiagnostic(preference.language, error instanceof Error ? error.message : 'Remote access failed'))) } }] : []), { label: t('Quit Pods'), role: 'quit' }] }, { label: t('Edit'), submenu: [{ label: t('Undo'), role: 'undo' }, { label: t('Redo'), role: 'redo' }, { type: 'separator' }, { label: t('Cut'), role: 'cut' }, { label: t('Copy'), role: 'copy' }, { label: t('Paste'), role: 'paste' }, { label: t('Paste and match style'), role: 'pasteAndMatchStyle' }, { label: t('Delete'), role: 'delete' }, { label: t('Select all'), role: 'selectAll' }] }, { label: t('Window'), submenu: [{ label: t('Minimize'), role: 'minimize' }, { label: t('Close window'), role: 'close' }] }, ...(process.env.OPENAPE_PODS_ISSUE_REPORTING_ENABLED === '1' ? [{ label: t('Help'), submenu: [{ id: 'report-problem', label: t('Report a problem'), click: () => { void shell.openExternal('https://repos.openape.ai/report?product=pods').catch((error: unknown) => dialog.showErrorBox(t('Could not open issue reporting'), translateDiagnostic(preference.language, error instanceof Error ? error.message : 'Browser unavailable'))) } }] }] : [])]))
 }
 async function start(): Promise<void> {
   await app.whenReady()
@@ -302,7 +344,7 @@ async function start(): Promise<void> {
   worker.start(root)
 }
 async function shutdown(): Promise<void> {
-  try { await worker.stop(); stopped = true; tray?.destroy(); app.quit() }
+  try { await remote.stop(); await worker.stop(); stopped = true; tray?.destroy(); app.quit() }
   catch (error) { console.error('Worker shutdown failed', error); app.exit(1) }
 }
 if (!app.requestSingleInstanceLock()) {

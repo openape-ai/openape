@@ -1,3 +1,4 @@
+import { removeRemoteSchema } from '../storage/legacy'
 // @vitest-environment node
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -66,6 +67,7 @@ it('migrates legacy messages and creation origins without losing content or rest
   store.db.prepare('INSERT OR REPLACE INTO master_contexts VALUES(?,?,?,?)').run('', 'broad-thread', 'idle', null)
   store.db.prepare('INSERT OR REPLACE INTO master_contexts VALUES(?,?,?,?)').run(pod.id, 'pod-thread', 'idle', null)
   const before = store.db.prepare('SELECT * FROM master_messages ORDER BY rowid').all()
+  removeRemoteSchema(store.db)
   for (const row of store.db.prepare('SELECT name FROM sqlite_schema WHERE type=\'table\' AND (name LIKE \'chat_%\' OR name IN (\'control_changes\',\'control_runs\')) ORDER BY rowid DESC').all()) store.db.exec(`DROP TABLE ${row.name}`)
   store.db.exec('PRAGMA user_version=20'); const root = store.root; store.close(); stores.splice(stores.indexOf(store), 1)
   const migrated = new PodDatabase(root); stores.push(migrated)

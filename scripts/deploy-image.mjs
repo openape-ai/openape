@@ -69,6 +69,7 @@ const PUSH_ENV = existsSync(join(ISOLATED_DOCKER_CONFIG, 'config.json'))
 const TARGETS = {
   'free-idp': { filter: 'openape-free-idp', dir: 'apps/openape-free-idp', image: 'openape-free-idp', port: 3003, compose: 'idp', unit: 'openape-free-idp', domain: 'id.openape.ai', envVar: 'IDP_TAG' },
   'pods-idp': { filter: 'openape-free-idp', dir: 'apps/openape-free-idp', image: 'openape-pods-idp', port: 3027, compose: 'pods-idp', unit: 'openape-pods-idp', domain: 'pods.openape.ai', envVar: 'PODS_IDP_TAG' },
+  'pods-relay': { filter: '@openape-pods-relay/app', dir: 'apps/openape-pods-relay', image: 'openape-pods-relay', port: 3028, compose: 'pods-relay', unit: 'openape-pods-relay', domain: 'pods.openape.ai', envVar: 'PODS_RELAY_TAG', dockerfile: 'compose/pods-relay-package.Dockerfile', healthPath: '/api/mobile/v1/health', healthService: 'openape-pods-relay' },
   'troop': { filter: '@openape/troop', dir: 'apps/openape-troop', image: 'openape-troop', port: 3010, compose: 'troop', unit: 'openape-troop', domain: 'troop.openape.ai', envVar: 'TROOP_TAG' },
   'chat': { filter: '@openape/chat', dir: 'apps/openape-chat', image: 'openape-chat', port: 3007, compose: 'chat', unit: 'openape-chat', domain: 'chat.openape.ai', envVar: 'CHAT_TAG' },
   'testrun': { filter: '@openape-testrun/app', dir: 'apps/openape-testrun', image: 'openape-testrun', port: 3006, compose: 'testrun', unit: 'openape-testrun', domain: 'testrun.openape.ai', envVar: 'TESTRUN_TAG' },
@@ -151,11 +152,15 @@ async function smokeTest(tag, port) {
   }
 }
 
-async function externalHealth(domain) {
+export function healthyResponse(value, service) {
+  return value?.ok === true && (!service || value.service === service)
+}
+
+async function externalHealth(domain, path = '/api/health', service) {
   for (let i = 0; i < 20; i++) {
     try {
-      const res = await fetch(`https://${domain}/api/health`, { signal: AbortSignal.timeout(8000) })
-      if (res.ok && (await res.json()).ok === true)
+      const res = await fetch(`https://${domain}${path}`, { signal: AbortSignal.timeout(8000) })
+      if (res.ok && healthyResponse(await res.json(), service))
         return true
     }
     catch {}
@@ -284,7 +289,7 @@ ${group.map(t => `    echo "PREV ${t.name} $OLD_${t.envVar}"`).join('\n')}
 
   // 5. gate — external health per target in parallel; rollback failures
   console.log(`\n━━━ health gate (parallel)`)
-  const results = await Promise.all(targets.map(async t => ({ name: t.name, ok: await externalHealth(t.domain) })))
+  const results = await Promise.all(targets.map(async t => ({ name: t.name, ok: await externalHealth(t.domain, t.healthPath, t.healthService) })))
   for (const r of results.filter(r => r.ok))
     console.log(`  ✓ ${r.name} healthy (prod-${sha}${prevMap[r.name] ? `, prev ${prevMap[r.name]}` : ''})`)
 

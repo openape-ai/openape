@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pods.openape.ai/protocol/v1/envelope.schema.json",
+  "title": "OpenApe Pods encrypted envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "route",
+    "contentMode",
+    "ephemeralKey",
+    "nonce",
+    "ciphertext",
+    "signature"
+  ],
+  "properties": {
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "major",
+        "minor",
+        "id",
+        "runtimeId",
+        "generation",
+        "deviceId",
+        "keyEpoch",
+        "owner",
+        "direction",
+        "kind",
+        "kindVersion",
+        "issuedAt",
+        "expiresAt",
+        "sequence"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "pods-mobile"
+        },
+        "major": {
+          "const": 1
+        },
+        "minor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "runtimeId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "generation": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "deviceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "keyEpoch": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "owner": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "issuer",
+            "subject"
+          ],
+          "properties": {
+            "issuer": {
+              "type": "string",
+              "format": "uri",
+              "maxLength": 2048
+            },
+            "subject": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 320
+            }
+          }
+        },
+        "direction": {
+          "enum": [
+            "command",
+            "query",
+            "response",
+            "event"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "pod.create",
+            "pod.rename",
+            "pod.pause",
+            "pod.resume",
+            "chat.send",
+            "chat.cancel",
+            "changes.apply",
+            "changes.discard",
+            "setup.respond",
+            "review.prepare",
+            "review.decide",
+            "run.start",
+            "run.cancel",
+            "inventory",
+            "conversation",
+            "run",
+            "catalog",
+            "reviews",
+            "operation",
+            "receipt",
+            "snapshot"
+          ]
+        },
+        "kindVersion": {
+          "const": 1
+        },
+        "issuedAt": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+        },
+        "expiresAt": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+        },
+        "sequence": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,18})$"
+        }
+      }
+    },
+    "contentMode": {
+      "const": "encrypted-v1"
+    },
+    "ephemeralKey": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "minLength": 87,
+      "maxLength": 87
+    },
+    "nonce": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "minLength": 16,
+      "maxLength": 16
+    },
+    "ciphertext": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "maxLength": 65536
+    },
+    "signature": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "minLength": 86,
+      "maxLength": 86
+    }
+  },
+  "description": "Application protocol only. Implementations additionally enforce 64 KiB encoded frame size, direction-specific kinds, canonical binary encodings and operation-specific expiry limits."
+}
