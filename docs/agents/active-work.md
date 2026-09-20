@@ -19,12 +19,18 @@ approval surfaces; no MCP transport is introduced here. Saved Pod draft artifact
 remain available to selected chats; conversation text, composers and pending
 change sets are separate. Stale changes require discard and deliberate preparation.
 
-Verification checkpoint: 333 unit/component tests, full lint (51 tasks), full
+Verification checkpoint: 334 unit/component tests, full lint (51 tasks), full
 typecheck (72 tasks), build and fixture package passed. Focused native regression
 suite passed 16 tests across Chats, foundation/foreign-window boundaries, groups,
 languages and script editor. It caught and fixed a narrow-sidebar group-confirmation
 overlap; legacy Workspace chat navigation now opens Chats. The complete final-source
-CI contract and native PR review remain the next gate. Final SHAs and complete gate
+CI contract and native PR review remain the next gate. Implementation checkpoint
+`b923685d166a1781e0d09a3d44826c436fb7101a` passed all suites up to the Pods native
+step; two existing startup polls expired with worker state `starting` before their
+functional assertions. Their bounded startup window is now 10 seconds; the full
+contract must pass again before push. Targeted dependency preparation, terminal
+feedback and central-chat native checks passed (3 files, 4 tests). The follow-up also names the failed Pod
+in coordinated change diagnostics and adds Chats to the existing HTML report. Final SHAs and complete gate
 logs will be retained in the native PR acceptance record; partial checks do not
 constitute merge approval. No installed app, owner profile, live mailbox, Telegram
 message or schedule activation was changed. Troop/OpenClaw remains paused.

@@ -9,6 +9,12 @@ import { digest } from '../storage/database'
 import type { ResourceRegistry } from '../resources/registry'
 import { ChatRegistry } from '../master/chat-registry'
 
+class TargetChangeError extends Error {
+  constructor(readonly podId: string, cause: unknown) {
+    super(cause instanceof Error ? cause.message : 'Change could not be applied', { cause })
+  }
+}
+
 export class ControlChanges {
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry) {}
 
@@ -132,18 +138,21 @@ export class ControlChanges {
     if (set.workflow && (current.workflowChanged || current.context.workflow?.id !== set.workflow.before.id)) throw new Error('Workflow changed; review its current members')
     if (set.conversationId !== context.id || set.contextRevision !== context.revision) throw new Error('Change set belongs to an earlier conversation context; prepare it again')
     for (const target of set.targets) {
-      if (!context.context.pods.some(pod => pod.id === target.podId) || context.unavailablePodIds.includes(target.podId)) throw new Error('Change target is unavailable or outside the conversation context')
-      if (digest(JSON.stringify(this.snapshot(target.podId))) !== target.base) throw new Error('Pod configuration changed; inspect the current state and prepare this change again')
-      this.assertFree(target.podId)
-      for (const action of target.actions) {
-        const key = `${action.action}:${action.action === 'setVariable' ? action.name : ''}`
-        if (action.action === 'activate') {
-          const evidence = this.store.db.prepare('SELECT validation FROM script_drafts WHERE id=?').get(action.draftId)?.validation
-          const expected = digest(JSON.stringify(Object.entries(this.targetVariables(target.podId, target.actions)).sort()))
-          if (!evidence || (JSON.parse(evidence as string) as { variablesHash?: string }).variablesHash !== expected) throw new Error('Validate the draft with the proposed variables before applying')
+      try {
+        if (!context.context.pods.some(pod => pod.id === target.podId) || context.unavailablePodIds.includes(target.podId)) throw new Error('Change target is unavailable or outside the conversation context')
+        if (digest(JSON.stringify(this.snapshot(target.podId))) !== target.base) throw new Error('Pod configuration changed; inspect the current state and prepare this change again')
+        this.assertFree(target.podId)
+        for (const action of target.actions) {
+          const key = `${action.action}:${action.action === 'setVariable' ? action.name : ''}`
+          if (action.action === 'activate') {
+            const evidence = this.store.db.prepare('SELECT validation FROM script_drafts WHERE id=?').get(action.draftId)?.validation
+            const expected = digest(JSON.stringify(Object.entries(this.targetVariables(target.podId, target.actions)).sort()))
+            if (!evidence || (JSON.parse(evidence as string) as { variablesHash?: string }).variablesHash !== expected) throw new Error('Validate the draft with the proposed variables before applying')
+          }
+          if (this.draftHash(action) !== target.draftHashes[key]) throw new Error('Draft changed; validate and review the current version')
         }
-        if (this.draftHash(action) !== target.draftHashes[key]) throw new Error('Draft changed; validate and review the current version')
       }
+      catch (error) { throw new TargetChangeError(target.podId, error) }
     }
   }
 
@@ -163,7 +172,8 @@ export class ControlChanges {
         if (set.kind === 'run') { set.state = 'running'; this.save(set); return }
         const results: ChangeSet['results'] = []
         for (const target of set.targets) {
-          for (const action of target.actions) results.push({ podId: target.podId, action: action.action, result: apply(action) })
+          try { for (const action of target.actions) results.push({ podId: target.podId, action: action.action, result: apply(action) }) }
+          catch (error) { throw new TargetChangeError(target.podId, error) }
         }
         if (set.workflow) {
           if (!workflow) throw new Error('Workflow operation unavailable')
@@ -189,6 +199,7 @@ export class ControlChanges {
     }
     catch (error) {
       set = this.get(id)
+      set.errorPodId = error instanceof TargetChangeError ? error.podId : undefined
       set.error = error instanceof Error ? error.message : 'Change could not be applied'
       if (set.state === 'running') set.state = 'failed'
       this.save(set); return set

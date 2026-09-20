@@ -52,6 +52,7 @@ it.each(['configuration', 'permission', 'program lease', 'context'])('applies ne
   if (kind === 'context') chats.execute({ type: 'context', id: context.id, revision: 1, podIds: [pods[0]!.id], workflowId: null, workflowRevision: null })
   const result = control.decide(context, set.id, set.revision, 'applyChanges')
   expect(result.state).toBe('pending'); expect(result.error).toBeTruthy()
+  if (kind !== 'context') expect(result.errorPodId).toBe(second.id)
   expect(pods.map(pod => new PodVariables(store).list(pod.id))).toEqual([[], []])
 })
 it('rolls back earlier targets when a later operation fails and retains the review', async () => {
