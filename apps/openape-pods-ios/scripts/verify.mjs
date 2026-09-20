@@ -1,6 +1,8 @@
 import { execFileSync } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
 
+process.env.DEVELOPER_DIR = '/Applications/Xcode.app/Contents/Developer'
+
 function run(command, args) { return execFileSync(command, args, { stdio: 'inherit' }) }
 for (const script of ['lint', 'typecheck', 'test']) run('pnpm', [script])
 if (process.platform !== 'darwin') throw new Error('Native acceptance requires the macOS runner with Xcode and iOS simulators')

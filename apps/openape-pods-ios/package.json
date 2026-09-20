@@ -1,5 +1,13 @@
 {
-  "name": "@openape/pods-ios", "version": "0.1.0", "private": true, "type": "module",
+  "name": "@openape/pods-ios",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
   "description": "Native iPhone and iPad access to desktop OpenApe Pods",
-  "scripts": { "lint": "xcrun swift-format lint --strict --recursive Sources Tests UITests", "typecheck": "swift build", "test": "swift test", "test:layout": "node scripts/verify.mjs" }
+  "scripts": {
+    "lint": "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift-format lint --strict --recursive Sources Tests UITests",
+    "typecheck": "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift build",
+    "test": "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift test",
+    "test:layout": "node scripts/verify.mjs"
+  }
 }

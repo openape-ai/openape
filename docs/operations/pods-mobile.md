@@ -30,6 +30,10 @@ Compose fixes the public origin, database location and fixture mode. Never enabl
 
 The iOS application uses bundle `ai.openape.pods`, team `Q994DN23WB`, iOS/iPadOS 18 and both `applinks` and `webcredentials` association services. Signed Simulator login-layout checks do not establish the HTTPS authentication handoff on a physical device. Apple distribution signing, upload, beta review and store review remain separate gates.
 
+## Native validation toolchain
+
+The iOS workspace selects `/Applications/Xcode.app/Contents/Developer` for its Swift and Simulator checks. The existing macOS CI runner deliberately defaults to Command Line Tools; that environment does not supply the Swift Testing module. Keep this selection scoped to iOS commands and do not change the runner launch configuration or other workspaces.
+
 ## Recovery and retention
 
 For an incident, first set relay enrollment closed and the service disabled, recreate only `pods-relay`, and disable desktop Mobile access. Keep provider routes available. Removing the relay router restores the original provider routing; it does not restore any mobile session. Local Pods continue to use their existing execution/grant system.
