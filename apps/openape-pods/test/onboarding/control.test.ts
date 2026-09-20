@@ -1,10 +1,11 @@
 // @vitest-environment node
+import { removeWorkflowSchema } from '../storage/legacy'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
-import { PodDatabase } from '../../src/worker/storage/database'
+import { PodDatabase, schemaVersion } from '../../src/worker/storage/database'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { SetupControl } from '../../src/worker/onboarding/control'
 import { assertMailHistory } from '../../src/worker/mail/authorization'
@@ -69,6 +70,7 @@ it('persists explicit owner selection across restart and rejects unavailable or 
 })
 it('upgrades existing profiles without choosing an owner or changing pod data', () => {
   const { store, owner, pod } = fixture(); const root = store.root
+  removeWorkflowSchema(store.db)
   store.db.exec('ALTER TABLE onboarding DROP COLUMN default_owner; PRAGMA user_version=18')
   store.close(); stores.splice(stores.indexOf(store), 1)
   const reopened = new PodDatabase(root); stores.push(reopened)
@@ -76,5 +78,5 @@ it('upgrades existing profiles without choosing an owner or changing pod data', 
   expect(control.connections.defaultOwner()).toBeNull()
   expect(control.connections.connections()[0]).toMatchObject(owner)
   expect(reopened.getPod(pod.id)).toEqual(pod)
-  expect(reopened.db.prepare('PRAGMA user_version').get()?.user_version).toBe(19)
+  expect(reopened.db.prepare('PRAGMA user_version').get()?.user_version).toBe(schemaVersion)
 })

@@ -378,3 +378,15 @@ Store telegram_chat_id as a variable and telegram_bot_token as a secret. The sel
 Use examples/mail-notification.mjs from the source checkout. The first successful run establishes a quiet baseline over the previous 24 hours. Later runs report new message identities using a five-minute overlap. The recipe caps reads at 20 pages and 1000 messages per window and fails visibly if the window is incomplete. It never sends historical messages on first use and sends only a count and account name.
 
 Validate and run manually before enabling a 15-minute interval in Settings. Review the secrets assigned to this Pod. The recipe records a pending notification before sending it and stores the receipt before acknowledging progress. When delivery is uncertain, inspect the destination and resolve the outcome in History before retrying.
+
+## Connect Pods in workflows
+
+Workflows appears beside groups in the sidebar. Select existing Pods and choose Starts after for each node. A node waits for every selected predecessor to finish successfully; independent branches may run in parallel. Connecting Pods leaves their scripts, permissions and individual schedules unchanged.
+
+The workflow has its own interval, daily, one-time or cron schedule. New schedules are off. Run workflow once also works when the workflow or member Pods are paused. Pause stops new node starts, while already running nodes finish. History explains waiting and blocked states. Retry keeps completed nodes and requires reconciliation of uncertain effects.
+
+Mail workflows require separately reviewed batch-aware recipes. Review the exact mailbox, assigned application, archive rules, protected communication partners and Telegram destination. The first run establishes a quiet baseline. Preview makes no moves or Telegram deliveries. Protected senders, recipients and known conversations remain for human review. Production autonomous archiving stays blocked until conditional moves can be verified with the provider.
+
+1. Choose Workflows → New workflow, enter a name and add existing Pods.
+2. Select all required predecessors, inspect the graph and upcoming schedule occurrences, then save with the schedule off. Cycles cannot be saved.
+3. Run a synthetic workflow and inspect every node and mail receipt before considering live setup. Installation, mailbox mutations, Telegram sends and activation require separate approval.

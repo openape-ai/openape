@@ -869,6 +869,9 @@ importers:
 
   apps/openape-pods:
     dependencies:
+      croner:
+        specifier: 10.0.1
+        version: 10.0.1
       '@xterm/addon-fit':
         specifier: 0.11.0
         version: 0.11.0

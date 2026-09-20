@@ -127,6 +127,7 @@ export async function restoreBackup(backup: string, parent: string, maximumSchem
         const directory = join(stage, 'snapshots', row.pod_id as string, row.id as string); await mkdir(directory, { recursive: true, mode: 0o700 })
         await rm(join(directory, 'manifest.json'), { force: true }); await durableJSON(join(directory, 'manifest.json'), snapshot, 0o400)
       }
+      if (manifest.schema >= 20) database.exec('UPDATE workflow_mail_scopes SET restored=1; UPDATE workflows SET enabled=0,paused=1; UPDATE workflow_runs SET paused=1,reason=\'Restored workflow requires review\' WHERE finished_at IS NULL;')
       if (manifest.schema >= 18) {
         database.exec('DELETE FROM dependency_domains;')
         for (const row of database.prepare('SELECT * FROM dependency_sets').all()) {

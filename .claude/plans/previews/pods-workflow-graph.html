@@ -1,0 +1,188 @@
+<div id="pods-graph-design" aria-label="Pods workflow graph design">
+<style>
+#pods-graph-design { color-scheme:light dark; --pg-bg:light-dark(#fafbf9,#151c18); --pg-surface:light-dark(#ffffff,#1e2821); --pg-side:light-dark(#f0f3ee,#19221c); --pg-line:light-dark(#d5dfd4,#3c4e40); --pg-text:light-dark(#263b2d,#e3ede5); --pg-muted:light-dark(#607064,#aec1b3); --pg-green:light-dark(#255e3a,#b1dbbc); --pg-soft:light-dark(#e5f0e5,#294331); --pg-on:light-dark(#ffffff,#163121); --pg-warn:light-dark(#82551a,#ebc992); --pg-warnbg:light-dark(#faf0dd,#3b3021); color:var(--pg-text); background:var(--pg-bg); border:1px solid var(--pg-line); border-radius:14px; font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; overflow-wrap:anywhere; }
+#pods-graph-design * { box-sizing:border-box; }
+#pods-graph-design button,#pods-graph-design input,#pods-graph-design select { font:inherit; }
+#pods-graph-design button { color:var(--pg-text); border:1px solid var(--pg-line); background:var(--pg-surface); border-radius:7px; padding:8px 12px; cursor:pointer; }
+#pods-graph-design button:disabled { opacity:.5; cursor:default; }
+#pods-graph-design .pg-primary { color:var(--pg-on); background:var(--pg-green); border-color:var(--pg-green); }
+#pods-graph-design h2 { font-size:24px; font-weight:500; letter-spacing:-.5px; margin:3px 0 4px; }
+#pods-graph-design h3 { font-size:15px; font-weight:500; margin:0 0 8px; }
+#pods-graph-design p { margin:0; }
+#pods-graph-design .pg-muted { color:var(--pg-muted); }
+#pods-graph-design .pg-small { font-size:12px; }
+#pods-graph-design .pg-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+#pods-graph-design .pg-between { justify-content:space-between; }
+#pods-graph-design .pg-top { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:center; padding:12px 18px; border-bottom:1px solid var(--pg-line); background:var(--pg-side); border-radius:14px 14px 0 0; }
+#pods-graph-design .pg-badge { font-size:12px; padding:4px 8px; border-radius:6px; background:var(--pg-side); color:var(--pg-muted); }
+#pods-graph-design .pg-badge.pg-warn { background:var(--pg-warnbg); color:var(--pg-warn); }
+#pods-graph-design .pg-shell { display:grid; grid-template-columns:195px minmax(0,1fr); }
+#pods-graph-design aside { background:var(--pg-side); border-right:1px solid var(--pg-line); padding:20px 10px; border-radius:0 0 0 14px; }
+#pods-graph-design .pg-section { display:flex; justify-content:space-between; align-items:center; color:var(--pg-muted); padding:8px; margin-top:12px; font-size:12px; }
+#pods-graph-design .pg-section:first-child { margin-top:0; }
+#pods-graph-design .pg-section button { border:0; background:transparent; padding:2px 7px; }
+#pods-graph-design .pg-sidebar-item { padding:9px 10px; margin:2px 0; font-size:13px; }
+#pods-graph-design aside button.pg-sidebar-item { width:100%; text-align:left; border:0; background:transparent; }
+#pods-graph-design aside button[aria-current="true"] { color:var(--pg-green); background:var(--pg-soft); }
+#pods-graph-design .pg-child { padding-left:22px; }
+#pods-graph-design main { padding:24px; min-width:0; }
+#pods-graph-design .pg-head { margin-bottom:19px; }
+#pods-graph-design .pg-tabs { display:flex; flex-wrap:wrap; gap:22px; border-bottom:1px solid var(--pg-line); margin-bottom:20px; }
+#pods-graph-design .pg-tabs button { padding:8px 0 12px; border:0; background:transparent; border-radius:0; color:var(--pg-muted); }
+#pods-graph-design .pg-tabs button[aria-selected="true"] { color:var(--pg-green); box-shadow:0 2px 0 var(--pg-green); }
+#pods-graph-design .pg-canvas { background:var(--pg-side); border:1px solid var(--pg-line); border-radius:10px; position:relative; padding:32px 18px; margin:14px 0; }
+#pods-graph-design .pg-levels { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0,1fr); gap:32px; position:relative; z-index:1; }
+#pods-graph-design .pg-level { display:flex; flex-direction:column; justify-content:center; gap:28px; min-width:0; }
+#pods-graph-design .pg-node { display:block; text-align:left; width:100%; min-width:0; background:var(--pg-surface); padding:14px 10px; border-radius:10px; box-shadow:0 2px 4px light-dark(#223b2910,#00000020); }
+#pods-graph-design .pg-node[aria-pressed="true"] { outline:2px solid var(--pg-green); outline-offset:2px; }
+#pods-graph-design .pg-node-title { display:block; font-weight:500; }
+#pods-graph-design .pg-node-kind { display:block; color:var(--pg-muted); font-size:11px; margin-bottom:7px; }
+#pods-graph-design .pg-state { display:block; font-size:12px; color:var(--pg-muted); margin-top:10px; }
+#pods-graph-design .pg-state[data-state="Running"],#pods-graph-design .pg-state[data-state="Completed"] { color:var(--pg-green); }
+#pods-graph-design .pg-edges { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible; color:var(--pg-muted); }
+#pods-graph-design .pg-detail { border:1px solid var(--pg-line); border-radius:10px; padding:16px; background:var(--pg-surface); }
+#pods-graph-design .pg-dependencies { display:flex; gap:8px 20px; flex-wrap:wrap; margin:12px 0; }
+#pods-graph-design label.pg-check { display:flex; align-items:center; gap:7px; }
+#pods-graph-design input[type="checkbox"] { accent-color:var(--pg-green); }
+#pods-graph-design .pg-foot { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; padding-top:18px; margin-top:20px; border-top:1px solid var(--pg-line); }
+#pods-graph-design .pg-settings { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+#pods-graph-design .pg-field { display:grid; gap:7px; min-width:0; }
+#pods-graph-design .pg-field input,#pods-graph-design .pg-field select,#pods-graph-design .pg-picker select { width:100%; min-width:0; color:var(--pg-text); background:var(--pg-surface); border:1px solid var(--pg-line); border-radius:7px; padding:10px; }
+#pods-graph-design .pg-note { background:var(--pg-soft); color:var(--pg-green); padding:13px; border-radius:8px; margin-top:18px; }
+#pods-graph-design .pg-picker { display:flex; flex-wrap:wrap; gap:8px; padding:12px 0; }
+#pods-graph-design .pg-picker select { flex:1 1 170px; }
+#pods-graph-design .pg-event { padding:13px 0; border-bottom:1px solid var(--pg-line); }
+#pods-graph-design [hidden] { display:none !important; }
+@media(max-width:800px) { #pods-graph-design .pg-shell { grid-template-columns:160px minmax(0,1fr); } #pods-graph-design main { padding:18px; } #pods-graph-design .pg-levels { gap:20px; } }
+@media(max-width:650px) { #pods-graph-design .pg-shell { grid-template-columns:1fr; } #pods-graph-design aside { border-right:0; border-bottom:1px solid var(--pg-line); border-radius:0; display:flex; gap:6px; flex-wrap:wrap; padding:10px; } #pods-graph-design aside .pg-groups { display:none; } #pods-graph-design aside .pg-section { margin:0; padding:6px; } #pods-graph-design aside button.pg-sidebar-item { width:auto; } #pods-graph-design .pg-levels { grid-auto-flow:row; grid-auto-columns:unset; gap:28px; } #pods-graph-design .pg-level { flex-direction:row; gap:16px; } #pods-graph-design .pg-level .pg-node { flex:1; } #pods-graph-design .pg-canvas { padding:20px 16px; } }
+@media(max-width:400px) { #pods-graph-design .pg-settings { grid-template-columns:1fr; } #pods-graph-design main { padding:14px; } #pods-graph-design .pg-level { flex-direction:column; } }
+@media(pointer:coarse) { #pods-graph-design button { min-height:44px; } #pods-graph-design .pg-field input,#pods-graph-design select { font-size:16px; } }
+</style>
+<header class="pg-top"><span>◒ &nbsp; OpenApe Pods</span><span class="pg-badge pg-warn">Design preview · synthetic data</span></header>
+<div class="pg-shell">
+<aside aria-label="Workspace navigation">
+  <div class="pg-groups"><div class="pg-section">GROUPS</div><div class="pg-sidebar-item">⌄ &nbsp; Delta Mind</div><div class="pg-sidebar-item pg-child">Inbox filter</div><div class="pg-sidebar-item pg-child">Mail-Kurzbericht</div><div class="pg-sidebar-item pg-child">Mail knowledge</div><div class="pg-sidebar-item">› &nbsp; Personal</div></div>
+  <div class="pg-section">WORKFLOWS <button type="button" data-new aria-label="New workflow">+</button></div>
+  <button type="button" class="pg-sidebar-item" data-flow="mail" aria-current="false">Inbox → Important mail</button>
+  <button type="button" class="pg-sidebar-item" data-flow="parallel" aria-current="true">Daily briefing</button>
+</aside>
+<main>
+  <div class="pg-head"><div class="pg-row pg-between"><p class="pg-small pg-muted">WORKFLOWS</p><span class="pg-badge">Draft · Schedule off</span></div><h2 data-title>Daily briefing</h2><p class="pg-muted">Connect existing Pods. Configure this workflow independently.</p></div>
+  <div class="pg-tabs" role="tablist" aria-label="Workflow settings">
+    <button type="button" id="pg-tab-graph" role="tab" aria-controls="pg-graph" aria-selected="true" data-tab="graph">Graph</button>
+    <button type="button" id="pg-tab-schedule" role="tab" aria-controls="pg-schedule" aria-selected="false" data-tab="schedule">Schedule</button>
+    <button type="button" id="pg-tab-history" role="tab" aria-controls="pg-history" aria-selected="false" data-tab="history">Run history</button>
+  </div>
+  <section id="pg-graph" role="tabpanel" aria-labelledby="pg-tab-graph">
+    <div class="pg-row pg-between"><span class="pg-small pg-muted" data-graph-summary>4 Pods · Parallel branches · All-predecessor joins</span><button type="button" data-add>+ Add Pod</button></div>
+    <div class="pg-picker" hidden><select aria-label="Existing Pod to add"><option value="calendar">Calendar preview</option><option value="report">Report export</option></select><button type="button" data-add-confirm>Add existing Pod</button></div>
+    <div class="pg-canvas"><svg class="pg-edges" aria-hidden="true"></svg><div class="pg-levels" aria-label="Workflow dependency graph"></div></div>
+    <div class="pg-detail"><div class="pg-row pg-between"><h3 data-selection>Daily briefing</h3><span class="pg-badge">Existing Pod · Unchanged</span></div><p class="pg-small pg-muted">Start after</p><div class="pg-dependencies"></div><p class="pg-small" data-rule>All selected predecessors must complete successfully.</p><p class="pg-small pg-muted" data-error role="status"></p></div>
+    <div class="pg-foot"><span class="pg-small pg-muted" data-run-label>Pods retain their scripts, settings and group.</span><button type="button" class="pg-primary" data-simulate>Simulate workflow</button></div>
+  </section>
+  <section id="pg-schedule" role="tabpanel" aria-labelledby="pg-tab-schedule" hidden>
+    <h3>Workflow schedule</h3><div class="pg-settings" style="margin-top:16px">
+      <label class="pg-field">Trigger<select data-kind><option value="interval">Interval</option><option value="daily">Daily time</option><option value="once">One-time date & time</option><option value="cron">Custom cron</option></select></label>
+      <label class="pg-field">Time zone<select><option>Europe/Vienna</option><option>UTC</option></select></label>
+      <label class="pg-field" data-field="interval">Every (minutes)<input type="number" min="1" value="15"></label>
+      <label class="pg-field" data-field="daily" hidden>At<input type="time" value="08:00"></label>
+      <label class="pg-field" data-field="once" hidden>Date & time<input type="datetime-local" value="2026-09-21T08:00"></label>
+      <label class="pg-field" data-field="cron" hidden>Cron expression<input type="text" value="0 8 * * 1-5"></label>
+    </div><div class="pg-note"><p data-schedule-text>Every 15 minutes · Europe/Vienna</p><p class="pg-small">Schedule off. This preview does not activate anything.</p></div>
+    <p class="pg-muted" style="margin-top:18px">This trigger starts the graph's root Pods. Successors follow their dependencies.</p><p class="pg-small pg-muted" style="margin-top:8px">Independent Pod schedules remain unchanged. Shared Pods wait until their current execution finishes.</p>
+  </section>
+  <section id="pg-history" role="tabpanel" aria-labelledby="pg-tab-history" hidden><h3>Synthetic workflow run</h3><div data-events><p class="pg-muted">Simulate the graph to inspect each Pod's status.</p></div></section>
+</main>
+</div>
+<script>
+(() => {
+  const root=document.getElementById('pods-graph-design');
+  const names={filter:'Inbox filter',summary:'Mail-Kurzbericht',knowledge:'Mail knowledge',briefing:'Daily briefing',calendar:'Calendar preview',report:'Report export'};
+  let nodes=['filter','summary','knowledge','briefing'];
+  let predecessors={filter:[],summary:['filter'],knowledge:['filter'],briefing:['summary','knowledge']};
+  let selected='briefing'; let states={}; let running=false;
+  const design={compact:false};
+  const $=selector=>root.querySelector(selector);
+  function showTab(tab) {
+    root.querySelectorAll('[data-tab]').forEach(button=>button.setAttribute('aria-selected',String(button.dataset.tab===tab)));
+    ['graph','schedule','history'].forEach(name=>$('#pg-'+name).hidden=name!==tab);
+    if(tab==='graph') requestAnimationFrame(drawEdges);
+    if(tab==='history') renderHistory();
+  }
+  function depths() {
+    const memo={}, visiting=new Set();
+    function depth(id) {
+      if(visiting.has(id)) throw new Error('This connection creates a cycle.');
+      if(memo[id]!==undefined) return memo[id];
+      visiting.add(id); const result=predecessors[id].length ? 1+Math.max(...predecessors[id].map(depth)) : 0;
+      visiting.delete(id); memo[id]=result; return result;
+    }
+    nodes.forEach(depth); return memo;
+  }
+  function drawEdges() {
+    if($('#pg-graph').hidden) return;
+    const canvas=$('.pg-canvas'), svg=$('.pg-edges'), bounds=canvas.getBoundingClientRect();
+    svg.setAttribute('viewBox',`0 0 ${bounds.width} ${bounds.height}`);
+    svg.innerHTML='<defs><marker id="pg-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L8 4 L0 8 Z" fill="currentColor"/></marker></defs>';
+    const vertical=matchMedia('(max-width:650px)').matches;
+    nodes.forEach(target=>predecessors[target].forEach(source=>{
+      const a=root.querySelector(`[data-node="${source}"]`).getBoundingClientRect(),b=root.querySelector(`[data-node="${target}"]`).getBoundingClientRect();
+      let x1,y1,x2,y2,d;
+      if(vertical) { x1=a.left+a.width/2-bounds.left; y1=a.bottom-bounds.top+3; x2=b.left+b.width/2-bounds.left; y2=b.top-bounds.top-6; const middle=(y1+y2)/2; d=`M${x1},${y1} C${x1},${middle} ${x2},${middle} ${x2},${y2}`; }
+      else { x1=a.right-bounds.left+3; y1=a.top+a.height/2-bounds.top; x2=b.left-bounds.left-6; y2=b.top+b.height/2-bounds.top; const middle=(x1+x2)/2; d=`M${x1},${y1} C${middle},${y1} ${middle},${y2} ${x2},${y2}`; }
+      const path=document.createElementNS('http://www.w3.org/2000/svg','path'); path.setAttribute('d',d); path.setAttribute('fill','none'); path.setAttribute('stroke','currentColor'); path.setAttribute('stroke-width','1.5'); path.setAttribute('marker-end','url(#pg-arrow)'); svg.append(path);
+    }));
+  }
+  function renderHistory() {
+    $('[data-events]').replaceChildren();
+    nodes.forEach(id=>{ const row=document.createElement('div'); row.className='pg-event'; const title=document.createElement('p'); title.textContent=names[id]+' · '+(states[id]||'Not started'); const detail=document.createElement('p'); detail.className='pg-small pg-muted'; detail.textContent=predecessors[id].length ? 'Requires: '+predecessors[id].map(p=>names[p]).join(' + ') : 'On workflow start'; row.append(title,detail); $('[data-events]').append(row); });
+  }
+  function render() {
+    const depth=depths(), levels=$('.pg-levels'); levels.replaceChildren();
+    for(let index=0;index<=Math.max(0,...Object.values(depth));index++) {
+      const column=document.createElement('div'); column.className='pg-level';
+      nodes.filter(id=>depth[id]===index).forEach(id=>{
+        const button=document.createElement('button'); button.type='button'; button.className='pg-node'; button.dataset.node=id; button.setAttribute('aria-pressed',String(id===selected)); button.style.padding=design.compact?'10px 8px':'';
+        const kind=document.createElement('span'); kind.className='pg-node-kind'; kind.textContent='POD';
+        const title=document.createElement('span'); title.className='pg-node-title'; title.textContent=names[id];
+        const state=document.createElement('span'); state.className='pg-state'; state.dataset.state=states[id]||''; state.textContent=states[id]|| (predecessors[id].length ? 'After '+predecessors[id].length+' predecessor'+(predecessors[id].length>1?'s':'') : 'On workflow start');
+        button.append(kind,title,state); button.addEventListener('click',()=>{selected=id;render();}); column.append(button);
+      }); levels.append(column);
+    }
+    $('[data-selection]').textContent=names[selected]||'Select a Pod';
+    $('[data-graph-summary]').textContent=nodes.length+' Pods · Connections belong to this workflow';
+    const dependencies=$('.pg-dependencies'); dependencies.replaceChildren();
+    nodes.filter(id=>id!==selected).forEach(id=>{
+      const label=document.createElement('label'); label.className='pg-check'; const checkbox=document.createElement('input'); checkbox.type='checkbox'; checkbox.checked=predecessors[selected]?.includes(id); checkbox.disabled=running;
+      checkbox.addEventListener('change',()=>{
+        const old=[...predecessors[selected]]; predecessors[selected]=checkbox.checked?[...old,id]:old.filter(p=>p!==id);
+        try {depths(); $('[data-error]').textContent=''; states={};} catch(error) {predecessors[selected]=old; $('[data-error]').textContent=error.message;}
+        render();
+      }); label.append(checkbox,document.createTextNode(names[id])); dependencies.append(label);
+    });
+    $('[data-rule]').textContent=predecessors[selected]?.length ? 'Start only after ALL selected Pods succeed.' : 'No predecessors. Starts with the workflow.';
+    renderHistory(); requestAnimationFrame(drawEdges);
+  }
+  function resetRun(){ states={};running=false; $('[data-simulate]').textContent='Simulate workflow'; $('[data-run-label]').textContent='Pods retain their scripts, settings and group.'; }
+  root.querySelectorAll('[data-flow]').forEach(button=>button.addEventListener('click',()=>{
+    root.querySelectorAll('[data-flow]').forEach(other=>other.setAttribute('aria-current',String(other===button)));
+    const mail=button.dataset.flow==='mail'; nodes=mail?['filter','summary']:['filter','summary','knowledge','briefing']; predecessors=mail?{filter:[],summary:['filter']}:{filter:[],summary:['filter'],knowledge:['filter'],briefing:['summary','knowledge']}; selected=mail?'summary':'briefing'; $('[data-title]').textContent=mail?'Inbox → Important mail':'Daily briefing'; resetRun();render();showTab('graph');
+  }));
+  root.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>showTab(button.dataset.tab)));
+  $('[data-add]').addEventListener('click',()=>{$('.pg-picker').hidden=!$('.pg-picker').hidden;});
+  $('[data-add-confirm]').addEventListener('click',()=>{const id=$('.pg-picker select').value; if(!nodes.includes(id)){nodes.push(id);predecessors[id]=[];selected=id;resetRun();render();} $('.pg-picker').hidden=true;});
+  $('[data-new]').addEventListener('click',()=>{nodes=['filter'];predecessors={filter:[]};selected='filter'; $('[data-title]').textContent='New workflow'; root.querySelectorAll('[data-flow]').forEach(button=>button.setAttribute('aria-current','false'));resetRun();render();showTab('graph');});
+  $('[data-simulate]').addEventListener('click',()=>{
+    if(!running){states={}; nodes.forEach(id=>states[id]=predecessors[id].length?'Waiting':'Running');running=true; $('[data-simulate]').textContent='Complete next Pod';}
+    else {const next=nodes.find(id=>states[id]==='Running'); if(next) states[next]='Completed'; nodes.forEach(id=>{if(states[id]==='Waiting'&&predecessors[id].every(p=>states[p]==='Completed'))states[id]='Running';});}
+    const active=nodes.filter(id=>states[id]==='Running'); const completed=nodes.every(id=>states[id]==='Completed'); $('[data-run-label]').textContent=completed?'Workflow completed · All Pods succeeded':active.length+' Pod'+(active.length===1?'':'s')+' running · Joins wait for all predecessors';
+    if(completed){running=false; $('[data-simulate]').textContent='Simulate again';} render();
+  });
+  function schedule(){ const kind=$('[data-kind]').value; root.querySelectorAll('[data-field]').forEach(field=>field.hidden=field.dataset.field!==kind); const zone=$('#pg-schedule select:not([data-kind])').value; const input=root.querySelector(`[data-field="${kind}"] input`).value; let description=kind==='interval'?`Every ${input} minutes`:kind==='daily'?`Daily at ${input}`:kind==='once'?`Once · ${input.replace('T',' ')}`:input==='0 8 * * 1-5'?'Weekdays at 08:00':`Cron: ${input}`; $('[data-schedule-text]').textContent=description+' · '+zone; }
+  $('#pg-schedule').addEventListener('input',schedule); $('#pg-schedule').addEventListener('change',schedule);
+  const observer=new ResizeObserver(()=>requestAnimationFrame(drawEdges));observer.observe($('.pg-canvas'));
+  render();
+  if(globalThis.Tweak){const tweak=new Tweak({container:root,onChange:render});tweak.addToggle(design,'compact',{label:'Compact Pod nodes'});}
+})();
+</script>
+</div>
