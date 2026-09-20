@@ -2,10 +2,12 @@
 
 ## Pods user guide (September 20, 2026)
 
-Issue: https://git.openape.ai/openape-ai/openape/issues/1357. Worktree
+Issue: https://git.openape.ai/openape-ai/openape/issues/1357. Native [PR 75](https://repos.openape.ai/patrick/monorepo/pulls/75). Worktree
 `openape-monorepo.worktrees/pods-user-guide`, branch
 `feature/issue-1357-pods-user-guide`, canonical base
-`cf19d3773f45dc9a5d8cd0cc8099fb5a76134cc0` (merged PR 74).
+`cf19d3773f45dc9a5d8cd0cc8099fb5a76134cc0` (merged PR 74). Implementation
+checkpoint: `e55edc4d98123a732c500fca61f25003448849c9`. [Inspected visual
+evidence](https://testrun.openape.ai/r/TzIMdYOoh7dD-x10bUpV2Kfc).
 
 The Apps generator now includes `/apps/pods` from the same English handbook
 source and section renderer as the offline edition. Both English and German
