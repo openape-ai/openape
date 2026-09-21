@@ -109,5 +109,5 @@ it('packaged prompt setup repairs a script, configures a pod and runs through th
     expect(await readFile(join(scriptRoot, 'greeting.txt'), 'utf8')).toBe('Hello from my pod')
     await writeFile(resolve('.artifacts/prompt-setup-evidence.json'), JSON.stringify({ kind: 'synthetic-model-packaged-ui', prompt: setupPrompt, userPrompts: 1, repairAttempts: 1, modelCalls: model.calls, elapsedMs: Date.now() - started, scriptGeneratedByLiveModel: false, ownerProfileUsed: false, enabledSchedule: schedule.enabled, result: run.summary, pendingSecret: chat.proposals[0]?.body.alias }, null, 2))
   }
-  finally { await app.close(); await shellIdentity?.close(); server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); await rm(root, { recursive: true, force: true }) }
+  finally { await app.close(); await shellIdentity?.close(); server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })

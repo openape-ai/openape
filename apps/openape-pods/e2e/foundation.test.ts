@@ -30,7 +30,7 @@ async function launch(packaged = false, reporting = false) {
 }
 afterEach(async () => {
   for (const identity of identities.splice(0)) await identity.close()
-  for (const { app, root, process: child } of active.splice(0)) { if (child.exitCode === null && child.signalCode === null) await app.close(); await rm(root, { recursive: true, force: true }) }
+  for (const { app, root, process: child } of active.splice(0)) { if (child.exitCode === null && child.signalCode === null) await app.close(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })
 describe('foundation', () => {
   it('reporting: opens only the fixed product URL through the native menu after opt-in', async () => {

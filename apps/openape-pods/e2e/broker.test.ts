@@ -20,7 +20,7 @@ const sha = (bytes: Buffer | string) => createHash('sha256').update(bytes).diges
 afterEach(async () => {
   if (server) await new Promise<void>((resolve, reject) => server!.close(error => error ? reject(error) : resolve()))
   server = undefined
-  if (root) await rm(root, { recursive: true, force: true })
+  if (root) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 })
 async function setup(packaged = false, slow = false, unicode = false) {
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-tool-broker-')))

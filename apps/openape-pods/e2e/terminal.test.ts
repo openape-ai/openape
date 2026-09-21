@@ -35,7 +35,7 @@ it('terminal: owns a foreground CLI with TTY input, resize and cancellation whil
     }
     finally { domain.cancel(); await domain.completed }
   }
-  finally { await rm(root, { recursive: true, force: true }) }
+  finally { await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })
 
 it.each(['waiting', 'backpressure'])('terminal: revokes %s sessions and keeps host files, snapshots, fork and shell execution denied', async (mode) => {
@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
     }
     finally { domain.stdout.resume(); domain.cancel(); await domain.completed }
   }
-  finally { await rm(root, { recursive: true, force: true }) }
+  finally { await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })
 
 it('terminal: the external o365 protocol fixture refreshes and reads through its own persistent application state', async () => {
@@ -120,7 +120,7 @@ it('terminal: the external o365 protocol fixture refreshes and reads through its
     await state.use(id, binding, async path => expect(await readFile(join(path, 'token.json'), 'utf8')).toContain('SYNTHETIC_TLS_REFRESH'))
     await expect(state.use(id, { ...binding, podId: randomUUID() }, async () => {})).rejects.toThrow('another application or pod')
   }
-  finally { await fixture.close(); await rm(root, { recursive: true, force: true }) }
+  finally { await fixture.close(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })
 
 it('terminal boundary: rejects a workspace replaced by a symlink before native launch', async () => {
@@ -139,5 +139,5 @@ it('terminal boundary: rejects a workspace replaced by a symlink before native l
     expect(failure).toBeInstanceOf(Error)
     expect((failure as Error).message).toBe('Terminal workspace changed before launch')
   }
-  finally { await rm(root, { recursive: true, force: true }) }
+  finally { await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })

@@ -135,5 +135,5 @@ it('master-chat: creates a manual pod, validates a draft and shows exact pending
     await writeFile(resolve('.artifacts/master-ui-failure.json'), JSON.stringify({ requestedModels, ...diagnostics }, null, 2))
     throw error
   }
-  finally { await app.close(); server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); await rm(root, { recursive: true, force: true }) }
+  finally { await app.close(); server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })

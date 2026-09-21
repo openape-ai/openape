@@ -7,7 +7,7 @@ import { executeAgent } from '../src/worker/agent/executor'
 import { recordedResponse } from './fixtures/responses'
 
 let root = ''
-afterEach(async () => { if (root) await rm(root, { recursive: true, force: true }) })
+afterEach(async () => { if (root) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) })
 async function setup(packaged = false): Promise<AgentRuntime> {
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-sdk-')))
   if (packaged) {

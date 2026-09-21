@@ -129,5 +129,5 @@ it('handbook: captures current native screens from isolated synthetic data witho
     expect((await page.evaluate(() => window.pods.onboarding({ type: 'list' }))).connections.every(connection => !connection.broker)).toBe(true)
     expect((await page.evaluate(() => window.pods.workspace({ type: 'list' })))).toMatchObject({ pods: [{ id: pod.id, activeScript }] })
   }
-  finally { await app.close(); await rm(root, { recursive: true, force: true }) }
+  finally { await app.close(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })
