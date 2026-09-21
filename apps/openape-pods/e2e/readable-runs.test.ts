@@ -75,5 +75,5 @@ it('readable run activity: renders actual persisted states and safe environment 
     await page.screenshot({ path: resolve('.artifacts/readable-runs/environment-de.png'), fullPage: true })
     expect(store.db.prepare('SELECT count(*) AS count FROM schedules WHERE enabled=1').get()?.count).toBe(0)
   }
-  finally { store?.close(); await app.close(); await rm(root, { recursive: true, force: true }) }
+  finally { store?.close(); await app.close(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })

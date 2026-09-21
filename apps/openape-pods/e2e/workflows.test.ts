@@ -66,5 +66,5 @@ it('workflow graph: runs unchanged pods through the real worker and renders depe
     await page.locator('.mail-workflow-settings').scrollIntoViewIfNeeded()
     await page.screenshot({ path: resolve('.artifacts/workflows-mail-policy-de.png'), fullPage: true })
   }
-  finally { await app.close(); await identity.close(); await rm(root, { recursive: true, force: true }) }
+  finally { await app.close(); await identity.close(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })

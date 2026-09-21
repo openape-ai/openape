@@ -10,7 +10,7 @@ import type { ProcessDomain } from '../src/worker/runtime/sandbox'
 const execute = promisify(execFile)
 const roots: string[] = []; const domains: ProcessDomain[] = []
 const helper = resolve('dist/native/pods-helper')
-afterEach(async () => { for (const domain of domains.splice(0)) { domain.cancel(); await domain.completed } for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }) })
+afterEach(async () => { for (const domain of domains.splice(0)) { domain.cancel(); await domain.completed } for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) })
 async function fixture() { const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-domains-'))); roots.push(root); return root }
 async function inspect(path: string) { return JSON.parse((await execute(helper, ['inspect-domain', path], { env: { PATH: '/usr/bin:/bin' } })).stdout) as { quiescent: boolean, reason: string } }
 describe('durable native process identity', () => {
