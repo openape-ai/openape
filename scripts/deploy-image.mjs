@@ -69,7 +69,7 @@ const PUSH_ENV = existsSync(join(ISOLATED_DOCKER_CONFIG, 'config.json'))
 const TARGETS = {
   'free-idp': { filter: 'openape-free-idp', dir: 'apps/openape-free-idp', image: 'openape-free-idp', port: 3003, compose: 'idp', unit: 'openape-free-idp', domain: 'id.openape.ai', envVar: 'IDP_TAG' },
   'pods-idp': { filter: 'openape-free-idp', dir: 'apps/openape-free-idp', image: 'openape-pods-idp', port: 3027, compose: 'pods-idp', unit: 'openape-pods-idp', domain: 'pods.openape.ai', envVar: 'PODS_IDP_TAG' },
-  'pods-relay': { filter: '@openape-pods-relay/app', dir: 'apps/openape-pods-relay', image: 'openape-pods-relay', port: 3028, compose: 'pods-relay', unit: 'openape-pods-relay', domain: 'pods.openape.ai', envVar: 'PODS_RELAY_TAG', dockerfile: 'compose/pods-relay-package.Dockerfile', healthPath: '/api/mobile/v1/health', healthService: 'openape-pods-relay' },
+  'pods-relay': { filter: '@openape-pods-relay/app', dir: 'apps/openape-pods-relay', image: 'openape-pods-relay', port: 3028, compose: 'pods-relay', unit: 'openape-pods-relay', domain: 'pods.openape.ai', envVar: 'PODS_RELAY_TAG', dockerfile: 'compose/pods-relay-package.Dockerfile', healthPath: '/api/mobile/v1/health', healthService: 'openape-pods-relay', smokeRuntime: ['--user', '999:988', '--read-only', '--tmpfs', '/tmp:size=32m,mode=1777', '-e', 'NUXT_RELAY_ENABLED=true', '-e', 'NUXT_RELAY_DATABASE=/tmp/relay.sqlite'] },
   'troop': { filter: '@openape/troop', dir: 'apps/openape-troop', image: 'openape-troop', port: 3010, compose: 'troop', unit: 'openape-troop', domain: 'troop.openape.ai', envVar: 'TROOP_TAG' },
   'chat': { filter: '@openape/chat', dir: 'apps/openape-chat', image: 'openape-chat', port: 3007, compose: 'chat', unit: 'openape-chat', domain: 'chat.openape.ai', envVar: 'CHAT_TAG' },
   'testrun': { filter: '@openape-testrun/app', dir: 'apps/openape-testrun', image: 'openape-testrun', port: 3006, compose: 'testrun', unit: 'openape-testrun', domain: 'testrun.openape.ai', envVar: 'TESTRUN_TAG' },
@@ -121,7 +121,8 @@ function tagFor(t, sha) {
   return `${REGISTRY}/${t.image}:prod-${sha}`
 }
 
-async function smokeTest(tag, port) {
+async function smokeTest(tag, target) {
+  const port = target.port
   const name = `smoke-${port}`
   try { execFileSync('docker', ['rm', '-f', name], { stdio: 'ignore' }) }
   catch {}
@@ -132,13 +133,14 @@ async function smokeTest(tag, port) {
     '-e', 'NUXT_OPENAPE_IDP_SESSION_SECRET=smoke-test-session-secret-0000000000',
     '-e', 'NUXT_OPENAPE_SP_SESSION_SECRET=smoke-test-session-secret-0000000000',
     '-e', 'NUXT_TURSO_URL=file:/tmp/smoke.db',
+    ...(target.smokeRuntime ?? []),
     tag,
   ])
   try {
     for (let i = 0; i < 30; i++) {
       try {
         const res = await fetch(`http://127.0.0.1:1${port}/api/health`)
-        if (res.ok && (await res.json()).ok === true)
+        if (res.ok && healthyResponse(await res.json(), target.healthService))
           return
       }
       catch {}
@@ -174,7 +176,7 @@ async function bake(name, sha) {
   const t = TARGETS[name]
   const tag = tagFor(t, sha)
   shQuiet('docker', ['buildx', 'build', '--platform', 'linux/amd64', '-f', t.dockerfile || 'compose/preview-package.Dockerfile', '--build-arg', `PORT=${t.port}`, '-t', tag, '--load', `${t.dir}/.output`])
-  await smokeTest(tag, t.port)
+  await smokeTest(tag, t)
   shQuiet('docker', ['push', tag], { env: PUSH_ENV })
   console.log(`  ✓ baked ${name} (${tag})`)
 }
