@@ -16,6 +16,12 @@ describe('shared check contract', () => {
     assert.deepEqual(affectedWorkspaces(packages, ['apps/app/page.vue']).map(p => p.name), ['app'])
     assert.equal(affectedWorkspaces(packages, ['pnpm-lock.yaml']).length, 4)
   })
+  it('ignores documentation and agent notes but keeps generated architecture docs as root changes', () => {
+    assert.deepEqual(affectedWorkspaces(packages, ['docs/operations/checks.md', '.claude/plans/x.md', 'AGENTS.md']), [])
+    assert.deepEqual(affectedWorkspaces(packages, ['docs/agents/active-work.md', 'apps/app/page.vue']).map(p => p.name), ['app'])
+    assert.equal(affectedWorkspaces(packages, ['docs/architecture/dependency-graph.md']).length, 4)
+    assert.equal(affectedWorkspaces(packages, ['.githooks/pre-push']).length, 4)
+  })
   it('fails when a mandatory script disappears', () => {
     assert.throws(() => validateScripts(packages.map(p => ({ ...p, scripts: {} })), policy), /Missing required script/)
     assert.throws(() => validateScripts(packages, { ...policy, layout: ['missing'] }), /missing:test:layout/)
