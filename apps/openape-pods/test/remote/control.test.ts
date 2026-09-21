@@ -140,3 +140,18 @@ it('refuses a run start whose approved script or resources changed since review'
   expect(JSON.parse(String(store.db.prepare('SELECT result FROM remote_inbox WHERE id=?').get(stale.route.id)?.result)).data).toMatchObject({ code: 'revision_conflict' })
   expect(store.db.prepare('SELECT count(*) AS count FROM control_runs').get()?.count).toBe(0)
 })
+it('claims an existing Pod idempotently and follows a renewed registration without changing its identity', async () => {
+  const { store, remote, registration, owner } = await fixture()
+  const local = store.createPod({ name: 'Existing local Pod' })
+  const identity = { subject: 'existing-agent@example.test', keyId: 'existing-key' }
+  await remote.execute({ type: 'claim', podId: local.id, owner, identity })
+  await remote.execute({ type: 'claim', podId: local.id, owner, identity })
+  expect(store.db.prepare('SELECT count(*) AS count FROM remote_pods').get()?.count).toBe(1)
+  await expect(remote.execute({ type: 'claim', podId: local.id, owner: { ...owner, subject: 'other@example.test' }, identity })).rejects.toThrow('wrong_owner')
+  const renewed = { ...registration, id: randomUUID(), generation: randomUUID() }
+  await remote.execute({ type: 'configure', registration: renewed })
+  await remote.execute({ type: 'claim', podId: local.id, owner, identity })
+  const binding = store.db.prepare('SELECT runtime_id,generation,identity FROM remote_pods WHERE pod_id=?').get(local.id)!
+  expect(binding).toMatchObject({ runtime_id: renewed.id, generation: renewed.generation })
+  expect(JSON.parse(String(binding.identity))).toEqual(identity)
+})
