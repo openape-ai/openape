@@ -89,7 +89,7 @@ pnpm --filter @openape/pods report
 
 ## Fixture state and lifecycle
 
-Normal launches use `~/Library/Application Support/OpenApe Pods`. `OPENAPE_PODS_FIXTURE_DIR` explicitly selects a separate private absolute test directory. The app checks directory ownership, private mode, leaf symlinks and its fixture marker before using it. No owner authentication cache is resolved. The trusted application is not an OS sandbox for arbitrary scripts; do not interpret this path guard as M3 enforcement.
+Normal launches use `~/Library/Application Support/OpenApe Pods`. `OPENAPE_PODS_FIXTURE_DIR` explicitly selects a separate private absolute test directory. The app checks directory ownership, private mode, leaf symlinks and its fixture marker before using it. Fixture launches keep their window hidden so test suites do not interrupt the developer; set `OPENAPE_PODS_FIXTURE_SHOW=1` to watch one. No owner authentication cache is resolved. The trusted application is not an OS sandbox for arbitrary scripts; do not interpret this path guard as M3 enforcement.
 
 Instances sharing that directory share Electron's single-instance lock. Closing the window hides it and keeps the worker/tray alive. Open Pods from the menu bar or launch the same instance again to restore it. Quit Pods asks the worker to stop, then kills it if it fails to stop within ten seconds. Unexpected worker exit is shown as Needs attention; reopen the application for explicit recovery. There is no timer-based simulation of successful work.
 
