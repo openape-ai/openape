@@ -7,6 +7,8 @@
   Root configuration/tooling changes select every workspace. When base equals
   head, the previous commit is used; an initial commit needs an explicit base.
 - `pnpm check:ci` runs the complete merge gate: unit, E2E and real-browser layout.
+  The pre-push hook runs the affected subset; the external checks run the complete
+  contract once per pushed head and are the required merge evidence.
 - `--suite unit`, `--suite e2e`, `--suite layout` split the same contract across
   runners. All three suites are required for a complete merge result.
 - `--dry-run` prints resolved SHAs, dirty state, workspace selection and commands.
