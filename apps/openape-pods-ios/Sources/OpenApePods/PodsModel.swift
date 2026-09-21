@@ -23,6 +23,8 @@ final class PodsModel: NSObject, ASWebAuthenticationPresentationContextProviding
   var lastUpdated: Date?
   private var client: RelayClient?
   private var authentication: ASWebAuthenticationSession?
+  private var serviceOrigin = URL(string: "https://pods.openape.ai")!
+  private var fixtureAuthentication = false
   var pod: JSONValue { pods.first(where: { $0["id"].string == selectedPod }) ?? .null }
   var online: Bool { runtime?.online == true }
   var canControl: Bool { online && paired && !busy && pending.isEmpty }
@@ -36,7 +38,18 @@ final class PodsModel: NSObject, ASWebAuthenticationPresentationContextProviding
     await perform {
       let folder = try FileManager.default.url(
         for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+      #if DEBUG && targetEnvironment(simulator)
+        if let value = ProcessInfo.processInfo.environment["PODS_ACCEPTANCE_ORIGIN"] {
+          guard let origin = URL(string: value), origin.scheme == "https",
+            origin.host == "127.0.0.1", origin.path.isEmpty, origin.query == nil,
+            origin.fragment == nil, origin.user == nil, origin.password == nil
+          else { throw PodsError.invalidEnvelope }
+          serviceOrigin = origin
+          fixtureAuthentication = true
+        }
+      #endif
       client = try RelayClient(
+        origin: serviceOrigin,
         storage: ProtectedCache(url: folder.appendingPathComponent("viewed-pods.json")))
       signedIn = await client!.signedIn()
       if signedIn { try await loadRuntimes() }
@@ -50,7 +63,7 @@ final class PodsModel: NSObject, ASWebAuthenticationPresentationContextProviding
         (continuation: CheckedContinuation<URL, Error>) in
         let session = ASWebAuthenticationSession(
           url: flow.browserURL,
-          callback: .https(host: "pods.openape.ai", path: "/mobile-auth/return")
+          callback: authenticationCallback
         ) { url, error in
           if let url {
             continuation.resume(returning: url)
@@ -65,11 +78,35 @@ final class PodsModel: NSObject, ASWebAuthenticationPresentationContextProviding
           continuation.resume(throwing: PodsError.service(500, "Could not open sign-in"))
         }
       }
-      try await client.finishLogin(flow: flow, callback: callback)
+      try await client.finishLogin(flow: flow, callback: normalizedCallback(callback))
       authentication = nil
       signedIn = true
       try await loadRuntimes()
     }
+  }
+  private var authenticationCallback: ASWebAuthenticationSession.Callback {
+    #if DEBUG && targetEnvironment(simulator)
+      if fixtureAuthentication { return .customScheme("openape-pods-acceptance") }
+    #endif
+    return .https(host: "pods.openape.ai", path: "/mobile-auth/return")
+  }
+  private func normalizedCallback(_ callback: URL) throws -> URL {
+    #if DEBUG && targetEnvironment(simulator)
+      if fixtureAuthentication {
+        guard callback.scheme == "openape-pods-acceptance", callback.host == "callback",
+          callback.path.isEmpty, callback.user == nil, callback.password == nil,
+          callback.fragment == nil,
+          var url = URLComponents(url: serviceOrigin, resolvingAgainstBaseURL: false)
+        else { throw PodsError.invalidEnvelope }
+        url.path = "/mobile-auth/return"
+        url.percentEncodedQuery =
+          URLComponents(url: callback, resolvingAgainstBaseURL: false)?
+          .percentEncodedQuery
+        guard let result = url.url else { throw PodsError.invalidEnvelope }
+        return result
+      }
+    #endif
+    return callback
   }
   private func loadRuntimes() async throws {
     guard let client else { return }
