@@ -34,7 +34,7 @@ async function fixture() {
   await remote.execute({ type: 'configure', registration }); await remote.execute({ type: 'pair', device })
   const route: Route = { protocol: 'pods-mobile', major: 1, minor: 0, id: randomUUID(), runtimeId: registration.id, generation: registration.generation, deviceId: device.id, keyEpoch: 1, owner, direction: 'command', kind: 'pod.create', kindVersion: 1, issuedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60000).toISOString(), sequence: '0' }
   const command = { type: 'execute' as const, route, body: { name: 'Remote Pod' }, hash: 'a'.repeat(64), leaseUntil: new Date(Date.now() + 25000).toISOString() }
-  return { store, remote, registration, device, owner, route, command, control }
+  return { store, remote, registration, device, owner, route, command, control, master, runs, resources, scheduler }
 }
 it('creates one paused Pod with durable ownership and the same local conversation', async () => {
   const { store, remote, command, owner } = await fixture()
@@ -118,4 +118,25 @@ it('reconciles an acknowledged operation from desktop storage and persists rejec
   expect(receipt).toMatchObject({ state: 'failed' })
   expect(await remote.execute(invalid)).toEqual(receipt)
   expect(store.getPod(pod.id).name).toBe('Remote Pod')
+})
+
+it('marks a command interrupted after journal commit as unknown and never re-applies it', async () => {
+  const { store, command, master, runs, resources, scheduler } = await fixture()
+  // Simulate a crash after the journal row was written but before the outcome was committed.
+  store.db.prepare('INSERT INTO remote_inbox VALUES(?,?,?,?,\'received\',NULL,NULL,?)').run(command.route.id, command.hash, command.route.deviceId, JSON.stringify(command.route), Date.now())
+  const restarted = new RemoteControl(store, master, runs, resources, scheduler)
+  const receipt = await restarted.execute(command)
+  expect(receipt).toMatchObject({ operationId: command.route.id, state: 'unknown', code: 'inspect_before_retry' })
+  expect(await restarted.execute(command)).toMatchObject({ operationId: command.route.id, state: 'unknown', code: 'inspect_before_retry' })
+  expect(store.listPods()).toEqual([])
+  await expect(restarted.execute({ ...command, hash: 'c'.repeat(64) })).rejects.toThrow('operation_conflict')
+})
+it('refuses a run start whose approved script or resources changed since review', async () => {
+  const { store, remote, command } = await fixture()
+  await remote.execute(command); const pod = store.listPods()[0]!
+  const stale = { ...command, route: { ...command.route, id: randomUUID(), kind: 'run.start' as const }, body: { podId: pod.id, expected: { podRevision: store.getPod(pod.id).revision, scriptHash: 'f'.repeat(64), resourceEpoch: 0 } } }
+  const receipt = await remote.execute(stale)
+  expect(receipt).toMatchObject({ state: 'failed' })
+  expect(JSON.parse(String(store.db.prepare('SELECT result FROM remote_inbox WHERE id=?').get(stale.route.id)?.result)).data).toMatchObject({ code: 'revision_conflict' })
+  expect(store.db.prepare('SELECT count(*) AS count FROM control_runs').get()?.count).toBe(0)
 })
