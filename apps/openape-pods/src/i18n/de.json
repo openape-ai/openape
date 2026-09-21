@@ -2124,5 +2124,6 @@
   "This prevents new mobile assignments. Review existing Pod permissions separately.": "Dies verhindert neue mobile Zuweisungen. Prüfe bestehende Pod-Berechtigungen separat.",
   "Confirm only if this exact code appears in the app on your device.": "Bestätige nur, wenn genau dieser Code in der App auf deinem Gerät angezeigt wird.",
   "Device: {id}": "Gerät: {id}",
-  "Owner: {subject}": "Eigentümer: {subject}"
+  "Owner: {subject}": "Eigentümer: {subject}",
+  "Remote acceptance requires an isolated loopback relay": "Die Remote-Abnahme benötigt einen isolierten lokalen Vermittlungsdienst"
 }
