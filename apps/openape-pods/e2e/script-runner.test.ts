@@ -7,7 +7,7 @@ import { executeScript } from '../src/worker/runs/runner'
 import type { RunInput } from '../src/contracts/runs'
 
 let root = ''
-afterEach(async () => { if (root) await rm(root, { recursive: true, force: true }) })
+afterEach(async () => { if (root) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) })
 async function setup(source: string, timeMs = 5000) {
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-script-')))
   const workspace = join(root, 'workspace'); await mkdir(workspace)

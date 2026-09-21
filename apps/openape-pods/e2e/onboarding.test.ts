@@ -27,7 +27,7 @@ it('onboarding: the actual pinned authentication process accepts account reads a
     await expect(auth.request('command/exec', { command: ['touch', join(root, 'escaped')] })).rejects.toThrow('cannot execute model')
     await expect(readFile(join(root, 'escaped'))).rejects.toMatchObject({ code: 'ENOENT' })
   }
-  finally { await auth.close(); await AuthProcess.recover(root, runtime.helper); await rm(root, { recursive: true, force: true }) }
+  finally { await auth.close(); await AuthProcess.recover(root, runtime.helper); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })
 it.each([false, true])('onboarding: empty setup, explicit continuation and no implicit activation (packaged=%s)', async (packaged) => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-onboarding-')))
@@ -55,7 +55,7 @@ it.each([false, true])('onboarding: empty setup, explicit continuation and no im
       catch { return 'denied' }
     })).toBe('denied')
   }
-  finally { await app.close(); await rm(root, { recursive: true, force: true }) }
+  finally { await app.close(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })
 
 it('onboarding: central account selection persists without moving existing pods (packaged)', async () => {
@@ -133,7 +133,7 @@ it('onboarding: central account selection persists without moving existing pods 
     }
     finally { reopened.close() }
   }
-  finally { await app.close(); await rm(root, { recursive: true, force: true }) }
+  finally { await app.close(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })
 
 it('broker provider settings: explicit consent, retained provider and readable narrow layout (packaged)', async () => {
@@ -186,5 +186,5 @@ it('broker provider settings: explicit consent, retained provider and readable n
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.screenshot({ path: resolve('.artifacts/broker-provider-consent-de.png') })
   }
-  finally { await app.close(); await rm(root, { recursive: true, force: true }) }
+  finally { await app.close(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })

@@ -117,6 +117,8 @@ final class PodsModel: NSObject, ASWebAuthenticationPresentationContextProviding
       runtime = runtimes.first
     }
     if let runtime {
+      // The desktop may have removed this pairing while the app was closed.
+      if runtime.paired == false { try await client.forgetPairing(runtime.id) }
       paired = await client.isPaired(runtime)
       if !paired { clearPodSelection() }
       pairingCode = paired ? nil : try await client.pairingCode(runtime)

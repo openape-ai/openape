@@ -29,5 +29,5 @@ it('terminal feedback: shows a failed preparation beside the button without laun
       await page.screenshot({ path: resolve(`.artifacts/terminal-feedback-${language}.png`), fullPage: true })
     }
   }
-  finally { await app.close(); await rm(root, { recursive: true, force: true }) }
+  finally { await app.close(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })

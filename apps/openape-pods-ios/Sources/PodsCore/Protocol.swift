@@ -28,6 +28,7 @@ public struct Registration: Codable, Identifiable, Equatable, Sendable {
   public let epoch: Int
   public var online: Bool?
   public var capabilities: Capabilities?
+  public var paired: Bool?
 }
 public struct Route: Codable, Sendable {
   public let `protocol`: String

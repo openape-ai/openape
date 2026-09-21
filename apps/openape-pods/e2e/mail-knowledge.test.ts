@@ -7,7 +7,7 @@ import { extractSource } from '../src/worker/mail/extraction'
 import type { AgentRuntime } from '../src/worker/agent/executor'
 
 let root = ''
-afterEach(async () => { if (root) await rm(root, { recursive: true, force: true }) })
+afterEach(async () => { if (root) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) })
 function pdf(text: string): Buffer {
   const stream = `BT /F1 12 Tf 20 150 Td (${text}) Tj ET`
   const objects = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>', '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>', `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`]

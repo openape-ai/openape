@@ -19,7 +19,7 @@ async function fixture() {
   await Promise.all([mkdir(workspace), mkdir(sibling), mkdir(broker)])
   return { root, workspace, sibling, broker }
 }
-afterEach(async () => { for (const domain of domains.splice(0)) { domain.cancel(); await domain.completed } for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }) })
+afterEach(async () => { for (const domain of domains.splice(0)) { domain.cancel(); await domain.completed } for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) })
 async function runProbe(root: Awaited<ReturnType<typeof fixture>>, script: string, readFiles: string[] = [], packaged = false, directories: Pick<RuntimePolicy, 'readDirectories' | 'writeDirectories'> = {}) {
   const file = join(root.broker, `${randomUUID()}.mjs`); await writeFile(file, script)
   const bundle = resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents')

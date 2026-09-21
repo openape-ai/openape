@@ -9,7 +9,7 @@ Foundation [PR 80](https://repos.openape.ai/patrick/monorepo/pulls/80) is merged
 
 Native acceptance [PR 84](https://repos.openape.ai/patrick/monorepo/pulls/84) merged as `b4cff75b8a4cc1043872fef275f7e587825d8772` (source `e04cf8462c0e44c5aed1ff37182e17f476176fa8`, external 4821/4822/4823 green). Its push gate `1789985301982-e04cf846-all` ran every workspace including the native run from clean source; iPhone and iPad passed 2/2 with app restart, desktop restart and pairing removal (refused, no new run). Published evidence: https://testrun.openape.ai/r/aUeVd1ZWv-LKtO4bMdIadQxQ. Remaining M1 gaps: two distinct real broker/decision authorities in the native fixture (owner decision on a fixture-only loopback boundary), controlled live-model smoke (owner ChatGPT sign-in), physical-device HTTPS association.
 
-Next (owner order of 2026-09-21): test-pyramid steps 1–3 of [issue 1364](https://repos.openape.ai/patrick/monorepo/issues/1364) (docs-neutral affected selection + selective branch CI in `chore/issue-1364-affected-selection`, then parallel Pods Electron E2E), then M2 while the three M1 gaps wait for owner decisions.
+Test-pyramid steps 1–3 are merged (PR 85 `80d62c57`, PR 86 `96b39096`). M2 (delivery, recovery, shared editing) is in progress on `feature/issue-1362-m2-delivery`: relay generation rotation, pairing projection, Retry-After, hub/store/desktop recovery tests. Next: finish the remaining M2 items (real-stack rotation round trip, program-effect replay proof, review-conflict UI, native client tests), then M3.
 
 ## Central Pod chats (September 20, 2026)
 
