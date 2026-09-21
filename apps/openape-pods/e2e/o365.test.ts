@@ -7,7 +7,7 @@ import { launchSandbox, verifyExecutable } from '../src/worker/runtime/sandbox'
 import type { ProcessDomain } from '../src/worker/runtime/sandbox'
 
 let root = ''; const domains: ProcessDomain[] = []
-afterEach(async () => { for (const domain of domains.splice(0)) { domain.cancel(); await domain.completed } if (root) await rm(root, { recursive: true, force: true }) })
+afterEach(async () => { for (const domain of domains.splice(0)) { domain.cancel(); await domain.completed } if (root) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) })
 async function capture(domain: ProcessDomain): Promise<{ code: number, stdout: string, stderr: string }> {
   domains.push(domain)
   let stdout = ''; let stderr = ''

@@ -15,7 +15,7 @@ import { fixtureShellIdentity } from './fixtures/shell-identity'
 
 const identities: Awaited<ReturnType<typeof fixtureShellIdentity>>[] = []
 const active: { app: ElectronApplication, child: ChildProcess, root: string }[] = []
-afterEach(async () => { for (const identity of identities.splice(0)) await identity.close(); for (const { app, child, root } of active.splice(0)) { if (child.exitCode === null && child.signalCode === null) await app.close(); await rm(root, { recursive: true, force: true }) } })
+afterEach(async () => { for (const identity of identities.splice(0)) await identity.close(); for (const { app, child, root } of active.splice(0)) { if (child.exitCode === null && child.signalCode === null) await app.close(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) } })
 async function launch() {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-workspace-'))); fixtureDirectory(root)
   const store = new PodDatabase(root)

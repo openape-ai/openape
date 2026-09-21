@@ -118,5 +118,5 @@ it('script-editor: edits exact source, preserves navigation, validates and runs 
     }
     expect((await page.evaluate(id => window.pods.scheduling({ type: 'list', podId: id }), pod.id)).enabled).toBe(false)
   }
-  finally { await app.close(); await shellIdentity.close(); await rm(root, { recursive: true, force: true }) }
+  finally { await app.close(); await shellIdentity.close(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })

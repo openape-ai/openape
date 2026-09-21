@@ -70,6 +70,7 @@ export async function boundary<T>(event: H3Event, run: () => T | Promise<T>): Pr
   catch (error) {
     if (error instanceof ProtocolError) {
       setResponseStatus(event, error.status)
+      if (error.status === 429 || error.status === 503) setHeader(event, 'retry-after', error.status === 429 ? 60 : 15)
       setHeader(event, 'content-type', 'application/problem+json')
       return { type: `https://pods.openape.ai/problems/${error.code}`, title: error.code, status: error.status, instance: getRequestURL(event).pathname, code: error.code }
     }

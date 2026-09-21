@@ -20,7 +20,7 @@ afterEach(async () => {
   for (const { app, child } of applications.splice(0)) { if (child.exitCode === null && child.signalCode === null) await app.close() }
   for (const identity of shellIdentities.values()) await identity.close()
   shellIdentities.clear()
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 })
 async function launch(root: string, packaged: boolean) {
   let identity = shellIdentities.get(root)

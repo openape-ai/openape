@@ -56,5 +56,5 @@ it('groups: organizes pods through the packaged sidebar and retains grouping acr
     const final = await page.evaluate(() => window.pods.workspace({ type: 'list' })); expect(final.organization.groups).toEqual([]); expect(final.pods).toHaveLength(2); expect(final.pods[0]).toEqual(original)
     expect((await page.evaluate(id => window.pods.scheduling({ type: 'list', podId: id }), pod.id)).enabled).toBe(false)
   }
-  finally { await app.close(); await rm(root, { recursive: true, force: true }) }
+  finally { await app.close(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })
