@@ -1,5 +1,6 @@
 # Shared with the local pre-push gate: scripts/check.mjs + .openape/checks.json.
-# Every mirrored branch is checked at its exact pushed commit. No main-vs-main diff.
+# Branch heads run the affected subset against origin/main at their exact pushed
+# commit; pushes to main run the complete contract as the post-merge safety net.
 name: e2e
 on:
   push:
@@ -30,7 +31,13 @@ jobs:
           key: checks-${{ runner.os }}-e2e-${{ hashFiles('pnpm-lock.yaml', '.nvmrc') }}-${{ github.sha }}
           restore-keys: checks-${{ runner.os }}-e2e-${{ hashFiles('pnpm-lock.yaml', '.nvmrc') }}-
       - name: Shared e2e contract
-        run: pnpm check:ci --suite e2e
+        run: |
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            pnpm check:ci --suite e2e
+          else
+            git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+            pnpm check:affected --base origin/main --head "$GITHUB_SHA" --suite e2e
+          fi
         env:
           TURBO_CACHE_DIR: .turbo-cache
       - name: Preserve complete check logs and summary

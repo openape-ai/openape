@@ -27,6 +27,9 @@ existing E2E proof-link manifest. Forgejo requires upload-artifact v3 or a
 patched v4: https://forgejo.org/docs/latest/user/actions/advanced-features/
 
 Forgejo workflows run on every mirrored branch at the exact source commit.
-They use the full contract, without an affected comparison against the same
-main tip. The native forge's required checks are enabled only after the external
+Branch heads run `check:affected --base origin/main`, so the required merge
+evidence covers only the workspaces the head changed; pushes to `main` run the
+complete contract as the post-merge safety net. Documentation under `docs/`
+(except `docs/architecture/`), `.claude/` and root Markdown files never select
+a workspace; a head that changes only those files passes with zero steps. The native forge's required checks are enabled only after the external
 runner and status adapter have been verified (rollout M4).

@@ -20,10 +20,18 @@ export function workspaces() {
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
+// Documentation and agent notes never change the check contract. Generated
+// architecture documents stay root changes because the workspace-docs step
+// verifies them.
+export function contractNeutral(file) {
+  return /^(docs\/(?!architecture\/)|\.claude\/)/.test(file) || /^[^/]+\.md$/.test(file)
+}
+
 export function affectedWorkspaces(packages, files) {
+  const relevant = files.filter(f => !contractNeutral(f))
   // Root-level tooling/configuration affects the entire workspace contract.
-  if (files.some(f => !packages.some(p => f.startsWith(`${p.path}/`)))) return packages
-  const selected = new Set(packages.filter(p => files.some(f => f.startsWith(`${p.path}/`))).map(p => p.name))
+  if (relevant.some(f => !packages.some(p => f.startsWith(`${p.path}/`)))) return packages
+  const selected = new Set(packages.filter(p => relevant.some(f => f.startsWith(`${p.path}/`))).map(p => p.name))
   let changed = true
   while (changed) {
     changed = false
