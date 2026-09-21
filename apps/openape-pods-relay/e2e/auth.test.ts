@@ -98,6 +98,26 @@ it('registers a desktop and mobile through real DDISA callbacks and rejects repl
     const page = await events.json() as { events: { cursor: string, envelope: SealedEnvelope }[] }
     expect(page.events).toHaveLength(1)
     expect(open(page.events[0]!.envelope, mobile.agreement, publicKey(desktop.key))).toEqual(receipt)
+    const pendingRoute: Route = { ...route, id: randomUUID() }
+    const pendingBody = JSON.stringify(seal(pendingRoute, { name: 'Admitted before the desktop restored a backup' }, publicKey(desktop.agreement), mobile.key))
+    const pendingPosted = await fetch(`${relay.url}${operationsPath}`, { method: 'POST', headers: { ...headers(mobile, operationsPath, 'POST', pendingBody), 'content-type': 'application/json' }, body: pendingBody })
+    expect(pendingPosted.status, await pendingPosted.clone().text()).toBe(202)
+    await frame('operation')
+    const rotatePath = '/api/runtime/v1/rotate'
+    const rotated = await fetch(`${relay.url}${rotatePath}`, { method: 'POST', headers: { ...headers(desktop, rotatePath, 'POST', '{}'), 'content-type': 'application/json' }, body: '{}' })
+    expect(rotated.status, await rotated.clone().text()).toBe(200)
+    const renewed = await rotated.json() as { id: string, generation: string }
+    expect(renewed.id).toBe(desktop.registration.id)
+    expect(renewed.generation).not.toBe(desktop.registration.generation)
+    await expect.poll(() => socket.readyState).toBe(WebSocket.CLOSED)
+    const runtimesAfter = await fetch(`${relay.url}${path}`, { headers: headers(mobile, path) })
+    expect(await runtimesAfter.json()).toMatchObject([{ id: desktop.registration.id, generation: renewed.generation, online: false, paired: false }])
+    const operationPath = `/api/mobile/v1/operations/${pendingRoute.id}`
+    const unpaired = await fetch(`${relay.url}${operationPath}`, { headers: headers(mobile, operationPath) })
+    expect(unpaired.status).toBe(403)
+    const staleBody = JSON.stringify(seal({ ...route, id: randomUUID() }, { name: 'Old generation' }, publicKey(desktop.agreement), mobile.key))
+    const stale = await fetch(`${relay.url}${operationsPath}`, { method: 'POST', headers: { ...headers(mobile, operationsPath, 'POST', staleBody), 'content-type': 'application/json' }, body: staleBody })
+    expect(stale.status).toBe(404)
     const revokePath = `/api/mobile/v1/runtimes/${desktop.registration.id}`
     const revoke = await fetch(`${relay.url}${revokePath}`, { method: 'DELETE', headers: headers(mobile, revokePath, 'DELETE') })
     expect(revoke.status).toBe(200)
