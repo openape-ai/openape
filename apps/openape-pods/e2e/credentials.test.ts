@@ -119,6 +119,6 @@ export async function run(context) {
     const process = app.process()
     const cleanup = setTimeout(() => { process.kill('SIGKILL') }, 3000)
     try { await app.close() }
-    finally { clearTimeout(cleanup) }; await shellIdentity.close(); await rm(root, { recursive: true, force: true })
+    finally { clearTimeout(cleanup) }; await shellIdentity.close(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
   }
 })

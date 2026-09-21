@@ -13,7 +13,7 @@ import { RunDispatcher } from '../src/worker/runs/dispatcher'
 let store: PodDatabase | undefined
 let dispatcher: RunDispatcher | undefined
 let root = ''
-afterEach(async () => { await dispatcher?.stop(); store?.close(); if (root) await rm(root, { recursive: true, force: true }) })
+afterEach(async () => { await dispatcher?.stop(); store?.close(); if (root) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) })
 async function setup(services?: RunServices) {
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-dispatch-')))
   store = new PodDatabase(root)

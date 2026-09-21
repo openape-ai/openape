@@ -100,7 +100,7 @@ int main(int argc, char **argv) {
     }
     else { expect(view.exitCode).not.toBe(0); expect(view.output).toContain('denied'); await expect(access(contextFile)).rejects.toMatchObject({ code: 'ENOENT' }) }
   }
-  finally { launch.close(); await launch.completed; server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await rm(root, { recursive: true, force: true }) }
+  finally { launch.close(); await launch.completed; server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })
 
 it('packaged runtime starts without a bundled third-party application', async () => {

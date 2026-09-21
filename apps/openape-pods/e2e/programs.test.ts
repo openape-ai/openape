@@ -97,7 +97,7 @@ int main(int argc, char **argv) {
   const terminal = () => new ProgramSession(randomUUID(), podId, applicationId, assignment, ['setup'], helper, privateRoot, cache, async () => {}, async () => { releases++ }, workspace)
   const lease = { signal: new AbortController().signal, capabilities: [assignment.capability], assertCurrent: () => {} }
   const invoke = (argv: string[], capabilities = lease.capabilities) => invokeProgram([resource], podId, { application: assignment.name, argv }, helper, privateRoot, cache, { ...lease, capabilities })
-  return { root, privateRoot, cache, assignment, resource, podId, applicationId, state, terminal, invoke, releases: () => releases, close: async () => { server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); await rm(root, { recursive: true, force: true }) } }
+  return { root, privateRoot, cache, assignment, resource, podId, applicationId, state, terminal, invoke, releases: () => releases, close: async () => { server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) } }
 }
 
 it('program boundary: owner terminal state is reused by the assigned read tool and the agent sees only its result', async () => {
@@ -241,7 +241,7 @@ it('packaged program UI: exposes the external terminal and reuses application se
     expect(folderBounds!.width).toBeGreaterThan(120)
     await page.locator('.directory-list').screenshot({ path: resolve('.artifacts/program-directories-de-dark.png') })
   }
-  finally { await app.close(); await shellIdentity.close(); await f.close(); await rm(folder, { recursive: true, force: true }) }
+  finally { await app.close(); await shellIdentity.close(); await f.close(); await rm(folder, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })
 
 it('HTTP grant boundary: verifies the signed origin and method before transport and cancels on remote revocation', async () => {

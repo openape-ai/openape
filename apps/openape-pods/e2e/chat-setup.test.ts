@@ -101,5 +101,5 @@ it('packaged chat setup: reviews real persisted permissions and missing values w
     expect(await page.locator('.master-compose').evaluate(element => element.getBoundingClientRect().bottom <= innerHeight)).toBe(true)
     await page.screenshot({ path: resolve('.artifacts/chat-setup-resolved-de-dark.png') })
   }
-  finally { await app.close(); await identity.close(); await rm(root, { recursive: true, force: true }); await rm(folder, { recursive: true, force: true }) }
+  finally { await app.close(); await identity.close(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); await rm(folder, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })
