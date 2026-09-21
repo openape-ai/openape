@@ -5,14 +5,14 @@ import { isBlockedAddress } from '@openape/core'
 import { ProtocolError } from '@openape/pods-protocol'
 
 export async function publicJson(url: URL, body?: unknown, fixture = false): Promise<unknown> {
-  const localFixture = fixture && url.protocol === 'http:' && url.hostname === '127.0.0.1'
+  const localFixture = fixture && ['http:', 'https:'].includes(url.protocol) && url.hostname === '127.0.0.1'
   if ((!localFixture && url.protocol !== 'https:') || url.username || url.password || url.hash) throw new ProtocolError('unsafe_identity_provider', 502)
   const addresses = await lookup(url.hostname, { all: true })
   if (!addresses.length || (!localFixture && addresses.some(item => isBlockedAddress(item.address)))) throw new ProtocolError('unsafe_identity_provider', 502)
   const address = addresses[0]!
   const data = body === undefined ? undefined : JSON.stringify(body)
   return await new Promise((resolve, reject) => {
-    const request = (localFixture ? httpRequest : httpsRequest)(url, {
+    const request = (url.protocol === 'http:' ? httpRequest : httpsRequest)(url, {
       method: data ? 'POST' : 'GET',
       headers: data ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(data) } : {},
       lookup: (_host, options, callback) => { if (options.all) callback(null, [address]); else callback(null, address.address, address.family) },
