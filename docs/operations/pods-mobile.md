@@ -4,7 +4,7 @@ This is the operational companion to [issue 1362](https://repos.openape.ai/patri
 
 ## Independent service
 
-`pods-idp` remains on port 3027 with its existing database, signing keys and image. `pods-relay` uses port 3028, its own SQLite database, Node 24.15.0 and the packaging image `compose/pods-relay-package.Dockerfile`. It runs as the existing application UID/GID 999:988 with a read-only container filesystem; only its dedicated data mount and bounded temporary filesystem are writable. The relay cannot access the provider's data mount.
+`pods-idp` remains on port 3027 with its existing database, signing keys and image. `pods-relay` uses port 3028, its own SQLite database, Node 24.15.0 and the packaging image `compose/pods-relay-package.Dockerfile`. It runs as the existing application UID/GID 999:988 with a read-only container filesystem; only its dedicated data mount and bounded temporary filesystem are writable. The relay cannot access the provider's data mount. The pre-push image smoke runs the built image with that user, a read-only root filesystem, a bounded writable `/tmp` and an enabled disposable SQLite database, and requires the exact `service` identity in the health response; a root-only smoke is not evidence that the production user can start the server.
 
 The exact routing configuration is `compose/traefik/pods-idp.yml`. The new higher-priority router owns only `/api/mobile/v1/`, `/api/runtime/v1/`, `/mobile-auth/`, the Apple association and SP client metadata. Existing discovery, JWKS, authorization/token, agent provisioning and grant routes retain the provider service. On September 20, the existing SP metadata path returned 404; inspect it again before installing this router in case another workstream has added a client.
 
