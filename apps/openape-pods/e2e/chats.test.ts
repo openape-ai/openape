@@ -106,5 +106,5 @@ it('central chats: scopes tools, reviews both Pods, starts a separate run and re
       await page.screenshot({ path: resolve(`.artifacts/chats-${width}.png`) })
     }
   }
-  finally { await app.close(); await identity.close(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); await rm(root, { recursive: true, force: true }) }
+  finally { await app.close(); await identity.close(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 }, 90000)

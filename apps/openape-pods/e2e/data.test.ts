@@ -56,7 +56,7 @@ it.each([false, true])('data: backs up, confirms deletion, restores into a fresh
     expect((await page.evaluate(podId => window.pods.scheduling({ type: 'list', podId }), pod.id)).enabled).toBe(false)
     expect(await readFile(join(root, pointer.profile, 'pods', pod.id, 'workspace/notes.txt'), 'utf8')).toBe('SYNTHETIC_DURABLE_WORKSPACE')
   }
-  finally { await app.close(); await identity?.close(); await rm(base, { recursive: true, force: true }) }
+  finally { await app.close(); await identity?.close(); await rm(base, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })
 
 it('data: restores a compatible backup when a newer database blocks normal startup', async () => {
@@ -80,5 +80,5 @@ it('data: restores a compatible backup when a newer database blocks normal start
     finally { restored.close() }
     await app.evaluate(({ app }) => { app.quit = (globalThis as unknown as { restoreQuit: typeof app.quit }).restoreQuit })
   }
-  finally { await app.close(); await rm(base, { recursive: true, force: true }) }
+  finally { await app.close(); await rm(base, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })

@@ -25,7 +25,7 @@ async function setup(provider?: AgentGatewayServices['provider'], packaged = fal
   master = new MasterService(store, runtime, control, provider)
   return { control, registry, runtime, scheduler }
 }
-afterEach(async () => { await master?.stop(); await dispatcher?.stop(); store?.close(); if (root) await rm(root, { recursive: true, force: true }) })
+afterEach(async () => { await master?.stop(); await dispatcher?.stop(); store?.close(); if (root) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) })
 const code = 'export async function run(c) { await c.progress.commit({expectedRevision:c.input.checkpointRevision,checkpoint:{checked:true},sources:[],claims:[]}); return {status:\'completed\',summary:\'Synthetic draft completed\',completedInputIds:[],gapIds:[]} }'
 describe('master actions and actual app-server', () => {
   it('validates and activates a native draft, preserves idempotency and rejects permission or revision escalation', async () => {

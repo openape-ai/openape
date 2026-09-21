@@ -43,5 +43,5 @@ it('values tab: exposes empty variables and missing secrets in both languages wi
     expect(resources.resources).toEqual([])
     expect(resources.variables?.every(variable => variable.value === '')).toBe(true)
   }
-  finally { await app.close(); await rm(root, { recursive: true, force: true }) }
+  finally { await app.close(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })
