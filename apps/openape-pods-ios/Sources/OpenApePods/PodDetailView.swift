@@ -12,6 +12,9 @@ struct PodDetailView: View {
           model.online ? "Desktop online" : "Offline · cached content",
           systemImage: model.online ? "network" : "wifi.slash"
         ).font(.caption)
+        if let updated = model.lastUpdated {
+          Text("· updated \(updated, style: .relative) ago").font(.caption)
+        }
         Spacer()
         if model.busy { ProgressView() }
       }.padding(.horizontal).padding(.vertical, 8).foregroundStyle(.secondary)
