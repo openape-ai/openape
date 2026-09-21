@@ -3,6 +3,7 @@ import SwiftUI
 struct PodDetailView: View {
   @Bindable var model: PodsModel
   @State private var section = "Chat"
+  @FocusState private var composerFocused: Bool
   @State private var confirmingRun = false
   var body: some View {
     VStack(spacing: 0) {
@@ -60,8 +61,10 @@ struct PodDetailView: View {
               description: Text(
                 "Explain what it should do. Review proposed changes before applying them."))
           }
-          ForEach(Array(model.conversation["messages"].array.enumerated()), id: \.offset) {
-            _, message in
+          ForEach(
+            model.conversation["messages"].array.filter { $0["role"].string != "tool" },
+            id: \.recordID
+          ) { message in
             VStack(alignment: .leading, spacing: 6) {
               Text(message["role"].string == "user" ? "You" : "Pod assistant").font(.caption.bold())
                 .foregroundStyle(.secondary)
@@ -75,8 +78,7 @@ struct PodDetailView: View {
                 ? Color.indigo.opacity(0.08) : Color.secondary.opacity(0.05),
               in: RoundedRectangle(cornerRadius: 16))
           }
-          ForEach(Array(model.conversation["changes"].array.enumerated()), id: \.offset) {
-            _, review in
+          ForEach(model.conversation["changes"].array, id: \.recordID) { review in
             ChangeReviewCard(review: review, enabled: model.canControl) { apply in
               Task { await model.decide(review, apply: apply) }
             }
@@ -86,11 +88,14 @@ struct PodDetailView: View {
           }
         }.padding()
       }
+      .scrollDismissesKeyboard(.interactively)
       Divider()
       HStack(alignment: .bottom, spacing: 12) {
         TextField("Message this Pod", text: $model.draft, axis: .vertical).lineLimit(1...6)
-          .textFieldStyle(.roundedBorder).accessibilityIdentifier("chat.composer")
+          .textFieldStyle(.roundedBorder).focused($composerFocused)
+          .accessibilityIdentifier("chat.composer")
         Button {
+          composerFocused = false
           Task { await model.sendChat() }
         } label: {
           Image(systemName: "arrow.up.circle.fill").font(.title)
@@ -150,7 +155,7 @@ struct PodDetailView: View {
         LabeledContent("Agent identity", value: model.pod["phase"].string ?? "Unknown")
         if let error = model.pod["error"].string { Text(error).foregroundStyle(.orange) }
         Text(
-          "Local file selection, program installation, provider sign-in and secret entry require the desktop. Continue this same conversation there, then refresh here."
+          "Local file selection, program installation, command permissions, provider sign-in and secret entry require the desktop. Continue this same conversation there, then refresh here."
         ).foregroundStyle(.secondary)
       }
       Section("Programs offered by your desktop") {
@@ -229,12 +234,17 @@ private struct ChangeReviewCard: View {
         ForEach(Array(target["review"].array.enumerated()), id: \.offset) { _, change in
           Text(change["action"].string ?? "Change").font(.subheadline)
           DisclosureGroup("Before and after") {
-            Text("Before").font(.caption.bold())
-            Text(change["before"].string ?? "").font(.caption.monospaced()).textSelection(.enabled)
-              .frame(maxWidth: .infinity, alignment: .leading)
-            Text("After").font(.caption.bold())
-            Text(change["after"].string ?? "").font(.caption.monospaced()).textSelection(.enabled)
-              .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 8) {
+              Text("Before").font(.caption.bold())
+              Text(change["before"].string ?? "").font(.caption.monospaced())
+                .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+              Text("After").font(.caption.bold())
+              Text(change["after"].string ?? "").font(.caption.monospaced())
+                .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("review.source.after")
+            }
           }
         }
       }
@@ -329,4 +339,8 @@ private struct AssignmentReviewCard: View {
       Text(review["program"]["name"].string ?? "Program")
     }
   }
+}
+
+extension JSONValue {
+  fileprivate var recordID: String? { self["id"].string }
 }
