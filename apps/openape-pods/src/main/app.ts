@@ -54,7 +54,9 @@ const worker = new FixtureWorker((next) => {
   if (next.state === 'ready' && process.env.OPENAPE_PODS_REMOTE_ENABLED === '1') void remote.resume().catch((error: unknown) => { remote.error = error instanceof Error ? error.message : 'Remote access unavailable' })
   if (window && !window.isDestroyed()) window.webContents.send(channels.changed, status)
 })
-remote = new RemoteController(root, worker)
+const fixtureRemoteOrigin = fixture && process.env.NODE_ENV === 'test' ? process.env.OPENAPE_PODS_FIXTURE_RELAY_ORIGIN : undefined
+if (fixtureRemoteOrigin && new URL(fixtureRemoteOrigin).hostname !== '127.0.0.1') throw new Error('Remote acceptance requires an isolated loopback relay')
+remote = new RemoteController(root, worker, fixtureRemoteOrigin)
 async function manageRemote(): Promise<void> {
   if (!window) return
   const action = await dialog.showMessageBox(window, { title: t('Mobile access'), message: t('OpenApe Pods on iPhone and iPad'), detail: translateDiagnostic(preference.language, remote.error) || t('Execution and credentials stay on this desktop. Mobile devices must be paired here before accessing Pods.'), buttons: [t('Cancel'), t('Register desktop'), t('Pair mobile device'), t('Disable mobile access'), t('Offer installed CLI'), t('Withdraw offered CLI'), t('Remove paired device')], defaultId: 0, cancelId: 0 })
