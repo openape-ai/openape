@@ -342,6 +342,13 @@ public actor RelayClient {
       ].contains(code) {
         cache.pending.removeValue(forKey: envelope.route.id)
         cache.pendingViews.removeValue(forKey: envelope.route.id)
+        // The desktop removed this pairing; forget the local pin so the next
+        // refresh shows pairing instead of an apparently usable runtime.
+        if code == "pairing_required" {
+          cache.paired.removeValue(forKey: envelope.route.runtimeId)
+          try storage.save(cache)
+          throw PodsError.unpaired
+        }
         try storage.save(cache)
       }
       throw PodsError.service(status, code)
