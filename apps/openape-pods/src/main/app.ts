@@ -105,7 +105,10 @@ function createWindow(): BrowserWindow {
   view.webContents.on('will-frame-navigate', event => event.preventDefault())
   view.webContents.on('will-attach-webview', event => event.preventDefault())
   view.on('close', (event) => { if (!quitting) { event.preventDefault(); view.hide() } })
-  view.once('ready-to-show', () => view.show())
+  // Fixture runs keep their windows hidden so test suites do not interrupt the
+  // developer; set OPENAPE_PODS_FIXTURE_SHOW=1 to watch a fixture run.
+  const hidden = fixture && process.env.OPENAPE_PODS_FIXTURE_SHOW !== '1'
+  view.once('ready-to-show', () => { if (!hidden) view.show() })
   view.webContents.on('render-process-gone', (_event, details) => { console.error('Pods renderer stopped', details.reason); app.quit() })
   void view.loadURL(rendererURL).catch((error: unknown) => { console.error('Pods UI failed to load', error); app.quit() })
   return view
