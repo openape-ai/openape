@@ -37,9 +37,14 @@ The Node engine minimum describes compatibility; `.nvmrc` fixes development/CI.
 `pnpm install --frozen-lockfile` installs without re-resolving versions. Preserve
 supply-chain quarantine and targeted overrides in `pnpm-workspace.yaml`.
 
-- During development: `pnpm check:affected --base origin/main --head HEAD`.
-- Complete merge gate: `pnpm check:ci`. The unit, E2E and layout suites together
-  form the required contract. A missing/skipped suite is not a green merge gate.
+- Use the mildest sufficient verification: unit/affected checks first, focused
+  behavioral checks next, full-application E2E last. During development and in
+  the pre-push hook: `pnpm check:affected --base origin/main --head HEAD`.
+- Complete merge gate: the external checks for the exact pushed head run
+  `pnpm check:ci` once (unit, E2E and layout suites); they are recorded on the PR
+  and required for merge. Do not duplicate that full run locally for the same
+  head; run `pnpm check:ci` explicitly before deployments. A missing/skipped
+  suite is not a green merge gate.
 - `--dry-run` explains scope; `.openape/check-results/` holds complete logs and
   summaries. See [checks](docs/operations/checks.md). Do not bypass a failed gate.
 - Before committing or deploying, full `pnpm lint` and `pnpm typecheck` must
