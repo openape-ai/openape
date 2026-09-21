@@ -10,5 +10,9 @@ if [ "$SKIP_HOOKS" = "1" ]; then
   exit 0
 fi
 
-echo "[pre-push] Running the shared merge check contract"
-exec pnpm check:ci
+# Local pushes run the mildest sufficient check: unit plus affected E2E/layout.
+# The single complete contract runs once externally for the pushed head and is
+# recorded on the pull request; run `pnpm check:ci` explicitly before deployments.
+echo "[pre-push] Running affected checks against origin/main"
+git fetch --quiet origin main || exit 1
+exec pnpm check:affected --base origin/main --head HEAD
