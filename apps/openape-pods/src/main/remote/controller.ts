@@ -54,6 +54,15 @@ export class RemoteController {
     return response.json()
   }
 
+  private async signed(method: 'POST', path: string, body: unknown): Promise<unknown> {
+    const token = this.saved!.tokens!.accessToken; const data = JSON.stringify(body)
+    const id = randomUUID(); const at = new Date().toISOString(); const digest = sha256(data)
+    const signature = signBytes(proofBytes('api-request', id, JSON.stringify([method, path, sha256(token), at, digest])), this.saved!.signing)
+    const response = await fetch(`${this.origin}${path}`, { method, headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, 'x-pods-request-id': id, 'x-pods-request-at': at, 'x-pods-body-digest': digest, 'x-pods-proof': signature }, body: data, redirect: 'error', signal: AbortSignal.any([this.abort.signal, AbortSignal.timeout(15000)]) })
+    if (!response.ok) throw new RemoteServiceError(response.status)
+    return response.json()
+  }
+
   async enable({ owner, email }: { owner: Owner, email: string }): Promise<void> {
     await this.load()
     if (this.saved!.tokens && sameOwner(this.saved!.tokens.registration.owner, owner)) {
@@ -65,6 +74,12 @@ export class RemoteController {
         const signature = signBytes(proofBytes('api-request', id, JSON.stringify(['GET', path, sha256(token), at, sha256('')])), this.saved!.signing)
         const response = await fetch(`${this.origin}${path}`, { headers: { authorization: `Bearer ${token}`, 'x-pods-request-id': id, 'x-pods-request-at': at, 'x-pods-body-digest': sha256(''), 'x-pods-proof': signature }, redirect: 'error', signal: AbortSignal.timeout(15000) })
         if (!response.ok) throw new RemoteServiceError(response.status)
+        const status = await this.worker.remote({ type: 'status' }) as { registration: RemoteRegistration | null }
+        if (status.registration?.id !== this.saved!.tokens.registration.id || status.registration.generation !== this.saved!.tokens.registration.generation) {
+          // The worker lost its registration (restored profile): start a new
+          // generation so commands of the old one are never delivered again.
+          this.saved!.tokens.registration = await this.signed('POST', '/api/runtime/v1/rotate', {}) as Tokens['registration']
+        }
         this.saved!.enabled = true; await this.save()
         await this.worker.remote({ type: 'configure', registration: this.saved!.tokens.registration })
         await this.worker.indexRemotePods(owner)
