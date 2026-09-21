@@ -139,3 +139,13 @@ it('keeps receipts across two database connections and purges them only after th
   }
   finally { rmSync(directory, { recursive: true, force: true }) }
 })
+it('bounds the replay buffer per runtime so one desktop cannot starve another', () => {
+  const { store, device, runtime, route, runtimeKey, owner } = fixture()
+  const otherKey = generateKey()
+  const other = store.register(randomUUID(), owner, 'runtime', { signing: publicKey(otherKey), agreement: publicKey(otherKey) })
+  store.pair(runtime, device.id); store.pair(other, device.id)
+  for (let i = 0; i < 1000; i++) store.deliver(runtime, seal({ ...route, id: randomUUID(), direction: 'event', kind: 'snapshot' }, {}, device.keys.agreement, runtimeKey))
+  expect(() => store.deliver(runtime, seal({ ...route, id: randomUUID(), direction: 'event', kind: 'snapshot' }, {}, device.keys.agreement, runtimeKey))).toThrow('replay_buffer_full')
+  const otherRoute = { ...route, id: randomUUID(), runtimeId: other.id, generation: other.generation, direction: 'event' as const, kind: 'snapshot' as const }
+  expect(() => store.deliver(other, seal(otherRoute, {}, device.keys.agreement, otherKey))).not.toThrow()
+})

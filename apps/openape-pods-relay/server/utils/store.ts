@@ -209,7 +209,8 @@ export class RelayStore {
         if (existing.envelope !== JSON.stringify(envelope)) throw new ProtocolError('event_conflict', 409)
         return String(existing.sequence)
       }
-      const capacity = this.db.prepare('SELECT count(*) AS count,coalesce(sum(length(envelope)),0) AS bytes FROM events WHERE device_id=?').get(device.id)!
+      // Bounded per device and runtime so one desktop cannot starve another.
+      const capacity = this.db.prepare('SELECT count(*) AS count,coalesce(sum(length(envelope)),0) AS bytes FROM events WHERE device_id=? AND runtime_id=?').get(device.id, runtime.id)!
       if (Number(capacity.count) >= 1000 || Number(capacity.bytes) + JSON.stringify(envelope).length > 32 * 1024 * 1024) throw new ProtocolError('replay_buffer_full', 503)
       const result = this.db.prepare('INSERT INTO events(id,device_id,runtime_id,envelope,created_at) VALUES(?,?,?,?,?)').run(route.id, device.id, runtime.id, JSON.stringify(envelope), this.now())
       if (route.direction === 'response') this.db.prepare('UPDATE operations SET envelope=NULL WHERE id=? AND runtime_id=? AND device_id=?').run(route.id, runtime.id, device.id)
