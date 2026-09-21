@@ -227,6 +227,10 @@ public actor RelayClient {
     cache.paired[runtime.id] = runtime
     try storage.save(cache)
   }
+  public func forgetPairing(_ runtimeId: String) throws {
+    cache.paired.removeValue(forKey: runtimeId)
+    try storage.save(cache)
+  }
   public func isPaired(_ runtime: Registration) -> Bool {
     guard let pinned = cache.paired[runtime.id] else { return false }
     return pinned.keys == runtime.keys && pinned.generation == runtime.generation
