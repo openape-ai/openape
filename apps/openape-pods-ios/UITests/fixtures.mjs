@@ -135,6 +135,7 @@ export async function startAcceptance(family) {
         HOME: homedir(), TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: profile,
         OPENAPE_PODS_FIXTURE_MODEL_PORT: String(model.address().port), NODE_ENV: 'test', OPENAPE_PODS_REMOTE_ENABLED: '1',
         OPENAPE_PODS_FIXTURE_RELAY_ORIGIN: mediation.origin, NODE_EXTRA_CA_CERTS: tls.path,
+        DDISA_MOCK_RECORDS: JSON.stringify({ 'pods-native.test': { idp: identity.origin } }),
       } })
       page = await app.firstWindow()
       await until(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state === 'ready', 'desktop worker')
@@ -142,7 +143,7 @@ export async function startAcceptance(family) {
     }
     await launchDesktop()
     cleanups.push(() => app.close())
-    await page.evaluate(({ email, issuer }) => window.pods.onboarding({ type: 'connect', provider: 'openape', account: email, issuer, makeDefault: true }), { email, issuer: identity.origin })
+    await page.evaluate(email => window.pods.onboarding({ type: 'connect', provider: 'openape', account: email }), email)
     const ownerLogin = await until(async () => (await page.evaluate(() => window.pods.onboarding({ type: 'list' }))).connections.find(item => item.login?.url)?.login.url, 'desktop owner browser flow')
     const authorized = await fetch(ownerLogin, { headers: { authorization: `Bearer ${ownerToken}` }, redirect: 'manual' })
     assert.equal(authorized.status, 302)

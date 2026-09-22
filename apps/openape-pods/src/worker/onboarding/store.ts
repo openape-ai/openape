@@ -1,6 +1,8 @@
 import type { ConnectionView } from '../../contracts/onboarding'
 import type { PodDatabase } from '../storage/database'
 
+const singleAccountProviders = ['chatgpt', 'openape']
+
 export class OnboardingStore {
   constructor(private readonly store: PodDatabase) {
     store.db.prepare('UPDATE connections SET state=\'failed\',error=\'Sign-in was interrupted. Start a new sign-in to retry.\' WHERE state=\'connecting\'').run()
@@ -12,6 +14,7 @@ export class OnboardingStore {
 
   save(connection: Omit<ConnectionView, 'login'>, metadata: Record<string, unknown>): void {
     if (this.connections().length >= 100 && !this.store.db.prepare('SELECT 1 FROM connections WHERE id=?').get(connection.id)) throw new Error('Connection limit reached')
+    if (singleAccountProviders.includes(connection.provider) && this.store.db.prepare('SELECT 1 FROM connections WHERE provider=? AND id!=?').get(connection.provider, connection.id)) throw new Error('Only one account per provider is supported')
     this.store.db.prepare('INSERT INTO connections VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET account=excluded.account,state=excluded.state,error=excluded.error,metadata=excluded.metadata').run(connection.id, connection.provider, connection.account, connection.state, connection.error, JSON.stringify(metadata))
   }
 
@@ -21,12 +24,7 @@ export class OnboardingStore {
     return JSON.parse(row.metadata as string) as Record<string, unknown>
   }
 
-  defaultOwner(): string | null { return this.store.db.prepare('SELECT default_owner FROM onboarding WHERE id=1').get()!.default_owner as string | null }
-  setDefaultOwner(id: string): void {
-    const owner = this.connections().find(item => item.id === id && item.provider === 'openape' && item.state === 'ready')
-    if (!owner) throw new Error('Choose a connected OpenApe account')
-    this.store.db.prepare('UPDATE onboarding SET default_owner=? WHERE id=1').run(id)
-  }
+  owner(): string | null { return (this.store.db.prepare('SELECT id FROM connections WHERE provider=\'openape\'').get()?.id as string | undefined) ?? null }
 
   complete(): boolean { return this.store.db.prepare('SELECT complete FROM onboarding WHERE id=1').get()!.complete === 1 }
   finish(): void { this.store.db.prepare('UPDATE onboarding SET complete=1 WHERE id=1').run() }

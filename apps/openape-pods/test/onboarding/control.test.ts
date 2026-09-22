@@ -57,16 +57,12 @@ it('denies attachment parents outside the received-date scope, including unknown
   expect(() => assertMailHistory(store, pod.id, scope, { operation: 'attachment', folder: 'foreign', message: 'new', attachment: 'a1' })).toThrow('parent')
   expect(() => assertMailHistory(store, pod.id, scope, { operation: 'attachments', folder: 'inbox', message: 'new' })).not.toThrow()
 })
-it('persists explicit owner selection across restart and rejects unavailable or non-owner accounts', () => {
-  const { control, store, resources, owner, mail } = fixture()
-  expect(control.connections.defaultOwner()).toBeNull()
-  expect(() => control.execute({ type: 'setDefaultOwner', id: mail.id })).toThrow('connected OpenApe')
-  expect(() => control.execute({ type: 'setDefaultOwner', id: randomUUID() })).toThrow('connected OpenApe')
-  control.execute({ type: 'setDefaultOwner', id: owner.id })
-  expect(new SetupControl(store, resources).connections.defaultOwner()).toBe(owner.id)
+it('keeps exactly one account per provider and reports it as the owner', () => {
+  const { control, owner } = fixture()
+  expect(control.connections.owner()).toBe(owner.id)
+  expect(() => control.execute({ type: 'save', connection: { ...owner, id: randomUUID(), account: 'second@example.invalid' }, metadata: {} })).toThrow('Only one account')
   control.execute({ type: 'save', connection: { ...owner, state: 'revoked' }, metadata: {} })
-  expect(() => control.execute({ type: 'setDefaultOwner', id: owner.id })).toThrow('connected OpenApe')
-  expect(control.connections.defaultOwner()).toBe(owner.id)
+  expect(control.connections.owner()).toBe(owner.id)
 })
 it('upgrades existing profiles without choosing an owner or changing pod data', () => {
   const { store, owner, pod } = fixture(); const root = store.root
@@ -75,7 +71,6 @@ it('upgrades existing profiles without choosing an owner or changing pod data', 
   store.close(); stores.splice(stores.indexOf(store), 1)
   const reopened = new PodDatabase(root); stores.push(reopened)
   const control = new SetupControl(reopened, new ResourceRegistry(reopened, () => {}))
-  expect(control.connections.defaultOwner()).toBeNull()
   expect(control.connections.connections()[0]).toMatchObject(owner)
   expect(reopened.getPod(pod.id)).toEqual(pod)
   expect(reopened.db.prepare('PRAGMA user_version').get()?.user_version).toBe(schemaVersion)
