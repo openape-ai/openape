@@ -290,6 +290,12 @@ public actor RelayClient {
     if result["receipt"]["state"].string == "failed" {
       throw PodsError.service(409, result["data"]["code"].string ?? "Desktop operation failed")
     }
+    if result["receipt"]["state"].string == "unknown" {
+      throw PodsError.service(
+        409,
+        "The desktop cannot tell whether this operation was applied. Inspect it on the desktop before retrying."
+      )
+    }
     if result["unavailable"].string != nil {
       throw PodsError.service(
         413,
@@ -329,14 +335,14 @@ public actor RelayClient {
   }
   private func retain(_ result: JSONValue, operationId: String) throws {
     guard
-      ["applied", "started", "completed", "failed"].contains(
+      ["applied", "started", "completed", "failed", "unknown"].contains(
         result["receipt"]["state"].string ?? "")
     else { return }
     cache.responses[operationId] = result
     cache.retainedAt["response:" + operationId] = Date()
     if cache.pending.removeValue(forKey: operationId) != nil,
       let view = cache.pendingViews.removeValue(forKey: operationId),
-      result["receipt"]["state"].string != "failed"
+      !["failed", "unknown"].contains(result["receipt"]["state"].string ?? "")
     {
       cache.viewed[view] = result["data"]
       cache.retainedAt["view:" + view] = Date()

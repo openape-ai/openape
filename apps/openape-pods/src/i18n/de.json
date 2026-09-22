@@ -543,6 +543,7 @@
   "Invalid application version": "Ungültige Anwendungsversion",
   "Invalid distribution manifest": "Ungültiges Distributionsmanifest",
   "Invalid synthetic model port": "Ungültiger Port des synthetischen Modells",
+  "Invalid remote hold point": "Ungültiger Haltepunkt für Fernbefehle",
   "Invalid worker response": "Ungültige Hintergrundprozessantwort",
   "Invalid or excessive broker request": "Ungültige oder zu umfangreiche Vermittleranfrage",
   "Invalid Pods status response": "Ungültige Pods-Statusantwort",
