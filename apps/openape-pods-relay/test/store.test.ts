@@ -148,4 +148,5 @@ it('bounds the replay buffer per runtime so one desktop cannot starve another', 
   expect(() => store.deliver(runtime, seal({ ...route, id: randomUUID(), direction: 'event', kind: 'snapshot' }, {}, device.keys.agreement, runtimeKey))).toThrow('replay_buffer_full')
   const otherRoute = { ...route, id: randomUUID(), runtimeId: other.id, generation: other.generation, direction: 'event' as const, kind: 'snapshot' as const }
   expect(() => store.deliver(other, seal(otherRoute, {}, device.keys.agreement, otherKey))).not.toThrow()
-})
+  // 1001 sealed envelopes (ECDH, AES-GCM and ECDSA each) exceed Vitest's 5-second default on the shared Linux runner.
+}, 60000)
