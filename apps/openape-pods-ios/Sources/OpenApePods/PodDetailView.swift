@@ -34,6 +34,13 @@ struct PodDetailView: View {
         }.disabled(model.busy).accessibilityLabel("Refresh Pod")
       }
     }
+    .alert("Review the current version", isPresented: $model.reviewConflict) {
+      Button("Show current review") {}
+    } message: {
+      Text(
+        "Your desktop changed this Pod after you loaded the review, so the earlier approval was not applied. The refreshed review is shown; decide again."
+      )
+    }
     .confirmationDialog(
       "Start one run on your desktop?", isPresented: $confirmingRun, titleVisibility: .visible
     ) {
