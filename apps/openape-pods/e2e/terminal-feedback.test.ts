@@ -21,7 +21,7 @@ it('terminal feedback: shows a failed preparation beside the button without laun
       await button.click()
       const alert = page.getByRole('alert')
       await alert.waitFor()
-      expect(await alert.textContent()).toContain('OpenApe')
+      expect(await alert.textContent()).toContain('DDISA')
       expect(await button.isEnabled()).toBe(true)
       const position = await alert.boundingBox(); const launch = await button.boundingBox()
       expect(position!.y).toBeGreaterThan(launch!.y)
