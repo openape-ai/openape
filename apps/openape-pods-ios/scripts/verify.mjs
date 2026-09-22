@@ -43,7 +43,7 @@ for (const family of ['iPhone', 'iPad']) {
     await run('xcrun', ['simctl', 'bootstatus', device, '-b'])
     await run('xcrun', ['simctl', 'keychain', device, 'add-root-cert', fixture.certificate])
     const resultPath = `.artifacts/${family}-${Date.now()}.xcresult`
-    await run('xcodebuild', ['-project', 'OpenApePods.xcodeproj', '-scheme', 'OpenApePods', '-collect-test-diagnostics', 'never', '-test-timeouts-enabled', 'YES', '-default-test-execution-time-allowance', '300', '-maximum-test-execution-time-allowance', '300', '-destination', `platform=iOS Simulator,id=${device}`, '-derivedDataPath', 'DerivedData', '-resultBundlePath', resultPath, 'test'], { ...process.env, TEST_RUNNER_PODS_ACCEPTANCE_ORIGIN: fixture.origin, TEST_RUNNER_PODS_ACCEPTANCE_EMAIL: fixture.email, TEST_RUNNER_PODS_ACCEPTANCE_CONTROL: fixture.control, TEST_RUNNER_PODS_ACCEPTANCE_TOKEN: fixture.controlToken })
+    await run('xcodebuild', ['-project', 'OpenApePods.xcodeproj', '-scheme', 'OpenApePods', '-collect-test-diagnostics', 'never', '-test-timeouts-enabled', 'YES', '-default-test-execution-time-allowance', '900', '-maximum-test-execution-time-allowance', '900', '-destination', `platform=iOS Simulator,id=${device}`, '-derivedDataPath', 'DerivedData', '-resultBundlePath', resultPath, 'test'], { ...process.env, TEST_RUNNER_PODS_ACCEPTANCE_ORIGIN: fixture.origin, TEST_RUNNER_PODS_ACCEPTANCE_EMAIL: fixture.email, TEST_RUNNER_PODS_ACCEPTANCE_CONTROL: fixture.control, TEST_RUNNER_PODS_ACCEPTANCE_TOKEN: fixture.controlToken })
     results.push({ family, path: resultPath })
   }
   finally { try { await fixture?.close() } finally { await run('xcrun', ['simctl', 'delete', device]) } }

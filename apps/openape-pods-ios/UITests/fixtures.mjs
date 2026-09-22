@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { createServer } from 'node:https'
 import { createServer as createHttpServer } from 'node:http'
 import { createHash, generateKeyPairSync, randomUUID, sign } from 'node:crypto'
-import { mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdir, writeFile, readFile, rm } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { join, resolve } from 'node:path'
@@ -130,11 +131,17 @@ export async function startAcceptance(family) {
     })
     await new Promise(resolve => model.listen(0, '127.0.0.1', resolve)); cleanups.push(async () => { model.closeAllConnections(); await new Promise(resolve => model.close(resolve)) })
     let page
-    async function launchDesktop() {
+    // A restored backup lives in a fresh profile directory selected by the pointer file.
+    async function databasePath() {
+      const pointer = join(profile, 'selected-profile.json')
+      if (!existsSync(pointer)) return join(profile, 'control.sqlite')
+      return join(profile, JSON.parse(await readFile(pointer, 'utf8')).profile, 'control.sqlite')
+    }
+    async function launchDesktop(extra = {}) {
       app = await electron.launch({ executablePath: resolve('../openape-pods/release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('../openape-pods'), env: {
         HOME: homedir(), TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: profile,
         OPENAPE_PODS_FIXTURE_MODEL_PORT: String(model.address().port), NODE_ENV: 'test', OPENAPE_PODS_REMOTE_ENABLED: '1',
-        OPENAPE_PODS_FIXTURE_RELAY_ORIGIN: mediation.origin, NODE_EXTRA_CA_CERTS: tls.path,
+        OPENAPE_PODS_FIXTURE_RELAY_ORIGIN: mediation.origin, NODE_EXTRA_CA_CERTS: tls.path, ...extra,
         DDISA_MOCK_RECORDS: JSON.stringify({ 'pods-native.test': { idp: identity.origin } }),
       } })
       page = await app.firstWindow()
@@ -143,17 +150,22 @@ export async function startAcceptance(family) {
     }
     await launchDesktop()
     cleanups.push(() => app.close())
-    await page.evaluate(email => window.pods.onboarding({ type: 'connect', provider: 'openape', account: email }), email)
-    const ownerLogin = await until(async () => (await page.evaluate(() => window.pods.onboarding({ type: 'list' }))).connections.find(item => item.login?.url)?.login.url, 'desktop owner browser flow')
-    const authorized = await fetch(ownerLogin, { headers: { authorization: `Bearer ${ownerToken}` }, redirect: 'manual' })
-    assert.equal(authorized.status, 302)
-    assert.equal((await fetch(authorized.headers.get('location'))).status, 200)
-    await until(async () => {
-      const connections = (await page.evaluate(() => window.pods.onboarding({ type: 'list' }))).connections
-      const owner = connections.find(item => item.provider === 'openape')
-      if (owner?.error) throw new Error(`Desktop owner sign-in: ${owner.error}`)
-      return owner?.state === 'ready'
-    }, 'desktop owner token exchange')
+    // The desktop owner signs in through the disposable IdP; a restored profile has to repeat this.
+    async function connectOwner() {
+      await page.evaluate(email => window.pods.onboarding({ type: 'connect', provider: 'openape', account: email }), email)
+      const ownerLogin = await until(async () => (await page.evaluate(() => window.pods.onboarding({ type: 'list' }))).connections.find(item => item.login?.url)?.login.url, 'desktop owner browser flow')
+      const authorized = await fetch(ownerLogin, { headers: { authorization: `Bearer ${ownerToken}` }, redirect: 'manual' })
+      assert.equal(authorized.status, 302)
+      assert.equal((await fetch(authorized.headers.get('location'))).status, 200)
+      await until(async () => {
+        const owners = (await page.evaluate(() => window.pods.onboarding({ type: 'list' }))).connections.filter(item => item.provider === 'openape')
+        // A restored profile keeps its revoked connection beside the new one until the owner signs in again.
+        const failed = owners.find(item => item.error && item.error !== 'Restored profile: reconnect')
+        if (failed) throw new Error(`Desktop owner sign-in: ${failed.error}`)
+        return owners.some(item => item.state === 'ready')
+      }, 'desktop owner token exchange')
+    }
+    await connectOwner()
     async function menu(action, expectedCode) {
       await app.evaluate(({ Menu, dialog, shell }, { action, expectedCode, cli, descriptor }) => {
         globalThis.acceptance = { browser: null, error: null, paired: null }
@@ -172,17 +184,16 @@ export async function startAcceptance(family) {
         Menu.getApplicationMenu().items[0].submenu.items.find(item => item.label === 'Mobile access…').click()
       }, { action, expectedCode, cli, descriptor })
     }
+    // The desktop registers through the owner's browser session at the disposable IdP.
+    async function registerDesktop(browserUrl) {
+      const start = await fetch(browserUrl, { redirect: 'manual' }); assert.equal(start.status, 302)
+      const browserCookie = start.headers.getSetCookie().map(item => item.split(';')[0]).join('; ')
+      const runtimeAuthorization = await fetch(start.headers.get('location'), { headers: { authorization: `Bearer ${ownerToken}` }, redirect: 'manual' }); assert.equal(runtimeAuthorization.status, 302)
+      const callback = await fetch(runtimeAuthorization.headers.get('location'), { headers: { cookie: browserCookie }, redirect: 'manual' }); assert.equal(callback.status, 200)
+      await controlRow('SELECT enabled AS ok FROM remote_registration WHERE id=1', 'registered desktop')
+    }
     await menu(1)
-    const browserUrl = await until(() => app.evaluate(() => { if (globalThis.acceptance.error) throw new Error(globalThis.acceptance.error); return globalThis.acceptance.browser }), 'runtime registration browser')
-    const start = await fetch(browserUrl, { redirect: 'manual' }); assert.equal(start.status, 302)
-    const browserCookie = start.headers.getSetCookie().map(item => item.split(';')[0]).join('; ')
-    const runtimeAuthorization = await fetch(start.headers.get('location'), { headers: { authorization: `Bearer ${ownerToken}` }, redirect: 'manual' }); assert.equal(runtimeAuthorization.status, 302)
-    const callback = await fetch(runtimeAuthorization.headers.get('location'), { headers: { cookie: browserCookie }, redirect: 'manual' }); assert.equal(callback.status, 200)
-    await until(async () => {
-      const store = new DatabaseSync(join(profile, 'control.sqlite'), { readOnly: true })
-      try { return store.prepare('SELECT enabled FROM remote_registration WHERE id=1').get()?.enabled === 1 }
-      finally { store.close() }
-    }, 'registered desktop')
+    await registerDesktop(await until(() => app.evaluate(() => { if (globalThis.acceptance.error) throw new Error(globalThis.acceptance.error); return globalThis.acceptance.browser }), 'runtime registration browser'))
     await menu(4)
     await until(async () => {
       const store = new DatabaseSync(join(profile, 'control.sqlite'), { readOnly: true })
@@ -190,13 +201,19 @@ export async function startAcceptance(family) {
       finally { store.close() }
     }, 'desktop-offered installed CLI')
     const approved = []; const programApprovals = []
-    async function controlRow(sql, description) {
+    async function controlRow(sql, description, timeout = 30000) {
       await until(async () => {
-        const store = new DatabaseSync(join(profile, 'control.sqlite'), { readOnly: true })
+        const store = new DatabaseSync(await databasePath(), { readOnly: true })
         try { return store.prepare(sql).get()?.ok === 1 }
         finally { store.close() }
-      }, description)
+      }, description, timeout)
     }
+    async function controlRows(sql) {
+      const store = new DatabaseSync(await databasePath(), { readOnly: true })
+      try { return store.prepare(sql).all() }
+      finally { store.close() }
+    }
+    const held = []
     async function state() {
       const workspace = await page.evaluate(() => window.pods.workspace({ type: 'list' }))
       const pod = workspace.pods[0]
@@ -288,9 +305,45 @@ export async function startAcceptance(family) {
           await menu(6)
           await controlRow('SELECT count(*)=0 AS ok FROM remote_devices WHERE revoked=0', 'desktop removed the paired device')
         }
+        else if (request.url === '/interrupt') {
+          // Network loss between the phone and the relay: before admission or before the result is acknowledged.
+          assert.ok(['admission', 'events'].includes(body.mode))
+          mediation.interrupt(body.mode === 'admission' ? (method, path) => method === 'POST' && path === '/api/mobile/v1/operations' : (_method, path) => path === '/api/mobile/v1/events')
+        }
+        else if (request.url === '/reconnect') mediation.interrupt(null)
+        else if (request.url === '/hold') {
+          // The desktop stops at a durable point of the next remote command until the harness kills it.
+          assert.ok(['after-journal', 'after-reservation'].includes(body.mode))
+          await app.close(); await launchDesktop({ OPENAPE_PODS_FIXTURE_HOLD_REMOTE: body.mode })
+          await controlRow('SELECT enabled AS ok FROM remote_registration WHERE id=1', 'registration retained across desktop restart')
+          result = { runs: (await state()).runs.length }
+        }
+        else if (request.url === '/crash') {
+          const before = Number(body.runs)
+          if (body.mode === 'after-journal') await controlRow('SELECT count(*)>0 AS ok FROM remote_inbox WHERE state=\'received\'', 'remote command journaled', 60000)
+          else await until(async () => (await state()).runs.length > before, 'run reserved by the held command', 60000)
+          const journaled = (await controlRows('SELECT id FROM remote_inbox WHERE state=\'received\'')).map(row => row.id)
+          held.push(...journaled)
+          await app.close(); await launchDesktop()
+          await controlRow('SELECT enabled AS ok FROM remote_registration WHERE id=1', 'registration retained across desktop crash')
+          const current = await state()
+          const unknown = (await controlRows('SELECT id,state FROM remote_inbox')).filter(row => journaled.includes(row.id))
+          result = { runs: current.runs.length, runIds: current.runs.map(run => run.id), states: current.runs.map(run => run.state), journaled, inbox: unknown }
+        }
+        else if (request.url === '/m2-verify') {
+          const current = await state()
+          const inbox = await controlRows('SELECT id,state FROM remote_inbox')
+          assert.deepEqual(inbox.filter(row => row.state === 'received'), [], 'no remote command may stay received')
+          assert.deepEqual(inbox.filter(row => held.includes(row.id)).map(row => row.state), ['unknown'], 'the command interrupted after its journal commit is exactly one unknown tombstone')
+          assert.deepEqual(failures, []); assert.deepEqual(mediation.failures.filter(item => !/ECONNRESET|socket hang up|aborted/.test(item)), [])
+          const evidence = JSON.parse(await readFile(`.artifacts/${family}-native-flow.json`, 'utf8'))
+          evidence.m2 = { runs: current.runs.length, runStates: current.runs.map(run => run.state), heldOperations: held, unknownTombstones: inbox.filter(row => held.includes(row.id)).length }
+          await writeFile(`.artifacts/${family}-native-flow.json`, JSON.stringify(evidence, null, 2))
+          result = evidence.m2
+        }
         else if (request.url === '/refused') {
-          const current = await state(); assert.equal(current.runs.length, 1)
-          await controlRow('SELECT count(*)=0 AS ok FROM remote_inbox WHERE state IN (\'received\',\'unknown\')', 'no pending or unknown remote command after refusal')
+          const current = await state()
+          await controlRow('SELECT count(*)=0 AS ok FROM remote_inbox WHERE state=\'received\'', 'no pending remote command after refusal')
           result = { runs: current.runs.length }
         }
         else throw new Error('Unknown acceptance action')
