@@ -17,26 +17,30 @@ public actor RelayClient {
   private let keys: PrivateKeys
   private var tokens: Tokens?
   private let storage: ProtectedCache
+  private let secrets: SecretStore
   private var cache: CacheState
   private let session: URLSession
   private var refreshing = false
   private var polling = false
-  public init(origin: URL = URL(string: "https://pods.openape.ai")!, storage: ProtectedCache) throws
-  {
+  public init(
+    origin: URL = URL(string: "https://pods.openape.ai")!, storage: ProtectedCache,
+    secrets: SecretStore = KeychainStore(),
+    configuration: URLSessionConfiguration = .ephemeral
+  ) throws {
     guard origin.scheme == "https", origin.path.isEmpty, origin.user == nil, origin.password == nil
     else { throw PodsError.invalidEnvelope }
     self.origin = origin
     self.storage = storage
-    if let saved = try KeychainStore.load(PrivateKeys.self, account: "device") {
+    self.secrets = secrets
+    if let saved = try secrets.load(PrivateKeys.self, account: "device") {
       keys = saved
     } else {
       let generated = PrivateKeys.generate()
-      try KeychainStore.save(generated, account: "device")
+      try secrets.save(generated, account: "device")
       keys = generated
     }
-    tokens = try KeychainStore.load(Tokens.self, account: "session")
+    tokens = try secrets.load(Tokens.self, account: "session")
     cache = try storage.load()
-    let configuration = URLSessionConfiguration.ephemeral
     configuration.timeoutIntervalForRequest = 15
     configuration.httpCookieStorage = nil
     configuration.urlCache = nil
@@ -118,7 +122,7 @@ public actor RelayClient {
       ]), authenticated: false)
     let renewed = try JSONDecoder().decode(Tokens.self, from: data)
     guard renewed.registration == tokens.registration else { throw PodsError.invalidEnvelope }
-    try KeychainStore.save(renewed, account: "session")
+    try secrets.save(renewed, account: "session")
     self.tokens = renewed
   }
   public func beginLogin(email: String) async throws -> LoginFlow {
@@ -176,7 +180,7 @@ public actor RelayClient {
     guard received.registration.id == keys.id,
       received.registration.keys == (try keys.publicKeys()), received.registration.kind == "mobile"
     else { throw PodsError.invalidEnvelope }
-    try KeychainStore.save(received, account: "session")
+    try secrets.save(received, account: "session")
     tokens = received
   }
   public func runtimes() async throws -> [Registration] {
@@ -190,6 +194,10 @@ public actor RelayClient {
         }) {
           cache.forgetRuntime(pinned.id)
         }
+      }
+      // The desktop removed this pairing while the app was closed; drop only the pin.
+      for runtime in runtimes where runtime.paired == false {
+        cache.paired.removeValue(forKey: runtime.id)
       }
       try storage.save(cache)
       return runtimes
@@ -442,8 +450,8 @@ public actor RelayClient {
       warning =
         "Signed out on this device. Remote revocation could not be confirmed: \(error.localizedDescription). Disable mobile access on your desktop to stop further remote access immediately."
     }
-    try KeychainStore.remove(account: "session")
-    try KeychainStore.remove(account: "device")
+    try secrets.remove(account: "session")
+    try secrets.remove(account: "device")
     try storage.remove()
     tokens = nil
     cache = CacheState()
