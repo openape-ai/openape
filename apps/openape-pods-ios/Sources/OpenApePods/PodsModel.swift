@@ -21,6 +21,7 @@ final class PodsModel: NSObject, ASWebAuthenticationPresentationContextProviding
   var paired = false
   var pending: [String] = []
   var lastUpdated: Date?
+  var reviewConflict = false
   private var client: RelayClient?
   private var authentication: ASWebAuthenticationSession?
   private var serviceOrigin = URL(string: "https://pods.openape.ai")!
@@ -401,7 +402,20 @@ final class PodsModel: NSObject, ASWebAuthenticationPresentationContextProviding
     busy = true
     error = nil
     defer { busy = false }
-    do { try await action() } catch { self.error = error.localizedDescription }
+    do {
+      try await action()
+    } catch PodsError.service(_, "revision_conflict") {
+      // The desktop changed what the phone reviewed; show the current version instead of a failure.
+      reviewConflict = true
+      do {
+        try await inventory()
+        try await loadDetail()
+      } catch {
+        self.error = error.localizedDescription
+      }
+    } catch {
+      self.error = error.localizedDescription
+    }
     pending = await client?.pendingOperations() ?? []
   }
 }
