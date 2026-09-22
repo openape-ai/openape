@@ -230,6 +230,50 @@ private struct Relay {
     #expect(StubRelay.requests.filter { $0 == "POST /api/mobile/v1/operations" }.count == 1)
   }
 
+  @Test func unknownReceiptResolvesThePendingCommandExplicitly() async throws {
+    let relay = try Relay()
+    StubRelay.handler = { _, _, _ in (503, json(["code": "relay_unavailable"])) }
+    let client = try relay.client()
+    try await client.pair(relay.runtime)
+    _ = try? await client.send(runtime: relay.runtime, kind: "run.start", body: .object([:]))
+    let id = try #require(await client.pendingOperations().first)
+    let query = Box<String?>(nil)
+    StubRelay.handler = { method, path, body in
+      switch (method, path) {
+      case ("GET", "/api/mobile/v1/runtimes"): return (200, try relay.runtimes())
+      case ("POST", "/api/mobile/v1/operations"):
+        query.value = try JSONDecoder().decode(Envelope.self, from: body).route.id
+        return (202, json([:]))
+      case ("GET", "/api/mobile/v1/events?cursor=0"):
+        guard let queryId = query.value else { return (200, json(["events": []])) }
+        // The desktop was interrupted after its journal commit: the row is an unknown tombstone.
+        let body = JSONValue.object([
+          "receipt": .object([
+            "operationId": .string(queryId), "state": .string("completed"),
+            "source": .string("desktop"),
+          ]),
+          "data": .object([
+            "receipt": .object([
+              "operationId": .string(id), "state": .string("unknown"), "source": .string("desktop"),
+            ])
+          ]),
+        ])
+        return (200, try relay.response(operationId: queryId, body: body, cursor: "3"))
+      case ("POST", "/api/mobile/v1/events"): return (200, json([:]))
+      default: throw PodsError.service(500, path)
+      }
+    }
+    let unknown = PodsError.service(
+      409,
+      "The desktop cannot tell whether this operation was applied. Inspect it on the desktop before retrying."
+    )
+    await #expect(throws: unknown) { try await client.retry(id) }
+    #expect(await client.pendingOperations().isEmpty)
+    StubRelay.requests = []
+    await #expect(throws: unknown) { try await client.retry(id) }
+    #expect(StubRelay.requests.isEmpty)
+  }
+
   @Test func relayReportedUnpairingDropsOnlyTheLocalPin() async throws {
     let relay = try Relay()
     StubRelay.handler = { _, _, _ in (200, try relay.runtimes(paired: false)) }
