@@ -15,6 +15,9 @@ import { MasterControl } from '../../src/worker/master/control'
 import { MasterService } from '../../src/worker/master/service'
 import { ChatRegistry } from '../../src/worker/master/chat-registry'
 import type { AgentRuntime } from '../../src/worker/agent/executor'
+import { installExample } from '../../src/worker/runs/examples'
+import { EffectLedger } from '../../src/worker/recovery/effects'
+import { executeHttpEffect } from '../../src/worker/runs/http'
 
 const stores: PodDatabase[] = []
 afterEach(() => { for (const store of stores.splice(0)) { store.close(); rmSync(store.root, { recursive: true, force: true }) } })
@@ -154,4 +157,33 @@ it('claims an existing Pod idempotently and follows a renewed registration witho
   const binding = store.db.prepare('SELECT runtime_id,generation,identity FROM remote_pods WHERE pod_id=?').get(local.id)!
   expect(binding).toMatchObject({ runtime_id: renewed.id, generation: renewed.generation })
   expect(JSON.parse(String(binding.identity))).toEqual(identity)
+})
+
+it('never replays a program effect after its remote run start was interrupted', async () => {
+  const { store, remote, command, master, resources, scheduler, runs } = await fixture()
+  await remote.execute(command); const pod = store.listPods()[0]!
+  await remote.execute({ type: 'provision', podId: pod.id, identity: { subject: 'agent@example.test', keyId: 'key' }, error: null })
+  installExample(store, resources, pod.id, 'deterministic', 'a'.repeat(64))
+  const current = store.getPod(pod.id); const epoch = resources.epoch(pod.id)
+  const start = { ...command, route: { ...command.route, id: randomUUID(), kind: 'run.start' as const }, body: { podId: pod.id, expected: { podRevision: current.revision, scriptHash: current.activeScript, resourceEpoch: epoch } } }
+  // The phone's run start reached the journal and reserved a run; the worker stopped while the program's POST was in flight.
+  store.db.prepare('INSERT INTO remote_inbox VALUES(?,?,?,?,\'received\',NULL,NULL,?)').run(start.route.id, start.hash, start.route.deviceId, JSON.stringify(start.route), Date.now())
+  const run = runs.runs.reserve(pod.id, current.activeScript!, epoch, { reason: 'manual', eventIds: [], operationId: start.route.id }).run
+  const request = { url: 'https://example.com/notify', method: 'POST', headers: {}, body: '{}', key: 'notify:1' }
+  let deliveries = 0
+  const send = async () => { deliveries++; return { status: 200, headers: {}, body: '{}' } }
+  expect(new EffectLedger(store).begin(pod.id, run.id, request.key, 'http.request', request)).toEqual({ execute: true })
+  const restartedRuns = new RunDispatcher(store, resources, {} as AgentRuntime)
+  const restarted = new RemoteControl(store, master, restartedRuns, resources, scheduler)
+  expect(await restarted.execute(start)).toMatchObject({ operationId: start.route.id, state: 'unknown', code: 'inspect_before_retry' })
+  expect(store.db.prepare('SELECT state FROM effect_ledger WHERE effect_key=?').get(request.key)?.state).toBe('unknown')
+  await expect(executeHttpEffect(new EffectLedger(store), pod.id, run.id, request, send)).rejects.toThrow()
+  const again = { ...start, route: { ...start.route, id: randomUUID() } }
+  expect(await restarted.execute(again)).toMatchObject({ state: 'failed' })
+  expect(JSON.parse(String(store.db.prepare('SELECT result FROM remote_inbox WHERE id=?').get(again.route.id)?.result)).data.message).toMatch(/needs review/)
+  expect(store.db.prepare('SELECT count(*) AS count FROM runs').get()?.count).toBe(1)
+  expect(deliveries).toBe(0)
+  const view = { ...command, route: { ...command.route, id: randomUUID(), direction: 'query' as const, kind: 'run' as const }, body: { podId: pod.id } }
+  expect(await restarted.execute(view)).toMatchObject({ state: 'completed' })
+  expect(JSON.parse(String(store.db.prepare('SELECT result FROM remote_inbox WHERE id=?').get(view.route.id)?.result)).data).toMatchObject({ effects: [{ key: request.key, runId: run.id }], runs: [{ id: run.id, state: 'interrupted' }] })
 })
