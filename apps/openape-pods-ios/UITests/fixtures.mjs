@@ -251,9 +251,11 @@ export async function startAcceptance(family) {
         }
         else if (request.url === '/approve') {
           const current = await state()
-          assert.equal(current.runs.length, 1); assert.equal(current.runs[0].state, 'running')
           const pending = current.approvals.filter(item => item.state === 'pending')
-          assert.ok(pending.length > 0, 'The run must wait for the original identity provider')
+          // A UI poll can observe the pending approval shortly before an earlier /approve takes effect.
+          const repeated = approved.length > 0 && pending.length === 0 && current.runs[0]?.state === 'completed'
+          if (!repeated) { assert.equal(current.runs.length, 1); assert.equal(current.runs[0].state, 'running') }
+          assert.ok(repeated || pending.length > 0, 'The run must wait for the original identity provider')
           for (const approval of pending) {
             assert.equal(approval.issuer, identity.origin)
             const grant = await json(`${idp.url}/api/grants/${approval.grantId}`, undefined, { authorization: `Bearer ${ownerToken}` })
