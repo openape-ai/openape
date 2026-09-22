@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { access, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { PodIdentityManager } from '../../src/main/connections/agent'
@@ -14,7 +14,8 @@ import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { SetupControl } from '../../src/worker/onboarding/control'
 
 const cleanups: (() => Promise<void>)[] = []
-afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); vi.restoreAllMocks() })
+vi.mock('../../src/main/connections/broker', async original => ({ ...await original<typeof import('../../src/main/connections/broker')>(), podBrokerReceipt: vi.fn(async () => 'synthetic-receipt') }))
+afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs() })
 async function fixture(locked = false, architecture = process.arch) {
   const root = await mkdtemp(join(tmpdir(), 'pods-connect-')); const vendor = join(root, 'vendor'); await mkdir(vendor)
   await writeFile(join(vendor, 'codex'), 'synthetic-codex')
@@ -26,7 +27,7 @@ async function fixture(locked = false, architecture = process.arch) {
   const manager = new ConnectionManager(root, runtime, credentials, async command => control.execute(command), availability)
   cleanups.push(async () => { await manager.stop(); store.close(); await rm(root, { recursive: true, force: true }) })
   await manager.initialize(async () => {})
-  return { manager, store, control, credentials, availability }
+  return { root, manager, store, control, credentials, availability }
 }
 it('records explicit sign-in cancellation and supports a separate retry without auto-activating work', async () => {
   vi.spyOn(CodexConnection.prototype, 'login').mockImplementation(async (_id, signal, present) => { present({ url: 'https://auth.openai.com/device', code: 'SYNTHETIC' }); return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('Cancelled')), { once: true })) })
@@ -37,10 +38,11 @@ it('records explicit sign-in cancellation and supports a separate retry without 
   expect(cancelled.connections[0]).toMatchObject({ state: 'failed', error: 'Cancelled', login: null })
   vi.spyOn(CodexConnection.prototype, 'login').mockResolvedValue({ account: 'model@example.invalid', accountId: 'synthetic-account' })
   await manager.execute({ type: 'connect', provider: 'chatgpt', account: '' })
-  await expect.poll(async () => (await manager.view()).connections[1].state).toBe('ready')
+  await expect.poll(async () => (await manager.view()).connections[0].state).toBe('ready')
+  expect((await manager.view()).connections).toHaveLength(1)
   expect(await manager.providerReady()).toBe(true); expect(store.listPods()).toEqual([])
   expect((await manager.view()).complete).toBe(false)
-  await manager.execute({ type: 'disconnect', id: (await manager.view()).connections[1].id }); expect(await manager.providerReady()).toBe(false)
+  await manager.execute({ type: 'disconnect', id }); expect(await manager.providerReady()).toBe(false)
 })
 it('keeps an opaque owner subject separate from its discovery email when enrolling existing Pods', async () => {
   const { manager, control, store } = await fixture()
@@ -49,7 +51,6 @@ it('keeps an opaque owner subject separate from its discovery email when enrolli
   const owner = { issuer: 'https://id.example', subject: 'stable-user-id' }
   const identity = { connectionId: randomUUID(), podId: pod.id, issuer: owner.issuer, owner: account, subject: 'pod@example.test', keyId: 'existing-key' }
   control.execute({ type: 'save', connection: { id, provider: 'openape', account, state: 'ready', error: null }, metadata: { ...owner, pods: { [pod.id]: { connectionId: identity.connectionId, prepared: true, identity } } } })
-  await manager.execute({ type: 'setDefaultOwner', id })
   expect(await manager.remoteOwner()).toEqual({ owner, email: account })
   expect(await manager.existingRemotePods(owner)).toEqual([{ podId: pod.id, identity }])
   expect(await manager.existingRemotePods({ ...owner, subject: account })).toEqual([])
@@ -68,78 +69,89 @@ it('fails visibly for a locked credential store and mismatched runtime architect
   await expect(wrong.manager.execute({ type: 'connect', provider: 'chatgpt', account: '' })).rejects.toThrow('architecture')
 })
 
-it('keeps an existing pod owner while new pods use only the explicitly selected account', async () => {
+it('uses the single owner for new pods, only through the Pods provider, without changing its account', async () => {
   const { manager, control, store } = await fixture()
   const existing = store.createPod({ name: 'Existing' }); const fresh = store.createPod({ name: 'New' })
-  const first = randomUUID(); const second = randomUUID()
-  const identity = { connectionId: randomUUID(), podId: existing.id, issuer: 'https://id.example.invalid', owner: 'first@example.invalid', subject: 'pod@example.invalid', keyId: 'key' }
-  for (const [id, account, pods] of [[first, identity.owner, { [existing.id]: { connectionId: identity.connectionId, prepared: true, identity } }], [second, 'second@example.invalid', {}]] as const) control.execute({ type: 'save', connection: { id, provider: 'openape', account, state: 'ready', error: null }, metadata: { issuer: identity.issuer, pods } })
+  const owner = randomUUID(); const account = 'owner@example.invalid'; const issuer = 'https://id.example.invalid'
+  const identity = { connectionId: randomUUID(), podId: existing.id, issuer, owner: account, subject: 'pod@example.invalid', keyId: 'key' }
+  control.execute({ type: 'save', connection: { id: owner, provider: 'openape', account, state: 'ready', error: null }, metadata: { issuer, subject: account, pods: { [existing.id]: { connectionId: identity.connectionId, prepared: true, identity } } } })
   expect((await manager.podConnection(existing.id)).identity).toEqual(identity)
-  await expect(manager.podConnection(fresh.id)).rejects.toThrow('Choose a default')
-  await manager.execute({ type: 'setDefaultOwner', id: second })
+  const broker = { issuer: 'https://pods.example.invalid', domain: 'pods.example.invalid', connectionId: randomUUID() }
+  const provision = vi.spyOn(PodIdentityManager.prototype, 'provision').mockImplementation(async connectionId => ({ ...identity, connectionId, podId: fresh.id, issuer: 'https://pods.example.invalid', decisionIssuer: issuer, brokerConnectionId: broker.connectionId }))
+  await expect(manager.podConnection(fresh.id)).rejects.toThrow('Allow Pods to create agents')
+  expect(provision).not.toHaveBeenCalled()
+  control.execute({ type: 'save', connection: { id: owner, provider: 'openape', account, state: 'ready', error: null }, metadata: { ...control.connections.metadata(owner), broker } })
   const bearer = vi.spyOn(OwnerConnection.prototype, 'bearer').mockResolvedValue('synthetic')
   vi.spyOn(PodIdentityManager.prototype, 'ensurePrepared').mockResolvedValue()
-  vi.spyOn(PodIdentityManager.prototype, 'provision').mockImplementation(async connectionId => ({ ...identity, connectionId, podId: fresh.id, owner: 'second@example.invalid' }))
-  expect((await manager.podConnection(fresh.id)).ownerConnection).toBe(second)
-  expect(bearer).toHaveBeenCalledWith(second, identity.issuer, 'second@example.invalid', expect.any(AbortSignal))
-  expect((await manager.podConnection(existing.id)).ownerConnection).toBe(first)
+  const before = (await manager.view()).connections
+  expect((await manager.podConnection(fresh.id)).ownerConnection).toBe(owner)
+  expect(bearer).toHaveBeenCalledWith(owner, issuer, account, expect.any(AbortSignal))
+  expect((await manager.view()).connections).toEqual(before)
+  await expect(manager.podConnection(fresh.id, { issuer, subject: 'someone-else' })).rejects.toThrow('another owner')
 })
-it('rejects ambiguous pod ownership without minting another identity', async () => {
-  const { manager, control, store } = await fixture(); const pod = store.createPod({ name: 'Ambiguous' })
-  for (const account of ['first@example.invalid', 'second@example.invalid']) control.execute({ type: 'save', connection: { id: randomUUID(), provider: 'openape', account, state: 'ready', error: null }, metadata: { issuer: 'https://id.example.invalid', pods: { [pod.id]: { prepared: false } } } })
+
+it('refuses Pod work while the owner must sign in again and keeps the binding for the same account', async () => {
+  vi.stubEnv('DDISA_MOCK_RECORDS', JSON.stringify({ 'example.invalid': { idp: 'https://id.example.invalid' } }))
+  const { manager, control, store } = await fixture(); const pod = store.createPod({ name: 'Bound' })
+  const id = randomUUID()
+  const identity = { connectionId: randomUUID(), podId: pod.id, issuer: 'https://id.example.invalid', owner: 'first@example.invalid', subject: 'agent@example.invalid', keyId: 'key' }
+  const metadata = { issuer: identity.issuer, subject: identity.owner, pods: { [pod.id]: { connectionId: identity.connectionId, prepared: true, identity } } }
+  control.execute({ type: 'save', connection: { id, provider: 'openape', account: identity.owner, state: 'expired', error: null }, metadata })
   const provision = vi.spyOn(PodIdentityManager.prototype, 'provision')
-  await expect(manager.podConnection(pod.id)).rejects.toThrow('multiple OpenApe accounts')
+  await expect(manager.podConnection(pod.id)).rejects.toThrow('Sign in to your DDISA account again')
+  const login = vi.spyOn(OwnerConnection.prototype, 'login').mockResolvedValue({ issuer: identity.issuer, subject: identity.owner })
+  await manager.execute({ type: 'connect', provider: 'openape', account: 'First@Example.invalid' })
+  await expect.poll(async () => (await manager.view()).connections[0].state).toBe('ready')
+  expect(login).toHaveBeenCalledWith(id, identity.issuer, identity.owner, expect.any(AbortSignal), expect.any(Function))
+  expect((await manager.podConnection(pod.id)).identity).toEqual(identity)
+  expect((await manager.view()).connections).toHaveLength(1)
   expect(provision).not.toHaveBeenCalled()
 })
 
-it('never transfers a disconnected pod to the default owner and reconnects the same binding', async () => {
-  const { manager, control, store } = await fixture(); const pod = store.createPod({ name: 'Bound' })
-  const id = randomUUID(); const other = randomUUID()
-  const identity = { connectionId: randomUUID(), podId: pod.id, issuer: 'https://id.example.invalid', owner: 'first@example.invalid', subject: 'agent@example.invalid', keyId: 'key' }
-  const metadata = { issuer: identity.issuer, pods: { [pod.id]: { connectionId: identity.connectionId, prepared: true, identity } } }
-  control.execute({ type: 'save', connection: { id, provider: 'openape', account: identity.owner, state: 'revoked', error: null }, metadata })
-  control.execute({ type: 'save', connection: { id: other, provider: 'openape', account: 'other@example.invalid', state: 'ready', error: null }, metadata: {} })
-  await manager.execute({ type: 'setDefaultOwner', id: other })
-  const provision = vi.spyOn(PodIdentityManager.prototype, 'provision')
-  await expect(manager.podConnection(pod.id)).rejects.toThrow('Reconnect')
-  expect(provision).not.toHaveBeenCalled()
-  vi.spyOn(OwnerConnection.prototype, 'login').mockResolvedValue({ issuer: identity.issuer, subject: 'owner-subject' })
-  await manager.execute({ type: 'reconnect', id })
-  await expect.poll(async () => (await manager.view()).connections.find(item => item.id === id)?.state).toBe('ready')
-  expect((await manager.podConnection(pod.id)).identity).toEqual(identity)
-  expect((await manager.view()).defaultOwner).toBe(other)
-  expect((await manager.view()).connections).toHaveLength(2)
+it('switches the owner only after confirmation and releases pods bound to the previous identity', async () => {
+  vi.stubEnv('DDISA_MOCK_RECORDS', JSON.stringify({ 'example.invalid': { idp: 'https://id.example.invalid' } }))
+  const { root, manager, control, store, credentials } = await fixture(); const pod = store.createPod({ name: 'Bound' })
+  const id = randomUUID(); const connectionId = randomUUID()
+  await credentials.create(connectionId, JSON.stringify({ podId: pod.id, privateKey: 'synthetic-key' }))
+  control.execute({ type: 'save', connection: { id, provider: 'openape', account: 'first@example.invalid', state: 'ready', error: null }, metadata: { issuer: 'https://id.example.invalid', subject: 'first@example.invalid', broker: { issuer: 'https://pods.example.invalid', domain: 'pods.example.invalid', connectionId: randomUUID() }, pods: { [pod.id]: { connectionId, prepared: true } } } })
+  const login = vi.spyOn(OwnerConnection.prototype, 'login').mockRejectedValueOnce(new Error('Declined')).mockResolvedValue({ issuer: 'https://id.example.invalid', subject: 'second@example.invalid' })
+  await expect(manager.execute({ type: 'connect', provider: 'openape', account: 'second@example.invalid' })).rejects.toThrow('Confirm switching')
+  expect(login).not.toHaveBeenCalled()
+  await manager.execute({ type: 'connect', provider: 'openape', account: 'second@example.invalid', switchAccount: true })
+  await expect.poll(async () => (await manager.view()).connections[0].error).toBe('Declined')
+  expect((await manager.view()).connections[0]).toMatchObject({ id, account: 'first@example.invalid', state: 'ready' })
+  expect(control.connections.metadata(id).pods).toHaveProperty(pod.id)
+  await manager.execute({ type: 'connect', provider: 'openape', account: 'second@example.invalid', switchAccount: true })
+  await expect.poll(async () => (await manager.view()).connections[0].account).toBe('second@example.invalid')
+  expect((await manager.view()).connections).toEqual([expect.objectContaining({ id, state: 'ready', error: null })])
+  expect(control.connections.metadata(id)).toEqual({ issuer: 'https://id.example.invalid', subject: 'second@example.invalid' })
+  await expect(access(join(root, 'credentials', `${connectionId}.encrypted`))).rejects.toThrow('ENOENT')
 })
-it('changes the default only after successful sign-in with explicit selection', async () => {
+
+it('discovers the identity provider from the DDISA record of the email domain', async () => {
+  vi.stubEnv('DDISA_MOCK_RECORDS', JSON.stringify({ 'published.invalid': { idp: 'https://idp.published.invalid' }, 'plain.invalid': { idp: 'http://idp.plain.invalid' } }))
   const { manager } = await fixture()
-  vi.spyOn(OwnerConnection.prototype, 'login').mockRejectedValueOnce(new Error('Declined')).mockResolvedValue({ issuer: 'https://id.example.invalid', subject: 'owner' })
-  await manager.execute({ type: 'connect', provider: 'openape', account: 'owner@example.invalid', issuer: 'https://id.example.invalid', makeDefault: true })
-  await expect.poll(async () => (await manager.view()).connections[0].state).toBe('failed')
-  expect((await manager.view()).defaultOwner).toBeNull()
-  await manager.execute({ type: 'connect', provider: 'openape', account: 'owner@example.invalid', issuer: 'https://id.example.invalid', makeDefault: true })
-  await expect.poll(async () => (await manager.view()).defaultOwner).toBe((await manager.view()).connections[1].id)
-  const selected = (await manager.view()).defaultOwner
-  await manager.execute({ type: 'connect', provider: 'openape', account: 'second@example.invalid', issuer: 'https://id.example.invalid' })
-  await expect.poll(async () => (await manager.view()).connections[2].state).toBe('ready')
-  expect((await manager.view()).defaultOwner).toBe(selected)
+  const login = vi.spyOn(OwnerConnection.prototype, 'login').mockResolvedValue({ issuer: 'https://idp.published.invalid', subject: 'owner' })
+  await expect(manager.execute({ type: 'connect', provider: 'openape', account: 'owner@plain.invalid' })).rejects.toThrow('HTTPS origin')
+  await manager.execute({ type: 'connect', provider: 'openape', account: 'owner@published.invalid' })
+  await expect.poll(async () => (await manager.view()).connections[0]?.state).toBe('ready')
+  expect(login).toHaveBeenCalledWith(expect.any(String), 'https://idp.published.invalid', 'owner@published.invalid', expect.any(AbortSignal), expect.any(Function))
+  expect((await manager.view()).owner).toBe((await manager.view()).connections[0].id)
 })
 
 it('reads a pod identity without creating credentials, changing owners or exposing private metadata', async () => {
   const { manager, control, store, credentials } = await fixture()
   const existing = store.createPod({ name: 'Existing' }); const fresh = store.createPod({ name: 'New' })
-  const first = randomUUID(); const second = randomUUID(); const brokerId = randomUUID()
+  const first = randomUUID(); const brokerId = randomUUID()
   const identity = { connectionId: randomUUID(), podId: existing.id, issuer: 'https://pods.example.invalid', decisionIssuer: 'https://id.example.invalid', owner: 'original@example.invalid', subject: 'agent@pods.example.invalid', keyId: 'private-metadata-key', brokerConnectionId: brokerId }
-  const metadata = { issuer: identity.decisionIssuer, privateMetadata: 'must-not-leak', pods: { [existing.id]: { connectionId: identity.connectionId, prepared: true, identity } } }
+  const metadata = { issuer: identity.decisionIssuer, privateMetadata: 'must-not-leak', broker: { issuer: 'https://new-pods.example.invalid', domain: 'new-pods.example.invalid', connectionId: randomUUID() }, pods: { [existing.id]: { connectionId: identity.connectionId, prepared: true, identity } } }
   control.execute({ type: 'save', connection: { id: first, provider: 'openape', account: identity.owner, state: 'revoked', error: null }, metadata })
-  control.execute({ type: 'save', connection: { id: second, provider: 'openape', account: 'new@example.invalid', state: 'ready', error: null }, metadata: { issuer: 'https://other.example.invalid', broker: { issuer: 'https://new-pods.example.invalid', domain: 'new-pods.example.invalid', connectionId: randomUUID() } } })
-  await manager.execute({ type: 'setDefaultOwner', id: second })
   const create = vi.spyOn(credentials, 'create'); const provision = vi.spyOn(PodIdentityManager.prototype, 'provision')
   const view = await manager.execute({ type: 'list', podId: existing.id })
   expect(view.podIdentity).toEqual({ podId: existing.id, bound: true, ownerConnection: first, issuer: identity.issuer, decisionIssuer: identity.decisionIssuer, subject: identity.subject, brokerConnectionId: brokerId })
   expect(JSON.stringify(view)).not.toMatch(/must-not-leak|private-metadata-key/)
-  expect((await manager.execute({ type: 'list', podId: fresh.id })).podIdentity).toMatchObject({ bound: false, ownerConnection: second, issuer: 'https://new-pods.example.invalid', subject: null })
+  expect((await manager.execute({ type: 'list', podId: fresh.id })).podIdentity).toMatchObject({ bound: false, ownerConnection: first, issuer: 'https://new-pods.example.invalid', subject: null })
   expect((await manager.execute({ type: 'list' })).podIdentity).toBeUndefined()
   expect(create).not.toHaveBeenCalled(); expect(provision).not.toHaveBeenCalled()
   expect(control.connections.metadata(first)).toEqual(metadata)
-  expect(control.connections.metadata(second).pods).toBeUndefined()
 })

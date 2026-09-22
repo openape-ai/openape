@@ -459,21 +459,24 @@ these tests.
 
 ## M11: account onboarding and exact mail scope
 
-The sidebar account button opens central OpenApe account management and shows
-its selected identity and connection status. Choose **Use for new pods** on a
-connected OpenApe account, or select that option during sign-in. The choice is
-persisted and used when a new Pod first needs an agent identity. Existing Pods
-retain their original account, including after disconnect or a default change.
-Sign in again reconnects that same account and preserves its Pod bindings;
-revoked permissions still need review. An unavailable owner never falls back to
-another account. Existing profiles require a one-time explicit default choice.
-The identity provider is available under **Advanced**. Each Pod's apes shell
-continues to receive its own agent identity, never the owner's personal token.
-ChatGPT model login, OpenApe human identity and application sign-ins are separate connections. The renderer
-can select a provider, expected email and HTTPS OpenApe issuer, but cannot supply
-tokens, executables or arbitrary provider endpoints. Browser opening uses only a
-currently pending, driver-validated sign-in URL. No startup code logs in or reads
-mail automatically.
+The sidebar account button opens central account management. It shows exactly
+two accounts: Codex / GPT and the owner's DDISA account. The DDISA identity
+provider is discovered from the DDISA TXT record of the entered email's domain.
+Every Pod, grant and mobile registration uses that single owner implicitly.
+Signing in again with the same email keeps the connection and its Pod bindings;
+switching to another email requires confirmation, revokes the previous owner's
+Pod bindings and permissions, and new agents are provisioned on first use. New
+agents require the owner's one-time Pods provider consent in Pod settings.
+At startup, profiles from earlier releases are reconciled to one Codex row and
+one DDISA owner row: duplicate rows of the owner identity are merged without
+re-provisioning; bindings of other identities are released.
+Each Pod's apes shell continues to receive its own agent identity, never the
+owner's personal token. ChatGPT model login, OpenApe human identity and
+application sign-ins are separate connections. The renderer can supply only an
+email and an explicit switch confirmation, not tokens, executables, issuers or
+provider endpoints. Browser opening uses only a currently pending,
+driver-validated sign-in URL. No startup code logs in or reads mail
+automatically.
 
 The pinned Codex auth-only app-server accepts initialize, account/login/start,
 account/login/cancel and account/read requests. Model turns and command requests

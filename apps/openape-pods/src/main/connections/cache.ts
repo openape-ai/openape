@@ -71,6 +71,13 @@ export class CredentialCache {
     finally { this.release(id) }
   }
 
+  async eraseConnection(id: string): Promise<void> {
+    if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('Invalid connection reference')
+    await this.acquire(id)
+    try { await rm(join(this.root, `${id}.encrypted`), { force: true }) }
+    finally { this.release(id) }
+  }
+
   async erasePodKey(id: string, podId: string): Promise<void> {
     this.path(id); await this.acquire(id)
     try {
