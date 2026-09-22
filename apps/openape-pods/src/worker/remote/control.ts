@@ -221,11 +221,15 @@ export class RemoteControl {
       const conversation = new ChatRegistry(this.store).get(body.conversationId!)
       const review = this.master.view(conversation.scope).changes?.find(item => item.id === body.reviewId)
       if (!review || review.workflow || review.targets.some(target => target.actions.some(action => action.action === 'setGroup'))) throw new ProtocolError('desktop_action_required', 409)
+      // A review the phone loaded before a desktop edit must come back as a re-review, not as a generic failure.
+      if (conversation.revision !== expected.contextRevision || review.contextRevision !== conversation.revision || review.revision !== expected.reviewRevision || (review.state !== 'pending' && (review.state === 'applied') !== (route.kind === 'changes.apply'))) throw new ProtocolError('revision_conflict', 409)
       for (const target of review.targets) {
         this.ownerPod(route.owner, target.podId)
         if (route.kind === 'changes.apply' && review.kind === 'run' && this.store.db.prepare('SELECT phase FROM remote_pods WHERE pod_id=?').get(target.podId)?.phase !== 'ready') throw new ProtocolError('desktop_action_required', 409)
       }
       result = await this.master.execute({ ...base, type: route.kind === 'changes.apply' ? 'applyChanges' : 'discardChanges', id: body.reviewId!, revision: expected.reviewRevision! })
+      const decided = (result as MasterView).changes?.find(item => item.id === body.reviewId)
+      if (decided?.state === 'pending' && decided.error) throw new ProtocolError('revision_conflict', 409)
     }
     else {
       throw new ProtocolError('unsupported_operation', 426)
