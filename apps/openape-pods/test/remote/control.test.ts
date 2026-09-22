@@ -18,6 +18,7 @@ import type { AgentRuntime } from '../../src/worker/agent/executor'
 import { installExample } from '../../src/worker/runs/examples'
 import { EffectLedger } from '../../src/worker/recovery/effects'
 import { executeHttpEffect } from '../../src/worker/runs/http'
+import { PodVariables } from '../../src/worker/resources/variables'
 
 const stores: PodDatabase[] = []
 afterEach(() => { for (const store of stores.splice(0)) { store.close(); rmSync(store.root, { recursive: true, force: true }) } })
@@ -35,8 +36,9 @@ async function fixture() {
   const key = publicKey(generateKey())
   const device = { id: randomUUID(), owner, keys: { signing: key, agreement: key }, epoch: 1 }
   await remote.execute({ type: 'configure', registration }); await remote.execute({ type: 'pair', device })
-  const route: Route = { protocol: 'pods-mobile', major: 1, minor: 0, id: randomUUID(), runtimeId: registration.id, generation: registration.generation, deviceId: device.id, keyEpoch: 1, owner, direction: 'command', kind: 'pod.create', kindVersion: 1, issuedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60000).toISOString(), sequence: '0' }
-  const command = { type: 'execute' as const, route, body: { name: 'Remote Pod' }, hash: 'a'.repeat(64), leaseUntil: new Date(Date.now() + 25000).toISOString() }
+  const now = Date.now()
+  const route: Route = { protocol: 'pods-mobile', major: 1, minor: 0, id: randomUUID(), runtimeId: registration.id, generation: registration.generation, deviceId: device.id, keyEpoch: 1, owner, direction: 'command', kind: 'pod.create', kindVersion: 1, issuedAt: new Date(now).toISOString(), expiresAt: new Date(now + 60000).toISOString(), sequence: '0' }
+  const command = { type: 'execute' as const, route, body: { name: 'Remote Pod' }, hash: 'a'.repeat(64), leaseUntil: new Date(now + 25000).toISOString() }
   return { store, remote, registration, device, owner, route, command, control, master, runs, resources, scheduler }
 }
 it('creates one paused Pod with durable ownership and the same local conversation', async () => {
@@ -186,4 +188,32 @@ it('never replays a program effect after its remote run start was interrupted', 
   const view = { ...command, route: { ...command.route, id: randomUUID(), direction: 'query' as const, kind: 'run' as const }, body: { podId: pod.id } }
   expect(await restarted.execute(view)).toMatchObject({ state: 'completed' })
   expect(JSON.parse(String(store.db.prepare('SELECT result FROM remote_inbox WHERE id=?').get(view.route.id)?.result)).data).toMatchObject({ effects: [{ key: request.key, runId: run.id }], runs: [{ id: run.id, state: 'interrupted' }] })
+})
+
+it('turns desktop edits during a mobile approval into a review conflict instead of a generic failure', async () => {
+  const { store, remote, command, control } = await fixture()
+  await remote.execute(command); const pod = store.listPods()[0]!
+  const registry = new ChatRegistry(store); const chat = registry.ensure(pod.id)
+  const changes = control.changes()
+  const review = changes.prepare(registry.get(chat.id), { action: 'setVariable', podId: pod.id, revision: store.getPod(pod.id).revision, name: 'greeting', value: 'from phone', variableRevision: 0 })
+  const apply = async (expected: Record<string, number>) => {
+    const decide = { ...command, route: { ...command.route, id: randomUUID(), kind: 'changes.apply' as const }, body: { podId: pod.id, conversationId: chat.id, reviewId: review.id, expected: { podRevision: store.getPod(pod.id).revision, contextRevision: 1, reviewRevision: 1, ...expected } } }
+    const receipt = await remote.execute(decide) as { state: string }
+    return { state: receipt.state, code: JSON.parse(String(store.db.prepare('SELECT result FROM remote_inbox WHERE id=?').get(decide.route.id)?.result)).data.code }
+  }
+  // Desktop changed the Pod configuration after the phone loaded the review.
+  new PodVariables(store).save(pod.id, 'other', 'edited on desktop', 0)
+  expect(await apply({})).toEqual({ state: 'failed', code: 'revision_conflict' })
+  expect(changes.list(chat.id)[0]).toMatchObject({ state: 'pending', error: expect.stringMatching(/configuration changed/) })
+  // Desktop re-reviewed the change; the phone still holds the old revision.
+  expect(changes.prepare(registry.get(chat.id), { action: 'setVariable', podId: pod.id, revision: store.getPod(pod.id).revision, name: 'greeting', value: 'from desktop', variableRevision: 0 }).revision).toBe(2)
+  expect(await apply({})).toEqual({ state: 'failed', code: 'revision_conflict' })
+  // Desktop changed the conversation context; the review belongs to the earlier context.
+  await remote.execute({ ...command, route: { ...command.route, id: randomUUID() }, body: { name: 'Second remote Pod' } })
+  const second = store.listPods().find(item => item.id !== pod.id)!
+  registry.execute({ type: 'context', id: chat.id, revision: 1, podIds: [pod.id, second.id], workflowId: null, workflowRevision: null })
+  expect(await apply({ reviewRevision: 2 })).toEqual({ state: 'failed', code: 'revision_conflict' })
+  expect(await apply({ reviewRevision: 2, contextRevision: 2 })).toEqual({ state: 'failed', code: 'revision_conflict' })
+  expect(new PodVariables(store).values(pod.id)).toEqual({ other: 'edited on desktop' })
+  expect(changes.list(chat.id).every(item => item.state === 'pending')).toBe(true)
 })
