@@ -159,7 +159,7 @@ Every PR: (1) adds the replacement tests, (2) shows one **negative proof per mov
 - [x] `2026-09-23 11:55` M4 implemented: packaged `onboarding` cases and `data` replaced (main-process harness for data dialogs, restore-on-error and profile selection; SQLite state for onboarding; layout); handbook screenshot generator moved out of the gate (`pnpm handbook:capture`). E2E 23 files / 113 tests, wall 27.5 / 26.5 s (5 workers), sum 127.2 / 124.3 s; browser 23 tests / 8.4 s; whole `test:layout` 43–45 s; unit 401 tests.
 - [x] `2026-09-23 12:20` PR 102 (M4) opened; merge authorized by Patrick for all PRs of this issue after green checks.
 - [x] `2026-09-23 12:40` M5 (reduced, reordered): `crash-recovery` split into four files (pulled forward from M6; suite 27 → 25 s); mail parser formats and gaps moved to `test/mail/extraction.test.ts` (unit), E2E keeps one packaged parser run and the recipe. Other planned M5 moves dropped (see Decision Log).
-- [ ] M6 remainder: entry.ts storage/suspend spike (optional).
+- [x] `2026-09-23 12:30` M6: reporting menu, German menus and delete dialog move from `foundation` to the main-process harness; the suspend case moves to a harness over the unchanged `src/worker/entry.ts` (in-memory `parentPort`, fake intervals) plus `powerMonitor` forwarding and `FixtureWorker.lifecycle`, closing the chain without a gap. The storage-limit case stays E2E: it proves stopping an actually running script. No production code changes.
 
 ## Surprises & Discoveries
 
@@ -178,6 +178,8 @@ Every PR: (1) adds the replacement tests, (2) shows one **negative proof per mov
 - 2026-09-23 — M3 removed five Electron files (~20 s of per-file time in the baseline) but the per-file sum stayed at ~159 s: with fewer Electron launches the heavy native files now overlap more and slow each other down (`crash-recovery` 23 → 28 s, `onboarding` 15 → 18 s, `agent` 9 → 13 s). Wall time is bounded by those native files and `maxWorkers: 3`, not by the UI files any more.
 
 - 2026-09-23 — Two parser rules are redundant for the tested inputs: `html-to-text` already omits `<script>` content, so the `script` skip selector changes nothing; and the 20 MiB byte limit is never reached by the "oversized" DOCX case (that case hits the text limit). Neither was proven by the former E2E either.
+
+- 2026-09-23 — The first worker-entry spike passed even with the suspend handler removed: each scheduler tick awaits an asynchronous storage check and scan, and the worker skips intervals while a tick runs, so the faked intervals never completed a tick. Each simulated interval now also waits real time for the tick to finish; removing the suspend or resume handler then turns the test red.
 
 ## Decision Log
 
