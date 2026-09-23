@@ -1,4 +1,5 @@
 import type { ChangeSet } from '../../contracts/control-api'
+import type { RunRecord } from '../../contracts/runs'
 import type { Conversation } from '../../contracts/chats'
 import { parseChatsCommand } from '../../contracts/chats'
 import { codexConversationId } from '../../contracts/codex'
@@ -7,9 +8,13 @@ import type { PodDatabase } from '../storage/database'
 import { ChatRegistry } from '../master/chat-registry'
 import type { MasterControl } from '../master/control'
 
+// Settings changes that cannot alter what a Pod does with its existing access;
+// Codex applies them directly (owner decision, issue 1375). Activation, rollback,
+// variables, runs and permissions stay reviews the owner applies in the app.
+const direct = ['revise', 'setGroup', 'pause', 'prepareSchedule']
+
 // Entry point for the owner's Codex. Every action runs through the same
-// MasterControl executor as the in-app chat, scoped to one hidden conversation,
-// so consequential actions only prepare reviews the owner applies in the app.
+// MasterControl executor as the in-app chat, scoped to one hidden conversation.
 export class CodexControl {
   constructor(private readonly store: PodDatabase, private readonly master: MasterControl) {}
 
@@ -19,9 +24,18 @@ export class CodexControl {
       ? this.select(action)
       : action.action === 'changes'
         ? this.changes(action)
-        : await this.master.execute(`codex:${request.id}`, action, signal, null, null, this.conversation())
+        : direct.includes(String(action.action))
+          ? await this.direct(request, signal)
+          : withoutRunContent(await this.master.execute(`codex:${request.id}`, action, signal, null, null, this.conversation()))
     if (Buffer.byteLength(JSON.stringify(result)) > 256 * 1024) throw new Error('Action completed but its result is too large; inspect a smaller portion')
     return result
+  }
+
+  private async direct(request: CodexRequest, signal: AbortSignal): Promise<unknown> {
+    const { podId, action } = request.action
+    if (typeof podId !== 'string' || !this.conversation().context.pods.some(pod => pod.id === podId)) throw new Error('context_required: select this Pod before changing it')
+    if (action === 'prepareSchedule' && this.store.db.prepare('SELECT enabled FROM schedules WHERE pod_id=?').get(podId)?.enabled === 1) throw new Error('Review an enabled schedule in Pod settings before replacing it')
+    return this.master.execute(`codex:${request.id}`, request.action, signal)
   }
 
   private conversation(): Conversation {
@@ -48,5 +62,13 @@ export class CodexControl {
 }
 
 function receipt(set: ChangeSet) {
-  return { id: set.id, kind: set.kind, state: set.state, error: set.error, targets: set.targets.map(target => ({ podId: target.podId, name: target.name, actions: target.actions.map(action => action.action), changedSinceApply: target.changedSinceApply ?? false })), execution: set.execution ?? null }
+  return { id: set.id, kind: set.kind, state: set.state, error: set.error, targets: set.targets.map(target => ({ podId: target.podId, name: target.name, actions: target.actions.map(action => action.action), changedSinceApply: target.changedSinceApply ?? false })), execution: set.execution?.map(({ podId, runId, state }) => ({ podId, runId, state })) ?? null }
+}
+
+// Run summaries, run errors and checkpoints are written by scripts during runs
+// and can carry mail or web content; Codex sees run state only.
+function withoutRunContent(result: unknown): unknown {
+  if (!result || typeof result !== 'object' || !('runs' in result) || !('checkpoint' in result)) return result
+  const { runs, checkpoint, ...rest } = result as { runs: RunRecord[], checkpoint: { revision: number } }
+  return { ...rest, runs: runs.map(({ id, state, scriptHash, startedAt, finishedAt, recovery }) => ({ id, state, scriptHash, startedAt, finishedAt, recovery: recovery?.state ?? null })), checkpoint: { revision: checkpoint.revision } }
 }

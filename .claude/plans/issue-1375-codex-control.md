@@ -70,12 +70,13 @@ Codex (owner's)
 
 | Action | Effect | Owner step in the app |
 |---|---|---|
-| `runtime`, `list`, `inspect`, `inspectWorkflow` | read | – |
+| `runtime`, `list`, `inspect`, `inspectWorkflow` | read; run summaries, run errors and checkpoints are withheld | – |
 | `select` | changes the hidden Codex scope | – |
 | `create` | empty, inactive Pod | – |
 | `draft`, `validate` | saved draft; sandboxed validation against simulated services | – |
 | `requestAccess` | pending proposal | existing access forms |
-| `activate`, `rollback`, `setVariable`, `prepareSchedule`, `setGroup`, `revise`, `pause`, `saveWorkflow` | pending change set | **Apply changes together** in **Prepared by Codex** |
+| `revise`, `setGroup`, `pause`, `prepareSchedule` (stays disabled; an enabled schedule is never replaced) | applied directly | – |
+| `activate`, `rollback`, `setVariable`, `saveWorkflow` | pending change set | **Apply changes together** in **Prepared by Codex** |
 | `run`, `runWorkflow` | pending run request | **Run once** button |
 | `resume`, `installMailRecipe`, apply/discard, schedule activation, secrets | refused / not expressible | Pod settings only |
 
@@ -194,7 +195,7 @@ Codex (owner's)
 - [x] `2026-09-23 14:30` Read-only analysis, plan written.
 - [x] `2026-09-23 14:50` Approved by Patrick: D1–D6 as recommended; no chat in Pods, only a review view; elicitation probe in M0.
 - [x] `2026-09-23 15:20` M0 spike: facts below; registration and launcher designs adjusted. No code kept.
-- [ ] M1 worker and main adapter
+- [x] `2026-09-23 18:40` M1 worker and main adapter: `CodexControl` + `CodexControlServer`; 10 refusal/leak/socket tests; six counter-proofs red.
 - [ ] M2 STDIO shim and launcher
 - [ ] M3 registration UI
 - [ ] M4 end-to-end acceptance and handbook
@@ -214,6 +215,7 @@ Codex (owner's)
 | Date | Decision | Reason | Rejected |
 |---|---|---|---|
 | 2026-09-23 | D1–D6 as recommended (Patrick) | Reuse the single writer; approval outside the model | Localhost HTTP, a second writer, apply from Codex |
+| 2026-09-23 | Option a (Patrick): renaming, grouping, pausing and preparing a disabled schedule apply directly from Codex; activation, rollback, variables, runs and permissions stay app reviews; Codex gets no run content | Pod runs never pass through the owner's Codex, but `inspect` exposed script-written run summaries and checkpoints, and the owner's Codex reads other untrusted sources. Only changes that alter what a Pod does with its existing access need a step outside the model | Everything reviewed (friction); everything direct except runs and permissions (activation or a changed recipient would run with existing credentials on the next schedule) |
 | 2026-09-23 | No chat display in Pods; hidden technical scope plus the **Prepared by Codex** review view (Patrick) | Codex already holds the conversation; Pods only needs the approval point | A visible Codex chat |
 
 ## Outcomes & Retrospective

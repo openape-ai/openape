@@ -424,6 +424,7 @@
   "Invalid Codex action": "Ungültige Codex-Aktion",
   "Invalid select fields": "Ungültige Felder der Auswahl",
   "Invalid select": "Ungültige Auswahl",
+  "context_required: select this Pod before changing it": "Kontext erforderlich: Wähle diesen Pod aus, bevor du ihn änderst",
   "Invalid changes fields": "Ungültige Felder der Änderungsabfrage",
   "Action completed but its result is too large; inspect a smaller portion": "Aktion abgeschlossen, aber das Ergebnis ist zu groß; sieh dir einen kleineren Ausschnitt an",
   "Invalid master pod revision": "Ungültige Pod-Revision des Masters",
