@@ -8,7 +8,8 @@ Every assertion lives on the lowest level that can answer its question. A packag
 | Component | `test/**/*-ui.test.ts`, `test/workspace.test.ts` (`@vue/test-utils` + happy-dom) | Vue states, branches, visible text, emitted bridge commands | unit gate |
 | Main process | `test/main/**` (Node, `vi.mock('electron')` via `test/main/app-harness.ts`) | The unchanged `src/main/app.ts`: IPC sender checks, native dialog gating, menus, power events — which worker command an owner's answer produces | unit gate |
 | Layout | `test/layout/**` (Vitest browser mode, installed Chrome) | Widths, overflow, breakpoints, dark mode — with `src/renderer/style.css` and every SFC `<style>` loaded | `test:browser`, part of `test:layout` |
-| Native / packaged | `e2e/**` (Playwright Electron, native helper) | Only what needs the packaged app or a real OS boundary | `test:e2e`, part of `test:layout` |
+| Native / packaged | `e2e/**` (Playwright Electron, native helper) | Only what needs the packaged app or a real OS boundary | `test:e2e`, part of `test:layout` (5 workers) |
+| Handbook capture | `e2e/handbook-capture.test.ts` | Screenshots for the handbook and the evidence report — a generator, not a check | `pnpm handbook:capture`, outside the gate |
 
 ## Rules
 
@@ -21,7 +22,7 @@ Every assertion lives on the lowest level that can answer its question. A packag
 
 ## Packaged E2E that remains, and why
 
-These are the questions no lower level can answer. Files under review in issue 1374 are not yet listed.
+These are the questions no lower level can answer. `handbook.test.ts` also stays: it opens the generated offline handbook in Chrome.
 
 | File | Why it needs the packaged app or a real process |
 |---|---|
@@ -29,7 +30,7 @@ These are the questions no lower level can answer. Files under review in issue 1
 | `crash-recovery.test.ts` | Real SIGKILL/quit of worker, app and script, relaunch and domain inspection without duplicate work |
 | `recovery.test.ts`, `domains.test.ts` | Supervisor lease, PID identity and PID reuse of real processes |
 | `resources.test.ts`, `script-runner.test.ts`, `terminal.test.ts` | Sandbox denial (files, fork, network, shell), real TTY, time limits |
-| `agent.test.ts`, `master.test.ts`, `master-chat.test.ts`, `onboarding.test.ts` (Node case) | Pinned Codex binary and app-server confined by the sandbox; native draft validation; chat repair loop, model choice and context reset as the provider actually receives them |
+| `agent.test.ts`, `master.test.ts`, `master-chat.test.ts`, `onboarding.test.ts` | Pinned Codex binary and app-server confined by the sandbox; native draft validation; chat repair loop, model choice and context reset as the provider actually receives them |
 | `external-shell.test.ts`, `external-session.test.ts`, `installed-applications.test.ts` | `ape-shell` from the package reaches real child processes; grant denial blocks the side effect |
 | `o365.test.ts`, `broker.test.ts` | TLS against a real socket with the packaged helper; credential isolation between sandboxes |
 | `credentials.test.ts` | Real macOS `safeStorage`: ciphertext never contains the value, decrypts after a restart, key files erased on rotation and revocation, other Pods' keys kept |
@@ -55,3 +56,6 @@ These are the questions no lower level can answer. Files under review in issue 1
 | `workflows.test.ts` | `test/scheduling/workflow-graph-ui.test.ts` (graph saved by the real `WorkflowEngine`, layers, German mail policy), existing `test/scheduling/workflows.test.ts` (order, unchanged members, pause/one-shot), `test/layout/workflows.test.ts` (node widths at 1060/760/560, keyboard cycle refusal) |
 | `dependencies.test.ts` (packaged editor case) | Node import case above, `test/main/app.test.ts` (preparation dialog), existing `test/workspace/script-ui.test.ts` (search/add/remove), `test/layout/pod-tabs.test.ts` (`.http-heading` spacing) |
 | `credentials.test.ts`, `programs.test.ts` (UI and layout parts) | `test/layout/pod-tabs.test.ts`, existing `test/credentials/ui.test.ts`, `test/programs/ui.test.ts`, `test/main/app.test.ts` (program picker) |
+| `onboarding.test.ts` (packaged cases) | `test/onboarding/setup-state.test.ts` (incomplete until the explicit finish, consent kept across a restart, continue only after the worker accepted, avatar in the collapsed sidebar), existing `test/onboarding/ui.test.ts`, `test/onboarding/control.test.ts`, `test/onboarding/reconcile.test.ts`, `test/onboarding/auth.test.ts`, `test/layout/onboarding.test.ts` (560 dark en/de, collapsed avatar) |
+| `data.test.ts` | `test/main/data-dialogs.test.ts` (delete/backup/restore wait for the owner's native confirmation; restore with the real `restoreBackup` while the worker refuses a newer database; startup opens the selected profile — the old test had stubbed the relaunch anyway), existing `test/data/backup.test.ts`, `test/data/update.test.ts`, `test/data/ui.test.ts`, `test/layout/onboarding.test.ts` (Data & backups at 560) |
+| `handbook.test.ts` (capture case) | Moved unchanged to `e2e/handbook-capture.test.ts`, run with `pnpm handbook:capture` |
