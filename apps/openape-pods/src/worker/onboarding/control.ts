@@ -4,29 +4,19 @@ import type { ResourceRegistry } from '../resources/registry'
 import type { PodIdentityReference } from '../../main/connections/agent'
 import type { MailAssignment } from '../../main/mail/service'
 import { OnboardingStore } from './store'
+import { reconcileAccounts, revokeConnectionUse } from './reconcile'
 
-export type SetupInternal = { type: 'list' } | { type: 'setDefaultOwner', id: string } | { type: 'save', connection: Omit<ConnectionView, 'login'>, metadata: Record<string, unknown> } | { type: 'metadata', id: string } | { type: 'finish' } | { type: 'revoke', id: string } | { type: 'assign', setup: MailSetup, identity: PodIdentityReference, grants: MailAssignment['grants'] }
-function usesConnection(configuration: Record<string, unknown>, id: string): boolean {
-  const authority = configuration.authority as { ownerConnection?: string } | undefined
-  const grants = Array.isArray(configuration.grants) ? configuration.grants as { authority?: { ownerConnection?: string } }[] : []
-  return [configuration.connectionId, configuration.ownerConnection, authority?.ownerConnection].includes(id) || grants.some(grant => grant.authority?.ownerConnection === id)
-}
+export type SetupInternal = { type: 'list' } | { type: 'reconcile' } | { type: 'save', connection: Omit<ConnectionView, 'login'>, metadata: Record<string, unknown> } | { type: 'metadata', id: string } | { type: 'finish' } | { type: 'revoke', id: string } | { type: 'assign', setup: MailSetup, identity: PodIdentityReference, grants: MailAssignment['grants'] }
 
 export class SetupControl {
   readonly connections: OnboardingStore
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry) { this.connections = new OnboardingStore(store) }
   execute(command: SetupInternal): unknown {
-    if (command.type === 'setDefaultOwner') this.connections.setDefaultOwner(command.id)
+    if (command.type === 'reconcile') return reconcileAccounts(this.store, this.resources)
     if (command.type === 'save') this.connections.save(command.connection, command.metadata)
     if (command.type === 'metadata') return this.connections.metadata(command.id)
     if (command.type === 'finish') this.connections.finish()
-    if (command.type === 'revoke') {
-      for (const pod of this.store.listPods()) {
-        for (const resource of this.resources.list(pod.id)) {
-          if (resource.state !== 'revoked' && usesConnection(resource.configuration, command.id)) this.resources.revoke(pod.id, resource.id, resource.revision)
-        }
-      }
-    }
+    if (command.type === 'revoke') revokeConnectionUse(this.store, this.resources, command.id)
     if (command.type === 'assign') {
       const { setup, identity, grants } = command
       const pod = this.store.getPod(setup.podId)
@@ -39,6 +29,6 @@ export class SetupControl {
         { kind: 'tool', name: 'Read-only Microsoft mail', configuration: { capability: 'mail.read', account: setup.account, connectionId: setup.mailConnection, folders: setup.folders.map(folder => folder.id), folderNames: setup.folders, since: setup.since, attachments: setup.attachments, grants } },
       ])
     }
-    return { connections: this.connections.connections(), defaultOwner: this.connections.defaultOwner(), complete: this.connections.complete() }
+    return { connections: this.connections.connections(), owner: this.connections.owner(), complete: this.connections.complete() }
   }
 }

@@ -28,11 +28,13 @@ it('stops oversized authentication responses before parsing and hides provider e
 
 it('accepts explicit account actions without accepting identity or token injection', () => {
   const id = randomUUID()
-  for (const type of ['setDefaultOwner', 'reconnect']) {
+  for (const type of ['disconnect', 'cancel']) {
     expect(parseOnboardingCommand({ type, id })).toEqual({ type, id })
     expect(() => parseOnboardingCommand({ type, id: 'not-an-id' })).toThrow()
     expect(() => parseOnboardingCommand({ type, id, token: 'forbidden' })).toThrow()
   }
-  expect(() => parseOnboardingCommand({ type: 'connect', provider: 'chatgpt', account: '', makeDefault: true })).toThrow('OpenApe')
-  expect(() => parseOnboardingCommand({ type: 'connect', provider: 'openape', account: 'owner@example.invalid', issuer: 'https://id.example.invalid', makeDefault: 'yes' })).toThrow('OpenApe')
+  for (const type of ['setDefaultOwner', 'reconnect']) expect(() => parseOnboardingCommand({ type, id })).toThrow('Unsupported')
+  expect(() => parseOnboardingCommand({ type: 'connect', provider: 'openape', account: 'owner@example.invalid', issuer: 'https://id.example.invalid' })).toThrow('Unsupported')
+  expect(() => parseOnboardingCommand({ type: 'connect', provider: 'chatgpt', account: '', switchAccount: true })).toThrow('DDISA')
+  expect(parseOnboardingCommand({ type: 'connect', provider: 'openape', account: 'owner@example.invalid', switchAccount: true })).toMatchObject({ switchAccount: true })
 })
