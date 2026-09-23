@@ -9,6 +9,7 @@ Every assertion lives on the lowest level that can answer its question. A packag
 | Main process and worker entry | `test/main/**` (Node; `vi.mock('electron')` via `test/main/app-harness.ts`, an in-memory `parentPort` for `src/worker/entry.ts`) | The unchanged `src/main/app.ts` and worker entry: IPC sender checks, native dialog gating, menus, power events, scheduler intake while suspended | unit gate |
 | Layout | `test/layout/**` (Vitest browser mode, installed Chrome) | Widths, overflow, breakpoints, dark mode — with `src/renderer/style.css` and every SFC `<style>` loaded | `test:browser`, part of `test:layout` |
 | Native / packaged | `e2e/**` (Playwright Electron, native helper) | Only what needs the packaged app or a real OS boundary | `test:e2e`, part of `test:layout` (6 workers) |
+| Fast local loop | unit, component, main-process and layout levels above | Everything except Electron and the native helper, in about 15 s without a build | `pnpm --filter @openape/pods test:fast` |
 | Handbook capture | `e2e/handbook-capture.test.ts` | Screenshots for the handbook and the evidence report — a generator, not a check | `pnpm handbook:capture`, outside the gate |
 
 ## Rules
@@ -41,7 +42,7 @@ These are the questions no lower level can answer. `handbook.test.ts` also stays
 
 | Former E2E | Replacement |
 |---|---|
-| `pod-workspace.test.ts` | `test/layout/app-shell.test.ts` (7 views × 6 sizes × light/dark × en/de, source viewer, contextual chat), `test/workspace/shell-ui.test.ts` (arrow-key tabs, archived pod cannot run, Discuss knowledge, connections hidden), existing `test/workspace/ui.test.ts`, `test/resources/ui.test.ts`, `test/settings.test.ts`, `test/scheduling/ui.test.ts`, `test/workspace/description-ui.test.ts`, `test/workspace.test.ts` |
+| `pod-workspace.test.ts` | `test/layout/app-shell.test.ts` (7 views at one size per breakpoint band, dark at the tightest size, German at compact and narrow sizes, source viewer, contextual chat), `test/workspace/shell-ui.test.ts` (arrow-key tabs, archived pod cannot run, Discuss knowledge, connections hidden), existing `test/workspace/ui.test.ts`, `test/resources/ui.test.ts`, `test/settings.test.ts`, `test/scheduling/ui.test.ts`, `test/workspace/description-ui.test.ts`, `test/workspace.test.ts` |
 | `groups.test.ts` | `test/workspace/groups.test.ts` (persistence), `test/workspace/groups-ui.test.ts`, `test/workspace/shell-ui.test.ts` (drag and drop, Settings group), `test/layout/app-shell.test.ts` (long group name wraps, with counter-check) |
 | `language.test.ts` | `test/i18n/language.test.ts`, `test/i18n/ui.test.ts`, `test/layout/app-shell.test.ts` (German views, language switcher in a narrow window); native menu and dialog labels in `foundation.test.ts` |
 | `foundation.test.ts` (unpackaged arms, scheduling, storage, layout) | Packaged arms kept; `test/workspace/shell-ui.test.ts` (concurrency limit), `test/workspace/script-authority.test.ts` (unknown create keys rejected), `test/storage/database.test.ts` (reopen), `test/layout/app-shell.test.ts` (empty profile light/dark, 880 × 640) |
@@ -61,6 +62,7 @@ These are the questions no lower level can answer. `handbook.test.ts` also stays
 | `handbook.test.ts` (capture case) | Moved unchanged to `e2e/handbook-capture.test.ts`, run with `pnpm handbook:capture` |
 | `mail-knowledge.test.ts` (unpackaged parser arm, gap case) | `test/mail/extraction.test.ts` (plain/HTML/PDF/DOCX text, scripts and tracking images dropped, unsupported/scanned/malformed/oversized as gaps); the packaged parser run and the recipe stay |
 | `foundation.test.ts` (reporting menu, German menus and delete dialog) | `test/main/app.test.ts` (menu only after opt-in, fixed report URL, menus rebuilt on language switch, German delete dialog) |
+| Unpackaged arms of `agent`, `broker`, `master`, `o365` and `resources` | Packaged arms kept: the shipped bundle runs the same runtime code as the development build, plus its own Electron-as-Node and helper paths. The development helper and `dist` runtime stay exercised by the other Node-level cases in `agent`, `broker`, `master` and `resources` |
 | `crash-recovery.test.ts` (suspend case) | `test/main/worker-entry.test.ts` (unchanged worker entry: no intake while suspended, missed slots caught up once), `test/main/app.test.ts` (powerMonitor forwarded), `test/main/worker-lifecycle.test.ts` (forwarded only to a ready worker), existing `test/scheduling/scheduler.test.ts` (coalescing) |
 
 ## Deliberately kept in `e2e/`

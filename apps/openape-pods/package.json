@@ -19,6 +19,7 @@
     "test:packaged": "vitest run --config vitest.electron.config.ts -t packaged",
     "test:layout": "pnpm build && pnpm package:mac && pnpm test:e2e && pnpm test:browser",
     "test:browser": "vitest run --config vitest.browser.config.ts",
+    "test:fast": "vitest run && vitest run --config vitest.browser.config.ts",
     "report": "node scripts/report.mjs",
     "package:distribution": "node scripts/package.mjs --distribution",
     "package:signed": "node scripts/package.mjs --distribution --signed",
