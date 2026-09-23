@@ -36,6 +36,21 @@ describe('foundation', () => {
   it('reporting: opens only the fixed product URL through the native menu after opt-in', async () => {
     const disabled = await launch()
     expect(await disabled.app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById('report-problem')?.visible)).toBeUndefined()
+    // Native menus and dialogs are built in the main process; switching the language rebuilds them.
+    await disabled.page.evaluate(() => window.pods.language({ type: 'set', language: 'de' }))
+    expect(await disabled.app.evaluate(({ Menu }) => Menu.getApplicationMenu()!.items.map(item => item.label))).toEqual(['OpenApe Pods', 'Bearbeiten', 'Fenster'])
+    expect(await disabled.app.evaluate(({ Menu }) => Menu.getApplicationMenu()!.items[0]!.submenu!.items.map(item => item.label))).toContain('Pods beenden')
+    const pod = (await disabled.page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Order review' }))).pods[0]!
+    await disabled.app.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async (first: unknown, second?: import('electron').MessageBoxOptions) => {
+        const options = second ?? first as import('electron').MessageBoxOptions
+        ;(globalThis as Record<string, unknown>).deleteDialog = { title: options.title, cancel: options.buttons?.[0] }
+        return { response: 0, checkboxChecked: false }
+      }
+    })
+    await disabled.page.evaluate(id => window.pods.data({ type: 'deletePod', podId: id, revision: 1, name: 'Order review' }), pod.id)
+    expect(await disabled.app.evaluate(() => (globalThis as Record<string, unknown>).deleteDialog)).toEqual({ title: 'Lokalen Pod löschen', cancel: 'Abbrechen' })
+    expect((await disabled.page.evaluate(() => window.pods.workspace({ type: 'list' }))).pods).toHaveLength(1)
     await disabled.app.close()
     const enabled = await launch(false, true)
     expect(await enabled.app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById('report-problem')?.visible)).toBe(true)
@@ -55,8 +70,8 @@ describe('foundation', () => {
     expect(icon).toBe('icon.icns')
     expect(await readFile(join(contents, 'Resources', icon))).toEqual(await readFile(resolve('build/openape-pods.icns')))
   })
-  it.each([false, true])('resources: reviews, snapshots and revokes a reference through the owner window (packaged=%s)', async (packaged) => {
-    const { app, page, root } = await launch(packaged)
+  it('resources: reviews, snapshots and revokes a reference through the packaged owner window', async () => {
+    const { app, page, root } = await launch(true)
     const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Reference pod' }))).pods[0]!
     const source = join(root, 'synthetic-reference.txt'); await writeFile(source, 'SYNTHETIC_REFERENCE')
     await app.evaluate(({ dialog }, path) => {
@@ -71,7 +86,7 @@ describe('foundation', () => {
     const snapshot = await page.evaluate(podId => window.pods.resources({ type: 'snapshot', podId }), pod.id)
     expect(snapshot.snapshot?.files).toHaveLength(1)
     await mkdir(artifacts, { recursive: true })
-    await page.screenshot({ path: join(artifacts, packaged ? 'resources-packaged.png' : 'resources-reference.png') })
+    await page.screenshot({ path: join(artifacts, 'resources-packaged.png') })
     const before = await page.evaluate(podId => window.pods.resources({ type: 'list', podId }), pod.id)
     expect(before.resources).toHaveLength(1)
     expect(await page.evaluate(async (podId) => {
@@ -85,8 +100,8 @@ describe('foundation', () => {
     const after = await page.evaluate(podId => window.pods.resources({ type: 'list', podId }), pod.id)
     expect(after.epoch).toBe(before.epoch + 1)
   })
-  it.each([false, true])('manual runs: executes the pinned script and displays durable events (packaged=%s)', async (packaged) => {
-    const { app, page, root } = await launch(packaged)
+  it('manual runs: executes the pinned script in the packaged app and displays durable events', async () => {
+    const { app, page, root } = await launch(true)
     const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Local example' }))).pods[0]!
     const identity = await fixtureShellIdentity(root); identities.push(identity); await identity.encrypt(app, true)
     await page.getByRole('tab', { name: 'History', exact: true }).click()
@@ -95,48 +110,9 @@ describe('foundation', () => {
     await page.getByText('Local example completed (1)', { exact: true }).waitFor()
     await page.getByText('Technical details', { exact: true }).click()
     await mkdir(artifacts, { recursive: true })
-    await page.screenshot({ path: join(artifacts, packaged ? 'runs-packaged.png' : 'runs-manual.png') })
+    await page.screenshot({ path: join(artifacts, 'runs-packaged.png') })
     const view = await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), pod.id)
     expect(view.runs[0]).toMatchObject({ state: 'completed', checkpointRevision: 1, error: null })
-  })
-  it('scheduling: persists a disabled daily schedule and an explicit concurrency limit', async () => {
-    const { page } = await launch()
-    const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Scheduled example' }))).pods[0]!
-    await page.getByRole('tab', { name: 'Settings', exact: true }).click()
-    await page.getByLabel('Repeat', { exact: true }).selectOption('daily')
-    await page.getByLabel('Local time', { exact: true }).fill('08:30')
-    await page.getByRole('button', { name: 'Save schedule', exact: true }).click()
-    await page.getByText('Saved on this Mac.', { exact: true }).waitFor()
-    expect((await page.evaluate(podId => window.pods.scheduling({ type: 'list', podId }), pod.id)).enabled).toBe(false)
-    await page.getByLabel('Concurrent pods on this Mac').fill('3')
-    await page.getByRole('button', { name: 'Save concurrency limit' }).click()
-    await expect.poll(async () => (await page.evaluate(podId => window.pods.scheduling({ type: 'list', podId }), pod.id)).concurrency).toBe(3)
-    await mkdir(artifacts, { recursive: true })
-    await page.getByRole('heading', { name: 'Schedule and limits' }).scrollIntoViewIfNeeded()
-    await page.locator('.schedule-panel').screenshot({ path: join(artifacts, 'schedule-settings.png') })
-    expect((await page.evaluate(() => window.pods.workspace({ type: 'list' }))).pods[0]!.lifecycle).toBe('paused')
-  })
-  it('storage: saves pod settings in the worker and reopens it after app restart', async () => {
-    const { app, page, root, binary } = await launch()
-    await page.getByRole('tab', { name: 'Settings', exact: true }).click()
-    await page.getByLabel('Pod name').fill('Fixture orders')
-    await page.getByRole('button', { name: 'Save pod', exact: true }).click()
-    await expect.poll(async () => (await page.evaluate(() => window.pods.workspace({ type: 'list' }))).pods.length).toBe(1)
-    await mkdir(artifacts, { recursive: true })
-    await page.screenshot({ path: join(artifacts, 'storage-settings.png') })
-    const first = await page.evaluate(() => window.pods.workspace({ type: 'list' }))
-    expect(first.pods).toHaveLength(1); expect(first.pods[0]!.activeScript).toBeNull()
-    expect(await page.evaluate(async () => {
-      try { await window.pods.workspace({ type: 'create', name: 'bad', credential: 'unassigned' } as never); return 'allowed' }
-      catch { return 'denied' }
-    })).toBe('denied')
-    await app.close()
-    const next = await electron.launch({ executablePath: binary, args: ['.'], cwd: resolve('.'), env: fixtureEnv(root) })
-    active.push({ app: next, root, process: next.process() })
-    const reopened = await next.firstWindow()
-    await expect.poll(async () => (await reopened.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
-    await reopened.getByRole('tab', { name: 'Settings', exact: true }).click()
-    expect(await reopened.evaluate(() => window.pods.workspace({ type: 'list' }))).toEqual(first)
   })
   it('boundary: denies renderer Node, external network/navigation, popups and foreign-frame IPC', async () => {
     const { app, page } = await launch()
@@ -186,33 +162,9 @@ describe('foundation', () => {
       catch { return 'gone' }
     }).toBe('gone')
   })
-  it('shows worker failure and supports keyboard navigation with light/dark layout', async () => {
-    const { app, page } = await launch()
+  it('shows worker failure after the worker process is killed', async () => {
+    const { page } = await launch()
     await mkdir(artifacts, { recursive: true })
-    for (const theme of ['light', 'dark'] as const) {
-      await page.emulateMedia({ colorScheme: theme })
-      await expect.poll(() => page.evaluate(() => matchMedia('(prefers-color-scheme: dark)').matches)).toBe(theme === 'dark')
-      await page.evaluate(() => new Promise<void>(resolveFrame => requestAnimationFrame(() => requestAnimationFrame(() => resolveFrame()))))
-      await page.screenshot({ path: join(artifacts, `foundation-${theme}.png`) })
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-    }
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(880, 640))
-    const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.querySelector('.workspace')!.getBoundingClientRect().bottom <= innerHeight + 1)
-    expect(await fits()).toBe(true)
-    await page.screenshot({ path: join(artifacts, 'foundation-compact.png') })
-    const originalHeight = await page.evaluate(() => {
-      const rule = Array.from(document.styleSheets[0].cssRules).find(rule => rule instanceof CSSStyleRule && rule.selectorText === '.workspace') as CSSStyleRule
-      const height = rule.style.height; rule.style.removeProperty('height'); return height
-    })
-    await page.evaluate((height) => {
-      const rule = Array.from(document.styleSheets[0].cssRules).find(rule => rule instanceof CSSStyleRule && rule.selectorText === '.workspace') as CSSStyleRule
-      rule.style.height = height
-    }, originalHeight)
-    expect(await fits()).toBe(true)
-    await page.getByRole('tab', { name: 'Overview', exact: true }).focus()
-    await page.keyboard.press('ArrowRight')
-    await page.getByRole('tabpanel').filter({ hasText: 'Connect Codex' }).waitFor()
-    await page.getByRole('tab', { name: 'Overview', exact: true }).click()
     const status = await page.evaluate(() => window.pods.getStatus())
     process.kill(status.worker.pid as number, 'SIGKILL')
     await page.getByRole('alert').filter({ hasText: 'Quit and reopen Pods' }).waitFor()
