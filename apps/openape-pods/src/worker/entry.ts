@@ -24,6 +24,8 @@ import type { SetupInternal } from './onboarding/control'
 import { parseMasterCommand } from '../contracts/master'
 import { MasterControl } from './master/control'
 import { MasterService } from './master/service'
+import { CodexControl } from './codex/control'
+import { parseCodexRequest } from '../contracts/codex'
 import type { AgentRuntime } from './agent/executor'
 import { authorizeRunService, authorizeCredentialService, assertMailHistory } from './mail/authorization'
 import { MailBridge } from './mail/bridge'
@@ -95,6 +97,7 @@ const masterControl = new MasterControl(store, registry, dispatcher, scheduler, 
 const scripts = new ScriptWorkspace(store, registry, masterControl, runtime)
 const scriptController = new AbortController()
 const master = new MasterService(store, runtime, masterControl, fixtureProvider)
+const codex = new CodexControl(store, masterControl)
 
 const remote = new RemoteControl(store, master, dispatcher, registry, scheduler, Date.now, { create: async (podId, applicationId) => String(await mailBridge.remoteProgramState({ operation: 'create', podId, applicationId })), discard: async (podId, stateId) => { await mailBridge.remoteProgramState({ operation: 'discard', podId, stateId }) } })
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
@@ -177,6 +180,9 @@ port.on('message', async (event) => {
     }
     if (request.command && typeof request.command === 'object' && 'chats' in request.command) {
       port.postMessage({ id: request.id, state: new ChatRegistry(store).execute(parseChatsCommand(request.command.chats)) }); return
+    }
+    if (request.command && typeof request.command === 'object' && 'codex' in request.command) {
+      port.postMessage({ id: request.id, state: await codex.execute(parseCodexRequest(request.command.codex), AbortSignal.timeout(170000)) }); return
     }
     if (request.command && typeof request.command === 'object' && 'master' in request.command) {
       port.postMessage({ id: request.id, state: await master.execute(parseMasterCommand(request.command.master)) }); return
