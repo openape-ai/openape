@@ -1,12 +1,12 @@
 # Active work
 
-## Pods: Codex controls the installed app (September 23, 2026)
+## Pods: Codex controls the installed app (September 23, 2026) — done
 
-[Issue 1375](https://repos.openape.ai/patrick/monorepo/issues/1375), [plan](../../.claude/plans/issue-1375-codex-control.md) (D1–D6 and option a approved by Patrick). Merged: PR 108 (adapter), PR 109 (MCP shim and launcher); PR 110 holds the registration UI, **Prepared by Codex**, the handbook chapter and the packaged acceptance with a real `codex app-server`. The owner's real `~/.codex` and profile were never touched; all tests use isolated `CODEX_HOME` and fixture profiles. Installing on Patrick's Mac and connecting his Codex are his own steps in App settings.
+[Issue 1375](https://repos.openape.ai/patrick/monorepo/issues/1375), [plan](../../.claude/plans/issue-1375-codex-control.md) (D1–D6 and option a approved by Patrick). Issue closed. PR 108 (adapter), PR 109 (MCP shim and launcher) and PR 110 (registration UI, **Prepared by Codex**, handbook chapter and packaged acceptance with a real `codex app-server`) are merged; PR 110 merged as `8aad8901`. The owner's real `~/.codex` and profile were never touched; all tests use isolated `CODEX_HOME` and fixture profiles. Installing on Patrick's Mac and connecting his Codex are his own steps in App settings.
 
 ## Pods test pyramid (September 23, 2026) — done
 
-[Issue 1374](https://repos.openape.ai/patrick/monorepo/issues/1374), [plan](../../.claude/plans/issue-1374-test-pyramid-pods.md) with outcomes. PR 97–104 merged (main `94ca3550`), no production code changes. Pods E2E: 35 files / 135 tests / 72.6 s → 25 files / 109 tests / 27.9 s (CI, 6 workers); pods layout step 54.2 s. iOS client outside the check contract (PR 100, issue 1364). Which level proves what: `apps/openape-pods/docs/testing.md`. Remaining open decision for Patrick: closing the issue.
+[Issue 1374](https://repos.openape.ai/patrick/monorepo/issues/1374), [plan](../../.claude/plans/issue-1374-test-pyramid-pods.md) with outcomes. PR 97–104 merged (main `94ca3550`), no production code changes. Pods E2E: 35 files / 135 tests / 72.6 s → 25 files / 109 tests / 27.9 s (CI, 6 workers); pods layout step 54.2 s. iOS client outside the check contract (PR 100, issue 1364). Which level proves what: `apps/openape-pods/docs/testing.md`. Issue closed. Follow-up PR 106 merged as `3cc7104e` (packaged E2E variants only, a leaner browser matrix and `pnpm --filter @openape/pods test:fast`, about 14 seconds without Electron). PR 107 merged as `b2b7002e` (pre-push runs only `check:affected --suite unit`; E2E and layout run externally once per head).
 
 ## Pods: two owner accounts (September 22, 2026)
 
