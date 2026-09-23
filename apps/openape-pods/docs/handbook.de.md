@@ -18,15 +18,15 @@ Verwende zuerst einen kleinen Ordner mit unkritischen Beispieldateien und nur Le
 
 ## Persönliche Konten verbinden
 
-Öffne App-Einstellungen → Deine Konten. Mit deinem persönlichen DDISA-Konto entscheidest du über Berechtigungsanfragen. Dein Codex-/GPT-Konto stellt den KI-Zugang für Chat und Modellaufrufe bereit. Das sind getrennte Verbindungen.
+Öffne App-Einstellungen → Deine Konten. Die Seite zeigt genau zwei Konten: dein DDISA-Konto, mit dem du über Berechtigungsanfragen entscheidest, und dein Codex-/GPT-Konto, das den KI-Zugang für Chat und Modellaufrufe bereitstellt.
 
-Das Standard-DDISA-Konto wird verwendet, wenn ein neuer Pod erstmals eine Identität benötigt. Für neue Pods verwenden ändert diesen Standard, verschiebt aber keine bestehenden Pod-Identitäten. Ist der Eigentümer eines bestehenden Pods abgemeldet, melde genau dieses zugewiesene Konto wieder an.
+Pods findet deinen Identitätsanbieter über den DDISA-Eintrag der Domain deiner E-Mail-Adresse. Alle Pods, Berechtigungen und mobilen Geräte verwenden dieses eine DDISA-Konto; es gibt nichts auszuwählen. Pod-Agenten sind nicht deine Konten und erscheinen hier nie. Ein Wechsel zu einem anderen DDISA-Konto gibt deinen Pods neue Agenten, deren Berechtigungen neu erteilt werden müssen.
 
 Weitere Dienste richtest du pro Pod ein: Programmanmeldungen unter Berechtigungen, Tokens und Passwörter unter Variablen und Geheimnisse. Du benötigst weder ein persönliches Konto noch eine zusätzliche Anmeldung bei pods.openape.ai.
 
-1. Wähle unter Verbindung das DDISA-Konto, gib das Erwartetes Konto ein und aktiviere bei Bedarf Nach der Anmeldung für neue Pods verwenden. Ändere den Identitätsanbieter unter Erweitert nur, wenn dein Konto einen anderen Anbieter benötigt.
-2. Wähle Anmeldung starten und schließe den Vorgang im Browser ab. Prüfe danach in Pods, ob das richtige Konto Angemeldet und gegebenenfalls Standard für neue Pods anzeigt.
-3. Wähle Codex-/GPT-Konto und Anmeldung starten. Schließe die angebotene Browseranmeldung ab und prüfe vor der Chat-Nutzung den Status Angemeldet.
+1. Gib unter Dein DDISA-Konto deine E-Mail-Adresse ein und wähle Anmelden. Schließe den Vorgang im Browser ab und kehre zu Pods zurück; das Konto zeigt Angemeldet.
+2. Wähle unter Codex-/GPT-Konto Anmelden. Schließe die angebotene Browseranmeldung ab und prüfe vor der Chat-Nutzung den Status Angemeldet.
+3. Zeigt ein Konto später Abgelaufen oder einen Fehler, wähle Erneut anmelden am selben Konto. Gib eine andere E-Mail-Adresse nur ein, wenn du das Konto wechseln willst, und prüfe Wechsel bestätigen.
 4. Wähle Weiter zum Arbeitsbereich. Die Oberflächensprache änderst du unter App-Einstellungen → Sprache.
 
 ![Persönliche Konten verbinden](images/handbook-setup-de.png)
@@ -49,13 +49,13 @@ Der Assistent kann Entwürfe speichern, Skripte validieren und Zugriffsanfragen 
 
 ## Pod-Identität und Anbieter-Erlaubnis prüfen
 
-Öffne im Pod Einstellungen → Pod-Identität. Freigaben durch nennt das persönliche DDISA-Konto, das entscheidet. Agenten-Identität bezeichnet den Pod, der für dich handelt. Sie wird beim ersten Prüfen von Berechtigungen erstellt; Noch nicht angelegt ist davor erwartbar.
+Öffne im Pod Einstellungen → Pod-Identität. Freigaben durch zeigt dein DDISA-Konto. Pod-Agent bezeichnet den Agenten, der für diesen Pod handelt. Er wird beim ersten Prüfen von Berechtigungen erstellt; Noch nicht angelegt ist davor erwartbar.
 
-Unter Erlaubnis für den Agenten-Anbieter öffnet Anfragen von diesem Anbieter erlauben die Prüfung. Kontrolliere für den OpenApe-Pods-Anbieter https://pods.openape.ai, die Agenten-Domain pods.openape.ai und das entscheidende Konto. Wähle dann Erlaubnis bestätigen. Eine zusätzliche Anmeldung bei pods.openape.ai ist nicht nötig. Der Anbieter erstellt Identitäten und stellt Anfragen; du entscheidest über die Freigabe der Aktionen.
+Bevor der erste Pod-Agent entsteht, fragt Pods unter Erlaubnis für den Agenten-Anbieter einmalig um Erlaubnis. Wähle Anfragen von diesem Anbieter erlauben, kontrolliere https://pods.openape.ai, die Agenten-Domain pods.openape.ai und das entscheidende Konto und wähle dann Erlaubnis bestätigen. Eine zusätzliche Anmeldung bei pods.openape.ai ist nicht nötig. Der Anbieter erstellt Agenten und stellt Anfragen; du entscheidest über die Freigabe der Aktionen.
 
-Diese Erlaubnis gehört zum ausgewählten DDISA-Konto und gilt für alle Pods dieses Kontos, die sie nutzen. Obwohl du sie innerhalb eines Pods verwaltest, ist sie nicht auf diesen einen Pod beschränkt. Sie erlaubt dem Anbieter weder eigene Freigaben noch das Aktivieren automatischer Ausführungen.
+Diese Erlaubnis gehört zu deinem DDISA-Konto und gilt für alle deine Pods. Obwohl du sie innerhalb eines Pods verwaltest, ist sie nicht auf diesen Pod beschränkt. Sie erlaubt dem Anbieter weder eigene Freigaben noch das Aktivieren automatischer Ausführungen.
 
-Eine neue Anbieter-Auswahl gilt nur für neu erstellte Identitäten. Bestehende Pods behalten Eigentümer, Anbieter, Schlüssel und Grants; weder ein anderer Kontostandard noch die Erlaubnis für einen anderen Anbieter zieht sie um. Identitätsdetails zeigt die zugewiesenen Identitäts- und Entscheidungsanbieter. Ohne separate Anbieter-Erlaubnis entstehen neue Identitäten bei deinem DDISA-Identitätsanbieter.
+Bestehende Pods behalten Agent, Schlüssel und Grants. Identitätsdetails zeigt Agenten- und Entscheidungsanbieter zur Diagnose. Der Agent eines Pods ändert sich nur, wenn du zu einem anderen DDISA-Konto wechselst.
 
 ![Pod-Identität und Anbieter-Erlaubnis prüfen](images/handbook-identity-de.png)
 
@@ -123,7 +123,7 @@ Unterbrochene Läufe sowie blockierte oder bereits beanspruchte Eingaben benöti
 
 Der Chat meldet „fertig“, aber ein Skript fehlt: Öffne Skript und prüfe den Speicherstatus im Chat. Beantworte offene Fragen, schließe Zugriffsprüfungen ab und wähle Einrichtung fortsetzen. Beende oder stoppe zuerst eine andere laufende Assistentenantwort.
 
-Konto nicht verfügbar: Öffne App-Einstellungen → Deine Konten. Verwende für einen bereits zugewiesenen Pod Erneut anmelden am selben DDISA-Konto. Prüfe für KI-Zugriff die Codex- / GPT-Verbindung und das Chat-Modell. Ein anderer Standard repariert keine bestehende Pod-Identität.
+Konto nicht verfügbar: Öffne App-Einstellungen → Deine Konten und wähle Erneut anmelden an dem Konto, das Abgelaufen oder einen Fehler zeigt. Prüfe für KI-Zugriff die Codex-/GPT-Verbindung und das Chat-Modell. Ein Wechsel zu einem anderen DDISA-Konto repariert keinen Agenten, sondern ersetzt alle Pod-Agenten.
 
 Warten auf Freigabe: Wähle Freigabe öffnen und entscheide die Anfrage bei deinem DDISA-Anbieter. Die Wartezeit beträgt höchstens 15 Minuten. Prüfe danach den gestoppten Lauf und bereite die Wiederherstellung vor; das Bestätigen einer alten Anfrage nach einem App-Neustart startet den Lauf nicht erneut.
 
