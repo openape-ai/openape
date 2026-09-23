@@ -24,7 +24,8 @@
     "package:signed": "node scripts/package.mjs --distribution --signed",
     "package:signed-candidate": "node scripts/package.mjs --distribution --signed-candidate",
     "test:distribution": "node scripts/verify-distribution.mjs",
-    "handbook": "node scripts/handbook.mjs"
+    "handbook": "node scripts/handbook.mjs",
+    "handbook:capture": "PODS_HANDBOOK_CAPTURE=1 vitest run --config vitest.electron.config.ts"
   },
   "dependencies": {
     "@xterm/addon-fit": "0.11.0",
