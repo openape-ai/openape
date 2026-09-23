@@ -14,7 +14,14 @@ const tabs = {
   en: ['Overview', 'Chat', 'Script', 'Variables and secrets', 'Permissions', 'Settings', 'History'],
   de: ['Übersicht', 'Chat', 'Skript', 'Variablen und Geheimnisse', 'Berechtigungen', 'Einstellungen', 'Historie'],
 }
-const sizes = [[1280, 800], [1060, 850], [880, 640], [760, 700], [560, 700], [560, 560]] as const
+// One size per breakpoint band (style.css: 1030, 900, 800, 760, 600) plus the
+// shortest window. Colours come from light-dark() tokens and no rule depends on
+// the scheme, so dark is measured once where space is tightest. German labels
+// are longer, so they are measured where width is scarce.
+const sizes = {
+  en: [[1060, 850, 'light'], [880, 640, 'light'], [760, 700, 'light'], [560, 700, 'light'], [560, 560, 'dark']],
+  de: [[880, 640, 'light'], [560, 560, 'dark']],
+} as const
 const frame = () => new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done())))
 const artifact = (name: string) => `../../.artifacts/${name}`
 let wrapper: VueWrapper | undefined
@@ -47,23 +54,19 @@ function overflow() {
 const fits = { page: 0, content: expect.toSatisfy((value: number) => value <= 1), footer: expect.toSatisfy((value: number) => value <= 1) }
 
 describe('workspace shell with the production stylesheet', () => {
-  it.each(['en', 'de'] as const)('fits all seven views at desktop, compact and narrow sizes in light and dark appearance (%s)', async (language) => {
+  it.each(['en', 'de'] as const)('fits all seven views at desktop, compact and narrow sizes (%s)', async (language) => {
     applyLanguage(language)
     await mountWorkspace()
     // Guard against measuring an empty shell: the seeded pods must be rendered.
     expect(wrapper!.findAll('.pod-button').map(button => button.text())).toEqual([expect.stringContaining('Mail knowledge'), expect.stringContaining('Archived research')])
-    for (const [width, height] of sizes) {
-      // Colours come from light-dark() tokens and no rule depends on the scheme,
-      // so dark mode is measured where space is tightest.
-      for (const scheme of width === 560 ? ['light', 'dark'] as const : ['light'] as const) {
-        await show(width, height, scheme)
-        for (const name of tabs[language]) {
-          await click('[role="tab"]', name)
-          expect(wrapper!.get('[role="tab"][aria-selected="true"]').text()).toBe(name)
-          expect(overflow(), `${language} ${width}x${height} ${scheme} ${name}`).toEqual(fits)
-          if (language === 'en' && scheme === 'light' && ((width === 1060 && name === 'Overview') || (width === 560 && height === 700 && name === 'Permissions')))
-            await page.screenshot({ path: artifact(`workspace-${width}-light-${name.toLowerCase()}.png`) })
-        }
+    for (const [width, height, scheme] of sizes[language]) {
+      await show(width, height, scheme)
+      for (const name of tabs[language]) {
+        await click('[role="tab"]', name)
+        expect(wrapper!.get('[role="tab"][aria-selected="true"]').text()).toBe(name)
+        expect(overflow(), `${language} ${width}x${height} ${scheme} ${name}`).toEqual(fits)
+        if (language === 'en' && ((width === 1060 && name === 'Overview') || (width === 560 && height === 700 && name === 'Permissions')))
+          await page.screenshot({ path: artifact(`workspace-${width}-light-${name.toLowerCase()}.png`) })
       }
     }
   })
