@@ -8,7 +8,7 @@ Every assertion lives on the lowest level that can answer its question. A packag
 | Component | `test/**/*-ui.test.ts`, `test/workspace.test.ts` (`@vue/test-utils` + happy-dom) | Vue states, branches, visible text, emitted bridge commands | unit gate |
 | Main process | `test/main/**` (Node, `vi.mock('electron')` via `test/main/app-harness.ts`) | The unchanged `src/main/app.ts`: IPC sender checks, native dialog gating, menus, power events — which worker command an owner's answer produces | unit gate |
 | Layout | `test/layout/**` (Vitest browser mode, installed Chrome) | Widths, overflow, breakpoints, dark mode — with `src/renderer/style.css` and every SFC `<style>` loaded | `test:browser`, part of `test:layout` |
-| Native / packaged | `e2e/**` (Playwright Electron, native helper) | Only what needs the packaged app or a real OS boundary | `test:e2e`, part of `test:layout` (5 workers) |
+| Native / packaged | `e2e/**` (Playwright Electron, native helper) | Only what needs the packaged app or a real OS boundary | `test:e2e`, part of `test:layout` (6 workers) |
 | Handbook capture | `e2e/handbook-capture.test.ts` | Screenshots for the handbook and the evidence report — a generator, not a check | `pnpm handbook:capture`, outside the gate |
 
 ## Rules
