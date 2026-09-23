@@ -86,6 +86,7 @@ button:not(:disabled):hover {
   text-align:left;
   font-weight:550;
 }
+.codex-badge { margin-left:auto; min-width:20px; padding:0 6px; border-radius:10px; background:var(--accent); color:var(--bg); font-size:12px; line-height:20px; text-align:center; }
 .nav-arrow {
   margin-left:auto;
   color:var(--muted);

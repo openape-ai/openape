@@ -6,6 +6,9 @@ import type { ChatsView } from '../contracts/chats'
 import WorkflowPanel from './WorkflowPanel.vue'
 import type { WorkflowView } from '../contracts/workflows'
 import LanguageSwitcher from './LanguageSwitcher.vue'
+import CodexPanel from './CodexPanel.vue'
+import CodexReviews from './CodexReviews.vue'
+import { loadCodexReviews, pendingReviews } from './codex-reviews'
 import PodNavigation from './PodNavigation.vue'
 import type { Organization } from '../contracts/groups'
 import DataManagement from './DataManagement.vue'
@@ -30,13 +33,13 @@ import type { ScheduleView } from '../contracts/scheduling'
 import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
-  components: { ChatsPanel, WorkflowPanel, AccountStatus, RunApproval, PodDescription, LanguageSwitcher, PodNavigation, DataManagement, Onboarding, MasterChat, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
+  components: { CodexPanel, CodexReviews, ChatsPanel, WorkflowPanel, AccountStatus, RunApproval, PodDescription, LanguageSwitcher, PodNavigation, DataManagement, Onboarding, MasterChat, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
   data() {
-    return { requestedRun: '', chatSeed: { podId: '', workflowId: '', key: '', edit: false }, chatId: '', chats: { conversations: [], activeConversationId: null } as ChatsView, workflowId: '', workflows: { workflows: [], runs: [] } as WorkflowView, requestedSecret: '', approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: 'Overview', tabs: ['Overview', 'Chat', 'Script', 'Values', 'Permissions', 'Settings', 'History'], descriptionExpanded: false, sidebarWidth: 224, sidebarCollapsed: false, resizeStart: 0, resizeWidth: 224, resizing: false, pods: [] as StoredPod[], podId: '', creating: false, creationId: '', details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
+    return { codexConnected: false, codexPending: 0, requestedRun: '', chatSeed: { podId: '', workflowId: '', key: '', edit: false }, chatId: '', chats: { conversations: [], activeConversationId: null } as ChatsView, workflowId: '', workflows: { workflows: [], runs: [] } as WorkflowView, requestedSecret: '', approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: 'Overview', tabs: ['Overview', 'Chat', 'Script', 'Values', 'Permissions', 'Settings', 'History'], descriptionExpanded: false, sidebarWidth: 224, sidebarCollapsed: false, resizeStart: 0, resizeWidth: 224, resizing: false, pods: [] as StoredPod[], podId: '', creating: false, creationId: '', details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
   computed: {
     activeTab(): string { return this.selected === 'Knowledge' ? 'Overview' : this.selected },
-    globalPage(): boolean { return ['App settings', 'Setup', 'Data', 'Workspace chat', 'Chats', 'Workflows'].includes(this.selected) },
+    globalPage(): boolean { return ['App settings', 'Setup', 'Data', 'Workspace chat', 'Chats', 'Workflows', 'Prepared by Codex'].includes(this.selected) },
     pod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.podId) },
     workerLabel(): string { if (this.connectionError) return t('Unavailable'); return label({ starting: 'Starting', ready: 'Ready', error: 'Needs attention', stopped: 'Stopped' }[this.status?.worker.state ?? 'starting']) },
     attention(): boolean { return !!this.connectionError || this.status?.worker.state === 'error' },
@@ -49,7 +52,7 @@ export default defineComponent({
     catch (error) { this.dataError = String(error) }
     try { const width = Number(localStorage.getItem('pods-sidebar-width')); if (width >= 176 && width <= 360) this.sidebarWidth = width }
     catch (error) { this.dataError = String(error) }
-    try { this.unsubscribe = window.pods.onStatus((status) => { this.status = status }); this.status = await window.pods.getStatus(); await this.refresh() }
+    try { this.unsubscribe = window.pods.onStatus((status) => { this.status = status }); this.status = await window.pods.getStatus(); this.codexConnected = (await window.pods.codex({ type: 'status' })).state === 'connected'; await this.refresh() }
     catch (error) { this.connectionError = error instanceof Error ? error.message : 'Could not reach the desktop worker' }
     this.poll()
   },
@@ -79,6 +82,7 @@ export default defineComponent({
       try {
         const [workspace, workflows, chats] = await Promise.all([window.pods.workspace({ type: 'list' }), window.pods.workflows({ type: 'list' }), window.pods.chats({ type: 'list' })])
         this.workspaceChanged(workspace); this.workflows = workflows; this.chats = chats
+        if (this.codexConnected) this.codexPending = pendingReviews(await loadCodexReviews())
         if (!this.pods.some(pod => pod.id === this.podId)) this.podId = this.creating ? '' : this.pods[0]?.id ?? ''
         const id = this.podId
         if (!id) { this.details = null; this.runs = []; this.schedule = null; this.resourceCount = 0; return }
@@ -129,6 +133,11 @@ export default defineComponent({
           {{ chat.title }}
         </button>
       </nav>
+      <nav v-if="codexConnected" class="workflow-navigation" :aria-label="t('Prepared by Codex')">
+        <button class="nav-button" :class="{ active: selected === 'Prepared by Codex' }" @click="selected = 'Prepared by Codex'">
+          {{ t('Prepared by Codex') }}<span v-if="codexPending" class="codex-badge" :aria-label="t('{p0} waiting for you', { p0: codexPending })">{{ codexPending }}</span>
+        </button>
+      </nav>
       <PodNavigation hide-group-picker :pods="pods" :pod-id="podId" :organization="organization" :available="status?.worker.state === 'ready' && !attention" :highlight="!globalPage" @select="selectPod" @updated="workspaceChanged" />
       <button class="new-pod" @click="master(true)">
         {{ t('＋ New pod') }}
@@ -169,7 +178,7 @@ export default defineComponent({
         </nav>
         <RunApproval v-if="!globalPage && selected !== 'History' && podId" :pod-id="podId" :approvals="approvals" />
         <section v-if="selected === 'App settings'" class="card">
-          <h2>{{ t('App settings') }}</h2><LanguageSwitcher /><div class="overview-actions">
+          <h2>{{ t('App settings') }}</h2><LanguageSwitcher /><CodexPanel @changed="codexConnected = $event.state === 'connected'" /><div class="overview-actions">
             <button class="secondary" @click="selected = 'Setup'">
               {{ t('Your accounts') }}
             </button><button class="secondary" @click="selected = 'Data'">
@@ -179,6 +188,7 @@ export default defineComponent({
             </button>
           </div>
         </section>
+        <CodexReviews v-else-if="selected === 'Prepared by Codex'" @changed="codexPending = $event" @run="openRun" @workflow="id => { selected = 'Workflows'; workflowId = id }" @resources="async id => { await selectPod(id); selected = 'Permissions' }" @settings="async (id, alias) => { await selectPod(id); openValues(alias) }" />
         <ChatsPanel v-else-if="selected === 'Chats'" :key="chatSeed.key" :initial-edit="chatSeed.edit" :initial-pod-id="chatSeed.podId" :initial-workflow-id="chatSeed.workflowId" :view="chats" :pods="pods" :workflows="workflows" :selected-id="chatId" @run="openRun" @select="openChat" @changed="chats = $event" @pod="selectPod" @workflow="id => { selected = 'Workflows'; workflowId = id }" @resources="async id => { await selectPod(id); selected = 'Permissions' }" @settings="async (id, alias) => { await selectPod(id); openValues(alias) }" />
         <template v-else-if="selected === 'Workflows'">
           <nav v-if="workflowId" class="overview-actions" :aria-label="t('Related chats')">
