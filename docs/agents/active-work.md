@@ -1,5 +1,9 @@
 # Active work
 
+## Pods test pyramid (September 23, 2026)
+
+[Issue 1374](https://repos.openape.ai/patrick/monorepo/issues/1374). Worktree `openape-monorepo.worktrees/issue-1374-test-pyramid`, branch `feature/issue-1374-test-pyramid-pods`, base `dc466549`. [Plan](../../.claude/plans/issue-1374-test-pyramid-pods.md), approved by Patrick with D1–D4; no production code changes, so it is independent of concurrent Pods work. Baseline `test:e2e`: 35 files / 135 tests, 72.6 s wall, 205.9 s sum. M1 (browser-mode layout suite, workspace shell) removes `pod-workspace`, `groups`, `language` and trims `foundation`: 57.9 s wall, 166.5 s sum. Next: M2 chat surfaces.
+
 ## Pods: two owner accounts (September 22, 2026)
 
 [Issue 1372](https://repos.openape.ai/patrick/monorepo/issues/1372) (supersedes 1365). Worktree `wt-issue-1372`, branch `feature/issue-1372-two-owner-accounts`, base `b15b564a`. [Plan](../../.claude/plans/issue-1372-two-owner-accounts.md), approved by Patrick with D1 (Pods of another identity are re-provisioned under the owner), D2 (one-time Pods provider consent at the first Pod) and D3 (one email field, IdP from the DDISA DNS record).
