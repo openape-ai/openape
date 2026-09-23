@@ -18,15 +18,15 @@ For a first task, use a small folder of non-sensitive sample files and read-only
 
 ## Connect your personal accounts
 
-Open App settings → Your accounts. Your DDISA account is the personal identity with which you decide permission requests. Your Codex / GPT account provides AI access for chat and model calls. These are separate connections.
+Open App settings → Your accounts. The page shows exactly two accounts: your DDISA account, with which you decide permission requests, and your Codex / GPT account, which provides AI access for chat and model calls.
 
-A default DDISA account is used when a new Pod first needs an identity. Use for new pods changes that default; it does not move existing Pod identities. If an existing Pod’s owner is disconnected, sign in to that assigned account again instead of choosing another account.
+Pods finds your identity provider through the DDISA record of your email domain. Every Pod, permission and mobile device uses this one DDISA account; there is nothing to select. Pod agents are not your accounts and are never listed here. Switching to another DDISA account gives your Pods new agents, and their permissions must be granted again.
 
 Other services are configured per Pod: application sign-in belongs in Permissions, and tokens or passwords belong in Variables and secrets. You do not need a personal account or an additional sign-in at pods.openape.ai.
 
-1. Choose DDISA account under Connection, enter Expected account and select Use for new pods after sign-in when appropriate. Change the Identity provider under Advanced only if your account requires another provider.
-2. Choose Start sign-in and complete the browser flow. Return to Pods and check that the intended account says Signed in and, where intended, Default for new pods.
-3. Choose Codex / GPT account and Start sign-in. Complete the offered browser flow and check Signed in before using chat.
+1. Under Your DDISA account, enter your email and choose Sign in. Complete the browser flow and return to Pods; the account shows Signed in.
+2. Under Codex / GPT account, choose Sign in. Complete the offered browser flow and check Signed in before using chat.
+3. If an account later shows Expired or an error, choose Sign in again on the same account. Enter another email only if you want to switch accounts, and review Confirm switch.
 4. Choose Continue to workspace. To change the interface language, use App settings → Language.
 
 ![Connect your personal accounts](images/handbook-setup.png)
@@ -49,13 +49,13 @@ The assistant can save drafts, validate scripts and prepare access requests. You
 
 ## Review the Pod identity and provider permission
 
-Open the Pod’s Settings → Pod identity. Permission decisions identifies the personal DDISA account that decides. Agent identity identifies the Pod acting on your behalf. An identity is created when you first review permissions; Not created yet before that step is expected.
+Open the Pod’s Settings → Pod identity. Permission decisions shows your DDISA account. Pod agent identifies the agent acting for this Pod. It is created when you first review permissions; Not created yet before that step is expected.
 
-Under Agent provider permission, Allow requests from this provider opens the review. For the OpenApe Pods provider, check https://pods.openape.ai, agent domain pods.openape.ai and the deciding account, then choose Confirm permission. No additional sign-in at pods.openape.ai is required. The provider creates identities and submits requests; you decide which actions to approve.
+Before the first Pod agent is created, Pods asks once for permission under Agent provider permission. Choose Allow requests from this provider, check https://pods.openape.ai, agent domain pods.openape.ai and the deciding account, then choose Confirm permission. No additional sign-in at pods.openape.ai is required. The provider creates agents and submits requests; you decide which actions to approve.
 
-This permission belongs to the selected DDISA account and applies across that account’s Pods using it. Although you manage it inside one Pod, it is not a permission limited to that Pod. It does not give the provider the right to approve actions or activate automation.
+This permission belongs to your DDISA account and applies to all your Pods. Although you manage it inside a Pod, it is not limited to that Pod. It does not give the provider the right to approve actions or activate automation.
 
-New provider selection applies only to newly created identities. Existing Pods retain their owner, provider, key and grants; changing the default account or allowing another provider does not move them. Identity details shows the assigned identity and decision providers. Without separate provider permission, new identities are created at your DDISA identity provider.
+Existing Pods keep their agent, key and grants. Identity details shows the agent and decision providers for diagnosis. A Pod’s agent changes only when you switch to another DDISA account.
 
 ![Review the Pod identity and provider permission](images/handbook-identity.png)
 
@@ -123,7 +123,7 @@ Interrupted runs and blocked or claimed inputs need recovery before further work
 
 Chat says “ready”, but no script exists: open Script and check the saved-state indicator in Chat. Answer pending questions, complete access reviews and choose Continue setup. If another assistant turn is active, finish or stop it first.
 
-Account unavailable: open App settings → Your accounts. For a Pod with an assigned owner, use Sign in again on that same DDISA account. For AI access, check the Codex / GPT connection and selected Chat model. Choosing another default does not repair an existing Pod’s identity.
+Account unavailable: open App settings → Your accounts and choose Sign in again on the account that shows Expired or an error. For AI access, check the Codex / GPT connection and selected Chat model. Switching to another DDISA account does not repair an agent; it replaces all Pod agents.
 
 Waiting for approval: use Open approval and decide the request at your DDISA provider. Waiting is limited to 15 minutes. If it expires, inspect the stopped run and prepare recovery; approving an old request after restarting the app does not restart that run.
 
