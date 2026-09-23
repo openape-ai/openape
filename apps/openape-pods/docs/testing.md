@@ -37,6 +37,7 @@ These are the questions no lower level can answer. `handbook.test.ts` also stays
 | `credentials.test.ts` | Real macOS `safeStorage`: ciphertext never contains the value, decrypts after a restart, key files erased on rotation and revocation, other Pods' keys kept |
 | `programs.test.ts` (packaged case) | Keychain-backed program state, the folder dialog path and a saved script reaching the application through worker, main broker and `ape-shell`; a read-only folder refuses writes |
 | `dependencies.test.ts` | A bare import resolves from the prepared, read-only library inside the sandbox (Node, no Electron) |
+| `codex-mcp.test.ts`, `codex-registration.test.ts`, `codex-acceptance.test.ts` | Issue 1375: the launcher starts the packaged shim without global Node; the bundled Codex CLI reads the appended entry and the owner's `config.toml` is restored byte for byte; a real `codex app-server` reaches the running app, and a prepared change lands only through **Prepared by Codex**. The refusals themselves are measured one level lower in `test/codex/control.test.ts` and `test/main/codex-*.test.ts` |
 
 ## Moved in issue 1374
 
