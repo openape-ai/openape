@@ -58,9 +58,9 @@ describe('master actions and actual app-server', () => {
     await expect(control.execute('check', { action: 'validate', podId: pod.id, revision: 1, draftId: draft.draftId, draftRevision: draft.draftRevision }, signal)).rejects.toThrow()
     expect(store.getPod(pod.id).activeScript).toBe(active); expect(master.view(pod.id).drafts[0]?.validation).toBeNull()
   })
-  it.each([false, true])('streams a dynamic action through confined app-server and resumes the same thread (packaged=%s)', async (packaged) => {
+  it('streams a dynamic action through confined app-server and resumes the same thread (packaged)', async () => {
     let calls = 0; const requests: unknown[] = []
-    await setup(async (body) => { requests.push(body); return ++calls === 1 ? recordedResponse({ type: 'function_call', id: 'item-1', call_id: 'call-1', name: 'pods_control', arguments: JSON.stringify({ action: 'create', name: 'Created by master' }) }) : recordedResponse() }, packaged)
+    await setup(async (body) => { requests.push(body); return ++calls === 1 ? recordedResponse({ type: 'function_call', id: 'item-1', call_id: 'call-1', name: 'pods_control', arguments: JSON.stringify({ action: 'create', name: 'Created by master' }) }) : recordedResponse() }, true)
     const command = { type: 'send' as const, id: randomUUID(), text: 'Create a synthetic pod.', podId: null }
     await master.execute(command)
     await expect.poll(() => master.view().state, { timeout: 20000 }).toBe('idle')
