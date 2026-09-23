@@ -38,8 +38,10 @@ The Node engine minimum describes compatibility; `.nvmrc` fixes development/CI.
 supply-chain quarantine and targeted overrides in `pnpm-workspace.yaml`.
 
 - Use the mildest sufficient verification: unit/affected checks first, focused
-  behavioral checks next, full-application E2E last. During development and in
-  the pre-push hook: `pnpm check:affected --base origin/main --head HEAD`.
+  behavioral checks next, full-application E2E last. The pre-push hook runs
+  `pnpm check:affected --base origin/main --head HEAD --suite unit`; E2E and
+  layout run in the external checks. Run a workspace's E2E or layout suite
+  locally only while working on it (Pods: `test:fast` without Electron).
 - Merge gate: the external checks for the exact pushed head run the affected
   subset of the contract once (unit, E2E and layout suites for changed
   workspaces and their consumers); they are recorded on the PR and required
