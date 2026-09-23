@@ -390,3 +390,20 @@ Mail-Workflows benötigen separat geprüfte Skripte für feste Nachrichtenpakete
 1. Wähle Workflows → Neuer Workflow, gib einen Namen ein und füge vorhandene Pods hinzu.
 2. Wähle alle erforderlichen Vorgänger, prüfe den Graphen und die nächsten Termine und speichere mit ausgeschaltetem Zeitplan. Zyklen lassen sich nicht speichern.
 3. Prüfe einen synthetischen Lauf und jeden Mail-Beleg vor einer Live-Einrichtung. Installation, Postfachänderungen, Telegram-Nachrichten und Aktivierung benötigen eine gesonderte Freigabe.
+
+## Mit deinem Codex arbeiten
+
+Wenn du Codex auf diesem Mac nutzt (ChatGPT-Desktop oder die Codex-CLI), kann es deine Pods mitbetreuen: Pods ansehen, Skriptentwürfe speichern und validieren, Pods umbenennen, gruppieren und pausieren sowie einen Zeitplan vorbereiten, der deaktiviert bleibt. Ausführung, Berechtigungen und Zugangsdaten bleiben in OpenApe Pods. Du brauchst kein global installiertes Node oder Codex; Pods bringt seine eigene Laufzeit mit.
+
+Codex wendet nie an, was ändert, wie ein Pod mit seinen Zugriffen arbeitet: eine neue Skriptversion, eine Variable, eine Workflow-Änderung oder einen Lauf. Das wartet unter „Von Codex vorbereitet“ in der Seitenleiste auf dich, mit Vorher und Nachher, bis du „Änderungen gemeinsam übernehmen“, „Einmal ausführen“ oder „Änderungen verwerfen“ wählst. Zugriffsanfragen erscheinen dort ebenfalls und nutzen die gewohnten Berechtigungsformulare. Codex sieht keine Laufzusammenfassungen, Lauffehler oder gespeicherten Checkpoints und erhält nie deine Konto-Tokens oder Pod-Schlüssel.
+
+Pods behandelt Text aus Mails, Webseiten oder Chats als Daten. Liest Codex solchen Text anderswo und versucht der Text, Codex zum Anwenden zu überreden, wartet die Änderung trotzdem auf dich. Prüfe jeden Eintrag, bevor du ihn anwendest.
+
+OpenApe Pods muss laufen, damit Codex es erreicht. Wenn du die App verschiebst oder neu installierst, öffne sie einmal; sie repariert die Verbindung. Bis dahin meldet Codex, dass OpenApe Pods verschoben oder entfernt wurde.
+
+Um die Anbindung zu entfernen, öffne die App-Einstellungen, dann „Mit Codex arbeiten“, und wähle „Codex trennen“. Hast du den Eintrag in Codex selbst geändert, lässt die App ihn unverändert; entferne ihn dann im Terminal mit codex mcp remove openape-pods.
+
+1. Öffne die App-Einstellungen und wähle unter „Mit Codex arbeiten“ die Option „Codex verbinden“.
+2. Starte Codex einmal neu, damit es OpenApe Pods lädt.
+3. Bitte Codex zum Beispiel: „Liste meine Pods und bereite für Invoices einen täglichen Zeitplan um 07:00 vor.“
+4. Öffne „Von Codex vorbereitet“ in der Seitenleiste, prüfe jeden Vorschlag und wende ihn an oder verwirf ihn.

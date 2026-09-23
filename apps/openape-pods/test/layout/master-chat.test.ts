@@ -168,7 +168,7 @@ describe('central chats with the production stylesheet', () => {
   }
 
   it('keeps the context header, reviews and composer reachable at 1060, 760 and 560 pixels', async () => {
-    await mountApp({ chats: async () => structuredClone(chats), master: async () => structuredClone(central) })
+    await mountApp({ codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }), chats: async () => structuredClone(chats), master: async () => structuredClone(central) })
     await click('.nav-button', 'Chats')
     await click('button', conversation.title)
     expect(wrapper!.text()).toContain('Apply changes together')

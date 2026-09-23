@@ -34,6 +34,10 @@ import { assertStatusRequest, assetPath, contentSecurityPolicy, rendererURL, ren
 import { FixtureWorker } from './worker'
 import { CodexControlServer } from './codex/server'
 import { refreshLauncher } from './codex/launcher'
+import { CodexRegistration } from './codex/registration'
+import { parseCodexCommand } from '../contracts/codex'
+import { homedir } from 'node:os'
+import { existsSync } from 'node:fs'
 
 const fixture = !!process.env.OPENAPE_PODS_FIXTURE_DIR
 app.setName(fixture ? 'OpenApe Pods Fixture' : 'OpenApe Pods')
@@ -62,6 +66,14 @@ remote = new RemoteController(root, worker, fixtureRemoteOrigin)
 const codexDirectory = join(profileBase, 'codex')
 const codexTarget = { executable: process.execPath, script: join(__dirname, '../runtime/codex-mcp.mjs').replace('/app.asar/', '/app.asar.unpacked/'), socket: join(codexDirectory, 'control.sock') }
 const codexServer = new CodexControlServer(codexTarget.socket, request => worker.codex(request))
+// Fixture runs must name an isolated Codex home; they never touch the owner's.
+const codexHome = fixture ? process.env.OPENAPE_PODS_FIXTURE_CODEX_HOME : process.env.CODEX_HOME || join(homedir(), '.codex')
+async function codexRegistration(): Promise<CodexRegistration> {
+  if (!codexHome) throw new Error('Fixture runs need OPENAPE_PODS_FIXTURE_CODEX_HOME')
+  const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
+  const manifest = JSON.parse(await readFile(join(vendor, 'manifest.json'), 'utf8')) as { binaryHash: string }
+  return new CodexRegistration({ binary: join(vendor, 'codex'), binaryHash: manifest.binaryHash }, codexHome, codexDirectory, codexTarget)
+}
 async function manageRemote(): Promise<void> {
   if (!window) return
   const action = await dialog.showMessageBox(window, { title: t('Mobile access'), message: t('OpenApe Pods on iPhone and iPad'), detail: translateDiagnostic(preference.language, remote.error) || t('Execution and credentials stay on this desktop. Mobile devices must be paired here before accessing Pods.'), buttons: [t('Cancel'), t('Register desktop'), t('Pair mobile device'), t('Disable mobile access'), t('Offer installed CLI'), t('Withdraw offered CLI'), t('Remove paired device')], defaultId: 0, cancelId: 0 })
@@ -240,6 +252,22 @@ async function start(): Promise<void> {
       await shell.openExternal(login.url); return state
     }
     return worker.onboarding(command)
+  })
+  ipcMain.handle(channels.codex, async (event, value: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    const command = parseCodexCommand(value)
+    // Without a launcher the app never connected; reading Codex's configuration waits for the owner.
+    if (command.type === 'status' && !existsSync(join(codexDirectory, 'openape-pods-mcp'))) return { state: 'disconnected', home: codexHome ?? '', manual: 'codex mcp remove openape-pods' }
+    const registration = await codexRegistration()
+    if (command.type === 'status') return registration.status()
+    if (command.type === 'connect') {
+      const connection = await registration.connect()
+      if (connection.state === 'connected') await codexServer.start()
+      return connection
+    }
+    const connection = await registration.disconnect()
+    if (connection.state !== 'edited') await codexServer.stop()
+    return connection
   })
   ipcMain.handle(channels.chats, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
