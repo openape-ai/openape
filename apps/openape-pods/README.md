@@ -83,9 +83,9 @@ pnpm --filter @openape/pods report
 
 `dev` builds once and opens Electron with bundled renderer assets; restart it after changing source. No HTTP development server or remote content is exposed. `package:mac` creates the unsigned arm64 development bundle at `release/mac-arm64/OpenApe Pods Fixture.app`. It runs with its own Node runtime and does not require system Node. M12 also supplies explicit signed-candidate/release pipelines and an unsigned DMG; release acceptance remains pending.
 
-`test:e2e` requires macOS and an already built app/bundle. `test:packaged` selects packaged acceptance; `test:boundaries` selects the Electron renderer/IPC boundary checks. The native cases exercise the owner-accepted custom SBPL boundary; this is not an Apple-supported isolation guarantee. `test:layout` builds/packages and runs the complete Electron suite. It is registered in the shared `layout` contract, which runs on the macOS CI runner and locally as part of `check:ci`. No skipped Electron suite is presented as a passing release gate.
+`test:e2e` requires macOS and an already built app/bundle. `test:packaged` selects packaged acceptance; `test:boundaries` selects the Electron renderer/IPC boundary checks. The native cases exercise the owner-accepted custom SBPL boundary; this is not an Apple-supported isolation guarantee. `test:layout` builds/packages, runs the complete Electron suite and then the browser-mode geometry suite (`test:browser`, `test/layout/`). It is registered in the shared `layout` contract, which runs on the macOS CI runner and locally as part of `check:ci`. No skipped Electron suite is presented as a passing release gate. Which level proves what is described in [testing](docs/testing.md).
 
-`report` creates a self-contained HTML evidence file with embedded screenshots at `.artifacts/foundation-report.html` after the Electron suite. Raw results stay in `.artifacts/electron-tests.json`.
+`report` creates a self-contained HTML evidence file with embedded screenshots at `.artifacts/foundation-report.html` after `test:layout` (Electron and browser-mode suites). Raw results stay in `.artifacts/electron-tests.json`.
 
 ## Fixture state and lifecycle
 
@@ -666,7 +666,7 @@ Open App settings in the sidebar and use Language / Sprache for immediate Englis
 
 The English source keys and German translations live in `src/i18n/de.json`; parameterized diagnostics are explicitly listed in `src/i18n/diagnostics.ts`. Add complete translations and identical placeholders when changing copy. Coverage tests check every static thrown diagnostic, visible template copy and handbook chapter parity. No translation network service or new runtime dependency is used.
 
-Read the [English handbook](docs/handbook.md) or [German handbook](docs/handbook.de.md). Both have eighteen chapters and eleven locale-specific packaged-app screenshots. Run `pnpm --filter @openape/pods handbook` from the repository root to generate standalone `.artifacts/openape-pods-handbook.html` and `.artifacts/openape-pods-handbook.de.html`. Keep both files together for the edition links; images are embedded for offline use. Refresh images only after the packaged `e2e/language.test.ts` scenario with `pnpm --filter @openape/pods handbook --refresh-images`.
+Read the [English handbook](docs/handbook.md) or [German handbook](docs/handbook.de.md). Both have eighteen chapters and eleven locale-specific packaged-app screenshots. Run `pnpm --filter @openape/pods handbook` from the repository root to generate standalone `.artifacts/openape-pods-handbook.html` and `.artifacts/openape-pods-handbook.de.html`. Keep both files together for the edition links; images are embedded for offline use. Refresh images only after the packaged `e2e/handbook.test.ts` capture with `pnpm --filter @openape/pods handbook --refresh-images`.
 
 
 ## Named script credentials
