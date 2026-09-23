@@ -196,7 +196,7 @@ Codex (owner's)
 - [x] `2026-09-23 14:50` Approved by Patrick: D1–D6 as recommended; no chat in Pods, only a review view; elicitation probe in M0.
 - [x] `2026-09-23 15:20` M0 spike: facts below; registration and launcher designs adjusted. No code kept.
 - [x] `2026-09-23 18:40` M1 worker and main adapter: `CodexControl` + `CodexControlServer`; 10 refusal/leak/socket tests; six counter-proofs red.
-- [ ] M2 STDIO shim and launcher
+- [x] `2026-09-23 18:50` M2 STDIO shim and launcher: `runtime/codex-mcp` (7.5 KB), stable launcher with an MCP fallback that reports a moved bundle; packaged E2E and three launcher unit tests; quoting counter-proof red.
 - [ ] M3 registration UI
 - [ ] M4 end-to-end acceptance and handbook
 
