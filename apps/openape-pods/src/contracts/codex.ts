@@ -28,3 +28,17 @@ export const codexTool = {
     },
   },
 }
+
+// The owner's Codex registration as App settings shows it. `edited` means the
+// owner changed the entry the app wrote, so removal is left to them (`manual`).
+export interface CodexConnection { state: 'connected' | 'disconnected' | 'foreign' | 'edited', home: string, manual: string }
+export interface CodexCommand { type: 'status' | 'connect' | 'disconnect' }
+export function parseCodexCommand(value: unknown): CodexCommand {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length !== 1 || !['status', 'connect', 'disconnect'].includes((value as { type?: string }).type ?? '')) throw new Error('Invalid Codex command')
+  return { type: (value as CodexCommand).type }
+}
+export function parseCodexConnection(value: unknown): CodexConnection {
+  const item = value as CodexConnection
+  if (!item || !['connected', 'disconnected', 'foreign', 'edited'].includes(item.state) || typeof item.home !== 'string' || typeof item.manual !== 'string') throw new Error('Invalid Codex connection')
+  return { state: item.state, home: item.home, manual: item.manual }
+}

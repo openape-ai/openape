@@ -354,6 +354,23 @@
         "Select all required predecessors, inspect the graph and upcoming schedule occurrences, then save with the schedule off. Cycles cannot be saved.",
         "Run a synthetic workflow and inspect every node and mail receipt before considering live setup. Installation, mailbox mutations, Telegram sends and activation require separate approval."
       ]
+    },
+    {
+      "id": "codex",
+      "title": "Work from your Codex",
+      "paragraphs": [
+        "If you use Codex on this Mac (ChatGPT desktop or the Codex CLI), it can look after your Pods: inspect them, save and validate script drafts, rename, group and pause Pods and prepare a schedule that stays disabled. Execution, permissions and credentials stay in OpenApe Pods. No global Node or Codex installation is needed; Pods brings its own runtime.",
+        "Codex never applies what changes how a Pod works with its access: a new script version, a variable, a workflow change or a run. Those wait for you under Prepared by Codex in the sidebar, with before and after, until you choose Apply changes together, Run once or Discard changes. Access requests appear there too and use the usual permission forms. Codex does not see run summaries, run errors or saved checkpoints, and it never receives your account tokens or Pod keys.",
+        "Pods treats text from mail, web pages or chats as data. If Codex reads such text elsewhere and it tries to talk Codex into applying something, the change still waits for you. Review every item before you apply it.",
+        "OpenApe Pods must be running for Codex to reach it. If you move or reinstall the app, open it once; it repairs the connection. Until then, Codex reports that OpenApe Pods moved or was removed.",
+        "To remove the integration, open App settings, then Work from Codex, and choose Disconnect Codex. If you edited the entry in Codex yourself, the app leaves it alone; remove it in a terminal with codex mcp remove openape-pods."
+      ],
+      "steps": [
+        "Open App settings and choose Connect Codex under Work from Codex.",
+        "Restart Codex once so it loads OpenApe Pods.",
+        "Ask Codex, for example: “List my Pods and prepare a daily 07:00 schedule for Invoices.”",
+        "Open Prepared by Codex in the sidebar, review each proposal and apply or discard it."
+      ]
     }
   ]
 }
