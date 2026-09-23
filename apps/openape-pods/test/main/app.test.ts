@@ -54,4 +54,37 @@ describe('main process owner dialogs', () => {
     expect(main.worker.resources).toHaveBeenLastCalledWith({ type: 'assignDirectory', podId, epoch: 3, path: folder, access: 'readWrite' })
     expect(main.dialog.showMessageBox.mock.calls.at(-1)![1]).toMatchObject({ message: folder, buttons: ['Cancel', 'Read and write'] })
   })
+
+  it('opens Terminal.app only with the launcher the worker prepared, and never when preparation fails', async () => {
+    main = await startMain()
+    main.worker.program.mockRejectedValueOnce(new Error('Sign in with your DDISA account before setting up a pod'))
+    await expect(main.invoke(channels.programs, { type: 'openShell', podId })).rejects.toThrow('DDISA')
+    expect(main.execFile).not.toHaveBeenCalled()
+    main.worker.program.mockResolvedValueOnce('/fixture/shell-launchers/pod/open-terminal.command')
+    await main.invoke(channels.programs, { type: 'openShell', podId })
+    expect(main.execFile).toHaveBeenCalledOnce()
+    expect(main.execFile.mock.calls[0]!.slice(0, 2)).toEqual(['/usr/bin/open', ['-a', '/System/Applications/Utilities/Terminal.app', '/fixture/shell-launchers/pod/open-terminal.command']])
+  })
+
+  it('releases the prepared terminal when Terminal.app cannot be opened', async () => {
+    main = await startMain()
+    main.worker.program.mockResolvedValueOnce('/fixture/shell-launchers/pod/open-terminal.command')
+    main.execFile.mockImplementationOnce((_file: string, _args: string[], callback: (error: Error | null) => void) => callback(new Error('open failed')))
+    await expect(main.invoke(channels.programs, { type: 'openShell', podId })).rejects.toThrow('open failed')
+    expect(main.worker.cancelProgram).toHaveBeenCalledWith(podId)
+  })
+
+  it('prepares script dependencies only after the owner confirms the listed packages', async () => {
+    main = await startMain()
+    const draftId = '00000000-0000-4000-8000-000000000061'
+    main.worker.scripts.mockImplementation(async () => ({ pod: { id: podId, revision: 1 }, source: { revision: 2, packages: { dependencies: { 'sample-package': '1.0.0' } } } }))
+    const command = { type: 'prepareDependencies', podId, revision: 1, draftId, draftRevision: 2 }
+    main.dialog.showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false })
+    await main.invoke(channels.scripts, command)
+    expect(main.worker.scripts).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'prepareDependencies' }))
+    expect(main.dialog.showMessageBox.mock.calls[0]![1]).toMatchObject({ detail: expect.stringContaining('sample-package@1.0.0'), cancelId: 0 })
+    main.dialog.showMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false })
+    await main.invoke(channels.scripts, command)
+    expect(main.worker.scripts).toHaveBeenLastCalledWith(command)
+  })
 })
