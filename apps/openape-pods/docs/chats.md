@@ -78,9 +78,19 @@ keeps history and disables existing schedules through the backup contract.
 `worker/control/changes.ts` coordinates them over existing domain operations.
 The renderer reaches these operations through the authenticated owner-window IPC
 in `main/app.ts` and `FixtureWorker`. Embedded model calls pass a server-derived
-conversation scope. Future owner MCP work must reuse this writer and the existing
-main-process approval surfaces. This feature installs no MCP transport and makes
-no claim about an unimplemented adapter's parity.
+conversation scope.
+
+The owner's locally installed Codex reaches the same writer (issue 1375):
+`runtime/codex-mcp` is a STDIO MCP server started by a stable launcher, and
+`main/codex/server.ts` forwards one `pods_control` action per line to
+`worker/codex/control.ts`. That executor runs in a hidden conversation scope that
+is not listed under Chats. Renaming, grouping, pausing and preparing a disabled
+schedule apply directly. Activation, rollback, variables, workflow saves and runs
+stay change sets that the owner applies under **Prepared by Codex**, which renders
+the same `ChangeReview` and `AccessProposals` components as the chat. Codex gets
+run state only, no run summaries, run errors or checkpoints. Apply, discard and
+approval have no representation on the socket. Registration appends one marked
+block to the owner's `config.toml` and removes exactly those bytes again.
 
 ## Verification
 

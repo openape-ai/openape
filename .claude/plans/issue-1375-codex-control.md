@@ -198,7 +198,7 @@ Codex (owner's)
 - [x] `2026-09-23 18:40` M1 worker and main adapter: `CodexControl` + `CodexControlServer`; 10 refusal/leak/socket tests; six counter-proofs red.
 - [x] `2026-09-23 18:50` M2 STDIO shim and launcher: `runtime/codex-mcp` (7.5 KB), stable launcher with an MCP fallback that reports a moved bundle; packaged E2E and three launcher unit tests; quoting counter-proof red.
 - [x] `2026-09-23 19:30` M3 registration UI, review view and lifecycle: append-only registration (four E2E cases against the bundled CLI), Codex settings, **Prepared by Codex** with `ChangeReview`/`AccessProposals` extracted from `MasterChat`; seven counter-proofs red. Status reads Codex only when a launcher exists.
-- [ ] M4 end-to-end acceptance and handbook
+- [x] `2026-09-23 20:10` M4 end-to-end acceptance and handbook: `e2e/codex-acceptance.test.ts` uses the packaged app and a real bundled `codex app-server` with an isolated `CODEX_HOME`. Handbook chapter `codex` (en/de); `chats.md` and `testing.md` updated. The acceptance counter-proof (direct `setVariable`) turns red. M3 and M4 ship in one PR because the acceptance drives the M3 surface.
 
 ## Surprises & Discoveries
 
@@ -220,4 +220,11 @@ Codex (owner's)
 
 ## Outcomes & Retrospective
 
-(after completion)
+- **Result:** The owner's Codex reaches the installed app through a bundled STDIO MCP shim, a stable launcher and a same-user socket. The chat's single executor applies safe settings directly. Activation, variables, workflow saves and runs land only through **Prepared by Codex**; access requests use the existing forms. Codex gets no run content and no authority. Registration only appends to and removes from the owner's `config.toml`.
+- **Deviations:**
+  - Option a replaced "everything reviewed" after Patrick's point that Pod runs never pass through Codex.
+  - M0 replaced `codex mcp add` with an append-only block and `exit 1` with a launcher that answers MCP.
+  - `AccessProposals` was extracted as well, because Codex's access requests must be reviewable outside the chat.
+- **Learnings:**
+  - The first launcher unit test could not catch a quoting bug, because a missing app always takes the fallback path; only an exact-path test measures it.
+  - Probe the external CLI's writer before trusting it with the owner's files.

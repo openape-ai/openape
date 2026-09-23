@@ -666,7 +666,7 @@ Open App settings in the sidebar and use Language / Sprache for immediate Englis
 
 The English source keys and German translations live in `src/i18n/de.json`; parameterized diagnostics are explicitly listed in `src/i18n/diagnostics.ts`. Add complete translations and identical placeholders when changing copy. Coverage tests check every static thrown diagnostic, visible template copy and handbook chapter parity. No translation network service or new runtime dependency is used.
 
-Read the [English handbook](docs/handbook.md) or [German handbook](docs/handbook.de.md). Both have eighteen chapters and eleven locale-specific packaged-app screenshots. Run `pnpm --filter @openape/pods handbook` from the repository root to generate standalone `.artifacts/openape-pods-handbook.html` and `.artifacts/openape-pods-handbook.de.html`. Keep both files together for the edition links; images are embedded for offline use. To refresh images, run `pnpm --filter @openape/pods handbook:capture` (packaged app, outside the test gate) and then `pnpm --filter @openape/pods handbook --refresh-images`.
+Read the [English handbook](docs/handbook.md) or [German handbook](docs/handbook.de.md). Both have twenty-six chapters and eleven locale-specific packaged-app screenshots. Run `pnpm --filter @openape/pods handbook` from the repository root to generate standalone `.artifacts/openape-pods-handbook.html` and `.artifacts/openape-pods-handbook.de.html`. Keep both files together for the edition links; images are embedded for offline use. To refresh images, run `pnpm --filter @openape/pods handbook:capture` (packaged app, outside the test gate) and then `pnpm --filter @openape/pods handbook --refresh-images`.
 
 
 ## Named script credentials
