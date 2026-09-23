@@ -153,7 +153,9 @@ Every PR: (1) adds the replacement tests, (2) shows one **negative proof per mov
 - [x] `2026-09-23 10:40` M1 implemented: E2E 35 → 32 files, 135 → 127 tests; `test:e2e` wall 72.6 → 57.9 s, per-file sum 205.9 → 166.5 s (two consecutive green runs); `foundation` 16.5 → 8.8 s. New browser suite 7 tests / 7.3 s; unit suite 362 → 369 tests. One of three full runs had a `chats.test.ts` timeout (Send stayed disabled); it passed 3/3 in isolation and 2/2 full reruns — flake under load, file is trimmed in M2.
 - [x] `2026-09-23 12:10` M1 external checks green on `81404434` (CI 4899, e2e 4900, layout 4901); native PR 97.
 - [x] `2026-09-23 12:40` M2 implemented (stacked on M1): `master-ui`, `chat-setup`, `prompt-setup`, `chats` deleted; new Node-level `e2e/master-chat.test.ts` (3 tests, 3.5–6.4 s, no Electron) with the same `PromptModel` scenario; main-process harness `test/main/app-harness.ts` (vi.mock('electron'), unchanged `src/main/app.ts`) pulled forward from M6 for dialog gating. E2E 29 files / 126 tests, wall 55.5 s, sum 160.0 s (two consecutive green runs); browser 13 tests / 7.6 s; unit 376 tests.
-- [ ] M3 … M6.
+- [x] `2026-09-23 13:30` M2 PR 98 green on `4f246915` (CI 4908, e2e 4909, layout 4910) after fixing the implicit 1 s `expect.poll` limit that caused the recurring PTY flake. Merge blocked while main is red in `pods-ios` (pre-existing since PR 96).
+- [x] `2026-09-23 14:20` M3 implemented (stacked on M2): `values-tab`, `readable-runs`, `script-editor`, `terminal-feedback`, `workflows` deleted; `credentials` and `programs` (packaged case) trimmed; `dependencies` packaged case replaced by a Node sandbox import test. E2E 24 files / 121 tests, wall 55.0 / 55.7 s, sum 158.3 / 159.9 s (two green runs); browser 20 tests / 8.7 s; unit 393 tests.
+- [ ] M4 … M6.
 
 ## Surprises & Discoveries
 
@@ -168,6 +170,8 @@ Every PR: (1) adds the replacement tests, (2) shows one **negative proof per mov
 
 - 2026-09-23 — The main-process harness works against the unchanged `app.ts` (0.4 s per test): every IPC handler and its sender check run as shipped; only Electron, the worker process and the remote controller are fakes. It makes M6 independent of Sessions A/C.
 - 2026-09-23 — M2 gain is small in wall time (57.9 → 55.5 s): the removed chat files ran concurrently with the long native files. The remaining wall time is dominated by `crash-recovery` (23 s) and the Node-level native files.
+
+- 2026-09-23 — M3 removed five Electron files (~20 s of per-file time in the baseline) but the per-file sum stayed at ~159 s: with fewer Electron launches the heavy native files now overlap more and slow each other down (`crash-recovery` 23 → 28 s, `onboarding` 15 → 18 s, `agent` 9 → 13 s). Wall time is bounded by those native files and `maxWorkers: 3`, not by the UI files any more.
 
 ## Decision Log
 
