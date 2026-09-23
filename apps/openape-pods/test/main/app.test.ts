@@ -88,3 +88,35 @@ describe('main process owner dialogs', () => {
     expect(main.worker.scripts).toHaveBeenLastCalledWith(command)
   })
 })
+
+describe('main process menus', () => {
+  interface Item { id?: string, label?: string, submenu?: Item[], click?: () => void }
+  const items = (menu: Item[]) => menu.flatMap(item => [item, ...(item.submenu ?? [])])
+
+  it('offers problem reporting only after opt-in and opens only the fixed product URL', async () => {
+    main = await startMain()
+    expect(items(main.menu() as Item[]).some(item => item.id === 'report-problem')).toBe(false)
+    await main.close()
+    main = await startMain({ OPENAPE_PODS_ISSUE_REPORTING_ENABLED: '1' })
+    const report = items(main.menu() as Item[]).find(item => item.id === 'report-problem')!
+    report.click!()
+    expect(main.shell.openExternal).toHaveBeenCalledExactlyOnceWith('https://repos.openape.ai/report?product=pods')
+  })
+
+  it('rebuilds native menus and dialogs in German after a language switch', async () => {
+    main = await startMain()
+    await main.invoke(channels.language, { type: 'set', language: 'de' })
+    const menu = main.menu() as Item[]
+    expect(menu.map(item => item.label)).toEqual(['OpenApe Pods', 'Bearbeiten', 'Fenster'])
+    expect(menu[0]!.submenu!.map(item => item.label)).toContain('Pods beenden')
+    main.worker.data.mockResolvedValue({ usedBytes: 0, freeBytes: 1, limitBytes: 1, pendingDeletion: 0, busy: false, error: null })
+    await main.invoke(channels.data, { type: 'deletePod', podId, revision: 1, name: 'Order review' })
+    expect(main.dialog.showMessageBox.mock.calls[0]![1]).toMatchObject({ title: 'Lokalen Pod löschen', buttons: ['Abbrechen', 'Lokalen Pod löschen'] })
+  })
+})
+
+it('forwards macOS suspend and resume to the worker', async () => {
+  main = await startMain()
+  main.power('suspend'); main.power('resume')
+  expect(main.worker.lifecycle.mock.calls).toEqual([['suspend'], ['resume']])
+})
