@@ -194,4 +194,8 @@ Every PR: (1) adds the replacement tests, (2) shows one **negative proof per mov
 
 ## Outcomes & Retrospective
 
-(after completion)
+- **Delivered (PR 97–104, all merged Sept 23 2026, no production code changes):** the packaged E2E suite went from 35 files / 135 tests / 72.6 s wall (3 workers) to 25 files / 109 tests / 27.9 s in CI (6 workers). Only `foundation`, the four `crash-recovery` files, `credentials` and the packaged `programs` case still launch Electron; everything else in `e2e/` is a Node test against real native boundaries. The external `layout--openape-pods` step went from 93.8 s (plus 422.8 s for `pods-ios`) to 54.2 s including build and package.
+- **New levels:** browser-mode layout suite (`test/layout`, 23 tests, real production CSS), main-process harness over the unchanged `app.ts`, worker-entry harness over the unchanged `entry.ts`, and ~50 new component/functional/unit cases. Every moved area has a recorded counter-proof (about 60 mutations in total).
+- **Deviations from the plan:** M5 was reduced (mock-based dispatcher/broker moves rejected; see Decision Log), the `crash-recovery` split and the main-process harness were pulled forward, iOS left the check contract (PR 100, owner decision) and workers went 3 → 5 → 6 (owner decisions).
+- **Findings beyond the brief:** the recurring PTY flake was Vitest's implicit 1 s `expect.poll` limit; several old E2E checks were vacuous (archived pod without script, secret never injected, Terminal.app never checked); some CSS/parser rules are redundant for the tested inputs and are listed in Surprises.
+- **Learnings:** once UI files are gone, wall time is sum / workers — measure per-file time before choosing what to move; counter-proofs caught two of my own tests that would have passed without the rule under test.
