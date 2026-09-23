@@ -2,7 +2,7 @@
 
 ## Pods test pyramid (September 23, 2026)
 
-[Issue 1374](https://repos.openape.ai/patrick/monorepo/issues/1374). Worktree `openape-monorepo.worktrees/issue-1374-test-pyramid`, branch `feature/issue-1374-test-pyramid-pods`, base `dc466549`. [Plan](../../.claude/plans/issue-1374-test-pyramid-pods.md), approved by Patrick with D1–D4; no production code changes, so it is independent of concurrent Pods work. Baseline `test:e2e`: 35 files / 135 tests, 72.6 s wall, 205.9 s sum. M1 (browser-mode layout suite, workspace shell) removes `pod-workspace`, `groups`, `language` and trims `foundation`: 57.9 s wall, 166.5 s sum. Next: M2 chat surfaces.
+[Issue 1374](https://repos.openape.ai/patrick/monorepo/issues/1374). Worktree `openape-monorepo.worktrees/issue-1374-test-pyramid`, branch `feature/issue-1374-test-pyramid-pods`, base `dc466549`. [Plan](../../.claude/plans/issue-1374-test-pyramid-pods.md), approved by Patrick with D1–D4; no production code changes, so it is independent of concurrent Pods work. Baseline `test:e2e`: 35 files / 135 tests, 72.6 s wall, 205.9 s sum. M1 ([PR 97](https://repos.openape.ai/patrick/monorepo/pulls/97), external checks green on `81404434`) adds the browser-mode layout suite, removes `pod-workspace`, `groups`, `language` and trims `foundation`: 57.9 s wall, 166.5 s sum. M2 (branch `feature/issue-1374-m2-chat-surfaces`, stacked on M1) replaces the four packaged chat files with Node-level app-server tests, a main-process harness over the unchanged `app.ts`, component and layout tests: 55.5 s wall, 160.0 s sum. Next: M3 pod tabs.
 
 ## Pods: two owner accounts (September 22, 2026)
 

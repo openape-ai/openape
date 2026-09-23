@@ -151,7 +151,9 @@ Every PR: (1) adds the replacement tests, (2) shows one **negative proof per mov
 - [x] `2026-09-23 08:40` File-by-file analysis against `test/**`.
 - [x] `2026-09-23` Patrick's approval (D1–D4; D3 revised to "no production code change").
 - [x] `2026-09-23 10:40` M1 implemented: E2E 35 → 32 files, 135 → 127 tests; `test:e2e` wall 72.6 → 57.9 s, per-file sum 205.9 → 166.5 s (two consecutive green runs); `foundation` 16.5 → 8.8 s. New browser suite 7 tests / 7.3 s; unit suite 362 → 369 tests. One of three full runs had a `chats.test.ts` timeout (Send stayed disabled); it passed 3/3 in isolation and 2/2 full reruns — flake under load, file is trimmed in M2.
-- [ ] M2 … M6.
+- [x] `2026-09-23 12:10` M1 external checks green on `81404434` (CI 4899, e2e 4900, layout 4901); native PR 97.
+- [x] `2026-09-23 12:40` M2 implemented (stacked on M1): `master-ui`, `chat-setup`, `prompt-setup`, `chats` deleted; new Node-level `e2e/master-chat.test.ts` (3 tests, 3.5–6.4 s, no Electron) with the same `PromptModel` scenario; main-process harness `test/main/app-harness.ts` (vi.mock('electron'), unchanged `src/main/app.ts`) pulled forward from M6 for dialog gating. E2E 29 files / 126 tests, wall 55.5 s, sum 160.0 s (two consecutive green runs); browser 13 tests / 7.6 s; unit 376 tests.
+- [ ] M3 … M6.
 
 ## Surprises & Discoveries
 
@@ -164,6 +166,9 @@ Every PR: (1) adds the replacement tests, (2) shows one **negative proof per mov
 - 2026-09-23 — M1 counter-proofs: of five CSS rules removed, three (`.main{min-width:0}`, `.content section{min-width:0}`, `.pod-button>span` wrap) left the E2E-equivalent views unchanged — the fixture data never needs them, and the former E2E had the same data. Removing `.value-row>div` wrapping produced a 4 px content overflow at 880 px and failed the new test; so does removing both wrapping and scrolling of the source `pre` (1089 px).
 - 2026-09-23 — The former `pod-workspace` archived-pod check was vacuous: the archived pod had no active script, so Run now was disabled for that reason alone. The replacement gives it a script, and removing the lifecycle check turns it red.
 
+- 2026-09-23 — The main-process harness works against the unchanged `app.ts` (0.4 s per test): every IPC handler and its sender check run as shipped; only Electron, the worker process and the remote controller are fakes. It makes M6 independent of Sessions A/C.
+- 2026-09-23 — M2 gain is small in wall time (57.9 → 55.5 s): the removed chat files ran concurrently with the long native files. The remaining wall time is dominated by `crash-recovery` (23 s) and the Node-level native files.
+
 ## Decision Log
 
 | Date | Decision | Reason | Rejected |
@@ -171,6 +176,7 @@ Every PR: (1) adds the replacement tests, (2) shows one **negative proof per mov
 | 2026-09-23 | Browser tests run inside existing `test:layout` | Layout suite already runs on the mac runner with Chrome; no new runner | Separate `test:browser` suite in checks.json |
 | 2026-09-23 | Plan approved by Patrick, D1–D4 as recommended | — | — |
 | 2026-09-23 | No production code change in any milestone; Electron-bound main code tested via `vi.mock('electron')` harness | Patrick: no dependency on Sessions A/C, which edit `apps/openape-pods/src` concurrently | Extract handlers from `app.ts`/`worker.ts`/`entry.ts` (conflicts with A/C) |
+| 2026-09-23 | Chat scenarios move to Node-level `e2e/master-chat.test.ts` instead of component-only tests | The confined app-server, native validation and sandboxed run are the parts no lower level can answer; Electron adds nothing to them | Keep one packaged chat smoke |
 | 2026-09-23 | New cases in new test files inside existing `test/` directories | Avoids merge conflicts with A/C on shared test files | Extending existing test files |
 
 ## Outcomes & Retrospective

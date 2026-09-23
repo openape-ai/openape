@@ -6,6 +6,7 @@ Every assertion lives on the lowest level that can answer its question. A packag
 |---|---|---|---|
 | Unit / functional | `test/**` (Node, happy-dom) | Pure functions, contracts, worker modules against real SQLite and files | `pnpm --filter @openape/pods test` (unit gate) |
 | Component | `test/**/*-ui.test.ts`, `test/workspace.test.ts` (`@vue/test-utils` + happy-dom) | Vue states, branches, visible text, emitted bridge commands | unit gate |
+| Main process | `test/main/**` (Node, `vi.mock('electron')` via `test/main/app-harness.ts`) | The unchanged `src/main/app.ts`: IPC sender checks, native dialog gating, menus, power events — which worker command an owner's answer produces | unit gate |
 | Layout | `test/layout/**` (Vitest browser mode, installed Chrome) | Widths, overflow, breakpoints, dark mode — with `src/renderer/style.css` and every SFC `<style>` loaded | `test:browser`, part of `test:layout` |
 | Native / packaged | `e2e/**` (Playwright Electron, native helper) | Only what needs the packaged app or a real OS boundary | `test:e2e`, part of `test:layout` |
 
@@ -28,7 +29,7 @@ These are the questions no lower level can answer. Files under review in issue 1
 | `crash-recovery.test.ts` | Real SIGKILL/quit of worker, app and script, relaunch and domain inspection without duplicate work |
 | `recovery.test.ts`, `domains.test.ts` | Supervisor lease, PID identity and PID reuse of real processes |
 | `resources.test.ts`, `script-runner.test.ts`, `terminal.test.ts` | Sandbox denial (files, fork, network, shell), real TTY, time limits |
-| `agent.test.ts`, `master.test.ts`, `onboarding.test.ts` (Node case) | Pinned Codex binary and app-server confined by the sandbox |
+| `agent.test.ts`, `master.test.ts`, `master-chat.test.ts`, `onboarding.test.ts` (Node case) | Pinned Codex binary and app-server confined by the sandbox; native draft validation; chat repair loop, model choice and context reset as the provider actually receives them |
 | `external-shell.test.ts`, `external-session.test.ts`, `installed-applications.test.ts` | `ape-shell` from the package reaches real child processes; grant denial blocks the side effect |
 | `o365.test.ts`, `broker.test.ts` | TLS against a real socket with the packaged helper; credential isolation between sandboxes |
 
@@ -40,3 +41,7 @@ These are the questions no lower level can answer. Files under review in issue 1
 | `groups.test.ts` | `test/workspace/groups.test.ts` (persistence), `test/workspace/groups-ui.test.ts`, `test/workspace/shell-ui.test.ts` (drag and drop, Settings group), `test/layout/app-shell.test.ts` (long group name wraps, with counter-check) |
 | `language.test.ts` | `test/i18n/language.test.ts`, `test/i18n/ui.test.ts`, `test/layout/app-shell.test.ts` (German views, language switcher in a narrow window); native menu and dialog labels in `foundation.test.ts` |
 | `foundation.test.ts` (unpackaged arms, scheduling, storage, layout) | Packaged arms kept; `test/workspace/shell-ui.test.ts` (concurrency limit), `test/workspace/script-authority.test.ts` (unknown create keys rejected), `test/storage/database.test.ts` (reopen), `test/layout/app-shell.test.ts` (empty profile light/dark, 880 × 640) |
+| `master-ui.test.ts` | `e2e/master-chat.test.ts` (model reaches the provider, Node), existing `test/master/ui.test.ts` (palette, model picker, decline, collapsed activity), `test/master/chats-ui.test.ts`, `test/workspace/chat-changes.test.ts`, `test/layout/master-chat.test.ts` (alignment, composer, palette at 560, scroll-follow) |
+| `chat-setup.test.ts` | `test/main/app.test.ts` (HTTP, folder and program dialogs), `test/master/chat-surfaces-ui.test.ts` (BotFather guidance, Continue setup while disconnected), existing `test/master/setup-ui.test.ts`, `test/master/setup.test.ts` (secret never in chat), `test/layout/master-chat.test.ts` (560 dark German) |
+| `prompt-setup.test.ts` | `e2e/master-chat.test.ts` (repair from native validation feedback, staged changes, reviewed run — same `PromptModel` scenario, Node), `test/master/chat-surfaces-ui.test.ts` (description label), existing `test/master/ui.test.ts` (secret proposals route to Values) |
+| `chats.test.ts` | `e2e/master-chat.test.ts` (fresh provider context after a context change, Node), `test/master/chat-surfaces-ui.test.ts` (rename), existing `test/workspace/chat-registry.test.ts`, `test/workspace/chat-changes.test.ts` (context, review, run receipt), `test/layout/master-chat.test.ts` (1060/760/560) |
