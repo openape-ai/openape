@@ -8,7 +8,7 @@ Every assertion lives on the lowest level that can answer its question. A packag
 | Component | `test/**/*-ui.test.ts`, `test/workspace.test.ts` (`@vue/test-utils` + happy-dom) | Vue states, branches, visible text, emitted bridge commands | unit gate |
 | Main process | `test/main/**` (Node, `vi.mock('electron')` via `test/main/app-harness.ts`) | The unchanged `src/main/app.ts`: IPC sender checks, native dialog gating, menus, power events — which worker command an owner's answer produces | unit gate |
 | Layout | `test/layout/**` (Vitest browser mode, installed Chrome) | Widths, overflow, breakpoints, dark mode — with `src/renderer/style.css` and every SFC `<style>` loaded | `test:browser`, part of `test:layout` |
-| Native / packaged | `e2e/**` (Playwright Electron, native helper) | Only what needs the packaged app or a real OS boundary | `test:e2e`, part of `test:layout` (5 workers) |
+| Native / packaged | `e2e/**` (Playwright Electron, native helper) | Only what needs the packaged app or a real OS boundary | `test:e2e`, part of `test:layout` (6 workers) |
 | Handbook capture | `e2e/handbook-capture.test.ts` | Screenshots for the handbook and the evidence report — a generator, not a check | `pnpm handbook:capture`, outside the gate |
 
 ## Rules
@@ -27,10 +27,10 @@ These are the questions no lower level can answer. `handbook.test.ts` also stays
 | File | Why it needs the packaged app or a real process |
 |---|---|
 | `foundation.test.ts` | Packaged start with Electron 40.9.3 / Node 24.14.1 and rendered Vue; bundle icon; renderer/IPC boundary and worker environment scrubbing; single instance and quit; worker crash detection; packaged manual run in the sandbox; packaged reference snapshot; native menus and delete dialog in German; Help-menu report URL |
-| `crash-recovery.test.ts` | Real SIGKILL/quit of worker, app and script, relaunch and domain inspection without duplicate work |
+| `crash-recovery*.test.ts`, `fixtures/crash.ts` | Real SIGKILL/quit of worker, app and script, relaunch and domain inspection without duplicate work; storage limit and suspend in the running app. Split into four files so the cases run on separate workers |
 | `recovery.test.ts`, `domains.test.ts` | Supervisor lease, PID identity and PID reuse of real processes |
 | `resources.test.ts`, `script-runner.test.ts`, `terminal.test.ts` | Sandbox denial (files, fork, network, shell), real TTY, time limits |
-| `agent.test.ts`, `master.test.ts`, `master-chat.test.ts`, `onboarding.test.ts` | Pinned Codex binary and app-server confined by the sandbox; native draft validation; chat repair loop, model choice and context reset as the provider actually receives them |
+| `agent.test.ts`, `master.test.ts`, `master-chat.test.ts`, `onboarding.test.ts`, `mail-knowledge.test.ts` | Pinned Codex binary and app-server confined by the sandbox; native draft validation; chat repair loop, model choice and context reset as the provider actually receives them |
 | `external-shell.test.ts`, `external-session.test.ts`, `installed-applications.test.ts` | `ape-shell` from the package reaches real child processes; grant denial blocks the side effect |
 | `o365.test.ts`, `broker.test.ts` | TLS against a real socket with the packaged helper; credential isolation between sandboxes |
 | `credentials.test.ts` | Real macOS `safeStorage`: ciphertext never contains the value, decrypts after a restart, key files erased on rotation and revocation, other Pods' keys kept |
@@ -59,3 +59,8 @@ These are the questions no lower level can answer. `handbook.test.ts` also stays
 | `onboarding.test.ts` (packaged cases) | `test/onboarding/setup-state.test.ts` (incomplete until the explicit finish, consent kept across a restart, continue only after the worker accepted, avatar in the collapsed sidebar), existing `test/onboarding/ui.test.ts`, `test/onboarding/control.test.ts`, `test/onboarding/reconcile.test.ts`, `test/onboarding/auth.test.ts`, `test/layout/onboarding.test.ts` (560 dark en/de, collapsed avatar) |
 | `data.test.ts` | `test/main/data-dialogs.test.ts` (delete/backup/restore wait for the owner's native confirmation; restore with the real `restoreBackup` while the worker refuses a newer database; startup opens the selected profile — the old test had stubbed the relaunch anyway), existing `test/data/backup.test.ts`, `test/data/update.test.ts`, `test/data/ui.test.ts`, `test/layout/onboarding.test.ts` (Data & backups at 560) |
 | `handbook.test.ts` (capture case) | Moved unchanged to `e2e/handbook-capture.test.ts`, run with `pnpm handbook:capture` |
+| `mail-knowledge.test.ts` (unpackaged parser arm, gap case) | `test/mail/extraction.test.ts` (plain/HTML/PDF/DOCX text, scripts and tracking images dropped, unsupported/scanned/malformed/oversized as gaps); the packaged parser run and the recipe stay |
+
+## Deliberately kept in `e2e/`
+
+Some checks inside the native files are pure logic but cost almost nothing there (the script and tool hash checks in `resources`, `script-runner` and `terminal`, < 0.1 s each), or need the script-entry frame protocol (the remaining `dispatcher` cases). Moving them would either save nothing or replace a real sandboxed process by a mock of its protocol, so they stay.

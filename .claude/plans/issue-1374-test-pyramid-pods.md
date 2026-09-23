@@ -157,7 +157,9 @@ Every PR: (1) adds the replacement tests, (2) shows one **negative proof per mov
 - [x] `2026-09-23 14:20` M3 implemented (stacked on M2): `values-tab`, `readable-runs`, `script-editor`, `terminal-feedback`, `workflows` deleted; `credentials` and `programs` (packaged case) trimmed; `dependencies` packaged case replaced by a Node sandbox import test. E2E 24 files / 121 tests, wall 55.0 / 55.7 s, sum 158.3 / 159.9 s (two green runs); browser 20 tests / 8.7 s; unit 393 tests.
 - [x] `2026-09-23 11:45` iOS client removed from the check contract (owner decision; PR 100, issue 1364); workers 3 → 5 (owner decision; PR 101). PR 97–101 merged; main `4e759ea2` layout green in 5 min.
 - [x] `2026-09-23 11:55` M4 implemented: packaged `onboarding` cases and `data` replaced (main-process harness for data dialogs, restore-on-error and profile selection; SQLite state for onboarding; layout); handbook screenshot generator moved out of the gate (`pnpm handbook:capture`). E2E 23 files / 113 tests, wall 27.5 / 26.5 s (5 workers), sum 127.2 / 124.3 s; browser 23 tests / 8.4 s; whole `test:layout` 43–45 s; unit 401 tests.
-- [ ] M5 … M6. Long pole is now `crash-recovery` (26 s); splitting its arms (M6) bounds wall time by the next file (~13 s).
+- [x] `2026-09-23 12:20` PR 102 (M4) opened; merge authorized by Patrick for all PRs of this issue after green checks.
+- [x] `2026-09-23 12:40` M5 (reduced, reordered): `crash-recovery` split into four files (pulled forward from M6; suite 27 → 25 s); mail parser formats and gaps moved to `test/mail/extraction.test.ts` (unit), E2E keeps one packaged parser run and the recipe. Other planned M5 moves dropped (see Decision Log).
+- [ ] M6 remainder: entry.ts storage/suspend spike (optional).
 
 ## Surprises & Discoveries
 
@@ -175,6 +177,8 @@ Every PR: (1) adds the replacement tests, (2) shows one **negative proof per mov
 
 - 2026-09-23 — M3 removed five Electron files (~20 s of per-file time in the baseline) but the per-file sum stayed at ~159 s: with fewer Electron launches the heavy native files now overlap more and slow each other down (`crash-recovery` 23 → 28 s, `onboarding` 15 → 18 s, `agent` 9 → 13 s). Wall time is bounded by those native files and `maxWorkers: 3`, not by the UI files any more.
 
+- 2026-09-23 — Two parser rules are redundant for the tested inputs: `html-to-text` already omits `<script>` content, so the `script` skip selector changes nothing; and the 20 MiB byte limit is never reached by the "oversized" DOCX case (that case hits the text limit). Neither was proven by the former E2E either.
+
 ## Decision Log
 
 | Date | Decision | Reason | Rejected |
@@ -183,6 +187,7 @@ Every PR: (1) adds the replacement tests, (2) shows one **negative proof per mov
 | 2026-09-23 | Plan approved by Patrick, D1–D4 as recommended | — | — |
 | 2026-09-23 | No production code change in any milestone; Electron-bound main code tested via `vi.mock('electron')` harness | Patrick: no dependency on Sessions A/C, which edit `apps/openape-pods/src` concurrently | Extract handlers from `app.ts`/`worker.ts`/`entry.ts` (conflicts with A/C) |
 | 2026-09-23 | Chat scenarios move to Node-level `e2e/master-chat.test.ts` instead of component-only tests | The confined app-server, native validation and sandboxed run are the parts no lower level can answer; Electron adds nothing to them | Keep one packaged chat smoke |
+| 2026-09-23 | M5 reduced to the crash-recovery split and the mail parser unit test | With 5 workers the wall time is ~sum/5; the remaining planned moves (dispatcher, broker, master logic, HTTP grant, hash checks) save ~6 s sum ≈ 1 s wall and would replace real sandboxed processes by mocks of the script-entry protocol or rebuild the large programs fixture | Mock-based dispatcher/broker functional tests |
 | 2026-09-23 | New cases in new test files inside existing `test/` directories | Avoids merge conflicts with A/C on shared test files | Extending existing test files |
 
 ## Outcomes & Retrospective
