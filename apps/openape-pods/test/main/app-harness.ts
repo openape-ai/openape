@@ -22,13 +22,16 @@ export interface MainHarness {
   shell: { openExternal: Mock }
   execFile: Mock
   app: { relaunch: Mock, quit: Mock, exit: Mock }
+  paths: Map<string, string>
   menu: () => MenuItemConstructorOptions[]
   power: (event: 'suspend' | 'resume') => void
   close: () => Promise<void>
 }
 
-export async function startMain(env: Record<string, string> = {}): Promise<MainHarness> {
+export async function startMain(env: Record<string, string> = {}, prepare: (root: string) => Promise<void> = async () => {}): Promise<MainHarness> {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-main-')))
+  await prepare(root)
+  const paths = new Map<string, string>()
   const handlers = new Map<string, Handler>()
   const powerListeners = new Map<string, () => void>()
   let applicationMenu: MenuItemConstructorOptions[] = []
@@ -59,7 +62,7 @@ export async function startMain(env: Record<string, string> = {}): Promise<MainH
   vi.resetModules()
   vi.doMock('electron', () => ({
     app: {
-      setName: () => {}, enableSandbox: () => {}, setPath: () => {}, getPath: (name: string) => join(root, name), getAppPath: () => root,
+      setName: () => {}, enableSandbox: () => {}, setPath: (name: string, path: string) => paths.set(name, path), getPath: (name: string) => join(root, name), getAppPath: () => root,
       requestSingleInstanceLock: () => true, on: () => {}, whenReady: () => Promise.resolve(), getPreferredSystemLanguages: () => ['en'], getLocale: () => 'en',
       getFileIcon: async () => ({ resize: () => ({ toDataURL: () => 'data:image/png;base64,' }) }), ...lifecycle,
     },
@@ -94,6 +97,7 @@ export async function startMain(env: Record<string, string> = {}): Promise<MainH
     shell,
     execFile,
     app: lifecycle,
+    paths,
     menu: () => applicationMenu,
     power: event => powerListeners.get(event)!(),
     close: async () => { process.env = previous; vi.doUnmock('electron'); vi.doUnmock('node:child_process'); vi.doUnmock('../../src/main/worker'); vi.doUnmock('../../src/main/remote/controller'); await rm(root, { recursive: true, force: true }) },
