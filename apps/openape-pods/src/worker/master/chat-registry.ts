@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { ChatsCommand, ChatsView, Conversation, ChatContext } from '../../contracts/chats'
 import { parseChatsCommand } from '../../contracts/chats'
+import { codexConversationId } from '../../contracts/codex'
 import type { WorkflowDefinition } from '../../contracts/workflows'
 import type { PodDatabase } from '../storage/database'
 
@@ -74,7 +75,7 @@ export class ChatRegistry {
     for (const pod of this.store.listPods()) this.ensure(pod.id)
     for (const row of this.store.db.prepare('SELECT DISTINCT scope FROM master_message_scopes UNION SELECT scope FROM master_contexts').all()) this.ensure(row.scope as string)
     const active = this.store.db.prepare('SELECT c.conversation_id FROM chat_active c JOIN master_session s ON s.id=c.id WHERE s.state=\'running\'').get()
-    return { conversations: this.store.db.prepare('SELECT id FROM chat_conversations ORDER BY updated_at DESC,rowid DESC LIMIT 1000').all().map(row => this.get(row.id as string)), activeConversationId: active?.conversation_id as string | null ?? null }
+    return { conversations: this.store.db.prepare('SELECT id FROM chat_conversations WHERE id!=? ORDER BY updated_at DESC,rowid DESC LIMIT 1000').all(codexConversationId).map(row => this.get(row.id as string)), activeConversationId: active?.conversation_id as string | null ?? null }
   }
 
   execute(value: ChatsCommand): ChatsView {
