@@ -32,6 +32,8 @@ import type { PodStatus } from '../contracts/ipc'
 import { fixtureDirectory, localDirectory } from './fixture'
 import { assertStatusRequest, assetPath, contentSecurityPolicy, rendererURL, rendererStyleNonce } from './security'
 import { FixtureWorker } from './worker'
+import { CodexControlServer } from './codex/server'
+import { refreshLauncher } from './codex/launcher'
 
 const fixture = !!process.env.OPENAPE_PODS_FIXTURE_DIR
 app.setName(fixture ? 'OpenApe Pods Fixture' : 'OpenApe Pods')
@@ -57,6 +59,9 @@ const worker = new FixtureWorker((next) => {
 const fixtureRemoteOrigin = fixture && process.env.NODE_ENV === 'test' ? process.env.OPENAPE_PODS_FIXTURE_RELAY_ORIGIN : undefined
 if (fixtureRemoteOrigin && new URL(fixtureRemoteOrigin).hostname !== '127.0.0.1') throw new Error('Remote acceptance requires an isolated loopback relay')
 remote = new RemoteController(root, worker, fixtureRemoteOrigin)
+const codexDirectory = join(profileBase, 'codex')
+const codexTarget = { executable: process.execPath, script: join(__dirname, '../runtime/codex-mcp.mjs').replace('/app.asar/', '/app.asar.unpacked/'), socket: join(codexDirectory, 'control.sock') }
+const codexServer = new CodexControlServer(codexTarget.socket, request => worker.codex(request))
 async function manageRemote(): Promise<void> {
   if (!window) return
   const action = await dialog.showMessageBox(window, { title: t('Mobile access'), message: t('OpenApe Pods on iPhone and iPad'), detail: translateDiagnostic(preference.language, remote.error) || t('Execution and credentials stay on this desktop. Mobile devices must be paired here before accessing Pods.'), buttons: [t('Cancel'), t('Register desktop'), t('Pair mobile device'), t('Disable mobile access'), t('Offer installed CLI'), t('Withdraw offered CLI'), t('Remove paired device')], defaultId: 0, cancelId: 0 })
@@ -347,9 +352,10 @@ async function start(): Promise<void> {
   powerMonitor.on('suspend', () => worker.lifecycle('suspend'))
   powerMonitor.on('resume', () => worker.lifecycle('resume'))
   worker.start(root)
+  if (await refreshLauncher(join(codexDirectory, 'openape-pods-mcp'), codexTarget)) await codexServer.start()
 }
 async function shutdown(): Promise<void> {
-  try { await remote.stop(); await worker.stop(); stopped = true; tray?.destroy(); app.quit() }
+  try { await codexServer.stop(); await remote.stop(); await worker.stop(); stopped = true; tray?.destroy(); app.quit() }
   catch (error) { console.error('Worker shutdown failed', error); app.exit(1) }
 }
 if (!app.requestSingleInstanceLock()) {
