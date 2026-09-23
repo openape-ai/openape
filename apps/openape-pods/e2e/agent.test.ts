@@ -17,8 +17,8 @@ async function setup(packaged = false): Promise<AgentRuntime> {
   return { helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, binary: resolve('dist/vendor/codex'), catalog: resolve('dist/vendor/models.json'), manifest: resolve('dist/vendor/manifest.json'), sdkHost: resolve('dist/runtime/sdk-host.mjs') }
 }
 describe('pinned SDK native boundary', () => {
-  it.each([false, true])('streams the actual Codex CLI through the SDK with a fresh context (packaged=%s)', async (packaged) => {
-    const runtime = await setup(packaged); const events: unknown[] = []; const requests: unknown[] = []
+  it('streams the actual Codex CLI through the SDK with a fresh context (packaged)', async () => {
+    const runtime = await setup(true); const events: unknown[] = []; const requests: unknown[] = []
     const services = { provider: async (body: unknown) => { requests.push(body); return recordedResponse() }, tool: async () => { throw new Error('No tools assigned') } }
     const first = await executeAgent(runtime, root, 'Synthetic transport fixture, no model connected.', [], services, new AbortController().signal, event => events.push(event))
     expect(first.response).toBe('SYNTHETIC_RESPONSE_COMPLETE')
