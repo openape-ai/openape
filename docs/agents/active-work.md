@@ -1,8 +1,8 @@
 # Active work
 
-## Pods test pyramid (September 23, 2026)
+## Pods test pyramid (September 23, 2026) — done
 
-[Issue 1374](https://repos.openape.ai/patrick/monorepo/issues/1374). Worktree `openape-monorepo.worktrees/issue-1374-test-pyramid`. [Plan](../../.claude/plans/issue-1374-test-pyramid-pods.md), approved by Patrick (D1–D4; no production code changes). Merged: PR 97 (M1), 98 (M2 + fix for the recurring PTY flake: implicit 1 s `expect.poll`), 99 (M3), 100 (iOS client out of the check contract, issue 1364), 101 (5 E2E workers); main `4e759ea2`, layout green. Baseline `test:e2e`: 35 files / 135 tests, 72.6 s wall. M4 (branch `feature/issue-1374-m4-onboarding-data`): 23 files / 113 tests, 27 s wall; whole pods layout step 43–45 s. Next: M5 functional moves, M6 split `crash-recovery` (26 s long pole).
+[Issue 1374](https://repos.openape.ai/patrick/monorepo/issues/1374), [plan](../../.claude/plans/issue-1374-test-pyramid-pods.md) with outcomes. PR 97–104 merged (main `94ca3550`), no production code changes. Pods E2E: 35 files / 135 tests / 72.6 s → 25 files / 109 tests / 27.9 s (CI, 6 workers); pods layout step 54.2 s. iOS client outside the check contract (PR 100, issue 1364). Which level proves what: `apps/openape-pods/docs/testing.md`. Remaining open decision for Patrick: closing the issue.
 
 ## Pods: two owner accounts (September 22, 2026)
 
