@@ -155,7 +155,9 @@ Every PR: (1) adds the replacement tests, (2) shows one **negative proof per mov
 - [x] `2026-09-23 12:40` M2 implemented (stacked on M1): `master-ui`, `chat-setup`, `prompt-setup`, `chats` deleted; new Node-level `e2e/master-chat.test.ts` (3 tests, 3.5–6.4 s, no Electron) with the same `PromptModel` scenario; main-process harness `test/main/app-harness.ts` (vi.mock('electron'), unchanged `src/main/app.ts`) pulled forward from M6 for dialog gating. E2E 29 files / 126 tests, wall 55.5 s, sum 160.0 s (two consecutive green runs); browser 13 tests / 7.6 s; unit 376 tests.
 - [x] `2026-09-23 13:30` M2 PR 98 green on `4f246915` (CI 4908, e2e 4909, layout 4910) after fixing the implicit 1 s `expect.poll` limit that caused the recurring PTY flake. Merge blocked while main is red in `pods-ios` (pre-existing since PR 96).
 - [x] `2026-09-23 14:20` M3 implemented (stacked on M2): `values-tab`, `readable-runs`, `script-editor`, `terminal-feedback`, `workflows` deleted; `credentials` and `programs` (packaged case) trimmed; `dependencies` packaged case replaced by a Node sandbox import test. E2E 24 files / 121 tests, wall 55.0 / 55.7 s, sum 158.3 / 159.9 s (two green runs); browser 20 tests / 8.7 s; unit 393 tests.
-- [ ] M4 … M6.
+- [x] `2026-09-23 11:45` iOS client removed from the check contract (owner decision; PR 100, issue 1364); workers 3 → 5 (owner decision; PR 101). PR 97–101 merged; main `4e759ea2` layout green in 5 min.
+- [x] `2026-09-23 11:55` M4 implemented: packaged `onboarding` cases and `data` replaced (main-process harness for data dialogs, restore-on-error and profile selection; SQLite state for onboarding; layout); handbook screenshot generator moved out of the gate (`pnpm handbook:capture`). E2E 23 files / 113 tests, wall 27.5 / 26.5 s (5 workers), sum 127.2 / 124.3 s; browser 23 tests / 8.4 s; whole `test:layout` 43–45 s; unit 401 tests.
+- [ ] M5 … M6. Long pole is now `crash-recovery` (26 s); splitting its arms (M6) bounds wall time by the next file (~13 s).
 
 ## Surprises & Discoveries
 
