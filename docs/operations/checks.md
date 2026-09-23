@@ -19,6 +19,11 @@ repository tooling tests, lint, typecheck and workspace tests. Missing scripts
 fail before execution; current coverage gaps are explicit reviewed exceptions
 in the contract. An exception does not imply that a test exists or passed.
 
+The native iOS client `@openape/pods-ios` is outside the contract by owner
+decision (2026-09-23, issue 1364): the gate covers the desktop app, and iOS is a
+separate topic. Its Xcode checks run only on demand with
+`pnpm --filter @openape/pods-ios test:layout`.
+
 Each invocation writes complete step logs and a machine-readable summary under
 `.openape/check-results/<run>/`. E2E invocations also write Vitest JSON reports.
 The first failed step returns nonzero and preserves its log. These local files
