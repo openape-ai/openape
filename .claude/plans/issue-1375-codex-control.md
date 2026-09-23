@@ -197,7 +197,7 @@ Codex (owner's)
 - [x] `2026-09-23 15:20` M0 spike: facts below; registration and launcher designs adjusted. No code kept.
 - [x] `2026-09-23 18:40` M1 worker and main adapter: `CodexControl` + `CodexControlServer`; 10 refusal/leak/socket tests; six counter-proofs red.
 - [x] `2026-09-23 18:50` M2 STDIO shim and launcher: `runtime/codex-mcp` (7.5 KB), stable launcher with an MCP fallback that reports a moved bundle; packaged E2E and three launcher unit tests; quoting counter-proof red.
-- [ ] M3 registration UI
+- [x] `2026-09-23 19:30` M3 registration UI, review view and lifecycle: append-only registration (four E2E cases against the bundled CLI), Codex settings, **Prepared by Codex** with `ChangeReview`/`AccessProposals` extracted from `MasterChat`; seven counter-proofs red. Status reads Codex only when a launcher exists.
 - [ ] M4 end-to-end acceptance and handbook
 
 ## Surprises & Discoveries
