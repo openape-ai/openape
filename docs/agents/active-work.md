@@ -46,20 +46,28 @@ through the verified owner; the Mac app stays open. Rollback pair:
 `~/Library/Application Support/OpenApe Pods Rollback/2026-09-24-204151-issue-1378`.
 Server backup: `shared/backups/issue-1378-live-20260924T183226Z` in the relay service.
 
-Live acceptance found an idle-queue transport failure: Nitro serializes a bare
-null claim as HTTP 204, but the desktop requires a JSON response. It reconnects
-and keeps automatic execution fenced. The existing real-DDISA HTTP regression
-reproduces 204 before the repair and passes after returning explicit JSON null;
-it also claims a real command. Service-only fix-forward work continues on
-`bugfix/issue-1378-idle-runtime-response` in `pods-web-workspace`.
+PR 123 repaired Nitro's empty idle response and merged as
+`14ec37bc857a1ce8237ccbd81566a61d2a8fed22` after exact-source jobs 5079–5081
+passed on `d93cdc9f0aa78af6dda751af1b96b11b7346a047`. Full clean local checks:
+`1790275950495-d93cdc9f-all`. Service `prod-14ec37bc` passed its tested-image
+rollout and health gate; provider health, discovery and JWKS remain byte-identical.
+The retained real-DDISA HTTP regression covers idle JSON null and a real claim.
 
-Before cutover, IURIO recovery `11f0549e-597b-4df3-b0bb-97e3bb3928e2` and scheduled
-follow-up `f1632d96-ffca-4181-8c92-04e4fb16a3ae` both completed without sending
-Telegram. Checkpoint 28, schedule revision 2 and the 900-second interval are
-preserved. Browser login through the existing SSH key succeeded, and browser
-and desktop show all six online Pods. Next: final repair gates and deployment,
-then verify editing, stable availability and resumed scheduled execution before
-claiming live acceptance. Relocation remains excluded.
+Browser and desktop committed a temporary description edit and restoration through
+the central stream. Live acceptance also exposed stale untouched editor fields:
+background reads updated the data but retained every form as if it were dirty.
+`bugfix/issue-1378-live-editor-sync` in `pods-web-workspace` refreshes unchanged
+forms while retaining unsaved edits and clears recovered connection errors.
+Permanent component regressions cover both behaviors. Final deployment and owner
+acceptance receipts are recorded in issue 1378 and the approved plan.
+
+All six Pods retain their IDs, lifecycle and schedules. The offline UI hides
+content and disables editing; a normal app launch retains central mode. IURIO
+recovery and scheduled follow-up completed before cutover. Natural post-adoption
+run `b3073936-17f8-4174-bf38-35808bfad53b` completed without Telegram, advancing
+checkpoint to 29 while retaining all five completed effect receipts. Schedule
+revision 2 and the 900-second interval remain unchanged. Keep the Mac app open.
+Relocation remains excluded.
 
 ## Pods: connected Codex owner administration (September 24, 2026) — delivered
 
