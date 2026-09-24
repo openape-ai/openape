@@ -57,8 +57,23 @@ a regular owner-only file with bounded size, detects concurrent changes and
 hands its value directly to the existing encrypted credential store. Plaintext
 never enters the action request, result or worker journal. Import failures return
 a fixed redacted diagnostic. Source files remain under the owner's control.
-Script credential access still binds the exact validated hash and resource epoch;
-Codex can grant that binding through `scripts` without a native confirmation.
+Every ready secret assigned to a Pod is available to its scripts through
+`context.credentials.get(alias)`. No per-script declaration or approval is required.
+Reads still verify the pinned run lease, Pod binding and resource epoch before
+and after delivery. Missing/revoked aliases fail at the read boundary. Legacy
+`credential.*` manifest entries are retained as history but do not gate access;
+`approveCredentials` remains a revision-checked compatibility no-op.
+
+## CLI setup help
+
+The MCP `runtime` response includes `programHelp`: executable/adapter assignment,
+command grants, network hosts, a fresh Pod terminal, private provider login and
+a real execution check. `program prepare` resolves a line to safe command metadata
+without running it. It can list assigned CLIs or their adapter operations.
+Assignments added after a terminal opened require exiting and reopening it.
+Host authentication and extensions are not automatically shared. For Homebrew
+Azure CLI, Python and the Azure DevOps extension must be verified separately;
+terminal success does not certify scheduled sandbox execution.
 
 ## Upgrade and recovery
 
