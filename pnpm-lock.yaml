@@ -975,6 +975,9 @@ importers:
       '@openape/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@openape/nuxt-auth-sp':
+        specifier: workspace:*
+        version: link:../../modules/nuxt-auth-sp
       '@openape/pods-protocol':
         specifier: workspace:*
         version: link:../../packages/pods-protocol
@@ -987,7 +990,13 @@ importers:
       nuxt:
         specifier: 'catalog:'
         version: 4.5.2(b0a3c132e12cfb17ac8ce4bccbf6271c)
+      vue:
+        specifier: '>=3.5.41'
+        version: 3.5.41(typescript@5.9.3)
     devDependencies:
+      '@openape/pods':
+        specifier: workspace:*
+        version: link:../openape-pods
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.0

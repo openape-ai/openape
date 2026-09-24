@@ -109,7 +109,7 @@ export function parseMasterAction(value: unknown): MasterAction {
   const extra: Record<string, string[]> = { list: [], runtime: [], setVariable: ['name', 'value', 'variableRevision'], prepareSchedule: ['spec', 'scheduleRevision'], setSchedule: ['spec', 'scheduleRevision', 'enabled'], setGroup: ['name', 'organizationRevision'], create: ['name'], inspect: [], run: [], pause: [], resume: [], installMailRecipe: [], revise: ['name'], draft: ['draftId', 'draftRevision', 'code', 'capabilities'], validate: ['draftId', 'draftRevision'], activate: ['draftId', 'draftRevision'], rollback: ['hash', 'expectedActive'], requestAccess: ['request'] }
   if (typeof item.action !== 'string' || !Object.hasOwn(extra, item.action)) throw new Error('Master action is not allowed')
   const scoped = !['list', 'runtime', 'create'].includes(item.action)
-  const allowed = ['action', ...(scoped ? ['podId', 'revision'] : []), ...extra[item.action]]
+  const allowed = ['action', ...(scoped ? ['podId', 'revision'] : []), ...extra[item.action]!]
   if (Object.keys(item).some(key => !allowed.includes(key) && !(item.action === 'draft' && key === 'packages')) || allowed.some(key => !(key in item))) throw new Error('Invalid master action fields')
   if (scoped && (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId) || !Number.isSafeInteger(item.revision) || (item.revision as number) < 1)) throw new Error('Invalid master pod revision')
   if (['create', 'revise'].includes(item.action) && (typeof item.name !== 'string' || !item.name.trim() || item.name.length > 100)) throw new Error('Invalid pod name')

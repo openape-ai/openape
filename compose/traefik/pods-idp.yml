@@ -13,7 +13,7 @@ http:
   routers:
     pods-relay-https:
       entryPoints: [https]
-      rule: Host(`pods.openape.ai`) && (PathPrefix(`/api/mobile/v1/`) || PathPrefix(`/api/runtime/v1/`) || PathPrefix(`/mobile-auth/`) || Path(`/.well-known/apple-app-site-association`) || Path(`/.well-known/oauth-client-metadata`))
+      rule: Host(`pods.openape.ai`) && (PathPrefix(`/api/mobile/v1/`) || PathPrefix(`/api/runtime/v1/`) || PathPrefix(`/mobile-auth/`) || Path(`/workspace`) || PathPrefix(`/workspace-auth/`) || PathPrefix(`/api/workspace/v1/`) || PathPrefix(`/pods-assets/`) || Path(`/.well-known/apple-app-site-association`) || Path(`/.well-known/oauth-client-metadata`))
       priority: 200
       service: pods-relay
       tls:
