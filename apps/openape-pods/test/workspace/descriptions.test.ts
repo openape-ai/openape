@@ -50,7 +50,9 @@ it('retains the last description on failure and resumes all messages beyond the 
     return 'Summary of completed segments'
   })
   message(pod.id, 'Initial'); descriptions.request(pod.id); descriptions.start(); await descriptions.idle()
-  for (let i = 0; i < 205; i++) message(pod.id, `Correction ${i}`)
+  store.transaction(() => {
+    for (let i = 0; i < 205; i++) message(pod.id, `Correction ${i}`)
+  })
   fail = true; descriptions.request(pod.id); descriptions.start(); await descriptions.idle()
   expect(descriptions.view(pod.id)).toMatchObject({ text: 'Summary of completed segments', state: 'failed', error: 'Synthetic model unavailable' })
   fail = false; descriptions.request(pod.id); descriptions.start(); await descriptions.idle()
