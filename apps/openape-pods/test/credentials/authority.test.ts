@@ -86,3 +86,13 @@ it('migrates schema 11 resources without losing assignments or their revisions',
   expect(registry.list(f.pod.id)[1]?.kind).toBe('credential')
   expect(migrated.db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
 })
+
+it('keeps a key that authenticates an HTTP destination away from scripts', () => {
+  const f = fixture(); f.registry.assignCredential(f.pod.id, 'agent_key', randomUUID(), 0); f.registry.assignCredential(f.pod.id, 'crm', randomUUID(), 1)
+  const authority = { identity: { podId: f.pod.id, connectionId: 'connection', issuer: 'https://id.example.invalid', owner: 'owner@example.invalid', subject: 'pod@example.invalid', keyId: 'key' }, ownerConnection: 'connection', grantId: 'grant' } as never
+  expect(f.authority.readable(f.pod.id, 'agent_key').configuration.alias).toBe('agent_key')
+  f.registry.assignHttp(f.pod.id, { origin: 'https://api.example.com', methods: ['GET'] }, authority, f.registry.epoch(f.pod.id), { type: 'ddisaAgent', credential: 'agent_key', subject: 'agent@id.example.com', issuer: 'https://id.example.com' })
+  expect(() => f.authority.readable(f.pod.id, 'agent_key')).toThrow('not readable by scripts')
+  expect(f.authority.assigned(f.pod.id, 'agent_key').configuration.alias).toBe('agent_key')
+  expect(f.authority.readable(f.pod.id, 'crm').configuration.alias).toBe('crm')
+})

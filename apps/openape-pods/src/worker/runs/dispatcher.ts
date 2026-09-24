@@ -2,7 +2,7 @@ import { MailWorkflow } from '../mail/workflow'
 import { createWorkflowMailTransport } from '../mail/workflow-transport'
 import type { WorkflowDefinition } from '../../contracts/workflows'
 import { workflowInput, publishWorkflowOutput } from '../workflows/handoff'
-import { parseAgentRequest } from '../../contracts/agent'
+import { maxAgentTimeoutSeconds, parseAgentRequest } from '../../contracts/agent'
 import { DependencyStore } from '../dependencies/store'
 import { assignedDirectories } from '../../runtime/directories'
 import { podDirectories } from '../../runtime/environment'
@@ -52,6 +52,8 @@ export interface RunServices {
   provider?: AgentGatewayServices['provider']
   tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
 }
+
+const maxAgentPauseMs = 2 * maxAgentTimeoutSeconds * 1000
 
 export class RunDispatcher {
   readonly runs: RunStore
@@ -121,8 +123,10 @@ export class RunDispatcher {
     const assertCurrent = () => { this.runs.assertLease(id); this.resources.assertCurrent(pod.id, epoch); if (this.store.getPod(pod.id).bindingRevision !== pod.bindingRevision) throw new Error('Script binding changed during the run'); signal.throwIfAborted() }
     const directory = join(this.store.root, 'runs', id)
     const pendingAgents = new Set<Promise<unknown>>()
-    // Agent calls carry their own bounded timeout, so they do not consume the script budget.
-    let activeAgentCalls = 0
+    // Agent calls carry their own bounded timeout, so they pause the script budget,
+    // up to a per-run total so unawaited calls cannot extend a run indefinitely.
+    let activeAgentCalls = 0; let agentPausedMs = 0; let agentSince = 0
+    const agentBudgetPaused = () => activeAgentCalls > 0 && agentPausedMs + (Date.now() - agentSince) < maxAgentPauseMs
     let shellScope: RunServiceScope | undefined
     try {
       await mkdir(directory, { recursive: true, mode: 0o700 })
@@ -162,7 +166,7 @@ export class RunDispatcher {
       let mail: MailRecipeSession | undefined
       this.runs.append(id, 'environment', { script: artifact, workspace: input.workspace, values: Object.fromEntries(Object.entries(runtime.environment).filter(([key]) => ['HOME', 'TMPDIR', 'PATH', 'SHELL', 'PODS_POD_ID', 'LANG', 'TERM'].includes(key))) })
       const result = await executeScript(runtime, directory, artifact, input, signal, {
-        budgetPaused: () => activeAgentCalls > 0 || this.runs.approvals(pod.id).some(item => item.runId === id),
+        budgetPaused: () => agentBudgetPaused() || this.runs.approvals(pod.id).some(item => item.runId === id),
         event: (type, data) => { this.runs.assertLease(id); this.runs.append(id, type, data); if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
         request: async (operation, payload, operationSignal) => {
           assertCurrent()
@@ -176,7 +180,7 @@ export class RunDispatcher {
                 tool: body => invokeTool(body, signal),
                 credential: async (alias) => {
                   if (!this.services?.credential) throw new Error('Script credential service is unavailable')
-                  new ScriptCredentials(this.store, this.resources).assigned(pod.id, alias)
+                  new ScriptCredentials(this.store, this.resources).readable(pod.id, alias)
                   return this.services.credential(alias, operationSignal, scope)
                 },
                 http: async (request) => {
@@ -235,7 +239,7 @@ export class RunDispatcher {
           if (operation === 'credentials.get') {
             const alias = parseCredentialRead(payload)
             if (!this.services?.credential) throw new Error('Script credential service is unavailable')
-            new ScriptCredentials(this.store, this.resources).assigned(pod.id, alias)
+            new ScriptCredentials(this.store, this.resources).readable(pod.id, alias)
             const request = this.services.credential(alias, operationSignal, scope); pendingAgents.add(request)
             try { const value = await request; assertCurrent(); operationSignal.throwIfAborted(); return value }
             finally { pendingAgents.delete(request) }
@@ -244,9 +248,9 @@ export class RunDispatcher {
             if (!this.services?.provider) throw new Error('Codex is not connected; connect the pod provider before using this script')
             const request = parseAgentRequest(payload)
             const operation = executeAgent(runtime, directory, request.prompt, input.references.map(file => file.path), { provider: this.services.provider, tool: invokeTool }, operationSignal, (event) => { assertCurrent(); this.runs.append(id, 'agent', event) }, request.tools, request.timeoutSeconds)
-            pendingAgents.add(operation); activeAgentCalls++
+            pendingAgents.add(operation); if (activeAgentCalls++ === 0) agentSince = Date.now()
             try { return await operation }
-            finally { pendingAgents.delete(operation); activeAgentCalls-- }
+            finally { pendingAgents.delete(operation); if (--activeAgentCalls === 0) agentPausedMs += Date.now() - agentSince }
           }
           if (operation === 'tools.invoke') return invokeTool(payload, operationSignal)
           throw new Error('Unsupported script operation')

@@ -14,7 +14,7 @@ export async function publicHttpsAddresses(host: string) {
   return addresses
 }
 
-async function publicHttps(urlString: string, options: RequestInit): Promise<Response> {
+export async function publicHttps(urlString: string, options: RequestInit): Promise<Response> {
   const url = new URL(urlString)
   const addresses = await publicHttpsAddresses(url.hostname)
   options.signal?.throwIfAborted()

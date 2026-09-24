@@ -52,12 +52,20 @@ export async function executeHttp(resources: PodResource[], scope: ServiceScope,
     checking = authority.assertActive(authorization.grantId, combined).catch(() => { controller.abort(new Error('HTTP permission is no longer active')) }).finally(() => { checking = undefined })
   }, 1000)
   try {
-    const outgoing = authentication ? { ...request, headers: { ...request.headers, authorization: `Bearer ${await bearer!.token(authentication)}` } } : request
-    const reply = await requestHttp(outgoing, combined)
+    const token = authentication ? await bearer!.token(authentication) : undefined
+    const outgoing = token ? { ...request, headers: { ...request.headers, authorization: `Bearer ${token}` } } : request
+    let reply = await requestHttp(outgoing, combined)
+    if (token) reply = redact(reply, token)
     if (authentication && reply.status === 401) bearer!.reject(authentication)
     await authority.assertActive(authorization.grantId, combined)
     combined.throwIfAborted()
     return reply
   }
   finally { clearInterval(timer); controller.abort(); await checking }
+}
+
+// A destination may echo request headers; the injected token must not reach the script.
+function redact(reply: HttpReply, token: string): HttpReply {
+  const hide = (value: string) => value.replaceAll(token, '[redacted]')
+  return { ...reply, body: hide(reply.body), headers: Object.fromEntries(Object.entries(reply.headers).map(([name, value]) => [name, hide(value)])) }
 }

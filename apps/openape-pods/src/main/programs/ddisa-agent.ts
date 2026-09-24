@@ -1,5 +1,6 @@
 import { createPrivateKey, randomUUID, sign } from 'node:crypto'
 import type { HttpAuthentication } from '../../contracts/http'
+import { publicHttps } from './http'
 
 type Transport = (url: string, options: RequestInit) => Promise<Response>
 const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url')
@@ -10,7 +11,7 @@ const cacheKey = (authentication: HttpAuthentication) => JSON.stringify([authent
 export class DdisaAgentTokens {
   private readonly cache = new Map<string, { podId: string, credentialId: string, token: string, expiresAt: number }>()
 
-  constructor(private readonly transport: Transport = fetch, private readonly now = () => Date.now()) {}
+  constructor(private readonly transport: Transport = publicHttps, private readonly now = () => Date.now()) {}
 
   async bearer(podId: string, authentication: HttpAuthentication, credentialId: string, readKey: () => Promise<string>, signal: AbortSignal): Promise<string> {
     const key = `${podId}:${cacheKey(authentication)}`
@@ -27,7 +28,9 @@ export class DdisaAgentTokens {
       body: JSON.stringify({ grant_type: 'client_credentials', client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer', client_assertion: assertion }),
     })
     if (!response.ok) throw new Error(`DDISA agent authentication failed (${response.status})`)
-    const reply = await response.json() as { access_token?: unknown, expires_in?: unknown }
+    let reply: { access_token?: unknown, expires_in?: unknown }
+    try { reply = await response.json() as typeof reply }
+    catch { throw new Error('DDISA agent authentication returned an invalid token') }
     if (typeof reply.access_token !== 'string' || !reply.access_token || typeof reply.expires_in !== 'number' || reply.expires_in <= 60 || reply.expires_in > 86400) throw new Error('DDISA agent authentication returned an invalid token')
     this.cache.set(key, { podId, credentialId, token: reply.access_token, expiresAt: this.now() + reply.expires_in * 1000 })
     return reply.access_token
