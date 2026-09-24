@@ -2306,5 +2306,9 @@
   "Your DDISA email": "Deine DDISA-E-Mail-Adresse",
   "Continue": "Weiter",
   "Sign-in could not be started": "Die Anmeldung konnte nicht gestartet werden",
-  "Sign-out failed. Please try again.": "Die Abmeldung ist fehlgeschlagen. Bitte versuche es erneut."
+  "Sign-out failed. Please try again.": "Die Abmeldung ist fehlgeschlagen. Bitte versuche es erneut.",
+  "Invalid workspace action fields": "Ungültige Felder der Arbeitsbereichsaktion",
+  "Invalid workspace query": "Ungültige Arbeitsbereichsabfrage",
+  "Connect the central workspace in the desktop app first": "Verbinde zuerst den zentralen Arbeitsbereich in der Desktop-App",
+  "Invalid tool arguments": "Ungültige Werkzeugargumente"
 }
