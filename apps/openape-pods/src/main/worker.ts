@@ -1,3 +1,9 @@
+import { administrationActions, parseAdministration } from '../contracts/codex-admin'
+import type { AdministrationJournal, AdministrationReceipt } from '../contracts/codex-admin'
+import { importPrivateSecret } from './codex/secret-import'
+import { programDefinition } from './programs/definition'
+import { applicationDefinition } from './programs/application'
+import { modelResources } from '../worker/master/resources'
 import { object as remoteObject, uuid as remoteUuid } from '@openape/pods-protocol'
 import { ProgramState } from './programs/state'
 import type { RemoteInternal } from '../worker/remote/control'
@@ -245,7 +251,51 @@ export class FixtureWorker {
     return (await this.connections.podConnection(podId, owner)).identity
   }
 
-  async codex(request: CodexRequest): Promise<unknown> { return this.dispatch({ codex: request }) }
+  async codex(request: CodexRequest): Promise<unknown> {
+    if (!administrationActions.includes(String(request.action.action))) return this.dispatch({ codex: request })
+    const action = parseAdministration(request.action)
+    const receipt = await this.dispatch({ codexAdministration: { type: 'begin', request } }) as AdministrationReceipt
+    if (receipt.completed) return receipt.result
+    try {
+      const result = await this.administer(action)
+      await this.dispatch({ codexAdministration: { type: 'complete', request, result } })
+      return result
+    }
+    catch (error) {
+      await this.dispatch({ codexAdministration: { type: 'failed', request } })
+      if (action.kind === 'importSecret') throw new Error('Secret import failed; inspect the private file, current Pod revision and resource epoch before retrying')
+      throw error
+    }
+  }
+
+  private async administer(action: ReturnType<typeof parseAdministration>): Promise<unknown> {
+    const { command } = action
+    if (action.kind === 'description') return { description: (await this.details(action.command)).description }
+    if (action.kind === 'setup') { await this.master(action.command); return { status: 'applied' } }
+    if (action.kind === 'scripts') {
+      const view = await this.scripts(action.command)
+      return { pod: view.pod, resourceEpoch: view.resourceEpoch, credentialAliases: view.credentialAliases, drafts: view.drafts, versions: view.versions, source: view.source && { ...view.source, evidence: null } }
+    }
+    if (action.kind === 'recovery') {
+      const view = await this.runs(action.command)
+      return { runs: view.runs.map(({ id, state, scriptHash, startedAt, finishedAt, recovery }) => ({ id, state, scriptHash, startedAt, finishedAt, recovery: recovery?.state ?? null })), effects: view.effects?.map(({ key, runId }) => ({ key, runId })) ?? [] }
+    }
+    if (action.kind === 'program') {
+      const definition = action.command.type === 'add' || action.command.type === 'replace'
+        ? action.path!.endsWith('.app') ? await applicationDefinition(action.path!, join(this.root, 'applications')) : await programDefinition(action.path!, action.adapterPath, action.commandName)
+        : undefined
+      await this.program(action.command, definition, action.path)
+    }
+    else if (action.kind === 'importSecret') {
+      await importPrivateSecret(action.path, value => this.resources({ type: 'saveCredential', ...action.command, value }))
+    }
+    else {
+      await this.resources(action.command)
+    }
+    const view = await this.resources({ type: 'list', podId: command.podId })
+    return { resources: modelResources(view.resources, true), variables: view.variables, epoch: view.epoch }
+  }
+
   async chats(command: ChatsCommand): Promise<ChatsView> { return parseChatsView(await this.dispatch({ chats: command })) }
   async master(command: MasterCommand): Promise<MasterView> { return parseMasterView(await this.dispatch({ master: command })) }
 
@@ -312,7 +362,7 @@ export class FixtureWorker {
 
   async scheduling(command: ScheduleCommand): Promise<ScheduleView> { return parseScheduleView(await this.dispatch({ schedule: command })) }
 
-  private dispatch(command: { codex: CodexRequest } | { remote: RemoteInternal } | { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { codexAdministration: AdministrationJournal } | { codex: CodexRequest } | { remote: RemoteInternal } | { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()

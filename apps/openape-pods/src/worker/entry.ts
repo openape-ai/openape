@@ -1,3 +1,4 @@
+import type { AdministrationJournal } from '../contracts/codex-admin'
 import { RemoteControl } from './remote/control'
 import type { RemoteInternal } from './remote/control'
 import { ChatRegistry } from './master/chat-registry'
@@ -180,6 +181,9 @@ port.on('message', async (event) => {
     }
     if (request.command && typeof request.command === 'object' && 'chats' in request.command) {
       port.postMessage({ id: request.id, state: new ChatRegistry(store).execute(parseChatsCommand(request.command.chats)) }); return
+    }
+    if (request.command && typeof request.command === 'object' && 'codexAdministration' in request.command) {
+      port.postMessage({ id: request.id, state: codex.administration(request.command.codexAdministration as AdministrationJournal) }); return
     }
     if (request.command && typeof request.command === 'object' && 'codex' in request.command) {
       port.postMessage({ id: request.id, state: await codex.execute(parseCodexRequest(request.command.codex), AbortSignal.timeout(170000)) }); return

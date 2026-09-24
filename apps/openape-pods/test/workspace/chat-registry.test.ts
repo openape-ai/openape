@@ -69,7 +69,7 @@ it('migrates legacy messages and creation origins without losing content or rest
   const before = store.db.prepare('SELECT * FROM master_messages ORDER BY rowid').all()
   removeRemoteSchema(store.db)
   for (const row of store.db.prepare('SELECT name FROM sqlite_schema WHERE type=\'table\' AND (name LIKE \'chat_%\' OR name IN (\'control_changes\',\'control_runs\')) ORDER BY rowid DESC').all()) store.db.exec(`DROP TABLE ${row.name}`)
-  store.db.exec('PRAGMA user_version=20'); const root = store.root; store.close(); stores.splice(stores.indexOf(store), 1)
+  store.db.exec('ALTER TABLE pod_descriptions DROP COLUMN manual; PRAGMA user_version=20'); const root = store.root; store.close(); stores.splice(stores.indexOf(store), 1)
   const migrated = new PodDatabase(root); stores.push(migrated)
   expect(migrated.db.prepare('SELECT * FROM master_messages ORDER BY rowid').all()).toEqual(before)
   const registry = new ChatRegistry(migrated)

@@ -33,12 +33,12 @@ it('keeps Continue setup unavailable while the model provider is disconnected', 
   wrapper.unmount()
 })
 
-it('marks a description generated from the pod conversation', async () => {
+it('preserves a legacy description for direct editing', async () => {
   applyLanguage('de')
-  window.pods = { master: vi.fn().mockResolvedValue({ description: { text: 'Writes a greeting file.', state: 'ready', error: null, revision: 1, updatedAt: 1 } }) } as unknown as typeof window.pods
+  window.pods = { details: vi.fn().mockResolvedValue({ description: { text: 'Writes a greeting file.', state: 'ready', error: null, revision: 1, updatedAt: 1 } }) } as unknown as typeof window.pods
   const wrapper = mount(PodDescription, { props: { podId } }); await flushPromises()
-  expect(wrapper.text()).toContain('Writes a greeting file.')
-  expect(wrapper.text()).toContain('Aus diesem Chat erstellt')
+  expect(wrapper.get('textarea').element.value).toBe('Writes a greeting file.')
+  expect(wrapper.text()).toContain('Beschreibung speichern')
   wrapper.unmount()
 })
 
