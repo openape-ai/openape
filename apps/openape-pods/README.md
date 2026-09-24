@@ -720,3 +720,8 @@ integration provides a frozen batch, protected partners and a receipt-backed
 outbox. Production autonomous moves remain blocked pending a verified provider
 concurrency guarantee. See [execution contract and disabled pilot](docs/workflows.md)
 and the workflow chapter in the shared handbook.
+
+## Claude Code
+
+Use the existing installed MCP server: [setup and central workspace commands](docs/claude-code.md).
+Claude Code and Codex share the desktop executor and central data.
