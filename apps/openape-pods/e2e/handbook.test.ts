@@ -15,7 +15,7 @@ for (const locale of ['en', 'de']) {
       await page.locator('img').evaluateAll(images => images.forEach(image => (image as HTMLImageElement).loading = 'eager'))
       await page.waitForFunction(() => Array.from(document.images).every(image => image.complete && image.naturalWidth > 0))
       expect(await page.locator('html').getAttribute('lang')).toBe(locale)
-      expect(await page.locator('section').count()).toBe(26); expect(await page.locator('img').count()).toBe(12)
+      expect(await page.locator('section').count()).toBe(26); expect(await page.locator('img').count()).toBe(11)
       expect(await page.locator('nav a[href^="#"]').evaluateAll(links => links.every(link => document.querySelector(link.getAttribute('href')!)))).toBe(true)
       await page.addStyleTag({ content: 'html { scroll-behavior: auto; }' })
       await page.locator('nav a[href="#credentials"]').click(); expect(new URL(page.url()).hash).toBe('#credentials')
