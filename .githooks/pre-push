@@ -11,8 +11,8 @@ if [ "$SKIP_HOOKS" = "1" ]; then
 fi
 
 # Local pushes run only the affected unit suite (lint, typecheck, unit and
-# component tests). E2E and layout run once externally for the pushed head and
-# are recorded on the pull request; run `pnpm check:ci` explicitly before deployments.
+# component tests), matching automatic CI. E2E and layout are manual only;
+# run `pnpm check:ci` explicitly before deployments.
 echo "[pre-push] Running affected unit checks against origin/main"
 git fetch --quiet origin main || exit 1
 exec pnpm check:affected --base origin/main --head HEAD --suite unit
