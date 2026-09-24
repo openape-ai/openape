@@ -65,7 +65,7 @@ it('handbook: captures current native screens from isolated synthetic data witho
       await shot('setup')
       await page.locator('.pod-button').first().click()
       for (const [en, de, name] of [
-        ['Overview', 'Übersicht', 'overview'], ['Chat', 'Chat', 'chat'], ['Script', 'Skript', 'script'],
+        ['Overview', 'Übersicht', 'overview'], ['Script', 'Skript', 'script'],
         ['Permissions', 'Berechtigungen', 'permissions'], ['History', 'Historie', 'history'],
       ]) {
         await page.getByRole('tab', { name: title(en!, de!), exact: true }).click()

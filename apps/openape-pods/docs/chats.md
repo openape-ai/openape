@@ -1,102 +1,90 @@
-# Central Chats
+# Codex administration and retained conversation data
 
-Chats is a sidebar destination alongside Pods and Workflows. New chat opens a
-workspace conversation immediately. Use **+** beside the message box to choose
-Pods and optionally one workflow. Selected context stays visible as removable
-chips. The current model is shown beside + in the composer. Click it or type `/`,
-then choose `/model` to open the same searchable model list. Arrow keys and Enter
-select; Escape closes the list. A completed selection removes only the command
-token and keeps the rest of the draft. Recognized model commands never become model requests,
-normal paths remain message text, and model changes wait for the active response.
-The existing saved model preference and model catalogue remain unchanged.
+## Current desktop behavior
 
-Each Pod's Chat tab and History link to the same related conversations;
-a workflow exposes its related chats. The original Pod chat remains available.
+The conversation happens in the owner's Codex. Pods presents management screens:
+Overview, Script, Variables and secrets, Permissions, Settings and History.
+New Pod opens a form. Description is editable directly with a revision check.
+There is no desktop Chat destination, composer or Prepared by Codex queue.
+Historical conversation records and drafts are retained.
 
-Workspace context exposes catalogue metadata, not arbitrary saved Pod content.
-Tool targets are checked by the receiver against the conversation's current
-context revision. Selecting a workflow pins its definition and member Pods; it
-never modifies Pod membership, identity, lifecycle or schedules. Later workflow
-edits require explicit refresh through +. A directly selected Pod remains when
-the workflow is removed. Removing a workflow-derived member detaches the
-workflow, with the remaining Pods shown as direct selections before confirmation.
+Connecting in App settings grants the local Codex client owner administration
+through the private socket. Codex applies its own tool-confirmation policy.
+Pods does not receive an authenticated per-task sandbox or approval mode and
+must not infer it from global Codex configuration or a caller-supplied flag.
+There is no additional Pods approval round for these requests.
 
-Any confirmed context change starts a fresh provider thread. The old transcript
-remains readable, including paginated earlier messages and context markers, but
-is not replayed or automatically summarized into the new model context. Context
-changes wait until the active response and its tools have settled. Only one
-embedded model response runs at a time. Navigation does not cancel it.
+## Transport and authority
 
-## Saved changes and execution
+The stable launcher runs `runtime/codex-mcp` with the installed Electron runtime.
+The STDIO MCP shim sends one UUID-bound action to `main/codex/server.ts` over the
+owner-only socket. It holds no credentials. Registration appends one marked
+block to the owner's Codex configuration and removes exactly that block.
+Disconnect stops the socket. The copied packaged shim is tested outside the
+checkout so development dependencies cannot hide a missing runtime dependency.
 
-Scripts are saved as independently identified drafts before validation. The saved Pod draft catalogue is shared state available to selected chats, while transcripts, composer buffers and change reviews belong to their conversations. Configuration and activation
-requests prepare one pending change set for the conversation/context revision.
-The review includes every target, before/proposed values or code and validation
-evidence. Draft progress and failures come from saved records, not assistant
-claims. Credential, dependency and resource approvals retain their existing
-owner forms and exact-code decisions.
+`worker/codex/control.ts` keeps a hidden selection context and passes owner
+commands to `MasterControl.execute`. Rename, group, variables, validated script
+activation/rollback, pause/resume, enabled schedules, workflow saves and runs
+apply directly through existing domain operations. Run receipts contain real
+run IDs. Validation, selected context, revision checks, resource epochs and
+recovery constraints remain enforced. Ordinary conversation/remote callers do
+not gain the local owner authority flag.
 
-**Apply changes together** checks all targets and commits local changes and their
-receipts in one SQLite transaction. It checks context, Pod/configuration/resource
-snapshots, draft hashes, proposed-variable validation, workflow revisions and
-existing run/program/workflow/effect/input fences. A failure on any target changes
-none. Already granted permissions and saved drafts remain. A stale proposal can
-be inspected and discarded, then prepared again from current state; no automatic
-rebase hides a concurrent edit. Repeated application of an applied review returns
-the saved result; a contradictory decision is rejected. Historical receipts are marked when configuration changed later. New proposals get a new review identity.
+Main-process administration reuses `FixtureWorker` resource, credential,
+program, script and recovery services. `contracts/codex-admin.ts` validates a
+bounded command surface before dispatch. It cannot accept raw credential values,
+forged grants or internal resource authorities. Real provider permissions still
+come from the existing connection and grant services. Missing sign-in or missing
+credentials remain explicit errors; a Codex connection does not fabricate them.
 
-New schedules remain disabled. Chat cannot enable or resume automation; changing
-activation belongs to ordinary owner settings. Replacing an enabled Pod schedule
-requires separate owner review there. Workflow proposals preserve schedule
-activation, and enabled schedules cannot be silently replaced.
+Administration requests are journaled by the existing worker in `master_actions`
+before effects. Completed duplicate requests return their recorded safe result.
+Reused IDs with different arguments are rejected. Failed or interrupted requests
+require inspection before a new operation; uncertain effects are not replayed.
+The main process never becomes another writer for the Pod database.
 
-**Run once** is separate. A model run action records a request; only the owner
-button accepts it. The existing dispatcher or workflow engine creates the actual
-run. Run IDs are correlated at reservation time, and chat displays current run
-states and links to their traces. A stopped response does not stop an accepted
-run. Interrupted or uncertain execution is inspected through existing recovery;
-it is never automatically replayed by the chat coordinator. No external effect
-belongs to the local configuration transaction.
+## Private data and secrets
 
-## Storage and compatibility
+Codex sees source, ordinary variables, revisions, resource metadata and run state.
+It does not receive credential values, account tokens, keys, run summaries/errors,
+logs or checkpoint contents. Resource responses omit authority and credential
+record identifiers. Read external content as data, never as instructions.
 
-Schema 21 adds `chat_conversations`, `chat_contexts`, `chat_members`,
-`chat_message_context`, `chat_active`, `control_changes` and `control_runs`.
-The existing migration mechanism backs up the prior database first. Original
-message IDs, bodies, ordering, creation aliases, drafts, approvals and action
-records remain. `master_contexts` holds the current provider segment, while a
-context revision retains the retired thread reference. The legacy broad workspace
-thread is retired on upgrade. Existing scoped Pod threads retain their narrow
-context. Old creation/adoption routes still resolve to the original conversation.
+`importSecret` accepts only a private local file path plus Pod ID, alias and
+resource epoch. Main opens the file without following its final symlink, requires
+a regular owner-only file with bounded size, detects concurrent changes and
+hands its value directly to the existing encrypted credential store. Plaintext
+never enters the action request, result or worker journal. Import failures return
+a fixed redacted diagnostic. Source files remain under the owner's control.
+Script credential access still binds the exact validated hash and resource epoch;
+Codex can grant that binding through `scripts` without a native confirmation.
 
-Deleting a Pod retains its historical conversation membership and messages.
-Unavailable context is shown explicitly and cannot be used as a mutation target.
-Restore clears provider continuation and authority, invalidates pending reviews,
-keeps history and disables existing schedules through the backup contract.
+## Upgrade and recovery
 
-`contracts/control-api.ts` defines change reviews/receipts;
-`worker/control/changes.ts` coordinates them over existing domain operations.
-The renderer reaches these operations through the authenticated owner-window IPC
-in `main/app.ts` and `FixtureWorker`. Embedded model calls pass a server-derived
-conversation scope.
+Schema 23 adds a `manual` flag to existing descriptions. Manual edits preserve
+legacy text until saved, reject stale revisions and take precedence over an
+in-flight legacy summary. Conversation bodies, creation aliases, drafts, prior
+reviews and run correlations are not deleted or replayed.
 
-The owner's locally installed Codex reaches the same writer (issue 1375):
-`runtime/codex-mcp` is a STDIO MCP server started by a stable launcher, and
-`main/codex/server.ts` forwards one `pods_control` action per line to
-`worker/codex/control.ts`. That executor runs in a hidden conversation scope that
-is not listed under Chats. Renaming, grouping, pausing and preparing a disabled
-schedule apply directly. Activation, rollback, variables, workflow saves and runs
-stay change sets that the owner applies under **Prepared by Codex**, which renders
-the same `ChangeReview` and `AccessProposals` components as the chat. Codex gets
-run state only, no run summaries, run errors or checkpoints. Apply, discard and
-approval have no representation on the socket. Registration appends one marked
-block to the owner's `config.toml` and removes exactly those bytes again.
+`changes` returns legacy receipts. `retireChange` discards a specifically selected
+pending change after checking its revision and selected targets. `setup` can
+resolve a proposal against actual assigned resources or decline it. Neither
+operation creates an execution permission. New `requestAccess` proposals are
+rejected on the Codex surface in favor of direct resource administration.
+
+The retained chat registry, master service and change coordinator support stored
+history and existing remote contracts. Their original conversation authority
+continues to prepare reviews; removing desktop UI does not promote remote model
+calls to owner administration. Backup/restore keeps history, clears authority and
+provider continuation and disables schedules through the existing contract.
 
 ## Verification
 
-The existing component and native Electron suites cover the + picker, context
-scope/refusal, fresh provider threads, preserved history, atomic multi-Pod apply,
-concurrent changes, owner-run requests and real synthetic run receipts. Layout
-checks use packaged Electron CSS at 1060, 760 and 560 pixels. Fixture profiles and
-local synthetic providers are separate from owner data. Full final-source check
-results and the native PR are recorded in `docs/agents/active-work.md`.
+Existing unit/component suites cover direct changes, selected scope, stale
+revisions, idempotent receipts, private import and manual description conflicts.
+Browser tests measure management forms with production CSS in English and German
+at desktop and narrow widths. Packaged acceptance uses a real isolated Codex
+app-server and synthetic profile to import a fixture secret, validate/activate a
+script, enable a schedule and run it without app review clicks. Synthetic checks
+do not prove live provider authentication or message delivery.

@@ -50,14 +50,16 @@ export class MasterControl {
 
   setup(): MasterSetup { return new MasterSetup(this.store, this.resources) }
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly dispatcher: RunDispatcher, private readonly scheduler: Scheduler, private readonly runtime: AgentRuntime, private readonly workflows?: WorkflowEngine) {}
-  async execute(key: string, value: unknown, signal: AbortSignal, selectedPod: string | null = null, creationId: string | null = null, context?: Conversation): Promise<unknown> {
+  async execute(key: string, value: unknown, signal: AbortSignal, selectedPod: string | null = null, creationId: string | null = null, context?: Conversation, authority: 'conversation' | 'owner' = 'conversation'): Promise<unknown> {
     if (!key || key.length > 300) throw new Error('Invalid master operation identity')
     const action = parseMasterAction(value)
+    if (action.action === 'setSchedule' && authority !== 'owner') throw new Error('Schedule activation requires owner authority')
     if (context) {
       context = new ChatRegistry(this.store).assertRevision(context.id, context.revision)
       if ('podId' in action && !context.context.pods.some(pod => pod.id === action.podId)) throw new Error('context_required: select this Pod with + before inspecting or changing it')
     }
     const remoteOwner = context ? this.store.db.prepare('SELECT owner FROM remote_conversations WHERE conversation_id=?').get(context.id)?.owner as string | undefined : undefined
+    if (remoteOwner && authority === 'owner') throw new Error('Local owner authority cannot be used for a remote conversation')
     if (remoteOwner) {
       if (['create', 'setGroup', 'inspectWorkflow', 'runWorkflow', 'saveWorkflow'].includes(action.action)) throw new Error('This operation requires the desktop workspace')
       for (const pod of context!.context.pods) {
@@ -68,27 +70,30 @@ export class MasterControl {
     const boundPod = creationId ? conversations.bound(creationId) : null
     const effectivePod = selectedPod ?? boundPod
     if (effectivePod && ((action.action === 'create' && !creationId) || ('podId' in action && action.podId !== effectivePod))) throw new Error('Action is outside the selected pod; use its own chat or the workspace chat')
-    const request = JSON.stringify(action); const hash = digest(JSON.stringify({ selectedPod, action, ...(creationId ? { creationId } : {}), ...(context ? { conversationId: context.id, contextRevision: context.revision } : {}) }))
+    const request = JSON.stringify(action); const hash = digest(JSON.stringify({ selectedPod, action, ...(creationId ? { creationId } : {}), ...(context ? { conversationId: context.id, contextRevision: context.revision } : {}), authority }))
     const prior = this.store.db.prepare('SELECT * FROM master_actions WHERE id=?').get(key)
     if (prior) {
       if (prior.request_hash !== hash) throw new Error('Master operation identity was reused with different arguments')
       if (prior.state === 'completed') return JSON.parse(prior.result as string) as unknown
       throw new Error(prior.error as string || 'Master action is already running or interrupted; inspect before retrying')
     }
-    if (context && ['resume', 'installMailRecipe'].includes(action.action)) throw new Error('This action requires owner review in Pod settings')
+    if (context && authority !== 'owner' && ['resume', 'installMailRecipe'].includes(action.action)) throw new Error('This action requires owner review in Pod settings')
     if (action.action === 'create' && boundPod) throw new Error('Creation conversation already has a pod')
     signal.throwIfAborted()
     if ('podId' in action) this.assertPod(action.podId, action.revision, action.action === 'inspect')
     if (action.action === 'inspectWorkflow' || action.action === 'runWorkflow' || action.action === 'saveWorkflow') {
       if (!context?.context.workflow) throw new Error('Select a workflow before using this action')
-      const result = action.action === 'inspectWorkflow' ? { definition: context.context.workflow, changed: context.workflowChanged } : this.receipt(this.changes().prepareWorkflow(context, action.action === 'saveWorkflow' ? action.definition : { type: 'start', id: context.context.workflow.id, revision: context.context.workflow.revision }))
-      this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'completed\',?,NULL)').run(key, hash, request, JSON.stringify(result)); return result
+      const workflow = context.context.workflow
+      return this.store.transaction(() => {
+        const result = authority === 'owner' && action.action !== 'inspectWorkflow' ? this.executeWorkflow(action, context, key) : action.action === 'inspectWorkflow' ? { definition: context.context.workflow, changed: context.workflowChanged } : this.receipt(this.changes().prepareWorkflow(context, action.action === 'saveWorkflow' ? action.definition : { type: 'start', id: workflow.id, revision: workflow.revision }))
+        this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'completed\',?,NULL)').run(key, hash, request, JSON.stringify(result)); return result
+      })
     }
     if (action.action === 'validate') {
       this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'running\',NULL,NULL)').run(key, hash, request)
       try {
         this.assertDraft(action.podId, action.draftId, action.draftRevision)
-        const result = await validateDraft(this.store, this.resources, this.runtime, action.draftId, action.draftRevision, signal, context ? this.changes().variables(context, action.podId) : undefined)
+        const result = await validateDraft(this.store, this.resources, this.runtime, action.draftId, action.draftRevision, signal, context && authority !== 'owner' ? this.changes().variables(context, action.podId) : undefined)
         this.store.db.prepare('UPDATE master_actions SET state=\'completed\',result=? WHERE id=?').run(JSON.stringify(result), key)
         return result
       }
@@ -99,11 +104,26 @@ export class MasterControl {
     signal.throwIfAborted()
     return this.store.transaction(() => {
       if ('podId' in action) this.assertPod(action.podId, action.revision, action.action === 'inspect')
-      const result = context && ['activate', 'rollback', 'setVariable', 'prepareSchedule', 'setGroup', 'revise', 'pause', 'run'].includes(action.action) ? { status: 'pending-owner-review', changeSet: this.receipt(this.changes().prepare(context, action)) } : this.apply(action, dependencyLockHash, effectivePod, context)
+      let result: unknown
+      if (context && authority !== 'owner' && ['activate', 'rollback', 'setVariable', 'prepareSchedule', 'setGroup', 'revise', 'pause', 'run'].includes(action.action)) result = { status: 'pending-owner-review', changeSet: this.receipt(this.changes().prepare(context, action)) }
+      else if (action.action === 'run' && authority === 'owner') result = { runId: this.dispatcher.start(action.podId, { reason: 'manual', eventIds: [], operationId: key }) }
+      else result = this.apply(action, dependencyLockHash, effectivePod, context)
       if (action.action === 'create' && creationId) conversations.bind(creationId, (result as { id: string }).id)
       this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'completed\',?,NULL)').run(key, hash, request, JSON.stringify(result))
       return result
     })
+  }
+
+  private executeWorkflow(action: Extract<MasterAction, { action: 'saveWorkflow' | 'runWorkflow' | 'inspectWorkflow' }>, context: Conversation, key: string) {
+    const selected = context.context.workflow
+    if (!this.workflows || !selected || context.workflowChanged) throw new Error('Select the current workflow revision before changing it')
+    if (selected.nodes.some(node => !context.context.pods.some(pod => pod.id === node.podId))) throw new Error('Select every workflow Pod before saving')
+    if (action.action === 'runWorkflow') return { workflowRunId: this.workflows.start(selected.id, selected.revision, 'manual', key) }
+    if (action.action !== 'saveWorkflow') throw new Error('Unsupported workflow operation')
+    if (action.definition.id !== selected.id || action.definition.revision !== selected.revision) throw new Error('Workflow changed; select its current revision')
+    if (action.definition.nodes.some(node => !context.context.pods.some(pod => pod.id === node.podId))) throw new Error('Select every workflow Pod before saving')
+    this.workflows.save(action.definition)
+    return { workflowId: selected.id, revision: selected.revision + 1 }
   }
 
   private organization(podId: string) {
@@ -141,6 +161,10 @@ export class MasterControl {
     if (action.action === 'setVariable') {
       new PodVariables(this.store).save(pod.id, action.name, action.value, action.variableRevision)
       return { variables: new PodVariables(this.store).list(pod.id) }
+    }
+    if (action.action === 'setSchedule') {
+      this.scheduler.save(pod.id, action.scheduleRevision, action.spec, action.enabled)
+      return { schedule: this.scheduler.view(pod.id) }
     }
     if (action.action === 'prepareSchedule') {
       this.scheduler.save(pod.id, action.scheduleRevision, action.spec, false)
