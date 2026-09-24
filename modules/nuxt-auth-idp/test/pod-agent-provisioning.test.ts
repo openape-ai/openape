@@ -17,6 +17,9 @@ vi.mock('nitropack/runtime', () => ({
     return storage
   },
 }))
+const broker = vi.hoisted(() => ({ binding: null as null | { owner: string, key_id: string }, grant: {} as Record<string, unknown> }))
+vi.mock('../src/runtime/server/utils/broker-store', () => ({ hasBrokerStore: () => broker.binding !== null, useBrokerStore: () => ({ getAgent: async () => broker.binding }) }))
+vi.mock('../src/runtime/server/utils/broker-forward', () => ({ forwardBrokerOperation: async () => broker.grant }))
 const owner = 'owner@example.test'
 let server: Server | undefined
 let origin = ''
@@ -26,6 +29,7 @@ async function request(body: unknown, bearer = token) {
   return fetch(`${origin}/api/pods/agents`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}) }, body: JSON.stringify(body) })
 }
 beforeEach(async () => {
+  broker.binding = null; broker.grant = {}
   for (const storage of storages.values()) await storage.clear()
   const { useIdpStores } = await import('../src/runtime/server/utils/stores')
   const { issueAuthToken } = await import('../src/runtime/server/utils/agent-token')
@@ -116,4 +120,23 @@ describe('owner-scoped pod identity over HTTP', () => {
     expect(await (await status(agent)).json()).toMatchObject({ active: false, keyIds: [] })
   })
 
+})
+
+it('keeps a consumed brokered once grant active for its running operation, but refuses revocation, expiry and foreign grants', async () => {
+  const identity = await (await request(fixtureBody())).json()
+  const { useIdpStores } = await import('../src/runtime/server/utils/stores')
+  const { issueAuthToken } = await import('../src/runtime/server/utils/agent-token')
+  const signing = await useIdpStores().keyStore.getSigningKey()
+  const bearer = await issueAuthToken({ sub: identity.email, act: 'agent' }, 'https://id.openape.test', signing.privateKey, signing.kid)
+  broker.binding = { owner, key_id: identity.keyId }
+  const requestValue = { requester: identity.email, grant_type: 'once' }
+  const status = async () => (await fetch(`${origin}/api/pods/agents/${encodeURIComponent(identity.email)}?grant=assigned`, { headers: { Authorization: `Bearer ${bearer}` } })).json()
+  for (const grantStatus of ['approved', 'used']) {
+    broker.grant = { id: 'assigned', status: grantStatus, request: requestValue }
+    expect(await status()).toMatchObject({ active: true, grantActive: true })
+  }
+  for (const delta of [{ status: 'revoked' }, { status: 'denied' }, { status: 'pending' }, { expires_at: 1 }, { id: 'foreign' }, { request: { ...requestValue, requester: 'foreign@example.test' } }, { request: { ...requestValue, grant_type: 'always' } }]) {
+    broker.grant = { id: 'assigned', status: 'used', request: requestValue, ...delta }
+    expect(await status()).toMatchObject({ grantActive: false })
+  }
 })
