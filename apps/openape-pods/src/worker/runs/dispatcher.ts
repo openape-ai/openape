@@ -121,6 +121,8 @@ export class RunDispatcher {
     const assertCurrent = () => { this.runs.assertLease(id); this.resources.assertCurrent(pod.id, epoch); if (this.store.getPod(pod.id).bindingRevision !== pod.bindingRevision) throw new Error('Script binding changed during the run'); signal.throwIfAborted() }
     const directory = join(this.store.root, 'runs', id)
     const pendingAgents = new Set<Promise<unknown>>()
+    // Agent calls carry their own bounded timeout, so they do not consume the script budget.
+    let activeAgentCalls = 0
     let shellScope: RunServiceScope | undefined
     try {
       await mkdir(directory, { recursive: true, mode: 0o700 })
@@ -160,7 +162,7 @@ export class RunDispatcher {
       let mail: MailRecipeSession | undefined
       this.runs.append(id, 'environment', { script: artifact, workspace: input.workspace, values: Object.fromEntries(Object.entries(runtime.environment).filter(([key]) => ['HOME', 'TMPDIR', 'PATH', 'SHELL', 'PODS_POD_ID', 'LANG', 'TERM'].includes(key))) })
       const result = await executeScript(runtime, directory, artifact, input, signal, {
-        awaitingApproval: () => this.runs.approvals(pod.id).some(item => item.runId === id),
+        budgetPaused: () => activeAgentCalls > 0 || this.runs.approvals(pod.id).some(item => item.runId === id),
         event: (type, data) => { this.runs.assertLease(id); this.runs.append(id, type, data); if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
         request: async (operation, payload, operationSignal) => {
           assertCurrent()
@@ -241,10 +243,10 @@ export class RunDispatcher {
           if (operation === 'agent.run') {
             if (!this.services?.provider) throw new Error('Codex is not connected; connect the pod provider before using this script')
             const request = parseAgentRequest(payload)
-            const operation = executeAgent(runtime, directory, request.prompt, input.references.map(file => file.path), { provider: this.services.provider, tool: invokeTool }, operationSignal, (event) => { assertCurrent(); this.runs.append(id, 'agent', event) }, request.tools)
-            pendingAgents.add(operation)
+            const operation = executeAgent(runtime, directory, request.prompt, input.references.map(file => file.path), { provider: this.services.provider, tool: invokeTool }, operationSignal, (event) => { assertCurrent(); this.runs.append(id, 'agent', event) }, request.tools, request.timeoutSeconds)
+            pendingAgents.add(operation); activeAgentCalls++
             try { return await operation }
-            finally { pendingAgents.delete(operation) }
+            finally { pendingAgents.delete(operation); activeAgentCalls-- }
           }
           if (operation === 'tools.invoke') return invokeTool(payload, operationSignal)
           throw new Error('Unsupported script operation')
