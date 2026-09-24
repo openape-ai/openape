@@ -103,3 +103,11 @@ at desktop and narrow widths. Packaged acceptance uses a real isolated Codex
 app-server and synthetic profile to import a fixture secret, validate/activate a
 script, enable a schedule and run it without app review clicks. Synthetic checks
 do not prove live provider authentication or message delivery.
+
+### Interpreted CLI runtimes
+
+Connected Codex can pass an owner-controlled `runtimePath` JSON descriptor when adding or replacing a program. Version 1 declares a native interpreter `executable`, fixed `arguments`, explicit read-only package `readDirectories`, and non-secret `environment` settings. Private HOME, loader and proxy settings remain managed by Pods. The interpreter and descriptor are hash-checked; replacement preserves private login state and resets command grants. Terminal and scheduled calls use the same launch configuration. Native programs need no descriptor. This does not enable arbitrary child processes or share the owner login cache. Runtime package directories are explicit code read access and must not contain credentials.
+
+For Homebrew Azure CLI, invoke the actual Python.app executable: its bin/python stub itself spawns another process. Include the Azure site-packages, Python and native dependency keg directories. Install `azure-devops` separately as code and set `AZURE_EXTENSION_DIR`; do not put extension code in the size-limited encrypted login state. The MCP runtime response documents the full descriptor and setup sequence. Test the actual runtime with an empty HOME before requesting Pod authentication.
+
+Brokered one-shot grants remain active for the operation that already consumed them, matching direct grants. A new execution still needs fresh authoritative consumption. Expiry, revocation, a different requester, deactivated identity and changed keys remain failures.

@@ -283,7 +283,7 @@ export class FixtureWorker {
     if (action.kind === 'program') {
       if (action.command.type === 'prepare') return this.program(action.command)
       const definition = action.command.type === 'add' || action.command.type === 'replace'
-        ? action.path!.endsWith('.app') ? await applicationDefinition(action.path!, join(this.root, 'applications')) : await programDefinition(action.path!, action.adapterPath, action.commandName)
+        ? action.path!.endsWith('.app') ? await applicationDefinition(action.path!, join(this.root, 'applications')) : await programDefinition(action.path!, action.adapterPath, action.commandName, action.runtimePath)
         : undefined
       await this.program(action.command, definition, action.path)
     }

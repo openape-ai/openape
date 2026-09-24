@@ -239,3 +239,24 @@ it('HTTP grant boundary: verifies the signed origin and method before transport 
   }
   finally { await f.close() }
 })
+
+it('program boundary: an explicit interpreter reuses private state while outside reads and child execution stay denied', async () => {
+  const f = await fixture(); const terminal = f.terminal()
+  try {
+    await expect.poll(() => terminal.view().output).toContain('SETUP_READY')
+    terminal.input('SYNTHETIC_CONFIGURATION\n'); await terminal.completed
+    expect(terminal.view().exitCode).toBe(0)
+    const interpreter = await realpath('/usr/bin/perl')
+    const descriptorPath = join(f.root, 'runtime.json')
+    const code = `open(my $state, '<', "$ENV{HOME}/state.txt") or die "missing private state"; my $value=<$state>; die "wrong state" unless $value eq "SYNTHETIC_CONFIGURATION\\n"; die "outside read allowed" if open(my $outside, '<', '${join(f.root, 'outside.txt')}'); my $child=fork(); die "fork allowed" if defined($child); print "PRIVATE_STATE_AND_BOUNDARIES_OK_0\\n";`
+    await writeFile(descriptorPath, JSON.stringify({ version: 1, executable: interpreter, arguments: ['-e', code], readDirectories: [], environment: { FIXTURE_MODE: '0' } }), { mode: 0o600 })
+    const { loadProgramRuntime } = await import('../src/main/programs/runtime')
+    f.resource.configuration = { ...f.assignment, runtime: await loadProgramRuntime(descriptorPath) }
+    const result = await f.invoke(['read'])
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toBe('PRIVATE_STATE_AND_BOUNDARIES_OK_0\n')
+    await writeFile(descriptorPath, '{}')
+    await expect(f.invoke(['read'])).rejects.toThrow()
+  }
+  finally { terminal.close(); await terminal.completed; await f.close() }
+})

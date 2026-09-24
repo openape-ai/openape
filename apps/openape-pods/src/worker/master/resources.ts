@@ -14,6 +14,7 @@ export function modelResources(resources: PodResource[], includeCommands = false
       const adapter = loadAdapter(String(configuration.cliId), String(configuration.adapterPath))
       if (adapter.digest.replace('SHA-256:', '') !== configuration.adapterHash) throw new Error('Application command reference changed; reassign the application in Permissions')
       visible.commands = adapter.adapter.operations
+      visible.runtimeConfigured = Boolean(configuration.runtime)
     }
     if (Array.isArray(configuration.grants)) visible.permissions = configuration.grants.map(grant => (grant as { permission: string }).permission)
     return { id, revision, kind, state, name, configuration: visible }

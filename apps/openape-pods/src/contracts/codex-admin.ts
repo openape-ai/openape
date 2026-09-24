@@ -10,8 +10,8 @@ import type { CodexRequest } from './codex'
 export const administrationActions = ['resources', 'scripts', 'recovery', 'program', 'importSecret', 'description', 'setup']
 
 export function parseAdministration(action: Record<string, unknown>) {
-  const { action: kind, command, revision, path, adapterPath, commandName } = action
-  if (!administrationActions.includes(String(kind)) || Object.keys(action).some(key => !['action', 'command', 'revision', 'path', 'adapterPath', 'commandName'].includes(key))) throw new Error('Invalid administration action')
+  const { action: kind, command, revision, path, adapterPath, commandName, runtimePath } = action
+  if (!administrationActions.includes(String(kind)) || Object.keys(action).some(key => !['action', 'command', 'revision', 'path', 'adapterPath', 'commandName', 'runtimePath'].includes(key))) throw new Error('Invalid administration action')
   if (!Number.isSafeInteger(revision) || Number(revision) < 1) throw new Error('Current Pod revision required')
   if (kind === 'description') {
     const parsed = parseDetailsCommand(command)
@@ -29,7 +29,7 @@ export function parseAdministration(action: Record<string, unknown>) {
     const value = command as { podId: string, alias: string, epoch: number }
     if (!value || Object.keys(value).some(key => !['podId', 'alias', 'epoch'].includes(key)) || !/^[a-f0-9-]{36}$/.test(value.podId) || !Number.isSafeInteger(value.epoch) || value.epoch < 0) throw new Error('Invalid credential import')
     parseCredentialAlias(value.alias)
-    if (adapterPath !== undefined || commandName !== undefined) throw new Error('Invalid credential import fields')
+    if (adapterPath !== undefined || commandName !== undefined || runtimePath !== undefined) throw new Error('Invalid credential import fields')
     return { kind, revision: Number(revision), command: value, path: absolutePath(path) } as const
   }
   if (kind === 'resources') {
@@ -55,13 +55,14 @@ export function parseAdministration(action: Record<string, unknown>) {
   if (['add', 'replace', 'importState'].includes(parsed.type)) {
     absolutePath(path)
     if (adapterPath !== undefined) absolutePath(adapterPath)
+    if (runtimePath !== undefined) absolutePath(runtimePath)
     if (commandName !== undefined && (typeof commandName !== 'string' || !/^[\w.-]{1,100}$/.test(commandName))) throw new Error('Invalid command name')
-    if (parsed.type === 'importState' && (adapterPath !== undefined || commandName !== undefined)) throw new Error('Invalid state import fields')
+    if (parsed.type === 'importState' && (adapterPath !== undefined || commandName !== undefined || runtimePath !== undefined)) throw new Error('Invalid state import fields')
   }
   else {
     noPaths(action)
   }
-  return { kind: 'program', revision: Number(revision), command: parsed, path: path as string | undefined, adapterPath: adapterPath as string | undefined, commandName: commandName as string | undefined } as const
+  return { kind: 'program', revision: Number(revision), command: parsed, path: path as string | undefined, adapterPath: adapterPath as string | undefined, commandName: commandName as string | undefined, runtimePath: runtimePath as string | undefined } as const
 }
 
 function absolutePath(value: unknown): string {
@@ -69,7 +70,7 @@ function absolutePath(value: unknown): string {
   return value
 }
 function noPaths(action: Record<string, unknown>) {
-  if (['path', 'adapterPath', 'commandName'].some(key => key in action)) throw new Error('Unexpected administration path')
+  if (['path', 'adapterPath', 'commandName', 'runtimePath'].some(key => key in action)) throw new Error('Unexpected administration path')
 }
 
 export type AdministrationReceipt = { completed: false } | { completed: true, result: unknown }
