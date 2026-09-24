@@ -8,7 +8,7 @@ Erstellt aus handbook.de.json. Abbildungen zeigen die gepackte App mit synthetis
 
 ## Was Pods macht und wie du es erhältst
 
-OpenApe Pods ist eine Mac-App für wiederkehrende Aufgaben. Du beschreibst eine Aufgabe im Chat; der Assistent bereitet ein gespeichertes Skript vor. Jeder Pod hat einen eigenen Arbeitsbereich, Zugriffsrechte, Ergebnisse und eine Historie. Du prüfst die Einrichtung, startest ihn manuell und entscheidest erst danach über automatische Ausführungen.
+OpenApe Pods führt wiederkehrende Aufgaben auf deinem Mac aus. Konfiguriere einen Pod direkt oder beschreibe die Aufgabe dem verbundenen Codex. Jeder Pod hat einen Arbeitsbereich, Berechtigungen, Ergebnisse und Historie. Prüfe einen echten Lauf, bevor du dich auf geplante Ausführungen verlässt.
 
 Verfügbarkeit — September 2026: Pods ist ein interner Pilot ohne öffentliche Downloadfreigabe. Es gibt eine intern mit Developer ID signierte und von Apple notarisierte App; damit ist die öffentliche Verteilung noch nicht freigegeben. Diese Anleitung nennt weder eine öffentliche Downloadadresse noch einen Veröffentlichungstermin. Ohne einen autorisierten internen Build kannst du die Installation von dieser Seite aus nicht abschließen.
 
@@ -18,34 +18,32 @@ Verwende zuerst einen kleinen Ordner mit unkritischen Beispieldateien und nur Le
 
 ## Persönliche Konten verbinden
 
-Öffne App-Einstellungen → Deine Konten. Die Seite zeigt genau zwei Konten: dein DDISA-Konto, mit dem du über Berechtigungsanfragen entscheidest, und dein Codex-/GPT-Konto, das den KI-Zugang für Chat und Modellaufrufe bereitstellt.
+Öffne App-Einstellungen → Deine Konten. Die Seite zeigt genau zwei Konten: dein DDISA-Konto, mit dem du über Berechtigungsanfragen entscheidest, und dein Codex-/GPT-Konto, das den KI-Zugang für Modellaufrufe in Pod-Skripten bereitstellt.
 
 Pods findet deinen Identitätsanbieter über den DDISA-Eintrag der Domain deiner E-Mail-Adresse. Alle Pods, Berechtigungen und mobilen Geräte verwenden dieses eine DDISA-Konto; es gibt nichts auszuwählen. Pod-Agenten sind nicht deine Konten und erscheinen hier nie. Ein Wechsel zu einem anderen DDISA-Konto gibt deinen Pods neue Agenten, deren Berechtigungen neu erteilt werden müssen.
 
 Weitere Dienste richtest du pro Pod ein: Programmanmeldungen unter Berechtigungen, Tokens und Passwörter unter Variablen und Geheimnisse. Du benötigst weder ein persönliches Konto noch eine zusätzliche Anmeldung bei pods.openape.ai.
 
 1. Gib unter Dein DDISA-Konto deine E-Mail-Adresse ein und wähle Anmelden. Schließe den Vorgang im Browser ab und kehre zu Pods zurück; das Konto zeigt Angemeldet.
-2. Wähle unter Codex-/GPT-Konto Anmelden. Schließe die angebotene Browseranmeldung ab und prüfe vor der Chat-Nutzung den Status Angemeldet.
+2. Wähle unter Codex-/GPT-Konto Anmelden. Schließe die angebotene Browseranmeldung ab und prüfe vor KI-gestützten Skripten den Status Angemeldet.
 3. Zeigt ein Konto später Abgelaufen oder einen Fehler, wähle Erneut anmelden am selben Konto. Gib eine andere E-Mail-Adresse nur ein, wenn du das Konto wechseln willst, und prüfe Wechsel bestätigen.
 4. Wähle Weiter zum Arbeitsbereich. Die Oberflächensprache änderst du unter App-Einstellungen → Sprache.
 
 ![Persönliche Konten verbinden](images/handbook-setup-de.png)
 
-## Den ersten Pod im Chat erstellen
+## Den ersten Pod erstellen
 
-Wähle Neuer Pod für den Erstellungs-Chat. Beschreibe Quelle, gewünschtes Ergebnis, was unverändert bleiben soll und woran du Erfolg erkennst. Ein erster Auftrag könnte lauten: „Erstelle einen Pod, der die Dateinamen in einem Beispielordner auflistet und deren Anzahl zurückgibt. Frage mich nach dem Ordner, fordere nur Lesezugriff an und bereite das Skript vor. Ändere keine Dateien, starte keinen Lauf und aktiviere keinen Zeitplan.“
+Wähle Neuer Pod, gib einen Namen ein und speichere. Bearbeite den Zweck unter Übersicht → Beschreibung. Beschreibe Quelle, gewünschtes Ergebnis und Erfolgskriterien.
 
-Wähle vor dem Senden das Chat-Modell. Pods merkt sich die Auswahl auf diesem Mac und verwendet sie für neue und fortgesetzte Chat-Beiträge. Modelle, die ausdrücklich in einem gespeicherten Skript gewählt wurden, bleiben unverändert. Enter sendet, Umschalt + Enter fügt einen Zeilenumbruch ein. In der gesamten App kann jeweils nur eine Assistentenantwort laufen.
+Verbinde für unterstützte Einrichtung Codex unter App-Einstellungen → Work from Codex, starte Codex neu und erteile dort deinen Auftrag. Pods enthält Verwaltungsformulare und Ausführungshistorie; Gespräche bleiben in Codex.
 
-Der Assistent kann Entwürfe speichern, Skripte validieren und Zugriffsanfragen vorbereiten. Zusätzliche Zugriffe genehmigst du. Der Chat kann einen Zeitplan vorbereiten, ihn aber nicht aktivieren. Eine Antwort, die fertige Arbeit ankündigt, beweist noch kein tatsächlich gespeichertes Skript oder eine erteilte Berechtigung.
+Der verbundene Codex kann Zugriffe konfigurieren, Skripte speichern und validieren, sie aktivieren und auf Wunsch Zeitpläne einschalten. Rückfragen richten sich nach Codex. Eine Fertigmeldung beweist noch keinen erfolgreichen Lauf.
 
-1. Beantworte normale Einrichtungsfragen über Frage beantworten. Nenne Ordner und unkritische Optionen; füge niemals ein Passwort oder Token in den Chat oder eine Antwort ein.
-2. Prüfe vorgeschlagene Ordner, Programme und HTTP-Ziele. Erlaube nur den benötigten Zugriff. Folge bei einem angeforderten Geheimnis dem geschützten Eingabeformular unter Variablen und Geheimnisse.
-3. Wähle nach den Antworten und Zugriffsentscheidungen Einrichtung fortsetzen. Der Assistent prüft den gespeicherten Stand und schließt die Vorbereitung ab, ohne einen Lauf zu starten oder Zeitpläne zu ändern.
-4. Öffne Skript und prüfe den gespeicherten Quelltext. Beachte den Speicherstatus im Chat: Ein fehlendes Skript oder gespeicherter Entwurf ist noch kein aktives Skript. Nach einer unterbrochenen Antwort nutze Einrichtung fortsetzen; verlasse dich nicht auf angekündigte Aktionen.
-5. Gleiche Berechtigungen und Variablen und Geheimnisse mit dem Auftrag ab. Lies Übersicht → Beschreibung, prüfe die tatsächliche Ausführung aber anhand des gespeicherten Skripts und der Zuweisungen. Lass dir unbekannten Code vor einer Freigabe im Chat erklären.
-
-![Den ersten Pod im Chat erstellen](images/handbook-chat-de.png)
+1. Erstelle den Pod oder bitte den verbundenen Codex darum.
+2. Nenne normale Einstellungen in Codex; übertrage Geheimnisse über OpenApe Secrets oder trage sie unter Variablen und Geheimnisse ein.
+3. Lass Codex die benötigten Zugriffe konfigurieren und das gespeicherte Skript validieren.
+4. Prüfe gespeichertes Skript, Zuweisungen und Zeitplan in Pods.
+5. Prüfe einen echten Lauf und sein externes Ergebnis, bevor du dich auf die Automatisierung verlässt.
 
 ## Pod-Identität und Anbieter-Erlaubnis prüfen
 
@@ -61,7 +59,7 @@ Bestehende Pods behalten Agent, Schlüssel und Grants. Identitätsdetails zeigt 
 
 ## Nur benötigte Zugriffe erlauben
 
-Berechtigungen trennt Ordner, Programme und HTTP-Ziele. Prüfe Chat-Vorschläge hier oder in deren vorausgefüllten Prüfformularen. Eine vorgeschlagene oder ausgewählte Ressource ist keine pauschale Erlaubnis für Befehle.
+Berechtigungen trennt Ordner, Programme und HTTP-Ziele. Du kannst sie direkt verwalten oder den verbundenen Codex damit beauftragen. Anbieteranmeldungen und echte externe Berechtigungen bleiben erforderlich.
 
 Ordnerzugriff betrifft die Originaldateien und Unterordner. Lesen und Schreiben erlaubt auch Änderungen und Löschungen. Wähle für den ersten Beispielauftrag Lesen. Externe Einrichtungsterminals und über Play gestartete Programme arbeiten mit den Rechten deines Mac-Benutzers; für sie gilt nicht die Ordner-Sandbox des Skripts.
 
@@ -79,14 +77,14 @@ Nach geänderten Zuweisungen pausiert der Pod und die vorherige Skriptvalidierun
 
 Nutze Variablen und Geheimnisse des jeweiligen Pods. Normale Variablen sind für den Assistenten sichtbar und nicht verschlüsselt. Verwende sie für unkritische Einstellungen wie eine Ordnerbezeichnung oder Ziel-ID. Passwörter, API-Schlüssel und Tokens gehören in Geheimnisse.
 
-Der Chat darf nach Name und Zweck eines Geheimnisses fragen, kann gespeicherte Werte aber nicht lesen. Füge den Wert niemals in den Chat, eine Antwort auf Frage beantworten, Skriptquelltext, Screenshots oder Supportnachrichten ein. Eine Abbildung darf nur das leere geschützte Formular und den Alias zeigen.
+Codex kann nach Name und Zweck eines Geheimnisses fragen, aber den gespeicherten Wert nicht lesen. Nutze OpenApe Secrets zur Übergabe oder das geschützte Eingabeformular. Füge den Wert nie in Gespräche, Quelltext, Screenshots oder Supportnachrichten ein.
 
 Die Zuweisung erlaubt den validierten Skripten dieses Pods, den Alias zu lesen. Prüfe den Quelltext: Ein Skript kann ein Geheimnis absichtlich in einen Prompt, eine Datei oder ein Protokoll kopieren. Sichere Speicherung macht beliebigen Code nicht sicher. Verwaltete Geheimnisse werden lokal verschlüsselt und nicht in Sicherungen exportiert.
 
 1. Wähle Geheimnis hinterlegen am angeforderten Alias oder trage den Zugangsdaten-Alias im geschützten Formular ein. Gib den Wert ausschließlich im maskierten Feld Geheimer Wert ein und wähle Zugangsdaten speichern oder ersetzen.
 2. Prüfe den Alias in der Liste. Das Wertefeld wird nach dem Absenden auch bei einem Fehler geleert; beachte deshalb die angezeigte Erfolgsmeldung oder Fehlermeldung.
-3. Prüfe Vom Skript verwendete Geheimnisse und speichere bei Bedarf den Skriptzugriff. Gehe zu Chat → Einrichtung fortsetzen und kontrolliere danach das gespeicherte Skript.
-4. Nach dem Ersetzen oder Entfernen eines Geheimnisses prüfe den pausierten Pod und validiere vor einem manuellen Lauf erneut. Nach einer Wiederherstellung musst du die Werte neu eingeben.
+3. Prüfe Vom Skript verwendete Geheimnisse und speichere bei Bedarf den Skriptzugriff. Lass Codex die Einrichtung fortsetzen und kontrolliere danach das gespeicherte Skript.
+4. Prüfe die vom Skript verwendeten Aliase. Lass Codex anschließend validieren und die Einrichtung abschließen oder nutze die Skript-Steuerung direkt.
 
 ![Variablen und Geheimnisse sicher hinterlegen](images/handbook-credentials-de.png)
 
@@ -110,7 +108,7 @@ Automatische Ausführungen laufen auf diesem Mac, nicht in der Cloud. Das Schlie
 
 Wenn die App wieder läuft oder der Mac aufwacht, wird für einen überfälligen aktivierten Zeitplan ein Nachholstart eingereiht, sofern noch kein Zeitplanstart wartet. Der nächste Termin wird in die Zukunft verschoben, statt jedes verpasste Intervall einzeln nachzuholen. Gespeicherter Fortschritt und Skript bestimmen, welche Daten dieser Lauf verarbeitet; damit ist nicht garantiert, dass jede verpasste E-Mail oder Datei nachgeholt wird.
 
-Unterbrochene Läufe sowie blockierte oder bereits beanspruchte Eingaben benötigen eine Wiederherstellungsentscheidung, bevor weitere Arbeit startet. Pro Pod läuft höchstens eine Ausführung gleichzeitig. Pausieren verhindert neue automatische Starts und lässt einen aktiven Lauf enden; Lauf abbrechen in der Historie stoppt ihn. Ein im Chat vorbereiteter Zeitplan bleibt deaktiviert und pausiert automatische Ausführungen.
+Unterbrochene Läufe sowie blockierte oder bereits beanspruchte Eingaben benötigen eine Wiederherstellungsentscheidung, bevor weitere Arbeit startet. Pro Pod läuft höchstens eine Ausführung gleichzeitig. Pausieren verhindert neue automatische Starts und lässt einen aktiven Lauf enden; Lauf abbrechen in der Historie stoppt ihn. Der verbundene Codex kann Zeitpläne auf deinen Auftrag hin aktivieren.
 
 1. Öffne nach einem erfolgreichen manuellen Lauf Einstellungen → Zeitplan und Limits. Wähle In einem Intervall mit Minuten oder Täglich mit Ortszeit und ausdrücklicher Zeitzone, beispielsweise Europe/Vienna.
 2. Aktiviere Diesen Zeitplan aktivieren und wähle Zeitplan speichern. Ist der Pod pausiert, wähle nach Prüfung der Bereitschaft zusätzlich Automatische Ausführung fortsetzen.
@@ -121,9 +119,9 @@ Unterbrochene Läufe sowie blockierte oder bereits beanspruchte Eingaben benöti
 
 ## Fehlerbehebung: der konkrete nächste Schritt
 
-Der Chat meldet „fertig“, aber ein Skript fehlt: Öffne Skript und prüfe den Speicherstatus im Chat. Beantworte offene Fragen, schließe Zugriffsprüfungen ab und wähle Einrichtung fortsetzen. Beende oder stoppe zuerst eine andere laufende Assistentenantwort.
+Codex meldet fertig: Prüfe das gespeicherte Skript, Ressourcen und tatsächliche Laufstatus in Pods. Bei fehlenden Eingaben oder einem Fehler lass Codex den aktuellen Zustand prüfen und korrigieren.
 
-Konto nicht verfügbar: Öffne App-Einstellungen → Deine Konten und wähle Erneut anmelden an dem Konto, das Abgelaufen oder einen Fehler zeigt. Prüfe für KI-Zugriff die Codex-/GPT-Verbindung und das Chat-Modell. Ein Wechsel zu einem anderen DDISA-Konto repariert keinen Agenten, sondern ersetzt alle Pod-Agenten.
+Konto nicht verfügbar: Öffne App-Einstellungen → Deine Konten und wähle Erneut anmelden an dem Konto, das Abgelaufen oder einen Fehler zeigt. Prüfe für KI-Zugriff die Codex-/GPT-Verbindung und das im Skript gewählte Modell. Ein Wechsel zu einem anderen DDISA-Konto repariert keinen Agenten, sondern ersetzt alle Pod-Agenten.
 
 Warten auf Freigabe: Wähle Freigabe öffnen und entscheide die Anfrage bei deinem DDISA-Anbieter. Die Wartezeit beträgt höchstens 15 Minuten. Prüfe danach den gestoppten Lauf und bereite die Wiederherstellung vor; das Bestätigen einer alten Anfrage nach einem App-Neustart startet den Lauf nicht erneut.
 
@@ -192,13 +190,13 @@ Gruppieren teilt keine Ressourcen oder Berechtigungen, macht kein Skript ungült
 
 ## Übersicht
 
-Die Beschreibung fasst die aktuell vereinbarten Anforderungen aus dem Pod-Chat zusammen. Sie wird nach abgeschlossenen Anfragen aktualisiert. Spätere Korrekturen ersetzen frühere Wünsche; der Startauftrag im Chat bleibt unverändert. Mit Im Chat ändern beschreibst du eine Änderung. Beschreibung aktualisieren erstellt den kurzen Übersichtstext aus dem bestehenden Verlauf neu, ohne eine Nachricht zu senden.
+Beschreibung hält den Zweck des Pods fest und lässt sich direkt bearbeiten. Bestehende Beschreibungen bleiben erhalten. Beschreibung speichern prüft, ob zwischenzeitlich jemand geändert hat.
 
-Die Beschreibung dient der Information. Ihr Text erteilt keine Zugriffsrechte, aktiviert kein Skript und ändert weder die Skriptausführung noch die Automatik. Wird aktualisiert und Nicht aktualisiert zeigen ausstehende oder fehlgeschlagene Generierung an. Beschreibung erneut erstellen behält den letzten erfolgreichen Text, bis ein neues Ergebnis vorliegt. Pods ohne Beschreibung zeigen einen Verweis zum Chat, in dem du ihre Aufgabe beschreiben kannst.
+Die Beschreibung ändert weder Skriptausführung noch Berechtigungen. Beauftrage den verbundenen Codex mit Verhaltensänderungen und prüfe danach Skript und echte Laufhistorie.
 
-1. Öffne einen Pod und lies die Beschreibung.
-2. Verwende Im Chat ändern für eine Korrektur. Der Startauftrag bleibt im Chat verfügbar.
-3. Prüfe die letzte Ausführung und verwende Jetzt ausführen, wenn das Skript bereit ist.
+1. Öffne einen Pod und bearbeite Beschreibung.
+2. Speichere die Beschreibung oder lade eine zwischenzeitliche Änderung neu.
+3. Prüfe den letzten Lauf und nutze Jetzt ausführen, sobald das Skript bereit ist.
 
 ![Übersicht](images/handbook-overview-de.png)
 
@@ -208,13 +206,13 @@ Der Tab Skript öffnet den aktuell gespeicherten Arbeitsstand, auch einen neuere
 
 Der JavaScript-Editor bietet Syntaxhervorhebung, Zeilennummern, horizontales Scrollen, Einrückung mit Tab, Escape gefolgt von Tab zum Verlassen und Cmd+S (Ctrl+S) zum Speichern. Quelltext wird wörtlich angezeigt und nicht in der Oberfläche ausgeführt.
 
-Ungespeicherte Skripte, normale Variablen, Einstellungen und Chat-Texte bleiben beim Navigieren innerhalb derselben Sitzung erhalten. Speichern Sie vor dem Beenden. Skript neu laden fragt vor dem Verwerfen von Änderungen. Bei einem Konflikt können Sie den aktuellen Stand laden oder Ihre Änderungen ausdrücklich als aktuelles Skript speichern.
+Ungespeicherte Skripte, normale Variablen, und Einstellungen bleiben beim Navigieren innerhalb derselben Sitzung erhalten. Speichern Sie vor dem Beenden. Skript neu laden fragt vor dem Verwerfen von Änderungen. Bei einem Konflikt können Sie den aktuellen Stand laden oder Ihre Änderungen ausdrücklich als aktuelles Skript speichern.
 
 Verfügbare Variablen und Geheimnisse zeigt aufklappbar kopierbare Zugriffsausdrücke. Geheimniswerte bleiben verborgen. Variablen und Geheimnisse verwalten öffnet den eigenen Tab. Verwalte Skript-Geheimnisse unter Variablen und Geheimnisse und Skript-Anwendungen unter Berechtigungen. Die Auswahl erteilt noch keine Ressourcenfreigabe.
 
 Gespeicherte Läufe starten über das mitgelieferte ape-shell mit dem Pod-Agenten. Der Node.js-Vertrag run(context) bleibt erhalten; HOME, Arbeitsverzeichnis und SHELL entsprechen dem Einrichtungsterminal. Eine fehlende Freigabe blockiert die Ausführung. Programmeinstellungen werden über context.tools.invoke wiederverwendet; Geheimnisse werden dadurch nicht automatisch Teil des KI-Kontexts.
 
-Unter Abhängigkeiten zeigt die Liste jedes Paket mit seiner festen Version. Klicke auf +, um die öffentliche npm-Registry zu durchsuchen, einen npm-Paketlink einzufügen oder name@1.2.3 einzugeben. Wähle einen Treffer, prüfe die feste Version und füge ihn hinzu; ein bereits vorhandener Name aktualisiert dessen Eintrag. Wähle eine Zeile und klicke auf −, um das Paket zu entfernen. Änderungen werden mit dem Skript gespeichert. Abhängigkeiten vorbereiten lädt die ausgewählten Pakete nach Bestätigung herunter. Suchen und Hinzufügen installieren noch nichts. Git-, Tarball- und private Registry-URLs werden nicht unterstützt. Bibliotheken teilen die Berechtigungen und den Geheimniszugriff des Skripts. Die Vorbereitung schließt Installationsskripte und native Erweiterungen aus; reguläre Läufe verwenden den geprüften schreibgeschützten Paketbestand ohne Downloads oder Updates. Paketänderungen erfordern Validierung; bestehende Geheimniszuweisungen des Pods gelten weiter. Die gespeicherte package.json steht weiterhin dem Pod-Chat zur Verfügung.
+Unter Abhängigkeiten zeigt die Liste jedes Paket mit seiner festen Version. Klicke auf +, um die öffentliche npm-Registry zu durchsuchen, einen npm-Paketlink einzufügen oder name@1.2.3 einzugeben. Wähle einen Treffer, prüfe die feste Version und füge ihn hinzu; ein bereits vorhandener Name aktualisiert dessen Eintrag. Wähle eine Zeile und klicke auf −, um das Paket zu entfernen. Änderungen werden mit dem Skript gespeichert. Abhängigkeiten vorbereiten lädt die ausgewählten Pakete nach Bestätigung herunter. Suchen und Hinzufügen installieren noch nichts. Git-, Tarball- und private Registry-URLs werden nicht unterstützt. Bibliotheken teilen die Berechtigungen und den Geheimniszugriff des Skripts. Die Vorbereitung schließt Installationsskripte und native Erweiterungen aus; reguläre Läufe verwenden den geprüften schreibgeschützten Paketbestand ohne Downloads oder Updates. Paketänderungen erfordern Validierung; bestehende Geheimniszuweisungen des Pods gelten weiter. Die gespeicherte package.json steht weiterhin dem verbundenen Codex zur Verfügung.
 
 1. Bearbeiten Sie den Quelltext und wählen Sie Skript speichern, um ihn ohne Ausführung zu sichern.
 2. Wählen Sie Ausführen oder Speichern & ausführen. Geänderter Quelltext wird gespeichert und in der bestehenden Sandbox mit synthetischen Diensten geprüft. Eine fehlgeschlagene Prüfung erhält den Text und lässt das zuvor aktive Skript unverändert.
@@ -227,7 +225,7 @@ Unter Abhängigkeiten zeigt die Liste jedes Paket mit seiner festen Version. Kli
 
 Normale Variablen sind benannte Zeichenketten in der SQLite-Datenbank dieses Pods. Skripte verwenden context.variables["name"]. Unterstützt werden bis zu 32 Variablen mit jeweils 2.048 Zeichen. Die Werte werden für jeden Lauf festgehalten; spätere Änderungen gelten für kommende Läufe. Diese Werte sind unverschlüsselt. Vertrauliche Werte gehören zu den Geheimnissen.
 
-Der eigene Tab zeigt alle gespeicherten Variablen und Geheimnisse dieses Pods. Leere Variablen sind mit Nicht hinterlegt gekennzeichnet. Vom gespeicherten Skript benötigte oder im Chat angefragte Geheimnisse erscheinen bereits ohne zugewiesenen Wert; Geheimnis hinterlegen übernimmt den Alias ins Formular. Mit der Zuweisung darf dieser Pod den Alias in seinen geprüften Skripten lesen. Entfernen der Zuweisung widerruft den Zugriff.
+Der eigene Tab zeigt alle gespeicherten Variablen und Geheimnisse dieses Pods. Leere Variablen sind mit Nicht hinterlegt gekennzeichnet. Vom gespeicherten Skript benötigte oder in gespeicherten Einrichtungsvorschlägen angefragte Geheimnisse erscheinen bereits ohne zugewiesenen Wert; Geheimnis hinterlegen übernimmt den Alias ins Formular. Mit der Zuweisung darf dieser Pod den Alias in seinen geprüften Skripten lesen. Entfernen der Zuweisung widerruft den Zugriff.
 
 Jeder Pod besitzt eigene Skriptversionen, einen Arbeitsbereich, einen dauerhaften Checkpoint und eigene Zugangsdaten-Zuweisungen. Gib unter Variablen und Geheimnisse einen Zugangsdaten-Alias und den verdeckten geheimen Wert ein und wähle Zugangsdaten speichern oder ersetzen. Ein Alias beginnt mit einem Kleinbuchstaben und enthält höchstens 64 Kleinbuchstaben, Ziffern, Unterstriche oder Bindestriche. Werte enthalten 1–16.384 Zeichen ohne Nullbytes. Pro Pod sind 32 aktuelle Aliase möglich; ein Skript darf insgesamt 16 Berechtigungen einschließlich zugewiesener Anwendungs- und HTTP-Berechtigungen deklarieren.
 
@@ -237,7 +235,7 @@ await context.credentials.get('crm') liefert den diesem Pod und Alias zugewiesen
 
 Ein Skript mit Lesezugriff auf einen geheimen Wert kann ihn ausdrücklich in einen Prompt, ein Protokoll, einen Checkpoint oder eine Datei schreiben. Prüfe vor der Freigabe den vollständigen Quelltext. Die synthetische Prüfung testet den Ausführungsvertrag mit Werten wie synthetic-credential-<alias>; sie beweist nicht, dass der Quelltext für jede Eingabe sicher ist. Ein späterer KI-Aufruf erhält den vom Skript zusammengestellten Prompt. Vom Skript geschriebene Dateien können mit ihrem Inhalt in Sicherungen gelangen.
 
-Speichern oder Ersetzen pausiert den Pod und macht bisherige Prüfungen ungültig. Eine reine Skriptänderung benötigt keine erneute Geheimnis-Freigabe. Ein Widerruf bricht betroffene Arbeiten ab und entfernt den verschlüsselten Wert. Weise nach einer Wiederherstellung die Werte erneut zu und prüfe die Skripte erneut; verwaltete geheime Werte und ihre Wiederherstellungseinträge fehlen absichtlich in Sicherungen. Unterbrochene Speichervorgänge werden beim Neustart abgeglichen. Neue Skriptversionen des Masters können sich keinen Zugang selbst freigeben.
+Speichern oder Ersetzen pausiert den Pod und macht bisherige Prüfungen ungültig. Eine reine Skriptänderung benötigt keine erneute Geheimnis-Freigabe. Ein Widerruf bricht betroffene Arbeiten ab und entfernt den verschlüsselten Wert. Weise nach einer Wiederherstellung die Werte erneut zu und prüfe die Skripte erneut; verwaltete geheime Werte und ihre Wiederherstellungseinträge fehlen absichtlich in Sicherungen. Unterbrochene Speichervorgänge werden beim Neustart abgeglichen. Der verbundene Codex kann Geheimniszugriff für das genaue validierte Skript und die aktuelle Ressourcen-Epoche freigeben.
 
 Das folgende Beispiel kombiniert normales Lesen und Schreiben mit Node.js, dauerhafte Variablen, einen ausdrücklichen Zugriff auf Zugangsdaten und einen getrennten KI-Aufruf. Der geheime Wert wird dabei nicht in den Prompt aufgenommen. Für die echte Ausführung sind ein zugewiesener Alias crm, die Pod-Ausführungsfreigabe und eine verbundene KI nötig. Die Prüfung verwendet eine synthetische KI-Antwort. Direkter Netzwerkzugriff und das Starten von Unterprozessen bleiben durch die bestehende Laufzeit beschränkt; eine Zugangsdaten-Deklaration erlaubt beides nicht.
 
@@ -276,7 +274,7 @@ export async function run(context) {
 
 ## Gleichzeitige Änderungen und Wiederherstellung
 
-Ändert ein Chat oder eine andere Bearbeitung das gespeicherte Skript, während Sie ungespeicherten Text haben, bleibt Ihr Text erhalten und ein veralteter Speicherversuch wird abgewiesen. Skript neu laden erlaubt nach Bestätigung das Verwerfen lokaler Änderungen. Meine Änderungen als aktuelles Skript speichern übernimmt Ihren Text ausdrücklich als neuen Arbeitsstand; vor der Ausführung sind weiterhin Prüfung und nötige Freigaben erforderlich.
+Ändert Codex oder eine andere Bearbeitung das gespeicherte Skript, während Sie ungespeicherten Text haben, bleibt Ihr Text erhalten und ein veralteter Speicherversuch wird abgewiesen. Skript neu laden erlaubt nach Bestätigung das Verwerfen lokaler Änderungen. Meine Änderungen als aktuelles Skript speichern übernimmt Ihren Text ausdrücklich als neuen Arbeitsstand; vor der Ausführung sind weiterhin Prüfung und nötige Freigaben erforderlich.
 
 Ein unveränderter Editor übernimmt beim erneuten Öffnen den aktuellen gespeicherten Quelltext. Speichern startet keinen Lauf. Ein Start wird bei verändertem aktivem Skript, belegtem Ausführungsplatz oder ausstehenden Eingaben abgewiesen, damit später kein anderer Code ausgeführt wird.
 
@@ -304,9 +302,9 @@ Wähle eine Anwendung aus, um ihre HTTPS-Hostnamen hinzuzufügen oder zu entfern
 
 ## Einstellungen
 
-Einstellungen enthält Pod-Name, Gruppe, Pod-Identität, Zeitplan und Limits sowie Weitere Optionen. Die erzeugte Beschreibung änderst du im Chat. Umbenennen erhält Arbeit und Berechtigungen.
+Einstellungen enthält Name, Gruppe, Pod-Identität, Zeitplan und Limits sowie Weitere Optionen. Die Beschreibung bearbeitest du direkt in Übersicht. Umbenennen erhält Arbeit und Berechtigungen.
 
-Unter Weitere Optionen können Sie den Pod archivieren oder einen archivierten Pod nach gesonderter nativer Bestätigung löschen. Dabei werden auch seine Variablen und sein Pod-Chat entfernt. Arbeitsbereich-Chat, gemeinsame Konten und ursprüngliche Referenzdateien bleiben erhalten.
+Weitere Optionen kann einen Pod archivieren oder einen archivierten Pod nach nativer Bestätigung löschen. Lokale Daten und Variablen werden entfernt. Gemeinsame Konten und ursprüngliche Referenzdateien bleiben; gespeicherte Gesprächshistorie folgt den bestehenden Aufbewahrungsregeln.
 
 ## Historie und Wiederherstellung
 
@@ -328,7 +326,7 @@ Filtere nach Art und aktiviere Ersetzte Versionen einbeziehen, um frühere Aussa
 
 Öffne einen Eintrag und wähle seine Quelle, um gespeicherten Inhalt, Version und Prüfsumme anzusehen. Extrahierter Text kann auf sein gespeichertes Original verweisen. Lange Vorschauen sind ausdrücklich als gekürzt gekennzeichnet. Quellentext wird unverändert angezeigt.
 
-Verwende die kontextbezogene Gesprächsaktion, um den Master zum gewählten Pod zu befragen. Aussagen und Quellenverlauf bleiben unabhängig vom Chat im Pod.
+Work from Codex öffnet die Verbindungseinstellungen. Besprich Änderungen in Codex. Feststellungen und Quellenhistorie bleiben im Pod gespeichert.
 
 ![Ergebnisse und Quellen](images/handbook-knowledge-de.png)
 
@@ -393,17 +391,17 @@ Mail-Workflows benötigen separat geprüfte Skripte für feste Nachrichtenpakete
 
 ## Mit deinem Codex arbeiten
 
-Wenn du Codex auf diesem Mac nutzt (ChatGPT-Desktop oder die Codex-CLI), kann es deine Pods mitbetreuen: Pods ansehen, Skriptentwürfe speichern und validieren, Pods umbenennen, gruppieren und pausieren sowie einen Zeitplan vorbereiten, der deaktiviert bleibt. Ausführung, Berechtigungen und Zugangsdaten bleiben in OpenApe Pods. Du brauchst kein global installiertes Node oder Codex; Pods bringt seine eigene Laufzeit mit.
+Der verbundene Codex auf diesem Mac verwaltet Pods direkt: Variablen und Ressourcen, Skriptvalidierung und Aktivierung, Zeitpläne sowie Start und Wiederherstellung von Läufen. Eine globale Node-Installation ist nicht nötig; Pods liefert seine Laufzeit mit.
 
-Codex wendet nie an, was ändert, wie ein Pod mit seinen Zugriffen arbeitet: eine neue Skriptversion, eine Variable, eine Workflow-Änderung oder einen Lauf. Das wartet unter „Von Codex vorbereitet“ in der Seitenleiste auf dich, mit Vorher und Nachher, bis du „Änderungen gemeinsam übernehmen“, „Einmal ausführen“ oder „Änderungen verwerfen“ wählst. Zugriffsanfragen erscheinen dort ebenfalls und nutzen die gewohnten Berechtigungsformulare. Codex sieht keine Laufzusammenfassungen, Lauffehler oder gespeicherten Checkpoints und erhält nie deine Konto-Tokens oder Pod-Schlüssel.
+Rückfragen richten sich nach den Einstellungen des Codex-Clients. Pods hat keine zusätzliche Freigabewarteschlange. Uneingeschränkter Zugriff in Codex hebt Skriptvalidierung, Revisionsprüfungen und echte Anmeldungen bei Anbietern nicht auf.
 
-Pods behandelt Text aus Mails, Webseiten oder Chats als Daten. Liest Codex solchen Text anderswo und versucht der Text, Codex zum Anwenden zu überreden, wartet die Änderung trotzdem auf dich. Prüfe jeden Eintrag, bevor du ihn anwendest.
+Codex erhält Ressourcenmetadaten und Laufstatus, keine Kontotokens, Pod-Schlüssel, Laufinhalte oder Geheimniswerte. Eine bereitgestellte private Geheimnisdatei kann direkt in den verschlüsselten Speicher importiert werden, ohne ihren Wert im Tool-Aufruf zu übertragen. E-Mails, Webseiten und andere externe Inhalte bleiben Daten, keine Anweisungen.
 
-OpenApe Pods muss laufen, damit Codex es erreicht. Wenn du die App verschiebst oder neu installierst, öffne sie einmal; sie repariert die Verbindung. Bis dahin meldet Codex, dass OpenApe Pods verschoben oder entfernt wurde.
+Pods muss laufen. Öffne es nach Verschieben oder Neuinstallation einmal, damit der Launcher aktualisiert wird. Alte Vorschläge werden beim Upgrade nicht ausgeführt; Codex kann überholte Vorschläge ausdrücklich verwerfen.
 
-Um die Anbindung zu entfernen, öffne die App-Einstellungen, dann „Mit Codex arbeiten“, und wähle „Codex trennen“. Hast du den Eintrag in Codex selbst geändert, lässt die App ihn unverändert; entferne ihn dann im Terminal mit codex mcp remove openape-pods.
+Trenne die Verbindung unter App-Einstellungen → Work from Codex. Selbst bearbeitete Codex-Einträge lässt Pods unverändert; entferne sie mit codex mcp remove openape-pods.
 
-1. Öffne die App-Einstellungen und wähle unter „Mit Codex arbeiten“ die Option „Codex verbinden“.
-2. Starte Codex einmal neu, damit es OpenApe Pods lädt.
-3. Bitte Codex zum Beispiel: „Liste meine Pods und bereite für Invoices einen täglichen Zeitplan um 07:00 vor.“
-4. Öffne „Von Codex vorbereitet“ in der Seitenleiste, prüfe jeden Vorschlag und wende ihn an oder verwirf ihn.
+1. Verbinde Codex unter App-Einstellungen → Work from Codex.
+2. Starte Codex einmal neu.
+3. Bitte Codex, die ausgewählten Pods einzurichten oder auszuführen.
+4. Prüfe angewendete Einstellungen und tatsächlichen Laufstatus in Pods; ein zweiter Freigabeklick ist nicht nötig.
