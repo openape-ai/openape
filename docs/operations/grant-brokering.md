@@ -58,3 +58,9 @@ and file installation as the existing `openape` service account. A failed first
 deployment is stopped; existing services with a previous image are rolled back.
 Keep the retained owner DB backup for explicit recovery; ordinary image rollback
 does not replace the live DB or discard grants created after the snapshot.
+
+### Machine request capacity
+
+`OPENAPE_RATE_LIMIT_MAX_AGENT` sets both the HTTP machine bucket and the accepted broker-request bound per connection. The default remains 120; invalid or non-positive values retain that default. Broker assertions live for at most 60 seconds, and the durable replay records remain until expiry. Increasing capacity does not skip signature, ownership, grant-status or replay verification.
+
+Assigned CLI calls perform several grant/status checks per invocation. Size the machine limit for the complete automation workload, including active-operation polling. On September 24, 2026, the owner IdP and Pods provider were configured for 600 requests per minute after the real IURIO scan exceeded 120. Keep the strict login bucket separate. Back up the service environment before changing it and verify health plus rate headers afterward.
