@@ -13,6 +13,14 @@ export class ScriptCredentials {
     return resource
   }
 
+  // A key that authenticates an HTTP destination stays with the runtime; a script
+  // holding it could mint tokens and bypass the destination's header boundary.
+  readable(podId: string, value: string): PodResource {
+    const resource = this.assigned(podId, value)
+    if (this.resources.list(podId).some(item => item.kind === 'tool' && item.state === 'ready' && item.configuration.type === 'http' && (item.configuration.authentication as { credential?: unknown } | undefined)?.credential === resource.configuration.alias)) throw new Error('This secret authenticates an HTTP destination and is not readable by scripts')
+    return resource
+  }
+
   approved(podId: string, hash: string): boolean {
     return !!this.store.db.prepare('SELECT 1 FROM scripts WHERE pod_id=? AND hash=?').get(podId, hash)
   }

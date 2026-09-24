@@ -7,7 +7,8 @@ export class EffectLedger {
   begin(podId: string, runId: string, key: string, operation: string, input: unknown): { execute: boolean, result?: unknown } {
     if (!/^[\w.:-]{1,160}$/.test(key) || !/^[a-z][a-z0-9.-]{1,100}$/.test(operation)) throw new Error('Invalid effect identity')
     const serialized = JSON.stringify(input)
-    if (!serialized || Buffer.byteLength(serialized) > 32768) throw new Error('Invalid effect input')
+    // Only the input hash is stored, so the bound follows the largest accepted HTTP request.
+    if (!serialized || Buffer.byteLength(serialized) > 128 * 1024) throw new Error('Invalid effect input')
     const hash = digest(serialized)
     return this.store.transaction(() => {
       const run = this.store.db.prepare('SELECT pod_id,state FROM runs WHERE id=?').get(runId)
