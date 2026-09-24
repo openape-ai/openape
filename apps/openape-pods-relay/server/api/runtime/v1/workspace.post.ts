@@ -13,7 +13,7 @@ export default defineEventHandler(event => boundary(event, () => workspaceBounda
   if (body.type === 'heartbeat') { store.heartbeat(runtime, lease, text(body.hash, 64)); return { ok: true } }
   if (body.type === 'disconnect') { store.disconnect(runtime, lease); return { ok: true } }
   if (body.type === 'archive') return store.archive(runtime, lease)
-  if (body.type === 'claim') return store.claim(runtime, lease)
+  if (body.type === 'claim') return new Response(JSON.stringify(store.claim(runtime, lease)), { headers: { 'content-type': 'application/json' } })
   if (body.type === 'publish') {
     let completion: { id: string, result: unknown, error: string | null } | undefined
     if (body.completion !== undefined) {

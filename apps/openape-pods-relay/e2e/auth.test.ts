@@ -90,6 +90,8 @@ it('registers a desktop and mobile through real DDISA callbacks and rejects repl
   const state = { version: 1, workspace: { ...fixture.host.workspace, pods: [fixture.host.workspace.pods[0]] }, pods: [fixture.view], archive: { schema: 23, tables: {} }, artifacts: [{ podId: fixture.view.id, path: 'workspace/example.bin', hash: artifactHash, size: artifact.length }] }
   const published = await central({ type: 'publish', lease: session.lease, id: randomUUID(), revision: 0, snapshot: state }) as { hash: string }
   await central({ type: 'heartbeat', lease: session.lease, hash: published.hash })
+  expect(await central({ type: 'claim', lease: session.lease })).toBeNull()
+  await central({ type: 'heartbeat', lease: session.lease, hash: published.hash })
   const workspaceInventory = await fetch(`${relay.url}/api/workspace/v1/inventory`, { headers: { cookie: webCookie } })
   expect(workspaceInventory.status, await workspaceInventory.clone().text()).toBe(200)
   expect(await workspaceInventory.json()).toMatchObject([{ id: desktop.registration.id, online: true }])
@@ -102,6 +104,7 @@ it('registers a desktop and mobile through real DDISA callbacks and rejects repl
   expect(crossSite.status).toBe(403)
   const submitted = await fetch(`${relay.url}/api/workspace/v1/commands`, { method: 'POST', headers: { cookie: webCookie, origin: relay.url, 'content-type': 'application/json' }, body: JSON.stringify(command) })
   expect(submitted.status, await submitted.clone().text()).toBe(202)
+  expect(await central({ type: 'claim', lease: session.lease })).toMatchObject({ id: command.id, state: 'started' })
   await central({ type: 'disconnect', lease: session.lease })
   const unavailable = await fetch(`${relay.url}/api/workspace/v1/pod?runtimeId=${desktop.registration.id}&podId=${fixture.view.id}`, { headers: { cookie: webCookie } })
   expect(unavailable.status).toBe(409)
