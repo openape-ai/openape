@@ -17,6 +17,8 @@ import { WorkspaceStore } from '../../openape-pods-relay/server/utils/workspace-
 import type { AgentRuntime } from '../src/worker/agent/executor'
 import type { CentralSnapshot } from '../src/contracts/central'
 
+vi.mock('electron', () => ({ utilityProcess: { fork: vi.fn() }, safeStorage: {}, app: { getPath: () => '/nonexistent' } }))
+
 const cleanup: (() => Promise<void> | void)[] = []
 afterEach(async () => { for (const task of cleanup.splice(0).reverse()) await task() })
 function fixture() {
@@ -47,12 +49,18 @@ it('adopts the current schema repeatedly without credentials or local process le
   store.db.prepare('UPDATE remote_pods SET owner=?').run(JSON.stringify({ ...actor.owner, subject: 'other' }))
   expect(() => projection.snapshot(actor.owner)).toThrow('Every Pod must belong')
 })
-it('executes a browser command once and exposes its committed result to both clients', async () => {
-  const { root, projection, actor, pod, details } = fixture()
+it('executes the same MCP/browser command once and exposes central results with offline gates', async () => {
+  const { root, store, projection, actor, pod, details } = fixture()
+  const runId = randomUUID()
+  store.db.prepare('INSERT INTO runs VALUES(?,?,?,\'failed\',1,2,?,?,0,0)').run(runId, pod.id, 'b'.repeat(64), 'Synthetic result', 'Synthetic failure')
   const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
   const execute = vi.fn(async () => details.execute({ type: 'describe', podId: pod.id, revision: 0, text: 'Shared with both clients' }))
   const request = async (body: Record<string, unknown>): Promise<unknown> => {
     const lease = String(body.lease)
+    if (body.type === 'inventory') return server.inventory(actor.owner)
+    if (body.type === 'read') return server.read(actor.owner, String(body.runtimeId), String(body.podId))
+    if (body.type === 'operation') return server.visibleOperation(actor.owner, String(body.id))
+    if (body.type === 'submit') return server.submit(actor.owner, String(body.runtimeId), Number(body.revision), body.command as Parameters<WorkspaceStore['submit']>[3], String(body.id))
     if (body.type === 'begin') return server.begin(actor)
     if (body.type === 'publish') return server.publish(actor, lease, String(body.id), Number(body.revision), body.snapshot, body.completion as Parameters<WorkspaceStore['publish']>[5])
     if (body.type === 'heartbeat') return server.heartbeat(actor, lease, String(body.hash))
@@ -63,17 +71,29 @@ it('executes a browser command once and exposes its committed result to both cli
   const controller = new CentralController(root, request, { snapshot: async () => projection.snapshot(actor.owner), execute, gate: async () => {} }, '/unused-no-artifacts')
   cleanup.push(() => controller.stop()); controller.start()
   await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+  const { FixtureWorker } = await import('../src/main/worker')
+  const worker = new FixtureWorker(() => {}); worker.central = controller
+  const call = (query: Record<string, unknown>) => worker.codex({ id: randomUUID(), action: { action: 'workspace', query } })
+  expect(await call({ type: 'inventory' })).toMatchObject([{ online: true, workspace: { pods: [{ id: pod.id, online: true }] } }])
   const id = randomUUID()
   const command = { channel: 'details' as const, body: { type: 'describe', podId: pod.id, revision: 0, text: 'Shared with both clients' } }
-  server.submit(actor.owner, actor.id, 1, command, id)
-  server.submit(actor.owner, actor.id, 1, command, id)
+  const submit = { type: 'submit', runtimeId: actor.id, revision: 1, command, id }
+  await call(submit)
+  await call(submit)
   await vi.waitFor(() => expect(server.operation(actor.owner, id).state).toBe('applied'), { timeout: 5000 })
+  expect(await call(submit)).toMatchObject({ id, state: 'applied' })
+  expect(await call({ type: 'operation', id })).toMatchObject({ id, state: 'applied' })
+  await expect(call({ ...submit, command: { ...command, body: { ...command.body, text: 'Changed retry' } } })).rejects.toThrow('workspace_operation_conflict')
+  await expect(call({ ...submit, id: randomUUID() })).rejects.toThrow('workspace_revision_conflict')
+  expect(await call({ type: 'read', runtimeId: actor.id, podId: pod.id })).toMatchObject({ pod: { details: { description: { text: 'Shared with both clients' } }, runs: { runs: [{ id: runId, summary: 'Synthetic result', error: 'Synthetic failure', state: 'failed' }] } } })
   expect(execute).toHaveBeenCalledOnce()
   expect(server.read(actor.owner, actor.id, pod.id).pod.details.description?.text).toBe('Shared with both clients')
   const archived = server.db.prepare('SELECT snapshot FROM runtimes WHERE id=?').get(actor.id)!.snapshot as string
   expect((JSON.parse(archived) as CentralSnapshot).archive.tables.pod_descriptions).toHaveLength(1)
   await controller.stop()
-  expect(() => server.read(actor.owner, actor.id, pod.id)).toThrow('pod_offline')
+  expect(await call({ type: 'inventory' })).toMatchObject([{ online: false, workspace: { pods: [{ id: pod.id, online: false }] } }])
+  await expect(call({ type: 'read', runtimeId: actor.id, podId: pod.id })).rejects.toThrow('pod_offline')
+  await expect(call({ ...submit, id: randomUUID(), revision: 2 })).rejects.toThrow('pod_offline')
 })
 
 it.each(['before publication', 'after commit'])('reconciles a lost response %s without executing the command twice', async (failure) => {
