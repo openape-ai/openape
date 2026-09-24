@@ -1,3 +1,4 @@
+import { installWorkspace } from './layout/workspace-fixture'
 import { mount, flushPromises } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PodStatus } from '../src/contracts/ipc'
@@ -13,13 +14,11 @@ describe('pod workspace shell', () => {
     const wrapper = mount(App)
     await flushPromises()
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
-    expect(wrapper.findAll('[role="tab"]').map(tab => tab.text())).toEqual(['Overview', 'Chat', 'Script', 'Variables and secrets', 'Permissions', 'Settings', 'History'])
+    expect(wrapper.findAll('[role="tab"]').map(tab => tab.text())).toEqual(['Overview', 'Script', 'Variables and secrets', 'Permissions', 'Settings', 'History'])
     expect(wrapper.text()).toContain('No pods yet')
     expect(wrapper.findAll('.pod-button')).toHaveLength(0)
     await wrapper.get('#tab-Permissions').trigger('click'); await flushPromises()
     expect(wrapper.get('[role="tabpanel"]').text()).toContain('Create a local pod')
-    await wrapper.get('#tab-Chat').trigger('click'); await flushPromises()
-    expect(wrapper.get('[role="tabpanel"]').text()).toContain('Connect Codex')
     await wrapper.get('#tab-Overview').trigger('click'); await flushPromises()
     listener({ ...ready, worker: { state: 'error', pid: null, error: 'Worker stopped. Reopen Pods.' } })
     await flushPromises()
@@ -58,22 +57,17 @@ describe('pod workspace shell', () => {
   })
 })
 
-it('starts a fresh creation chat when New pod is clicked again', async () => {
-  localStorage.removeItem('pods-creation-id')
-  const master = vi.fn().mockResolvedValue({ connected: true, state: 'idle', error: null, messages: [], drafts: [], proposals: [] })
-  window.pods = { master, getStatus: async () => ready, onStatus: () => () => {}, workspace: async () => ({ organization: { revision: 1, groups: [] }, pods: [] }) } as unknown as typeof window.pods
+it('preserves the creation form draft without starting a chat', async () => {
+  const master = vi.fn()
+  installWorkspace({ master })
   const wrapper = mount(App); await flushPromises()
   try {
     await wrapper.get('.new-pod').trigger('click'); await flushPromises()
-    await wrapper.get('textarea').setValue('An unfinished first request')
+    await wrapper.get('input').setValue('An unfinished name')
     await wrapper.get('.new-pod').trigger('click'); await flushPromises()
-    expect(wrapper.get('textarea').element.value).toBe('')
-    const beginnings = master.mock.calls.filter(([command]) => command.type === 'begin')
-    expect(beginnings).toHaveLength(2)
-    expect(beginnings[0][0].id).not.toBe(beginnings[1][0].id)
-    await wrapper.get('textarea').setValue('The second request')
-    await wrapper.get('form.master-compose').trigger('submit'); await flushPromises()
-    expect(master).toHaveBeenCalledWith(expect.objectContaining({ type: 'send', creationId: beginnings[1][0].id, text: 'The second request' }))
+    expect(wrapper.get('input').element.value).toBe('An unfinished name')
+    expect(wrapper.find('form.master-compose').exists()).toBe(false)
+    expect(master).not.toHaveBeenCalled()
   }
-  finally { wrapper.unmount(); localStorage.removeItem('pods-creation-id') }
+  finally { wrapper.unmount() }
 })

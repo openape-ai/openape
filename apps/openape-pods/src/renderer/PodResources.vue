@@ -82,7 +82,7 @@ export default defineComponent({
           </p><span class="badge">{{ t("{p0} · revision {p1}", { p0: label(resource.state), p1: resource.revision }) }}</span><p v-if="resource.kind !== 'reference'" class="muted">
             {{ resource.configuration.scope }}
           </p><button v-if="['expired', 'missing', 'refreshRequired'].includes(resource.state)" class="text-button" @click="$emit('discuss')">
-            {{ t("Resolve access in master chat") }}
+            {{ t("Work from Codex") }}
           </button>
         </div>
         <button v-if="mode === 'values'" class="text-button" :disabled="busy" @click="credentialAlias = resource.name">
