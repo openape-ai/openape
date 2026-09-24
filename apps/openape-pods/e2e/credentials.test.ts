@@ -68,6 +68,7 @@ export async function run(context) {
 `
     await panel().getByLabel('Script source').fill(code)
     await panel().getByRole('button', { name: 'Save script', exact: true }).click()
+    await panel().getByText('Draft saved. Validate it before activation.', { exact: true }).waitFor()
     await page.getByRole('tab', { name: 'Variables and secrets', exact: true }).click()
     expect(await page.getByRole('checkbox', { name: 'crm', exact: true }).count()).toBe(0)
     expect(await page.getByRole('button', { name: 'Save script access', exact: true }).count()).toBe(0)

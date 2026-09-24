@@ -16,6 +16,7 @@ function fixture() {
 it('saves source without secret declarations and preserves program declarations', async () => {
   const f = fixture(); const wrapper = mount(PodScript, { props: { pod: f.view.pod } }); await flushPromises()
   await wrapper.findAll('button').find(button => button.text() === 'Save script')!.trigger('click'); await flushPromises()
+  expect(() => structuredClone(f.scripts.mock.calls.at(-1)![0])).not.toThrow()
   expect(f.scripts).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'save', code: f.view.source!.code, capabilities: ['tool.orders.invoke'], draftRevision: 1 }))
   expect(f.scripts.mock.calls.every(([command]) => command.type === 'save' || command.type === 'list')).toBe(true)
   wrapper.unmount()

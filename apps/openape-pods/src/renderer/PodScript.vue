@@ -74,7 +74,7 @@ export default defineComponent({
       let packages
       try { packages = parsePackages(JSON.parse(state.packages)) }
       catch (error) { state.error = error instanceof Error ? error.message : 'Invalid package.json'; return }
-      await this.command({ type: 'save', podId: this.pod.id, revision: state.view?.pod.revision ?? this.pod.revision, draftId: !asNew && source?.kind === 'draft' ? source.id : null, draftRevision: !asNew && source?.kind === 'draft' ? source.revision : 0, code: state.code, packages, capabilities: state.toolCapabilities }, 'Draft saved. Validate it before activation.')
+      await this.command({ type: 'save', podId: this.pod.id, revision: state.view?.pod.revision ?? this.pod.revision, draftId: !asNew && source?.kind === 'draft' ? source.id : null, draftRevision: !asNew && source?.kind === 'draft' ? source.revision : 0, code: state.code, packages, capabilities: [...state.toolCapabilities] }, 'Draft saved. Validate it before activation.')
     },
     async prepareDependencies() {
       await this.save(); if (this.buffer.error) return
