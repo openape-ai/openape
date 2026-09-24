@@ -24,10 +24,10 @@ describe('workspace shell', () => {
     await mountApp()
     expect(tab('Overview').attributes('tabindex')).toBe('0')
     await tab('Overview').trigger('keydown', { key: 'ArrowRight' }); await flushPromises()
-    expect(tab('Chat').attributes('aria-selected')).toBe('true')
-    expect(tab('Chat').attributes('tabindex')).toBe('0')
+    expect(tab('Script').attributes('aria-selected')).toBe('true')
+    expect(tab('Script').attributes('tabindex')).toBe('0')
     expect(tab('Overview').attributes('tabindex')).toBe('-1')
-    await tab('Chat').trigger('keydown', { key: 'ArrowLeft' }); await flushPromises()
+    await tab('Script').trigger('keydown', { key: 'ArrowLeft' }); await flushPromises()
     expect(tab('Overview').attributes('aria-selected')).toBe('true')
   })
 
@@ -42,13 +42,13 @@ describe('workspace shell', () => {
     expect(runs.mock.calls.some(([command]) => command.type === 'start')).toBe(false)
   })
 
-  it('opens the pod chat from Discuss knowledge', async () => {
+  it('opens Codex connection settings from knowledge', async () => {
     installWorkspace()
     await mountApp()
     await button('Results and sources').trigger('click'); await flushPromises()
-    await button('Discuss knowledge').trigger('click'); await flushPromises()
-    expect(tab('Chat').attributes('aria-selected')).toBe('true')
-    expect(wrapper!.get('h1').text()).toBe('Mail knowledge')
+    await button('Work from Codex').trigger('click'); await flushPromises()
+    expect(wrapper!.get('h1').text()).toBe('App settings')
+    expect(wrapper!.text()).toContain('Connected Codex can administer')
   })
 
   it('lists assigned directories and references in Permissions but never account connections', async () => {

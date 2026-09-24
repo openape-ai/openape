@@ -24,7 +24,7 @@ onMounted(() => request('status'))
   <section class="codex-settings" :aria-label="t('Work from Codex')">
     <h3>{{ t('Work from Codex') }}</h3>
     <p class="muted">
-      {{ t('Your Codex on this Mac can inspect Pods, save and validate drafts, rename, group and pause Pods and prepare disabled schedules. Script versions, variables, runs and new permissions wait for you under Prepared by Codex.') }}
+      {{ t('Connected Codex can administer your Pods, assign permissions, activate scripts, enable schedules and start runs directly. Any confirmation follows your Codex settings. Conversations stay in Codex.') }}
     </p>
     <template v-if="connection">
       <p role="status">

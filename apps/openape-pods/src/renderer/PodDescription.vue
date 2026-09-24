@@ -1,46 +1,48 @@
-<script lang="ts">
-import { defineComponent } from 'vue'
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
 import { t, diagnostic } from './i18n'
-import type { PodDescription } from '../contracts/description'
 
-export default defineComponent({
-  props: { podId: { type: String, required: true } },
-  emits: ['change'],
-  data() { return { description: null as PodDescription | null, initial: '', error: '', closed: false, timer: null as ReturnType<typeof setTimeout> | null } },
-  async mounted() { await this.load() },
-  beforeUnmount() { this.closed = true; if (this.timer) clearTimeout(this.timer) },
-  methods: {
-    t, diagnostic,
-    async load() {
-      try { const view = await window.pods.master({ type: 'list', podId: this.podId }); this.description = view.description ?? null; this.initial = view.initialRequest?.text ?? ''; this.error = '' }
-      catch (error) { this.error = error instanceof Error ? error.message : 'Could not load description' }
-      if (!this.closed) this.timer = setTimeout(() => { void this.load() }, 1000)
-    },
-    async retry() {
-      try { const view = await window.pods.master({ type: 'summarize', podId: this.podId }); this.description = view.description ?? null }
-      catch (error) { this.error = String(error) }
-    },
-  },
-})
+const props = defineProps<{ podId: string }>()
+const text = ref(''); const revision = ref(0); const error = ref(''); const busy = ref(false)
+async function load() {
+  try {
+    const view = await window.pods.details({ type: 'list', podId: props.podId })
+    text.value = view.description?.text ?? ''; revision.value = view.description?.revision ?? 0
+  }
+  catch (failure) { error.value = String(failure) }
+}
+async function save() {
+  busy.value = true; error.value = ''
+  try {
+    const view = await window.pods.details({ type: 'describe', podId: props.podId, text: text.value, revision: revision.value })
+    revision.value = view.description!.revision
+  }
+  catch (failure) { error.value = String(failure) }
+  finally { busy.value = false }
+}
+onMounted(load)
 </script>
 
 <template>
-  <article class="card">
+  <form class="card" @submit.prevent="save">
     <h2>{{ t('Description') }}</h2>
-    <p class="description-text">
-      {{ description?.text || initial || t('Describe this pod in Chat to create its description.') }}
+    <label for="pod-description">{{ t('What should this Pod do?') }}</label>
+    <textarea id="pod-description" v-model="text" maxlength="4000" rows="3" :disabled="busy" />
+    <div class="overview-actions">
+      <button class="secondary" type="submit" :disabled="busy">
+        {{ t('Save description') }}
+      </button>
+      <button class="text-button" type="button" :disabled="busy" @click="load">
+        {{ t('Reload') }}
+      </button>
+    </div>
+    <p v-if="error" role="alert" class="error-message">
+      {{ diagnostic(error) }}
     </p>
-    <p class="muted" role="status">
-      {{ !description ? (initial ? t('Description pending') : t('No conversation description yet')) : description.state === 'ready' ? t('Generated from this conversation') : description.state === 'failed' ? t('Description not updated') : t('Updating description…') }}
-    </p>
-    <p v-if="error || description?.error" role="alert" class="error-message">
-      {{ diagnostic(error || description?.error) }}
-    </p>
-    <button v-if="description?.state === 'ready' || description?.state === 'failed' || (!description && initial)" class="secondary" @click="retry">
-      {{ description?.state === 'ready' ? t('Refresh description') : t('Retry description') }}
-    </button>
-    <button class="text-button" @click="$emit('change')">
-      {{ t('Change in chat') }}
-    </button>
-  </article>
+  </form>
 </template>
+
+<style scoped>
+label { display:block; margin-bottom:8px; color:var(--muted); }
+textarea { display:block; width:100%; min-height:88px; padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); font:inherit; resize:vertical; }
+</style>

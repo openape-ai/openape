@@ -12,7 +12,7 @@ import { fixtureShellIdentity } from './fixtures/shell-identity'
 
 // Issue 1375 acceptance: the bundled Codex CLI, with an isolated CODEX_HOME,
 // reaches the packaged app through the registration the owner made in App
-// settings. Codex prepares; only the owner's own surface applies or runs.
+// settings. Connected Codex administers directly, without a second app review.
 const bundle = resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents')
 const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup() })
@@ -31,7 +31,7 @@ function appServer(home: string) {
   return { request, statuses, notify: (method: string) => child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method })}\n`), close: () => child.kill() }
 }
 
-it('lets the owner\'s Codex prepare changes that land only through the app\'s review (packaged)', async () => {
+it('lets connected Codex configure, activate and run a Pod without app approvals (packaged)', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-codex-'))); fixtureDirectory(root)
   cleanups.push(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }))
   const store = new PodDatabase(root); store.createPod({ name: 'Invoices' }); store.close()
@@ -64,21 +64,29 @@ it('lets the owner\'s Codex prepare changes that land only through the app\'s re
   await call({ action: 'select', podIds: [pod!.id] })
   expect((await call({ action: 'revise', podId: pod!.id, revision: pod!.revision, name: 'Invoices 2026' })).value).toMatchObject({ name: 'Invoices 2026' })
   const revision = (await call({ action: 'inspect', podId: pod!.id, revision: pod!.revision + 1 })).value.pod.revision as number
-  expect((await call({ action: 'setVariable', podId: pod!.id, revision, name: 'recipient', value: 'ops@example.invalid', variableRevision: 0 })).value.status).toBe('pending-owner-review')
-  expect((await call({ action: 'run', podId: pod!.id, revision })).value.status).toBe('pending-owner-review')
-  expect((await call({ action: 'applyChanges', id: pod!.id, revision: 1 })).error).toBe(true)
-  const variables = async () => (await call({ action: 'inspect', podId: pod!.id, revision })).value.variables as { name: string, value: string }[]
-  expect(await variables()).toEqual([])
-
-  // The owner sees both requests under Prepared by Codex and applies only the change.
+  expect((await call({ action: 'setVariable', podId: pod!.id, revision, name: 'recipient', value: 'ops@example.invalid', variableRevision: 0 })).value.variables).toEqual([{ name: 'recipient', value: 'ops@example.invalid', revision: 1 }])
+  const secretPath = join(root, 'private-token'); await writeFile(secretPath, 'LOCAL_SYNTHETIC_TOKEN', { mode: 0o600 })
+  const imported = await call({ action: 'importSecret', revision, command: { podId: pod!.id, alias: 'test_token', epoch: 0 }, path: secretPath })
+  expect(imported.error).toBe(false)
+  expect(imported.value.resources).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'credential' })]))
+  const current = (await call({ action: 'list' })).value.pods.find((candidate: { id: string }) => candidate.id === pod!.id)
+  const code = `export async function run(context) {
+    await context.progress.commit({expectedRevision:context.input.checkpointRevision,checkpoint:{ran:true},sources:[],claims:[]});
+    return {status:'completed',summary:'Synthetic Codex run',completedInputIds:context.input.eventIds,gapIds:[]};
+  }`
+  const draft = (await call({ action: 'draft', podId: pod!.id, revision: current.revision, draftId: null, draftRevision: 0, code, capabilities: [] })).value
+  const scoped = { podId: pod!.id, revision: current.revision }
+  expect((await call({ action: 'validate', ...scoped, draftId: draft.draftId, draftRevision: draft.draftRevision })).error).toBe(false)
+  expect((await call({ action: 'activate', ...scoped, draftId: draft.draftId, draftRevision: draft.draftRevision })).error).toBe(false)
+  expect((await call({ action: 'resume', ...scoped })).value.lifecycle).toBe('active')
+  expect((await call({ action: 'setSchedule', ...scoped, scheduleRevision: 0, spec: { kind: 'interval', seconds: 900 }, enabled: true })).value.schedule.enabled).toBe(true)
+  const started = await call({ action: 'run', ...scoped })
+  expect(started.error).toBe(false); expect(started.value.runId).toMatch(/^[a-f0-9-]{36}$/)
+  await expect.poll(async () => (await call({ action: 'inspect', ...scoped })).value.runs.find((run: { id: string }) => run.id === started.value.runId)?.state, { timeout: 20000 }).toBe('completed')
+  expect((await call({ action: 'changes' })).value.changes).toEqual([])
   await page.reload()
-  await page.getByRole('button', { name: /Prepared by Codex/ }).click()
-  await expect.poll(() => page.getByText('ops@example.invalid').count()).toBeGreaterThan(0)
-  await page.getByRole('button', { name: 'Apply changes together' }).click()
-  await expect.poll(async () => (await variables()).map(variable => [variable.name, variable.value])).toEqual([['recipient', 'ops@example.invalid']])
-  const { changes } = (await call({ action: 'changes' })).value as { changes: { kind: string, state: string }[] }
-  expect(changes.map(set => [set.kind, set.state]).sort()).toEqual([['changes', 'applied'], ['run', 'pending']])
-  expect((await call({ action: 'inspect', podId: pod!.id, revision })).value.runs).toEqual([])
+  expect(await page.getByRole('tab', { name: 'Chat', exact: true }).count()).toBe(0)
+  expect(await page.getByRole('button', { name: /Prepared by Codex/ }).count()).toBe(0)
 
   for (const secret of secrets) expect(outputs.join('\n')).not.toContain(secret)
   expect(await page.evaluate(() => window.pods.codex({ type: 'disconnect' }))).toMatchObject({ state: 'disconnected' })
