@@ -13,6 +13,7 @@ const selected = ref<{ runtimeId: string, podId: string } | null>(null)
 const current = shallowRef<{ revision: number, pod: CentralPod } | null>(null)
 const baseline = shallowRef<CentralPod | null>(null)
 const error = ref('')
+const connectionError = ref('')
 const notice = ref('')
 const busy = ref(false)
 const authenticated = ref(true)
@@ -37,12 +38,16 @@ const operationId = ref('')
 const abort = new AbortController()
 let refreshing: Promise<void> | null = null
 let generation = 0
+let savedEditor = ''
 const runtime = computed(() => runtimes.value.find(item => item.id === selected.value?.runtimeId))
 const listed = computed(() => runtime.value?.workspace.pods.find(item => item.id === selected.value?.podId))
 const available = computed(() => !!listed.value?.online && !!current.value)
 const history = computed(() => current.value?.pod.history[runId.value] ?? current.value?.pod.runs)
 const activeRuntime = computed(() => runtime.value?.online ? runtime.value : runtimes.value.find(item => item.online))
 
+function editorState() {
+  return JSON.stringify([name.value, description.value, source.value?.id, code.value, variableName.value, variableValue.value, scheduleKind.value, interval.value, dailyTime.value, timezone.value, scheduleEnabled.value, groupId.value])
+}
 function resetEditor() {
   const pod = current.value?.pod
   if (!pod) return
@@ -55,6 +60,7 @@ function resetEditor() {
   if (pod.scheduling.spec?.kind === 'daily') { dailyTime.value = pod.scheduling.spec.time; timezone.value = pod.scheduling.spec.timezone }
   scheduleEnabled.value = pod.scheduling.enabled
   groupId.value = runtime.value?.workspace.organization.groups.find(group => group.podIds.includes(pod.id))?.id ?? ''
+  savedEditor = editorState()
 }
 function selectSource(value: ScriptSource | null) { source.value = value ? structuredClone(value) : null; code.value = value?.code ?? '' }
 async function refresh() {
@@ -64,21 +70,22 @@ async function refresh() {
     try {
       const inventory = await props.client.inventory()
       if (abort.signal.aborted) return
-      runtimes.value = inventory; authenticated.value = true
+      runtimes.value = inventory; authenticated.value = true; connectionError.value = ''
       const target = selected.value
       if (!target || token !== generation) return
       const entry = inventory.find(item => item.id === target.runtimeId)?.workspace.pods.find(item => item.id === target.podId)
       if (!entry?.online) { current.value = null; return }
       const detail = await props.client.read(target.runtimeId, target.podId)
       if (token !== generation || abort.signal.aborted) return
+      const unchanged = !baseline.value || editorState() === savedEditor
       current.value = detail
-      if (!baseline.value) resetEditor()
+      if (unchanged && !busy.value && !operationId.value) resetEditor()
     }
     catch (cause) {
       current.value = null
       runtimes.value = runtimes.value.map(item => ({ ...item, online: false, workspace: { ...item.workspace, pods: item.workspace.pods.map(pod => ({ ...pod, online: false })) } }))
       if (cause instanceof WorkspaceRequestError && cause.status === 401) { authenticated.value = false; baseline.value = null; code.value = ''; description.value = ''; runtimes.value = [] }
-      error.value = cause instanceof Error ? cause.message : 'Workspace is unavailable'
+      connectionError.value = cause instanceof Error ? cause.message : 'Workspace is unavailable'
     }
   })().finally(() => { refreshing = null })
   return refreshing
@@ -163,7 +170,7 @@ async function watchChanges() {
     try { cursor = (await props.client.changes(cursor, abort.signal)).cursor; await refresh() }
     catch (cause) {
       if (abort.signal.aborted) return
-      error.value = String(cause); current.value = null
+      connectionError.value = String(cause); current.value = null
       await wait(2000)
       await refresh()
     }
@@ -212,8 +219,8 @@ onBeforeUnmount(() => { generation++; abort.abort() })
         </p>
       </aside>
       <main class="central-content">
-        <p v-if="error" role="alert" class="central-error">
-          {{ diagnostic(error) }}
+        <p v-if="error || connectionError" role="alert" class="central-error">
+          {{ diagnostic(error || connectionError) }}
         </p><p v-if="notice" role="status">
           {{ diagnostic(notice) }}
         </p>

@@ -32,6 +32,33 @@ it('keeps an unsaved draft after a revision conflict and does not retry it', asy
   expect((wrapper!.find('textarea').element as HTMLTextAreaElement).value).toBe('My unfinished edit')
   expect(fixture.client.command).toHaveBeenCalledOnce()
 })
+it('refreshes untouched editors from another client and preserves local edits', async () => {
+  const fixture = await open()
+  fixture.view.details.description!.text = 'Saved in the browser'
+  fixture.view.details.description!.revision++
+  fixture.host.revision++
+  fixture.wake(); await flushPromises()
+  expect((wrapper!.find('textarea').element as HTMLTextAreaElement).value).toBe('Saved in the browser')
+  await wrapper!.find('textarea').setValue('Unfinished desktop edit')
+  fixture.view.details.description!.text = 'A newer browser edit'
+  fixture.view.details.description!.revision++
+  fixture.host.revision++
+  fixture.wake(); await flushPromises()
+  expect((wrapper!.find('textarea').element as HTMLTextAreaElement).value).toBe('Unfinished desktop edit')
+  await wrapper!.findAll('button').find(item => item.text() === 'Reload saved version')!.trigger('click')
+  expect((wrapper!.find('textarea').element as HTMLTextAreaElement).value).toBe('A newer browser edit')
+})
+it('clears a connection failure once the workspace reconnects', async () => {
+  const fixture = await open()
+  const read = fixture.client.read
+  fixture.client.read = async () => { throw new Error('Connection unavailable') }
+  fixture.wake(); await flushPromises()
+  expect(wrapper!.find('[role="alert"]').text()).toContain('Connection unavailable')
+  fixture.client.read = read
+  fixture.wake(); await flushPromises()
+  expect(wrapper!.find('[role="alert"]').exists()).toBe(false)
+  expect(wrapper!.text()).toContain('What this Pod does')
+})
 it('retains an operation identity when the request acknowledgement is lost', async () => {
   const fixture = await open()
   fixture.client.command = vi.fn(async () => { throw new TypeError('Connection lost') })
