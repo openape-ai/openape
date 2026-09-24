@@ -40,3 +40,42 @@ it('adopts missing identities through the verified owner without reprovisioning 
   await expect(worker.indexRemotePods(owner)).rejects.toThrow('another owner')
   expect(remote).not.toHaveBeenCalled()
 })
+
+it('forwards central MCP reads and stable commands without a second local operation', async () => {
+  const { FixtureWorker } = await import('../../src/main/worker')
+  const worker = new FixtureWorker(() => {})
+  const id = '00000000-0000-4000-8000-000000000001'
+  const result = { state: 'applied', id }
+  const query = vi.fn(async () => result)
+  const local = vi.fn()
+  Object.assign(worker, { central: { query, local, available: false } })
+  const commands = [
+    { type: 'inventory' }, { type: 'read', runtimeId: id, podId: id },
+    { type: 'submit', runtimeId: id, revision: 4, id, command: { channel: 'workspace', body: { type: 'create', name: 'Test Pod' } } },
+    { type: 'operation', id },
+  ]
+  for (const command of commands) {
+    expect(await worker.codex({ id, action: { action: 'workspace', query: command } })).toBe(result)
+    expect(query).toHaveBeenLastCalledWith(command)
+  }
+  expect(local).not.toHaveBeenCalled()
+  query.mockRejectedValueOnce(new Error('pod_offline'))
+  await expect(worker.codex({ id, action: { action: 'workspace', query: commands[1] } })).rejects.toThrow('pod_offline')
+})
+
+it('rejects MCP attempts to override leases, submit local closures or bypass central authority', async () => {
+  const { FixtureWorker } = await import('../../src/main/worker')
+  const worker = new FixtureWorker(() => {})
+  const id = '00000000-0000-4000-8000-000000000001'
+  const query = vi.fn()
+  Object.assign(worker, { central: { query } })
+  for (const value of [
+    { type: 'inventory', owner: 'other' }, { type: 'read', runtimeId: id, podId: id, lease: id },
+    { type: 'submit', runtimeId: id, revision: 1, id, command: { channel: 'local', body: { type: 'ownerAction' } } },
+    { type: 'submit', runtimeId: id, revision: 1, id, command: { channel: 'resources', body: { type: 'saveCredential', podId: id, alias: 'secret', value: 'forbidden', epoch: 1 } } },
+    { type: 'publish' }, { type: 'read', runtimeId: id }, { type: 'operation', id: 'invalid' },
+  ]) await expect(worker.codex({ id, action: { action: 'workspace', query: value } })).rejects.toThrow()
+  expect(query).not.toHaveBeenCalled()
+  worker.central = null
+  await expect(worker.codex({ id, action: { action: 'workspace', query: { type: 'inventory' } } })).rejects.toThrow('Connect the central workspace')
+})
