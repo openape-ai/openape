@@ -46,6 +46,7 @@ app.setName(fixture ? 'OpenApe Pods Fixture' : 'OpenApe Pods')
 app.enableSandbox()
 const profileBase = fixture ? fixtureDirectory(process.env.OPENAPE_PODS_FIXTURE_DIR) : localDirectory(join(app.getPath('appData'), 'OpenApe Pods'))
 const root = selectedProfile(profileBase)
+if (existsSync(join(root, 'central'))) process.env.OPENAPE_PODS_CENTRAL_ENABLED = '1'
 app.setPath('userData', root)
 app.setPath('sessionData', join(root, 'chromium'))
 protocol.registerSchemesAsPrivileged([{ scheme: 'pods', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
