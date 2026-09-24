@@ -77,7 +77,7 @@ Rollback: stop only the specific app/monitor being updated, restore the saved ap
 ## Progress
 
 - September 24: inspected installed behavior, source and the previous plan; created issue 1377 and a clean branch from canonical main. No product code, real profile or Codex settings changed for this issue.
-- Milestones 1–3 implemented. Local full lint/typecheck and app build pass; 436 unit/component tests, 20 browser checks and two focused packaged MCP acceptance tests pass. Milestone 4: final source review and native PR next; signed installation and live IURIO acceptance pending.
+- Milestones 1–3 implemented. Local full lint/typecheck and app build pass; 436 unit/component tests, 20 browser checks and two focused packaged MCP acceptance tests pass. Milestone 4: PR 113 merged as `56eb0366` after all three exact-source external checks passed for `29447001`. Full deployment check `1790239240109-29447001-all` passed, including all 109 packaged Pods cases. The signed/notarized internal build passed mounted-DMG acceptance and is installed; all six existing Pods were preserved. Live IURIO acceptance still awaits the dedicated Azure credential.
 
 ## Discoveries
 
@@ -88,4 +88,6 @@ Rollback: stop only the specific app/monitor being updated, restore the saved ap
 
 ## Outcomes
 
-Implemented locally and verified through a real isolated Codex app-server: private fixture secret import, script validation/activation, enabled schedule and a completed deterministic run without app approval clicks. Source is not yet merged or installed. Live acceptance awaits the Azure credential requested through OpenApe Secrets and actual delivery.
+Implemented locally and verified through a real isolated Codex app-server: private fixture secret import, script validation/activation, enabled schedule and a completed deterministic run without app approval clicks. Merged through [PR 113](https://repos.openape.ai/patrick/monorepo/pulls/113), source `294470018230ef03fc0bf0c75046c7bffb19e9d3`, merge `56eb0366cf83638dc63615fa8c407534b2e0ea9b` (identical trees). [Inspected UI evidence](https://testrun.openape.ai/r/z7Gh5qVdFwQdXTRnaQnVUQ4A). The installed internal build is signed by Delta Mind GmbH (Q994DN23WB), with accepted and stapled app/DMG notarizations. Isolated mounted-DMG verification passes. Receipts: `~/Downloads/OpenApe-Pods-29447001/`; paired rollback: `~/Library/Application Support/OpenApe Pods Rollback/2026-09-24-105317-issue-1377`.
+
+Actual installed MCP saved the IURIO description and Telegram destination immediately, assigned Azure GET and Telegram POST through authentic grants, and retired the superseded variable proposal. The existing account flow established the once-per-account Pods provider connection. The actual UI contains no embedded chat or review queue. All six Pods retain their prior names, revisions and lifecycle; the owner's Codex configuration is unchanged. The draft includes the assigned HTTP capabilities at revision 2. Live acceptance still awaits the Azure credential requested through OpenApe Secrets, then validation/activation and actual delivery. The monitor remains paused and its 15-minute schedule disabled; milestone 4 and this plan remain open for that missing input.
