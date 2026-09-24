@@ -1,3 +1,5 @@
+import { CentralProjection } from './central/projection'
+import { parseOwner } from '@openape/pods-protocol'
 import type { AdministrationJournal } from '../contracts/codex-admin'
 import { RemoteControl } from './remote/control'
 import type { RemoteInternal } from './remote/control'
@@ -102,6 +104,7 @@ const codex = new CodexControl(store, masterControl)
 
 const remote = new RemoteControl(store, master, dispatcher, registry, scheduler, Date.now, { create: async (podId, applicationId) => String(await mailBridge.remoteProgramState({ operation: 'create', podId, applicationId })), discard: async (podId, stateId) => { await mailBridge.remoteProgramState({ operation: 'discard', podId, stateId }) } })
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
+let centralUntil = process.env.PODS_CENTRAL_ENABLED === '1' ? 0 : Infinity
 let scanAt = 0
 let storageAt = 0
 let maintenance = false
@@ -111,7 +114,7 @@ let startupReady = false
 let preferWorkflow = true
 let ticking: Promise<void> | null = null
 const timer = setInterval(() => {
-  if (ticking || suspended || !startupReady || maintenance) return
+  if (ticking || suspended || !startupReady || maintenance || Date.now() >= centralUntil) return
   ticking = (async () => {
     try {
       if (Date.now() >= storageAt) {
@@ -122,7 +125,7 @@ const timer = setInterval(() => {
       const error = store.db.prepare('SELECT error FROM data_settings WHERE id=1').get()?.error
       if (error) { for (const pod of store.listPods()) dispatcher.cancelPod(pod.id, String(error)); await master.stop(); return }
       if (Date.now() >= scanAt) { await watcher.scan(); scanAt = Date.now() + 15000 }
-      if (!suspended) {
+      if (!suspended && Date.now() < centralUntil) {
         const before = store.db.prepare('SELECT count(*) AS count FROM runs').get()!.count
         if (preferWorkflow) { workflows.tick(); scheduler.tick() }
         else { scheduler.tick(); workflows.tick() }
@@ -140,6 +143,17 @@ port.on('message', async (event) => {
   const request = event.data as { id?: unknown, command?: unknown }
   if (!request || typeof request.id !== 'string') throw new Error('Invalid worker request')
   try {
+    if (request.command && typeof request.command === 'object' && 'central' in request.command) {
+      const command = request.command.central as { type: string, until?: number, owner?: unknown }
+      if (command.type === 'gate') {
+        if (typeof command.until !== 'number' || !Number.isFinite(command.until) || command.until < 0 || command.until > Date.now() + 30000) throw new Error('Invalid central lease')
+        centralUntil = command.until
+        if (!centralUntil) await ticking
+        port.postMessage({ id: request.id, state: true }); return
+      }
+      if (command.type !== 'snapshot') throw new Error('Unsupported central worker command')
+      port.postMessage({ id: request.id, state: new CentralProjection(store, registry, scripts, dispatcher, scheduler).snapshot(parseOwner(command.owner)) }); return
+    }
     if (request.command && typeof request.command === 'object' && 'data' in request.command) {
       const command = request.command.data as DataInternal
       if (maintenance && command.type !== 'status') throw new Error('Another data operation is in progress')

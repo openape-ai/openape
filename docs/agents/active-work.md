@@ -1,5 +1,39 @@
 # Active work
 
+## Pods: central browser and desktop workspace (September 24, 2026) — implementation
+
+[Issue 1378](https://repos.openape.ai/patrick/monorepo/issues/1378),
+[approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3A03YDYB092Z1NDM7J6NQ8X),
+[local plan](../../.claude/plans/2026-09-24-pods-central-workspace.html).
+Worktree `pods-web-workspace`, branch `feature/issue-1378-pods-central-workspace`,
+canonical base `4e5648237b478c7e5447578d8f92a3cef187d399`.
+
+Implemented an opt-in central SQLite workspace, owner-scoped DDISA web sessions,
+versioned commands and receipts, managed artifact capture, desktop lease/recovery
+integration and one shared browser/desktop Vue workspace. Native permission and
+secret setup remain local; Codex uses the same writer. Existing chat removal is
+preserved. [Operations and recovery](../operations/pods-central-workspace.md).
+
+Final local evidence: full `pnpm check:ci` passed (receipt
+`1790268448329-4e564823-all`, base plus the candidate changes). This includes
+447 Pods unit/component tests, 113 native/desktop tests and 21 browser tests;
+21 service unit tests and real-DDISA HTTP acceptance also pass. The service
+production build passes. Shared UI screenshots at 1280/560 pixels and German
+dark appearance were inspected. Permanent new cases cover ownership, offline
+access, revisions, lost acknowledgements, no duplicate effects, managed-file
+link rejection and multi-megabyte artifact transport. Native PR checks remain
+to be recorded.
+
+The installed signed Pods app stays open. Preserve normal scheduled changes to
+IURIO Pod `98c32f74-ffaf-4628-bd41-95cea821572f`, its enabled 900-second schedule
+and existing baseline. No owner profile was migrated and no service deployed.
+Live adoption, app replacement/restart and computer relocation are outside this
+session. Read-only verification after the local checks found the monitor active at
+Pod revision 1 / schedule revision 2, no pending or blocked events, latest run
+`d71b02a6-8c8a-41c2-8d6e-4a6b4ea31c25` completed and checkpoint revision 21.
+Next: review the native PR and its exact-source external checks; live rollout
+remains a separate maintenance decision.
+
 ## Pods: connected Codex owner administration (September 24, 2026) — delivered
 
 [Issue 1377](https://repos.openape.ai/patrick/monorepo/issues/1377), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3971H91PDY5XPHJP3696PZ7). Worktree `issue-1377-broker-capacity`; completion documentation branch `bugfix/issue-1377-completion-docs`.

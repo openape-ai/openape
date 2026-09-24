@@ -1,6 +1,10 @@
 import type { MessageKey } from './index'
 
 export const diagnosticPatterns = [
+  'Permission {p0}; review this Pod\'s permissions before retrying',
+  'Pod {p0} exists and is awaiting its identity. Do not create it again. {p1}',
+  'Workspace operation {p0} is not confirmed. Reconcile this operation before retrying',
+
   'Remote service returned {p0}',
   'Desktop registration failed ({p0})',
   'Remote service: {p0}',
