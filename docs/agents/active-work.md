@@ -1,5 +1,18 @@
 # Active work
 
+## Automatic CI scope (September 24, 2026)
+
+[Issue 1379](https://repos.openape.ai/patrick/monorepo/issues/1379), branch
+`bugfix/issue-1379-headless-ci`, worktree `pods-web-workspace`, base canonical
+main `f576ea94bb746f6e811b45a8dce8f9128d5fc40d`.
+Owner decision: remove all automatic E2E/layout jobs and required contexts;
+retain audit, tooling, lint, typecheck and unit/component checks. Explicit
+manual E2E/layout commands remain available. Three main-CI unit timeouts in
+Pods bulk fixtures are addressed with transactions around seed data only;
+assertions, deadlines and production durability remain unchanged. Exact-source
+verification, audited protection migration and merge receipts belong to the
+issue. The deployed Pods app and monitor remain running; no runtime changes.
+
 ## Pods: central browser and desktop workspace (September 24, 2026) — live rollout
 
 [Issue 1378](https://repos.openape.ai/patrick/monorepo/issues/1378),
