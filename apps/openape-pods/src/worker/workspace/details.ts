@@ -8,6 +8,14 @@ export class WorkspaceDetails {
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry) {}
   execute(command: DetailsCommand): PodDetails {
     const pod = this.store.getPod(command.podId)
+    if (command.type === 'describe') {
+      this.store.transaction(() => {
+        if (pod.lifecycle === 'archived') throw new Error('Archived Pods cannot be edited')
+        const current = this.store.db.prepare('SELECT revision FROM pod_descriptions WHERE pod_id=?').get(pod.id)
+        if ((current?.revision ?? 0) !== command.revision) throw new Error('Description changed; reload before saving')
+        this.store.db.prepare('INSERT INTO pod_descriptions(pod_id,body,revision,state,updated_at,manual) VALUES(?,?,?,\'ready\',?,1) ON CONFLICT(pod_id) DO UPDATE SET body=excluded.body,revision=excluded.revision,state=\'ready\',error=NULL,updated_at=excluded.updated_at,manual=1').run(pod.id, command.text, command.revision + 1, Date.now())
+      })
+    }
     if (command.type === 'activate') {
       this.store.transaction(() => {
         const row = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(pod.id, command.hash)
@@ -33,7 +41,8 @@ export class WorkspaceDetails {
     }
     const active = this.store.getPod(pod.id).activeScript
     const versions = this.store.db.prepare('SELECT hash,manifest FROM scripts WHERE pod_id=? ORDER BY rowid DESC LIMIT 100').all(pod.id).map(row => ({ hash: row.hash as string, assignmentRevision: parseManifest(JSON.parse(row.manifest as string)).assignmentRevision, validated: this.validated(pod.id, row.hash as string, pod.bindingRevision), active: row.hash === active }))
-    return { claims, counts, total: this.store.db.prepare('SELECT count(*) AS count FROM claims WHERE pod_id=?').get(pod.id)!.count as number, checkpointRevision: this.store.checkpoint(pod.id).revision, versions, source }
+    const description = this.store.db.prepare('SELECT body,revision,state,error,updated_at FROM pod_descriptions WHERE pod_id=?').get(pod.id)
+    return { description: description ? { text: description.body as string, revision: description.revision as number, state: description.state as 'ready', error: description.error as string | null, updatedAt: description.updated_at as number | null } : null, claims, counts, total: this.store.db.prepare('SELECT count(*) AS count FROM claims WHERE pod_id=?').get(pod.id)!.count as number, checkpointRevision: this.store.checkpoint(pod.id).revision, versions, source }
   }
 
   private validated(podId: string, hash: string, revision: number): boolean { return !!this.store.db.prepare('SELECT 1 FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(podId, hash, revision, this.resources.epoch(podId)) }

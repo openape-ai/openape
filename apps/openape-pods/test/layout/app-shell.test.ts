@@ -11,8 +11,8 @@ import { installWorkspace, pods } from './workspace-fixture'
 // `language` and `foundation` E2E files. Screenshots keep the names that
 // scripts/report.mjs embeds.
 const tabs = {
-  en: ['Overview', 'Chat', 'Script', 'Variables and secrets', 'Permissions', 'Settings', 'History'],
-  de: ['Übersicht', 'Chat', 'Skript', 'Variablen und Geheimnisse', 'Berechtigungen', 'Einstellungen', 'Historie'],
+  en: ['Overview', 'Script', 'Variables and secrets', 'Permissions', 'Settings', 'History'],
+  de: ['Übersicht', 'Skript', 'Variablen und Geheimnisse', 'Berechtigungen', 'Einstellungen', 'Historie'],
 }
 // One size per breakpoint band (style.css: 1030, 900, 800, 760, 600) plus the
 // shortest window. Colours come from light-dark() tokens and no rule depends on
@@ -54,7 +54,7 @@ function overflow() {
 const fits = { page: 0, content: expect.toSatisfy((value: number) => value <= 1), footer: expect.toSatisfy((value: number) => value <= 1) }
 
 describe('workspace shell with the production stylesheet', () => {
-  it.each(['en', 'de'] as const)('fits all seven views at desktop, compact and narrow sizes (%s)', async (language) => {
+  it.each(['en', 'de'] as const)('fits all management views at desktop, compact and narrow sizes (%s)', async (language) => {
     applyLanguage(language)
     await mountWorkspace()
     // Guard against measuring an empty shell: the seeded pods must be rendered.
@@ -84,7 +84,7 @@ describe('workspace shell with the production stylesheet', () => {
     await page.screenshot({ path: artifact('foundation-compact.png') })
   })
 
-  it('keeps retained source evidence and the contextual chat inside a narrow dark window', async () => {
+  it('keeps retained source evidence and the Codex settings inside a narrow dark window', async () => {
     await mountWorkspace()
     await click('button', 'Results and sources')
     await click('.knowledge-entry summary')
@@ -94,10 +94,10 @@ describe('workspace shell with the production stylesheet', () => {
     await page.screenshot({ path: artifact('workspace-source.png'), element: document.querySelector('.source-content')! })
     await show(560, 700, 'dark')
     expect(overflow(), 'source 560 dark').toEqual(fits)
-    await click('button', 'Discuss knowledge')
+    await click('button', 'Work from Codex')
     await show(1060, 850)
-    expect(overflow(), 'chat').toEqual(fits)
-    await page.screenshot({ path: artifact('workspace-master.png') })
+    expect(overflow(), 'Codex settings').toEqual(fits)
+    await page.screenshot({ path: artifact('workspace-codex.png') })
   })
 
   it('saves settings and schedule panels as report evidence', async () => {

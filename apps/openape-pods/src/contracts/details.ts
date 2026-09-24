@@ -1,13 +1,16 @@
+import type { PodDescription } from './description'
+
 export interface Citation { id: string, version: string, hash: string, locator: string }
 export interface KnowledgeClaim { id: string, matter: string, kind: 'finding' | 'question' | 'gap', text: string, citations: Citation[], supersedes: string | null, revision: number, current: boolean }
 export interface ScriptVersion { hash: string, assignmentRevision: number, validated: boolean, active: boolean }
-export interface PodDetails { claims: KnowledgeClaim[], total: number, counts: { finding: number, question: number, gap: number }, checkpointRevision: number, versions: ScriptVersion[], source: { citation: Citation, content: string, original?: Citation, truncated?: boolean } | null }
-export type DetailsCommand = { type: 'list', podId: string, offset?: number } | { type: 'source', podId: string, id: string, version: string } | { type: 'activate', podId: string, hash: string, expectedActive: string | null, assignmentRevision: number }
+export interface PodDetails { description?: PodDescription | null, claims: KnowledgeClaim[], total: number, counts: { finding: number, question: number, gap: number }, checkpointRevision: number, versions: ScriptVersion[], source: { citation: Citation, content: string, original?: Citation, truncated?: boolean } | null }
+export type DetailsCommand = { type: 'describe', podId: string, text: string, revision: number } | { type: 'list', podId: string, offset?: number } | { type: 'source', podId: string, id: string, version: string } | { type: 'activate', podId: string, hash: string, expectedActive: string | null, assignmentRevision: number }
 export function parseDetailsCommand(value: unknown): DetailsCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid pod detail request')
   const request = value as Record<string, unknown>
-  const keys = request.type === 'list' ? ['type', 'podId', 'offset'] : request.type === 'source' ? ['type', 'podId', 'id', 'version'] : request.type === 'activate' ? ['type', 'podId', 'hash', 'expectedActive', 'assignmentRevision'] : []
+  const keys = request.type === 'describe' ? ['type', 'podId', 'text', 'revision'] : request.type === 'list' ? ['type', 'podId', 'offset'] : request.type === 'source' ? ['type', 'podId', 'id', 'version'] : request.type === 'activate' ? ['type', 'podId', 'hash', 'expectedActive', 'assignmentRevision'] : []
   if (!keys.length || Object.keys(request).some(key => !keys.includes(key)) || typeof request.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(request.podId)) throw new Error('Invalid pod detail scope')
+  if (request.type === 'describe' && (typeof request.text !== 'string' || request.text.length > 4000 || !Number.isSafeInteger(request.revision) || Number(request.revision) < 0)) throw new Error('Invalid description revision or text')
   if (request.type === 'list' && request.offset !== undefined && (!Number.isSafeInteger(request.offset) || (request.offset as number) < 0)) throw new Error('Invalid knowledge offset')
   if (request.type === 'source' && ['id', 'version'].some(key => typeof request[key] !== 'string' || !(request[key] as string).length || (request[key] as string).length > 20000)) throw new Error('Invalid citation')
   if (request.type === 'activate' && (typeof request.hash !== 'string' || !/^[a-f0-9]{64}$/.test(request.hash) || (request.expectedActive !== null && (typeof request.expectedActive !== 'string' || !/^[a-f0-9]{64}$/.test(request.expectedActive))) || !Number.isSafeInteger(request.assignmentRevision) || (request.assignmentRevision as number) < 1)) throw new Error('Invalid version activation')
