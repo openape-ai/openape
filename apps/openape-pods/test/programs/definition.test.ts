@@ -19,3 +19,30 @@ it('keeps the installed command name when the adapter ID and symlink target diff
   }
   finally { await rm(root, { recursive: true, force: true }) }
 })
+
+it('assigns an explicit interpreter without sharing the owner HOME or changing native programs', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-runtime-definition-')))
+  try {
+    const runtime = join(root, 'runtime.json')
+    const executable = join(root, 'interpreter')
+    await writeFile(executable, 'SYNTHETIC_EXECUTABLE', { mode: 0o700 })
+    const { loadProgramRuntime, programLaunch, verifyProgramRuntime } = await import('../../src/main/programs/runtime')
+    const descriptor = { version: 1, executable, arguments: ['--isolated', '-m', 'fixture'], readDirectories: [root], environment: { FIXTURE_MODE: 'read' } }
+    await writeFile(runtime, JSON.stringify(descriptor), { mode: 0o600 })
+    const loaded = await loadProgramRuntime(runtime)
+    const definition = { executable: '/launcher', executableHash: 'original', environment: {}, runtime: loaded } as import('../../src/contracts/programs').ProgramDefinition
+    expect(programLaunch(definition)).toMatchObject({ executable, prefix: descriptor.arguments, runtimeDirectories: [root], environment: descriptor.environment })
+    await verifyProgramRuntime(definition)
+    await writeFile(executable, 'CHANGED_EXECUTABLE')
+    await expect(verifyProgramRuntime(definition)).rejects.toThrow()
+    for (const environment of [{ HOME: '/owner' }, { HTTPS_PROXY: 'https://unexpected.test' }, { ACCESS_TOKEN: 'not-allowed' }]) {
+      await writeFile(runtime, JSON.stringify({ ...descriptor, environment }))
+      await expect(loadProgramRuntime(runtime)).rejects.toThrow('non-secret')
+    }
+    await writeFile(runtime, JSON.stringify({ ...descriptor, readDirectories: ['/'] }))
+    await expect(loadProgramRuntime(runtime)).rejects.toThrow('specific runtime')
+    const linked = join(root, 'linked.json'); await symlink(runtime, linked)
+    await expect(loadProgramRuntime(linked)).rejects.toThrow()
+  }
+  finally { await rm(root, { recursive: true, force: true }) }
+})

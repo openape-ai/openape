@@ -2183,5 +2183,15 @@
   "Only pending legacy changes can be retired": "Nur ausstehende alte Änderungen können verworfen werden",
   "Invalid legacy change identity": "Ungültige Kennung einer alten Änderung",
   "Store an encrypted value for this pod. Its scripts can use every assigned secret. Saving or replacing pauses the pod and requires script validation again.": "Speichere einen verschlüsselten Wert für diesen Pod. Seine Skripte können alle zugewiesenen Geheimnisse verwenden. Speichern oder Ersetzen pausiert den Pod und erfordert eine erneute Skriptprüfung.",
-  "No script has been saved for this pod yet. Continue setup with Codex or write your own script.": "Für diesen Pod wurde noch kein Skript gespeichert. Setze die Einrichtung mit Codex fort oder schreibe dein eigenes Skript."
+  "No script has been saved for this pod yet. Continue setup with Codex or write your own script.": "Für diesen Pod wurde noch kein Skript gespeichert. Setze die Einrichtung mit Codex fort oder schreibe dein eigenes Skript.",
+  "Runtime paths must be absolute": "Laufzeitpfade müssen absolut sein",
+  "Choose an owner-controlled runtime file up to 64 KB": "Wähle eine vom Eigentümer kontrollierte Laufzeitdatei bis 64 KB",
+  "Runtime file changed during assignment": "Die Laufzeitdatei wurde während der Zuweisung geändert",
+  "Invalid program runtime descriptor": "Ungültige Programmlaufzeit-Beschreibung",
+  "Invalid fixed runtime arguments": "Ungültige feste Laufzeitargumente",
+  "Invalid runtime package directories": "Ungültige Laufzeit-Paketverzeichnisse",
+  "Choose an executable runtime up to 128 MB": "Wähle eine ausführbare Laufzeit bis 128 MB",
+  "Choose specific runtime package directories, not a system or home root": "Wähle konkrete Paketverzeichnisse statt eines System- oder Benutzer-Stammverzeichnisses",
+  "Invalid runtime environment": "Ungültige Laufzeitumgebung",
+  "Runtime environment must contain only non-secret settings; HOME, loader and network settings are managed by Pods": "Die Laufzeitumgebung darf nur Einstellungen ohne Geheimnisse enthalten; HOME, Lade- und Netzwerkeinstellungen verwaltet Pods"
 }
