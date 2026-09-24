@@ -2318,5 +2318,6 @@
   "DDISA agent authentication failed ({p0})": "Die DDISA-Agent-Authentifizierung ist fehlgeschlagen ({p0})",
   "DDISA agent authentication returned an invalid token": "Die DDISA-Agent-Authentifizierung lieferte einen ungültigen Token",
   "This HTTP destination authenticates as its assigned DDISA agent; remove the Authorization header": "Dieses HTTP-Ziel authentifiziert sich als zugewiesener DDISA-Agent; entferne den Authorization-Header",
-  "DDISA agent authentication is unavailable": "Die DDISA-Agent-Authentifizierung ist nicht verfügbar"
+  "DDISA agent authentication is unavailable": "Die DDISA-Agent-Authentifizierung ist nicht verfügbar",
+  "This secret authenticates an HTTP destination and is not readable by scripts": "Dieses Geheimnis authentifiziert ein HTTP-Ziel und ist für Skripte nicht lesbar"
 }
