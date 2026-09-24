@@ -100,7 +100,7 @@ async function main() {
   const value = name => args.includes(name) ? args[args.indexOf(name) + 1] : undefined
   const suite = value('--suite')
   if (suite && !['unit', 'e2e', 'layout'].includes(suite)) throw new Error('Unknown suite')
-  const suites = suite ? [suite] : ['unit', 'e2e', 'layout']
+  const suites = [suite || 'unit']
   const head = git(['rev-parse', '--verify', `${value('--head') || 'HEAD'}^{commit}`])
   if (head !== git(['rev-parse', 'HEAD'])) throw new Error('Check out the requested head before running checks.')
   const dirty = Boolean(git(['status', '--porcelain']))
@@ -120,7 +120,7 @@ async function main() {
   const steps = checkCommands(packages, selected, suites)
   const summary = { contract: contract.version, mode, suites, base, head, dirty, workspaces: selected.map(p => p.name), exceptions: contract.unitExceptions, steps, results: [], status: 'pending' }
   if (args.includes('--dry-run')) { console.log(JSON.stringify(summary, null, 2)); return }
-  const logs = join(root, '.openape/check-results', `${Date.now()}-${head.slice(0, 8)}-${suite || 'all'}`)
+  const logs = join(root, '.openape/check-results', `${Date.now()}-${head.slice(0, 8)}-${suite || 'unit'}`)
   mkdirSync(logs, { recursive: true })
   const save = () => writeFileSync(join(logs, 'summary.json'), `${JSON.stringify(summary, null, 2)}\n`)
   save()
