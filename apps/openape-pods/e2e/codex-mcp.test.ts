@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { copyFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
@@ -16,20 +16,25 @@ afterEach(async () => { await server?.stop(); server = undefined; if (root) awai
 
 function mcp(launcher: string) {
   const child = spawn(launcher, [], { stdio: ['pipe', 'pipe', 'pipe'], env: { PATH: '/usr/bin:/bin' } }); let next = 0
-  const waiting = new Map<number, (message: Record<string, any>) => void>()
-  createInterface({ input: child.stdout }).on('line', (line) => { const message = JSON.parse(line) as { id: number }; waiting.get(message.id)?.(message); waiting.delete(message.id) })
+  const waiting = new Map<number, { resolve: (message: Record<string, any>) => void, reject: (error: Error) => void }>()
+  let stderr = ''
+  child.stderr.on('data', (chunk) => { stderr += chunk.toString() })
+  child.on('exit', (code) => { for (const request of waiting.values()) request.reject(new Error(`MCP exited (${code}): ${stderr}`)); waiting.clear() })
+  createInterface({ input: child.stdout }).on('line', (line) => { const message = JSON.parse(line) as { id: number }; waiting.get(message.id)?.resolve(message); waiting.delete(message.id) })
   return {
-    request: (method: string, params: unknown) => new Promise<Record<string, any>>((done) => { const id = ++next; waiting.set(id, done); child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`) }),
+    request: (method: string, params: unknown) => new Promise<Record<string, any>>((done, reject) => { const id = ++next; waiting.set(id, { resolve: done, reject }); child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`) }),
     close: () => child.kill(),
   }
 }
 
-it('serves pods_control from the packaged app runtime and reports a stopped app (packaged)', async () => {
+it('serves the packaged MCP outside the checkout and reports a stopped app (packaged)', async () => {
   root = await mkdtemp(join(tmpdir(), 'pods codex \'mcp\'-'))
   const socket = join(root, 'codex', 'control.sock'); const launcher = join(root, 'codex', 'openape-pods-mcp')
   const execute = vi.fn(async (request: { action: unknown }) => ({ pods: [], received: request.action }))
   server = new CodexControlServer(socket, execute); await server.start()
-  await writeLauncher(launcher, { executable: join(bundle, 'MacOS/OpenApe Pods Fixture'), script: join(bundle, 'Resources/app.asar.unpacked/dist/runtime/codex-mcp.mjs'), socket })
+  const script = join(root, 'codex-mcp.mjs')
+  await copyFile(join(bundle, 'Resources/app.asar.unpacked/dist/runtime/codex-mcp.mjs'), script)
+  await writeLauncher(launcher, { executable: join(bundle, 'MacOS/OpenApe Pods Fixture'), script, socket })
   const client = mcp(launcher)
   try {
     const initialized = await client.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '0' } })
