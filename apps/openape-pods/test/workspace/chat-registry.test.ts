@@ -82,10 +82,12 @@ it('migrates legacy messages and creation origins without losing content or rest
 
 it('paginates every message in stable order even when timestamps are equal', () => {
   const { store, chats } = fixture(); const chat = chats.ensure(''); const conversations = new MasterConversations(store)
-  for (let index = 0; index < 205; index++) {
-    store.db.prepare('INSERT INTO master_messages VALUES(?,?,?,?,?)').run(`page-${index}`, 'user', `Message ${index}`, 'sent', 1)
-    conversations.assign(`page-${index}`, chat.scope)
-  }
+  store.transaction(() => {
+    for (let index = 0; index < 205; index++) {
+      store.db.prepare('INSERT INTO master_messages VALUES(?,?,?,?,?)').run(`page-${index}`, 'user', `Message ${index}`, 'sent', 1)
+      conversations.assign(`page-${index}`, chat.scope)
+    }
+  })
   let messages = conversations.messages(chat.scope)
   while (true) {
     const older = conversations.messages(chat.scope, messages[0]!.sequence)

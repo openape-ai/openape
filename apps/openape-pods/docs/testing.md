@@ -14,6 +14,12 @@ Every assertion lives on the lowest level that can answer its question. A packag
 
 ## Rules
 
+- Automatic CI and merge checks run unit/component tests only (owner decision,
+  September 24, 2026, issue 1379). Browser layout and native/packaged E2E remain
+  manual acceptance: `pnpm --filter @openape/pods test:browser` for layout or
+  `pnpm --filter @openape/pods test:layout` for build, package, native E2E and
+  browser layout together. Run the latter only with an unlocked Mac available.
+
 - Vue behaviour goes to a component test. Assert visible text and the exact bridge command, not CSS classes.
 - Anything with a size, a position, a breakpoint or a colour scheme goes to `test/layout`. happy-dom computes no layout.
 - `test/layout/setup.ts` imports only the production stylesheet. Never add a rule there that a component should carry itself; it would hide the loss of the real rule.
