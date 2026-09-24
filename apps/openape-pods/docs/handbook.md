@@ -288,6 +288,8 @@ Use + below the application list to select an installed macOS app or CLI. Its na
 
 Open Terminal.app opens a separate macOS window above this list. The banner shows the pod HOME, workspace and shell. Run an assigned CLI there using its normal commands, for example o365-cli auth login. Applications manage their own sign-in; Pods does not invent a login-status indicator. Required grants are approved through OpenApe or apes grants approve.
 
+Interpreted CLIs also need their interpreter and package libraries. Connected Codex can assign a runtime descriptor for these code files; terminal setup and automated runs then use the same configuration. Keep extensions in a separate code directory, not in the encrypted sign-in state. Reopen an existing Pod terminal after changing its assignment. A successful terminal login still needs a real automated read check before enabling a schedule.
+
 Grants are managed through OpenApe and checked at execution time. Permissions does not display a static command-grant list, script call snippets or a separate application script-access selector. Application assignment does not bypass runtime authorization.
 
 HTTP destinations appear as a list of addresses and allowed methods. Use + to add a destination; select a row and use − to remove it. The input form opens only when adding a destination. These permissions allow Node.js requests to an explicit HTTPS origin and selected methods through context.http.request. Secrets belong in Variables and secrets. Requests cannot follow redirects or reach private addresses. Current transport uses IPv4 on port 443, a 30-second timeout and bounded responses. Permissions are granted to the pod’s OpenApe agent.
