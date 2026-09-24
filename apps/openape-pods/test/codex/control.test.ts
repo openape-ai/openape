@@ -153,5 +153,7 @@ it('offers CLI setup help and resolves only metadata for assigned commands', asy
   expect(help.programHelp.steps.join(' ')).toContain('Exit and reopen')
   expect(help.programHelp.secrets).toContain('No credential.* declaration')
   expect(parseAdministration({ action: 'program', revision: 1, command: { type: 'prepare', podId: pod.id, line: 'az --help' } })).toMatchObject({ command: { type: 'prepare' } })
+  expect(parseAdministration({ action: 'program', revision: 1, command: { type: 'add', podId: pod.id, epoch: 0 }, path: '/fixture/az', runtimePath: '/fixture/runtime.json' })).toMatchObject({ runtimePath: '/fixture/runtime.json' })
+  expect(() => parseAdministration({ action: 'resources', revision: 1, command: { type: 'list', podId: pod.id }, runtimePath: '/fixture/runtime.json' })).toThrow()
   for (const type of ['start', 'poll', 'input']) expect(() => parseAdministration({ action: 'program', revision: 1, command: { type, podId: pod.id } })).toThrow()
 })
