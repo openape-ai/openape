@@ -1,6 +1,6 @@
 # Active work
 
-## Pods: central browser and desktop workspace (September 24, 2026) — integrated
+## Pods: central browser and desktop workspace (September 24, 2026) — live rollout
 
 [Issue 1378](https://repos.openape.ai/patrick/monorepo/issues/1378),
 [merged PR 120](https://repos.openape.ai/patrick/monorepo/pulls/120),
@@ -35,17 +35,22 @@ remain intact. Its focused 12 scheduler tests and full local `pnpm check:ci` pas
 Wait for the repair source gates before merging; do not bypass the red main gate.
 Self-contained HTML evidence is `~/Downloads/OpenApe-Pods-central-a894db75/verification.html`.
 
-The approved implementation scope includes a tested candidate and fixture adoption,
-not the live owner cutover. The installed signed Pods app remains open. Preserve
-normal scheduled changes to IURIO Pod `98c32f74-ffaf-4628-bd41-95cea821572f`, its
-enabled 900-second schedule and existing baseline. Read-only completion checks found
-checkpoint revision 24, unchanged Pod revision 1 / schedule revision 2 and no
-pending or blocked schedule events. The allowlisted owner archive is approximately
-2.7 MB; only two of six Pods currently have remote index rows, so a live cutover must
-use the supported owner registration/indexing flow. No service deployment, owner
-installation or migration is implied by the merge. Moving Pods between computers
-remains outside scope. Live activation needs clarification against the explicit
-no-restart instruction; recovery/retention requirements remain in the operations guide.
+Patrick subsequently approved completion and deployment for live testing, including
+the required app restart and monitor recovery. Issue 1378 and its plan are active
+again. Work continues on `feature/issue-1378-live-rollout` from canonical main
+`373fd1cbeb6068b9ce4c8810b183c133c2d1dce8` in `pods-web-workspace`.
+Main CI/E2E/layout jobs 5070–5072 passed; PR 121 is merged. The signed candidate
+and full evidence are at https://testrun.openape.ai/r/6NLYTgkuRIMm2I6vO9zjHTSB.
+
+The live preparation fixes two adoption gaps: normal application launches preserve
+central authority once adoption starts, and owner registration provisions missing
+Pod identities through the existing verified owner connection. Existing identities
+are reused and conflicting owners are rejected. Focused main/worker checks pass.
+The IURIO recovery run `11f0549e-597b-4df3-b0bb-97e3bb3928e2` completed in
+203 seconds, preserving the prior baseline and notification receipts; the next
+accepted schedule input started normally. Next: final gates,
+native PR, signed installation, service/routing deployment and paired live evidence.
+Keep all six Pods and leave the updated Mac app open. Relocation remains excluded.
 
 ## Pods: connected Codex owner administration (September 24, 2026) — delivered
 
