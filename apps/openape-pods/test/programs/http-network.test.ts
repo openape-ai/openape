@@ -3,6 +3,7 @@ import { startMailProxy } from '../../src/main/mail/proxy'
 // @vitest-environment node
 import { expect, it, vi } from 'vitest'
 import { requestHttp } from '../../src/main/programs/http'
+import { httpResponseBodyBytes } from '../../src/contracts/http'
 
 const lookup = vi.hoisted(() => vi.fn())
 vi.mock('node:dns/promises', () => ({ lookup }))
@@ -14,7 +15,7 @@ it.each(['127.0.0.1', '10.0.0.1', '172.16.0.1', '192.168.0.1', '169.254.169.254'
 })
 it('rejects redirects, oversized bodies and oversized headers from a transport', async () => {
   const signal = new AbortController().signal
-  for (const reply of [new Response(null, { status: 302, headers: { location: 'https://foreign.example.com' } }), new Response('x'.repeat(20001)), new Response('', { headers: { 'x-large': 'x'.repeat(31000) } })]) {
+  for (const reply of [new Response(null, { status: 302, headers: { location: 'https://foreign.example.com' } }), new Response('x'.repeat(httpResponseBodyBytes + 1)), new Response('', { headers: { 'x-large': 'x'.repeat(200 * 1024) } })]) {
     await expect(requestHttp(request, signal, async () => reply)).rejects.toThrow('delivery may be uncertain')
   }
 })

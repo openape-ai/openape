@@ -68,7 +68,7 @@ it('pauses active runtime limits only while a bounded approval wait is recorded'
   let waiting = false
   const events: unknown[] = []
   const reply = await executeScript(fixture.runtime, fixture.directory, fixture.artifact, fixture.input, new AbortController().signal, {
-    awaitingApproval: () => waiting,
+    budgetPaused: () => waiting,
     event: (type, data) => events.push({ type, data }),
     request: async () => { waiting = true; await new Promise(resolve => setTimeout(resolve, 1100)); waiting = false; return 'Synthetic result' },
   })
