@@ -1,9 +1,10 @@
 # Central Pods workspace
 
 Issue: https://repos.openape.ai/patrick/monorepo/issues/1378.
-The central workspace is an opt-in candidate. Do not enable it on an existing
-owner profile while its installed app is running. This change does not install,
-restart or migrate the owner's Mac app or alter the IURIO monitor.
+The central workspace is an opt-in owner pilot. Patrick approved service deployment,
+installation, restart and live adoption on September 24, 2026. Finish active runs
+and back up the app and profile together before replacing the executor. Preserve
+the IURIO monitor baseline, schedule and delivery receipts.
 
 ## Authority and execution
 
@@ -91,11 +92,16 @@ same workspace database. The existing agent IdP remains a separate service.
 2. Start the candidate with `OPENAPE_PODS_CENTRAL_ENABLED=1`. The worker initially
    blocks automatic starts. Connect the owner accounts in Desktop settings and
    register this desktop through the existing signed DDISA device enrollment.
-3. All imported Pods must already bind to that exact owner. Mixed-owner or
-   unbound profiles fail closed; do not rewrite ownership to bypass this check.
+3. Registration reuses existing identities and provisions missing identities through
+   the verified owner’s existing provider connection. All imported Pods must bind
+   to that exact owner; conflicting identities fail closed. Never rewrite ownership
+   records to bypass this check.
 4. The runtime publishes its allowlisted domain data and managed artifacts,
    stores a durable adoption receipt, and only then enables its execution lease.
-   Existing Pod IDs, identity references and schedule revisions are preserved.
+   Existing Pod IDs, identity references and schedule revisions are preserved. Once
+   the profile has its `central/` directory, ordinary application launches keep
+   central authority even without the launch environment flag. Disabling or removing
+   that directory is not a supported rollback.
 5. Verify the shared inventory, edit a description, run a synthetic script from
    both clients, compare checkpoint progression and receipts, and restart the
    same fixture. The established unit and native suites automate this rehearsal.
@@ -121,7 +127,7 @@ allowing further work. There is deliberately no blind retry or destructive
 support for operator-assisted recovery and retention remains a rollout concern;
 central mode disables local restore/deletion/cleanup to prevent competing state.
 
-A live cutover needs a later maintenance window: finish current runs, take paired
+The approved live cutover uses a maintenance window: finish current runs, take paired
 backups, verify the candidate and its exact-source checks, stop the old executor,
 and enable central authority on the same profile. Keep the existing IURIO
 baseline, checkpoint and notification receipts. Rollback must preserve newer
