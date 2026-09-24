@@ -12,7 +12,7 @@ import { assignedHttp } from '../../main/programs/http-service'
 import { EffectLedger } from '../recovery/effects'
 import { executeHttpEffect } from './http'
 import { PodVariables } from '../resources/variables'
-import { credentialAliases, parseCredentialRead } from '../../contracts/credentials'
+import { parseCredentialRead } from '../../contracts/credentials'
 import { ScriptCredentials } from '../resources/script-credentials'
 import { MailRecipeSession, mailToolRequest } from '../mail/recipe'
 import { extractSource } from '../mail/extraction'
@@ -130,8 +130,6 @@ export class RunDispatcher {
       if (!manifest.triggers.includes(trigger.reason)) throw new Error('Script does not allow this trigger')
       const assigned = this.resources.list(pod.id).filter(resource => resource.kind === 'tool' && resource.state === 'ready').map(resource => resource.configuration.capability)
       if (manifest.capabilities.filter(capability => !capability.startsWith('credential.')).some(capability => !assigned.includes(capability)) || (manifest.capabilities.includes('mail.read') && !this.services?.tool)) throw new Error('No tool assignments are available for this script')
-      new ScriptCredentials(this.store, this.resources).assertApproved(pod.id, run.scriptHash, manifest.capabilities)
-      if (credentialAliases(manifest.capabilities).length && !this.services?.credential) throw new Error('Script credential service is unavailable')
       const artifact = join(directory, 'run.mjs'); await writeFile(artifact, this.store.readBlob(run.scriptHash), { flag: 'wx', mode: 0o400 })
       const snapshots = await this.resources.capture(pod.id, this.runtime.helper)
       assertCurrent()
@@ -175,8 +173,8 @@ export class RunDispatcher {
                 assertCurrent,
                 tool: body => invokeTool(body, signal),
                 credential: async (alias) => {
-                  if (!manifest.capabilities.includes(`credential.${alias}`) || !this.services?.credential) throw new Error('Credential capability is not declared by this script')
-                  new ScriptCredentials(this.store, this.resources).assertApproved(pod.id, run.scriptHash, manifest.capabilities)
+                  if (!this.services?.credential) throw new Error('Script credential service is unavailable')
+                  new ScriptCredentials(this.store, this.resources).assigned(pod.id, alias)
                   return this.services.credential(alias, operationSignal, scope)
                 },
                 http: async (request) => {
@@ -234,8 +232,8 @@ export class RunDispatcher {
           }
           if (operation === 'credentials.get') {
             const alias = parseCredentialRead(payload)
-            if (!manifest.capabilities.includes(`credential.${alias}`) || !this.services?.credential) throw new Error('Credential capability is not declared by this script')
-            new ScriptCredentials(this.store, this.resources).assertApproved(pod.id, run.scriptHash, manifest.capabilities)
+            if (!this.services?.credential) throw new Error('Script credential service is unavailable')
+            new ScriptCredentials(this.store, this.resources).assigned(pod.id, alias)
             const request = this.services.credential(alias, operationSignal, scope); pendingAgents.add(request)
             try { const value = await request; assertCurrent(); operationSignal.throwIfAborted(); return value }
             finally { pendingAgents.delete(request) }

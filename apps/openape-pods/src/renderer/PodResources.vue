@@ -1,7 +1,6 @@
 <script lang="ts">
 import ProgramPermissions from './ProgramPermissions.vue'
 import DirectoryPermissions from './DirectoryPermissions.vue'
-import ScriptAccess from './ScriptAccess.vue'
 import { t, diagnostic, label } from './i18n'
 import { defineComponent } from 'vue'
 import type { PropType } from 'vue'
@@ -9,7 +8,7 @@ import type { StoredPod } from '../contracts/control'
 import type { ResourceCommand, ResourceState } from '../contracts/resources'
 
 export default defineComponent({
-  components: { ProgramPermissions, DirectoryPermissions, ScriptAccess },
+  components: { ProgramPermissions, DirectoryPermissions },
   props: { requestedSecret: { type: String, default: '' }, requiredAliases: { type: Array as PropType<string[]>, default: () => [] }, mode: { type: String, default: 'permissions' }, selectedPodId: { type: String, default: '' } },
   emits: ['selected', 'discuss'],
   data() { return { pods: [] as StoredPod[], podId: '', state: { resources: [], epoch: 0 } as ResourceState, busy: false, error: '', credentialAlias: this.requestedSecret, credentialValue: '' } },
@@ -64,7 +63,7 @@ export default defineComponent({
       <form v-if="mode === 'values'" class="credential-form" @submit.prevent="saveCredential">
         <h3>{{ t('Script credentials') }}</h3>
         <p class="muted">
-          {{ t('Store an encrypted value for this pod. The alias is visible; the value is never shown again. Saving or replacing pauses the pod and requires script validation and credential approval again.') }}
+          {{ t('Store an encrypted value for this pod. Its scripts can use every assigned secret. Saving or replacing pauses the pod and requires script validation again.') }}
         </p>
         <label>{{ t('Credential alias') }}<input v-model="credentialAlias" name="credential-alias" pattern="[a-z][a-z0-9_-]{0,63}" maxlength="64" required :disabled="busy" autocomplete="off"></label>
         <label>{{ t('Credential value') }}<input v-model="credentialValue" name="credential-value" type="password" maxlength="16384" required :disabled="busy" autocomplete="new-password"></label>
@@ -92,7 +91,6 @@ export default defineComponent({
           {{ t("Revoke access") }}
         </button>
       </article>
-      <ScriptAccess v-if="mode === 'values' && podId" :key="state.epoch" :pod-id="podId" kind="secrets" />
       <ProgramPermissions v-if="mode !== 'values'" :pod-id="podId" :state="state" @updated="value => { state = value }" />
       <div v-if="state.snapshot" class="snapshot-result" role="status">
         <h3>{{ t("Snapshot ready") }}</h3><p>{{ t("Each file is copied and hashed. Its source remains unchanged.") }}</p>

@@ -2181,5 +2181,7 @@
   "Unsupported legacy setup operation": "Nicht unterstützte Aktion für einen alten Einrichtungsvorschlag",
   "Select all targets and the current change revision before retiring it": "Vor dem Verwerfen alle Ziele und die aktuelle Änderungsrevision auswählen",
   "Only pending legacy changes can be retired": "Nur ausstehende alte Änderungen können verworfen werden",
-  "Invalid legacy change identity": "Ungültige Kennung einer alten Änderung"
+  "Invalid legacy change identity": "Ungültige Kennung einer alten Änderung",
+  "Store an encrypted value for this pod. Its scripts can use every assigned secret. Saving or replacing pauses the pod and requires script validation again.": "Speichere einen verschlüsselten Wert für diesen Pod. Seine Skripte können alle zugewiesenen Geheimnisse verwenden. Speichern oder Ersetzen pausiert den Pod und erfordert eine erneute Skriptprüfung.",
+  "No script has been saved for this pod yet. Continue setup with Codex or write your own script.": "Für diesen Pod wurde noch kein Skript gespeichert. Setze die Einrichtung mit Codex fort oder schreibe dein eigenes Skript."
 }

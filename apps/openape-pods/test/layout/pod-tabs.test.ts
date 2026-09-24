@@ -46,13 +46,15 @@ describe('pod tabs with the production stylesheet', () => {
     const rows = Array.from(document.querySelectorAll<HTMLElement>('.value-row > div'))
     expect(rows).toHaveLength(2)
     for (const row of rows) expect(row.getBoundingClientRect().width).toBeGreaterThan(160)
-    const access = document.querySelector<HTMLElement>('.script-access')!
+    expect(document.querySelector('.script-access')).toBeNull()
+    const access = document.querySelector<HTMLElement>('.resource-row:last-of-type')!
     access.scrollIntoView()
     expect(content(), 'long alias').toBeLessThanOrEqual(0)
     // Counter-check: a fieldset that cannot shrink does overflow the content.
     access.style.minWidth = '1200px'
     expect(content()).toBeGreaterThan(0)
     access.style.removeProperty('min-width')
+    await page.screenshot({ path: artifact('pod-secrets-without-selection.png') })
   })
 
   it('keeps persisted run explanations and a pending approval inside 680 and 600 pixel windows', async () => {
