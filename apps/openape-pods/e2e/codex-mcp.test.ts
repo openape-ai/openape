@@ -44,6 +44,12 @@ it('serves the packaged MCP outside the checkout and reports a stopped app (pack
     const called = await client.request('tools/call', { name: 'pods_control', arguments: { action: 'list' } })
     expect(JSON.parse(called.result.content[0].text)).toEqual({ pods: [], received: { action: 'list' } })
     expect(execute).toHaveBeenCalledWith({ id: expect.stringMatching(/^[a-f0-9-]{36}$/), action: { action: 'list' } })
+    const requestId = '00000000-0000-4000-8000-000000000138'
+    const parameters = { name: 'pods_control', arguments: { action: 'workspace', query: { type: 'inventory' }, requestId } }
+    await client.request('tools/call', parameters)
+    await client.request('tools/call', parameters)
+    expect(execute).toHaveBeenLastCalledWith({ id: requestId, action: { action: 'workspace', query: { type: 'inventory' } } })
+    expect(execute.mock.calls.slice(-2)).toEqual([execute.mock.calls.at(-1), execute.mock.calls.at(-1)])
     await server.stop(); server = undefined
     expect((await client.request('tools/call', { name: 'pods_control', arguments: { action: 'list' } })).result).toEqual({ isError: true, content: [{ type: 'text', text: 'OpenApe Pods is not running. Open the app and retry.' }] })
   }

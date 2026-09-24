@@ -43,6 +43,7 @@ import type { SetupInternal } from '../worker/onboarding/control'
 import { startAgentGateway } from '../worker/agent/gateway'
 import type { OnboardingCommand, OnboardingView } from '../contracts/onboarding'
 import { parseMasterView } from '../contracts/master'
+import { parseWorkspaceAction, workspaceHelp } from '../contracts/codex'
 import type { CodexRequest } from '../contracts/codex'
 import type { MasterCommand, MasterView } from '../contracts/master'
 import { realpathSync } from 'node:fs'
@@ -274,6 +275,12 @@ export class FixtureWorker {
   }
 
   async codex(request: CodexRequest): Promise<unknown> {
+    if (request.action.action === 'workspace') {
+      const query = parseWorkspaceAction(request.action)
+      if (!this.central) throw new Error('Connect the central workspace in the desktop app first')
+      return this.central.query(query)
+    }
+    if (request.action.action === 'runtime') return { ...await this.dispatch({ codex: request }) as object, workspace: workspaceHelp }
     if (this.central && !this.central.executing) return this.central.local(() => this.codex(request))
     if (!administrationActions.includes(String(request.action.action))) {
       const result = await this.dispatch({ codex: request })

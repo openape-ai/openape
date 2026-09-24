@@ -1,5 +1,30 @@
 # Active work
 
+## Pods: Claude Code MCP integration (September 24, 2026) — implementing
+
+[Issue 1380](https://repos.openape.ai/patrick/monorepo/issues/1380),
+[review plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3AJBBZHMJV6KC8A4WJP67JR),
+[local plan](../../.claude/plans/issue-1380-claude-code.html).
+Worktree `pods-claude-code`, branch `feature/issue-1380-claude-code`, canonical
+base `967038a5bff24a24b96e020f788b4060b1243c31`.
+
+Code inspection selects the existing STDIO MCP and CentralController query
+contract. Existing MCP lacks central online inventory and full run results;
+its transport generates a fresh request identity on every call. The planned
+adapter reuses central inventory/read/submit/operation and durable command IDs.
+Claude Code 2.1.260 successfully connected to the actual installed launcher in
+an isolated `/tmp/pods-claude-handshake.MicvlS` configuration (`mcp get`:
+`Status: Connected`). The owner Claude user configuration now contains only the added MCP entry and
+exact tool allow rule; unrelated configuration was compared and preserved.
+No owner Pod state was changed.
+
+Patrick approved the plan and brief backed-up app update/restart with “Los geht’s”.
+The shared central MCP adapter is implemented. Full lint/typecheck, app build,
+22 focused unit checks and the packaged MCP transport check pass. Receipts:
+`/tmp/pods-claude-{lint,typecheck,build,focused,packaged-mcp}.log`.
+Next: exact-source PR checks/merge, signed installation and live Claude acceptance. Keep the installed app open and the IURIO monitor untouched.
+Use a separate synthetic Pod for acceptance. Automatic E2E/layout remains off.
+
 ## Automatic CI scope (September 24, 2026)
 
 [Issue 1379](https://repos.openape.ai/patrick/monorepo/issues/1379), branch
