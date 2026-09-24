@@ -1,6 +1,7 @@
 import { request as httpsRequest } from 'node:https'
 import { lookup } from 'node:dns/promises'
 import { BlockList } from 'node:net'
+import { httpResponseBodyBytes, parseHttpReply } from '../../contracts/http'
 import type { HttpRequest, HttpReply } from '../../contracts/http'
 
 type Transport = (url: string, options: RequestInit) => Promise<Response>
@@ -13,14 +14,14 @@ export async function publicHttpsAddresses(host: string) {
   return addresses
 }
 
-async function publicHttps(urlString: string, options: RequestInit): Promise<Response> {
+export async function publicHttps(urlString: string, options: RequestInit): Promise<Response> {
   const url = new URL(urlString)
   const addresses = await publicHttpsAddresses(url.hostname)
   options.signal?.throwIfAborted()
   return new Promise((resolve, reject) => {
     const request = httpsRequest(url, { method: options.method, headers: options.headers as Record<string, string>, signal: options.signal ?? undefined, family: 4, lookup: (_host, _options, callback) => callback(null, addresses[0].address, 4) }, (response) => {
       const chunks: Buffer[] = []; let size = 0
-      response.on('data', (chunk: Buffer) => { size += chunk.length; if (size > 20000) response.destroy(new Error('HTTP response exceeds its size limit')); else chunks.push(chunk) })
+      response.on('data', (chunk: Buffer) => { size += chunk.length; if (size > httpResponseBodyBytes) response.destroy(new Error('HTTP response exceeds its size limit')); else chunks.push(chunk) })
       response.once('error', reject)
       response.once('end', () => {
         const status = response.statusCode ?? 502
@@ -45,14 +46,13 @@ export async function requestHttp(request: HttpRequest, signal: AbortSignal, tra
     const reader = response.body?.getReader(); const chunks: Uint8Array[] = []; let size = 0
     if (reader) {
       try {
-        for (;;) { const chunk = await reader.read(); if (chunk.done) break; size += chunk.value.length; if (size > 20000) throw new Error('HTTP response exceeds its size limit'); chunks.push(chunk.value) }
+        for (;;) { const chunk = await reader.read(); if (chunk.done) break; size += chunk.value.length; if (size > httpResponseBodyBytes) throw new Error('HTTP response exceeds its size limit'); chunks.push(chunk.value) }
       }
       finally { await reader.cancel(); reader.releaseLock() }
     }
     const headers: Record<string, string> = {}; response.headers.forEach((value, key) => { headers[key] = value })
     const reply = { status: response.status, headers, body: Buffer.concat(chunks).toString('utf8') }
-    if (Buffer.byteLength(JSON.stringify(reply)) > 30000) throw new Error('HTTP response exceeds its size limit')
-    return reply
+    return parseHttpReply(reply)
   }
   catch { throw new Error('HTTP request failed; delivery may be uncertain') }
 }
