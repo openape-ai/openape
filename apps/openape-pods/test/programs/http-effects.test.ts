@@ -57,3 +57,11 @@ it('stores only a digest receipt when requested and replays it without a second 
   expect(deliveries).toBe(1)
   expect(JSON.stringify(f.store.db.prepare('SELECT * FROM effect_ledger').all())).not.toContain('synthetic')
 })
+
+it('keeps only a digest for replies beyond the stored receipt bound instead of blocking the pod', async () => {
+  const f = fixture()
+  const reply = { status: 200, headers: {}, body: 'z'.repeat(40000) }
+  expect(await executeHttpEffect(f.ledger, f.pod.id, f.run.id, { ...request, key: 'large:1' }, async () => reply)).toEqual(reply)
+  expect(f.store.db.prepare('SELECT state FROM effect_ledger WHERE effect_key=?').get('large:1')?.state).toBe('completed')
+  expect((await executeHttpEffect(f.ledger, f.pod.id, f.run.id, { ...request, key: 'large:1' }, async () => reply)).receipt?.bytes).toBe(40000)
+})

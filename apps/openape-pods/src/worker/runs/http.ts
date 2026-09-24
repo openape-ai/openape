@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto'
 import { isHttpEffect } from '../../contracts/http'
 import type { HttpRequest, HttpReply } from '../../contracts/http'
+
 import type { EffectLedger } from '../recovery/effects'
+
+// Matches the effect ledger's stored result bound; larger replies keep a digest.
+const maxFullReceiptBytes = 32768
 
 export async function executeHttpEffect(ledger: EffectLedger, podId: string, runId: string, request: HttpRequest, send: () => Promise<HttpReply>): Promise<HttpReply> {
   if (!isHttpEffect(request.method)) return send()
@@ -11,7 +15,7 @@ export async function executeHttpEffect(ledger: EffectLedger, podId: string, run
   try {
     const reply = await send()
     if (reply.status >= 400) throw new Error('HTTP request returned an error response; review delivery before retrying')
-    ledger.complete(podId, key, request.receipt === 'digest' ? digestReceipt(reply) : reply)
+    ledger.complete(podId, key, request.receipt === 'digest' || Buffer.byteLength(JSON.stringify(reply)) > maxFullReceiptBytes ? digestReceipt(reply) : reply)
     return reply
   }
   catch (error) { ledger.markUnknown(podId, key); throw error }

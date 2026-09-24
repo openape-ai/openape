@@ -54,7 +54,7 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
       if (operation === 'mail.workflow.notify') return { delivered: true }
       if (operation === 'credentials.get') {
         const alias = parseCredentialRead(payload)
-        new ScriptCredentials(store, resources).assigned(pod.id, alias)
+        new ScriptCredentials(store, resources).readable(pod.id, alias)
         return `synthetic-credential-${alias}`
       }
       if (operation === 'http.request') {
