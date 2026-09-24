@@ -145,3 +145,13 @@ it('keeps a legacy pending proposal inert until explicitly retired', async () =>
   expect(await send(action)).toMatchObject({ state: 'discarded' })
   expect(count(store, 'SELECT count(*) AS count FROM pod_variables')).toBe(0)
 })
+
+it('offers CLI setup help and resolves only metadata for assigned commands', async () => {
+  const { parseAdministration } = await import('../../src/contracts/codex-admin')
+  const { pod, send } = fixture()
+  const help = await send({ action: 'runtime' }) as { programHelp: { steps: string[], secrets: string } }
+  expect(help.programHelp.steps.join(' ')).toContain('Exit and reopen')
+  expect(help.programHelp.secrets).toContain('No credential.* declaration')
+  expect(parseAdministration({ action: 'program', revision: 1, command: { type: 'prepare', podId: pod.id, line: 'az --help' } })).toMatchObject({ command: { type: 'prepare' } })
+  for (const type of ['start', 'poll', 'input']) expect(() => parseAdministration({ action: 'program', revision: 1, command: { type, podId: pod.id } })).toThrow()
+})

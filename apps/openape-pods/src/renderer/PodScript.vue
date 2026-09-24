@@ -13,14 +13,13 @@ export default defineComponent({
   components: { ScriptCode, ScriptPackages },
   props: { pod: { type: Object as PropType<StoredPod>, required: true } },
   emits: ['changed', 'values', 'ran'],
-  data() { return { awaitingRun: false, available: [] as { name: string, expression: string }[], buffer: scriptBuffer(this.pod.id), choice: '', pending: null as ScriptSelection | 'new' | 'current' | null } },
+  data() { return { available: [] as { name: string, expression: string }[], buffer: scriptBuffer(this.pod.id), choice: '', pending: null as ScriptSelection | 'new' | 'current' | null } },
   computed: {
     dependenciesReady(): boolean { return this.buffer.packages === JSON.stringify(this.buffer.source?.packages ?? emptyPackages(), null, 2) && (this.buffer.source?.dependenciesPrepared ?? true) },
     dirty(): boolean { return isDirty(this.buffer) },
     readOnly(): boolean { return !this.buffer.editing || this.pod.lifecycle === 'archived' },
     canValidate(): boolean { return !this.dirty && this.buffer.source?.kind === 'draft' && !this.buffer.busy && this.pod.lifecycle !== 'archived' },
-    missingSecrets(): boolean { return !!this.buffer.source?.capabilities.some(item => item.startsWith('credential.')) && !this.buffer.source.credentialAccessApproved },
-    canActivate(): boolean { return !this.missingSecrets && !this.dirty && !!this.buffer.source?.validated && !!this.buffer.source.hash && this.buffer.source.hash !== this.buffer.view?.pod.activeScript && !this.buffer.busy && this.pod.lifecycle !== 'archived' },
+    canActivate(): boolean { return !this.dirty && !!this.buffer.source?.validated && !!this.buffer.source.hash && this.buffer.source.hash !== this.buffer.view?.pod.activeScript && !this.buffer.busy && this.pod.lifecycle !== 'archived' },
     sourceLabel(): string { const source = this.buffer.source; return source?.kind === 'version' ? t('Version {id}', { id: source.id.slice(0, 12) }) : source ? t('Draft {id} · revision {revision}', { id: source.id.slice(0, 8), revision: source.revision }) : t('New script') },
     evidence(): string { return this.buffer.source?.evidence ? JSON.stringify(JSON.parse(this.buffer.source.evidence) as unknown, null, 2) : '' },
   },
@@ -33,12 +32,10 @@ export default defineComponent({
       catch (error) { this.buffer.error = error instanceof Error ? error.message : 'Could not load variables' }
     },
     async prepareRun() {
-      this.awaitingRun = false
       if (this.dirty || !this.buffer.source?.validated) {
         await this.save(); if (this.buffer.error) return
         await this.validate(); if (this.buffer.error) return
       }
-      if (this.missingSecrets) { this.awaitingRun = true; return }
       await this.finishRun()
     },
     async finishRun() {
@@ -47,7 +44,7 @@ export default defineComponent({
       catch (error) { this.buffer.error = error instanceof Error ? error.message : 'Could not start run' }
     },
     syncChoice() { const source = this.buffer.source; this.choice = source ? `${source.kind}:${source.id}` : '' },
-    apply(view: ScriptView) { this.buffer.view = view; this.buffer.source = view.source; this.buffer.code = view.source?.code ?? ''; this.buffer.packages = JSON.stringify(view.source?.packages ?? emptyPackages(), null, 2); this.buffer.toolCapabilities = view.source?.capabilities.filter(item => !item.startsWith('credential.')) ?? []; this.buffer.credentialAliases = view.source?.capabilities.filter(item => item.startsWith('credential.')).map(item => item.slice(11)) ?? []; this.buffer.editing = !!view.source && this.pod.lifecycle !== 'archived'; this.buffer.compare = null; this.syncChoice() },
+    apply(view: ScriptView) { this.buffer.view = view; this.buffer.source = view.source; this.buffer.code = view.source?.code ?? ''; this.buffer.packages = JSON.stringify(view.source?.packages ?? emptyPackages(), null, 2); this.buffer.toolCapabilities = view.source?.capabilities.filter(item => !item.startsWith('credential.')) ?? []; this.buffer.editing = !!view.source && this.pod.lifecycle !== 'archived'; this.buffer.compare = null; this.syncChoice() },
     async load(selection?: ScriptSelection) {
       this.buffer.busy = true; this.buffer.error = ''
       try { this.apply(await window.pods.scripts({ type: 'list', podId: this.pod.id, ...(selection ? { selection } : {}) })) }
@@ -68,7 +65,7 @@ export default defineComponent({
       if (this.buffer.busy) return
       this.pending = null; this.buffer.message = ''
       if (selection !== 'new') { await this.load(selection === 'current' ? undefined : selection); if (!this.buffer.source && this.buffer.view) await this.open('new'); return }
-      this.buffer.source = null; this.buffer.code = ''; this.buffer.packages = JSON.stringify(emptyPackages(), null, 2); this.buffer.toolCapabilities = []; this.buffer.credentialAliases = []; this.buffer.editing = true; this.buffer.compare = null; this.syncChoice()
+      this.buffer.source = null; this.buffer.code = ''; this.buffer.packages = JSON.stringify(emptyPackages(), null, 2); this.buffer.toolCapabilities = []; this.buffer.editing = true; this.buffer.compare = null; this.syncChoice()
     },
     async save(asNew = false) {
       const state = this.buffer
@@ -77,7 +74,7 @@ export default defineComponent({
       let packages
       try { packages = parsePackages(JSON.parse(state.packages)) }
       catch (error) { state.error = error instanceof Error ? error.message : 'Invalid package.json'; return }
-      await this.command({ type: 'save', podId: this.pod.id, revision: state.view?.pod.revision ?? this.pod.revision, draftId: !asNew && source?.kind === 'draft' ? source.id : null, draftRevision: !asNew && source?.kind === 'draft' ? source.revision : 0, code: state.code, packages, capabilities: [...state.toolCapabilities, ...state.credentialAliases.map(alias => `credential.${alias}`)] }, 'Draft saved. Validate it before activation.')
+      await this.command({ type: 'save', podId: this.pod.id, revision: state.view?.pod.revision ?? this.pod.revision, draftId: !asNew && source?.kind === 'draft' ? source.id : null, draftRevision: !asNew && source?.kind === 'draft' ? source.revision : 0, code: state.code, packages, capabilities: state.toolCapabilities }, 'Draft saved. Validate it before activation.')
     },
     async prepareDependencies() {
       await this.save(); if (this.buffer.error) return
@@ -131,7 +128,7 @@ export default defineComponent({
       </button>
     </div>
     <p v-if="!buffer.source && !buffer.code.trim()" class="muted">
-      {{ t('No script has been saved for this pod yet. Continue setup in Chat or write your own script.') }}
+      {{ t('No script has been saved for this pod yet. Continue setup with Codex or write your own script.') }}
     </p>
     <p v-if="buffer.error" class="error-message" role="alert">
       {{ diagnostic(buffer.error) }}
@@ -165,13 +162,6 @@ export default defineComponent({
         {{ t('Save script') }}
       </button><button class="text-button" :disabled="buffer.busy" @click="requestSelection('current')">
         {{ t('Reload script') }}
-      </button>
-    </div>
-    <div v-if="awaitingRun" class="discard-prompt" role="alert">
-      <p>{{ t('Assign the required secrets, then validate and run the script again.') }}</p><button class="primary" @click="$emit('values')">
-        {{ t('Manage variables and secrets') }}
-      </button><button class="text-button" @click="awaitingRun = false">
-        {{ t('Cancel') }}
       </button>
     </div>
     <section class="script-packages">
