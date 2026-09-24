@@ -80,7 +80,10 @@ describe('persistent scheduling and intake', () => {
     const reopened = new PodDatabase(f.store.root); stores.push(reopened)
     const next = new Scheduler(reopened, { start: () => { throw new Error('Paused') } })
     expect(next.acceptEvent(pod, 'fixture', 'before-ack', {})).toBe(accepted)
-    for (let i = 1; i < 1000; i++) next.acceptEvent(pod, 'fixture', String(i), {})
+    // Seed capacity together; the restart above independently verifies durable acceptance.
+    reopened.transaction(() => {
+      for (let i = 1; i < 1000; i++) next.acceptEvent(pod, 'fixture', String(i), {})
+    })
     expect(() => next.acceptEvent(pod, 'fixture', 'overflow', {})).toThrow('full')
     expect(next.acceptEvent(pod, 'fixture', 'before-ack', {})).toBe(accepted)
   })

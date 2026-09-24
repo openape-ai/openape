@@ -26,8 +26,13 @@ Service and clean desktop builds passed. The exact-source external CI, E2E and
 layout jobs 5058, 5059 and 5060 all passed before merge. Screenshots at 1280/560
 pixels and German dark appearance were inspected. Permanent cases cover ownership,
 offline access, revisions, lost acknowledgements, no duplicate effects, managed-file
-link rejection and multi-megabyte artifact transport. Full post-merge main checks
-run as jobs 5061, 5062 and 5063; consult their current status before further merges.
+link rejection and multi-megabyte artifact transport. Post-merge main jobs 5062 (E2E) and 5063 (layout) passed. CI 5061 exposed
+a pre-existing scheduler-test timeout while individually committing 999 queue
+fixtures (14.4 seconds against a 5-second test limit). Completion PR 121 batches
+only queue fixture seeding; real restart, deduplication and overflow assertions
+remain intact. Its focused 12 scheduler tests and full local `pnpm check:ci` pass (receipt
+`1790271555860-05650cf1-all`, source plus the repair). No production code changes.
+Wait for the repair source gates before merging; do not bypass the red main gate.
 Self-contained HTML evidence is `~/Downloads/OpenApe-Pods-central-a894db75/verification.html`.
 
 The approved implementation scope includes a tested candidate and fixture adoption,
