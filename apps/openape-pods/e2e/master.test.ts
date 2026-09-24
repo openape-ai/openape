@@ -166,7 +166,7 @@ it('persists ordinary setup, keeps automation disabled and enforces revisions an
   expect(inspected.organization.groups).toEqual([expect.objectContaining({ name: 'Examples', selected: true })])
   expect(inspected.resources.find(resource => resource.id === reference.id)?.configuration).toEqual({})
   expect(JSON.stringify(inspected)).not.toContain(credentialId); expect(JSON.stringify(inspected)).not.toContain('/private/owner-only.txt'); expect(JSON.stringify(inspected)).not.toContain('PRIVATE_'); expect(JSON.stringify(inspected)).not.toContain('/private/host/tool')
-  expect(inspected.resources.find(resource => (resource.configuration as { cliId?: string }).cliId === 'fixture')?.configuration).toEqual({ type: 'program', cliId: 'fixture', capability: 'tool.fixture.read', permissions: ['fixture.read'], commands: expect.arrayContaining([expect.objectContaining({ command: ['read'], action: 'read' })]) })
+  expect(inspected.resources.find(resource => (resource.configuration as { cliId?: string }).cliId === 'fixture')?.configuration).toEqual({ type: 'program', cliId: 'fixture', runtimeConfigured: false, capability: 'tool.fixture.read', permissions: ['fixture.read'], commands: expect.arrayContaining([expect.objectContaining({ command: ['read'], action: 'read' })]) })
   await action({ action: 'setGroup', name: 'examples', organizationRevision: inspected.organization.revision })
   expect(store.db.prepare('SELECT count(*) AS n FROM pod_groups').get()?.n).toBe(1)
   const epoch = registry.epoch(pod.id)
