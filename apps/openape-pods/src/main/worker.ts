@@ -1,10 +1,14 @@
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import type { CentralController } from './central/controller'
+import type { CentralCommand, CentralSnapshot } from '../contracts/central'
+import { centralId, parseCentralCommand } from '../contracts/central'
 import { administrationActions, parseAdministration } from '../contracts/codex-admin'
 import type { AdministrationJournal, AdministrationReceipt } from '../contracts/codex-admin'
 import { importPrivateSecret } from './codex/secret-import'
 import { programDefinition } from './programs/definition'
 import { applicationDefinition } from './programs/application'
 import { modelResources } from '../worker/master/resources'
-import { object as remoteObject, uuid as remoteUuid } from '@openape/pods-protocol'
+import { object as remoteObject, uuid as remoteUuid, sameOwner } from '@openape/pods-protocol'
 import { ProgramState } from './programs/state'
 import type { RemoteInternal } from '../worker/remote/control'
 import type { Owner } from '@openape/pods-protocol'
@@ -66,6 +70,7 @@ import { dirname, join } from 'node:path'
 import type { WorkerStatus } from '../contracts/ipc'
 
 export class FixtureWorker {
+  central: CentralController | null = null
   private shellIdentities = new Map<string, { close: () => Promise<void> }>()
   private openedApprovals = new Set<string>()
   private programs: ProgramManager | null = null
@@ -80,6 +85,12 @@ export class FixtureWorker {
   private services = new Map<string, AbortController>()
   private pending = new Map<string, { resolve: (state: unknown) => void, reject: (error: Error) => void, timer: ReturnType<typeof setTimeout> }>()
   private state: WorkerStatus = { state: 'starting', pid: null, error: null }
+  private centralAction(type: string): CentralController | null {
+    if (!this.central || this.central.executing) return null
+    if (!this.central.available) throw new Error(this.central.error ?? 'Pod is offline')
+    return type === 'list' ? null : this.central
+  }
+
   constructor(private readonly publish: (status: WorkerStatus) => void) {}
   start(root: string): void {
     try { assertPilotRuntime() }
@@ -88,7 +99,7 @@ export class FixtureWorker {
     this.credentials = createMacOSCredentialCache(join(this.root, 'credentials'))
     const fixturePort = process.env.NODE_ENV === 'test' ? process.env.OPENAPE_PODS_FIXTURE_MODEL_PORT : undefined
     if (fixturePort && (!/^\d+$/.test(fixturePort) || Number(fixturePort) < 1024 || Number(fixturePort) > 65535)) throw new Error('Invalid synthetic model port')
-    this.child = utilityProcess.fork(join(__dirname, '../worker/entry.cjs'), [], { cwd: root, env: { HOME: root, TMPDIR: root, PATH: '/usr/bin:/bin', PODS_RUNTIME_EXECUTABLE: process.execPath, ...(fixturePort ? { PODS_FIXTURE_MODEL_PORT: fixturePort } : {}) }, serviceName: 'OpenApe Pods Fixture Worker', stdio: 'pipe' })
+    this.child = utilityProcess.fork(join(__dirname, '../worker/entry.cjs'), [], { cwd: root, env: { HOME: root, TMPDIR: root, PATH: '/usr/bin:/bin', PODS_RUNTIME_EXECUTABLE: process.execPath, ...(process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1' ? { PODS_CENTRAL_ENABLED: '1' } : {}), ...(fixturePort ? { PODS_FIXTURE_MODEL_PORT: fixturePort } : {}) }, serviceName: 'OpenApe Pods Fixture Worker', stdio: 'pipe' })
     const child = this.child
     const reportError = (error: string) => { this.state = { state: 'error', pid: child.pid ?? null, error }; this.publish(this.state) }
     child.on('message', (message: unknown) => {
@@ -169,6 +180,7 @@ export class FixtureWorker {
   }
 
   async data(command: DataInternal): Promise<DataView> {
+    if (this.central && command.type !== 'status' && command.type !== 'backup') throw new Error('Central workspaces require coordinated backup and retention; local deletion and restore are disabled')
     await this.setupReady
     if (command.type !== 'status' && (this.connections?.busy() || this.programs?.busy())) throw new Error('Finish or cancel account setup before changing application data')
     const view = parseDataView(await this.dispatch({ data: command }))
@@ -183,7 +195,9 @@ export class FixtureWorker {
     await Promise.all(identities.map(identity => identity.close()))
   }
 
-  async program(command: ProgramCommand, definition?: ProgramDefinition, file?: string) {
+  async program(command: ProgramCommand, definition?: ProgramDefinition, file?: string): Promise<Awaited<ReturnType<ProgramManager['terminal']>> | Awaited<ReturnType<ProgramManager['prepare']>> | ResourceState | string | null> {
+    const central = this.centralAction(['launchStatus', 'prepare', 'poll', 'input', 'resize', 'close'].includes(command.type) ? 'list' : command.type)
+    if (central) return central.local(() => this.program(command, definition, file))
     await this.setupReady
     if (!this.programs) throw new Error('Program service is not ready')
     if (command.type === 'launchStatus') return this.programs.launchStatus(command.podId)
@@ -232,7 +246,7 @@ export class FixtureWorker {
     return this.connections.execute(command)
   }
 
-  async remote(command: RemoteInternal): Promise<unknown> { return this.dispatch({ remote: command }) }
+  async remote(command: RemoteInternal): Promise<unknown> { if (this.central && command.type === 'execute') throw new Error('Use the central workspace to control this Pod'); return this.dispatch({ remote: command }) }
   async remoteOwner(): Promise<{ owner: Owner, email: string }> {
     await this.setupReady
     if (!this.connections) throw new Error('Connection service unavailable')
@@ -252,7 +266,12 @@ export class FixtureWorker {
   }
 
   async codex(request: CodexRequest): Promise<unknown> {
-    if (!administrationActions.includes(String(request.action.action))) return this.dispatch({ codex: request })
+    if (this.central && !this.central.executing) return this.central.local(() => this.codex(request))
+    if (!administrationActions.includes(String(request.action.action))) {
+      const result = await this.dispatch({ codex: request })
+      if (this.central && request.action.action === 'create') await this.centralProvision(centralId((result as { id: string }).id), (await this.remoteOwner()).owner)
+      return result
+    }
     const action = parseAdministration(request.action)
     const receipt = await this.dispatch({ codexAdministration: { type: 'begin', request } }) as AdministrationReceipt
     if (receipt.completed) return receipt.result
@@ -297,19 +316,21 @@ export class FixtureWorker {
     return { resources: modelResources(view.resources, true), variables: view.variables, epoch: view.epoch }
   }
 
-  async chats(command: ChatsCommand): Promise<ChatsView> { return parseChatsView(await this.dispatch({ chats: command })) }
-  async master(command: MasterCommand): Promise<MasterView> { return parseMasterView(await this.dispatch({ master: command })) }
+  async chats(command: ChatsCommand): Promise<ChatsView> { const central = this.centralAction(command.type); if (central) return central.local(() => this.chats(command)); return parseChatsView(await this.dispatch({ chats: command })) }
+  async master(command: MasterCommand): Promise<MasterView> { const central = this.centralAction(command.type); if (central) return central.local(() => this.master(command)); return parseMasterView(await this.dispatch({ master: command })) }
 
   async scripts(command: ScriptCommand): Promise<ScriptView> {
+    const central = this.centralAction(command.type); if (central) return central.local(() => this.scripts(command))
     const view = parseScriptView(await this.dispatch({ scripts: command }))
     return { ...view, environment: visibleEnvironment(podEnvironmentValues(this.root, command.podId)) }
   }
 
-  async details(command: DetailsCommand): Promise<PodDetails> { return parsePodDetails(await this.dispatch({ details: command })) }
+  async details(command: DetailsCommand): Promise<PodDetails> { const central = this.centralAction(command.type); if (central) return central.local(() => this.details(command)); return parsePodDetails(await this.dispatch({ details: command })) }
 
-  async request(command: WorkspaceCommand): Promise<WorkspaceState> { return parseWorkspace(await this.dispatch(command)) }
+  async request(command: WorkspaceCommand): Promise<WorkspaceState> { const central = this.centralAction(command.type); if (central) return central.local(() => this.request(command)); return parseWorkspace(await this.dispatch(command)) }
 
   async resources(command: InternalResourceCommand): Promise<ResourceState> {
+    const central = this.centralAction(command.type); if (central) return central.local(() => this.resources(command))
     await this.setupReady
     if (command.type === 'assignHttp') {
       if (!this.connections) throw new Error('Connection setup is not ready')
@@ -347,6 +368,7 @@ export class FixtureWorker {
   }
 
   async runs(command: RunCommand): Promise<RunView> {
+    const central = this.centralAction(command.type); if (central) return central.local(() => this.runs(command))
     await this.setupReady
     if (command.type !== 'openApproval') return parseRunView(await this.dispatch({ run: command }))
     const view = parseRunView(await this.dispatch({ run: { type: 'list', podId: command.podId, runId: command.runId } }))
@@ -359,11 +381,60 @@ export class FixtureWorker {
     return view
   }
 
-  async workflows(command: WorkflowCommand): Promise<WorkflowView> { return parseWorkflowView(await this.dispatch({ workflow: command })) }
+  async workflows(command: WorkflowCommand): Promise<WorkflowView> { const central = this.centralAction(command.type); if (central) return central.local(() => this.workflows(command)); return parseWorkflowView(await this.dispatch({ workflow: command })) }
 
-  async scheduling(command: ScheduleCommand): Promise<ScheduleView> { return parseScheduleView(await this.dispatch({ schedule: command })) }
+  async scheduling(command: ScheduleCommand): Promise<ScheduleView> { const central = this.centralAction(command.type); if (central) return central.local(() => this.scheduling(command)); return parseScheduleView(await this.dispatch({ schedule: command })) }
 
-  private dispatch(command: { codexAdministration: AdministrationJournal } | { codex: CodexRequest } | { remote: RemoteInternal } | { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private async centralProvision(podId: string, owner: Owner): Promise<void> {
+    const directory = join(this.root, 'central'); const path = join(directory, `pod-${centralId(podId)}.json`)
+    await mkdir(directory, { recursive: true, mode: 0o700 })
+    try { await writeFile(path, JSON.stringify({ podId, owner }), { mode: 0o600, flag: 'wx', flush: true }) }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error }
+    const pending = JSON.parse(await readFile(path, 'utf8')) as { podId: string, owner: Owner }
+    if (pending.podId !== podId || !sameOwner(pending.owner, owner)) throw new Error('Pending Pod provisioning belongs to another owner')
+    try {
+      const identity = await this.provisionRemotePod(podId, owner)
+      await this.remote({ type: 'claim', podId, owner, identity })
+      await rm(path)
+    }
+    catch (error) { throw new Error(`Pod ${podId} exists and is awaiting its identity. Do not create it again. ${String(error)}`) }
+  }
+
+  async centralSnapshot(): Promise<CentralSnapshot> {
+    const { owner } = await this.remoteOwner()
+    await mkdir(join(this.root, 'central'), { recursive: true, mode: 0o700 })
+    for (const name of await readdir(join(this.root, 'central'))) {
+      const match = /^pod-([a-f0-9-]{36})\.json$/.exec(name)
+      if (match) await this.centralProvision(match[1]!, owner)
+    }
+    await this.indexRemotePods(owner)
+    return await this.dispatch({ central: { type: 'snapshot', owner } }) as CentralSnapshot
+  }
+
+  async centralGate(until: number): Promise<void> { await this.dispatch({ central: { type: 'gate', until } }) }
+
+  async centralExecute(value: CentralCommand): Promise<unknown> {
+    const { channel, body } = parseCentralCommand(value)
+    const command = body as never
+    if (channel === 'workspace') {
+      const before = body.type === 'create' ? parseWorkspace(await this.dispatch({ type: 'list' })).pods.map(pod => pod.id) : []
+      const result = await this.request(command)
+      const { owner } = await this.remoteOwner()
+      if (body.type === 'create') {
+        for (const pod of result.pods.filter(pod => !before.includes(pod.id))) await this.centralProvision(pod.id, owner)
+        await this.indexRemotePods(owner)
+      }
+      return result
+    }
+    if (channel === 'scripts') return this.scripts(command)
+    if (channel === 'details') return this.details(command)
+    if (channel === 'scheduling') return this.scheduling(command)
+    if (channel === 'runs') return this.runs(command)
+    if (channel === 'resources') return this.resources(command)
+    throw new Error('Unsupported central execution')
+  }
+
+  private dispatch(command: { central: { type: 'snapshot', owner: Owner } | { type: 'gate', until: number } } | { codexAdministration: AdministrationJournal } | { codex: CodexRequest } | { remote: RemoteInternal } | { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()

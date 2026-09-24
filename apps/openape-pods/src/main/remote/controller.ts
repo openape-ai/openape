@@ -12,11 +12,12 @@ import type { RemoteDevice, RemoteRegistration } from '../../worker/remote/contr
 interface Tokens { accessToken: string, refreshToken: string, expiresAt: string, registration: RemoteRegistration }
 interface Saved { id: string, signing: string, agreement: string, enabled: boolean, tokens?: Tokens }
 interface Outbox { id: string, device_id: string, sequence: number, route: string, body: string, envelope: string | null }
-class RemoteServiceError extends Error {
+export class RemoteServiceError extends Error {
   constructor(readonly status: number) { super(`Remote service returned ${status}`) }
 }
 export class RemoteController {
   private saved: Saved | null = null
+  private refreshing: Promise<void> | null = null
   private socket: WebSocket | null = null
   private stopping = false
   private runner: Promise<void> | null = null
@@ -122,11 +123,25 @@ export class RemoteController {
   }
 
   private start(): void {
-    if (this.runner) return
+    if (this.runner || process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1') return
     this.runner = this.run().finally(() => { this.runner = null })
   }
 
   private async refresh(): Promise<void> {
+    if (!this.refreshing) this.refreshing = this.refreshTokens().finally(() => { this.refreshing = null })
+    return this.refreshing
+  }
+
+  async workspaceRequest(body: Record<string, unknown>): Promise<unknown> {
+    await this.load()
+    if (!this.saved?.enabled || !this.saved.tokens) throw new Error('Register this desktop before connecting the central workspace')
+    const identity = await this.worker.remoteOwner()
+    if (!sameOwner(identity.owner, this.saved.tokens.registration.owner)) throw new Error('Central workspace belongs to another owner')
+    await this.refresh()
+    return this.signed('POST', '/api/runtime/v1/workspace', body)
+  }
+
+  private async refreshTokens(): Promise<void> {
     if (!this.saved?.tokens) throw new Error('Register this desktop again')
     if (Date.parse(this.saved.tokens.expiresAt) >= Date.now() + 60000) return
     this.saved.tokens = await this.post('/api/mobile/v1/session/refresh', { refreshToken: this.saved.tokens.refreshToken, signature: signBytes(proofBytes('session-refresh', this.saved.id, sha256(this.saved.tokens.refreshToken)), this.saved.signing) }) as Tokens
