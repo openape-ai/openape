@@ -256,7 +256,15 @@ export class FixtureWorker {
   async indexRemotePods(owner: Owner): Promise<void> {
     await this.setupReady
     if (!this.connections) throw new Error('Connection service unavailable')
-    for (const binding of await this.connections.existingRemotePods(owner)) await this.remote({ type: 'claim', podId: binding.podId, owner, identity: binding.identity })
+    const bindings = await this.connections.existingRemotePods(owner)
+    if (this.central) {
+      const workspace = parseWorkspace(await this.dispatch({ type: 'list' }))
+      for (const pod of workspace.pods) {
+        if (bindings.some(binding => binding.podId === pod.id)) continue
+        bindings.push({ podId: pod.id, identity: await this.provisionRemotePod(pod.id, owner) })
+      }
+    }
+    for (const binding of bindings) await this.remote({ type: 'claim', podId: binding.podId, owner, identity: binding.identity })
   }
 
   async provisionRemotePod(podId: string, owner: Owner) {

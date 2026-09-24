@@ -16,3 +16,27 @@ it('passes suspend and resume to a ready worker process only', async () => {
   worker.lifecycle('suspend'); worker.lifecycle('resume')
   expect(child.postMessage.mock.calls).toEqual([['suspend'], ['resume']])
 })
+
+it('adopts missing identities through the verified owner without reprovisioning existing Pods', async () => {
+  const { FixtureWorker } = await import('../../src/main/worker')
+  const worker = new FixtureWorker(() => {})
+  const owner = { issuer: 'https://owner.example', subject: 'owner' }
+  const existingId = '00000000-0000-4000-8000-000000000001'
+  const missingId = '00000000-0000-4000-8000-000000000002'
+  const existing = { podId: existingId, identity: { podId: existingId } }
+  const created = { podId: missingId }
+  const connections = { existingRemotePods: vi.fn(async () => [existing]), podConnection: vi.fn(async () => ({ identity: created })) }
+  const dispatch = vi.fn(async () => ({ pods: [existingId, missingId].map(id => ({ id, name: id, revision: 1, lifecycle: 'paused', activeScript: null })), organization: { revision: 1, groups: [] } }))
+  const remote = vi.spyOn(worker, 'remote').mockResolvedValue({})
+  Object.assign(worker, { connections, dispatch, central: {} })
+  await worker.indexRemotePods(owner)
+  expect(connections.podConnection).toHaveBeenCalledExactlyOnceWith(missingId, owner)
+  expect(remote.mock.calls).toEqual([
+    [{ type: 'claim', podId: existingId, owner, identity: existing.identity }],
+    [{ type: 'claim', podId: missingId, owner, identity: created }],
+  ])
+  remote.mockClear()
+  connections.podConnection.mockRejectedValueOnce(new Error('Pod belongs to another owner'))
+  await expect(worker.indexRemotePods(owner)).rejects.toThrow('another owner')
+  expect(remote).not.toHaveBeenCalled()
+})

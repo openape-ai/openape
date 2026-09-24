@@ -10,6 +10,17 @@ const podId = '00000000-0000-4000-8000-000000000001'
 let main: MainHarness | undefined
 afterEach(async () => { await main?.close(); main = undefined })
 
+it('retains central authority on ordinary launches once adoption has started', async () => {
+  main = await startMain({ OPENAPE_PODS_CENTRAL_ENABLED: '0' }, async (root) => {
+    await mkdir(join(root, 'central'))
+  })
+  expect(await main.invoke(channels.central, { type: 'status' })).toMatchObject({ enabled: true, online: false })
+  expect(process.env.OPENAPE_PODS_CENTRAL_ENABLED).toBe('1')
+  await main.close()
+  main = await startMain({ OPENAPE_PODS_CENTRAL_ENABLED: '0' })
+  expect(await main.invoke(channels.central, { type: 'status' })).toMatchObject({ enabled: false })
+})
+
 describe('main process owner dialogs', () => {
   it('assigns an HTTP destination only after the owner confirms the native dialog', async () => {
     main = await startMain()
