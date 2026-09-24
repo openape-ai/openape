@@ -1,5 +1,9 @@
 # Active work
 
+## Pods broker capacity follow-up
+
+Worktree `issue-1377-broker-capacity`, branch `bugfix/issue-1377-broker-capacity`, issue 1377. Real Azure scans still hit HTTP 429 after the HTTP machine bucket was configured to 600: the durable broker store independently hard-coded 120 live assertions per connection. Make that bound honor the same existing operator setting, retaining the 120 default, expiry cleanup and replay rejection. This server follow-up requires reviewed green source and an owner-IdP deployment; do not enable the IURIO schedule until real Telegram delivery succeeds.
+
 ## Pods: connected Codex owner administration (September 24, 2026)
 
 [Issue 1377](https://repos.openape.ai/patrick/monorepo/issues/1377), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3971H91PDY5XPHJP3696PZ7). Patrick approved the Azure runtime and grant repair on September 24. Worktree `issue-1377-azure-runtime`; current follow-up branch `bugfix/issue-1377-assigned-grant`, base `4f5977cb`.
