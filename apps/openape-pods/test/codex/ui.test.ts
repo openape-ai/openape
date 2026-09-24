@@ -55,14 +55,16 @@ it('shows an empty review before Codex prepared anything', async () => {
   expect(view.get('[role="status"]').text()).toBe('Nothing is waiting for you.'); expect(view.find('[role="alert"]').exists()).toBe(false)
 })
 
-it('lists Prepared by Codex with its waiting count only while Codex is connected', async () => {
-  const master = async (command: { type: string, conversationId?: string }) => command.conversationId === codexConversationId ? review([pending]) : review([])
-  installWorkspace({ codex: async () => connection('disconnected'), master })
-  const hidden = mount(App); await flushPromises()
-  expect(hidden.text()).not.toContain('Prepared by Codex'); hidden.unmount()
+it('keeps chat and approval destinations out of the connected workspace', async () => {
+  const master = vi.fn(async () => review([pending]))
   installWorkspace({ codex: async () => connection('connected'), master })
   const shown = mount(App); await flushPromises()
-  const entry = shown.findAll('.nav-button').find(button => button.text().startsWith('Prepared by Codex'))!
-  expect(entry.get('.codex-badge').text()).toBe('1')
+  expect(shown.text()).not.toContain('Prepared by Codex')
+  expect(shown.findAll('[role="tab"]').map(tab => tab.text())).not.toContain('Chat')
+  expect(shown.findAll('.nav-button').map(button => button.text())).not.toContain('Chats')
+  expect(master).not.toHaveBeenCalled()
+  await shown.get('.new-pod').trigger('click'); await flushPromises()
+  expect(shown.find('.master-panel').exists()).toBe(false)
+  expect(shown.find('input').exists()).toBe(true)
   shown.unmount()
 })

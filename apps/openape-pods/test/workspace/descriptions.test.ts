@@ -1,3 +1,5 @@
+import { WorkspaceDetails } from '../../src/worker/workspace/details'
+import { ResourceRegistry } from '../../src/worker/resources/registry'
 // @vitest-environment node
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -80,4 +82,17 @@ it('explicitly regenerates a ready description from its original conversation wh
   descriptions.request(pod.id, true); descriptions.start(); await descriptions.idle()
   expect(descriptions.view(pod.id)).toMatchObject({ state: 'ready', text: 'A concise replacement', revision: 2 })
   expect(calls).toBe(2); expect(store.getPod(pod.id)).toEqual(pod)
+})
+
+it('does not overwrite a manual edit when a legacy summary finishes later', async () => {
+  const pod = store.createPod({ name: 'Manual description' })
+  const details = new WorkspaceDetails(store, new ResourceRegistry(store, () => {}))
+  const descriptions = new PodDescriptions(store, async () => {
+    details.execute({ type: 'describe', podId: pod.id, revision: 0, text: 'Owner purpose' })
+    return 'Stale generated purpose'
+  })
+  message(pod.id, 'Original request'); descriptions.request(pod.id); descriptions.start(); await descriptions.idle()
+  expect(descriptions.view(pod.id)).toMatchObject({ text: 'Owner purpose', revision: 1 })
+  descriptions.request(pod.id, true); descriptions.start(); await descriptions.idle()
+  expect(descriptions.view(pod.id)).toMatchObject({ text: 'Owner purpose', revision: 1 })
 })

@@ -67,7 +67,7 @@ it('keeps exactly one account per provider and reports it as the owner', () => {
 it('upgrades existing profiles without choosing an owner or changing pod data', () => {
   const { store, owner, pod } = fixture(); const root = store.root
   removeWorkflowSchema(store.db)
-  store.db.exec('ALTER TABLE onboarding DROP COLUMN default_owner; PRAGMA user_version=18')
+  store.db.exec('ALTER TABLE onboarding DROP COLUMN default_owner; ALTER TABLE pod_descriptions DROP COLUMN manual; PRAGMA user_version=18')
   store.close(); stores.splice(stores.indexOf(store), 1)
   const reopened = new PodDatabase(root); stores.push(reopened)
   const control = new SetupControl(reopened, new ResourceRegistry(reopened, () => {}))
