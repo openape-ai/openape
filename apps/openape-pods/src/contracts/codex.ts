@@ -14,7 +14,7 @@ export function parseCodexRequest(value: unknown): CodexRequest {
 
 export const codexTool = {
   name: masterTool.name,
-  description: 'Administer OpenApe Pods as the connected local owner. Call runtime for the script API, then list and select before inspecting or changing Pods. Changes apply directly; Codex governs any tool confirmation. Preserve revision and resource checks. Secret values must never be supplied in arguments or returned. Legacy changes are history, not an approval queue.',
+  description: 'Administer OpenApe Pods as the connected local owner. Call runtime for the script API and CLI setup help, then list and select before inspecting or changing Pods. Changes apply directly; Codex governs any tool confirmation. Preserve revision and resource checks. Secret values must never be supplied in arguments or returned. Legacy changes are history, not an approval queue.',
   inputSchema: {
     ...masterTool.inputSchema,
     properties: {
@@ -22,7 +22,7 @@ export const codexTool = {
       action: { type: 'string', enum: [...masterTool.inputSchema.properties.action.enum.filter(action => action !== 'requestAccess'), 'select', 'changes', 'retireChange', 'setSchedule', ...administrationActions] },
       id: { type: 'string', description: 'retireChange: legacy change ID; revision must match changes receipt. Select every affected Pod.' },
       packages: { type: 'object', description: 'Exact npm dependency versions; prepare through scripts prepareDependencies before validation.' },
-      command: { type: 'object', description: 'description: list/describe(text,revision). setup: resolveSetup(id,podId,resourceId,epoch,request) or decline(id,podId) for old proposals only. resources: list/assignHttp(permission)/assignDirectory(path,access)/assignReference(name,path)/revoke(id,revision)/removeVariable(name,revision). scripts: list/prepareDependencies/approveCredentials(hash,epoch). recovery: list/recover/resolveHttp/retryQueue/cancel. program: add/replace/network/grant/importState. All commands include podId and relevant epoch/revisions. importSecret: {podId,alias,epoch}; use path outside command. Outer revision is the current Pod revision.' },
+      command: { type: 'object', description: 'description: list/describe(text,revision). setup: resolveSetup(id,podId,resourceId,epoch,request) or decline(id,podId) for old proposals only. resources: list/assignHttp(permission)/assignDirectory(path,access)/assignReference(name,path)/revoke(id,revision)/removeVariable(name,revision). scripts: list/prepareDependencies. Assigned Pod secrets need no script declaration or approval. recovery: list/recover/resolveHttp/retryQueue/cancel. program: add/replace/network/grant/importState/prepare(line). prepare only resolves command metadata; runtime has the complete CLI setup sequence. All commands include podId and relevant epoch/revisions. importSecret: {podId,alias,epoch}; use path outside command. Outer revision is the current Pod revision.' },
       path: { type: 'string', description: 'importSecret: private owner file, never its content. program add/replace/importState: absolute source path.' },
       adapterPath: { type: 'string', description: 'program add/replace: optional Shapes adapter path.' },
       commandName: { type: 'string', description: 'program add/replace: optional CLI name.' },

@@ -281,6 +281,7 @@ export class FixtureWorker {
       return { runs: view.runs.map(({ id, state, scriptHash, startedAt, finishedAt, recovery }) => ({ id, state, scriptHash, startedAt, finishedAt, recovery: recovery?.state ?? null })), effects: view.effects?.map(({ key, runId }) => ({ key, runId })) ?? [] }
     }
     if (action.kind === 'program') {
+      if (action.command.type === 'prepare') return this.program(action.command)
       const definition = action.command.type === 'add' || action.command.type === 'replace'
         ? action.path!.endsWith('.app') ? await applicationDefinition(action.path!, join(this.root, 'applications')) : await programDefinition(action.path!, action.adapterPath, action.commandName)
         : undefined

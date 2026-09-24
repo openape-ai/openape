@@ -29,7 +29,6 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
   const pod = store.getPod(draft.pod_id as string); const epoch = resources.epoch(pod.id)
   if (draft.assignment_revision !== pod.bindingRevision) throw new Error('Script binding changed; save a new draft revision')
   const capabilities = JSON.parse(draft.capabilities as string) as string[]
-  new ScriptCredentials(store, resources).required(pod.id, capabilities)
   const assignedTools = resources.list(pod.id).filter(resource => resource.kind === 'tool' && resource.state === 'ready').map(resource => resource.configuration.capability)
   if (capabilities.some(capability => capability.startsWith('tool.') && !assignedTools.includes(capability))) throw new Error('No tool assignments are available for this script')
   if (capabilities.includes('mail.read')) assignedMail(resources.list(pod.id))
@@ -55,7 +54,7 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
       if (operation === 'mail.workflow.notify') return { delivered: true }
       if (operation === 'credentials.get') {
         const alias = parseCredentialRead(payload)
-        if (!capabilities.includes(`credential.${alias}`)) throw new Error('Credential capability is not declared by this script')
+        new ScriptCredentials(store, resources).assigned(pod.id, alias)
         return `synthetic-credential-${alias}`
       }
       if (operation === 'http.request') {

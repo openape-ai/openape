@@ -1,3 +1,4 @@
+import { programHelp } from './program-help'
 import { runtimeReference } from '../master/reference'
 import { parseAdministration } from '../../contracts/codex-admin'
 import type { AdministrationJournal, AdministrationReceipt } from '../../contracts/codex-admin'
@@ -40,15 +41,16 @@ export class CodexControl {
     const { requestAccess: _proposal, ...actions } = runtimeReference.actions
     return {
       ...runtimeReference,
+      programHelp,
       workflow: [
         'Connected local Codex administers Pods directly. Codex governs any confirmation. Call list, then select with exact podIds and optionally workflowId/workflowRevision. Reinspect current revisions after changes.',
         'Save drafts and ordinary variables directly. Configure resources before validation. Import secrets by a private owner file path, never by their values. Do not copy owner login stores into Pods.',
-        'Use scripts prepareDependencies when packages change. Validate the draft with current resources; scripts approveCredentials pins its validated hash and resource epoch. Then activate, resume and setSchedule with enabled=true as requested.',
+        'Use scripts prepareDependencies when packages change. Validate the draft with current resources. Every assigned Pod secret is available to its scripts without declarations or approval. Then activate, resume and setSchedule with enabled=true as requested.',
         'run returns the actual runId. recovery list returns status and unresolved effect keys without run contents. Resolve uncertain delivery only with real external evidence; never guess that an effect failed.',
         'Old pending changes are history and never automatically execute. Synthetic validation does not prove live provider behavior or delivery.',
       ],
       actions: { ...actions, saveWorkflow: { definition: 'Selected workflow save command; include current id/revision and explicitly selected members.' }, setSchedule: { ...actions.prepareSchedule, enabled: 'boolean; resume separately to allow scheduled execution' }, administration: 'resources/scripts/recovery/program/importSecret: see tool command schema. Include outer revision and command.podId. resources list returns epoch and safe assignment metadata.' },
-      script: { ...runtimeReference.script, files: runtimeReference.script.files.replace('Only the owner can assign/change directory access in Permissions.', 'Connected Codex can assign directory access through resources.'), credentials: runtimeReference.script.credentials.replace('owner approval of the exact validated script', 'approval of the exact validated script through scripts approveCredentials') },
+      script: { ...runtimeReference.script, files: runtimeReference.script.files.replace('Only the owner can assign/change directory access in Permissions.', 'Connected Codex can assign directory access through resources.') },
     }
   }
 
