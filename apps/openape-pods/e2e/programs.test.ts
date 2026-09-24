@@ -240,6 +240,36 @@ it('HTTP grant boundary: verifies the signed origin and method before transport 
   finally { await f.close() }
 })
 
+it('HTTP agent authentication: the runtime adds the DDISA bearer, refuses script credentials and forgets rejected tokens', async () => {
+  const f = await fixture(); sendHttp.mockClear()
+  const vendor = resolve('dist/vendor'); const adapter = loadAdapter('pod-http', join(vendor, 'pod-http-shapes.toml'))
+  f.state.signedCommand = await resolveCommand(adapter, ['pod-http', 'request', '--origin', 'https://api.example.com', '--method', 'GET'])
+  const authority = { ...f.assignment.grants[0]!.authority, grantId: 'http' }
+  const capability = 'tool.http_synthetic.request'
+  const authentication = { type: 'ddisaAgent' as const, credential: 'agent_key', subject: 'agent@id.example.com', issuer: 'https://id.example.com' }
+  const resources: PodResource[] = [{ ...f.resource, configuration: { type: 'http', origin: 'https://api.example.com', methods: ['GET'], capability, authority, authentication } }]
+  const scope = { podId: f.podId, runId: randomUUID(), epoch: 0, assignmentRevision: 1, capabilities: [capability] }
+  const request = { url: 'https://api.example.com/pending', method: 'GET', headers: {} }
+  const bearer = { token: vi.fn(async () => 'SYNTHETIC_AGENT_TOKEN'), reject: vi.fn() }
+  const signal = new AbortController().signal
+  try {
+    await expect(executeHttp(resources, scope, { ...request, headers: { Authorization: 'Bearer script' } }, vendor, f.cache, signal, undefined, undefined, bearer)).rejects.toThrow('remove the Authorization header')
+    await expect(executeHttp(resources, scope, request, vendor, f.cache, signal)).rejects.toThrow('authentication is unavailable')
+    expect(sendHttp).not.toHaveBeenCalled()
+    expect(await executeHttp(resources, scope, request, vendor, f.cache, signal, undefined, undefined, bearer)).toMatchObject({ status: 200 })
+    expect(bearer.token).toHaveBeenCalledWith(authentication)
+    expect(sendHttp.mock.calls[0]![0]).toMatchObject({ headers: { authorization: 'Bearer SYNTHETIC_AGENT_TOKEN' } })
+    expect(request.headers).toEqual({})
+    sendHttp.mockResolvedValueOnce({ status: 200, headers: { 'x-echo': 'Bearer SYNTHETIC_AGENT_TOKEN' }, body: 'authorization: Bearer SYNTHETIC_AGENT_TOKEN' })
+    const echoed = await executeHttp(resources, scope, request, vendor, f.cache, signal, undefined, undefined, bearer)
+    expect(JSON.stringify(echoed)).not.toContain('SYNTHETIC_AGENT_TOKEN')
+    sendHttp.mockResolvedValueOnce({ status: 401, headers: {}, body: '' })
+    expect(await executeHttp(resources, scope, request, vendor, f.cache, signal, undefined, undefined, bearer)).toMatchObject({ status: 401 })
+    expect(bearer.reject).toHaveBeenCalledWith(authentication)
+  }
+  finally { await f.close() }
+})
+
 it('program boundary: an explicit interpreter reuses private state while outside reads and child execution stay denied', async () => {
   const f = await fixture(); const terminal = f.terminal()
   try {

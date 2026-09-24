@@ -1,5 +1,27 @@
 # Active work
 
+## Pods: zaz task queue from a scheduled Pod (September 24, 2026) — implementing
+
+[Issue 1381](https://repos.openape.ai/patrick/monorepo/issues/1381),
+[plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3AMN0CXG8G9TH0FR3MX5K5J),
+[local plan](../../.claude/plans/issue-1381-zaz-pod.html). Worktree `pods-zaz`,
+branch `feature/issue-1381-zaz-pod`, base `7103930d` (PR 127 merged).
+Owner decisions: Pods + zaz changes; raise limits instead of rejecting large
+extractions. The launchd worker `at.openape.worker` stays disabled; only zaz moves.
+
+Runtime changes:
+- HTTP resources may authenticate as a DDISA agent from an assigned key secret.
+  The main process mints and injects the bearer; the token never reaches the
+  script, logs or the centrally replicated effect ledger.
+- `receipt: "digest"` stores only status, SHA-256 and size.
+- Request bodies up to 64 KiB, responses up to 128 KiB.
+- `agent.run` accepts `timeoutSeconds` from 30 to 900; agent time pauses the script budget.
+
+zaz adds an authenticated `GET /api/agent/tasks/pending` on its deployed branch
+`feature/monatssoll`. Next: exact-source CI and merge, signed installation, test
+Pod, then the zaz Pod on a 60 s schedule. Keep the IURIO monitor unchanged.
+Automatic E2E/layout remains off.
+
 ## Pods: Claude Code MCP integration (September 24, 2026) — implementing
 
 [Issue 1380](https://repos.openape.ai/patrick/monorepo/issues/1380),

@@ -7,7 +7,7 @@ import { launchSandbox } from '../runtime/sandbox'
 import type { RuntimePolicy, ShellLaunch } from '../runtime/sandbox'
 
 export interface ScriptRuntime { dependencyRoot?: string, shell?: ShellLaunch, home?: string, registerDomain?: (path: string, ownerPid: number) => void | Promise<void>, helper: string, executable: string, entry: string, runtimeDirectories: string[], environment: Record<string, string> }
-export interface ScriptServices { awaitingApproval?: () => boolean,  request: (operation: string, payload: unknown, signal: AbortSignal) => Promise<unknown>, event: (type: string, data: unknown) => void }
+export interface ScriptServices { budgetPaused?: () => boolean,  request: (operation: string, payload: unknown, signal: AbortSignal) => Promise<unknown>, event: (type: string, data: unknown) => void }
 async function interruptible<T>(operation: () => Promise<T>, signal: AbortSignal): Promise<T> {
   signal.throwIfAborted()
   let stop: () => void = () => {}
@@ -32,7 +32,7 @@ export async function executeScript(runtime: ScriptRuntime, directory: string, a
   let remaining = input.limits.timeMs; let checkedAt = Date.now()
   const timeout = setInterval(() => {
     const now = Date.now()
-    if (!services.awaitingApproval?.()) remaining -= now - checkedAt
+    if (!services.budgetPaused?.()) remaining -= now - checkedAt
     checkedAt = now
     if (remaining <= 0) { local.abort(new Error('Script exceeded its time limit')); stop() }
   }, 250)

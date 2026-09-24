@@ -2310,5 +2310,14 @@
   "Invalid workspace action fields": "Ungültige Felder der Arbeitsbereichsaktion",
   "Invalid workspace query": "Ungültige Arbeitsbereichsabfrage",
   "Connect the central workspace in the desktop app first": "Verbinde zuerst den zentralen Arbeitsbereich in der Desktop-App",
-  "Invalid tool arguments": "Ungültige Werkzeugargumente"
+  "Invalid tool arguments": "Ungültige Werkzeugargumente",
+  "Agent timeoutSeconds must be an integer from 30 to {p0}": "Agent-timeoutSeconds muss eine ganze Zahl von 30 bis {p0} sein",
+  "HTTP receipt must be \"digest\" and is only valid for effect methods": "Die HTTP-Quittung muss \"digest\" sein und gilt nur für verändernde Methoden",
+  "Invalid HTTP authentication": "Ungültige HTTP-Authentifizierung",
+  "HTTP authentication needs the DDISA agent email": "Die HTTP-Authentifizierung benötigt die E-Mail-Adresse des DDISA-Agenten",
+  "DDISA agent authentication failed ({p0})": "Die DDISA-Agent-Authentifizierung ist fehlgeschlagen ({p0})",
+  "DDISA agent authentication returned an invalid token": "Die DDISA-Agent-Authentifizierung lieferte einen ungültigen Token",
+  "This HTTP destination authenticates as its assigned DDISA agent; remove the Authorization header": "Dieses HTTP-Ziel authentifiziert sich als zugewiesener DDISA-Agent; entferne den Authorization-Header",
+  "DDISA agent authentication is unavailable": "Die DDISA-Agent-Authentifizierung ist nicht verfügbar",
+  "This secret authenticates an HTTP destination and is not readable by scripts": "Dieses Geheimnis authentifiziert ein HTTP-Ziel und ist für Skripte nicht lesbar"
 }
