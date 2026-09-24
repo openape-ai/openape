@@ -1,5 +1,9 @@
 # Active work
 
+## Pods installed Codex MCP dependency (September 24, 2026)
+
+[Issue 1376](https://repos.openape.ai/patrick/monorepo/issues/1376). The signed `95fc9d87` installation exposed an external `croner` import in the unpacked MCP runtime; checkout-based acceptance resolved ancestor dependencies and missed it. The repair bundles the dependency and runs the existing packaged MCP case from an isolated path outside the checkout. That regression fails with the installed error before the fix and passes after it; full lint/typecheck and the app build pass. The issue records exact-source merge checks and refreshed signed installation evidence. Preserve the owner app/profile rollback pair.
+
 ## Pods: Codex controls the installed app (September 23, 2026) — done
 
 [Issue 1375](https://repos.openape.ai/patrick/monorepo/issues/1375), [plan](../../.claude/plans/issue-1375-codex-control.md) (D1–D6 and option a approved by Patrick). Issue closed. PR 108 (adapter), PR 109 (MCP shim and launcher) and PR 110 (registration UI, **Prepared by Codex**, handbook chapter and packaged acceptance with a real `codex app-server`) are merged; PR 110 merged as `8aad8901`. The owner's real `~/.codex` and profile were never touched; all tests use isolated `CODEX_HOME` and fixture profiles. Installing on Patrick's Mac and connecting his Codex are his own steps in App settings.
