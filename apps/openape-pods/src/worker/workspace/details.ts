@@ -1,4 +1,3 @@
-import { ScriptCredentials } from '../resources/script-credentials'
 import type { DetailsCommand, PodDetails, Citation, KnowledgeClaim } from '../../contracts/details'
 import { parseManifest } from '../storage/database'
 import type { PodDatabase } from '../storage/database'
@@ -22,7 +21,6 @@ export class WorkspaceDetails {
         if (!row) throw new Error('Script version not found')
         const manifest = parseManifest(JSON.parse(row.manifest as string))
         if (manifest.assignmentRevision !== command.assignmentRevision || !this.validated(pod.id, command.hash, command.assignmentRevision)) throw new Error('Validate this version for the current script and permissions')
-        new ScriptCredentials(this.store, this.resources).assertApproved(pod.id, command.hash, manifest.capabilities)
         this.store.readBlob(command.hash)
         const changed = this.store.db.prepare('UPDATE pods SET active_script=? WHERE id=? AND revision=? AND active_script IS ? AND lifecycle!=\'archived\'').run(command.hash, pod.id, command.assignmentRevision, command.expectedActive)
         if (changed.changes !== 1) throw new Error('Pod or active version changed; reload before activating')

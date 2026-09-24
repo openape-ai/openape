@@ -79,6 +79,8 @@ Rollback: stop only the specific app/monitor being updated, restore the saved ap
 - September 24: inspected installed behavior, source and the previous plan; created issue 1377 and a clean branch from canonical main. No product code, real profile or Codex settings changed for this issue.
 - Milestones 1–3 implemented. Local full lint/typecheck and app build pass; 436 unit/component tests, 20 browser checks and two focused packaged MCP acceptance tests pass. Milestone 4: PR 113 merged as `56eb0366` after all three exact-source external checks passed for `29447001`. Full deployment check `1790239240109-29447001-all` passed, including all 109 packaged Pods cases. The signed/notarized internal build passed mounted-DMG acceptance and is installed; all six existing Pods were preserved. Live IURIO acceptance still awaits the dedicated Azure credential.
 
+- September 24 follow-up requested by Patrick: remove the remaining per-script secret selector and declaration checks, document executable/adapter/grant/login setup through MCP runtime help, and assign Azure CLI to the existing IURIO Pod. The owner profile is not used as the Pod login store. Azure DevOps extension/runtime support must be verified before CLI-based scheduled monitoring.
+
 ## Discoveries
 
 - The old issue-1375 plan already said that Pods shows no chat, but the current renderer still exposes workspace and Pod chats. Patrick's September 24 screenshot confirms the mismatch.

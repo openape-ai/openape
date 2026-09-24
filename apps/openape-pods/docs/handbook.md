@@ -216,7 +216,7 @@ Under Dependencies, the list shows each package and its fixed version. Click + t
 
 1. Edit the source and choose Save script to persist it without running.
 2. Choose Run or Save and run. The app saves and validates changed source in the existing sandbox with synthetic services. A failed check preserves the source and leaves the previously active script intact.
-3. If secrets are missing, choose Manage variables and secrets and assign the required aliases. Review the full source before assigning access, then validate and run the script again. Existing Pod secret assignments continue to apply after script edits.
+3. If the script reports a missing secret, assign its alias in Variables and secrets and validate again. Existing Pod assignments also apply after script edits.
 4. After successful validation and any required owner approval, the app activates that exact source and starts it. History shows the result. This does not enable automatic execution.
 
 ![Further detail: Inspect and edit your script](images/handbook-script.png)
@@ -231,16 +231,16 @@ Each pod owns its script versions, workspace, persistent checkpoint and credenti
 
 Values are encrypted with macOS safeStorage under the active application profile’s credentials directory. Resource records and editor history contain aliases and opaque IDs, never the automatically supplied value. Two pods may use the same alias with different values. ChatGPT and OpenApe tokens stay inside their connection broker. Imported application state is delivered only to its program, separately from script secrets.
 
-await context.credentials.get('crm') returns the string assigned to this pod and alias. Declare credential.crm under Secrets used by the script in Variables and secrets, then save script access. The runtime verifies the current run lease, exact script version, execution binding, resource revision and current secret assignment before and after reading. Codex has no credentials.get tool. Values are not automatically added to input.json, environment, AI prompts or run logs.
+await context.credentials.get('crm') returns the string assigned to this pod and alias. Every secret assigned to this Pod is available to its scripts without additional selection, declaration or approval. The runtime verifies the current run lease, exact script version, execution binding, resource revision and current secret assignment before and after reading. Codex has no credentials.get tool. Values are not automatically added to input.json, environment, AI prompts or run logs.
 
 A script that can read a secret can explicitly put it into a prompt, log, checkpoint or file. Review the full source before granting access. Synthetic validation checks the execution contract with synthetic-credential-<alias> values; it cannot establish that source is safe for every input. A later model call receives whatever prompt the script constructs. Files written by the script and their contents may be included in backups.
 
-Saving or replacing a credential pauses the pod and invalidates prior validation. Script source changes alone do not require another secret approval. Revoking it cancels affected work and removes its encrypted value. After restore, assign secret values again and revalidate scripts; managed secret values and their recovery records are excluded from backups. An interrupted save is reconciled on restart. Connected Codex can approve credential access for the exact validated script and resource epoch.
+Saving or replacing a credential pauses the pod and invalidates prior validation. Script source changes alone do not require another secret approval. Revoking it cancels affected work and removes its encrypted value. After restore, assign secret values again and revalidate scripts; managed secret values and their recovery records are excluded from backups. An interrupted save is reconciled on restart.
 
 The example below combines normal Node file IO, durable variables, an explicit credential read and a separate AI call. It deliberately keeps the credential out of the prompt. It requires an assigned crm alias, Pod execution permission and a connected model for real execution. Validation uses a synthetic model response. Direct network access and launching child programs remain restricted by the existing runtime; declaring a credential does not grant either.
 
 1. Open Variables and secrets. Enter the secret alias and value, then save. The masked field clears after submission, including failures.
-2. In Variables and secrets, select the aliases under Secrets used by the script and save script access. Save unfinished code edits in Script first. Use await context.credentials.get("alias") in the source.
+2. Use await context.credentials.get("alias") in the source. All secrets assigned to this Pod are available without a separate script selection.
 3. Choose Save and run. After synthetic validation, review the Pod execution permission in the browser if requested.
 4. History shows the run. Source or resource changes require validation; existing Pod permissions remain until revoked.
 
