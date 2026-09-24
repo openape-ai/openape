@@ -1,6 +1,7 @@
 import type { ProgramAssignment } from '../../contracts/programs'
 import { parseHttpPermission } from '../../contracts/http'
 import type { ProgramAuthority } from '../../main/programs/grants'
+import type { HttpAuthentication } from '../../contracts/http'
 import { parseCredentialAlias } from '../../contracts/credentials'
 import type { DirectoryAccess, PodResource } from '../../contracts/resources'
 import { randomUUID } from 'node:crypto'
@@ -85,7 +86,7 @@ export class ResourceRegistry {
     this.revokeActive(podId)
   }
 
-  assignHttp(podId: string, permission: unknown, authority: ProgramAuthority, expectedEpoch: number): void {
+  assignHttp(podId: string, permission: unknown, authority: ProgramAuthority, expectedEpoch: number, authentication?: HttpAuthentication): void {
     const scope = parseHttpPermission(permission)
     this.store.transaction(() => {
       const pod = this.store.getPod(podId)
@@ -94,7 +95,7 @@ export class ResourceRegistry {
       if (!current.some(item => item.configuration.type === 'http' && item.configuration.origin === scope.origin) && current.length >= 16) throw new Error('This pod already has 16 tools')
       for (const item of this.list(podId).filter(item => item.kind === 'tool' && item.configuration.type === 'http' && item.configuration.origin === scope.origin && item.state !== 'revoked')) this.store.db.prepare('UPDATE resources SET state=\'revoked\',revision=revision+1 WHERE id=?').run(item.id)
       const id = randomUUID()
-      const configuration = { type: 'http', ...scope, authority, capability: `tool.http_${id.replaceAll('-', '')}.request` }
+      const configuration = { type: 'http', ...scope, authority, capability: `tool.http_${id.replaceAll('-', '')}.request`, ...(authentication ? { authentication } : {}) }
       this.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(id, podId, 'tool', 'ready', scope.origin, JSON.stringify(configuration))
       this.advance(podId)
       this.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(podId)

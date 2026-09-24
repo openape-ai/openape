@@ -30,6 +30,8 @@ import type { ProgramDefinition, ProgramCommand } from '../contracts/programs'
 import type { ProgramInternal } from '../worker/resources/programs'
 import { parseHttpPermission, parseHttpRequest } from '../contracts/http'
 import { executeHttp } from './programs/http-service'
+import type { AgentBearer } from './programs/http-service'
+import { DdisaAgentTokens } from './programs/ddisa-agent'
 import { parseCredentialRead } from '../contracts/credentials'
 import { parseScriptView } from '../contracts/scripts'
 import type { ScriptCommand, ScriptView } from '../contracts/scripts'
@@ -83,6 +85,7 @@ export class FixtureWorker {
   private stopping = false
   private root = ''
   private credentials: CredentialCache | null = null
+  private readonly agentTokens = new DdisaAgentTokens()
   private services = new Map<string, AbortController>()
   private pending = new Map<string, { resolve: (state: unknown) => void, reject: (error: Error) => void, timer: ReturnType<typeof setTimeout> }>()
   private state: WorkerStatus = { state: 'starting', pid: null, error: null }
@@ -356,7 +359,7 @@ export class FixtureWorker {
       if (!current.some(item => item.configuration.type === 'http' && item.configuration.origin === permission.origin) && current.length >= 16) throw new Error('This pod already has 16 tools')
       const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
       const authority = await this.connections.approve(command.podId, join(vendor, 'pod-http-shapes.toml'), permission.methods.map(method => ['pod-http', 'request', '--origin', permission.origin, '--method', method]))
-      return parseResourceState(await this.dispatch({ resource: { type: 'approveHttp', podId: command.podId, epoch: command.epoch, permission, authority } }))
+      return parseResourceState(await this.dispatch({ resource: { type: 'approveHttp', podId: command.podId, epoch: command.epoch, permission, authority, ...(command.authentication ? { authentication: command.authentication } : {}) } }))
     }
     if (command.type === 'saveCredential') {
       if (!this.credentials) throw new Error('Credential store is unavailable')
@@ -526,7 +529,16 @@ export class FixtureWorker {
       if (request.kind === 'http') {
         if (!this.credentials) throw new Error('Credential store is unavailable')
         const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
-        const result = await executeHttp(state.resources, scope, parseHttpRequest(request.body), vendor, this.credentials, controller.signal, observe, previous)
+        const credentials = this.credentials
+        const bearer: AgentBearer = {
+          token: async (authentication) => {
+            const id = await this.dispatch({ credentialCheck: { scope, alias: authentication.credential } })
+            if (typeof id !== 'string') throw new Error('Invalid credential broker binding')
+            return this.agentTokens.bearer(scope.podId, authentication, id, () => credentials.readScriptSecret(id, scope.podId, authentication.credential), controller.signal)
+          },
+          reject: authentication => this.agentTokens.reject(scope.podId, authentication),
+        }
+        const result = await executeHttp(state.resources, scope, parseHttpRequest(request.body), vendor, credentials, controller.signal, observe, previous, bearer)
         await check(); controller.signal.throwIfAborted(); return result
       }
       if (request.body && typeof request.body === 'object' && ('applicationId' in request.body || 'application' in request.body)) {

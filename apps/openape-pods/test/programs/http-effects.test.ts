@@ -45,3 +45,15 @@ it('requires owner review of a mutating HTTP error response instead of retaining
   await expect(executeHttpEffect(f.ledger, f.pod.id, f.run.id, request, async () => ({ status: 403, headers: {}, body: '{}' }))).rejects.toThrow('review delivery')
   expect(f.store.db.prepare('SELECT state FROM effect_ledger').get()?.state).toBe('unknown')
 })
+
+it('stores only a digest receipt when requested and replays it without a second delivery', async () => {
+  const f = fixture(); let deliveries = 0
+  const reply = { status: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ task: { id: 'synthetic', history: 'x'.repeat(40000) } }) }
+  const send = async () => { deliveries++; return reply }
+  const digest = { ...request, key: 'claim:1', receipt: 'digest' as const }
+  expect(await executeHttpEffect(f.ledger, f.pod.id, f.run.id, digest, send)).toEqual(reply)
+  const replay = await executeHttpEffect(f.ledger, f.pod.id, f.run.id, digest, send)
+  expect(replay).toEqual({ status: 200, headers: {}, body: '', receipt: { sha256: expect.stringMatching(/^[a-f0-9]{64}$/), bytes: Buffer.byteLength(reply.body) } })
+  expect(deliveries).toBe(1)
+  expect(JSON.stringify(f.store.db.prepare('SELECT * FROM effect_ledger').all())).not.toContain('synthetic')
+})
