@@ -1,3 +1,4 @@
+import { centralFixture } from '../../openape-pods/test/workspace/central-fixture'
 import { capabilities } from '@openape/pods-protocol'
 import { generateKeyPairSync, randomBytes, randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, expect, it } from 'vitest'
@@ -14,7 +15,7 @@ const managementToken = 'pods-relay-disposable-fixture'
 const email = 'owner@pods-mobile.test'
 beforeAll(async () => {
   idp = await startIdp({ managementToken, ddisaMockRecords: { 'pods-mobile.test': { version: 'ddisa1', idp: 'https://identity.example', mode: 'open' } } })
-  relay = await startServer({ cwd: process.cwd(), readyPath: '/api/health', timeoutMs: 300000, env: ({ url }) => ({ NUXT_IGNORE_LOCK: '1', NUXT_RELAY_ORIGIN: url, NUXT_RELAY_ENABLED: 'true', NUXT_RELAY_ENROLLMENT: 'pilot', NUXT_RELAY_OWNER_ALLOWLIST: JSON.stringify([{ issuer: idp.url, subject: email }]), NUXT_RELAY_FIXTURE: 'true', NUXT_RELAY_IDP_URL: idp.url, NUXT_RELAY_DATABASE: `${makeTempDir('pods-relay-e2e-')}/relay.sqlite` }) })
+  relay = await startServer({ cwd: process.cwd(), readyPath: '/api/health', timeoutMs: 300000, env: ({ url }) => ({ NUXT_IGNORE_LOCK: '1', NUXT_WORKSPACE_ENABLED: 'true', NUXT_WORKSPACE_DATABASE: `${makeTempDir('pods-workspace-e2e-')}/workspace.sqlite`, NUXT_WORKSPACE_SESSION_SECRET: 'synthetic-workspace-session-secret-1378', NUXT_OPENAPE_SP_SESSION_SECRET: 'synthetic-workspace-flow-secret-1378', NUXT_OPENAPE_SP_OPENAPE_URL: idp.url, NUXT_OPENAPE_SP_CLIENT_ID: new URL(url).host, NUXT_RELAY_ORIGIN: url, NUXT_RELAY_ENABLED: 'true', NUXT_RELAY_ENROLLMENT: 'pilot', NUXT_RELAY_OWNER_ALLOWLIST: JSON.stringify([{ issuer: idp.url, subject: email }]), NUXT_RELAY_FIXTURE: 'true', NUXT_RELAY_IDP_URL: idp.url, NUXT_RELAY_DATABASE: `${makeTempDir('pods-relay-e2e-')}/relay.sqlite` }) })
 })
 afterAll(async () => { if (relay) await relay.stop(); if (idp) await idp.stop() })
 it('registers a desktop and mobile through real DDISA callbacks and rejects replayed native handoffs', async () => {
@@ -59,6 +60,53 @@ it('registers a desktop and mobile through real DDISA callbacks and rejects repl
     const id = randomUUID(); const at = new Date().toISOString(); const digest = sha256(body)
     return { authorization: `Bearer ${session.accessToken}`, 'x-pods-request-id': id, 'x-pods-request-at': at, 'x-pods-body-digest': digest, 'x-pods-proof': signBytes(proofBytes('api-request', id, JSON.stringify([method, path, sha256(session.accessToken), at, digest])), session.key) }
   }
+  const unauthenticated = await fetch(`${relay.url}/api/workspace/v1/inventory`)
+  expect(unauthenticated.status).toBe(401)
+  const login = await fetch(`${relay.url}/workspace-auth/login`, { method: 'POST', headers: { origin: relay.url, 'content-type': 'application/json' }, body: JSON.stringify({ email }) })
+  expect(login.status, await login.clone().text()).toBe(200)
+  const flowCookie = login.headers.getSetCookie().map(value => value.split(';')[0]).join('; ')
+  const { redirectUrl } = await login.json() as { redirectUrl: string }
+  const authorize = await fetch(redirectUrl, { redirect: 'manual', headers: { authorization: `Bearer ${loginToken}` } })
+  expect(authorize.status, await authorize.clone().text()).toBe(302)
+  const webCallback = authorize.headers.get('location')!
+  const webLogin = await fetch(webCallback, { redirect: 'manual', headers: { cookie: flowCookie } })
+  expect(webLogin.headers.get('location'), await webLogin.clone().text()).toBe('/workspace')
+  const webCookie = webLogin.headers.getSetCookie().map(value => value.split(';')[0]).join('; ')
+  const runtimePath = '/api/runtime/v1/workspace'
+  async function central(body: Record<string, unknown>) {
+    const encoded = JSON.stringify(body)
+    const response = await fetch(`${relay.url}${runtimePath}`, { method: 'POST', headers: { ...headers(desktop, runtimePath, 'POST', encoded), 'content-type': 'application/json' }, body: encoded })
+    expect(response.status, await response.clone().text()).toBe(200)
+    return response.json()
+  }
+  const session = await central({ type: 'begin' }) as { lease: string }
+  const fixture = centralFixture()
+  const artifact = Buffer.alloc(2 * 1024 * 1024, 42)
+  const artifactHash = sha256(artifact)
+  await central({ type: 'artifact', lease: session.lease, podId: fixture.view.id, hash: artifactHash, content: artifact.toString('base64') })
+  const invalidArtifact = JSON.stringify({ type: 'artifact', lease: session.lease, podId: fixture.view.id, hash: artifactHash, content: 'not base64' })
+  const invalidUpload = await fetch(`${relay.url}${runtimePath}`, { method: 'POST', headers: { ...headers(desktop, runtimePath, 'POST', invalidArtifact), 'content-type': 'application/json' }, body: invalidArtifact })
+  expect(invalidUpload.status).toBe(400)
+  const state = { version: 1, workspace: { ...fixture.host.workspace, pods: [fixture.host.workspace.pods[0]] }, pods: [fixture.view], archive: { schema: 23, tables: {} }, artifacts: [{ podId: fixture.view.id, path: 'workspace/example.bin', hash: artifactHash, size: artifact.length }] }
+  const published = await central({ type: 'publish', lease: session.lease, id: randomUUID(), revision: 0, snapshot: state }) as { hash: string }
+  await central({ type: 'heartbeat', lease: session.lease, hash: published.hash })
+  const workspaceInventory = await fetch(`${relay.url}/api/workspace/v1/inventory`, { headers: { cookie: webCookie } })
+  expect(workspaceInventory.status, await workspaceInventory.clone().text()).toBe(200)
+  expect(await workspaceInventory.json()).toMatchObject([{ id: desktop.registration.id, online: true }])
+  expect(workspaceInventory.headers.get('cache-control')).toContain('no-store')
+  const download = await fetch(`${relay.url}/api/workspace/v1/artifact?runtimeId=${desktop.registration.id}&podId=${fixture.view.id}&path=workspace/example.bin`, { headers: { cookie: webCookie } })
+  expect(download.status).toBe(200)
+  expect(sha256(new Uint8Array(await download.arrayBuffer()))).toBe(artifactHash)
+  const command = { runtimeId: desktop.registration.id, revision: 1, id: randomUUID(), command: { channel: 'details', body: { type: 'describe', podId: fixture.view.id, text: 'Browser edit', revision: 1 } } }
+  const crossSite = await fetch(`${relay.url}/api/workspace/v1/commands`, { method: 'POST', headers: { cookie: webCookie, origin: 'https://other.example', 'content-type': 'application/json' }, body: JSON.stringify(command) })
+  expect(crossSite.status).toBe(403)
+  const submitted = await fetch(`${relay.url}/api/workspace/v1/commands`, { method: 'POST', headers: { cookie: webCookie, origin: relay.url, 'content-type': 'application/json' }, body: JSON.stringify(command) })
+  expect(submitted.status, await submitted.clone().text()).toBe(202)
+  await central({ type: 'disconnect', lease: session.lease })
+  const unavailable = await fetch(`${relay.url}/api/workspace/v1/pod?runtimeId=${desktop.registration.id}&podId=${fixture.view.id}`, { headers: { cookie: webCookie } })
+  expect(unavailable.status).toBe(409)
+  const signOut = await fetch(`${relay.url}/workspace-auth/logout`, { method: 'POST', headers: { cookie: webCookie, origin: relay.url } })
+  expect(signOut.status).toBe(200)
   const path = '/api/mobile/v1/runtimes'
   const proof = headers(mobile, path)
   const inventory = await fetch(`${relay.url}${path}`, { headers: proof })

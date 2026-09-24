@@ -1,4 +1,6 @@
-import { RemoteController } from './remote/controller'
+import { CentralController } from './central/controller'
+import { centralObject } from '../contracts/central'
+import { RemoteController, RemoteServiceError } from './remote/controller'
 import { parseChatsCommand } from '../contracts/chats'
 import { parseWorkflowCommand } from '../contracts/workflows'
 import { searchPackages } from './package-catalog'
@@ -55,14 +57,20 @@ let preference: LanguagePreference
 function t(key: MessageKey, parameters?: Parameters): string { return translate(preference.language, key, parameters) }
 const status: PodStatus = { version: 1, mode: fixture ? 'fixture' : 'local', executionEnabled: true, worker: { state: 'starting', pid: null, error: null }, runtime: { electron: process.versions.electron, node: process.versions.node } }
 let remote: RemoteController
+let central: CentralController | null = null
 const worker = new FixtureWorker((next) => {
   status.worker = next
+  if (next.state === 'ready') central?.start()
   if (next.state === 'ready' && process.env.OPENAPE_PODS_REMOTE_ENABLED === '1') void remote.resume().catch((error: unknown) => { remote.error = error instanceof Error ? error.message : 'Remote access unavailable' })
   if (window && !window.isDestroyed()) window.webContents.send(channels.changed, status)
 })
 const fixtureRemoteOrigin = fixture && process.env.NODE_ENV === 'test' ? process.env.OPENAPE_PODS_FIXTURE_RELAY_ORIGIN : undefined
 if (fixtureRemoteOrigin && new URL(fixtureRemoteOrigin).hostname !== '127.0.0.1') throw new Error('Remote acceptance requires an isolated loopback relay')
 remote = new RemoteController(root, worker, fixtureRemoteOrigin)
+if (process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1') {
+  central = new CentralController(root, body => remote.workspaceRequest(body), { snapshot: () => worker.centralSnapshot(), execute: command => worker.centralExecute(command), gate: until => worker.centralGate(until) }, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/'))
+  worker.central = central
+}
 const codexDirectory = join(profileBase, 'codex')
 const codexTarget = { executable: process.execPath, script: join(__dirname, '../runtime/codex-mcp.mjs').replace('/app.asar/', '/app.asar.unpacked/'), socket: join(codexDirectory, 'control.sock') }
 const codexServer = new CodexControlServer(codexTarget.socket, request => worker.codex(request))
@@ -161,6 +169,18 @@ async function start(): Promise<void> {
       return new Response(body, { headers: { 'Content-Type': contentType, 'Content-Security-Policy': contentSecurityPolicy, 'X-Content-Type-Options': 'nosniff' } })
     }
     catch (error) { console.error('Rejected Pods asset request', error instanceof Error ? error.message : 'unknown error'); return new Response('Not found', { status: 404 }) }
+  })
+  ipcMain.handle(channels.central, async (event, value: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    const command = centralObject(value)
+    if (command.type === 'status') return { enabled: !!central, online: central?.available ?? false, error: central?.error ?? null }
+    if (!central) throw new Error('Central workspace is not enabled')
+    if (command.type === 'register') { await remote.enable(await worker.remoteOwner()); return { ok: true } }
+    try { return await central.query(command) }
+    catch (error) {
+      if (error instanceof RemoteServiceError) return { requestError: { status: error.status, message: error.message } }
+      throw error
+    }
   })
   ipcMain.handle(channels.status, (event, ...args: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, args)
@@ -383,7 +403,7 @@ async function start(): Promise<void> {
   if (await refreshLauncher(join(codexDirectory, 'openape-pods-mcp'), codexTarget)) await codexServer.start()
 }
 async function shutdown(): Promise<void> {
-  try { await codexServer.stop(); await remote.stop(); await worker.stop(); stopped = true; tray?.destroy(); app.quit() }
+  try { await codexServer.stop(); await central?.stop(); await remote.stop(); await worker.stop(); stopped = true; tray?.destroy(); app.quit() }
   catch (error) { console.error('Worker shutdown failed', error); app.exit(1) }
 }
 if (!app.requestSingleInstanceLock()) {
