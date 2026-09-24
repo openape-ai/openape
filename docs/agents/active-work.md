@@ -35,22 +35,31 @@ remain intact. Its focused 12 scheduler tests and full local `pnpm check:ci` pas
 Wait for the repair source gates before merging; do not bypass the red main gate.
 Self-contained HTML evidence is `~/Downloads/OpenApe-Pods-central-a894db75/verification.html`.
 
-Patrick subsequently approved completion and deployment for live testing, including
-the required app restart and monitor recovery. Issue 1378 and its plan are active
-again. Work continues on `feature/issue-1378-live-rollout` from canonical main
-`373fd1cbeb6068b9ce4c8810b183c133c2d1dce8` in `pods-web-workspace`.
-Main CI/E2E/layout jobs 5070–5072 passed; PR 121 is merged. The signed candidate
-and full evidence are at https://testrun.openape.ai/r/6NLYTgkuRIMm2I6vO9zjHTSB.
+Patrick approved live deployment, the required restart and monitor recovery.
+PR 122 merged as `b00457200edc3b500def401abcc87335cfdced82` after source
+`e9ef256c919f1ac18c1f86d445ec158ccf492efa` passed exact-source jobs 5073–5075.
+Full local deployment checks passed in `1790274717919-373fd1cb-all` with those
+changes. The owner service `prod-b0045720` is healthy, and provider health,
+discovery and JWKS are byte-identical. The signed/notarized e9ef256c desktop
+passed mounted-DMG acceptance and is installed. All six Pods were adopted
+through the verified owner; the Mac app stays open. Rollback pair:
+`~/Library/Application Support/OpenApe Pods Rollback/2026-09-24-204151-issue-1378`.
+Server backup: `shared/backups/issue-1378-live-20260924T183226Z` in the relay service.
 
-The live preparation fixes two adoption gaps: normal application launches preserve
-central authority once adoption starts, and owner registration provisions missing
-Pod identities through the existing verified owner connection. Existing identities
-are reused and conflicting owners are rejected. Focused main/worker checks pass.
-The IURIO recovery run `11f0549e-597b-4df3-b0bb-97e3bb3928e2` completed in
-203 seconds, preserving the prior baseline and notification receipts; the next
-accepted schedule input started normally. Next: final gates,
-native PR, signed installation, service/routing deployment and paired live evidence.
-Keep all six Pods and leave the updated Mac app open. Relocation remains excluded.
+Live acceptance found an idle-queue transport failure: Nitro serializes a bare
+null claim as HTTP 204, but the desktop requires a JSON response. It reconnects
+and keeps automatic execution fenced. The existing real-DDISA HTTP regression
+reproduces 204 before the repair and passes after returning explicit JSON null;
+it also claims a real command. Service-only fix-forward work continues on
+`bugfix/issue-1378-idle-runtime-response` in `pods-web-workspace`.
+
+Before cutover, IURIO recovery `11f0549e-597b-4df3-b0bb-97e3bb3928e2` and scheduled
+follow-up `f1632d96-ffca-4181-8c92-04e4fb16a3ae` both completed without sending
+Telegram. Checkpoint 28, schedule revision 2 and the 900-second interval are
+preserved. Browser login through the existing SSH key succeeded, and browser
+and desktop show all six online Pods. Next: final repair gates and deployment,
+then verify editing, stable availability and resumed scheduled execution before
+claiming live acceptance. Relocation remains excluded.
 
 ## Pods: connected Codex owner administration (September 24, 2026) — delivered
 
