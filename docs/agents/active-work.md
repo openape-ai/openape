@@ -13,74 +13,61 @@ assertions, deadlines and production durability remain unchanged. Exact-source
 verification, audited protection migration and merge receipts belong to the
 issue. The deployed Pods app and monitor remain running; no runtime changes.
 
-## Pods: central browser and desktop workspace (September 24, 2026) — live rollout
+## Pods: central browser and desktop workspace (September 24, 2026) — deployed
 
 [Issue 1378](https://repos.openape.ai/patrick/monorepo/issues/1378),
-[merged PR 120](https://repos.openape.ai/patrick/monorepo/pulls/120),
 [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3A03YDYB092Z1NDM7J6NQ8X),
 [local plan](../../.claude/plans/2026-09-24-pods-central-workspace.html),
-[published evidence](https://testrun.openape.ai/r/LrWQSD6pJWc74hhAaQVRSROl).
-Implementation source `a894db757efc544c370960e8b06e99a3ee9c1075`; reviewed PR
-source `9f4a7897f6eb21c8d6211094f18b31a785ea11a8` against canonical target
-`4e5648237b478c7e5447578d8f92a3cef187d399`; merge
-`c00fc360eeae0ad5049246696c720020dc3f1ad1`. Completion documentation uses
-worktree `pods-web-workspace`, branch `feature/issue-1378-completion`.
+[live acceptance evidence](https://testrun.openape.ai/r/bPb4nyghS79Z5iXMo5m3_ZGZ).
+Worktree `pods-web-workspace`; documentation branch
+`feature/issue-1378-live-closeout`, base canonical main
+`f576ea94bb746f6e811b45a8dce8f9128d5fc40d`.
 
-Implemented an opt-in central SQLite workspace, owner-scoped DDISA web sessions,
-versioned commands and receipts, managed artifact capture, desktop lease/recovery
-integration and one shared browser/desktop Vue workspace. Native permission and
-secret setup remain local; Codex uses the same writer. Existing chat removal is
-preserved. [Operations and recovery](../operations/pods-central-workspace.md).
+Delivered through PRs 120–124: owner-scoped central SQLite data and managed
+artifacts, versioned commands/receipts, one browser/desktop Vue workspace,
+online-only content/editing, durable runtime recovery and connected Codex on
+the same writer. Secrets, private keys and native login state remain local.
+Embedded chat remains removed; relocation remains excluded.
+[Operations and recovery](../operations/pods-central-workspace.md).
 
-Full local `pnpm check:ci` passed (receipt `1790268448329-4e564823-all`,
-base plus the candidate changes): 447 Pods unit/component tests, 113 native/desktop
-tests, 21 browser tests, 21 service unit tests and real-DDISA HTTP acceptance.
-Service and clean desktop builds passed. The exact-source external CI, E2E and
-layout jobs 5058, 5059 and 5060 all passed before merge. Screenshots at 1280/560
-pixels and German dark appearance were inspected. Permanent cases cover ownership,
-offline access, revisions, lost acknowledgements, no duplicate effects, managed-file
-link rejection and multi-megabyte artifact transport. Post-merge main jobs 5062 (E2E) and 5063 (layout) passed. CI 5061 exposed
-a pre-existing scheduler-test timeout while individually committing 999 queue
-fixtures (14.4 seconds against a 5-second test limit). Completion PR 121 batches
-only queue fixture seeding; real restart, deduplication and overflow assertions
-remain intact. Its focused 12 scheduler tests and full local `pnpm check:ci` pass (receipt
-`1790271555860-05650cf1-all`, source plus the repair). No production code changes.
-Wait for the repair source gates before merging; do not bypass the red main gate.
-Self-contained HTML evidence is `~/Downloads/OpenApe-Pods-central-a894db75/verification.html`.
+The final reviewed PR 124 source `67c10b97001126e48d7fd1d6243412b3d2a74286`
+passed exact-source external CI 5085, E2E 5086 and layout 5087 against target
+`14ec37bc857a1ce8237ccbd81566a61d2a8fed22`, then merged as `f576ea94`.
+Full clean local deployment contract passed in `1790277270233-67c10b97-all`:
+451 Pods unit/component tests, native/packaged checks, browser layouts and real
+DDISA HTTP acceptance. The previous main `14ec37bc` passed jobs 5082–5084.
+Final post-merge main results are recorded on the issue; documentation does not
+change the accepted runtime tree.
 
-Patrick approved live deployment, the required restart and monitor recovery.
-PR 122 merged as `b00457200edc3b500def401abcc87335cfdced82` after source
-`e9ef256c919f1ac18c1f86d445ec158ccf492efa` passed exact-source jobs 5073–5075.
-Full local deployment checks passed in `1790274717919-373fd1cb-all` with those
-changes. The owner service `prod-b0045720` is healthy, and provider health,
-discovery and JWKS are byte-identical. The signed/notarized e9ef256c desktop
-passed mounted-DMG acceptance and is installed. All six Pods were adopted
-through the verified owner; the Mac app stays open. Rollback pair:
-`~/Library/Application Support/OpenApe Pods Rollback/2026-09-24-204151-issue-1378`.
-Server backup: `shared/backups/issue-1378-live-20260924T183226Z` in the relay service.
+Production workspace image `prod-f576ea94` passed its tested-image deployment
+and health gate. Provider health, discovery and JWKS are byte-identical to the
+pre-deployment baseline. Signed/notarized desktop source `67c10b97` passed
+mounted-DMG acceptance, is installed and remains open. The owner signed in through
+the existing SSH flow. All six Pods were adopted through the verified owner;
+IDs, lifecycle states, schedules, baseline and effect receipts are preserved.
 
-PR 123 repaired Nitro's empty idle response and merged as
-`14ec37bc857a1ce8237ccbd81566a61d2a8fed22` after exact-source jobs 5079–5081
-passed on `d93cdc9f0aa78af6dda751af1b96b11b7346a047`. Full clean local checks:
-`1790275950495-d93cdc9f-all`. Service `prod-14ec37bc` passed its tested-image
-rollout and health gate; provider health, discovery and JWKS remain byte-identical.
-The retained real-DDISA HTTP regression covers idle JSON null and a real claim.
+Live acceptance verified browser-to-desktop editing and desktop-to-browser
+restoration without reload or reselection. The original test description is
+restored. All accepted operations are applied, with no unresolved journals.
+Offline inventory remains visible while content and controls are unavailable;
+ordinary Mac launches retain central authority. Live testing found and fixed
+Nitro's idle HTTP 204 response (PR 123) and stale untouched editor fields
+(PR 124), each with retained behavioral regressions. Dirty edits remain protected.
 
-Browser and desktop committed a temporary description edit and restoration through
-the central stream. Live acceptance also exposed stale untouched editor fields:
-background reads updated the data but retained every form as if it were dirty.
-`bugfix/issue-1378-live-editor-sync` in `pods-web-workspace` refreshes unchanged
-forms while retaining unsaved edits and clears recovered connection errors.
-Permanent component regressions cover both behaviors. Final deployment and owner
-acceptance receipts are recorded in issue 1378 and the approved plan.
+IURIO Pod `98c32f74-ffaf-4628-bd41-95cea821572f` remains active with its enabled
+900-second schedule at revision 2. Supported recovery and four natural runs after
+adoption completed without duplicate Telegram messages. Latest verified run
+`9713d194-e711-451b-9db5-6b55a654e5f9` reports no PR changes/no Telegram;
+checkpoint 32 and all five existing completed effect receipts are retained.
+The installed app stays open on its monitor overview. No further rollout action
+is required; preserve normal scheduled execution.
 
-All six Pods retain their IDs, lifecycle and schedules. The offline UI hides
-content and disables editing; a normal app launch retains central mode. IURIO
-recovery and scheduled follow-up completed before cutover. Natural post-adoption
-run `b3073936-17f8-4174-bf38-35808bfad53b` completed without Telegram, advancing
-checkpoint to 29 while retaining all five completed effect receipts. Schedule
-revision 2 and the 900-second interval remain unchanged. Keep the Mac app open.
-Relocation remains excluded.
+Receipts: `~/Downloads/OpenApe-Pods-live-20260924/verification.html` and `final/`.
+Latest paired app/profile backup:
+`~/Library/Application Support/OpenApe Pods Rollback/2026-09-24-213618-issue-1378-editor`.
+Latest server online SQLite backup:
+`shared/backups/issue-1378-editor-20260924T192205Z` in the relay service.
+Do not restore an older profile over newer central writes or effect receipts.
 
 ## Pods: connected Codex owner administration (September 24, 2026) — delivered
 
