@@ -2341,5 +2341,6 @@
   "Invalid workspace part key": "Ungültiger Schlüssel eines Arbeitsbereichsteils",
   "Invalid workspace read view": "Ungültige Leseansicht des Arbeitsbereichs",
   "This Pod has a run in progress since {p0}; wait for it to finish or cancel it before changing its applications": "Dieser Pod hat seit {p0} einen laufenden Lauf; warte, bis er endet, oder brich ihn ab, bevor du seine Anwendungen änderst",
-  "Central workspace offline: {p0}": "Zentraler Arbeitsbereich offline: {p0}"
+  "Central workspace offline: {p0}": "Zentraler Arbeitsbereich offline: {p0}",
+  "The scheduler step \"{phase}\" did not finish at {time}; scheduling continued. Restart the app if runs stop.": "Der Planungsschritt „{phase}\" wurde um {time} nicht fertig; die Planung läuft weiter. Starte die App neu, falls Läufe ausbleiben."
 }
