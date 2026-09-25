@@ -4,8 +4,10 @@ import { useRuntimeConfig } from 'nitropack/runtime'
 import { parseOwner, ProtocolError, sameOwner } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
 import { sha256 } from '@openape/pods-protocol/crypto'
-import { centralMaxBytes } from '../../../openape-pods/src/contracts/central'
+import { setTimeout as delay } from 'node:timers/promises'
+import { centralId, centralMaxBytes, centralRevision } from '../../../openape-pods/src/contracts/central'
 import { WorkspaceStore } from './workspace-store'
+import type { WorkspaceView } from './workspace-store'
 
 let instance: WorkspaceStore | undefined
 export function workspace(): WorkspaceStore {
@@ -61,4 +63,20 @@ export async function workspaceBoundary<T>(run: () => T | Promise<T>): Promise<T
     if (error instanceof Error && /^(?:Invalid |Unsupported |Expected |This action|Script belongs)/.test(error.message)) throw new ProtocolError('invalid_workspace_request')
     throw error
   }
+}
+
+// Format-2 clients ask for a bounded view; without one, `read` returns the legacy full Pod.
+export function workspaceView(query: Record<string, unknown>): WorkspaceView | null {
+  if (query.view === undefined) return null
+  if (query.view === 'summary') return { view: 'summary' }
+  if (query.view === 'runs') return { view: 'runs', offset: centralRevision(Number(query.offset ?? 0)) }
+  if (query.view === 'run') return { view: 'run', runId: centralId(query.runId) }
+  if (query.view === 'version' && typeof query.selection === 'string' && /^(?:[a-f0-9]{64}|[a-f0-9-]{36})$/.test(query.selection)) return { view: 'version', selection: query.selection }
+  throw new ProtocolError('invalid_workspace_request')
+}
+
+export async function waitForChange(owner: Owner, cursor: number, closed: () => boolean, maximumMs = 20000): Promise<{ cursor: number }> {
+  const deadline = Date.now() + maximumMs
+  while (Date.now() < deadline && !closed() && workspace().cursor(owner) === cursor) await delay(250)
+  return { cursor: workspace().cursor(owner) }
 }

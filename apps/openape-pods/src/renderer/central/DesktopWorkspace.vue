@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { t, diagnostic } from '../i18n'
-import { ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
+import type { CentralStatus } from '../../contracts/central'
 import CentralWorkspace from './CentralWorkspace.vue'
 import { desktopWorkspaceClient } from './client'
 import Onboarding from '../Onboarding.vue'
@@ -12,6 +13,18 @@ const client = desktopWorkspaceClient(invoke)
 const settings = ref(false)
 const error = ref('')
 const registering = ref(false)
+const status = ref<CentralStatus | null>(null)
+// Local IPC only: the reason this desktop is offline is known here, not by the service.
+async function poll() {
+  try {
+    const value = await invoke({ type: 'status' }) as CentralStatus & { enabled: boolean }
+    status.value = value.enabled ? value : null
+  }
+  catch (cause) { console.error('Desktop connection status unavailable', cause) }
+}
+let timer: ReturnType<typeof setInterval> | undefined
+onMounted(() => { void poll(); timer = setInterval(() => { void poll() }, 5000) })
+onBeforeUnmount(() => clearInterval(timer))
 async function register() {
   registering.value = true; error.value = ''
   try { await invoke({ type: 'register' }); settings.value = false }
@@ -30,7 +43,7 @@ async function register() {
       {{ diagnostic(error) }}
     </p>
   </section>
-  <CentralWorkspace v-else :client="client" desktop @settings="settings = true">
+  <CentralWorkspace v-else :client="client" :desktop-status="status" desktop @settings="settings = true">
     <template #permissions="{ podId }">
       <PodResources :key="podId" :selected-pod-id="podId" />
     </template>

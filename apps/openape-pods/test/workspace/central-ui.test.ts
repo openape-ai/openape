@@ -4,6 +4,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import CentralWorkspace from '../../src/renderer/central/CentralWorkspace.vue'
 import { WorkspaceRequestError } from '../../src/renderer/central/client'
 import { centralFixture } from './central-fixture'
+import type { CentralStatus } from '../../src/contracts/central'
+import { connected, connectionAfter, connectionLevel } from '../../src/renderer/central/status'
 
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined })
@@ -66,4 +68,63 @@ it('retains an operation identity when the request acknowledgement is lost', asy
   expect(wrapper!.text()).toContain('Check pending operation')
   expect(wrapper!.find('fieldset').attributes('disabled')).toBeDefined()
   expect(fixture.client.command).toHaveBeenCalledOnce()
+})
+it('keeps the open Pod and its online state through a single failed read', async () => {
+  const fixture = await open()
+  const inventory = fixture.client.inventory
+  fixture.client.inventory = async () => { throw new Error('socket hang up') }
+  fixture.wake(); await flushPromises()
+  expect(wrapper!.find('[role="alert"]').text()).toContain('Reconnecting to your workspace')
+  expect(wrapper!.text()).toContain('What this Pod does')
+  expect(wrapper!.find('.central-pod small').text()).toContain('Online')
+  fixture.wake(); await flushPromises(); fixture.wake(); await flushPromises()
+  expect(wrapper!.find('[role="alert"]').text()).toMatch(/Workspace unreachable since .*socket hang up/)
+  fixture.client.inventory = inventory
+  fixture.wake(); await flushPromises()
+  expect(wrapper!.find('[role="alert"]').exists()).toBe(false)
+})
+it('lists archived Pods in their own labelled section', async () => {
+  const fixture = centralFixture()
+  fixture.host.workspace.pods[1]!.lifecycle = 'archived'
+  wrapper = mount(CentralWorkspace, { props: { client: fixture.client } })
+  await flushPromises()
+  expect(wrapper.find('details.central-archived summary').text()).toContain('Archived 1')
+  expect(wrapper.find('details.central-archived').text()).toContain('Monthly report')
+  expect(wrapper.findAll('.central-pod').filter(item => item.text().includes('Monthly report'))).toHaveLength(1)
+})
+it('shows a blocked schedule queue in the sidebar and the Pod overview', async () => {
+  const fixture = centralFixture()
+  fixture.host.workspace.pods[0]!.queue = { blocked: 1, since: Date.UTC(2026, 8, 25, 9), error: 'Pod execution permission is no longer active' }
+  fixture.view.scheduling = { ...fixture.view.scheduling, blocked: 1, blockedSince: Date.UTC(2026, 8, 25, 9), error: 'Pod execution permission is no longer active' }
+  wrapper = mount(CentralWorkspace, { props: { client: fixture.client } })
+  await flushPromises()
+  expect(wrapper.find('.central-pod .central-blocked').text()).toContain('Schedule blocked')
+  await wrapper.find('.central-pod').trigger('click'); await flushPromises()
+  expect(wrapper.find('[role="alert"]').text()).toMatch(/Schedule blocked since .*Pod execution permission is no longer active/)
+})
+it('tells the owner why this desktop is offline and that schedules are paused', async () => {
+  const fixture = centralFixture()
+  const since = Date.now() - 10 * 60000
+  const status: CentralStatus = { state: 'offline', error: 'worker snapshot: Worker response timed out; reload state before retrying', since, lastOnlineAt: since, gateUntil: 0, lastTickAt: since, tickingSince: null, format: 2, runtimeId: fixture.host.id, lastPublication: null }
+  wrapper = mount(CentralWorkspace, { props: { client: fixture.client, desktop: true, desktopStatus: status } })
+  await flushPromises()
+  expect(wrapper.find('[role="alert"]').text()).toMatch(/offline since .*Scheduled runs are paused.*worker snapshot: Worker response timed out/)
+  await wrapper.setProps({ desktopStatus: { ...status, state: 'online', error: null } })
+  expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+})
+it('loads run events only when the run history is opened', async () => {
+  const fixture = await open()
+  const run = vi.spyOn(fixture.client, 'run')
+  expect(run).not.toHaveBeenCalled()
+  await wrapper!.findAll('button').find(item => item.text() === 'View run')!.trigger('click'); await flushPromises()
+  expect(run).toHaveBeenCalledOnce()
+  expect(wrapper!.text()).toContain(`Details of ${fixture.view.runs.runs[0]!.id}`)
+})
+it('counts consecutive failures before calling the workspace unreachable', () => {
+  let state = connected
+  state = connectionAfter(state, 'timeout', 100)
+  expect([connectionLevel(state), state.since]).toEqual(['reconnecting', 100])
+  state = connectionAfter(connectionAfter(state, 'timeout', 200), 'timeout', 300)
+  expect([connectionLevel(state), state.since]).toEqual(['offline', 100])
+  expect(connectionLevel(connectionAfter(state, null, 400))).toBe('online')
 })
