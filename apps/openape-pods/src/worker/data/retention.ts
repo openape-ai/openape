@@ -28,6 +28,12 @@ export class DataRetention {
     return view
   }
 
+  async inspectionDue(): Promise<boolean> {
+    const settings = this.store.db.prepare('SELECT used_bytes,limit_bytes,error FROM data_settings WHERE id=1').get()!
+    const disk = await statfs(this.store.root)
+    return !!settings.error || (settings.used_bytes as number) >= (settings.limit_bytes as number) || disk.bavail * disk.bsize < 256 * 1024 * 1024
+  }
+
   limit(bytes: number): void { this.store.db.prepare('UPDATE data_settings SET limit_bytes=? WHERE id=1').run(bytes) }
   jobs(): DeletionJob[] {
     return this.store.db.prepare('SELECT * FROM deletion_jobs').all().map((row) => {
