@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// ape-git post-receive hook — the webhook firing point (plan M5).
+// ape-git post-receive hook — the webhook firing point.
 //
 // Deliberately dumb: it reports the ref updates plus the authenticated pusher
 // to the app over loopback and exits. Signing, subscriber lookup and the

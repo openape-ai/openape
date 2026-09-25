@@ -3,7 +3,7 @@ import { isGrantExpired } from '@openape/grants'
 
 // Pure authorization logic for the git smart-HTTP transport. A repo grant is a
 // delegation grant whose scopes carry the access level (`git:read|write|admin`)
-// and the resource (`repo:<owner>/<name>`) — see the ape-git plan, M1.
+// and the resource (`repo:<owner>/<name>`).
 
 export type GitAccess = 'read' | 'write' | 'admin'
 
@@ -49,9 +49,10 @@ export function requiredAccess(service: string | null): GitAccess {
   return service === 'git-receive-pack' ? 'write' : 'read'
 }
 
-// `git http-backend` dispatches POSTs via PATH_INFO and never reads `?service=`,
-// so deriving the level from the query parameter alone is fail-open.
+/** The access a request needs, taking both the path and the service parameter into account. */
 export function requiredAccessFor(pathname: string, serviceParam: string | null): GitAccess {
+  // `git http-backend` dispatches POSTs via PATH_INFO and never reads
+  // `?service=`, so trusting the parameter alone would be fail-open.
   if (pathname.endsWith('/git-receive-pack')) return 'write'
   return requiredAccess(serviceParam)
 }

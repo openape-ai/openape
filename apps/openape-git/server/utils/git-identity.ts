@@ -34,8 +34,7 @@ function capFromScope(scope: unknown): GitTokenCap | undefined {
  *   delegated:   { sub: <delegator>, act: { sub: <actor> } }        (RFC 8693)
  *   grant authz: { sub: <delegator>, delegate: <actor>, scope: [...] }
  * The actor — not the delegator — is the transport identity: grants and the
- * committer check bind to whoever actually acts (M4; before this, a delegated
- * token was treated as its delegator). A scoped token additionally caps the
+ * committer check bind to whoever actually acts. A scoped token additionally caps the
  * access level to its git:* scopes.
  */
 export function identityFromClaims(payload: Record<string, unknown>): GitIdentity | null {

@@ -1,5 +1,5 @@
-// Fixed-window per-key rate limiter for the git transport routes (security
-// checklist; deferred from M1). In-memory on purpose: one app process per VM.
+// Fixed-window per-key rate limiter for the git transport routes.
+// In-memory on purpose: one app process per VM.
 // ponytail: fixed window, sliding window if bursts at the boundary ever matter.
 
 export interface RateLimiter {

@@ -14,9 +14,9 @@ import { findRepo, reposRoot } from '../utils/repos'
 // Grant-gated git smart HTTP: /<owner>/<name>.git/* → rate limit → DDISA-JWT
 // auth → registry lookup → grant check → `git http-backend` CGI. Lives in
 // middleware (not a route) so the raw node req/res can stream packfiles
-// untouched. Error bodies stay ASCII-only: git prints them raw on the client
-// (M0 lesson). The verified identity rides down to the pre-receive hook via
-// APE_GIT_* env (M4 identity binding).
+// untouched. Error bodies stay ASCII-only: git prints them raw on the client.
+// The verified identity rides down to the pre-receive hook via
+// APE_GIT_* env for the identity binding.
 
 function deny(event: H3Event, status: number, message: string): void {
   const res = event.node.res
@@ -92,7 +92,7 @@ export default defineEventHandler(async (event) => {
       APE_GIT_DELEGATOR: identity.delegator ?? '',
       APE_GIT_ACCESS: access,
       APE_GIT_PROTECTED_REFS: JSON.stringify((await protectionsFor(repo.id)).filter(p => p.enabled).map(p => `refs/heads/${p.branch}`)),
-      // Webhook firing (M5): post-receive reports back over loopback.
+      // Webhook firing: post-receive reports back over loopback.
       APE_GIT_REPO_OWNER: parsed.owner,
       APE_GIT_REPO_NAME: parsed.name,
       APE_GIT_EVENT_URL: pushEventUrl(),

@@ -173,7 +173,7 @@ export function findReadme(entries: TreeEntry[]): TreeEntry | null {
     ?? null
 }
 
-// --- Pull requests (M6) -----------------------------------------------------
+// --- Pull requests -----------------------------------------------------
 
 export interface DiffLine {
   type: 'add' | 'del' | 'ctx' | 'hunk'

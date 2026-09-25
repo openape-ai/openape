@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// ape-git reference CI consumer (plan M5).
+// ape-git reference CI consumer.
 //
 // The forge itself runs no CI: it posts a signed push event and takes a status
 // back. This is the smallest honest consumer of that contract — verify the
