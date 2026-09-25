@@ -12,8 +12,10 @@ import type { RemoteDevice, RemoteRegistration } from '../../worker/remote/contr
 interface Tokens { accessToken: string, refreshToken: string, expiresAt: string, registration: RemoteRegistration }
 interface Saved { id: string, signing: string, agreement: string, enabled: boolean, tokens?: Tokens }
 interface Outbox { id: string, device_id: string, sequence: number, route: string, body: string, envelope: string | null }
+// 15 s for the round trip plus one second per 32 KiB, so large uploads on a slow uplink finish.
+export function requestTimeout(bytes: number): number { return Math.min(30 * 60000, 15000 + Math.ceil(bytes / 32768) * 1000) }
 export class RemoteServiceError extends Error {
-  constructor(readonly status: number) { super(`Remote service returned ${status}`) }
+  constructor(readonly status: number, readonly code: string | null = null) { super(`Remote service returned ${status}${code ? `: ${code}` : ''}`) }
 }
 export class RemoteController {
   private saved: Saved | null = null
@@ -55,12 +57,12 @@ export class RemoteController {
     return response.json()
   }
 
-  private async signed(method: 'POST', path: string, body: unknown): Promise<unknown> {
+  private async signed(method: 'POST', path: string, body: unknown, waitMs = 0): Promise<unknown> {
     const token = this.saved!.tokens!.accessToken; const data = JSON.stringify(body)
     const id = randomUUID(); const at = new Date().toISOString(); const digest = sha256(data)
     const signature = signBytes(proofBytes('api-request', id, JSON.stringify([method, path, sha256(token), at, digest])), this.saved!.signing)
-    const response = await fetch(`${this.origin}${path}`, { method, headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, 'x-pods-request-id': id, 'x-pods-request-at': at, 'x-pods-body-digest': digest, 'x-pods-proof': signature }, body: data, redirect: 'error', signal: AbortSignal.any([this.abort.signal, AbortSignal.timeout(15000)]) })
-    if (!response.ok) throw new RemoteServiceError(response.status)
+    const response = await fetch(`${this.origin}${path}`, { method, headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, 'x-pods-request-id': id, 'x-pods-request-at': at, 'x-pods-body-digest': digest, 'x-pods-proof': signature }, body: data, redirect: 'error', signal: AbortSignal.any([this.abort.signal, AbortSignal.timeout(requestTimeout(Buffer.byteLength(data)) + waitMs)]) })
+    if (!response.ok) throw new RemoteServiceError(response.status, await response.json().then((problem: { code?: unknown }) => typeof problem.code === 'string' ? problem.code.slice(0, 80) : null, () => null))
     return response.json()
   }
 
@@ -138,7 +140,7 @@ export class RemoteController {
     const identity = await this.worker.remoteOwner()
     if (!sameOwner(identity.owner, this.saved.tokens.registration.owner)) throw new Error('Central workspace belongs to another owner')
     await this.refresh()
-    return this.signed('POST', '/api/runtime/v1/workspace', body)
+    return this.signed('POST', '/api/runtime/v1/workspace', body, body.type === 'changes' ? 25000 : 0)
   }
 
   private async refreshTokens(): Promise<void> {

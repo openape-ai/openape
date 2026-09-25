@@ -6,6 +6,8 @@ export const diagnosticPatterns = [
   'Workspace operation {p0} is not confirmed. Reconcile this operation before retrying',
 
   'Remote service returned {p0}',
+  'Central workspace offline: {p0}',
+  'This Pod has a run in progress since {p0}; wait for it to finish or cancel it before changing its applications',
   'Agent timeoutSeconds must be an integer from 30 to {p0}',
   'DDISA agent authentication failed ({p0})',
   'Desktop registration failed ({p0})',

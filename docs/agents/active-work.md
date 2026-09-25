@@ -1,5 +1,16 @@
 # Active work
 
+## Pods: stable central connection (September 25, 2026) — implementing
+
+[Issue 1384](https://repos.openape.ai/patrick/monorepo/issues/1384),
+[approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3C2RQPRQ5HE2XBRFXR8KRM5).
+Worktree `pods-central-stability`, branch `bugfix/issue-1384-pods-central-stability`, base `0003ecb4`.
+Format-2 part publication, independent heartbeat, phase-tagged offline reason in UI/MCP,
+five-minute owner notification, bounded reads with a change feed, archived section,
+visible blocked queue and refusal of application changes during a run.
+Before: 30.4 MB `publication.json`; 5 min nettop on the main process 132.7 MB in / 63.3 MB out.
+Next: PR, relay deployment first, then the signed desktop after Patrick's go.
+
 ## Pods MCP discovery texts (September 25, 2026)
 
 [Issue 1383](https://repos.openape.ai/patrick/monorepo/issues/1383). Worktree `pods-mcp-discovery`,
