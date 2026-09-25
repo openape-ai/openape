@@ -10,10 +10,11 @@ import { storageBytes } from './files'
 export interface DeletionJob { podId: string, runIds: string[], keyIds: string[] }
 const validId = (value: string) => /^[a-f0-9-]{36}$/.test(value)
 export class DataRetention {
+  private settledRuns = new Map<string, { changedMs: number, bytes: number }>()
   constructor(private readonly store: PodDatabase, private readonly helper: string) {}
   async view(): Promise<DataView> {
-    let usedBytes = 0
-    for (const directory of ['blobs', 'pods', 'snapshots', 'runs', 'dependencies', 'dependency-staging']) {
+    let usedBytes = await this.runBytes()
+    for (const directory of ['blobs', 'pods', 'snapshots', 'dependencies', 'dependency-staging']) {
       usedBytes += await storageBytes(join(this.store.root, directory))
     }
     for (const name of ['control.sqlite', 'control.sqlite-wal']) {
@@ -26,6 +27,30 @@ export class DataRetention {
     // Every write grows the WAL by a page, which this measurement includes; a byte-exact rewrite would change the database every five seconds forever.
     this.store.db.prepare('UPDATE data_settings SET used_bytes=?,error=? WHERE id=1 AND (abs(used_bytes-?)>=1048576 OR error IS NOT ?)').run(usedBytes, error, usedBytes, error)
     return view
+  }
+
+  // Run folders are never pruned; walking all of them every minute costs tens of thousands of lstat calls.
+  // A run finished five minutes ago without a lease no longer writes its folder, so only a changed folder mtime re-measures it.
+  private async runBytes(): Promise<number> {
+    const root = join(this.store.root, 'runs')
+    let names: string[] = []
+    try { names = await readdir(root) }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+    const settled = new Set(this.store.db.prepare('SELECT id FROM runs WHERE finished_at<? AND id NOT IN (SELECT run_id FROM run_leases)').all(Date.now() - 300000).map(row => row.id as string))
+    const next = new Map<string, { changedMs: number, bytes: number }>()
+    let bytes = 0
+    for (const name of names) {
+      const path = join(root, name)
+      let info
+      try { info = await lstat(path) }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; throw error }
+      const cached = this.settledRuns.get(name)
+      const size = cached?.changedMs === info.mtimeMs ? cached.bytes : await storageBytes(path)
+      if (info.isDirectory() && (cached || settled.has(name))) next.set(name, { changedMs: info.mtimeMs, bytes: size })
+      bytes += size
+    }
+    this.settledRuns = next
+    return bytes
   }
 
   async inspectionDue(): Promise<boolean> {
