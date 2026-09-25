@@ -14,7 +14,11 @@ Real API model discovery and all three decision types passed with `jev-1.13.0`.
 The existing owner-authorized key is encrypted in the isolated Jev development profile;
 production accounts, Pods and schedules were not changed. Remaining acceptance:
 neutral fresh Codex authoring plus live Pod grant flow and labelled workflow quality.
-Next: native PR and exact-head external checks; no production release in this task.
+[PR #134](https://repos.openape.ai/patrick/monorepo/pulls/134), implementation commit
+`fa31c9bc684ed02b6c23a5f2d762eba62daf961a` against the base above.
+[Published evidence](https://testrun.openape.ai/r/q8kG0M6twEJoIpqcVVx8reEg).
+Commit/push hooks passed the affected unit contract, including the relay consumer.
+Next: exact-head external checks and PR review; no production release in this task.
 
 ## Pods: stable central connection (September 25, 2026) — implementing
 
