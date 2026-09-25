@@ -16,7 +16,10 @@ export function centralFixture() {
   let wake: (() => void) | null = null
   const client: CentralClient = {
     inventory: async () => structuredClone([host]),
-    read: async () => ({ revision: host.revision, pod: structuredClone(view) }),
+    read: async () => ({ revision: host.revision, total: view.runs.runs.length, pod: structuredClone(view) }),
+    runs: async (_runtime, _pod, offset) => ({ revision: host.revision, total: view.runs.runs.length, runs: structuredClone(view.runs.runs.slice(offset, offset + 20)) }),
+    run: async (_runtime, _pod, runId) => ({ revision: host.revision, run: structuredClone(view.runs.runs.find(run => run.id === runId)!), events: [{ sequence: 1, type: 'log', data: { line: `Details of ${runId}` }, at: 1790269230000 }] }),
+    version: async () => { throw new Error('No version') },
     command: async (_runtime, _revision, command, id) => ({ id, runtimeId, command, state: 'applied', result: null, error: null, revision: ++host.revision }),
     operation: async () => { throw new Error('No operation pending') },
     changes: (cursor, signal) => new Promise((resolve) => {

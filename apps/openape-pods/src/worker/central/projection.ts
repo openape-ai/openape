@@ -22,7 +22,7 @@ export class CentralProjection {
         const binding = this.store.db.prepare('SELECT owner FROM remote_pods WHERE pod_id=?').get(pod.id)
         if (!binding || !sameOwner(JSON.parse(String(binding.owner)), owner)) throw new Error('Every Pod must belong to the connected owner before adopting this workspace')
       }
-      const tables = Object.fromEntries(centralTables.map(table => [table, this.store.db.prepare(`SELECT * FROM ${table}`).all()]))
+      const tables = Object.fromEntries(centralTables.map(table => [table, this.store.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()]))
       const details = new WorkspaceDetails(this.store, this.resources)
       return {
         version: 1 as const, workspace: { pods, organization: new PodGroups(this.store).view() }, archive: { schema: schemaVersion, tables }, artifacts: [],
@@ -33,7 +33,7 @@ export class CentralProjection {
             id: pod.id, ready: true, details: details.execute({ type: 'list', podId: pod.id }), scripts, runs,
             scheduling: this.scheduler.view(pod.id), resources: { resources: this.resources.list(pod.id), variables: new PodVariables(this.store).list(pod.id), epoch: this.resources.epoch(pod.id) },
             versions: Object.fromEntries([...scripts.versions.map(version => ({ kind: 'version' as const, id: version.hash })), ...scripts.drafts.map(draft => ({ kind: 'draft' as const, id: draft.id }))].map(selection => [selection.id, this.scripts.view(pod.id, selection)])),
-            history: Object.fromEntries(runs.runs.map((run) => { const { timing: _timing, ...view } = this.runs.view(pod.id, run.id); return [run.id, view] })),
+            history: Object.fromEntries(runs.runs.map(run => [run.id, { runs: [run], events: this.runs.runs.recentEvents(pod.id, run.id) }])),
           }
         }),
       }

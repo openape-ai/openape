@@ -1,4 +1,4 @@
-import { CentralController } from './central/controller'
+import { CentralController, offlineAlert } from './central/controller'
 import { centralObject } from '../contracts/central'
 import { RemoteController, RemoteServiceError } from './remote/controller'
 import { parseChatsCommand } from '../contracts/chats'
@@ -25,7 +25,7 @@ import { parseDetailsCommand } from '../contracts/details'
 import { parseScheduleCommand } from '../contracts/scheduling'
 import { parseRunCommand } from '../contracts/runs'
 import { parseResourceCommand } from '../contracts/resources'
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, powerMonitor, protocol, session, shell, Tray } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, powerMonitor, protocol, session, shell, Tray } from 'electron'
 import { mkdir, readFile, realpath } from 'node:fs/promises'
 import { basename, dirname, extname, join } from 'node:path'
 import { parseCommand } from '../contracts/control'
@@ -69,7 +69,7 @@ const fixtureRemoteOrigin = fixture && process.env.NODE_ENV === 'test' ? process
 if (fixtureRemoteOrigin && new URL(fixtureRemoteOrigin).hostname !== '127.0.0.1') throw new Error('Remote acceptance requires an isolated loopback relay')
 remote = new RemoteController(root, worker, fixtureRemoteOrigin)
 if (process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1') {
-  central = new CentralController(root, body => remote.workspaceRequest(body), { snapshot: () => worker.centralSnapshot(), execute: command => worker.centralExecute(command), gate: until => worker.centralGate(until) }, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/'))
+  central = new CentralController(root, body => remote.workspaceRequest(body), { snapshot: () => worker.centralSnapshot(), version: () => worker.centralVersion(), execute: command => worker.centralExecute(command), gate: until => worker.centralGate(until) }, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/'))
   worker.central = central
 }
 const codexDirectory = join(profileBase, 'codex')
@@ -174,7 +174,7 @@ async function start(): Promise<void> {
   ipcMain.handle(channels.central, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     const command = centralObject(value)
-    if (command.type === 'status') return { enabled: !!central, online: central?.available ?? false, error: central?.error ?? null }
+    if (command.type === 'status') return { enabled: !!central, online: central?.available ?? false, ...central?.status() }
     if (!central) throw new Error('Central workspace is not enabled')
     if (command.type === 'register') { await remote.enable(await worker.remoteOwner()); return { ok: true } }
     try { return await central.query(command) }
@@ -401,7 +401,21 @@ async function start(): Promise<void> {
   powerMonitor.on('suspend', () => worker.lifecycle('suspend'))
   powerMonitor.on('resume', () => worker.lifecycle('resume'))
   worker.start(root)
+  if (central) watchCentral(central)
   if (await refreshLauncher(join(codexDirectory, 'openape-pods-mcp'), codexTarget)) await codexServer.start()
+}
+// Tells the owner once when scheduling has been paused for five minutes, and again when it resumes.
+function watchCentral(controller: CentralController): void {
+  let alerted = false
+  setInterval(() => {
+    const status = controller.status()
+    const alert = offlineAlert(status, alerted, Date.now())
+    if (!alert || !Notification.isSupported()) return
+    alerted = alert === 'alert'
+    new Notification(alerted
+      ? { title: t('Pods scheduling paused'), body: t('The central workspace has been offline for five minutes: {reason}', { reason: status.error ?? t('connecting') }) }
+      : { title: t('Pods scheduling resumed'), body: t('This desktop is connected to the central workspace again.') }).show()
+  }, 30000).unref()
 }
 async function shutdown(): Promise<void> {
   try { await codexServer.stop(); await central?.stop(); await remote.stop(); await worker.stop(); stopped = true; tray?.destroy(); app.quit() }
