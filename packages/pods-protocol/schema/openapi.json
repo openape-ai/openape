@@ -1,0 +1,1080 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OpenApe Pods native mediation",
+    "version": "1.0.0",
+    "description": "Implementation draft. See docs/architecture/pods-mobile-protocol.md for websocket frames, device proof tuple, cryptography, encrypted payloads and acceptance status. Existing DDISA provider routes are outside this service."
+  },
+  "servers": [
+    {
+      "url": "https://pods.openape.ai"
+    }
+  ],
+  "paths": {
+    "/api/mobile/v1/session/begin": {
+      "post": {
+        "operationId": "beginEnrollment",
+        "responses": {
+          "200": {
+            "description": "beginEnrollment"
+          },
+          "default": {
+            "description": "RFC 9457 application problem",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "deviceId",
+                  "kind",
+                  "keys",
+                  "challenge",
+                  "email"
+                ],
+                "properties": {
+                  "deviceId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "kind": {
+                    "enum": [
+                      "runtime",
+                      "mobile"
+                    ]
+                  },
+                  "keys": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "signing",
+                      "agreement"
+                    ],
+                    "properties": {
+                      "signing": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]+$",
+                        "minLength": 87,
+                        "maxLength": 87
+                      },
+                      "agreement": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]+$",
+                        "minLength": 87,
+                        "maxLength": 87
+                      }
+                    }
+                  },
+                  "challenge": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]+$",
+                    "minLength": 43,
+                    "maxLength": 43
+                  },
+                  "email": {
+                    "type": "string",
+                    "maxLength": 320
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mobile/v1/session/exchange": {
+      "post": {
+        "operationId": "exchangeNativeHandoff",
+        "responses": {
+          "200": {
+            "description": "exchangeNativeHandoff"
+          },
+          "default": {
+            "description": "RFC 9457 application problem",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "verifier",
+                  "signature"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "verifier": {
+                    "type": "string",
+                    "minLength": 43,
+                    "maxLength": 128
+                  },
+                  "signature": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]+$",
+                    "minLength": 86,
+                    "maxLength": 86
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mobile/v1/session/refresh": {
+      "post": {
+        "operationId": "rotateDeviceSession",
+        "responses": {
+          "200": {
+            "description": "rotateDeviceSession"
+          },
+          "default": {
+            "description": "RFC 9457 application problem",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "refreshToken",
+                  "signature"
+                ],
+                "properties": {
+                  "refreshToken": {
+                    "type": "string"
+                  },
+                  "signature": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]+$",
+                    "minLength": 86,
+                    "maxLength": 86
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mobile/v1/session/revoke": {
+      "post": {
+        "operationId": "revokeCurrentMobile",
+        "responses": {
+          "200": {
+            "description": "revokeCurrentMobile"
+          },
+          "default": {
+            "description": "RFC 9457 application problem",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "deviceSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Pods-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Request-At",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Body-Digest",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Proof",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [],
+                "properties": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mobile/v1/runtimes": {
+      "get": {
+        "operationId": "listOwnedRuntimes",
+        "responses": {
+          "200": {
+            "description": "listOwnedRuntimes"
+          },
+          "default": {
+            "description": "RFC 9457 application problem",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "deviceSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Pods-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Request-At",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Body-Digest",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Proof",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/mobile/v1/runtimes/{id}": {
+      "delete": {
+        "operationId": "revokeOwnedRuntime",
+        "responses": {
+          "200": {
+            "description": "revokeOwnedRuntime"
+          },
+          "default": {
+            "description": "RFC 9457 application problem",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "deviceSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Pods-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Request-At",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Body-Digest",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Proof",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/mobile/v1/operations": {
+      "post": {
+        "operationId": "submitEncryptedOperation",
+        "responses": {
+          "202": {
+            "description": "Relay admission only; never execution success."
+          },
+          "default": {
+            "description": "RFC 9457 application problem",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "deviceSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Pods-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Request-At",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Body-Digest",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Proof",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Envelope"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mobile/v1/operations/{id}": {
+      "get": {
+        "operationId": "readRelayReceipt",
+        "responses": {
+          "200": {
+            "description": "Delivery status only. Query the desktop operation receipt for authoritative outcome."
+          },
+          "default": {
+            "description": "RFC 9457 application problem",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "deviceSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Pods-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Request-At",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Body-Digest",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Proof",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/mobile/v1/events": {
+      "get": {
+        "operationId": "readEncryptedEvents",
+        "responses": {
+          "200": {
+            "description": "readEncryptedEvents"
+          },
+          "default": {
+            "description": "RFC 9457 application problem",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "deviceSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Pods-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Request-At",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Body-Digest",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Proof",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "0"
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "acknowledgePersistedEvents",
+        "responses": {
+          "200": {
+            "description": "acknowledgePersistedEvents"
+          },
+          "default": {
+            "description": "RFC 9457 application problem",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "deviceSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Pods-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Request-At",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Body-Digest",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Proof",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "cursor"
+                ],
+                "properties": {
+                  "cursor": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,18})$"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mobile/v1/sync": {
+      "get": {
+        "operationId": "beginSnapshotResync",
+        "responses": {
+          "200": {
+            "description": "Current cursor; fetch desktop snapshots and reconcile pending commands before changing state."
+          },
+          "default": {
+            "description": "RFC 9457 application problem",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "deviceSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Pods-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Request-At",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Body-Digest",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Proof",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/mobile/v1/devices": {
+      "get": {
+        "operationId": "listOwnedDevices",
+        "responses": {
+          "200": {
+            "description": "listOwnedRuntimes"
+          },
+          "default": {
+            "description": "RFC 9457 application problem",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "deviceSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Pods-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Request-At",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Body-Digest",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Proof",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/mobile/v1/devices/{id}": {
+      "delete": {
+        "operationId": "revokeOwnedDevice",
+        "responses": {
+          "200": {
+            "description": "revokeOwnedRuntime"
+          },
+          "default": {
+            "description": "RFC 9457 application problem",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "deviceSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Pods-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Request-At",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Body-Digest",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Pods-Proof",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/mobile/v1/capabilities": {
+      "get": {
+        "summary": "Supported encrypted protocol and operations",
+        "responses": {
+          "200": {
+            "description": "Protocol major/minor, command/query kinds and content modes"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "deviceSession": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Opaque access token plus mandatory per-request paired-device signature headers."
+      }
+    },
+    "schemas": {
+      "Envelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "route",
+          "contentMode",
+          "ephemeralKey",
+          "nonce",
+          "ciphertext",
+          "signature"
+        ],
+        "properties": {
+          "route": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "protocol",
+              "major",
+              "minor",
+              "id",
+              "runtimeId",
+              "generation",
+              "deviceId",
+              "keyEpoch",
+              "owner",
+              "direction",
+              "kind",
+              "kindVersion",
+              "issuedAt",
+              "expiresAt",
+              "sequence"
+            ],
+            "properties": {
+              "protocol": {
+                "const": "pods-mobile"
+              },
+              "major": {
+                "const": 1
+              },
+              "minor": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "runtimeId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "generation": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "deviceId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "keyEpoch": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "owner": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "issuer",
+                  "subject"
+                ],
+                "properties": {
+                  "issuer": {
+                    "type": "string",
+                    "format": "uri",
+                    "maxLength": 2048
+                  },
+                  "subject": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 320
+                  }
+                }
+              },
+              "direction": {
+                "enum": [
+                  "command",
+                  "query",
+                  "response",
+                  "event"
+                ]
+              },
+              "kind": {
+                "enum": [
+                  "pod.create",
+                  "pod.rename",
+                  "pod.pause",
+                  "pod.resume",
+                  "chat.send",
+                  "chat.cancel",
+                  "changes.apply",
+                  "changes.discard",
+                  "setup.respond",
+                  "review.prepare",
+                  "review.decide",
+                  "run.start",
+                  "run.cancel",
+                  "inventory",
+                  "conversation",
+                  "run",
+                  "catalog",
+                  "reviews",
+                  "operation",
+                  "receipt",
+                  "snapshot"
+                ]
+              },
+              "kindVersion": {
+                "const": 1
+              },
+              "issuedAt": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+              },
+              "expiresAt": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+              },
+              "sequence": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,18})$"
+              }
+            }
+          },
+          "contentMode": {
+            "const": "encrypted-v1"
+          },
+          "ephemeralKey": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "minLength": 87,
+            "maxLength": 87
+          },
+          "nonce": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "minLength": 16,
+            "maxLength": 16
+          },
+          "ciphertext": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "maxLength": 65536
+          },
+          "signature": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "minLength": 86,
+            "maxLength": 86
+          }
+        }
+      },
+      "Problem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "title",
+          "status",
+          "instance",
+          "code"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "instance": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

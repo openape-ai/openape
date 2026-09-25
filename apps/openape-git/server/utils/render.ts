@@ -1,4 +1,4 @@
-import { marked } from 'marked'
+import { marked, Marked } from 'marked'
 import sanitizeHtml from 'sanitize-html'
 import { codeToHtml } from 'shiki'
 
@@ -54,4 +54,30 @@ export async function highlightCode(code: string, lang: string): Promise<string>
     // Unknown language or grammar failure — fall back to plain text.
     return await codeToHtml(code, { lang: 'text', theme: 'github-dark-default' })
   }
+}
+
+export function renderIssueMarkdown(source: string, links: Record<string, string> = {}): string {
+  const parser = new Marked({ gfm: true })
+  parser.use({
+    walkTokens(token) {
+      if ((token.type === 'link' || token.type === 'image') && links[token.href]) token.href = links[token.href]!
+    },
+    extensions: [{
+      name: 'issueReference',
+      level: 'inline',
+      start: text => text.search(/(?:[\w.-]+\/[\w.-]+)?#[1-9]\d*\b/),
+      tokenizer(text) {
+        const match = /^(?:[\w.-]+\/[\w.-]+)?#[1-9]\d*\b/.exec(text)
+        if (match && links[match[0]]) return { type: 'issueReference', raw: match[0], text: match[0], href: links[match[0]] }
+      },
+      renderer: token => `<a href="${token.href}">${token.text}</a>`,
+    }],
+  })
+  return sanitizeHtml(parser.parse(source) as string, {
+    ...SANITIZE_OPTIONS,
+    transformTags: {
+      ...SANITIZE_OPTIONS.transformTags,
+      img: (_tag, attributes) => ({ tagName: 'a', attribs: { href: attributes.src ?? '', rel: 'noopener noreferrer', target: '_blank' }, text: attributes.alt || 'Image attachment' }),
+    },
+  })
 }

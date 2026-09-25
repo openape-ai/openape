@@ -1,3 +1,4 @@
+import { useBrokerStore } from '../../utils/broker-store'
 import { introspectGrant, useGrant, verifyAuthzJWT } from '@openape/grants'
 import { defineEventHandler, readBody } from 'h3'
 import { useGrantStores } from '../../utils/grant-stores'
@@ -30,6 +31,12 @@ export default defineEventHandler(async (event) => {
   const grant = await introspectGrant(grantId, grantStore)
   if (!grant) {
     return { valid: false, error: 'Grant not found' }
+  }
+
+  if (grant.brokered || result.claims?.brokered) {
+    if (!result.claims) return { valid: false, error: 'Missing authorization claims' }
+    const consumed = await useBrokerStore(event).consume(grantId, result.claims)
+    return { valid: !consumed.error, ...consumed, claims: result.claims }
   }
 
   if (grant.status !== 'approved') {

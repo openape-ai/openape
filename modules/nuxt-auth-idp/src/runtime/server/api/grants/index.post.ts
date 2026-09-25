@@ -1,3 +1,4 @@
+import { maybeForwardBrokerGrant } from '../../utils/broker-forward'
 import type { GrantType, OpenApeAuthorizationDetail, OpenApeCliAuthorizationDetail, OpenApeGrantRequest } from '@openape/core'
 import { computeCmdHash } from '@openape/core'
 import { canonicalizeCliPermission, cliAuthorizationDetailsCover, computeArgvHash, createGrant, evaluateStandingGrants, findSimilarCliGrants, isCliAuthorizationDetailExact, validateCliAuthorizationDetail } from '@openape/grants'
@@ -69,6 +70,8 @@ function hasExactStructuredDetail(request: Pick<OpenApeGrantRequest, 'authorizat
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<OpenApeGrantRequest>(event)
+  const forwarded = await maybeForwardBrokerGrant(event, 'create', body)
+  if (forwarded !== undefined) return forwarded
   const { grantStore } = useGrantStores()
 
   // Spec §5: grant requests MUST carry a Bearer token; §3.4: an authenticated

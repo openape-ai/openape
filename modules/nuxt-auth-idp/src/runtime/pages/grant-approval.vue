@@ -4,6 +4,8 @@ import { navigateTo, useIdpAuth, useRoute } from '#imports'
 import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
 import { buildRuleProposals, ruleTemplatePreview, suggestAllowPattern } from '../utils/rule-suggestions'
 import { callerState, formatCountdown, formatWaited } from '../utils/caller-liveness'
+import PodRunGrant from '../components/PodRunGrant.vue'
+import { podRunPresentation } from '../utils/pod-run-grant'
 import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
 import { grantSummaryText, safeSummaryLink } from '../utils/grant-summary'
 
@@ -30,6 +32,9 @@ const EXTEND_MODE_OPTIONS = [
   { label: 'Add this value', value: 'merge', description: 'Merge into single grant keeping specific selectors' },
   { label: 'Approve as separate', value: 'separate', description: 'Create a new independent grant' },
 ]
+const podGerman = ref(false)
+onMounted(() => { podGerman.value = navigator.language.startsWith('de') })
+const podRun = computed(() => podRunPresentation(grant.value?.request))
 const cliDetails = computed(() => getCliAuthorizationDetails(grant.value?.request?.authorization_details))
 // Why is this still pending? Filled by the IdP's diagnostic hooks — one entry
 // per auto-approval mechanism that could have fired and didn't.
@@ -70,7 +75,8 @@ onMounted(() => {
 onUnmounted(() => clearInterval(clock))
 const liveness = computed(() => callerState(grant.value?.request, grant.value?.created_at ?? 0, nowSec.value))
 
-function toggleAlwaysPanel() {
+async function toggleAlwaysPanel() {
+  if (grant.value?.brokered) { await handleApprove('always'); return }
   alwaysOpen.value = !alwaysOpen.value
   if (alwaysOpen.value && !patternDraft.value) {
     patternDraft.value = commandDisplay.value ? (suggestAllowPattern(commandDisplay.value.text) ?? '') : ''
@@ -338,7 +344,7 @@ function isExactCommand(detail) {
     <UCard class="w-full max-w-lg">
       <template #header>
         <h1 class="text-2xl font-bold text-center">
-          Permission Request
+          {{ podRun && podGerman ? 'Freigabe' : 'Permission Request' }}
         </h1>
       </template>
 
@@ -385,7 +391,21 @@ function isExactCommand(detail) {
             </template>
           </UAlert>
 
-          <UAlert :color="isDelegate ? 'error' : 'warning'" title="An application is requesting permission:">
+          <div v-if="grant.brokered" class="mb-4 rounded-lg border border-default p-4 text-sm space-y-2">
+            <p><strong>{{ grant.request?.requester }}</strong> uses the agent provider <strong>{{ grant.brokered.agent_issuer }}</strong>.</p>
+            <p>The request is addressed to {{ grant.brokered.owner }}. Only this account can approve it; the provider cannot decide.</p>
+          </div>
+          <PodRunGrant v-if="podRun" :pod="podRun" :german="podGerman" @language="podGerman = $event" />
+          <details v-if="podRun">
+            <summary class="cursor-pointer text-sm">
+              {{ podGerman ? 'Technische Details' : 'Technical request details' }}
+            </summary><pre class="mt-2 text-xs whitespace-pre-wrap break-all">{{ commandDisplay?.text }}</pre><p class="text-xs break-all">
+              {{ grant.request?.requester }} · {{ grant.request?.target_host }}
+            </p><p class="text-xs break-all">
+              {{ grant.request?.permissions?.join(' · ') }}
+            </p>
+          </details>
+          <UAlert v-else :color="isDelegate ? 'error' : 'warning'" title="An application is requesting permission:">
             <template #description>
               <dl class="text-sm space-y-2 mt-2">
                 <div>
@@ -433,7 +453,7 @@ function isExactCommand(detail) {
                 </div>
                 <div v-if="summaryText">
                   <dt class="text-muted mb-1">
-                    Angabe des Antragstellers
+                    Requester-provided summary
                   </dt>
                   <dd class="text-sm whitespace-pre-wrap break-words">
                     {{ summaryText }}
@@ -500,8 +520,11 @@ function isExactCommand(detail) {
             </template>
           </UAlert>
 
-          <div v-if="pendingDiagnostics.length" class="rounded-lg border border-default p-4 space-y-3">
-            <h3 class="text-sm font-semibold">
+          <component :is="podRun ? 'details' : 'div'" v-if="pendingDiagnostics.length" class="rounded-lg border border-default p-4 space-y-3">
+            <summary v-if="podRun" class="cursor-pointer text-sm">
+              {{ podGerman ? 'Technische Freigabeprüfung' : 'Technical approval checks' }}
+            </summary>
+            <h3 v-else class="text-sm font-semibold">
               Why this is waiting
             </h3>
             <div v-for="d in pendingDiagnostics" :key="d.source" class="space-y-1">
@@ -524,7 +547,7 @@ function isExactCommand(detail) {
                 Contains command substitution — a pattern must spell the construct out to allow it.
               </p>
             </div>
-          </div>
+          </component>
 
           <UAlert
             v-if="liveness.kind === 'abandoned'"
@@ -540,7 +563,17 @@ function isExactCommand(detail) {
             Der Prozess wartet noch — {{ formatCountdown(liveness.secondsLeft) }}
           </p>
 
-          <div class="flex gap-2">
+          <UAlert v-if="podRun && ruleError" color="error" :title="ruleError" />
+          <div v-if="podRun" class="flex flex-wrap gap-2">
+            <UButton color="error" variant="soft" :loading="processing" @click="handleDeny">
+              {{ podGerman ? 'Ablehnen' : 'Deny' }}
+            </UButton><UButton color="success" :loading="ruleBusy || processing" :disabled="processing || ruleBusy" @click="createRuleAndApproveOnce">
+              {{ podGerman ? 'Pod-Ausführung erlauben' : 'Allow Pod execution' }}
+            </UButton><UButton v-if="liveness.kind !== 'abandoned'" variant="outline" :loading="processing" :disabled="ruleBusy" @click="handleApprove('once')">
+              {{ podGerman ? 'Einmal' : 'Once' }}
+            </UButton>
+          </div>
+          <div v-else class="flex gap-2">
             <UButton color="error" variant="soft" :loading="processing" class="flex-1" @click="handleDeny">
               Deny
             </UButton>
@@ -558,7 +591,7 @@ function isExactCommand(detail) {
             </UButton>
           </div>
 
-          <div v-if="alwaysOpen" class="rounded border border-success/30 bg-success/5 px-3 py-2 space-y-2">
+          <div v-if="alwaysOpen && !podRun" class="rounded border border-success/30 bg-success/5 px-3 py-2 space-y-2">
             <p class="text-xs text-muted">
               Make a rule so future requests like this auto-approve. This request itself runs once.
             </p>
@@ -593,6 +626,7 @@ function isExactCommand(detail) {
           </div>
 
           <button
+            v-if="!podRun"
             type="button"
             class="flex items-center gap-2 text-xs text-muted hover:text-default"
             @click="moreOptionsOpen = !moreOptionsOpen"
@@ -601,7 +635,7 @@ function isExactCommand(detail) {
             <UBadge v-if="hasSimilarGrants" color="info" variant="soft" size="xs" label="similar grants exist" />
           </button>
 
-          <div v-if="moreOptionsOpen" class="space-y-3">
+          <div v-if="moreOptionsOpen && !podRun" class="space-y-3">
             <p class="font-mono text-xs text-dimmed break-all">
               Grant {{ grantId.slice(0, 8) }}… · Audience: {{ grant.request?.audience }}
             </p>
@@ -755,7 +789,7 @@ function isExactCommand(detail) {
                 </div>
                 <div v-if="summaryText">
                   <dt class="text-muted mb-1">
-                    Angabe des Antragstellers
+                    Requester-provided summary
                   </dt>
                   <dd class="text-sm whitespace-pre-wrap break-words">
                     {{ summaryText }}
