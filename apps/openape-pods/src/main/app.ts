@@ -1,3 +1,5 @@
+import { RuntimeApprovalPolicy } from './codex/runtime-approval'
+import { parseRuntimeApprovalCommand } from '../contracts/runtime-approval'
 import { CentralController, offlineAlert } from './central/controller'
 import { centralObject } from '../contracts/central'
 import { RemoteController, RemoteServiceError } from './remote/controller'
@@ -46,6 +48,7 @@ app.setName(fixture ? 'OpenApe Pods Fixture' : 'OpenApe Pods')
 app.enableSandbox()
 const profileBase = fixture ? fixtureDirectory(process.env.OPENAPE_PODS_FIXTURE_DIR) : localDirectory(join(app.getPath('appData'), 'OpenApe Pods'))
 const root = selectedProfile(profileBase)
+const runtimeApproval = new RuntimeApprovalPolicy(root)
 if (existsSync(join(root, 'central'))) process.env.OPENAPE_PODS_CENTRAL_ENABLED = '1'
 app.setPath('userData', root)
 app.setPath('sessionData', join(root, 'chromium'))
@@ -64,12 +67,12 @@ const worker = new FixtureWorker((next) => {
   if (next.state === 'ready') central?.start()
   if (next.state === 'ready' && process.env.OPENAPE_PODS_REMOTE_ENABLED === '1') void remote.resume().catch((error: unknown) => { remote.error = error instanceof Error ? error.message : 'Remote access unavailable' })
   if (window && !window.isDestroyed()) window.webContents.send(channels.changed, status)
-})
+}, runtimeApproval)
 const fixtureRemoteOrigin = fixture && process.env.NODE_ENV === 'test' ? process.env.OPENAPE_PODS_FIXTURE_RELAY_ORIGIN : undefined
 if (fixtureRemoteOrigin && new URL(fixtureRemoteOrigin).hostname !== '127.0.0.1') throw new Error('Remote acceptance requires an isolated loopback relay')
 remote = new RemoteController(root, worker, fixtureRemoteOrigin)
 if (process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1') {
-  central = new CentralController(root, body => remote.workspaceRequest(body), { snapshot: () => worker.centralSnapshot(), version: () => worker.centralVersion(), execute: command => worker.centralExecute(command), gate: until => worker.centralGate(until) }, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/'))
+  central = new CentralController(root, body => remote.workspaceRequest(body), { snapshot: () => worker.centralSnapshot(), version: () => worker.centralVersion(), execute: (command, id) => worker.centralExecute(command, id), gate: until => worker.centralGate(until) }, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/'))
   worker.central = central
 }
 const codexDirectory = join(profileBase, 'codex')
@@ -273,6 +276,12 @@ async function start(): Promise<void> {
       await shell.openExternal(login.url); return state
     }
     return worker.onboarding(command)
+  })
+  ipcMain.handle(channels.runtimeApproval, (event, value: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    const command = parseRuntimeApprovalCommand(value)
+    if (command.type === 'set') runtimeApproval.setEnabled(command.enabled)
+    return { enabled: runtimeApproval.enabled }
   })
   ipcMain.handle(channels.codex, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)

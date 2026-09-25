@@ -1,3 +1,5 @@
+import { approveRuntimeGrant } from './runtime-grant'
+import type { AgentConnection } from '../broker/authorization'
 import { parseTypesafeKey, typesafeOrigin } from '../../contracts/jev'
 import { typesafeJSON, verifyTypesafe } from './typesafe'
 import type { Owner } from '@openape/pods-protocol'
@@ -266,6 +268,11 @@ export class ConnectionManager {
     if (existing) return existing
     const connection = await this.podConnection(podId)
     return { permission: resolved.permission, display: resolved.detail.display, authority: { identity: connection.identity, ownerConnection: connection.ownerConnection, grantId: '' } }
+  }
+
+  async approveRuntimeGrant(connection: AgentConnection & { ownerConnection: string }, podId: string, grantId: string, signal: AbortSignal, allowed: () => boolean): Promise<void> {
+    const bearer = await this.owner.bearer(connection.ownerConnection, connection.decisionIssuer ?? connection.issuer, connection.owner, signal)
+    await approveRuntimeGrant(connection, podId, grantId, bearer, signal, allowed)
   }
 
   async approve(podId: string, adapterPath: string, commands: string[][]): Promise<ProgramAuthority> {

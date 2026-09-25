@@ -1,3 +1,4 @@
+import type { RuntimeApprovalPolicy } from './codex/runtime-approval'
 import { assignedJev, parseJevRequest, typesafeOrigin } from '../contracts/jev'
 import { executeJev } from './connections/jev-service'
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
@@ -98,7 +99,7 @@ export class FixtureWorker {
     return type === 'list' ? null : this.central
   }
 
-  constructor(private readonly publish: (status: WorkerStatus) => void) {}
+  constructor(private readonly publish: (status: WorkerStatus) => void, private readonly runtimeApproval: RuntimeApprovalPolicy | null = null) {}
   start(root: string): void {
     try { assertPilotRuntime() }
     catch (error) { this.state = { state: 'error', pid: null, error: error instanceof Error ? error.message : 'Unsupported Mac' }; this.publish(this.state); return }
@@ -284,13 +285,21 @@ export class FixtureWorker {
     if (request.action.action === 'workspace') {
       const query = parseWorkspaceAction(request.action)
       if (!this.central) throw new Error('Connect the central workspace in the desktop app first')
+      if (this.runtimeApproval && query.type === 'submit' && query.runtimeId === this.central.status().runtimeId) {
+        const command = parseCentralCommand(query.command)
+        if (command.channel === 'workspace' && command.body.type === 'create') this.runtimeApproval.recordCreation(centralId(query.id), centralId(query.runtimeId), command)
+      }
       return this.central.query(query)
     }
     if (request.action.action === 'runtime') return { ...await this.dispatch({ codex: request }) as object, workspace: workspaceHelp, ...(this.central ? { central: this.central.status() } : {}) }
     if (this.central && !this.central.executing) return this.central.local(() => this.codex(request))
     if (!administrationActions.includes(String(request.action.action))) {
       const result = await this.dispatch({ codex: request })
-      if (this.central && request.action.action === 'create') await this.centralProvision(centralId((result as { id: string }).id), (await this.remoteOwner()).owner)
+      if (request.action.action === 'create') {
+        const podId = centralId((result as { id: string }).id)
+        this.runtimeApproval?.recordPod(podId)
+        if (this.central) await this.centralProvision(podId, (await this.remoteOwner()).owner)
+      }
       return result
     }
     const action = parseAdministration(request.action)
@@ -444,15 +453,19 @@ export class FixtureWorker {
   async centralGate(until: number): Promise<CentralGate> { return await this.dispatch({ central: { type: 'gate', until } }) as CentralGate }
   async centralVersion(): Promise<number> { return Number(await this.dispatch({ central: { type: 'version' } })) }
 
-  async centralExecute(value: CentralCommand): Promise<unknown> {
-    const { channel, body } = parseCentralCommand(value)
+  async centralExecute(value: CentralCommand, operationId?: string): Promise<unknown> {
+    const parsed = parseCentralCommand(value)
+    const { channel, body } = parsed
     const command = body as never
     if (channel === 'workspace') {
       const before = body.type === 'create' ? parseWorkspace(await this.dispatch({ type: 'list' })).pods.map(pod => pod.id) : []
       const result = await this.request(command)
       const { owner } = await this.remoteOwner()
       if (body.type === 'create') {
-        for (const pod of result.pods.filter(pod => !before.includes(pod.id))) await this.centralProvision(pod.id, owner)
+        for (const pod of result.pods.filter(pod => !before.includes(pod.id))) {
+          if (this.runtimeApproval?.createdLocally(operationId, this.central?.status().runtimeId ?? null, parsed)) this.runtimeApproval.recordPod(pod.id)
+          await this.centralProvision(pod.id, owner)
+        }
         await this.indexRemotePods(owner)
       }
       return result
@@ -491,9 +504,9 @@ export class FixtureWorker {
         const grant = await this.dispatch({ runContext: { scope, grant: { permission, issuer: connection.decisionIssuer ?? connection.issuer, subject: connection.subject } } }) as RunApproval | null
         return grant && !['cancelled', 'expired'].includes(grant.state) ? grant.grantId : undefined
       }
-      const observe = async (approval: RunApproval) => {
+      const observe = async (approval: RunApproval, automatic = false) => {
         await this.dispatch({ serviceCheck: { scope, approval } })
-        if (approval.state !== 'pending' || context.reason !== 'manual' || this.openedApprovals.has(approval.grantId)) return
+        if (automatic || approval.state !== 'pending' || context.reason !== 'manual' || this.openedApprovals.has(approval.grantId)) return
         this.openedApprovals.add(approval.grantId)
         try { await shell.openExternal(approvalURL(approval)) }
         catch { await this.dispatch({ serviceCheck: { scope, approval: { ...approval, openError: 'The browser could not be opened; use Open approval to try again' } } }) }
@@ -505,7 +518,13 @@ export class FixtureWorker {
         const runtime = { executable: process.execPath, cli: app.isPackaged ? join(process.resourcesPath, 'apes/ape-shell.mjs') : join(dist, 'vendor/apes/ape-shell.mjs'), client: join(dist, 'runtime/shell-client.mjs') }
         const environment = await podEnvironment(this.root, scope.podId, runtime)
         const connection = await this.connections.podConnection(scope.podId)
-        const authority = new AgentAuthority(connection, observe, previous)
+        const authority = new AgentAuthority(connection, observe, previous, this.runtimeApproval?.allows(scope.podId)
+          ? async (grantId, signal) => {
+            if (!this.runtimeApproval?.allows(scope.podId)) return false
+            await this.connections!.approveRuntimeGrant(connection, scope.podId, grantId, signal, () => this.runtimeApproval!.allows(scope.podId))
+            return true
+          }
+          : undefined)
         const adapterPath = join(dist, 'vendor/pod-runtime-shapes.toml')
         const adapter = loadAdapter('pod-runtime', adapterPath)
         const argv = ['pod-runtime', 'run', '--pod', scope.podId, '--name', context.name, '--script', join(this.root, 'runs', scope.runId, 'run.mjs'), '--workspace', environment.workspace, '--home', environment.home, '--environment', JSON.stringify(visibleEnvironment(environment.environment))]

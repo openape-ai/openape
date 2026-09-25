@@ -18,7 +18,7 @@ For a first task, use a small folder of non-sensitive sample files and read-only
 
 ## Connect your personal accounts
 
-Open App settings → Your accounts. The page shows exactly two accounts: your DDISA account, with which you decide permission requests, and your Codex / GPT account, which provides AI access for model calls in Pod scripts.
+Open App settings → Your accounts. Connect your DDISA account to decide permission requests and your Codex / GPT account for LLM calls. Optional TypeSafe / Jev setup is directly in App settings.
 
 Pods finds your identity provider through the DDISA record of your email domain. Every Pod, permission and mobile device uses this one DDISA account; there is nothing to select. Pod agents are not your accounts and are never listed here. Switching to another DDISA account gives your Pods new agents, and their permissions must be granted again.
 
@@ -31,6 +31,26 @@ Other services are configured per Pod: application sign-in belongs in Permission
 
 ![Connect your personal accounts](images/handbook-setup.png)
 
+## Structured decisions with Jev
+
+Connect TypeSafe with an API key in desktop App settings. The key is verified using model discovery, stored encrypted on this Mac, and never given to scripts or Codex. Replacing the key preserves the connection. Codex configures the Pod assignment through the resources API.
+
+Codex writes the script; Jev evaluates bounded semantic questions at runtime. Use ordinary code for exact rules, Jev for Choice, Score or Noul decisions, and an explicit agent.run call for generated text. A Jev-only script needs no active Codex account. Synthetic validation proves the script contract, not decision quality.
+
+Review what text the script sends to TypeSafe. Preserve ambiguous decisions for review and test German/English examples before relying on automation. Retries may incur additional charges; history shows successful evaluation usage, model, attempts and duration.
+
+1. Enter the API key in App settings → TypeSafe AI - Jev - API Key.
+2. Ask Codex to configure Jev through the resources API with a pinned model such as jev-1.13.0 and an attempt budget (default 20 per run), then declare jev.evaluate in the script capabilities. Script and Permissions contain no Jev setup panel.
+3. Validate, inspect the script and run once. Connecting alone never grants a Pod access. Central web shows availability; enter keys on the owning desktop.
+
+```javascript
+const result = await context.jev.evaluate({
+  state: context.variables.sampleMessage,
+  questions: { relevant: { type: 'noul', instructions: 'Is this a support request?' } },
+})
+const relevance = result.answers.relevant.noul
+```
+
 ## Create your first Pod
 
 Choose New pod, enter a name and save. Edit its purpose directly under Overview → Description. Describe the source, desired result and how you will recognize success.
@@ -38,6 +58,8 @@ Choose New pod, enter a name and save. Edit its purpose directly under Overview 
 For assisted setup, connect Codex under App settings → Work from Codex, restart Codex and give it your task there. Pods contains management forms and execution history; conversations stay in Codex.
 
 Connected Codex can configure access, save and validate a script, activate it and enable a schedule when requested. Its confirmation policy belongs to Codex. A response saying ready is not evidence of a completed run.
+
+In desktop App settings, you can enable “Automatically approve script execution for Pods created through local MCP”. It is off by default and applies to Pods created through local MCP after this version is installed, including local MCP submissions to this Mac’s central workspace. Manual and scheduled runs obtain the usual reusable execution grant from the Pod’s original owner. Folder, program, network and secret permissions remain separate. Denied or revoked grants are never replaced automatically. Turning the setting off stops new automatic approvals; revoke existing grants separately. MCP and the central web interface cannot change this setting.
 
 1. Create the Pod or ask connected Codex to create it.
 2. Provide ordinary settings in Codex; transfer secrets through OpenApe Secrets or enter them in Variables and secrets.

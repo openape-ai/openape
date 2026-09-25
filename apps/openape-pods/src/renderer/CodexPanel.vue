@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import RuntimeApprovalSettings from './RuntimeApprovalSettings.vue'
 import type { CodexConnection } from '../contracts/codex'
 import { t, diagnostic } from './i18n'
 
@@ -45,6 +46,7 @@ onMounted(() => request('status'))
     <p v-if="error" role="alert" class="error-message">
       {{ diagnostic(error) }}
     </p>
+    <RuntimeApprovalSettings />
   </section>
 </template>
 
