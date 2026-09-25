@@ -29,7 +29,7 @@ Relay `prod-63ab0bf0`; signed desktop `3c9afa24` (DMG sha256 `33a46975…`) inst
 Backups: relay `shared/backups/issue-1384-before-20260925T112651Z`; desktop
 `~/Library/Application Support/OpenApe Pods Rollback/2026-09-25-151456-issue-1384-final`.
 5 min nettop on the main process: 132.7 MB in / 63.3 MB out before, 0.74 MB / 0.64 MB after.
-Measurements, incidents and lessons: PR 132 comment. Open follow-ups: storage inspection walks ~24 000 files every 5 s;
+Measurements, incidents and lessons: PR 132 comment. Open follow-ups: storage inspection walks ~24 000 files every 5 s ([issue 1387](https://repos.openape.ai/patrick/monorepo/issues/1387): full inventory every 60 s, per-tick check of disk/limit/error; worktree `perf-pods-storage`, not yet released);
 `query` before the first lease answers 400 instead of "connecting".
 
 ## Pods MCP discovery texts (September 25, 2026)
