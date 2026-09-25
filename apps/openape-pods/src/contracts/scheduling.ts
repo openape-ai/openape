@@ -1,5 +1,5 @@
 export type ScheduleSpec = { kind: 'interval', seconds: number } | { kind: 'daily', time: string, timezone: string }
-export interface ScheduleView { spec: ScheduleSpec | null, enabled: boolean, revision: number, nextAt: number | null, error: string | null, pending: number, blocked: number, concurrency: number }
+export interface ScheduleView { spec: ScheduleSpec | null, enabled: boolean, revision: number, nextAt: number | null, error: string | null, pending: number, blocked: number, blockedSince?: number | null, concurrency: number }
 export type ScheduleCommand = { type: 'list', podId: string } | { type: 'save', podId: string, revision: number, spec: ScheduleSpec, enabled: boolean } | { type: 'concurrency', podId: string, maximum: number } | { type: 'lifecycle', podId: string, revision: number, lifecycle: 'active' | 'paused' }
 export function parseSchedule(value: unknown): ScheduleSpec {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid schedule')

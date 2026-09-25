@@ -7,7 +7,7 @@ import type { ScriptView } from './scripts'
 import { parseScheduleCommand, parseScheduleView } from './scheduling'
 import type { ScheduleView } from './scheduling'
 import { parseRunCommand, parseRunView } from './runs'
-import type { RunView } from './runs'
+import type { RunEvent, RunRecord, RunView } from './runs'
 import { parseResourceCommand, parseResourceState } from './resources'
 import type { ResourceState } from './resources'
 
@@ -45,7 +45,23 @@ export interface CentralSnapshot {
   archive: { schema: number, tables: Record<string, Record<string, unknown>[]> }
   artifacts: { podId: string, path: string, hash: string, size: number }[]
 }
-export interface CentralRuntime { id: string, revision: number, online: boolean, workspace: Omit<WorkspaceState, 'pods'> & { pods: (WorkspaceState['pods'][number] & { online: boolean })[] } }
+export type CentralState = 'connecting' | 'online' | 'reconnecting' | 'offline'
+export interface CentralStatus {
+  state: CentralState
+  error: string | null
+  since: number
+  lastOnlineAt: number | null
+  gateUntil: number
+  lastTickAt: number | null
+  tickingSince: number | null
+  format: 1 | 2 | null
+  runtimeId: string | null
+  lastPublication: { at: number, bytes: number } | null
+}
+export interface CentralQueue { blocked: number, since: number | null, error: string | null }
+export interface CentralRuntime { id: string, revision: number, online: boolean, lastSeenAt?: number | null, workspace: Omit<WorkspaceState, 'pods'> & { pods: (WorkspaceState['pods'][number] & { online: boolean, queue?: CentralQueue })[] } }
+export interface CentralSummary { revision: number, total: number, pod: CentralPod }
+export interface CentralRunDetail { revision: number, run: RunRecord, events: RunEvent[] }
 export interface CentralOperation {
   id: string
   runtimeId: string
@@ -57,7 +73,10 @@ export interface CentralOperation {
 }
 export interface CentralClient {
   inventory: () => Promise<CentralRuntime[]>
-  read: (runtimeId: string, podId: string) => Promise<{ revision: number, pod: CentralPod }>
+  read: (runtimeId: string, podId: string) => Promise<CentralSummary>
+  runs: (runtimeId: string, podId: string, offset: number) => Promise<{ revision: number, total: number, runs: RunRecord[] }>
+  run: (runtimeId: string, podId: string, runId: string) => Promise<CentralRunDetail>
+  version: (runtimeId: string, podId: string, selection: string) => Promise<{ revision: number, version: ScriptView }>
   command: (runtimeId: string, revision: number, command: CentralCommand, id: string) => Promise<CentralOperation>
   operation: (id: string) => Promise<CentralOperation>
   changes: (cursor: number, signal: AbortSignal) => Promise<{ cursor: number }>

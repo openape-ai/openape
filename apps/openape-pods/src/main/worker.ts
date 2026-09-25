@@ -1,5 +1,5 @@
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
-import type { CentralController } from './central/controller'
+import type { CentralController, CentralGate } from './central/controller'
 import type { CentralCommand, CentralSnapshot } from '../contracts/central'
 import { centralId, parseCentralCommand } from '../contracts/central'
 import { administrationActions, parseAdministration } from '../contracts/codex-admin'
@@ -91,7 +91,7 @@ export class FixtureWorker {
   private state: WorkerStatus = { state: 'starting', pid: null, error: null }
   private centralAction(type: string): CentralController | null {
     if (!this.central || this.central.executing) return null
-    if (!this.central.available) throw new Error(this.central.error ?? 'Pod is offline')
+    if (!this.central.available) throw new Error(this.central.offlineMessage())
     return type === 'list' ? null : this.central
   }
 
@@ -283,7 +283,7 @@ export class FixtureWorker {
       if (!this.central) throw new Error('Connect the central workspace in the desktop app first')
       return this.central.query(query)
     }
-    if (request.action.action === 'runtime') return { ...await this.dispatch({ codex: request }) as object, workspace: workspaceHelp }
+    if (request.action.action === 'runtime') return { ...await this.dispatch({ codex: request }) as object, workspace: workspaceHelp, ...(this.central ? { central: this.central.status() } : {}) }
     if (this.central && !this.central.executing) return this.central.local(() => this.codex(request))
     if (!administrationActions.includes(String(request.action.action))) {
       const result = await this.dispatch({ codex: request })
@@ -429,7 +429,8 @@ export class FixtureWorker {
     return await this.dispatch({ central: { type: 'snapshot', owner } }) as CentralSnapshot
   }
 
-  async centralGate(until: number): Promise<void> { await this.dispatch({ central: { type: 'gate', until } }) }
+  async centralGate(until: number): Promise<CentralGate> { return await this.dispatch({ central: { type: 'gate', until } }) as CentralGate }
+  async centralVersion(): Promise<number> { return Number(await this.dispatch({ central: { type: 'version' } })) }
 
   async centralExecute(value: CentralCommand): Promise<unknown> {
     const { channel, body } = parseCentralCommand(value)
@@ -452,12 +453,12 @@ export class FixtureWorker {
     throw new Error('Unsupported central execution')
   }
 
-  private dispatch(command: { central: { type: 'snapshot', owner: Owner } | { type: 'gate', until: number } } | { codexAdministration: AdministrationJournal } | { codex: CodexRequest } | { remote: RemoteInternal } | { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { central: { type: 'snapshot', owner: Owner } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { codex: CodexRequest } | { remote: RemoteInternal } | { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('Worker response timed out; reload state before retrying')) }, 'data' in command ? 15 * 60 * 1000 : 'codex' in command ? 180000 : 'scripts' in command && command.scripts.type === 'prepareDependencies' ? 210000 : ('run' in command && command.run.type === 'recover') || 'inspectCredentials' in command ? 30000 : 10000)
+      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('Worker response timed out; reload state before retrying')) }, 'data' in command ? 15 * 60 * 1000 : 'central' in command && command.central.type === 'snapshot' ? 60000 : 'codex' in command ? 180000 : 'scripts' in command && command.scripts.type === 'prepareDependencies' ? 210000 : ('run' in command && command.run.type === 'recover') || 'inspectCredentials' in command ? 30000 : 10000)
       this.pending.set(id, { resolve, reject, timer }); child.postMessage({ id, command })
     })
   }

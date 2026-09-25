@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { randomUUID } from 'node:crypto'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -12,8 +12,11 @@ import { MasterControl } from '../src/worker/master/control'
 import { ScriptWorkspace } from '../src/worker/workspace/scripts'
 import { WorkspaceDetails } from '../src/worker/workspace/details'
 import { CentralProjection } from '../src/worker/central/projection'
-import { CentralController } from '../src/main/central/controller'
+import { CentralController, centralState, offlineAlert, partBatches } from '../src/main/central/controller'
+import type { CentralExecutor } from '../src/main/central/controller'
+import { assembleSnapshot, splitSnapshot } from '../src/contracts/central-parts'
 import { WorkspaceStore } from '../../openape-pods-relay/server/utils/workspace-store'
+import type { WorkspaceActor } from '../../openape-pods-relay/server/utils/workspace-store'
 import type { AgentRuntime } from '../src/worker/agent/executor'
 import type { CentralSnapshot } from '../src/contracts/central'
 
@@ -38,6 +41,24 @@ function fixture() {
   store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,?,?,NULL)').run(pod.id, JSON.stringify(owner), actor.id, actor.generation, 'ready', '{}')
   return { store, root, projection, actor, pod, details: new WorkspaceDetails(store, resources) }
 }
+type Completion = Parameters<WorkspaceStore['publish']>[5]
+function relay(server: WorkspaceStore, actor: WorkspaceActor) {
+  return async (body: Record<string, unknown>): Promise<unknown> => {
+    const lease = String(body.lease)
+    if (body.type === 'inventory') return server.inventory(actor.owner)
+    if (body.type === 'read') return body.view ? server.view(actor.owner, String(body.runtimeId), String(body.podId), body as never) : server.read(actor.owner, String(body.runtimeId), String(body.podId))
+    if (body.type === 'operation') return server.visibleOperation(actor.owner, String(body.id))
+    if (body.type === 'submit') return server.submit(actor.owner, String(body.runtimeId), Number(body.revision), body.command as Parameters<WorkspaceStore['submit']>[3], String(body.id))
+    if (body.type === 'begin') return server.begin(actor)
+    if (body.type === 'parts') return server.stage(actor, lease, body.parts as Record<string, unknown>)
+    if (body.type === 'publish' && body.format === 2) return server.publishParts(actor, lease, String(body.id), Number(body.revision), body.changes as Record<string, string | null>, String(body.hash), body.completion as Completion)
+    if (body.type === 'publish') return server.publish(actor, lease, String(body.id), Number(body.revision), body.snapshot, body.completion as Completion)
+    if (body.type === 'heartbeat') return server.heartbeat(actor, lease, String(body.hash))
+    if (body.type === 'claim') return server.claim(actor, lease)
+    if (body.type === 'disconnect') return server.disconnect(actor, lease)
+    throw new Error(`Unexpected request ${String(body.type)}`)
+  }
+}
 it('adopts the current schema repeatedly without credentials or local process leases', () => {
   const { store, projection, actor, pod } = fixture()
   const first = projection.snapshot(actor.owner)
@@ -55,19 +76,7 @@ it('executes the same MCP/browser command once and exposes central results with 
   store.db.prepare('INSERT INTO runs VALUES(?,?,?,\'failed\',1,2,?,?,0,0)').run(runId, pod.id, 'b'.repeat(64), 'Synthetic result', 'Synthetic failure')
   const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
   const execute = vi.fn(async () => details.execute({ type: 'describe', podId: pod.id, revision: 0, text: 'Shared with both clients' }))
-  const request = async (body: Record<string, unknown>): Promise<unknown> => {
-    const lease = String(body.lease)
-    if (body.type === 'inventory') return server.inventory(actor.owner)
-    if (body.type === 'read') return server.read(actor.owner, String(body.runtimeId), String(body.podId))
-    if (body.type === 'operation') return server.visibleOperation(actor.owner, String(body.id))
-    if (body.type === 'submit') return server.submit(actor.owner, String(body.runtimeId), Number(body.revision), body.command as Parameters<WorkspaceStore['submit']>[3], String(body.id))
-    if (body.type === 'begin') return server.begin(actor)
-    if (body.type === 'publish') return server.publish(actor, lease, String(body.id), Number(body.revision), body.snapshot, body.completion as Parameters<WorkspaceStore['publish']>[5])
-    if (body.type === 'heartbeat') return server.heartbeat(actor, lease, String(body.hash))
-    if (body.type === 'claim') return server.claim(actor, lease)
-    if (body.type === 'disconnect') return server.disconnect(actor, lease)
-    throw new Error(`Unexpected request ${String(body.type)}`)
-  }
+  const request = relay(server, actor)
   const controller = new CentralController(root, request, { snapshot: async () => projection.snapshot(actor.owner), execute, gate: async () => {} }, '/unused-no-artifacts')
   cleanup.push(() => controller.stop()); controller.start()
   await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
@@ -88,8 +97,9 @@ it('executes the same MCP/browser command once and exposes central results with 
   expect(await call({ type: 'read', runtimeId: actor.id, podId: pod.id })).toMatchObject({ pod: { details: { description: { text: 'Shared with both clients' } }, runs: { runs: [{ id: runId, summary: 'Synthetic result', error: 'Synthetic failure', state: 'failed' }] } } })
   expect(execute).toHaveBeenCalledOnce()
   expect(server.read(actor.owner, actor.id, pod.id).pod.details.description?.text).toBe('Shared with both clients')
-  const archived = server.db.prepare('SELECT snapshot FROM runtimes WHERE id=?').get(actor.id)!.snapshot as string
-  expect((JSON.parse(archived) as CentralSnapshot).archive.tables.pod_descriptions).toHaveLength(1)
+  const archived = server.db.prepare('SELECT value FROM parts WHERE runtime_id=? AND key=\'table/pod_descriptions/0\'').get(actor.id)!.value as string
+  expect(JSON.parse(archived) as CentralSnapshot['archive']['tables'][string]).toHaveLength(1)
+  expect(controller.status()).toMatchObject({ state: 'online', format: 2, runtimeId: actor.id, error: null })
   await controller.stop()
   expect(await call({ type: 'inventory' })).toMatchObject([{ online: false, workspace: { pods: [{ id: pod.id, online: false }] } }])
   await expect(call({ type: 'read', runtimeId: actor.id, podId: pod.id })).rejects.toThrow('pod_offline')
@@ -101,19 +111,12 @@ it.each(['before publication', 'after commit'])('reconciles a lost response %s w
   let now = Date.now(); let failed = false; let executed = false
   const server = new WorkspaceStore(':memory:', () => now); cleanup.push(() => server.close())
   const execute = vi.fn(async () => { executed = true; return details.execute({ type: 'describe', podId: pod.id, revision: 0, text: 'Recovered result' }) })
+  const forward = relay(server, actor)
   const request = async (body: Record<string, unknown>): Promise<unknown> => {
-    const lease = String(body.lease)
-    if (body.type === 'begin') return server.begin(actor)
     if (body.type === 'operation') return server.operation(actor.owner, String(body.id))
-    if (body.type === 'publish') {
-      const result = server.publish(actor, lease, String(body.id), Number(body.revision), body.snapshot, body.completion as Parameters<WorkspaceStore['publish']>[5])
-      if (body.completion && failure === 'after commit' && !failed) { failed = true; now += 30001; throw new Error('Publication response lost') }
-      return result
-    }
-    if (body.type === 'heartbeat') return server.heartbeat(actor, lease, String(body.hash))
-    if (body.type === 'claim') return server.claim(actor, lease)
-    if (body.type === 'disconnect') return server.disconnect(actor, lease)
-    throw new Error(`Unexpected request ${String(body.type)}`)
+    const result = await forward(body)
+    if (body.type === 'publish' && body.completion && failure === 'after commit' && !failed) { failed = true; now += 30001; throw new Error('Publication response lost') }
+    return result
   }
   const controller = new CentralController(root, request, { snapshot: async () => {
     if (executed && failure === 'before publication' && !failed) { failed = true; now += 30001; throw new Error('Snapshot interrupted') }
@@ -129,3 +132,115 @@ it.each(['before publication', 'after commit'])('reconciles a lost response %s w
   expect(execute).toHaveBeenCalledOnce()
   expect(server.read(actor.owner, actor.id, pod.id).pod.details.description?.text).toBe('Recovered result')
 }, 12000)
+
+const fast = { heartbeatMs: 100, publishIntervalMs: 0 }
+function connected(options: { request?: (forward: (body: Record<string, unknown>) => Promise<unknown>, body: Record<string, unknown>) => Promise<unknown>, executor?: Partial<CentralExecutor> } = {}) {
+  const { root, projection, actor, pod, store, details } = fixture()
+  const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
+  const forward = relay(server, actor)
+  const requests: Record<string, unknown>[] = []
+  const request = async (body: Record<string, unknown>) => { requests.push(body); return options.request ? options.request(forward, body) : forward(body) }
+  const gates: number[] = []
+  const executor: CentralExecutor = { snapshot: async () => projection.snapshot(actor.owner), execute: async () => null, gate: async (until) => { gates.push(until) }, ...options.executor }
+  const controller = new CentralController(root, request, executor, '/unused-no-artifacts', fast)
+  cleanup.push(() => controller.stop())
+  return { controller, server, actor, pod, store, details, requests, gates, root }
+}
+
+it('keeps heartbeats and the scheduling lease alive while a large publication is still uploading', async () => {
+  let release!: () => void
+  const hold = new Promise<void>((resolve) => { release = resolve })
+  let holding = false
+  const { controller, details, pod, gates, requests } = connected({ request: async (forward, body) => {
+    if (body.type === 'parts' && holding) await hold
+    return forward(body)
+  } })
+  cleanup.push(() => release())
+  controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+  holding = true
+  const mark = requests.length
+  await details.execute({ type: 'describe', podId: pod.id, revision: 0, text: 'A change that must be published' })
+  await vi.waitFor(() => expect(requests.slice(mark).some(item => item.type === 'parts')).toBe(true), { timeout: 5000 })
+  const before = requests.filter(item => item.type === 'heartbeat').length
+  const leases = gates.length
+  await vi.waitFor(() => expect(requests.filter(item => item.type === 'heartbeat').length).toBeGreaterThan(before + 2), { timeout: 5000 })
+  expect(gates.slice(leases).every(until => until > Date.now())).toBe(true)
+  expect(controller.status()).toMatchObject({ state: 'online', error: null })
+  release()
+  await vi.waitFor(() => expect(controller.status().lastPublication).not.toBeNull())
+})
+
+it('publishes complete snapshots to an older service that has no part format', async () => {
+  const { controller, server, actor, requests } = connected({ request: async (forward, body) => {
+    if (body.type === 'parts' || (body.type === 'publish' && body.format === 2)) throw new Error('Unsupported by an older service')
+    const result = await forward(body)
+    if (body.type === 'begin') { const { format: _format, manifest: _manifest, runtimeId: _runtimeId, ...legacy } = result as Record<string, unknown>; return legacy }
+    return result
+  } })
+  controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+  expect(controller.status().format).toBe(1)
+  expect(requests.some(item => item.type === 'publish' && 'snapshot' in item)).toBe(true)
+  expect(server.inventory(actor.owner)[0]?.online).toBe(true)
+})
+
+it('names the failing phase as the offline reason in status, inventory and MCP errors', async () => {
+  const { controller, actor } = connected({ executor: { snapshot: async () => { throw new Error('Worker response timed out; reload state before retrying') } } })
+  controller.start()
+  await vi.waitFor(() => expect(controller.error).toBe('worker snapshot: Worker response timed out; reload state before retrying'))
+  expect(controller.status()).toMatchObject({ state: 'connecting', runtimeId: actor.id })
+  await expect(controller.local(async () => 'never')).rejects.toThrow('Central workspace offline: worker snapshot: Worker response timed out')
+  expect(await controller.query({ type: 'inventory' })).toMatchObject([{ id: actor.id, online: false, desktop: { state: 'connecting', error: 'worker snapshot: Worker response timed out; reload state before retrying' } }])
+})
+
+it('does not rebuild the snapshot while the worker reports no data change', async () => {
+  let version = 1
+  const snapshot = vi.fn()
+  const { controller, requests } = connected({ executor: { version: async () => version } })
+  const executor = (controller as unknown as { executor: CentralExecutor }).executor
+  const original = executor.snapshot
+  executor.snapshot = async () => { snapshot(); return original() }
+  controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+  const claims = requests.filter(item => item.type === 'claim').length
+  await vi.waitFor(() => expect(requests.filter(item => item.type === 'claim').length).toBeGreaterThan(claims + 2), { timeout: 5000 })
+  expect(snapshot).toHaveBeenCalledOnce()
+  version++
+  await vi.waitFor(() => expect(snapshot).toHaveBeenCalledTimes(2), { timeout: 5000 })
+})
+
+it('rebuilds a format-2 journal the service refuses instead of retrying it forever', async () => {
+  const { controller, root } = connected()
+  mkdirSync(join(root, 'central'), { recursive: true })
+  writeFileSync(join(root, 'central/publication.json'), JSON.stringify({ id: randomUUID(), revision: 0, format: 2, hash: 'f'.repeat(64), changes: {}, parts: {} }))
+  controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+})
+
+it('alerts the owner once after five minutes offline and again when scheduling resumes', () => {
+  const since = 1_000_000
+  expect(offlineAlert({ state: 'reconnecting', since }, false, since + 60000)).toBeNull()
+  expect(offlineAlert({ state: 'offline', since }, false, since + 5 * 60000)).toBe('alert')
+  expect(offlineAlert({ state: 'offline', since }, true, since + 10 * 60000)).toBeNull()
+  expect(offlineAlert({ state: 'online', since }, true, since + 11 * 60000)).toBe('recovered')
+  expect(centralState(false, null, since, since + 10 * 60000)).toBe('connecting')
+  expect(centralState(false, since - 1, since, since + 60000)).toBe('reconnecting')
+  expect(centralState(false, since - 1, since, since + 3 * 60000)).toBe('offline')
+  expect(partBatches({ a: 'x'.repeat(10), b: 'y'.repeat(10), c: 'z'.repeat(30) }, 25).map(Object.keys)).toEqual([['a', 'b'], ['c']])
+})
+
+it('reassembles the projected snapshot exactly from parts and keeps each run history entry small', () => {
+  const { store, projection, actor, pod } = fixture()
+  for (let index = 0; index < 3; index++) {
+    const id = randomUUID()
+    store.db.prepare('INSERT INTO runs VALUES(?,?,?,\'completed\',?,?,?,NULL,0,0)').run(id, pod.id, 'b'.repeat(64), index, index + 1, `Run ${index}`)
+    store.db.prepare('INSERT INTO run_events VALUES(?,1,\'log\',?,?)').run(id, JSON.stringify({ index }), index)
+  }
+  const snapshot = projection.snapshot(actor.owner)
+  const parts = splitSnapshot(snapshot)
+  expect(assembleSnapshot(key => parts.get(key), [...parts.keys()])).toEqual(snapshot)
+  const view = snapshot.pods[0]!
+  for (const entry of Object.values(view.history)) expect(entry.runs).toHaveLength(1)
+  expect(view.runs.events).toEqual(view.history[view.runs.runs[0]!.id]!.events)
+})

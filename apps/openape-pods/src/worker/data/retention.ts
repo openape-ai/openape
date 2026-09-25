@@ -22,7 +22,8 @@ export class DataRetention {
     }
     const disk = await statfs(this.store.root); const limitBytes = this.store.db.prepare('SELECT limit_bytes FROM data_settings WHERE id=1').get()!.limit_bytes as number
     const view: DataView = { usedBytes, freeBytes: disk.bavail * disk.bsize, limitBytes, pendingDeletion: this.jobs().length, busy: !!this.store.db.prepare('SELECT 1 FROM program_leases UNION ALL SELECT 1 FROM run_leases UNION ALL SELECT 1 FROM master_session WHERE state=\'running\' UNION ALL SELECT 1 FROM master_actions WHERE state=\'running\' LIMIT 1').get(), error: usedBytes >= limitBytes ? 'Storage limit reached. Export a backup and remove unused data before continuing.' : disk.bavail * disk.bsize < 256 * 1024 * 1024 ? 'Less than 256 MiB free disk space remains. Free space before continuing.' : this.store.db.prepare('SELECT error FROM deletion_jobs WHERE error IS NOT NULL LIMIT 1').get()?.error as string | null ?? null }
-    this.store.db.prepare('UPDATE data_settings SET used_bytes=?,error=? WHERE id=1').run(usedBytes, usedBytes >= limitBytes || view.freeBytes < 256 * 1024 * 1024 ? view.error : null)
+    const error = usedBytes >= limitBytes || view.freeBytes < 256 * 1024 * 1024 ? view.error : null
+    this.store.db.prepare('UPDATE data_settings SET used_bytes=?,error=? WHERE id=1 AND (used_bytes IS NOT ? OR error IS NOT ?)').run(usedBytes, error, usedBytes, error)
     return view
   }
 
