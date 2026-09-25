@@ -1,5 +1,209 @@
 # Active work
 
+## Pods: TypeSafe Jev integration (September 25, 2026) — implementation verified
+
+[Issue 1385](https://repos.openape.ai/patrick/monorepo/issues/1385),
+[review plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3C2TZC7HM94KDEG7AWW3BGM),
+[local plan](../../.claude/plans/jev-integration.md).
+Worktree `jev-integration`, branch `feature/issue-1385-jev-integration`,
+integrated canonical base `63ab0bf0788e02dfd5c6fd8f5f7936977cfbbe6f`.
+Encrypted TypeSafe account setup, per-Pod inference permissions, bounded Jev runtime,
+MCP discovery, native/central UI and handbook are implemented. Full lint/typecheck,
+Pods build, 492 unit/component tests, 22 browser tests and 11 native script tests pass.
+Real API model discovery and all three decision types passed with `jev-1.13.0`.
+The existing owner-authorized key is encrypted in the isolated Jev development profile;
+production accounts, Pods and schedules were not changed. Remaining acceptance:
+neutral fresh Codex authoring plus live Pod grant flow and labelled workflow quality.
+[PR #134](https://repos.openape.ai/patrick/monorepo/pulls/134), implementation commit
+`fa31c9bc684ed02b6c23a5f2d762eba62daf961a` against the base above.
+[Published evidence](https://testrun.openape.ai/r/q8kG0M6twEJoIpqcVVx8reEg).
+Commit/push hooks passed the affected unit contract, including the relay consumer.
+The original head `9f3ee934` passed external CI. Owner UI correction: compact API-key form directly in App settings, no Jev explanation/link or Script/Permissions panels. Agent reference and resources API remain authoritative. Full lint/typecheck, build, 34 focused tests and five browser tests pass; [updated screenshots](https://testrun.openape.ai/r/sDUdikwIBcms_bwtddTTcAJG). Next: push the UI correction and check its exact head before PR review; no production release in this task.
+
+## Pods: stable central connection (September 25, 2026) — deployed
+
+[Issue 1384](https://repos.openape.ai/patrick/monorepo/issues/1384),
+[approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3C2RQPRQ5HE2XBRFXR8KRM5).
+PR 132 (`63ab0bf0`), follow-ups PR 133 (`dea37661`, idle storage rewrite) and PR 135 (`3c9afa24`, bounded scheduler tick), all exact-source CI green.
+Relay `prod-63ab0bf0`; signed desktop `3c9afa24` (DMG sha256 `33a46975…`) installed 15:15.
+Backups: relay `shared/backups/issue-1384-before-20260925T112651Z`; desktop
+`~/Library/Application Support/OpenApe Pods Rollback/2026-09-25-151456-issue-1384-final`.
+5 min nettop on the main process: 132.7 MB in / 63.3 MB out before, 0.74 MB / 0.64 MB after.
+Measurements, incidents and lessons: PR 132 comment. Open follow-ups: storage inspection walks ~24 000 files every 5 s ([issue 1387](https://repos.openape.ai/patrick/monorepo/issues/1387): full inventory every 60 s, per-tick check of disk/limit/error; worktree `perf-pods-storage`, not yet released);
+`query` before the first lease answers 400 instead of "connecting".
+
+## Pods MCP discovery texts (September 25, 2026)
+
+[Issue 1383](https://repos.openape.ai/patrick/monorepo/issues/1383). Worktree `pods-mcp-discovery`,
+branch `feature/issue-1383-mcp-discovery`, base `3ff707b6`.
+- Server instructions now carry the discovery signal (category, when to use, capabilities, order, stale-session hint) in 1 188 characters.
+- `pods_control` describes only what it does and returns.
+- `serverInfo` and the tool report title `OpenApe Pods`; `serverInfo` reports version `<app version>+<build revision>`.
+- Follows [Claude Code tool-search guidance](https://code.claude.com/docs/en/mcp#for-mcp-server-authors) (2 048-character limit).
+
+The change reaches installed apps with the next signed release. Splitting read/write tools with annotations remains an owner decision.
+
+## Pods: service-queue pattern in runtime help (September 25, 2026)
+
+[Issue 1382](https://repos.openape.ai/patrick/monorepo/issues/1382). Worktree `pods-service-pattern`,
+branch `feature/issue-1382-service-pod-pattern`, base `6c72f271`. The MCP `runtime` help
+gains `patterns.serviceQueue`, the verified issue-1381 pattern: setup, rules and a tested
+example script. It reaches installed apps with the next signed release. A dedicated skill is
+deferred until a second or third service Pod exists.
+
+## Pods: zaz task queue from a scheduled Pod (September 25, 2026) — delivered
+
+[Issue 1381](https://repos.openape.ai/patrick/monorepo/issues/1381),
+[plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3AMN0CXG8G9TH0FR3MX5K5J).
+PR 127 merged as `7103930d`; PR 128 merged as `7a269851` (external CI 5100 and the review-fix run, both green).
+The runtime changes:
+- HTTP resources authenticate as a DDISA agent from an assigned key secret; the key is not readable by scripts and echoed tokens are redacted.
+- `receipt: "digest"` stores digest-only receipts, and oversized effect replies do so automatically.
+- Request bodies up to 64 KiB, responses up to 128 KiB.
+- `agent.run` accepts `timeoutSeconds` up to 900; the agent budget pause is capped per run.
+
+The signed and notarized `7a269851` package (DMG sha256 `01e2558e…`) passed the mounted-DMG check and is installed and open.
+Paired rollback: `~/Library/Application Support/OpenApe Pods Rollback/2026-09-25-000406-issue-1381`.
+The IURIO monitor kept its 900 s schedule (rev 2) and its five receipts.
+
+zaz (`delta-mind/zaz` PR 4 into deployed `feature/monatssoll`, release `2026-09-24T21-31-33`) adds authenticated
+`GET /api/agent/tasks/pending` and compact resolve replies.
+
+The zaz Pod `93139662-c618-48e2-8a1e-36299aff36f2` is active on a 60 s interval. It uses gpt-5.5 via `agent.run` and the
+`op-delta-mind` agent key (secret `zaz_agent_key`). Test Pod `e8062ed3-22a0-40f9-8f88-c2c239129331` stays paused without a schedule.
+
+Acceptance:
+- An empty queue makes one GET and zero model calls or receipts.
+- Controlled tasks `d03d0a34` (manual) and `7c47a133` (scheduled run `19db9941`) completed once with one artifact each.
+- An intentional resolve replay returned the stored digest receipt.
+- Repeat runs added no effects.
+- Central inventory shows both Pods, their runs and the schedule.
+
+The legacy launchd worker stays disabled.
+
+## Pods: Claude Code MCP integration (September 24, 2026) — implementing
+
+[Issue 1380](https://repos.openape.ai/patrick/monorepo/issues/1380),
+[review plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3AJBBZHMJV6KC8A4WJP67JR),
+[local plan](../../.claude/plans/issue-1380-claude-code.html).
+Worktree `pods-claude-code`, branch `feature/issue-1380-claude-code`, canonical
+base `967038a5bff24a24b96e020f788b4060b1243c31`.
+
+Code inspection selects the existing STDIO MCP and CentralController query
+contract. Existing MCP lacks central online inventory and full run results;
+its transport generates a fresh request identity on every call. The planned
+adapter reuses central inventory/read/submit/operation and durable command IDs.
+Claude Code 2.1.260 successfully connected to the actual installed launcher in
+an isolated `/tmp/pods-claude-handshake.MicvlS` configuration (`mcp get`:
+`Status: Connected`). The owner Claude user configuration now contains only the added MCP entry and
+exact tool allow rule; unrelated configuration was compared and preserved.
+No owner Pod state was changed.
+
+Patrick approved the plan and brief backed-up app update/restart with “Los geht’s”.
+The shared central MCP adapter is implemented. Full lint/typecheck, app build,
+22 focused unit checks and the packaged MCP transport check pass. Receipts:
+`/tmp/pods-claude-{lint,typecheck,build,focused,packaged-mcp}.log`.
+Next: exact-source PR checks/merge, signed installation and live Claude acceptance. Keep the installed app open and the IURIO monitor untouched.
+Use a separate synthetic Pod for acceptance. Automatic E2E/layout remains off.
+
+## Automatic CI scope (September 24, 2026)
+
+[Issue 1379](https://repos.openape.ai/patrick/monorepo/issues/1379), branch
+`bugfix/issue-1379-headless-ci`, worktree `pods-web-workspace`, base canonical
+main `f576ea94bb746f6e811b45a8dce8f9128d5fc40d`.
+Owner decision: remove all automatic E2E/layout jobs and required contexts;
+retain audit, tooling, lint, typecheck and unit/component checks. Explicit
+manual E2E/layout commands remain available. Three main-CI unit timeouts in
+Pods bulk fixtures are addressed with transactions around seed data only;
+assertions, deadlines and production durability remain unchanged. Exact-source
+verification, audited protection migration and merge receipts belong to the
+issue. The deployed Pods app and monitor remain running; no runtime changes.
+
+## Pods: central browser and desktop workspace (September 24, 2026) — deployed
+
+[Issue 1378](https://repos.openape.ai/patrick/monorepo/issues/1378),
+[approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3A03YDYB092Z1NDM7J6NQ8X),
+[local plan](../../.claude/plans/2026-09-24-pods-central-workspace.html),
+[live acceptance evidence](https://testrun.openape.ai/r/bPb4nyghS79Z5iXMo5m3_ZGZ).
+Worktree `pods-web-workspace`; documentation branch
+`feature/issue-1378-live-closeout`, base canonical main
+`f576ea94bb746f6e811b45a8dce8f9128d5fc40d`.
+
+Delivered through PRs 120–124: owner-scoped central SQLite data and managed
+artifacts, versioned commands/receipts, one browser/desktop Vue workspace,
+online-only content/editing, durable runtime recovery and connected Codex on
+the same writer. Secrets, private keys and native login state remain local.
+Embedded chat remains removed; relocation remains excluded.
+[Operations and recovery](../operations/pods-central-workspace.md).
+
+The final reviewed PR 124 source `67c10b97001126e48d7fd1d6243412b3d2a74286`
+passed exact-source external CI 5085, E2E 5086 and layout 5087 against target
+`14ec37bc857a1ce8237ccbd81566a61d2a8fed22`, then merged as `f576ea94`.
+Full clean local deployment contract passed in `1790277270233-67c10b97-all`:
+451 Pods unit/component tests, native/packaged checks, browser layouts and real
+DDISA HTTP acceptance. The previous main `14ec37bc` passed jobs 5082–5084.
+Final post-merge main results are recorded on the issue; documentation does not
+change the accepted runtime tree.
+
+Production workspace image `prod-f576ea94` passed its tested-image deployment
+and health gate. Provider health, discovery and JWKS are byte-identical to the
+pre-deployment baseline. Signed/notarized desktop source `67c10b97` passed
+mounted-DMG acceptance, is installed and remains open. The owner signed in through
+the existing SSH flow. All six Pods were adopted through the verified owner;
+IDs, lifecycle states, schedules, baseline and effect receipts are preserved.
+
+Live acceptance verified browser-to-desktop editing and desktop-to-browser
+restoration without reload or reselection. The original test description is
+restored. All accepted operations are applied, with no unresolved journals.
+Offline inventory remains visible while content and controls are unavailable;
+ordinary Mac launches retain central authority. Live testing found and fixed
+Nitro's idle HTTP 204 response (PR 123) and stale untouched editor fields
+(PR 124), each with retained behavioral regressions. Dirty edits remain protected.
+
+IURIO Pod `98c32f74-ffaf-4628-bd41-95cea821572f` remains active with its enabled
+900-second schedule at revision 2. Supported recovery and four natural runs after
+adoption completed without duplicate Telegram messages. Latest verified run
+`9713d194-e711-451b-9db5-6b55a654e5f9` reports no PR changes/no Telegram;
+checkpoint 32 and all five existing completed effect receipts are retained.
+The installed app stays open on its monitor overview. No further rollout action
+is required; preserve normal scheduled execution.
+
+Receipts: `~/Downloads/OpenApe-Pods-live-20260924/verification.html` and `final/`.
+Latest paired app/profile backup:
+`~/Library/Application Support/OpenApe Pods Rollback/2026-09-24-213618-issue-1378-editor`.
+Latest server online SQLite backup:
+`shared/backups/issue-1378-editor-20260924T192205Z` in the relay service.
+Do not restore an older profile over newer central writes or effect receipts.
+
+## Pods: connected Codex owner administration (September 24, 2026) — delivered
+
+[Issue 1377](https://repos.openape.ai/patrick/monorepo/issues/1377), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3971H91PDY5XPHJP3696PZ7). Worktree `issue-1377-broker-capacity`; completion documentation branch `bugfix/issue-1377-completion-docs`.
+
+Delivered: PR 113 (`56eb0366`) removed embedded chat and duplicate local approvals; PR 115 (`b17e2b54`) removed per-script secret selection and documented MCP CLI setup. PR 116 (`4f5977cb`) added explicit native CLI runtimes and corrected active-operation checks for consumed one-shot grants. PR 117 (`8af87e34`) makes current owner-assigned grants take precedence over stale run history. PR 118 (`8ac60bf0`) applies configured machine capacity to broker assertions. All exact-source CI/E2E/layout checks passed; full local checks passed before distribution and deployment.
+
+Signed/notarized desktop source `347b869d` is installed and its mounted-DMG check passed. All six Pods and real Codex settings were preserved. Receipts: `~/Downloads/OpenApe-Pods-347b869d/`; paired app/profile rollback: `~/Library/Application Support/OpenApe Pods Rollback/2026-09-24-160638-issue-1377`. The formerly failing current Azure grant completed successfully in real run `b9a9627a-cb89-43e0-986b-b88bef5478ee`.
+
+Owner IdP `prod-8ac60bf0` and Pods provider `prod-4f5977cb` are healthy with unchanged discovery/JWKS. Both machine limits are configured to 600; strict login limits are unchanged. The broker's previous independent 120-assertion bound caused the real HTTP 429 failures. Azure read and Pod runtime already use approved `always` grants; repeated status/token checks are not new approval requests. Owner IdP database backup passed SQLite quick_check at `/home/openape/projects/openape-free-idp/shared/backups/issue-1377-capacity-20260924T140829Z`; environment backups are under each service's `shared/backups/issue-1377-rate-20260924T135931Z`.
+
+Reuse group `iurio` and Pod `98c32f74-ffaf-4628-bd41-95cea821572f`. Private Azure login and real PR reads are verified; no repeat login or PAT is needed. Telegram connection test `a2e8104b-07e2-40ca-8a4c-7430596fc6dd` completed and Patrick confirmed receipt. Full run `368a4b8e-6320-445e-a841-a7eb352549f5` completed all 39 PRs with 119 successful Azure reads and one confirmed Telegram baseline notification. Bounded retries cover transient read failures while preserving the prior baseline on failure. Follow-up `88c09e14-5ff2-49f8-8550-816dc31af162` completed another 119 reads with no changes and no Telegram message. The Pod is active with its 900-second schedule enabled at revision 2; checkpoint revision 10. Other Pods are unchanged. Receipts are recorded in `~/Downloads/IURIO-PR-monitor/TASK.md` and the issue. Never copy owner login stores or expose secret values.
+
+## Pods installed Codex MCP dependency (September 24, 2026)
+
+[Issue 1376](https://repos.openape.ai/patrick/monorepo/issues/1376). The signed `95fc9d87` installation exposed an external `croner` import in the unpacked MCP runtime; checkout-based acceptance resolved ancestor dependencies and missed it. The repair bundles the dependency and runs the existing packaged MCP case from an isolated path outside the checkout. That regression fails with the installed error before the fix and passes after it; full lint/typecheck and the app build pass. The issue records exact-source merge checks and refreshed signed installation evidence. Preserve the owner app/profile rollback pair.
+
+## Pods: Codex controls the installed app (September 23, 2026) — done
+
+[Issue 1375](https://repos.openape.ai/patrick/monorepo/issues/1375), [plan](../../.claude/plans/issue-1375-codex-control.md) (D1–D6 and option a approved by Patrick). Issue closed. PR 108 (adapter), PR 109 (MCP shim and launcher) and PR 110 (registration UI, **Prepared by Codex**, handbook chapter and packaged acceptance with a real `codex app-server`) are merged; PR 110 merged as `8aad8901`. The owner's real `~/.codex` and profile were never touched; all tests use isolated `CODEX_HOME` and fixture profiles. Installing on Patrick's Mac and connecting his Codex are his own steps in App settings.
+
+## Pods test pyramid (September 23, 2026) — done
+
+[Issue 1374](https://repos.openape.ai/patrick/monorepo/issues/1374), [plan](../../.claude/plans/issue-1374-test-pyramid-pods.md) with outcomes. PR 97–104 merged (main `94ca3550`), no production code changes. Pods E2E: 35 files / 135 tests / 72.6 s → 25 files / 109 tests / 27.9 s (CI, 6 workers); pods layout step 54.2 s. iOS client outside the check contract (PR 100, issue 1364). Which level proves what: `apps/openape-pods/docs/testing.md`. Issue closed. Follow-up PR 106 merged as `3cc7104e` (packaged E2E variants only, a leaner browser matrix and `pnpm --filter @openape/pods test:fast`, about 14 seconds without Electron). PR 107 merged as `b2b7002e` (pre-push runs only `check:affected --suite unit`; E2E and layout run externally once per head).
+
+## Pods: two owner accounts (September 22, 2026)
+
+[Issue 1372](https://repos.openape.ai/patrick/monorepo/issues/1372) (supersedes 1365). Worktree `wt-issue-1372`, branch `feature/issue-1372-two-owner-accounts`, base `b15b564a`. [Plan](../../.claude/plans/issue-1372-two-owner-accounts.md), approved by Patrick with D1 (Pods of another identity are re-provisioned under the owner), D2 (one-time Pods provider consent at the first Pod) and D3 (one email field, IdP from the DDISA DNS record).
+"Your accounts" shows exactly Codex / GPT and the DDISA owner. Startup reconciliation keeps one row per provider, merges duplicate rows of the owner identity without re-provisioning and releases bindings of other identities. Mobile access and new Pods use the owner implicitly. Native [PR 96](https://repos.openape.ai/patrick/monorepo/pulls/96). Local evidence: 362 Pods unit/component tests, 8 packaged Electron onboarding/handbook E2E tests, lint and typecheck green. Installation on Patrick's Mac is a separate decision.
+
 ## Native mobile Pods (September 21, 2026)
 
 [Issue 1362](https://repos.openape.ai/patrick/monorepo/issues/1362), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2ZQTVS90HK79ZWQW973Y8HP).

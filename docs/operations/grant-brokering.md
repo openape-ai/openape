@@ -24,7 +24,7 @@ Pods obtains a short-lived connection receipt from the owner IdP and enrolls wit
 
 ## Execution and scope
 
-The broker authenticates the local agent and signs the entire original grant request with the immutable owner/connection/key binding. The decision provider rejects replay and foreign routing, stores a pending grant without a local agent account, and routes visibility and notifications to its human owner. Existing YOLO and standing-grant shortcuts do not autoapprove brokered requests. Each owner can have at most 100 pending brokered requests across all connections; the check and insertion are atomic. Each connection accepts at most 120 outstanding short-lived assertions. Existing notification debouncing applies. Durable audit rows associate creation, decisions, token issuance and each successful consumption with the owner, agent, broker, connection and grant; they contain no tokens or assertion nonces.
+The broker authenticates the local agent and signs the entire original grant request with the immutable owner/connection/key binding. The decision provider rejects replay and foreign routing, stores a pending grant without a local agent account, and routes visibility and notifications to its human owner. Existing YOLO and standing-grant shortcuts do not autoapprove brokered requests. Each owner can have at most 100 pending brokered requests across all connections; the check and insertion are atomic. By default, each connection accepts at most 120 outstanding short-lived assertions; the machine-capacity setting below controls this bound. Existing notification debouncing applies. Durable audit rows associate creation, decisions, token issuance and each successful consumption with the owner, agent, broker, connection and grant; they contain no tokens or assertion nonces.
 
 Pods retrieves the original owner-signed authorization token through the agent provider. Its assigned executor checks the pinned decision issuer, original signature, agent subject/key, owner, connection, target host and resolved command. It checks current agent/key status and consumes directly at the decision provider. Unassigned generic CLI execution rejects brokered tokens; it cannot derive a trusted decision authority from a token supplied by an agent.
 
@@ -58,3 +58,9 @@ and file installation as the existing `openape` service account. A failed first
 deployment is stopped; existing services with a previous image are rolled back.
 Keep the retained owner DB backup for explicit recovery; ordinary image rollback
 does not replace the live DB or discard grants created after the snapshot.
+
+### Machine request capacity
+
+`OPENAPE_RATE_LIMIT_MAX_AGENT` sets both the HTTP machine bucket and the accepted broker-request bound per connection. The default remains 120; invalid or non-positive values retain that default. Broker assertions live for at most 60 seconds, and the durable replay records remain until expiry. Increasing capacity does not skip signature, ownership, grant-status or replay verification.
+
+Assigned CLI calls perform several grant/status checks per invocation. Size the machine limit for the complete automation workload, including active-operation polling. On September 24, 2026, the owner IdP and Pods provider were configured for 600 requests per minute after the real IURIO scan exceeded 120. Keep the strict login bucket separate. Back up the service environment before changing it and verify health plus rate headers afterward.

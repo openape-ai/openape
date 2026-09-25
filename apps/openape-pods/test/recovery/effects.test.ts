@@ -79,7 +79,9 @@ it('retains complete approval timing when recent diagnostics exceed the visible 
   f.store.db.prepare('UPDATE run_events SET at=2000 WHERE run_id=? AND type=\'approval\'').run(f.run.id)
   f.runs.append(f.run.id, 'approval', { ...grant, state: 'approved' })
   f.store.db.prepare('UPDATE run_events SET at=5000 WHERE run_id=? AND json_extract(data,\'$.state\')=\'approved\'').run(f.run.id)
-  for (let index = 0; index < 510; index++) f.runs.append(f.run.id, 'diagnostic', { text: 'Synthetic progress' })
+  f.store.transaction(() => {
+    for (let index = 0; index < 510; index++) f.runs.append(f.run.id, 'diagnostic', { text: 'Synthetic progress' })
+  })
   f.runs.finish(f.run.id, 'completed', 'Synthetic', null)
   f.store.db.prepare('UPDATE runs SET finished_at=10000 WHERE id=?').run(f.run.id)
   expect(f.runs.timing(f.pod.id, f.run.id)).toEqual({ activeMs: 6000, waitingMs: 3000 })

@@ -60,7 +60,7 @@ it('advertises assigned application invocations to the agent without credential 
 })
 
 it('defaults to no tools and rejects unknown or ambiguous agent permissions', () => {
-  expect(parseAgentRequest({ prompt: 'Summarize' })).toEqual({ prompt: 'Summarize', tools: [] })
+  expect(parseAgentRequest({ prompt: 'Summarize' })).toEqual({ prompt: 'Summarize', tools: [], timeoutSeconds: 120 })
   expect(parseAgentRequest({ prompt: 'Summarize', tools: [] }).tools).toEqual([])
   expect(parseAgentRequest({ prompt: 'Read', tools: ['ape_shell'] }).tools).toEqual(['ape_shell'])
   for (const tools of [true, false, null, 'ape_shell', ['shell'], ['ape_shell', 'ape_shell']]) expect(() => parseAgentRequest({ prompt: 'Read', tools })).toThrow()
@@ -79,4 +79,10 @@ it('removes provider tool declarations and rejects direct tool calls without a b
     expect(provider).toHaveBeenCalledExactlyOnceWith({ model: 'fixture', tools: [], tool_choice: 'none', parallel_tool_calls: false }, expect.any(AbortSignal))
   }
   finally { await gateway.close() }
+})
+
+it('bounds each agent call with an explicit timeout', () => {
+  expect(parseAgentRequest({ prompt: 'Summarize' })).toEqual({ prompt: 'Summarize', tools: [], timeoutSeconds: 120 })
+  expect(parseAgentRequest({ prompt: 'Summarize', tools: [], timeoutSeconds: 900 }).timeoutSeconds).toBe(900)
+  for (const timeoutSeconds of [29, 901, 60.5, '60']) expect(() => parseAgentRequest({ prompt: 'Summarize', timeoutSeconds })).toThrow('timeoutSeconds')
 })

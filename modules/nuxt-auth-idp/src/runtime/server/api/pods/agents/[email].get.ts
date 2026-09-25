@@ -23,11 +23,19 @@ export default defineEventHandler(async (event) => {
     if (caller.act !== 'agent' || caller.sub !== email) throw createProblemError({ status: 403, title: 'Agent authentication is required' })
     const keys = await sshKeyStore.findByUser(email)
     const grant = brokerObject(await forwardBrokerOperation(binding, 'get', query.grant))
-    return { email, owner: binding.owner, active: agent.isActive && keys.length === 1 && keys[0]?.keyId === binding.key_id, keyIds: keys.map(key => key.keyId), grantId: query.grant, grantActive: grant.id === query.grant && grant.status === 'approved' }
+    return { email, owner: binding.owner, active: agent.isActive && keys.length === 1 && keys[0]?.keyId === binding.key_id, keyIds: keys.map(key => key.keyId), grantId: query.grant, grantActive: grant.id === query.grant && activeGrant(grant, email) }
   }
   const owner = agent.owner ? await userStore.findByEmail(agent.owner) : null
   const grant = await useGrantStores().grantStore.findById(query.grant)
-  const approved = grant?.request.requester === email && (grant.status === 'approved' || (grant.status === 'used' && grant.request.grant_type === 'once')) && (!grant.expires_at || grant.expires_at > Date.now() / 1000)
+  const approved = activeGrant(grant, email)
   const keys = await sshKeyStore.findByUser(email)
   return { email, owner: agent.owner, active: agent.isActive && owner?.isActive === true, keyIds: keys.map(key => key.keyId), grantId: query.grant, grantActive: approved }
 })
+
+function activeGrant(value: unknown, email: string): boolean {
+  if (!value || typeof value !== 'object') return false
+  const grant = value as { status?: unknown, expires_at?: unknown, request?: { requester?: unknown, grant_type?: unknown } }
+  if (grant.request?.requester !== email) return false
+  if (grant.expires_at != null && (typeof grant.expires_at !== 'number' || grant.expires_at <= Date.now() / 1000)) return false
+  return grant.status === 'approved' || (grant.status === 'used' && grant.request.grant_type === 'once')
+}

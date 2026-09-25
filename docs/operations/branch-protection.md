@@ -20,9 +20,9 @@ Owner-only `POST /api/repos/:owner/:name/protections` accepts:
 {
   "branch": "main",
   "mirrorId": "<enabled Forgejo mirror ID>",
-  "contexts": ["CI / ci (push)", "e2e / e2e (push)", "layout / layout (push)"],
+  "contexts": ["CI / ci (push)"],
   "enabled": true,
-  "reason": "External runner path and negative acceptance cases verified"
+  "reason": "Owner decision: automatic unit CI only; E2E and layout run manually (issue 1379)"
 }
 ```
 
@@ -56,11 +56,14 @@ incident, and record the resulting commit and verification in the incident.
 This path is an operational capability, not permission to bypass a failed test.
 
 The reference `.ape-ci.sh` consumer remains available for small trusted repos;
-the monorepo uses the existing external Docker/mac runners. Check code is
+the monorepo's automatic check uses the existing external Docker runner. Check code is
 untrusted process input: keep job containers disposable, status-report secrets
-repo-scoped, and run layout only on the dedicated CI runner account.
+repo-scoped. E2E and layout workflows and their required contexts were removed
+by owner decision (September 24, 2026, issue 1379); run them explicitly for local
+acceptance. The policy stays enabled and still rejects unchecked source commits
+and protected direct pushes.
 
 Runner caches are restored per OS, suite and lockfile, with the commit in the
-save key. Turbo still validates each task's input hash; E2E and layout execute
-fresh. The cache directory is explicit via `TURBO_CACHE_DIR` and remains ignored
+save key. Turbo still validates each task's input hash. The cache directory is
+explicit via `TURBO_CACHE_DIR` and remains ignored
 by Git. Reference: https://turborepo.dev/docs/reference/system-environment-variables
