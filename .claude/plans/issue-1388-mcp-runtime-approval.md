@@ -25,4 +25,5 @@ Use the pinned toolchain via `scripts/activate-node.sh`. Commands: `pnpm lint`, 
 - Implemented desktop IPC/checkbox, persisted local provenance, central-operation binding and exact owner-approved runtime grants.
 - Verification: full `pnpm lint` and `pnpm typecheck`; Pods build; 515 unit/component tests; two real Chrome settings tests (English/light and German/narrow/dark). Screenshots inspected, self-contained report at `apps/openape-pods/.artifacts/runtime-approval-report.html`.
 - Permanent tests cover consequential authorization boundaries and owner-visible setting behavior. Existing suites/runners are unchanged.
-- Native PR and exact-head external checks are the remaining delivery steps. The installed owner app stays on its existing build.
+- Native [PR 140](https://repos.openape.ai/patrick/monorepo/pulls/140) created and explicitly linked to issue 1388; implementation commit `a610cc9ce1fef75375347e6af38da346b01fceae`. Commit/push affected unit gates passed, including the relay consumer.
+- Exact-head external checks and owner review remain. The installed owner app stays on its existing build.
