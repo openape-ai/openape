@@ -54,6 +54,8 @@ export interface CentralStatus {
   gateUntil: number
   lastTickAt: number | null
   tickingSince: number | null
+  tickPhase: string | null
+  tickTimeout: { phase: string, at: number } | null
   format: 1 | 2 | null
   runtimeId: string | null
   lastPublication: { at: number, bytes: number } | null
