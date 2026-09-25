@@ -1,5 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import { CentralProjection } from './central/projection'
+import { boundedStep } from './scheduling/tick-step'
 import { parseOwner } from '@openape/pods-protocol'
 import type { AdministrationJournal } from '../contracts/codex-admin'
 import { RemoteControl } from './remote/control'
@@ -116,6 +117,12 @@ let preferWorkflow = true
 let ticking: Promise<void> | null = null
 let tickStartedAt = 0
 let lastTickAt = 0
+let tickPhase = ''
+let tickTimeout: { phase: string, at: number } | null = null
+function tickStep<T>(phase: string, limitMs: number, work: () => Promise<T>): Promise<T | undefined> {
+  tickPhase = phase
+  return boundedStep(limitMs, work, () => { tickTimeout = { phase, at: Date.now() }; console.error(`Scheduler step ${phase} did not finish within ${limitMs} ms; continuing`) })
+}
 const timer = setInterval(() => {
   if (ticking || suspended || !startupReady || maintenance || Date.now() >= centralUntil) return
   tickStartedAt = Date.now()
@@ -123,12 +130,13 @@ const timer = setInterval(() => {
     try {
       if (Date.now() >= storageAt) {
         storageAt = Date.now() + 5000
-        try { await data.retention.view() }
+        try { await tickStep('storage inspection', 60000, () => data.retention.view()) }
         catch (error) { store.db.prepare('UPDATE data_settings SET error=? WHERE id=1').run(error instanceof Error ? error.message : 'Storage inspection failed') }
       }
       const error = store.db.prepare('SELECT error FROM data_settings WHERE id=1').get()?.error
-      if (error) { for (const pod of store.listPods()) dispatcher.cancelPod(pod.id, String(error)); await master.stop(); return }
-      if (Date.now() >= scanAt) { await watcher.scan(); scanAt = Date.now() + 15000 }
+      if (error) { for (const pod of store.listPods()) dispatcher.cancelPod(pod.id, String(error)); await tickStep('master stop', 60000, () => master.stop()); return }
+      if (Date.now() >= scanAt) { await tickStep('reference scan', 120000, () => watcher.scan()); scanAt = Date.now() + 15000 }
+      tickPhase = 'scheduling'
       if (!suspended && Date.now() < centralUntil) {
         const before = store.db.prepare('SELECT count(*) AS count FROM runs').get()!.count
         if (preferWorkflow) { workflows.tick(); scheduler.tick() }
@@ -137,7 +145,7 @@ const timer = setInterval(() => {
       }
     }
     catch (error) { console.error('Scheduler stopped', error); process.exit(1) }
-  })().finally(() => { ticking = null; lastTickAt = Date.now() })
+  })().finally(() => { ticking = null; lastTickAt = Date.now(); tickPhase = '' })
 }, 1000)
 port.on('message', async (event) => {
   if (event.data && typeof event.data === 'object' && 'serviceReply' in event.data) { mailBridge.accept(event.data.serviceReply); return }
@@ -154,7 +162,7 @@ port.on('message', async (event) => {
         centralUntil = command.until
         // A tick re-reads centralUntil before scheduling, so closing the gate never needs an unbounded wait.
         if (!centralUntil && ticking) await Promise.race([ticking, delay(5000)])
-        port.postMessage({ id: request.id, state: { lastTickAt, tickingSince: ticking ? tickStartedAt : null } }); return
+        port.postMessage({ id: request.id, state: { lastTickAt, tickingSince: ticking ? tickStartedAt : null, tickPhase: ticking ? tickPhase : null, tickTimeout } }); return
       }
       if (command.type === 'version') { port.postMessage({ id: request.id, state: Number(store.db.prepare('SELECT total_changes() AS changes').get()!.changes) }); return }
       if (command.type !== 'snapshot') throw new Error('Unsupported central worker command')
