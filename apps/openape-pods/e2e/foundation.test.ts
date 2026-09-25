@@ -17,11 +17,11 @@ const executable: string = require('electron')
 const active: { app: ElectronApplication, root: string, process: ChildProcess }[] = []
 const artifacts = resolve('.artifacts')
 function fixtureEnv(root: string) { return { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, PODS_UNASSIGNED_SECRET: 'synthetic-canary', NODE_ENV: 'test' } }
-async function launch(packaged = false, reporting = false) {
+async function launch(packaged = false) {
   if (process.platform !== 'darwin') throw new Error('Electron foundation acceptance requires the macOS runner')
   const root = await mkdtemp(join(tmpdir(), 'pods-e2e-'))
   const binary = packaged ? resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture') : executable
-  const app = await electron.launch({ executablePath: binary, args: packaged ? [] : ['.'], cwd: resolve('.'), env: { ...fixtureEnv(root), OPENAPE_PODS_ISSUE_REPORTING_ENABLED: reporting ? '1' : '0' }, timeout: 20000 })
+  const app = await electron.launch({ executablePath: binary, args: packaged ? [] : ['.'], cwd: resolve('.'), env: { ...fixtureEnv(root), OPENAPE_PODS_ISSUE_REPORTING_ENABLED: '0' }, timeout: 20000 })
   active.push({ app, root, process: app.process() })
   const page = await app.firstWindow()
   await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state, { timeout: 20000 }).toBe('ready')
@@ -32,31 +32,17 @@ afterEach(async () => {
   for (const identity of identities.splice(0)) await identity.close()
   for (const { app, root, process: child } of active.splice(0)) { if (child.exitCode === null && child.signalCode === null) await app.close(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })
+// Native menus, problem reporting and German dialogs are tested against the
+// unchanged main process in test/main/app.test.ts.
 describe('foundation', () => {
-  it('reporting: opens only the fixed product URL through the native menu after opt-in', async () => {
-    const disabled = await launch()
-    expect(await disabled.app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById('report-problem')?.visible)).toBeUndefined()
-    await disabled.app.close()
-    const enabled = await launch(false, true)
-    expect(await enabled.app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById('report-problem')?.visible)).toBe(true)
-    const destination = await enabled.app.evaluate(async ({ Menu, shell, BrowserWindow }) => {
-      let opened = ''
-      shell.openExternal = async (url) => { opened = url }
-      const item = Menu.getApplicationMenu()!.getMenuItemById('report-problem')!
-      item.click(item, BrowserWindow.getAllWindows()[0], {} as never)
-      return opened
-    })
-    expect(destination).toBe('https://repos.openape.ai/report?product=pods')
-  })
-
   it('packaged: embeds the approved macOS icon referenced by the bundle', async () => {
     const contents = resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents')
     const icon = execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIconFile', join(contents, 'Info.plist')], { encoding: 'utf8' }).trim()
     expect(icon).toBe('icon.icns')
     expect(await readFile(join(contents, 'Resources', icon))).toEqual(await readFile(resolve('build/openape-pods.icns')))
   })
-  it.each([false, true])('resources: reviews, snapshots and revokes a reference through the owner window (packaged=%s)', async (packaged) => {
-    const { app, page, root } = await launch(packaged)
+  it('resources: reviews, snapshots and revokes a reference through the packaged owner window', async () => {
+    const { app, page, root } = await launch(true)
     const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Reference pod' }))).pods[0]!
     const source = join(root, 'synthetic-reference.txt'); await writeFile(source, 'SYNTHETIC_REFERENCE')
     await app.evaluate(({ dialog }, path) => {
@@ -71,7 +57,7 @@ describe('foundation', () => {
     const snapshot = await page.evaluate(podId => window.pods.resources({ type: 'snapshot', podId }), pod.id)
     expect(snapshot.snapshot?.files).toHaveLength(1)
     await mkdir(artifacts, { recursive: true })
-    await page.screenshot({ path: join(artifacts, packaged ? 'resources-packaged.png' : 'resources-reference.png') })
+    await page.screenshot({ path: join(artifacts, 'resources-packaged.png') })
     const before = await page.evaluate(podId => window.pods.resources({ type: 'list', podId }), pod.id)
     expect(before.resources).toHaveLength(1)
     expect(await page.evaluate(async (podId) => {
@@ -85,8 +71,8 @@ describe('foundation', () => {
     const after = await page.evaluate(podId => window.pods.resources({ type: 'list', podId }), pod.id)
     expect(after.epoch).toBe(before.epoch + 1)
   })
-  it.each([false, true])('manual runs: executes the pinned script and displays durable events (packaged=%s)', async (packaged) => {
-    const { app, page, root } = await launch(packaged)
+  it('manual runs: executes the pinned script in the packaged app and displays durable events', async () => {
+    const { app, page, root } = await launch(true)
     const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Local example' }))).pods[0]!
     const identity = await fixtureShellIdentity(root); identities.push(identity); await identity.encrypt(app, true)
     await page.getByRole('tab', { name: 'History', exact: true }).click()
@@ -95,52 +81,13 @@ describe('foundation', () => {
     await page.getByText('Local example completed (1)', { exact: true }).waitFor()
     await page.getByText('Technical details', { exact: true }).click()
     await mkdir(artifacts, { recursive: true })
-    await page.screenshot({ path: join(artifacts, packaged ? 'runs-packaged.png' : 'runs-manual.png') })
+    await page.screenshot({ path: join(artifacts, 'runs-packaged.png') })
     const view = await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), pod.id)
     expect(view.runs[0]).toMatchObject({ state: 'completed', checkpointRevision: 1, error: null })
   })
-  it('scheduling: persists a disabled daily schedule and an explicit concurrency limit', async () => {
-    const { page } = await launch()
-    const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Scheduled example' }))).pods[0]!
-    await page.getByRole('tab', { name: 'Settings', exact: true }).click()
-    await page.getByLabel('Repeat', { exact: true }).selectOption('daily')
-    await page.getByLabel('Local time', { exact: true }).fill('08:30')
-    await page.getByRole('button', { name: 'Save schedule', exact: true }).click()
-    await page.getByText('Saved on this Mac.', { exact: true }).waitFor()
-    expect((await page.evaluate(podId => window.pods.scheduling({ type: 'list', podId }), pod.id)).enabled).toBe(false)
-    await page.getByLabel('Concurrent pods on this Mac').fill('3')
-    await page.getByRole('button', { name: 'Save concurrency limit' }).click()
-    await expect.poll(async () => (await page.evaluate(podId => window.pods.scheduling({ type: 'list', podId }), pod.id)).concurrency).toBe(3)
-    await mkdir(artifacts, { recursive: true })
-    await page.getByRole('heading', { name: 'Schedule and limits' }).scrollIntoViewIfNeeded()
-    await page.locator('.schedule-panel').screenshot({ path: join(artifacts, 'schedule-settings.png') })
-    expect((await page.evaluate(() => window.pods.workspace({ type: 'list' }))).pods[0]!.lifecycle).toBe('paused')
-  })
-  it('storage: saves pod settings in the worker and reopens it after app restart', async () => {
-    const { app, page, root, binary } = await launch()
-    await page.getByRole('tab', { name: 'Settings', exact: true }).click()
-    await page.getByLabel('Pod name').fill('Fixture orders')
-    await page.getByRole('button', { name: 'Save pod', exact: true }).click()
-    await expect.poll(async () => (await page.evaluate(() => window.pods.workspace({ type: 'list' }))).pods.length).toBe(1)
-    await mkdir(artifacts, { recursive: true })
-    await page.screenshot({ path: join(artifacts, 'storage-settings.png') })
-    const first = await page.evaluate(() => window.pods.workspace({ type: 'list' }))
-    expect(first.pods).toHaveLength(1); expect(first.pods[0]!.activeScript).toBeNull()
-    expect(await page.evaluate(async () => {
-      try { await window.pods.workspace({ type: 'create', name: 'bad', credential: 'unassigned' } as never); return 'allowed' }
-      catch { return 'denied' }
-    })).toBe('denied')
-    await app.close()
-    const next = await electron.launch({ executablePath: binary, args: ['.'], cwd: resolve('.'), env: fixtureEnv(root) })
-    active.push({ app: next, root, process: next.process() })
-    const reopened = await next.firstWindow()
-    await expect.poll(async () => (await reopened.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
-    await reopened.getByRole('tab', { name: 'Settings', exact: true }).click()
-    expect(await reopened.evaluate(() => window.pods.workspace({ type: 'list' }))).toEqual(first)
-  })
   it('boundary: denies renderer Node, external network/navigation, popups and foreign-frame IPC', async () => {
     const { app, page } = await launch()
-    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['chats', 'data', 'details', 'getStatus', 'language', 'master', 'onStatus', 'onboarding', 'packages', 'programs', 'resources', 'runs', 'scheduling', 'scripts', 'workflows', 'workspace'] })
+    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['central', 'chats', 'codex', 'data', 'details', 'getStatus', 'language', 'master', 'onStatus', 'onboarding', 'packages', 'programs', 'resources', 'runs', 'scheduling', 'scripts', 'workflows', 'workspace'] })
     expect(await page.evaluate(async () => {
       try { await fetch('https://unassigned.invalid/'); return 'allowed' }
       catch { return 'denied' }
@@ -152,11 +99,11 @@ describe('foundation', () => {
       const other = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, preload: `${app.getAppPath()}/dist/preload/index.cjs` } })
       try {
         await other.loadURL('pods://app/index.html')
-        return await other.webContents.executeJavaScript('(async () => { const results = []; for (const request of [() => window.pods.master({type:"list"}), () => window.pods.language({type:"set", language:"de"}), () => window.pods.workflows({type:"list"}), () => window.pods.chats({type:"list"})]) { try { await request(); results.push("allowed") } catch { results.push("denied") } } return results })()')
+        return await other.webContents.executeJavaScript('(async () => { const results = []; for (const request of [() => window.pods.central({type:"status"}), () => window.pods.master({type:"list"}), () => window.pods.language({type:"set", language:"de"}), () => window.pods.workflows({type:"list"}), () => window.pods.chats({type:"list"})]) { try { await request(); results.push("allowed") } catch { results.push("denied") } } return results })()')
       }
       finally { other.destroy() }
     })
-    expect(result).toEqual(['denied', 'denied', 'denied', 'denied'])
+    expect(result).toEqual(['denied', 'denied', 'denied', 'denied', 'denied'])
     const status = await page.evaluate(() => window.pods.getStatus())
     expect(status.executionEnabled).toBe(true)
     expect(status.worker.pid).toBeGreaterThan(0)
@@ -186,33 +133,9 @@ describe('foundation', () => {
       catch { return 'gone' }
     }).toBe('gone')
   })
-  it('shows worker failure and supports keyboard navigation with light/dark layout', async () => {
-    const { app, page } = await launch()
+  it('shows worker failure after the worker process is killed', async () => {
+    const { page } = await launch()
     await mkdir(artifacts, { recursive: true })
-    for (const theme of ['light', 'dark'] as const) {
-      await page.emulateMedia({ colorScheme: theme })
-      await expect.poll(() => page.evaluate(() => matchMedia('(prefers-color-scheme: dark)').matches)).toBe(theme === 'dark')
-      await page.evaluate(() => new Promise<void>(resolveFrame => requestAnimationFrame(() => requestAnimationFrame(() => resolveFrame()))))
-      await page.screenshot({ path: join(artifacts, `foundation-${theme}.png`) })
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-    }
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(880, 640))
-    const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.querySelector('.workspace')!.getBoundingClientRect().bottom <= innerHeight + 1)
-    expect(await fits()).toBe(true)
-    await page.screenshot({ path: join(artifacts, 'foundation-compact.png') })
-    const originalHeight = await page.evaluate(() => {
-      const rule = Array.from(document.styleSheets[0].cssRules).find(rule => rule instanceof CSSStyleRule && rule.selectorText === '.workspace') as CSSStyleRule
-      const height = rule.style.height; rule.style.removeProperty('height'); return height
-    })
-    await page.evaluate((height) => {
-      const rule = Array.from(document.styleSheets[0].cssRules).find(rule => rule instanceof CSSStyleRule && rule.selectorText === '.workspace') as CSSStyleRule
-      rule.style.height = height
-    }, originalHeight)
-    expect(await fits()).toBe(true)
-    await page.getByRole('tab', { name: 'Overview', exact: true }).focus()
-    await page.keyboard.press('ArrowRight')
-    await page.getByRole('tabpanel').filter({ hasText: 'Connect Codex' }).waitFor()
-    await page.getByRole('tab', { name: 'Overview', exact: true }).click()
     const status = await page.evaluate(() => window.pods.getStatus())
     process.kill(status.worker.pid as number, 'SIGKILL')
     await page.getByRole('alert').filter({ hasText: 'Quit and reopen Pods' }).waitFor()

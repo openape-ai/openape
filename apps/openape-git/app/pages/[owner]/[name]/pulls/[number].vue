@@ -52,6 +52,7 @@ interface PullDetail {
   conflicts: string[]
   gate?: { protected: boolean, blockers: string[] } | null
   canMerge: boolean
+  canDeleteSource: boolean
   comments: Comment[]
 }
 
@@ -63,6 +64,7 @@ const number = route.params.number as string
 const detail = ref<PullDetail | null>(null)
 const error = ref('')
 const merging = ref(false)
+const deletingBranch = ref(false)
 
 const commentBody = ref('')
 const commentAnchor = ref<{ path: string, line: number } | null>(null)
@@ -130,6 +132,26 @@ async function onMerge() {
     merging.value = false
   }
 }
+
+async function onDeleteBranch() {
+  if (deletingBranch.value || !detail.value?.sourceSha) return
+  deletingBranch.value = true
+  error.value = ''
+  try {
+    await $fetch(`/api/repos/${owner}/${name}/branches`, {
+      method: 'DELETE',
+      body: { branch: detail.value.pull.sourceRef.replace(/^refs\/heads\//, ''), expectedSha: detail.value.sourceSha },
+    })
+    await load()
+  }
+  catch (err: unknown) {
+    const e = err as { data?: { statusMessage?: string }, message?: string }
+    error.value = e.data?.statusMessage ?? e.message ?? 'Could not delete the branch.'
+  }
+  finally {
+    deletingBranch.value = false
+  }
+}
 </script>
 
 <template>
@@ -167,6 +189,15 @@ async function onMerge() {
             {{ shortSha(detail.pull.mergeSha ?? '') }}
           </NuxtLink>
           <span v-if="detail.pull.mergedAt" class="text-zinc-500"> · {{ formatDate(detail.pull.mergedAt) }}</span>
+          <div v-if="detail.canDeleteSource" class="mt-2 flex items-center gap-3">
+            <span class="text-zinc-400">Branch <code class="font-mono text-amber-500">{{ detail.pull.sourceRef }}</code> can be deleted safely.</span>
+            <UButton size="xs" color="error" variant="soft" icon="i-lucide-trash-2" :loading="deletingBranch" @click="onDeleteBranch">
+              Delete branch
+            </UButton>
+          </div>
+          <p v-else-if="!detail.sourceSha" class="mt-2 text-zinc-500">
+            Branch <code class="font-mono">{{ detail.pull.sourceRef }}</code> has been deleted.
+          </p>
         </section>
 
         <PullMergeGate v-else :gate="detail.gate" :mergeable="detail.mergeable" :conflicts="detail.conflicts" :can-merge="detail.canMerge" :busy="merging" @merge="onMerge" />

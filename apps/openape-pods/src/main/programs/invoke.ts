@@ -1,3 +1,4 @@
+import { programLaunch } from './runtime'
 import type { GrantObserver, GrantLookup } from '../broker/authorization'
 import type { PodResource } from '../../contracts/resources'
 import { parseProgramArgv } from '../../contracts/programs'
@@ -23,7 +24,8 @@ export async function invokeProgram(resources: PodResource[], podId: string, bod
   const proxy = assignment.networkHosts.length ? await startMailProxy(lease.signal, undefined, assignment.networkHosts) : undefined
   try {
     const broker = new PodToolBroker(helper, root, authority, credentials)
-    return await broker.execute({ id, ...authorization, capability: assignment.capability, executable: assignment.executable, executableHash: assignment.executableHash, entryFiles: assignment.entryFiles, prefix: [], programState: { id: assignment.stateId, podId, applicationId: id }, cacheArgument: assignment.cacheArgument, runtimeDirectories: [], environment: { ...assignment.environment, ...proxy?.environment }, networkPorts: proxy ? [proxy.port] : [], maxOutputBytes: 200000 }, { toolId: id, argv: [assignment.cliId, ...argv] }, lease)
+    const launch = programLaunch(assignment)
+    return await broker.execute({ id, ...authorization, capability: assignment.capability, executable: launch.executable, executableHash: launch.executableHash, entryFiles: assignment.entryFiles, prefix: launch.prefix, programState: { id: assignment.stateId, podId, applicationId: id }, cacheArgument: assignment.cacheArgument, runtimeDirectories: launch.runtimeDirectories, runtimeEnvironment: assignment.runtime?.environment, environment: { ...assignment.environment, ...proxy?.environment }, networkPorts: proxy ? [proxy.port] : [], maxOutputBytes: 200000 }, { toolId: id, argv: [assignment.cliId, ...argv] }, lease)
   }
   finally { await proxy?.close() }
 }

@@ -1,4 +1,6 @@
-import { RemoteController } from './remote/controller'
+import { CentralController, offlineAlert } from './central/controller'
+import { centralObject } from '../contracts/central'
+import { RemoteController, RemoteServiceError } from './remote/controller'
 import { parseChatsCommand } from '../contracts/chats'
 import { parseWorkflowCommand } from '../contracts/workflows'
 import { searchPackages } from './package-catalog'
@@ -23,7 +25,7 @@ import { parseDetailsCommand } from '../contracts/details'
 import { parseScheduleCommand } from '../contracts/scheduling'
 import { parseRunCommand } from '../contracts/runs'
 import { parseResourceCommand } from '../contracts/resources'
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, powerMonitor, protocol, session, shell, Tray } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, powerMonitor, protocol, session, shell, Tray } from 'electron'
 import { mkdir, readFile, realpath } from 'node:fs/promises'
 import { basename, dirname, extname, join } from 'node:path'
 import { parseCommand } from '../contracts/control'
@@ -32,12 +34,19 @@ import type { PodStatus } from '../contracts/ipc'
 import { fixtureDirectory, localDirectory } from './fixture'
 import { assertStatusRequest, assetPath, contentSecurityPolicy, rendererURL, rendererStyleNonce } from './security'
 import { FixtureWorker } from './worker'
+import { CodexControlServer } from './codex/server'
+import { refreshLauncher } from './codex/launcher'
+import { CodexRegistration } from './codex/registration'
+import { parseCodexCommand } from '../contracts/codex'
+import { homedir } from 'node:os'
+import { existsSync } from 'node:fs'
 
 const fixture = !!process.env.OPENAPE_PODS_FIXTURE_DIR
 app.setName(fixture ? 'OpenApe Pods Fixture' : 'OpenApe Pods')
 app.enableSandbox()
 const profileBase = fixture ? fixtureDirectory(process.env.OPENAPE_PODS_FIXTURE_DIR) : localDirectory(join(app.getPath('appData'), 'OpenApe Pods'))
 const root = selectedProfile(profileBase)
+if (existsSync(join(root, 'central'))) process.env.OPENAPE_PODS_CENTRAL_ENABLED = '1'
 app.setPath('userData', root)
 app.setPath('sessionData', join(root, 'chromium'))
 protocol.registerSchemesAsPrivileged([{ scheme: 'pods', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
@@ -49,14 +58,31 @@ let preference: LanguagePreference
 function t(key: MessageKey, parameters?: Parameters): string { return translate(preference.language, key, parameters) }
 const status: PodStatus = { version: 1, mode: fixture ? 'fixture' : 'local', executionEnabled: true, worker: { state: 'starting', pid: null, error: null }, runtime: { electron: process.versions.electron, node: process.versions.node } }
 let remote: RemoteController
+let central: CentralController | null = null
 const worker = new FixtureWorker((next) => {
   status.worker = next
+  if (next.state === 'ready') central?.start()
   if (next.state === 'ready' && process.env.OPENAPE_PODS_REMOTE_ENABLED === '1') void remote.resume().catch((error: unknown) => { remote.error = error instanceof Error ? error.message : 'Remote access unavailable' })
   if (window && !window.isDestroyed()) window.webContents.send(channels.changed, status)
 })
 const fixtureRemoteOrigin = fixture && process.env.NODE_ENV === 'test' ? process.env.OPENAPE_PODS_FIXTURE_RELAY_ORIGIN : undefined
 if (fixtureRemoteOrigin && new URL(fixtureRemoteOrigin).hostname !== '127.0.0.1') throw new Error('Remote acceptance requires an isolated loopback relay')
 remote = new RemoteController(root, worker, fixtureRemoteOrigin)
+if (process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1') {
+  central = new CentralController(root, body => remote.workspaceRequest(body), { snapshot: () => worker.centralSnapshot(), version: () => worker.centralVersion(), execute: command => worker.centralExecute(command), gate: until => worker.centralGate(until) }, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/'))
+  worker.central = central
+}
+const codexDirectory = join(profileBase, 'codex')
+const codexTarget = { executable: process.execPath, script: join(__dirname, '../runtime/codex-mcp.mjs').replace('/app.asar/', '/app.asar.unpacked/'), socket: join(codexDirectory, 'control.sock') }
+const codexServer = new CodexControlServer(codexTarget.socket, request => worker.codex(request))
+// Fixture runs must name an isolated Codex home; they never touch the owner's.
+const codexHome = fixture ? process.env.OPENAPE_PODS_FIXTURE_CODEX_HOME : process.env.CODEX_HOME || join(homedir(), '.codex')
+async function codexRegistration(): Promise<CodexRegistration> {
+  if (!codexHome) throw new Error('Fixture runs need OPENAPE_PODS_FIXTURE_CODEX_HOME')
+  const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
+  const manifest = JSON.parse(await readFile(join(vendor, 'manifest.json'), 'utf8')) as { binaryHash: string }
+  return new CodexRegistration({ binary: join(vendor, 'codex'), binaryHash: manifest.binaryHash }, codexHome, codexDirectory, codexTarget)
+}
 async function manageRemote(): Promise<void> {
   if (!window) return
   const action = await dialog.showMessageBox(window, { title: t('Mobile access'), message: t('OpenApe Pods on iPhone and iPad'), detail: translateDiagnostic(preference.language, remote.error) || t('Execution and credentials stay on this desktop. Mobile devices must be paired here before accessing Pods.'), buttons: [t('Cancel'), t('Register desktop'), t('Pair mobile device'), t('Disable mobile access'), t('Offer installed CLI'), t('Withdraw offered CLI'), t('Remove paired device')], defaultId: 0, cancelId: 0 })
@@ -144,6 +170,18 @@ async function start(): Promise<void> {
       return new Response(body, { headers: { 'Content-Type': contentType, 'Content-Security-Policy': contentSecurityPolicy, 'X-Content-Type-Options': 'nosniff' } })
     }
     catch (error) { console.error('Rejected Pods asset request', error instanceof Error ? error.message : 'unknown error'); return new Response('Not found', { status: 404 }) }
+  })
+  ipcMain.handle(channels.central, async (event, value: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    const command = centralObject(value)
+    if (command.type === 'status') return { enabled: !!central, online: central?.available ?? false, ...central?.status() }
+    if (!central) throw new Error('Central workspace is not enabled')
+    if (command.type === 'register') { await remote.enable(await worker.remoteOwner()); return { ok: true } }
+    try { return await central.query(command) }
+    catch (error) {
+      if (error instanceof RemoteServiceError) return { requestError: { status: error.status, message: error.message } }
+      throw error
+    }
   })
   ipcMain.handle(channels.status, (event, ...args: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, args)
@@ -235,6 +273,22 @@ async function start(): Promise<void> {
       await shell.openExternal(login.url); return state
     }
     return worker.onboarding(command)
+  })
+  ipcMain.handle(channels.codex, async (event, value: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    const command = parseCodexCommand(value)
+    // Without a launcher the app never connected; reading Codex's configuration waits for the owner.
+    if (command.type === 'status' && !existsSync(join(codexDirectory, 'openape-pods-mcp'))) return { state: 'disconnected', home: codexHome ?? '', manual: 'codex mcp remove openape-pods' }
+    const registration = await codexRegistration()
+    if (command.type === 'status') return registration.status()
+    if (command.type === 'connect') {
+      const connection = await registration.connect()
+      if (connection.state === 'connected') await codexServer.start()
+      return connection
+    }
+    const connection = await registration.disconnect()
+    if (connection.state !== 'edited') await codexServer.stop()
+    return connection
   })
   ipcMain.handle(channels.chats, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
@@ -347,9 +401,24 @@ async function start(): Promise<void> {
   powerMonitor.on('suspend', () => worker.lifecycle('suspend'))
   powerMonitor.on('resume', () => worker.lifecycle('resume'))
   worker.start(root)
+  if (central) watchCentral(central)
+  if (await refreshLauncher(join(codexDirectory, 'openape-pods-mcp'), codexTarget)) await codexServer.start()
+}
+// Tells the owner once when scheduling has been paused for five minutes, and again when it resumes.
+function watchCentral(controller: CentralController): void {
+  let alerted = false
+  setInterval(() => {
+    const status = controller.status()
+    const alert = offlineAlert(status, alerted, Date.now())
+    if (!alert || !Notification.isSupported()) return
+    alerted = alert === 'alert'
+    new Notification(alerted
+      ? { title: t('Pods scheduling paused'), body: t('The central workspace has been offline for five minutes: {reason}', { reason: status.error ?? t('connecting') }) }
+      : { title: t('Pods scheduling resumed'), body: t('This desktop is connected to the central workspace again.') }).show()
+  }, 30000).unref()
 }
 async function shutdown(): Promise<void> {
-  try { await remote.stop(); await worker.stop(); stopped = true; tray?.destroy(); app.quit() }
+  try { await codexServer.stop(); await central?.stop(); await remote.stop(); await worker.stop(); stopped = true; tray?.destroy(); app.quit() }
   catch (error) { console.error('Worker shutdown failed', error); app.exit(1) }
 }
 if (!app.requestSingleInstanceLock()) {

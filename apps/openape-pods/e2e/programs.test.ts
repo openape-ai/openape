@@ -143,6 +143,11 @@ it('program boundary: grant revocation stops a waiting terminal before its lease
   finally { terminal.close(); await terminal.completed; await f.close() }
 })
 
+// Application cards, HTTP destinations and their narrow/German layout live in
+// test/programs/ui.test.ts and test/layout/pod-tabs.test.ts; the owner dialogs in
+// test/main/app.test.ts. This keeps what needs the packaged app: keychain-backed
+// program state, the folder dialog path and a saved script reaching the
+// application through worker, main broker and ape-shell.
 it('packaged program UI: exposes the external terminal and reuses application setup from the saved script', async () => {
   const f = await fixture()
   const setup = f.terminal()
@@ -173,7 +178,6 @@ it('packaged program UI: exposes the external terminal and reuses application se
     await page.getByRole('button', { name: 'Open Terminal.app', exact: true }).waitFor()
     expect(await page.getByRole('button', { name: 'Open Terminal.app', exact: true }).count()).toBe(1)
     expect(await page.locator('.pod-console').count()).toBe(0)
-    await mkdir(resolve('.artifacts'), { recursive: true })
     await app.evaluate(({ dialog }, folder) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder], bookmarks: [] })
       dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false })
@@ -181,7 +185,6 @@ it('packaged program UI: exposes the external terminal and reuses application se
     await page.getByRole('button', { name: 'Add directory', exact: true }).click()
     await expect.poll(async () => page.locator('.directory-select').count()).toBe(1)
     expect(await page.locator('.fixed-directory').count()).toBe(2)
-    await page.locator('.directory-list').screenshot({ path: resolve('.artifacts/program-directories-en.png') })
     const runCode = `import fs from 'node:fs/promises'; import path from 'node:path';
     export async function run(context) {
       await fs.writeFile(path.join(context.home, 'home-check.txt'), 'HOME')
@@ -204,42 +207,6 @@ it('packaged program UI: exposes the external terminal and reuses application se
     }, { podId: f.podId, capability: f.assignment.capability, code: runCode })
     await expect.poll(async () => { const run = (await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), f.podId)).runs[0]; return run?.error ?? run?.summary }, { timeout: 15000 }).toBe('Program read: STATE_MATCH 1')
     console.info('Program UI: saved script invoked application by name through worker and main broker')
-    await app.evaluate(({ dialog }, paths) => {
-      let selection = 0
-      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [paths[selection++]!], bookmarks: [] })
-    }, [f.assignment.executable, f.assignment.adapterPath])
-    await page.getByRole('button', { name: 'Add installed application…', exact: true }).click()
-    await page.getByRole('button', { name: 'Open fixture', exact: true }).waitFor()
-    await page.getByRole('button', { name: 'Synthetic application', exact: true }).click()
-    expect(await page.getByText('Allowed commands', { exact: true }).count()).toBe(0)
-    expect(await page.getByText('Script access', { exact: true }).count()).toBe(0)
-    expect(await page.getByRole('button', { name: 'Select installed replacement…', exact: true }).count()).toBe(0)
-    expect(await page.getByRole('button', { name: 'Import existing setup', exact: true }).count()).toBe(0)
-    await page.getByRole('button', { name: 'Add installed application…', exact: true }).waitFor()
-    await page.getByRole('button', { name: 'https://api.example.com GET, POST', exact: true }).click()
-    expect(await page.getByRole('button', { name: 'Remove HTTP destination', exact: true }).isEnabled()).toBe(true)
-    await page.locator('.application-card').first().screenshot({ path: resolve('.artifacts/program-permissions-en.png') })
-    await page.locator('.program-permissions').screenshot({ path: resolve('.artifacts/external-terminal-en.png') })
-    await page.locator('.http-list').screenshot({ path: resolve('.artifacts/program-http-en.png') })
-    await page.getByRole('button', { name: 'Add HTTP destination', exact: true }).click()
-    await page.getByLabel('HTTPS origin', { exact: true }).waitFor()
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
-    expect(await page.locator('.http-form').count()).toBe(0)
-    await page.getByRole('button', { name: 'App settings', exact: true }).click()
-    await page.getByLabel('Language', { exact: true }).selectOption('de')
-    await page.locator('.pod-button').first().click()
-    await page.getByRole('tab', { name: 'Berechtigungen', exact: true }).click()
-    await page.getByRole('heading', { name: 'Ausführbare Anwendungen', exact: true }).waitFor()
-    await page.emulateMedia({ colorScheme: 'dark' })
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(560, 800))
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-    await page.locator('.application-card').first().screenshot({ path: resolve('.artifacts/program-permissions-de-dark.png') })
-    expect(await page.getByRole('button', { name: 'Terminal.app öffnen', exact: true }).count()).toBe(1)
-    await page.locator('.program-permissions').screenshot({ path: resolve('.artifacts/external-terminal-de-dark.png') })
-    await page.locator('.http-list').screenshot({ path: resolve('.artifacts/program-http-de-dark.png') })
-    const folderBounds = await page.locator('.directory-select .directory-label').boundingBox()
-    expect(folderBounds!.width).toBeGreaterThan(120)
-    await page.locator('.directory-list').screenshot({ path: resolve('.artifacts/program-directories-de-dark.png') })
   }
   finally { await app.close(); await shellIdentity.close(); await f.close(); await rm(folder, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })
@@ -271,4 +238,55 @@ it('HTTP grant boundary: verifies the signed origin and method before transport 
     expect(sendHttp).toHaveBeenCalledTimes(2)
   }
   finally { await f.close() }
+})
+
+it('HTTP agent authentication: the runtime adds the DDISA bearer, refuses script credentials and forgets rejected tokens', async () => {
+  const f = await fixture(); sendHttp.mockClear()
+  const vendor = resolve('dist/vendor'); const adapter = loadAdapter('pod-http', join(vendor, 'pod-http-shapes.toml'))
+  f.state.signedCommand = await resolveCommand(adapter, ['pod-http', 'request', '--origin', 'https://api.example.com', '--method', 'GET'])
+  const authority = { ...f.assignment.grants[0]!.authority, grantId: 'http' }
+  const capability = 'tool.http_synthetic.request'
+  const authentication = { type: 'ddisaAgent' as const, credential: 'agent_key', subject: 'agent@id.example.com', issuer: 'https://id.example.com' }
+  const resources: PodResource[] = [{ ...f.resource, configuration: { type: 'http', origin: 'https://api.example.com', methods: ['GET'], capability, authority, authentication } }]
+  const scope = { podId: f.podId, runId: randomUUID(), epoch: 0, assignmentRevision: 1, capabilities: [capability] }
+  const request = { url: 'https://api.example.com/pending', method: 'GET', headers: {} }
+  const bearer = { token: vi.fn(async () => 'SYNTHETIC_AGENT_TOKEN'), reject: vi.fn() }
+  const signal = new AbortController().signal
+  try {
+    await expect(executeHttp(resources, scope, { ...request, headers: { Authorization: 'Bearer script' } }, vendor, f.cache, signal, undefined, undefined, bearer)).rejects.toThrow('remove the Authorization header')
+    await expect(executeHttp(resources, scope, request, vendor, f.cache, signal)).rejects.toThrow('authentication is unavailable')
+    expect(sendHttp).not.toHaveBeenCalled()
+    expect(await executeHttp(resources, scope, request, vendor, f.cache, signal, undefined, undefined, bearer)).toMatchObject({ status: 200 })
+    expect(bearer.token).toHaveBeenCalledWith(authentication)
+    expect(sendHttp.mock.calls[0]![0]).toMatchObject({ headers: { authorization: 'Bearer SYNTHETIC_AGENT_TOKEN' } })
+    expect(request.headers).toEqual({})
+    sendHttp.mockResolvedValueOnce({ status: 200, headers: { 'x-echo': 'Bearer SYNTHETIC_AGENT_TOKEN' }, body: 'authorization: Bearer SYNTHETIC_AGENT_TOKEN' })
+    const echoed = await executeHttp(resources, scope, request, vendor, f.cache, signal, undefined, undefined, bearer)
+    expect(JSON.stringify(echoed)).not.toContain('SYNTHETIC_AGENT_TOKEN')
+    sendHttp.mockResolvedValueOnce({ status: 401, headers: {}, body: '' })
+    expect(await executeHttp(resources, scope, request, vendor, f.cache, signal, undefined, undefined, bearer)).toMatchObject({ status: 401 })
+    expect(bearer.reject).toHaveBeenCalledWith(authentication)
+  }
+  finally { await f.close() }
+})
+
+it('program boundary: an explicit interpreter reuses private state while outside reads and child execution stay denied', async () => {
+  const f = await fixture(); const terminal = f.terminal()
+  try {
+    await expect.poll(() => terminal.view().output).toContain('SETUP_READY')
+    terminal.input('SYNTHETIC_CONFIGURATION\n'); await terminal.completed
+    expect(terminal.view().exitCode).toBe(0)
+    const interpreter = await realpath('/usr/bin/perl')
+    const descriptorPath = join(f.root, 'runtime.json')
+    const code = `open(my $state, '<', "$ENV{HOME}/state.txt") or die "missing private state"; my $value=<$state>; die "wrong state" unless $value eq "SYNTHETIC_CONFIGURATION\\n"; die "outside read allowed" if open(my $outside, '<', '${join(f.root, 'outside.txt')}'); my $child=fork(); die "fork allowed" if defined($child); print "PRIVATE_STATE_AND_BOUNDARIES_OK_0\\n";`
+    await writeFile(descriptorPath, JSON.stringify({ version: 1, executable: interpreter, arguments: ['-e', code], readDirectories: [], environment: { FIXTURE_MODE: '0' } }), { mode: 0o600 })
+    const { loadProgramRuntime } = await import('../src/main/programs/runtime')
+    f.resource.configuration = { ...f.assignment, runtime: await loadProgramRuntime(descriptorPath) }
+    const result = await f.invoke(['read'])
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toBe('PRIVATE_STATE_AND_BOUNDARIES_OK_0\n')
+    await writeFile(descriptorPath, '{}')
+    await expect(f.invoke(['read'])).rejects.toThrow()
+  }
+  finally { terminal.close(); await terminal.completed; await f.close() }
 })

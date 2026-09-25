@@ -77,8 +77,8 @@ describe('ape-shell broker native boundary', () => {
     expect(reply.exitCode).toBe(0)
     expect(reply.stdout).toContain('Grüße 日本語')
   })
-  it.each([false, true])('delivers only the assigned rotating credential in a separate sandbox (packaged=%s)', async (packaged) => {
-    const fixture = await setup(packaged)
+  it('delivers only the assigned rotating credential in a separate sandbox (packaged)', async () => {
+    const fixture = await setup(true)
     const reply = await fixture.broker.execute(fixture.assignment, fixture.request, fixture.lease)
     expect(reply.exitCode, reply.stderr).toBe(0)
     expect(JSON.parse(reply.stdout)).toEqual({ assigned: true, siblingDenied: true, childDenied: true })

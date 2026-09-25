@@ -83,9 +83,9 @@ pnpm --filter @openape/pods report
 
 `dev` builds once and opens Electron with bundled renderer assets; restart it after changing source. No HTTP development server or remote content is exposed. `package:mac` creates the unsigned arm64 development bundle at `release/mac-arm64/OpenApe Pods Fixture.app`. It runs with its own Node runtime and does not require system Node. M12 also supplies explicit signed-candidate/release pipelines and an unsigned DMG; release acceptance remains pending.
 
-`test:e2e` requires macOS and an already built app/bundle. `test:packaged` selects packaged acceptance; `test:boundaries` selects the Electron renderer/IPC boundary checks. The native cases exercise the owner-accepted custom SBPL boundary; this is not an Apple-supported isolation guarantee. `test:layout` builds/packages and runs the complete Electron suite. It is registered in the shared `layout` contract, which runs on the macOS CI runner and locally as part of `check:ci`. No skipped Electron suite is presented as a passing release gate.
+`test:e2e` requires macOS and an already built app/bundle. `test:packaged` selects packaged acceptance; `test:boundaries` selects the Electron renderer/IPC boundary checks. The native cases exercise the owner-accepted custom SBPL boundary; this is not an Apple-supported isolation guarantee. `test:layout` builds/packages, runs the complete Electron suite and then the browser-mode geometry suite (`test:browser`, `test/layout/`). It is registered in the shared `layout` contract, which runs on the macOS CI runner and locally as part of `check:ci`. No skipped Electron suite is presented as a passing release gate. `test:fast` runs the unit, component and browser-mode suites without building or launching Electron. Which level proves what is described in [testing](docs/testing.md).
 
-`report` creates a self-contained HTML evidence file with embedded screenshots at `.artifacts/foundation-report.html` after the Electron suite. Raw results stay in `.artifacts/electron-tests.json`.
+`report` creates a self-contained HTML evidence file with embedded screenshots at `.artifacts/foundation-report.html` after `test:layout` (Electron and browser-mode suites) and `handbook:capture`. Raw results stay in `.artifacts/electron-tests.json`.
 
 ## Fixture state and lifecycle
 
@@ -459,21 +459,24 @@ these tests.
 
 ## M11: account onboarding and exact mail scope
 
-The sidebar account button opens central OpenApe account management and shows
-its selected identity and connection status. Choose **Use for new pods** on a
-connected OpenApe account, or select that option during sign-in. The choice is
-persisted and used when a new Pod first needs an agent identity. Existing Pods
-retain their original account, including after disconnect or a default change.
-Sign in again reconnects that same account and preserves its Pod bindings;
-revoked permissions still need review. An unavailable owner never falls back to
-another account. Existing profiles require a one-time explicit default choice.
-The identity provider is available under **Advanced**. Each Pod's apes shell
-continues to receive its own agent identity, never the owner's personal token.
-ChatGPT model login, OpenApe human identity and application sign-ins are separate connections. The renderer
-can select a provider, expected email and HTTPS OpenApe issuer, but cannot supply
-tokens, executables or arbitrary provider endpoints. Browser opening uses only a
-currently pending, driver-validated sign-in URL. No startup code logs in or reads
-mail automatically.
+The sidebar account button opens central account management. It shows exactly
+two accounts: Codex / GPT and the owner's DDISA account. The DDISA identity
+provider is discovered from the DDISA TXT record of the entered email's domain.
+Every Pod, grant and mobile registration uses that single owner implicitly.
+Signing in again with the same email keeps the connection and its Pod bindings;
+switching to another email requires confirmation, revokes the previous owner's
+Pod bindings and permissions, and new agents are provisioned on first use. New
+agents require the owner's one-time Pods provider consent in Pod settings.
+At startup, profiles from earlier releases are reconciled to one Codex row and
+one DDISA owner row: duplicate rows of the owner identity are merged without
+re-provisioning; bindings of other identities are released.
+Each Pod's apes shell continues to receive its own agent identity, never the
+owner's personal token. ChatGPT model login, OpenApe human identity and
+application sign-ins are separate connections. The renderer can supply only an
+email and an explicit switch confirmation, not tokens, executables, issuers or
+provider endpoints. Browser opening uses only a currently pending,
+driver-validated sign-in URL. No startup code logs in or reads mail
+automatically.
 
 The pinned Codex auth-only app-server accepts initialize, account/login/start,
 account/login/cancel and account/read requests. Model turns and command requests
@@ -551,10 +554,12 @@ newer database and can still restore a compatible backup through Data & backups.
 Checksums detect corruption; an owner-selected backup is not authenticated by a
 publisher signature. Treat imported backups as trusted owner data.
 
-The default 10 GiB pod-data limit is configurable from 1 GiB to 1 TiB. Five-second
-scans stop runs/master work at the limit or below 256 MiB of free disk space. Blob
-publication checks available space first. This is a sampled application limit, not
-a hard filesystem quota: active work can overshoot between scans. Chromium caches,
+The default 10 GiB pod-data limit is configurable from 1 GiB to 1 TiB. A full
+inventory runs every minute and stops runs/master work at the limit or below 256 MiB
+of free disk space. Each one-second scheduler tick checks free disk space, tracked
+blob usage and the stored error, and starts the inventory at once when one of them trips.
+Blob publication checks available space first. This is a sampled application limit,
+not a hard filesystem quota: active work can overshoot between inventories. Chromium caches,
 authentication files, external backups and previous profiles are separate from the
 reported pod-data usage. Cleanup removes only unreachable blobs/snapshot staging;
 all referenced evidence, committed history and pending events are retained.
@@ -663,7 +668,7 @@ Open App settings in the sidebar and use Language / Sprache for immediate Englis
 
 The English source keys and German translations live in `src/i18n/de.json`; parameterized diagnostics are explicitly listed in `src/i18n/diagnostics.ts`. Add complete translations and identical placeholders when changing copy. Coverage tests check every static thrown diagnostic, visible template copy and handbook chapter parity. No translation network service or new runtime dependency is used.
 
-Read the [English handbook](docs/handbook.md) or [German handbook](docs/handbook.de.md). Both have eighteen chapters and eleven locale-specific packaged-app screenshots. Run `pnpm --filter @openape/pods handbook` from the repository root to generate standalone `.artifacts/openape-pods-handbook.html` and `.artifacts/openape-pods-handbook.de.html`. Keep both files together for the edition links; images are embedded for offline use. Refresh images only after the packaged `e2e/language.test.ts` scenario with `pnpm --filter @openape/pods handbook --refresh-images`.
+Read the [English handbook](docs/handbook.md) or [German handbook](docs/handbook.de.md). Both have twenty-six chapters and eleven locale-specific packaged-app screenshots. Run `pnpm --filter @openape/pods handbook` from the repository root to generate standalone `.artifacts/openape-pods-handbook.html` and `.artifacts/openape-pods-handbook.de.html`. Keep both files together for the edition links; images are embedded for offline use. To refresh images, run `pnpm --filter @openape/pods handbook:capture` (packaged app, outside the test gate) and then `pnpm --filter @openape/pods handbook --refresh-images`.
 
 
 ## Named script credentials
@@ -717,3 +722,8 @@ integration provides a frozen batch, protected partners and a receipt-backed
 outbox. Production autonomous moves remain blocked pending a verified provider
 concurrency guarantee. See [execution contract and disabled pilot](docs/workflows.md)
 and the workflow chapter in the shared handbook.
+
+## Claude Code
+
+Use the existing installed MCP server: [setup and central workspace commands](docs/claude-code.md).
+Claude Code and Codex share the desktop executor and central data.
