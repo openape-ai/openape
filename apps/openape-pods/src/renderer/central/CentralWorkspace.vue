@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import JevReference from '../JevReference.vue'
 import { t, diagnostic, label } from '../i18n'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import type { CentralClient, CentralCommand, CentralRunDetail, CentralRuntime, CentralStatus, CentralSummary } from '../../contracts/central'
@@ -316,7 +315,6 @@ onBeforeUnmount(() => { generation++; abort.abort() })
               </p>
             </section>
             <section v-if="tab === 'Script'">
-              <JevReference />
               <label>{{ t('Version') }}<select :value="source?.id ?? ''" @change="selectVersion(($event.target as HTMLSelectElement).value)"><option value="">{{ t('New draft') }}</option><option v-for="draft in current.pod.scripts.drafts" :key="draft.id" :value="draft.id">{{ t('Draft') }} {{ draft.id.slice(0, 8) }} · {{ draft.validated ? t('validated') : t('not validated') }}</option><option v-for="version in current.pod.scripts.versions" :key="version.hash" :value="version.hash">{{ version.hash.slice(0, 12) }} {{ version.active ? `· ${label('active')}` : '' }}</option></select></label>
               <textarea v-model="code" class="central-code" :aria-label="t('Script source')" rows="20" spellcheck="false" />
               <div class="central-actions">
@@ -344,10 +342,8 @@ onBeforeUnmount(() => { generation++; abort.abort() })
               </button>
             </section>
             <section v-if="tab === 'Permissions'">
-              <slot name="permissions" :pod-id="current.pod.id" /><p>{{ t('TypeSafe connection') }}: {{ current.pod.resources.jev ? label(current.pod.resources.jev.state) : t('Not connected') }}</p><h2>{{ t('Assigned access') }}</h2><p>{{ t('Assign programs, credentials and local folders on the desktop.') }}</p><article v-for="resource in current.pod.resources.resources" :key="resource.id" class="central-card">
-                <strong>{{ resource.name }}</strong><p v-if="resource.configuration.type === 'jev'">
-                  {{ resource.configuration.model }} · {{ resource.configuration.maxAttempts }} {{ t('attempts per run') }}
-                </p><p>{{ label(resource.kind) }} · {{ label(resource.state) }}</p><button :disabled="resource.state === 'revoked'" @click="send('resources', { type: 'revoke', podId: current.pod.id, id: resource.id, revision: resource.revision })">
+              <slot name="permissions" :pod-id="current.pod.id" /><h2>{{ t('Assigned access') }}</h2><p>{{ t('Assign programs, credentials and local folders on the desktop.') }}</p><article v-for="resource in current.pod.resources.resources.filter(item => item.configuration.type !== 'jev')" :key="resource.id" class="central-card">
+                <strong>{{ resource.name }}</strong><p>{{ label(resource.kind) }} · {{ label(resource.state) }}</p><button :disabled="resource.state === 'revoked'" @click="send('resources', { type: 'revoke', podId: current.pod.id, id: resource.id, revision: resource.revision })">
                   {{ t('Revoke access') }}
                 </button>
               </article>

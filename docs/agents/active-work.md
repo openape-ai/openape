@@ -18,7 +18,7 @@ neutral fresh Codex authoring plus live Pod grant flow and labelled workflow qua
 `fa31c9bc684ed02b6c23a5f2d762eba62daf961a` against the base above.
 [Published evidence](https://testrun.openape.ai/r/q8kG0M6twEJoIpqcVVx8reEg).
 Commit/push hooks passed the affected unit contract, including the relay consumer.
-Next: exact-head external checks and PR review; no production release in this task.
+The original head `9f3ee934` passed external CI. Owner UI correction: compact API-key form directly in App settings, no Jev explanation/link or Script/Permissions panels. Agent reference and resources API remain authoritative. Full lint/typecheck, build, 34 focused tests and five browser tests pass; [updated screenshots](https://testrun.openape.ai/r/sDUdikwIBcms_bwtddTTcAJG). Next: push the UI correction and check its exact head before PR review; no production release in this task.
 
 ## Pods: stable central connection (September 25, 2026) — implementing
 

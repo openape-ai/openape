@@ -1,21 +1,24 @@
-import { mount } from '@vue/test-utils'
-import { expect, it } from 'vitest'
-import JevPermissions from '../../src/renderer/JevPermissions.vue'
-import type { ResourceState } from '../../src/contracts/resources'
+import { flushPromises, mount } from '@vue/test-utils'
+import { expect, it, vi } from 'vitest'
+import JevConnection from '../../src/renderer/JevConnection.vue'
+import type { OnboardingView } from '../../src/contracts/onboarding'
 
-it('requires a connected account and emits scoped assignments with a pinned model and attempt limit', async () => {
-  const podId = '00000000-0000-4000-8000-000000000001'; const id = '00000000-0000-4000-8000-000000000002'
-  const state: ResourceState = { epoch: 3, resources: [], jev: null }
-  const wrapper = mount(JevPermissions, { props: { state, podId } })
-  expect(wrapper.find('form').exists()).toBe(false)
-  expect(wrapper.text()).toContain('Connect TypeSafe in desktop Accounts')
-  await wrapper.setProps({ state: { ...state, jev: { id, state: 'ready', verifiedAt: 1 } } })
-  await wrapper.get('form').trigger('submit')
-  expect(wrapper.emitted('command')?.[0]).toEqual([{ type: 'assignJev', podId, epoch: 3, connectionId: id, model: 'jev-1.13.0', maxAttempts: 20 }])
-  await wrapper.setProps({ state: { ...state, jev: { id, state: 'ready', verifiedAt: 1 }, resources: [{ id, podId, kind: 'tool', state: 'ready', name: 'TypeSafe / Jev', revision: 1, configuration: { type: 'jev', model: 'jev-1.14.0', maxAttempts: 5 } }] } })
-  expect((wrapper.get('input[type="number"]').element as HTMLInputElement).value).toBe('5')
-  expect((wrapper.findAll('input')[0].element as HTMLInputElement).value).toBe('jev-1.14.0')
-  await wrapper.findAll('button').find(button => button.text() === 'Revoke access')!.trigger('click')
-  expect(wrapper.emitted('command')?.at(-1)).toEqual([{ type: 'revoke', podId, id, revision: 1 }])
+it('keeps connected key setup minimal and reports a failed replacement without losing the saved state', async () => {
+  const view: OnboardingView = { connections: [{ id: '00000000-0000-4000-8000-000000000001', provider: 'typesafe', account: 'TypeSafe / Jev', state: 'ready', error: null, login: null }], owner: null, runtime: { ready: true, error: null }, complete: false }
+  const onboarding = vi.fn(async () => view)
+  window.pods = { onboarding } as unknown as typeof window.pods
+  const wrapper = mount(JevConnection); await flushPromises()
+  expect(wrapper.get('label').text()).toBe('TypeSafe AI - Jev - API Key')
+  expect(wrapper.get('button').text()).toBe('Connect or replace API key')
+  expect(wrapper.find('p').exists()).toBe(false)
+  expect(wrapper.findAll('button')).toHaveLength(1)
+  expect(wrapper.find('a').exists()).toBe(false)
+  expect(wrapper.get('input').attributes('placeholder')).toBe('••••••••')
+  onboarding.mockRejectedValueOnce(new Error('TypeSafe connection failed'))
+  await wrapper.get('input').setValue('synthetic-replacement')
+  await wrapper.get('form').trigger('submit'); await flushPromises()
+  expect(wrapper.get('[role="alert"]').text()).toBe('TypeSafe connection failed')
+  expect(wrapper.get('input').attributes('placeholder')).toBe('••••••••')
+  expect(wrapper.text()).not.toContain('synthetic-replacement')
   wrapper.unmount()
 })

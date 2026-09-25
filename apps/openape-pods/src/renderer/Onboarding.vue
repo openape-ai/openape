@@ -1,11 +1,9 @@
 <script lang="ts">
-import JevConnection from './JevConnection.vue'
 import { t, diagnostic, label } from './i18n'
 import { defineComponent } from 'vue'
 import type { ConnectionView, OnboardingCommand, OnboardingView } from '../contracts/onboarding'
 
 export default defineComponent({
-  components: { JevConnection },
   emits: ['finished'],
   data() { return { view: null as OnboardingView | null, email: '', busy: false, error: '', switching: false, disconnecting: '', closed: false, timer: null as ReturnType<typeof setTimeout> | null } },
   computed: {
@@ -98,7 +96,6 @@ export default defineComponent({
           </button>
         </div>
       </section>
-      <JevConnection :connection="view?.connections.find(item => item.provider === 'typesafe')" @updated="request({ type: 'list' })" />
     </article>
     <button :disabled="busy" @click="finish">
       {{ t("Continue to workspace") }}

@@ -111,7 +111,7 @@ export class ResourceRegistry {
     parseJevModel(model)
     this.store.transaction(() => {
       if (this.store.getPod(podId).lifecycle === 'archived' || this.epoch(podId) !== expectedEpoch || authority.identity.podId !== podId) throw new Error('Pod or Jev permissions changed; reload before assigning access')
-      if (!this.store.db.prepare('SELECT 1 FROM connections WHERE id=? AND provider=\'typesafe\' AND state=\'ready\'').get(connectionId)) throw new Error('TypeSafe is not connected; reconnect in Accounts')
+      if (!this.store.db.prepare('SELECT 1 FROM connections WHERE id=? AND provider=\'typesafe\' AND state=\'ready\'').get(connectionId)) throw new Error('TypeSafe is not connected; reconnect in App settings')
       const current = this.list(podId).filter(item => item.kind === 'tool' && item.state === 'ready')
       if (!current.some(item => item.configuration.type === 'jev') && current.length >= 16) throw new Error('This pod already has 16 tools')
       for (const resource of current.filter(item => item.configuration.type === 'jev')) this.store.db.prepare('UPDATE resources SET state=\'revoked\',revision=revision+1 WHERE id=?').run(resource.id)

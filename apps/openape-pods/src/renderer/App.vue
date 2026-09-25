@@ -5,6 +5,7 @@ import WorkflowPanel from './WorkflowPanel.vue'
 import type { WorkflowView } from '../contracts/workflows'
 import LanguageSwitcher from './LanguageSwitcher.vue'
 import CodexPanel from './CodexPanel.vue'
+import JevConnection from './JevConnection.vue'
 import PodNavigation from './PodNavigation.vue'
 import type { Organization } from '../contracts/groups'
 import DataManagement from './DataManagement.vue'
@@ -27,7 +28,7 @@ import type { ScheduleView } from '../contracts/scheduling'
 import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
-  components: { CodexPanel, WorkflowPanel, AccountStatus, RunApproval, PodDescription, LanguageSwitcher, PodNavigation, DataManagement, Onboarding, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
+  components: { JevConnection, CodexPanel, WorkflowPanel, AccountStatus, RunApproval, PodDescription, LanguageSwitcher, PodNavigation, DataManagement, Onboarding, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
   data() {
     return { requestedRun: '', workflowId: '', workflows: { workflows: [], runs: [] } as WorkflowView, requestedSecret: '', approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: 'Overview', tabs: ['Overview', 'Script', 'Values', 'Permissions', 'Settings', 'History'], descriptionExpanded: false, sidebarWidth: 224, sidebarCollapsed: false, resizeStart: 0, resizeWidth: 224, resizing: false, pods: [] as StoredPod[], podId: '', creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
@@ -150,7 +151,7 @@ export default defineComponent({
         </nav>
         <RunApproval v-if="!globalPage && selected !== 'History' && podId" :pod-id="podId" :approvals="approvals" />
         <section v-if="selected === 'App settings'" class="card">
-          <h2>{{ t('App settings') }}</h2><LanguageSwitcher /><CodexPanel /><div class="overview-actions">
+          <h2>{{ t('App settings') }}</h2><LanguageSwitcher /><CodexPanel /><JevConnection /><div class="overview-actions">
             <button class="secondary" @click="selected = 'Setup'">
               {{ t('Your accounts') }}
             </button><button class="secondary" @click="selected = 'Data'">
