@@ -1,5 +1,21 @@
 # Active work
 
+## Pods: TypeSafe Jev integration (September 25, 2026) — implementation verified
+
+[Issue 1385](https://repos.openape.ai/patrick/monorepo/issues/1385),
+[review plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3C2TZC7HM94KDEG7AWW3BGM),
+[local plan](../../.claude/plans/jev-integration.md).
+Worktree `jev-integration`, branch `feature/issue-1385-jev-integration`,
+integrated canonical base `63ab0bf0788e02dfd5c6fd8f5f7936977cfbbe6f`.
+Encrypted TypeSafe account setup, per-Pod inference permissions, bounded Jev runtime,
+MCP discovery, native/central UI and handbook are implemented. Full lint/typecheck,
+Pods build, 492 unit/component tests, 22 browser tests and 11 native script tests pass.
+Real API model discovery and all three decision types passed with `jev-1.13.0`.
+The existing owner-authorized key is encrypted in the isolated Jev development profile;
+production accounts, Pods and schedules were not changed. Remaining acceptance:
+neutral fresh Codex authoring plus live Pod grant flow and labelled workflow quality.
+Next: native PR and exact-head external checks; no production release in this task.
+
 ## Pods: stable central connection (September 25, 2026) — implementing
 
 [Issue 1384](https://repos.openape.ai/patrick/monorepo/issues/1384),

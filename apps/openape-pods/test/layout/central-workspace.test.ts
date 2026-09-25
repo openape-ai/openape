@@ -22,3 +22,17 @@ it('renders the same workspace at desktop and narrow browser sizes without overf
   await flushPromises(); await page.viewport(560, 950)
   await page.screenshot({ path: '../../.artifacts/central-workspace-de-dark.png' })
 })
+
+it('shows Jev availability and the script reference in the narrow central workspace', async () => {
+  const fixture = centralFixture()
+  fixture.view.resources.jev = { id: fixture.view.id, state: 'ready', verifiedAt: 1 }
+  wrapper = mount(CentralWorkspace, { attachTo: document.body, props: { client: fixture.client } })
+  await flushPromises(); await wrapper.find('.central-pod').trigger('click'); await flushPromises()
+  await page.viewport(390, 950)
+  for (const tab of ['Script', 'Permissions']) {
+    await wrapper.findAll('.central-tabs button').find(item => item.text() === tab)!.trigger('click'); await flushPromises()
+    expect(wrapper.text()).toContain(tab === 'Script' ? 'Jev script reference' : 'TypeSafe connection')
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390)
+    await page.screenshot({ path: `../../.artifacts/jev-central-${tab.toLowerCase()}.png` })
+  }
+})

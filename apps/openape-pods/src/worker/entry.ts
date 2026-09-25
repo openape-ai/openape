@@ -1,3 +1,5 @@
+import { jevAvailability } from './onboarding/store'
+import type { JevEvaluation } from '../contracts/jev'
 import { setTimeout as delay } from 'node:timers/promises'
 import { CentralProjection } from './central/projection'
 import { parseOwner } from '@openape/pods-protocol'
@@ -72,7 +74,7 @@ const runServices: RunServices = { shell: async (scope, signal) => {
 }, closeShell: async (scope) => {
   const { podId, runId, epoch, assignmentRevision, capabilities } = scope
   await mailBridge.execute({ podId, runId, epoch, assignmentRevision, capabilities }, {}, AbortSignal.timeout(10000), 'shellClose')
-}, http: async (body, signal, scope) => parseHttpReply(await mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'http')), credential: async (alias, signal, scope) => {
+}, jev: async (body, signal, scope) => await mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'jev') as JevEvaluation, http: async (body, signal, scope) => parseHttpReply(await mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'http')), credential: async (alias, signal, scope) => {
   const value = await mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, { alias }, signal, 'credential')
   if (typeof value !== 'string') throw new Error('Invalid credential broker response')
   return value
@@ -294,6 +296,8 @@ port.on('message', async (event) => {
     }
     if (request.command && typeof request.command === 'object' && 'resource' in request.command) {
       const resource = parseResourceCommand(request.command.resource, true)
+      if (resource.type === 'assignJev') throw new Error('Jev permissions require owner approval')
+      if (resource.type === 'approveJev') registry.assignJev(resource.podId, resource.connectionId, resource.model, resource.maxAttempts, resource.authority, resource.epoch)
       if (resource.type === 'approveHttp') registry.assignHttp(resource.podId, resource.permission, resource.authority, resource.epoch, resource.authentication)
       if (resource.type === 'assignHttp') throw new Error('HTTP permissions require owner approval')
       if (resource.type === 'saveCredential') throw new Error('Credential values must be stored by the owning main process')
@@ -309,7 +313,7 @@ port.on('message', async (event) => {
       const snapshot = resource.type === 'snapshot' ? await registry.capture(resource.podId, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/')) : undefined
       const resources = registry.list(resource.podId)
       const directories = await podDirectories(store.root, resource.podId)
-      port.postMessage({ id: request.id, state: { directories, variables: variables.list(resource.podId), resources, epoch: registry.epoch(resource.podId), ...(snapshot ? { snapshot } : {}) } })
+      port.postMessage({ id: request.id, state: { jev: jevAvailability(store), directories, variables: variables.list(resource.podId), resources, epoch: registry.epoch(resource.podId), ...(snapshot ? { snapshot } : {}) } })
       return
     }
     const command = parseCommand(request.command)
@@ -317,7 +321,7 @@ port.on('message', async (event) => {
     if (command.type === 'pauseAll') store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE lifecycle=\'active\'').run()
     if (command.type === 'create') store.createPod({ name: command.name })
     if (command.type === 'update') { store.updatePod(command.id, command.revision, { name: command.name, lifecycle: command.lifecycle }); if (command.lifecycle === 'archived') dispatcher.cancelPod(command.id, 'Pod archived') }
-    port.postMessage({ id: request.id, state: { pods: store.listPods(), organization: new PodGroups(store).view() } })
+    port.postMessage({ id: request.id, state: { jev: jevAvailability(store), pods: store.listPods(), organization: new PodGroups(store).view() } })
   }
   catch (error) { port.postMessage({ id: request.id, error: error instanceof Error ? error.message : 'Workspace operation failed' }) }
 })

@@ -1,3 +1,4 @@
+import { parseJevModel } from '../../contracts/jev'
 import type { ProgramAssignment } from '../../contracts/programs'
 import { parseHttpPermission } from '../../contracts/http'
 import type { ProgramAuthority } from '../../main/programs/grants'
@@ -100,6 +101,22 @@ export class ResourceRegistry {
       const id = randomUUID()
       const configuration = { type: 'http', ...scope, authority, capability: `tool.http_${id.replaceAll('-', '')}.request`, ...(authentication ? { authentication } : {}) }
       this.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(id, podId, 'tool', 'ready', scope.origin, JSON.stringify(configuration))
+      this.advance(podId)
+      this.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(podId)
+    })
+    this.revokeActive(podId)
+  }
+
+  assignJev(podId: string, connectionId: string, model: string, maxAttempts: number, authority: ProgramAuthority, expectedEpoch: number): void {
+    parseJevModel(model)
+    this.store.transaction(() => {
+      if (this.store.getPod(podId).lifecycle === 'archived' || this.epoch(podId) !== expectedEpoch || authority.identity.podId !== podId) throw new Error('Pod or Jev permissions changed; reload before assigning access')
+      if (!this.store.db.prepare('SELECT 1 FROM connections WHERE id=? AND provider=\'typesafe\' AND state=\'ready\'').get(connectionId)) throw new Error('TypeSafe is not connected; reconnect in Accounts')
+      const current = this.list(podId).filter(item => item.kind === 'tool' && item.state === 'ready')
+      if (!current.some(item => item.configuration.type === 'jev') && current.length >= 16) throw new Error('This pod already has 16 tools')
+      for (const resource of current.filter(item => item.configuration.type === 'jev')) this.store.db.prepare('UPDATE resources SET state=\'revoked\',revision=revision+1 WHERE id=?').run(resource.id)
+      const configuration = { type: 'jev', capability: 'jev.evaluate', connectionId, model, maxAttempts, authority }
+      this.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), podId, 'tool', 'ready', 'TypeSafe / Jev', JSON.stringify(configuration))
       this.advance(podId)
       this.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(podId)
     })
