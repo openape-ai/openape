@@ -130,11 +130,14 @@ const timer = setInterval(() => {
   tickStartedAt = Date.now()
   ticking = (async () => {
     try {
-      if (Date.now() >= storageAt) {
-        storageAt = Date.now() + 5000
-        try { await tickStep('storage inspection', 60000, () => data.retention.view()) }
-        catch (error) { store.db.prepare('UPDATE data_settings SET error=? WHERE id=1').run(error instanceof Error ? error.message : 'Storage inspection failed') }
+      try {
+        // The full inventory lstats every profile entry (~1 s on a real profile), so it runs every minute unless a limit is already near.
+        if (Date.now() >= storageAt || await data.retention.inspectionDue()) {
+          storageAt = Date.now() + 60000
+          await tickStep('storage inspection', 60000, () => data.retention.view())
+        }
       }
+      catch (error) { store.db.prepare('UPDATE data_settings SET error=? WHERE id=1').run(error instanceof Error ? error.message : 'Storage inspection failed') }
       const error = store.db.prepare('SELECT error FROM data_settings WHERE id=1').get()?.error
       if (error) { for (const pod of store.listPods()) dispatcher.cancelPod(pod.id, String(error)); await tickStep('master stop', 60000, () => master.stop()); return }
       if (Date.now() >= scanAt) { await tickStep('reference scan', 120000, () => watcher.scan()); scanAt = Date.now() + 15000 }
