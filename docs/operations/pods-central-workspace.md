@@ -31,6 +31,47 @@ Its progress is reconciled before new work. An execution whose outcome was not
 journaled is **unknown**, never automatically replayed. Pausing schedules is
 separate from availability: a paused, connected Pod remains editable.
 
+## Publication format and connection status
+
+Issue: https://repos.openape.ai/patrick/monorepo/issues/1384.
+Format 2 splits the snapshot into content-addressed parts: `workspace`, `artifacts`,
+`schema`, one part per Pod, per script version, per run record and per run's events,
+and archive tables in chunks of 16 rows (`contracts/central-parts.ts`). The desktop
+uploads only parts the service does not hold (`parts`, batches of at most 2 MiB),
+journals the manifest delta in `publication.json` and commits it with `publish`
+(`format: 2`). The service verifies every part hash and the manifest digest, validates
+changed parts and cross-part bindings, and commits atomically. A refused delta (409)
+is rebuilt from the current state. The first format-2 publication uploads about
+20 MB once; afterwards a scheduled run changes a few parts (tens of KB). The worker
+reports a change counter, so an idle desktop builds no snapshot at all.
+
+Compatibility: the service still accepts full format-1 snapshots from older desktops
+and keeps their `snapshot` column for rollback. A desktop that sees no `format` on
+`begin` publishes full snapshots. Parts live in additive tables; `user_version`
+stays 1, so an older service can open the database again.
+
+Heartbeats run every 10 seconds on their own and never wait for a publication; the
+service accepts the current or the just-replaced hash. Request timeouts are 15 s
+plus 1 s per 32 KiB. `CentralController.status()` reports `state`
+(connecting, online, reconnecting, offline), `error` prefixed with the failing phase
+(for example `worker snapshot: …`), `since`, the scheduling `gateUntil`, the worker's
+last scheduler tick and the last publication size. The desktop shows it as a banner;
+MCP `runtime` returns it as `central`, and the desktop's own `workspace inventory`
+entry carries it as `desktop`. MCP commands fail with `Central workspace offline:
+<reason>`. After five minutes offline the desktop sends one macOS notification and
+another when scheduling resumes. The service inventory adds `lastSeenAt` per runtime
+and `queue` (blocked inputs, since, error) per Pod; archived Pods keep their
+lifecycle while offline and appear in a separate sidebar section.
+
+Reads: `read` with `view=summary` returns the Pod with its latest 20 run records
+and no events; `view=runs` pages older runs, `view=run` returns one run with its
+events and `view=version` one script version. Without `view`, `read` returns the
+complete legacy Pod. The desktop refreshes on the runtime `changes` long poll and
+falls back to a 5 s timer against an older service.
+
+Changing a Pod's application while one of its runs is in progress is refused;
+previously it cancelled the run and blocked the schedule queue.
+
 ## Stored data and local exclusions
 
 The explicit `centralTables` allowlist in `src/contracts/central.ts` covers:
