@@ -96,6 +96,7 @@ struct PodsRootView: View {
         if let code = model.pairingCode {
           Section("Pair this device") {
             Text(code).font(.title2.monospaced().bold()).textSelection(.enabled)
+              .accessibilityIdentifier("pairing.code")
             Text(
               "On your desktop, open Mobile access → Pair mobile device. Confirm this exact code on both devices."
             ).font(.callout)

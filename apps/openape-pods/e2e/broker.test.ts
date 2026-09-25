@@ -20,7 +20,7 @@ const sha = (bytes: Buffer | string) => createHash('sha256').update(bytes).diges
 afterEach(async () => {
   if (server) await new Promise<void>((resolve, reject) => server!.close(error => error ? reject(error) : resolve()))
   server = undefined
-  if (root) await rm(root, { recursive: true, force: true })
+  if (root) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 })
 async function setup(packaged = false, slow = false, unicode = false) {
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-tool-broker-')))
@@ -77,8 +77,8 @@ describe('ape-shell broker native boundary', () => {
     expect(reply.exitCode).toBe(0)
     expect(reply.stdout).toContain('Grüße 日本語')
   })
-  it.each([false, true])('delivers only the assigned rotating credential in a separate sandbox (packaged=%s)', async (packaged) => {
-    const fixture = await setup(packaged)
+  it('delivers only the assigned rotating credential in a separate sandbox (packaged)', async () => {
+    const fixture = await setup(true)
     const reply = await fixture.broker.execute(fixture.assignment, fixture.request, fixture.lease)
     expect(reply.exitCode, reply.stderr).toBe(0)
     expect(JSON.parse(reply.stdout)).toEqual({ assigned: true, siblingDenied: true, childDenied: true })

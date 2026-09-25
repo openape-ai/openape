@@ -61,5 +61,5 @@ it('external shell: opens the real client and persists harmless application setu
     }
     finally { terminal.kill(); await exited }
   }
-  finally { session.close(); await session.completed; await new Promise<void>(resolve => server.close(() => resolve())); await rm(root, { recursive: true, force: true }) }
+  finally { session.close(); await session.completed; await new Promise<void>(resolve => server.close(() => resolve())); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })

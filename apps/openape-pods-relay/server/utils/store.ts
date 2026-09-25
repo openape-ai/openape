@@ -138,8 +138,30 @@ export class RelayStore {
     })
   }
 
+  isPaired(runtime: Registration, device: Registration): boolean {
+    return sameOwner(runtime.owner, device.owner) && !!this.db.prepare('SELECT 1 FROM pairings WHERE runtime_id=? AND device_id=? AND epoch=?').get(runtime.id, device.id, device.epoch)
+  }
+
   requirePair(runtime: Registration, device: Registration): void {
-    if (!sameOwner(runtime.owner, device.owner) || !this.db.prepare('SELECT 1 FROM pairings WHERE runtime_id=? AND device_id=? AND epoch=?').get(runtime.id, device.id, device.epoch)) throw new ProtocolError('pairing_required', 403)
+    if (!this.isPaired(runtime, device)) throw new ProtocolError('pairing_required', 403)
+  }
+
+  // A restored or re-registered desktop starts a new generation: commands of
+  // the previous generation are never delivered again, buffered content is
+  // dropped and every phone must pair with the new generation explicitly.
+  rotate(runtime: Registration): Registration {
+    if (runtime.kind !== 'runtime') throw new ProtocolError('wrong_actor', 403)
+    return this.transaction(() => {
+      this.db.prepare('UPDATE registrations SET generation=? WHERE id=? AND revoked=0').run(randomUUID(), runtime.id)
+      for (const row of this.db.prepare('SELECT id FROM operations WHERE runtime_id=? AND envelope IS NOT NULL').all(runtime.id)) {
+        const receipt: Receipt = { operationId: row.id as string, state: 'unknown', source: 'relay', updatedAt: new Date(this.now()).toISOString(), code: 'runtime_rotated_reconcile_desktop' }
+        this.db.prepare('UPDATE operations SET envelope=NULL,receipt=? WHERE id=?').run(JSON.stringify(receipt), row.id as string)
+      }
+      this.db.prepare('DELETE FROM events WHERE runtime_id=?').run(runtime.id)
+      this.db.prepare('DELETE FROM pairings WHERE runtime_id=?').run(runtime.id)
+      this.audit(runtime.id, 'rotated')
+      return this.registration(runtime.id)
+    })
   }
 
   admit(actor: Registration, value: unknown, online: (runtimeId: string) => boolean): Receipt {
@@ -187,7 +209,8 @@ export class RelayStore {
         if (existing.envelope !== JSON.stringify(envelope)) throw new ProtocolError('event_conflict', 409)
         return String(existing.sequence)
       }
-      const capacity = this.db.prepare('SELECT count(*) AS count,coalesce(sum(length(envelope)),0) AS bytes FROM events WHERE device_id=?').get(device.id)!
+      // Bounded per device and runtime so one desktop cannot starve another.
+      const capacity = this.db.prepare('SELECT count(*) AS count,coalesce(sum(length(envelope)),0) AS bytes FROM events WHERE device_id=? AND runtime_id=?').get(device.id, runtime.id)!
       if (Number(capacity.count) >= 1000 || Number(capacity.bytes) + JSON.stringify(envelope).length > 32 * 1024 * 1024) throw new ProtocolError('replay_buffer_full', 503)
       const result = this.db.prepare('INSERT INTO events(id,device_id,runtime_id,envelope,created_at) VALUES(?,?,?,?,?)').run(route.id, device.id, runtime.id, JSON.stringify(envelope), this.now())
       if (route.direction === 'response') this.db.prepare('UPDATE operations SET envelope=NULL WHERE id=? AND runtime_id=? AND device_id=?').run(route.id, runtime.id, device.id)
