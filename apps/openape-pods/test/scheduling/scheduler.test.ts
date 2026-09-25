@@ -1,8 +1,9 @@
 // @vitest-environment node
+import { boundedStep } from '../../src/worker/scheduling/tick-step'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PodDatabase } from '../../src/worker/storage/database'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { RunStore } from '../../src/worker/runs/store'
@@ -139,4 +140,11 @@ it('lets earlier ready pods take their slots without queuing a reviewed script f
   for (const run of f.started) f.runs.finish(run.id, 'completed', 'Done', null, run.trigger.eventIds)
   f.scheduler.tick()
   expect(f.started.map(run => run.podId)).toEqual(earlier)
+})
+it('continues a scheduler tick past a step whose promise never settles and names that step', async () => {
+  const expired = vi.fn()
+  expect(await boundedStep(50, async () => 'done', expired)).toBe('done')
+  expect(await boundedStep(20, () => new Promise<never>(() => {}), expired)).toBeUndefined()
+  expect(expired).toHaveBeenCalledOnce()
+  await expect(boundedStep(50, async () => { throw new Error('Storage inspection failed') }, expired)).rejects.toThrow('Storage inspection failed')
 })

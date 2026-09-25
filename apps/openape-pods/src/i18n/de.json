@@ -2401,5 +2401,6 @@
   "Jev service is unavailable": "Der Jev-Dienst ist nicht verfügbar",
   "TypeSafe API key is invalid or access was denied; reconnect": "Der TypeSafe-API-Schlüssel ist ungültig oder der Zugriff wurde verweigert; verbinde erneut",
   "TypeSafe connection failed": "Die TypeSafe-Verbindung ist fehlgeschlagen",
-  "Connected": "Verbunden"
+  "Connected": "Verbunden",
+  "The scheduler step \"{phase}\" did not finish at {time}; scheduling continued. Restart the app if runs stop.": "Der Planungsschritt „{phase}\" wurde um {time} nicht fertig; die Planung läuft weiter. Starte die App neu, falls Läufe ausbleiben."
 }

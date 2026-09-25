@@ -261,6 +261,9 @@ onBeforeUnmount(() => { generation++; abort.abort() })
           {{ desktopStatus.state === 'connecting' ? t('This desktop is connecting to your workspace.') : desktopStatus.state === 'reconnecting' ? t('This desktop is reconnecting since {time}.', { time: time(desktopStatus.since) }) : t('This desktop is offline since {time}. Scheduled runs are paused until it reconnects.', { time: time(desktopStatus.since) }) }}
           <span v-if="desktopStatus.error">{{ diagnostic(desktopStatus.error) }}</span>
         </p>
+        <p v-else-if="desktopStatus?.tickTimeout && Date.now() - desktopStatus.tickTimeout.at < 3600000" role="alert" class="central-error">
+          {{ t('The scheduler step "{phase}" did not finish at {time}; scheduling continued. Restart the app if runs stop.', { phase: desktopStatus.tickTimeout.phase, time: time(desktopStatus.tickTimeout.at) }) }}
+        </p>
         <p v-if="error" role="alert" class="central-error">
           {{ diagnostic(error) }}
         </p><p v-else-if="connectionError" role="alert" class="central-error">
