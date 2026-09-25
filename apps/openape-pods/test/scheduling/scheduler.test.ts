@@ -1,8 +1,9 @@
 // @vitest-environment node
+import { boundedStep } from '../../src/worker/scheduling/tick-step'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PodDatabase } from '../../src/worker/storage/database'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { RunStore } from '../../src/worker/runs/store'
@@ -80,7 +81,10 @@ describe('persistent scheduling and intake', () => {
     const reopened = new PodDatabase(f.store.root); stores.push(reopened)
     const next = new Scheduler(reopened, { start: () => { throw new Error('Paused') } })
     expect(next.acceptEvent(pod, 'fixture', 'before-ack', {})).toBe(accepted)
-    for (let i = 1; i < 1000; i++) next.acceptEvent(pod, 'fixture', String(i), {})
+    // Seed capacity together; the restart above independently verifies durable acceptance.
+    reopened.transaction(() => {
+      for (let i = 1; i < 1000; i++) next.acceptEvent(pod, 'fixture', String(i), {})
+    })
     expect(() => next.acceptEvent(pod, 'fixture', 'overflow', {})).toThrow('full')
     expect(next.acceptEvent(pod, 'fixture', 'before-ack', {})).toBe(accepted)
   })
@@ -89,7 +93,8 @@ describe('persistent scheduling and intake', () => {
     f.scheduler.acceptEvent(pod, 'fixture', 'A', {}); f.scheduler.tick()
     f.runs.finish(f.started[0]!.id, 'failed', 'Failed', 'Synthetic failure')
     f.scheduler.acceptEvent(pod, 'fixture', 'B', {}); f.scheduler.tick()
-    expect(f.started).toHaveLength(1); expect(f.scheduler.view(pod)).toMatchObject({ blocked: 1, pending: 1 })
+    expect(f.started).toHaveLength(1); expect(f.scheduler.view(pod)).toMatchObject({ blocked: 1, pending: 1, error: 'Synthetic failure' })
+    expect(f.scheduler.view(pod).blockedSince).toBe(f.store.db.prepare('SELECT finished_at FROM runs WHERE id=?').get(f.started[0]!.id)!.finished_at)
     const other = f.store.createPod({ name: 'Unconfigured' })
     f.scheduler.requestManual(other.id)
     expect(f.scheduler.view(other.id).blocked).toBe(1)
@@ -135,4 +140,11 @@ it('lets earlier ready pods take their slots without queuing a reviewed script f
   for (const run of f.started) f.runs.finish(run.id, 'completed', 'Done', null, run.trigger.eventIds)
   f.scheduler.tick()
   expect(f.started.map(run => run.podId)).toEqual(earlier)
+})
+it('continues a scheduler tick past a step whose promise never settles and names that step', async () => {
+  const expired = vi.fn()
+  expect(await boundedStep(50, async () => 'done', expired)).toBe('done')
+  expect(await boundedStep(20, () => new Promise<never>(() => {}), expired)).toBeUndefined()
+  expect(expired).toHaveBeenCalledOnce()
+  await expect(boundedStep(50, async () => { throw new Error('Storage inspection failed') }, expired)).rejects.toThrow('Storage inspection failed')
 })

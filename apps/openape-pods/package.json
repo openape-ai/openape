@@ -17,13 +17,16 @@
     "test:boundaries": "vitest run --config vitest.electron.config.ts -t boundary",
     "package:mac": "node scripts/package.mjs",
     "test:packaged": "vitest run --config vitest.electron.config.ts -t packaged",
-    "test:layout": "pnpm build && pnpm package:mac && pnpm test:e2e",
+    "test:layout": "pnpm build && pnpm package:mac && pnpm test:e2e && pnpm test:browser",
+    "test:browser": "vitest run --config vitest.browser.config.ts",
+    "test:fast": "vitest run && vitest run --config vitest.browser.config.ts",
     "report": "node scripts/report.mjs",
     "package:distribution": "node scripts/package.mjs --distribution",
     "package:signed": "node scripts/package.mjs --distribution --signed",
     "package:signed-candidate": "node scripts/package.mjs --distribution --signed-candidate",
     "test:distribution": "node scripts/verify-distribution.mjs",
-    "handbook": "node scripts/handbook.mjs"
+    "handbook": "node scripts/handbook.mjs",
+    "handbook:capture": "PODS_HANDBOOK_CAPTURE=1 vitest run --config vitest.electron.config.ts"
   },
   "dependencies": {
     "@xterm/addon-fit": "0.11.0",
@@ -39,6 +42,8 @@
     "@openape/grants": "workspace:*",
     "@types/node": "catalog:",
     "@vitejs/plugin-vue": "catalog:",
+    "@vitest/browser": "catalog:",
+    "@vitest/browser-playwright": "catalog:",
     "@vue/test-utils": "catalog:",
     "electron": "40.9.3",
     "electron-builder": "26.15.3",

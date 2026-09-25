@@ -2,7 +2,7 @@
 import { createServer } from 'node:http'
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto'
 import { resolve } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import { AgentAuthority } from '../src/main/broker/authorization'
 import type { RunApproval } from '../src/contracts/activity'
@@ -17,7 +17,7 @@ async function fixture(initial = 'used', decision = 'approved') {
   const resolved = await resolveCommand(adapter, argv)
   const command = { cliId: 'pod-runtime', adapterPath, adapterDigest: adapter.digest, argv, permission: resolved.permission }
   const keys = generateKeyPairSync('ed25519')
-  const state = { grantType: 'once', initial, decision, creates: 0, consumes: [] as string[], tokens: [] as string[], bodies: [] as Record<string, unknown>[], active: true, tokenError: false, subject: 'pod@example.test', progress: [] as RunApproval[], grants: new Map<string, string>() }
+  const state = { grantType: 'once', initial, decision, creates: 0, consumes: [] as string[], tokens: [] as string[], bodies: [] as Record<string, unknown>[], active: true, tokenError: false, subject: 'pod@example.test', progress: [] as RunApproval[], grants: new Map<string, string>(), staleAdapters: new Set<string>() }
   let origin = ''
   const server = createServer(async (request, response) => {
     response.setHeader('Content-Type', 'application/json')
@@ -35,7 +35,7 @@ async function fixture(initial = 'used', decision = 'approved') {
       if (state.tokenError || (id === 'old' && state.initial === 'used')) { response.statusCode = 400; reply({ type: 'https://openape.org/errors/grant_not_approved', title: 'Grant is not approved (status: used)' }); return }
       const now = Math.floor(Date.now() / 1000)
       const head = Buffer.from(JSON.stringify({ alg: 'EdDSA', kid: 'key' })).toString('base64url')
-      const payload = Buffer.from(JSON.stringify({ iss: origin, sub: state.subject, aud: 'shapes', target_host: `pods:${podId}`, grant_id: id, grant_type: state.grantType, iat: now, exp: now + 60, jti: randomUUID(), authorization_details: [resolved.detail], execution_context: resolved.executionContext })).toString('base64url')
+      const payload = Buffer.from(JSON.stringify({ iss: origin, sub: state.subject, aud: 'shapes', target_host: `pods:${podId}`, grant_id: id, grant_type: state.grantType, iat: now, exp: now + 60, jti: randomUUID(), authorization_details: [resolved.detail], execution_context: state.staleAdapters.has(id) ? { ...resolved.executionContext, adapter_digest: `SHA-256:${'0'.repeat(64)}` } : resolved.executionContext })).toString('base64url')
       reply({ authz_jwt: `${head}.${payload}.${sign(null, Buffer.from(`${head}.${payload}`), keys.privateKey).toString('base64url')}` }); return
     }
     if (request.url?.endsWith('/consume')) { state.consumes.push(id); if (state.grantType === 'once') state.grants.set(id, 'used'); reply({ status: 'valid' }); return }
@@ -102,4 +102,51 @@ it('reuses Pod-scoped continuing permission across script paths, but rejects ano
   const other = { ...changed, argv: changed.argv.map(arg => arg === f.connection.targetHost.slice(5) ? otherId : arg), permission: `pod-runtime.pod[id=${otherId}]#run` }
   await expect(f.authority.authorize({ command: other, grantId: 'old' }, new AbortController().signal)).rejects.toThrow('does not cover')
   expect(f.state.consumes).toEqual(['old'])
+})
+
+it('uses the current owner assignment instead of a historical grant for a replaced adapter', async () => {
+  const f = await fixture('approved'); f.state.grantType = 'always'
+  f.state.grants.set('historical', 'approved'); f.state.staleAdapters.add('historical')
+  const authority = new AgentAuthority(f.connection, undefined, async () => 'historical')
+  await authority.authorize({ command: f.command, grantId: 'old' }, new AbortController().signal)
+  expect(f.state.tokens).toEqual(['old']); expect(f.state.consumes).toEqual(['old'])
+  expect(f.state.creates).toBe(0)
+})
+
+it('retains a renewed continuing grant when the original assignment was consumed', async () => {
+  const f = await fixture(); f.state.grantType = 'always'; f.state.grants.set('renewed', 'approved')
+  const authority = new AgentAuthority(f.connection, undefined, async () => 'renewed')
+  await authority.authorize({ command: f.command, grantId: 'old' }, new AbortController().signal)
+  expect(f.state.tokens).toEqual(['renewed']); expect(f.state.consumes).toEqual(['renewed'])
+  expect(f.state.creates).toBe(0)
+})
+
+it('automatically approves the runtime while retaining signed authorization and reusable consumption', async () => {
+  const f = await fixture('used', 'pending'); f.state.grantType = 'always'
+  const approve = vi.fn(async (id: string) => { f.state.grants.set(id, 'approved'); return true })
+  const progress: { state: string, automatic: boolean }[] = []
+  const authority = new AgentAuthority(f.connection, async (item, automatic = false) => { progress.push({ state: item.state, automatic }) }, undefined, approve)
+  const assignment = { command: f.command, grantId: '' }
+  await authority.authorize(assignment, new AbortController().signal)
+  await authority.authorize(assignment, new AbortController().signal)
+  expect(approve).toHaveBeenCalledTimes(1)
+  expect(f.state.creates).toBe(1)
+  expect(f.state.consumes).toEqual(['fresh-1', 'fresh-1'])
+  expect(progress).toEqual([{ state: 'pending', automatic: true }, { state: 'approved', automatic: false }, { state: 'approved', automatic: false }])
+})
+
+it.each(['denied', 'revoked'])('never automatically replaces a previously %s runtime decision', async (decision) => {
+  const f = await fixture(decision)
+  const approve = vi.fn()
+  const authority = new AgentAuthority(f.connection, undefined, async () => 'old', approve)
+  await expect(authority.authorize({ command: f.command, grantId: '' }, new AbortController().signal)).rejects.toThrow(decision)
+  expect(approve).not.toHaveBeenCalled(); expect(f.state.creates).toBe(0)
+})
+
+it('records the pending grant before an automatic approval failure and never consumes it', async () => {
+  const f = await fixture('used', 'pending')
+  const authority = new AgentAuthority(f.connection, async (progress) => { f.state.progress.push(progress) }, undefined, async () => { throw new Error('Owner connection binding is invalid') })
+  await expect(authority.authorize({ command: f.command, grantId: '' }, new AbortController().signal)).rejects.toThrow('Owner connection')
+  expect(f.state.progress).toMatchObject([{ grantId: 'fresh-1', state: 'pending' }])
+  expect(f.state.consumes).toEqual([])
 })

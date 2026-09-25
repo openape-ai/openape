@@ -1,6 +1,8 @@
+import { parseJevModel } from '../../contracts/jev'
 import type { ProgramAssignment } from '../../contracts/programs'
 import { parseHttpPermission } from '../../contracts/http'
 import type { ProgramAuthority } from '../../main/programs/grants'
+import type { HttpAuthentication } from '../../contracts/http'
 import { parseCredentialAlias } from '../../contracts/credentials'
 import type { DirectoryAccess, PodResource } from '../../contracts/resources'
 import { randomUUID } from 'node:crypto'
@@ -73,6 +75,9 @@ export class ResourceRegistry {
   assignProgram(podId: string, id: string, configuration: ProgramAssignment, expectedEpoch: number): void {
     this.store.transaction(() => {
       if (this.store.getPod(podId).lifecycle === 'archived' || this.epoch(podId) !== expectedEpoch) throw new Error('Pod or application permissions changed; reload before assigning access')
+      // Changing an application cancels the running run and blocks its schedule input, so refuse it until the run ends.
+      const running = this.store.db.prepare('SELECT started_at FROM runs WHERE pod_id=? AND state=\'running\' ORDER BY started_at LIMIT 1').get(podId)
+      if (running) throw new Error(`This Pod has a run in progress since ${new Date(Number(running.started_at)).toISOString()}; wait for it to finish or cancel it before changing its applications`)
       const owner = this.store.db.prepare('SELECT pod_id FROM resources WHERE id=?').get(id)
       if (owner && owner.pod_id !== podId) throw new Error('Application belongs to another pod')
       const current = this.list(podId).find(item => item.id === id)
@@ -85,7 +90,7 @@ export class ResourceRegistry {
     this.revokeActive(podId)
   }
 
-  assignHttp(podId: string, permission: unknown, authority: ProgramAuthority, expectedEpoch: number): void {
+  assignHttp(podId: string, permission: unknown, authority: ProgramAuthority, expectedEpoch: number, authentication?: HttpAuthentication): void {
     const scope = parseHttpPermission(permission)
     this.store.transaction(() => {
       const pod = this.store.getPod(podId)
@@ -94,8 +99,24 @@ export class ResourceRegistry {
       if (!current.some(item => item.configuration.type === 'http' && item.configuration.origin === scope.origin) && current.length >= 16) throw new Error('This pod already has 16 tools')
       for (const item of this.list(podId).filter(item => item.kind === 'tool' && item.configuration.type === 'http' && item.configuration.origin === scope.origin && item.state !== 'revoked')) this.store.db.prepare('UPDATE resources SET state=\'revoked\',revision=revision+1 WHERE id=?').run(item.id)
       const id = randomUUID()
-      const configuration = { type: 'http', ...scope, authority, capability: `tool.http_${id.replaceAll('-', '')}.request` }
+      const configuration = { type: 'http', ...scope, authority, capability: `tool.http_${id.replaceAll('-', '')}.request`, ...(authentication ? { authentication } : {}) }
       this.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(id, podId, 'tool', 'ready', scope.origin, JSON.stringify(configuration))
+      this.advance(podId)
+      this.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(podId)
+    })
+    this.revokeActive(podId)
+  }
+
+  assignJev(podId: string, connectionId: string, model: string, maxAttempts: number, authority: ProgramAuthority, expectedEpoch: number): void {
+    parseJevModel(model)
+    this.store.transaction(() => {
+      if (this.store.getPod(podId).lifecycle === 'archived' || this.epoch(podId) !== expectedEpoch || authority.identity.podId !== podId) throw new Error('Pod or Jev permissions changed; reload before assigning access')
+      if (!this.store.db.prepare('SELECT 1 FROM connections WHERE id=? AND provider=\'typesafe\' AND state=\'ready\'').get(connectionId)) throw new Error('TypeSafe is not connected; reconnect in App settings')
+      const current = this.list(podId).filter(item => item.kind === 'tool' && item.state === 'ready')
+      if (!current.some(item => item.configuration.type === 'jev') && current.length >= 16) throw new Error('This pod already has 16 tools')
+      for (const resource of current.filter(item => item.configuration.type === 'jev')) this.store.db.prepare('UPDATE resources SET state=\'revoked\',revision=revision+1 WHERE id=?').run(resource.id)
+      const configuration = { type: 'jev', capability: 'jev.evaluate', connectionId, model, maxAttempts, authority }
+      this.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), podId, 'tool', 'ready', 'TypeSafe / Jev', JSON.stringify(configuration))
       this.advance(podId)
       this.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(podId)
     })

@@ -17,7 +17,8 @@ link their canonical issue instead of copying its lifecycle.
    preferably in a dedicated worktree. Preserve other worktrees and local work.
 3. Select the installed Node pin with `. ./scripts/activate-node.sh`, install
    using `pnpm install --frozen-lockfile`, then use
-   `pnpm check:affected --base origin/main --head HEAD` while developing.
+   `pnpm check:affected --base origin/main --head HEAD --suite unit` while
+   developing (the pre-push hook runs the same); E2E and layout run externally.
 4. Run full lint/typecheck before committing; app changes also require an app
    build and relevant tests. The shared merge gate is `pnpm check:ci` (unit,
    E2E and layout). [Check details and logs](docs/operations/checks.md).

@@ -19,12 +19,15 @@
     "@openape/pods-protocol": "workspace:*",
     "h3": "catalog:",
     "jose": "catalog:",
-    "nuxt": "catalog:"
+    "nuxt": "catalog:",
+    "@openape/nuxt-auth-sp": "workspace:*",
+    "vue": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "openape-e2e": "workspace:*"
+    "openape-e2e": "workspace:*",
+    "@openape/pods": "workspace:*"
   }
 }

@@ -1,7 +1,17 @@
 import { parseHttpPermission } from './http'
 import type { ProgramAuthority } from '../main/programs/grants'
 
+export interface ProgramRuntime {
+  executable: string
+  executableHash: string
+  arguments: string[]
+  readDirectories: string[]
+  environment: Record<string, string>
+  descriptor: { path: string, hash: string }
+}
+
 export interface ProgramDefinition {
+  runtime?: ProgramRuntime
   name: string
   icon?: string
   bundlePath?: string

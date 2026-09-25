@@ -1,3 +1,5 @@
 dist/
 release/
 .artifacts/
+.vitest-attachments/
+test/layout/__screenshots__/

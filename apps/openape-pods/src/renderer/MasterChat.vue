@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { chatModels, parseChatModel } from '../contracts/models'
 import type { ChatModel } from '../contracts/models'
-import ChatSetupReview from './ChatSetupReview.vue'
+import ChangeReview from './ChangeReview.vue'
+import AccessProposals from './AccessProposals.vue'
 import { t, diagnostic, label } from './i18n'
 import { chatDraft } from './chat-buffer'
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
@@ -223,99 +224,8 @@ onMounted(async () => {
             <strong>{{ draft.name }}</strong> · {{ t(draft.validation ? 'Validated with synthetic services' : 'Unvalidated draft') }}<span v-if="draft.validationError" class="error-message"> · {{ diagnostic(draft.validationError) }}</span>
           </p>
         </details>
-        <section v-if="view?.changes?.length" :aria-label="t('Changes for review')">
-          <h3>{{ t('Changes for review') }}</h3>
-          <details v-for="change in view.changes" :key="change.id" class="chat-access" :open="change.state === 'pending'">
-            <summary>{{ t(change.kind === 'run' ? 'Run once' : 'Saved changes') }} · {{ change.targets.map(target => target.name).join(', ') }} · {{ change.kind === 'run' && change.state === 'applied' ? t('Run requested') : label(change.state) }}</summary>
-            <details v-if="change.workflow">
-              <summary>{{ change.workflow.before.name }} · {{ t('Workflow changes') }}</summary><div class="change-columns">
-                <section><h5>{{ t('Before') }}</h5><pre>{{ JSON.stringify(change.workflow.before, null, 2) }}</pre></section><section><h5>{{ t('Proposed') }}</h5><pre>{{ JSON.stringify(change.workflow.command, null, 2) }}</pre></section>
-              </div>
-            </details>
-            <p v-if="change.error" role="alert" class="error-message">
-              <strong v-if="change.errorPodId">{{ change.targets.find(target => target.podId === change.errorPodId)?.name }}: </strong>{{ diagnostic(change.error) }}
-            </p>
-            <p v-if="change.contextRevision !== view.conversation?.revision" class="muted">
-              {{ t('Earlier context: inspect and prepare these changes again before applying.') }}
-            </p>
-            <article v-for="target in change.targets" :key="target.podId">
-              <h4>{{ target.name }}</h4>
-              <details v-for="(review, index) in target.review" :key="index" class="change-diff">
-                <summary>{{ t(review.action.startsWith('setVariable') ? 'Change variable' : review.action === 'activate' ? 'Use script version' : review.action === 'rollback' ? 'Restore script version' : review.action === 'revise' ? 'Rename Pod' : review.action === 'setGroup' ? 'Change group' : review.action === 'prepareSchedule' ? 'Prepare disabled schedule' : review.action === 'pause' ? 'Pause Pod' : 'Run once') }}{{ review.action.includes(':') ? review.action.slice(review.action.indexOf(':')) : '' }}</summary>
-                <div class="change-columns">
-                  <section><h5>{{ t('Before') }}</h5><pre>{{ review.before || t('none') }}</pre></section><section><h5>{{ t('Proposed') }}</h5><pre>{{ review.after || t('none') }}</pre></section>
-                </div>
-                <details v-if="review.evidence">
-                  <summary>{{ t('Validation details') }}</summary><pre>{{ review.evidence }}</pre>
-                </details>
-              </details>
-              <p v-if="change.state === 'applied' && change.kind !== 'run'">
-                {{ t(target.changedSinceApply ? 'Applied then; configuration changed later' : 'Applied with a saved receipt') }}
-              </p>
-              <div v-for="execution in change.execution?.filter(item => item.podId === target.podId)" :key="execution.runId ?? execution.podId" class="run-receipt">
-                <strong>{{ label(execution.state) }}</strong><p v-if="execution.error" class="error-message">
-                  {{ diagnostic(execution.error) }}
-                </p><button v-if="execution.runId" class="text-button" @click="emit('run', execution.podId, execution.runId)">
-                  {{ t('View run trace') }}
-                </button><button v-else-if="execution.workflowId" class="text-button" @click="emit('workflow', execution.workflowId!)">
-                  {{ t('Open workflow') }}
-                </button>
-              </div>
-              <details v-if="change.results.some(result => result.podId === target.podId)">
-                <summary>{{ t('Receipt') }}</summary><pre>{{ JSON.stringify(change.results.filter(result => result.podId === target.podId), null, 2) }}</pre>
-              </details>
-            </article>
-            <div v-if="change.state === 'pending' && change.contextRevision === view.conversation?.revision" class="overview-actions">
-              <button class="primary" :disabled="busy || !!view.activeConversationId" @click="command({ type: 'applyChanges', id: change.id, revision: change.revision })">
-                {{ t(change.kind === 'run' ? 'Run once' : 'Apply changes together') }}
-              </button><button class="secondary" :disabled="busy" @click="command({ type: 'discardChanges', id: change.id, revision: change.revision })">
-                {{ t('Discard changes') }}
-              </button>
-            </div>
-          </details>
-        </section>
-        <section v-if="view?.proposals.length" :aria-label="t('Access proposals')">
-          <h3>{{ t("Resource access for your review") }}</h3><details v-for="proposal in view.proposals" :key="proposal.id" class="chat-access" :open="proposal.state === 'pending'">
-            <summary>{{ proposal.body.description }}<span v-if="proposal.state !== 'pending'" class="muted"> · {{ label(proposal.state) }}</span></summary><dl class="proposal-scope">
-              <dt>{{ t("Service") }}</dt><dd>{{ proposal.body.provider === 'credential' ? t('Secrets') : proposal.body.provider === 'directory' ? t('Directory permissions') : proposal.body.provider === 'reference' ? t('Files and folders') : proposal.body.provider === 'variable' ? t('Variables') : proposal.body.provider === 'http' ? t('HTTP destinations') : t('Executable applications') }}</dd>
-              <template v-if="proposal.body.alias">
-                <dt>{{ t(proposal.body.provider === 'variable' ? 'Variable name' : 'Secret name') }}</dt><dd>{{ proposal.body.alias }}</dd>
-              </template>
-              <template v-if="proposal.body.application">
-                <dt>{{ t('Application') }}</dt><dd>{{ proposal.body.application }}</dd>
-              </template>
-              <template v-if="proposal.body.command">
-                <dt>{{ t('Program arguments') }}</dt><dd>{{ proposal.body.command }}</dd>
-              </template>
-              <template v-if="proposal.body.origin">
-                <dt>{{ t('HTTPS origin') }}</dt><dd>{{ proposal.body.origin }}</dd>
-              </template>
-              <template v-if="proposal.body.account">
-                <dt>{{ t("Account") }}</dt><dd>{{ proposal.body.account }}</dd>
-              </template>
-              <template v-if="proposal.body.folders">
-                <dt>{{ t("Folders") }}</dt><dd>{{ (proposal.body.folders as string[]).join(', ') }}</dd>
-              </template>
-              <template v-if="proposal.body.attachments !== undefined">
-                <dt>{{ t("Attachments") }}</dt><dd>{{ proposal.body.attachments ? t("Include readable attachments") : t("Do not read attachments") }}</dd>
-              </template>
-            </dl>
-            <p v-if="proposal.body.instructions" class="master-text">
-              {{ proposal.body.instructions }}
-            </p>
-            <p v-else-if="proposal.body.provider === 'credential' && proposal.body.alias === 'telegram_bot_token'" class="master-text">
-              {{ t('In Telegram, open @BotFather. Use /newbot to create a bot or /mybots to select an existing bot and its API token. Save the token only in Variables and secrets, never in this chat. Then open your bot and send /start.') }}
-            </p>
-            <div v-if="proposal.state === 'pending'" class="overview-actions">
-              <ChatSetupReview v-if="['http', 'directory', 'reference', 'application', 'variable'].includes(proposal.body.provider)" :proposal="proposal" @updated="setupUpdated" />
-              <button v-else class="secondary" @click="proposal.body.provider === 'credential' ? emit('settings', proposal.podId, proposal.body.alias) : emit('resources', proposal.podId)">
-                {{ proposal.body.provider === 'credential' ? t('Variables and secrets') : t('Review resources') }}
-              </button><button class="text-button" :disabled="busy" @click="command({ type: 'decline', id: proposal.id, podId: proposal.podId })">
-                {{ t("Decline") }}
-              </button>
-            </div>
-          </details>
-        </section>
+        <ChangeReview v-if="view?.changes?.length" :view="view" :busy="busy" @command="command" @run="(podId, runId) => emit('run', podId, runId)" @workflow="id => emit('workflow', id)" />
+        <AccessProposals v-if="view?.proposals.length" :view="view" :busy="busy" @command="command" @updated="setupUpdated" @settings="(podId, alias) => emit('settings', podId, alias)" @resources="podId => emit('resources', podId)" />
 
         <button v-if="view?.scriptState && view.state !== 'running' && (view.state === 'interrupted' || view.state === 'failed' || view.scriptState === 'missing' || view.proposals.length)" class="secondary" :disabled="busy || !view.connected" @click="resumeSetup">
           {{ t('Continue setup') }}
@@ -399,10 +309,6 @@ onMounted(async () => {
 <style scoped>
 .chat-add-context { flex:none; width:34px; height:34px; padding:0; border:0; border-radius:50%; background:var(--sidebar); color:var(--text); font-size:26px; cursor:pointer; line-height:1; }
 .chat-add-context:disabled { opacity:.5; cursor:default; }
-.change-columns { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-.change-columns section { min-width:0; }
-.change-diff { margin:10px 0; }
-@media(max-width:760px) { .change-columns { grid-template-columns:1fr; } }
 .context-chips { display:flex; flex-wrap:wrap; gap:8px; padding:6px 24px; color:var(--muted); font-size:13px; }
 .context-notice { font-size:13px; color:var(--muted); line-height:1.5; }
 .chat-access pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:320px; overflow:auto; }

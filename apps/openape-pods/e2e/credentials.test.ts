@@ -1,13 +1,16 @@
 import { fixtureShellIdentity } from './fixtures/shell-identity'
 import { randomBytes } from 'node:crypto'
 import { _electron as electron } from 'playwright'
-import { mkdtemp, realpath, rm, readFile, readdir, mkdir } from 'node:fs/promises'
+import { mkdtemp, realpath, rm, readFile, readdir } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
 import { fixtureDirectory } from '../src/main/fixture'
 import { PodDatabase } from '../src/worker/storage/database'
 
+// Geometry of the Values tab lives in test/layout/pod-tabs.test.ts. This file
+// keeps what needs the packaged app: real macOS safeStorage ciphertext, a restart
+// that decrypts it again, and key files erased on rotation and revocation.
 it('credentials: packaged owner flow retains assigned secrets across runs and revokes access', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-credentials-ui-'))); fixtureDirectory(root)
   const store = new PodDatabase(root); const pod = store.createPod({ name: 'Customer review' }); store.close()
@@ -34,8 +37,6 @@ it('credentials: packaged owner flow retains assigned secrets across runs and re
   try {
     let page = await app.firstWindow(); page.setDefaultTimeout(7000); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
     await page.getByRole('tab', { name: 'Variables and secrets', exact: true }).click()
-    await mkdir(resolve('.artifacts'), { recursive: true })
-    await page.locator('.credential-form').screenshot({ path: resolve('.artifacts/handbook-credentials-en.png') })
     console.info('Credential flow: rendered resources, saving synthetic encrypted value')
     await page.getByLabel('Credential alias', { exact: true }).fill('crm')
     await page.getByLabel('Credential value', { exact: true }).fill('SYNTHETIC_SCRIPT_CREDENTIAL')
@@ -67,17 +68,16 @@ export async function run(context) {
 `
     await panel().getByLabel('Script source').fill(code)
     await panel().getByRole('button', { name: 'Save script', exact: true }).click()
+    await panel().getByText('Draft saved. Validate it before activation.', { exact: true }).waitFor()
     await page.getByRole('tab', { name: 'Variables and secrets', exact: true }).click()
-    await page.getByRole('checkbox', { name: 'crm', exact: true }).check()
-    await page.getByRole('button', { name: 'Save script access', exact: true }).click()
-    await page.getByText('Script access saved', { exact: true }).waitFor()
+    expect(await page.getByRole('checkbox', { name: 'crm', exact: true }).count()).toBe(0)
+    expect(await page.getByRole('button', { name: 'Save script access', exact: true }).count()).toBe(0)
     await page.getByRole('tab', { name: 'Script', exact: true }).click()
     await panel().getByRole('button', { name: 'Run', exact: true }).click()
     await page.getByText('Credential script completed', { exact: true }).waitFor()
     const validated = await page.evaluate(podId => window.pods.scripts({ type: 'list', podId }), pod.id)
-    expect(validated.source!.credentialAccessApproved).toBe(true)
+    expect(validated.source!.capabilities).toEqual([])
     expect(await page.getByRole('button', { name: 'Review credential access' }).count()).toBe(0)
-    await page.screenshot({ path: resolve('.artifacts/credentials-approved.png') })
     const runs = await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), pod.id)
     expect(runs.runs[0]!.state).toBe('completed')
     expect(JSON.stringify(await page.evaluate(({ podId, id }) => window.pods.runs({ type: 'list', podId, runId: id }), { podId: pod.id, id: runs.runs[0]!.id }))).not.toContain('SYNTHETIC_SCRIPT_CREDENTIAL')
@@ -96,24 +96,12 @@ export async function run(context) {
     await page.locator('.resource-row').last().getByRole('button', { name: 'Revoke access' }).click()
     await expect.poll(async () => (await page.evaluate(podId => window.pods.resources({ type: 'list', podId }), pod.id)).resources.find(item => item.id === current.id)?.state).toBe('revoked')
     expect(await readdir(join(root, 'credentials'))).not.toContain(`${id}.encrypted`)
-    expect((await page.evaluate(podId => window.pods.scripts({ type: 'list', podId }), pod.id)).source!.credentialAccessApproved).toBe(false)
+    expect((await page.evaluate(podId => window.pods.scripts({ type: 'list', podId }), pod.id)).source!.validated).toBe(false)
     expect((await page.evaluate(podId => window.pods.runs({ type: 'start', podId }), pod.id)).runs).toHaveLength(2)
     expect(await page.evaluate(podId => window.pods.scheduling({ type: 'list', podId }), pod.id)).toMatchObject({ blocked: 1, error: expect.stringContaining('validation') })
     expect(await readdir(join(root, 'credentials'))).not.toContain(`${current.configuration.credentialId}.encrypted`)
     expect(await readdir(join(root, 'credentials'))).toContain(`${otherId}.encrypted`)
     expect((await page.evaluate(podId => window.pods.scheduling({ type: 'list', podId }), pod.id)).enabled).toBe(false)
-    const epoch = (await page.evaluate(podId => window.pods.resources({ type: 'list', podId }), pod.id)).epoch
-    await page.evaluate(({ podId, epoch }) => window.pods.resources({ type: 'saveCredential', podId, alias: 'a'.repeat(64), value: 'SYNTHETIC_LONG_ALIAS', epoch }), { podId: pod.id, epoch })
-    await page.getByRole('tab', { name: 'Overview', exact: true }).click(); await page.getByRole('tab', { name: 'Variables and secrets', exact: true }).click()
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(560, 840)); await page.emulateMedia({ colorScheme: 'dark' })
-    const content = page.locator('.content'); const fieldset = page.locator('.script-access')
-    await fieldset.scrollIntoViewIfNeeded()
-    expect(await content.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
-    await fieldset.evaluate(element => element.style.minWidth = '1200px')
-    expect(await content.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
-    await fieldset.evaluate(element => element.style.removeProperty('min-width'))
-    expect(await content.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
-    await page.screenshot({ path: resolve('.artifacts/credentials-long-alias-dark.png') })
   }
   finally {
     const process = app.process()
