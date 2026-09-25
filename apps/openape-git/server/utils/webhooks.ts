@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 
-// Signed webhooks (plan M5). One shared secret per webhook carries both
+// Signed webhooks. One shared secret per webhook carries both
 // directions: the forge signs the delivery body, the consumer signs its
 // commit-status POST and its archive GET with the same key. HMAC-SHA256 over
 // bytes — no key distribution problem, no token expiry for an unattended
