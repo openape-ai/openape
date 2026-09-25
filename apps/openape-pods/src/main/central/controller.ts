@@ -327,6 +327,7 @@ export class CentralController {
   // Inventory carries this desktop's own connection status, which the service cannot know.
   async query(body: Record<string, unknown>): Promise<unknown> {
     if (!['inventory', 'read', 'submit', 'operation', 'changes'].includes(String(body.type))) throw new Error('Unsupported workspace query')
+    if (!this.lease) throw new Error(this.offlineMessage())
     const result = await this.call(body)
     if (body.type !== 'inventory' || !Array.isArray(result)) return result
     return result.map((runtime: { id?: unknown }) => runtime.id === this.runtimeId ? { ...runtime, desktop: this.status() } : runtime)
