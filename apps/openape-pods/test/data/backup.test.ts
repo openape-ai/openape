@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdtemp, mkdir, lstat, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { appendFile, chmod, mkdtemp, mkdir, lstat, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -134,6 +134,23 @@ it('requests an early full inventory only when tracked usage reaches the limit o
   expect((await retention.view()).error).toContain('limit reached')
   retention.limit(1024 ** 3); expect(await retention.inspectionDue()).toBe(true)
   expect((await retention.view()).error).toBeNull(); expect(await retention.inspectionDue()).toBe(false)
+})
+
+it('re-measures active runs every time and a settled run only after its folder changes', async () => {
+  const { store, root, runId } = await fixture(); const retention = new DataRetention(store, 'unused-helper')
+  const mebibyte = Buffer.alloc(1024 * 1024, 1); const agent = join(root, 'runs', runId, 'agent'); await mkdir(agent, { recursive: true })
+  const used = async () => (await retention.view()).usedBytes
+  const grewBy = (after: number, before: number, bytes: number) => expect(Math.abs(after - before - bytes)).toBeLessThan(128 * 1024)
+  await writeFile(join(agent, 'output.bin'), mebibyte); const first = await used()
+  await appendFile(join(agent, 'output.bin'), mebibyte); const recent = await used()
+  grewBy(recent, first, mebibyte.length)
+  store.db.prepare('UPDATE runs SET finished_at=? WHERE id=?').run(Date.now() - 600000, runId); const settled = await used()
+  await chmod(agent, 0o000)
+  try { grewBy(await used(), settled, 0) }
+  finally { await chmod(agent, 0o700) }
+  await writeFile(join(root, 'runs', runId, 'late.bin'), mebibyte); const changed = await used()
+  grewBy(changed, settled, mebibyte.length)
+  await rm(join(root, 'runs', runId), { recursive: true }); grewBy(await used(), changed, -3 * mebibyte.length)
 })
 
 it('leaves an idle database unchanged although each measurement includes the growing WAL', async () => {
