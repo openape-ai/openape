@@ -20,16 +20,17 @@ neutral fresh Codex authoring plus live Pod grant flow and labelled workflow qua
 Commit/push hooks passed the affected unit contract, including the relay consumer.
 The original head `9f3ee934` passed external CI. Owner UI correction: compact API-key form directly in App settings, no Jev explanation/link or Script/Permissions panels. Agent reference and resources API remain authoritative. Full lint/typecheck, build, 34 focused tests and five browser tests pass; [updated screenshots](https://testrun.openape.ai/r/sDUdikwIBcms_bwtddTTcAJG). Next: push the UI correction and check its exact head before PR review; no production release in this task.
 
-## Pods: stable central connection (September 25, 2026) — implementing
+## Pods: stable central connection (September 25, 2026) — deployed
 
 [Issue 1384](https://repos.openape.ai/patrick/monorepo/issues/1384),
 [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3C2RQPRQ5HE2XBRFXR8KRM5).
-Worktree `pods-central-stability`, branch `bugfix/issue-1384-pods-central-stability`, base `0003ecb4`.
-Format-2 part publication, independent heartbeat, phase-tagged offline reason in UI/MCP,
-five-minute owner notification, bounded reads with a change feed, archived section,
-visible blocked queue and refusal of application changes during a run.
-Before: 30.4 MB `publication.json`; 5 min nettop on the main process 132.7 MB in / 63.3 MB out.
-Next: PR, relay deployment first, then the signed desktop after Patrick's go.
+PR 132 (`63ab0bf0`), follow-ups PR 133 (`dea37661`, idle storage rewrite) and PR 135 (`3c9afa24`, bounded scheduler tick), all exact-source CI green.
+Relay `prod-63ab0bf0`; signed desktop `3c9afa24` (DMG sha256 `33a46975…`) installed 15:15.
+Backups: relay `shared/backups/issue-1384-before-20260925T112651Z`; desktop
+`~/Library/Application Support/OpenApe Pods Rollback/2026-09-25-151456-issue-1384-final`.
+5 min nettop on the main process: 132.7 MB in / 63.3 MB out before, 0.74 MB / 0.64 MB after.
+Measurements, incidents and lessons: PR 132 comment. Open follow-ups: storage inspection walks ~24 000 files every 5 s;
+`query` before the first lease answers 400 instead of "connecting".
 
 ## Pods MCP discovery texts (September 25, 2026)
 
