@@ -1,5 +1,9 @@
 // @vitest-environment node
 import { expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { RuntimeApprovalPolicy } from '../../src/main/codex/runtime-approval'
 
 vi.mock('electron', () => ({ utilityProcess: { fork: vi.fn() }, safeStorage: {}, app: { getPath: () => '/nonexistent' } }))
 
@@ -78,4 +82,30 @@ it('rejects MCP attempts to override leases, submit local closures or bypass cen
   expect(query).not.toHaveBeenCalled()
   worker.central = null
   await expect(worker.codex({ id, action: { action: 'workspace', query: { type: 'inventory' } } })).rejects.toThrow('Connect the central workspace')
+})
+
+it('records only local MCP creation, including a queued central creation on this runtime', async () => {
+  const { FixtureWorker } = await import('../../src/main/worker')
+  const root = mkdtempSync(join(tmpdir(), 'pods-provenance-'))
+  try {
+    const policy = new RuntimeApprovalPolicy(root); policy.setEnabled(true)
+    const worker = new FixtureWorker(() => {}, policy)
+    const ids = [1, 2, 3, 4].map(n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`)
+    const runtimeId = ids[3]!
+    const owner = { issuer: 'https://owner.example', subject: 'owner' }
+    const central = { executing: true, status: () => ({ runtimeId }), query: vi.fn(async () => ({})) }
+    Object.assign(worker, { central, remoteOwner: async () => ({ owner }), centralProvision: vi.fn(), indexRemotePods: vi.fn(), dispatch: vi.fn(async () => ({ id: ids[0] })) })
+    await worker.codex({ id: ids[0]!, action: { action: 'create', name: 'Direct' } })
+    expect(policy.allows(ids[0]!)).toBe(true)
+    const command = { channel: 'workspace' as const, body: { type: 'create' as const, name: 'Queued' } }
+    await worker.codex({ id: ids[1]!, action: { action: 'workspace', query: { type: 'submit', runtimeId, revision: 1, id: ids[1], command } } })
+    const workspace = (id: string) => ({ pods: [{ id, name: 'Queued', revision: 1, lifecycle: 'paused', activeScript: null }], organization: { revision: 1, groups: [] } })
+    Object.assign(worker, { dispatch: async () => ({ pods: [], organization: { revision: 1, groups: [] } }), request: async () => workspace(ids[1]!) })
+    await worker.centralExecute(command, ids[1])
+    expect(policy.allows(ids[1]!)).toBe(true)
+    Object.assign(worker, { request: async () => workspace(ids[2]!) })
+    await worker.centralExecute(command, ids[2])
+    expect(policy.allows(ids[2]!)).toBe(false)
+  }
+  finally { rmSync(root, { recursive: true, force: true }) }
 })

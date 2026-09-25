@@ -19,7 +19,7 @@ export interface CentralGate { lastTickAt: number, tickingSince: number | null, 
 export interface CentralExecutor {
   snapshot: () => Promise<CentralSnapshot>
   version?: () => Promise<number>
-  execute: (command: CentralCommand) => Promise<unknown>
+  execute: (command: CentralCommand, operationId: string) => Promise<unknown>
   gate: (until: number) => Promise<CentralGate | void>
 }
 export type WorkspaceRequest = (body: Record<string, unknown>) => Promise<unknown>
@@ -242,7 +242,7 @@ export class CentralController {
     this.phase = 'execute'
     try {
       result = await this.context.run(true, async () => {
-        if (operation.command.channel !== 'local') return this.executor.execute(operation.command)
+        if (operation.command.channel !== 'local') return this.executor.execute(operation.command, operation.id)
         const action = this.localActions.get(operation.id)
         if (!action) throw new Error('Local action was interrupted; inspect the existing state before issuing another action')
         return action()
