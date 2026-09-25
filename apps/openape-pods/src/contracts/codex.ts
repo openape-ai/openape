@@ -15,7 +15,8 @@ export function parseCodexRequest(value: unknown): CodexRequest {
 
 export const codexTool = {
   name: masterTool.name,
-  description: 'Administer OpenApe Pods as the connected local owner. Call runtime for the script API and CLI setup help, then list and select before inspecting or changing Pods. Use workspace for central inventory, online Pod content, run results and commands; runtime documents its exact format. Changes apply directly; the connected client governs any tool confirmation. Preserve revision and resource checks. Secret values must never be supplied in arguments or returned. Legacy changes are history, not an approval queue.',
+  title: 'OpenApe Pods',
+  description: 'Administers OpenApe Pods on this Mac through one action per call: runtime returns the versioned reference; list, select and inspect read local Pods; create, revise, draft, validate, activate and rollback change Pods and scripts; run, pause, resume and setSchedule control execution; resources, importSecret (by file path), program and recovery handle setup and recovery; workspace reads and commands the central inventory (inventory/read/submit/operation). Returns JSON. Mutations require current revisions; secret values are never accepted or returned.',
   inputSchema: {
     ...masterTool.inputSchema,
     properties: {
