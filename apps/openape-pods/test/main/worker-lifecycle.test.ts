@@ -56,7 +56,7 @@ it('forwards central MCP reads and stable commands without a second local operat
   ]
   for (const command of commands) {
     expect(await worker.codex({ id, action: { action: 'workspace', query: command } })).toBe(result)
-    expect(query).toHaveBeenLastCalledWith(command)
+    expect(query).toHaveBeenLastCalledWith(command.type === 'read' ? { ...command, view: 'summary' } : command)
   }
   expect(local).not.toHaveBeenCalled()
   query.mockRejectedValueOnce(new Error('pod_offline'))

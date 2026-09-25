@@ -74,6 +74,9 @@ export class ResourceRegistry {
   assignProgram(podId: string, id: string, configuration: ProgramAssignment, expectedEpoch: number): void {
     this.store.transaction(() => {
       if (this.store.getPod(podId).lifecycle === 'archived' || this.epoch(podId) !== expectedEpoch) throw new Error('Pod or application permissions changed; reload before assigning access')
+      // Changing an application cancels the running run and blocks its schedule input, so refuse it until the run ends.
+      const running = this.store.db.prepare('SELECT started_at FROM runs WHERE pod_id=? AND state=\'running\' ORDER BY started_at LIMIT 1').get(podId)
+      if (running) throw new Error(`This Pod has a run in progress since ${new Date(Number(running.started_at)).toISOString()}; wait for it to finish or cancel it before changing its applications`)
       const owner = this.store.db.prepare('SELECT pod_id FROM resources WHERE id=?').get(id)
       if (owner && owner.pod_id !== podId) throw new Error('Application belongs to another pod')
       const current = this.list(podId).find(item => item.id === id)

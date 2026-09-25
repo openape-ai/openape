@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises'
 import { CentralProjection } from './central/projection'
 import { parseOwner } from '@openape/pods-protocol'
 import type { AdministrationJournal } from '../contracts/codex-admin'
@@ -113,8 +114,11 @@ let suspended = false
 let startupReady = false
 let preferWorkflow = true
 let ticking: Promise<void> | null = null
+let tickStartedAt = 0
+let lastTickAt = 0
 const timer = setInterval(() => {
   if (ticking || suspended || !startupReady || maintenance || Date.now() >= centralUntil) return
+  tickStartedAt = Date.now()
   ticking = (async () => {
     try {
       if (Date.now() >= storageAt) {
@@ -133,7 +137,7 @@ const timer = setInterval(() => {
       }
     }
     catch (error) { console.error('Scheduler stopped', error); process.exit(1) }
-  })().finally(() => { ticking = null })
+  })().finally(() => { ticking = null; lastTickAt = Date.now() })
 }, 1000)
 port.on('message', async (event) => {
   if (event.data && typeof event.data === 'object' && 'serviceReply' in event.data) { mailBridge.accept(event.data.serviceReply); return }
@@ -148,9 +152,11 @@ port.on('message', async (event) => {
       if (command.type === 'gate') {
         if (typeof command.until !== 'number' || !Number.isFinite(command.until) || command.until < 0 || command.until > Date.now() + 30000) throw new Error('Invalid central lease')
         centralUntil = command.until
-        if (!centralUntil) await ticking
-        port.postMessage({ id: request.id, state: true }); return
+        // A tick re-reads centralUntil before scheduling, so closing the gate never needs an unbounded wait.
+        if (!centralUntil && ticking) await Promise.race([ticking, delay(5000)])
+        port.postMessage({ id: request.id, state: { lastTickAt, tickingSince: ticking ? tickStartedAt : null } }); return
       }
+      if (command.type === 'version') { port.postMessage({ id: request.id, state: Number(store.db.prepare('SELECT total_changes() AS changes').get()!.changes) }); return }
       if (command.type !== 'snapshot') throw new Error('Unsupported central worker command')
       port.postMessage({ id: request.id, state: new CentralProjection(store, registry, scripts, dispatcher, scheduler).snapshot(parseOwner(command.owner)) }); return
     }
