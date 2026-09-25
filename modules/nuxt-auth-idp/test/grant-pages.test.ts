@@ -686,4 +686,21 @@ describe('grant approval pages', () => {
     })
   })
 
+  it('presents a managed Pod execution and creates only its Pod-scoped standing rule', async () => {
+    __resetNuxtImportsMocks(); __setUser({ email: 'approver@example.com' }); __setFetchUser(async () => {}); __setRouteQuery({ grant_id: 'grant-1' })
+    const podId = '00000000-0000-4000-8000-000000000001'
+    const grant = buildCliGrant()
+    Object.assign(grant.request, { target_host: `pods:${podId}`, command: ['pod-runtime', 'run'], permissions: [`pod-runtime.pod[id=${podId}]#run`], execution_context: { context_bindings: { pod: podId, name: 'Synthetic digest', script: '/fixture/run.mjs', workspace: '/fixture/workspace', environment: '{"HOME":"/fixture/home"}' } }, authorization_details: [{ type: 'openape_cli', cli_id: 'pod-runtime', operation_id: 'run', resource_chain: [{ resource: 'pod', selector: { id: podId } }], action: 'run', risk: 'high', permission: `pod-runtime.pod[id=${podId}]#run`, display: 'Run the stored script of Synthetic digest' }] })
+    const { fetchMock, calls } = routedFetchMock(grant); vi.stubGlobal('$fetch', fetchMock)
+    const wrapper = mount(GrantApprovalPage, { global: { stubs: globalStubs } }); await flushPromises()
+    expect(wrapper.text()).toContain('Synthetic digest')
+    expect(wrapper.text()).toContain('separately assigned permissions')
+    expect(wrapper.text()).toContain('/fixture/home')
+    expect(wrapper.text()).not.toContain('More options')
+    await wrapper.findAll('button').find(button => button.text().includes('Allow Pod execution'))!.trigger('click'); await flushPromises()
+    expect(calls.find(c => c.url === '/api/standing-grants')?.opts.body).toMatchObject({ delegate: 'agent@example.com', target_host: `pods:${podId}`, cli_id: 'pod-runtime', resource_chain_template: [{ resource: 'pod', selector: { id: podId } }] })
+    expect(calls.find(c => c.url.endsWith('/approve'))?.opts.body).toEqual({ grant_type: 'once' })
+    wrapper.unmount()
+  })
+
 })

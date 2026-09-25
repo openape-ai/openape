@@ -1,3 +1,7 @@
+import type { BrokeredGrant } from './broker.js'
+
+export * from './broker.js'
+
 /** Policy modes controlling SP admission */
 export type PolicyMode = 'open' | 'allowlist-admin' | 'allowlist-user' | 'deny'
 
@@ -212,6 +216,7 @@ export type GrantCategory = 'command' | 'delegation' | 'standing'
 
 /** OpenApe grant */
 export interface OpenApeGrant {
+  brokered?: BrokeredGrant
   /** Unique grant ID */
   id: string
   /** Grant category: command (default) or delegation */
@@ -250,6 +255,7 @@ export interface OpenApeGrant {
 
 /** OpenApe AuthZ-JWT claims */
 export interface OpenApeAuthZClaims {
+  brokered?: BrokeredGrant
   /** Issuer — OpenApe server */
   iss: string
   /** Subject — the requester */

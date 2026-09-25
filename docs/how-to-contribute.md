@@ -17,6 +17,8 @@ Each persona has a specific mandate:
 
 Stay in your lane. For work outside your mandate, file a task for the right persona.
 
+Development problems and implementation work belong to [native issues](https://repos.openape.ai/issues). Tasks below describe general work and reminders. A task may link an issue, but must not duplicate its discussion or resolution status. Approved implementation proposals remain in Plans.
+
 ## Finding Your Tasks
 
 ### 1. Check Your Identity
@@ -122,41 +124,47 @@ If your task requires code changes:
 
 ### 1. Find Related Issues
 
-```bash
-curl -s -H "Authorization: token $FORGEJO_TOKEN" \
-  "https://git.openape.ai/api/v1/repos/issues/search?assigned=true&state=open&type=issues"
-```
-
-### 2. Create a Worktree
+From your own monorepo checkout, activate the pinned Node version and use the authenticated native CLI:
 
 ```bash
-git_worktree create --repo <repo-url> --task-id <task-id> --branch <branch-name>
+. ./scripts/activate-node.sh
+pnpm git:cli -- issue list --all-repos --state open --assignee me
+pnpm git:cli -- issue show <number> --repo patrick/monorepo
 ```
 
-### 3. Make Targeted Edits
+Results use your live repository or individual reporter access. An assignment does not grant access. Ask the repository owner for the necessary permission when access is missing; do not switch to a mirror token.
 
-- Read the repo's `CONTRIBUTING.md` and `.openape/coding.json`
-- Make small, focused changes — never rewrite whole files
-- Run verification: `verify --cwd ~/work/<task-id> --command "<test-command>"`
+### 2. Create a Worktree and Verify Changes
 
-### 4. Push and Open a PR
+Read `AGENTS.md` in the selected checkout. Create an isolated branch from canonical main, preserve other worktrees, and follow its lint, typecheck, build and behavioral test gates. The collection's `openape-monorepo` directory may be a bare Git directory: create a working checkout before running package or CLI scripts there.
+
+### 3. Push and Open a Native PR
 
 ```bash
-curl -s -X POST -H "Authorization: token $FORGEJO_TOKEN" \
-  -H 'Content-Type: application/json' \
-  "https://git.openape.ai/api/v1/repos/<owner>/<repo>/pulls" \
-  -d '{"head":"<branch>","base":"main","title":"...","body":"Closes #<n>"}'
+git push -u origin feature/issue-<number>-<description>
+pnpm git:cli -- pr create --repo patrick/monorepo --source feature/issue-<number>-<description> --title 'Describe the behavior change' --body-file /tmp/pr-body.md
+pnpm git:cli -- issue link <number> --repo patrick/monorepo --pull-repo patrick/monorepo --pull-number <pr-number>
 ```
 
-Include the PR URL in your task notes before closing.
+Write the full native issue URL and actual validation evidence in the PR body. Review the exact source/target SHAs and require the protected branch's external checks. Follow the current repository merge authorization; a linked PR does not close its issue. After verifying resolution, read the latest issue version and explicitly close it:
+
+```bash
+pnpm git:cli -- issue show <number> --repo patrick/monorepo
+pnpm git:cli -- issue close <number> --repo patrick/monorepo --expected-version <current-version>
+```
+
+Keep umbrella issues open while approved work remains. Update a linked reminder only when that separate reminder is complete.
 
 ## Key Resources
 
 | Resource | URL |
 |----------|-----|
-| Task Board | https://tasks.openape.ai |
-| Code Repository | https://git.openape.ai/openape-ai/openape |
-| Company Overview | https://troop.openape.ai |
+| Development issues | https://repos.openape.ai/issues |
+| Product problem reporting | https://repos.openape.ai/report |
+| General tasks and reminders | https://tasks.openape.ai |
+| Code and pull requests | https://repos.openape.ai/patrick/monorepo |
+| Implementation proposals | https://plans.openape.ai |
+| Company overview | https://troop.openape.ai |
 
 ## Quick Reference
 

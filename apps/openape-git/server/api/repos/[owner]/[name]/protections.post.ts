@@ -5,13 +5,14 @@ import { useDb } from '../../../../database/drizzle'
 import { branchProtections, mirrors, protectionEvents } from '../../../../database/schema'
 import { forgejoApiBase } from '../../../../utils/branch-checks'
 import { isValidRef } from '../../../../utils/git-parse'
-import { findRepo } from '../../../../utils/repos'
+import { findRepo, requireGitRepository } from '../../../../utils/repos'
 
 export default defineEventHandler(async (event) => {
   const caller = await requireCaller(event)
   if (caller.act !== 'human') throw createError({ statusCode: 403, statusMessage: 'only the human repository owner can change protection' })
   const repo = await findRepo(getRouterParam(event, 'owner') ?? '', getRouterParam(event, 'name') ?? '')
   if (!repo || repo.ownerEmail !== caller.email) throw createError({ statusCode: 404, statusMessage: 'repo not found' })
+  requireGitRepository(repo)
   const body = await readBody<{ branch?: string, mirrorId?: string, contexts?: string[], enabled?: boolean, reason?: string }>(event)
   const branch = body?.branch ?? ''
   if (!isValidRef(branch) || branch.startsWith('refs/')) throw createError({ statusCode: 400, statusMessage: 'branch name required, without refs/heads/' })

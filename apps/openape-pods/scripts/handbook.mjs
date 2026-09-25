@@ -1,0 +1,29 @@
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { readHandbooks, sectionMarkdown } from './handbook-content.mjs'
+
+const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
+const editions = {
+  en: { input: 'handbook.json', markdown: 'handbook.md', html: 'openape-pods-handbook.html', other: 'openape-pods-handbook.de.html', otherMarkdown: 'handbook.de.md', switch: 'Deutsch', title: 'User handbook', contents: 'Handbook contents', edition: 'Development app 0.1.0 · September 2026 · Offline edition', image: 'in OpenApe Pods with synthetic data', caption: 'synthetic local workspace', generated: 'Generated from handbook.json. Screenshots use the packaged app with synthetic data.' },
+  de: { input: 'handbook.de.json', markdown: 'handbook.de.md', html: 'openape-pods-handbook.de.html', other: 'openape-pods-handbook.html', otherMarkdown: 'handbook.md', switch: 'English', title: 'Benutzerhandbuch', contents: 'Handbuchinhalt', edition: 'Entwicklungsversion 0.1.0 · September 2026 · Offline-Ausgabe', image: 'in OpenApe Pods mit synthetischen Daten', caption: 'synthetischer lokaler Arbeitsbereich', generated: 'Erstellt aus handbook.de.json. Abbildungen zeigen die gepackte App mit synthetischen Daten.' },
+}
+const books = readHandbooks('docs', { checkImages: !process.argv.includes('--refresh-images') })
+mkdirSync('docs/images', { recursive: true }); mkdirSync('.artifacts', { recursive: true })
+for (const [locale, edition] of Object.entries(editions)) {
+  const book = books[locale]
+  if (process.argv.includes('--refresh-images')) {
+    for (const section of book.sections) {
+      if (!section.image) continue
+      const capture = locale === 'en' ? section.image.replace('.png', '-en.png') : section.image
+      copyFileSync(join('.artifacts', capture), join('docs/images', section.image))
+    }
+  }
+  const navigation = book.sections.map(section => `<a href="#${section.id}">${escape(section.title)}</a>`).join('')
+  const sections = book.sections.map(section => `<section id="${section.id}"><h2>${escape(section.title)}</h2>${section.paragraphs.map(text => `<p>${escape(text)}</p>`).join('')}${section.steps.length ? `<ol>${section.steps.map(text => `<li>${escape(text)}</li>`).join('')}</ol>` : ''}${section.code ? `<pre><code>${escape(section.code)}</code></pre>` : ''}${section.image ? `<figure><img loading="lazy" alt="${escape(section.title)} ${edition.image}" src="data:image/png;base64,${readFileSync(join('docs/images', section.image)).toString('base64')}"><figcaption>${escape(section.title)} · ${edition.caption}</figcaption></figure>` : ''}</section>`).join('\n')
+  const markdown = [`# ${book.title}`, `[${edition.switch}](${edition.otherMarkdown})`, book.subtitle, edition.generated, ...book.sections.flatMap(section => sectionMarkdown(section, 'images'))].join('\n\n')
+  writeFileSync(join('docs', edition.markdown), `${markdown}\n`)
+  const html = `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(book.title)}</title><style>:root{color-scheme:light dark;--bg:light-dark(#f5f7f2,#191e1b);--paper:light-dark(#fff,#242b26);--text:light-dark(#263b2d,#e7eee8);--muted:light-dark(#526b59,#b0c7b5);--line:light-dark(#dce5d9,#415047)}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font:16px/1.7 system-ui;background:var(--bg);color:var(--text)}nav{position:fixed;inset:0 auto 0 0;width:260px;padding:32px 20px;overflow:auto;border-right:1px solid var(--line)}nav strong{display:block;font-size:20px;margin-bottom:20px}a{color:var(--muted)}nav a{display:block;padding:7px 10px;text-decoration:none;border-radius:6px;font-size:14px}nav a:hover,nav a:focus{background:var(--paper)}main{margin-left:260px;max-width:1240px;padding:48px 40px}h1{font-size:42px;line-height:1.15;letter-spacing:-1px}h2{font-size:27px;line-height:1.25}header p{font-size:20px;color:var(--muted)}section{scroll-margin-top:24px;margin:28px 0;padding:28px;background:var(--paper);border:1px solid var(--line);border-radius:16px}li{margin:14px 0}figure{margin:24px 0 0}img{display:block;max-width:100%;height:auto;border:1px solid var(--line);border-radius:8px}figcaption{font-size:13px;color:var(--muted);margin-top:8px}pre{overflow:auto;font:13px/1.7 ui-monospace,monospace;padding:20px;background:var(--bg);border-radius:10px}p,li{overflow-wrap:anywhere}@media(max-width:800px){nav{position:static;width:auto;border-right:0;border-bottom:1px solid var(--line)}nav a{display:inline-block}main{margin:0;padding:24px 16px}section{padding:20px}h1{font-size:32px}}@media print{nav{display:none}main{margin:0;padding:0}section{break-inside:avoid;border:0}img{max-height:650px;object-fit:contain}}</style></head><body><nav aria-label="${edition.contents}"><strong>OpenApe Pods</strong><a href="${edition.other}" lang="${locale === 'de' ? 'en' : 'de'}">${edition.switch}</a>${navigation}</nav><main><header><h1>${edition.title}</h1><p>${escape(book.subtitle)}</p><small>${edition.edition}</small></header>${sections}</main></body></html>`
+  writeFileSync(join('.artifacts', edition.html), html)
+  if (locale === 'en') writeFileSync('.artifacts/handbook.html', html)
+  console.log(`Handbook ${locale}: docs/${edition.markdown}, .artifacts/${edition.html} (${book.sections.length} sections)`)
+}

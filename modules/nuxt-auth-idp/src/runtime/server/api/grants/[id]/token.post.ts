@@ -1,3 +1,4 @@
+import { maybeForwardBrokerGrant } from '../../../utils/broker-forward'
 import { introspectGrant, issueAuthzJWT } from '@openape/grants'
 import { defineEventHandler, getRouterParam } from 'h3'
 import { tryBearerAuth } from '../../../utils/agent-auth'
@@ -32,10 +33,15 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 400, title: 'Grant ID is required' })
   }
 
+  const forwarded = await maybeForwardBrokerGrant(event, 'token', id)
+  if (forwarded !== undefined) return forwarded
+
   const grant = await introspectGrant(id, grantStore)
   if (!grant) {
     throw createProblemError({ status: 404, title: 'Grant not found', type: 'https://openape.org/errors/grant_not_found' })
   }
+
+  if (grant.brokered) throw createProblemError({ status: 403, title: 'Brokered tokens must be retrieved through the authorized broker' })
 
   if (grant.request.requester !== identity) {
     throw createProblemError({ status: 403, title: 'Grant does not belong to this identity' })

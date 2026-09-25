@@ -1,0 +1,23 @@
+export default defineNuxtConfig({
+  compatibilityDate: '2026-09-01',
+  devtools: { enabled: false },
+  ssr: false,
+  app: { buildAssetsDir: '/pods-assets/' },
+  modules: ['@openape/nuxt-auth-sp'],
+  openapeSp: { routes: false, clientId: 'pods.openape.ai', spName: 'OpenApe Pods', postLoginRedirect: '/workspace' },
+  runtimeConfig: {
+    workspaceEnabled: false,
+    workspaceDatabase: './.data/workspace.sqlite',
+    workspaceSessionSecret: '',
+    relayDatabase: './.data/relay.sqlite',
+    relayOrigin: 'https://pods.openape.ai',
+    relayEnabled: false,
+    relayEnrollment: 'closed',
+    relayOwnerAllowlist: [] as { issuer: string, subject: string }[],
+    relayIdpUrl: '',
+    relayFixture: false,
+    relayAppleTeam: 'Q994DN23WB',
+    relayAppleBundle: 'ai.openape.pods',
+  },
+  nitro: { preset: 'node-server', experimental: { websocket: true } },
+})

@@ -3,39 +3,10 @@ import { readFileSync } from 'node:fs'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { repository } from './repository.mjs'
+import { createClient, ForgeError, parseRepository } from './native-forge-client.mjs'
+import { executeIssueCommand } from './native-issue-commands.mjs'
 
-export class ForgeError extends Error {
-  constructor(code, message, status = 0) { super(message); this.code = code; this.status = status }
-}
-
-export function parseRepository(value = new URL(repository.url).pathname.slice(1).replace(/\.git$/, '')) {
-  if (!/^[a-z0-9][\w.-]*\/[a-z0-9][\w.-]*$/i.test(value)) throw new ForgeError('INVALID_REPOSITORY', 'Use --repo owner/name')
-  return value
-}
-
-export function createClient({ endpoint = new URL(repository.url).origin, authorize, fetcher = fetch } = {}) {
-  return async (method, path, body) => {
-    if (!path.startsWith('/api/')) throw new ForgeError('INVALID_PATH', 'API path required')
-    let authorization
-    try {
-      const getToken = authorize ?? (await import('../packages/cli-auth/dist/index.js')).getAuthorizedBearer
-      authorization = await getToken({ endpoint, aud: new URL(endpoint).host })
-    }
-    catch { throw new ForgeError('AUTH_REQUIRED', 'OpenApe authentication unavailable. Run apes login for your identity, then retry.') }
-    let response
-    try {
-      response = await fetcher(`${endpoint}${path}`, { method, headers: { authorization, 'content-type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), redirect: 'error', signal: AbortSignal.timeout(30_000) })
-    }
-    catch { throw new ForgeError('NETWORK_ERROR', 'The native forge could not be reached. Check the endpoint and connection.') }
-    const data = await response.json().catch(() => ({}))
-    if (!response.ok) {
-      const message = data.statusMessage || data.message || data.title || `HTTP ${response.status}`
-      const code = response.status === 401 ? 'AUTH_REQUIRED' : response.status === 403 ? 'ACCESS_DENIED' : response.status === 404 ? 'NOT_FOUND' : response.status === 409 ? (/check/i.test(message) ? 'CHECKS_BLOCKED' : 'STALE_REVIEW') : 'REQUEST_FAILED'
-      throw new ForgeError(code, message, response.status)
-    }
-    return data
-  }
-}
+export { createClient, ForgeError, parseRepository } from './native-forge-client.mjs'
 
 export function checkState(statuses, contexts, sha, providerErrors = []) {
   const checks = contexts.map((context) => {
@@ -48,7 +19,7 @@ export function checkState(statuses, contexts, sha, providerErrors = []) {
 
 function options(args) {
   const flags = {}; const positional = []
-  const allowed = new Set(['repo', 'title', 'body-file', 'source', 'target', 'expected-source', 'expected-target', 'context', 'branch', 'timeout', 'interval', 'path', 'line', 'state'])
+  const allowed = new Set(['repo', 'code-source', 'title', 'body-file', 'source', 'target', 'expected-source', 'expected-target', 'context', 'branch', 'timeout', 'interval', 'path', 'line', 'state'])
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
     if (arg === '--json') continue
@@ -69,8 +40,12 @@ function positive(value, fallback) {
   return n
 }
 
-export async function execute(argv, request = createClient(), sleep = ms => new Promise(resolve => setTimeout(resolve, ms))) {
-  const { flags, positional: p } = options(argv[0] === '--' ? argv.slice(1) : argv)
+export async function execute(argv, request, sleep = ms => new Promise(resolve => setTimeout(resolve, ms))) {
+  const args = argv[0] === '--' ? argv.slice(1) : argv
+  if (args[0] === 'report') return executeIssueCommand(args, request)
+  if (args[0] === 'issue') return executeIssueCommand(args.slice(1), request)
+  request ??= createClient()
+  const { flags, positional: p } = options(args)
   const repo = parseRepository(flags.repo)
   const base = `/api/repos/${repo}`
   const bodyText = () => {
@@ -81,6 +56,11 @@ export async function execute(argv, request = createClient(), sleep = ms => new 
     const [data, policies] = await Promise.all([request('GET', `${base}/statuses/${sha}`), request('GET', `${base}/protections`)])
     const policy = policies.policies.find(p => p.enabled && p.branch === (flags.branch || repository.defaultBranch))
     return { ...checkState(data.statuses, policy?.contexts ?? [], sha, data.providerErrors), statuses: data.statuses }
+  }
+  if (p[0] === 'repo' && p[1] === 'create') {
+    if (!flags.repo) throw new ForgeError('USAGE', 'repo create requires --repo owner/name')
+    const [owner, name] = repo.split('/')
+    return { code: 0, data: await request('POST', '/api/repos', { owner, name, ...(flags['code-source'] ? { issueHomeOnly: true, codeSourceUrl: flags['code-source'] } : {}) }) }
   }
   if (p[0] === 'repo') {
     const [details, protections] = await Promise.all([request('GET', base), request('GET', `${base}/protections`)])
@@ -101,7 +81,7 @@ export async function execute(argv, request = createClient(), sleep = ms => new 
     }
     return { code: data.state === 'success' ? 0 : data.state === 'failure' ? 1 : 3, data }
   }
-  if (p[0] !== 'pr') throw new ForgeError('USAGE', 'Commands: repo, pr list|show|diff|create|comment|merge, checks SHA, logs SHA, wait SHA')
+  if (p[0] !== 'pr') throw new ForgeError('USAGE', 'Commands: repo, pr list|show|diff|issues|create|comment|merge, checks SHA, logs SHA, wait SHA')
   if (p[1] === 'list') return { code: 0, data: await request('GET', `${base}/pulls?state=${encodeURIComponent(flags.state || 'open')}`) }
   if (p[1] === 'create') {
     if (!flags.title || !flags.source) throw new ForgeError('USAGE', 'pr create requires --title, --source and --body-file')
@@ -109,6 +89,7 @@ export async function execute(argv, request = createClient(), sleep = ms => new 
   }
   const number = positive(p[2])
   const path = `${base}/pulls/${number}`
+  if (p[1] === 'issues') return { code: 0, data: await request('GET', `${path}/issues`) }
   if (['show', 'diff'].includes(p[1])) {
     const data = await request('GET', path)
     if (p[1] === 'show') { const { files: _files, ...summary } = data; return { code: 0, data: summary } }

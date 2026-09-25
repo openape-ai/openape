@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "$id": "https://openape.org/schemas/broker-request-claims.json",
+  "title": "Signed broker request claims",
+  "properties": {
+    "iss": {
+      "type": "string",
+      "format": "uri"
+    },
+    "sub": {
+      "type": "string",
+      "minLength": 1
+    },
+    "aud": {
+      "type": "string",
+      "format": "uri"
+    },
+    "iat": {
+      "type": "integer"
+    },
+    "exp": {
+      "type": "integer"
+    },
+    "jti": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "connection_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1
+    },
+    "key_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "operation": {
+      "enum": [
+        "connection",
+        "create",
+        "get",
+        "token"
+      ]
+    },
+    "request": {
+      "$ref": "grant-request.json"
+    },
+    "grant_id": {
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "required": [
+    "iss",
+    "aud",
+    "iat",
+    "exp",
+    "jti",
+    "connection_id",
+    "owner",
+    "operation"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "connection"
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "sub"
+              ]
+            },
+            {
+              "required": [
+                "key_id"
+              ]
+            },
+            {
+              "required": [
+                "request"
+              ]
+            },
+            {
+              "required": [
+                "grant_id"
+              ]
+            }
+          ]
+        }
+      },
+      "else": {
+        "required": [
+          "sub",
+          "key_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "create"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "request"
+        ],
+        "not": {
+          "required": [
+            "grant_id"
+          ]
+        }
+      },
+      "else": {
+        "not": {
+          "required": [
+            "request"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "enum": [
+              "get",
+              "token"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "grant_id"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "grant_id"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -7,10 +7,11 @@
 //
 // Committed output, so the docs build never depends on a capture run. This
 // script wipes and rewrites content/5.apps/ + public/guides/ — edit the story
-// captions in compose/demo/stories/, not the generated pages.
+// captions in compose/demo/stories/ or Pods handbook.json, not the generated pages.
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readHandbooks, sectionMarkdown } from '../../openape-pods/scripts/handbook-content.mjs'
 
 const docsRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const monorepoRoot = join(docsRoot, '..', '..')
@@ -32,11 +33,11 @@ const APPS = [
   { dir: 'openape-timetrack', slug: 'timetrack', title: 'Timetrack' },
   { dir: 'openape-pr', slug: 'pr', title: 'PR' },
   { dir: 'openape-crm', slug: 'crm', title: 'CRM' },
+  { dir: 'openape-pods', slug: 'pods', title: 'Pods', source: 'handbook' },
 ]
 
 /**
- * Kurzfassung an der letzten Wortgrenze — ein harter Schnitt endet mitten im
- * word, and that text doubles as the page's OG description.
+ * Keep the summary at a word boundary; it also serves as the OG description.
  */
 function summarize(text, max) {
   const flat = text.replace(/\n/g, ' ').trim()
@@ -45,6 +46,9 @@ function summarize(text, max) {
   const lastSpace = cut.lastIndexOf(' ')
   return `${(lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut).replace(/[,;:.\s]+$/, '')}…`
 }
+
+const podsDocs = join(monorepoRoot, 'apps', 'openape-pods', 'docs')
+const handbook = readHandbooks(podsDocs).en
 
 const sectionDir = join(docsRoot, 'content', '5.apps')
 const shotsRoot = join(docsRoot, 'public', 'guides')
@@ -57,6 +61,28 @@ writeFileSync(join(sectionDir, '.navigation.yml'), 'title: Apps\nicon: i-lucide-
 const overview = []
 let written = 0
 APPS.forEach((app, i) => {
+  if (app.source === 'handbook') {
+    const imageDir = join(shotsRoot, app.slug)
+    mkdirSync(imageDir, { recursive: true })
+    for (const section of handbook.sections) {
+      if (section.image) cpSync(join(podsDocs, 'images', section.image), join(imageDir, section.image))
+    }
+    const lines = [
+      '---', `title: ${JSON.stringify(app.title)}`, `description: ${JSON.stringify(handbook.subtitle)}`, '---', '',
+      '::note',
+      'Pods is a native Mac app. These screenshots show its current interface with isolated synthetic data. This guide shares its English content with the offline handbook; a German offline edition is also maintained.',
+      '::', '',
+      handbook.sections.flatMap(section => sectionMarkdown(section, `/guides/${app.slug}`)).join('\n\n'), '',
+      '## Related guides', '',
+      '- [OpenApe ID: your account and approvals](/apps/idp)',
+      '- [Permissions and grants](/ecosystem/grants)',
+      '- [All app guides](/apps)', '',
+    ]
+    writeFileSync(join(sectionDir, `${String(i + 2).padStart(2, '0')}.${app.slug}.md`), `${lines.join('\n')}\n`)
+    overview.push({ ...app, blurb: handbook.subtitle })
+    written++
+    return
+  }
   const storiesPath = join(monorepoRoot, 'apps', app.dir, 'docs', 'stories.json')
   if (!existsSync(storiesPath)) {
     console.warn(`[aggregate-guides] skip ${app.slug}: no stories.json`)
@@ -83,7 +109,7 @@ APPS.forEach((app, i) => {
     '---',
     '',
     // No `# ${app.title}` in the body: the frontmatter `title` already renders
-    // als Seitenueberschrift, ein zweites H1 stellt denselben Namen doppelt.
+    // as the page heading; a second H1 would duplicate it.
     '::note',
     'Every step below is captured from a live end-to-end run on the local stack — the screenshots refresh on each capture, so this guide cannot drift from the real product.',
     '::',
@@ -108,10 +134,10 @@ APPS.forEach((app, i) => {
 const indexLines = [
   '---',
   'title: Overview',
-  `description: ${JSON.stringify(`Every OpenApe app, documented from a live end-to-end run: ${overview.map(a => a.title).join(', ')}.`)}`,
+  `description: ${JSON.stringify(`Step-by-step OpenApe app guides: ${overview.map(a => a.title).join(', ')}.`)}`,
   '---',
   '',
-  'Every app below is documented from a live end-to-end run on the local stack — a headless browser drives the real flow, and the screenshots are captured as it goes. The guide cannot drift from the product because it *is* the test run.',
+  'Find setup steps, screenshots and practical checks for each app. Web app screenshots come from local story runs. Pods is a native Mac app: its guide shares the offline handbook content and uses isolated synthetic desktop fixtures. Each guide explains what its examples demonstrate.',
   '',
   '::card-group',
   ...overview.flatMap(app => [

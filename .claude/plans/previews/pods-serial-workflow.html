@@ -1,0 +1,147 @@
+<div id="pods-flow-preview" aria-label="OpenApe Pods workflow preview">
+  <style>
+    #pods-flow-preview { color-scheme:light dark; --pods-bg:light-dark(#fafbf9,#141b18); --pods-panel:light-dark(#ffffff,#1c2520); --pods-chrome:light-dark(#f0f3ee,#18201b); --pods-text:light-dark(#24392d,#e4ece5); --pods-muted:light-dark(#5b6c60,#b0bfb3); --pods-line:light-dark(#dbe3d9,#3a4a3d); --pods-accent:light-dark(#245d3c,#aed8b7); --pods-onaccent:light-dark(#ffffff,#12261a); --pods-soft:light-dark(#e9f2e8,#263d2d); --pods-warn:light-dark(#805020,#f0c28a); --pods-warnbg:light-dark(#fcf3e4,#392f20); --pods-error:light-dark(#9a4036,#ffb5a6); --pods-errorbg:light-dark(#fff0ec,#3c2825); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--pods-text); background:var(--pods-bg); border:1px solid var(--pods-line); border-radius:14px; overflow-wrap:anywhere; }
+    #pods-flow-preview * { box-sizing:border-box; }
+    #pods-flow-preview button,#pods-flow-preview input { font:inherit; }
+    #pods-flow-preview button { cursor:pointer; color:var(--pods-text); background:var(--pods-panel); border:1px solid var(--pods-line); border-radius:8px; padding:9px 13px; }
+    #pods-flow-preview button:disabled { cursor:default; opacity:.55; }
+    #pods-flow-preview button.pods-primary { color:var(--pods-onaccent); background:var(--pods-accent); border-color:var(--pods-accent); }
+    #pods-flow-preview h2,#pods-flow-preview h3,#pods-flow-preview h4,#pods-flow-preview p { margin:0; }
+    #pods-flow-preview h2 { font-size:23px; font-weight:500; letter-spacing:-.5px; }
+    #pods-flow-preview h3 { font-size:17px; font-weight:500; }
+    #pods-flow-preview h4 { font-size:15px; font-weight:500; }
+    #pods-flow-preview p { line-height:1.55; }
+    #pods-flow-preview .pods-muted { color:var(--pods-muted); }
+    #pods-flow-preview .pods-small { font-size:12px; }
+    #pods-flow-preview .pods-top { padding:14px 20px; display:flex; gap:12px; align-items:center; justify-content:space-between; border-bottom:1px solid var(--pods-line); background:var(--pods-chrome); border-radius:14px 14px 0 0; }
+    #pods-flow-preview .pods-brand { display:flex; gap:10px; align-items:center; font-weight:500; }
+    #pods-flow-preview .pods-mark { background:var(--pods-accent); color:var(--pods-onaccent); padding:4px 8px; border-radius:7px; }
+    #pods-flow-preview .pods-shell { display:grid; grid-template-columns:180px minmax(0,1fr); }
+    #pods-flow-preview aside { padding:22px 12px; border-right:1px solid var(--pods-line); background:var(--pods-chrome); border-radius:0 0 0 14px; }
+    #pods-flow-preview .pods-nav-label { padding:0 10px 13px; color:var(--pods-muted); font-size:12px; }
+    #pods-flow-preview .pods-nav-item { padding:11px 10px; margin:3px 0; border-radius:8px; font-size:13px; }
+    #pods-flow-preview .pods-nav-item.pods-selected { background:var(--pods-soft); color:var(--pods-accent); }
+    #pods-flow-preview main { min-width:0; padding:26px; }
+    #pods-flow-preview .pods-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+    #pods-flow-preview .pods-heading p { margin-top:8px; }
+    #pods-flow-preview .pods-badge { display:inline-block; font-size:12px; padding:4px 8px; border-radius:6px; color:var(--pods-muted); background:var(--pods-chrome); white-space:normal; }
+    #pods-flow-preview .pods-badge.pods-green { background:var(--pods-soft); color:var(--pods-accent); }
+    #pods-flow-preview .pods-badge.pods-amber { background:var(--pods-warnbg); color:var(--pods-warn); }
+    #pods-flow-preview .pods-badge.pods-red { background:var(--pods-errorbg); color:var(--pods-error); }
+    #pods-flow-preview .pods-tabs { display:flex; gap:20px; margin:24px 0; border-bottom:1px solid var(--pods-line); flex-wrap:wrap; }
+    #pods-flow-preview .pods-tabs button { border:0; border-radius:0; background:transparent; padding:0 0 12px; color:var(--pods-muted); }
+    #pods-flow-preview .pods-tabs button[aria-selected="true"] { color:var(--pods-accent); box-shadow:0 2px 0 var(--pods-accent); }
+    #pods-flow-preview .pods-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    #pods-flow-preview .pods-between { justify-content:space-between; }
+    #pods-flow-preview .pods-box { border:1px solid var(--pods-line); background:var(--pods-panel); padding:18px; border-radius:11px; }
+    #pods-flow-preview .pods-box + .pods-box { margin-top:14px; }
+    #pods-flow-preview .pods-step { display:grid; grid-template-columns:30px minmax(0,1fr); gap:13px; }
+    #pods-flow-preview .pods-number { height:30px; width:30px; display:grid; place-items:center; background:var(--pods-soft); color:var(--pods-accent); border-radius:50%; }
+    #pods-flow-preview .pods-step p { margin-top:8px; }
+    #pods-flow-preview .pods-connector { color:var(--pods-muted); padding:12px 0 12px 15px; font-size:12px; }
+    #pods-flow-preview .pods-config { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:20px 0; }
+    #pods-flow-preview .pods-config div { min-width:0; }
+    #pods-flow-preview .pods-config p + p { margin-top:4px; }
+    #pods-flow-preview .pods-footer { display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; margin-top:24px; padding-top:18px; border-top:1px solid var(--pods-line); }
+    #pods-flow-preview .pods-notice { padding:13px 15px; background:var(--pods-soft); color:var(--pods-accent); border-radius:8px; margin:16px 0; }
+    #pods-flow-preview .pods-notice.pods-problem { background:var(--pods-errorbg); color:var(--pods-error); }
+    #pods-flow-preview .pods-policy { margin:18px 0; display:grid; gap:10px; }
+    #pods-flow-preview .pods-partner { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; padding:12px 0; border-bottom:1px solid var(--pods-line); }
+    #pods-flow-preview .pods-partner:last-child { border:0; }
+    #pods-flow-preview .pods-form { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+    #pods-flow-preview .pods-form label { display:grid; flex:1 1 220px; gap:6px; }
+    #pods-flow-preview input { min-width:0; width:100%; padding:10px; color:var(--pods-text); background:var(--pods-panel); border:1px solid var(--pods-line); border-radius:8px; }
+    #pods-flow-preview .pods-form button { align-self:end; }
+    #pods-flow-preview .pods-report { display:grid; gap:12px; padding-top:15px; }
+    #pods-flow-preview .pods-report article { padding-bottom:12px; border-bottom:1px solid var(--pods-line); }
+    #pods-flow-preview .pods-report article:last-child { border:0; padding-bottom:0; }
+    #pods-flow-preview [hidden] { display:none !important; }
+    @media(max-width:720px) { #pods-flow-preview .pods-shell { grid-template-columns:1fr; } #pods-flow-preview aside { display:none; } #pods-flow-preview main { padding:20px; } }
+    @media(max-width:430px) { #pods-flow-preview main { padding:16px; } #pods-flow-preview .pods-config { grid-template-columns:1fr; } #pods-flow-preview .pods-top { padding:12px; flex-wrap:wrap; } #pods-flow-preview .pods-tabs { gap:14px; } }
+    @media(pointer:coarse) { #pods-flow-preview button { min-height:44px; } #pods-flow-preview input { font-size:16px; } }
+  </style>
+  <header class="pods-top"><div class="pods-brand"><span class="pods-mark">◒</span> OpenApe Pods</div><span class="pods-badge pods-amber">Design preview · synthetic data</span></header>
+  <div class="pods-shell">
+    <aside aria-label="Pod workspace">
+      <div class="pods-nav-label">YOUR PODS</div>
+      <div class="pods-nav-item pods-selected">Inbox filter</div>
+      <div class="pods-nav-item">Mail-Kurzbericht</div>
+      <div class="pods-nav-item pods-muted">Mail knowledge</div>
+      <div class="pods-nav-label" style="margin-top:26px">WORKSPACE</div>
+      <div class="pods-nav-item">Accounts</div><div class="pods-nav-item">Settings</div>
+    </aside>
+    <main>
+      <div class="pods-heading"><div><p class="pods-small pods-muted">INBOX FILTER / SCHEDULE</p><h2>Inbox filtering → Important mail</h2><p class="pods-muted">One batch. Two Pods. An explicit order.</p></div><span class="pods-badge">Draft · Schedule off</span></div>
+      <div class="pods-tabs" role="tablist" aria-label="Workflow views">
+        <button type="button" role="tab" id="pods-tab-flow" aria-controls="pods-panel-flow" aria-selected="true" data-view="flow">Workflow</button>
+        <button type="button" role="tab" id="pods-tab-rules" aria-controls="pods-panel-rules" aria-selected="false" data-view="rules">Rules & partners</button>
+        <button type="button" role="tab" id="pods-tab-history" aria-controls="pods-panel-history" aria-selected="false" data-view="history">Run history</button>
+      </div>
+      <section id="pods-panel-flow" role="tabpanel" aria-labelledby="pods-tab-flow">
+        <article class="pods-box pods-step"><div class="pods-number">1</div><div><div class="pods-row pods-between"><h3>Inbox filter</h3><span class="pods-badge">First step</span></div><p>Review the batch, retain protected and uncertain mail, archive eligible messages.</p><p class="pods-small pods-muted">Completes after confirmed moves and delivery of the itemized archive report.</p></div></article>
+        <div class="pods-connector">↓ Only after step 1 completes successfully</div>
+        <article class="pods-box pods-step"><div class="pods-number">2</div><div><div class="pods-row pods-between"><h3>Mail-Kurzbericht</h3><span class="pods-badge">Depends on Inbox filter</span></div><p>Summarize the important messages retained in this batch and notify you.</p><p class="pods-small pods-muted">New arrivals wait for the next filtering batch.</p></div></article>
+        <div class="pods-config"><div><p class="pods-small pods-muted">MAILBOX</p><p>phofmann@delta-mind.at</p><p class="pods-small pods-muted">Inbox → Archive · same mailbox</p></div><div><p class="pods-small pods-muted">DELIVERY</p><p>Telegram · destination ending 5587</p><p class="pods-small pods-muted">German summary · existing bot</p></div></div>
+        <div class="pods-notice"><p>First run: establish a quiet baseline. No historical messages are archived or reported.</p></div>
+        <div class="pods-footer"><span class="pods-small pods-muted">Protected partners override archive rules.</span><button type="button" class="pods-primary" data-action="preview">Preview synthetic run →</button></div>
+      </section>
+      <section id="pods-panel-rules" role="tabpanel" aria-labelledby="pods-tab-rules" hidden>
+        <div class="pods-row pods-between"><h3>Protected communication partners</h3><span class="pods-badge pods-green">Always important</span></div>
+        <p class="pods-muted" style="margin-top:10px">Matching mail stays in Inbox. Archiving requires human review, even when an archive rule matches.</p>
+        <div class="pods-box" style="margin-top:18px" id="pods-partners">
+          <div class="pods-partner"><div><p>alex@client.example</p><p class="pods-small pods-muted">Exact address · example client</p></div><span class="pods-badge pods-green">Protected</span></div>
+          <div class="pods-partner"><div><p>accounting.example</p><p class="pods-small pods-muted">Exact domain · example accounting partner</p></div><span class="pods-badge pods-green">Protected</span></div>
+        </div>
+        <form class="pods-form" id="pods-partner-form"><label>Protect an email address<input id="pods-partner-input" type="email" placeholder="person@example.com" required></label><button type="submit">Add to preview</button></form>
+        <div class="pods-policy"><h3>Archive rules</h3><div class="pods-partner"><div><p>Routine promotional newsletters</p><p class="pods-small pods-muted">Only explicitly selected senders or mailing lists</p></div><span class="pods-badge">Disabled</span></div><div class="pods-partner"><div><p>Redundant informational digests</p><p class="pods-small pods-muted">No action, deadline or protected content</p></div><span class="pods-badge">Disabled</span></div></div>
+        <div class="pods-notice"><p>Keep personal correspondence, invoices, contracts, security notices, deadlines and action requests. If uncertain, retain.</p></div>
+        <p class="pods-small pods-muted">Example contacts only. Changes here stay in this preview.</p>
+      </section>
+      <section id="pods-panel-history" role="tabpanel" aria-labelledby="pods-tab-history" hidden>
+        <div class="pods-row pods-between"><div><h3>Batch B-0042</h3><p class="pods-small pods-muted">5 synthetic messages · fixed batch boundary</p></div><button type="button" data-action="toggle-outcome">Show blocked example</button></div>
+        <div id="pods-run-state" aria-live="polite" style="margin-top:18px"></div>
+        <div class="pods-box" style="margin-top:18px"><div class="pods-row pods-between"><h3>Archive report</h3><span class="pods-badge pods-green">2 confirmed moves</span></div><div class="pods-report"><article><p>1 · Weekly product roundup</p><p class="pods-small pods-muted">digest@updates.example · Routine digest rule</p><p class="pods-small">Moved to Archive · receipt M-001</p></article><article><p>2 · September offers</p><p class="pods-small pods-muted">offers@shop.example · Approved promotional list</p><p class="pods-small">Moved to Archive · receipt M-002</p></article></div></div>
+        <div class="pods-footer"><p class="pods-small pods-muted">Completed moves and confirmed report parts are never replayed.</p><button type="button" data-action="back">← Back to workflow</button></div>
+      </section>
+    </main>
+  </div>
+  <script>
+    (() => {
+      const root = document.getElementById('pods-flow-preview');
+      const state = { blocked:false, showSidebar:true, compact:false };
+      function view(name) {
+        root.querySelectorAll('[data-view]').forEach(button => button.setAttribute('aria-selected', String(button.dataset.view === name)));
+        ['flow','rules','history'].forEach(key => { root.querySelector('#pods-panel-'+key).hidden = key !== name; });
+      }
+      function render() {
+        const target = root.querySelector('#pods-run-state');
+        target.innerHTML = state.blocked
+          ? '<div class="pods-box pods-step"><div class="pods-number">1</div><div><div class="pods-row pods-between"><h3>Inbox filter</h3><span class="pods-badge pods-red">Blocked · Delivery unknown</span></div><p>2 moves confirmed. Archive report part 2 needs reconciliation.</p></div></div><div class="pods-connector">↓ Waiting for the required report</div><div class="pods-box pods-step"><div class="pods-number">2</div><div><div class="pods-row pods-between"><h3>Mail-Kurzbericht</h3><span class="pods-badge">Waiting</span></div><p>The predecessor has not completed its required work.</p></div></div><div class="pods-notice pods-problem"><p>No automatic resend. Confirm whether report part 2 was delivered before resuming.</p></div>'
+          : '<div class="pods-box pods-step"><div class="pods-number">1</div><div><div class="pods-row pods-between"><h3>Inbox filter</h3><span class="pods-badge pods-green">Completed</span></div><p>2 messages archived · 3 retained · Archive report delivered</p></div></div><div class="pods-connector">↓ Sealed batch handed to the successor</div><div class="pods-box pods-step"><div class="pods-number">2</div><div><div class="pods-row pods-between"><h3>Mail-Kurzbericht</h3><span class="pods-badge pods-green">Running</span></div><p>Summarizing the 3 retained messages, including protected correspondence.</p></div></div>';
+        root.querySelector('[data-action="toggle-outcome"]').textContent = state.blocked ? 'Show successful handoff' : 'Show blocked example';
+        root.querySelector('aside').hidden = !state.showSidebar;
+        root.querySelector('.pods-shell').style.gridTemplateColumns = !state.showSidebar ? 'minmax(0,1fr)' : '';
+        root.querySelectorAll('.pods-box').forEach(box => { box.style.padding = state.compact ? '12px' : ''; });
+      }
+      root.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => view(button.dataset.view)));
+      root.querySelector('[data-action="preview"]').addEventListener('click', () => { state.blocked=false; render(); view('history'); });
+      root.querySelector('[data-action="back"]').addEventListener('click', () => view('flow'));
+      root.querySelector('[data-action="toggle-outcome"]').addEventListener('click', () => { state.blocked=!state.blocked; render(); });
+      root.querySelector('#pods-partner-form').addEventListener('submit', event => {
+        event.preventDefault();
+        const input = root.querySelector('#pods-partner-input');
+        if (!input.reportValidity()) return;
+        const row = document.createElement('div'); row.className='pods-partner';
+        const name = document.createElement('p'); name.textContent=input.value;
+        const badge = document.createElement('span'); badge.className='pods-badge pods-green'; badge.textContent='Protected';
+        row.append(name,badge); root.querySelector('#pods-partners').append(row); input.value='';
+      });
+      render();
+      if (globalThis.Tweak) {
+        const tweak = new Tweak({container:root,onChange:render});
+        tweak.addToggle(state,'compact',{label:'Compact step cards'});
+        tweak.addToggle(state,'showSidebar',{label:'Show workspace sidebar'});
+      }
+    })();
+  </script>
+</div>

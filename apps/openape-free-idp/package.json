@@ -24,6 +24,7 @@
     "@nuxt/ui": "catalog:",
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
+    "@openape/grants": "workspace:*",
     "@openape/nuxt-auth-idp": "workspace:*",
     "@sentry/nuxt": "^10.62.0",
     "@vite-pwa/nuxt": "catalog:",

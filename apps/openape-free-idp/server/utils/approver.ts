@@ -1,3 +1,4 @@
+import type { OpenApeGrant } from '@openape/core'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
 import { users } from '../database/schema'
@@ -11,13 +12,14 @@ import { users } from '../database/schema'
  * so a fourth channel cannot quietly disagree with the other three about who
  * the owner is.
  */
-export async function resolveApprover(requester: string): Promise<string | null> {
+export async function resolveApprover(requester: string, grant?: OpenApeGrant): Promise<string | null> {
   const row = await useDb()
     .select()
     .from(users)
-    .where(eq(users.email, requester))
+    .where(eq(users.email, grant?.brokered?.owner ?? requester))
     .get()
-  if (!row) return null
+  if (!row || !row.isActive) return null
+  if (grant?.brokered) return row.type !== 'agent' && !row.owner ? row.email : null
   return row.approver ?? row.email
 }
 
@@ -29,10 +31,11 @@ export async function countPendingForApprover(approver: string): Promise<number>
   let count = 0
   for (const grant of pending) {
     const requester = grant.request.requester
-    if (!approverByRequester.has(requester)) {
-      approverByRequester.set(requester, await resolveApprover(requester))
+    const binding = JSON.stringify([requester, grant.brokered?.owner, grant.brokered?.connection_id])
+    if (!approverByRequester.has(binding)) {
+      approverByRequester.set(binding, await resolveApprover(requester, grant))
     }
-    if (approverByRequester.get(requester) === approver) count++
+    if (approverByRequester.get(binding) === approver) count++
   }
   return count
 }
