@@ -1,5 +1,4 @@
 <script lang="ts">
-import JevPermissions from './JevPermissions.vue'
 import ProgramPermissions from './ProgramPermissions.vue'
 import DirectoryPermissions from './DirectoryPermissions.vue'
 import { t, diagnostic, label } from './i18n'
@@ -9,7 +8,7 @@ import type { StoredPod } from '../contracts/control'
 import type { ResourceCommand, ResourceState } from '../contracts/resources'
 
 export default defineComponent({
-  components: { JevPermissions, ProgramPermissions, DirectoryPermissions },
+  components: { ProgramPermissions, DirectoryPermissions },
   props: { requestedSecret: { type: String, default: '' }, requiredAliases: { type: Array as PropType<string[]>, default: () => [] }, mode: { type: String, default: 'permissions' }, selectedPodId: { type: String, default: '' } },
   emits: ['selected', 'discuss'],
   data() { return { pods: [] as StoredPod[], podId: '', state: { resources: [], epoch: 0 } as ResourceState, busy: false, error: '', credentialAlias: this.requestedSecret, credentialValue: '' } },
@@ -92,7 +91,6 @@ export default defineComponent({
           {{ t("Revoke access") }}
         </button>
       </article>
-      <JevPermissions v-if="mode !== 'values'" :state="state" :pod-id="podId" :busy="busy" @command="act" />
       <ProgramPermissions v-if="mode !== 'values'" :pod-id="podId" :state="state" @updated="value => { state = value }" />
       <div v-if="state.snapshot" class="snapshot-result" role="status">
         <h3>{{ t("Snapshot ready") }}</h3><p>{{ t("Each file is copied and hashed. Its source remains unchanged.") }}</p>

@@ -17,7 +17,7 @@
       "id": "accounts",
       "title": "Persönliche Konten verbinden",
       "paragraphs": [
-        "Öffne Desktop-Einstellungen → Deine Konten. Verbinde dein DDISA-Konto für Berechtigungen, dein Codex-/GPT-Konto für LLM-Aufrufe und optional TypeSafe / Jev für strukturierte Entscheidungen in Skripten.",
+        "Öffne Desktop-Einstellungen → Deine Konten. Verbinde dein DDISA-Konto für Berechtigungen, dein Codex-/GPT-Konto für LLM-Aufrufe. Die optionale Einrichtung von TypeSafe / Jev findest du direkt in den App-Einstellungen.",
         "Pods findet deinen Identitätsanbieter über den DDISA-Eintrag der Domain deiner E-Mail-Adresse. Alle Pods, Berechtigungen und mobilen Geräte verwenden dieses eine DDISA-Konto; es gibt nichts auszuwählen. Pod-Agenten sind nicht deine Konten und erscheinen hier nie. Ein Wechsel zu einem anderen DDISA-Konto gibt deinen Pods neue Agenten, deren Berechtigungen neu erteilt werden müssen.",
         "Weitere Dienste richtest du pro Pod ein: Programmanmeldungen unter Berechtigungen, Tokens und Passwörter unter Variablen und Geheimnisse. Du benötigst weder ein persönliches Konto noch eine zusätzliche Anmeldung bei pods.openape.ai."
       ],
@@ -33,13 +33,13 @@
       "id": "jev-decisions",
       "title": "Strukturierte Entscheidungen mit Jev",
       "paragraphs": [
-        "Verbinde TypeSafe mit einem API-Schlüssel in den Desktop-Konten. Der Schlüssel wird geprüft und verschlüsselt auf diesem Mac gespeichert. Skripte und Codex erhalten ihn nicht. Beim Ersetzen bleibt die Verbindung erhalten; beim Trennen werden ihre Pod-Zuweisungen widerrufen.",
+        "Verbinde TypeSafe mit einem API-Schlüssel in den App-Einstellungen. Der Schlüssel wird geprüft und verschlüsselt auf diesem Mac gespeichert. Skripte und Codex erhalten ihn nicht. Beim Ersetzen bleibt die Verbindung erhalten. Codex richtet die Pod-Zuweisung über die Ressourcen-API ein.",
         "Codex schreibt das Skript; Jev beantwortet darin begrenzte semantische Fragen. Nutze normalen Code für genaue Regeln, Jev für Choice-, Score- oder Noul-Entscheidungen und einen ausdrücklichen agent.run-Aufruf für generierten Text. Ein reines Jev-Skript benötigt kein aktives Codex-Konto. Synthetische Validierung belegt den Skriptvertrag, nicht die Entscheidungsqualität.",
         "Prüfe, welche Texte das Skript an TypeSafe sendet. Bewahre unklare Entscheidungen zur Prüfung auf und teste deutsche und englische Beispiele vor der Automatisierung. Wiederholungen können zusätzliche Kosten verursachen; der Verlauf zeigt Verbrauch, Modell, Versuche und Dauer erfolgreicher Auswertungen."
       ],
       "steps": [
-        "Trage den API-Schlüssel unter Desktop-Konten → TypeSafe / Jev ein.",
-        "Weise dem Pod unter Berechtigungen Jev mit einer festen Modellversion wie jev-1.13.0 und einem Versuchslimit zu (Standard: 20 pro Lauf). Deklariere jev.evaluate als Skriptberechtigung.",
+        "Trage den API-Schlüssel unter App-Einstellungen → TypeSafe AI - Jev - API Key ein.",
+        "Lass Codex Jev über die Ressourcen-API mit einer festen Modellversion wie jev-1.13.0 und einem Versuchslimit einrichten (Standard: 20 pro Lauf). Deklariere jev.evaluate als Skriptberechtigung. Skript und Berechtigungen enthalten keine Jev-Einrichtung.",
         "Validiere und prüfe das Skript, dann starte einen einzelnen Lauf. Die Kontoverbindung allein gibt keinem Pod Zugriff. Die zentrale Weboberfläche zeigt den Status; Schlüssel werden am zugehörigen Desktop eingegeben."
       ],
       "code": "const result = await context.jev.evaluate({\n  state: context.variables.sampleMessage,\n  questions: { relevant: { type: 'noul', instructions: 'Is this a support request?' } },\n})\nconst relevance = result.answers.relevant.noul"
