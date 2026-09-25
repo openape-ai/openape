@@ -11,7 +11,10 @@ matching the existing detail page. Ordinary standing-rule and broker policy beha
 remain unchanged. Component coverage exercises both entry points.
 Live timer recovery reused the same Pod-scoped always grant on a second no-op run
 without a pending approval (two seconds). Full lint/typecheck, IdP application build and 26 focused component/broker tests
-pass. Next: review native PR and exact-head CI.
+pass. Commit/push affected unit gates pass.
+[PR 142](https://repos.openape.ai/patrick/monorepo/pulls/142), implementation
+`365049fd2ce8bef774f51b177c7126fac44770b1`. Next: exact-head external CI,
+then merge/release the inbox change; the live timer recovery is already effective.
 
 ## Pods: local MCP runtime approval (September 25, 2026) — verified locally
 
