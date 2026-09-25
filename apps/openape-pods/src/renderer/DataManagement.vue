@@ -52,7 +52,7 @@ export default defineComponent({
           </button>
         </form>
         <p class="muted">
-          {{ t("Checked every five seconds. Runs stop when the limit is reached or less than 256 MiB remains free. Temporary usage can exceed the limit between checks.") }}
+          {{ t("Checked every minute, and at once when the limit is reached or free space runs low. Runs stop when the limit is reached or less than 256 MiB remains free. Temporary usage can exceed the limit between checks.") }}
         </p>
         <button class="secondary" :disabled="busy || view.busy" @click="perform({ type: 'cleanup' })">
           {{ t("Clean unused files") }}
