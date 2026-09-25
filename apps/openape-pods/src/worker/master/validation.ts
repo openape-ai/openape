@@ -1,3 +1,4 @@
+import { assignedJev, parseJevRequest, syntheticJevResult } from '../../contracts/jev'
 import { parseWorkflowOutput } from '../../contracts/workflows'
 import { parseAgentRequest } from '../../contracts/agent'
 import { DependencyStore } from '../dependencies/store'
@@ -56,6 +57,10 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
         const alias = parseCredentialRead(payload)
         new ScriptCredentials(store, resources).readable(pod.id, alias)
         return `synthetic-credential-${alias}`
+      }
+      if (operation === 'jev.evaluate') {
+        const assignment = assignedJev(resources.list(pod.id), pod.id, capabilities)
+        return syntheticJevResult(parseJevRequest(payload), assignment.model)
       }
       if (operation === 'http.request') {
         assignedHttp(resources.list(pod.id), { podId: pod.id, capabilities }, parseHttpRequest(payload))

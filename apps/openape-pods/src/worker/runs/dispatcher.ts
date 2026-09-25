@@ -1,3 +1,5 @@
+import { assignedJev, parseJevRequest, parseJevResult } from '../../contracts/jev'
+import type { JevRequest, JevEvaluation } from '../../contracts/jev'
 import { MailWorkflow } from '../mail/workflow'
 import { createWorkflowMailTransport } from '../mail/workflow-transport'
 import type { WorkflowDefinition } from '../../contracts/workflows'
@@ -45,6 +47,7 @@ export interface RunServiceScope {
   registerDomain: (path: string, ownerPid: number) => void
 }
 export interface RunServices {
+  jev?: (request: JevRequest, signal: AbortSignal, scope: RunServiceScope) => Promise<JevEvaluation>
   shell?: (scope: RunServiceScope, signal: AbortSignal) => Promise<{ home: string, environment: Record<string, string>, shell?: { cli: string, environment: Record<string, string> } }>
   closeShell?: (scope: RunServiceScope) => Promise<void>
   http?: (request: HttpRequest, signal: AbortSignal, scope: RunServiceScope) => Promise<HttpReply>
@@ -218,6 +221,22 @@ export class RunDispatcher {
             const result = await mail.next() as { type: string, hash?: string, sources?: number, omissions?: string[], revision?: number, count?: number }
             this.runs.append(id, 'mail-progress', { type: result.type, contextHash: result.hash, sources: result.sources, omissions: result.omissions, revision: result.revision, retrieved: result.count })
             return result
+          }
+          if (operation === 'jev.evaluate') {
+            const assignment = assignedJev(this.resources.list(pod.id), pod.id, scope.capabilities)
+            if (!this.services?.jev) throw new Error('Jev service is unavailable')
+            const request = parseJevRequest(payload)
+            const started = Date.now()
+            const pending = this.services.jev(request, operationSignal, scope)
+            pendingAgents.add(pending)
+            try {
+              const evaluation = await pending
+              assertCurrent(); operationSignal.throwIfAborted()
+              const result = parseJevResult(evaluation.result, request, assignment.model)
+              this.runs.append(id, 'jev', { provider: 'typesafe', model: result.model, attempts: evaluation.attempts, durationMs: Date.now() - started, usage: result.usage })
+              return result
+            }
+            finally { pendingAgents.delete(pending) }
           }
           if (operation === 'http.request') {
             if (!this.services?.http) throw new Error('HTTP service is unavailable')

@@ -244,3 +244,18 @@ it('reassembles the projected snapshot exactly from parts and keeps each run his
   for (const entry of Object.values(view.history)) expect(entry.runs).toHaveLength(1)
   expect(view.runs.events).toEqual(view.history[view.runs.runs[0]!.id]!.events)
 })
+
+it('publishes only TypeSafe availability through both full and partitioned central snapshots', async () => {
+  const { store, projection, actor, pod } = fixture()
+  const { SetupControl } = await import('../src/worker/onboarding/control')
+  const setup = new SetupControl(store, new ResourceRegistry(store, () => {})); const id = randomUUID()
+  setup.execute({ type: 'save', connection: { id, provider: 'typesafe', account: 'TypeSafe / Jev', state: 'ready', error: null }, metadata: { verifiedAt: 12, private: 'not-for-central' } })
+  const snapshot = projection.snapshot(actor.owner)
+  const parts = splitSnapshot(snapshot)
+  const restored = assembleSnapshot(key => parts.get(key), [...parts.keys()])
+  expect(restored.workspace.jev).toEqual({ id, state: 'ready', verifiedAt: 12 })
+  expect(restored.pods.find(item => item.id === pod.id)?.resources.jev).toEqual(restored.workspace.jev)
+  expect(JSON.stringify(restored)).not.toContain('not-for-central')
+  setup.execute({ type: 'save', connection: { id, provider: 'typesafe', account: 'TypeSafe / Jev', state: 'expired', error: null }, metadata: { verifiedAt: 12 } })
+  expect(projection.snapshot(actor.owner).workspace.jev?.state).toBe('expired')
+})

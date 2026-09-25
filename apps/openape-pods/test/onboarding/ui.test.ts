@@ -20,12 +20,13 @@ async function page(view: OnboardingView) {
   return { wrapper, onboarding }
 }
 
-it('shows exactly the Codex and DDISA accounts and nothing else', async () => {
+it('shows the Codex and DDISA accounts with an optional protected TypeSafe connection', async () => {
   const { wrapper } = await page(state)
   expect(wrapper.findAll('section.setup-connection').map(item => item.attributes('aria-label'))).toEqual(['Codex / GPT account', 'Your DDISA account'])
   for (const hidden of ['mail@example.invalid', 'Telegram', 'Microsoft', 'Expected account', 'Identity provider', 'Default for new pods', 'Use for new pods', 'Allow requests from this provider']) expect(wrapper.text()).not.toContain(hidden)
   expect(wrapper.findAll('select')).toHaveLength(0)
-  expect(wrapper.findAll('input')).toHaveLength(1)
+  expect(wrapper.findAll('input')).toHaveLength(2)
+  expect(wrapper.get('input[type="password"]').attributes('autocomplete')).toBe('new-password')
   wrapper.unmount()
 })
 it('offers sign-in for both accounts when neither is signed in', async () => {
@@ -154,4 +155,15 @@ it('confirms the account-wide impact before revoking provider consent', async ()
   await wrapper.findAll('button').find(button => button.text() === 'Confirm revocation')!.trigger('click'); await flushPromises()
   expect(onboarding).toHaveBeenCalledWith({ type: 'revokeBroker', id })
   wrapper.unmount()
+})
+
+it('clears the masked TypeSafe input before verifying and exposes no raw key in feedback', async () => {
+  const { wrapper, onboarding } = await page(state)
+  const section = wrapper.get('section[aria-label="TypeSafe / Jev"]')
+  expect(section.text()).toContain('Optional')
+  await section.get('input[type="password"]').setValue('synthetic-key')
+  await section.get('form').trigger('submit'); await flushPromises()
+  expect(onboarding).toHaveBeenCalledWith({ type: 'saveTypesafe', key: 'synthetic-key' })
+  expect((section.get('input').element as HTMLInputElement).value).toBe('')
+  expect(wrapper.text()).not.toContain('synthetic-key'); wrapper.unmount()
 })

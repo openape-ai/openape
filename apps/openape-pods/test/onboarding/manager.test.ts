@@ -155,3 +155,43 @@ it('reads a pod identity without creating credentials, changing owners or exposi
   expect(create).not.toHaveBeenCalled(); expect(provision).not.toHaveBeenCalled()
   expect(control.connections.metadata(first)).toEqual(metadata)
 })
+
+it('preserves a working TypeSafe key on failed replacement, hides it and erases it on disconnect', async () => {
+  const { manager, credentials, store } = await fixture()
+  const transport = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ models: [{ name: 'jev-stable' }] }))
+  const connected = await manager.execute({ type: 'saveTypesafe', key: 'synthetic-private-key' })
+  const item = connected.connections.find(item => item.provider === 'typesafe')!
+  expect(item).toMatchObject({ state: 'ready', account: 'TypeSafe / Jev' })
+  expect(await credentials.readConnection(item.id)).toEqual({ kind: 'typesafe', key: 'synthetic-private-key' })
+  expect(await manager.providerReady()).toBe(false)
+  expect(JSON.stringify(connected)).not.toContain('synthetic-private-key')
+  expect(JSON.stringify(store.db.prepare('SELECT * FROM connections').all())).not.toContain('synthetic-private-key')
+  transport.mockResolvedValueOnce(new Response('synthetic-private-key', { status: 401 }))
+  await expect(manager.execute({ type: 'saveTypesafe', key: 'wrong-replacement' })).rejects.toThrow('API key is invalid')
+  expect(await credentials.readConnection(item.id)).toMatchObject({ key: 'synthetic-private-key' })
+  expect((await manager.view()).connections.find(connection => connection.id === item.id)?.state).toBe('ready')
+  transport.mockResolvedValueOnce(Response.json({ model: 'jev-1.13.0', echo: 'synthetic-private-key' }))
+  await expect(manager.typesafeRequest(item.id, '{}', new AbortController().signal)).rejects.toThrow('exposed authentication data')
+  transport.mockResolvedValueOnce(Response.json({ models: [{ name: 'jev-stable' }] }))
+  expect((await manager.execute({ type: 'saveTypesafe', key: 'new-private-key' })).connections.find(connection => connection.provider === 'typesafe')?.id).toBe(item.id)
+  expect(await credentials.readConnection(item.id)).toMatchObject({ key: 'new-private-key' })
+  await manager.execute({ type: 'disconnect', id: item.id })
+  await expect(credentials.readConnection(item.id)).rejects.toThrow()
+  await expect(manager.typesafeRequest(item.id, '{}', new AbortController().signal)).rejects.toThrow('not connected')
+})
+
+it('aborts a live TypeSafe request on disconnect and marks rejected credentials expired', async () => {
+  const { manager } = await fixture()
+  const transport = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ models: [{ name: 'jev-stable' }] }))
+  const id = (await manager.execute({ type: 'saveTypesafe', key: 'synthetic-key' })).connections[0].id
+  transport.mockImplementationOnce(async (_url, options) => new Promise((_resolve, reject) => options!.signal!.addEventListener('abort', () => reject(options!.signal!.reason), { once: true })))
+  const pending = manager.typesafeRequest(id, '{}', new AbortController().signal)
+  const rejected = expect(pending).rejects.toThrow('connection removed')
+  await expect.poll(() => transport.mock.calls.length).toBe(2)
+  await manager.execute({ type: 'disconnect', id }); await rejected
+  transport.mockResolvedValueOnce(Response.json({ models: [{ name: 'jev-stable' }] }))
+  await manager.execute({ type: 'saveTypesafe', key: 'another-key' })
+  transport.mockResolvedValueOnce(new Response('another-key', { status: 403 }))
+  const response = await manager.typesafeRequest(id, '{}', new AbortController().signal); await response.body?.cancel()
+  expect((await manager.view()).connections[0]).toMatchObject({ state: 'expired', error: 'TypeSafe API key is invalid or access was denied; reconnect' })
+})

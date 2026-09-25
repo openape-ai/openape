@@ -1,4 +1,5 @@
 <script lang="ts">
+import JevReference from './JevReference.vue'
 import { emptyPackages, parsePackages } from '../contracts/dependencies'
 import { t, diagnostic, number } from './i18n'
 import { defineComponent } from 'vue'
@@ -10,7 +11,7 @@ import ScriptCode from './ScriptCode.vue'
 import ScriptPackages from './ScriptPackages.vue'
 
 export default defineComponent({
-  components: { ScriptCode, ScriptPackages },
+  components: { JevReference, ScriptCode, ScriptPackages },
   props: { pod: { type: Object as PropType<StoredPod>, required: true } },
   emits: ['changed', 'values', 'ran'],
   data() { return { available: [] as { name: string, expression: string }[], buffer: scriptBuffer(this.pod.id), choice: '', pending: null as ScriptSelection | 'new' | 'current' | null } },
@@ -117,6 +118,7 @@ export default defineComponent({
 </script>
 
 <template>
+  <JevReference />
   <article class="card script-panel" :aria-label="t('Script editor')">
     <div class="card-heading">
       <div>
