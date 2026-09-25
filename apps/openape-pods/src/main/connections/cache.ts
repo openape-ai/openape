@@ -135,6 +135,12 @@ export class CredentialCache {
     finally { this.release(id) }
   }
 
+  async readConnection(id: string): Promise<Record<string, unknown>> {
+    this.path(id); await this.acquire(id)
+    try { return parseCredentialJSON(this.cipher.decrypt(await readFile(this.path(id)))) }
+    finally { this.release(id) }
+  }
+
   async withCache<T>(id: string, operation: (file: string) => Promise<T>, signal?: AbortSignal): Promise<T> {
     this.path(id); await this.acquire(id, signal)
     let temporary: string | undefined

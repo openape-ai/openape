@@ -1,5 +1,25 @@
 # Active work
 
+## Pods: TypeSafe Jev integration (September 25, 2026) — implementation verified
+
+[Issue 1385](https://repos.openape.ai/patrick/monorepo/issues/1385),
+[review plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3C2TZC7HM94KDEG7AWW3BGM),
+[local plan](../../.claude/plans/jev-integration.md).
+Worktree `jev-integration`, branch `feature/issue-1385-jev-integration`,
+integrated canonical base `63ab0bf0788e02dfd5c6fd8f5f7936977cfbbe6f`.
+Encrypted TypeSafe account setup, per-Pod inference permissions, bounded Jev runtime,
+MCP discovery, native/central UI and handbook are implemented. Full lint/typecheck,
+Pods build, 492 unit/component tests, 22 browser tests and 11 native script tests pass.
+Real API model discovery and all three decision types passed with `jev-1.13.0`.
+The existing owner-authorized key is encrypted in the isolated Jev development profile;
+production accounts, Pods and schedules were not changed. Remaining acceptance:
+neutral fresh Codex authoring plus live Pod grant flow and labelled workflow quality.
+[PR #134](https://repos.openape.ai/patrick/monorepo/pulls/134), implementation commit
+`fa31c9bc684ed02b6c23a5f2d762eba62daf961a` against the base above.
+[Published evidence](https://testrun.openape.ai/r/q8kG0M6twEJoIpqcVVx8reEg).
+Commit/push hooks passed the affected unit contract, including the relay consumer.
+The original head `9f3ee934` passed external CI. Owner UI correction: compact API-key form directly in App settings, no Jev explanation/link or Script/Permissions panels. Agent reference and resources API remain authoritative. Full lint/typecheck, build, 34 focused tests and five browser tests pass; [updated screenshots](https://testrun.openape.ai/r/sDUdikwIBcms_bwtddTTcAJG). Next: push the UI correction and check its exact head before PR review; no production release in this task.
+
 ## Pods: stable central connection (September 25, 2026) — implementing
 
 [Issue 1384](https://repos.openape.ai/patrick/monorepo/issues/1384),

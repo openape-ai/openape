@@ -41,7 +41,16 @@ export async function run(context) {
 }`
 
 export const runtimeReference = {
-  contractVersion: 1,
+  contractVersion: 2,
+  jev: {
+    capability: 'jev.evaluate',
+    purpose: 'Use ordinary code for exact rules and arithmetic, Jev for semantic classification/routing/scoring, and agent.run for text generation or open-ended work. Jev does not write code or prose. Prefer a Jev script for bounded decisions when TypeSafe is connected; do not add an LLM call unnecessarily.',
+    setup: 'jevConnection reports actual native connection availability, never a key. If missing or expired, direct the owner to desktop App settings > TypeSafe AI - Jev - API Key. Never request a key in chat or import it as a Pod secret. Configure the Pod assignment through the resources API; there is no Jev panel in Script or Permissions. Connected Codex can call resources with {type:assignJev,podId,epoch,connectionId,model:"jev-1.13.0",maxAttempts:20}. Existing identity grants apply. The central browser can inspect availability; native setup stays on desktop.',
+    request: 'Declare capability jev.evaluate. await context.jev.evaluate({state,questions}) uses the assigned pinned model and connection. state is text or JSON; each named question has type choice, score or noul plus instructions. Choice criteria is an object mapping options to descriptions; Score criteria is an ordered array of 2–10 descriptions; Noul criteria optionally describes true/false.',
+    response: 'Returns {model,answers,usage:{input_tokens,output_tokens}}. Choice: {type,choice,probabilities,confidence}; Score: {type,score,legend,probabilities,confidence}; Noul: {type,noul} (0–1, no confidence). Questions and workflow-specific thresholds belong together in the script. Preserve uncertain items for review; model decisions never grant permissions.',
+    limits: 'At most three attempts per evaluation within 60 seconds, with an assigned per-run attempt limit (default 20, retries included). No silent LLM fallback. Responses and requests are bounded. Temporary inference failure does not create an unknown delivery. Synthetic validation uses uncertain synthetic answers, never real TypeSafe data or quality evidence.',
+    example: 'const result = await context.jev.evaluate({state:context.variables.message,questions:{urgent:{type:"noul",instructions:"Does this message require urgent attention?"}}}); const probability = result.answers.urgent.noul;',
+  },
   workflow: [
     'Read runtime, then list and inspect the target pod. Only explicitly selected Pods may be inspected or changed. The owner selects context with +. Workspace context can list catalogue metadata and create paused Pods.',
     'inspect.script is the same saved working source shown by the editor, including a newer saved draft. If kind=draft, use its id and revision as draftId/draftRevision when editing; if kind=version or null, create a new draft. Unsaved editor text is unavailable to this assistant and must be saved first.',
@@ -61,7 +70,7 @@ export const runtimeReference = {
     setVariable: { podId: 'UUID', revision: 'current pod settings revision', name: 'lowercase alias', value: 'ordinary string, not a secret', variableRevision: '0 for new, otherwise current variable revision' },
     prepareSchedule: { podId: 'UUID', revision: 'current pod settings revision', spec: '{kind:"interval",seconds:900} or {kind:"daily",time:"09:00",timezone:"Europe/Vienna"}', scheduleRevision: '0 for new, otherwise current schedule revision' },
     setGroup: { podId: 'UUID', revision: 'current pod settings revision', name: 'existing/new group name, or null for ungrouped', organizationRevision: 'inspect.organization.revision' },
-    draft: { podId: 'UUID', revision: 'current pod settings revision', draftId: 'null for new, otherwise UUID', draftRevision: '0 for new, otherwise current draft revision', code: 'JavaScript ES module, up to 150000 characters', capabilities: 'exact tool.* capabilities from inspect, at most 16; assigned secrets require no credential.* declaration' },
+    draft: { podId: 'UUID', revision: 'current pod settings revision', draftId: 'null for new, otherwise UUID', draftRevision: '0 for new, otherwise current draft revision', code: 'JavaScript ES module, up to 150000 characters', capabilities: 'exact assigned tool.* or jev.evaluate capabilities from inspect, at most 16; assigned secrets require no credential.* declaration' },
     validate: { podId: 'UUID', revision: 'current pod settings revision', draftId: 'UUID', draftRevision: 'current draft revision' },
     activate: { podId: 'UUID', revision: 'current pod settings revision', draftId: 'UUID', draftRevision: 'current draft revision' },
     run: { podId: 'UUID', revision: 'current pod settings revision' },

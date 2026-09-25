@@ -1,3 +1,4 @@
+import { jevAvailability } from '../onboarding/store'
 import type { ChangeSet } from '../../contracts/control-api'
 import type { WorkflowEngine } from '../workflows/engine'
 import { ControlChanges } from '../control/changes'
@@ -144,10 +145,10 @@ export class MasterControl {
   }
 
   private apply(action: MasterAction, lock: string, selectedPod: string | null, context?: Conversation): unknown {
-    if (action.action === 'runtime') return runtimeReference
+    if (action.action === 'runtime') return { ...runtimeReference, jevConnection: jevAvailability(this.store) }
     const remoteOwner = context ? this.store.db.prepare('SELECT owner FROM remote_conversations WHERE conversation_id=?').get(context.id)?.owner as string | undefined : undefined
-    if (action.action === 'list' && remoteOwner) return { pods: this.store.listPods().filter(pod => this.store.db.prepare('SELECT owner FROM remote_pods WHERE pod_id=?').get(pod.id)?.owner === remoteOwner).map(pod => ({ id: pod.id, name: pod.name, revision: pod.revision, lifecycle: pod.lifecycle, selected: context!.context.pods.some(item => item.id === pod.id) })), workflows: [] }
-    if (action.action === 'list') return { pods: (selectedPod ? [this.store.getPod(selectedPod)] : this.store.listPods()).map(pod => context ? { id: pod.id, name: pod.name, revision: pod.revision, lifecycle: pod.lifecycle, selected: context.context.pods.some(item => item.id === pod.id) } : pod), ...(context ? { workflows: this.store.db.prepare('SELECT id,name,revision,nodes FROM workflows WHERE archived=0').all().map(row => ({ id: row.id, name: row.name, revision: row.revision, podIds: (JSON.parse(row.nodes as string) as { podId: string }[]).map(node => node.podId) })) } : {}) }
+    if (action.action === 'list' && remoteOwner) return { jev: jevAvailability(this.store), pods: this.store.listPods().filter(pod => this.store.db.prepare('SELECT owner FROM remote_pods WHERE pod_id=?').get(pod.id)?.owner === remoteOwner).map(pod => ({ id: pod.id, name: pod.name, revision: pod.revision, lifecycle: pod.lifecycle, selected: context!.context.pods.some(item => item.id === pod.id) })), workflows: [] }
+    if (action.action === 'list') return { jev: jevAvailability(this.store), pods: (selectedPod ? [this.store.getPod(selectedPod)] : this.store.listPods()).map(pod => context ? { id: pod.id, name: pod.name, revision: pod.revision, lifecycle: pod.lifecycle, selected: context.context.pods.some(item => item.id === pod.id) } : pod), ...(context ? { workflows: this.store.db.prepare('SELECT id,name,revision,nodes FROM workflows WHERE archived=0').all().map(row => ({ id: row.id, name: row.name, revision: row.revision, podIds: (JSON.parse(row.nodes as string) as { podId: string }[]).map(node => node.podId) })) } : {}) }
     if (action.action === 'create') {
       if (this.store.listPods().length >= 100) throw new Error('Local pod limit reached')
       return this.store.createPod({ name: action.name })
@@ -156,7 +157,7 @@ export class MasterControl {
     const pod = this.store.getPod(action.podId)
     if (action.action === 'inspect') {
       const scripts = new ScriptWorkspace(this.store, this.resources, this).view(pod.id)
-      return { pod, script: scripts.source, resources: modelResources(this.resources.list(pod.id), true), variables: new PodVariables(this.store).list(pod.id), schedule: this.scheduler.view(pod.id), organization: remoteOwner ? undefined : this.organization(pod.id), versions: scripts.versions, runs: this.dispatcher.view(pod.id).runs, checkpoint: this.store.checkpoint(pod.id), setup: this.setup().proposals(pod.id) }
+      return { jev: jevAvailability(this.store), pod, script: scripts.source, resources: modelResources(this.resources.list(pod.id), true), variables: new PodVariables(this.store).list(pod.id), schedule: this.scheduler.view(pod.id), organization: remoteOwner ? undefined : this.organization(pod.id), versions: scripts.versions, runs: this.dispatcher.view(pod.id).runs, checkpoint: this.store.checkpoint(pod.id), setup: this.setup().proposals(pod.id) }
     }
     if (action.action === 'setVariable') {
       new PodVariables(this.store).save(pod.id, action.name, action.value, action.variableRevision)

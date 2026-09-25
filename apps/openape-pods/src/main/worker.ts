@@ -1,3 +1,5 @@
+import { assignedJev, parseJevRequest, typesafeOrigin } from '../contracts/jev'
+import { executeJev } from './connections/jev-service'
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import type { CentralController, CentralGate } from './central/controller'
 import type { CentralCommand, CentralSnapshot } from '../contracts/central'
@@ -80,6 +82,7 @@ export class FixtureWorker {
   private connections: ConnectionManager | null = null
   private providerGateway: Awaited<ReturnType<typeof startAgentGateway>> | null = null
   private providerAbort = new AbortController()
+  private jevAttempts = new Map<string, number>()
   private setupReady: Promise<void> | null = null
   private child: UtilityProcess | null = null
   private stopping = false
@@ -195,7 +198,7 @@ export class FixtureWorker {
   cancelProgram(podId: string): void { this.programs?.cancelPod(podId) }
 
   private async closeShellIdentities(): Promise<void> {
-    const identities = [...this.shellIdentities.values()]; this.shellIdentities.clear()
+    const identities = [...this.shellIdentities.values()]; this.shellIdentities.clear(); this.jevAttempts.clear()
     await Promise.all(identities.map(identity => identity.close()))
   }
 
@@ -350,6 +353,15 @@ export class FixtureWorker {
   async resources(command: InternalResourceCommand): Promise<ResourceState> {
     const central = this.centralAction(command.type); if (central) return central.local(() => this.resources(command))
     await this.setupReady
+    if (command.type === 'assignJev') {
+      if (!this.connections) throw new Error('Connection setup is not ready')
+      const before = parseResourceState(await this.dispatch({ resource: { type: 'list', podId: command.podId } }))
+      if (before.epoch !== command.epoch) throw new Error('Pod or Jev permissions changed; reload before assigning access')
+      if (before.jev?.id !== command.connectionId || before.jev.state !== 'ready') throw new Error('TypeSafe is not connected; reconnect in App settings')
+      const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
+      const authority = await this.connections.approve(command.podId, join(vendor, 'pod-http-shapes.toml'), [['pod-http', 'request', '--origin', typesafeOrigin, '--method', 'POST']])
+      return parseResourceState(await this.dispatch({ resource: { ...command, type: 'approveJev', authority } }))
+    }
     if (command.type === 'assignHttp') {
       if (!this.connections) throw new Error('Connection setup is not ready')
       const before = parseResourceState(await this.dispatch({ resource: { type: 'list', podId: command.podId } }))
@@ -465,12 +477,13 @@ export class FixtureWorker {
 
   private async executeService(request: ServiceRequest): Promise<unknown> {
     if (!request || typeof request.id !== 'string' || !/^[a-f0-9-]{36}$/.test(request.id) || this.services.has(request.id) || this.services.size >= 16) throw new Error('Invalid or excessive broker request')
-    if (request.kind !== undefined && request.kind !== 'credential' && request.kind !== 'http' && request.kind !== 'shell' && request.kind !== 'shellClose') throw new Error('Unsupported broker service')
+    if (request.kind !== undefined && request.kind !== 'credential' && request.kind !== 'jev' && request.kind !== 'http' && request.kind !== 'shell' && request.kind !== 'shellClose') throw new Error('Unsupported broker service')
     const scope = parseServiceScope(request.scope)
     const controller = new AbortController(); this.services.set(request.id, controller)
     const check = async (domain?: { path: string, ownerPid: number }) => parseResourceState(await this.dispatch({ serviceCheck: { scope, ...(domain ? { domain } : {}) } }))
     try {
       if (request.kind === 'shellClose') {
+        this.jevAttempts.delete(scope.runId)
         await this.shellIdentities.get(scope.runId)?.close(); this.shellIdentities.delete(scope.runId); return true
       }
       const context = await this.dispatch({ runContext: { scope } }) as { name: string, reason: string }
@@ -527,6 +540,21 @@ export class FixtureWorker {
         return value
       }
       const state = await check()
+      if (request.kind === 'jev') {
+        if (!this.credentials || !this.connections) throw new Error('Connection service unavailable')
+        const assignment = assignedJev(state.resources, scope.podId, scope.capabilities)
+        const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
+        const result = await executeJev(assignment, parseJevRequest(request.body), {
+          vendor, credentials: this.credentials, signal: controller.signal, observe, previous, check,
+          send: (body, signal) => this.connections!.typesafeRequest(assignment.connectionId, body, signal),
+          consumeAttempt: () => {
+            const count = this.jevAttempts.get(scope.runId) ?? 0
+            if (count >= assignment.maxAttempts) throw new Error('Jev request limit reached for this run')
+            this.jevAttempts.set(scope.runId, count + 1)
+          },
+        })
+        await check(); controller.signal.throwIfAborted(); return result
+      }
       if (request.kind === 'http') {
         if (!this.credentials) throw new Error('Credential store is unavailable')
         const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')

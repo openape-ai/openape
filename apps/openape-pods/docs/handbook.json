@@ -17,7 +17,7 @@
       "id": "accounts",
       "title": "Connect your personal accounts",
       "paragraphs": [
-        "Open App settings → Your accounts. The page shows exactly two accounts: your DDISA account, with which you decide permission requests, and your Codex / GPT account, which provides AI access for model calls in Pod scripts.",
+        "Open App settings → Your accounts. Connect your DDISA account to decide permission requests and your Codex / GPT account for LLM calls. Optional TypeSafe / Jev setup is directly in App settings.",
         "Pods finds your identity provider through the DDISA record of your email domain. Every Pod, permission and mobile device uses this one DDISA account; there is nothing to select. Pod agents are not your accounts and are never listed here. Switching to another DDISA account gives your Pods new agents, and their permissions must be granted again.",
         "Other services are configured per Pod: application sign-in belongs in Permissions, and tokens or passwords belong in Variables and secrets. You do not need a personal account or an additional sign-in at pods.openape.ai."
       ],
@@ -28,6 +28,21 @@
         "Choose Continue to workspace. To change the interface language, use App settings → Language."
       ],
       "image": "handbook-setup.png"
+    },
+    {
+      "id": "jev-decisions",
+      "title": "Structured decisions with Jev",
+      "paragraphs": [
+        "Connect TypeSafe with an API key in desktop App settings. The key is verified using model discovery, stored encrypted on this Mac, and never given to scripts or Codex. Replacing the key preserves the connection. Codex configures the Pod assignment through the resources API.",
+        "Codex writes the script; Jev evaluates bounded semantic questions at runtime. Use ordinary code for exact rules, Jev for Choice, Score or Noul decisions, and an explicit agent.run call for generated text. A Jev-only script needs no active Codex account. Synthetic validation proves the script contract, not decision quality.",
+        "Review what text the script sends to TypeSafe. Preserve ambiguous decisions for review and test German/English examples before relying on automation. Retries may incur additional charges; history shows successful evaluation usage, model, attempts and duration."
+      ],
+      "steps": [
+        "Enter the API key in App settings → TypeSafe AI - Jev - API Key.",
+        "Ask Codex to configure Jev through the resources API with a pinned model such as jev-1.13.0 and an attempt budget (default 20 per run), then declare jev.evaluate in the script capabilities. Script and Permissions contain no Jev setup panel.",
+        "Validate, inspect the script and run once. Connecting alone never grants a Pod access. Central web shows availability; enter keys on the owning desktop."
+      ],
+      "code": "const result = await context.jev.evaluate({\n  state: context.variables.sampleMessage,\n  questions: { relevant: { type: 'noul', instructions: 'Is this a support request?' } },\n})\nconst relevance = result.answers.relevant.noul"
     },
     {
       "id": "master",
