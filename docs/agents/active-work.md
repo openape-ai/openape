@@ -1,5 +1,23 @@
 # Active work
 
+## Pods: local MCP runtime approval (September 25, 2026) — verified locally
+
+[Issue 1388](https://repos.openape.ai/patrick/monorepo/issues/1388),
+[approved implementation plan](../../.claude/plans/issue-1388-mcp-runtime-approval.md).
+Worktree `pods-mcp-runtime-approval`, branch `feature/issue-1388-mcp-runtime-approval`,
+canonical base `98cf9078600f5ec94585294772db78cdd7c8cf81`.
+Desktop-only opt-in approves the exact reusable runtime grant for locally MCP-created
+Pods, through their original owner and decision IdP. Denial/revocation, signed grant
+verification and separate resource permissions remain enforced. Disabling prevents
+new automatic decisions; existing grants require explicit revocation.
+Full lint/typecheck, Pods build, 515 unit/component tests and two real Chrome settings
+tests pass. English/light and German/narrow/dark screenshots were inspected; the
+self-contained local report is `apps/openape-pods/.artifacts/runtime-approval-report.html`.
+[PR 140](https://repos.openape.ai/patrick/monorepo/pulls/140), implementation commit
+`a610cc9ce1fef75375347e6af38da346b01fceae`. Commit/push affected unit gates pass,
+including the relay consumer; receipt `.openape/check-results/1790346471069-a610cc9c-unit/summary.json`.
+Next: exact-head external CI and owner review; installation is separate. No owner-profile changes.
+
 ## Pods: TypeSafe Jev integration (September 25, 2026) — implementation verified
 
 [Issue 1385](https://repos.openape.ai/patrick/monorepo/issues/1385),
