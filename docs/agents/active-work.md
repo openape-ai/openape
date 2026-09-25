@@ -1,5 +1,18 @@
 # Active work
 
+## Pods: repeated timer approvals (September 25, 2026)
+
+[Issue 1389](https://repos.openape.ai/patrick/monorepo/issues/1389).
+Worktree `openape-monorepo/openape-timer-investigation`, branch
+`bugfix/issue-1389-pods-standing-grant`, canonical base
+`a23d519d7543ab572585d9bd6ba141155fcbba19`.
+The inbox Always allow action now approves brokered requests with lifetime always,
+matching the existing detail page. Ordinary standing-rule and broker policy behavior
+remain unchanged. Component coverage exercises both entry points.
+Live timer recovery reused the same Pod-scoped always grant on a second no-op run
+without a pending approval (two seconds). Full lint/typecheck, IdP application build and 26 focused component/broker tests
+pass. Next: review native PR and exact-head CI.
+
 ## Pods: local MCP runtime approval (September 25, 2026) — verified locally
 
 [Issue 1388](https://repos.openape.ai/patrick/monorepo/issues/1388),
