@@ -15,7 +15,7 @@ interface State { revision: number, hash: string }
 interface Completion { id: string, result: unknown, error: string | null }
 type Pending = { id: string, revision: number, completion?: Completion } & ({ format?: 1, snapshot: CentralSnapshot } | { format: 2, hash: string, changes: Record<string, string | null>, parts: Record<string, unknown> })
 interface Session extends State { lease: string, pending: CentralOperation[], format?: number, runtimeId?: string, manifest?: CentralManifest }
-export interface CentralGate { lastTickAt: number, tickingSince: number | null }
+export interface CentralGate { lastTickAt: number, tickingSince: number | null, tickPhase?: string | null, tickTimeout?: { phase: string, at: number } | null }
 export interface CentralExecutor {
   snapshot: () => Promise<CentralSnapshot>
   version?: () => Promise<number>
@@ -82,7 +82,7 @@ export class CentralController {
   offlineMessage(): string { return `Central workspace offline: ${this.error ?? 'connecting'}` }
 
   status(): CentralStatus {
-    return { state: centralState(this.online, this.lastOnlineAt, this.since, Date.now()), error: this.error, since: this.since, lastOnlineAt: this.lastOnlineAt, gateUntil: this.gateUntil, lastTickAt: this.worker?.lastTickAt || null, tickingSince: this.worker?.tickingSince ?? null, format: this.format, runtimeId: this.runtimeId, lastPublication: this.lastPublication }
+    return { state: centralState(this.online, this.lastOnlineAt, this.since, Date.now()), error: this.error, since: this.since, lastOnlineAt: this.lastOnlineAt, gateUntil: this.gateUntil, lastTickAt: this.worker?.lastTickAt || null, tickingSince: this.worker?.tickingSince ?? null, tickPhase: this.worker?.tickPhase ?? null, tickTimeout: this.worker?.tickTimeout ?? null, format: this.format, runtimeId: this.runtimeId, lastPublication: this.lastPublication }
   }
 
   start(): void {
