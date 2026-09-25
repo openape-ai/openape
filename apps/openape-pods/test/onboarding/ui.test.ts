@@ -3,6 +3,7 @@ import { expect, it, vi } from 'vitest'
 import AccountStatus from '../../src/renderer/AccountStatus.vue'
 import PodIdentity from '../../src/renderer/PodIdentity.vue'
 import Onboarding from '../../src/renderer/Onboarding.vue'
+import JevConnection from '../../src/renderer/JevConnection.vue'
 import type { OnboardingView } from '../../src/contracts/onboarding'
 
 const owner = '00000000-0000-4000-8000-000000000002'
@@ -20,12 +21,13 @@ async function page(view: OnboardingView) {
   return { wrapper, onboarding }
 }
 
-it('shows exactly the Codex and DDISA accounts and nothing else', async () => {
+it('shows only the Codex and DDISA accounts', async () => {
   const { wrapper } = await page(state)
   expect(wrapper.findAll('section.setup-connection').map(item => item.attributes('aria-label'))).toEqual(['Codex / GPT account', 'Your DDISA account'])
   for (const hidden of ['mail@example.invalid', 'Telegram', 'Microsoft', 'Expected account', 'Identity provider', 'Default for new pods', 'Use for new pods', 'Allow requests from this provider']) expect(wrapper.text()).not.toContain(hidden)
   expect(wrapper.findAll('select')).toHaveLength(0)
   expect(wrapper.findAll('input')).toHaveLength(1)
+  expect(wrapper.text()).not.toContain('TypeSafe')
   wrapper.unmount()
 })
 it('offers sign-in for both accounts when neither is signed in', async () => {
@@ -154,4 +156,17 @@ it('confirms the account-wide impact before revoking provider consent', async ()
   await wrapper.findAll('button').find(button => button.text() === 'Confirm revocation')!.trigger('click'); await flushPromises()
   expect(onboarding).toHaveBeenCalledWith({ type: 'revokeBroker', id })
   wrapper.unmount()
+})
+
+it('clears the masked TypeSafe input before verifying and exposes no raw key in feedback', async () => {
+  const onboarding = vi.fn(async () => state)
+  window.pods = { onboarding } as unknown as typeof window.pods
+  const wrapper = mount(JevConnection); await flushPromises()
+  const section = wrapper
+  expect(section.get('input').attributes('autocomplete')).toBe('new-password')
+  await section.get('input[type="password"]').setValue('synthetic-key')
+  await section.get('form').trigger('submit'); await flushPromises()
+  expect(onboarding).toHaveBeenCalledWith({ type: 'saveTypesafe', key: 'synthetic-key' })
+  expect((section.get('input').element as HTMLInputElement).value).toBe('')
+  expect(wrapper.text()).not.toContain('synthetic-key'); wrapper.unmount()
 })

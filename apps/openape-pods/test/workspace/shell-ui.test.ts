@@ -49,6 +49,7 @@ describe('workspace shell', () => {
     await button('Work from Codex').trigger('click'); await flushPromises()
     expect(wrapper!.get('h1').text()).toBe('App settings')
     expect(wrapper!.text()).toContain('Connected Codex can administer')
+    expect(wrapper!.get('.jev-connection label').text()).toBe('TypeSafe AI - Jev - API Key')
   })
 
   it('lists assigned directories and references in Permissions but never account connections', async () => {
@@ -59,6 +60,9 @@ describe('workspace shell', () => {
     expect(panel).toContain('Orders')
     expect(panel).toContain('Reference')
     expect(panel).not.toContain('Microsoft fixture')
+    expect(panel).not.toContain('Jev')
+    await tab('Script').trigger('click'); await flushPromises()
+    expect(wrapper!.text()).not.toContain('Jev script reference')
   })
 })
 

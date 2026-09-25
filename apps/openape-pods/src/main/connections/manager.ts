@@ -1,3 +1,5 @@
+import { parseTypesafeKey, typesafeOrigin } from '../../contracts/jev'
+import { typesafeJSON, verifyTypesafe } from './typesafe'
 import type { Owner } from '@openape/pods-protocol'
 import { enablePodBroker, revokePodBroker, podBrokerReceipt } from './broker'
 import type { PodBrokerConnection } from './broker'
@@ -35,6 +37,8 @@ export class ConnectionManager {
   private runtimeState = { ready: false, error: null as string | null }
   private assigning = false
   private identityTurn: Promise<void> = Promise.resolve()
+  private typesafeSession = new AbortController()
+  private typesafeChanging = false
   private providerSession = new AbortController()
   private codex: CodexConnection
   private owner: OwnerConnection
@@ -121,11 +125,17 @@ export class ConnectionManager {
 
   async execute(command: OnboardingCommand): Promise<OnboardingView> {
     if (command.type === 'list') return this.view(command.podId)
+    if (command.type === 'saveTypesafe') return this.saveTypesafe(command.key)
     if (command.type === 'assign' || command.type === 'folders' || (command.type === 'connect' && command.provider === 'microsoft')) throw new Error('Configure application accounts in the pod Permissions tab')
     if (command.type === 'cancel' || command.type === 'disconnect') {
       const job = this.jobs.get(command.id); job?.controller.abort(new Error('Sign-in cancelled by the owner')); await job?.work
       if (command.type === 'disconnect') {
         const item = await this.connection(command.id)
+        if (item.provider === 'typesafe') {
+          if (this.typesafeChanging) throw new Error('TypeSafe connection is being updated')
+          this.typesafeSession.abort(new Error('TypeSafe connection removed')); this.typesafeSession = new AbortController()
+          await this.credentials.eraseConnection(item.id)
+        }
         if (item.provider === 'chatgpt') { this.providerSession.abort(new Error('ChatGPT connection removed')); this.providerSession = new AbortController() }
         await this.dispatch({ type: 'revoke', id: item.id }); await this.save({ ...item, state: 'revoked', error: null }, await this.metadata(item.id))
         await this.availability()
@@ -135,6 +145,7 @@ export class ConnectionManager {
     if (command.type === 'enableBroker' || command.type === 'revokeBroker') { await this.configureBroker(command); return this.view() }
     if (!this.runtimeState.ready) throw new Error(this.runtimeState.error ?? 'Bundled runtime is not ready')
     if (command.type === 'connect') {
+      if (command.provider === 'typesafe') throw new Error('Connect TypeSafe through the protected API key form')
       const existing = (await this.state()).connections.find(item => item.provider === command.provider)
       if (this.assigning) throw new Error('Another permission review is in progress')
       if (command.provider === 'chatgpt') return this.startLogin(existing ?? { id: randomUUID(), provider: 'chatgpt', account: '', state: 'connecting', error: null, login: null }, existing ? await this.metadata(existing.id) : {}, !existing)
@@ -270,7 +281,7 @@ export class ConnectionManager {
     finally { this.assigning = false }
   }
 
-  busy(): boolean { return this.jobs.size > 0 || this.assigning }
+  busy(): boolean { return this.jobs.size > 0 || this.assigning || this.typesafeChanging }
   async purgePodKeys(podId: string, assignedIds: string[]): Promise<void> {
     const ids = new Set(assignedIds)
     const owners = (await this.state()).connections.filter(item => item.provider === 'openape')
@@ -286,6 +297,45 @@ export class ConnectionManager {
     }
   }
 
+  private async saveTypesafe(key: string): Promise<OnboardingView> {
+    if (this.typesafeChanging) throw new Error('TypeSafe connection is being updated')
+    this.typesafeChanging = true
+    try {
+      parseTypesafeKey(key)
+      await verifyTypesafe(key, this.typesafeSession.signal)
+      this.typesafeSession.signal.throwIfAborted()
+      const existing = (await this.state()).connections.find(item => item.provider === 'typesafe')
+      const id = existing?.id ?? randomUUID()
+      await this.credentials.connect(id, JSON.stringify({ kind: 'typesafe', key }))
+      this.typesafeSession.abort(new Error('TypeSafe API key replaced')); this.typesafeSession = new AbortController()
+      await this.save({ id, provider: 'typesafe', account: 'TypeSafe / Jev', state: 'ready', error: null, login: null }, { verifiedAt: Date.now() })
+      await this.availability()
+      return this.view()
+    }
+    finally { this.typesafeChanging = false }
+  }
+
+  async typesafeRequest(id: string, body: string, signal: AbortSignal): Promise<Response> {
+    signal = AbortSignal.any([signal, this.typesafeSession.signal])
+    const item = await this.connection(id, 'typesafe')
+    if (item.state !== 'ready') throw new Error('TypeSafe is not connected; reconnect in App settings')
+    const record = await this.credentials.readConnection(id)
+    if (record.kind !== 'typesafe') throw new Error('Invalid TypeSafe credential record')
+    const key = parseTypesafeKey(record.key)
+    signal.throwIfAborted()
+    const response = await fetch(`${typesafeOrigin}/v1/systemone`, { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body, redirect: 'error', signal })
+    signal.throwIfAborted()
+    if ([401, 403].includes(response.status)) {
+      await this.save({ ...item, state: 'expired', error: 'TypeSafe API key is invalid or access was denied; reconnect' }, await this.metadata(id))
+      await this.availability()
+    }
+    if (!response.ok) return response
+    const value = JSON.stringify(await typesafeJSON(response))
+    signal.throwIfAborted()
+    if (value.includes(key)) throw new Error('TypeSafe response exposed authentication data')
+    return new Response(value, { headers: { 'Content-Type': 'application/json' } })
+  }
+
   async providerReady(): Promise<boolean> { return this.runtimeState.ready && (await this.state()).connections.some(item => item.provider === 'chatgpt' && item.state === 'ready') }
   async provider(body: unknown, signal: AbortSignal): Promise<Response> {
     signal = AbortSignal.any([signal, this.providerSession.signal])
@@ -295,9 +345,10 @@ export class ConnectionManager {
     if (typeof metadata.accountId !== 'string') throw new Error('ChatGPT account binding is missing')
     const bearer = await this.codex.bearer(item.id, metadata.accountId, signal)
     const response = await fetch('https://chatgpt.com/backend-api/codex/responses', { method: 'POST', redirect: 'error', headers: { Authorization: `Bearer ${bearer}`, 'ChatGPT-Account-ID': metadata.accountId, 'Content-Type': 'application/json', Accept: 'text/event-stream', originator: 'codex_cli_rs' }, body: JSON.stringify(body), signal })
+    signal.throwIfAborted()
     if ([401, 403].includes(response.status)) { await this.save({ ...item, state: 'expired', error: 'ChatGPT sign-in expired or access was denied; reconnect' }, metadata); await this.availability() }
     return response
   }
 
-  async stop(): Promise<void> { this.providerSession.abort(); for (const job of this.jobs.values()) job.controller.abort(); await Promise.all(Array.from(this.jobs.values(), job => job.work)) }
+  async stop(): Promise<void> { this.typesafeSession.abort(); this.providerSession.abort(); for (const job of this.jobs.values()) job.controller.abort(); await Promise.all(Array.from(this.jobs.values(), job => job.work)) }
 }
