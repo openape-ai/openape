@@ -1,6 +1,8 @@
 import type { MessageKey } from './index'
 
 export const diagnosticPatterns = [
+  'Runtime permission {p0}; automatic approval cannot replace this decision',
+  'Automatic runtime permission approval failed ({p0})',
   'Permission {p0}; review this Pod\'s permissions before retrying',
   'Pod {p0} exists and is awaiting its identity. Do not create it again. {p1}',
   'Workspace operation {p0} is not confirmed. Reconcile this operation before retrying',
