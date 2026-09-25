@@ -34,7 +34,7 @@ export function parseAdministration(action: Record<string, unknown>) {
   }
   if (kind === 'resources') {
     const parsed = parseResourceCommand(command, true)
-    if (!['list', 'assignHttp', 'assignDirectory', 'assignReference', 'revoke', 'removeVariable'].includes(parsed.type)) throw new Error('Unsupported Codex resource operation; import secrets by private file')
+    if (!['list', 'assignJev', 'assignHttp', 'assignDirectory', 'assignReference', 'revoke', 'removeVariable'].includes(parsed.type)) throw new Error('Unsupported Codex resource operation; import secrets by private file')
     noPaths(action)
     return { kind, revision: Number(revision), command: parsed } as const
   }

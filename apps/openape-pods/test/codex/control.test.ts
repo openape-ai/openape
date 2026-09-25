@@ -157,3 +157,18 @@ it('offers CLI setup help and resolves only metadata for assigned commands', asy
   expect(() => parseAdministration({ action: 'resources', revision: 1, command: { type: 'list', podId: pod.id }, runtimePath: '/fixture/runtime.json' })).toThrow()
   for (const type of ['start', 'poll', 'input']) expect(() => parseAdministration({ action: 'program', revision: 1, command: { type, podId: pod.id } })).toThrow()
 })
+
+it('discovers Jev before Pod creation and refreshes connection availability without exposing credentials', async () => {
+  const { store, pod, send } = fixture()
+  const reference = await send({ action: 'runtime' }) as Record<string, unknown>
+  expect(reference).toMatchObject({ jevConnection: null, jev: { capability: 'jev.evaluate' } })
+  const { SetupControl } = await import('../../src/worker/onboarding/control')
+  const resources = new ResourceRegistry(store, () => {}); const setup = new SetupControl(store, resources)
+  const id = randomUUID()
+  setup.execute({ type: 'save', connection: { id, provider: 'typesafe', account: 'TypeSafe / Jev', state: 'ready', error: null }, metadata: { verifiedAt: 1, private: 'never-expose-this' } })
+  expect(await send({ action: 'runtime' })).toMatchObject({ jevConnection: { id, state: 'ready', verifiedAt: 1 } })
+  await send({ action: 'select', podIds: [pod.id] })
+  const inspected = await send({ action: 'inspect', podId: pod.id, revision: pod.revision })
+  expect(inspected).toMatchObject({ jev: { id, state: 'ready' } })
+  expect(JSON.stringify(inspected)).not.toContain('never-expose-this')
+})
