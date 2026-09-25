@@ -229,7 +229,7 @@ onBeforeUnmount(() => { generation++; abort.abort() })
     </div>
     <div v-else class="central-layout">
       <aside class="central-sidebar" :aria-label="t('Pods')">
-        <h2>{{ t('Pods') }} <span class="central-muted">{{ runtimes.reduce((count, item) => count + item.workspace.pods.length, 0) }}</span></h2>
+        <h2>{{ t('Pods') }}</h2>
         <form class="central-create" @submit.prevent="send('workspace', { type: 'create', name: newName }, activeRuntime)">
           <input v-model="newName" :aria-label="t('New Pod name')" :placeholder="t('New Pod')" maxlength="100"><button :disabled="!activeRuntime || !newName.trim() || busy || !!operationId">
             {{ t('Add') }}
@@ -240,7 +240,7 @@ onBeforeUnmount(() => { generation++; abort.abort() })
             ● {{ host.online ? t('Desktop online') : host.lastSeenAt ? t('Desktop offline since {time}', { time: time(host.lastSeenAt) }) : t('Desktop offline') }}
           </p>
           <template v-for="group in sidebar(host).groups" :key="group.id">
-            <h3>{{ group.id ? group.name : t('Ungrouped') }}</h3>
+            <h3>{{ group.id ? group.name : t('Ungrouped') }} <span class="central-muted">{{ group.pods.length }}</span></h3>
             <button v-for="pod in group.pods" :key="pod.id" class="central-pod" :aria-current="selected?.podId === pod.id ? 'true' : undefined" :disabled="busy || !pod.online" @click="select(host.id, pod.id)">
               <span>{{ pod.name }}</span><small v-if="pod.queue?.blocked" class="central-blocked">● {{ t('Schedule blocked') }}</small><small v-else :class="{ 'central-online': pod.online }">● {{ pod.online ? t('Online') : t('Offline') }}</small>
             </button>

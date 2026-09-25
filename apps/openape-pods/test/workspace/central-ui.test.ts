@@ -89,6 +89,8 @@ it('lists archived Pods in their own labelled section', async () => {
   wrapper = mount(CentralWorkspace, { props: { client: fixture.client } })
   await flushPromises()
   expect(wrapper.find('details.central-archived summary').text()).toContain('Archived 1')
+  expect(wrapper.find('.central-sidebar h3').text()).toBe('Ungrouped 1')
+  expect(wrapper.find('.central-sidebar h2').text()).toBe('Pods')
   expect(wrapper.find('details.central-archived').text()).toContain('Monthly report')
   expect(wrapper.findAll('.central-pod').filter(item => item.text().includes('Monthly report'))).toHaveLength(1)
 })
