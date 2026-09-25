@@ -1,5 +1,13 @@
 # Active work
 
+## Pods: service-queue pattern in runtime help (September 25, 2026)
+
+[Issue 1382](https://repos.openape.ai/patrick/monorepo/issues/1382). Worktree `pods-service-pattern`,
+branch `feature/issue-1382-service-pod-pattern`, base `6c72f271`. The MCP `runtime` help
+gains `patterns.serviceQueue`, the verified issue-1381 pattern: setup, rules and a tested
+example script. It reaches installed apps with the next signed release. A dedicated skill is
+deferred until a second or third service Pod exists.
+
 ## Pods: zaz task queue from a scheduled Pod (September 25, 2026) — delivered
 
 [Issue 1381](https://repos.openape.ai/patrick/monorepo/issues/1381),
