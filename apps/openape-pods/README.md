@@ -554,10 +554,12 @@ newer database and can still restore a compatible backup through Data & backups.
 Checksums detect corruption; an owner-selected backup is not authenticated by a
 publisher signature. Treat imported backups as trusted owner data.
 
-The default 10 GiB pod-data limit is configurable from 1 GiB to 1 TiB. Five-second
-scans stop runs/master work at the limit or below 256 MiB of free disk space. Blob
-publication checks available space first. This is a sampled application limit, not
-a hard filesystem quota: active work can overshoot between scans. Chromium caches,
+The default 10 GiB pod-data limit is configurable from 1 GiB to 1 TiB. A full
+inventory runs every minute and stops runs/master work at the limit or below 256 MiB
+of free disk space. Each one-second scheduler tick checks free disk space, tracked
+blob usage and the stored error, and starts the inventory at once when one of them trips.
+Blob publication checks available space first. This is a sampled application limit,
+not a hard filesystem quota: active work can overshoot between inventories. Chromium caches,
 authentication files, external backups and previous profiles are separate from the
 reported pod-data usage. Cleanup removes only unreachable blobs/snapshot staging;
 all referenced evidence, committed history and pending events are retained.
