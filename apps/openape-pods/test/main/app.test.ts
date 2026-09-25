@@ -131,3 +131,14 @@ it('forwards macOS suspend and resume to the worker', async () => {
   main.power('suspend'); main.power('resume')
   expect(main.worker.lifecycle.mock.calls).toEqual([['suspend'], ['resume']])
 })
+
+it('exposes automatic runtime approval only through the validated desktop preference channel', async () => {
+  main = await startMain()
+  expect(await main.invoke(channels.runtimeApproval, { type: 'get' })).toEqual({ enabled: false })
+  await expect(main.invoke(channels.runtimeApproval, { type: 'set', enabled: true }, true)).rejects.toThrow()
+  expect(await main.invoke(channels.runtimeApproval, { type: 'set', enabled: true })).toEqual({ enabled: true })
+  expect(await main.invoke(channels.runtimeApproval, { type: 'get' })).toEqual({ enabled: true })
+  await expect(main.invoke(channels.runtimeApproval, { type: 'set', enabled: 'true' })).rejects.toThrow()
+  await expect(main.invoke(channels.runtimeApproval, { type: 'set', enabled: true, podId })).rejects.toThrow()
+  expect(await main.invoke(channels.runtimeApproval, { type: 'set', enabled: false })).toEqual({ enabled: false })
+})

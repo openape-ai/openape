@@ -16,7 +16,7 @@ import type { WorkerStatus } from '../../src/contracts/ipc'
 type Handler = (event: unknown, value: unknown, ...extra: unknown[]) => unknown
 export interface MainHarness {
   root: string
-  invoke: (channel: string, value?: unknown) => Promise<unknown>
+  invoke: (channel: string, value?: unknown, untrusted?: boolean) => Promise<unknown>
   dialog: { showMessageBox: Mock, showOpenDialog: Mock, showErrorBox: Mock }
   worker: Record<string, Mock> & { publish: (status: WorkerStatus) => void }
   shell: { openExternal: Mock }
@@ -86,11 +86,11 @@ export async function startMain(env: Record<string, string> = {}, prepare: (root
   await vi.waitFor(() => { if (!handlers.has('pods:resources') || !windows.length) throw new Error('Main process has not started') })
   return {
     root,
-    invoke: async (channel, value) => {
+    invoke: async (channel, value, untrusted = false) => {
       const handler = handlers.get(channel)
       if (!handler) throw new Error(`No IPC handler for ${channel}`)
       const { webContents } = windows[0]!
-      return handler({ sender: webContents, senderFrame: webContents.mainFrame }, value)
+      return handler({ sender: untrusted ? {} : webContents, senderFrame: webContents.mainFrame }, value)
     },
     dialog,
     worker,

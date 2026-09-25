@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
 import App from '../../src/renderer/App.vue'
+import RuntimeApprovalSettings from '../../src/renderer/RuntimeApprovalSettings.vue'
 import CodexPanel from '../../src/renderer/CodexPanel.vue'
 import CodexReviews from '../../src/renderer/CodexReviews.vue'
 import { applyLanguage } from '../../src/renderer/i18n'
@@ -67,4 +68,26 @@ it('keeps chat and approval destinations out of the connected workspace', async 
   expect(shown.find('.master-panel').exists()).toBe(false)
   expect(shown.find('input').exists()).toBe(true)
   shown.unmount()
+})
+
+it('persists the owner checkbox and restores its checked state after reopening', async () => {
+  let enabled = false
+  const runtimeApproval = vi.fn(async (command: { type: string, enabled?: boolean }) => {
+    if (command.type === 'set') enabled = command.enabled!
+    return { enabled }
+  })
+  installWorkspace({ runtimeApproval })
+  const view = mount(RuntimeApprovalSettings); await flushPromises()
+  expect(view.get('input').element.checked).toBe(false)
+  await view.get('input').setValue(true); await flushPromises()
+  expect(runtimeApproval).toHaveBeenLastCalledWith({ type: 'set', enabled: true })
+  expect(view.get('input').element.checked).toBe(true)
+  view.unmount()
+  const reopened = mount(RuntimeApprovalSettings); await flushPromises()
+  expect(reopened.get('input').element.checked).toBe(true)
+  runtimeApproval.mockRejectedValueOnce(new Error('Disk is read-only'))
+  await reopened.get('input').setValue(false); await flushPromises()
+  expect(reopened.get('input').element.checked).toBe(true)
+  expect(reopened.get('[role="alert"]').text()).toContain('Disk is read-only')
+  reopened.unmount()
 })
