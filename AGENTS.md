@@ -7,8 +7,12 @@ sibling repositories and linked worktrees have their own checkout state.
 
 - Source of truth: `.openape/repository.json`. Code, pushes and PRs belong to
   `https://repos.openape.ai/patrick/monorepo.git`. Forgejo and GitHub are mirrors.
-- Issues remain at `https://git.openape.ai/openape-ai/openape/issues`.
-  Always link the full issue URL across forges; a bare `Closes #N` is ambiguous.
+- Development issues live at `https://repos.openape.ai/patrick/monorepo/issues`.
+  Use the native [issue CLI](docs/operations/native-issues.md); Forgejo retains
+  the read-only issue archive and CI. Link the full issue URL and add an explicit
+  PR relation. Merging a PR never closes an issue automatically.
+- Tasks owns general work/reminders; Plans owns approved proposals. Link the
+  development issue instead of duplicating its discussion or resolution state.
 - Run `git status --short` and `git branch --show-current`. In each tool shell,
   run `. ./scripts/activate-node.sh` from the checkout before `pnpm run doctor`.
   Use the explicit `run`: `pnpm doctor` is pnpm's own command. For restricted
@@ -33,9 +37,22 @@ The Node engine minimum describes compatibility; `.nvmrc` fixes development/CI.
 `pnpm install --frozen-lockfile` installs without re-resolving versions. Preserve
 supply-chain quarantine and targeted overrides in `pnpm-workspace.yaml`.
 
-- During development: `pnpm check:affected --base origin/main --head HEAD`.
-- Complete merge gate: `pnpm check:ci`. The unit, E2E and layout suites together
-  form the required contract. A missing/skipped suite is not a green merge gate.
+- Use the mildest sufficient verification: unit/affected checks first, focused
+  behavioral checks next, full-application E2E last. The pre-push hook runs
+  `pnpm check:affected --base origin/main --head HEAD --suite unit`; automatic
+  CI also runs only the unit suite. Run a workspace's E2E or layout suite
+  locally only while working on it (Pods: `test:fast` without Electron).
+- Merge gate: the external checks for the exact pushed head run the affected
+  unit subset of the contract (audit, tooling, lint, typecheck and unit/component
+  tests for changed workspaces and their consumers); it is recorded on the PR
+  and required for merge. Pushes to main run the full unit contract; a red main
+  blocks further merges until fixed forward. Do not duplicate the external run
+  locally for the same head; run `pnpm check:ci` explicitly before deployments.
+  A missing/skipped required CI check is not a green merge gate. E2E and layout
+  are manual only by owner decision (issue 1379); never restore automatic jobs
+  or mandatory E2E/layout contexts without a new owner decision. Use explicit
+  `--suite e2e` or `--suite layout` for relevant manual acceptance. Native Pods
+  acceptance requires an available, unlocked Mac.
 - `--dry-run` explains scope; `.openape/check-results/` holds complete logs and
   summaries. See [checks](docs/operations/checks.md). Do not bypass a failed gate.
 - Before committing or deploying, full `pnpm lint` and `pnpm typecheck` must

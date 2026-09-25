@@ -1,8 +1,8 @@
-import type { OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGrantSummary } from '@openape/core'
+import type { BrokeredGrant, OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGrantSummary } from '@openape/core'
 import { computeCmdHash } from '@openape/core'
-import { cliAuthorizationDetailCovers, verifyAuthzJWT } from '@openape/grants'
+import { cliAuthorizationDetailCovers, sameBrokeredGrant, verifyAuthzJWT } from '@openape/grants'
 import { execFileSync } from 'node:child_process'
-import { hostname } from 'node:os'
+import { shellTargetHost } from '../shell/context.js'
 import consola from 'consola'
 import { getGenericAuditLogPath } from '../config.js'
 import { appendGenericCallLog } from '../audit/generic-log.js'
@@ -91,7 +91,7 @@ export async function createShapesGrant(
     idp: params.idp,
     body: {
       requester,
-      target_host: hostname(),
+      target_host: shellTargetHost(),
       audience: resolved.adapter.cli.audience ?? 'shapes',
       grant_type: params.approval,
       command: resolved.executionContext.argv,
@@ -164,14 +164,25 @@ function hasStructuredCliGrant(claims: Record<string, unknown>): boolean {
  * Split out so the interactive shell can re-use the verify + consume path
  * without being forced into the `execFileSync`-based one-shot execution.
  */
-export async function verifyAndConsume(token: string, resolved: ResolvedCommand): Promise<void> {
+export interface AssignedGrantScope {
+  brokered?: BrokeredGrant
+  issuer: string
+  subject: string
+  targetHost: string
+  grantId: string
+  jwksUri: string
+  grantsEndpoint: string
+  runAs?: string
+  signal?: AbortSignal
+}
+export async function verifyAndConsume(token: string, resolved: ResolvedCommand, scope?: AssignedGrantScope): Promise<void> {
   const payload = decodePayload(token)
-  const issuer = String(payload.iss ?? '')
+  const issuer = scope?.issuer ?? String(payload.iss ?? '')
   if (!issuer)
     throw new Error('Grant token is missing issuer')
 
-  const discovery = await discoverEndpoints(issuer)
-  const jwksUri = String(discovery.jwks_uri ?? `${issuer}/.well-known/jwks.json`)
+  const discovery = scope ? {} : await discoverEndpoints(issuer)
+  const jwksUri = scope?.jwksUri ?? String(discovery.jwks_uri ?? `${issuer}/.well-known/jwks.json`)
   const result = await verifyAuthzJWT(token, {
     expectedIss: issuer,
     expectedAud: resolved.adapter.cli.audience ?? 'shapes',
@@ -183,6 +194,9 @@ export async function verifyAndConsume(token: string, resolved: ResolvedCommand)
   }
 
   const claims = result.claims
+  if (claims.brokered && !scope) throw new Error('Brokered grants require an explicitly assigned owner and agent binding')
+  if (scope && (!sameBrokeredGrant(scope.brokered, claims.brokered) || (scope.brokered && claims.decided_by !== scope.brokered.owner))) throw new Error('Grant does not match the assigned broker connection')
+  if (scope && (claims.sub !== scope.subject || claims.target_host !== scope.targetHost || claims.grant_id !== scope.grantId || claims.run_as !== scope.runAs || claims.execution_context?.adapter_digest !== resolved.digest)) throw new Error('Grant does not match the assigned identity, host or adapter')
   const details = grantedCliDetails(claims as unknown as Record<string, unknown>)
 
   if (claims.execution_context?.adapter_digest && claims.execution_context.adapter_digest !== resolved.digest) {
@@ -222,9 +236,10 @@ export async function verifyAndConsume(token: string, resolved: ResolvedCommand)
     }
   }
 
-  const grantsEndpoint = await getGrantsEndpoint(issuer)
-  const consume = await fetch(`${grantsEndpoint}/${claims.grant_id}/consume`, {
+  const grantsEndpoint = scope?.grantsEndpoint ?? await getGrantsEndpoint(issuer)
+  const consume = await fetch(`${grantsEndpoint}/${encodeURIComponent(claims.grant_id)}/consume`, {
     method: 'POST',
+    ...(scope ? { redirect: 'error' as const, signal: scope.signal ?? AbortSignal.timeout(10000) } : {}),
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -234,10 +249,11 @@ export async function verifyAndConsume(token: string, resolved: ResolvedCommand)
     throw new Error(`Consume failed: ${consume.status} ${consume.statusText}`)
   }
 
-  const consumeResult = await consume.json() as { error?: string }
+  const consumeResult = await consume.json() as { error?: string, status?: string }
   if (consumeResult.error) {
     throw new Error(`Grant rejected at consume step: ${consumeResult.error}`)
   }
+  if (scope && !['valid', 'consumed'].includes(consumeResult.status ?? '')) throw new Error('Unrecognized grant consume response')
 }
 
 /**
@@ -437,7 +453,7 @@ export async function createCompoundGrant(
     idp: params.idp,
     body: {
       requester,
-      target_host: hostname(),
+      target_host: shellTargetHost(),
       audience: compound.audience,
       grant_type: params.approval,
       command: compound.executionContext.argv,
@@ -521,6 +537,7 @@ export async function verifyAndConsumeCompound(token: string, compound: Resolved
   }
 
   const claims = result.claims
+  if (claims.brokered) throw new Error('Brokered grants require an explicitly assigned owner and agent binding')
   const details = grantedCliDetails(claims as unknown as Record<string, unknown>)
   if (details.length === 0)
     throw new Error('Grant carries no structured CLI details for a compound command')

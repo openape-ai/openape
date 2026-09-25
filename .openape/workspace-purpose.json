@@ -9,6 +9,7 @@
   "apps/openape-git": "Native Git-Forge, PRs, Mirrors und Commit-Checks.",
   "apps/openape-monitor": "Uptime-Überwachung und Benachrichtigungen.",
   "apps/openape-nest": "Lokaler Steuerungsdienst für Agenten.",
+  "apps/openape-pods": "Installable macOS pod workspace with isolated fixture execution and narrow Electron IPC.",
   "apps/openape-plans": "Gemeinsam gepflegte HTML-Pläne.",
   "apps/openape-pr": "PR-Review und prüfbare Review-Ergebnisse.",
   "apps/openape-question-service": "Fragen und Antworten als Service-Agent.",
@@ -48,5 +49,8 @@
   "packages/ape-timetrack": "Kommandozeile und Client für timetrack.",
   "packages/ape-troop": "Kommandozeile und Client für troop.",
   "packages/ape-pr": "Kommandozeile und Client für pr.",
-  "packages/ape-crm": "Kommandozeile und Client für crm."
+  "packages/ape-crm": "Kommandozeile und Client für crm.",
+  "packages/pods-protocol": "Versioned native Pods envelopes, validation and cross-language encryption contracts.",
+  "apps/openape-pods-relay": "Owner-authenticated central Pods workspace, browser UI and existing encrypted native delivery.",
+  "apps/openape-pods-ios": "Native SwiftUI client for shared desktop Pods on iPhone and iPad."
 }

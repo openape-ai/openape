@@ -1,6 +1,10 @@
 {
   "version": 1,
-  "consumedApps": ["@openape/ape-agent", "@openape/ape-chat", "@openape/nest"],
+  "consumedApps": [
+    "@openape/ape-agent",
+    "@openape/ape-chat",
+    "@openape/nest"
+  ],
   "unitExceptions": {
     "@openape/ape-chat:test": "No unit suite yet; CLI build and typecheck remain mandatory.",
     "@openape-question-service/app:test": "No unit suite yet; app lint and typecheck remain mandatory.",
@@ -8,8 +12,24 @@
     "openape-idp-example:test": "Covered by the dedicated openape-e2e suite.",
     "openape-sp-example:test": "Covered by the dedicated openape-e2e suite.",
     "openape-e2e:typecheck": "The fixture workspace has no standalone typecheck script.",
-    "openape-e2e:test": "Executed as test:e2e in the e2e suite, not twice."
+    "openape-e2e:test": "Executed as test:e2e in the e2e suite, not twice.",
+    "@openape/pods-ios:lint": "Excluded from the CI contract by owner decision on 2026-09-23 (issue 1364): the gate covers the desktop app; iOS is a separate topic. Run `pnpm --filter @openape/pods-ios test:layout` manually.",
+    "@openape/pods-ios:typecheck": "Excluded from the CI contract by owner decision on 2026-09-23 (issue 1364): the gate covers the desktop app; iOS is a separate topic. Run `pnpm --filter @openape/pods-ios test:layout` manually.",
+    "@openape/pods-ios:test": "Excluded from the CI contract by owner decision on 2026-09-23 (issue 1364): the gate covers the desktop app; iOS is a separate topic. Run `pnpm --filter @openape/pods-ios test:layout` manually."
   },
-  "e2e": ["openape-e2e", "openape-free-idp", "@openape-testrun/app", "@openape-pr/app"],
-  "layout": ["@openape/troop", "@openape/nuxt-auth-sp", "@openape-testrun/app"]
+  "e2e": [
+    "openape-e2e",
+    "openape-free-idp",
+    "@openape-testrun/app",
+    "@openape-pr/app",
+    "@openape-git/app",
+    "@openape-pods-relay/app"
+  ],
+  "layout": [
+    "@openape/troop",
+    "@openape/nuxt-auth-sp",
+    "@openape-testrun/app",
+    "@openape/pods",
+    "@openape-git/app"
+  ]
 }

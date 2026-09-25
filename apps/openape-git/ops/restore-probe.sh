@@ -20,6 +20,11 @@ bare=$(find "$dest" -type d -path "*/$owner/$name.git" | head -1)
 echo "== registry from the backup"
 sqlite3 "$(find "$dest" -name registry.db | head -1)" 'select owner, name, owner_email from repos'
 
+registry=$(find "$dest" -name registry.db | head -1)
+assets=$(find "$dest" -type d -name issue-assets | head -1)
+archives=$(find "$dest" -type d -name issue-imports | head -1)
+python3 "$(dirname "$0")/verify-issue-backup.py" "$registry" "${assets:-$dest/issue-assets}" "${archives:-$dest/issue-imports}"
+
 echo "== cloning $bare"
 git clone "$bare" "$dest/clone"
 git -C "$dest/clone" log --oneline -5

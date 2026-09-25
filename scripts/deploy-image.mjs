@@ -39,7 +39,8 @@ const REGISTRY = 'registry.openape.ai'
 // `unitGuard` covers the dormant systemd fallback units that only exist on chatty.
 const HOSTS = {
   chatty: {
-    ssh: `${process.env.CHATTY_USER || 'openape'}@${process.env.CHATTY_HOST || 'chatty.delta-mind.at'}`,
+    ssh: process.env.CHATTY_SSH || 'chatty.delta-mind.at',
+    executeAs: 'openape',
     prodDir: '/home/openape/prod',
     composeFile: 'compose/chatty.yml',
     unitGuard: true,
@@ -67,6 +68,8 @@ const PUSH_ENV = existsSync(join(ISOLATED_DOCKER_CONFIG, 'config.json'))
 
 const TARGETS = {
   'free-idp': { filter: 'openape-free-idp', dir: 'apps/openape-free-idp', image: 'openape-free-idp', port: 3003, compose: 'idp', unit: 'openape-free-idp', domain: 'id.openape.ai', envVar: 'IDP_TAG' },
+  'pods-idp': { filter: 'openape-free-idp', dir: 'apps/openape-free-idp', image: 'openape-pods-idp', port: 3027, compose: 'pods-idp', unit: 'openape-pods-idp', domain: 'pods.openape.ai', envVar: 'PODS_IDP_TAG' },
+  'pods-relay': { filter: '@openape-pods-relay/app', dir: 'apps/openape-pods-relay', image: 'openape-pods-relay', port: 3028, compose: 'pods-relay', unit: 'openape-pods-relay', domain: 'pods.openape.ai', envVar: 'PODS_RELAY_TAG', dockerfile: 'compose/pods-relay-package.Dockerfile', healthPath: '/api/mobile/v1/health', healthService: 'openape-pods-relay', smokeRuntime: ['--user', '999:988', '--read-only', '--tmpfs', '/tmp:size=32m,mode=1777', '-e', 'NUXT_RELAY_ENABLED=true', '-e', 'NUXT_RELAY_DATABASE=/tmp/relay.sqlite'] },
   'troop': { filter: '@openape/troop', dir: 'apps/openape-troop', image: 'openape-troop', port: 3010, compose: 'troop', unit: 'openape-troop', domain: 'troop.openape.ai', envVar: 'TROOP_TAG' },
   'chat': { filter: '@openape/chat', dir: 'apps/openape-chat', image: 'openape-chat', port: 3007, compose: 'chat', unit: 'openape-chat', domain: 'chat.openape.ai', envVar: 'CHAT_TAG' },
   'testrun': { filter: '@openape-testrun/app', dir: 'apps/openape-testrun', image: 'openape-testrun', port: 3006, compose: 'testrun', unit: 'openape-testrun', domain: 'testrun.openape.ai', envVar: 'TESTRUN_TAG' },
@@ -97,7 +100,7 @@ function out(cmd, args) {
   return execFileSync(cmd, args, { encoding: 'utf8' }).trim()
 }
 function ssh(host, script) {
-  return execFileSync('ssh', ['-o', 'ConnectTimeout=15', '-o', 'BatchMode=yes', host.ssh, 'bash', '-s'], {
+  return execFileSync('ssh', ['-o', 'ConnectTimeout=15', '-o', 'BatchMode=yes', host.ssh, ...(host.executeAs ? ['sudo', '-n', '-u', host.executeAs] : []), 'bash', '-s'], {
     input: script,
     encoding: 'utf8',
   }).trim()
@@ -118,7 +121,8 @@ function tagFor(t, sha) {
   return `${REGISTRY}/${t.image}:prod-${sha}`
 }
 
-async function smokeTest(tag, port) {
+async function smokeTest(tag, target) {
+  const port = target.port
   const name = `smoke-${port}`
   try { execFileSync('docker', ['rm', '-f', name], { stdio: 'ignore' }) }
   catch {}
@@ -129,13 +133,14 @@ async function smokeTest(tag, port) {
     '-e', 'NUXT_OPENAPE_IDP_SESSION_SECRET=smoke-test-session-secret-0000000000',
     '-e', 'NUXT_OPENAPE_SP_SESSION_SECRET=smoke-test-session-secret-0000000000',
     '-e', 'NUXT_TURSO_URL=file:/tmp/smoke.db',
+    ...(target.smokeRuntime ?? []),
     tag,
   ])
   try {
     for (let i = 0; i < 30; i++) {
       try {
         const res = await fetch(`http://127.0.0.1:1${port}/api/health`)
-        if (res.ok && (await res.json()).ok === true)
+        if (res.ok && healthyResponse(await res.json(), target.healthService))
           return
       }
       catch {}
@@ -149,11 +154,15 @@ async function smokeTest(tag, port) {
   }
 }
 
-async function externalHealth(domain) {
+export function healthyResponse(value, service) {
+  return value?.ok === true && (!service || value.service === service)
+}
+
+async function externalHealth(domain, path = '/api/health', service) {
   for (let i = 0; i < 20; i++) {
     try {
-      const res = await fetch(`https://${domain}/api/health`, { signal: AbortSignal.timeout(8000) })
-      if (res.ok && (await res.json()).ok === true)
+      const res = await fetch(`https://${domain}${path}`, { signal: AbortSignal.timeout(8000) })
+      if (res.ok && healthyResponse(await res.json(), service))
         return true
     }
     catch {}
@@ -167,9 +176,23 @@ async function bake(name, sha) {
   const t = TARGETS[name]
   const tag = tagFor(t, sha)
   shQuiet('docker', ['buildx', 'build', '--platform', 'linux/amd64', '-f', t.dockerfile || 'compose/preview-package.Dockerfile', '--build-arg', `PORT=${t.port}`, '-t', tag, '--load', `${t.dir}/.output`])
-  await smokeTest(tag, t.port)
+  await smokeTest(tag, t)
   shQuiet('docker', ['push', tag], { env: PUSH_ENV })
   console.log(`  ✓ baked ${name} (${tag})`)
+}
+
+export function rollbackScript(prodDir, group, prevMap) {
+  return `
+      set -euo pipefail
+      cd ${prodDir}
+${group.map((t) => {
+  const prev = prevMap[t.name]
+  if (!prev) return `      docker compose --env-file .env -f docker-compose.yml stop ${t.compose}\n      echo "${t.name}: first deployment stopped; no previous image exists"`
+  return `      grep -vE '^${t.envVar}=' .env > .env.new && mv .env.new .env
+      echo "${t.envVar}=${prev}" >> .env`
+}).join('\n')}
+      ${group.filter(t => prevMap[t.name]).length ? `docker compose --env-file .env -f docker-compose.yml up -d ${group.filter(t => prevMap[t.name]).map(t => t.compose).join(' ')}` : ':'}
+    `
 }
 
 async function main() {
@@ -237,7 +260,15 @@ async function main() {
   for (const [hostKey, group] of groupByHost(targets)) {
     const host = HOSTS[hostKey]
     console.log(`\n━━━ swap on ${hostKey} (one compose up for ${group.map(t => t.name).join(', ')})`)
-    sh('scp', ['-q', host.composeFile, `${host.ssh}:${host.prodDir}/docker-compose.yml`])
+    if (host.executeAs) {
+      const staged = `/tmp/openape-compose-${process.pid}.yml`
+      sh('scp', ['-q', host.composeFile, `${host.ssh}:${staged}`])
+      ssh(host, `set -eu\ninstall -m 644 ${staged} ${host.prodDir}/docker-compose.yml`)
+      sh('ssh', [host.ssh, 'rm', staged])
+    }
+    else {
+      sh('scp', ['-q', host.composeFile, `${host.ssh}:${host.prodDir}/docker-compose.yml`])
+    }
     const composes = group.map(t => t.compose).join(' ')
     const pinScript = `
     set -euo pipefail
@@ -260,7 +291,7 @@ ${group.map(t => `    echo "PREV ${t.name} $OLD_${t.envVar}"`).join('\n')}
 
   // 5. gate — external health per target in parallel; rollback failures
   console.log(`\n━━━ health gate (parallel)`)
-  const results = await Promise.all(targets.map(async t => ({ name: t.name, ok: await externalHealth(t.domain) })))
+  const results = await Promise.all(targets.map(async t => ({ name: t.name, ok: await externalHealth(t.domain, t.healthPath, t.healthService) })))
   for (const r of results.filter(r => r.ok))
     console.log(`  ✓ ${r.name} healthy (prod-${sha}${prevMap[r.name] ? `, prev ${prevMap[r.name]}` : ''})`)
 
@@ -269,17 +300,7 @@ ${group.map(t => `    echo "PREV ${t.name} $OLD_${t.envVar}"`).join('\n')}
     console.error(`\n✗ health gate failed: ${failed.join(', ')} — rolling back`)
     for (const [hostKey, group] of groupByHost(failed.map(n => ({ name: n, ...TARGETS[n] })))) {
       const host = HOSTS[hostKey]
-      const rollScript = `
-      set -euo pipefail
-      cd ${host.prodDir}
-${group.map((t) => {
-  const prev = prevMap[t.name]
-  if (!prev) return `      echo "${t.name}: no previous tag — emergency: (as ubuntu) sudo systemctl start ${t.unit}"`
-  return `      grep -vE '^${t.envVar}=' .env > .env.new && mv .env.new .env
-      echo "${t.envVar}=${prev}" >> .env`
-}).join('\n')}
-      docker compose --env-file .env -f docker-compose.yml up -d ${group.map(t => t.compose).join(' ')}
-    `
+      const rollScript = rollbackScript(host.prodDir, group, prevMap)
       ssh(host, rollScript)
     }
     console.error(`→ rolled back: ${failed.map(n => `${n}→${prevMap[n] || '(none)'}`).join(', ')}`)

@@ -154,6 +154,38 @@
     "run_as": {
       "type": "string",
       "description": "Execute command as this user identity."
+    },
+    "brokered": {
+      "type": "object",
+      "properties": {
+        "connection_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "broker_issuer": {
+          "type": "string",
+          "format": "uri"
+        },
+        "agent_issuer": {
+          "type": "string",
+          "format": "uri"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "key_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "connection_id",
+        "broker_issuer",
+        "agent_issuer",
+        "owner",
+        "key_id"
+      ],
+      "additionalProperties": false
     }
   },
   "required": ["iss", "sub", "aud", "target_host", "iat", "exp", "jti", "grant_id", "grant_type"],
