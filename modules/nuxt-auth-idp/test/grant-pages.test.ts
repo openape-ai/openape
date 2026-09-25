@@ -485,6 +485,27 @@ describe('grant approval pages', () => {
     })
   })
 
+  it.each([
+    ['inbox', GrantsPage],
+    ['detail', GrantApprovalPage],
+  ])('approves a brokered grant for reuse from the %s without creating an ignored rule', async (_name, page) => {
+    __setRouteQuery({ grant_id: 'grant-1' })
+    const grant = buildCliGrant({ brokered: { connection_id: 'connection-1', broker_issuer: 'https://pods.example.com', agent_issuer: 'https://pods.example.com', owner: 'approver@example.com', key_id: 'agent-key' } })
+    const { fetchMock, calls } = routedFetchMock(grant)
+    vi.stubGlobal('$fetch', fetchMock)
+    const wrapper = mount(page, { global: { stubs: globalStubs } })
+    await flushPromises()
+
+    await wrapper.findAll('button').find(button => button.text() === 'Always allow')!.trigger('click')
+    await flushPromises()
+
+    expect(calls.filter(call => call.opts.method === 'POST')).toEqual([
+      { url: '/api/grants/grant-1/approve', opts: { method: 'POST', body: { grant_type: 'always' } } },
+    ])
+    expect(wrapper.text()).not.toContain('Create rule + run once')
+    wrapper.unmount()
+  })
+
   it('creates a standing-grant rule for shaped requests and approves once', async () => {
     const { fetchMock, calls } = routedFetchMock(buildCliGrant())
     vi.stubGlobal('$fetch', fetchMock)
