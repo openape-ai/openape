@@ -1,5 +1,16 @@
 # Active work
 
+## Pods MCP discovery texts (September 25, 2026)
+
+[Issue 1383](https://repos.openape.ai/patrick/monorepo/issues/1383). Worktree `pods-mcp-discovery`,
+branch `feature/issue-1383-mcp-discovery`, base `3ff707b6`.
+- Server instructions now carry the discovery signal (category, when to use, capabilities, order, stale-session hint) in 1 188 characters.
+- `pods_control` describes only what it does and returns.
+- `serverInfo` and the tool report title `OpenApe Pods`; `serverInfo` reports version `<app version>+<build revision>`.
+- Follows [Claude Code tool-search guidance](https://code.claude.com/docs/en/mcp#for-mcp-server-authors) (2 048-character limit).
+
+The change reaches installed apps with the next signed release. Splitting read/write tools with annotations remains an owner decision.
+
 ## Pods: service-queue pattern in runtime help (September 25, 2026)
 
 [Issue 1382](https://repos.openape.ai/patrick/monorepo/issues/1382). Worktree `pods-service-pattern`,
