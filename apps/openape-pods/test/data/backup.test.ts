@@ -126,6 +126,24 @@ it('blocks new storage at the sampled limit and clears the block after space is 
   retention.limit(1024 ** 3); expect((await retention.view()).error).toBeNull(); expect(() => store.putBlob('new content')).not.toThrow()
 })
 
+it('requests an early full inventory only when tracked usage reaches the limit or a storage error is set', async () => {
+  const { store } = await fixture(); const retention = new DataRetention(store, 'unused-helper')
+  await retention.view(); expect(await retention.inspectionDue()).toBe(false)
+  store.putBlob('tracked between inventories'); expect(await retention.inspectionDue()).toBe(false)
+  retention.limit(1); expect(await retention.inspectionDue()).toBe(true)
+  expect((await retention.view()).error).toContain('limit reached')
+  retention.limit(1024 ** 3); expect(await retention.inspectionDue()).toBe(true)
+  expect((await retention.view()).error).toBeNull(); expect(await retention.inspectionDue()).toBe(false)
+})
+
+it('leaves an idle database unchanged although each measurement includes the growing WAL', async () => {
+  const { store } = await fixture(); const retention = new DataRetention(store, 'unused-helper')
+  await retention.view()
+  const changes = () => Number(store.db.prepare('SELECT total_changes() AS changes').get()!.changes)
+  const before = changes()
+  for (let index = 0; index < 5; index++) await retention.view()
+  expect(changes()).toBe(before)
+})
 it('restores immutable reference snapshots at their new path with read-only permissions', async () => {
   const { store, root, pod, exports } = await fixture(); const id = randomUUID(); const file = randomUUID()
   const directory = join(root, 'snapshots', pod.id, id); await mkdir(directory, { recursive: true })

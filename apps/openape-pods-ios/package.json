@@ -9,5 +9,9 @@
     "typecheck": "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift build",
     "test": "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift test",
     "test:layout": "node scripts/verify.mjs"
+  },
+  "devDependencies": {
+    "openape-e2e": "workspace:*",
+    "playwright": "catalog:"
   }
 }

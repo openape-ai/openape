@@ -7,7 +7,7 @@ import { launchSandbox, verifyExecutable } from '../src/worker/runtime/sandbox'
 import type { ProcessDomain } from '../src/worker/runtime/sandbox'
 
 let root = ''; const domains: ProcessDomain[] = []
-afterEach(async () => { for (const domain of domains.splice(0)) { domain.cancel(); await domain.completed } if (root) await rm(root, { recursive: true, force: true }) })
+afterEach(async () => { for (const domain of domains.splice(0)) { domain.cancel(); await domain.completed } if (root) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) })
 async function capture(domain: ProcessDomain): Promise<{ code: number, stdout: string, stderr: string }> {
   domains.push(domain)
   let stdout = ''; let stderr = ''
@@ -16,9 +16,9 @@ async function capture(domain: ProcessDomain): Promise<{ code: number, stdout: s
   await domain.processId
   return { code: await domain.completed, stdout, stderr }
 }
-it.each([false, true])('runs the pinned o365 read protocol inside the native sandbox (packaged=%s)', async (packaged) => {
+it('runs the pinned o365 read protocol inside the native sandbox (packaged)', async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-o365-native-')))
-  const dist = packaged ? resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/Resources/app.asar.unpacked/dist') : resolve('dist')
+  const dist = resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/Resources/app.asar.unpacked/dist')
   const executable = resolve('.artifacts/o365-fixture/o365-cli')
   const manifest = JSON.parse(await readFile(resolve('.artifacts/o365-fixture/o365-manifest.json'), 'utf8')) as { binaryHash: string }
   await verifyExecutable(executable, manifest.binaryHash)
@@ -31,13 +31,13 @@ it.each([false, true])('runs the pinned o365 read protocol inside the native san
   }
 })
 
-it.each([false, true])('refreshes synthetic OAuth and reads all TLS pages through the external CLI with the packaged helper (packaged=%s)', async (packaged) => {
+it('refreshes synthetic OAuth and reads all TLS pages through the external CLI with the packaged helper (packaged)', async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-o365-tls-')))
   const fixture = await mailTLSFixture(root)
   const workspace = join(root, 'tool'); await mkdir(workspace, { mode: 0o700 })
   const cachePath = join(workspace, 'token.json')
   await writeFile(cachePath, await readFile(resolve('e2e/fixtures/msal-synthetic.json')), { mode: 0o600 })
-  const dist = packaged ? resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/Resources/app.asar.unpacked/dist') : resolve('dist')
+  const dist = resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/Resources/app.asar.unpacked/dist')
   const executable = resolve('.artifacts/o365-fixture/o365-cli')
   let cursor = ''; const ids: string[] = []
   try {

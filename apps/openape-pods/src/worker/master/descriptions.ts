@@ -19,6 +19,7 @@ export class PodDescriptions {
 
   request(podId: string, refresh = false): void {
     this.store.getPod(podId)
+    if (this.store.db.prepare('SELECT manual FROM pod_descriptions WHERE pod_id=?').get(podId)?.manual === 1) return
     const row = this.store.db.prepare('SELECT MAX(m.rowid) AS latest FROM master_messages m JOIN master_message_scopes s ON s.message_id=m.id WHERE s.scope=? AND NOT EXISTS(SELECT 1 FROM chat_message_context c WHERE c.message_id=m.id AND c.revision>1) AND m.role IN (\'user\',\'assistant\') AND m.state IN (\'sent\',\'completed\')').get(podId)
     if (!row?.latest) return
     const current = this.store.db.prepare('SELECT covered_row,state FROM pod_descriptions WHERE pod_id=?').get(podId)
@@ -70,8 +71,8 @@ export class PodDescriptions {
     signal.throwIfAborted()
     if (!text.trim() || text.length > 4000) throw new Error('Generated description must contain 1–4000 characters')
     this.store.transaction(() => {
-      const current = this.store.db.prepare('SELECT requested_row FROM pod_descriptions WHERE pod_id=?').get(podId)
-      if (!current) return
+      const current = this.store.db.prepare('SELECT requested_row,manual FROM pod_descriptions WHERE pod_id=?').get(podId)
+      if (!current || current.manual === 1) return
       if (current.requested_row !== row.requested_row) { this.store.db.prepare('UPDATE pod_descriptions SET state=\'pending\' WHERE pod_id=?').run(podId); return }
       const finished = covered === row.requested_row && offset === 0
       this.store.db.prepare('UPDATE pod_descriptions SET work_body=?,work_row=?,work_offset=?,state=? WHERE pod_id=?').run(text, covered, offset, finished ? 'ready' : 'pending', podId)

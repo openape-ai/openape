@@ -72,8 +72,11 @@ export class AgentAuthority {
     if (adapter.digest !== assignment.command.adapterDigest) throw new Error('Assigned adapter integrity mismatch')
     const resolved = await resolveCommand(adapter, assignment.command.argv)
     if (resolved.permission !== assignment.command.permission || resolved.detail.operation_id === '_generic.exec') throw new Error('Command is outside the assigned operation')
-    const previousId = await this.previous?.(resolved.permission, this.connection) ?? assignment.grantId
-    let grant = previousId ? await this.grant(previousId, signal) : undefined
+    let grant = assignment.grantId ? await this.grant(assignment.grantId, signal) : undefined
+    if (!grant || ['used', 'expired'].includes(grant.status)) {
+      const previousId = await this.previous?.(resolved.permission, this.connection)
+      if (previousId && previousId !== grant?.id) grant = await this.grant(previousId, signal)
+    }
     if (grant && ['denied', 'revoked'].includes(grant.status)) throw new Error(`Permission ${grant.status}; review this Pod's permissions before retrying`)
     if (!grant || grant.status === 'used' || grant.status === 'expired') {
       const created = await this.request('/api/grants', 'POST', signal, { requester: this.connection.subject, target_host: this.connection.targetHost, audience: 'shapes', grant_type: assignment.command.cliId === 'pod-runtime' ? 'always' : 'once', waits_until: Math.floor(Date.now() / 1000) + 15 * 60, command: assignment.command.argv, permissions: [resolved.permission], authorization_details: [resolved.detail], execution_context: resolved.executionContext, reason: resolved.detail.display, ...(summary ? { summary: { text: summary } } : {}) }) as { id?: unknown }
