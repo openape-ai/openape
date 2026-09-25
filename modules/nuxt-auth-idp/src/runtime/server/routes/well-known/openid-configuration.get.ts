@@ -1,10 +1,14 @@
+import { useRuntimeConfig } from 'nitropack/runtime'
+import { hasBrokerStore } from '../../utils/broker-store'
 import { defineEventHandler } from 'h3'
 import { getIdpIssuer } from '../../utils/stores'
 
 export default defineEventHandler(() => {
   const issuer = getIdpIssuer()
 
+  const agentDomain = useRuntimeConfig().openapeIdp.brokerAgentDomain
   return {
+    ...(hasBrokerStore() ? { openape_grant_brokering_version: '1.0', openape_broker_connections_endpoint: `${issuer}/api/broker-connections`, openape_brokered_grants_endpoint: `${issuer}/api/brokered-grants`, ...(agentDomain ? { openape_agent_domain: agentDomain, openape_broker_enrollment_endpoint: `${issuer}/api/broker-agents` } : {}) } : {}),
     issuer,
     authorization_endpoint: `${issuer}/authorize`,
     token_endpoint: `${issuer}/token`,

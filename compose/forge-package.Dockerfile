@@ -8,8 +8,9 @@
 
 FROM node:22-bookworm-slim
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git \
+ && apt-get install -y --no-install-recommends git ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
+ && test -s /etc/ssl/certs/ca-certificates.crt \
  && git config --system --add safe.directory '*'
 ARG PORT=3000
 WORKDIR /app

@@ -1,6 +1,6 @@
 {
   "name": "@openape-git/app",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,9 @@
     "test": "vitest run",
     "typecheck": "nuxt typecheck",
     "lint": "eslint .",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "test:layout": "vitest run --config vitest.layout.config.ts"
   },
   "dependencies": {
     "@iconify-json/lucide": "catalog:",
@@ -20,6 +22,7 @@
     "@openape/grants": "workspace:*",
     "@openape/nuxt-auth-sp": "workspace:*",
     "drizzle-orm": "catalog:",
+    "h3": "catalog:",
     "jose": "catalog:",
     "marked": "catalog:",
     "nuxt": "catalog:",
@@ -30,8 +33,13 @@
   },
   "devDependencies": {
     "@types/sanitize-html": "^2.13.0",
+    "@vitejs/plugin-vue": "catalog:",
+    "@vue/test-utils": "catalog:",
+    "happy-dom": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "vue-tsc": "catalog:"
+    "vue-tsc": "catalog:",
+    "openape-e2e": "workspace:*",
+    "playwright": "catalog:"
   }
 }

@@ -43,6 +43,57 @@ services:
       retries: 6
       start_period: 10s
 
+  pods-idp:
+    image: registry.openape.ai/openape-pods-idp:${PODS_IDP_TAG:-unset}
+    restart: unless-stopped
+    user: "999:988"
+    env_file: /home/openape/projects/openape-pods-idp/shared/.env
+    environment:
+      HOST: 0.0.0.0
+      NITRO_HOST: 0.0.0.0
+      PORT: "3027"
+      NITRO_PORT: "3027"
+    volumes:
+      - /home/openape/projects/openape-pods-idp/shared:/home/openape/projects/openape-pods-idp/shared
+    ports:
+      - "127.0.0.1:3027:3027"
+      - "10.0.1.1:3027:3027"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3027/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  pods-relay:
+    image: registry.openape.ai/openape-pods-relay:${PODS_RELAY_TAG:-unset}
+    restart: unless-stopped
+    user: "999:988"
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    env_file: /home/openape/projects/openape-pods-relay/shared/.env
+    environment:
+      HOST: 0.0.0.0
+      NITRO_HOST: 0.0.0.0
+      PORT: "3028"
+      NITRO_PORT: "3028"
+      NUXT_RELAY_DATABASE: /data/relay.sqlite
+      NUXT_WORKSPACE_DATABASE: /data/workspace.sqlite
+      NUXT_RELAY_ORIGIN: https://pods.openape.ai
+      NUXT_RELAY_FIXTURE: "false"
+    volumes:
+      - /home/openape/projects/openape-pods-relay/shared/data:/data
+    ports:
+      - "127.0.0.1:3028:3028"
+      - "10.0.1.1:3028:3028"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3028/api/health').then(async r=>process.exit(r.ok&&(await r.json()).service==='openape-pods-relay'?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
   troop:
     image: registry.openape.ai/openape-troop:${TROOP_TAG:-unset}
     restart: unless-stopped

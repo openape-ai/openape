@@ -111,14 +111,15 @@ export async function notifyApproverOfPendingGrant(grant: OpenApeGrant): Promise
   const requester = await db
     .select()
     .from(users)
-    .where(eq(users.email, grant.request.requester))
+    .where(eq(users.email, grant.brokered?.owner ?? grant.request.requester))
     .get()
-  if (!requester) return
+  if (!requester || !requester.isActive) return
+  if (grant.brokered && (requester.type === 'agent' || requester.owner)) return
 
   // Recipient = explicit approver if present, else the requester
   // themselves (human approving their own grant). Agents always have
   // an approver set at enroll-time; humans typically don't.
-  const recipient = requester.approver ?? requester.email
+  const recipient = grant.brokered ? requester.email : (requester.approver ?? requester.email)
 
   const subs = await db
     .select()

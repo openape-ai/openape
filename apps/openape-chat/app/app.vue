@@ -5,5 +5,6 @@
       <InstallBanner />
       <UpdateAvailable />
     </ClientOnly>
+    <OpenApeReportLink product="chat" :enabled="useRuntimeConfig().public.issueReportingEnabled" />
   </UApp>
 </template>

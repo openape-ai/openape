@@ -1,12 +1,14 @@
 import { eq } from 'drizzle-orm'
-import { createError, defineEventHandler } from 'h3'
+import { createError, defineEventHandler, readBody } from 'h3'
 import { useDb } from '../../../../../../database/drizzle'
 import { pulls } from '../../../../../../database/schema'
 import { createMergeCommit, mergeBase, mergeMessage, mergePreview } from '../../../../../../utils/git-merge'
 import { resolveCommit } from '../../../../../../utils/git-read'
 import { requirePull } from '../../../../../../utils/pulls'
 import { appendPushRecord } from '../../../../../../utils/push-log'
-import { dispatchPushEvent } from '../../../../../../utils/push-dispatch'
+import { dispatchMirrorPush, dispatchPushEvent } from '../../../../../../utils/push-dispatch'
+import { reviewedHeadsMatch } from '../../../../../../utils/branch-checks'
+import { requireBranchGate } from '../../../../../../utils/branch-protection'
 import { repoDiskPath } from '../../../../../../utils/repos'
 
 /**
@@ -21,15 +23,21 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 409, statusMessage: `pull request is ${pull.state}` })
 
   const dir = repoDiskPath(repo.owner, repo.name)
-  const targetRef = `refs/heads/${pull.targetRef}`
+  const targetRef = `refs/heads/${pull.targetRef.replace(/^refs\/heads\//, '')}`
+  const sourceRef = `refs/heads/${pull.sourceRef.replace(/^refs\/heads\//, '')}`
   const [sourceSha, targetSha] = await Promise.all([
-    resolveCommit(dir, pull.sourceRef),
+    resolveCommit(dir, sourceRef),
     resolveCommit(dir, targetRef),
   ])
   if (!sourceSha)
     throw createError({ statusCode: 409, statusMessage: `source ref is gone: ${pull.sourceRef}` })
   if (!targetSha)
     throw createError({ statusCode: 409, statusMessage: `target is not a branch: ${pull.targetRef}` })
+  const body = await readBody<{ expectedSourceSha?: string, expectedTargetSha?: string }>(event)
+  if (!reviewedHeadsMatch(body?.expectedSourceSha, body?.expectedTargetSha, sourceSha, targetSha))
+    throw createError({ statusCode: 409, statusMessage: 'Review is stale or missing: expectedSourceSha and expectedTargetSha must match current branches' })
+  await requireBranchGate(repo.id, pull.targetRef, sourceSha)
+
   if (await mergeBase(dir, targetSha, sourceSha) === sourceSha)
     throw createError({ statusCode: 409, statusMessage: 'nothing to merge: target already contains source' })
 
@@ -49,6 +57,7 @@ export default defineEventHandler(async (event) => {
     source: sourceSha,
     targetRef,
     expectedTarget: targetSha,
+    sourceRef,
     message: mergeMessage(pull.number, pull.title, pull.sourceRef, pull.targetRef),
     identity: { name: caller.email.split('@')[0] ?? caller.email, email: caller.email },
   })
@@ -56,6 +65,9 @@ export default defineEventHandler(async (event) => {
   const now = Math.floor(Date.now() / 1000)
   await appendPushRecord(dir, sha, { email: caller.email, act: caller.act, ts: now })
   await useDb().update(pulls).set({ state: 'merged', mergeSha: sha, mergedAt: now }).where(eq(pulls.id, pull.id))
+
+  void dispatchMirrorPush(repo, [{ ref: targetRef, before: targetSha, after: sha }])
+    .catch(err => console.error('[ape-git] merge mirror dispatch failed', err))
 
   // A merge moves a branch: CI consumers hear about it like any other push.
   await dispatchPushEvent(repo, [{ ref: targetRef, before: targetSha, after: sha }], {

@@ -1,3 +1,5 @@
+import { useBrokerStore } from '../../../utils/broker-store'
+import { requireBrokerGrantOwner } from '../../../utils/broker-owner'
 import type { GrantType, OpenApeCliAuthorizationDetail } from '@openape/core'
 import type { ApproveGrantOverrides, ExtendMode } from '@openape/grants'
 import { approveGrant, approveGrantWithExtension, approveGrantWithWidening, issueAuthzJWT } from '@openape/grants'
@@ -20,7 +22,8 @@ export default defineEventHandler(async (event) => {
 
   const email = await requireAuth(event)
 
-  const body = await readBody(event).catch(() => ({})) as Record<string, unknown>
+  const body = await readBody<Record<string, unknown>>(event) ?? {}
+  if (typeof body !== 'object' || Array.isArray(body)) throw createProblemError({ status: 400, title: 'Approval body must be an object' })
 
   // Validate overrides if provided
   if (body.grant_type !== undefined) {
@@ -39,7 +42,8 @@ export default defineEventHandler(async (event) => {
 
   // Management token bypasses authorization check.
   const isManagement = email === '_management_'
-  if (!isManagement) {
+  if (grant.brokered) await requireBrokerGrantOwner(event, grant)
+  if (!grant.brokered && !isManagement) {
     const requesterUser = await userStore.findByEmail(grant.request.requester)
     if (!requesterUser) {
       throw createProblemError({ status: 403, title: 'Requester not found for this grant' })
@@ -78,6 +82,8 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  if (grant.brokered && (hasWidenedDetails || hasExtend)) throw createProblemError({ status: 400, title: 'Brokered grants require a new request to change actions' })
+
   try {
     let approved
 
@@ -115,6 +121,7 @@ export default defineEventHandler(async (event) => {
 
     const signingKey = await keyStore.getSigningKey()
     const authzJwt = await issueAuthzJWT(approved, getIdpIssuer(), signingKey.privateKey, signingKey.kid)
+    if (approved.brokered) await useBrokerStore(event).recordToken(approved)
     return { grant: approved, authz_jwt: authzJwt }
   }
   catch (err: unknown) {

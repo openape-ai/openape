@@ -17,7 +17,8 @@
   },
   "dependencies": {
     "@openape/nuxt-auth-idp": "workspace:*",
-    "@openape/nuxt-auth-sp": "workspace:*"
+    "@openape/nuxt-auth-sp": "workspace:*",
+    "h3": "catalog:"
   },
   "devDependencies": {
     "typescript": "catalog:",
