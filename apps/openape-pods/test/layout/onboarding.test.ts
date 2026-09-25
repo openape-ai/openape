@@ -44,14 +44,14 @@ describe('accounts, identity and data views with the production stylesheet', () 
     await show(560, 840, 'dark')
     for (const target of [accountsLabel, dataLabel]) {
       await click('.nav-button[aria-label]')
+      expect(wrapper!.find('input[type="password"]').exists()).toBe(true)
+      wrapper!.get('.jev-connection').element.scrollIntoView({ block: 'center' }); await frame()
+      expect(pageFits(), `${language} settings`).toBe(true)
+      await page.screenshot({ path: `../../.artifacts/jev-settings-${language}.png` })
       await click('button', target)
       expect(document.querySelector('h1, h2')).not.toBeNull()
       expect(pageFits(), `${language} ${target}`).toBe(true)
-      if (target === accountsLabel) {
-        expect(wrapper!.find('input[type="password"]').exists()).toBe(true)
-        wrapper!.get('.jev-connection').element.scrollIntoView({ block: 'center' }); await frame()
-        await page.screenshot({ path: `../../.artifacts/jev-accounts-${language}.png` })
-      }
+
     }
     await click('.pod-button')
     await click('[role="tab"]', language === 'en' ? 'Settings' : 'Einstellungen')

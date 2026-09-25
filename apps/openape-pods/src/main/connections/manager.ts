@@ -318,7 +318,7 @@ export class ConnectionManager {
   async typesafeRequest(id: string, body: string, signal: AbortSignal): Promise<Response> {
     signal = AbortSignal.any([signal, this.typesafeSession.signal])
     const item = await this.connection(id, 'typesafe')
-    if (item.state !== 'ready') throw new Error('TypeSafe is not connected; reconnect in Accounts')
+    if (item.state !== 'ready') throw new Error('TypeSafe is not connected; reconnect in App settings')
     const record = await this.credentials.readConnection(id)
     if (record.kind !== 'typesafe') throw new Error('Invalid TypeSafe credential record')
     const key = parseTypesafeKey(record.key)

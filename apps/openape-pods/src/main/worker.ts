@@ -357,7 +357,7 @@ export class FixtureWorker {
       if (!this.connections) throw new Error('Connection setup is not ready')
       const before = parseResourceState(await this.dispatch({ resource: { type: 'list', podId: command.podId } }))
       if (before.epoch !== command.epoch) throw new Error('Pod or Jev permissions changed; reload before assigning access')
-      if (before.jev?.id !== command.connectionId || before.jev.state !== 'ready') throw new Error('TypeSafe is not connected; reconnect in Accounts')
+      if (before.jev?.id !== command.connectionId || before.jev.state !== 'ready') throw new Error('TypeSafe is not connected; reconnect in App settings')
       const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
       const authority = await this.connections.approve(command.podId, join(vendor, 'pod-http-shapes.toml'), [['pod-http', 'request', '--origin', typesafeOrigin, '--method', 'POST']])
       return parseResourceState(await this.dispatch({ resource: { ...command, type: 'approveJev', authority } }))
