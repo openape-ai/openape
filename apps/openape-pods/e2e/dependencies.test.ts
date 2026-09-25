@@ -1,11 +1,8 @@
-import { fixtureShellIdentity } from './fixtures/shell-identity'
-import { _electron as electron } from 'playwright'
 import { chmod, mkdtemp, realpath, mkdir, writeFile, rename } from 'node:fs/promises'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
 import { PodDatabase } from '../src/worker/storage/database'
-import { fixtureDirectory } from '../src/main/fixture'
 import { packageDigest, packageFiles } from '../src/worker/dependencies/tree'
 import { randomUUID } from 'node:crypto'
 import { ResourceRegistry } from '../src/worker/resources/registry'
@@ -13,60 +10,36 @@ import { ScriptCredentials } from '../src/worker/resources/script-credentials'
 import { validateDraft } from '../src/worker/master/validation'
 import { DependencyStore, removePackageTree } from '../src/worker/dependencies/store'
 
-it('managed dependencies: packaged editor saves, prepares, validates and runs an immutable local library', async () => {
-  const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-packages-ui-'))); fixtureDirectory(root)
+// The packaged editor flow is covered below the app: dependency search and
+// selection in test/workspace/script-ui.test.ts, the preparation dialog in
+// test/main/app.test.ts. What only a real process answers is this: a bare
+// import resolves from the prepared, read-only library inside the sandbox.
+it('managed dependencies: a bare import resolves from the prepared read-only library inside the sandbox', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-package-import-')))
   const store = new PodDatabase(root); const pod = store.createPod({ name: 'CSV review' })
-  const packages = { dependencies: { 'sample-package': '1.0.0' } }
-  const lock = { lockfileVersion: 3, packages: { '': packages, 'node_modules/sample-package': { version: '1.0.0', resolved: 'https://registry.npmjs.org/sample-package/-/sample-package-1.0.0.tgz', integrity: 'sha512-YQ==' } } }
-  const stage = join(root, 'prepared'); await mkdir(join(stage, 'node_modules/sample-package'), { recursive: true })
-  await writeFile(join(stage, 'package.json'), JSON.stringify(packages)); await writeFile(join(stage, 'package-lock.json'), JSON.stringify(lock))
-  await writeFile(join(stage, 'node_modules/sample-package/package.json'), '{"name":"sample-package","version":"1.0.0","main":"index.cjs"}')
-  await writeFile(join(stage, 'node_modules/sample-package/index.cjs'), 'module.exports=42')
-  const files = await packageFiles(stage, true); const hash = packageDigest(files); const parent = join(root, 'dependencies', pod.id)
-  await mkdir(parent, { recursive: true }); await chmod(stage, 0o700); await rename(stage, join(parent, hash)); await chmod(join(parent, hash), 0o500)
-  store.db.prepare('INSERT INTO dependency_sets VALUES(?,?,?,?,?)').run(pod.id, hash, JSON.stringify(packages), JSON.stringify(lock), JSON.stringify(files)); store.close()
-  const identity = await fixtureShellIdentity(root)
-  const app = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: homedir(), TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
   try {
-    await identity.encrypt(app, true)
-    const page = await app.firstWindow(); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state, { timeout: 10000 }).toBe('ready')
-    await page.getByRole('tab', { name: 'Script', exact: true }).click()
-    await page.getByLabel('Script source').fill('import answer from \'sample-package\';\n\nexport async function run(context) {\n  return { status: \'completed\', summary: \'Library returned \'+answer, completedInputIds: context.input.eventIds, gapIds: [] }\n}\n')
-    await app.evaluate(({ ipcMain }) => {
-      ipcMain.removeHandler('pods:packages')
-      ipcMain.handle('pods:packages', () => [{ name: 'sample-package', version: '1.0.0', description: 'Synthetic library for the packaged UI check' }])
-    })
-    await page.getByRole('button', { name: 'Add dependency', exact: true }).click()
-    await page.getByLabel('Search npm or paste an npm package URL').fill('sample-package')
-    await page.getByRole('button', { name: 'Search npm', exact: true }).click()
-    await page.locator('.package-result').click()
-    await page.locator('.package-picker').scrollIntoViewIfNeeded()
-    await mkdir(resolve('.artifacts'), { recursive: true })
-    await page.screenshot({ path: resolve('.artifacts/dependency-search-en.png'), fullPage: true })
-    await page.locator('.package-choice').getByRole('button', { name: 'Add dependency', exact: true }).click()
-    await page.getByRole('button', { name: 'Save script', exact: true }).click()
-    await expect.poll(() => page.getByText('Dependencies prepared', { exact: true }).isVisible()).toBe(true)
-    await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false }) })
-    await page.getByRole('button', { name: 'Prepare dependencies', exact: true }).click()
-    await expect.poll(() => page.getByRole('button', { name: 'Prepare dependencies', exact: true }).isEnabled()).toBe(true)
-    expect((await page.evaluate(podId => window.pods.scripts({ type: 'list', podId }), pod.id)).source?.validated).toBe(false)
-    await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false }) })
-    await page.getByRole('button', { name: 'Prepare dependencies', exact: true }).click()
-    await expect.poll(() => page.getByRole('button', { name: 'Prepare dependencies', exact: true }).isEnabled()).toBe(true)
-    await mkdir(resolve('.artifacts'), { recursive: true }); await page.locator('.script-packages').scrollIntoViewIfNeeded(); await page.screenshot({ path: resolve('.artifacts/managed-dependencies-en.png'), fullPage: true })
-    await page.getByRole('button', { name: 'Run', exact: true }).click()
-    await expect.poll(async () => (await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), pod.id)).runs[0]?.state, { timeout: 15000 }).toBe('completed')
-    const view = await page.evaluate(podId => window.pods.scripts({ type: 'list', podId }), pod.id)
-    expect(view.source?.packages).toEqual(packages); expect(view.source?.validated).toBe(true)
-    await page.getByRole('tab', { name: 'Permissions', exact: true }).click()
-    const gap = await page.locator('.http-heading').evaluate((node) => { const previous = node.previousElementSibling!; return node.getBoundingClientRect().top - previous.getBoundingClientRect().bottom })
-    expect(gap).toBeGreaterThanOrEqual(34)
-    await page.locator('.program-permissions').scrollIntoViewIfNeeded(); await page.screenshot({ path: resolve('.artifacts/managed-dependencies-permissions-en.png'), fullPage: true })
-    await page.evaluate(() => window.pods.language({ type: 'set', language: 'de' })); await page.reload()
-    await page.getByRole('tab', { name: 'Skript', exact: true }).click()
-    await page.locator('.script-packages').scrollIntoViewIfNeeded(); await page.screenshot({ path: resolve('.artifacts/managed-dependencies-de.png'), fullPage: true })
+    const packages = { dependencies: { 'sample-package': '1.0.0' } }
+    const lock = { lockfileVersion: 3, packages: { '': packages, 'node_modules/sample-package': { version: '1.0.0', resolved: 'https://registry.npmjs.org/sample-package/-/sample-package-1.0.0.tgz', integrity: 'sha512-YQ==' } } }
+    const stage = join(root, 'prepared'); await mkdir(join(stage, 'node_modules/sample-package'), { recursive: true })
+    await writeFile(join(stage, 'package.json'), JSON.stringify(packages)); await writeFile(join(stage, 'package-lock.json'), JSON.stringify(lock))
+    await writeFile(join(stage, 'node_modules/sample-package/package.json'), '{"name":"sample-package","version":"1.0.0","main":"index.cjs"}')
+    await writeFile(join(stage, 'node_modules/sample-package/index.cjs'), 'module.exports=42')
+    const files = await packageFiles(stage, true); const hash = packageDigest(files); const parent = join(root, 'dependencies', pod.id)
+    await mkdir(parent, { recursive: true }); await chmod(stage, 0o700); await rename(stage, join(parent, hash)); await chmod(join(parent, hash), 0o500)
+    store.db.prepare('INSERT INTO dependency_sets VALUES(?,?,?,?,?)').run(pod.id, hash, JSON.stringify(packages), JSON.stringify(lock), JSON.stringify(files))
+    const resources = new ResourceRegistry(store, () => {})
+    const runtime = { helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, binary: '', catalog: '', sdkHost: '', manifest: resolve('dist/vendor/manifest.json') }
+    const draft = async (id: string, code: string) => {
+      store.db.prepare('INSERT INTO script_drafts VALUES(?,?,?,?,?,?,NULL,NULL)').run(id, pod.id, 1, store.getPod(pod.id).bindingRevision, code, '[]')
+      store.db.prepare('INSERT INTO draft_packages VALUES(?,?)').run(id, JSON.stringify(packages))
+      return validateDraft(store, resources, runtime, id, 1, new AbortController().signal)
+    }
+    const result = await draft(randomUUID(), 'import answer from \'sample-package\'\nexport async function run(context) { if (answer !== 42) throw new Error(\'wrong library\'); return { status: \'completed\', summary: \'Library returned \' + answer, completedInputIds: context.input.eventIds, gapIds: [] } }\n')
+    expect(new DependencyStore(store).scriptSet(pod.id, result.hash)).toBe(hash)
+    // Counter-check: a package outside the prepared set does not resolve.
+    await expect(draft(randomUUID(), 'import other from \'unprepared-package\'\nexport async function run() { return { status: \'completed\', summary: String(other), completedInputIds: [], gapIds: [] } }\n')).rejects.toThrow()
   }
-  finally { await app.close(); await identity.close(); await removePackageTree(root) }
+  finally { store.close(); await removePackageTree(root) }
 })
 
 it('managed dependencies: changing a library requires a new validated script and retains assigned secrets', async () => {

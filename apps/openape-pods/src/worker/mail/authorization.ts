@@ -35,9 +35,7 @@ export function authorizeCredentialService(store: PodDatabase, registry: Resourc
   const alias = parseCredentialAlias(value)
   authorizeRunService(store, registry, runs, check)
   const { scope } = check
-  if (!scope.capabilities.includes(`credential.${alias}`)) throw new Error('Credential capability is not declared by this script')
   const authority = new ScriptCredentials(store, registry)
-  authority.assertApproved(scope.podId, runs.get(scope.runId).scriptHash, scope.capabilities)
   return authority.assigned(scope.podId, alias).configuration.credentialId as string
 }
 

@@ -23,7 +23,7 @@ export function translateDiagnostic(language: Language, value: string | null | u
       return part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     }).join('')
     const match = new RegExp(`^${pattern}$`).exec(message)
-    if (match) return translate(language, key, Object.fromEntries(names.map((name, index) => [name, match[index + 1]])))
+    if (match) return translate(language, key, Object.fromEntries(names.map((name, index) => [name, match[index + 1]!])))
   }
   return language === 'en' ? message : `Technische Meldung (Original): ${message}`
 }

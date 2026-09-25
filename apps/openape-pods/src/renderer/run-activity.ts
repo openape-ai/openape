@@ -1,7 +1,7 @@
 import type { RunEvent, RunRecord } from '../contracts/runs'
 
 export interface ActivityItem { sequence: number, at: number, title: string, state: string }
-const operations: Record<string, string> = { 'tools.invoke': 'Application call', 'agent.run': 'AI request', 'http.request': 'HTTP delivery', 'progress.commit': 'Save progress', 'credentials.get': 'Read an assigned secret', 'mail.next': 'Read mail', 'mail.commit': 'Save mail knowledge' }
+const operations: Record<string, string> = { 'jev.evaluate': 'Jev decision', 'tools.invoke': 'Application call', 'agent.run': 'AI request', 'http.request': 'HTTP delivery', 'progress.commit': 'Save progress', 'credentials.get': 'Read an assigned secret', 'mail.next': 'Read mail', 'mail.commit': 'Save mail knowledge' }
 export function runActivity(events: RunEvent[]): ActivityItem[] {
   const items: ActivityItem[] = []
   const active = new Map<string, ActivityItem>()

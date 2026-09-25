@@ -31,7 +31,7 @@ export default defineComponent({
   <article class="card knowledge-panel">
     <div class="card-heading">
       <h2>{{ t("Supported findings") }}</h2><button class="text-button" @click="$emit('discuss')">
-        {{ t("Discuss knowledge") }}
+        {{ t("Work from Codex") }}
       </button>
     </div>
     <p class="muted">

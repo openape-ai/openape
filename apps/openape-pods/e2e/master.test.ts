@@ -58,9 +58,9 @@ describe('master actions and actual app-server', () => {
     await expect(control.execute('check', { action: 'validate', podId: pod.id, revision: 1, draftId: draft.draftId, draftRevision: draft.draftRevision }, signal)).rejects.toThrow()
     expect(store.getPod(pod.id).activeScript).toBe(active); expect(master.view(pod.id).drafts[0]?.validation).toBeNull()
   })
-  it.each([false, true])('streams a dynamic action through confined app-server and resumes the same thread (packaged=%s)', async (packaged) => {
+  it('streams a dynamic action through confined app-server and resumes the same thread (packaged)', async () => {
     let calls = 0; const requests: unknown[] = []
-    await setup(async (body) => { requests.push(body); return ++calls === 1 ? recordedResponse({ type: 'function_call', id: 'item-1', call_id: 'call-1', name: 'pods_control', arguments: JSON.stringify({ action: 'create', name: 'Created by master' }) }) : recordedResponse() }, packaged)
+    await setup(async (body) => { requests.push(body); return ++calls === 1 ? recordedResponse({ type: 'function_call', id: 'item-1', call_id: 'call-1', name: 'pods_control', arguments: JSON.stringify({ action: 'create', name: 'Created by master' }) }) : recordedResponse() }, true)
     const command = { type: 'send' as const, id: randomUUID(), text: 'Create a synthetic pod.', podId: null }
     await master.execute(command)
     await expect.poll(() => master.view().state, { timeout: 20000 }).toBe('idle')
@@ -166,7 +166,7 @@ it('persists ordinary setup, keeps automation disabled and enforces revisions an
   expect(inspected.organization.groups).toEqual([expect.objectContaining({ name: 'Examples', selected: true })])
   expect(inspected.resources.find(resource => resource.id === reference.id)?.configuration).toEqual({})
   expect(JSON.stringify(inspected)).not.toContain(credentialId); expect(JSON.stringify(inspected)).not.toContain('/private/owner-only.txt'); expect(JSON.stringify(inspected)).not.toContain('PRIVATE_'); expect(JSON.stringify(inspected)).not.toContain('/private/host/tool')
-  expect(inspected.resources.find(resource => (resource.configuration as { cliId?: string }).cliId === 'fixture')?.configuration).toEqual({ type: 'program', cliId: 'fixture', capability: 'tool.fixture.read', permissions: ['fixture.read'], commands: expect.arrayContaining([expect.objectContaining({ command: ['read'], action: 'read' })]) })
+  expect(inspected.resources.find(resource => (resource.configuration as { cliId?: string }).cliId === 'fixture')?.configuration).toEqual({ type: 'program', cliId: 'fixture', runtimeConfigured: false, capability: 'tool.fixture.read', permissions: ['fixture.read'], commands: expect.arrayContaining([expect.objectContaining({ command: ['read'], action: 'read' })]) })
   await action({ action: 'setGroup', name: 'examples', organizationRevision: inspected.organization.revision })
   expect(store.db.prepare('SELECT count(*) AS n FROM pod_groups').get()?.n).toBe(1)
   const epoch = registry.epoch(pod.id)

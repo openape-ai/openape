@@ -1,7 +1,15 @@
 import type { MessageKey } from './index'
 
 export const diagnosticPatterns = [
+  'Permission {p0}; review this Pod\'s permissions before retrying',
+  'Pod {p0} exists and is awaiting its identity. Do not create it again. {p1}',
+  'Workspace operation {p0} is not confirmed. Reconcile this operation before retrying',
+
   'Remote service returned {p0}',
+  'Central workspace offline: {p0}',
+  'This Pod has a run in progress since {p0}; wait for it to finish or cancel it before changing its applications',
+  'Agent timeoutSeconds must be an integer from 30 to {p0}',
+  'DDISA agent authentication failed ({p0})',
   'Desktop registration failed ({p0})',
   'Remote service: {p0}',
   'Broker revocation failed ({p0}); review the connection at your identity provider',

@@ -51,7 +51,7 @@ beforeEach(async () => {
   grantStore = createDrizzleGrantStore()
   connection = await store.createConnection({ id: randomUUID(), owner: { issuer, subject: owner }, broker_issuer: broker, agent_domain: 'pods.provider.test', status: 'active', created_at: 1 })
 })
-afterEach(() => { client.close(); rmSync(directory, { recursive: true, force: true }) })
+afterEach(() => { vi.unstubAllEnvs(); client.close(); rmSync(directory, { recursive: true, force: true }) })
 
 describe('durable grant brokering', () => {
   it('accepts the authorized broker once and rejects replay, substituted owners and other domains', async () => {
@@ -60,6 +60,21 @@ describe('durable grant brokering', () => {
     await expect(store.acceptRequest(assertion)).rejects.toMatchObject({ statusCode: 409 })
     await expect(store.acceptRequest({ ...request(), owner: 'other@identity.test' })).rejects.toMatchObject({ statusCode: 403 })
     await expect(store.acceptRequest({ ...request(), operation: 'get', sub: 'agent@elsewhere.test', key_id: 'key-one', grant_id: randomUUID() })).rejects.toMatchObject({ statusCode: 403 })
+  })
+
+  it.each(['3', 'invalid', '0'])('enforces configured broker capacity or its safe default (%s)', async (configured) => {
+    vi.stubEnv('OPENAPE_RATE_LIMIT_MAX_AGENT', configured)
+    const bounded = createDrizzleBrokerStore()
+    const limit = configured === '3' ? 3 : 120
+    const now = Math.floor(Date.now() / 1000)
+    const records = Array.from({ length: limit }, () => ({ connectionId: connection.id, jti: randomUUID(), expiresAt: now + 60 }))
+    await database.insert(schema.brokerRequests).values(records)
+    await expect(bounded.acceptRequest(request())).rejects.toMatchObject({ statusCode: 429 })
+    await database.update(schema.brokerRequests).set({ expiresAt: now - 1 }).where(eq(schema.brokerRequests.jti, records[0]!.jti))
+    const assertion = request()
+    await expect(bounded.acceptRequest(assertion)).resolves.toEqual(connection)
+    await database.delete(schema.brokerRequests).where(eq(schema.brokerRequests.jti, records[1]!.jti))
+    await expect(bounded.acceptRequest(assertion)).rejects.toMatchObject({ statusCode: 409 })
   })
 
   it('lists foreign grants for the owner without creating a local agent or leaking to another owner', async () => {

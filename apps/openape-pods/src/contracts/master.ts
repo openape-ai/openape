@@ -85,6 +85,7 @@ export type MasterAction =
   | { action: 'create', name: string }
   | { action: 'inspect' | 'run' | 'pause' | 'resume' | 'installMailRecipe', podId: string, revision: number }
   | { action: 'setVariable', podId: string, revision: number, name: string, value: string, variableRevision: number }
+  | { action: 'setSchedule', podId: string, revision: number, spec: ScheduleSpec, scheduleRevision: number, enabled: boolean }
   | { action: 'prepareSchedule', podId: string, revision: number, spec: ScheduleSpec, scheduleRevision: number }
   | { action: 'setGroup', podId: string, revision: number, name: string | null, organizationRevision: number }
   | { action: 'revise', podId: string, revision: number, name: string }
@@ -105,10 +106,10 @@ export function parseMasterAction(value: unknown): MasterAction {
     }
     return { action: item.action as 'inspectWorkflow' | 'runWorkflow' }
   }
-  const extra: Record<string, string[]> = { list: [], runtime: [], setVariable: ['name', 'value', 'variableRevision'], prepareSchedule: ['spec', 'scheduleRevision'], setGroup: ['name', 'organizationRevision'], create: ['name'], inspect: [], run: [], pause: [], resume: [], installMailRecipe: [], revise: ['name'], draft: ['draftId', 'draftRevision', 'code', 'capabilities'], validate: ['draftId', 'draftRevision'], activate: ['draftId', 'draftRevision'], rollback: ['hash', 'expectedActive'], requestAccess: ['request'] }
+  const extra: Record<string, string[]> = { list: [], runtime: [], setVariable: ['name', 'value', 'variableRevision'], prepareSchedule: ['spec', 'scheduleRevision'], setSchedule: ['spec', 'scheduleRevision', 'enabled'], setGroup: ['name', 'organizationRevision'], create: ['name'], inspect: [], run: [], pause: [], resume: [], installMailRecipe: [], revise: ['name'], draft: ['draftId', 'draftRevision', 'code', 'capabilities'], validate: ['draftId', 'draftRevision'], activate: ['draftId', 'draftRevision'], rollback: ['hash', 'expectedActive'], requestAccess: ['request'] }
   if (typeof item.action !== 'string' || !Object.hasOwn(extra, item.action)) throw new Error('Master action is not allowed')
   const scoped = !['list', 'runtime', 'create'].includes(item.action)
-  const allowed = ['action', ...(scoped ? ['podId', 'revision'] : []), ...extra[item.action]]
+  const allowed = ['action', ...(scoped ? ['podId', 'revision'] : []), ...extra[item.action]!]
   if (Object.keys(item).some(key => !allowed.includes(key) && !(item.action === 'draft' && key === 'packages')) || allowed.some(key => !(key in item))) throw new Error('Invalid master action fields')
   if (scoped && (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId) || !Number.isSafeInteger(item.revision) || (item.revision as number) < 1)) throw new Error('Invalid master pod revision')
   if (['create', 'revise'].includes(item.action) && (typeof item.name !== 'string' || !item.name.trim() || item.name.length > 100)) throw new Error('Invalid pod name')
@@ -120,7 +121,8 @@ export function parseMasterAction(value: unknown): MasterAction {
     if (typeof item.name !== 'string' || typeof item.value !== 'string' || typeof item.variableRevision !== 'number') throw new Error('Invalid pod variable')
     parseVariable({ name: item.name, value: item.value, revision: item.variableRevision })
   }
-  if (item.action === 'prepareSchedule') { parseSchedule(item.spec); if (!Number.isSafeInteger(item.scheduleRevision) || (item.scheduleRevision as number) < 0) throw new Error('Invalid schedule revision') }
+  if (item.action === 'setSchedule' && typeof item.enabled !== 'boolean') throw new Error('Schedule enabled state required')
+  if (item.action === 'prepareSchedule' || item.action === 'setSchedule') { parseSchedule(item.spec); if (!Number.isSafeInteger(item.scheduleRevision) || (item.scheduleRevision as number) < 0) throw new Error('Invalid schedule revision') }
   if (item.action === 'setGroup') { if (item.name !== null) item.name = groupName(item.name); if (!Number.isSafeInteger(item.organizationRevision) || (item.organizationRevision as number) < 1) throw new Error('Invalid organization revision') }
   if (item.action === 'rollback' && (typeof item.hash !== 'string' || !/^[a-f0-9]{64}$/.test(item.hash) || (item.expectedActive !== null && (typeof item.expectedActive !== 'string' || !/^[a-f0-9]{64}$/.test(item.expectedActive))))) throw new Error('Invalid rollback version')
   if (item.action === 'requestAccess') item.request = parseSetupRequest(item.request)

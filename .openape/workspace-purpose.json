@@ -51,6 +51,6 @@
   "packages/ape-pr": "Kommandozeile und Client für pr.",
   "packages/ape-crm": "Kommandozeile und Client für crm.",
   "packages/pods-protocol": "Versioned native Pods envelopes, validation and cross-language encryption contracts.",
-  "apps/openape-pods-relay": "Authenticated outbound desktop mediation with encrypted delivery and bounded persistence.",
+  "apps/openape-pods-relay": "Owner-authenticated central Pods workspace, browser UI and existing encrypted native delivery.",
   "apps/openape-pods-ios": "Native SwiftUI client for shared desktop Pods on iPhone and iPad."
 }
