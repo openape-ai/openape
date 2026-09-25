@@ -1,26 +1,34 @@
 # Active work
 
-## Pods: zaz task queue from a scheduled Pod (September 24, 2026) — implementing
+## Pods: zaz task queue from a scheduled Pod (September 25, 2026) — delivered
 
 [Issue 1381](https://repos.openape.ai/patrick/monorepo/issues/1381),
-[plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3AMN0CXG8G9TH0FR3MX5K5J),
-[local plan](../../.claude/plans/issue-1381-zaz-pod.html). Worktree `pods-zaz`,
-branch `feature/issue-1381-zaz-pod`, base `7103930d` (PR 127 merged).
-Owner decisions: Pods + zaz changes; raise limits instead of rejecting large
-extractions. The launchd worker `at.openape.worker` stays disabled; only zaz moves.
-
-Runtime changes:
-- HTTP resources may authenticate as a DDISA agent from an assigned key secret.
-  The main process mints and injects the bearer; the token never reaches the
-  script, logs or the centrally replicated effect ledger.
-- `receipt: "digest"` stores only status, SHA-256 and size.
+[plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3AMN0CXG8G9TH0FR3MX5K5J).
+PR 127 merged as `7103930d`; PR 128 merged as `7a269851` (external CI 5100 and the review-fix run, both green).
+The runtime changes:
+- HTTP resources authenticate as a DDISA agent from an assigned key secret; the key is not readable by scripts and echoed tokens are redacted.
+- `receipt: "digest"` stores digest-only receipts, and oversized effect replies do so automatically.
 - Request bodies up to 64 KiB, responses up to 128 KiB.
-- `agent.run` accepts `timeoutSeconds` from 30 to 900; agent time pauses the script budget.
+- `agent.run` accepts `timeoutSeconds` up to 900; the agent budget pause is capped per run.
 
-zaz adds an authenticated `GET /api/agent/tasks/pending` on its deployed branch
-`feature/monatssoll`. Next: exact-source CI and merge, signed installation, test
-Pod, then the zaz Pod on a 60 s schedule. Keep the IURIO monitor unchanged.
-Automatic E2E/layout remains off.
+The signed and notarized `7a269851` package (DMG sha256 `01e2558e…`) passed the mounted-DMG check and is installed and open.
+Paired rollback: `~/Library/Application Support/OpenApe Pods Rollback/2026-09-25-000406-issue-1381`.
+The IURIO monitor kept its 900 s schedule (rev 2) and its five receipts.
+
+zaz (`delta-mind/zaz` PR 4 into deployed `feature/monatssoll`, release `2026-09-24T21-31-33`) adds authenticated
+`GET /api/agent/tasks/pending` and compact resolve replies.
+
+The zaz Pod `93139662-c618-48e2-8a1e-36299aff36f2` is active on a 60 s interval. It uses gpt-5.5 via `agent.run` and the
+`op-delta-mind` agent key (secret `zaz_agent_key`). Test Pod `e8062ed3-22a0-40f9-8f88-c2c239129331` stays paused without a schedule.
+
+Acceptance:
+- An empty queue makes one GET and zero model calls or receipts.
+- Controlled tasks `d03d0a34` (manual) and `7c47a133` (scheduled run `19db9941`) completed once with one artifact each.
+- An intentional resolve replay returned the stored digest receipt.
+- Repeat runs added no effects.
+- Central inventory shows both Pods, their runs and the schedule.
+
+The legacy launchd worker stays disabled.
 
 ## Pods: Claude Code MCP integration (September 24, 2026) — implementing
 
