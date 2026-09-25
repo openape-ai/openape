@@ -194,6 +194,12 @@ it('names the failing phase as the offline reason in status, inventory and MCP e
   expect(await controller.query({ type: 'inventory' })).toMatchObject([{ id: actor.id, online: false, desktop: { state: 'connecting', error: 'worker snapshot: Worker response timed out; reload state before retrying' } }])
 })
 
+it('refuses workspace queries before the first lease instead of sending an empty lease', async () => {
+  const { controller, requests } = connected()
+  await expect(controller.query({ type: 'inventory' })).rejects.toThrow('Central workspace offline: connecting')
+  expect(requests).toEqual([])
+})
+
 it('does not rebuild the snapshot while the worker reports no data change', async () => {
   let version = 1
   const snapshot = vi.fn()
