@@ -7,7 +7,7 @@ import { executeScript } from '../src/worker/runs/runner'
 import type { RunInput } from '../src/contracts/runs'
 
 let root = ''
-afterEach(async () => { if (root) await rm(root, { recursive: true, force: true }) })
+afterEach(async () => { if (root) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) })
 async function setup(source: string, timeMs = 5000) {
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-script-')))
   const workspace = join(root, 'workspace'); await mkdir(workspace)
@@ -68,10 +68,20 @@ it('pauses active runtime limits only while a bounded approval wait is recorded'
   let waiting = false
   const events: unknown[] = []
   const reply = await executeScript(fixture.runtime, fixture.directory, fixture.artifact, fixture.input, new AbortController().signal, {
-    awaitingApproval: () => waiting,
+    budgetPaused: () => waiting,
     event: (type, data) => events.push({ type, data }),
     request: async () => { waiting = true; await new Promise(resolve => setTimeout(resolve, 1100)); waiting = false; return 'Synthetic result' },
   })
   expect(reply.status).toBe('completed')
   expect(events).toContainEqual({ type: 'operation', data: { id: expect.any(String), operation: 'agent.run', state: 'completed' } })
+})
+
+it('runs the Jev helper through the native script bridge without starting an LLM agent', async () => {
+  const fixture = await setup(`export async function run(c) { const result=await c.jev.evaluate({state:'Synthetic invoice',questions:{reply:{type:'noul',instructions:'Reply needed?'}}}); if(result.answers.reply.noul!==0.9)throw new Error('Wrong decision'); return {status:'completed',summary:'Jev decision received',completedInputIds:[],gapIds:[]}; }`)
+  const operations: string[] = []
+  const reply = await executeScript(fixture.runtime, fixture.directory, fixture.artifact, fixture.input, new AbortController().signal, { event: () => {}, request: async (operation, payload) => {
+    operations.push(operation); expect(payload).toMatchObject({ state: 'Synthetic invoice' })
+    return { model: 'jev-1.13.0', answers: { reply: { type: 'noul', noul: 0.9 } }, usage: { input_tokens: 12, output_tokens: 1 } }
+  } })
+  expect(reply.status).toBe('completed'); expect(operations).toEqual(['jev.evaluate'])
 })

@@ -1,13 +1,12 @@
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { zipSync, strToU8 } from 'fflate'
 import { afterEach, expect, it } from 'vitest'
 import { extractSource } from '../src/worker/mail/extraction'
 import type { AgentRuntime } from '../src/worker/agent/executor'
 
 let root = ''
-afterEach(async () => { if (root) await rm(root, { recursive: true, force: true }) })
+afterEach(async () => { if (root) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) })
 function pdf(text: string): Buffer {
   const stream = `BT /F1 12 Tf 20 150 Td (${text}) Tj ET`
   const objects = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>', '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>', `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`]
@@ -23,37 +22,15 @@ async function runtime(packaged: boolean): Promise<AgentRuntime> {
   const base = packaged ? join(bundle, 'Resources/app.asar.unpacked/dist') : resolve('dist')
   return { helper: join(base, 'native/pods-helper'), executable: packaged ? join(bundle, 'MacOS/OpenApe Pods Fixture') : process.execPath, entry: join(base, 'runtime/script-entry.mjs'), runtimeDirectories: packaged ? [await realpath(join(bundle, 'Frameworks'))] : [], environment: packaged ? { ELECTRON_RUN_AS_NODE: '1' } : {}, binary: '', catalog: '', manifest: '', sdkHost: '' }
 }
-for (const packaged of [false, true]) {
-  it(`mail-knowledge: extracts plain/HTML/PDF/DOCX sources in the native packaged parser (packaged=${packaged})`, async () => {
-    const config = await runtime(packaged)
-    const documents = [
-      { type: 'text/plain', bytes: Buffer.from('Delivery is June 8.'), expected: 'Delivery is June 8.' },
-      { type: 'text/html', bytes: Buffer.from('<p>Delivery is <b>June 8</b>.</p><script>stealSecrets()</script><img src="https://attacker.invalid/tracking">'), expected: 'Delivery is June 8.' },
-      { type: 'application/pdf', bytes: pdf('Delivery is June 8.'), expected: 'Delivery is June 8.' },
-      { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', bytes: Buffer.from(zipSync({ 'word/document.xml': strToU8('<w:document><w:body><w:p><w:r><w:t>Delivery is June 8.</w:t></w:r></w:p></w:body></w:document>') })), expected: 'Delivery is June 8.' },
-    ]
-    const domains: string[] = []
-    for (const document of documents) {
-      const source = Buffer.from(JSON.stringify({ data: { contentType: document.type, contentBytes: document.bytes.toString('base64') } }))
-      const result = await extractSource(config, root, source, new AbortController().signal, (path) => { domains.push(path) })
-      expect(result.gap, document.type).toBeNull(); expect(result.text).toContain(document.expected)
-      expect(result.text).not.toContain('stealSecrets'); expect(result.text).not.toContain('attacker.invalid')
-    }
-    expect(domains).toHaveLength(4)
-  })
-}
-it('mail-knowledge: unsupported, scanned, malformed and oversized documents remain explicit gaps', async () => {
-  const config = await runtime(false)
-  const documents = [
-    { type: 'application/octet-stream', bytes: Buffer.from('unsupported') },
-    { type: 'application/pdf', bytes: pdf('') },
-    { type: 'application/pdf', bytes: Buffer.from('broken PDF') },
-    { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', bytes: Buffer.from(zipSync({ 'word/document.xml': strToU8(`<w:document>${'a'.repeat(3 * 1024 * 1024)}</w:document>`) })) },
-  ]
-  for (const document of documents) {
-    const result = await extractSource(config, root, Buffer.from(JSON.stringify({ data: { contentType: document.type, contentBytes: document.bytes.toString('base64') } })), new AbortController().signal, () => {})
-    expect(result.gap).toBeTruthy(); expect(result.text).toBe('')
-  }
+// Formats and gap classification are unit-tested in test/mail/extraction.test.ts.
+// This run proves the parser executes in the sandbox with the packaged runtime.
+it('mail-knowledge: extracts a PDF source in the native parser of the packaged app', async () => {
+  const config = await runtime(true)
+  const domains: string[] = []
+  const source = Buffer.from(JSON.stringify({ data: { contentType: 'application/pdf', contentBytes: pdf('Delivery is June 8.').toString('base64') } }))
+  const result = await extractSource(config, root, source, new AbortController().signal, (path) => { domains.push(path) })
+  expect(result.gap).toBeNull(); expect(result.text).toContain('Delivery is June 8.')
+  expect(domains).toHaveLength(1)
 })
 
 it('mail-knowledge: runs the versioned recipe through the actual script, SDK and parser without duplicating committed evidence', async () => {

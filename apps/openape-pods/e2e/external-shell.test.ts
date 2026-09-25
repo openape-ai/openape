@@ -66,7 +66,7 @@ export async function run(context) {
     expect(operations).toEqual(['progress.commit'])
     expect(requests.filter(url => url.startsWith('/api/grants?')).length).toBeGreaterThanOrEqual(2)
   }
-  finally { await new Promise<void>(resolve => server.close(() => resolve())); await rm(root, { recursive: true, force: true }) }
+  finally { await new Promise<void>(resolve => server.close(() => resolve())); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })
 
 it('ape-shell: a denied harmless script command never writes its output file', async () => {
@@ -101,5 +101,5 @@ it('ape-shell: a denied harmless script command never writes its output file', a
     expect(requested).toBe(true); expect(code).not.toBe(0); expect(output).toContain('denied')
     await expect(readFile(join(context.workspace, 'denied.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
   }
-  finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await rm(root, { recursive: true, force: true }) }
+  finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })

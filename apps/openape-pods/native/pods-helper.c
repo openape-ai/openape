@@ -50,14 +50,14 @@ static int same_version(const struct stat *left, const struct stat *right) {
     left->st_mtimespec.tv_sec == right->st_mtimespec.tv_sec && left->st_mtimespec.tv_nsec == right->st_mtimespec.tv_nsec &&
     left->st_ctimespec.tv_sec == right->st_ctimespec.tv_sec && left->st_ctimespec.tv_nsec == right->st_ctimespec.tv_nsec;
 }
-static void capture(const char *source, const char *destination, const char *limit_text) {
+static void capture(const char *source, const char *destination, const char *limit_text, int managed) {
   char *end = NULL; errno = 0;
   long long limit = strtoll(limit_text, &end, 10);
   if (errno || !end || *end || limit < 1 || limit > 104857600) { errno = EINVAL; fail("Invalid snapshot limit"); }
   int input = open_source(source);
   struct stat before, after, current;
   if (fstat(input, &before) < 0) fail("Inspect source");
-  if (!S_ISREG(before.st_mode) || before.st_size > limit) { errno = EINVAL; fail("Source is not a bounded regular file"); }
+  if (!S_ISREG(before.st_mode) || before.st_size > limit || (managed && before.st_nlink != 1)) { errno = EINVAL; fail("Source is not a bounded regular file"); }
   int output = open(destination, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
   if (output < 0) fail("Create staging file");
   char buffer[65536]; ssize_t count; long long total = 0;
@@ -277,7 +277,8 @@ static int supervise(char **command, const char *record_path, int interactive) {
   return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
 }
 int main(int argc, char **argv) {
-  if (argc == 5 && !strcmp(argv[1], "capture")) { close_descriptors(3); capture(argv[2], argv[3], argv[4]); return 0; }
+  if (argc == 5 && !strcmp(argv[1], "capture-managed")) { close_descriptors(3); capture(argv[2], argv[3], argv[4], 1); return 0; }
+  if (argc == 5 && !strcmp(argv[1], "capture")) { close_descriptors(3); capture(argv[2], argv[3], argv[4], 0); return 0; }
   if (argc >= 3 && !strcmp(argv[1], "supervise") && argv[2][0] == '/') return supervise(argv + 2, NULL, 0);
   if (argc >= 4 && !strcmp(argv[1], "supervise-record") && argv[2][0] == '/' && argv[3][0] == '/') return supervise(argv + 3, argv[2], 0);
   if (argc >= 4 && !strcmp(argv[1], "supervise-terminal-record") && argv[2][0] == '/' && argv[3][0] == '/') return supervise(argv + 3, argv[2], 1);

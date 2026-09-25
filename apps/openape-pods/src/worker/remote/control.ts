@@ -105,7 +105,7 @@ export class RemoteControl {
       const existing = this.store.db.prepare('SELECT owner,identity FROM remote_pods WHERE pod_id=?').get(command.podId)
       if (existing && !sameOwner(JSON.parse(existing.owner as string), command.owner)) throw new ProtocolError('pod_owner_conflict', 409)
       if (existing?.identity && existing.identity !== JSON.stringify(command.identity)) throw new ProtocolError('pod_identity_conflict', 409)
-      this.store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,\'ready\',?,NULL) ON CONFLICT(pod_id) DO UPDATE SET runtime_id=excluded.runtime_id,generation=excluded.generation').run(command.podId, JSON.stringify(command.owner), registration.id, registration.generation, JSON.stringify(command.identity))
+      this.store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,\'ready\',?,NULL) ON CONFLICT(pod_id) DO UPDATE SET runtime_id=excluded.runtime_id,generation=excluded.generation WHERE runtime_id IS NOT excluded.runtime_id OR generation IS NOT excluded.generation').run(command.podId, JSON.stringify(command.owner), registration.id, registration.generation, JSON.stringify(command.identity))
       return { claimed: true }
     }
     if (command.type === 'provision') {
@@ -221,11 +221,15 @@ export class RemoteControl {
       const conversation = new ChatRegistry(this.store).get(body.conversationId!)
       const review = this.master.view(conversation.scope).changes?.find(item => item.id === body.reviewId)
       if (!review || review.workflow || review.targets.some(target => target.actions.some(action => action.action === 'setGroup'))) throw new ProtocolError('desktop_action_required', 409)
+      // A review the phone loaded before a desktop edit must come back as a re-review, not as a generic failure.
+      if (conversation.revision !== expected.contextRevision || review.contextRevision !== conversation.revision || review.revision !== expected.reviewRevision || (review.state !== 'pending' && (review.state === 'applied') !== (route.kind === 'changes.apply'))) throw new ProtocolError('revision_conflict', 409)
       for (const target of review.targets) {
         this.ownerPod(route.owner, target.podId)
         if (route.kind === 'changes.apply' && review.kind === 'run' && this.store.db.prepare('SELECT phase FROM remote_pods WHERE pod_id=?').get(target.podId)?.phase !== 'ready') throw new ProtocolError('desktop_action_required', 409)
       }
       result = await this.master.execute({ ...base, type: route.kind === 'changes.apply' ? 'applyChanges' : 'discardChanges', id: body.reviewId!, revision: expected.reviewRevision! })
+      const decided = (result as MasterView).changes?.find(item => item.id === body.reviewId)
+      if (decided?.state === 'pending' && decided.error) throw new ProtocolError('revision_conflict', 409)
     }
     else {
       throw new ProtocolError('unsupported_operation', 426)

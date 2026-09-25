@@ -37,7 +37,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 22
+export const schemaVersion = 23
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -278,6 +278,7 @@ PRAGMA user_version=20;`)
 
       if (version < 21) { migrateChats(this.db); this.db.exec('PRAGMA user_version=21;') }
       if (version < 22) { migrateRemote(this.db); this.db.exec('PRAGMA user_version=22;') }
+      if (version < 23) this.db.exec('ALTER TABLE pod_descriptions ADD COLUMN manual INTEGER NOT NULL DEFAULT 0; PRAGMA user_version=23;')
     })
   }
 

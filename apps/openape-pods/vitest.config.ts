@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 
-export default defineConfig({ plugins: [vue()], test: { include: ['test/**/*.test.ts'], environment: 'happy-dom', retry: 0 } })
+// test/layout runs in a real browser (vitest.browser.config.ts), not in happy-dom.
+export default defineConfig({ plugins: [vue()], test: { include: ['test/**/*.test.ts'], exclude: ['test/layout/**'], environment: 'happy-dom', retry: 0 } })

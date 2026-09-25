@@ -8,11 +8,11 @@ export default defineComponent({
   emits: ['open'],
   data() { return { view: null as OnboardingView | null, error: '', closed: false, timer: null as ReturnType<typeof setTimeout> | null } },
   computed: {
-    account() { return this.view?.connections.find(item => item.id === this.view?.defaultOwner) },
+    account() { return this.view?.connections.find(item => item.id === this.view?.owner) },
     status(): string {
       if (this.error) return t('Account status unavailable')
       if (!this.view) return t('Loading account…')
-      if (!this.account) return t('Choose your account')
+      if (!this.account) return t('Not signed in')
       return this.account.state === 'ready' ? t('Signed in') : label(this.account.state)
     },
   },

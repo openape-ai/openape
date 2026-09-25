@@ -72,11 +72,11 @@ export function parseResult(value: unknown, input: RunInput): ScriptResult {
   if (!Array.isArray(result.completedInputIds) || result.completedInputIds.some(id => !input.eventIds.includes(id)) || !Array.isArray(result.gapIds) || result.gapIds.length > 1000 || result.gapIds.some(id => typeof id !== 'string')) throw new Error('Uncommitted result references')
   return result as unknown as ScriptResult
 }
-export interface ScriptFrame { version: 1, runId: string, sequence: number, type: 'request' | 'result' | 'error' | 'log', id?: string, operation?: 'http.request' | 'credentials.get' | 'agent.run' | 'tools.invoke' | 'progress.commit' | 'mail.next' | 'mail.commit' | 'workflow.publish' | 'mail.workflow.filter' | 'mail.workflow.remaining' | 'mail.workflow.notify', payload: unknown }
+export interface ScriptFrame { version: 1, runId: string, sequence: number, type: 'request' | 'result' | 'error' | 'log', id?: string, operation?: 'jev.evaluate' | 'http.request' | 'credentials.get' | 'agent.run' | 'tools.invoke' | 'progress.commit' | 'mail.next' | 'mail.commit' | 'workflow.publish' | 'mail.workflow.filter' | 'mail.workflow.remaining' | 'mail.workflow.notify', payload: unknown }
 export function parseFrame(value: unknown, runId: string, sequence: number): ScriptFrame {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid script frame')
   const frame = value as Record<string, unknown>
   if (Object.keys(frame).some(key => !['version', 'runId', 'sequence', 'type', 'id', 'operation', 'payload'].includes(key)) || frame.version !== 1 || frame.runId !== runId || frame.sequence !== sequence || !['request', 'result', 'error', 'log'].includes(frame.type as string)) throw new Error('Invalid script frame binding or sequence')
-  if (frame.type === 'request' && (typeof frame.id !== 'string' || !/^[a-z0-9-]{1,100}$/i.test(frame.id) || !['http.request', 'credentials.get', 'agent.run', 'tools.invoke', 'progress.commit', 'mail.next', 'mail.commit', 'workflow.publish', 'mail.workflow.filter', 'mail.workflow.remaining', 'mail.workflow.notify'].includes(frame.operation as string))) throw new Error('Unsupported script request')
+  if (frame.type === 'request' && (typeof frame.id !== 'string' || !/^[a-z0-9-]{1,100}$/i.test(frame.id) || !['jev.evaluate', 'http.request', 'credentials.get', 'agent.run', 'tools.invoke', 'progress.commit', 'mail.next', 'mail.commit', 'workflow.publish', 'mail.workflow.filter', 'mail.workflow.remaining', 'mail.workflow.notify'].includes(frame.operation as string))) throw new Error('Unsupported script request')
   return frame as unknown as ScriptFrame
 }

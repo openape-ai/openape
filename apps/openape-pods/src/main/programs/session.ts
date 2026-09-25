@@ -1,3 +1,4 @@
+import { programLaunch, verifyProgramRuntime } from './runtime'
 import type { DirectoryPolicy } from '../../runtime/directories'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -18,6 +19,7 @@ import { ProgramState } from './state'
 
 export async function resolveProgram(assignment: ProgramAssignment, podId: string, argv: string[], readOnly = false) {
   await verifyExecutable(assignment.executable, assignment.executableHash)
+  await verifyProgramRuntime(assignment)
   await verifyExecutable(assignment.adapterPath, assignment.adapterHash)
   for (const file of assignment.entryFiles) await verifyExecutable(file.path, file.hash)
   const adapter = loadAdapter(assignment.cliId, assignment.adapterPath)
@@ -76,8 +78,9 @@ export class ProgramSession {
       try {
         await new ProgramState(credentials).use(assignment.stateId, { podId: this.podId, applicationId }, async (workspace) => {
           await check(); signal.throwIfAborted()
-          const args = [...argv, ...(assignment.cacheArgument ? [assignment.cacheArgument, workspace] : [])]
-          const domain = await launchTerminal(helper, directory, { executable: assignment.executable, workspace: podWorkspace, readDirectories: directories.readDirectories, writeDirectories: [workspace, ...directories.writeDirectories], readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: [], networkPorts: proxy ? [proxy.port] : [], systemTrust: Boolean(proxy) }, args, { ...assignment.environment, ...proxy?.environment, HOME: workspace, TMPDIR: workspace }, (path, ownerPid) => registerAuthDomain(root, path, ownerPid))
+          const launch = programLaunch(assignment)
+          const args = [...launch.prefix, ...argv, ...(assignment.cacheArgument ? [assignment.cacheArgument, workspace] : [])]
+          const domain = await launchTerminal(helper, directory, { executable: launch.executable, workspace: podWorkspace, readDirectories: directories.readDirectories, writeDirectories: [workspace, ...directories.writeDirectories], readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: launch.runtimeDirectories, networkPorts: proxy ? [proxy.port] : [], systemTrust: Boolean(proxy) }, args, { ...launch.environment, ...proxy?.environment, HOME: workspace, TMPDIR: workspace }, (path, ownerPid) => registerAuthDomain(root, path, ownerPid))
           this.domain = domain; verifiedClosed = false
           const decoder = new StringDecoder('utf8')
           domain.stdout.on('data', (bytes: Buffer) => this.append(decoder.write(bytes)))
