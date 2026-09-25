@@ -1,5 +1,11 @@
 # @openape/cli-auth
 
+## 0.5.5
+
+### Patch Changes
+
+- 52579f6: Re-exchange legacy cached SP tokens that lack their issuing endpoint instead of failing during endpoint validation.
+
 ## 0.5.4
 
 ### Patch Changes

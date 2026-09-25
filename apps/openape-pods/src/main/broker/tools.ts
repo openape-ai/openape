@@ -1,0 +1,125 @@
+import { ProgramState } from '../programs/state'
+import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
+import { StringDecoder } from 'node:string_decoder'
+import { parseCredentialJSON } from '../connections/cache'
+import type { CredentialCache } from '../connections/cache'
+import { launchSandbox, verifyExecutable } from '../../worker/runtime/sandbox'
+import type { AgentAuthority, AssignedAuthorization } from './authorization'
+
+export interface ToolAssignment extends AssignedAuthorization {
+  id: string
+  programState?: { id: string, podId: string, applicationId: string }
+  capability: string
+  executable: string
+  executableHash: string
+  entryFiles: { path: string, hash: string }[]
+  prefix: string[]
+  connectionId?: string
+  cacheArgument?: '--cache-dir'
+  maxOutputBytes?: number
+  runtimeDirectories: string[]
+  environment: Record<string, string>
+  runtimeEnvironment?: Record<string, string>
+  networkPorts: number[]
+}
+export interface BrokerLease {
+  readDirectories?: string[]
+  writeDirectories?: string[]
+  workspace?: string
+  registerDomain?: (path: string, ownerPid: number) => void | Promise<void>
+  capabilities: string[]
+  assertCurrent: () => void
+  signal: AbortSignal
+}
+export interface ToolReply { exitCode: number, stdout: string, stderr: string }
+function secretStrings(value: unknown, key = ''): string[] {
+  const credentialKeys = ['secret', 'token', 'accesstoken', 'refreshtoken', 'idtoken', 'refresh', 'privatekey', 'clientsecret', 'password', 'authorization']
+  if (typeof value === 'string') return value && credentialKeys.includes(key.toLowerCase().replaceAll('_', '')) ? [value, JSON.stringify(value).slice(1, -1)] : []
+  if (!value || typeof value !== 'object') return []
+  return Object.entries(value).flatMap(([childKey, child]) => secretStrings(child, childKey))
+}
+
+export class PodToolBroker {
+  constructor(private readonly helper: string, private readonly root: string, private readonly authority: AgentAuthority, private readonly credentials: CredentialCache) {}
+  async execute(assignment: ToolAssignment, request: unknown, lease: BrokerLease): Promise<ToolReply> {
+    if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('Invalid ape-shell request')
+    const value = request as Record<string, unknown>
+    if (Object.keys(value).some(key => !['toolId', 'argv'].includes(key)) || value.toolId !== assignment.id || !Array.isArray(value.argv) || JSON.stringify(value.argv) !== JSON.stringify(assignment.command.argv)) throw new Error('Command is outside the assigned tool call')
+    lease.assertCurrent(); lease.signal.throwIfAborted()
+    if (!lease.capabilities.includes(assignment.capability)) throw new Error('Script does not declare this capability')
+    await verifyExecutable(assignment.executable, assignment.executableHash)
+    for (const file of assignment.entryFiles) await verifyExecutable(file.path, file.hash)
+    await this.authority.authorize(assignment, lease.signal)
+    lease.assertCurrent(); lease.signal.throwIfAborted()
+    await mkdir(this.root, { recursive: true, mode: 0o700 })
+    if (assignment.programState) {
+      const state = assignment.programState
+      return new ProgramState(this.credentials).use(state.id, state, async directory => this.run(assignment, lease, directory, assignment.cacheArgument ? join(directory, 'token.json') : undefined), lease.signal)
+    }
+    if (assignment.connectionId) {
+      return this.credentials.withCache(assignment.connectionId, async (cache) => {
+        lease.assertCurrent(); lease.signal.throwIfAborted()
+        return this.run(assignment, lease, dirname(cache), cache)
+      }, lease.signal)
+    }
+    const workspace = await mkdtemp(join(this.root, 'tool-'))
+    try { return await this.run(assignment, lease, workspace) }
+    finally { await rm(workspace, { recursive: true, force: true }) }
+  }
+
+  private async run(assignment: ToolAssignment, lease: BrokerLease, workspace: string, cache?: string): Promise<ToolReply> {
+    await this.authority.assertActive(assignment.grantId, lease.signal)
+    lease.assertCurrent(); lease.signal.throwIfAborted()
+    const secrets = [...Object.values(assignment.environment).filter(Boolean), ...[assignment.environment.HTTPS_PROXY, assignment.environment.HTTP_PROXY].filter(Boolean).flatMap(url => new URL(url).password ? [new URL(url).password] : []), ...(cache ? secretStrings(parseCredentialJSON(await readFile(cache, 'utf8'))) : [])]
+    const args = [...assignment.prefix, ...assignment.command.argv.slice(1), ...(cache && assignment.cacheArgument ? [assignment.cacheArgument, dirname(cache)] : [])]
+    const limit = assignment.maxOutputBytes ?? 256 * 1024
+    if (!Number.isSafeInteger(limit) || limit < 1024 || limit > 32 * 1024 * 1024) throw new Error('Invalid tool output bound')
+    const domain = await launchSandbox(this.helper, this.root, { executable: assignment.executable, workspace: await realpath(lease.workspace ?? workspace), readDirectories: lease.readDirectories, writeDirectories: [...(lease.workspace ? [await realpath(workspace)] : []), ...lease.writeDirectories ?? []], readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: assignment.runtimeDirectories, networkPorts: assignment.networkPorts, systemTrust: assignment.networkPorts.length > 0 }, args, { ...assignment.runtimeEnvironment, ...assignment.environment, HOME: workspace, TMPDIR: workspace, ...(cache ? { POD_TOOL_AUTH_FILE: cache } : {}) }, lease.registerDomain)
+    let stdout = ''; let stderr = ''; let failure: Error | undefined
+    let outputBytes = 0
+    const outDecoder = new StringDecoder('utf8'); const errDecoder = new StringDecoder('utf8')
+    const stop = () => { failure ??= new Error('Tool call cancelled'); domain.cancel() }
+    lease.signal.addEventListener('abort', stop, { once: true })
+    if (lease.signal.aborted) stop()
+    const append = (which: 'stdout' | 'stderr', bytes: Buffer) => {
+      outputBytes += bytes.length
+      if (outputBytes > limit) { failure = new Error('Tool output exceeded its limit'); domain.cancel(); return }
+      if (which === 'stdout') stdout += outDecoder.write(bytes)
+      else stderr += errDecoder.write(bytes)
+    }
+    domain.stdout.on('data', bytes => append('stdout', bytes)); domain.stderr.on('data', bytes => append('stderr', bytes))
+    const monitoring = new AbortController()
+    const poll = async () => {
+      try {
+        while (!monitoring.signal.aborted) {
+          await delay(1000, undefined, { signal: monitoring.signal })
+          lease.assertCurrent()
+          await this.authority.assertActive(assignment.grantId, AbortSignal.any([lease.signal, monitoring.signal]))
+        }
+      }
+      catch (error) {
+        if (monitoring.signal.aborted) return
+        failure = error instanceof Error ? error : new Error('Tool authority lost'); domain.cancel()
+      }
+    }
+    const monitor = poll()
+    const deadline = setTimeout(() => { failure = new Error('Tool call exceeded its time limit'); domain.cancel() }, 60000)
+    try {
+      await domain.processId
+      const exitCode = await domain.completed
+      stdout += outDecoder.end(); stderr += errDecoder.end()
+      if (failure) throw failure
+      await this.authority.assertActive(assignment.grantId, lease.signal)
+      lease.assertCurrent(); lease.signal.throwIfAborted()
+      if (cache) secrets.push(...secretStrings(parseCredentialJSON(await readFile(cache, 'utf8'))))
+      for (const secret of secrets) { stdout = stdout.replaceAll(secret, '[REDACTED]'); stderr = stderr.replaceAll(secret, '[REDACTED]') }
+      return { exitCode, stdout, stderr }
+    }
+    finally {
+      clearTimeout(deadline); monitoring.abort(); lease.signal.removeEventListener('abort', stop)
+      domain.cancel(); await domain.completed; await monitor
+    }
+  }
+}

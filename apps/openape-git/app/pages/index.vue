@@ -8,6 +8,7 @@ interface Repo {
   id: string
   owner: string
   name: string
+  issueHomeOnly: number
   defaultBranch: string
   createdAt: number
 }
@@ -22,6 +23,8 @@ const repos = ref<Repo[]>([])
 const loading = ref(true)
 const newOwner = ref('')
 const newName = ref('')
+const issueHomeOnly = ref(false)
+const codeSourceUrl = ref('')
 const creating = ref(false)
 
 const identity = computed(() => {
@@ -74,9 +77,9 @@ async function onCreate() {
   try {
     const repo = await $fetch<Repo>('/api/repos', {
       method: 'POST',
-      body: { owner: newOwner.value, name: newName.value },
+      body: { owner: newOwner.value, name: newName.value, ...(issueHomeOnly.value ? { issueHomeOnly: true, codeSourceUrl: codeSourceUrl.value } : {}) },
     })
-    await navigateTo(`/${repo.owner}/${repo.name}`)
+    await navigateTo(`/${repo.owner}/${repo.name}${repo.issueHomeOnly ? '/issues' : ''}`)
   }
   catch (err: unknown) {
     const e = err as { data?: { statusMessage?: string }, message?: string }
@@ -96,6 +99,9 @@ async function onCreate() {
           🦍 ape-git
         </NuxtLink>
         <div class="flex items-center gap-3 text-sm text-zinc-400">
+          <NuxtLink v-if="useRuntimeConfig().public.issuesEnabled" to="/issues">
+            Issues
+          </NuxtLink>
           <span>{{ identity }}</span>
           <UButton size="xs" color="neutral" variant="ghost" @click="logout()">
             Logout
@@ -108,9 +114,11 @@ async function onCreate() {
           <h2 class="text-xl font-semibold mb-4">
             New repository
           </h2>
-          <form class="flex flex-col sm:flex-row gap-2" @submit.prevent="onCreate">
-            <UInput v-model="newOwner" placeholder="owner" class="sm:w-40" />
-            <UInput v-model="newName" placeholder="name" class="flex-1" />
+          <form class="flex flex-col gap-3" @submit.prevent="onCreate">
+            <label v-if="useRuntimeConfig().public.issuesEnabled" class="text-sm text-zinc-400"><input v-model="issueHomeOnly" type="checkbox"> Issues only; keep code at its current host</label>
+            <UInput v-if="issueHomeOnly" v-model="codeSourceUrl" type="url" aria-label="External code URL" placeholder="https://code.example/owner/project" required />
+            <UInput v-model="newOwner" aria-label="Repository owner" placeholder="owner" class="sm:w-40" />
+            <UInput v-model="newName" aria-label="Repository name" placeholder="name" class="flex-1" />
             <UButton type="submit" color="primary" :loading="creating" :disabled="!newOwner.trim() || !newName.trim()">
               Create
             </UButton>
@@ -131,10 +139,10 @@ async function onCreate() {
           <ul v-else class="divide-y divide-zinc-800 border border-zinc-800 rounded-lg">
             <li v-for="repo in repos" :key="repo.id">
               <NuxtLink
-                :to="`/${repo.owner}/${repo.name}`"
+                :to="`/${repo.owner}/${repo.name}${repo.issueHomeOnly ? '/issues' : ''}`"
                 class="flex items-center justify-between px-4 py-3 hover:bg-zinc-900"
               >
-                <span class="font-mono">{{ repo.owner }}/{{ repo.name }}</span>
+                <span class="font-mono">{{ repo.owner }}/{{ repo.name }}</span><span v-if="repo.issueHomeOnly" class="text-xs text-zinc-500">Issues · external code</span>
                 <span class="text-xs text-zinc-500">{{ repo.defaultBranch }}</span>
               </NuxtLink>
             </li>

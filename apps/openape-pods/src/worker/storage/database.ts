@@ -1,0 +1,427 @@
+import { migrateRemote } from '../remote/migration.ts'
+import { migrateChats } from '../master/chat-migration.ts'
+import { createHash, randomUUID } from 'node:crypto'
+import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, statfsSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
+
+export interface Pod {
+  id: string
+  name: string
+  bindingRevision: number
+  revision: number
+  lifecycle: 'active' | 'paused' | 'archived'
+  activeScript: string | null
+}
+export interface ScriptManifest {
+  schemaVersion: 1
+  contentHash: string
+  entrypoint: 'run.mjs'
+  dependencyLockHash: string
+  runtimeVersion: string
+  capabilities: string[]
+  triggers: ('manual' | 'schedule' | 'event')[]
+  inputSchemaHash: string
+  outputSchemaHash: string
+  checkpointSchemaVersion: number
+  assignmentRevision: number
+  effects: 'readOnly' | 'reconciledEffects'
+}
+export interface SourceInput { id: string, locator: string, version: string, content: string }
+export interface ClaimInput { id: string, matter: string, kind: 'finding' | 'question' | 'gap', text: string, sourceIds: string[], supersedes?: string }
+export interface ProgressInput {
+  podId: string
+  expectedRevision: number
+  checkpoint: Record<string, unknown>
+  sources: SourceInput[]
+  claims: ClaimInput[]
+}
+export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
+export const schemaVersion = 23
+export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
+
+function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !keys.includes(key))) throw new Error('Invalid object schema')
+}
+function text(value: unknown, name: string, max = 20000): asserts value is string {
+  if (typeof value !== 'string' || !value.trim() || value.length > max || value.includes('\0')) throw new Error(`Invalid ${name}`)
+}
+function integer(value: unknown): asserts value is number {
+  if (!Number.isSafeInteger(value) || (value as number) < 1) throw new Error('Invalid revision')
+}
+function hash(value: unknown): asserts value is string {
+  if (typeof value !== 'string' || !/^[a-f0-9]{64}$/.test(value)) throw new Error('Invalid content hash')
+}
+export function parseManifest(value: unknown): ScriptManifest {
+  record(value, ['schemaVersion', 'contentHash', 'entrypoint', 'dependencyLockHash', 'runtimeVersion', 'capabilities', 'triggers', 'inputSchemaHash', 'outputSchemaHash', 'checkpointSchemaVersion', 'assignmentRevision', 'effects'])
+  if (value.schemaVersion !== 1 || value.entrypoint !== 'run.mjs' || !['readOnly', 'reconciledEffects'].includes(value.effects as string)) throw new Error('Unsupported script contract')
+  for (const key of ['contentHash', 'dependencyLockHash', 'inputSchemaHash', 'outputSchemaHash']) hash(value[key])
+  text(value.runtimeVersion, 'runtime', 100); integer(value.checkpointSchemaVersion); integer(value.assignmentRevision)
+  if (!Array.isArray(value.capabilities) || value.capabilities.length > 100 || value.capabilities.some(cap => typeof cap !== 'string' || !/^[a-z][\w.-]{0,100}$/.test(cap))) throw new Error('Invalid capabilities')
+  if (!Array.isArray(value.triggers) || !value.triggers.length || value.triggers.some(trigger => !['manual', 'schedule', 'event'].includes(trigger))) throw new Error('Invalid triggers')
+  return structuredClone(value) as unknown as ScriptManifest
+}
+function syncDirectory(path: string): void {
+  const fd = openSync(path, 'r')
+  try { fsyncSync(fd) }
+  finally { closeSync(fd) }
+}
+function podFromRow(row: Record<string, unknown>): Pod {
+  return { id: row.id as string, name: row.name as string, bindingRevision: row.revision as number, revision: row.metadata_revision as number, lifecycle: row.lifecycle as Pod['lifecycle'], activeScript: row.active_script as string | null }
+}
+
+export class PodDatabase {
+  readonly db: DatabaseSync
+  readonly blobs: string
+  readonly path: string
+  private transactionDepth = 0
+  constructor(readonly root: string) {
+    this.path = join(root, 'control.sqlite')
+    if (existsSync(this.path)) {
+      const probe = new DatabaseSync(this.path, { readOnly: true })
+      try {
+        const version = probe.prepare('PRAGMA user_version').get()?.user_version as number
+        if (version > schemaVersion) throw new Error(`Database schema ${version} needs a newer application`)
+        if (probe.prepare('PRAGMA quick_check').get()?.quick_check !== 'ok') throw new Error('Database integrity check failed')
+      }
+      finally { probe.close() }
+    }
+    mkdirSync(root, { recursive: true, mode: 0o700 })
+    this.db = new DatabaseSync(this.path)
+    this.blobs = join(root, 'blobs')
+    try {
+      this.db.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;')
+      this.migrate()
+      this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;')
+      mkdirSync(this.blobs, { recursive: true, mode: 0o700 })
+    }
+    catch (error) { this.db.close(); throw error }
+  }
+
+  private migrate(): void {
+    const version = this.db.prepare('PRAGMA user_version').get()?.user_version as number
+    if (version === schemaVersion) return
+    if (version > 0) this.db.prepare('VACUUM INTO ?').run(join(this.root, `before-v${version}-${randomUUID()}.sqlite`))
+    this.transaction(() => {
+      if (version < 1) {
+        this.db.exec(`
+        CREATE TABLE pods(id TEXT PRIMARY KEY, name TEXT NOT NULL, assignment TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1, lifecycle TEXT NOT NULL DEFAULT 'paused' CHECK(lifecycle IN ('active','paused','archived')), active_script TEXT);
+        CREATE TABLE assignments(pod_id TEXT NOT NULL REFERENCES pods(id), revision INTEGER NOT NULL, body TEXT NOT NULL, PRIMARY KEY(pod_id,revision));
+        CREATE TABLE scripts(pod_id TEXT NOT NULL REFERENCES pods(id), hash TEXT NOT NULL, manifest TEXT NOT NULL, PRIMARY KEY(pod_id,hash));
+        CREATE TABLE checkpoints(pod_id TEXT PRIMARY KEY REFERENCES pods(id), revision INTEGER NOT NULL, body TEXT NOT NULL);
+        CREATE TABLE sources(pod_id TEXT NOT NULL REFERENCES pods(id), id TEXT NOT NULL, version TEXT NOT NULL, locator TEXT NOT NULL, hash TEXT NOT NULL, PRIMARY KEY(pod_id,id,version));
+        CREATE TABLE claims(pod_id TEXT NOT NULL REFERENCES pods(id), id TEXT NOT NULL, matter TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('finding','question','gap')), body TEXT NOT NULL, citations TEXT NOT NULL, supersedes TEXT, revision INTEGER NOT NULL, PRIMARY KEY(pod_id,id));
+      `)
+      }
+      if (version < 2) {
+        this.db.exec(`
+        CREATE TABLE settings(id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL, concurrency INTEGER NOT NULL CHECK(concurrency BETWEEN 1 AND 8));
+        INSERT INTO settings VALUES(1,1,2);
+        CREATE TABLE validations(pod_id TEXT NOT NULL, script_hash TEXT NOT NULL, assignment_revision INTEGER NOT NULL, resource_epoch INTEGER NOT NULL, evidence TEXT NOT NULL, PRIMARY KEY(pod_id,script_hash,assignment_revision,resource_epoch), FOREIGN KEY(pod_id,script_hash) REFERENCES scripts(pod_id,hash));
+        PRAGMA user_version=2;
+      `)
+      }
+      if (version < 3) {
+        this.db.exec(`
+        CREATE TABLE resources(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), revision INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('reference','tool','connection')), state TEXT NOT NULL CHECK(state IN ('ready','missing','expired','revoked','refreshRequired')), name TEXT NOT NULL, configuration TEXT NOT NULL);
+        CREATE TABLE resource_epochs(pod_id TEXT PRIMARY KEY REFERENCES pods(id), epoch INTEGER NOT NULL);
+        CREATE TABLE snapshot_sets(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), epoch INTEGER NOT NULL, manifest TEXT NOT NULL);
+        PRAGMA user_version=3;
+      `)
+      }
+      if (version < 4) {
+        this.db.exec(`
+        CREATE TABLE runs(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), script_hash TEXT NOT NULL, state TEXT NOT NULL, started_at INTEGER NOT NULL, finished_at INTEGER, summary TEXT NOT NULL, error TEXT, checkpoint_revision INTEGER NOT NULL, assignment_revision INTEGER NOT NULL);
+        CREATE TABLE run_leases(pod_id TEXT PRIMARY KEY REFERENCES pods(id), run_id TEXT NOT NULL UNIQUE REFERENCES runs(id), boot_id TEXT NOT NULL, heartbeat INTEGER NOT NULL, process_id INTEGER);
+        CREATE TABLE run_events(run_id TEXT NOT NULL REFERENCES runs(id), sequence INTEGER NOT NULL, type TEXT NOT NULL, data TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(run_id,sequence));
+        PRAGMA user_version=4;
+        `)
+      }
+      if (version < 5) {
+        this.db.exec(`
+          CREATE TABLE schedules(pod_id TEXT PRIMARY KEY REFERENCES pods(id),revision INTEGER NOT NULL,spec TEXT NOT NULL,enabled INTEGER NOT NULL DEFAULT 0,next_at INTEGER,error TEXT);
+          CREATE TABLE accepted_events(sequence INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL UNIQUE,pod_id TEXT NOT NULL REFERENCES pods(id),source TEXT NOT NULL,dedupe_key TEXT NOT NULL,payload TEXT NOT NULL,accepted_at INTEGER NOT NULL,state TEXT NOT NULL DEFAULT 'pending',run_id TEXT,error TEXT,UNIQUE(pod_id,source,dedupe_key));
+          CREATE INDEX ready_events ON accepted_events(state,pod_id,sequence);
+          CREATE TABLE run_inputs(run_id TEXT PRIMARY KEY REFERENCES runs(id),reason TEXT NOT NULL,event_ids TEXT NOT NULL);
+          CREATE TABLE reference_observations(pod_id TEXT NOT NULL REFERENCES pods(id),resource_id TEXT NOT NULL,revision INTEGER NOT NULL,hash TEXT NOT NULL,generation INTEGER NOT NULL,error TEXT,PRIMARY KEY(pod_id,resource_id));
+          PRAGMA user_version=5;
+        `)
+      }
+      if (version < 6) {
+        this.db.exec(`
+          CREATE TABLE execution_domains(path TEXT PRIMARY KEY,run_id TEXT NOT NULL REFERENCES runs(id),owner_pid INTEGER NOT NULL);
+          CREATE TABLE recovery_reviews(run_id TEXT PRIMARY KEY REFERENCES runs(id),state TEXT NOT NULL,error TEXT,checked_at INTEGER NOT NULL,request_event_id TEXT);
+          CREATE TABLE effect_ledger(pod_id TEXT NOT NULL REFERENCES pods(id),effect_key TEXT NOT NULL,operation TEXT NOT NULL,input_hash TEXT NOT NULL,run_id TEXT NOT NULL REFERENCES runs(id),state TEXT NOT NULL,result TEXT,PRIMARY KEY(pod_id,effect_key));
+          PRAGMA user_version=6;
+        `)
+      }
+      if (version < 7) {
+        this.db.exec(`
+CREATE TABLE mail_inventory(pod_id TEXT PRIMARY KEY REFERENCES pods(id), scope TEXT NOT NULL, phase TEXT NOT NULL, folder_index INTEGER NOT NULL, cursor TEXT, completed_at INTEGER);
+CREATE TABLE mail_items(pod_id TEXT NOT NULL REFERENCES pods(id), account TEXT NOT NULL, id TEXT NOT NULL, folder TEXT NOT NULL, source_id TEXT NOT NULL, conversation TEXT NOT NULL, metadata TEXT NOT NULL, PRIMARY KEY(pod_id,account,id));
+CREATE INDEX mail_conversation ON mail_items(pod_id,conversation);
+CREATE TABLE mail_receipts(pod_id TEXT NOT NULL REFERENCES pods(id), source_id TEXT NOT NULL, recipe TEXT NOT NULL, context_hash TEXT NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY(pod_id,source_id,recipe));
+CREATE TABLE mail_extractions(pod_id TEXT NOT NULL REFERENCES pods(id), source_id TEXT NOT NULL, parser TEXT NOT NULL, text_source_id TEXT NOT NULL, gap TEXT, PRIMARY KEY(pod_id,source_id,parser));
+CREATE TABLE mail_contexts(pod_id TEXT NOT NULL REFERENCES pods(id), hash TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(pod_id,hash));
+CREATE TABLE source_derivations(pod_id TEXT NOT NULL REFERENCES pods(id), source_id TEXT NOT NULL, original_id TEXT NOT NULL, operation TEXT NOT NULL, PRIMARY KEY(pod_id,source_id));
+PRAGMA user_version=7;
+`)
+      }
+      if (version < 8) {
+        this.db.exec(`
+CREATE TABLE master_inputs(id TEXT PRIMARY KEY,request_hash TEXT NOT NULL);
+CREATE TABLE master_domains(path TEXT PRIMARY KEY, owner_pid INTEGER NOT NULL);
+CREATE TABLE master_session(id INTEGER PRIMARY KEY CHECK(id=1),thread_id TEXT,active_turn TEXT,state TEXT NOT NULL,error TEXT);
+INSERT INTO master_session VALUES(1,NULL,NULL,'idle',NULL);
+CREATE TABLE master_messages(id TEXT PRIMARY KEY,role TEXT NOT NULL,body TEXT NOT NULL,state TEXT NOT NULL,created_at INTEGER NOT NULL);
+CREATE TABLE master_actions(id TEXT PRIMARY KEY,request_hash TEXT NOT NULL,request TEXT NOT NULL,state TEXT NOT NULL,result TEXT,error TEXT);
+CREATE TABLE script_drafts(id TEXT PRIMARY KEY,pod_id TEXT NOT NULL REFERENCES pods(id),revision INTEGER NOT NULL,assignment_revision INTEGER NOT NULL,code TEXT NOT NULL,capabilities TEXT NOT NULL,validation TEXT,script_hash TEXT);
+CREATE TABLE access_proposals(id TEXT PRIMARY KEY,pod_id TEXT NOT NULL REFERENCES pods(id),body TEXT NOT NULL,state TEXT NOT NULL);
+PRAGMA user_version=8;
+`)
+      }
+
+      if (version < 9) {
+        this.db.exec(`CREATE TABLE connections(id TEXT PRIMARY KEY,provider TEXT NOT NULL,account TEXT NOT NULL,state TEXT NOT NULL,error TEXT,metadata TEXT NOT NULL);
+CREATE TABLE onboarding(id INTEGER PRIMARY KEY CHECK(id=1),complete INTEGER NOT NULL);
+INSERT INTO onboarding VALUES(1,0);
+PRAGMA user_version=9;`)
+      }
+
+      if (version < 10) {
+        this.db.exec(`
+CREATE TABLE data_settings(id INTEGER PRIMARY KEY CHECK(id=1),limit_bytes INTEGER NOT NULL,used_bytes INTEGER NOT NULL,error TEXT);
+INSERT INTO data_settings VALUES(1,10737418240,0,NULL);
+CREATE TABLE deletion_jobs(pod_id TEXT PRIMARY KEY,payload TEXT NOT NULL,error TEXT);
+PRAGMA user_version=10;
+`)
+      }
+
+      if (version < 11) {
+        this.db.exec(`
+CREATE TABLE pod_organization(id INTEGER PRIMARY KEY CHECK(id=1),revision INTEGER NOT NULL);
+INSERT INTO pod_organization VALUES(1,1);
+CREATE TABLE pod_groups(id TEXT PRIMARY KEY,name TEXT NOT NULL,collapsed INTEGER NOT NULL CHECK(collapsed IN (0,1)));
+CREATE TABLE pod_memberships(pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DELETE CASCADE,group_id TEXT NOT NULL REFERENCES pod_groups(id) ON DELETE CASCADE);
+CREATE INDEX group_members ON pod_memberships(group_id);
+PRAGMA user_version=11;
+`)
+      }
+
+      if (version < 12) {
+        this.db.exec(`
+CREATE TABLE resources_v12(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), revision INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('reference','tool','connection','credential')), state TEXT NOT NULL CHECK(state IN ('ready','missing','expired','revoked','refreshRequired')), name TEXT NOT NULL, configuration TEXT NOT NULL);
+INSERT INTO resources_v12 SELECT * FROM resources;
+DROP TABLE resources;
+ALTER TABLE resources_v12 RENAME TO resources;
+CREATE TABLE script_credential_approvals(pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE,script_hash TEXT NOT NULL,assignment_revision INTEGER NOT NULL,resource_epoch INTEGER NOT NULL,PRIMARY KEY(pod_id,script_hash)); PRAGMA user_version=12;`)
+      }
+
+      if (version < 13) {
+        this.db.exec(`
+CREATE TABLE pod_variables(pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE,name TEXT NOT NULL,value TEXT NOT NULL,revision INTEGER NOT NULL,PRIMARY KEY(pod_id,name));
+CREATE TABLE master_contexts(scope TEXT PRIMARY KEY,thread_id TEXT,state TEXT NOT NULL,error TEXT);
+INSERT INTO master_contexts SELECT '',thread_id,state,error FROM master_session WHERE id=1;
+CREATE TABLE master_message_scopes(message_id TEXT PRIMARY KEY REFERENCES master_messages(id) ON DELETE CASCADE,scope TEXT NOT NULL);
+INSERT INTO master_message_scopes SELECT id,'' FROM master_messages;
+PRAGMA user_version=13;`)
+      }
+      if (version < 14) {
+        this.db.exec(`CREATE TABLE program_leases(pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DELETE CASCADE,session_id TEXT NOT NULL UNIQUE,application_id TEXT NOT NULL,epoch INTEGER NOT NULL,assignment_revision INTEGER NOT NULL); PRAGMA user_version=14;`)
+      }
+
+      if (version < 15) {
+        this.db.exec(`
+CREATE TABLE master_creations(id TEXT PRIMARY KEY,pod_id TEXT UNIQUE REFERENCES pods(id) ON DELETE CASCADE);
+CREATE TABLE pod_chat_origins(pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DELETE CASCADE,message_id TEXT NOT NULL REFERENCES master_messages(id) ON DELETE CASCADE);
+CREATE TABLE pod_descriptions(pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DELETE CASCADE,body TEXT NOT NULL DEFAULT '',revision INTEGER NOT NULL DEFAULT 0,covered_row INTEGER NOT NULL DEFAULT 0,requested_row INTEGER NOT NULL DEFAULT 0,state TEXT NOT NULL DEFAULT 'pending',error TEXT,updated_at INTEGER,work_body TEXT NOT NULL DEFAULT '',work_row INTEGER NOT NULL DEFAULT 0,work_offset INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE summary_domains(path TEXT PRIMARY KEY,owner_pid INTEGER NOT NULL);
+PRAGMA user_version=15;`)
+      }
+      if (version < 16) this.db.exec('ALTER TABLE pods ADD COLUMN metadata_revision INTEGER NOT NULL DEFAULT 1; UPDATE pods SET metadata_revision=revision; PRAGMA user_version=16;')
+      if (version < 17) {
+        this.db.exec(`
+CREATE TABLE resources_v17(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), revision INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('reference','directory','tool','connection','credential')), state TEXT NOT NULL CHECK(state IN ('ready','missing','expired','revoked','refreshRequired')), name TEXT NOT NULL, configuration TEXT NOT NULL);
+INSERT INTO resources_v17 SELECT * FROM resources ORDER BY rowid;
+DROP TABLE resources;
+ALTER TABLE resources_v17 RENAME TO resources;
+PRAGMA user_version=17;`)
+      }
+
+      if (version < 18) {
+        this.db.exec(`
+CREATE TABLE draft_packages(draft_id TEXT PRIMARY KEY REFERENCES script_drafts(id) ON DELETE CASCADE, manifest TEXT NOT NULL);
+CREATE TABLE dependency_sets(pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE,hash TEXT NOT NULL,manifest TEXT NOT NULL,lockfile TEXT NOT NULL,files TEXT NOT NULL,PRIMARY KEY(pod_id,hash),UNIQUE(pod_id,manifest));
+CREATE TABLE script_dependencies(pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE,script_hash TEXT NOT NULL,dependency_hash TEXT NOT NULL,PRIMARY KEY(pod_id,script_hash),FOREIGN KEY(pod_id,dependency_hash) REFERENCES dependency_sets(pod_id,hash));
+CREATE TABLE dependency_domains(path TEXT PRIMARY KEY,owner_pid INTEGER NOT NULL);
+PRAGMA user_version=18;`)
+      }
+
+      if (version < 19) this.db.exec('ALTER TABLE onboarding ADD COLUMN default_owner TEXT REFERENCES connections(id); PRAGMA user_version=19;')
+      if (version < 20) {
+        this.db.exec(`
+CREATE TABLE workflows(id TEXT PRIMARY KEY, revision INTEGER NOT NULL, name TEXT NOT NULL, nodes TEXT NOT NULL, schedule TEXT, enabled INTEGER NOT NULL DEFAULT 0, next_at INTEGER, paused INTEGER NOT NULL DEFAULT 1, mail TEXT, archived INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE workflow_members(workflow_id TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE, pod_id TEXT NOT NULL REFERENCES pods(id), PRIMARY KEY(workflow_id,pod_id));
+CREATE TABLE workflow_runs(id TEXT PRIMARY KEY, workflow_id TEXT NOT NULL REFERENCES workflows(id), revision INTEGER NOT NULL, definition TEXT NOT NULL, trigger TEXT NOT NULL, state TEXT NOT NULL, reason TEXT, started_at INTEGER NOT NULL, finished_at INTEGER, paused INTEGER NOT NULL DEFAULT 0);
+CREATE UNIQUE INDEX workflow_active ON workflow_runs(workflow_id) WHERE finished_at IS NULL;
+CREATE TABLE workflow_nodes(workflow_run_id TEXT NOT NULL REFERENCES workflow_runs(id), pod_id TEXT NOT NULL REFERENCES pods(id), script_hash TEXT, assignment_revision INTEGER NOT NULL, resource_epoch INTEGER NOT NULL, state TEXT NOT NULL, run_id TEXT REFERENCES runs(id), reason TEXT, output TEXT, PRIMARY KEY(workflow_run_id,pod_id));
+CREATE TABLE workflow_reservations(pod_id TEXT PRIMARY KEY REFERENCES pods(id), workflow_run_id TEXT NOT NULL REFERENCES workflow_runs(id));
+CREATE TABLE workflow_attempts(run_id TEXT PRIMARY KEY REFERENCES runs(id), workflow_run_id TEXT NOT NULL REFERENCES workflow_runs(id), pod_id TEXT NOT NULL REFERENCES pods(id));
+CREATE TABLE workflow_mail_scopes(id TEXT PRIMARY KEY, mailbox TEXT NOT NULL, cursor TEXT, baseline_at INTEGER NOT NULL, initialized INTEGER NOT NULL DEFAULT 0, restored INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE workflow_mail_pending(scope_id TEXT NOT NULL REFERENCES workflow_mail_scopes(id), message_id TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(scope_id,message_id));
+CREATE TABLE workflow_mail_processed(scope_id TEXT NOT NULL REFERENCES workflow_mail_scopes(id), message_id TEXT NOT NULL, PRIMARY KEY(scope_id,message_id));
+CREATE TABLE workflow_mail_participants(scope_id TEXT NOT NULL REFERENCES workflow_mail_scopes(id), conversation TEXT NOT NULL, address TEXT NOT NULL, PRIMARY KEY(scope_id,conversation,address));
+CREATE TABLE workflow_mail_batches(id TEXT PRIMARY KEY REFERENCES workflow_runs(id), scope_id TEXT NOT NULL REFERENCES workflow_mail_scopes(id), configuration TEXT NOT NULL, state TEXT NOT NULL);
+CREATE TABLE workflow_mail_audit(sequence INTEGER PRIMARY KEY AUTOINCREMENT, batch_id TEXT NOT NULL REFERENCES workflow_mail_batches(id), effect_key TEXT NOT NULL, kind TEXT NOT NULL, body TEXT NOT NULL, at INTEGER NOT NULL);
+PRAGMA user_version=20;`)
+      }
+
+      if (version < 21) { migrateChats(this.db); this.db.exec('PRAGMA user_version=21;') }
+      if (version < 22) { migrateRemote(this.db); this.db.exec('PRAGMA user_version=22;') }
+      if (version < 23) this.db.exec('ALTER TABLE pod_descriptions ADD COLUMN manual INTEGER NOT NULL DEFAULT 0; PRAGMA user_version=23;')
+    })
+  }
+
+  transaction<T>(operation: () => T): T {
+    const depth = this.transactionDepth
+    const savepoint = `pods_transaction_${depth}`
+    this.db.exec(depth ? `SAVEPOINT ${savepoint}` : 'BEGIN IMMEDIATE')
+    this.transactionDepth++
+    try {
+      const result = operation()
+      this.db.exec(depth ? `RELEASE ${savepoint}` : 'COMMIT')
+      return result
+    }
+    catch (error) {
+      this.db.exec(depth ? `ROLLBACK TO ${savepoint}; RELEASE ${savepoint}` : 'ROLLBACK')
+      throw error
+    }
+    finally { this.transactionDepth-- }
+  }
+
+  close(): void { this.db.close() }
+  listPods(): Pod[] { return this.db.prepare('SELECT * FROM pods ORDER BY rowid').all().map(podFromRow) }
+  getPod(id: string): Pod {
+    const row = this.db.prepare('SELECT * FROM pods WHERE id=?').get(id)
+    if (!row) throw new Error('Pod not found')
+    return podFromRow(row)
+  }
+
+  createPod(input: unknown): Pod {
+    record(input, ['name']); text(input.name, 'name', 100)
+    const { name } = input
+    const id = randomUUID()
+    this.transaction(() => {
+      this.db.prepare('INSERT INTO pods(id,name,assignment) VALUES(?,?,?)').run(id, name, '')
+      this.db.prepare('INSERT INTO checkpoints VALUES(?,?,?)').run(id, 0, '{}')
+    })
+    return this.getPod(id)
+  }
+
+  updatePod(id: string, expectedRevision: number, input: unknown): Pod {
+    record(input, ['name', 'lifecycle']); text(input.name, 'name', 100); integer(expectedRevision)
+    if (!['active', 'paused', 'archived'].includes(input.lifecycle as string)) throw new Error('Invalid lifecycle')
+    const { name, lifecycle } = input
+    this.transaction(() => {
+      const update = this.db.prepare('UPDATE pods SET name=?,lifecycle=?,metadata_revision=metadata_revision+1 WHERE id=? AND metadata_revision=?').run(name, lifecycle as string, id, expectedRevision)
+      if (update.changes !== 1) throw new Error('Stale pod revision')
+    })
+    return this.getPod(id)
+  }
+
+  assertStorage(additionalBytes = 0): void {
+    const policy = this.db.prepare('SELECT * FROM data_settings WHERE id=1').get()!
+    if (policy.error) throw new Error(policy.error as string)
+    if ((policy.used_bytes as number) + additionalBytes >= (policy.limit_bytes as number)) throw new Error('Storage limit reached; clean unused data or raise the limit')
+    const disk = statfsSync(this.root)
+    if (disk.bavail * disk.bsize - additionalBytes < 256 * 1024 * 1024) throw new Error('Insufficient free disk space; at least 256 MiB must remain')
+  }
+
+  putBlob(content: string | Buffer, observe: (point: CommitPoint) => void = () => {}): string {
+    const key = digest(content); const target = join(this.blobs, key)
+    if (existsSync(target)) {
+      if (digest(readFileSync(target)) !== key) throw new Error('Corrupt stored blob')
+      return key
+    }
+    this.assertStorage(Buffer.byteLength(content))
+    const stage = join(this.blobs, `.stage-${randomUUID()}`)
+    const fd = openSync(stage, 'wx', 0o600)
+    try { writeFileSync(fd, content); fsyncSync(fd) }
+    finally { closeSync(fd) }
+    observe('staged')
+    renameSync(stage, target); syncDirectory(this.blobs); this.db.prepare('UPDATE data_settings SET used_bytes=used_bytes+? WHERE id=1').run(Buffer.byteLength(content)); observe('renamed')
+    return key
+  }
+
+  readBlob(key: string): Buffer {
+    hash(key)
+    const content = readFileSync(join(this.blobs, key))
+    if (digest(content) !== key) throw new Error('Corrupt stored blob')
+    return content
+  }
+
+  storeScript(podId: string, input: unknown, artifact: string): ScriptManifest {
+    const manifest = parseManifest(input)
+    const pod = this.getPod(podId)
+    if (manifest.assignmentRevision !== pod.bindingRevision) throw new Error('Stale script binding')
+    if (digest(artifact) !== manifest.contentHash) throw new Error('Artifact hash mismatch')
+    const existing = this.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(podId, manifest.contentHash)
+    if (existing && existing.manifest !== JSON.stringify(manifest)) throw new Error('Immutable script manifest conflict')
+    this.putBlob(artifact)
+    this.db.prepare('INSERT OR IGNORE INTO scripts VALUES(?,?,?)').run(podId, manifest.contentHash, JSON.stringify(manifest))
+    return manifest
+  }
+
+  checkpoint(podId: string): { revision: number, body: Record<string, unknown> } {
+    const row = this.db.prepare('SELECT * FROM checkpoints WHERE pod_id=?').get(podId)
+    if (!row) throw new Error('Pod checkpoint not found')
+    return { revision: row.revision as number, body: JSON.parse(row.body as string) }
+  }
+
+  commitProgress(input: ProgressInput, observe: (point: CommitPoint) => void = () => {}, publish: (revision: number) => void = () => {}): number {
+    this.getPod(input.podId)
+    if (JSON.stringify(input).length > 1024 * 1024) throw new Error('Progress exceeds frame limit')
+    const sources = input.sources.map((source) => {
+      text(source.id, 'source ID'); text(source.version, 'source version'); text(source.locator, 'source locator'); text(source.content, 'source content', 1024 * 1024)
+      return { ...source, hash: this.putBlob(source.content, observe) }
+    })
+    const revision = this.transaction(() => {
+      if (this.checkpoint(input.podId).revision !== input.expectedRevision) throw new Error('Stale checkpoint revision')
+      for (const source of sources) {
+        const prior = this.db.prepare('SELECT hash,locator FROM sources WHERE pod_id=? AND id=? AND version=?').get(input.podId, source.id, source.version)
+        if (prior && (prior.hash !== source.hash || prior.locator !== source.locator)) throw new Error('Source version conflict')
+        this.db.prepare('INSERT OR IGNORE INTO sources VALUES(?,?,?,?,?)').run(input.podId, source.id, source.version, source.locator, source.hash)
+      }
+      for (const claim of input.claims) this.insertClaim(input.podId, input.expectedRevision + 1, claim)
+      this.db.prepare('UPDATE checkpoints SET revision=revision+1,body=? WHERE pod_id=?').run(JSON.stringify(input.checkpoint), input.podId)
+      publish(input.expectedRevision + 1)
+      observe('beforeCommit')
+      return input.expectedRevision + 1
+    })
+    observe('committed')
+    return revision
+  }
+
+  private insertClaim(podId: string, revision: number, claim: ClaimInput): void {
+    text(claim.id, 'claim ID'); text(claim.matter, 'matter'); text(claim.text, 'claim')
+    if (!['finding', 'question', 'gap'].includes(claim.kind) || !Array.isArray(claim.sourceIds) || !claim.sourceIds.length) throw new Error('Claim needs sources and a valid kind')
+    const citations = claim.sourceIds.map((id) => {
+      const row = this.db.prepare('SELECT id,version,hash,locator FROM sources WHERE pod_id=? AND id=? ORDER BY rowid DESC LIMIT 1').get(podId, id)
+      if (!row) throw new Error('Claim references unavailable evidence')
+      return row
+    })
+    if (claim.supersedes && !this.db.prepare('SELECT id FROM claims WHERE pod_id=? AND id=? AND matter=?').get(podId, claim.supersedes, claim.matter)) throw new Error('Superseded claim not found in matter')
+    const prior = this.db.prepare('SELECT * FROM claims WHERE pod_id=? AND id=?').get(podId, claim.id)
+    const values = [podId, claim.id, claim.matter, claim.kind, claim.text, JSON.stringify(citations), claim.supersedes ?? null, revision]
+    if (prior) {
+      if (prior.body !== claim.text || prior.citations !== JSON.stringify(citations) || prior.kind !== claim.kind || prior.matter !== claim.matter || prior.supersedes !== (claim.supersedes ?? null)) throw new Error('Immutable claim conflict')
+      return
+    }
+    this.db.prepare('INSERT INTO claims VALUES(?,?,?,?,?,?,?,?)').run(...values)
+  }
+
+  knowledge(podId: string): Record<string, unknown>[] {
+    this.getPod(podId)
+    return this.db.prepare('SELECT * FROM claims WHERE pod_id=? ORDER BY revision,id').all(podId).map(row => ({ ...row, citations: JSON.parse(row.citations as string) }))
+  }
+}

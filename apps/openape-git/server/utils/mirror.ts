@@ -36,6 +36,7 @@ export async function pushRefToMirror(
   mirror: { url: string, username: string, token: string },
   ref: string,
   exec: GitRunner = gitRunner,
+  expected?: { sourceSha: string | null, targetSha: string | null },
 ): Promise<MirrorPushResult> {
   const startedAt = Date.now()
   const args = [
@@ -48,8 +49,9 @@ export async function pushRefToMirror(
     // No --force, no --mirror: the target is written to directly as well, so a
     // divergence must fail rather than overwrite, and its own refs must survive.
     'push',
+    ...(expected?.sourceSha === null ? [`--force-with-lease=${ref}:${expected.targetSha ?? ''}`] : []),
     mirror.url,
-    `${ref}:${ref}`,
+    `${expected ? expected.sourceSha ?? '' : ref}:${ref}`,
   ]
   const env = {
     ...process.env,
@@ -72,4 +74,38 @@ export async function pushRefToMirror(
       durationMs: Date.now() - startedAt,
     }
   }
+}
+
+export interface MirrorCredential { url: string, username: string, token: string }
+
+/** Raw object IDs preserve annotated tags, unlike rev-parse ref^{commit}. */
+export async function localMirrorRefs(dir: string): Promise<Map<string, string>> {
+  const { stdout } = await run('git', ['for-each-ref', '--format=%(objectname) %(refname)', 'refs/heads', 'refs/tags'], { cwd: dir })
+  return parseMirrorRefs(stdout)
+}
+
+export function parseMirrorRefs(output: string): Map<string, string> {
+  return new Map(output.trim().split('\n').flatMap((line) => {
+    const [sha, ref] = line.trim().split(/\s+/)
+    return sha && ref && /^[a-f0-9]{40,64}$/.test(sha) && shouldMirrorRef(ref) && !ref.endsWith('^{}') ? [[ref, sha]] : []
+  }))
+}
+
+export async function remoteMirrorRefs(dir: string, mirror: MirrorCredential): Promise<Map<string, string>> {
+  try {
+    const { stdout } = await run('git', ['-c', 'credential.helper=', '-c', `credential.helper=${CREDENTIAL_HELPER}`, 'ls-remote', '--refs', mirror.url, 'refs/heads/*', 'refs/tags/*'], {
+      cwd: dir,
+      timeout: 30_000,
+      env: { ...process.env, APE_GIT_MIRROR_USER: mirror.username, APE_GIT_MIRROR_TOKEN: mirror.token, GIT_TERMINAL_PROMPT: '0' },
+    })
+    return parseMirrorRefs(stdout)
+  }
+  catch (error) {
+    throw new Error(redactToken((error as Error).message, mirror.token).slice(0, 2000))
+  }
+}
+
+/** Only delete a previously replicated ref whose target has not changed. */
+export function mayDeleteMirrorRef(lastSuccessfulSha: string | null, targetSha: string | null): boolean {
+  return targetSha === null || (lastSuccessfulSha !== null && lastSuccessfulSha === targetSha)
 }

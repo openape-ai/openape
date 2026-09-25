@@ -14,7 +14,7 @@
     "test": "turbo run test",
     "e2e": "node scripts/e2e.mjs",
     "dev": "turbo run dev",
-    "graph": "node scripts/dependency-graph.mjs",
+    "graph": "node scripts/workspace-map.mjs",
     "knip": "node scripts/knip-workspaces.mjs",
     "changeset": "changeset",
     "version-packages": "changeset version",
@@ -29,7 +29,13 @@
     "seed:shapes": "tsx scripts/seed-shapes.ts",
     "prepare": "git config core.hooksPath .githooks || true",
     "deploy:docs-site": "node scripts/deploy-docs-site.mjs",
-    "guides": "bash compose/demo/run.sh"
+    "guides": "bash compose/demo/run.sh",
+    "repo:status": "node scripts/repository.mjs",
+    "check:affected": "node scripts/check.mjs affected",
+    "check:ci": "node scripts/check.mjs ci",
+    "docs:check": "node scripts/workspace-map.mjs --check",
+    "git:cli": "node scripts/ape-git.mjs",
+    "doctor": "node scripts/doctor.mjs"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",
@@ -40,6 +46,7 @@
     "drizzle-orm": "^0.45.2",
     "eslint": "^9.39.4",
     "knip": "^6.23.0",
+    "nostics": "1.2.0",
     "smol-toml": "^1.7.0",
     "tsx": "^4.22.4",
     "turbo": "^2.10.0"

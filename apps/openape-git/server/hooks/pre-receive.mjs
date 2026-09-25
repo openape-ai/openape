@@ -62,9 +62,14 @@ function main() {
     process.exit(1)
   }
 
+  const protectedRefs = new Set(JSON.parse(process.env.APE_GIT_PROTECTED_REFS || '[]'))
   const updates = []
   for (const line of readFileSync(0, 'utf8').split('\n')) {
     const [oldSha, newSha, ref] = line.split(' ')
+    if (ref && protectedRefs.has(ref)) {
+      process.stderr.write(`ape-git: push rejected - protected branch ${ref}; use a checked pull request merge\n`)
+      process.exit(1)
+    }
     if (oldSha && newSha && ref && !ZERO_SHA.test(newSha)) updates.push(newSha)
   }
 

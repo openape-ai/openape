@@ -3,7 +3,7 @@ import { createError, defineEventHandler, getRouterParam, readBody } from 'h3'
 import { ulid } from 'ulid'
 import { useDb } from '../../../../database/drizzle'
 import { mirrors } from '../../../../database/schema'
-import { findRepo } from '../../../../utils/repos'
+import { findRepo, requireGitRepository } from '../../../../utils/repos'
 
 /**
  * POST /api/repos/:owner/:name/mirrors { url, username, token } — registers a
@@ -18,6 +18,7 @@ export default defineEventHandler(async (event) => {
   const repo = await findRepo(owner, name)
   if (!repo || repo.ownerEmail !== caller.email)
     throw createError({ statusCode: 404, statusMessage: 'repo not found' })
+  requireGitRepository(repo)
 
   const body = await readBody<{ url?: string, username?: string, token?: string }>(event)
   const url = body?.url?.trim() ?? ''

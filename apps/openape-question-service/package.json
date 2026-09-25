@@ -1,6 +1,6 @@
 {
   "name": "@openape-question-service/app",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "private": true,
   "type": "module",
   "scripts": {
@@ -19,6 +19,7 @@
     "@openape/nuxt-auth-sp": "workspace:*",
     "@openape/sp-tasks": "workspace:*",
     "drizzle-orm": "catalog:",
+    "h3": "catalog:",
     "nuxt": "catalog:",
     "tailwindcss": "catalog:"
   },

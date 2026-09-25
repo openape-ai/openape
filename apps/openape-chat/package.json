@@ -1,7 +1,7 @@
 {
   "name": "@openape/chat",
   "type": "module",
-  "version": "0.2.26",
+  "version": "0.2.27",
   "private": true,
   "scripts": {
     "postinstall": "nuxt prepare",
@@ -21,6 +21,7 @@
     "@openape/nuxt-auth-sp": "workspace:*",
     "@vite-pwa/nuxt": "catalog:",
     "drizzle-orm": "catalog:",
+    "h3": "catalog:",
     "jose": "catalog:",
     "marked": "catalog:",
     "nuxt": "catalog:",
