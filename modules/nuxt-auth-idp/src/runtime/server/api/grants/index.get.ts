@@ -1,3 +1,4 @@
+import { hasBrokerStore } from '../../utils/broker-store'
 import type { GrantStatus, OpenApeGrant } from '@openape/core'
 import { createError, defineEventHandler, getQuery } from 'h3'
 import { expireStaleGrants } from '../../utils/expire-stale-grants'
@@ -54,22 +55,27 @@ export default defineEventHandler(async (event) => {
 
   // Explicit `?requester=` filter: only allowed for a requester the caller may
   // see — otherwise 403 (no cross-user enumeration).
+  const brokerVisibility: { brokerOwner?: string | null } = {}
+  if (hasBrokerStore()) {
+    const owner = await userStore.findByEmail(email)
+    brokerVisibility.brokerOwner = owner?.isActive && owner.type !== 'agent' && !owner.owner && !bearerPayload?.delegation_grant && bearerPayload?.act !== 'agent' ? email : null
+  }
   if (requester) {
-    if (!requesters.includes(requester)) {
+    if (!requesters.includes(requester) && !hasBrokerStore()) {
       throw createError({ statusCode: 403, message: 'Not authorized to list grants for this requester' })
     }
-    const page = await grantStore.listGrants({ limit, cursor, status, requester })
+    const page = await grantStore.listGrants({ limit, cursor, status, ...(hasBrokerStore() ? { requester: requesters, requesterFilter: requester, ...brokerVisibility } : { requester }) })
     return { ...page, data: await expireStaleGrants(page.data, grantStore) }
   }
 
   // Default paginated case: delegate to DB-level query with IN clause
   if (!section) {
-    const page = await grantStore.listGrants({ limit, cursor, status, requester: requesters })
+    const page = await grantStore.listGrants({ limit, cursor, status, requester: requesters, ...brokerVisibility })
     return { ...page, data: await expireStaleGrants(page.data, grantStore) }
   }
 
   // Section queries need all user grants, then filter in-memory
-  const { data: rawOwned } = await grantStore.listGrants({ requester: requesters, limit: 10000 })
+  const { data: rawOwned } = await grantStore.listGrants({ requester: requesters, limit: 10000, ...brokerVisibility })
   const owned = await expireStaleGrants(rawOwned, grantStore)
 
   // section=active

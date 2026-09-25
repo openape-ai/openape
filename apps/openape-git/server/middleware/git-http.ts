@@ -8,6 +8,7 @@ import { runGitHttpBackend } from '../utils/git-cgi'
 import { useGrantStore } from '../utils/grant-store'
 import { internalToken, pushEventUrl } from '../utils/internal-token'
 import { createRateLimiter } from '../utils/rate-limit'
+import { protectionsFor } from '../utils/branch-protection'
 import { findRepo, reposRoot } from '../utils/repos'
 
 // Grant-gated git smart HTTP: /<owner>/<name>.git/* → rate limit → DDISA-JWT
@@ -77,6 +78,8 @@ export default defineEventHandler(async (event) => {
   if (!accessAllows(access, required))
     return deny(event, 403, `ape-git: grant for ${email} on ${parsed.owner}/${parsed.name} is git:${access} - ${service ?? 'push'} denied`)
 
+  if (repo.issueHomeOnly) return deny(event, 409, 'ape-git: issue-only home; code is hosted externally')
+
   await runGitHttpBackend(event.node.req, event.node.res, {
     projectRoot: reposRoot(),
     pathInfo: pathname,
@@ -88,6 +91,7 @@ export default defineEventHandler(async (event) => {
       APE_GIT_AUTH_ACT: identity.act,
       APE_GIT_DELEGATOR: identity.delegator ?? '',
       APE_GIT_ACCESS: access,
+      APE_GIT_PROTECTED_REFS: JSON.stringify((await protectionsFor(repo.id)).filter(p => p.enabled).map(p => `refs/heads/${p.branch}`)),
       // Webhook firing: post-receive reports back over loopback.
       APE_GIT_REPO_OWNER: parsed.owner,
       APE_GIT_REPO_NAME: parsed.name,

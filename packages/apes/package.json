@@ -1,6 +1,6 @@
 {
   "name": "@openape/apes",
-  "version": "1.35.4",
+  "version": "1.36.0",
   "turbo": {
     "tags": [
       "publishable"
@@ -16,6 +16,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./assigned": {
+      "import": "./dist/shapes/assigned.js",
+      "types": "./dist/shapes/assigned.d.ts"
     }
   },
   "files": [

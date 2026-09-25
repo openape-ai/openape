@@ -1,0 +1,391 @@
+{
+  "title": "OpenApe Pods · User handbook",
+  "subtitle": "Set up your first Pod, verify a manual result and stay in control of automation.",
+  "sections": [
+    {
+      "id": "start",
+      "title": "What Pods does and how to get it",
+      "paragraphs": [
+        "OpenApe Pods runs repeatable tasks on your Mac. Configure a Pod directly or describe the task to connected Codex. Each Pod keeps its own workspace, permissions, results and history. Verify a real run before relying on scheduled execution.",
+        "Availability — September 2026: Pods is an internal pilot, not a publicly released download. A Developer ID signed and Apple-notarized internal app exists, but public distribution is not approved. This guide provides no public download link or release date. If you have not been given an authorized internal build, you cannot complete installation from this page.",
+        "If you have received that build, open its DMG, copy OpenApe Pods into Applications and launch it. The app bundles its runtime; no separate Node.js or Codex installation is needed. Execution is currently restricted to Apple Silicon and Darwin 25.6.0 (verified on macOS 26.6.2). Other OS/CPU combinations display an error and block execution; the packaging minimum is not a promise of runtime support.",
+        "For a first task, use a small folder of non-sensitive sample files and read-only access. Keep automatic execution off until you have checked a manual result. All screenshots in this guide use isolated synthetic data. They illustrate the current interface, not a successful connection to your accounts."
+      ],
+      "steps": []
+    },
+    {
+      "id": "accounts",
+      "title": "Connect your personal accounts",
+      "paragraphs": [
+        "Open App settings → Your accounts. Connect your DDISA account to decide permission requests and your Codex / GPT account for LLM calls. Optional TypeSafe / Jev setup is directly in App settings.",
+        "Pods finds your identity provider through the DDISA record of your email domain. Every Pod, permission and mobile device uses this one DDISA account; there is nothing to select. Pod agents are not your accounts and are never listed here. Switching to another DDISA account gives your Pods new agents, and their permissions must be granted again.",
+        "Other services are configured per Pod: application sign-in belongs in Permissions, and tokens or passwords belong in Variables and secrets. You do not need a personal account or an additional sign-in at pods.openape.ai."
+      ],
+      "steps": [
+        "Under Your DDISA account, enter your email and choose Sign in. Complete the browser flow and return to Pods; the account shows Signed in.",
+        "Under Codex / GPT account, choose Sign in. Complete the offered browser flow and check Signed in before using AI-powered scripts.",
+        "If an account later shows Expired or an error, choose Sign in again on the same account. Enter another email only if you want to switch accounts, and review Confirm switch.",
+        "Choose Continue to workspace. To change the interface language, use App settings → Language."
+      ],
+      "image": "handbook-setup.png"
+    },
+    {
+      "id": "jev-decisions",
+      "title": "Structured decisions with Jev",
+      "paragraphs": [
+        "Connect TypeSafe with an API key in desktop App settings. The key is verified using model discovery, stored encrypted on this Mac, and never given to scripts or Codex. Replacing the key preserves the connection. Codex configures the Pod assignment through the resources API.",
+        "Codex writes the script; Jev evaluates bounded semantic questions at runtime. Use ordinary code for exact rules, Jev for Choice, Score or Noul decisions, and an explicit agent.run call for generated text. A Jev-only script needs no active Codex account. Synthetic validation proves the script contract, not decision quality.",
+        "Review what text the script sends to TypeSafe. Preserve ambiguous decisions for review and test German/English examples before relying on automation. Retries may incur additional charges; history shows successful evaluation usage, model, attempts and duration."
+      ],
+      "steps": [
+        "Enter the API key in App settings → TypeSafe AI - Jev - API Key.",
+        "Ask Codex to configure Jev through the resources API with a pinned model such as jev-1.13.0 and an attempt budget (default 20 per run), then declare jev.evaluate in the script capabilities. Script and Permissions contain no Jev setup panel.",
+        "Validate, inspect the script and run once. Connecting alone never grants a Pod access. Central web shows availability; enter keys on the owning desktop."
+      ],
+      "code": "const result = await context.jev.evaluate({\n  state: context.variables.sampleMessage,\n  questions: { relevant: { type: 'noul', instructions: 'Is this a support request?' } },\n})\nconst relevance = result.answers.relevant.noul"
+    },
+    {
+      "id": "master",
+      "title": "Create your first Pod",
+      "paragraphs": [
+        "Choose New pod, enter a name and save. Edit its purpose directly under Overview → Description. Describe the source, desired result and how you will recognize success.",
+        "For assisted setup, connect Codex under App settings → Work from Codex, restart Codex and give it your task there. Pods contains management forms and execution history; conversations stay in Codex.",
+        "Connected Codex can configure access, save and validate a script, activate it and enable a schedule when requested. Its confirmation policy belongs to Codex. A response saying ready is not evidence of a completed run."
+      ],
+      "steps": [
+        "Create the Pod or ask connected Codex to create it.",
+        "Provide ordinary settings in Codex; transfer secrets through OpenApe Secrets or enter them in Variables and secrets.",
+        "Ask Codex to configure the required access and validate the saved script.",
+        "Inspect the actual saved script, assignments and schedule in Pods.",
+        "Check a real run and its external result before relying on the automation."
+      ]
+    },
+    {
+      "id": "identity",
+      "title": "Review the Pod identity and provider permission",
+      "paragraphs": [
+        "Open the Pod’s Settings → Pod identity. Permission decisions shows your DDISA account. Pod agent identifies the agent acting for this Pod. It is created when you first review permissions; Not created yet before that step is expected.",
+        "Before the first Pod agent is created, Pods asks once for permission under Agent provider permission. Choose Allow requests from this provider, check https://pods.openape.ai, agent domain pods.openape.ai and the deciding account, then choose Confirm permission. No additional sign-in at pods.openape.ai is required. The provider creates agents and submits requests; you decide which actions to approve.",
+        "This permission belongs to your DDISA account and applies to all your Pods. Although you manage it inside a Pod, it is not limited to that Pod. It does not give the provider the right to approve actions or activate automation.",
+        "Existing Pods keep their agent, key and grants. Identity details shows the agent and decision providers for diagnosis. A Pod’s agent changes only when you switch to another DDISA account."
+      ],
+      "steps": [],
+      "image": "handbook-identity.png"
+    },
+    {
+      "id": "access",
+      "title": "Allow only the access your task needs",
+      "paragraphs": [
+        "Permissions separates folders, applications and HTTP destinations. Manage them directly or ask connected Codex to configure them. Provider sign-in and authentic external grants remain required.",
+        "Folder access applies to original files and subfolders. Read and write permits changes and deletion. Choose Read for your first sample task. External setup terminals and Play-launched applications run with your Mac user’s permissions; they do not gain the script’s folder sandbox.",
+        "After changing assignments, a Pod is paused and its previous script validation no longer applies. Return to the script, validate the new setup with a manual run and resume automation only when ready."
+      ],
+      "steps": [
+        "Folders: use +, choose a folder and confirm Read or Read and write in the native dialog. Verify the path and access in the list. A missing or replaced folder must be assigned again.",
+        "Applications: use + to select an installed app or CLI. Configure its own account through Open Terminal.app or Play. Check the account inside that application. Exit the terminal or close the application normally to save setup; an open terminal pauses automation even while idle.",
+        "For automated application calls, select the application and allow its required HTTPS hostnames. Command approval still applies. These hostnames are separate from the HTTP destinations used directly by the script.",
+        "HTTP destinations: use +, enter the exact HTTPS origin and allow only the required methods. Review the browser permission request. Direct requests cannot follow redirects or reach private network addresses.",
+        "Recheck the listed resources before running. Use − on a selected row to revoke an unneeded assignment."
+      ],
+      "image": "handbook-permissions.png"
+    },
+    {
+      "id": "secrets",
+      "title": "Set variables and secrets safely",
+      "paragraphs": [
+        "Use Variables and secrets for this Pod. Ordinary variables are visible to the assistant and are not encrypted. Use them for non-sensitive settings such as a folder label or destination ID. Passwords, API keys and tokens belong in Secrets.",
+        "Codex can ask for a secret by name and purpose but cannot read its stored value. Use OpenApe Secrets for transfer or enter the value in the protected form. Never paste it in conversation, source, screenshots or support messages.",
+        "Assigning a secret lets this Pod’s validated scripts read that alias. Review the source: a script can deliberately copy a secret into a prompt, file or log. Secret storage does not make arbitrary code safe. Managed secret values are encrypted locally and excluded from backup exports."
+      ],
+      "steps": [
+        "Choose Set secret on the requested alias, or enter Credential alias in the protected form. Enter the value only in the masked Credential value field, then choose Save or replace credential.",
+        "Check the alias in the list. The value field clears after submission, even if saving fails; use the displayed result to check success.",
+        "Review Secrets used by the script and save script access when needed. Ask Codex to continue configuration, then check the saved Script.",
+        "Review the aliases used by the script, then ask Codex to validate and finish configuration or use the Script controls directly."
+      ],
+      "image": "handbook-credentials.png"
+    },
+    {
+      "id": "first-run",
+      "title": "Run manually and check the result",
+      "paragraphs": [
+        "A first successful run proves more than a chat reply or synthetic validation. For the sample folder task, compare the reported filenames and count with the folder you selected. Confirm that no original file changed. Other tasks need their own visible success check.",
+        "Run in Script saves and validates changed source before starting it. Validation uses simulated services; it cannot prove that a real account, later input or delivery will work. A failed validation preserves the draft and leaves any previously active script intact. Recheck the saved state before trying again."
+      ],
+      "steps": [
+        "Leave the schedule disabled. In Script, inspect the saved source and choose Run or Save and run. If an active script is already ready, Overview → Run now starts a manual run.",
+        "If a permission request opens, review the Pod, action and account in the browser. Once authorizes the current request; Allow Pod execution creates a revocable standing permission. Use Open approval in the waiting card if the browser did not open.",
+        "Open History and select the run. Read the result, next action and What happened. Completed with gaps needs review of the missing evidence; a waiting, stopped or failed run is not success.",
+        "Check the actual output and, for actions outside Pods, the destination. Overview shows the last result; Results and sources shows retained findings when the script creates them.",
+        "If the run failed, open Technical details, fix the indicated account, resource or script issue and follow the recovery steps below. Do not enable a schedule while the manual result is unresolved."
+      ],
+      "image": "handbook-history.png"
+    },
+    {
+      "id": "schedules",
+      "title": "Enable a schedule deliberately",
+      "paragraphs": [
+        "Automatic execution runs on this Mac, not in the cloud. Closing the window keeps Pods available in the menu bar. Quit Pods stops local execution. While the Mac sleeps, scheduling is suspended; the app does not wake the Mac to run a Pod.",
+        "When the app is running again or the Mac wakes, an overdue enabled schedule queues one catch-up start if a schedule start is not already pending. It advances the next due time into the future instead of replaying every missed interval. Saved progress and the script determine which data that run processes; this does not guarantee that every missed email or file is recovered.",
+        "Interrupted runs and blocked or claimed inputs need recovery before further work can start. One Pod can run only once at a time. Pausing blocks new automatic starts but lets an active run finish; use Cancel run in History to stop it. Connected Codex can enable schedules when you request it."
+      ],
+      "steps": [
+        "After a successful manual run, open Settings → Schedule and limits. Choose At an interval and enter minutes, or Daily with Local time and an explicit timezone such as Europe/Vienna.",
+        "Check Enable this schedule and choose Save schedule. If the Pod is paused, separately choose Resume automatic execution after reviewing readiness.",
+        "Check Next scheduled time, the enabled state and any displayed error. Keep Pods running and the Mac awake when execution is needed.",
+        "To stop future scheduled work, disable and save the schedule or pause automatic execution. Inspect History after sleep, quitting or a crash before retrying interrupted work."
+      ],
+      "image": "handbook-settings.png"
+    },
+    {
+      "id": "troubleshooting",
+      "title": "Troubleshooting: what to do next",
+      "paragraphs": [
+        "Codex reports ready: inspect the saved script, resources and actual run state in Pods. If input is missing or an operation failed, ask Codex to inspect current state and repair it.",
+        "Account unavailable: open App settings → Your accounts and choose Sign in again on the account that shows Expired or an error. For AI access, check the Codex / GPT connection and the model selected in the script. Switching to another DDISA account does not repair an agent; it replaces all Pod agents.",
+        "Waiting for approval: use Open approval and decide the request at your DDISA provider. Waiting is limited to 15 minutes. If it expires, inspect the stopped run and prepare recovery; approving an old request after restarting the app does not restart that run.",
+        "Permission or validation error: open Technical details in History. Check the exact folder, application, HTTPS hostname, HTTP method or secret alias in the named Pod. Reassign a missing resource, save the corrected script and validate again. A permission-service failure does not by itself mean your mail account needs a new login.",
+        "No automatic run: check the enabled schedule, Next scheduled time, paused state and active script. Close any setup terminal normally. Keep the Mac awake and the app running. Resolve stopped runs, blocked inputs and resource errors in History before resuming.",
+        "Interrupted or failed run: select it in History and choose Prepare retry. This checks saved progress without starting the script. Resolve uncertain deliveries, then choose Retry unfinished work when offered. Use Retry unstarted requests for blocked starts. Repeated clicks on Run can create extra requests.",
+        "Unknown delivery: check the external destination first. Record what you observed in History, then choose Already delivered or Not delivered · allow retry. Do not guess or blindly resend; a lost response does not prove that nothing happened.",
+        "Worker unavailable or unsupported host: read the displayed diagnostic, resolve the stated cause and reopen the app. An unsupported OS or CPU cannot be fixed by changing the script. At a storage limit, use Data & backups to inspect space, export a backup, clean unused files or adjust the limit, then inspect interrupted work.",
+        "When requesting help, include the app version, failed step and the non-sensitive error text. Remove personal content and secret values from screenshots and logs. A successful synthetic check is not proof of live account or delivery behavior."
+      ],
+      "steps": []
+    },
+    {
+      "id": "revocation",
+      "title": "Pause or revoke access",
+      "paragraphs": [
+        "To stop future automatic starts, pause the Pod in Settings. To stop an active run, use Cancel run in History. Pausing does not remove its permissions.",
+        "To remove a folder, application or HTTP assignment, select it in Permissions and use −. Remove a secret assignment in Variables and secrets to revoke access and remove its encrypted value. Inspect the paused Pod and its validation state before further use.",
+        "To revoke provider consent, open Settings → Pod identity → Agent provider permission → Revoke provider permission and review Confirm revocation. This affects all Pods using that DDISA account’s provider consent, including existing recurring permissions. The equivalent account control is Account & security → Agent providers at the decision identity provider.",
+        "Revocation blocks new requests and further grant use, but cannot undo an already started command or earlier external effects. Existing identities and local data remain. A new consent does not restore the old identities or grants; do not reconnect expecting the old binding to work again.",
+        "Disconnecting a DDISA account under Your accounts revokes permissions using it and pauses affected Pods while retaining data and account assignments. Disconnecting Codex / GPT stops AI requests until you reconnect. Review the confirmation before either action."
+      ],
+      "steps": []
+    },
+    {
+      "id": "data",
+      "title": "Back up and restore your work",
+      "paragraphs": [
+        "Open App settings → Data & backups. Normal app data lives in ~/Library/Application Support/OpenApe Pods. Use the export and restore controls instead of copying a live database.",
+        "Export includes settings, scripts, workspaces, knowledge, sources and history. Managed account credentials, secret values, protected application state and shell HOME/history are excluded. Personal content or secrets you manually wrote into script source or workspace files can still be in the backup. Keep exports private.",
+        "Restore backup and restart verifies checksums, creates a new profile and retains the old one. It does not silently resume automation. Reconnect accounts and applications, re-enter secrets, review resource paths and permissions, validate scripts and manually verify a result before explicitly enabling schedules.",
+        "Verify update and back up checks an approved signed update candidate and prepares a backup; installation is manual after quitting. An internally signed/notarized build with releaseReady: false is not an approved public update candidate. Keep the previous app and a compatible backup for rollback; never open a newer migrated database in an older app."
+      ],
+      "steps": [
+        "Finish the assistant response and stop or recover runs before maintenance.",
+        "Choose Export backup and select a safe location. Check that the operation completed and retain the exported file.",
+        "To restore, choose Restore backup and restart, select your export and review the confirmation.",
+        "After restart, reconnect required services, restore secret values separately and perform the manual checks above. Choose the interface language again if needed."
+      ],
+      "image": "handbook-data.png"
+    },
+    {
+      "id": "language",
+      "title": "Choose your language",
+      "paragraphs": [
+        "Open App settings in the sidebar and use Language to switch between Deutsch and English. Your choice is saved per local profile and applies to the interface, native menus and app-owned dialogs. Unsaved editor content is retained when navigating there.",
+        "Pod and group names, knowledge, sources, conversation messages, script code and technical audit payloads stay in their original language. The switch does not translate your content or change model prompts. Known app diagnostics are translated; an unknown external diagnostic is labeled and retained exactly. Dates and numbers follow the selected display language; stored times, schedule time zones and script contracts remain unchanged.",
+        "The handbook is available as complete English and German offline editions with matching app screenshots. Use the link to the other edition in the handbook navigation. Keep both HTML files together when using those links. The language preference is local display configuration; a restored profile starts from its system default until you choose again."
+      ],
+      "steps": []
+    },
+    {
+      "id": "groups",
+      "title": "Organize pods in groups",
+      "paragraphs": [
+        "Use groups in the sidebar to organize related pods. Every pod belongs to one flat group or Ungrouped. Group names, membership and collapsed state are saved on this Mac and included in backups. Groups appear in creation order; pods keep their original creation order within each group.",
+        "Grouping does not share resources or permissions, invalidate a script or alter a running task. New pods begin in Ungrouped. Removing a group keeps every pod; deleting a pod remains a separate Data & backups action."
+      ],
+      "steps": [
+        "Choose + Group beside YOUR PODS, enter a Group name and choose Create group. Names contain 1–100 characters; up to fifty groups are supported.",
+        "Select a pod, open Settings and choose Group. Dragging a pod onto a sidebar group also works.",
+        "Choose a group heading to collapse or expand it. The selected pod stays open in the workspace while its group is collapsed.",
+        "Choose the three-dot button beside a group to rename it. To remove the group, choose Remove group and confirm that its pods move to Ungrouped.",
+        "If another edit changed the groups, keep your entered text, wait for the sidebar to refresh and try again."
+      ],
+      "image": "handbook-groups.png"
+    },
+    {
+      "id": "overview",
+      "title": "Overview",
+      "paragraphs": [
+        "Description is an editable statement of the Pod purpose. Existing descriptions are retained. Save description updates it directly and rejects a conflicting revision.",
+        "The description does not change script execution or permissions. Ask connected Codex to implement behavioral changes, then inspect the saved script and real run history."
+      ],
+      "steps": [
+        "Open a Pod and edit Description.",
+        "Save description, or reload to read a concurrent update.",
+        "Inspect the last run and use Run now when the script is ready."
+      ],
+      "image": "handbook-overview.png"
+    },
+    {
+      "id": "script",
+      "title": "Further detail: Inspect and edit your script",
+      "paragraphs": [
+        "The Script tab opens the current saved working source, including a newer saved draft. V1 has no version browser, comparison or rollback controls. Internal immutable script hashes, validation, credential approval and run pinning remain enforced.",
+        "The highlighted JavaScript editor supports line numbers, horizontal scrolling, two-space Tab indentation, Escape followed by Tab to leave, and Cmd+S (Ctrl+S) to save. Source is rendered literally and is not executed in the renderer.",
+        "Unsaved script, ordinary variable, and settings survive navigation within this app session. Save before quitting. Reload script asks before discarding changed text. If a concurrent change causes a conflict, reload the current source or explicitly save your edits as the current script.",
+        "Available variables and secrets expands a reference list with copyable access expressions. Secret values stay hidden. Manage variables and secrets opens their dedicated tab. Manage script secrets in Variables and secrets, and script applications in Permissions. Selecting a capability does not grant resource access.",
+        "Saved runs start through the bundled ape-shell as the pod agent. The Node.js run(context) contract remains unchanged; HOME, working directory and SHELL match the setup terminal. Missing grants block execution. context.tools.invoke reuses application setup; secrets do not automatically enter the AI context.",
+        "Under Dependencies, the list shows each package and its fixed version. Click + to search the public npm registry, paste an npm package-page URL, or enter name@1.2.3. Select a result, review the exact version and add it; selecting an existing name updates its declaration. Select a row and click − to remove it. These edits are saved with the script. Prepare dependencies downloads the selected packages after confirmation. Searching and adding do not install anything. Git, tarball and private-registry URLs are not supported. Libraries share the script’s permissions and secret access. Preparation excludes installation hooks and native addons; regular runs use the verified read-only package tree without downloads or updates. Package changes require validation; existing Pod secret assignments remain in effect. The saved package.json remains available to connected Codex."
+      ],
+      "steps": [
+        "Edit the source and choose Save script to persist it without running.",
+        "Choose Run or Save and run. The app saves and validates changed source in the existing sandbox with synthetic services. A failed check preserves the source and leaves the previously active script intact.",
+        "If the script reports a missing secret, assign its alias in Variables and secrets and validate again. Existing Pod assignments also apply after script edits.",
+        "After successful validation and any required owner approval, the app activates that exact source and starts it. History shows the result. This does not enable automatic execution."
+      ],
+      "image": "handbook-script.png"
+    },
+    {
+      "id": "credentials",
+      "title": "Further detail: Variables and secrets",
+      "paragraphs": [
+        "Ordinary variables are named strings stored in SQLite for this pod. Use context.variables[\"name\"] in scripts. Up to 32 variables are supported, with values up to 2,048 characters. Values are captured for each run; later edits apply to future runs. These values are not encrypted. Store sensitive values as secrets.",
+        "The dedicated tab shows all stored variables and secrets for this pod. Empty variables are marked Not set. Secrets required by the saved script or requested in retained setup requests also appear before a value has been assigned; choose Set secret to prefill the alias. Assigning a secret authorizes this Pod to read that alias from its validated scripts; removing the assignment revokes access.",
+        "Each pod owns its script versions, workspace, persistent checkpoint and credential assignments. Under Variables and secrets, enter a Credential alias and a masked Credential value, then choose Save or replace credential. An alias starts with a lowercase letter and contains at most 64 lowercase letters, digits, underscores or hyphens. Values contain 1–16,384 characters without null bytes. Each pod supports 32 current aliases; a script can declare up to 16 capabilities including assigned application and HTTP capabilities.",
+        "Values are encrypted with macOS safeStorage under the active application profile’s credentials directory. Resource records and editor history contain aliases and opaque IDs, never the automatically supplied value. Two pods may use the same alias with different values. ChatGPT and OpenApe tokens stay inside their connection broker. Imported application state is delivered only to its program, separately from script secrets.",
+        "await context.credentials.get('crm') returns the string assigned to this pod and alias. Every secret assigned to this Pod is available to its scripts without additional selection, declaration or approval. The runtime verifies the current run lease, exact script version, execution binding, resource revision and current secret assignment before and after reading. Codex has no credentials.get tool. Values are not automatically added to input.json, environment, AI prompts or run logs.",
+        "A script that can read a secret can explicitly put it into a prompt, log, checkpoint or file. Review the full source before granting access. Synthetic validation checks the execution contract with synthetic-credential-<alias> values; it cannot establish that source is safe for every input. A later model call receives whatever prompt the script constructs. Files written by the script and their contents may be included in backups.",
+        "Saving or replacing a credential pauses the pod and invalidates prior validation. Script source changes alone do not require another secret approval. Revoking it cancels affected work and removes its encrypted value. After restore, assign secret values again and revalidate scripts; managed secret values and their recovery records are excluded from backups. An interrupted save is reconciled on restart.",
+        "The example below combines normal Node file IO, durable variables, an explicit credential read and a separate AI call. It deliberately keeps the credential out of the prompt. It requires an assigned crm alias, Pod execution permission and a connected model for real execution. Validation uses a synthetic model response. Direct network access and launching child programs remain restricted by the existing runtime; declaring a credential does not grant either."
+      ],
+      "steps": [
+        "Open Variables and secrets. Enter the secret alias and value, then save. The masked field clears after submission, including failures.",
+        "Use await context.credentials.get(\"alias\") in the source. All secrets assigned to this Pod are available without a separate script selection.",
+        "Choose Save and run. After synthetic validation, review the Pod execution permission in the browser if requested.",
+        "History shows the run. Source or resource changes require validation; existing Pod permissions remain until revoked."
+      ],
+      "code": "import { readFile, writeFile } from 'node:fs/promises'\n\nexport async function run(context) {\n  const credential = await context.credentials.get('crm')\n  if (!credential) throw new Error('Assigned credential is empty')\n\n  const notes = context.input.checkpoint.notes ?? 'Review synthetic notes'\n  await writeFile(context.workspace + '/notes.txt', notes)\n  const text = await readFile(context.workspace + '/notes.txt', 'utf8')\n  const answer = await context.agent.run({ prompt: text, tools: [] })\n  await writeFile(context.workspace + '/review.txt', answer.response)\n\n  await context.progress.commit({\n    expectedRevision: context.input.checkpointRevision,\n    checkpoint: { ...context.input.checkpoint, reviews: (context.input.checkpoint.reviews ?? 0) + 1 },\n    sources: [],\n    claims: [],\n  })\n  return {\n    status: 'completed',\n    summary: 'Local review completed',\n    completedInputIds: context.input.eventIds,\n    gapIds: [],\n  }\n}"
+    },
+    {
+      "id": "conflicts",
+      "title": "Concurrent edits and recovery",
+      "paragraphs": [
+        "If Codex or another edit changes the saved script while your editor contains unsaved work, the app retains your text and rejects a stale save. Reload script lets you discard your local edits after confirmation. Save my changes as current script explicitly preserves your text as a new working artifact; it still requires validation and any credential approval before running.",
+        "Reloading an unchanged editor picks up the current saved source. Saving does not start a run. A Run request rejects a changed active script, an occupied execution slot or pending inputs rather than silently executing different code later."
+      ],
+      "steps": []
+    },
+    {
+      "id": "resources",
+      "title": "Further detail: Permissions",
+      "paragraphs": [
+        "Permissions lists HOME and the working directory as permanent writable pod folders. Add additional folders with +, choose Read or Read and write in the native confirmation, and change access with the row selector. Select a row and − to revoke it. These are direct accesses to the original files, including subfolders; write access allows changes and deletion. Existing reference files retain their read-only snapshots. Assignment or access changes pause the pod and invalidate active execution. Missing, replaced or symlinked folders block execution until reassigned; internal app data and runtime folders cannot be assigned.",
+        "The macOS sandbox enforces directory read/write permissions for regular scripts and brokered application calls. External setup terminals and Play-launched GUI apps keep the existing Mac-user/ape-shell permission boundary; the directory list does not sandbox those windows. Overlapping folder permissions are additive: an explicitly writable child remains writable inside a read-only parent.",
+        "Use + below the application list to select an installed macOS app or CLI. Its name and icon appear with a Play button. Play starts the selected executable without arguments through ape-shell. Select a row and use − to remove its assignment. Existing apes CLI descriptors are detected automatically, or you can select the descriptor file. Applications are not bundled with Pods.",
+        "Open Terminal.app opens a separate macOS window above this list. The banner shows the pod HOME, workspace and shell. Run an assigned CLI there using its normal commands, for example o365-cli auth login. Applications manage their own sign-in; Pods does not invent a login-status indicator. Required grants are approved through OpenApe or apes grants approve.",
+        "Interpreted CLIs also need their interpreter and package libraries. Connected Codex can assign a runtime descriptor for these code files; terminal setup and automated runs then use the same configuration. Keep extensions in a separate code directory, not in the encrypted sign-in state. Reopen an existing Pod terminal after changing its assignment. A successful terminal login still needs a real automated read check before enabling a schedule.",
+        "Grants are managed through OpenApe and checked at execution time. Permissions does not display a static command-grant list, script call snippets or a separate application script-access selector. Application assignment does not bypass runtime authorization.",
+        "HTTP destinations appear as a list of addresses and allowed methods. Use + to add a destination; select a row and use − to remove it. The input form opens only when adding a destination. These permissions allow Node.js requests to an explicit HTTPS origin and selected methods through context.http.request. Secrets belong in Variables and secrets. Requests cannot follow redirects or reach private addresses. Current transport uses IPv4 on port 443, a 30-second timeout and bounded responses. Permissions are granted to the pod’s OpenApe agent.",
+        "An open terminal holds the pod and pauses automation, including while its prompt is idle. Leave the shell with exit and wait for the process to finish so application setup is saved. Automation remains paused afterwards. Assigned programs receive their own temporary HOME containing decrypted application state; later script calls reuse that saved state. The shell HOME is pods/<pod-id>/home and its working directory is pods/<pod-id>/workspace inside the app profile. Interrupted sessions are not treated as successful setup.",
+        "ape-shell mediates command grants; it does not provide a filesystem sandbox. The setup terminal runs granted commands with your Mac user privileges. A broad session grant permits correspondingly broad shell commands. Use foreground programs; reliable termination of detached background processes is not guaranteed. Automated Node.js scripts retain their additional macOS sandbox, and context.tools.invoke still uses the bounded application broker. Graphical programs and arbitrary child-process trees remain unsupported in that script broker.",
+        "Play starts apps directly with the pod workspace and private application HOME, using the normal login Keychain. Some Mac apps ignore HOME or reuse a global profile or existing instance: check the account inside the app. Only programs respecting the supplied context can share setup reliably. Close the app normally to save setup. Interrupted sessions keep the last saved setup. Encrypted state is currently limited to 4 MB and 128 files; large browser profiles are not supported by this storage contract.",
+        "Select an application to add or remove its HTTPS hostnames. Sandboxed application calls can connect only to these public hosts on port 443; command grants still apply. This is separate from Node.js HTTP destinations. Changing hosts pauses the pod and invalidates prior script validation. Setup terminals and GUI windows retain their existing Mac-user permissions."
+      ],
+      "steps": []
+    },
+    {
+      "id": "settings",
+      "title": "Settings",
+      "paragraphs": [
+        "Settings contains name, group, Pod identity, schedule and limits, and More options. Edit Description directly in Overview. Renaming preserves work and permissions.",
+        "More options can archive a Pod or delete an archived Pod after the native confirmation. Deletion removes its local data and variables. Shared accounts and original reference files remain; retained conversation history follows the existing retention policy."
+      ],
+      "steps": []
+    },
+    {
+      "id": "runs",
+      "title": "History and recovery",
+      "paragraphs": [
+        "History shows the result, the next action and What happened. Repeated application calls and AI requests are grouped with successful and unfinished counts. Routine permission checks stay in collapsed Technical details, together with the pinned script and persisted events.",
+        "Cancel run stops an active run. Interrupted work remains visible after a crash or restart. Choose Prepare retry to check saved progress and possible deliveries without starting the script. Retry unfinished work becomes available after a successful check. Resolve uncertain deliveries first. Overview also leads to this check after a stopped run.",
+        "At most one run executes per pod. Other waiting starts counts queued start requests, not emails or files. Repeated start clicks may create several requests. Retry unstarted requests applies to a blocked queue. Checkpoints record successful progress; resuming a Codex thread alone is not a recovery decision.",
+        "Changing the script only affects subsequent runs and does not undo earlier results or effects. Internal script hashes remain in execution details for auditability.",
+        "Unknown HTTP deliveries appear in History. Record what you observed at the destination and choose Already delivered or Not delivered · allow retry. The former records an owner-attested receipt, not a provider response; the latter permits a subsequent retry. A lost response is never automatically resent."
+      ],
+      "steps": []
+    },
+    {
+      "id": "knowledge",
+      "title": "Results and sources",
+      "paragraphs": [
+        "Knowledge contains durable statements with supporting evidence. Findings describe supported business facts. Open questions need a business answer. Verification gaps identify missing or unreadable evidence; a gap is not automatically an unanswered business question.",
+        "Filter by kind, and enable Include superseded history to inspect earlier statements. Current statements can replace earlier ones while retaining their source history. Additional entries are paginated.",
+        "Expand an entry and choose its source to view the retained content, version and digest. Extracted text can link to its retained original. Long source previews are explicitly marked as truncated. Source text is displayed literally.",
+        "Work from Codex opens connection settings. Discuss changes in Codex. Findings and source history remain stored in the Pod."
+      ],
+      "steps": [],
+      "image": "handbook-knowledge.png"
+    },
+    {
+      "id": "script-api",
+      "title": "Further detail: A small script you can adapt",
+      "paragraphs": [
+        "A pod script is a JavaScript ES module exporting async run(context). Await every asynchronous operation before returning. The result includes status, summary, completedInputIds and gapIds. A completedWithGaps result needs committed gap claims.",
+        "context.input contains the frozen run metadata, event IDs, prior checkpoint, references and limits. context.home and context.workspace are the permanent writable pod directories. context.directories lists assigned original folders as {path, access}, with access read or readWrite; use Node.js filesystem APIs on those paths. context.references identifies read-only snapshots. context.log(message) records a run event. context.variables contains the frozen ordinary values captured for this run; values only enter a model prompt when the script explicitly includes them.",
+        "context.progress.commit writes checkpoint, sources and claims atomically using expectedRevision. context.agent.run({ prompt, tools: [] }) invokes Codex with fresh context and no tools. Omitting tools also disables them. Use tools: [\"ape_shell\"] explicitly when the model needs assigned application reads; assignments and grants still apply. The script may continue using context.tools.invoke independently. context.tools.invoke({ application: \"o365-cli\", argv }) executes an assigned read command through apes. context.http.request({ url, method, headers, body, key }) uses an assigned HTTP destination; every mutating method requires a stable effect key. Request bodies may contain up to 65,536 characters and responses up to 131,072 bytes. receipt: \"digest\" stores only status, SHA-256 and size in the effect receipt; the live reply is still returned. A destination assigned with DDISA agent authentication receives an Authorization header from the runtime, derived from an assigned secret key; scripts never see that token. context.agent.run accepts timeoutSeconds from 30 to 900 (default 120); agent time does not count against the script time limit. Only calls opting into ape_shell receive that tool; neither mode exposes a credential or HTTP tool. Treat model output as untrusted text, never executable code. Legacy context.mail scripts need migration to an assigned installed application; source and history remain available.",
+        "The following example adds a checkpoint flag and returns a visible summary. It uses no mail or model service. Keep input completion IDs limited to work the script actually completed."
+      ],
+      "steps": [],
+      "code": "export async function run(context) {\n  await context.progress.commit({\n    expectedRevision: context.input.checkpointRevision,\n    checkpoint: { ...context.input.checkpoint, reviewed: true },\n    sources: [],\n    claims: [],\n  })\n  return {\n    status: 'completed',\n    summary: 'Local review completed',\n    completedInputIds: context.input.eventIds,\n    gapIds: [],\n  }\n}"
+    },
+    {
+      "id": "execution-approvals",
+      "title": "Further detail: Execution approvals and run activity",
+      "paragraphs": [
+        "Starting a manual run opens any required OpenApe approval in your browser. A waiting card also appears in the Pod workspace with Open approval, so a browser-opening failure does not hide the required action. Background runs show the card without opening the browser automatically. Approval waits last at most 15 minutes and pause the script's active time limit. Cancel run stops waiting. After an application restart, a stopped run requires explicit recovery; approving its old request does not restart it.",
+        "The managed execution permission belongs to this Pod and its OpenApe agent. Allow Pod execution creates a revocable standing rule; Once authorizes only the current request. Script edits do not expand directory, application, HTTP or secret assignments. The desktop broker verifies the structured permission through the ape-shell authorization library, then launches the pinned script inside the existing native sandbox. External Terminal.app continues to use the ape-shell CLI.",
+        "History shows actual operations, active elapsed time, approval wait time and the run outcome. Application, AI and HTTP steps appear only when called. Technical details contains the original error and event data. If authorization fails, review Permissions and the grant status; a permission-service error does not itself require signing into Microsoft again. For uncertain deliveries, inspect the destination and record the outcome before retrying. The Script tab's Environment disclosure shows the managed process environment without stored secret values."
+      ],
+      "steps": []
+    },
+    {
+      "id": "setup",
+      "title": "Further detail: Connections and the mail notification recipe",
+      "paragraphs": [
+        "For a mail notification task, first connect your personal accounts under App settings → Your accounts. Manage the Pod identity in its Settings. Other programs authenticate in Permissions, through the Pod’s external Terminal.app window or the application opened with Play.",
+        "For a mail notification pod, select your installed o365-cli in Permissions and configure it through Terminal.app using its own auth commands. Inspect its help and approved apes descriptor before writing the script. Installed versions can differ from the former prototype protocol; do not use o365-cli pods commands unless your selected installation actually supports them.",
+        "Store telegram_chat_id as a variable and telegram_bot_token as a secret. The selected CLI determines whether the script needs an explicit mailbox variable. Allow POST to https://api.telegram.org in Permissions. Telegram needs no separate account card or bundled executable.",
+        "Use examples/mail-notification.mjs from the source checkout. The first successful run establishes a quiet baseline over the previous 24 hours. Later runs report new message identities using a five-minute overlap. The recipe caps reads at 20 pages and 1000 messages per window and fails visibly if the window is incomplete. It never sends historical messages on first use and sends only a count and account name.",
+        "Validate and run manually before enabling a 15-minute interval in Settings. Review the secrets assigned to this Pod. The recipe records a pending notification before sending it and stores the receipt before acknowledging progress. When delivery is uncertain, inspect the destination and resolve the outcome in History before retrying."
+      ],
+      "steps": []
+    },
+    {
+      "id": "workflows",
+      "title": "Connect Pods in workflows",
+      "paragraphs": [
+        "Workflows appears beside groups in the sidebar. Select existing Pods and choose Starts after for each node. A node waits for every selected predecessor to finish successfully; independent branches may run in parallel. Connecting Pods leaves their scripts, permissions and individual schedules unchanged.",
+        "The workflow has its own interval, daily, one-time or cron schedule. New schedules are off. Run workflow once also works when the workflow or member Pods are paused. Pause stops new node starts, while already running nodes finish. History explains waiting and blocked states. Retry keeps completed nodes and requires reconciliation of uncertain effects.",
+        "Mail workflows require separately reviewed batch-aware recipes. Review the exact mailbox, assigned application, archive rules, protected communication partners and Telegram destination. The first run establishes a quiet baseline. Preview makes no moves or Telegram deliveries. Protected senders, recipients and known conversations remain for human review. Production autonomous archiving stays blocked until conditional moves can be verified with the provider."
+      ],
+      "steps": [
+        "Choose Workflows → New workflow, enter a name and add existing Pods.",
+        "Select all required predecessors, inspect the graph and upcoming schedule occurrences, then save with the schedule off. Cycles cannot be saved.",
+        "Run a synthetic workflow and inspect every node and mail receipt before considering live setup. Installation, mailbox mutations, Telegram sends and activation require separate approval."
+      ]
+    },
+    {
+      "id": "codex",
+      "title": "Work from your Codex",
+      "paragraphs": [
+        "Connected Codex on this Mac administers Pods directly: it can manage variables and resources, validate and activate scripts, enable schedules and start or recover runs. No global Node installation is needed; Pods supplies its runtime.",
+        "Any confirmation follows the Codex client settings. There is no additional approval queue in Pods. Full access in Codex does not remove script validation, stale-revision checks or real provider sign-in requirements.",
+        "Codex receives safe resource metadata and run state, not account tokens, Pod keys, run contents or secret values. It can import a supplied private secret file directly into the encrypted store without putting the value in a tool call. Mail, web pages and other external content remain data, not instructions.",
+        "Pods must be running. After moving or reinstalling it, open it once to refresh the launcher. Historical proposals do not execute on upgrade; Codex can retire superseded ones explicitly.",
+        "Disconnect under App settings → Work from Codex. If you edited the registered Codex entry yourself, Pods leaves it alone; remove it with codex mcp remove openape-pods."
+      ],
+      "steps": [
+        "Connect Codex under App settings → Work from Codex.",
+        "Restart Codex once.",
+        "Ask Codex to configure or run the selected Pods.",
+        "Check the applied settings and actual run status in Pods; no second approval click is required."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+import { createHash, randomUUID } from 'node:crypto'
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import { executeScript } from '../src/worker/runs/runner'
+import type { RunInput } from '../src/contracts/runs'
+
+let root = ''
+afterEach(async () => { if (root) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) })
+async function setup(source: string, timeMs = 5000) {
+  root = await realpath(await mkdtemp(join(tmpdir(), 'pods-script-')))
+  const workspace = join(root, 'workspace'); await mkdir(workspace)
+  const artifact = join(root, 'run.mjs'); await writeFile(artifact, source)
+  const input: RunInput = { version: 1, runId: randomUUID(), podId: randomUUID(), scriptHash: createHash('sha256').update(source).digest('hex'), assignmentRevision: 1, reason: 'manual', eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: 0, workspace, references: [], limits: { timeMs, frameBytes: 256 * 1024 } }
+  const runtime = { helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {} }
+  return { input, runtime, artifact, directory: join(root, 'private') }
+}
+const result = `{status:'completed',summary:'Local example completed',completedInputIds:[],gapIds:[]}`
+describe('native script runtime', () => {
+  it('executes a deterministic script with frozen input, assigned workspace and acknowledged progress', async () => {
+    const fixture = await setup(`import fs from 'node:fs'; export async function run(context) { if(!Object.isFrozen(context.input.checkpoint)) throw new Error('Mutable input'); fs.writeFileSync(context.workspace+'/result.txt','WORKSPACE'); const reply=await context.progress.commit({checkpoint:{seen:1},sources:[],claims:[]}); if(reply.revision!==1)throw new Error('Unacknowledged progress');return ${result} }`)
+    const requests: unknown[] = []
+    const reply = await executeScript(fixture.runtime, fixture.directory, fixture.artifact, fixture.input, new AbortController().signal, { event: () => {}, request: async (operation, payload) => { requests.push({ operation, payload }); return { revision: 1 } } })
+    expect(reply.status).toBe('completed'); expect(requests).toHaveLength(1)
+    expect(await readFile(join(fixture.input.workspace, 'result.txt'), 'utf8')).toBe('WORKSPACE')
+  })
+  it.each([
+    ['zero exit', 'process.exit(0)', 'without a terminal'],
+    ['bad result', 'export async function run(){return {status:"completed"}}', 'terminal result'],
+    ['bad frame', 'import fs from "node:fs";fs.writeSync(3,JSON.stringify({version:1,runId:"foreign",sequence:1,type:"result",payload:{}})+"\\n");setInterval(()=>{},1000)', 'binding'],
+    ['hung script', 'export async function run(){await new Promise(()=>{})} setInterval(()=>{},1000)', 'time limit'],
+  ])('rejects %s visibly', async (_name, source, error) => {
+    const fixture = await setup(source, 700)
+    await expect(executeScript(fixture.runtime, fixture.directory, fixture.artifact, fixture.input, new AbortController().signal, { event: () => {}, request: async () => null })).rejects.toThrow(error)
+  })
+  it('cancels a waiting script and does not report its pending request as completed', async () => {
+    const fixture = await setup(`export async function run(c){await c.agent.run({prompt:'Synthetic'});return ${result}}`)
+    const controller = new AbortController()
+    const execution = executeScript(fixture.runtime, fixture.directory, fixture.artifact, fixture.input, controller.signal, { event: () => {}, request: async () => { controller.abort(new Error('Owner cancelled')); throw new Error('Owner cancelled') } })
+    await expect(execution).rejects.toThrow('Owner cancelled')
+  })
+  it('bounds a stalled service request as well as the script process', async () => {
+    const fixture = await setup(`export async function run(c){await c.agent.run({prompt:'Synthetic'});return ${result}}`, 400)
+    await expect(executeScript(fixture.runtime, fixture.directory, fixture.artifact, fixture.input, new AbortController().signal, { event: () => {}, request: async () => new Promise(() => {}) })).rejects.toThrow('time limit')
+  }, 2000)
+
+})
+
+it('rejects a changed script artifact before starting a process', async () => {
+  const fixture = await setup(`export async function run(){return ${result}}`)
+  await writeFile(fixture.artifact, 'export async function run(){return null}')
+  await expect(executeScript(fixture.runtime, fixture.directory, fixture.artifact, fixture.input, new AbortController().signal, { event: () => {}, request: async () => null })).rejects.toThrow('selected source')
+})
+
+it('managed dependencies: resolves ESM and CommonJS imports while keeping package files read-only', async () => {
+  const fixture = await setup(`import answer from 'sample-package'; import {createRequire} from 'node:module'; import fs from 'node:fs/promises'; const require=createRequire(import.meta.url); export async function run(context) { if(answer!==42 || require('sample-package')!==42) throw new Error('Import resolution failed'); let denied=false; try { await fs.writeFile(context.variables.packageFile,'must not change') } catch(error) { denied=error.code==='EPERM'||error.code==='EACCES' } if(!denied) throw new Error('Package was writable'); return ${result} }`)
+  const dependencyRoot = join(root, 'dependencies'); const directory = join(dependencyRoot, 'node_modules/sample-package'); await mkdir(directory, { recursive: true })
+  await writeFile(join(directory, 'package.json'), '{"name":"sample-package","version":"1.0.0","main":"index.cjs"}')
+  await writeFile(join(directory, 'index.cjs'), 'module.exports=42')
+  const input = { ...fixture.input, variables: { packageFile: join(directory, 'index.cjs') } }
+  const reply = await executeScript({ ...fixture.runtime, dependencyRoot }, fixture.directory, fixture.artifact, input, new AbortController().signal, { event: () => {}, request: async () => null })
+  expect(reply.status).toBe('completed'); expect(await readFile(join(directory, 'index.cjs'), 'utf8')).toBe('module.exports=42')
+})
+
+it('pauses active runtime limits only while a bounded approval wait is recorded', async () => {
+  const fixture = await setup(`export async function run(c){await c.agent.run({prompt:'Synthetic'});return ${result}}`, 700)
+  let waiting = false
+  const events: unknown[] = []
+  const reply = await executeScript(fixture.runtime, fixture.directory, fixture.artifact, fixture.input, new AbortController().signal, {
+    budgetPaused: () => waiting,
+    event: (type, data) => events.push({ type, data }),
+    request: async () => { waiting = true; await new Promise(resolve => setTimeout(resolve, 1100)); waiting = false; return 'Synthetic result' },
+  })
+  expect(reply.status).toBe('completed')
+  expect(events).toContainEqual({ type: 'operation', data: { id: expect.any(String), operation: 'agent.run', state: 'completed' } })
+})
+
+it('runs the Jev helper through the native script bridge without starting an LLM agent', async () => {
+  const fixture = await setup(`export async function run(c) { const result=await c.jev.evaluate({state:'Synthetic invoice',questions:{reply:{type:'noul',instructions:'Reply needed?'}}}); if(result.answers.reply.noul!==0.9)throw new Error('Wrong decision'); return {status:'completed',summary:'Jev decision received',completedInputIds:[],gapIds:[]}; }`)
+  const operations: string[] = []
+  const reply = await executeScript(fixture.runtime, fixture.directory, fixture.artifact, fixture.input, new AbortController().signal, { event: () => {}, request: async (operation, payload) => {
+    operations.push(operation); expect(payload).toMatchObject({ state: 'Synthetic invoice' })
+    return { model: 'jev-1.13.0', answers: { reply: { type: 'noul', noul: 0.9 } }, usage: { input_tokens: 12, output_tokens: 1 } }
+  } })
+  expect(reply.status).toBe('completed'); expect(operations).toEqual(['jev.evaluate'])
+})

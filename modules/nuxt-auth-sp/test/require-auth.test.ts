@@ -256,3 +256,75 @@ describe('requireCaller — catalog-aware scope enforcement', () => {
     await expect(requireCaller(event)).resolves.toEqual({ email: 'pat@example.com', act: 'human' })
   })
 })
+
+describe('verified principals for exact-scope resources', () => {
+  async function principal(scopes = ['issues:comment']) {
+    const { requireScopedPrincipal } = await import('../src/runtime/server/utils/verified-principal')
+    return requireScopedPrincipal(event, scopes)
+  }
+
+  const catalog = [{ id: 'issues:comment', description: 'Comment', grants: ['POST /api/issue-records/:id/comments'] }]
+
+  it('preserves subject and actual actor from a verified exchanged token', async () => {
+    withCatalog(catalog)
+    request('POST', '/api/issue-records/one/comments')
+    bearer((await signCliToken({ email: 'owner@example.com', act: 'agent', scope: ['issues:comment'], delegate: 'bot@example.com' })).token)
+    await expect(principal()).resolves.toMatchObject({ subject: 'owner@example.com', actor: 'bot@example.com', scope: ['issues:comment'], authentication: 'bearer' })
+  })
+
+  it.each([{ scope: [] }, { scope: ['issues:read'] }, { scope: ['repos:write'] }])('rejects insufficient exact scope $scope', async ({ scope }) => {
+    withCatalog(catalog)
+    request('POST', '/api/issue-records/one/comments')
+    bearer((await signCliToken({ email: 'owner@example.com', act: 'agent', scope })).token)
+    await expect(principal()).rejects.toMatchObject({ statusCode: 403 })
+  })
+
+  it('does not fall back to a different scope prefix or accept another method', async () => {
+    withCatalog(catalog)
+    request('DELETE', '/api/issue-records/one/comments')
+    bearer((await signCliToken({ email: 'owner@example.com', act: 'agent', scope: ['issues:comment', 'repos:write'] })).token)
+    await expect(principal()).rejects.toMatchObject({ statusCode: 403 })
+  })
+
+  it('rejects unbounded delegated sessions and forged bearer tokens without raw-token fallback', async () => {
+    mockUseSession.mockResolvedValue({ data: { claims: { sub: 'owner@example.com', act: { sub: 'bot@example.com' } } } })
+    await expect(principal()).rejects.toMatchObject({ statusCode: 401 })
+    bearer('forged.token.signature')
+    await expect(principal()).rejects.toMatchObject({ statusCode: 401 })
+  })
+
+  it('honors scoped sessions and rejects malformed token scope entries', async () => {
+    withCatalog(catalog)
+    request('POST', '/api/issue-records/one/comments')
+    mockUseSession.mockResolvedValue({ data: { claims: { sub: 'owner@example.com', act: { sub: 'bot@example.com' }, scope: ['issues:read'] } } })
+    await expect(principal()).rejects.toMatchObject({ statusCode: 403 })
+    bearer(await rawCliToken({ sub: 'owner@example.com', email: 'owner@example.com', act: 'agent', scope: [42] }))
+    await expect(principal()).rejects.toMatchObject({ statusCode: 401 })
+  })
+})
+
+describe('verified principal audience boundary', () => {
+  it('rejects a valid signature issued for another service', async () => {
+    const token = await new SignJWT({ typ: 'cli', sub: 'owner@example.com', email: 'owner@example.com', act: 'human' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuer(CLIENT_ID)
+      .setAudience('different.openape.ai')
+      .setIssuedAt()
+      .setExpirationTime('5m')
+      .sign(new TextEncoder().encode(SESSION_SECRET))
+    bearer(token)
+    const { requireScopedPrincipal } = await import('../src/runtime/server/utils/verified-principal')
+    await expect(requireScopedPrincipal(event, ['issues:read'])).rejects.toMatchObject({ statusCode: 401 })
+  })
+})
+
+describe('catalog-only scopes on existing handlers', () => {
+  it('does not turn an issue read scope into a repository or secrets read capability', async () => {
+    mockRuntimeConfig.mockReturnValue({ openapeSp: { sessionSecret: SESSION_SECRET, catalogOnlyScopes: ['issues:read'], manifest: { scopes: [{ id: 'issues:read', grants: ['GET /api/issues'] }] } } })
+    bearer((await signCliToken({ email: 'owner@example.com', act: 'agent', scope: ['issues:read'] })).token)
+    request('GET', '/api/repos/owner/private/browse')
+    await expect(requireCaller(event)).rejects.toMatchObject({ statusCode: 403 })
+    request('GET', '/api/issues')
+    await expect(requireCaller(event)).resolves.toMatchObject({ scope: ['issues:read'] })
+  })
+})

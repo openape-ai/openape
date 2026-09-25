@@ -1,4 +1,4 @@
-import { hostname } from 'node:os'
+import { shellTargetHost } from './context.js'
 import consola from 'consola'
 import { loadAuth } from '../config.js'
 import { requestGrantForShellLine } from './grant-dispatch.js'
@@ -93,7 +93,7 @@ export async function runInteractiveShell(): Promise<void> {
 
   await bridge.waitForReady()
 
-  const targetHost = hostname()
+  const targetHost = shellTargetHost()
   const auth = loadAuth()
   const session = new ShellSession({
     host: targetHost,

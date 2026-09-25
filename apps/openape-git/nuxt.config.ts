@@ -1,4 +1,7 @@
+import { issueScopes } from './shared/issue-scopes'
+
 export default defineNuxtConfig({
+  vite: { server: { hmr: process.env.E2E_HMR_PORT ? { port: Number(process.env.E2E_HMR_PORT) } : undefined } },
   compatibilityDate: '2025-01-01',
   devtools: { enabled: true },
 
@@ -15,6 +18,8 @@ export default defineNuxtConfig({
     // `pnpm dev` works without env setup. Production MUST set NUXT_TURSO_URL
     // (path under /srv/ape-git so it lives on the data volume).
     tursoUrl: 'file:./dev.db',
+    issueIntakeRepoId: '',
+    issueRoutingAdmin: '',
     tursoAuthToken: '',
     // Bare repos live under `${gitDataDir}/repos/<owner>/<name>.git`.
     // Production mounts the block-storage volume here (NUXT_GIT_DATA_DIR=/srv/ape-git).
@@ -31,7 +36,7 @@ export default defineNuxtConfig({
     // this. 36h: a daily backup may skip one run (host reboot) before it counts
     // as broken, but two missed days never pass unnoticed.
     backupMaxAgeSec: 36 * 3600,
-    public: { siteName: 'ape-git' },
+    public: { siteName: 'ape-git', issuesEnabled: false },
   },
 
   colorMode: { preference: 'dark', fallback: 'dark' },
@@ -39,16 +44,18 @@ export default defineNuxtConfig({
   openapeSp: {
     clientId: process.env.NUXT_OPENAPE_CLIENT_ID || 'repos.openape.ai',
     spName: 'ape-git',
+    catalogOnlyScopes: issueScopes.map(scope => scope.id),
     sessionSecret: process.env.NUXT_OPENAPE_SP_SESSION_SECRET
       || process.env.NUXT_SESSION_SECRET
       || 'dev-session-secret-at-least-32-characters-long',
     fallbackIdpUrl: process.env.NUXT_FALLBACK_IDP_URL || 'https://id.openape.ai',
     manifest: {
       scopes: [
+        ...issueScopes,
         {
           id: 'repos:read',
           description: 'List your repositories and their access grants.',
-          grants: ['GET /api/repos', 'GET /api/repos/:owner/:name'],
+          grants: ['GET /api/repos', 'GET /api/repos/:owner/:name', 'GET /api/repos/:owner/:name/metadata'],
         },
         {
           id: 'repos:write',

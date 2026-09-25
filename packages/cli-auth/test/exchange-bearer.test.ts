@@ -110,6 +110,21 @@ describe('getAuthorizedBearer', () => {
     expect(loadSpToken('plans.openape.ai')?.access_token).toBe('fresh-sp')
   })
 
+  it('re-exchanges legacy cached tokens without an endpoint', async () => {
+    saveIdpAuth({ idp: 'https://id.openape.ai', access_token: 'idp-x', email: 'me@x', expires_at: Math.floor(Date.now() / 1000) + 3600 })
+    saveSpToken({
+      // Simulate the old on-disk cache format read through JSON.
+      endpoint: undefined as unknown as string,
+      aud: 'plans.openape.ai',
+      access_token: 'legacy-sp',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+    })
+    const exchange = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ access_token: 'fresh-sp', expires_in: 3600 }), { status: 201, headers: { 'Content-Type': 'application/json' } }))
+    await expect(getAuthorizedBearer({ endpoint: 'https://plans.openape.ai', aud: 'plans.openape.ai' })).resolves.toBe('Bearer fresh-sp')
+    expect(exchange).toHaveBeenCalledOnce()
+    expect(loadSpToken('plans.openape.ai')?.endpoint).toBe('https://plans.openape.ai')
+  })
+
   it('forceRefresh bypasses cache', async () => {
     saveIdpAuth({ idp: 'https://id.openape.ai', access_token: 'idp-x', email: 'me@x', expires_at: Math.floor(Date.now() / 1000) + 3600 })
     saveSpToken({

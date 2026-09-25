@@ -1,0 +1,34 @@
+{
+  "testOnly": true,
+  "sender": "b2kr6zjsLqE83DNwGg5dTyaUD39UENQKVo7H2k-DNwQ",
+  "recipient": "l3ohJdmwI4Ujy4WlkLOiHWaxpajzqjICN1dkTW4m320",
+  "senderPublic": "BCWWmAZzT31u-n34kJ8MFWQXG337gDD7nGqilS28Y3GhycbVWzoEbfmr1tEZkgHz5id0JWdSSgTyDknDDC1ydWc",
+  "recipientPublic": "BM_EgjrlUtRl0UI9xx_pQEE5ZbkRp5e2HdJre8NM6NfcZXFTvkB9qev0ojq9nP4iXfeJoDLC7vr6fxsh_PcRNn4",
+  "envelope": {
+    "route": {
+      "protocol": "pods-mobile",
+      "major": 1,
+      "minor": 0,
+      "id": "7a7d54a6-3c8c-4b1c-a1d7-80b5c74b5001",
+      "runtimeId": "7a7d54a6-3c8c-4b1c-a1d7-80b5c74b5002",
+      "generation": "7a7d54a6-3c8c-4b1c-a1d7-80b5c74b5003",
+      "deviceId": "7a7d54a6-3c8c-4b1c-a1d7-80b5c74b5004",
+      "keyEpoch": 1,
+      "owner": {
+        "issuer": "https://id.example",
+        "subject": "owner@example.test"
+      },
+      "direction": "command",
+      "kind": "pod.create",
+      "kindVersion": 1,
+      "issuedAt": "2026-09-20T12:00:00.000Z",
+      "expiresAt": "2026-09-20T12:05:00.000Z",
+      "sequence": "0"
+    },
+    "contentMode": "encrypted-v1",
+    "ephemeralKey": "BMKHdBHrU24ok-JqOusU6rsuy0sSi-PT1VzdzLaINIhCCEQP3FnQh0F5aSbsUFwI-42sAG8pgI54bncEibYZpSk",
+    "nonce": "h1tLknBnqIPb6_dz",
+    "ciphertext": "1ZNAHtkrA_dABFkW9kbAf-kC103PtzCPcsB0gC2WPncJn43-enHRrteC5uY",
+    "signature": "AxSdiyJwML6rM4dRkQbv6DLnvAGI6iPwpydY8iDV_y8Iw8Wf0HPIVB45_X3Gg7s9M4J6IZw6OyDBSpl9Y9zhyw"
+  }
+}

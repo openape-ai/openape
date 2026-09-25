@@ -95,6 +95,7 @@ export async function createMergeCommit(dir: string, options: {
   source: string
   targetRef: string
   expectedTarget: string
+  sourceRef?: string
   message: string
   identity: MergeIdentity
 }): Promise<string> {
@@ -111,6 +112,16 @@ export async function createMergeCommit(dir: string, options: {
     { env },
   )
   const sha = stdout.trim()
-  await run('git', ['-C', dir, 'update-ref', options.targetRef, sha, options.expectedTarget])
+  if (options.sourceRef) {
+    // The source verification and target update form one Git transaction.
+    // No source push can race between review validation and the branch update.
+    await new Promise<void>((resolve, reject) => {
+      const child = execFile('git', ['-C', dir, 'update-ref', '--stdin'], error => error ? reject(error) : resolve())
+      child.stdin!.end(`start\nverify ${options.sourceRef} ${options.source}\nupdate ${options.targetRef} ${sha} ${options.expectedTarget}\nprepare\ncommit\n`)
+    })
+  }
+  else {
+    await run('git', ['-C', dir, 'update-ref', options.targetRef, sha, options.expectedTarget])
+  }
   return sha
 }
