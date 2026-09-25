@@ -1,11 +1,18 @@
 import Foundation
 import Security
 
-public enum KeychainStore {
+/// Protected storage for device keys and session tokens; the Keychain in the app, memory in tests.
+public protocol SecretStore: Sendable {
+  func load<T: Decodable>(_ type: T.Type, account: String) throws -> T?
+  func save<T: Encodable>(_ value: T, account: String) throws
+  func remove(account: String) throws
+}
+public struct KeychainStore: SecretStore {
   private static let service = "ai.openape.pods.mobile"
-  public static func load<T: Decodable>(_ type: T.Type, account: String) throws -> T? {
+  public init() {}
+  public func load<T: Decodable>(_ type: T.Type, account: String) throws -> T? {
     let query: [String: Any] = [
-      kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+      kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Self.service,
       kSecAttrAccount as String: account, kSecReturnData as String: true,
       kSecMatchLimit as String: kSecMatchLimitOne,
     ]
@@ -17,9 +24,9 @@ public enum KeychainStore {
     }
     return try JSONDecoder().decode(type, from: data)
   }
-  public static func save<T: Encodable>(_ value: T, account: String) throws {
+  public func save<T: Encodable>(_ value: T, account: String) throws {
     let query: [String: Any] = [
-      kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+      kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Self.service,
       kSecAttrAccount as String: account,
     ]
     let data = try JSONEncoder().encode(value)
@@ -36,9 +43,9 @@ public enum KeychainStore {
       throw PodsError.storage("Could not save the protected session.")
     }
   }
-  public static func remove(account: String) throws {
+  public func remove(account: String) throws {
     let query: [String: Any] = [
-      kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+      kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Self.service,
       kSecAttrAccount as String: account,
     ]
     let status = SecItemDelete(query as CFDictionary)
