@@ -1,3 +1,4 @@
+import { jevAvailability } from '../onboarding/store'
 import { programHelp } from './program-help'
 import { runtimeReference } from '../master/reference'
 import { parseAdministration } from '../../contracts/codex-admin'
@@ -41,6 +42,7 @@ export class CodexControl {
     const { requestAccess: _proposal, ...actions } = runtimeReference.actions
     return {
       ...runtimeReference,
+      jevConnection: jevAvailability(this.store),
       programHelp,
       workflow: [
         'Connected local Codex administers Pods directly. Codex governs any confirmation. Call list, then select with exact podIds and optionally workflowId/workflowRevision. Reinspect current revisions after changes.',

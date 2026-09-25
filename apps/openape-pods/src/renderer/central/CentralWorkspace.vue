@@ -345,7 +345,7 @@ onBeforeUnmount(() => { generation++; abort.abort() })
               </button>
             </section>
             <section v-if="tab === 'Permissions'">
-              <slot name="permissions" :pod-id="current.pod.id" /><h2>{{ t('Assigned access') }}</h2><p>{{ t('Assign programs, credentials and local folders on the desktop.') }}</p><article v-for="resource in current.pod.resources.resources" :key="resource.id" class="central-card">
+              <slot name="permissions" :pod-id="current.pod.id" /><h2>{{ t('Assigned access') }}</h2><p>{{ t('Assign programs, credentials and local folders on the desktop.') }}</p><article v-for="resource in current.pod.resources.resources.filter(item => item.configuration.type !== 'jev')" :key="resource.id" class="central-card">
                 <strong>{{ resource.name }}</strong><p>{{ label(resource.kind) }} · {{ label(resource.state) }}</p><button :disabled="resource.state === 'revoked'" @click="send('resources', { type: 'revoke', podId: current.pod.id, id: resource.id, revision: resource.revision })">
                   {{ t('Revoke access') }}
                 </button>

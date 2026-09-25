@@ -7,6 +7,7 @@ export function modelResources(resources: PodResource[], includeCommands = false
     for (const key of ['type', 'cliId', 'capability', 'alias', 'origin']) {
       if (typeof configuration[key] === 'string') visible[key] = configuration[key]
     }
+    if (configuration.type === 'jev') { visible.connectionId = configuration.connectionId; visible.model = configuration.model; visible.maxAttempts = configuration.maxAttempts }
     if (kind === 'directory') { visible.path = configuration.path; visible.access = configuration.access }
     if (Array.isArray(configuration.networkHosts)) visible.networkHosts = configuration.networkHosts.filter(value => typeof value === 'string')
     if (Array.isArray(configuration.methods)) visible.methods = configuration.methods.filter(value => typeof value === 'string')

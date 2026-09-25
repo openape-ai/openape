@@ -9,7 +9,7 @@ export function parseCredentialValue(value: unknown): string {
 export function parseScriptCapabilities(value: unknown): string[] {
   if (!Array.isArray(value) || value.length > 16 || new Set(value).size !== value.length) throw new Error('Invalid script capability set')
   for (const capability of value) {
-    if (capability === 'mail.read' || (typeof capability === 'string' && /^tool\.[a-z][a-z0-9_-]{0,63}\.[a-z][a-z0-9_-]{0,31}$/.test(capability))) continue
+    if (capability === 'mail.read' || capability === 'jev.evaluate' || (typeof capability === 'string' && /^tool\.[a-z][a-z0-9_-]{0,63}\.[a-z][a-z0-9_-]{0,31}$/.test(capability))) continue
     if (typeof capability !== 'string' || !capability.startsWith('credential.')) throw new Error('Unsupported script capability')
     parseCredentialAlias(capability.slice('credential.'.length))
   }
