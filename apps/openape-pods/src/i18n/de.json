@@ -46,7 +46,7 @@
   "Pending local deletions": "Ausstehende lokale Löschungen",
   "Storage limit (GiB)": "Speicherlimit (GiB)",
   "Save storage limit": "Speicherlimit speichern",
-  "Checked every five seconds. Runs stop when the limit is reached or less than 256 MiB remains free. Temporary usage can exceed the limit between checks.": "Prüfung alle fünf Sekunden. Läufe werden bei Erreichen des Limits oder weniger als 256 MiB freiem Speicher gestoppt. Zwischen den Prüfungen kann der Verbrauch das Limit vorübergehend überschreiten.",
+  "Checked every minute, and at once when the limit is reached or free space runs low. Runs stop when the limit is reached or less than 256 MiB remains free. Temporary usage can exceed the limit between checks.": "Prüfung jede Minute, bei erreichtem Limit oder knappem Speicher sofort. Läufe werden bei Erreichen des Limits oder weniger als 256 MiB freiem Speicher gestoppt. Zwischen den Prüfungen kann der Verbrauch das Limit vorübergehend überschreiten.",
   "Clean unused files": "Ungenutzte Dateien bereinigen",
   "Knowledge, cited evidence, run history and pending inputs are kept until you explicitly delete their pod. Backups and old restored profiles are retained separately.": "Wissen, zitierte Belege, Laufverlauf und ausstehende Eingaben bleiben erhalten, bis du den zugehörigen Pod ausdrücklich löschst. Sicherungen und früher wiederhergestellte Profile werden separat aufbewahrt.",
   "Backup and recovery": "Sicherung und Wiederherstellung",
