@@ -18,7 +18,7 @@ Verwende zuerst einen kleinen Ordner mit unkritischen Beispieldateien und nur Le
 
 ## Persönliche Konten verbinden
 
-Öffne App-Einstellungen → Deine Konten. Die Seite zeigt genau zwei Konten: dein DDISA-Konto, mit dem du über Berechtigungsanfragen entscheidest, und dein Codex-/GPT-Konto, das den KI-Zugang für Modellaufrufe in Pod-Skripten bereitstellt.
+Öffne Desktop-Einstellungen → Deine Konten. Verbinde dein DDISA-Konto für Berechtigungen, dein Codex-/GPT-Konto für LLM-Aufrufe. Die optionale Einrichtung von TypeSafe / Jev findest du direkt in den App-Einstellungen.
 
 Pods findet deinen Identitätsanbieter über den DDISA-Eintrag der Domain deiner E-Mail-Adresse. Alle Pods, Berechtigungen und mobilen Geräte verwenden dieses eine DDISA-Konto; es gibt nichts auszuwählen. Pod-Agenten sind nicht deine Konten und erscheinen hier nie. Ein Wechsel zu einem anderen DDISA-Konto gibt deinen Pods neue Agenten, deren Berechtigungen neu erteilt werden müssen.
 
@@ -31,6 +31,26 @@ Weitere Dienste richtest du pro Pod ein: Programmanmeldungen unter Berechtigunge
 
 ![Persönliche Konten verbinden](images/handbook-setup-de.png)
 
+## Strukturierte Entscheidungen mit Jev
+
+Verbinde TypeSafe mit einem API-Schlüssel in den App-Einstellungen. Der Schlüssel wird geprüft und verschlüsselt auf diesem Mac gespeichert. Skripte und Codex erhalten ihn nicht. Beim Ersetzen bleibt die Verbindung erhalten. Codex richtet die Pod-Zuweisung über die Ressourcen-API ein.
+
+Codex schreibt das Skript; Jev beantwortet darin begrenzte semantische Fragen. Nutze normalen Code für genaue Regeln, Jev für Choice-, Score- oder Noul-Entscheidungen und einen ausdrücklichen agent.run-Aufruf für generierten Text. Ein reines Jev-Skript benötigt kein aktives Codex-Konto. Synthetische Validierung belegt den Skriptvertrag, nicht die Entscheidungsqualität.
+
+Prüfe, welche Texte das Skript an TypeSafe sendet. Bewahre unklare Entscheidungen zur Prüfung auf und teste deutsche und englische Beispiele vor der Automatisierung. Wiederholungen können zusätzliche Kosten verursachen; der Verlauf zeigt Verbrauch, Modell, Versuche und Dauer erfolgreicher Auswertungen.
+
+1. Trage den API-Schlüssel unter App-Einstellungen → TypeSafe AI - Jev - API Key ein.
+2. Lass Codex Jev über die Ressourcen-API mit einer festen Modellversion wie jev-1.13.0 und einem Versuchslimit einrichten (Standard: 20 pro Lauf). Deklariere jev.evaluate als Skriptberechtigung. Skript und Berechtigungen enthalten keine Jev-Einrichtung.
+3. Validiere und prüfe das Skript, dann starte einen einzelnen Lauf. Die Kontoverbindung allein gibt keinem Pod Zugriff. Die zentrale Weboberfläche zeigt den Status; Schlüssel werden am zugehörigen Desktop eingegeben.
+
+```javascript
+const result = await context.jev.evaluate({
+  state: context.variables.sampleMessage,
+  questions: { relevant: { type: 'noul', instructions: 'Is this a support request?' } },
+})
+const relevance = result.answers.relevant.noul
+```
+
 ## Den ersten Pod erstellen
 
 Wähle Neuer Pod, gib einen Namen ein und speichere. Bearbeite den Zweck unter Übersicht → Beschreibung. Beschreibe Quelle, gewünschtes Ergebnis und Erfolgskriterien.
@@ -38,6 +58,8 @@ Wähle Neuer Pod, gib einen Namen ein und speichere. Bearbeite den Zweck unter �
 Verbinde für unterstützte Einrichtung Codex unter App-Einstellungen → Work from Codex, starte Codex neu und erteile dort deinen Auftrag. Pods enthält Verwaltungsformulare und Ausführungshistorie; Gespräche bleiben in Codex.
 
 Der verbundene Codex kann Zugriffe konfigurieren, Skripte speichern und validieren, sie aktivieren und auf Wunsch Zeitpläne einschalten. Rückfragen richten sich nach Codex. Eine Fertigmeldung beweist noch keinen erfolgreichen Lauf.
+
+In den Desktop-App-Einstellungen kannst du „Skriptausführung für über lokales MCP erstellte Pods automatisch freigeben“ aktivieren. Die Option ist standardmäßig aus und gilt für Pods, die nach Installation dieser Version über lokales MCP erstellt werden, einschließlich lokaler MCP-Aufträge an den zentralen Arbeitsbereich dieses Macs. Manuelle und geplante Läufe erhalten die übliche wiederverwendbare Ausführungsfreigabe des ursprünglichen Pod-Eigentümers. Ordner-, Programm-, Netzwerk- und Secret-Berechtigungen bleiben separat. Abgelehnte oder widerrufene Freigaben werden nie automatisch ersetzt. Ausschalten stoppt neue automatische Freigaben; bestehende Freigaben musst du separat widerrufen. MCP und die zentrale Weboberfläche können diese Einstellung nicht ändern.
 
 1. Erstelle den Pod oder bitte den verbundenen Codex darum.
 2. Nenne normale Einstellungen in Codex; übertrage Geheimnisse über OpenApe Secrets oder trage sie unter Variablen und Geheimnisse ein.

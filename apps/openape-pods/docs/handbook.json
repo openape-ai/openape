@@ -50,7 +50,8 @@
       "paragraphs": [
         "Choose New pod, enter a name and save. Edit its purpose directly under Overview → Description. Describe the source, desired result and how you will recognize success.",
         "For assisted setup, connect Codex under App settings → Work from Codex, restart Codex and give it your task there. Pods contains management forms and execution history; conversations stay in Codex.",
-        "Connected Codex can configure access, save and validate a script, activate it and enable a schedule when requested. Its confirmation policy belongs to Codex. A response saying ready is not evidence of a completed run."
+        "Connected Codex can configure access, save and validate a script, activate it and enable a schedule when requested. Its confirmation policy belongs to Codex. A response saying ready is not evidence of a completed run.",
+        "In desktop App settings, you can enable “Automatically approve script execution for Pods created through local MCP”. It is off by default and applies to Pods created through local MCP after this version is installed, including local MCP submissions to this Mac’s central workspace. Manual and scheduled runs obtain the usual reusable execution grant from the Pod’s original owner. Folder, program, network and secret permissions remain separate. Denied or revoked grants are never replaced automatically. Turning the setting off stops new automatic approvals; revoke existing grants separately. MCP and the central web interface cannot change this setting."
       ],
       "steps": [
         "Create the Pod or ask connected Codex to create it.",

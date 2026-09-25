@@ -7,7 +7,8 @@ import { loadAdapter, resolveCommand } from '@openape/apes'
 import { setTimeout as delay } from 'node:timers/promises'
 
 export type GrantProgress = RunApproval
-export type GrantObserver = (progress: GrantProgress) => Promise<void>
+export type GrantObserver = (progress: GrantProgress, automatic?: boolean) => Promise<void>
+export type GrantApproval = (grantId: string, signal: AbortSignal) => Promise<boolean>
 export type GrantLookup = (permission: string, connection: AgentConnection) => Promise<string | undefined>
 interface Grant { brokered?: BrokeredGrant, id: string, status: string, request: { requester: string, audience: string, target_host: string, grant_type: string } }
 
@@ -26,7 +27,7 @@ export interface AssignedAuthorization {
   grantId: string
 }
 export class AgentAuthority {
-  constructor(private readonly connection: AgentConnection, private readonly observe?: GrantObserver, private readonly previous?: GrantLookup) {
+  constructor(private readonly connection: AgentConnection, private readonly observe?: GrantObserver, private readonly previous?: GrantLookup, private readonly approve?: GrantApproval) {
     const url = new URL(connection.issuer)
     if ((url.protocol !== 'https:' && !(url.protocol === 'http:' && url.hostname === '127.0.0.1')) || url.pathname !== '/' || url.search || url.hash || url.username || url.password) throw new Error('Invalid assigned identity origin')
   }
@@ -84,7 +85,14 @@ export class AgentAuthority {
       grant = await this.grant(created.id, signal)
     }
     const current = grant
-    const publish = async (state: GrantProgress['state']) => this.observe?.({ grantId: current.id, issuer: this.connection.decisionIssuer ?? this.connection.issuer, title: resolved.detail.display, permission: resolved.permission, subject: this.connection.subject, state })
+    const publish = async (state: GrantProgress['state'], automatic = false) => this.observe?.({ grantId: current.id, issuer: this.connection.decisionIssuer ?? this.connection.issuer, title: resolved.detail.display, permission: resolved.permission, subject: this.connection.subject, state }, automatic)
+    if (grant.status === 'pending' && assignment.command.cliId === 'pod-runtime' && this.approve) {
+      await publish('pending', true)
+      if (await this.approve(grant.id, signal)) {
+        grant = await this.grant(grant.id, signal)
+        if (grant.status !== 'approved') throw new Error(`Automatic runtime permission approval failed (${grant.status})`)
+      }
+    }
     if (grant.status === 'pending') {
       if (!this.observe) throw new Error('Permission needs owner approval; open this Pod in OpenApe Pods')
       await publish('pending')
