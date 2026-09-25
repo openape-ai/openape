@@ -13,7 +13,10 @@ new automatic decisions; existing grants require explicit revocation.
 Full lint/typecheck, Pods build, 515 unit/component tests and two real Chrome settings
 tests pass. English/light and German/narrow/dark screenshots were inspected; the
 self-contained local report is `apps/openape-pods/.artifacts/runtime-approval-report.html`.
-Next: native PR and exact-head CI. No owner-profile or installed-app changes.
+[PR 140](https://repos.openape.ai/patrick/monorepo/pulls/140), implementation commit
+`a610cc9ce1fef75375347e6af38da346b01fceae`. Commit/push affected unit gates pass,
+including the relay consumer; receipt `.openape/check-results/1790346471069-a610cc9c-unit/summary.json`.
+Next: exact-head external CI and owner review; installation is separate. No owner-profile changes.
 
 ## Pods: TypeSafe Jev integration (September 25, 2026) — implementation verified
 
