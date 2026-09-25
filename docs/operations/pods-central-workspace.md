@@ -72,6 +72,15 @@ falls back to a 5 s timer against an older service.
 Changing a Pod's application while one of its runs is in progress is refused;
 previously it cancelled the run and blocked the schedule queue.
 
+Each awaited scheduler tick step (storage inspection, reference scan, master stop) is
+bounded; an expired step is logged and reported as `tickTimeout {phase, at}` in the
+status, and scheduling continues. When runs stop while the desktop is online, check
+`desktop.tickingSince`, `tickPhase` and `tickTimeout` in MCP `workspace inventory` first.
+
+Rollout order: deploy the relay and install the desktop back to back. A relay
+deployment makes an older desktop republish its full snapshot, which its fixed 15 s
+timeout cannot finish on a slow uplink (observed September 25, 13:33–14:00).
+
 ## Stored data and local exclusions
 
 The explicit `centralTables` allowlist in `src/contracts/central.ts` covers:
