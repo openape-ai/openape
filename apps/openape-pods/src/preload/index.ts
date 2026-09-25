@@ -1,4 +1,6 @@
+import { parseRuntimeApprovalCommand, parseRuntimeApprovalPreference } from '../contracts/runtime-approval'
 import { parseChatsCommand, parseChatsView } from '../contracts/chats'
+import { parseCodexCommand, parseCodexConnection } from '../contracts/codex'
 import { parseWorkflowCommand, parseWorkflowView } from '../contracts/workflows'
 import { parsePackageSearch, parsePackageOptions } from '../contracts/package-catalog'
 import { parseProgramCommand, parseTerminalView, parseConsoleView } from '../contracts/programs'
@@ -18,6 +20,9 @@ import { channels, isPodStatus } from '../contracts/ipc'
 import type { PodsBridge } from '../contracts/ipc'
 
 const bridge: PodsBridge = {
+  async runtimeApproval(command) { return parseRuntimeApprovalPreference(await ipcRenderer.invoke(channels.runtimeApproval, parseRuntimeApprovalCommand(command))) },
+  async central(command) { return ipcRenderer.invoke(channels.central, command) },
+  async codex(command) { return parseCodexConnection(await ipcRenderer.invoke(channels.codex, parseCodexCommand(command))) },
   async chats(command) { return parseChatsView(await ipcRenderer.invoke(channels.chats, parseChatsCommand(command))) },
   async workflows(command) { return parseWorkflowView(await ipcRenderer.invoke(channels.workflows, parseWorkflowCommand(command))) },
   async packages(command) { return parsePackageOptions(await ipcRenderer.invoke(channels.packages, parsePackageSearch(command))) },

@@ -1,5 +1,7 @@
-import { parseHttpPermission } from './http'
-import type { HttpPermission } from './http'
+import { parseJevAvailability, parseJevModel  } from './jev'
+import type { JevAvailability } from './jev'
+import { parseHttpAuthentication, parseHttpPermission } from './http'
+import type { HttpAuthentication, HttpPermission } from './http'
 import type { ProgramAuthority } from '../main/programs/grants'
 import { parseCredentialAlias, parseCredentialValue } from './credentials'
 
@@ -17,16 +19,20 @@ export function parseVariable(value: PodVariable): void {
   parseCredentialAlias(value.name)
   if (typeof value.value !== 'string' || value.value.length > 2048 || !Number.isSafeInteger(value.revision) || value.revision < 0) throw new Error('Invalid pod variable')
 }
-export interface ResourceState { directories?: { home: string, workspace: string }, variables?: PodVariable[], resources: PodResource[], epoch: number, snapshot?: { id: string, files: { id: string, hash: string, size: number }[] } }
+export interface ResourceState { jev?: JevAvailability | null, directories?: { home: string, workspace: string }, variables?: PodVariable[], resources: PodResource[], epoch: number, snapshot?: { id: string, files: { id: string, hash: string, size: number }[] } }
 export type DirectoryAccess = 'read' | 'readWrite'
 export interface DirectoryAssignment { path: string, access: DirectoryAccess, device: string, inode: string }
-export type ResourceCommand = { type: 'reviewDirectory', podId: string, path: string, access: DirectoryAccess, epoch: number } | { type: 'pickDirectory', podId: string, epoch: number } | { type: 'changeDirectory', podId: string, id: string, revision: number, epoch: number, access: DirectoryAccess } | { type: 'assignHttp', podId: string, epoch: number, permission: HttpPermission } | { type: 'saveVariable', podId: string, name: string, value: string, revision: number } | { type: 'removeVariable', podId: string, name: string, revision: number } | { type: 'saveCredential', podId: string, alias: string, value: string, epoch: number } | { type: 'list' | 'pickReference' | 'snapshot', podId: string } | { type: 'revoke', podId: string, id: string, revision: number }
-export type InternalResourceCommand = ResourceCommand | { type: 'assignDirectory', podId: string, path: string, access: DirectoryAccess, epoch: number } | { type: 'approveHttp', podId: string, epoch: number, permission: HttpPermission, authority: ProgramAuthority } | { type: 'assignCredential', podId: string, alias: string, credentialId: string, epoch: number } | { type: 'assignReference', podId: string, name: string, path: string }
+export type ResourceCommand = { type: 'assignJev', podId: string, epoch: number, connectionId: string, model: string, maxAttempts: number } | { type: 'reviewDirectory', podId: string, path: string, access: DirectoryAccess, epoch: number } | { type: 'pickDirectory', podId: string, epoch: number } | { type: 'changeDirectory', podId: string, id: string, revision: number, epoch: number, access: DirectoryAccess } | { type: 'assignHttp', podId: string, epoch: number, permission: HttpPermission, authentication?: HttpAuthentication } | { type: 'saveVariable', podId: string, name: string, value: string, revision: number } | { type: 'removeVariable', podId: string, name: string, revision: number } | { type: 'saveCredential', podId: string, alias: string, value: string, epoch: number } | { type: 'list' | 'pickReference' | 'snapshot', podId: string } | { type: 'revoke', podId: string, id: string, revision: number }
+export type InternalResourceCommand = ResourceCommand | { type: 'approveJev', podId: string, epoch: number, connectionId: string, model: string, maxAttempts: number, authority: ProgramAuthority } | { type: 'assignDirectory', podId: string, path: string, access: DirectoryAccess, epoch: number } | { type: 'approveHttp', podId: string, epoch: number, permission: HttpPermission, authority: ProgramAuthority, authentication?: HttpAuthentication } | { type: 'assignCredential', podId: string, alias: string, credentialId: string, epoch: number } | { type: 'assignReference', podId: string, name: string, path: string }
 export function parseResourceCommand(value: unknown, internal = false): InternalResourceCommand {
   if (!value || typeof value !== 'object') throw new Error('Invalid resource command')
   const command = value as Record<string, unknown>
-  const keys = command.type === 'pickDirectory' ? ['type', 'podId', 'epoch'] : command.type === 'changeDirectory' ? ['type', 'podId', 'id', 'revision', 'epoch', 'access'] : (command.type === 'reviewDirectory' || (internal && command.type === 'assignDirectory')) ? ['type', 'podId', 'path', 'access', 'epoch'] : command.type === 'assignHttp' ? ['type', 'podId', 'epoch', 'permission'] : internal && command.type === 'approveHttp' ? ['type', 'podId', 'epoch', 'permission', 'authority'] : command.type === 'saveVariable' ? ['type', 'podId', 'name', 'value', 'revision'] : command.type === 'removeVariable' ? ['type', 'podId', 'name', 'revision'] : command.type === 'saveCredential' ? ['type', 'podId', 'alias', 'value', 'epoch'] : internal && command.type === 'assignCredential' ? ['type', 'podId', 'alias', 'credentialId', 'epoch'] : command.type === 'revoke' ? ['type', 'podId', 'id', 'revision'] : internal && command.type === 'assignReference' ? ['type', 'podId', 'name', 'path'] : ['list', 'pickReference', 'snapshot'].includes(command.type as string) ? ['type', 'podId'] : []
+  const keys = command.type === 'assignJev' ? ['type', 'podId', 'epoch', 'connectionId', 'model', 'maxAttempts'] : internal && command.type === 'approveJev' ? ['type', 'podId', 'epoch', 'connectionId', 'model', 'maxAttempts', 'authority'] : command.type === 'pickDirectory' ? ['type', 'podId', 'epoch'] : command.type === 'changeDirectory' ? ['type', 'podId', 'id', 'revision', 'epoch', 'access'] : (command.type === 'reviewDirectory' || (internal && command.type === 'assignDirectory')) ? ['type', 'podId', 'path', 'access', 'epoch'] : command.type === 'assignHttp' ? ['type', 'podId', 'epoch', 'permission', 'authentication'] : internal && command.type === 'approveHttp' ? ['type', 'podId', 'epoch', 'permission', 'authority', 'authentication'] : command.type === 'saveVariable' ? ['type', 'podId', 'name', 'value', 'revision'] : command.type === 'removeVariable' ? ['type', 'podId', 'name', 'revision'] : command.type === 'saveCredential' ? ['type', 'podId', 'alias', 'value', 'epoch'] : internal && command.type === 'assignCredential' ? ['type', 'podId', 'alias', 'credentialId', 'epoch'] : command.type === 'revoke' ? ['type', 'podId', 'id', 'revision'] : internal && command.type === 'assignReference' ? ['type', 'podId', 'name', 'path'] : ['list', 'pickReference', 'snapshot'].includes(command.type as string) ? ['type', 'podId'] : []
   if (!keys.length || Object.keys(command).some(key => !keys.includes(key)) || typeof command.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(command.podId)) throw new Error('Unsupported resource command')
+  if (command.type === 'assignJev' || command.type === 'approveJev') {
+    parseJevModel(command.model)
+    if (typeof command.connectionId !== 'string' || !/^[a-f0-9-]{36}$/.test(command.connectionId) || !Number.isSafeInteger(command.epoch) || Number(command.epoch) < 0 || !Number.isSafeInteger(command.maxAttempts) || Number(command.maxAttempts) < 1 || Number(command.maxAttempts) > 100) throw new Error('Invalid Jev assignment')
+  }
   if (['pickDirectory', 'changeDirectory', 'assignDirectory', 'reviewDirectory'].includes(command.type as string)) {
     if (!Number.isSafeInteger(command.epoch) || Number(command.epoch) < 0) throw new Error('Invalid directory permission revision')
     if (command.type !== 'pickDirectory' && !['read', 'readWrite'].includes(command.access as string)) throw new Error('Invalid directory access')
@@ -34,6 +40,7 @@ export function parseResourceCommand(value: unknown, internal = false): Internal
   }
   if (command.type === 'assignHttp' || command.type === 'approveHttp') {
     command.permission = parseHttpPermission(command.permission)
+    if (command.authentication !== undefined) command.authentication = parseHttpAuthentication(command.authentication)
     if (!Number.isSafeInteger(command.epoch) || Number(command.epoch) < 0) throw new Error('Invalid HTTP permission revision')
   }
   if (['revoke', 'changeDirectory'].includes(command.type as string) && (typeof command.id !== 'string' || !/^[a-f0-9-]{36}$/.test(command.id) || !Number.isSafeInteger(command.revision) || (command.revision as number) < 1)) throw new Error('Invalid resource revocation')
@@ -50,6 +57,7 @@ export function parseResourceCommand(value: unknown, internal = false): Internal
 export function parseResourceState(value: unknown): ResourceState {
   if (!value || typeof value !== 'object') throw new Error('Invalid resource response')
   const state = value as ResourceState
+  if (state.jev !== undefined) state.jev = parseJevAvailability(state.jev)
   if (!Array.isArray(state.resources) || !Number.isSafeInteger(state.epoch) || state.epoch < 0) throw new Error('Invalid resource state')
   if (state.directories && (state.directories.home === state.directories.workspace || [state.directories.home, state.directories.workspace].some(path => typeof path !== 'string' || !path.startsWith('/') || /[\0\r\n]/.test(path)))) throw new Error('Invalid pod directories')
   if (state.variables !== undefined) {

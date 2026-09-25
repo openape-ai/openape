@@ -22,6 +22,8 @@ function checkConnection(row: typeof brokerConnections.$inferSelect | undefined,
 
 export function createDrizzleBrokerStore(): BrokerStore {
   const db = useDb()
+  const configuredLimit = Number(process.env.OPENAPE_RATE_LIMIT_MAX_AGENT)
+  const requestLimit = Number.isInteger(configuredLimit) && configuredLimit > 0 ? configuredLimit : 120
   return {
     async createConnection(connection) {
       return await db.transaction(async (tx) => {
@@ -53,7 +55,7 @@ export function createDrizzleBrokerStore(): BrokerStore {
         const now = Math.floor(Date.now() / 1000)
         await tx.delete(brokerRequests).where(lt(brokerRequests.expiresAt, now))
         const recent = await tx.select({ count: sql<number>`count(*)` }).from(brokerRequests).where(and(eq(brokerRequests.connectionId, row.id), gt(brokerRequests.expiresAt, now))).get()
-        if ((recent?.count ?? 0) >= 120) throw createError({ statusCode: 429, statusMessage: 'Broker request rate exceeded' })
+        if ((recent?.count ?? 0) >= requestLimit) throw createError({ statusCode: 429, statusMessage: 'Broker request rate exceeded' })
         const inserted = await tx.insert(brokerRequests).values({ connectionId: row.id, jti: request.jti, expiresAt: request.exp }).onConflictDoNothing().returning({ jti: brokerRequests.jti })
         if (!inserted.length) throw createError({ statusCode: 409, statusMessage: 'Broker request was already used', data: { type: 'https://openape.org/errors/broker_request_replayed' } })
         return connectionFromRow(row)

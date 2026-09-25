@@ -1,8 +1,10 @@
+import { parseJevAvailability } from './jev'
+import type { JevAvailability } from './jev'
 import { parseGroupCommand, parseOrganization } from './groups'
 import type { GroupCommand, Organization } from './groups'
 
 export interface StoredPod { id: string, name: string, revision: number, lifecycle: 'active' | 'paused' | 'archived', activeScript: string | null }
-export interface WorkspaceState { pods: StoredPod[], organization: Organization }
+export interface WorkspaceState { jev?: JevAvailability | null, pods: StoredPod[], organization: Organization }
 export type WorkspaceCommand = GroupCommand | { type: 'list' } | { type: 'pauseAll' } | { type: 'create', name: string } | { type: 'update', id: string, revision: number, name: string, lifecycle: StoredPod['lifecycle'] }
 export function parseCommand(value: unknown): WorkspaceCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid workspace command')
@@ -22,6 +24,7 @@ export function parseCommand(value: unknown): WorkspaceCommand {
 export function parseWorkspace(value: unknown): WorkspaceState {
   if (!value || typeof value !== 'object' || !Array.isArray((value as WorkspaceState).pods)) throw new Error('Invalid workspace response')
   const state = value as WorkspaceState
+  if (state.jev !== undefined) state.jev = parseJevAvailability(state.jev)
   for (const pod of state.pods) {
     parseCommand({ type: 'update', id: pod.id, revision: pod.revision, name: pod.name, lifecycle: pod.lifecycle })
     if (pod.activeScript !== null && (typeof pod.activeScript !== 'string' || !/^[a-f0-9]{64}$/.test(pod.activeScript))) throw new Error('Invalid active script')

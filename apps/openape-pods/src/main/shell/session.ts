@@ -1,3 +1,4 @@
+import { programLaunch, verifyProgramRuntime } from '../programs/runtime'
 import { constants } from 'node:fs'
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { chmod, copyFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -119,6 +120,7 @@ export class ExternalShell {
           const assignment = resource.configuration as unknown as ProgramAssignment
           if (!/^[\w-]+$/.test(assignment.cliId) || ['node', 'apes', 'ape-shell'].includes(assignment.cliId)) throw new Error('Application command conflicts with the pod shell')
           await verifyApplicationBundle(assignment)
+          await verifyProgramRuntime(assignment)
           await verifyExecutable(assignment.executable, assignment.executableHash)
           await verifyExecutable(assignment.adapterPath, assignment.adapterHash)
           const destination = join(adapters, `${assignment.cliId}.toml`)
@@ -126,10 +128,12 @@ export class ExternalShell {
           await copyFile(assignment.adapterPath, destination, constants.COPYFILE_EXCL)
           for (const file of assignment.entryFiles) await verifyExecutable(file.path, file.hash)
           await state.use(assignment.stateId, { podId: this.podId, applicationId: resource.id }, async (home) => {
-            const environment = Object.entries({ ...assignment.environment, HOME: home, TMPDIR: home }).map(([key, value]) => quoteShell(`${key}=${value}`)).join(' ')
+            const launch = programLaunch(assignment)
+            const invocation = [launch.executable, ...launch.prefix].map(quoteShell).join(' ')
+            const environment = Object.entries({ ...launch.environment, HOME: home, TMPDIR: home }).map(([key, value]) => quoteShell(`${key}=${value}`)).join(' ')
             const suffix = assignment.cacheArgument ? ` ${quoteShell(assignment.cacheArgument)} ${quoteShell(home)}` : ''
             const wrapper = join(context.bin, assignment.cliId); wrappers.push(wrapper)
-            await writeFile(wrapper, `#!/bin/sh\nexec /usr/bin/env -u ELECTRON_RUN_AS_NODE ${environment} ${quoteShell(assignment.executable)} "$@"${suffix}\n`, { mode: 0o700 })
+            await writeFile(wrapper, `#!/bin/sh\nexec /usr/bin/env -u ELECTRON_RUN_AS_NODE ${environment} ${invocation} "$@"${suffix}\n`, { mode: 0o700 })
             if (launchCommand) {
               const launcher = join(context.bin, launchCommand); wrappers.push(launcher)
               await writeFile(join(adapters, `${launchCommand}.toml`), launchDescriptor(launchCommand, resource.name), { mode: 0o600 })

@@ -156,6 +156,14 @@ export class ControlChanges {
     }
   }
 
+  retire(id: string, revision: number, podIds: string[]): ChangeSet {
+    const set = this.get(id)
+    if (set.revision !== revision || set.targets.some(target => !podIds.includes(target.podId)) || (set.workflow && set.workflow.before.nodes.some(node => !podIds.includes(node.podId)))) throw new Error('Select all targets and the current change revision before retiring it')
+    if (set.state === 'discarded') return set
+    if (set.state !== 'pending') throw new Error('Only pending legacy changes can be retired')
+    set.state = 'discarded'; this.save(set); return set
+  }
+
   execute(context: Conversation, id: string, revision: number, decision: 'applyChanges' | 'discardChanges', apply: (action: MasterAction) => unknown, run: (podId: string, operationId: string) => string, workflow?: (command: Extract<WorkflowCommand, { type: 'save' | 'start' }>, operationId: string) => unknown): ChangeSet {
     let set = this.get(id)
     if (set.conversationId !== context.id || set.contextRevision !== context.revision || set.revision !== revision) throw new Error('Change review changed; reload before deciding')

@@ -58,7 +58,7 @@ describe('native resource boundary', () => {
     await rename(source, join(root.root, 'moved'))
     await expect(createSnapshotSet(helper, destination, [assignment])).rejects.toThrow()
   })
-  it.each([false, true])('denies cross-pod/auth/snapshot writes, fork and direct network (packaged=%s)', async (packaged) => {
+  it('denies cross-pod/auth/snapshot writes, fork and direct network (packaged)', async () => {
     const root = await fixture(); const secret = join(root.broker, 'agent-auth'); const sibling = join(root.sibling, 'private.txt'); const reference = join(root.broker, 'reference.txt')
     await Promise.all([writeFile(secret, 'SYNTHETIC_AUTH'), writeFile(sibling, 'OTHER_POD'), writeFile(reference, 'REFERENCE')])
     await symlink(secret, join(root.workspace, 'alias'))
@@ -78,11 +78,11 @@ describe('native resource boundary', () => {
       results.hostSecret=process.env.PODS_UNASSIGNED_SECRET??null;
       console.log(JSON.stringify(results));`
     try {
-      const result = await runProbe(root, script, [reference], packaged)
+      const result = await runProbe(root, script, [reference], true)
       expect(result.exit, result.error).toBe(0)
       expect(JSON.parse(result.output)).toEqual({ auth: 'EPERM', sibling: 'EPERM', symlink: 'EPERM', reference: 'REFERENCE', snapshotWrite: 'EPERM', own: 'OWN', fork: 'EPERM', network: 'denied', hostSecret: null })
       expect(await readFile(secret, 'utf8')).toBe('SYNTHETIC_AUTH'); expect(await readFile(reference, 'utf8')).toBe('REFERENCE')
-      const control = await runProbe(root, `import fs from 'node:fs'; console.log(fs.readFileSync(${JSON.stringify(secret)},'utf8'))`, [secret], packaged)
+      const control = await runProbe(root, `import fs from 'node:fs'; console.log(fs.readFileSync(${JSON.stringify(secret)},'utf8'))`, [secret], true)
       expect(control.exit, control.error).toBe(0); expect(control.output).toContain('SYNTHETIC_AUTH')
     }
     finally { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())) }

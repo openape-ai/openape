@@ -105,7 +105,7 @@ export class RemoteControl {
       const existing = this.store.db.prepare('SELECT owner,identity FROM remote_pods WHERE pod_id=?').get(command.podId)
       if (existing && !sameOwner(JSON.parse(existing.owner as string), command.owner)) throw new ProtocolError('pod_owner_conflict', 409)
       if (existing?.identity && existing.identity !== JSON.stringify(command.identity)) throw new ProtocolError('pod_identity_conflict', 409)
-      this.store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,\'ready\',?,NULL) ON CONFLICT(pod_id) DO UPDATE SET runtime_id=excluded.runtime_id,generation=excluded.generation').run(command.podId, JSON.stringify(command.owner), registration.id, registration.generation, JSON.stringify(command.identity))
+      this.store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,\'ready\',?,NULL) ON CONFLICT(pod_id) DO UPDATE SET runtime_id=excluded.runtime_id,generation=excluded.generation WHERE runtime_id IS NOT excluded.runtime_id OR generation IS NOT excluded.generation').run(command.podId, JSON.stringify(command.owner), registration.id, registration.generation, JSON.stringify(command.identity))
       return { claimed: true }
     }
     if (command.type === 'provision') {

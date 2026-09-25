@@ -79,6 +79,7 @@ services:
       PORT: "3028"
       NITRO_PORT: "3028"
       NUXT_RELAY_DATABASE: /data/relay.sqlite
+      NUXT_WORKSPACE_DATABASE: /data/workspace.sqlite
       NUXT_RELAY_ORIGIN: https://pods.openape.ai
       NUXT_RELAY_FIXTURE: "false"
     volumes:
