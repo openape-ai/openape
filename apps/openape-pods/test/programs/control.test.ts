@@ -85,3 +85,13 @@ it('accepts explicit public application hosts and rejects wildcard or local dest
   expect(parseProgramCommand({ ...base, hosts: [] })).toEqual({ ...base, hosts: [] })
   for (const hosts of [['*.example.com'], ['localhost'], ['127.0.0.1'], ['api.local'], ['api.example.com:443'], ['api.example.com/path'], ['api.example.com', 'API.EXAMPLE.COM'], ['https://api.example.com'], Array.from({ length: 17 }).fill('api.example.com')]) expect(() => parseProgramCommand({ ...base, hosts })).toThrow()
 })
+it('refuses to change an application while a run of the Pod is in progress instead of cancelling it', () => {
+  const f = fixture(); const epoch = f.resources.epoch(f.pod.id)
+  const run = f.runs.reserve(f.pod.id, f.store.getPod(f.pod.id).activeScript!, epoch)
+  expect(() => f.control.execute({ type: 'save', podId: f.pod.id, id: f.id, epoch, configuration: { ...f.configuration, name: 'replacement' } })).toThrow('run in progress since')
+  expect(f.resources.epoch(f.pod.id)).toBe(epoch)
+  expect(f.store.db.prepare('SELECT state FROM runs WHERE id=?').get(run.run.id)!.state).toBe('running')
+  f.runs.finish(run.run.id, 'completed', 'Fixture', null)
+  f.control.execute({ type: 'save', podId: f.pod.id, id: f.id, epoch, configuration: { ...f.configuration, name: 'replacement' } })
+  expect(f.resources.epoch(f.pod.id)).toBe(epoch + 1)
+})

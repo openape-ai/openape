@@ -19,6 +19,13 @@ function fixture() {
   return { store, pod, resources, details: new WorkspaceDetails(store, resources) }
 }
 describe('pod details and version controls', () => {
+  it('saves a manual description by revision and preserves it across stale edits', () => {
+    const f = fixture()
+    const command = { type: 'describe' as const, podId: f.pod.id, revision: 0, text: 'Watch open PRs every 15 minutes' }
+    expect(f.details.execute(command).description).toMatchObject({ text: command.text, revision: 1, state: 'ready' })
+    expect(() => f.details.execute({ ...command, text: 'Stale overwrite' })).toThrow('Description changed')
+    expect(f.details.execute({ type: 'list', podId: f.pod.id }).description?.text).toBe(command.text)
+  })
   it('retains exact historical evidence and counts only current claims', () => {
     const f = fixture()
     for (const revision of [0, 1]) f.store.commitProgress({ podId: f.pod.id, expectedRevision: revision, checkpoint: {}, sources: [{ id: 'source', version: String(revision), locator: 'fixture:order', content: revision ? 'Due Tuesday' : 'Due Monday' }], claims: [{ id: `claim-${revision}`, matter: 'Order', kind: 'finding', text: revision ? 'Tuesday' : 'Monday', sourceIds: ['source'], ...(revision ? { supersedes: 'claim-0' } : {}) }] })

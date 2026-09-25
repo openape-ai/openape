@@ -1,3 +1,10 @@
+import { jevAvailability } from './onboarding/store'
+import type { JevEvaluation } from '../contracts/jev'
+import { setTimeout as delay } from 'node:timers/promises'
+import { CentralProjection } from './central/projection'
+import { boundedStep } from './scheduling/tick-step'
+import { parseOwner } from '@openape/pods-protocol'
+import type { AdministrationJournal } from '../contracts/codex-admin'
 import { RemoteControl } from './remote/control'
 import type { RemoteInternal } from './remote/control'
 import { ChatRegistry } from './master/chat-registry'
@@ -24,6 +31,8 @@ import type { SetupInternal } from './onboarding/control'
 import { parseMasterCommand } from '../contracts/master'
 import { MasterControl } from './master/control'
 import { MasterService } from './master/service'
+import { CodexControl } from './codex/control'
+import { parseCodexRequest } from '../contracts/codex'
 import type { AgentRuntime } from './agent/executor'
 import { authorizeRunService, authorizeCredentialService, assertMailHistory } from './mail/authorization'
 import { MailBridge } from './mail/bridge'
@@ -66,7 +75,7 @@ const runServices: RunServices = { shell: async (scope, signal) => {
 }, closeShell: async (scope) => {
   const { podId, runId, epoch, assignmentRevision, capabilities } = scope
   await mailBridge.execute({ podId, runId, epoch, assignmentRevision, capabilities }, {}, AbortSignal.timeout(10000), 'shellClose')
-}, http: async (body, signal, scope) => parseHttpReply(await mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'http')), credential: async (alias, signal, scope) => {
+}, jev: async (body, signal, scope) => await mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'jev') as JevEvaluation, http: async (body, signal, scope) => parseHttpReply(await mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'http')), credential: async (alias, signal, scope) => {
   const value = await mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, { alias }, signal, 'credential')
   if (typeof value !== 'string') throw new Error('Invalid credential broker response')
   return value
@@ -95,9 +104,11 @@ const masterControl = new MasterControl(store, registry, dispatcher, scheduler, 
 const scripts = new ScriptWorkspace(store, registry, masterControl, runtime)
 const scriptController = new AbortController()
 const master = new MasterService(store, runtime, masterControl, fixtureProvider)
+const codex = new CodexControl(store, masterControl)
 
 const remote = new RemoteControl(store, master, dispatcher, registry, scheduler, Date.now, { create: async (podId, applicationId) => String(await mailBridge.remoteProgramState({ operation: 'create', podId, applicationId })), discard: async (podId, stateId) => { await mailBridge.remoteProgramState({ operation: 'discard', podId, stateId }) } })
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
+let centralUntil = process.env.PODS_CENTRAL_ENABLED === '1' ? 0 : Infinity
 let scanAt = 0
 let storageAt = 0
 let maintenance = false
@@ -106,19 +117,32 @@ let suspended = false
 let startupReady = false
 let preferWorkflow = true
 let ticking: Promise<void> | null = null
+let tickStartedAt = 0
+let lastTickAt = 0
+let tickPhase = ''
+let tickTimeout: { phase: string, at: number } | null = null
+function tickStep<T>(phase: string, limitMs: number, work: () => Promise<T>): Promise<T | undefined> {
+  tickPhase = phase
+  return boundedStep(limitMs, work, () => { tickTimeout = { phase, at: Date.now() }; console.error(`Scheduler step ${phase} did not finish within ${limitMs} ms; continuing`) })
+}
 const timer = setInterval(() => {
-  if (ticking || suspended || !startupReady || maintenance) return
+  if (ticking || suspended || !startupReady || maintenance || Date.now() >= centralUntil) return
+  tickStartedAt = Date.now()
   ticking = (async () => {
     try {
-      if (Date.now() >= storageAt) {
-        storageAt = Date.now() + 5000
-        try { await data.retention.view() }
-        catch (error) { store.db.prepare('UPDATE data_settings SET error=? WHERE id=1').run(error instanceof Error ? error.message : 'Storage inspection failed') }
+      try {
+        // The full inventory lstats every profile entry (~1 s on a real profile), so it runs every minute unless a limit is already near.
+        if (Date.now() >= storageAt || await data.retention.inspectionDue()) {
+          storageAt = Date.now() + 60000
+          await tickStep('storage inspection', 60000, () => data.retention.view())
+        }
       }
+      catch (error) { store.db.prepare('UPDATE data_settings SET error=? WHERE id=1').run(error instanceof Error ? error.message : 'Storage inspection failed') }
       const error = store.db.prepare('SELECT error FROM data_settings WHERE id=1').get()?.error
-      if (error) { for (const pod of store.listPods()) dispatcher.cancelPod(pod.id, String(error)); await master.stop(); return }
-      if (Date.now() >= scanAt) { await watcher.scan(); scanAt = Date.now() + 15000 }
-      if (!suspended) {
+      if (error) { for (const pod of store.listPods()) dispatcher.cancelPod(pod.id, String(error)); await tickStep('master stop', 60000, () => master.stop()); return }
+      if (Date.now() >= scanAt) { await tickStep('reference scan', 120000, () => watcher.scan()); scanAt = Date.now() + 15000 }
+      tickPhase = 'scheduling'
+      if (!suspended && Date.now() < centralUntil) {
         const before = store.db.prepare('SELECT count(*) AS count FROM runs').get()!.count
         if (preferWorkflow) { workflows.tick(); scheduler.tick() }
         else { scheduler.tick(); workflows.tick() }
@@ -126,7 +150,7 @@ const timer = setInterval(() => {
       }
     }
     catch (error) { console.error('Scheduler stopped', error); process.exit(1) }
-  })().finally(() => { ticking = null })
+  })().finally(() => { ticking = null; lastTickAt = Date.now(); tickPhase = '' })
 }, 1000)
 port.on('message', async (event) => {
   if (event.data && typeof event.data === 'object' && 'serviceReply' in event.data) { mailBridge.accept(event.data.serviceReply); return }
@@ -136,6 +160,19 @@ port.on('message', async (event) => {
   const request = event.data as { id?: unknown, command?: unknown }
   if (!request || typeof request.id !== 'string') throw new Error('Invalid worker request')
   try {
+    if (request.command && typeof request.command === 'object' && 'central' in request.command) {
+      const command = request.command.central as { type: string, until?: number, owner?: unknown }
+      if (command.type === 'gate') {
+        if (typeof command.until !== 'number' || !Number.isFinite(command.until) || command.until < 0 || command.until > Date.now() + 30000) throw new Error('Invalid central lease')
+        centralUntil = command.until
+        // A tick re-reads centralUntil before scheduling, so closing the gate never needs an unbounded wait.
+        if (!centralUntil && ticking) await Promise.race([ticking, delay(5000)])
+        port.postMessage({ id: request.id, state: { lastTickAt, tickingSince: ticking ? tickStartedAt : null, tickPhase: ticking ? tickPhase : null, tickTimeout } }); return
+      }
+      if (command.type === 'version') { port.postMessage({ id: request.id, state: Number(store.db.prepare('SELECT total_changes() AS changes').get()!.changes) }); return }
+      if (command.type !== 'snapshot') throw new Error('Unsupported central worker command')
+      port.postMessage({ id: request.id, state: new CentralProjection(store, registry, scripts, dispatcher, scheduler).snapshot(parseOwner(command.owner)) }); return
+    }
     if (request.command && typeof request.command === 'object' && 'data' in request.command) {
       const command = request.command.data as DataInternal
       if (maintenance && command.type !== 'status') throw new Error('Another data operation is in progress')
@@ -177,6 +214,12 @@ port.on('message', async (event) => {
     }
     if (request.command && typeof request.command === 'object' && 'chats' in request.command) {
       port.postMessage({ id: request.id, state: new ChatRegistry(store).execute(parseChatsCommand(request.command.chats)) }); return
+    }
+    if (request.command && typeof request.command === 'object' && 'codexAdministration' in request.command) {
+      port.postMessage({ id: request.id, state: codex.administration(request.command.codexAdministration as AdministrationJournal) }); return
+    }
+    if (request.command && typeof request.command === 'object' && 'codex' in request.command) {
+      port.postMessage({ id: request.id, state: await codex.execute(parseCodexRequest(request.command.codex), AbortSignal.timeout(170000)) }); return
     }
     if (request.command && typeof request.command === 'object' && 'master' in request.command) {
       port.postMessage({ id: request.id, state: await master.execute(parseMasterCommand(request.command.master)) }); return
@@ -264,7 +307,9 @@ port.on('message', async (event) => {
     }
     if (request.command && typeof request.command === 'object' && 'resource' in request.command) {
       const resource = parseResourceCommand(request.command.resource, true)
-      if (resource.type === 'approveHttp') registry.assignHttp(resource.podId, resource.permission, resource.authority, resource.epoch)
+      if (resource.type === 'assignJev') throw new Error('Jev permissions require owner approval')
+      if (resource.type === 'approveJev') registry.assignJev(resource.podId, resource.connectionId, resource.model, resource.maxAttempts, resource.authority, resource.epoch)
+      if (resource.type === 'approveHttp') registry.assignHttp(resource.podId, resource.permission, resource.authority, resource.epoch, resource.authentication)
       if (resource.type === 'assignHttp') throw new Error('HTTP permissions require owner approval')
       if (resource.type === 'saveCredential') throw new Error('Credential values must be stored by the owning main process')
       const variables = new PodVariables(store)
@@ -279,7 +324,7 @@ port.on('message', async (event) => {
       const snapshot = resource.type === 'snapshot' ? await registry.capture(resource.podId, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/')) : undefined
       const resources = registry.list(resource.podId)
       const directories = await podDirectories(store.root, resource.podId)
-      port.postMessage({ id: request.id, state: { directories, variables: variables.list(resource.podId), resources, epoch: registry.epoch(resource.podId), ...(snapshot ? { snapshot } : {}) } })
+      port.postMessage({ id: request.id, state: { jev: jevAvailability(store), directories, variables: variables.list(resource.podId), resources, epoch: registry.epoch(resource.podId), ...(snapshot ? { snapshot } : {}) } })
       return
     }
     const command = parseCommand(request.command)
@@ -287,7 +332,7 @@ port.on('message', async (event) => {
     if (command.type === 'pauseAll') store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE lifecycle=\'active\'').run()
     if (command.type === 'create') store.createPod({ name: command.name })
     if (command.type === 'update') { store.updatePod(command.id, command.revision, { name: command.name, lifecycle: command.lifecycle }); if (command.lifecycle === 'archived') dispatcher.cancelPod(command.id, 'Pod archived') }
-    port.postMessage({ id: request.id, state: { pods: store.listPods(), organization: new PodGroups(store).view() } })
+    port.postMessage({ id: request.id, state: { jev: jevAvailability(store), pods: store.listPods(), organization: new PodGroups(store).view() } })
   }
   catch (error) { port.postMessage({ id: request.id, error: error instanceof Error ? error.message : 'Workspace operation failed' }) }
 })

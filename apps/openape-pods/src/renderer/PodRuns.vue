@@ -15,6 +15,7 @@ export default defineComponent({
   },
   computed: {
     selectedRun() { return this.view.runs.find(run => run.id === this.runId) ?? this.view.runs[0] },
+    jevEvaluations() { return this.view.events.filter(event => event.type === 'jev').map(event => ({ sequence: event.sequence, ...event.data as { model: string, attempts: number, durationMs: number, usage: { input_tokens: number, output_tokens: number } } })) },
     steps() { return runSteps(this.view.events, this.selectedRun?.state) },
     needsRecovery() { return !!this.selectedRun && ['interrupted', 'failed', 'cancelled', 'blocked'].includes(this.selectedRun.state) && this.selectedRun.recovery?.state !== 'retryQueued' },
     hasActiveRun() { return this.view.runs.some(run => run.state === 'running') },
@@ -133,6 +134,13 @@ export default defineComponent({
           </ul>
         </section>
       </article>
+      <section v-if="jevEvaluations.length" class="jev-usage">
+        <h3>{{ t('Jev decisions') }}</h3>
+        <p>{{ t('Usage for successful evaluations shown in this history. Retries may incur additional charges.') }}</p>
+        <p v-for="evaluation in jevEvaluations" :key="evaluation.sequence">
+          {{ evaluation.model }} · {{ t('{p0} attempts · {p1} ms · tokens in/out: {p2}/{p3}', { p0: evaluation.attempts, p1: evaluation.durationMs, p2: evaluation.usage.input_tokens, p3: evaluation.usage.output_tokens }) }}
+        </p>
+      </section>
       <section v-if="view.effects?.length" class="http-review">
         <h3>{{ t('Check the delivery before retrying') }}</h3>
         <p>{{ t('Inspect the destination before retrying. Pods cannot tell whether a request without a receipt was delivered.') }}</p>

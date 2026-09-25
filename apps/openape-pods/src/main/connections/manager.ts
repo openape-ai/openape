@@ -1,3 +1,7 @@
+import { approveRuntimeGrant } from './runtime-grant'
+import type { AgentConnection } from '../broker/authorization'
+import { parseTypesafeKey, typesafeOrigin } from '../../contracts/jev'
+import { typesafeJSON, verifyTypesafe } from './typesafe'
 import type { Owner } from '@openape/pods-protocol'
 import { enablePodBroker, revokePodBroker, podBrokerReceipt } from './broker'
 import type { PodBrokerConnection } from './broker'
@@ -5,6 +9,7 @@ import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { ProgramAssignment } from '../../contracts/programs'
 import { randomUUID } from 'node:crypto'
 import { rm, readFile } from 'node:fs/promises'
+import { extractDomain, resolveIdP } from '@openape/core'
 import { join } from 'node:path'
 import type { ConnectionView, OnboardingCommand, OnboardingView, PodIdentityView } from '../../contracts/onboarding'
 import type { AgentRuntime } from '../../worker/agent/executor'
@@ -17,18 +22,29 @@ import type { PodIdentityReference } from './agent'
 import { recoverAuthDomains } from './ledger'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
 import { approveCommands } from '../programs/grants'
+import type { AccountCleanup } from '../../worker/onboarding/reconcile'
 import type { ProgramAuthority } from '../programs/grants'
 
-interface SetupState { connections: ConnectionView[], defaultOwner: string | null, complete: boolean }
+interface SetupState { connections: ConnectionView[], owner: string | null, complete: boolean }
+interface PodEntry { connectionId: string, prepared: boolean, broker?: PodBrokerConnection, identity?: PodIdentityReference }
+async function discoverIssuer(account: string): Promise<string> {
+  const idp = await resolveIdP(extractDomain(account))
+  if (!idp) throw new Error('No DDISA identity provider is published for this email domain')
+  const url = new URL(idp)
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('The published DDISA identity provider must be an HTTPS origin')
+  return url.origin
+}
 export class ConnectionManager {
-  private jobs = new Map<string, { controller: AbortController, work: Promise<void>, login: ConnectionView['login'], owner: boolean }>()
+  private jobs = new Map<string, { controller: AbortController, work: Promise<void>, login: ConnectionView['login'] }>()
   private runtimeState = { ready: false, error: null as string | null }
   private assigning = false
   private identityTurn: Promise<void> = Promise.resolve()
+  private typesafeSession = new AbortController()
+  private typesafeChanging = false
   private providerSession = new AbortController()
   private codex: CodexConnection
   private owner: OwnerConnection
-  constructor(private readonly root: string, private readonly runtime: AgentRuntime, private readonly credentials: CredentialCache, private readonly dispatch: (command: SetupInternal) => Promise<unknown>, private readonly availability: () => Promise<void>) {
+  constructor(private readonly root: string, private readonly runtime: AgentRuntime, private readonly credentials: CredentialCache, private readonly dispatch: (command: SetupInternal) => Promise<unknown>, private readonly availability: () => Promise<void>, private readonly directAgents = false) {
     this.codex = new CodexConnection(credentials, runtime, join(root, 'authentication'))
     this.owner = new OwnerConnection(credentials)
   }
@@ -37,6 +53,7 @@ export class ConnectionManager {
     try {
       await recoverAuthDomains(join(this.root, 'authentication'), this.runtime.helper)
       await inspectCredentials()
+      await this.cleanup(await this.dispatch({ type: 'reconcile' }) as AccountCleanup)
       await rm(join(this.root, 'credentials/temporary'), { recursive: true, force: true })
       const manifest = JSON.parse(await readFile(this.runtime.manifest, 'utf8')) as { binaryHash: string, cli: string }
       if (manifest.cli !== `0.153.4-${process.platform}-${process.arch}`) throw new Error('Bundled Codex architecture does not match this Mac')
@@ -59,45 +76,44 @@ export class ConnectionManager {
     await this.dispatch({ type: 'save', connection: record, metadata })
   }
 
+  private async cleanup(cleanup: AccountCleanup): Promise<void> {
+    for (const key of cleanup.podKeys) await this.credentials.erasePodKey(key.id, key.podId)
+    for (const id of cleanup.connections) await this.credentials.eraseConnection(id)
+  }
+
+  private async ownerAccount(state?: SetupState): Promise<{ owner: ConnectionView, metadata: Record<string, unknown> } | null> {
+    const owner = (state ?? await this.state()).connections.find(item => item.provider === 'openape')
+    return owner ? { owner, metadata: await this.metadata(owner.id) } : null
+  }
+
   private async podIdentity(state: SetupState, podId: string): Promise<PodIdentityView> {
-    const owners = state.connections.filter(item => item.provider === 'openape')
-    const candidates = await Promise.all(owners.map(async owner => ({ owner, metadata: await this.metadata(owner.id) })))
-    const bound = candidates.filter(item => Object.hasOwn((item.metadata.pods ?? {}) as object, podId))
-    if (bound.length > 1) throw new Error('This pod is assigned to multiple OpenApe accounts; correct its owner before continuing')
-    const selected = bound[0] ?? candidates.find(item => item.owner.id === state.defaultOwner)
+    const selected = await this.ownerAccount(state)
     if (!selected) return { podId, bound: false, ownerConnection: null, issuer: null, decisionIssuer: null, subject: null, brokerConnectionId: null }
     const { owner, metadata } = selected
-    const entry = (metadata.pods as Record<string, { broker?: PodBrokerConnection, identity?: PodIdentityReference }> | undefined)?.[podId]
+    const entry = (metadata.pods as Record<string, PodEntry> | undefined)?.[podId]
     const broker = entry ? entry.broker : metadata.broker as PodBrokerConnection | undefined
     const decisionIssuer = entry?.identity?.decisionIssuer ?? (typeof metadata.issuer === 'string' ? metadata.issuer : null)
     return { podId, bound: !!entry, ownerConnection: owner.id, issuer: entry?.identity?.issuer ?? broker?.issuer ?? decisionIssuer, decisionIssuer, subject: entry?.identity?.subject ?? null, brokerConnectionId: entry?.identity?.brokerConnectionId ?? broker?.connectionId ?? null }
   }
 
   async existingRemotePods(owner: Owner): Promise<{ podId: string, identity: PodIdentityReference }[]> {
-    const state = await this.state()
-    const owners = state.connections.filter(item => item.provider === 'openape')
-    const entries = await Promise.all(owners.map(async connection => ({ connection, metadata: await this.metadata(connection.id) })))
-    const seen = new Set<string>(); const bound: { podId: string, identity: PodIdentityReference }[] = []
-    for (const entry of entries) {
-      const pods = (entry.metadata.pods ?? {}) as Record<string, { identity?: PodIdentityReference }>
-      for (const [podId, pod] of Object.entries(pods)) {
-        if (seen.has(podId)) throw new Error('This pod is assigned to multiple OpenApe accounts; correct its owner before continuing')
-        seen.add(podId)
-        if (entry.metadata.issuer !== owner.issuer || entry.metadata.subject !== owner.subject || !pod.identity) continue
-        if (pod.identity.podId !== podId || pod.identity.owner !== entry.connection.account || (pod.identity.decisionIssuer ?? pod.identity.issuer) !== owner.issuer) throw new Error('Existing pod identity belongs to a different setup')
-        bound.push({ podId, identity: pod.identity })
-      }
+    const selected = await this.ownerAccount()
+    if (!selected || selected.metadata.issuer !== owner.issuer || selected.metadata.subject !== owner.subject) return []
+    const bound: { podId: string, identity: PodIdentityReference }[] = []
+    for (const [podId, pod] of Object.entries((selected.metadata.pods ?? {}) as Record<string, PodEntry>)) {
+      if (!pod.identity) continue
+      if (pod.identity.podId !== podId || pod.identity.owner !== selected.owner.account || (pod.identity.decisionIssuer ?? pod.identity.issuer) !== owner.issuer) throw new Error('Existing pod identity belongs to a different setup')
+      bound.push({ podId, identity: pod.identity })
     }
     return bound
   }
 
   async remoteOwner(): Promise<{ owner: Owner, email: string }> {
-    const state = await this.state()
-    const selected = state.connections.find(item => item.id === state.defaultOwner && item.provider === 'openape' && item.state === 'ready')
-    if (!selected) throw new Error('Connect and select your OpenApe owner account on desktop first')
-    const metadata = await this.metadata(selected.id)
-    if (typeof metadata.issuer !== 'string' || typeof metadata.subject !== 'string') throw new Error('Reconnect your owner account to verify its identity')
-    return { owner: { issuer: metadata.issuer, subject: metadata.subject }, email: selected.account }
+    const selected = await this.ownerAccount()
+    if (!selected || selected.owner.state !== 'ready') throw new Error('Sign in with your DDISA account on desktop first')
+    const { owner, metadata } = selected
+    if (typeof metadata.issuer !== 'string' || typeof metadata.subject !== 'string') throw new Error('Sign in with your DDISA account again to verify its identity')
+    return { owner: { issuer: metadata.issuer, subject: metadata.subject }, email: owner.account }
   }
 
   async view(podId?: string): Promise<OnboardingView> {
@@ -111,11 +127,17 @@ export class ConnectionManager {
 
   async execute(command: OnboardingCommand): Promise<OnboardingView> {
     if (command.type === 'list') return this.view(command.podId)
+    if (command.type === 'saveTypesafe') return this.saveTypesafe(command.key)
     if (command.type === 'assign' || command.type === 'folders' || (command.type === 'connect' && command.provider === 'microsoft')) throw new Error('Configure application accounts in the pod Permissions tab')
     if (command.type === 'cancel' || command.type === 'disconnect') {
       const job = this.jobs.get(command.id); job?.controller.abort(new Error('Sign-in cancelled by the owner')); await job?.work
       if (command.type === 'disconnect') {
         const item = await this.connection(command.id)
+        if (item.provider === 'typesafe') {
+          if (this.typesafeChanging) throw new Error('TypeSafe connection is being updated')
+          this.typesafeSession.abort(new Error('TypeSafe connection removed')); this.typesafeSession = new AbortController()
+          await this.credentials.eraseConnection(item.id)
+        }
         if (item.provider === 'chatgpt') { this.providerSession.abort(new Error('ChatGPT connection removed')); this.providerSession = new AbortController() }
         await this.dispatch({ type: 'revoke', id: item.id }); await this.save({ ...item, state: 'revoked', error: null }, await this.metadata(item.id))
         await this.availability()
@@ -123,16 +145,19 @@ export class ConnectionManager {
       return this.view()
     }
     if (command.type === 'enableBroker' || command.type === 'revokeBroker') { await this.configureBroker(command); return this.view() }
-    if (command.type === 'setDefaultOwner') { await this.dispatch({ type: 'setDefaultOwner', id: command.id }); return this.view() }
     if (!this.runtimeState.ready) throw new Error(this.runtimeState.error ?? 'Bundled runtime is not ready')
     if (command.type === 'connect') {
-      const connection: ConnectionView = { id: randomUUID(), provider: command.provider, account: command.account, state: 'connecting', error: null, login: null }
-      return this.startLogin(connection, command.issuer ? { issuer: command.issuer.replace(/\/$/, '') } : {}, command.makeDefault === true, true)
-    }
-    if (command.type === 'reconnect') {
-      const connection = await this.connection(command.id, 'openape')
+      if (command.provider === 'typesafe') throw new Error('Connect TypeSafe through the protected API key form')
+      const existing = (await this.state()).connections.find(item => item.provider === command.provider)
       if (this.assigning) throw new Error('Another permission review is in progress')
-      return this.startLogin({ ...connection, state: 'connecting', error: null }, await this.metadata(connection.id), false)
+      if (command.provider === 'chatgpt') return this.startLogin(existing ?? { id: randomUUID(), provider: 'chatgpt', account: '', state: 'connecting', error: null, login: null }, existing ? await this.metadata(existing.id) : {}, !existing)
+      const account = command.account.trim().toLowerCase()
+      const current = existing ? await this.metadata(existing.id) : {}
+      const switching = !!existing && existing.account.toLowerCase() !== account
+      if (switching && Object.keys(current.pods ?? {}).length > 0 && command.switchAccount !== true) throw new Error('Confirm switching to another DDISA account')
+      const issuer = await discoverIssuer(account)
+      const metadata = switching ? {} : current
+      return this.startLogin(existing ?? { id: randomUUID(), provider: 'openape', account, state: 'connecting', error: null, login: null }, { ...metadata, issuer }, !existing, account)
     }
     if (command.type === 'finish') await this.dispatch({ type: 'finish' })
     return this.view()
@@ -162,29 +187,41 @@ export class ConnectionManager {
     finally { this.assigning = false }
   }
 
-  private async startLogin(connection: ConnectionView, metadata: Record<string, unknown>, makeDefault: boolean, fresh = false): Promise<OnboardingView> {
-    if (this.jobs.size >= 3 || this.jobs.has(connection.id)) throw new Error('Finish or cancel another sign-in first')
-    if (connection.provider === 'openape' && [...this.jobs.values()].some(job => job.owner)) throw new Error('Finish or cancel another sign-in first')
-    if (fresh) await this.credentials.create(connection.id, '{}')
-    await this.save(connection, metadata)
+  private async startLogin(previous: ConnectionView, metadata: Record<string, unknown>, fresh: boolean, account = previous.account): Promise<OnboardingView> {
+    if (this.jobs.size >= 3 || this.jobs.has(previous.id)) throw new Error('Finish or cancel another sign-in first')
+    if (fresh) await this.credentials.create(previous.id, '{}')
+    const connection: ConnectionView = { ...previous, state: 'connecting', error: null, login: null }
+    await this.save(connection, fresh ? metadata : await this.metadata(previous.id))
     const controller = new AbortController(); const timer = setTimeout(() => controller.abort(new Error('Sign-in expired; start again')), 15 * 60 * 1000)
-    const job = { controller, work: Promise.resolve(), login: null as ConnectionView['login'], owner: connection.provider === 'openape' }; this.jobs.set(connection.id, job)
+    const job = { controller, work: Promise.resolve(), login: null as ConnectionView['login'] }; this.jobs.set(connection.id, job)
     job.work = (async () => {
       try {
         const present = (login: NonNullable<ConnectionView['login']>) => { job.login = login }
-        if (connection.provider === 'chatgpt') { const account = await this.codex.login(connection.id, controller.signal, present); connection.account = account.account; metadata.accountId = account.accountId }
+        if (connection.provider === 'chatgpt') { const signedIn = await this.codex.login(connection.id, controller.signal, present); connection.account = signedIn.account; metadata.accountId = signedIn.accountId }
         if (connection.provider === 'openape') {
-          if (typeof metadata.issuer !== 'string') throw new Error('OpenApe identity provider is required')
-          Object.assign(metadata, await this.owner.login(connection.id, metadata.issuer.replace(/\/$/, ''), connection.account, controller.signal, present))
+          Object.assign(metadata, await this.owner.login(connection.id, metadata.issuer as string, account, controller.signal, present))
+          if (account.toLowerCase() !== previous.account.toLowerCase()) await this.releasePods(connection.id)
+          connection.account = account
         }
         controller.signal.throwIfAborted(); await this.save({ ...connection, state: 'ready' }, metadata)
-        if (makeDefault) await this.dispatch({ type: 'setDefaultOwner', id: connection.id })
         await this.availability()
       }
-      catch (error) { await this.save({ ...connection, state: 'failed', error: error instanceof Error ? error.message : 'Sign-in failed' }, metadata) }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Sign-in failed'
+        await this.save({ ...previous, state: fresh || previous.state === 'connecting' ? 'failed' : previous.state, error: message }, await this.metadata(previous.id))
+      }
       finally { clearTimeout(timer); this.jobs.delete(connection.id) }
     })().catch((error: unknown) => { this.runtimeState = { ready: false, error: error instanceof Error ? error.message : 'Could not persist sign-in outcome' } })
     return this.view()
+  }
+
+  // The previous owner's agents are bound to that identity at their provider; new identities are provisioned on first use.
+  private async releasePods(id: string): Promise<void> {
+    const metadata = await this.metadata(id)
+    for (const [podId, entry] of Object.entries((metadata.pods ?? {}) as Record<string, Partial<PodEntry>>)) {
+      if (entry.connectionId) await this.credentials.erasePodKey(entry.connectionId, podId)
+    }
+    await this.dispatch({ type: 'revoke', id })
   }
 
   async podConnection(podId: string, requestedOwner?: Owner) {
@@ -202,22 +239,19 @@ export class ConnectionManager {
   }
 
   private async preparePodConnection(podId: string, requestedOwner?: Owner) {
-    const state = await this.state()
-    const owners = state.connections.filter(item => item.provider === 'openape')
-    const candidates = await Promise.all(owners.map(async owner => ({ owner, metadata: await this.metadata(owner.id) })))
-    const bound = candidates.filter(item => Object.hasOwn((item.metadata.pods ?? {}) as object, podId))
-    if (bound.length > 1) throw new Error('This pod is assigned to multiple OpenApe accounts; correct its owner before continuing')
-    const matches = (item: typeof candidates[number]) => item.metadata.issuer === requestedOwner?.issuer && (item.metadata.subject ?? item.owner.account) === requestedOwner?.subject
-    if (requestedOwner && bound.length && !matches(bound[0])) throw new Error('Pod belongs to another owner')
-    const selected = bound[0] ?? candidates.find(item => requestedOwner ? matches(item) : item.owner.id === state.defaultOwner)
-    if (!selected) throw new Error('Choose a default OpenApe account before setting up a new pod')
-    if (selected.owner.state !== 'ready') throw new Error('Reconnect this pod’s OpenApe account before continuing')
+    const selected = await this.ownerAccount()
+    if (!selected) throw new Error('Sign in with your DDISA account before setting up a pod')
     const { owner, metadata } = selected
+    if (requestedOwner && (metadata.issuer !== requestedOwner.issuer || (metadata.subject ?? owner.account) !== requestedOwner.subject)) throw new Error('Pod belongs to another owner')
+    if (owner.state !== 'ready') throw new Error('Sign in to your DDISA account again before continuing')
     if (typeof metadata.issuer !== 'string') throw new Error('OpenApe identity provider is required')
     const identities = new PodIdentityManager(this.credentials)
-    const pods = (metadata.pods ?? {}) as Record<string, { connectionId: string, prepared: boolean, broker?: PodBrokerConnection, identity?: PodIdentityReference }>
+    const pods = (metadata.pods ?? {}) as Record<string, PodEntry>
     let entry = pods[podId]
-    if (!entry) { entry = { connectionId: randomUUID(), prepared: false, ...(metadata.broker ? { broker: metadata.broker as PodBrokerConnection } : {}) }; pods[podId] = entry; metadata.pods = pods; await this.save(owner, metadata) }
+    if (!entry) {
+      if (!metadata.broker && !this.directAgents) throw new Error('Allow Pods to create agents in this pod’s settings first')
+      entry = { connectionId: randomUUID(), prepared: false, ...(metadata.broker ? { broker: metadata.broker as PodBrokerConnection } : {}) }; pods[podId] = entry; metadata.pods = pods; await this.save(owner, metadata)
+    }
     if (!entry.prepared) { await identities.ensurePrepared(entry.connectionId, podId, entry.broker?.issuer ?? metadata.issuer, owner.account, entry.broker ? { decisionIssuer: metadata.issuer, brokerConnectionId: entry.broker.connectionId } : undefined); entry.prepared = true; await this.save(owner, metadata) }
     if (!entry.identity) {
       const bearer = await this.owner.bearer(owner.id, metadata.issuer, owner.account, AbortSignal.timeout(120000))
@@ -236,6 +270,11 @@ export class ConnectionManager {
     return { permission: resolved.permission, display: resolved.detail.display, authority: { identity: connection.identity, ownerConnection: connection.ownerConnection, grantId: '' } }
   }
 
+  async approveRuntimeGrant(connection: AgentConnection & { ownerConnection: string }, podId: string, grantId: string, signal: AbortSignal, allowed: () => boolean): Promise<void> {
+    const bearer = await this.owner.bearer(connection.ownerConnection, connection.decisionIssuer ?? connection.issuer, connection.owner, signal)
+    await approveRuntimeGrant(connection, podId, grantId, bearer, signal, allowed)
+  }
+
   async approve(podId: string, adapterPath: string, commands: string[][]): Promise<ProgramAuthority> {
     const connection = await this.podConnection(podId)
     if (this.assigning) throw new Error('Another permission review is in progress')
@@ -249,7 +288,7 @@ export class ConnectionManager {
     finally { this.assigning = false }
   }
 
-  busy(): boolean { return this.jobs.size > 0 || this.assigning }
+  busy(): boolean { return this.jobs.size > 0 || this.assigning || this.typesafeChanging }
   async purgePodKeys(podId: string, assignedIds: string[]): Promise<void> {
     const ids = new Set(assignedIds)
     const owners = (await this.state()).connections.filter(item => item.provider === 'openape')
@@ -265,6 +304,45 @@ export class ConnectionManager {
     }
   }
 
+  private async saveTypesafe(key: string): Promise<OnboardingView> {
+    if (this.typesafeChanging) throw new Error('TypeSafe connection is being updated')
+    this.typesafeChanging = true
+    try {
+      parseTypesafeKey(key)
+      await verifyTypesafe(key, this.typesafeSession.signal)
+      this.typesafeSession.signal.throwIfAborted()
+      const existing = (await this.state()).connections.find(item => item.provider === 'typesafe')
+      const id = existing?.id ?? randomUUID()
+      await this.credentials.connect(id, JSON.stringify({ kind: 'typesafe', key }))
+      this.typesafeSession.abort(new Error('TypeSafe API key replaced')); this.typesafeSession = new AbortController()
+      await this.save({ id, provider: 'typesafe', account: 'TypeSafe / Jev', state: 'ready', error: null, login: null }, { verifiedAt: Date.now() })
+      await this.availability()
+      return this.view()
+    }
+    finally { this.typesafeChanging = false }
+  }
+
+  async typesafeRequest(id: string, body: string, signal: AbortSignal): Promise<Response> {
+    signal = AbortSignal.any([signal, this.typesafeSession.signal])
+    const item = await this.connection(id, 'typesafe')
+    if (item.state !== 'ready') throw new Error('TypeSafe is not connected; reconnect in App settings')
+    const record = await this.credentials.readConnection(id)
+    if (record.kind !== 'typesafe') throw new Error('Invalid TypeSafe credential record')
+    const key = parseTypesafeKey(record.key)
+    signal.throwIfAborted()
+    const response = await fetch(`${typesafeOrigin}/v1/systemone`, { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body, redirect: 'error', signal })
+    signal.throwIfAborted()
+    if ([401, 403].includes(response.status)) {
+      await this.save({ ...item, state: 'expired', error: 'TypeSafe API key is invalid or access was denied; reconnect' }, await this.metadata(id))
+      await this.availability()
+    }
+    if (!response.ok) return response
+    const value = JSON.stringify(await typesafeJSON(response))
+    signal.throwIfAborted()
+    if (value.includes(key)) throw new Error('TypeSafe response exposed authentication data')
+    return new Response(value, { headers: { 'Content-Type': 'application/json' } })
+  }
+
   async providerReady(): Promise<boolean> { return this.runtimeState.ready && (await this.state()).connections.some(item => item.provider === 'chatgpt' && item.state === 'ready') }
   async provider(body: unknown, signal: AbortSignal): Promise<Response> {
     signal = AbortSignal.any([signal, this.providerSession.signal])
@@ -274,9 +352,10 @@ export class ConnectionManager {
     if (typeof metadata.accountId !== 'string') throw new Error('ChatGPT account binding is missing')
     const bearer = await this.codex.bearer(item.id, metadata.accountId, signal)
     const response = await fetch('https://chatgpt.com/backend-api/codex/responses', { method: 'POST', redirect: 'error', headers: { Authorization: `Bearer ${bearer}`, 'ChatGPT-Account-ID': metadata.accountId, 'Content-Type': 'application/json', Accept: 'text/event-stream', originator: 'codex_cli_rs' }, body: JSON.stringify(body), signal })
+    signal.throwIfAborted()
     if ([401, 403].includes(response.status)) { await this.save({ ...item, state: 'expired', error: 'ChatGPT sign-in expired or access was denied; reconnect' }, metadata); await this.availability() }
     return response
   }
 
-  async stop(): Promise<void> { this.providerSession.abort(); for (const job of this.jobs.values()) job.controller.abort(); await Promise.all(Array.from(this.jobs.values(), job => job.work)) }
+  async stop(): Promise<void> { this.typesafeSession.abort(); this.providerSession.abort(); for (const job of this.jobs.values()) job.controller.abort(); await Promise.all(Array.from(this.jobs.values(), job => job.work)) }
 }

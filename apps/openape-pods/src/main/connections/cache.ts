@@ -71,6 +71,13 @@ export class CredentialCache {
     finally { this.release(id) }
   }
 
+  async eraseConnection(id: string): Promise<void> {
+    if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('Invalid connection reference')
+    await this.acquire(id)
+    try { await rm(join(this.root, `${id}.encrypted`), { force: true }) }
+    finally { this.release(id) }
+  }
+
   async erasePodKey(id: string, podId: string): Promise<void> {
     this.path(id); await this.acquire(id)
     try {
@@ -125,6 +132,12 @@ export class CredentialCache {
       if (value.alias !== alias) throw new Error('Credential alias does not match its assignment')
       return parseCredentialValue(value.value)
     }
+    finally { this.release(id) }
+  }
+
+  async readConnection(id: string): Promise<Record<string, unknown>> {
+    this.path(id); await this.acquire(id)
+    try { return parseCredentialJSON(this.cipher.decrypt(await readFile(this.path(id)))) }
     finally { this.release(id) }
   }
 

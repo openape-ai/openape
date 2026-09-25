@@ -1,0 +1,74 @@
+<h1>zaz task queue served by a scheduled OpenApe Pod</h1>
+<p class="lead">zaz.delta-mind.at gets its LLM answers again. A Pod checks the queue every 60 seconds without a model call, claims only claimable tasks, and answers them. It returns each result to zaz exactly once.</p>
+
+<h2>Purpose and scope</h2>
+<p>The launchd worker <code>at.openape.worker</code> was stopped on purpose and stays disabled. It served zaz, the troop cockpit and mail/invoice tasks. Only zaz moves to Pods. zaz health (<code>/api/agent/health</code>) reports 503 because nobody polls. The IURIO monitor Pod <code>98c32f74-ffaf-4628-bd41-95cea821572f</code> (900 s schedule, rev 2, checkpoint 38, five completed effect receipts) must remain unchanged. Automatic E2E/layout jobs stay off.</p>
+
+<h2>Verified starting point</h2>
+<div class="grid">
+<div class="card"><strong>zaz protocol</strong><p><code>@openape/sp-tasks</code> 0.1.0. <code>POST /api/agent/tasks/next</code> leases the oldest submitted or expired task (300 s lease) and returns <code>{task}</code>. <code>POST /resolve</code> requires the matching assignee and a live lease. A terminal resolve clears both, so a repeated terminal resolve is refused with 409 and no duplicate artifact is possible. Task data: <code>systemPrompt</code>, <code>userMessage</code>, <code>model</code> (gpt-5.5). Synchronous callers wait 280 s; extraction is decoupled.</p></div>
+<div class="card"><strong>Authentication</strong><p>zaz verifies an id.openape.ai JWT and an allowlisted <code>sub</code>. The existing agent key <code>op-delta-mind-cb6bf26a+patrick+hofmann_eco@id.openape.ai</code> is allowlisted. Its standard agent token (8 h) returned 200 at <code>next</code> on 2026-09-24. The old operator delegation rotates its grant ID monthly and is therefore unsuitable.</p></div>
+<div class="card"><strong>Production data</strong><p>No open tasks. 142 llm tasks with at most 8.5 KB results. Extractions have history up to 54 KB and results up to 40 KB, and took up to 15 min on Sonnet. zaz runs branch <code>feature/monatssoll</code> <code>7002422</code> (deployed 2026-09-11 13:09); <code>main</code> is 10 commits behind.</p></div>
+</div>
+<div class="callout"><strong>Pods gaps (main 967038a5):</strong> Every POST reply is stored in the centrally replicated <code>effect_ledger</code>, so an IdP token reply would leak there. Other limits:
+<ul>
+<li>request body ≤16 000 characters</li>
+<li>response ≤20 000 bytes</li>
+<li>ledger input and result ≤32 KB</li>
+<li><code>agent.run</code> 120 s and gpt-5.5 fixed</li>
+<li>run budget 300 s, including agent time</li>
+</ul>
+Every POST is an effect: a network failure or 4xx marks it unknown and blocks the Pod until owner reconciliation.</div>
+
+<h2>Owner decisions (2026-09-24)</h2>
+<p>Implement the Pods and zaz changes. Raise the limits instead of rejecting large extractions.</p>
+
+<h2>Milestone 1 — Pods runtime (monorepo, issue 1381)</h2>
+<ul>
+<li><strong>DDISA agent authentication for HTTP resources.</strong> <code>assignHttp</code> accepts optional <code>authentication {type:"ddisaAgent", credential, subject, issuer}</code>. For such origins, main reads the assigned key secret, signs an EdDSA client assertion, calls <code>issuer/token</code> itself and caches the token until shortly before expiry. It then injects <code>Authorization</code>. Script-supplied Authorization is refused for that resource. The token never reaches the script, logs, run events or ledger.</li>
+<li><strong>Digest receipts.</strong> The HTTP request option <code>receipt:"digest"</code> stores only status, SHA-256 and byte length in the ledger. The live reply is returned in full; a replay returns the digest receipt with an empty body. The default stays the full receipt, so IURIO/Telegram are unchanged.</li>
+<li><strong>Limits.</strong>
+<ul>
+<li>Request body 64 KiB and response body 128 KiB, within the 256 KiB frames.</li>
+<li>The ledger stores only a hash of the input, so its input bound rises accordingly.</li>
+<li><code>agent.run</code> gets optional <code>timeoutSeconds</code> (30–900, default 120).</li>
+<li>Time spent in <code>agent.run</code> does not consume the script run budget; the agent call has its own bound.</li>
+</ul></li>
+<li>Update runtime help, the MCP command schema and the handbook. Add focused regressions to the existing unit suites: token injection/refusal/caching, digest receipt/replay, larger bodies, agent timeout, and run budget.</li>
+</ul>
+<p>Acceptance: full <code>pnpm lint</code>, <code>pnpm typecheck</code>, Pods build and focused unit tests; exact-source external CI; native PR merge.</p>
+
+<h2>Milestone 2 — zaz pending check</h2>
+<p>From the deployed <code>feature/monatssoll</code>, branch <code>feature/agent-pending</code> adds authenticated <code>GET /api/agent/tasks/pending</code>. It reuses <code>resolveServiceAgent</code> and the claimable predicate of <code>leaseNextTask</code>, returns <code>{pending}</code>, and records the poll so health reflects a live consumer. Deploy with <code>deploy/README.md</code>, verify health and the endpoint, and open a Forgejo PR into <code>feature/monatssoll</code>.</p>
+
+<h2>Milestone 3 — installation</h2>
+<p>Run <code>pnpm check:ci</code> from clean main, then the signed/notarized internal package and mounted-DMG check. Wait for idle IURIO, take a paired app/profile backup, and record IURIO identity, schedule, checkpoint and receipts. Replace the app, restart it on the same profile, verify central reconnection and the unchanged IURIO state, and leave the app open.</p>
+
+<h2>Milestone 4 — Pods via MCP</h2>
+<p>Import the <code>op-delta-mind</code> key as Pod secret <code>zaz_agent_key</code> by file path (never by value). Assign <code>https://zaz.delta-mind.at</code> GET/POST with ddisaAgent authentication. Script per run:</p>
+<ol>
+<li>GET <code>pending</code>. At 0, finish with zero model calls.</li>
+<li>Otherwise POST <code>next</code> with digest receipt and key <code>zaz:claim:&lt;runId&gt;</code>. Checkpoint the leased task ID and delivery count.</li>
+<li><code>agent.run</code> with <code>systemPrompt</code> + untrusted <code>userMessage</code> and <code>tools:[]</code>. Strip fences as the old <code>clean.py</code> did.</li>
+<li>POST <code>resolve</code> <code>completed</code> (or <code>failed</code> with a reason) with key <code>zaz:resolve:&lt;taskId&gt;:&lt;delivery&gt;</code> and a digest receipt.</li>
+<li>Commit the checkpoint and return a summary.</li>
+</ol>
+<p>A separate test Pod runs the same script against a controlled synthetic task inserted in zaz. Then the zaz Pod is activated with a 60 s interval.</p>
+
+<h2>Verification</h2>
+<ol>
+<li>An empty queue makes zero <code>agent.run</code> calls (run events).</li>
+<li>A controlled test task is completed and its artifact is visible in zaz.</li>
+<li>Repeating a run or replaying the same key sends no second resolve; zaz has one artifact.</li>
+<li>Status and results are visible in the browser (pods.openape.ai/workspace) and on the desktop.</li>
+<li>Natural scheduled runs follow and zaz health returns 200.</li>
+</ol>
+
+<h2>Rollback</h2>
+<p>Pause the zaz Pod or disable its schedule. The zaz endpoint is additive; redeploy the previous release symlink. For Pods, reinstall the previous signed app (<code>67c10b97</code> DMG) only if central data is compatible. Never restore an older profile over newer central writes or receipts.</p>
+
+<h2>Progress</h2>
+<p>2026-09-24 23:40: analysis done, owner decisions recorded, PR 127 merged as <code>7103930d</code>, issue 1381 created, worktree <code>pods-zaz</code> from <code>7103930d</code>.</p>
+
+<h2>Decision log</h2>
+<p>MCP-only Pod setup with no database edits. A GET pending check avoids per-minute effect receipts and blocking on transient claim errors. Runtime-injected DDISA authentication keeps tokens out of centrally replicated receipts. Digest receipts avoid a second copy of zaz content in Pods and avoid the 32 KB ledger limit. <code>op-delta-mind</code> is chosen over the rotating operator delegation. gpt-5.5 matches the model requested by zaz tasks.</p>
