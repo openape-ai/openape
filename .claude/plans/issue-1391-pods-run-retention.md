@@ -7,7 +7,7 @@
 
 Keep the newest 50 runs per Pod, ordered by started_at descending with rowid descending as the deterministic tie-breaker. Delete older eligible runs from local and central history and remove their execution folders. Preserve protected runs, idempotency receipts, Pods, account copies, scripts, schedules, checkpoints, sources and claims. Ship one signed/notarized app-only DMG containing this change and the inventory cache from PR 143.
 
-Owner authorization already covers installation, paired backup and irreversible pruning after the safety checks. Patrick approved policy B and this implementation/release plan after discussing durable Pod workspaces and independent application-managed receipts. Implementation is in progress; release and installation have not occurred.
+Owner authorization already covers installation, paired backup and irreversible pruning after the safety checks. Patrick approved policy B and this implementation/release plan after discussing durable Pod workspaces and independent application-managed receipts. Implementation merged via PR 144 at 9237c196. One signed/notarized app-only DMG is installed with paired rollback; release verification is recorded in docs/agents/active-work.md.
 
 ## Repository orientation
 
@@ -100,7 +100,7 @@ Rollback: quit normally, preserve the post-upgrade profile for investigation, re
 
 - September 26: dedicated main worktree created; AGENTS and the three requested memory notes read; dependencies/CLI prepared.
 - September 26: issue 1391 opened before coding; source references and read-only receipt inventory inspected.
-- September 26: Patrick approved policy B and the plan. Implemented bounded retention and nullable completed-receipt references. Full lint/typecheck, Pods build and all 542 tests pass. Native PR/CI, release and installation remain.
+- September 26: Patrick approved policy B and the plan. Implemented bounded retention and nullable completed-receipt references. Full lint/typecheck, Pods build and all 542 tests pass. Native PR 144 and exact-head CI passed; signed merge-commit release installed with paired rollback.
 
 ## Surprises & Discoveries
 
@@ -121,4 +121,6 @@ Read this plan and current active-work, inspect branch/status/log and canonical 
 
 ## Outcomes
 
-Implementation is verified locally. Benchmark: 2,500 runs and 30,000 files reduced to 50 runs/folders in 98 bounded passes; maximum 17.42 ms, mean 14.04 ms, idle pass mean 0.117 ms, zero foreign-key errors. Release and installation remain.
+DMG SHA-256: `2331cf7b10554ef9324e695d32448eab0a37380bd79fa688335a19d5282b87c8`. Paired rollback: `/Users/patrickhofmann/Library/Application Support/OpenApe Pods Rollback/2026-09-26-103952-issue-1391/`. Before/after entries under runs/: 34,799 → 2,808. Gatekeeper confirms Notarized Developer ID; signed DMG acceptance and inspected screenshot passed. No owner Pods or profile data were included or seeded.
+
+Implementation and installed release are verified. Benchmark: 2,500 runs and 30,000 files reduced to 50 runs/folders in 98 bounded passes; maximum 17.42 ms, mean 14.04 ms, idle pass mean 0.117 ms, zero foreign-key errors. Release and installation completed at 9237c196; live rows/folders reduced from 2,560 to 258, preserving all 12 Pods, schedules and 26 receipts. Worker CPU measured 4.80 seconds per five minutes versus 10.69 immediately before. One old approval-protected run remains outside the newest 50. See docs/agents/active-work.md for hashes, backup, central checks and scheduled-run evidence.
