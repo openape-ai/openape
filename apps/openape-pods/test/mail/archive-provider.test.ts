@@ -43,3 +43,11 @@ it('rejects pagination outside the account and provider scope', async () => {
   const f = await fixture(); await expect(f.run(['list', '--cursor', 'https://evil.example.test/mail'])).rejects.toThrow('cursor')
   expect(f.fetch).toHaveBeenCalledTimes(1)
 })
+it('follows Microsoft OData Inbox continuation links without broadening the folder scope', async () => {
+  const f = await fixture()
+  for (const cursor of ['https://graph.microsoft.com/v1.0/me/mailFolders(\'inbox\')/messages?$skip=20', 'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$skip=20']) {
+    expect(await f.run(['list', '--cursor', cursor])).toMatchObject({ messages: [{ id: 'immutable-1' }] })
+  }
+  await expect(f.run(['list', '--cursor', 'https://graph.microsoft.com/v1.0/me/mailFolders(\'sentitems\')/messages'])).rejects.toThrow('cursor')
+  expect(f.fetch.mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true)
+})

@@ -67,7 +67,8 @@ export async function microsoftMail(argv = process.argv.slice(2), environment = 
     let path = `/v1.0/me/mailFolders/inbox/messages?$top=20&$orderby=receivedDateTime%20desc&$select=${fields}`
     if (values.cursor) {
       const url = new URL(values.cursor)
-      if (url.origin !== graphOrigin || !['/v1.0/me/mailFolders/inbox/messages', `/v1.0/me/mailFolders/${inbox.id}/messages`].includes(decodeURIComponent(url.pathname))) throw new Error('Invalid Inbox pagination cursor')
+      const paths = ['/v1.0/me/mailFolders/inbox/messages', '/v1.0/me/mailFolders(\'inbox\')/messages', `/v1.0/me/mailFolders/${inbox.id}/messages`, `/v1.0/me/mailFolders('${inbox.id.replaceAll('\'', '\'\'')}')/messages`]
+      if (url.origin !== graphOrigin || !paths.includes(decodeURIComponent(url.pathname))) throw new Error('Invalid Inbox pagination cursor')
       path = url.href
     }
     const page = await request(path)
