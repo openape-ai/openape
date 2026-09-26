@@ -138,3 +138,38 @@ it('warns when a scheduler step timed out although the desktop is online', async
   await flushPromises()
   expect(wrapper.find('[role="alert"]').text()).toMatch(/storage inspection.*did not finish/)
 })
+
+it('opens Jev, language, accounts and data through the active desktop settings entry point', async () => {
+  const { default: DesktopWorkspace } = await import('../../src/renderer/central/DesktopWorkspace.vue')
+  const { installWorkspace } = await import('../layout/workspace-fixture')
+  const onboarding = vi.fn(async () => ({ connections: [], complete: true, owner: null, runtime: { ready: true, error: null } }))
+  const data = vi.fn(async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }))
+  installWorkspace({ onboarding, data, central: async (command) => {
+    if (command.type === 'status') return { enabled: false }
+    if (command.type === 'inventory') return []
+    return { requestError: { status: 400, message: 'No fixture change feed' } }
+  } })
+  wrapper = mount(DesktopWorkspace); await flushPromises()
+  const click = async (text: string) => {
+    await wrapper!.findAll('button').find(button => button.text() === text)!.trigger('click')
+    await flushPromises()
+  }
+  await click('Desktop settings')
+  expect(wrapper.get('h1').text()).toBe('App settings')
+  expect(wrapper.get('.jev-connection label').text()).toBe('TypeSafe AI - Jev - API Key')
+  expect(wrapper.get('input[type="password"]').attributes('autocomplete')).toBe('new-password')
+  expect(wrapper.find('select[aria-label="Language"]').exists()).toBe(true)
+  await wrapper.get('.jev-connection input').setValue('synthetic-key')
+  await wrapper.get('.jev-connection form').trigger('submit'); await flushPromises()
+  expect(onboarding).toHaveBeenLastCalledWith({ type: 'saveTypesafe', key: 'synthetic-key' })
+  expect(wrapper.get<HTMLInputElement>('.jev-connection input').element.value).toBe('')
+  await click('Data & backups')
+  expect(data).toHaveBeenLastCalledWith({ type: 'status' })
+  expect(wrapper.find('[aria-label="Data and backups"]').exists()).toBe(true)
+  await click('Your accounts')
+  expect(wrapper.find('[aria-label="Your accounts"]').exists()).toBe(true)
+  await click('Continue to workspace')
+  expect(wrapper.find('.central-desktop-settings').exists()).toBe(false)
+  await click('Desktop settings')
+  expect(wrapper.find('.jev-connection').exists()).toBe(true)
+})
