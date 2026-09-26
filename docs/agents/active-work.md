@@ -8,12 +8,12 @@ The production Drizzle store now expires unanswered requests older than 48 hours
 
 Permanent SQLite-backed regression coverage extends the existing broker-store suite because the earlier default-store tests missed the production implementation. The original implementation failed 11 new cases; all 344 IdP tests now pass, including the additional decision-boundary case. Full `pnpm lint`, `pnpm typecheck` and `pnpm --filter openape-free-idp build` pass. A separate built-server smoke with the actual production Drizzle plugin, isolated SQLite and SSH challenge authentication verifies the pending inbox, persisted expiry and HTTP 400 for an old approval link; fresh pending and approved grants remain unchanged.
 
-Next: native PR review, exact-source CI, merge and tested-image IdP rollout; confirm the live owner inbox and old request status before closing the issue.
+[PR 148](https://repos.openape.ai/patrick/monorepo/pulls/148) passed external CI at `c836ee53`; its main-branch synchronization preserves the parallel Pods entry. Merge, production image, backup, final live verification and issue closure are recorded in the linked issue as the authoritative delivery receipt.
 
-## Pods: central desktop settings (September 26, 2026) — release preparation
+## Pods: central desktop settings (September 26, 2026) — sidebar follow-up
 
 [Issue 1393](https://repos.openape.ai/patrick/monorepo/issues/1393).
-Worktree `pods-jev-settings`, branch `bugfix/issue-1393-jev-desktop-settings`, base `3451e93a`.
+Worktree `pods-jev-settings`. PR 146 merged at `531a91ba` after exact-head CI success. Owner requested the DDISA account and App settings at the bottom left before installation; follow-up branch `bugfix/issue-1393-sidebar-settings` restores those entries in the active central desktop. The Pod list scrolls separately so both entries remain visible. The account opens account settings directly.
 The installed central desktop mounted a different settings screen from the one covered by Jev acceptance. The active desktop settings now expose the existing compact Jev key form, language, Codex preferences, account management and data/backups, with grouped cards and navigation. Completing account setup returns to the workspace.
 
 Full lint/typecheck, Pods build and all 543 unit/component tests pass. A permanent behavioral regression follows the actual desktop settings entry point, submits a synthetic key through the existing IPC contract and checks account/data navigation; browser coverage checks English and German narrow/dark layouts. Existing key encryption and authorization behavior are unchanged. Four focused browser tests pass; English/light and German/dark screenshots were inspected. Next: native PR/exact-head CI, then signed local delivery with paired rollback and owner UI verification.

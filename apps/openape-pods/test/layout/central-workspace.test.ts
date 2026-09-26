@@ -43,16 +43,30 @@ it('keeps Script and Permissions free of Jev setup in the narrow central workspa
 it.each(['en', 'de'] as const)('shows Jev in the active desktop settings with readable navigation (%s)', async (language) => {
   const { default: DesktopWorkspace } = await import('../../src/renderer/central/DesktopWorkspace.vue')
   const { installWorkspace } = await import('./workspace-fixture')
-  installWorkspace({ central: async (command) => {
+  const { host } = centralFixture()
+  host.workspace.pods = Array.from({ length: 30 }, (_, index) => ({ ...host.workspace.pods[0]!, id: `pod-${index}`, name: `Release monitor ${index + 1}` }))
+  installWorkspace({ onboarding: async () => ({ owner: 'owner', complete: true, runtime: { ready: true, error: null }, connections: [{ id: 'owner', provider: 'openape', account: 'owner@example.invalid', state: 'ready', error: null, login: null }] }), central: async (command) => {
     if (command.type === 'status') return { enabled: false }
-    if (command.type === 'inventory') return []
+    if (command.type === 'inventory') return [host]
     return { requestError: { status: 400, message: 'No fixture change feed' } }
   } })
   applyLanguage(language)
   await page.viewport(language === 'de' ? 560 : 1060, 950)
   document.documentElement.style.colorScheme = language === 'de' ? 'dark' : 'light'
   wrapper = mount(DesktopWorkspace, { attachTo: document.body }); await flushPromises()
-  await wrapper.findAll('button').find(button => button.text() === (language === 'de' ? 'Desktop-Einstellungen' : 'Desktop settings'))!.trigger('click')
+  const sidebar = wrapper.get('.central-sidebar').element.getBoundingClientRect()
+  const account = wrapper.get('.account-status').element.getBoundingClientRect()
+  const settings = wrapper.get('.central-settings-button').element.getBoundingClientRect()
+  expect(account.bottom).toBeLessThanOrEqual(settings.top)
+  expect(settings.right).toBeLessThanOrEqual(sidebar.right)
+  expect(settings.bottom).toBeLessThanOrEqual(innerHeight)
+  const list = wrapper.get('.central-pod-list').element
+  expect(list.scrollHeight).toBeGreaterThan(list.clientHeight)
+  expect(list.getBoundingClientRect().bottom).toBeLessThan(account.top)
+  expect(wrapper.get('.account-status').text()).toContain('owner@example.invalid')
+  expect(wrapper.find('.central-header button').exists()).toBe(false)
+  await page.screenshot({ path: `../../.artifacts/jev-desktop-sidebar-${language}.png` })
+  await wrapper.get('.central-sidebar-bottom .central-settings-button').trigger('click')
   await flushPromises()
   const input = wrapper.get('input[type="password"]').element.getBoundingClientRect()
   expect(input.width).toBeGreaterThan(200)
