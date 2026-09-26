@@ -190,3 +190,14 @@ it('discovers Jev before Pod creation and refreshes connection availability with
   expect(inspected).toMatchObject({ jev: { id, state: 'ready' } })
   expect(JSON.stringify(inspected)).not.toContain('never-expose-this')
 })
+
+it('journals a local private Jev import without accepting a raw key or unselected Pod', async () => {
+  const { pod, codex, send } = fixture()
+  const request = { id: randomUUID(), action: { action: 'resources', revision: pod.revision, command: { type: 'importJev', podId: pod.id, epoch: 0 }, path: '/private/jev-key' } }
+  expect(() => codex.administration({ type: 'begin', request })).toThrow('context_required')
+  await send({ action: 'select', podIds: [pod.id] })
+  expect(() => codex.administration({ type: 'begin', request: { ...request, action: { ...request.action, command: { ...request.action.command, key: 'forbidden' } } } })).toThrow('Invalid')
+  expect(codex.administration({ type: 'begin', request })).toEqual({ completed: false })
+  codex.administration({ type: 'complete', request, result: { jev: { state: 'ready' } } })
+  expect(codex.administration({ type: 'begin', request })).toEqual({ completed: true, result: { jev: { state: 'ready' } } })
+})

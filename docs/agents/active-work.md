@@ -1,5 +1,13 @@
 # Active work
 
+## Pods: contact protection and Jev evaluation (September 26, 2026)
+
+[Issue 1396](https://repos.openape.ai/patrick/monorepo/issues/1396), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3FKATZRY0Z3BY2YMMMVEFW9). Existing checkout `mail-briefing-grants`, branch `feature/issue-1396-mail-protection-jev`, base `40113402`.
+
+The assigned Microsoft companion retains a per-mailbox union of Sent Items To/Cc/Bcc recipients and enforces an owner-controlled address/domain policy before proposals and actual moves. Incomplete scans and conversation evidence prohibit archival. Jev supplies bounded structured decisions and priorities; free-form LLM calls only summarize selected important messages. A local-only private-file import initializes a missing native Jev connection without exposing its key or implicitly assigning it to a Pod. Changed application bindings expire old pending archive batches locally and require fresh owner review.
+
+Existing decision polling is disabled during rollout. Final source/check/PR, signed installation, contact counts, Jev acceptance and schedule receipts belong to the issue. No mail may move during setup; keep manual per-batch approval and use preview delivery during acceptance.
+
 ## Morning mail triage and archive approvals (September 26, 2026)
 
 [Issue 1395](https://repos.openape.ai/patrick/monorepo/issues/1395), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3F3FK9MX2BH6QWBCWBZZCJE). Checkout `mail-briefing-grants`, follow-up branch `bugfix/issue-1395-archive-service-lifetime`, [PR 153](https://repos.openape.ai/patrick/monorepo/pulls/153). PRs 150–152 are merged. The dedicated archive service uses exact manually confirmed once grants, frozen readable mail metadata, version/folder rechecks and durable uncertain outcomes. Generic program calls remain read-only. Follow-up fixes cover mailbox read permission reuse, the archive script boundary and native request lifetime, and owner workflow controls in connected desktop settings.

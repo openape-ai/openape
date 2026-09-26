@@ -30,6 +30,9 @@ export class MailArchiveService {
     const records = await this.store.list(podId)
     const unresolved = records.filter(record => ['preparing', 'executing', 'unknown'].includes(record.state))
     if (unresolved.length) throw new Error('An archive operation needs reconciliation before another proposal')
+    for (const record of records) {
+      if (record.manifest.applicationId === provider.applicationId) await this.expireChangedApplication(record, provider)
+    }
     const pending = records.filter(record => record.state === 'pending' && record.manifest.expiresAt > Date.now())
     if (pending.length >= 4) throw new Error('Review outstanding mail archive grants before preparing more')
     const items = []
@@ -59,6 +62,13 @@ export class MailArchiveService {
     }
   }
 
+  private async expireChangedApplication(record: ArchiveRecord, provider: ArchiveProvider): Promise<boolean> {
+    if (record.state !== 'pending' || (provider.applicationId === record.manifest.applicationId && provider.applicationHash === record.manifest.applicationHash)) return false
+    record.state = 'expired'; record.error = 'Mail application changed; request a fresh archive review'
+    await this.store.save(record)
+    return true
+  }
+
   async process(podId: string, providerFor: (record: ArchiveRecord) => Promise<ArchiveProvider>, authority: ArchiveAuthority): Promise<ArchiveView[]> {
     const records = await this.store.list(podId)
     const output: ArchiveView[] = []
@@ -71,11 +81,11 @@ export class MailArchiveService {
     for (const record of records) {
       if (record.state !== 'pending') { if (record.state === 'unknown') output.push(view(record)); continue }
       if (record.manifest.expiresAt <= Date.now()) { record.state = 'expired'; await this.store.save(record); output.push(view(record)); continue }
+      const provider = await providerFor(record)
+      if (await this.expireChangedApplication(record, provider)) { output.push(view(record)); continue }
       const status = await authority.status(record)
       if (status === 'pending') { output.push(view(record)); continue }
       if (status !== 'approved') { record.state = status; await this.store.save(record); output.push(view(record)); continue }
-      const provider = await providerFor(record)
-      if (provider.applicationId !== record.manifest.applicationId || provider.applicationHash !== record.manifest.applicationHash) throw new Error('Mail application changed; the old archive grant cannot execute')
       record.state = 'executing'; await this.store.save(record)
       try {
         await authority.consume(record)
