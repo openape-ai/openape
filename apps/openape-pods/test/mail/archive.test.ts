@@ -12,6 +12,15 @@ import type { ArchiveMail } from '../../src/contracts/mail-archive'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 
 const roots: string[] = []
+it('reuses account-scoped read assignments for concrete messages and conversations', async () => {
+  const adapter = loadAdapter('pods-mail', join(process.cwd(), 'examples/microsoft-mail-shapes.toml'))
+  for (const [operation, option] of [['read', '--message'], ['thread', '--conversation']]) {
+    const command = (account: string, id: string) => resolveCommand(adapter, ['pods-mail', operation!, '--account', account, option!, id])
+    const assigned = await command('owner@example.test', '*')
+    expect((await command('owner@example.test', 'concrete-provider-id')).permission).toBe(assigned.permission)
+    expect((await command('other@example.test', 'concrete-provider-id')).permission).not.toBe(assigned.permission)
+  }
+})
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); vi.useRealTimers() })
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'pods-mail-archive-')); roots.push(root)
