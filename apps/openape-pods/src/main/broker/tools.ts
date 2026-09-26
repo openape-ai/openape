@@ -42,7 +42,7 @@ function secretStrings(value: unknown, key = ''): string[] {
 }
 
 export class PodToolBroker {
-  constructor(private readonly helper: string, private readonly root: string, private readonly authority: AgentAuthority, private readonly credentials: CredentialCache) {}
+  constructor(private readonly helper: string, private readonly root: string, private readonly authority: Pick<AgentAuthority, 'authorize' | 'assertActive'>, private readonly credentials: CredentialCache) {}
   async execute(assignment: ToolAssignment, request: unknown, lease: BrokerLease): Promise<ToolReply> {
     if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('Invalid ape-shell request')
     const value = request as Record<string, unknown>

@@ -1,3 +1,6 @@
+import { MailArchiveService } from './mail/archive/service'
+import { ArchiveStore } from './mail/archive/store'
+import { handleMailArchive } from './mail/archive/handler'
 import type { RuntimeApprovalPolicy } from './codex/runtime-approval'
 import { assignedJev, parseJevRequest, typesafeOrigin } from '../contracts/jev'
 import { executeJev } from './connections/jev-service'
@@ -79,6 +82,7 @@ export class FixtureWorker {
   central: CentralController | null = null
   private shellIdentities = new Map<string, { close: () => Promise<void> }>()
   private openedApprovals = new Set<string>()
+  private archiveService?: MailArchiveService
   private programs: ProgramManager | null = null
   private connections: ConnectionManager | null = null
   private providerGateway: Awaited<ReturnType<typeof startAgentGateway>> | null = null
@@ -490,7 +494,7 @@ export class FixtureWorker {
 
   private async executeService(request: ServiceRequest): Promise<unknown> {
     if (!request || typeof request.id !== 'string' || !/^[a-f0-9-]{36}$/.test(request.id) || this.services.has(request.id) || this.services.size >= 16) throw new Error('Invalid or excessive broker request')
-    if (request.kind !== undefined && request.kind !== 'credential' && request.kind !== 'jev' && request.kind !== 'http' && request.kind !== 'shell' && request.kind !== 'shellClose') throw new Error('Unsupported broker service')
+    if (request.kind !== undefined && request.kind !== 'mailArchive' && request.kind !== 'credential' && request.kind !== 'jev' && request.kind !== 'http' && request.kind !== 'shell' && request.kind !== 'shellClose') throw new Error('Unsupported broker service')
     const scope = parseServiceScope(request.scope)
     const controller = new AbortController(); this.services.set(request.id, controller)
     const check = async (domain?: { path: string, ownerPid: number }) => parseResourceState(await this.dispatch({ serviceCheck: { scope, ...(domain ? { domain } : {}) } }))
@@ -559,6 +563,12 @@ export class FixtureWorker {
         return value
       }
       const state = await check()
+      if (request.kind === 'mailArchive') {
+        if (!this.credentials || !this.connections) throw new Error('Connection service unavailable')
+        this.archiveService ??= new MailArchiveService(new ArchiveStore(join(this.root, 'mail-archive')))
+        const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
+        return handleMailArchive({ service: this.archiveService, body: request.body, scope, root: this.root, helper: join(dist, 'native/pods-helper'), credentials: this.credentials, connections: this.connections, check, signal: controller.signal, observe, previous })
+      }
       if (request.kind === 'jev') {
         if (!this.credentials || !this.connections) throw new Error('Connection service unavailable')
         const assignment = assignedJev(state.resources, scope.podId, scope.capabilities)
