@@ -2028,6 +2028,7 @@
   "Review schedule activation changes in Workflow settings": "Prüfe Änderungen der Zeitplan-Aktivierung in den Workflow-Einstellungen",
   "Select all proposed workflow members before preparing changes": "Wähle alle vorgeschlagenen Workflow-Mitglieder aus, bevor du Änderungen vorbereitest",
   "Workflow operation unavailable": "Workflow-Aktion nicht verfügbar",
+  "Select only the member Pods before creating a workflow": "Wähle vor dem Erstellen eines Workflows nur die zugehörigen Pods aus",
   "Select a workflow before using this action": "Wähle einen Workflow aus, bevor du diese Aktion verwendest",
   "Related chats": "Zugehörige Chats",
   "Workflow changes": "Workflow-Änderungen",
