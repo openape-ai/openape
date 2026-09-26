@@ -1,4 +1,5 @@
 import type { BrokerConnection, BrokerRequest, OpenApeAuthZClaims, OpenApeGrant } from '@openape/core'
+import { approveGrant } from '@openape/grants'
 import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -9,7 +10,8 @@ import { eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as schema from '../server/database/schema'
 import { createDrizzleBrokerStore } from '../server/utils/drizzle-broker-store'
-import { createDrizzleGrantStore } from '../server/utils/drizzle-grant-store'
+import { createDrizzleGrantStore, grantToRow } from '../server/utils/drizzle-grant-store'
+import { countPendingForApprover } from '../server/utils/approver'
 
 let directory: string
 let client: ReturnType<typeof createClient>
@@ -27,7 +29,7 @@ function request(): BrokerRequest {
   return { iss: broker, aud: issuer, owner, connection_id: connection.id, iat: now, exp: now + 60, jti: randomUUID(), operation: 'connection' }
 }
 function grant(type: 'once' | 'always' = 'once'): OpenApeGrant {
-  return { id: randomUUID(), status: 'approved', created_at: 1, decided_by: owner, request: { requester: subject, target_host: 'pods:fixture', audience: 'shapes', grant_type: type, command: ['printf', 'fixture'] }, brokered: { connection_id: connection.id, broker_issuer: broker, agent_issuer: broker, owner, key_id: 'key-one' } }
+  return { id: randomUUID(), status: 'approved', created_at: Math.floor(Date.now() / 1000), decided_by: owner, request: { requester: subject, target_host: 'pods:fixture', audience: 'shapes', grant_type: type, command: ['printf', 'fixture'] }, brokered: { connection_id: connection.id, broker_issuer: broker, agent_issuer: broker, owner, key_id: 'key-one' } }
 }
 function claims(value: OpenApeGrant): OpenApeAuthZClaims {
   const now = Math.floor(Date.now() / 1000)
@@ -51,7 +53,7 @@ beforeEach(async () => {
   grantStore = createDrizzleGrantStore()
   connection = await store.createConnection({ id: randomUUID(), owner: { issuer, subject: owner }, broker_issuer: broker, agent_domain: 'pods.provider.test', status: 'active', created_at: 1 })
 })
-afterEach(() => { vi.unstubAllEnvs(); client.close(); rmSync(directory, { recursive: true, force: true }) })
+afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.restoreAllMocks(); client.close(); rmSync(directory, { recursive: true, force: true }) })
 
 describe('durable grant brokering', () => {
   it('accepts the authorized broker once and rejects replay, substituted owners and other domains', async () => {
@@ -144,5 +146,93 @@ describe('durable grant brokering', () => {
     await expect(store.bindAgent({ ...binding, owner: 'another@identity.test' }, 'Fixture', 'fixture-public-key')).rejects.toMatchObject({ statusCode: 403 })
     await database.update(schema.users).set({ isActive: false }).where(eq(schema.users.email, subject))
     await expect(store.bindAgent(binding, 'Fixture', 'fixture-public-key')).rejects.toMatchObject({ statusCode: 403 })
+  })
+})
+
+describe('production pending request expiry', () => {
+  const now = 1_800_000_000
+  const cutoff = now - 48 * 3600
+
+  beforeEach(() => { vi.spyOn(Date, 'now').mockReturnValue(now * 1000) })
+
+  function pending(createdAt: number, brokered = false): OpenApeGrant {
+    return { ...grant(), brokered: brokered ? grant().brokered : undefined, status: 'pending', created_at: createdAt }
+  }
+
+  it('expires requests older than 48 hours before inbox filtering and preserves the boundary and decided grants', async () => {
+    const stale = pending(cutoff - 1)
+    const boundary = pending(cutoff)
+    const fresh = pending(cutoff + 1)
+    const decided = (['approved', 'denied', 'revoked', 'used', 'expired'] as const).map(status => ({ ...pending(cutoff - 10), status }))
+    await database.insert(schema.grants).values([stale, boundary, fresh, ...decided].map(grantToRow))
+
+    expect((await grantStore.findPending()).map(value => value.id)).toEqual([fresh.id, boundary.id])
+    const persisted = await database.select().from(schema.grants)
+    expect(persisted.find(value => value.id === stale.id)?.status).toBe('expired')
+    for (const value of decided) expect(persisted.find(row => row.id === value.id)?.status).toBe(value.status)
+  })
+
+  it.each(['findById', 'findByRequester', 'findAll', 'findByDelegate', 'findByDelegator'] as const)('persists expiry through %s without a prior inbox read', async (method) => {
+    const stale = { ...pending(cutoff - 1), type: 'delegation' as const }
+    stale.request.delegate = subject
+    stale.request.delegator = owner
+    await database.insert(schema.grants).values(grantToRow(stale))
+
+    const results = {
+      findById: () => grantStore.findById(stale.id),
+      findByRequester: () => grantStore.findByRequester(subject),
+      findAll: () => grantStore.findAll(),
+      findByDelegate: () => grantStore.findByDelegate(subject),
+      findByDelegator: () => grantStore.findByDelegator(owner),
+    }
+    const result = await results[method]()
+    expect(Array.isArray(result) ? result : [result]).toMatchObject([{ id: stale.id, status: 'expired' }])
+    expect(await database.select().from(schema.grants).where(eq(schema.grants.id, stale.id)).get()).toMatchObject({ status: 'expired' })
+  })
+
+  it('excludes stale requests before pagination and exposes them in expired history', async () => {
+    const stale = pending(cutoff - 1)
+    const fresh = pending(now)
+    await database.insert(schema.grants).values([stale, fresh].map(grantToRow))
+    const page = await grantStore.listGrants({ status: 'pending', requester: subject, limit: 1 })
+    expect(page.data).toMatchObject([{ id: fresh.id, status: 'pending' }])
+    expect(page.pagination.has_more).toBe(false)
+    expect((await grantStore.listGrants({ status: 'expired', requester: subject })).data).toMatchObject([{ id: stale.id, status: 'expired' }])
+  })
+
+  it('counts only current requests in approver notifications', async () => {
+    await database.insert(schema.users).values({ email: subject, name: 'Agent', type: 'agent', approver: owner, isActive: true, createdAt: now })
+    await database.insert(schema.grants).values([pending(cutoff - 1), pending(now)].map(grantToRow))
+    vi.stubGlobal('useGrantStores', () => ({ grantStore }))
+    expect(await countPendingForApprover(owner)).toBe(1)
+  })
+
+  it.each([false, true])('refuses approval through an old link (brokered: %s)', async (brokered) => {
+    const stale = pending(cutoff - 1, brokered)
+    await database.insert(schema.grants).values(grantToRow(stale))
+    await expect(approveGrant(stale.id, owner, grantStore)).rejects.toThrow('Grant is not pending: expired')
+    expect((await grantStore.findById(stale.id))?.status).toBe('expired')
+  })
+
+  it('refuses a stale decision even when the request was read before it expired', async () => {
+    const value = pending(cutoff)
+    await grantStore.save(value)
+    expect((await grantStore.findById(value.id))?.status).toBe('pending')
+    vi.mocked(Date.now).mockReturnValue((now + 1) * 1000)
+    await expect(grantStore.updateStatus(value.id, 'approved')).rejects.toMatchObject({ statusCode: 409 })
+    expect((await grantStore.findById(value.id))?.status).toBe('expired')
+  })
+
+  it('releases broker inbox capacity and records each expiry exactly once', async () => {
+    const stale = Array.from({ length: 100 }, () => pending(cutoff - 1, true))
+    await database.insert(schema.grants).values(stale.map(grantToRow))
+    const fresh = pending(now, true)
+    await grantStore.save(fresh)
+    expect((await grantStore.findPending()).map(value => value.id)).toEqual([fresh.id])
+    await grantStore.findAll()
+    const audit = await database.select().from(schema.brokerAudit)
+    expect(audit.filter(row => row.event === 'expired')).toHaveLength(100)
+    expect(new Set(audit.filter(row => row.event === 'expired').map(row => row.grantId)).size).toBe(100)
+    expect(audit.find(row => row.grantId === stale[0]!.id)).toMatchObject({ owner, agent: subject, connectionId: connection.id })
   })
 })
