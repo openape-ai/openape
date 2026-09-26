@@ -1,0 +1,42 @@
+schema = "openape-shapes/v1"
+[cli]
+id = "pods-mail"
+executable = "pods-mail"
+audience = "shapes"
+
+[[operation]]
+id = "list"
+command = ["list"]
+display = "List reviewed mail for {account}"
+action = "list"
+risk = "low"
+required_options = ["account"]
+resource_chain = ["mailbox:id={account}", "messages:*"]
+
+[[operation]]
+id = "read"
+command = ["read"]
+display = "Read reviewed mail for {account}"
+action = "read"
+risk = "low"
+required_options = ["account", "message"]
+resource_chain = ["mailbox:id={account}", "message:id={message}"]
+
+[[operation]]
+id = "thread"
+command = ["thread"]
+display = "Thread reviewed mail for {account}"
+action = "read"
+risk = "low"
+required_options = ["account", "conversation"]
+resource_chain = ["mailbox:id={account}", "conversation:id={conversation}"]
+
+[[operation]]
+id = "archive"
+command = ["archive"]
+display = "Archive reviewed mail for {account}"
+action = "archive"
+risk = "high"
+required_options = ["account", "message", "version", "folder"]
+resource_chain = ["mailbox:id={account}", "message:id={message}"]
+exact_command = true
