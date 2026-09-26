@@ -8,18 +8,35 @@ import { afterEach, expect, it, vi } from 'vitest'
 const roots: string[] = []
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))) })
 async function example(name: string) { return import(/* @vite-ignore */ pathToFileURL(join(process.cwd(), 'examples', name)).href) }
-it('bounds classification prompts and retains conversations that cannot be reviewed completely', async () => {
+function judgment(choice = 'completed', confidence = 0.95) { return { type: 'choice', choice, confidence, probabilities: { action: 0.01, keep: 0.01, newsletter: 0.01, completed: 0.97 } } }
+function jevFixture(choice = 'completed', confidence = 0.95) {
+  return vi.fn(async ({ state, questions }: { state: { messages: { id: string }[] }, questions: Record<string, unknown> }) => {
+    expect(new TextEncoder().encode(JSON.stringify({ state, questions })).length).toBeLessThan(128 * 1024)
+    return { model: 'jev-1.13.0', answers: Object.fromEntries(state.messages.flatMap((_, index) => [[`category_${index}`, judgment(choice, confidence)], [`priority_${index}`, { type: 'score', score: 2, confidence: 0.8 }]])) }
+  })
+}
+it('bounds Jev state and retains conversations that cannot be reviewed completely without an LLM', async () => {
   const { classify } = await example('mail-triage.mjs')
   const messages = Array.from({ length: 20 }, (_, id) => ({ id: String(id), version: 'one', sender: 'sender@example.test', body: 'x'.repeat(6000), conversation: String(id) }))
-  const run = vi.fn(async ({ prompt }: { prompt: string }) => {
-    expect(prompt.length).toBeLessThan(128 * 1024)
-    const data = JSON.parse(prompt.split('\n\n').at(-1)!)
-    return { response: JSON.stringify(data.messages.map((mail: { id: string }) => ({ id: mail.id, disposition: 'archive', priority: 1, summary: 'Reviewed', reason: 'Completed', nextAction: '' }))) }
-  })
-  const result = await classify({ agent: { run } }, messages, [{ id: '0', messages: [{ body: 'x'.repeat(120000) }], truncated: false }])
-  expect(result).toHaveLength(20)
-  expect(result[0]).toMatchObject({ id: '0', disposition: 'keep' })
-  expect(run).toHaveBeenCalledTimes(2)
+  const evaluate = jevFixture(); const run = vi.fn()
+  const result = await classify({ jev: { evaluate }, agent: { run } }, messages, [{ id: '0', messages: [{ body: 'x'.repeat(120000) }], truncated: false }])
+  expect(result).toHaveLength(20); expect(result[0]).toMatchObject({ id: '0', disposition: 'keep' })
+  expect(evaluate).toHaveBeenCalledTimes(2); expect(run).not.toHaveBeenCalled()
+})
+it('retains protected and uncertain archive candidates even if Jev chooses completed', async () => {
+  const { classify } = await example('mail-triage.mjs')
+  const message = { id: '1', version: 'one', sender: 'sender@example.test' }
+  expect(await classify({ jev: { evaluate: jevFixture() } }, [{ ...message, protected: true }])).toMatchObject([{ disposition: 'keep' }])
+  expect(await classify({ jev: { evaluate: jevFixture('completed', 0.4) } }, [message])).toMatchObject([{ disposition: 'keep' }])
+  expect(await classify({ jev: { evaluate: jevFixture() } }, [message])).toMatchObject([{ disposition: 'archive' }])
+})
+it('does not fall back to an LLM if Jev fails and refuses summary attempts to change dispositions', async () => {
+  const { classify, summarize } = await example('mail-triage.mjs')
+  const message = { id: '1', version: 'one', sender: 'sender@example.test' }
+  const run = vi.fn(async () => ({ response: JSON.stringify([{ id: '1', summary: 'A summary.', nextAction: '', disposition: 'archive' }]) }))
+  await expect(classify({ jev: { evaluate: async () => { throw new Error('Jev unavailable') } }, agent: { run } }, [message])).rejects.toThrow('Jev unavailable')
+  expect(run).not.toHaveBeenCalled()
+  await expect(summarize({ agent: { run } }, [message])).rejects.toThrow('Invalid important-mail summaries')
 })
 it('renders actionable mail and the exact grant link alongside calendar and issue sections', async () => {
   const { render } = await example('morning-mail-briefing.mjs')

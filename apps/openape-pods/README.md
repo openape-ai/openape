@@ -751,3 +751,13 @@ and the workflow chapter in the shared handbook.
 
 Use the existing installed MCP server: [setup and central workspace commands](docs/claude-code.md).
 Claude Code and Codex share the desktop executor and central data.
+
+## Morning mail protection and Jev evaluation
+
+`examples/mail-triage.mjs` uses `jev.evaluate` for structured mail disposition and priority. Uncertain archival judgments remain in the Inbox; `agent.run` only summarizes selected important messages. Assign the pinned Jev connection and a sufficient per-run attempt budget (100 for the initial two-mailbox review). Provider or parsing errors remain explicit coverage gaps, never an LLM classification fallback.
+
+The reviewed `examples/microsoft-mail.mjs` companion requires `PODS_MAIL_POLICY` to point to an owner-maintained, Pod-read-only JSON policy; `examples/mail-protection-policy.json` documents the format. Domain entries match the exact domain and its subdomains, never a substring. The `protection --account ...` read operation incrementally collects all available Sent Items To/Cc/Bcc recipients through Microsoft Graph delta queries. Its private per-mailbox recipient union never shrinks when sent messages disappear. Already deleted historical Sent Items cannot be reconstructed. Continue bounded pages until `ready:true`; incomplete metadata, an unavailable source or an incomplete conversation prohibits archival. The companion independently refreshes protection when preparing and immediately before executing a move. Policy changes do not require trusting a cached model decision.
+
+Local Codex can initialize a missing native Jev connection using resources command `{type:"importJev",podId,epoch}` with outer `revision` and `path` to an existing private owner key file. Key values never enter the MCP request, journal or response; no Pod permission is assigned implicitly. Existing connections must be replaced through the protected App settings form. Once connected, use the existing `assignJev` permission flow.
+
+Replacing the assigned companion expires its prior pending archive batches locally. Their old links cannot authorize the replacement program. Fresh proposals remain manual expiring one-time approvals; do not approve a grant merely to verify setup.
