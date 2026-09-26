@@ -4,8 +4,33 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RuntimeApprovalPolicy } from '../../src/main/codex/runtime-approval'
+import { handleMailArchive } from '../../src/main/mail/archive/handler'
+import type { ServiceRequest } from '../../src/contracts/services'
 
 vi.mock('electron', () => ({ utilityProcess: { fork: vi.fn() }, safeStorage: {}, app: { getPath: () => '/nonexistent' } }))
+vi.mock('../../src/main/mail/archive/handler', () => ({ handleMailArchive: vi.fn() }))
+
+it.each([false, true])('keeps archive authority alive until its asynchronous operation settles (failure: %s)', async (failure) => {
+  const { FixtureWorker } = await import('../../src/main/worker')
+  const worker = new FixtureWorker(() => {})
+  const id = '00000000-0000-4000-8000-000000000001'
+  const dispatch = vi.fn(async (command: Record<string, unknown>) => 'runContext' in command ? { name: 'Mail review', reason: 'manual' } : { resources: [], epoch: 0 })
+  Object.assign(worker, { root: '/unused', credentials: {}, connections: {}, dispatch })
+  let signal: AbortSignal | undefined
+  vi.mocked(handleMailArchive).mockImplementationOnce(async (input) => {
+    signal = input.signal
+    await new Promise<void>(resolve => setImmediate(resolve))
+    input.signal.throwIfAborted()
+    if (failure) throw new Error('Provider unavailable')
+    return { state: 'pending', count: 1 }
+  })
+  const service = worker as unknown as { executeService: (request: ServiceRequest) => Promise<unknown> }
+  const operation = service.executeService({ id, kind: 'mailArchive', scope: { podId: id, runId: id, epoch: 0, assignmentRevision: 1, capabilities: [] }, body: { operation: 'process' } })
+  if (failure) await expect(operation).rejects.toThrow('Provider unavailable')
+  else await expect(operation).resolves.toEqual({ state: 'pending', count: 1 })
+  expect(signal?.aborted).toBe(true)
+  expect(dispatch).toHaveBeenCalledTimes(failure ? 2 : 3)
+})
 
 // Last link of the suspend chain (powerMonitor → FixtureWorker → worker
 // process): test/main/app.test.ts covers the first, worker-entry.test.ts the last.

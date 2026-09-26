@@ -6,9 +6,34 @@ import { WorkspaceRequestError } from '../../src/renderer/central/client'
 import { centralFixture } from './central-fixture'
 import type { CentralStatus } from '../../src/contracts/central'
 import { connected, connectionAfter, connectionLevel } from '../../src/renderer/central/status'
+import type { WorkflowCommand, WorkflowView } from '../../src/contracts/workflows'
 
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined })
+it('opens local workflows from connected desktop settings and resumes the selected workflow', async () => {
+  const { default: DesktopWorkspace } = await import('../../src/renderer/central/DesktopWorkspace.vue')
+  const { installWorkspace, podId } = await import('../layout/workspace-fixture')
+  const id = '00000000-0000-4000-8000-000000000003'
+  const view: WorkflowView = { workflows: [{ id, revision: 1, name: 'Morning review', nodes: [{ podId, after: [], handoff: true }], schedule: null, enabled: false, paused: true, nextAt: null }], runs: [] }
+  const workflows = vi.fn(async (command: WorkflowCommand) => {
+    if (command.type === 'pause') { view.workflows[0]!.paused = command.paused; view.workflows[0]!.revision++ }
+    return structuredClone(view)
+  })
+  installWorkspace({ workflows, central: async command => command.type === 'status' ? { enabled: false } : command.type === 'inventory' ? [] : { requestError: { status: 400, message: 'No fixture change feed' } } })
+  wrapper = mount(DesktopWorkspace); await flushPromises()
+  const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.text() === text)!.trigger('click'); await flushPromises() }
+  await wrapper.get('.central-sidebar-bottom .central-settings-button').trigger('click'); await flushPromises()
+  await click('Workflows')
+  expect(workflows).toHaveBeenCalledExactlyOnceWith({ type: 'list' })
+  await click('Morning review')
+  expect(wrapper.find('.workflow-graph').text()).toContain('Mail knowledge')
+  await click('Resume workflow')
+  expect(workflows).toHaveBeenLastCalledWith({ type: 'pause', id, revision: 1, paused: false })
+  expect(wrapper.text()).toContain('Pause workflow')
+  workflows.mockRejectedValueOnce(new Error('Workflow connection unavailable'))
+  await click('Refresh')
+  expect(wrapper.get('[role="alert"]').text()).toContain('Workflow connection unavailable')
+})
 async function open() {
   const fixture = centralFixture()
   wrapper = mount(CentralWorkspace, { props: { client: fixture.client } })
