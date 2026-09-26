@@ -111,3 +111,12 @@ it('keeps truncated message text valid Unicode for structured evaluation', async
   expect(result.messages[0]?.body.length).toBe(6000)
   expect(Buffer.from(result.messages[0]!.body, 'utf8').toString('utf8')).toBe(result.messages[0]!.body)
 })
+
+it('rescans legacy query-limited contact cursors while preserving known recipients', async () => {
+  const f = await fixture()
+  await writeFile(join(f.root, 'mail-contacts-owner%40example.test.json'), JSON.stringify({ version: 1, account: 'owner@example.test', recipients: ['legacy@example.test'], cursor: 'https://graph.microsoft.com/v1.0/me/mailFolders/sent/messages/delta?$deltatoken=legacy', complete: true }))
+  f.sent.push({ toRecipients: [{ emailAddress: { address: 'sender@example.test' } }], ccRecipients: [], bccRecipients: [] })
+  expect(await f.run(['protection'])).toMatchObject({ ready: true, count: 2 })
+  expect(f.fetch.mock.calls.some(([url]) => String(url).includes('deltatoken=legacy'))).toBe(false)
+  expect(JSON.parse(await readFile(join(f.root, 'mail-contacts-owner%40example.test.json'), 'utf8'))).toMatchObject({ version: 2, complete: true, recipients: ['legacy@example.test', 'sender@example.test'] })
+})

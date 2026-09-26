@@ -62,10 +62,11 @@ export async function microsoftMail(argv = process.argv.slice(2), environment = 
   policy.addresses = policy.addresses.map(value => value.trim().toLowerCase())
   if (policy.domains.some(domain => !/^[a-z0-9]+(?:[.-][a-z0-9]+)*\.[a-z]{2,}$/.test(domain)) || policy.addresses.some(address => !email(address))) throw new Error('Invalid owner mail protection policy')
   const protectionPath = join(environment.HOME, `mail-contacts-${encodeURIComponent(account)}.json`)
-  let contacts = { version: 1, account, recipients: [], cursor: null, complete: false }
+  let contacts = { version: 2, account, recipients: [], cursor: null, complete: false }
   try { contacts = JSON.parse(await readFile(protectionPath, 'utf8')) }
   catch (error) { if (error.code !== 'ENOENT') throw error }
-  if (contacts.version !== 1 || contacts.account !== account || !Array.isArray(contacts.recipients) || contacts.recipients.some(address => !email(address)) || typeof contacts.complete !== 'boolean' || (contacts.cursor !== null && typeof contacts.cursor !== 'string')) throw new Error('Invalid saved mail protection index')
+  if (![1, 2].includes(contacts.version) || contacts.account !== account || !Array.isArray(contacts.recipients) || contacts.recipients.some(address => !email(address)) || typeof contacts.complete !== 'boolean' || (contacts.cursor !== null && typeof contacts.cursor !== 'string')) throw new Error('Invalid saved mail protection index')
+  if (contacts.version === 1) contacts = { ...contacts, version: 2, cursor: null, complete: false }
   const recipients = new Set(contacts.recipients)
   function email(value) { return typeof value === 'string' && /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/.test(value) }
   function participants(item) { return [item.from, ...item.toRecipients ?? [], ...item.ccRecipients ?? [], ...item.bccRecipients ?? [], ...item.replyTo ?? []].map(person => person?.emailAddress?.address?.toLowerCase()).filter(Boolean) }
@@ -113,7 +114,7 @@ export async function microsoftMail(argv = process.argv.slice(2), environment = 
         }
       }
       next = cursor(page['@odata.nextLink'] ?? page['@odata.deltaLink'])
-      contacts = { version: 1, account, recipients: [...recipients].sort(), cursor: next, complete: Boolean(page['@odata.deltaLink']) }
+      contacts = { version: 2, account, recipients: [...recipients].sort(), cursor: next, complete: Boolean(page['@odata.deltaLink']) }
       const saved = JSON.stringify(contacts)
       if (Buffer.byteLength(saved) > 2500000) throw new Error('Sent recipient index exceeds private program storage limit')
       await writeFile(`${protectionPath}.tmp`, saved, { mode: 0o600 }); await rename(`${protectionPath}.tmp`, protectionPath)
