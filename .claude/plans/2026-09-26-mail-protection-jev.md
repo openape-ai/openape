@@ -19,7 +19,7 @@ Canonical repository https://repos.openape.ai/patrick/monorepo; issue 1396. Chec
 
 - 2026-09-26: Owner approved the proposed design; issue 1396 created. Existing decision polling disabled during upgrade (schedule revision 2). Existing Jev connection absent; owner authorized use of the test key in ~/Companies/private/repos/jev.
 
-- Implementation complete; full lint/typecheck, Pods build and 592 tests passed. Real Jev test-key acceptance correctly classified five synthetic cases. Final review normalizes owner policy casing and completes summaries before creating grants. Signed packaging and live acceptance remain.
+- Implementation complete; full lint/typecheck, Pods build and 592 tests passed. Real Jev test-key acceptance correctly classified five synthetic cases. Final review normalizes owner policy casing and completes summaries before creating grants. PR 154 merged at 84ccff34; signed/notarized f182add0 app and DMG acceptance passed, installed with all 14 Pods preserved. Jev native private-file connection is ready. The first real preview failed closed on Jev HTTP 400; high-entropy synthetic state reproduced max_tokens_exceeded. Follow-up branch bugfix/issue-1396-sent-delta-pages bounds state to 24 KB (below the 32k-token state-plus-question limit), requests Microsoft delta page size through Prefer, and logs synchronization progress. Live acceptance remains.
 
 ## Decisions
 
@@ -33,4 +33,4 @@ Retain prior program assignment/source and script history. Disable decision poll
 
 ## Outcomes
 
-Pending implementation and live acceptance.
+Native installation and Jev connection completed. Final mailbox acceptance and re-enabled archive decision polling remain; see issue 1396 for final receipts.

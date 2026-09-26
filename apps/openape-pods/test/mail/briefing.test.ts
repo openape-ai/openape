@@ -11,7 +11,8 @@ async function example(name: string) { return import(/* @vite-ignore */ pathToFi
 function judgment(choice = 'completed', confidence = 0.95) { return { type: 'choice', choice, confidence, probabilities: { action: 0.01, keep: 0.01, newsletter: 0.01, completed: 0.97 } } }
 function jevFixture(choice = 'completed', confidence = 0.95) {
   return vi.fn(async ({ state, questions }: { state: { messages: { id: string }[] }, questions: Record<string, unknown> }) => {
-    expect(new TextEncoder().encode(JSON.stringify({ state, questions })).length).toBeLessThan(128 * 1024)
+    expect(new TextEncoder().encode(JSON.stringify(state)).length).toBeLessThan(24576)
+    expect(new TextEncoder().encode(JSON.stringify({ state, questions })).length).toBeLessThan(64000)
     return { model: 'jev-1.13.0', answers: Object.fromEntries(state.messages.flatMap((_, index) => [[`category_${index}`, judgment(choice, confidence)], [`priority_${index}`, { type: 'score', score: 2, confidence: 0.8 }]])) }
   })
 }
@@ -21,7 +22,7 @@ it('bounds Jev state and retains conversations that cannot be reviewed completel
   const evaluate = jevFixture(); const run = vi.fn()
   const result = await classify({ jev: { evaluate }, agent: { run } }, messages, [{ id: '0', messages: [{ body: 'x'.repeat(120000) }], truncated: false }])
   expect(result).toHaveLength(20); expect(result[0]).toMatchObject({ id: '0', disposition: 'keep' })
-  expect(evaluate).toHaveBeenCalledTimes(2); expect(run).not.toHaveBeenCalled()
+  expect(evaluate).toHaveBeenCalledTimes(7); expect(run).not.toHaveBeenCalled()
 })
 it('retains protected and uncertain archive candidates even if Jev chooses completed', async () => {
   const { classify } = await example('mail-triage.mjs')
