@@ -567,7 +567,8 @@ export class FixtureWorker {
         if (!this.credentials || !this.connections) throw new Error('Connection service unavailable')
         this.archiveService ??= new MailArchiveService(new ArchiveStore(join(this.root, 'mail-archive')))
         const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
-        return handleMailArchive({ service: this.archiveService, body: request.body, scope, root: this.root, helper: join(dist, 'native/pods-helper'), credentials: this.credentials, connections: this.connections, check, signal: controller.signal, observe, previous })
+        const result = await handleMailArchive({ service: this.archiveService, body: request.body, scope, root: this.root, helper: join(dist, 'native/pods-helper'), credentials: this.credentials, connections: this.connections, check, signal: controller.signal, observe, previous })
+        await check(); controller.signal.throwIfAborted(); return result
       }
       if (request.kind === 'jev') {
         if (!this.credentials || !this.connections) throw new Error('Connection service unavailable')
