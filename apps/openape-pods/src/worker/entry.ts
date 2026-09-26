@@ -131,6 +131,7 @@ const timer = setInterval(() => {
   ticking = (async () => {
     try {
       try {
+        await tickStep('run retention', 1000, () => data.retention.runs.prune())
         // The full inventory lstats every profile entry (~1 s on a real profile), so it runs every minute unless a limit is already near.
         if (Date.now() >= storageAt || await data.retention.inspectionDue()) {
           storageAt = Date.now() + 60000

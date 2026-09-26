@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import { applyLanguage } from '../../src/renderer/i18n'
 import DataManagement from '../../src/renderer/DataManagement.vue'
 import type { DataCommand } from '../../src/contracts/data'
 
@@ -24,5 +25,16 @@ it('disables maintenance while work is active', async () => {
   window.pods = { codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }), chats: async () => ({ conversations: [], activeConversationId: null }), workflows: async () => ({ workflows: [], runs: [] }), packages: async () => { throw new Error('No package search fixture configured') }, programs: async () => { throw new Error('No program fixture configured') }, language: async () => 'en' as const, scripts: async () => { throw new Error('No script fixture configured') }, data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: true, error: null }) } as unknown as typeof window.pods
   const wrapper = mount(DataManagement); await flushPromises()
   for (const text of ['Export backup…', 'Clean unused files', 'Verify update and back up…']) expect(wrapper.findAll('button').find(item => item.text() === text)!.attributes('disabled')).toBeDefined()
+  wrapper.unmount()
+})
+
+afterEach(() => applyLanguage('en'))
+it.each(['en', 'de'] as const)('explains irreversible retention and independent receipts in %s', async (language) => {
+  applyLanguage(language)
+  window.pods = { data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }) } as unknown as typeof window.pods
+  const wrapper = mount(DataManagement); await flushPromises()
+  expect(wrapper.text()).toContain(language === 'en' ? 'newest 50 runs' : 'neuesten 50 Läufe')
+  expect(wrapper.text()).toContain(language === 'en' ? 'Delivery receipts' : 'Zustellbelege')
+  expect(wrapper.text()).toContain(language === 'en' ? 'Deleted runs cannot be recovered from a later backup' : 'Gelöschte Läufe lassen sich aus einer späteren Sicherung nicht wiederherstellen')
   wrapper.unmount()
 })
