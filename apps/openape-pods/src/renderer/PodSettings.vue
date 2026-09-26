@@ -137,7 +137,7 @@ export default defineComponent({
   <details v-if="selectedPod" class="card lifecycle-panel">
     <summary>{{ t("More options") }}</summary>
     <h2>{{ t("Pod lifecycle") }}</h2><p class="muted">
-      {{ t("Archiving stops intake and preserves knowledge and run history.") }}
+      {{ t("Archiving stops intake and preserves knowledge. Run history follows the 50-run retention policy.") }}
     </p><button class="secondary" :disabled="busy || selectedPod.lifecycle === 'archived'" @click="archive">
       {{ t("Archive pod") }}
     </button><button v-if="selectedPod.lifecycle === 'archived'" class="secondary" :disabled="busy" @click="remove">

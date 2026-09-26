@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
+import { RunRetention } from '../../src/worker/data/run-retention'
 import { PodDatabase } from '../../src/worker/storage/database'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { RunStore } from '../../src/worker/runs/store'
@@ -193,4 +194,25 @@ it('correlates accepted workflow runs durably without starting a duplicate graph
     { id: secondOperation, run_id: runId, kind: 'workflow' },
   ])
   expect(f.engine.view().runs).toHaveLength(1)
+})
+
+it('protects earlier attempts of unfinished workflows and detaches only after the graph finishes', async () => {
+  const f = fixture(); const pod = f.pod(); const workflow = f.workflow([pod]); const batch = f.engine.start(workflow, 1)
+  f.engine.tick(); const first = f.started[0]!.id; f.complete(pod)
+  const old = randomUUID()
+  f.store.db.prepare('INSERT INTO runs VALUES(?,?,?,\'failed\',0,1,\'Previous attempt\',NULL,0,1)').run(old, pod, f.store.getPod(pod).activeScript!)
+  f.store.db.prepare('INSERT INTO workflow_attempts VALUES(?,?,?)').run(old, batch, pod)
+  f.store.db.prepare('UPDATE runs SET started_at=0 WHERE id=?').run(first)
+  f.store.db.prepare('DELETE FROM workflow_attempts WHERE run_id=?').run(first)
+  for (let index = 1; index <= 50; index++) f.store.db.prepare('INSERT INTO runs VALUES(?,?,?,\'completed\',?,?,?,NULL,0,1)').run(randomUUID(), pod, f.store.getPod(pod).activeScript!, index, index + 1, 'Later')
+  const retention = new RunRetention(f.store)
+  await retention.prune()
+  expect(f.runs.get(old).id).toBe(old); expect(f.runs.get(first).id).toBe(first)
+  f.engine.tick(); expect(f.engine.run(batch).state).toBe('completed')
+  await retention.prune()
+  expect(() => f.runs.get(old)).toThrow('Run not found'); expect(() => f.runs.get(first)).toThrow('Run not found')
+  expect(f.engine.run(batch).nodes[0]).toMatchObject({ state: 'completed', runId: null })
+  expect(f.store.db.prepare('SELECT * FROM workflow_attempts').all()).toEqual([])
+  expect(f.store.getPod(pod).id).toBe(pod)
+  expect(f.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
 })

@@ -58,13 +58,13 @@ export default defineComponent({
           {{ t("Clean unused files") }}
         </button>
         <p class="muted">
-          {{ t("Knowledge, cited evidence, run history and pending inputs are kept until you explicitly delete their pod. Backups and old restored profiles are retained separately.") }}
+          {{ t("Each Pod keeps its newest 50 runs. Older runs are permanently removed from local and account history once active work, approvals, inputs and recovery are settled. Delivery receipts, Pod workspaces, settings, checkpoints and knowledge are preserved. Backups and old restored profiles remain separate.") }}
         </p>
       </template>
     </article>
     <article class="card">
       <h2>{{ t("Backup and recovery") }}</h2>
-      <p>{{ t("Export pod settings, scripts, workspaces, knowledge, source snapshots and run history. Backups contain your data; choose a private destination. Account credentials are excluded.") }}</p>
+      <p>{{ t("Export pod settings, scripts, workspaces, knowledge, source snapshots and retained run history. Deleted runs cannot be recovered from a later backup. Backups contain your data; choose a private destination. Account credentials are excluded.") }}</p>
       <div class="actions">
         <button class="primary" :disabled="busy || !view || view.busy" @click="perform({ type: 'backup' })">
           {{ t("Export backup…") }}
