@@ -103,3 +103,11 @@ it('rejects foreign sent cursors and incomplete recipient metadata without movin
   await expect(f.run(['protection'])).rejects.toThrow('recipient metadata')
   expect(f.fetch.mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true)
 })
+
+it('keeps truncated message text valid Unicode for structured evaluation', async () => {
+  const f = await fixture(); f.message.body.content = `${'x'.repeat(5999)}𝟙`
+  const result = await f.run(['list']) as { messages: { body: string, truncated: boolean }[] }
+  expect(result.messages[0]?.truncated).toBe(true)
+  expect(result.messages[0]?.body.length).toBe(6000)
+  expect(Buffer.from(result.messages[0]!.body, 'utf8').toString('utf8')).toBe(result.messages[0]!.body)
+})
