@@ -40,3 +40,12 @@ risk = "high"
 required_options = ["account", "message", "version", "folder"]
 resource_chain = ["mailbox:id={account}", "message:id={message}"]
 exact_command = true
+
+[[operation]]
+id = "protection"
+command = ["protection"]
+display = "Synchronize sent recipient protection for {account}"
+action = "read"
+risk = "low"
+required_options = ["account"]
+resource_chain = ["mailbox:id={account}", "sentRecipients:*"]
