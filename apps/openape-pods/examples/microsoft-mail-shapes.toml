@@ -20,7 +20,7 @@ display = "Read reviewed mail for {account}"
 action = "read"
 risk = "low"
 required_options = ["account", "message"]
-resource_chain = ["mailbox:id={account}", "message:id={message}"]
+resource_chain = ["mailbox:id={account}", "message:*"]
 
 [[operation]]
 id = "thread"
@@ -29,7 +29,7 @@ display = "Thread reviewed mail for {account}"
 action = "read"
 risk = "low"
 required_options = ["account", "conversation"]
-resource_chain = ["mailbox:id={account}", "conversation:id={conversation}"]
+resource_chain = ["mailbox:id={account}", "conversation:*"]
 
 [[operation]]
 id = "archive"
