@@ -51,7 +51,7 @@ export class CodexControl {
         'run returns the actual runId. recovery list returns status and unresolved effect keys without run contents. Resolve uncertain delivery only with real external evidence; never guess that an effect failed.',
         'Old pending changes are history and never automatically execute. Synthetic validation does not prove live provider behavior or delivery.',
       ],
-      actions: { ...actions, saveWorkflow: { definition: 'Selected workflow save command; include current id/revision and explicitly selected members.' }, setSchedule: { ...actions.prepareSchedule, enabled: 'boolean; resume separately to allow scheduled execution' }, administration: 'resources/scripts/recovery/program/importSecret: see tool command schema. Include outer revision and command.podId. resources list returns epoch and safe assignment metadata.' },
+      actions: { ...actions, saveWorkflow: { definition: 'Save a workflow with explicitly selected members. To create: select member podIds without a workflow, then send type:save, a new UUID id, revision:0, name, nodes, schedule and enabled. To update: select the existing workflow and its current revision first.' }, setSchedule: { ...actions.prepareSchedule, enabled: 'boolean; resume separately to allow scheduled execution' }, administration: 'resources/scripts/recovery/program/importSecret: see tool command schema. Include outer revision and command.podId. resources list returns epoch and safe assignment metadata.' },
       script: { ...runtimeReference.script, files: runtimeReference.script.files.replace('Only the owner can assign/change directory access in Permissions.', 'Connected Codex can assign directory access through resources.') },
     }
   }
