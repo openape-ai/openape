@@ -316,13 +316,20 @@ export class FixtureWorker {
     }
     catch (error) {
       await this.dispatch({ codexAdministration: { type: 'failed', request } })
-      if (action.kind === 'importSecret') throw new Error('Secret import failed; inspect the private file, current Pod revision and resource epoch before retrying')
+      if (action.kind === 'importSecret' || action.kind === 'importJev') throw new Error('Secret import failed; inspect the private file, current Pod revision and resource epoch before retrying')
       throw error
     }
   }
 
   private async administer(action: ReturnType<typeof parseAdministration>): Promise<unknown> {
     const { command } = action
+    if (action.kind === 'importJev') {
+      const before = await this.resources({ type: 'list', podId: command.podId })
+      if (before.epoch !== action.command.epoch) throw new Error('Pod permissions changed; reload before importing Jev')
+      if (before.jev) throw new Error('A Jev connection already exists; replace it through App settings')
+      await importPrivateSecret(action.path, key => this.onboarding({ type: 'saveTypesafe', key }))
+      return { jev: (await this.resources({ type: 'list', podId: command.podId })).jev }
+    }
     if (action.kind === 'description') return { description: (await this.details(action.command)).description }
     if (action.kind === 'setup') { await this.master(action.command); return { status: 'applied' } }
     if (action.kind === 'scripts') {
