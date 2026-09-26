@@ -1,12 +1,19 @@
 # Active work
 
-## Pods: central desktop settings (September 26, 2026) — sidebar follow-up
+## Pods: central desktop settings (September 26, 2026) — signed, installation pending
 
-[Issue 1393](https://repos.openape.ai/patrick/monorepo/issues/1393).
-Worktree `pods-jev-settings`. PR 146 merged at `531a91ba` after exact-head CI success. Owner requested the DDISA account and App settings at the bottom left before installation; follow-up branch `bugfix/issue-1393-sidebar-settings` restores those entries in the active central desktop. The Pod list scrolls separately so both entries remain visible. The account opens account settings directly.
-The installed central desktop mounted a different settings screen from the one covered by Jev acceptance. The active desktop settings now expose the existing compact Jev key form, language, Codex preferences, account management and data/backups, with grouped cards and navigation. Completing account setup returns to the workspace.
+[Issue 1393](https://repos.openape.ai/patrick/monorepo/issues/1393),
+[PR 146](https://repos.openape.ai/patrick/monorepo/pulls/146),
+[PR 147](https://repos.openape.ai/patrick/monorepo/pulls/147),
+[inspected sidebar and settings screenshots](https://testrun.openape.ai/r/Z8Rrx-TCsYAZj17DQLcoAjRn).
 
-Full lint/typecheck, Pods build and all 543 unit/component tests pass. A permanent behavioral regression follows the actual desktop settings entry point, submits a synthetic key through the existing IPC contract and checks account/data navigation; browser coverage checks English and German narrow/dark layouts. Existing key encryption and authorization behavior are unchanged. Four focused browser tests pass; English/light and German/dark screenshots were inspected. Next: native PR/exact-head CI, then signed local delivery with paired rollback and owner UI verification.
+Both implementation PRs passed exact-head external CI. The active central desktop now shows the DDISA account and App settings at the bottom left. The Pod list scrolls separately. Account access opens account settings; App settings exposes Jev, language, Codex preferences and data/backups. The previous Jev acceptance had covered the alternate local shell instead of this active entry point.
+
+Signed local build: clean merged `7689b6356f8e0190bac7982a22c07569b789792d`, tree identical to tested source `5a46ba7a`. Full `pnpm check:ci`, full lint/typecheck, fresh Pods build, 543 unit/component tests, four focused browser tests and signed mounted-DMG acceptance pass. Permanent tests protect the active navigation, Jev key submission through existing IPC and footer visibility with 30 Pods in English/light and German/narrow/dark layouts. The package smoke runs only synthetic data in an isolated profile; its alternate-shell screenshot is not the central-workspace UI acceptance.
+
+DMG SHA-256: `69b1b6bf1e30a12a2d09086a1653a16a611cc93a7bf75a9a9c02d3fa2cfdcd89`. Apple accepted app `5515b4c8-6bbd-41e8-abc4-db8714e4756a` and DMG `a5eebdcf-96a3-498c-afe1-b2241fa3e95a`; stapling and Gatekeeper checks pass. The ASAR inventory has no owner database/profile/run data. Schema remains 24.
+
+Worktree: `pods-jev-settings`; release artifact: `apps/openape-pods/release/distribution/OpenApe-Pods-0.1.0-arm64-signed-local.dmg`; evidence: `apps/openape-pods/.artifacts/issue-1393-sidebar/`. The owner Mac is locked. Installation, paired rollback and actual owner UI verification await unlocking; no app or profile has been replaced.
 
 ## Pods: run retention and signed release (September 26, 2026) — installed and verified
 
