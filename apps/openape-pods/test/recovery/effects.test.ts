@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { RunRetention } from '../../src/worker/data/run-retention'
 import { PodDatabase } from '../../src/worker/storage/database'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { RunStore } from '../../src/worker/runs/store'
@@ -87,4 +88,29 @@ it('retains complete approval timing when recent diagnostics exceed the visible 
   expect(f.runs.timing(f.pod.id, f.run.id)).toEqual({ activeMs: 6000, waitingMs: 3000 })
   expect(f.runs.recentEvents(f.pod.id, f.run.id)).toHaveLength(500)
   expect(f.runs.recentEvents(f.pod.id, f.run.id).at(-1)?.type).toBe('finished')
+})
+
+it('returns the original HTTP receipt after its run and folder have been pruned', async () => {
+  const f = fixture(); const retention = new RunRetention(f.store)
+  const input = { url: 'https://delivery.example.test', body: 'once' }
+  let deliveries = 0
+  if (f.ledger.begin(f.pod.id, f.run.id, 'delivery', 'http.request', input).execute) {
+    deliveries++; f.ledger.complete(f.pod.id, 'delivery', { status: 200, body: 'confirmed' })
+  }
+  f.runs.finish(f.run.id, 'completed', 'Sent', null)
+  f.store.db.prepare('UPDATE runs SET started_at=0 WHERE id=?').run(f.run.id)
+  for (let index = 0; index < 50; index++) {
+    const run = f.runs.reserve(f.pod.id, f.store.getPod(f.pod.id).activeScript!, 0).run
+    f.runs.finish(run.id, 'completed', 'Later', null)
+  }
+  await retention.prune()
+  expect(() => f.runs.get(f.run.id)).toThrow('Run not found')
+  expect(f.store.db.prepare('SELECT run_id FROM effect_ledger').get()).toEqual({ run_id: null })
+  const current = f.runs.reserve(f.pod.id, f.store.getPod(f.pod.id).activeScript!, 0).run
+  const replay = f.ledger.begin(f.pod.id, current.id, 'delivery', 'http.request', input)
+  if (replay.execute) deliveries++
+  expect(replay).toEqual({ execute: false, result: { status: 200, body: 'confirmed' } })
+  expect(deliveries).toBe(1)
+  expect(() => f.ledger.begin(f.pod.id, current.id, 'delivery', 'http.request', { ...input, body: 'changed' })).toThrow('conflicting')
+  expect(() => f.store.db.prepare('UPDATE effect_ledger SET state=\'unknown\' WHERE effect_key=\'delivery\'').run()).toThrow('CHECK')
 })

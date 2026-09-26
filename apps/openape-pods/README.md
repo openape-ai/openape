@@ -562,7 +562,31 @@ Blob publication checks available space first. This is a sampled application lim
 not a hard filesystem quota: active work can overshoot between inventories. Chromium caches,
 authentication files, external backups and previous profiles are separate from the
 reported pod-data usage. Cleanup removes only unreachable blobs/snapshot staging;
-all referenced evidence, committed history and pending events are retained.
+all referenced evidence and pending events are retained.
+
+Each Pod retains its newest 50 runs, ordered by start time (insertion order breaks
+ties). Older finished runs disappear from local and central run history and their
+execution folders are removed. Leased or unfinished runs, unresolved effects,
+pending approvals/inputs, open recovery reviews and every attempt of an unfinished
+workflow remain protected beyond this limit. A queued recovery review settles when
+its retry input is processed. Completed effect receipts survive independently of
+their old runs, so repeating an effect key returns the original result instead of
+delivering twice. Processed input identities also survive for deduplication.
+
+Schema 24 makes the completed receipt run reference nullable and adds a run-only
+file-deletion journal. Database deletion and journal insertion commit atomically;
+startup resumes interrupted cleanup. The existing scheduler processes at most 25
+runs per pass with a bounded tick step and no overlapping cleanup. Local deletion
+is published through the existing central manifest protocol, which removes stale
+run parts and replaces the archive tables; account Pods are preserved.
+
+Retention does not change Pod workspaces, configuration, scripts, schedules,
+checkpoints or knowledge. Durable work belongs in the Pod workspace/checkpoints,
+not old execution logs. Backups contain only the history still present at export;
+removed runs need an earlier backup. Execution folders are excluded from normal
+exports. A release rollback therefore pairs the previous app with a full profile
+copy. Signed DMGs contain only the app, never an owner or fixture profile, Pods or
+runs. Examples and mail recipes remain explicit commands on an existing Pod.
 
 An archived pod can be deleted after a native owner confirmation bound to its current
 name and revision. Deletion journals pending filesystem/key cleanup, preserves shared

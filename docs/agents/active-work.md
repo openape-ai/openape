@@ -1,5 +1,27 @@
 # Active work
 
+## Pods: run retention and signed release (September 26, 2026) — locally verified
+
+[Issue 1391](https://repos.openape.ai/patrick/monorepo/issues/1391),
+[approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3E5TH9XNWQJGJX4NE11PV2W),
+[local plan and run-reference map](../../.claude/plans/issue-1391-pods-run-retention.md).
+Dedicated worktree `pods-run-retention`, branch `feature/issue-1391-pods-run-retention`,
+base `d4adc04afd529b9abe432241748408278a722dac` includes merged PR 143.
+Patrick approved policy B: completed delivery receipts remain independent of discarded
+run history. Schema 24 permits null run references only for completed receipts.
+Retention keeps the newest 50 runs plus active/recovery/input/approval/workflow protections,
+journals run-only folder deletion atomically and processes at most 25 runs per scheduler pass.
+Processed input receipts retain their immutable payload for conflict detection.
+Full `pnpm lint`, `pnpm typecheck`, Pods build and all 542 Pods tests pass.
+The controller/relay integration proves pruned runs disappear from list/detail/archive
+while account Pods and detached receipts remain. No relay production change is needed.
+Synthetic measurement: 2,500 runs / 30,000 files reduced to 50 rows/folders in 98 passes;
+maximum pass 17.42 ms, mean 14.04 ms, idle mean 0.117 ms, zero FK errors.
+Existing migration helpers and English/German data/archive component assertions are updated.
+Next: native PR, exact-head CI and merge; clean-main signed app-only DMG and acceptance;
+paired old-app/full-profile backup, installation and five-minute worker CPU observation.
+No owner profile changes or installation yet; both issues remain open until live verification.
+
 ## Pods: local MCP runtime approval (September 25, 2026) — verified locally
 
 [Issue 1388](https://repos.openape.ai/patrick/monorepo/issues/1388),

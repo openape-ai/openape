@@ -19,7 +19,9 @@ it('keeps unsaved settings across navigation without replacing the saved revisio
   const pod = { id: crypto.randomUUID(), name: 'Original', revision: 1, lifecycle: 'paused', activeScript: null }
   window.pods = { workspace: vi.fn().mockResolvedValue({ pods: [pod], organization: { revision: 1, groups: [] } }) } as unknown as typeof window.pods
   const options = { props: { selectedPodId: pod.id }, global: { stubs: { PodSchedule: true, PodValues: true, PodIdentity: true } } }
-  let wrapper = mount(PodSettings, options); await flushPromises(); await wrapper.get('input').setValue('Unsaved name'); wrapper.unmount()
+  let wrapper = mount(PodSettings, options); await flushPromises()
+  expect(wrapper.text()).toContain('Run history follows the 50-run retention policy')
+  await wrapper.get('input').setValue('Unsaved name'); wrapper.unmount()
   pod.revision = 2; wrapper = mount(PodSettings, options); await flushPromises()
   expect(wrapper.get('input').element.value).toBe('Unsaved name')
   await wrapper.get('form').trigger('submit'); await flushPromises()
