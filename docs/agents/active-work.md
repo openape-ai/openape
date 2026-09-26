@@ -1,26 +1,57 @@
 # Active work
 
-## Pods: run retention and signed release (September 26, 2026) — locally verified
+## Pods: run retention and signed release (September 26, 2026) — installed and verified
 
 [Issue 1391](https://repos.openape.ai/patrick/monorepo/issues/1391),
-[approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3E5TH9XNWQJGJX4NE11PV2W),
-[local plan and run-reference map](../../.claude/plans/issue-1391-pods-run-retention.md).
-Dedicated worktree `pods-run-retention`, branch `feature/issue-1391-pods-run-retention`,
-base `d4adc04afd529b9abe432241748408278a722dac` includes merged PR 143.
-Patrick approved policy B: completed delivery receipts remain independent of discarded
-run history. Schema 24 permits null run references only for completed receipts.
-Retention keeps the newest 50 runs plus active/recovery/input/approval/workflow protections,
-journals run-only folder deletion atomically and processes at most 25 runs per scheduler pass.
-Processed input receipts retain their immutable payload for conflict detection.
-Full `pnpm lint`, `pnpm typecheck`, Pods build and all 542 Pods tests pass.
-The controller/relay integration proves pruned runs disappear from list/detail/archive
-while account Pods and detached receipts remain. No relay production change is needed.
-Synthetic measurement: 2,500 runs / 30,000 files reduced to 50 rows/folders in 98 passes;
-maximum pass 17.42 ms, mean 14.04 ms, idle mean 0.117 ms, zero FK errors.
-Existing migration helpers and English/German data/archive component assertions are updated.
-Next: native PR, exact-head CI and merge; clean-main signed app-only DMG and acceptance;
-paired old-app/full-profile backup, installation and five-minute worker CPU observation.
-No owner profile changes or installation yet; both issues remain open until live verification.
+[issue 1390](https://repos.openape.ai/patrick/monorepo/issues/1390),
+[PR 144](https://repos.openape.ai/patrick/monorepo/pulls/144),
+[PR 143](https://repos.openape.ai/patrick/monorepo/pulls/143),
+[approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3E5TH9XNWQJGJX4NE11PV2W).
+
+PR 144 merged after exact-head CI success (`1856dd99a7e5a51c2fdb06b993c6a3ca456f1026`) at `9237c1966ec8911b907d6d801051c77f52d3c7f8`, which includes PR 143. Main CI also passed. One signed-local DMG was built from the clean merge worktree with frozen dependencies, the full `pnpm check:ci` contract and a fresh Pods build. No relay deployment was required.
+
+DMG SHA-256: `2331cf7b10554ef9324e695d32448eab0a37380bd79fa688335a19d5282b87c8`.
+
+Apple accepted the app (`a451ba7a-d786-4ae3-83cf-75e3439241e1`) and DMG (`e944956e-578b-4230-8129-e11f96ee8c13`); both tickets were stapled and validated. Deep/strict code-sign verification and Gatekeeper passed, including the installed app: `Notarized Developer ID`. The signed DMG acceptance test passed; `.artifacts/data-dmg.png` was visually inspected. Its acceptance Pod existed only in the isolated disposable test profile.
+
+Before signing, the unsigned assembly of the exact build was inspected (2,515 resource entries / 3,214 asar entries). The signed app and read-only mounted DMG were checked again (2,518 / 3,218). No control.sqlite, runs/, pods/, profile or fixture profile data was present. Only OpenApe Pods.app was installed; no Pod, script, schedule or profile was imported or seeded.
+
+The old app quit normally through bundle ID `ai.openape.pods`, with no active run leases. Existing MCP shim processes were left alone. Paired rollback: `/Users/patrickhofmann/Library/Application Support/OpenApe Pods Rollback/2026-09-26-103952-issue-1391` (old 9f00ed4d app moved there plus cp -cR full profile). Backup schema 23, 12 Pods, 2,560 runs and 34,799 run-directory entries were verified; copied database/WAL hashes matched.
+
+| Pod | Runs before | Runs after |
+| --- | ---: | ---: |
+| Daily action website | 1 | 1 |
+| IURIO PR monitor | 177 | 50 |
+| IURIO Task monitor | 637 | 51 |
+| Mail-Alarm | 0 | 0 |
+| Mail-Kurzbericht | 108 | 50 |
+| Mail-Wissen · Delta Mind | 0 | 0 |
+| Rechnungs-Emails ablegen | 0 | 0 |
+| Test | 0 | 0 |
+| Timing test · 15-minute no-op | 78 | 50 |
+| Timing test · streamlined setup | 1 | 1 |
+| zaz Service-Agent | 1553 | 50 |
+| zaz Service-Agent · Test | 5 | 5 |
+
+After startup: schema 24; 2,560 → 258 run rows and matching folders; 34,799 → 2,808 entries under runs/. Cleanup journal empty, no orphan/missing run folders, no foreign-key errors and no data_settings.error. The IURIO Task monitor retains one old cancelled run with a still-pending approval, in addition to the newest 50. No eligible old runs remain.
+
+All 12 Pod identities/configuration records and schedule configurations are unchanged. All 26 effect receipts have identical pod/key, operation, input hash, state and result; 18 obsolete run links were detached. Schedule configuration SHA-256: `60e61a6622f02a1356b2759233a3313819c490642b0482032ee702a167ce7288`. Receipt-content SHA-256: `7e2befb39ad86c2f74cf9c97c1f6709050286eb45917d413000cd28a565217a6`.
+
+Live central inventory retains the same 12 Pods, with each history count matching local storage. The removed zaz run `11503fb4-152c-4b9e-9075-2cb2b51bd40f` returns `404 run_not_found`; controller/relay tests additionally verify central archive removal. No new or duplicate Pod was created. Existing blocked Mail-Kurzbericht remains unchanged.
+
+All four enabled schedules completed naturally after startup: zaz Service-Agent at 10:40:23, IURIO Task monitor at 10:42:56, IURIO PR monitor at 10:45:23, Timing test · 15-minute no-op at 10:48:58 (Europe/Vienna). All 14 post-install runs observed through 10:49 completed successfully. No schedule was changed and no manual run was injected.
+
+Worker CPU: NodeService PID 56984, parent app PID 56979; ps time 0:17.25 → 0:22.05, **4.80 CPU seconds over 300.000 wall seconds** after cleanup. Same-session old-app measurement: 10.69 CPU seconds / 300.002 s (PID 24172, parent 24166, 42:07.69 → 42:18.38). Historical owner baseline: 14.5 s / five minutes, then with the IURIO Task monitor running every minute; its current cadence is five minutes. These are operating observations, not a controlled benchmark.
+
+Validation receipts: release `.openape/check-results/1790411276414-9237c196-unit/summary.json`; all 542 Pods unit/component tests; full lint/typecheck/build and normal commit/push hooks. The restart test injects EIO because chmod is not a reliable failure mechanism under root CI. Synthetic cleanup: 2,500 runs / 30,000 files → 50 rows/folders in 98 passes, max 17.42 ms and mean 14.04 ms; idle mean 0.117 ms.
+
+Release worktree: `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-release-1391`. DMG: `apps/openape-pods/release/distribution/OpenApe-Pods-0.1.0-arm64-signed-local.dmg`. Local evidence: `apps/openape-pods/.artifacts/issue-1391/`.
+
+Release evidence branch: `feature/issue-1391-release-evidence` in `pods-run-retention`.
+New owner follow-up: [issue 1392](https://repos.openape.ai/patrick/monorepo/issues/1392),
+per-Pod opt-in parallel runs, disabled by default. Current runs are already serialized
+within each Pod; the existing concurrency limit applies across different Pods.
+The new option is not implemented or included in this signed release.
 
 ## Pods: local MCP runtime approval (September 25, 2026) — verified locally
 
