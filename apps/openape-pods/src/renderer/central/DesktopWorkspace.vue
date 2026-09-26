@@ -11,11 +11,29 @@ import JevConnection from '../JevConnection.vue'
 import LanguageSwitcher from '../LanguageSwitcher.vue'
 import DataManagement from '../DataManagement.vue'
 import AccountStatus from '../AccountStatus.vue'
+import WorkflowPanel from '../WorkflowPanel.vue'
+import type { WorkflowView } from '../../contracts/workflows'
+import type { StoredPod } from '../../contracts/control'
 
 const invoke = window.pods.central!
 const client = desktopWorkspaceClient(invoke)
 const settings = ref(false)
-const settingsPage = ref<'general' | 'accounts' | 'data'>('general')
+const settingsPage = ref<'general' | 'accounts' | 'data' | 'workflows'>('general')
+const workflows = ref<WorkflowView>({ workflows: [], runs: [] })
+const workflowPods = ref<StoredPod[]>([])
+const workflowId = ref('')
+const workflowError = ref('')
+const loadingWorkflows = ref(false)
+async function loadWorkflows() {
+  if (loadingWorkflows.value) return
+  loadingWorkflows.value = true; workflowError.value = ''
+  try {
+    const [view, workspace] = await Promise.all([window.pods.workflows({ type: 'list' }), window.pods.workspace({ type: 'list' })])
+    workflows.value = view; workflowPods.value = workspace.pods
+  }
+  catch (cause) { workflowError.value = String(cause) }
+  finally { loadingWorkflows.value = false }
+}
 const error = ref('')
 const registering = ref(false)
 const status = ref<CentralStatus | null>(null)
@@ -50,6 +68,9 @@ async function register() {
       <button v-for="item in ([['general', 'App settings'], ['accounts', 'Your accounts'], ['data', 'Data & backups']] as const)" :key="item[0]" class="secondary" :aria-current="settingsPage === item[0] ? 'page' : undefined" @click="settingsPage = item[0]">
         {{ t(item[1]) }}
       </button>
+      <button class="secondary" :aria-current="settingsPage === 'workflows' ? 'page' : undefined" @click="settingsPage = 'workflows'; loadWorkflows()">
+        {{ t('Workflows') }}
+      </button>
     </nav>
     <template v-if="settingsPage === 'general'">
       <section class="card settings-general">
@@ -71,7 +92,22 @@ async function register() {
       </section>
     </template>
     <Onboarding v-else-if="settingsPage === 'accounts'" @finished="settings = false" />
-    <DataManagement v-else />
+    <DataManagement v-else-if="settingsPage === 'data'" />
+    <section v-else>
+      <h2>{{ t('Workflows') }}</h2>
+      <p v-if="workflowError" role="alert" class="error-message">
+        {{ diagnostic(workflowError) }}
+      </p>
+      <div class="overview-actions">
+        <button class="secondary" :disabled="loadingWorkflows" @click="loadWorkflows">
+          {{ t('Refresh') }}
+        </button>
+        <button v-for="workflow in workflows.workflows" :key="workflow.id" class="secondary" :aria-current="workflowId === workflow.id ? 'page' : undefined" @click="workflowId = workflow.id">
+          {{ workflow.name }}
+        </button>
+      </div>
+      <WorkflowPanel :view="workflows" :pods="workflowPods" :selected-id="workflowId" @changed="workflows = $event" @select="workflowId = $event" />
+    </section>
   </main>
   <CentralWorkspace v-else :client="client" :desktop-status="status" desktop @settings="settingsPage = 'general'; settings = true">
     <template #account>
