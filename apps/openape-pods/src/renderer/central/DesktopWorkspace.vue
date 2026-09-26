@@ -10,6 +10,7 @@ import CodexPanel from '../CodexPanel.vue'
 import JevConnection from '../JevConnection.vue'
 import LanguageSwitcher from '../LanguageSwitcher.vue'
 import DataManagement from '../DataManagement.vue'
+import AccountStatus from '../AccountStatus.vue'
 
 const invoke = window.pods.central!
 const client = desktopWorkspaceClient(invoke)
@@ -73,6 +74,9 @@ async function register() {
     <DataManagement v-else />
   </main>
   <CentralWorkspace v-else :client="client" :desktop-status="status" desktop @settings="settingsPage = 'general'; settings = true">
+    <template #account>
+      <AccountStatus @open="settingsPage = 'accounts'; settings = true" />
+    </template>
     <template #permissions="{ podId }">
       <PodResources :key="podId" :selected-pod-id="podId" />
     </template>
