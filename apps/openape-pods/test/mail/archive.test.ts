@@ -1,3 +1,4 @@
+import { parseFrame } from '../../src/contracts/runs'
 // @vitest-environment node
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -11,6 +12,13 @@ import { archiveCommand, archiveSummary, parseArchiveProposal } from '../../src/
 import type { ArchiveMail } from '../../src/contracts/mail-archive'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 
+it('accepts archive prepare and process requests across the script frame boundary', () => {
+  for (const payload of [{ operation: 'prepare', proposal: { application: 'pods-mail', mailbox: 'owner@example.test', items: [] } }, { operation: 'process' }]) {
+    const frame = { version: 1, runId: 'run', sequence: 1, type: 'request', id: 'request-1', operation: 'mail.archive', payload }
+    expect(parseFrame(JSON.parse(JSON.stringify(frame)), 'run', 1)).toEqual(frame)
+    expect(() => parseFrame({ ...frame, operation: 'mail.execute' }, 'run', 1)).toThrow('Unsupported')
+  }
+})
 const roots: string[] = []
 it('reuses account-scoped read assignments for concrete messages and conversations', async () => {
   const adapter = loadAdapter('pods-mail', join(process.cwd(), 'examples/microsoft-mail-shapes.toml'))
