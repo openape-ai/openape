@@ -28,13 +28,13 @@ export async function classify(context, messages, conversations = []) {
   for (const mail of messages) {
     const conversation = conversations.find(thread => thread.id === mail.conversation)
     const related = conversation ? [conversation] : []
-    if (size([mail], related) > 80000) {
+    if (size([mail], related) > 24000) {
       await flush()
       decisions.push({ id: mail.id, version: mail.version, policy: reviewPolicy, disposition: 'keep', priority: 3, reason: 'Der vollständige Verlauf überschreitet die Prüfgrenze.' })
       continue
     }
     const nextThreads = conversation && !threads.includes(conversation) ? [...threads, conversation] : threads
-    if (batch.length >= 20 || size([...batch, mail], nextThreads) > 80000) await flush()
+    if (batch.length >= 20 || size([...batch, mail], nextThreads) > 24000) await flush()
     batch.push(mail)
     if (conversation && !threads.includes(conversation)) threads.push(conversation)
   }
@@ -101,6 +101,7 @@ export async function run(context) {
       for (let attempt = 0; attempt < 20; attempt++) {
         protection = await read([], account, 'protection')
         if (typeof protection.ready !== 'boolean' || !Number.isSafeInteger(protection.count)) throw new Error('Invalid sent recipient protection response')
+        await context.log(`${account}: ${protection.count} protected sent recipients; synchronization ${protection.ready ? 'complete' : 'continues'}`)
         if (protection.ready) break
       }
       if (!protection.ready) throw new Error('Sent recipient index is incomplete; archive proposals are disabled')

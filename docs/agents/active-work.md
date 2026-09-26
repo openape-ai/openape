@@ -6,7 +6,7 @@
 
 The assigned Microsoft companion retains a per-mailbox union of Sent Items To/Cc/Bcc recipients and enforces an owner-controlled address/domain policy before proposals and actual moves. Incomplete scans and conversation evidence prohibit archival. Jev supplies bounded structured decisions and priorities; free-form LLM calls only summarize selected important messages. A local-only private-file import initializes a missing native Jev connection without exposing its key or implicitly assigning it to a Pod. Changed application bindings expire old pending archive batches locally and require fresh owner review.
 
-Existing decision polling is disabled during rollout. Final source/check/PR, signed installation, contact counts, Jev acceptance and schedule receipts belong to the issue. No mail may move during setup; keep manual per-batch approval and use preview delivery during acceptance.
+PR 154 is merged at 84ccff34 and the signed f182add0 app is installed with all 14 Pods preserved. Existing decision polling is disabled during rollout. The first live preview failed closed on Jev context size; bugfix/issue-1396-sent-delta-pages uses a conservative 24 KB state bound, Microsoft delta page-size headers and progress logs. Final source/check/PR, contact counts, Jev acceptance and schedule receipts belong to the issue. No mail may move during setup; keep manual per-batch approval and use preview delivery during acceptance.
 
 ## Morning mail triage and archive approvals (September 26, 2026)
 

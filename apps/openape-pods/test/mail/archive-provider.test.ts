@@ -20,6 +20,7 @@ async function fixture() {
     const address = String(url)
     expect(new Headers(options?.headers).get('Prefer')).toContain('ImmutableId')
     if (address.includes('/mailFolders/sentitems?')) return Response.json({ id: 'sent' })
+    if (address.includes('/messages/delta')) expect(new Headers(options?.headers).get('Prefer')).toContain('odata.maxpagesize=500')
     if (address.includes('/messages/delta')) return Response.json({ value: sent, '@odata.deltaLink': 'https://graph.microsoft.com/v1.0/me/mailFolders/sent/messages/delta?$deltatoken=next' })
     if (address.includes('/mailFolders/inbox?')) return Response.json({ id: 'inbox', totalItemCount: 1 })
     if (address.includes('/mailFolders/archive?')) return Response.json({ id: 'archive' })
