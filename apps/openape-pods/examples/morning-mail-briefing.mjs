@@ -77,8 +77,9 @@ export function render(now, data, mailReview) {
   for (const item of mailReview.accounts) {
     lines.push(`${item.account}: ${item.checked}/${item.total} Inbox-Mails geprüft`)
     for (const mail of item.important.slice(0, 2)) {
+      const received = parts(mail.receivedAt)
       const compact = value => value.replace(/\s+/g, ' ').trim()
-      lines.push(`- ${mail.disposition === 'action' ? 'Handlungsbedarf' : 'Behalten'}: ${compact(mail.subject).slice(0, 60)} (${mail.sender})`, `  ${compact(mail.summary).slice(0, 130)}`)
+      lines.push(`- ${mail.disposition === 'action' ? 'Handlungsbedarf' : 'Behalten'}: ${compact(mail.subject).slice(0, 60)} (${mail.sender}, ${received.day}.${received.month}.${received.year})`, `  ${compact(mail.summary).slice(0, 130)}`)
       if (mail.nextAction) lines.push(`  Nächster Schritt: ${compact(mail.nextAction).slice(0, 90)}`)
     }
     if (item.grant?.count < item.archiveCount) lines.push(`${item.archiveCount - item.grant.count} weitere Archivierungsvorschläge bleiben vorerst in der Inbox.`)

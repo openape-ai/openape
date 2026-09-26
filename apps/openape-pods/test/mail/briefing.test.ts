@@ -23,8 +23,8 @@ it('bounds classification prompts and retains conversations that cannot be revie
 })
 it('renders actionable mail and the exact grant link alongside calendar and issue sections', async () => {
   const { render } = await example('morning-mail-briefing.mjs')
-  const text = render(new Date('2026-09-26T05:00:00Z'), [{ today: [], upcoming: [] }, { repos: { total: 1, issues: [{ title: 'An open issue', repository: 'patrick/monorepo', number: 123, url: 'https://repos.openape.ai/patrick/monorepo/issues/123' }] } }], { date: '2026-09-26', accounts: [{ account: 'owner@example.test', total: 12, checked: 12, important: [{ disposition: 'action', subject: 'Please confirm', sender: 'partner@example.test', summary: 'A decision is due today.', nextAction: 'Reply before noon.' }], archiveCount: 3, grant: { count: 3, url: 'https://id.example.test/grant-approval?grant_id=fixture' } }], gaps: [] })
-  for (const textPart of ['Please confirm', 'A decision is due today.', 'Reply before noon.', '3 Mails zum Archivieren', 'grant_id=fixture', 'An open issue', 'Keine Termine heute']) expect(text).toContain(textPart)
+  const text = render(new Date('2026-09-26T05:00:00Z'), [{ today: [], upcoming: [] }, { repos: { total: 1, issues: [{ title: 'An open issue', repository: 'patrick/monorepo', number: 123, url: 'https://repos.openape.ai/patrick/monorepo/issues/123' }] } }], { date: '2026-09-26', accounts: [{ account: 'owner@example.test', total: 12, checked: 12, important: [{ disposition: 'action', subject: 'Please confirm', receivedAt: '2026-09-22T13:47:13Z', sender: 'partner@example.test', summary: 'A decision is due today.', nextAction: 'Reply before noon.' }], archiveCount: 3, grant: { count: 3, url: 'https://id.example.test/grant-approval?grant_id=fixture' } }], gaps: [] })
+  for (const textPart of ['Please confirm', '22.09.2026', 'A decision is due today.', 'Reply before noon.', '3 Mails zum Archivieren', 'grant_id=fixture', 'An open issue', 'Keine Termine heute']) expect(text).toContain(textPart)
   expect(text.length).toBeLessThan(4097)
 })
 it('requires current workflow output rather than silently reporting no mail', async () => {

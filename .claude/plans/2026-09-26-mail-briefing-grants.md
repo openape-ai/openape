@@ -38,3 +38,9 @@ Disable the new workflow and polling schedule, restore the original briefing scr
 - Provider read and move failures remain explicit; successful prior effects are never silently replayed.
 
 - 2026-09-26 17:19 Vienna: M1/M2 implementation complete; full lint/typecheck/build and 568 Pods checks pass. Real read-only Graph metadata probe passes. Native PR, signed delivery and live Pod setup remain.
+
+- 2026-09-26 20:03 Vienna: Live read-only review completed for 213 Delta Mind and 124 DOCPIT Inbox messages, with zero gaps and 19 archive candidates. Final setup fixes in PR 152 add mailbox-scoped read reuse, local owner workflow creation, and the missing archive frame operation. Full local deployment check passed on f4e933831b5c0c03b292dd01e40381575db0a3f5. Exact-head external CI and signed native acceptance are in progress; actual grants, workflow handoff and schedules remain unverified. No mail moved and no extra Telegram delivery.
+
+- 2026-09-26 20:15 Vienna: PR 152 merged as 50f68e2644dac5b6e0f6929f7fbb85c07653f917. The signed app passed native DMG acceptance and was installed with a paired backup. Workflow creation now succeeds. The first archive service call exposed premature AbortController cleanup; a follow-up awaits completion and adds an asynchronous native-service regression. The real two-node workflow preview is running; schedules remain unchanged until the complete acceptance passes.
+
+- 2026-09-26 20:19 Vienna: The actual workflow preview a9993b53-1146-40e8-8eec-09e3f42a6aab completed both nodes: 214 Delta Mind and 124 DOCPIT messages, zero gaps, 2,127-character briefing preview, no Telegram delivery. The workflow is saved but disabled and paused. Restoring the existing WorkflowPanel in connected desktop settings is included in the final setup fix, so the owner can inspect, pause and resume workflows through supported UI. Native grant preparation and final schedule activation remain pending acceptance.
