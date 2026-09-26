@@ -1,5 +1,11 @@
 # Active work
 
+## Morning mail triage and archive approvals (September 26, 2026)
+
+[Issue 1395](https://repos.openape.ai/patrick/monorepo/issues/1395), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3F3FK9MX2BH6QWBCWBZZCJE). Checkout `mail-briefing-grants`, branch `feature/issue-1395-mail-briefing-grants`, base `bcccb19f`. Dedicated human-confirmed archive service, exact signed once grants, immutable provider identity/version rechecks, durable uncertain outcomes and daily workflow examples implemented. Generic program calls remain read-only; autonomous archive gate unchanged.
+
+Full lint/typecheck, Pods build and all 568 unit/component tests pass, including 25 permanent cases for consequential archive authority/provider/briefing contracts. A real read-only Microsoft probe returns complete metadata for the first 20 of 212 Delta Mind Inbox messages. No mail moved and no extra Telegram message sent. New review Pod `890bca63-dc4d-4e93-a5cc-cc8c7bfe489d` is paused and unconfigured. Next: native PR and exact-head CI, signed local delivery, read-only owner workflow preview and single-schedule cutover.
+
 ## IdP pending grant expiry (September 26, 2026)
 
 [Issue 1394](https://repos.openape.ai/patrick/monorepo/issues/1394).
