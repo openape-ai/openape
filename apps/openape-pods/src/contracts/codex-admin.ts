@@ -32,6 +32,11 @@ export function parseAdministration(action: Record<string, unknown>) {
     if (adapterPath !== undefined || commandName !== undefined || runtimePath !== undefined) throw new Error('Invalid credential import fields')
     return { kind, revision: Number(revision), command: value, path: absolutePath(path) } as const
   }
+  if (kind === 'resources' && (command as { type?: unknown })?.type === 'importJev') {
+    const value = command as { type: 'importJev', podId: string, epoch: number }
+    if (Object.keys(value).some(key => !['type', 'podId', 'epoch'].includes(key)) || !/^[a-f0-9-]{36}$/.test(value.podId) || !Number.isSafeInteger(value.epoch) || value.epoch < 0 || adapterPath !== undefined || commandName !== undefined || runtimePath !== undefined) throw new Error('Invalid Jev key import')
+    return { kind: 'importJev', revision: Number(revision), command: value, path: absolutePath(path) } as const
+  }
   if (kind === 'resources') {
     const parsed = parseResourceCommand(command, true)
     if (!['list', 'assignJev', 'assignHttp', 'assignDirectory', 'assignReference', 'revoke', 'removeVariable'].includes(parsed.type)) throw new Error('Unsupported Codex resource operation; import secrets by private file')

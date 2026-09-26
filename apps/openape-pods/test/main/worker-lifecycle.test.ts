@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RuntimeApprovalPolicy } from '../../src/main/codex/runtime-approval'
@@ -131,6 +131,29 @@ it('records only local MCP creation, including a queued central creation on this
     Object.assign(worker, { request: async () => workspace(ids[2]!) })
     await worker.centralExecute(command, ids[2])
     expect(policy.allows(ids[2]!)).toBe(false)
+  }
+  finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+it('imports an initial Jev connection from a private file and refuses replacement or stale resources', async () => {
+  const { FixtureWorker } = await import('../../src/main/worker')
+  const root = mkdtempSync(join(tmpdir(), 'pods-jev-import-'))
+  try {
+    const path = join(root, 'key'); writeFileSync(path, 'synthetic-jev-key', { mode: 0o600 })
+    const worker = new FixtureWorker(() => {})
+    const id = '00000000-0000-4000-8000-000000000001'
+    const dispatch = vi.fn(async () => ({ completed: false }))
+    let connected = false
+    const resources = vi.spyOn(worker, 'resources').mockImplementation(async () => ({ epoch: 1, resources: [], variables: [], jev: connected ? { id, state: 'ready', verifiedAt: 1 } : null }))
+    const onboarding = vi.spyOn(worker, 'onboarding').mockImplementation(async (command) => { expect(command).toEqual({ type: 'saveTypesafe', key: 'synthetic-jev-key' }); connected = true; return {} as never })
+    Object.assign(worker, { dispatch })
+    const action = { action: 'resources', revision: 1, path, command: { type: 'importJev', podId: id, epoch: 1 } }
+    expect(await worker.codex({ id, action })).toEqual({ jev: { id, state: 'ready', verifiedAt: 1 } })
+    expect(JSON.stringify(dispatch.mock.calls)).not.toContain('synthetic-jev-key')
+    await expect(worker.codex({ id, action })).rejects.toThrow('Secret import failed')
+    connected = false
+    await expect(worker.codex({ id, action: { ...action, command: { ...action.command, epoch: 0 } } })).rejects.toThrow('Secret import failed')
+    expect(onboarding).toHaveBeenCalledTimes(1); expect(resources).toHaveBeenCalledTimes(4)
   }
   finally { rmSync(root, { recursive: true, force: true }) }
 })

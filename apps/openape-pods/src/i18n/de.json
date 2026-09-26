@@ -2460,5 +2460,8 @@
   "Invalid archive Pod identity": "Ungültige Pod-Identität für die Archivierung",
   "Archive proposals require live provider data; synthetic validation never creates grants or moves mail": "Archivierungsvorschläge benötigen echte Maildaten; die synthetische Prüfung erstellt keine Freigaben und verschiebt keine Mails",
   "Mail archive service is unavailable": "Der Dienst für Archivierungsfreigaben ist nicht verfügbar",
-  "Archive message details exceed the grant display limit": "Die Nachrichtendetails überschreiten das Anzeigelimit einer Freigabe"
+  "Archive message details exceed the grant display limit": "Die Nachrichtendetails überschreiten das Anzeigelimit einer Freigabe",
+  "Invalid Jev key import": "Ungültiger Import des Jev-Schlüssels",
+  "Pod permissions changed; reload before importing Jev": "Pod-Berechtigungen geändert; vor dem Jev-Import neu laden",
+  "A Jev connection already exists; replace it through App settings": "Eine Jev-Verbindung besteht bereits; ersetze sie in den App-Einstellungen"
 }

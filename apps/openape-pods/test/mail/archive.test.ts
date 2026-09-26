@@ -85,7 +85,9 @@ it('retains an uncertain move across restart and never retries it', async () => 
 })
 it('refuses changed program bindings and expired approved batches', async () => {
   const f = await fixture(); await f.service.prepare(f.podId, f.proposal, f.provider, f.authority); vi.mocked(f.authority.status).mockResolvedValue('approved')
-  await expect(f.service.process(f.podId, async () => ({ ...f.provider, applicationHash: 'changed' }), f.authority)).rejects.toThrow('application changed')
+  expect((await f.service.process(f.podId, async () => ({ ...f.provider, applicationHash: 'changed' }), f.authority))[0]).toMatchObject({ state: 'expired', error: expect.stringContaining('application changed') })
+  expect(f.authority.consume).not.toHaveBeenCalled()
+  await f.service.prepare(f.podId, f.proposal, f.provider, f.authority)
   vi.useFakeTimers(); vi.setSystemTime(Date.now() + 13 * 60 * 60 * 1000)
   expect((await f.service.process(f.podId, async () => f.provider, f.authority))[0]?.state).toBe('expired')
   expect(f.provider.move).not.toHaveBeenCalled()
@@ -109,4 +111,12 @@ it('keeps every displayed grant within the broker limits without hiding listed m
   expect(archiveSummary(record!.manifest).length).toBeLessThanOrEqual(4096)
   expect(archiveCommand(record!.manifest).every(argument => argument.length <= 4096)).toBe(true)
   for (const mail of record!.manifest.items) expect(archiveSummary(record!.manifest)).toContain(mail.subject)
+})
+
+it('supersedes pending grants when the reviewed application changes without consuming old authority', async () => {
+  const f = await fixture(); await f.service.prepare(f.podId, f.proposal, f.provider, f.authority)
+  const prepared = await f.service.prepare(f.podId, f.proposal, { ...f.provider, applicationHash: 'new-policy' }, f.authority)
+  expect(prepared.state).toBe('pending')
+  expect((await f.store.list(f.podId)).map(record => record.state).sort()).toEqual(['expired', 'pending'])
+  expect(f.authority.consume).not.toHaveBeenCalled(); expect(f.provider.move).not.toHaveBeenCalled()
 })
