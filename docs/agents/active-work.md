@@ -1,5 +1,13 @@
 # Active work
 
+## Pods: central desktop settings (September 26, 2026) — release preparation
+
+[Issue 1393](https://repos.openape.ai/patrick/monorepo/issues/1393).
+Worktree `pods-jev-settings`, branch `bugfix/issue-1393-jev-desktop-settings`, base `3451e93a`.
+The installed central desktop mounted a different settings screen from the one covered by Jev acceptance. The active desktop settings now expose the existing compact Jev key form, language, Codex preferences, account management and data/backups, with grouped cards and navigation. Completing account setup returns to the workspace.
+
+Full lint/typecheck, Pods build and all 543 unit/component tests pass. A permanent behavioral regression follows the actual desktop settings entry point, submits a synthetic key through the existing IPC contract and checks account/data navigation; browser coverage checks English and German narrow/dark layouts. Existing key encryption and authorization behavior are unchanged. Four focused browser tests pass; English/light and German/dark screenshots were inspected. Next: native PR/exact-head CI, then signed local delivery with paired rollback and owner UI verification.
+
 ## Pods: run retention and signed release (September 26, 2026) — installed and verified
 
 [Issue 1391](https://repos.openape.ai/patrick/monorepo/issues/1391),
