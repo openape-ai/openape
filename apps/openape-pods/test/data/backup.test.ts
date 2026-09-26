@@ -12,6 +12,7 @@ import { storageBytes } from '../../src/worker/data/files'
 import { ChatRegistry } from '../../src/worker/master/chat-registry'
 import { MasterConversations } from '../../src/worker/master/conversations'
 import { ControlChanges } from '../../src/worker/control/changes'
+import { Scheduler } from '../../src/worker/scheduling/scheduler'
 import { DataRetention } from '../../src/worker/data/retention'
 
 const stores: PodDatabase[] = []; const roots: string[] = []
@@ -239,4 +240,138 @@ it('restores chat history while discarding pending changes and every provider co
   expect(new MasterConversations(restored).messages(chat.scope)[0]?.text).toBe('Saved history')
   expect(new MasterConversations(restored).session(chat.scope).threadId).toBeNull()
   expect(new ControlChanges(restored, new ResourceRegistry(restored, () => {})).list(chat.id)[0]?.state).toBe('discarded')
+})
+
+async function retentionFixture(count = 55) {
+  const f = await fixture()
+  f.store.db.prepare('UPDATE runs SET started_at=0,finished_at=1 WHERE id=?').run(f.runId)
+  const ids = [f.runId]
+  for (let index = 1; index < count; index++) {
+    const id = randomUUID(); ids.push(id)
+    f.store.db.prepare('INSERT INTO runs VALUES(?,?,?,\'completed\',?,?,?,NULL,1,1)').run(id, f.pod.id, f.store.getPod(f.pod.id).activeScript!, index, index + 1, 'Finished')
+  }
+  for (const id of ids) {
+    await mkdir(join(f.root, 'runs', id), { recursive: true })
+    await writeFile(join(f.root, 'runs', id, 'output.txt'), 'Execution output')
+  }
+  return { ...f, ids, retention: new DataRetention(f.store, 'unused-helper') }
+}
+
+it('keeps the newest 50 rows and folders while preserving Pod data and processed input deduplication', async () => {
+  const f = await retentionFixture()
+  const before = { pods: f.store.listPods(), checkpoint: f.store.checkpoint(f.pod.id), knowledge: f.store.knowledge(f.pod.id), schedules: f.store.db.prepare('SELECT * FROM schedules').all() }
+  const event = randomUUID()
+  f.store.db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at,state,run_id) VALUES(?,?,\'manual\',\'original\',\'{"body":"old input"}\',1,\'processed\',?)').run(event, f.pod.id, f.runId)
+  f.store.db.prepare('INSERT INTO run_inputs VALUES(?,\'manual\',?)').run(f.runId, JSON.stringify([event]))
+  f.store.db.prepare('INSERT INTO run_events VALUES(?,1,\'finished\',\'{}\',1)').run(f.runId)
+  f.store.db.prepare('INSERT INTO execution_domains VALUES(?,?,1)').run(join(f.root, 'runs', f.runId, 'domain'), f.runId)
+  const operation = randomUUID()
+  f.store.db.prepare('INSERT INTO control_runs VALUES(?,?,\'pod\')').run(operation, f.runId)
+  f.store.db.prepare('INSERT INTO control_changes VALUES(?,?,?)').run(operation, randomUUID(), JSON.stringify({ id: operation, kind: 'run', state: 'applied', results: [{ podId: f.pod.id, action: 'run', result: { runId: f.runId } }] }))
+  await f.retention.runs.prune()
+  expect(f.store.db.prepare('SELECT * FROM control_runs').all()).toEqual([])
+  const decision = JSON.parse(String(f.store.db.prepare('SELECT body FROM control_changes WHERE id=?').get(operation)!.body))
+  expect(decision.state).toBe('applied'); expect(JSON.stringify(decision)).not.toContain(f.runId)
+  expect(f.store.db.prepare('SELECT id FROM runs ORDER BY started_at,rowid').all().map(row => row.id)).toEqual(f.ids.slice(5))
+  expect((await readdir(join(f.root, 'runs'))).sort()).toEqual(f.ids.slice(5).sort())
+  expect({ pods: f.store.listPods(), checkpoint: f.store.checkpoint(f.pod.id), knowledge: f.store.knowledge(f.pod.id), schedules: f.store.db.prepare('SELECT * FROM schedules').all() }).toEqual(before)
+  expect(await readFile(join(f.workspace, 'notes.txt'), 'utf8')).toBe('Durable workspace')
+  expect(f.store.db.prepare('SELECT run_id,payload,state FROM accepted_events WHERE id=?').get(event)).toEqual({ run_id: null, payload: '{"body":"old input"}', state: 'processed' })
+  const scheduler = new Scheduler(f.store, { start: () => { throw new Error('Must not replay processed input') } })
+  expect(scheduler.acceptEvent(f.pod.id, 'manual', 'original', { body: 'old input' })).toBe(event)
+  expect(() => scheduler.acceptEvent(f.pod.id, 'manual', 'original', {})).toThrow('conflicts')
+  scheduler.drain()
+  for (const table of ['run_inputs', 'run_events', 'execution_domains', 'run_deletion_jobs']) expect(f.store.db.prepare(`SELECT * FROM ${table}`).all()).toEqual([])
+  expect(f.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+})
+
+it.each(['lease', 'intent', 'unknown', 'needsReview', 'ready', 'retryQueued', 'pending', 'claimed', 'blocked', 'linkedInput', 'approval', 'unfinished', 'running'])('protects %s and prunes only after that protection is settled', async (protection) => {
+  const f = await retentionFixture(); const db = f.store.db; const event = randomUUID()
+  let settle: () => void
+  if (protection === 'lease') {
+    db.prepare('INSERT INTO run_leases VALUES(?,?,?,1,NULL)').run(f.pod.id, f.runId, 'old-boot')
+    settle = () => { db.prepare('DELETE FROM run_leases').run() }
+  }
+  else if (protection === 'intent' || protection === 'unknown') {
+    db.prepare('INSERT INTO effect_ledger VALUES(?,?,?,?,?,?,NULL)').run(f.pod.id, 'delivery', 'http.request', digest('{}'), f.runId, protection)
+    settle = () => { db.prepare('UPDATE effect_ledger SET state=\'completed\',result=\'{}\'').run() }
+  }
+  else if (['needsReview', 'ready', 'retryQueued'].includes(protection)) {
+    db.prepare('INSERT INTO recovery_reviews VALUES(?,?,NULL,1,?)').run(f.runId, protection, event)
+    db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at,state) VALUES(?,?,\'manual\',?,\'{}\',1,\'pending\')').run(event, f.pod.id, event)
+    settle = () => { db.prepare('UPDATE recovery_reviews SET state=\'retryQueued\'').run(); db.prepare('UPDATE accepted_events SET state=\'processed\'').run() }
+  }
+  else if (['pending', 'claimed', 'blocked', 'linkedInput'].includes(protection)) {
+    db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at,state,run_id) VALUES(?,?,\'manual\',?,\'{}\',1,?,?)').run(event, f.pod.id, event, protection === 'linkedInput' ? 'pending' : protection, protection === 'linkedInput' ? null : f.runId)
+    db.prepare('INSERT INTO run_inputs VALUES(?,\'manual\',?)').run(f.runId, JSON.stringify([event]))
+    settle = () => { db.prepare('UPDATE accepted_events SET state=\'processed\'').run() }
+  }
+  else if (protection === 'approval') {
+    db.prepare('INSERT INTO run_events VALUES(?,1,\'approval\',?,1)').run(f.runId, JSON.stringify({ grantId: 'grant', state: 'pending' }))
+    settle = () => { db.prepare('INSERT INTO run_events VALUES(?,2,\'approval\',?,2)').run(f.runId, JSON.stringify({ grantId: 'grant', state: 'denied' })) }
+  }
+  else if (protection === 'running') {
+    db.prepare('UPDATE runs SET state=\'running\' WHERE id=?').run(f.runId)
+    settle = () => { db.prepare('UPDATE runs SET state=\'completed\' WHERE id=?').run(f.runId) }
+  }
+  else {
+    db.prepare('UPDATE runs SET finished_at=NULL,state=\'interrupted\' WHERE id=?').run(f.runId)
+    settle = () => { db.prepare('UPDATE runs SET finished_at=1,state=\'cancelled\' WHERE id=?').run(f.runId) }
+  }
+  await f.retention.runs.prune()
+  expect(db.prepare('SELECT id FROM runs WHERE id=?').get(f.runId)?.id).toBe(f.runId)
+  expect(await readFile(join(f.root, 'runs', f.runId, 'output.txt'), 'utf8')).toBe('Execution output')
+  settle(); await f.retention.runs.prune()
+  expect(db.prepare('SELECT id FROM runs WHERE id=?').get(f.runId)).toBeUndefined()
+  await expect(lstat(join(f.root, 'runs', f.runId))).rejects.toMatchObject({ code: 'ENOENT' })
+  expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+})
+
+it('rolls back history and journal together when database deletion fails', async () => {
+  const f = await retentionFixture()
+  f.store.db.exec('CREATE TRIGGER fail_retention BEFORE DELETE ON runs BEGIN SELECT RAISE(ABORT,\'synthetic interruption\'); END;')
+  await expect(f.retention.runs.prune()).rejects.toThrow('synthetic interruption')
+  expect(f.store.db.prepare('SELECT id FROM runs').all()).toHaveLength(55)
+  expect(f.store.db.prepare('SELECT * FROM run_deletion_jobs').all()).toEqual([])
+  expect(await readdir(join(f.root, 'runs'))).toHaveLength(55)
+  f.store.db.exec('DROP TRIGGER fail_retention')
+  await f.retention.runs.prune()
+  expect(f.store.db.prepare('SELECT id FROM runs').all()).toHaveLength(50)
+})
+
+it('finishes journaled folder deletion after restart without touching the Pod workspace', async () => {
+  const f = await retentionFixture()
+  await chmod(join(f.root, 'runs'), 0o500)
+  try { await expect(f.retention.runs.prune()).rejects.toThrow() }
+  finally { await chmod(join(f.root, 'runs'), 0o700) }
+  expect(f.store.db.prepare('SELECT id FROM runs').all()).toHaveLength(50)
+  expect(f.store.db.prepare('SELECT * FROM run_deletion_jobs').all()).toHaveLength(5)
+  expect((await f.retention.view()).pendingDeletion).toBe(5)
+  f.store.close(); stores.splice(stores.indexOf(f.store), 1)
+  const reopened = new PodDatabase(f.root); stores.push(reopened)
+  await new DataRetention(reopened, 'unused-helper').cleanDeletedFiles()
+  expect(reopened.db.prepare('SELECT * FROM run_deletion_jobs').all()).toEqual([])
+  expect(await readdir(join(f.root, 'runs'))).toHaveLength(50)
+  expect(await readFile(join(f.workspace, 'notes.txt'), 'utf8')).toBe('Durable workspace')
+})
+
+it('bounds a pass and resolves equal start times by insertion order', async () => {
+  const f = await retentionFixture(110)
+  f.store.db.prepare('UPDATE runs SET started_at=1').run()
+  await Promise.all([f.retention.runs.prune(), f.retention.runs.prune()])
+  expect(f.store.db.prepare('SELECT id FROM runs').all()).toHaveLength(85)
+  await f.retention.runs.prune(); await f.retention.runs.prune()
+  expect(f.store.db.prepare('SELECT id FROM runs ORDER BY rowid').all().map(row => row.id)).toEqual(f.ids.slice(60))
+  expect(await readdir(join(f.root, 'runs'))).toHaveLength(50)
+})
+
+it('exports and restores detached receipts without resurrecting pruned runs', async () => {
+  const f = await retentionFixture()
+  f.store.db.prepare('INSERT INTO effect_ledger VALUES(?,?,?,?,?,\'completed\',?)').run(f.pod.id, 'delivery', 'http.request', digest('{}'), f.runId, '{"receipt":"confirmed"}')
+  await f.retention.runs.prune()
+  const backup = await createBackup(f.store, f.exports)
+  const restored = new PodDatabase(await restoreBackup(backup, f.exports, schemaVersion)); stores.push(restored)
+  expect(restored.db.prepare('SELECT * FROM runs').all()).toHaveLength(50)
+  expect(restored.db.prepare('SELECT run_id,result FROM effect_ledger').get()).toEqual({ run_id: null, result: '{"receipt":"confirmed"}' })
+  expect(restored.db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
 })

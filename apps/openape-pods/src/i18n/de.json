@@ -48,9 +48,7 @@
   "Save storage limit": "Speicherlimit speichern",
   "Checked every minute, and at once when the limit is reached or free space runs low. Runs stop when the limit is reached or less than 256 MiB remains free. Temporary usage can exceed the limit between checks.": "Prüfung jede Minute, bei erreichtem Limit oder knappem Speicher sofort. Läufe werden bei Erreichen des Limits oder weniger als 256 MiB freiem Speicher gestoppt. Zwischen den Prüfungen kann der Verbrauch das Limit vorübergehend überschreiten.",
   "Clean unused files": "Ungenutzte Dateien bereinigen",
-  "Knowledge, cited evidence, run history and pending inputs are kept until you explicitly delete their pod. Backups and old restored profiles are retained separately.": "Wissen, zitierte Belege, Laufverlauf und ausstehende Eingaben bleiben erhalten, bis du den zugehörigen Pod ausdrücklich löschst. Sicherungen und früher wiederhergestellte Profile werden separat aufbewahrt.",
   "Backup and recovery": "Sicherung und Wiederherstellung",
-  "Export pod settings, scripts, workspaces, knowledge, source snapshots and run history. Backups contain your data; choose a private destination. Account credentials are excluded.": "Exportiere Pod-Einstellungen, Skripte, Arbeitsbereiche, Wissen, Quellenkopien und Laufverlauf. Sicherungen enthalten deine Daten; wähle einen privaten Speicherort. Zugangsdaten werden nicht exportiert.",
   "Export backup…": "Sicherung exportieren …",
   "Restore backup and restart…": "Sicherung wiederherstellen und neu starten …",
   "Restoration verifies checksums and creates a new profile. The current profile is retained. Reconnect accounts, review resources and explicitly enable schedules after restoring.": "Die Wiederherstellung prüft Prüfsummen und erstellt ein neues Profil. Das aktuelle Profil bleibt erhalten. Verbinde anschließend die Konten erneut, prüfe die Ressourcen und aktiviere Zeitpläne ausdrücklich.",
@@ -211,7 +209,6 @@
   "Assignment": "Aufgabe",
   "Assignment revision {p0} · {p1}": "Aufgabenrevision {p0} · {p1}",
   "Pod lifecycle": "Pod-Lebenszyklus",
-  "Archiving stops intake and preserves knowledge and run history.": "Archivieren stoppt neue Eingaben und bewahrt Wissen und Laufverlauf.",
   "Archive pod": "Pod archivieren",
   "Delete local pod…": "Lokalen Pod löschen …",
   "Deletion permanently removes this pod’s local data and key. Export a backup first. A separate confirmation follows.": "Das Löschen entfernt lokale Daten und Schlüssel dieses Pods dauerhaft. Exportiere zuvor eine Sicherung. Eine gesonderte Bestätigung folgt.",
@@ -2417,5 +2414,11 @@
   "Runtime permission was not approved": "Das Ausführungsrecht wurde nicht freigegeben",
   "Automatic runtime permission approval failed ({p0})": "Die automatische Ausführungsfreigabe ist fehlgeschlagen ({p0})",
   "Could not load automatic runtime approval": "Die Einstellung für automatische Ausführungsfreigaben konnte nicht geladen werden",
-  "Could not save automatic runtime approval": "Die Einstellung für automatische Ausführungsfreigaben konnte nicht gespeichert werden"
+  "Could not save automatic runtime approval": "Die Einstellung für automatische Ausführungsfreigaben konnte nicht gespeichert werden",
+  "Each Pod keeps its newest 50 runs. Older runs are permanently removed from local and account history once active work, approvals, inputs and recovery are settled. Delivery receipts, Pod workspaces, settings, checkpoints and knowledge are preserved. Backups and old restored profiles remain separate.": "Jeder Pod behält seine neuesten 50 Läufe. Ältere Läufe werden dauerhaft aus dem lokalen und zentralen Verlauf entfernt, sobald laufende Arbeit, Freigaben, Eingaben und Wiederherstellung abgeschlossen sind. Zustellbelege, Pod-Arbeitsordner, Einstellungen, Fortschritt und Wissen bleiben erhalten. Sicherungen und frühere Profile bleiben separat.",
+  "Export pod settings, scripts, workspaces, knowledge, source snapshots and retained run history. Deleted runs cannot be recovered from a later backup. Backups contain your data; choose a private destination. Account credentials are excluded.": "Exportiere Pod-Einstellungen, Skripte, Arbeitsbereiche, Wissen, Quellenkopien und den noch vorhandenen Laufverlauf. Gelöschte Läufe lassen sich aus einer späteren Sicherung nicht wiederherstellen. Sicherungen enthalten deine Daten; wähle einen privaten Speicherort. Zugangsdaten werden nicht exportiert.",
+  "Archiving stops intake and preserves knowledge. Run history follows the 50-run retention policy.": "Archivieren stoppt neue Eingaben und bewahrt Wissen. Für den Laufverlauf gilt weiterhin die Aufbewahrung der neuesten 50 Läufe.",
+  "Invalid run deletion identity": "Ungültige Kennung für die Laufbereinigung",
+  "Invalid pending run deletion": "Ungültiger vorgemerkter Lauf zur Bereinigung",
+  "Run folder deletion failed": "Der Laufordner konnte nicht gelöscht werden"
 }
