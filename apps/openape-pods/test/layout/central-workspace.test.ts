@@ -39,3 +39,26 @@ it('keeps Script and Permissions free of Jev setup in the narrow central workspa
     await page.screenshot({ path: `../../.artifacts/jev-central-${tab.toLowerCase()}.png` })
   }
 })
+
+it.each(['en', 'de'] as const)('shows Jev in the active desktop settings with readable navigation (%s)', async (language) => {
+  const { default: DesktopWorkspace } = await import('../../src/renderer/central/DesktopWorkspace.vue')
+  const { installWorkspace } = await import('./workspace-fixture')
+  installWorkspace({ central: async (command) => {
+    if (command.type === 'status') return { enabled: false }
+    if (command.type === 'inventory') return []
+    return { requestError: { status: 400, message: 'No fixture change feed' } }
+  } })
+  applyLanguage(language)
+  await page.viewport(language === 'de' ? 560 : 1060, 950)
+  document.documentElement.style.colorScheme = language === 'de' ? 'dark' : 'light'
+  wrapper = mount(DesktopWorkspace, { attachTo: document.body }); await flushPromises()
+  await wrapper.findAll('button').find(button => button.text() === (language === 'de' ? 'Desktop-Einstellungen' : 'Desktop settings'))!.trigger('click')
+  await flushPromises()
+  const input = wrapper.get('input[type="password"]').element.getBoundingClientRect()
+  expect(input.width).toBeGreaterThan(200)
+  expect(input.top).toBeGreaterThan(0)
+  expect(input.bottom).toBeLessThan(innerHeight)
+  expect(wrapper.get('.settings-navigation').element.getBoundingClientRect().bottom).toBeLessThan(input.top)
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth)
+  await page.screenshot({ path: `../../.artifacts/jev-desktop-settings-${language}.png` })
+})
