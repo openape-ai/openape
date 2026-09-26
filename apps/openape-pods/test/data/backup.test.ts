@@ -3,7 +3,7 @@ import { appendFile, chmod, mkdtemp, mkdir, lstat, readFile, readdir, realpath, 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { PodDatabase, digest, schemaVersion } from '../../src/worker/storage/database'
 import { createBackup, restoreBackup } from '../../src/worker/data/backup'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
@@ -14,6 +14,11 @@ import { MasterConversations } from '../../src/worker/master/conversations'
 import { ControlChanges } from '../../src/worker/control/changes'
 import { Scheduler } from '../../src/worker/scheduling/scheduler'
 import { DataRetention } from '../../src/worker/data/retention'
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const files = await importOriginal<typeof import('node:fs/promises')>()
+  return { ...files, rm: vi.fn(files.rm) }
+})
 
 const stores: PodDatabase[] = []; const roots: string[] = []
 afterEach(async () => { for (const store of stores.splice(0)) store.close(); for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }) })
@@ -341,9 +346,8 @@ it('rolls back history and journal together when database deletion fails', async
 
 it('finishes journaled folder deletion after restart without touching the Pod workspace', async () => {
   const f = await retentionFixture()
-  await chmod(join(f.root, 'runs'), 0o500)
-  try { await expect(f.retention.runs.prune()).rejects.toThrow() }
-  finally { await chmod(join(f.root, 'runs'), 0o700) }
+  vi.mocked(rm).mockRejectedValueOnce(Object.assign(new Error('Synthetic disk failure'), { code: 'EIO' }))
+  await expect(f.retention.runs.prune()).rejects.toThrow('Synthetic disk failure')
   expect(f.store.db.prepare('SELECT id FROM runs').all()).toHaveLength(50)
   expect(f.store.db.prepare('SELECT * FROM run_deletion_jobs').all()).toHaveLength(5)
   expect((await f.retention.view()).pendingDeletion).toBe(5)
