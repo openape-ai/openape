@@ -20,7 +20,7 @@ async function fixture() {
     const address = String(url)
     expect(new Headers(options?.headers).get('Prefer')).toContain('ImmutableId')
     if (address.includes('/mailFolders/sentitems?')) return Response.json({ id: 'sent' })
-    if (address.includes('/messages/delta')) expect(new Headers(options?.headers).get('Prefer')).toContain('odata.maxpagesize=500')
+    if (address.includes('/messages/delta')) expect(new Headers(options?.headers).get('Prefer')).toContain('odata.maxpagesize=100')
     if (address.includes('/messages/delta')) return Response.json({ value: sent, '@odata.deltaLink': 'https://graph.microsoft.com/v1.0/me/mailFolders/sent/messages/delta?$deltatoken=next' })
     if (address.includes('/mailFolders/inbox?')) return Response.json({ id: 'inbox', totalItemCount: 1 })
     if (address.includes('/mailFolders/archive?')) return Response.json({ id: 'archive' })
@@ -102,4 +102,21 @@ it('rejects foreign sent cursors and incomplete recipient metadata without movin
   f.fetch.mockImplementation(async (url, options) => String(url).includes('/messages/delta') ? Response.json({ value: [{ toRecipients: [] }], '@odata.deltaLink': 'https://graph.microsoft.com/v1.0/me/mailFolders/sent/messages/delta' }) : original(url, options))
   await expect(f.run(['protection'])).rejects.toThrow('recipient metadata')
   expect(f.fetch.mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true)
+})
+
+it('keeps truncated message text valid Unicode for structured evaluation', async () => {
+  const f = await fixture(); f.message.body.content = `${'x'.repeat(5999)}𝟙`
+  const result = await f.run(['list']) as { messages: { body: string, truncated: boolean }[] }
+  expect(result.messages[0]?.truncated).toBe(true)
+  expect(result.messages[0]?.body.length).toBe(6000)
+  expect(Buffer.from(result.messages[0]!.body, 'utf8').toString('utf8')).toBe(result.messages[0]!.body)
+})
+
+it('rescans legacy query-limited contact cursors while preserving known recipients', async () => {
+  const f = await fixture()
+  await writeFile(join(f.root, 'mail-contacts-owner%40example.test.json'), JSON.stringify({ version: 1, account: 'owner@example.test', recipients: ['legacy@example.test'], cursor: 'https://graph.microsoft.com/v1.0/me/mailFolders/sent/messages/delta?$deltatoken=legacy', complete: true }))
+  f.sent.push({ toRecipients: [{ emailAddress: { address: 'sender@example.test' } }], ccRecipients: [], bccRecipients: [] })
+  expect(await f.run(['protection'])).toMatchObject({ ready: true, count: 2 })
+  expect(f.fetch.mock.calls.some(([url]) => String(url).includes('deltatoken=legacy'))).toBe(false)
+  expect(JSON.parse(await readFile(join(f.root, 'mail-contacts-owner%40example.test.json'), 'utf8'))).toMatchObject({ version: 2, complete: true, recipients: ['legacy@example.test', 'sender@example.test'] })
 })

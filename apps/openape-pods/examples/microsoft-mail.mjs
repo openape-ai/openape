@@ -46,7 +46,7 @@ export async function microsoftMail(argv = process.argv.slice(2), environment = 
   async function request(path, method = 'GET', body) {
     const url = new URL(path, graphOrigin)
     if (url.origin !== graphOrigin || !url.pathname.startsWith('/v1.0/me/')) throw new Error('Mail request escaped the assigned Microsoft mailbox')
-    const response = await fetch(url, { method, redirect: 'error', signal: AbortSignal.timeout(20000), headers: { Authorization: `Bearer ${token}`, Prefer: `IdType="ImmutableId", outlook.body-content-type="text"${url.pathname.endsWith('/messages/delta') ? ', odata.maxpagesize=500' : ''}`, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) })
+    const response = await fetch(url, { method, redirect: 'error', signal: AbortSignal.timeout(20000), headers: { Authorization: `Bearer ${token}`, Prefer: `IdType="ImmutableId", outlook.body-content-type="text"${url.pathname.endsWith('/messages/delta') ? ', odata.maxpagesize=100' : ''}`, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) })
     if (response.status === 404 && method === 'GET') return null
     if (response.status === 410 && method === 'GET') throw Object.assign(new Error('Microsoft delta cursor expired'), { code: 'DELTA_EXPIRED' })
     if (!response.ok) throw new Error(`Microsoft mail ${method} failed (${response.status})`)
@@ -62,10 +62,11 @@ export async function microsoftMail(argv = process.argv.slice(2), environment = 
   policy.addresses = policy.addresses.map(value => value.trim().toLowerCase())
   if (policy.domains.some(domain => !/^[a-z0-9]+(?:[.-][a-z0-9]+)*\.[a-z]{2,}$/.test(domain)) || policy.addresses.some(address => !email(address))) throw new Error('Invalid owner mail protection policy')
   const protectionPath = join(environment.HOME, `mail-contacts-${encodeURIComponent(account)}.json`)
-  let contacts = { version: 1, account, recipients: [], cursor: null, complete: false }
+  let contacts = { version: 2, account, recipients: [], cursor: null, complete: false }
   try { contacts = JSON.parse(await readFile(protectionPath, 'utf8')) }
   catch (error) { if (error.code !== 'ENOENT') throw error }
-  if (contacts.version !== 1 || contacts.account !== account || !Array.isArray(contacts.recipients) || contacts.recipients.some(address => !email(address)) || typeof contacts.complete !== 'boolean' || (contacts.cursor !== null && typeof contacts.cursor !== 'string')) throw new Error('Invalid saved mail protection index')
+  if (![1, 2].includes(contacts.version) || contacts.account !== account || !Array.isArray(contacts.recipients) || contacts.recipients.some(address => !email(address)) || typeof contacts.complete !== 'boolean' || (contacts.cursor !== null && typeof contacts.cursor !== 'string')) throw new Error('Invalid saved mail protection index')
+  if (contacts.version === 1) contacts = { ...contacts, version: 2, cursor: null, complete: false }
   const recipients = new Set(contacts.recipients)
   function email(value) { return typeof value === 'string' && /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/.test(value) }
   function participants(item) { return [item.from, ...item.toRecipients ?? [], ...item.ccRecipients ?? [], ...item.bccRecipients ?? [], ...item.replyTo ?? []].map(person => person?.emailAddress?.address?.toLowerCase()).filter(Boolean) }
@@ -113,7 +114,7 @@ export async function microsoftMail(argv = process.argv.slice(2), environment = 
         }
       }
       next = cursor(page['@odata.nextLink'] ?? page['@odata.deltaLink'])
-      contacts = { version: 1, account, recipients: [...recipients].sort(), cursor: next, complete: Boolean(page['@odata.deltaLink']) }
+      contacts = { version: 2, account, recipients: [...recipients].sort(), cursor: next, complete: Boolean(page['@odata.deltaLink']) }
       const saved = JSON.stringify(contacts)
       if (Buffer.byteLength(saved) > 2500000) throw new Error('Sent recipient index exceeds private program storage limit')
       await writeFile(`${protectionPath}.tmp`, saved, { mode: 0o600 }); await rename(`${protectionPath}.tmp`, protectionPath)
@@ -135,7 +136,7 @@ export async function microsoftMail(argv = process.argv.slice(2), environment = 
     if ([item.id, item.changeKey, item.parentFolderId, item.internetMessageId, sender, item.receivedDateTime, item.webLink].some(value => typeof value !== 'string' || !value)) throw new Error('Microsoft mail identity is incomplete')
     const content = item.body?.content ?? ''
     return { id: item.id, version: item.changeKey, folder: item.parentFolderId, internetMessageId: item.internetMessageId, sender, subject: (item.subject ?? '').replace(/\s+/g, ' ').trim(), receivedAt: item.receivedDateTime, url: item.webLink,
-      ...(includeBody ? { conversation: item.conversationId, body: content.slice(0, 6000), truncated: content.length > 6000, hasAttachments: item.hasAttachments === true, flagged: item.flag?.flagStatus === 'flagged', important: item.importance === 'high', unread: item.isRead !== true, participants: participants(item), protected: Boolean(protection(item)), protectionReason: protection(item) } : {}) }
+      ...(includeBody ? { conversation: item.conversationId, body: content.slice(0, 6000).toWellFormed(), truncated: content.length > 6000, hasAttachments: item.hasAttachments === true, flagged: item.flag?.flagStatus === 'flagged', important: item.importance === 'high', unread: item.isRead !== true, participants: participants(item), protected: Boolean(protection(item)), protectionReason: protection(item) } : {}) }
   }
   const output = { protocol: 'pods-mail-review/v1', account, operation }
   if (operation === 'protection') return { ...output, ...await syncContacts() }
