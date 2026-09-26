@@ -1,5 +1,15 @@
 # Active work
 
+## IdP pending grant expiry (September 26, 2026)
+
+[Issue 1394](https://repos.openape.ai/patrick/monorepo/issues/1394).
+Worktree `pending-grant-expiry`, branch `bugfix/issue-1394-pending-grant-expiry`, base `531a91ba`.
+The production Drizzle store now expires unanswered requests older than 48 hours before reads, decisions and broker capacity checks. Expiry and broker audit records commit atomically. Existing approved and terminal grants retain their statuses.
+
+Permanent SQLite-backed regression coverage extends the existing broker-store suite because the earlier default-store tests missed the production implementation. The original implementation failed 11 new cases; all 344 IdP tests now pass, including the additional decision-boundary case. Full `pnpm lint`, `pnpm typecheck` and `pnpm --filter openape-free-idp build` pass. A separate built-server smoke with the actual production Drizzle plugin, isolated SQLite and SSH challenge authentication verifies the pending inbox, persisted expiry and HTTP 400 for an old approval link; fresh pending and approved grants remain unchanged.
+
+Next: native PR review, exact-source CI, merge and tested-image IdP rollout; confirm the live owner inbox and old request status before closing the issue.
+
 ## Pods: central desktop settings (September 26, 2026) — release preparation
 
 [Issue 1393](https://repos.openape.ai/patrick/monorepo/issues/1393).
