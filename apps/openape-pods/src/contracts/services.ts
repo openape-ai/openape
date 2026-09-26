@@ -2,7 +2,7 @@ import type { RunApproval } from './activity'
 import { parseScriptCapabilities } from './credentials'
 
 export interface ServiceScope { podId: string, runId: string, epoch: number, assignmentRevision: number, capabilities: string[] }
-export interface ServiceRequest { id: string, scope: ServiceScope, body: unknown, kind?: 'credential' | 'jev' | 'http' | 'shell' | 'shellClose' }
+export interface ServiceRequest { id: string, scope: ServiceScope, body: unknown, kind?: 'mailArchive' | 'credential' | 'jev' | 'http' | 'shell' | 'shellClose' }
 export interface ServiceCheck { authorityLost?: true, scope: ServiceScope, domain?: { path: string, ownerPid: number }, approval?: RunApproval }
 export function parseServiceScope(value: unknown): ServiceScope {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid service scope')

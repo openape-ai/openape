@@ -69,7 +69,7 @@ const runtime: AgentRuntime = {
   runtimeDirectories: [dirname(dirname(executable))], environment: { ELECTRON_RUN_AS_NODE: '1' },
   binary: join(dist, 'vendor/codex'), catalog: join(dist, 'vendor/models.json'), manifest: join(dist, 'vendor/manifest.json'), sdkHost: join(dist, 'runtime/sdk-host.mjs'),
 }
-const runServices: RunServices = { shell: async (scope, signal) => {
+const runServices: RunServices = { mailArchive: async (body, signal, scope) => mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'mailArchive'), shell: async (scope, signal) => {
   const { podId, runId, epoch, assignmentRevision, capabilities } = scope
   return await mailBridge.execute({ podId, runId, epoch, assignmentRevision, capabilities }, {}, signal, 'shell') as Awaited<ReturnType<NonNullable<RunServices['shell']>>>
 }, closeShell: async (scope) => {
