@@ -46,7 +46,7 @@ export async function microsoftMail(argv = process.argv.slice(2), environment = 
   async function request(path, method = 'GET', body) {
     const url = new URL(path, graphOrigin)
     if (url.origin !== graphOrigin || !url.pathname.startsWith('/v1.0/me/')) throw new Error('Mail request escaped the assigned Microsoft mailbox')
-    const response = await fetch(url, { method, redirect: 'error', signal: AbortSignal.timeout(20000), headers: { Authorization: `Bearer ${token}`, Prefer: 'IdType="ImmutableId", outlook.body-content-type="text"', 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) })
+    const response = await fetch(url, { method, redirect: 'error', signal: AbortSignal.timeout(20000), headers: { Authorization: `Bearer ${token}`, Prefer: `IdType="ImmutableId", outlook.body-content-type="text"${url.pathname.endsWith('/messages/delta') ? ', odata.maxpagesize=500' : ''}`, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) })
     if (response.status === 404 && method === 'GET') return null
     if (response.status === 410 && method === 'GET') throw Object.assign(new Error('Microsoft delta cursor expired'), { code: 'DELTA_EXPIRED' })
     if (!response.ok) throw new Error(`Microsoft mail ${method} failed (${response.status})`)
@@ -83,7 +83,7 @@ export async function microsoftMail(argv = process.argv.slice(2), environment = 
   async function syncContacts() {
     const folder = await request('/v1.0/me/mailFolders/sentitems?$select=id')
     if (!folder?.id) throw new Error('Microsoft Sent Items could not be resolved')
-    const initial = `/v1.0/me/mailFolders/${encodeURIComponent(folder.id)}/messages/delta?$top=500&$select=id,toRecipients,ccRecipients,bccRecipients`
+    const initial = `/v1.0/me/mailFolders/${encodeURIComponent(folder.id)}/messages/delta?$select=id,toRecipients,ccRecipients,bccRecipients`
     function cursor(value) {
       const url = new URL(value, graphOrigin)
       const paths = [`/v1.0/me/mailFolders/${folder.id}/messages/delta`, `/v1.0/me/mailFolders('${folder.id.replaceAll('\'', '\'\'')}')/messages/delta`]
