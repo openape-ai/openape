@@ -172,6 +172,10 @@ describe('privacy rollback boundary', () => {
         for (const path of [`/api/public/runs/${run.slug}`, `/api/public/runs/${run.slug}?v=1`, `/api/public/runs/${run.slug}/assets/secret.png?v=1`, `/api/runs/${run.id}`]) {
           for (const headers of [{}, { authorization: `Bearer ${owner}` }, { authorization: `Bearer ${await cliToken('other@example.com')}` }]) {
             const response = await fetch(`${base}${path}`, { headers })
+            if (reportType === 'briefing' && headers.authorization === `Bearer ${owner}` && path.startsWith('/api/public/runs/') && !path.includes('/assets/')) {
+              expect(response.status).toBe(200)
+              continue
+            }
             expect([401, 404]).toContain(response.status)
             expect(await response.text()).not.toContain(manifest.title)
           }

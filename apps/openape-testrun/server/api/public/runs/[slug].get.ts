@@ -1,22 +1,12 @@
 import { and, desc, eq } from 'drizzle-orm'
 import { defineEventHandler, getRouterParam } from 'h3'
 import { useDb } from '../../../database/drizzle'
-import { assets, runVersions } from '../../../database/schema'
+import { assets, reportPublications, runVersions } from '../../../database/schema'
 import { createProblemError } from '../../../utils/problem'
 import { renderMarkdown, renderMarkdownInline } from '../../../utils/markdown'
 import { loadRunBySlug, requestedVersion } from '../../../utils/run-access'
 import type { RunManifest } from '../../../utils/run-shape'
 
-/**
- * GET /api/public/runs/:slug — render-ready report data, NO auth.
- *
- * The slug is an unguessable capability token; whoever has the link can view
- * the report. Markdown is rendered server-side (escaped — uploads can never
- * inject HTML); `shot` paths are rewritten to public asset URLs.
- *
- * Series runs keep every uploaded version: the link shows the latest, and
- * ?v=<n> renders an archived version. `versions` lists them newest first.
- */
 export default defineEventHandler(async (event) => {
   const slug = getRouterParam(event, 'slug')
   if (!slug) throw createProblemError({ status: 400, title: 'Slug required' })
@@ -29,6 +19,10 @@ export default defineEventHandler(async (event) => {
     const archived = await db.select().from(runVersions).where(and(eq(runVersions.runId, run.id), eq(runVersions.version, version))).get()
     if (!archived) throw createProblemError({ status: 404, title: 'Version not found' })
     shown = archived
+  }
+  if (run.reportType === 'briefing') {
+    const editions = await db.select({ version: reportPublications.version, date: reportPublications.editionDate }).from(reportPublications).where(eq(reportPublications.seriesId, run.id)).orderBy(desc(reportPublications.version))
+    return { type: 'briefing' as const, briefing: JSON.parse(shown.manifest) as import('../../../../shared/briefing').Briefing, version, latest_version: run.version, editions }
   }
   const manifest = JSON.parse(shown.manifest) as RunManifest
 
@@ -48,6 +42,7 @@ export default defineEventHandler(async (event) => {
   const assetUrl = (shot: string) => `/api/public/runs/${run.slug}/assets/${shot}?v=${version}`
 
   return {
+    type: 'test' as const,
     title: shown.title,
     project: shown.project,
     status: shown.status,

@@ -19,10 +19,20 @@ afterEach(() => { for (const client of clients.splice(0)) client.close(); for (c
 describe('report storage migration', () => {
   it('preserves legacy report identity, version and asset bytes across repeated startup', async () => {
     const client = database()
-    await migrateReports(client)
-    await client.execute('ALTER TABLE runs DROP COLUMN report_type')
-    await client.execute('ALTER TABLE runs DROP COLUMN visibility')
-    await client.execute('ALTER TABLE run_versions DROP COLUMN report_type')
+    await client.execute(`CREATE TABLE runs (
+      id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
+      project TEXT, summary TEXT, status TEXT NOT NULL,
+      passed_count INTEGER NOT NULL DEFAULT 0, failed_count INTEGER NOT NULL DEFAULT 0,
+      skipped_count INTEGER NOT NULL DEFAULT 0, manifest TEXT NOT NULL,
+      started_at INTEGER, finished_at INTEGER, created_by TEXT NOT NULL,
+      created_by_act TEXT NOT NULL DEFAULT 'human', created_at INTEGER NOT NULL, deleted_at INTEGER,
+      series TEXT, version INTEGER NOT NULL DEFAULT 1
+    )`)
+    await client.execute(`CREATE TABLE assets (
+      id TEXT PRIMARY KEY, run_id TEXT NOT NULL, path TEXT NOT NULL,
+      content_type TEXT NOT NULL, size INTEGER NOT NULL, bytes BLOB NOT NULL,
+      created_at INTEGER NOT NULL, version INTEGER NOT NULL DEFAULT 1
+    )`)
     await client.execute('INSERT INTO runs (id, slug, title, status, manifest, created_by, created_at, version) VALUES (\'run\', \'old-link\', \'Old report\', \'passed\', \'{}\', \'owner@example.com\', 1, 3)')
     await client.execute({ sql: 'INSERT INTO assets (id, run_id, path, content_type, size, bytes, created_at, version) VALUES (\'shot\', \'run\', \'shot.png\', \'image/png\', 3, ?, 1, 1)', args: [new Uint8Array([1, 2, 3])] })
     await migrateReports(client)
