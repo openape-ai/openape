@@ -20,7 +20,7 @@ import type { RunManifest } from '../../../utils/run-shape'
 export default defineEventHandler(async (event) => {
   const slug = getRouterParam(event, 'slug')
   if (!slug) throw createProblemError({ status: 400, title: 'Slug required' })
-  const run = await loadRunBySlug(slug)
+  const run = await loadRunBySlug(event, slug)
   const version = requestedVersion(event, run)
   const db = useDb()
 
