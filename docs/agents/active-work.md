@@ -2,6 +2,8 @@
 
 ## OpenApe Reports (September 27, 2026) — deployed; scheduled acceptance pending
 
+Owner follow-up: Reports is the general product; briefings and test runs are specialized formats. Branch `feature/issue-1397-reports-home` from `dc40f3a7` corrects the landing page, private collection labels and default page metadata. This is a presentation change; the existing publication contracts and owning workflow remain in place. Verification and final deployment receipt belong to issue 1397.
+
 [Issue 1397](https://repos.openape.ai/patrick/monorepo/issues/1397), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3HW6FG47VR534XC5EAFNS1R). Isolated checkout `reports`, receipt branch `feature/issue-1397-rollout-receipt`, based on merged main `972df1b8715db1e3166f7c09bd28762496ca03b4`. Implementation [PR 158](https://repos.openape.ai/patrick/monorepo/pulls/158) source `2873623ad08664a00f2371e84bdb2b836d0e13c9` passed exact-source external CI run 5187 before merge.
 
 **Implementation and deployment accepted.** Chatty runs healthy `prod-972df1b8`, deployed through the existing tested-image pipeline from clean `reports-release` after `pnpm check:ci` (`1790532415331-972df1b8-unit/summary.json`). Exoscale A record `report.openape.ai` points to `85.217.175.26`, TTL 300; its explicit Traefik router shares the Testrun service. Public TLS/health and real owner login on the alias work. Existing canonical CLI/SP identity remains `testrun.openape.ai`. All 283 legacy runs, 168 archives and 695 assets were compared in both directions against the protected pre-migration database backup: zero differences; SQLite integrity passes. Existing test JSON differs only by the additive `type: test` discriminator.

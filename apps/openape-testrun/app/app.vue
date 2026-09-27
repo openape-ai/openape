@@ -8,8 +8,8 @@ useHead({
 })
 
 useSeoMeta({
-  title: 'OpenApe Testrun',
-  description: 'Upload a test run, share one link that proves it works.',
+  title: 'OpenApe Reports',
+  description: 'A home for clear findings, useful context and results worth keeping.',
 })
 </script>
 
