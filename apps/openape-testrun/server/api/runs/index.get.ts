@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
     createdBy: runs.createdBy,
     createdByAct: runs.createdByAct,
     createdAt: runs.createdAt,
-  }).from(runs).where(and(eq(runs.createdBy, caller.email), isNull(runs.deletedAt))).orderBy(desc(runs.createdAt)).limit(limit)
+  }).from(runs).where(and(eq(runs.createdBy, caller.email), eq(runs.reportType, 'test'), eq(runs.visibility, 'shared'), isNull(runs.deletedAt))).orderBy(desc(runs.createdAt)).limit(limit)
 
   return rows.map(row => ({
     id: row.id,
