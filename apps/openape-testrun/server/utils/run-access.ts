@@ -5,6 +5,7 @@ import { useRuntimeConfig } from 'nitropack/runtime'
 import { useDb } from '../database/drizzle'
 import { runs } from '../database/schema'
 import { createProblemError } from './problem'
+import { privateReportHeaders, reportOwner } from './report-auth'
 import type { Caller } from '@openape/nuxt-auth-sp'
 
 export type RunRow = typeof runs.$inferSelect
@@ -26,7 +27,14 @@ export async function loadRunBySlug(event: H3Event, slug: string): Promise<RunRo
   const db = useDb()
   const run = await db.select().from(runs).where(and(eq(runs.slug, slug), isNull(runs.deletedAt))).get()
   if (!run) throw createProblemError({ status: 404, title: 'Run not found' })
-  denyNonSharedTest(event, run)
+  if (run.reportType === 'briefing' && run.visibility === 'private') {
+    privateReportHeaders(event)
+    const principal = await reportOwner(event)
+    if (principal.subject !== run.createdBy) throw createProblemError({ status: 404, title: 'Report not found' })
+  }
+  else {
+    denyNonSharedTest(event, run)
+  }
   return run
 }
 

@@ -142,6 +142,7 @@ services:
     environment:
       HOST: 0.0.0.0
       NITRO_HOST: 0.0.0.0
+      NUXT_BRIEFING_URL: https://report.openape.ai
     volumes:
       - /home/openape/projects/openape-testrun/shared:/home/openape/projects/openape-testrun/shared
     ports:

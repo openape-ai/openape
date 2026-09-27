@@ -11,7 +11,7 @@ export const runs = sqliteTable('runs', {
   /** Markdown summary shown at the top of the report. */
   summary: text('summary'),
   /** Aggregated over tests: failed > passed > skipped. */
-  status: text('status', { enum: ['passed', 'failed', 'skipped'] }).notNull(),
+  status: text('status', { enum: ['passed', 'failed', 'skipped'] }),
   passedCount: integer('passed_count').notNull().default(0),
   failedCount: integer('failed_count').notNull().default(0),
   skippedCount: integer('skipped_count').notNull().default(0),
@@ -45,7 +45,7 @@ export const runVersions = sqliteTable('run_versions', {
   title: text('title').notNull(),
   project: text('project'),
   summary: text('summary'),
-  status: text('status', { enum: ['passed', 'failed', 'skipped'] }).notNull(),
+  status: text('status', { enum: ['passed', 'failed', 'skipped'] }),
   passedCount: integer('passed_count').notNull().default(0),
   failedCount: integer('failed_count').notNull().default(0),
   skippedCount: integer('skipped_count').notNull().default(0),
@@ -72,3 +72,24 @@ export const assets = sqliteTable('assets', {
   index('idx_assets_run').on(t.runId),
   index('idx_assets_run_path').on(t.runId, t.path),
 ])
+
+export const reportSeries = sqliteTable('report_series', {
+  id: text('id').primaryKey(),
+  owner: text('owner').notNull(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull(),
+  publisher: text('publisher'),
+  revision: integer('revision').notNull().default(1),
+  createdAt: integer('created_at').notNull(),
+})
+
+export const reportPublications = sqliteTable('report_publications', {
+  id: text('id').primaryKey(),
+  seriesId: text('series_id').notNull(),
+  editionDate: text('edition_date').notNull(),
+  version: integer('version').notNull(),
+  digest: text('digest').notNull(),
+  idempotencyKey: text('idempotency_key').notNull(),
+  publisher: text('publisher').notNull(),
+  createdAt: integer('created_at').notNull(),
+})
