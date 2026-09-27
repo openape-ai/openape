@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useOpenApeAuth } from '#imports'
 
+const route = useRoute()
 const { user, fetchUser, login } = useOpenApeAuth()
 const email = ref('')
 const submitting = ref(false)
@@ -10,7 +11,9 @@ const error = ref('')
 onMounted(async () => {
   await fetchUser()
   if (user.value) {
-    await navigateTo('/runs')
+    const returnTo = sessionStorage.getItem('reports-return')
+    sessionStorage.removeItem('reports-return')
+    await navigateTo(returnTo && /^\/r\/[\w-]+(?:\?v=\d+)?$/.test(returnTo) ? returnTo : '/reports')
   }
 })
 
@@ -20,6 +23,8 @@ async function onSubmit() {
   submitting.value = true
   error.value = ''
   try {
+    const returnTo = route.query.returnTo
+    if (typeof returnTo === 'string' && /^\/r\/[\w-]+(?:\?v=\d+)?$/.test(returnTo)) sessionStorage.setItem('reports-return', returnTo)
     await login(value)
   }
   catch (err: unknown) {
@@ -39,21 +44,21 @@ async function onSubmit() {
         <OpenApeOAuthErrorAlert
           class="text-left mb-6 w-full"
           :messages="{
-            access_denied: 'Die Anmeldung wurde vom Identity Provider abgelehnt. Wahrscheinlich hat dein Domain-Admin Testrun noch nicht freigegeben — frag deinen Admin oder versuche eine andere Email-Adresse.',
+            access_denied: 'Your identity provider declined sign-in. Contact your domain administrator or use another account.',
           }"
         />
 
         <div class="text-6xl mb-6" aria-hidden="true">
-          🧪
+          ◒
         </div>
 
         <h1 class="text-4xl sm:text-5xl font-bold tracking-tight leading-tight">
-          One link that proves<br>
-          <span class="text-primary-500">it works.</span>
+          A clearer view<br>
+          <span class="text-primary-500">of your day.</span>
         </h1>
 
         <p class="mt-4 text-zinc-400 text-lg">
-          Upload a test run — descriptions, screenshots, pass/fail — and share a single report link.
+          Private briefings and shared test reports, together in OpenApe Reports.
         </p>
 
         <form class="w-full mt-10 space-y-3" @submit.prevent="onSubmit">

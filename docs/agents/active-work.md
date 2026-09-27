@@ -1,10 +1,12 @@
 # Active work
 
-## OpenApe Reports (September 27, 2026) — approved, implementation started
+## OpenApe Reports (September 27, 2026) — implementation and rollout
 
-[Issue 1397](https://repos.openape.ai/patrick/monorepo/issues/1397), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3HW6FG47VR534XC5EAFNS1R). Isolated checkout `reports`, branch `feature/issue-1397-reports`, base `53f77a0b81c7870fc27cbb8aa7c089fb7edfb33d`.
+[Issue 1397](https://repos.openape.ai/patrick/monorepo/issues/1397), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3HW6FG47VR534XC5EAFNS1R). Isolated checkout `reports`, current branch `feature/issue-1397-briefings`; original base `53f77a0b81c7870fc27cbb8aa7c089fb7edfb33d`.
 
-The privacy rollback baseline passes full lint/typecheck, the application build, 20 unit tests and 10 HTTP/CLI E2E tests. Permanent coverage protects migration rollback and private-resource denial because these contracts prevent data disclosure. Next: native PR, exact-head external CI and deployment of the safe rollback image. It rejects private/non-test rows through legacy routes and preserves the existing CLI contract. Then implement atomic private briefing publication and the mobile/desktop template. DNS uses exo; routing uses Chatty. Deployment, a real no-Telegram Pod preview, and first regular scheduled delivery are separate acceptance gates. Preserve the single daily workflow, independent mail-approval polling and all existing delivery receipts. No extra Telegram test messages.
+Privacy rollback baseline [PR 157](https://repos.openape.ai/patrick/monorepo/pulls/157) merged at `183395e40aa278b1af2510152300c067c5a6d672` and deployed as `prod-183395e4` from clean `reports-release` after the full deployment check. Existing proof JSON is unchanged; all 282 runs, 168 archives and 691 assets survive with SQLite integrity intact. A protected consistent backup exists on Chatty. Do not roll back to older images after private content exists.
+
+The private publication API, immutable daily editions, strict publisher identity and responsive template are implemented. Focused checks pass: 45 Testrun unit tests, 107 auth tests, 7 browser component/layout tests, 14 real HTTP/CLI/browser tests, 600 Pods unit tests and four CLI unit tests. Both login origins and all four phone/desktop light/dark screenshots were inspected. Full root lint/typecheck and both affected app builds pass. The native PR, domain deployment, actual no-Telegram workflow preview and first regular scheduled delivery remain separate gates. DNS uses exo; routing uses Chatty. Preserve the single daily workflow, independent mail-approval polling and existing delivery receipts. No extra Telegram test messages. [Synthetic screenshots](https://testrun.openape.ai/r/AeJDx48LWOG_vVrS_KKBgCsv); safe baseline rollback against the final schema also passes.
 
 
 ## Pods: contact protection and Jev evaluation (September 26, 2026)
