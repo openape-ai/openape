@@ -1,5 +1,12 @@
 # Active work
 
+## OpenApe Reports (September 27, 2026) — approved, implementation started
+
+[Issue 1397](https://repos.openape.ai/patrick/monorepo/issues/1397), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3HW6FG47VR534XC5EAFNS1R). Isolated checkout `reports`, branch `feature/issue-1397-reports`, base `53f77a0b81c7870fc27cbb8aa7c089fb7edfb33d`.
+
+The privacy rollback baseline passes full lint/typecheck, the application build, 20 unit tests and 10 HTTP/CLI E2E tests. Permanent coverage protects migration rollback and private-resource denial because these contracts prevent data disclosure. Next: native PR, exact-head external CI and deployment of the safe rollback image. It rejects private/non-test rows through legacy routes and preserves the existing CLI contract. Then implement atomic private briefing publication and the mobile/desktop template. DNS uses exo; routing uses Chatty. Deployment, a real no-Telegram Pod preview, and first regular scheduled delivery are separate acceptance gates. Preserve the single daily workflow, independent mail-approval polling and all existing delivery receipts. No extra Telegram test messages.
+
+
 ## Pods: contact protection and Jev evaluation (September 26, 2026)
 
 [Issue 1396](https://repos.openape.ai/patrick/monorepo/issues/1396), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3FKATZRY0Z3BY2YMMMVEFW9). Existing checkout `mail-briefing-grants`, branch `feature/issue-1396-mail-protection-jev`, base `40113402`.
