@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   const slug = getRouterParam(event, 'slug')
   const path = getRouterParam(event, 'path')
   if (!slug || !path) throw createProblemError({ status: 400, title: 'Slug and path required' })
-  const run = await loadRunBySlug(slug)
+  const run = await loadRunBySlug(event, slug)
   const version = requestedVersion(event, run)
 
   const db = useDb()
