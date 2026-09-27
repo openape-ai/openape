@@ -4,6 +4,8 @@ export const runs = sqliteTable('runs', {
   id: text('id').primaryKey(),
   /** Unguessable share token — the public report URL is /r/<slug>. */
   slug: text('slug').notNull().unique(),
+  reportType: text('report_type', { enum: ['test', 'briefing'] }).notNull().default('test'),
+  visibility: text('visibility', { enum: ['shared', 'private'] }).notNull().default('shared'),
   title: text('title').notNull(),
   project: text('project'),
   /** Markdown summary shown at the top of the report. */
@@ -38,6 +40,7 @@ export const runs = sqliteTable('runs', {
 export const runVersions = sqliteTable('run_versions', {
   id: text('id').primaryKey(),
   runId: text('run_id').notNull(),
+  reportType: text('report_type', { enum: ['test', 'briefing'] }).notNull().default('test'),
   version: integer('version').notNull(),
   title: text('title').notNull(),
   project: text('project'),
