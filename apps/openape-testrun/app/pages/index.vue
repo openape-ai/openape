@@ -52,13 +52,17 @@ async function onSubmit() {
           ◒
         </div>
 
+        <p class="mb-4 text-sm tracking-wide text-zinc-400">
+          OpenApe Reports
+        </p>
+
         <h1 class="text-4xl sm:text-5xl font-bold tracking-tight leading-tight">
-          A clearer view<br>
-          <span class="text-primary-500">of your day.</span>
+          Reports that bring<br>
+          <span class="text-primary-500">things into focus.</span>
         </h1>
 
         <p class="mt-4 text-zinc-400 text-lg">
-          Private briefings and shared test reports, together in OpenApe Reports.
+          A home for clear findings, useful context and results worth keeping.
         </p>
 
         <form class="w-full mt-10 space-y-3" @submit.prevent="onSubmit">
@@ -93,7 +97,8 @@ async function onSubmit() {
         </form>
 
         <p class="mt-10 text-sm text-zinc-500">
-          Agents upload with <code class="text-zinc-400">ape-testruns upload ./out</code> — one command, one link.
+          From briefings to test results, each report has its place.
+          Read the latest edition or revisit an earlier one.
         </p>
       </div>
     </main>

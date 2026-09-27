@@ -10,17 +10,17 @@ useSeoMeta({ title: 'OpenApe Reports', robots: 'noindex, nofollow' })
         Test reports →
       </NuxtLink>
     </header>
-    <h1>Your briefings.</h1>
+    <h1>Your reports.</h1>
     <p class="intro">
-      A private collection of what matters, ready when you are.
+      Your private report collection, with the latest edition of each series.
     </p>
     <div v-if="error">
-      <p>Sign in to view your private briefings.</p><NuxtLink to="/">
+      <p>Sign in to view your private reports.</p><NuxtLink to="/">
         Sign in with OpenApe →
       </NuxtLink>
     </div>
     <p v-else-if="!series?.length">
-      Your first briefing will appear here after publication.
+      Your first report will appear here after publication.
     </p>
     <article v-for="item in series" v-else :key="item.id">
       <div><h2>{{ item.name }}</h2><p>{{ item.version ? `Edition ${item.version}` : 'Awaiting first publication' }}</p></div><NuxtLink v-if="item.version" :to="`/r/${item.slug}`">
