@@ -80,6 +80,8 @@ export interface ModuleOptions {
   postLoginRedirect: string
   /** Scope IDs that may only authorize their catalog operations, including on legacy handlers. */
   catalogOnlyScopes?: string[]
+  /** Explicit additional callback URLs for reviewed service aliases. */
+  additionalRedirectUris?: string[]
   manifest?: ManifestConfig
 }
 
