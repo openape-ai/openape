@@ -252,9 +252,10 @@ Capture real browser screenshots with production CSS and authenticated fixture l
 - **Done:** 2026-09-27: Published remote draft `01M3HW6FG47VR534XC5EAFNS1R`; authenticated browser rendering and the preview cards inspected directly.
 - **Done:** 2026-09-27: Owner clarified DNS through `exo` and routing on Chatty; deployment instructions updated. This clarification does not constitute implementation approval.
 - **Done:** 2026-09-27: Patrick explicitly approved the plan in this conversation.
-- **In progress:** M1: [Issue 1397](https://repos.openape.ai/patrick/monorepo/issues/1397) and isolated worktree created. Privacy rollback baseline implemented; full lint/typecheck pass, build and behavioral verification running.
-- **Pending:** M2: Atomic publication and editions.
-- **Pending:** M3: UI and browser acceptance.
+- **In progress:** M1: [Issue 1397](https://repos.openape.ai/patrick/monorepo/issues/1397) and isolated worktree created. Privacy rollback baseline merged through PR 157 at `183395e40aa278b1af2510152300c067c5a6d672` after exact-head external CI. Full lint/typecheck/build, 20 unit and 10 E2E tests passed. Clean release checkout passed `pnpm check:ci` (`1790529449682-183395e4-unit/summary.json`). Deployed `prod-183395e4` on Chatty; health and SQLite integrity pass, all 282 runs / 168 archives / 691 assets preserved. Existing proof JSON is byte-identical before/after. Consistent protected backup: `/home/openape/backups/reports-2026-09-27/testrun-before-baseline.db`, SHA-256 `0adc3911911a0162618ca2b1d2072fbfaf19d3f9bf4fb9ed3b2765e17dfafc6d`. Auth and private briefing implementation continues on `feature/issue-1397-briefings`.
+- **Done:** M2: Atomic daily publication, replay/conflict handling, archive and latest views implemented; 45 app unit tests and 107 auth-module tests pass. The actual Pods DDISA token and renewal flow are exercised against the disposable IdP.
+- **Done:** M3: 14 real HTTP/CLI/browser E2E tests pass. Desktop 1440px and mobile 390px screenshots in both themes inspected directly, including approval links and dated editions. [Published synthetic screenshots](https://testrun.openape.ai/r/AeJDx48LWOG_vVrS_KKBgCsv). Self-contained synthetic evidence is generated in `.artifacts/reports/report.html`.
+- **Done:** Safe rollback rehearsed: baseline `183395e4` starts against the final schema, retains shared report access and denies private head/archive/asset/page contents. Full root lint/typecheck and both affected app builds pass; 600 Pods unit tests and four CLI tests pass.
 - **Pending:** M4: Privacy-safe deployment and domain activation.
 - **Pending:** M5: Actual no-send preview and workflow integration.
 - **Pending:** M6: First regular scheduled Reports delivery.
@@ -293,4 +294,4 @@ Capture real browser screenshots with production CSS and authenticated fixture l
 
 ## Outcomes & Retrospective
 
-Implementation started after explicit approval. Deployment and Reports live acceptance remain pending. Complete this section after M6 with actual delivered behavior, deviations, verified receipts and lessons.
+Implementation and local acceptance are complete. The privacy baseline is deployed; the full Reports rollout, actual Pods preview and scheduled acceptance remain pending. Complete this section after M6 with actual delivered behavior, deviations, verified receipts and lessons.

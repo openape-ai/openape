@@ -24,8 +24,9 @@ export default defineNuxtConfig({
     // Empty default → public URLs derive from the request origin. Production
     // sets NUXT_PUBLIC_URL=https://testrun.openape.ai explicitly.
     publicUrl: '',
+    briefingUrl: '',
     public: {
-      siteName: 'OpenApe Testrun',
+      siteName: 'OpenApe Reports',
     },
   },
 
@@ -36,7 +37,9 @@ export default defineNuxtConfig({
 
   openapeSp: {
     clientId: process.env.NUXT_OPENAPE_CLIENT_ID || 'testrun.openape.ai',
-    spName: 'OpenApe Testrun',
+    spName: 'OpenApe Reports',
+    additionalRedirectUris: ['https://report.openape.ai/api/callback', 'https://report.openape.ai/oauth/grants/callback'],
+    catalogOnlyScopes: ['reports:read', 'reports:publish', 'reports:manage'],
     sessionSecret: process.env.NUXT_OPENAPE_SP_SESSION_SECRET
       || process.env.NUXT_SESSION_SECRET
       || 'dev-session-secret-at-least-32-characters-long',
@@ -46,6 +49,9 @@ export default defineNuxtConfig({
     // tokens against the entry ids.
     manifest: {
       scopes: [
+        { id: 'reports:read', description: 'Read your private briefings.', grants: ['GET /api/report-series', 'GET /api/public/runs/:slug', 'GET /api/public/runs/:slug/assets/*'] },
+        { id: 'reports:publish', description: 'Publish a briefing to your series.', grants: ['POST /api/reports', 'GET /api/report-series/:id/editions/:date/publication'] },
+        { id: 'reports:manage', description: 'Create your series and manage its publisher.', grants: ['POST /api/report-series', 'PUT /api/report-series/:id/publisher'] },
         {
           id: 'testruns:read',
           description: 'List and read your uploaded test runs.',

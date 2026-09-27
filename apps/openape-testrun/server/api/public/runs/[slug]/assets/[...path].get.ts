@@ -23,6 +23,6 @@ export default defineEventHandler(async (event) => {
 
   setHeader(event, 'content-type', asset.contentType)
   setHeader(event, 'content-length', asset.size)
-  setHeader(event, 'cache-control', 'public, max-age=31536000, immutable')
+  if (run.visibility === 'shared') setHeader(event, 'cache-control', 'public, max-age=31536000, immutable')
   return asset.bytes
 })
