@@ -5,6 +5,21 @@ async function addColumn(tx: Transaction, table: string, name: string, definitio
   if (!columns.rows.some(row => row.name === name)) await tx.execute(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`)
 }
 
+async function allowBriefingStatus(tx: Transaction, table: 'runs' | 'run_versions') {
+  const columns = await tx.execute(`PRAGMA table_info(${table})`)
+  if (!columns.rows.find(row => row.name === 'status')?.notnull) return
+  const schema = await tx.execute({ sql: 'SELECT sql FROM sqlite_master WHERE type = \'table\' AND name = ?', args: [table] })
+  const original = String(schema.rows[0]!.sql)
+  const definition = original.replace(/status TEXT NOT NULL/i, 'status TEXT')
+  if (original === definition) throw new Error(`Unrecognized ${table} status definition`)
+  const indexes = await tx.execute({ sql: 'SELECT sql FROM sqlite_master WHERE tbl_name = ? AND type IN (\'index\', \'trigger\') AND sql IS NOT NULL', args: [table] })
+  await tx.execute(definition.replace(/CREATE TABLE\s+(?:IF NOT EXISTS\s+)?["`]?\w+["`]?/i, `CREATE TABLE ${table}_reports_migration`))
+  await tx.execute(`INSERT INTO ${table}_reports_migration SELECT * FROM ${table}`)
+  await tx.execute(`DROP TABLE ${table}`)
+  await tx.execute(`ALTER TABLE ${table}_reports_migration RENAME TO ${table}`)
+  for (const row of indexes.rows) await tx.execute(String(row.sql))
+}
+
 export async function migrateReports(client: Client) {
   const tx = await client.transaction('write')
   try {
@@ -33,6 +48,19 @@ export async function migrateReports(client: Client) {
     await addColumn(tx, 'runs', 'report_type', 'TEXT NOT NULL DEFAULT \'test\'')
     await addColumn(tx, 'runs', 'visibility', 'TEXT NOT NULL DEFAULT \'shared\'')
     await addColumn(tx, 'run_versions', 'report_type', 'TEXT NOT NULL DEFAULT \'test\'')
+    await allowBriefingStatus(tx, 'runs')
+    await allowBriefingStatus(tx, 'run_versions')
+    await tx.execute(`CREATE TABLE IF NOT EXISTS report_series (
+      id TEXT PRIMARY KEY, owner TEXT NOT NULL, name TEXT NOT NULL, slug TEXT NOT NULL UNIQUE,
+      publisher TEXT, revision INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL,
+      UNIQUE(owner, name)
+    )`)
+    await tx.execute(`CREATE TABLE IF NOT EXISTS report_publications (
+      id TEXT PRIMARY KEY, series_id TEXT NOT NULL, edition_date TEXT NOT NULL,
+      version INTEGER NOT NULL, digest TEXT NOT NULL, idempotency_key TEXT NOT NULL,
+      publisher TEXT NOT NULL, created_at INTEGER NOT NULL,
+      UNIQUE(series_id, edition_date), UNIQUE(series_id, idempotency_key), UNIQUE(series_id, version)
+    )`)
     for (const statement of [
       'CREATE INDEX IF NOT EXISTS idx_runs_creator ON runs(created_by)',
       'CREATE INDEX IF NOT EXISTS idx_runs_created ON runs(created_at)',
