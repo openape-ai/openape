@@ -1,3 +1,4 @@
+import type { WorkflowView } from './workflows'
 import { parseDataCommand } from './data'
 import { parseCommand, parseWorkspace } from './control'
 import type { WorkspaceState } from './control'
@@ -62,7 +63,7 @@ export interface CentralStatus {
   lastPublication: { at: number, bytes: number } | null
 }
 export interface CentralQueue { blocked: number, since: number | null, error: string | null }
-export interface CentralRuntime { id: string, revision: number, online: boolean, lastSeenAt?: number | null, workspace: Omit<WorkspaceState, 'pods'> & { pods: (WorkspaceState['pods'][number] & { online: boolean, queue?: CentralQueue })[] } }
+export interface CentralRuntime { workflows?: WorkflowView, id: string, revision: number, online: boolean, lastSeenAt?: number | null, workspace: Omit<WorkspaceState, 'pods'> & { pods: (WorkspaceState['pods'][number] & { online: boolean, queue?: CentralQueue })[] } }
 export interface CentralSummary { revision: number, total: number, pod: CentralPod }
 export interface CentralRunDetail { revision: number, run: RunRecord, events: RunEvent[] }
 export interface CentralOperation {

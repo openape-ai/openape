@@ -20,7 +20,8 @@ export function runActivity(events: RunEvent[]): ActivityItem[] {
       items.push(next); active.set(key, next); continue
     }
     const titles: Record<string, string> = { started: 'Run prepared', process: 'Script started', checkpoint: 'Progress saved', finished: 'Run finished', interrupted: 'Run interrupted' }
-    if (titles[event.type]) items.push({ sequence: event.sequence, at: event.at, title: titles[event.type], state: event.type === 'finished' ? String(data.state) : event.type === 'interrupted' ? 'interrupted' : 'completed' })
+    const title = titles[event.type]
+    if (title) items.push({ sequence: event.sequence, at: event.at, title, state: event.type === 'finished' ? String(data.state) : event.type === 'interrupted' ? 'interrupted' : 'completed' })
   }
   return items
 }

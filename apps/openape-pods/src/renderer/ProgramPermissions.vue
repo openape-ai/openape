@@ -1,4 +1,5 @@
 <script lang="ts">
+import { usePodAccess } from './pod-access'
 import { defineComponent } from 'vue'
 import type { ResourceState, PodResource } from '../contracts/resources'
 import { parseTerminalView } from '../contracts/programs'
@@ -8,6 +9,7 @@ import { t, diagnostic } from './i18n'
 export default defineComponent({
   props: { podId: { type: String, required: true }, state: { type: Object as () => ResourceState, required: true } },
   emits: ['updated'],
+  setup() { return { access: usePodAccess() } },
   data() { return { networkHost: '', selectedApplication: '', selectedDestination: '', addingHttp: false, busy: false, openingShell: false, error: '', launch: null as TerminalView | null, pollTimer: undefined as ReturnType<typeof setTimeout> | undefined, disposed: false, origin: '', methods: ['GET'] as string[] } },
   computed: {
     selected() { return this.applications.find(item => item.id === this.selectedApplication) },
@@ -16,7 +18,7 @@ export default defineComponent({
     networkHosts(): string[] { return (this.selected?.configuration.networkHosts as string[] | undefined) ?? [] },
     selectedHttp() { return this.destinations.find(item => item.id === this.selectedDestination) },
   },
-  async mounted() { await this.refreshLaunch() },
+  async mounted() { if (!this.access.remote) await this.refreshLaunch() },
   beforeUnmount() { this.disposed = true; clearTimeout(this.pollTimer) },
   methods: {
     t, diagnostic,
@@ -53,7 +55,7 @@ export default defineComponent({
     async grantHttp() {
       this.busy = true; this.error = ''
       try {
-        this.$emit('updated', await window.pods.resources({ type: 'assignHttp', podId: this.podId, epoch: this.state.epoch, permission: { origin: this.origin, methods: this.methods } }))
+        this.$emit('updated', await this.access.api.resources({ type: 'assignHttp', podId: this.podId, epoch: this.state.epoch, permission: { origin: this.origin, methods: this.methods } }))
         this.busy = false; await this.closeHttpForm()
       }
       catch (error) { this.error = error instanceof Error ? error.message : 'HTTP permission failed' }
@@ -66,7 +68,7 @@ export default defineComponent({
     },
     async revoke(resource: PodResource) {
       this.busy = true; this.error = ''
-      try { this.$emit('updated', await window.pods.resources({ type: 'revoke', podId: this.podId, id: resource.id, revision: resource.revision })) }
+      try { this.$emit('updated', await this.access.api.resources({ type: 'revoke', podId: this.podId, id: resource.id, revision: resource.revision })) }
       catch (error) { this.error = error instanceof Error ? error.message : 'Resource operation failed' }
       finally { this.busy = false }
     },
@@ -76,8 +78,11 @@ export default defineComponent({
 
 <template>
   <section class="program-permissions">
+    <p v-if="access.remote" class="muted">
+      {{ t('Assign programs, credentials and local folders on the desktop.') }}
+    </p>
     <header>
-      <h3>{{ t('Executable applications') }}</h3><button class="secondary" :disabled="busy" @click="act({ type: 'openShell', podId })">
+      <h3>{{ t('Executable applications') }}</h3><button class="secondary" :disabled="access.remote || busy" @click="act({ type: 'openShell', podId })">
         {{ t('Open Terminal.app') }}
       </button>
     </header>
@@ -93,7 +98,7 @@ export default defineComponent({
     <section v-if="launch" class="launch-status" aria-live="polite">
       <header>
         <strong>{{ launch.state === 'closed' ? t('Application session ended') : t('Application session · waiting for approval or running') }}</strong>
-        <button v-if="launch.state !== 'closed'" class="secondary" :disabled="busy" @click="act({ type: 'close', podId, sessionId: launch.sessionId })">
+        <button v-if="launch.state !== 'closed'" class="secondary" :disabled="access.remote || busy" @click="act({ type: 'close', podId, sessionId: launch.sessionId })">
           {{ t('Stop application') }}
         </button>
       </header>
@@ -111,7 +116,7 @@ export default defineComponent({
           <span v-else class="application-icon fallback-icon" aria-hidden="true">{{ application.configuration.bundlePath ? '▣' : '›_' }}</span>
           <span>{{ application.name }}</span>
         </button>
-        <button class="play-button secondary" :aria-label="t('Open {application}', { application: application.name })" :title="t('Open without arguments')" :disabled="busy || !!launch && launch.state !== 'closed'" @click="act({ type: 'launch', podId, applicationId: application.id, epoch: state.epoch })">
+        <button class="play-button secondary" :aria-label="t('Open {application}', { application: application.name })" :title="t('Open without arguments')" :disabled="access.remote || busy || !!launch && launch.state !== 'closed'" @click="act({ type: 'launch', podId, applicationId: application.id, epoch: state.epoch })">
           ▶
         </button>
       </article>
@@ -119,7 +124,7 @@ export default defineComponent({
         {{ t('Add an installed application to use it in this pod.') }}
       </p>
       <footer class="application-toolbar">
-        <button class="text-button" :aria-label="t('Add installed application…')" :title="t('Add installed application…')" :disabled="busy" @click="act({ type: 'add', podId, epoch: state.epoch })">
+        <button class="text-button" :aria-label="t('Add installed application…')" :title="t('Add installed application…')" :disabled="access.remote || busy" @click="act({ type: 'add', podId, epoch: state.epoch })">
           ＋
         </button>
         <button class="text-button" :aria-label="t('Remove application')" :title="t('Remove application')" :disabled="busy || !selected" @click="selected && revoke(selected)">
@@ -134,7 +139,7 @@ export default defineComponent({
       </p>
       <ul v-if="networkHosts.length">
         <li v-for="host in networkHosts" :key="host">
-          <span>{{ host }}</span><button class="text-button" :disabled="busy" :aria-label="t('Remove host {host}', { host })" @click="saveNetwork(networkHosts.filter(item => item !== host))">
+          <span>{{ host }}</span><button class="text-button" :disabled="access.remote || busy" :aria-label="t('Remove host {host}', { host })" @click="saveNetwork(networkHosts.filter(item => item !== host))">
             −
           </button>
         </li>
@@ -143,8 +148,8 @@ export default defineComponent({
         {{ t('No network hosts assigned.') }}
       </p>
       <form @submit.prevent="saveNetwork([...networkHosts, networkHost.trim()])">
-        <label>{{ t('HTTPS hostname') }}<input v-model="networkHost" type="text" :placeholder="t('api.example.com')" required :disabled="busy"></label>
-        <button :disabled="busy || !networkHost.trim()">
+        <label>{{ t('HTTPS hostname') }}<input v-model="networkHost" type="text" :placeholder="t('api.example.com')" required :disabled="access.remote || busy"></label>
+        <button :disabled="access.remote || busy || !networkHost.trim()">
           {{ t('Add host') }}
         </button>
       </form>
@@ -166,7 +171,7 @@ export default defineComponent({
         {{ t('No HTTP destinations assigned.') }}
       </p>
       <footer class="application-toolbar">
-        <button ref="addHttp" class="text-button" :aria-label="t('Add HTTP destination')" :title="t('Add HTTP destination')" :disabled="busy" :aria-expanded="addingHttp" aria-controls="http-destination-form" @click="openHttpForm">
+        <button ref="addHttp" class="text-button" :aria-label="t('Add HTTP destination')" :title="t('Add HTTP destination')" :disabled="access.remote || busy" :aria-expanded="addingHttp" aria-controls="http-destination-form" @click="openHttpForm">
           ＋
         </button>
         <button class="text-button" :aria-label="t('Remove HTTP destination')" :title="t('Remove HTTP destination')" :disabled="busy || !selectedHttp" @click="selectedHttp && revoke(selectedHttp)">
@@ -176,12 +181,12 @@ export default defineComponent({
     </div>
     <form v-if="addingHttp" id="http-destination-form" class="http-form" @submit.prevent="grantHttp" @keydown.esc.prevent="!busy && closeHttpForm()">
       <h4>{{ t('Add HTTP destination') }}</h4>
-      <label>{{ t('HTTPS origin') }}<input ref="httpOrigin" v-model="origin" type="url" required :placeholder="t('https://api.example.com')" :disabled="busy"></label>
-      <fieldset><legend>{{ t('Allowed methods') }}</legend><label v-for="method in ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']" :key="method"><input v-model="methods" type="checkbox" :value="method" :disabled="busy">{{ method }}</label></fieldset>
-      <button :disabled="busy || !methods.length">
+      <label>{{ t('HTTPS origin') }}<input ref="httpOrigin" v-model="origin" type="url" required :placeholder="t('https://api.example.com')" :disabled="access.remote || busy"></label>
+      <fieldset><legend>{{ t('Allowed methods') }}</legend><label v-for="method in ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']" :key="method"><input v-model="methods" type="checkbox" :value="method" :disabled="access.remote || busy">{{ method }}</label></fieldset>
+      <button :disabled="access.remote || busy || !methods.length">
         {{ t('Allow HTTP destination') }}
       </button>
-      <button type="button" class="secondary" :disabled="busy" @click="closeHttpForm">
+      <button type="button" class="secondary" :disabled="access.remote || busy" @click="closeHttpForm">
         {{ t('Cancel') }}
       </button>
     </form>

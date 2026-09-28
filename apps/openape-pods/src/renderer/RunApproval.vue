@@ -1,4 +1,5 @@
 <script lang="ts">
+import { usePodAccess } from './pod-access'
 import { defineComponent } from 'vue'
 import type { PropType } from 'vue'
 import type { RunApproval } from '../contracts/activity'
@@ -6,6 +7,7 @@ import { t, diagnostic } from './i18n'
 
 export default defineComponent({
   props: { podId: { type: String, required: true }, approvals: { type: Array as PropType<(RunApproval & { runId: string })[]>, default: () => [] } },
+  setup() { return { access: usePodAccess() } },
   data() { return { busy: false, error: '' } },
   methods: {
     t, diagnostic,
@@ -26,7 +28,7 @@ export default defineComponent({
     <p class="approval-title">
       {{ approval.permission?.startsWith('pod-runtime.pod[') ? t('Run the stored Pod script') : approval.title }}
     </p>
-    <button class="primary" :disabled="busy" @click="open(approval)">
+    <button class="primary" :disabled="busy || access.remote" @click="open(approval)">
       {{ t('Open approval') }}
     </button>
     <p v-if="approval.openError" class="muted">

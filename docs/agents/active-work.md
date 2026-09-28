@@ -1,5 +1,33 @@
 # Active work
 
+## Pods browser/desktop visual parity — issue 1404
+
+[Issue 1404](https://repos.openape.ai/patrick/monorepo/issues/1404),
+[approved plan and desktop preview](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3MQ93SGG9D2W2R80HYCREK9).
+Own checkout `openape-monorepo.worktrees/pods-workspace-landing`, branch
+`feature/issue-1404-browser-desktop-parity`, base `961960578a934c89a9aacfdc1c601712052908e4`.
+
+Owner approved the plan on 2026-09-28 and requested implementation without further
+questions. Shared shell, read-only workflow projection, six Pod views and browser
+settings now use desktop components through explicit native/HTTP adapters.
+Existing owner scope, command allowlist, revisions, pending receipts and draft
+protection remain enforced. Device-only actions are visibly desktop-only.
+The local plan is `.claude/plans/2026-09-28-pods-browser-desktop-parity.html`.
+
+Paired browser tests passed for 1280px English/light and 390px German/dark with
+identical Pod view geometry and no page overflow. Full lint/typecheck and both app builds pass; Pods has 654 passing tests and relay
+has 29. Real disposable DDISA acceptance passes in Chromium through login, all
+six Pod tabs, App settings and sign-out, with no browser exceptions. Untouched remote forms refresh from new desktop snapshots while edited inputs
+keep their original revision. A discovered dark-mode run-card contrast issue is fixed in the shared component. Next: publish
+native PR/exact-head CI, merge and tested-image relay rollout.
+Implementation `ca769ac564dbb786b9dec49d1f1d699f1692a850` is in
+[PR 171](https://repos.openape.ai/patrick/monorepo/pulls/171).
+[Verified Test Runs evidence](https://testrun.openape.ai/r/rjcC2AAVQ_nFpqTF2M2EzXn5)
+contains the actual commands and 15 inspected synthetic screenshots. Production
+SSO reached the existing private workspace through normal DDISA discovery; the
+session is ready for post-deployment read-only acceptance. Previous healthy relay
+image: `registry.openape.ai/openape-pods-relay:prod-96196057`.
+
 ## Pods public workspace entry — issue 1403
 
 [Issue 1403](https://repos.openape.ai/patrick/monorepo/issues/1403).
@@ -133,7 +161,7 @@ Both implementation PRs passed exact-head external CI. The active central deskto
 
 Signed local build: clean merged `7689b6356f8e0190bac7982a22c07569b789792d`, tree identical to tested source `5a46ba7a`. Full `pnpm check:ci`, full lint/typecheck, fresh Pods build, 543 unit/component tests, four focused browser tests and signed mounted-DMG acceptance pass. Permanent tests protect the active navigation, Jev key submission through existing IPC and footer visibility with 30 Pods in English/light and German/narrow/dark layouts. The package smoke runs only synthetic data in an isolated profile; its alternate-shell screenshot is not the central-workspace UI acceptance.
 
-DMG SHA-256: `69b1b6bf1e30a12a2d09086a1653a16a611cc93a7bf75a9a9c02d3fa2cfdcd89`. Apple accepted app `5515b4c8-6bbd-41e8-abc4-db8714e4756a` and DMG `a5eebdcf-96a3-498c-afe1-b2241fa3e95a`; stapling and Gatekeeper checks pass. The ASAR inventory has no owner database/profile/run data. Schema remains 24.
+DMG SHA-256: `69b1b6bf1e30a12a2d09086a1654a16a611cc93a7bf75a9a9c02d3fa2cfdcd89`. Apple accepted app `5515b4c8-6bbd-41e8-abc4-db8714e4756a` and DMG `a5eebdcf-96a3-498c-afe1-b2241fa3e95a`; stapling and Gatekeeper checks pass. The ASAR inventory has no owner database/profile/run data. Schema remains 24.
 
 Worktree: `pods-jev-settings`; release artifact: `apps/openape-pods/release/distribution/OpenApe-Pods-0.1.0-arm64-signed-local.dmg`; evidence: `apps/openape-pods/.artifacts/issue-1393-sidebar/`. At this September 26 checkpoint, installation was pending because the owner Mac was locked. This artifact was superseded by the September 28 Variant A installation below; it is not the installed binary.
 

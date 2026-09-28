@@ -1,4 +1,5 @@
 <script lang="ts">
+import { usePodAccess } from './pod-access'
 import ProgramPermissions from './ProgramPermissions.vue'
 import DirectoryPermissions from './DirectoryPermissions.vue'
 import { t, diagnostic, label } from './i18n'
@@ -11,17 +12,19 @@ export default defineComponent({
   components: { ProgramPermissions, DirectoryPermissions },
   props: { requestedSecret: { type: String, default: '' }, requiredAliases: { type: Array as PropType<string[]>, default: () => [] }, mode: { type: String, default: 'permissions' }, selectedPodId: { type: String, default: '' } },
   emits: ['selected', 'discuss'],
+  setup() { const access = usePodAccess(); return { access, remoteRevision: access.revision } },
   data() { return { pods: [] as StoredPod[], podId: '', state: { resources: [], epoch: 0 } as ResourceState, busy: false, error: '', credentialAlias: this.requestedSecret, credentialValue: '' } },
-  computed: { missingAliases(): string[] { return this.requiredAliases.filter(alias => !this.visibleResources.some(resource => resource.name === alias && resource.state === 'ready')) }, visibleResources() { return this.state.resources.filter(resource => this.mode === 'values' ? resource.kind === 'credential' : resource.kind === 'reference') } },
+  computed: { missingAliases(): string[] { return this.requiredAliases.filter(alias => !this.visibleResources.some(resource => resource.name === alias && resource.state === 'ready')) }, visibleResources() { return this.state.resources.filter(resource => this.mode === 'values' ? resource.kind === 'credential' : this.access.remote && !['reference', 'directory', 'credential'].includes(resource.kind) && !['program', 'http', 'jev'].includes(String(resource.configuration.type))) } },
+  watch: { remoteRevision() { if (!this.busy && !this.error && this.podId) void this.load() } },
   async mounted() {
-    try { this.pods = (await window.pods.workspace({ type: 'list' })).pods; this.podId = this.selectedPodId || this.pods[0]?.id || ''; if (this.podId) await this.load() }
+    try { this.pods = (await this.access.api.workspace({ type: 'list' })).pods; this.podId = this.selectedPodId || this.pods[0]?.id || ''; if (this.podId) await this.load() }
     catch (error) { this.error = error instanceof Error ? error.message : 'Could not load resources' }
   },
   methods: {
     t, diagnostic, label,
     async act(command: ResourceCommand) {
       this.busy = true; this.error = ''
-      try { this.state = await window.pods.resources(command) }
+      try { this.state = await this.access.api.resources(command) }
       catch (error) { this.error = error instanceof Error ? error.message : 'Resource operation failed' }
       finally { this.busy = false }
     },
@@ -47,7 +50,10 @@ export default defineComponent({
     </p>
     <template v-else>
       <label v-if="!selectedPodId">{{ t("Pod") }}<select v-model="podId" :disabled="busy" @change="load"><option v-for="pod in pods" :key="pod.id" :value="pod.id">{{ pod.name }}</option></select></label>
-      <DirectoryPermissions v-if="mode !== 'values'" :state="state" :busy="busy" @add="act({ type: 'pickDirectory', podId, epoch: state.epoch })" @access="(resource, access) => act({ type: 'changeDirectory', podId, id: resource.id, revision: resource.revision, epoch: state.epoch, access })" @revoke="resource => act({ type: 'revoke', podId, id: resource.id, revision: resource.revision })" />
+      <DirectoryPermissions v-if="mode !== 'values'" :state="state" :busy="busy" :readonly="access.remote" @add="act({ type: 'pickDirectory', podId, epoch: state.epoch })" @access="(resource, access) => act({ type: 'changeDirectory', podId, id: resource.id, revision: resource.revision, epoch: state.epoch, access })" @revoke="resource => act({ type: 'revoke', podId, id: resource.id, revision: resource.revision })" />
+      <p v-if="mode === 'values' && access.remote" class="muted">
+        {{ t('Manage secrets on the desktop.') }}
+      </p>
       <template v-if="mode === 'values'">
         <article v-for="alias in missingAliases" :key="alias" class="resource-row">
           <div>
@@ -55,12 +61,12 @@ export default defineComponent({
               {{ t('Requested secret · Not set') }}
             </p>
           </div>
-          <button class="text-button" :disabled="busy" @click="credentialAlias = alias">
+          <button class="text-button" :disabled="busy || access.remote" @click="credentialAlias = alias">
             {{ t('Set secret') }}
           </button>
         </article>
       </template>
-      <form v-if="mode === 'values'" class="credential-form" @submit.prevent="saveCredential">
+      <form v-if="mode === 'values' && !access.remote" class="credential-form" @submit.prevent="saveCredential">
         <h3>{{ t('Script credentials') }}</h3>
         <p class="muted">
           {{ t('Store an encrypted value for this pod. Its scripts can use every assigned secret. Saving or replacing pauses the pod and requires script validation again.') }}
@@ -74,7 +80,7 @@ export default defineComponent({
       <p v-if="mode === 'values' && !visibleResources.length && !missingAliases.length" class="muted">
         {{ t('No secrets assigned.') }}
       </p>
-      <article v-for="resource in mode === 'values' ? visibleResources : []" :key="resource.id" class="resource-row">
+      <article v-for="resource in visibleResources" :key="resource.id" class="resource-row">
         <div>
           <strong>{{ resource.name }}</strong><p class="resource-path">
             {{ resource.configuration.path ?? resource.configuration.account ?? resource.configuration.scope }}
@@ -84,7 +90,7 @@ export default defineComponent({
             {{ t("Work from Codex") }}
           </button>
         </div>
-        <button v-if="mode === 'values'" class="text-button" :disabled="busy" @click="credentialAlias = resource.name">
+        <button v-if="mode === 'values'" class="text-button" :disabled="busy || access.remote" @click="credentialAlias = resource.name">
           {{ t('Replace secret') }}
         </button>
         <button class="text-button" :disabled="busy || resource.state === 'revoked'" @click="act({ type: 'revoke', podId, id: resource.id, revision: resource.revision })">
