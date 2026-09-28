@@ -112,12 +112,17 @@ native capture. Runtime/security state is never reconstructed from this archive.
 
 ## Browser and service configuration
 
-The web entry is `/workspace`. It uses the existing DDISA SP implementation with
+The public entry at `/` explains the workspace and starts sign-in through
+`/workspace-auth/login`. Email-based DDISA discovery selects the identity provider;
+the existing callback returns to `/workspace`. The same sign-in screen handles
+workspace login requests and callback failures. Sign-out returns to `/`.
+
+The workspace uses the existing DDISA SP implementation with
 an independent HttpOnly workspace cookie. Mutations require the configured
 Origin; APIs return no-store responses. Only direct human sessions are accepted.
 Pilot membership is checked on every authenticated request. Provider endpoints
 such as `/authorize`, `/token` and identity enrollment retain their routing.
-The proxy additions route `/workspace`, `/workspace-auth/`, `/api/workspace/v1/`
+The proxy additions route `/`, `/workspace`, `/workspace-auth/`, `/api/workspace/v1/`
 and `/pods-assets/` to the workspace service.
 
 Configure through the approved secrets and deployment process:
