@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ScriptCode from '../ScriptCode.vue'
+import type { WorkflowView } from '../../contracts/workflows'
 import PodLifecycle from './PodLifecycle.vue'
 import { t, diagnostic, label } from '../i18n'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
@@ -7,9 +9,9 @@ import type { RunRecord } from '../../contracts/runs'
 import { parseScriptView } from '../../contracts/scripts'
 import type { ScriptSource } from '../../contracts/scripts'
 import { WorkspaceRequestError } from './client'
-import { connected, connectionAfter, connectionLevel, sidebar } from './status'
+import { connected, connectionAfter, connectionLevel } from './status'
 
-const props = defineProps<{ client: CentralClient, desktop?: boolean, desktopStatus?: CentralStatus | null }>()
+const props = defineProps<{ client: CentralClient, desktop?: boolean, desktopStatus?: CentralStatus | null, embedded?: boolean, workflows?: WorkflowView }>()
 const emit = defineEmits<{ settings: [], login: [], logout: [] }>()
 const runtimes = ref<CentralRuntime[]>([])
 const selected = ref<{ runtimeId: string, podId: string } | null>(null)
@@ -37,6 +39,9 @@ const timezone = ref(Intl.DateTimeFormat().resolvedOptions().timeZone)
 const scheduleKind = ref('interval')
 const scheduleEnabled = ref(false)
 const newName = ref('')
+const creating = ref(false)
+const archived = ref(false)
+const search = ref('')
 const newGroup = ref('')
 const runId = ref('')
 const groupId = ref('')
@@ -47,9 +52,22 @@ let generation = 0
 let savedEditor = ''
 const runtime = computed(() => runtimes.value.find(item => item.id === selected.value?.runtimeId))
 const listed = computed(() => runtime.value?.workspace.pods.find(item => item.id === selected.value?.podId))
-const available = computed(() => !!listed.value?.online && !!current.value)
+const available = computed(() => !!listed.value?.online && !!current.value && (selected.value?.runtimeId !== props.desktopStatus?.runtimeId || props.desktopStatus?.state === 'online'))
 const runList = computed(() => [...current.value?.pod.runs.runs ?? [], ...olderRuns.value])
-const activeRuntime = computed(() => runtime.value?.online ? runtime.value : runtimes.value.find(item => item.online))
+const activeRuntime = computed(() => runtimes.value.find(item => item.id === props.desktopStatus?.runtimeId && item.online) ?? (runtime.value?.online ? runtime.value : runtimes.value.find(item => item.online)))
+const localEditor = computed(() => props.desktop && !!props.desktopStatus?.runtimeId && selected.value?.runtimeId === props.desktopStatus.runtimeId)
+function visiblePods(host: CentralRuntime) { return host.workspace.pods.filter(pod => (pod.lifecycle === 'archived') === archived.value && pod.name.toLowerCase().includes(search.value.toLowerCase())) }
+function memberships(runtimeId: string, id: string) { return runtimeId === props.desktopStatus?.runtimeId ? props.workflows?.workflows.filter(item => item.nodes.some(node => node.podId === id)).map(item => item.name).join(' · ') : '' }
+async function createPod() {
+  const target = activeRuntime.value
+  if (!target) return
+  const before = new Set(target.workspace.pods.map(pod => pod.id))
+  await send('workspace', { type: 'create', name: newName.value }, target)
+  if (error.value || operationId.value) return
+  const created = runtimes.value.find(item => item.id === target.id)?.workspace.pods.find(pod => !before.has(pod.id))
+  newName.value = ''; creating.value = false
+  if (created) await select(target.id, created.id)
+}
 
 function editorState() {
   return JSON.stringify([name.value, description.value, source.value?.id, code.value, variableName.value, variableValue.value, scheduleKind.value, interval.value, dailyTime.value, timezone.value, scheduleEnabled.value, groupId.value])
@@ -121,7 +139,7 @@ async function send(channel: CentralCommand['channel'], body: Record<string, unk
     }
     if (operation.state !== 'applied') throw new Error(operation.error ?? 'The command could not be confirmed. Inspect its outcome before retrying.')
     operationId.value = ''; notice.value = channel === 'data' && body.type === 'deletePod' ? 'Pod deleted.' : 'Saved to your workspace.'
-    await refresh(); resetEditor()
+    await refreshing; await refresh(); resetEditor()
     if (channel === 'scripts') selectSource(parseScriptView(operation.result).source)
   }
   catch (cause) {
@@ -213,13 +231,15 @@ async function watchChanges() {
     }
   }
 }
+function showInventory() { generation++; selected.value = null; current.value = null }
+defineExpose({ select, showInventory })
 onMounted(async () => { await refresh(); await watchChanges() })
 onBeforeUnmount(() => { generation++; abort.abort() })
 </script>
 
 <template>
-  <div class="central-workspace" :class="{ 'central-desktop': desktop }">
-    <header class="central-header">
+  <div class="central-workspace" :class="{ 'central-desktop': desktop, 'central-embedded': embedded, 'central-detail': !!selected }">
+    <header v-if="!embedded" class="central-header">
       <div><span class="central-mark">◉</span><strong>{{ t('OpenApe Pods') }}</strong><span class="central-muted">{{ t('Your workspace') }}</span></div><button v-if="!desktop && authenticated" @click="emit('logout')">
         {{ t('Sign out') }}
       </button>
@@ -232,43 +252,52 @@ onBeforeUnmount(() => { generation++; abort.abort() })
       </p>
     </div>
     <div v-else class="central-layout">
-      <aside class="central-sidebar" :aria-label="t('Pods')">
-        <div class="central-pod-list">
-          <h2>{{ t('Pods') }}</h2>
-          <form class="central-create" @submit.prevent="send('workspace', { type: 'create', name: newName }, activeRuntime)">
-            <input v-model="newName" :aria-label="t('New Pod name')" :placeholder="t('New Pod')" maxlength="100"><button :disabled="!activeRuntime || !newName.trim() || busy || !!operationId">
-              {{ t('Add') }}
-            </button>
-          </form>
-          <section v-for="host in runtimes" :key="host.id">
-            <p class="central-runtime" :class="{ 'central-online': host.online }">
-              ● {{ host.online ? t('Desktop online') : host.lastSeenAt ? t('Desktop offline since {time}', { time: time(host.lastSeenAt) }) : t('Desktop offline') }}
+      <section v-if="!selected" class="central-inventory">
+        <header class="inventory-heading">
+          <div>
+            <h1>{{ t('Pods') }}</h1><p class="central-muted">
+              {{ t('Every Pod has its own script, permissions and history.') }}
             </p>
-            <template v-for="group in sidebar(host).groups" :key="group.id">
-              <h3>{{ group.id ? group.name : t('Ungrouped') }} <span class="central-muted">{{ group.pods.length }}</span></h3>
-              <button v-for="pod in group.pods" :key="pod.id" class="central-pod" :aria-current="selected?.podId === pod.id ? 'true' : undefined" :disabled="busy || !pod.online" @click="select(host.id, pod.id)">
-                <span>{{ pod.name }}</span><small v-if="pod.queue?.blocked" class="central-blocked">● {{ t('Schedule blocked') }}</small><small v-else :class="{ 'central-online': pod.online }">● {{ pod.online ? t('Online') : t('Offline') }}</small>
-              </button>
-            </template>
-            <details v-if="sidebar(host).archived.length" class="central-archived">
-              <summary>{{ t('Archived') }} <span class="central-muted">{{ sidebar(host).archived.length }}</span></summary>
-              <button v-for="pod in sidebar(host).archived" :key="pod.id" class="central-pod" :aria-current="selected?.podId === pod.id ? 'true' : undefined" :disabled="busy || !pod.online" @click="select(host.id, pod.id)">
-                <span>{{ pod.name }}</span><small>{{ t('Archived') }}</small>
-              </button>
-            </details>
-          </section>
-          <p v-if="!runtimes.length" class="central-muted">
-            {{ t('Connect your desktop to bring your Pods online.') }}
-          </p>
-        </div>
-        <div v-if="desktop" class="central-sidebar-bottom">
-          <slot name="account" />
-          <button class="central-settings-button" @click="emit('settings')">
-            <span aria-hidden="true">⚙</span> {{ t('App settings') }}
+          </div><button :disabled="!activeRuntime || busy" @click="creating = !creating">
+            {{ t('＋ New pod') }}
           </button>
+        </header>
+        <form v-if="creating" class="central-create central-card" @submit.prevent="createPod">
+          <input v-model="newName" :aria-label="t('New Pod name')" :placeholder="t('New Pod')" maxlength="100" required><button :disabled="!activeRuntime || !newName.trim() || busy || !!operationId">
+            {{ t('Create') }}
+          </button><button type="button" @click="creating = false">
+            {{ t('Cancel') }}
+          </button>
+        </form>
+        <div class="inventory-toolbar">
+          <div class="central-tabs" role="group" :aria-label="t('Pods')">
+            <button :aria-pressed="!archived" @click="archived = false">
+              {{ t('Current Pods') }}
+            </button><button :aria-pressed="archived" @click="archived = true">
+              {{ t('Archived') }}
+            </button>
+          </div><input v-model="search" type="search" :aria-label="t('Search Pods')" :placeholder="t('Search Pods')">
         </div>
-      </aside>
-      <main class="central-content">
+        <section v-for="host in runtimes" :key="host.id">
+          <p class="central-runtime">
+            {{ host.online ? t('Desktop online') : host.lastSeenAt ? t('Desktop offline since {time}', { time: time(host.lastSeenAt) }) : t('Desktop offline') }}<span v-if="runtimes.length > 1"> · {{ host.id }}</span>
+          </p>
+          <button v-for="pod in visiblePods(host)" :key="pod.id" class="inventory-row central-pod" :disabled="busy" @click="select(host.id, pod.id)">
+            <span><strong>{{ pod.name }}</strong><small>{{ memberships(host.id, pod.id) || (host.id === desktopStatus?.runtimeId ? t('Standalone Pod') : host.workspace.organization.groups.find(group => group.podIds.includes(pod.id))?.name || t('Ungrouped')) }}</small></span><small v-if="pod.queue?.blocked" class="central-blocked">{{ t('Schedule blocked') }}</small><span class="badge">{{ pod.online ? label(pod.lifecycle) : t('Offline') }}</span><span aria-hidden="true">›</span>
+          </button>
+          <p v-if="!visiblePods(host).length" class="central-muted">
+            {{ archived ? t('No archived Pods') : t('No matching Pods') }}
+          </p>
+        </section>
+        <p v-if="!runtimes.length" class="central-muted">
+          {{ t('Connect your desktop to bring your Pods online.') }}
+        </p>
+        <slot name="account" />
+      </section>
+      <div class="central-content">
+        <button v-if="selected" class="text-button" @click="showInventory">
+          ‹ {{ t('Pods') }}
+        </button>
         <p v-if="desktopStatus && desktopStatus.state !== 'online'" role="alert" class="central-error">
           {{ desktopStatus.state === 'connecting' ? t('This desktop is connecting to your workspace.') : desktopStatus.state === 'reconnecting' ? t('This desktop is reconnecting since {time}.', { time: time(desktopStatus.since) }) : t('This desktop is offline since {time}. Scheduled runs are paused until it reconnects.', { time: time(desktopStatus.since) }) }}
           <span v-if="desktopStatus.error">{{ diagnostic(desktopStatus.error) }}</span>
@@ -288,11 +317,12 @@ onBeforeUnmount(() => { generation++; abort.abort() })
             {{ t('Check pending operation') }}
           </button> {{ t('Review its result before making another change.') }}
         </p>
-        <div v-if="!available" class="central-empty">
+        <div v-if="selected && !available" class="central-empty">
           <h1>{{ listed?.name ?? t('Your Pods') }}</h1><p>{{ listed ? t('This Pod is offline. Its contents will be available when it reconnects.') : t('Choose an online Pod to see its scripts, settings and recent runs.') }}</p><button @click="refresh">
             {{ t('Refresh') }}
           </button>
         </div>
+        <slot v-else-if="localEditor && current && $slots['local-editor']" name="local-editor" :pod-id="current.pod.id" />
         <template v-else-if="current && baseline">
           <div class="central-title">
             <div><span class="central-eyebrow">{{ t('POD · ONLINE') }}</span><h1>{{ current.pod.scripts.pod.name }}</h1><p>{{ label(current.pod.scripts.pod.lifecycle) }} · {{ current.total }} {{ t('recent runs') }}</p></div><button :disabled="busy" @click="resetEditor">
@@ -331,7 +361,7 @@ onBeforeUnmount(() => { generation++; abort.abort() })
             </section>
             <section v-if="tab === 'Script'">
               <label>{{ t('Version') }}<select :value="source?.id ?? ''" @change="selectVersion(($event.target as HTMLSelectElement).value)"><option value="">{{ t('New draft') }}</option><option v-for="draft in current.pod.scripts.drafts" :key="draft.id" :value="draft.id">{{ t('Draft') }} {{ draft.id.slice(0, 8) }} · {{ draft.validated ? t('validated') : t('not validated') }}</option><option v-for="version in current.pod.scripts.versions" :key="version.hash" :value="version.hash">{{ version.hash.slice(0, 12) }} {{ version.active ? `· ${label('active')}` : '' }}</option></select></label>
-              <textarea v-model="code" class="central-code" :aria-label="t('Script source')" rows="20" spellcheck="false" />
+              <ScriptCode v-model="code" :readonly="current.pod.scripts.pod.lifecycle === 'archived'" @save="saveScript" />
               <div class="central-actions">
                 <button @click="saveScript">
                   {{ t('Save draft') }}
@@ -400,7 +430,7 @@ onBeforeUnmount(() => { generation++; abort.abort() })
             {{ t('Waiting for the desktop and central storage…') }}
           </p>
         </template>
-      </main>
+      </div>
     </div>
   </div>
 </template>
@@ -413,4 +443,5 @@ onBeforeUnmount(() => { generation++; abort.abort() })
 .central-sidebar-bottom{display:grid;gap:8px;padding-top:16px;margin-top:16px;border-top:1px solid var(--line)}
 .central-sidebar-bottom .central-settings-button{display:flex;align-items:center;gap:10px;text-align:left;border-color:transparent;background:transparent}
 @media(max-width:760px){.central-desktop .central-sidebar{position:static;height:auto;max-height:420px;overflow:visible}.central-desktop .central-pod-list{flex:auto}.central-sidebar-bottom{flex-shrink:0}}
+.central-layout{display:block;min-height:0}.central-inventory{max-width:1050px;margin:auto;padding:28px 32px}.central-content{margin:auto}.central-content:has(>.text-button){display:grid;gap:18px}.central-embedded{min-height:0;background:transparent}.central-embedded .central-content,.central-embedded .central-inventory{padding:0;max-width:none}.central-inventory .inventory-row{display:flex!important;border:1px solid var(--border)!important;background:var(--surface)!important;padding:18px;margin:12px 0}.central-inventory .inventory-row span{white-space:normal}.central-inventory .inventory-row small{white-space:normal}.inventory-toolbar .central-tabs{margin:0}.inventory-toolbar input{width:220px}.central-tabs [aria-pressed=true]{color:var(--accent);border-bottom:2px solid var(--accent)}.central-create{flex-wrap:wrap}.central-create input{flex:1;min-width:150px}.central-inventory h1{margin:0;font-size:26px}.central-inventory .central-runtime{overflow-wrap:anywhere}
 </style>

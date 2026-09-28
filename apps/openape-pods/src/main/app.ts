@@ -1,3 +1,5 @@
+import { McpAccessPolicy } from './codex/access'
+import { parseMcpAccessCommand } from '../contracts/mcp-access'
 import { RuntimeApprovalPolicy } from './codex/runtime-approval'
 import { parseRuntimeApprovalCommand } from '../contracts/runtime-approval'
 import { CentralController, offlineAlert } from './central/controller'
@@ -77,7 +79,23 @@ if (process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1') {
 }
 const codexDirectory = join(profileBase, 'codex')
 const codexTarget = { executable: process.execPath, script: join(__dirname, '../runtime/codex-mcp.mjs').replace('/app.asar/', '/app.asar.unpacked/'), socket: join(codexDirectory, 'control.sock') }
-const codexServer = new CodexControlServer(codexTarget.socket, request => worker.codex(request))
+const mcpAccess = new McpAccessPolicy(profileBase)
+const codexServer = new CodexControlServer(codexTarget.socket, async (request) => { mcpAccess.assert(request); return worker.codex(request) })
+let mcpTransition = Promise.resolve()
+let mcpRunning: boolean | undefined
+function syncMcp(): Promise<void> {
+  const previous = mcpTransition
+  mcpTransition = (async () => {
+    try { await previous }
+    catch (error) { console.error('Previous MCP transition failed', error) }
+    const shouldRun = mcpAccess.get().mode !== 'off'
+    if (shouldRun === mcpRunning) return
+    if (shouldRun) await codexServer.start()
+    else await codexServer.stop()
+    mcpRunning = shouldRun
+  })()
+  return mcpTransition
+}
 // Fixture runs must name an isolated Codex home; they never touch the owner's.
 const codexHome = fixture ? process.env.OPENAPE_PODS_FIXTURE_CODEX_HOME : process.env.CODEX_HOME || join(homedir(), '.codex')
 async function codexRegistration(): Promise<CodexRegistration> {
@@ -277,6 +295,14 @@ async function start(): Promise<void> {
     }
     return worker.onboarding(command)
   })
+  ipcMain.handle(channels.mcpAccess, async (event, value: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    const command = parseMcpAccessCommand(value)
+    if (command.type === 'set') mcpAccess.set(command.mode, command.duration)
+    try { await syncMcp() }
+    catch (error) { mcpAccess.set('off', mcpAccess.get().duration); throw error }
+    return mcpAccess.get()
+  })
   ipcMain.handle(channels.runtimeApproval, (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     const command = parseRuntimeApprovalCommand(value)
@@ -292,11 +318,11 @@ async function start(): Promise<void> {
     if (command.type === 'status') return registration.status()
     if (command.type === 'connect') {
       const connection = await registration.connect()
-      if (connection.state === 'connected') await codexServer.start()
+      if (connection.state === 'connected') await syncMcp()
       return connection
     }
     const connection = await registration.disconnect()
-    if (connection.state !== 'edited') await codexServer.stop()
+    if (connection.state !== 'edited') { mcpAccess.set('off', mcpAccess.get().duration); await syncMcp() }
     return connection
   })
   ipcMain.handle(channels.chats, (event, command: unknown, ...extra: unknown[]) => {
@@ -411,7 +437,12 @@ async function start(): Promise<void> {
   powerMonitor.on('resume', () => worker.lifecycle('resume'))
   worker.start(root)
   if (central) watchCentral(central)
-  if (await refreshLauncher(join(codexDirectory, 'openape-pods-mcp'), codexTarget)) await codexServer.start()
+  await refreshLauncher(join(codexDirectory, 'openape-pods-mcp'), codexTarget)
+  await syncMcp()
+  const expiry = setInterval(() => {
+    void syncMcp().catch((error: unknown) => console.error('Could not stop MCP', error))
+  }, 1000)
+  expiry.unref()
 }
 // Tells the owner once when scheduling has been paused for five minutes, and again when it resumes.
 function watchCentral(controller: CentralController): void {
