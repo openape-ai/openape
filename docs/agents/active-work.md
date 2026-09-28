@@ -1,5 +1,11 @@
 # Active work
 
+## Generic Reports acceptance — issue 1401
+
+Implementation PR 166 and release-version PR 167 are merged. Reports image `prod-e40ae6ea` is healthy after clean-main `pnpm check:ci`; previous image `prod-7bab2ba6` was rehearsed against migrated data. Production preserves every original legacy row. Real PR and morning previews passed without Telegram sends; the activated PR monitor already completed one natural report and confirmed Telegram notification. Test Runs evidence and guidance are verified.
+
+Current branch `feature/issue-1401-reports-acceptance` starts from canonical `983583f8`; dedicated clone `openape-monorepo.worktrees/generic-reports-release`. See [migration matrix](../operations/generic-reports-migration.md) and [live receipt](../operations/generic-reports-live-receipt.json). Remaining external blocker: npm login expired; CLI 0.3.0 registry release awaits owner renewal. Keep issue 1401 and its plan open until that publication is verified. No further Pod run or notification is needed for acceptance.
+
 ## Morning editorial workflow (September 28, 2026) — deployed
 
 [Issue 1400](https://repos.openape.ai/patrick/monorepo/issues/1400), [PR 164](https://repos.openape.ai/patrick/monorepo/pulls/164), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3KEEMTW4EN59AFD8HP34X7F). Implementation merged as `0b8216bb1b17269bbaa5c1d03cb919ee45b87fae` after exact-source CI 5201. Full lint/typecheck, Pods build and 623 unit tests passed; the clean merged deployment gate `pnpm check:ci` passed (`1790582152595-0b8216bb-unit/summary.json`).
