@@ -19,7 +19,14 @@ identical Pod view geometry and no page overflow. Full lint/typecheck and both a
 has 29. Real disposable DDISA acceptance passes in Chromium through login, all
 six Pod tabs, App settings and sign-out, with no browser exceptions. A discovered
 dark-mode run-card contrast issue is fixed in the shared component. Next: publish
-inspected evidence, native PR/exact-head CI, merge and tested-image relay rollout.
+native PR/exact-head CI, merge and tested-image relay rollout.
+Implementation `ca769ac564dbb786b9dec49d1f1d699f1692a850` is in
+[PR 171](https://repos.openape.ai/patrick/monorepo/pulls/171).
+[Verified Test Runs evidence](https://testrun.openape.ai/r/rjcC2AAVQ_nFpqTF2M2EzXn5)
+contains the actual commands and 15 inspected synthetic screenshots. Production
+SSO reached the existing private workspace through normal DDISA discovery; the
+session is ready for post-deployment read-only acceptance. Previous healthy relay
+image: `registry.openape.ai/openape-pods-relay:prod-96196057`.
 
 ## Pods public workspace entry — issue 1403
 
