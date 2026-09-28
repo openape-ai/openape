@@ -16,10 +16,10 @@ Scope: four nodes in the existing workflow, standalone example scripts, bounded 
 
 ## Architecture and contracts
 
-Existing owning workflow `5f7ea0d7-1f9c-4c74-8c8a-afd513950001`, currently revision 6, daily 07:00 Europe/Vienna:
+Existing owning workflow `5f7ea0d7-1f9c-4c74-8c8a-afd513950001`, revision 7 after accepted cutover, daily 07:00 Europe/Vienna:
 
 1. Existing Mail-Prüfung Pod `890bca63-dc4d-4e93-a5cc-cc8c7bfe489d`: Inbox/protection reads, fresh selected conversations including sent replies, bounded Jev classification, archive proposals. It emits evidence and fixed action eligibility, without editorial LLM calls. Its independent 60-second approval poll remains intact.
-2. New Calendar/Issues source Pod: the existing calendar and owned-repository issue collection, no model, report publication or Telegram. It has no independent schedule. Reuse the existing approved readers and account scopes. Existing Microsoft Pod credential folder may be assigned; do not copy owner login stores. Complete ordinary native program authentication if a new isolated application state needs it, or report the actual setup blocker without weakening isolation.
+2. New Calendar/Issues source Pod: the existing calendar and owned-repository issue collection, no model, report publication or Telegram. It has no independent schedule. Reuse the existing approved readers and account scopes. Existing Microsoft Pod credential folder may be assigned; do not copy owner login stores. Patrick separately confirmed transferring the existing Repos login/signing state into the isolated source assignment. Use supported private-file import and the established bootstrap wrapper; remove temporary imports. This targeted approval does not authorize other owner credential copies.
 3. New Berichtsredaktion Pod: depends on both sources; no provider tools, credentials or delivery authority. It uses `agent.run` with tools empty to write German summaries, evidenced next actions and an overview. Disposition is fixed by the source review: keep/partial evidence cannot turn into an owner action. Preserve original subjects, source URLs, calendar and issue facts. Validate model output before accepting it.
 4. Existing sender `991849f7-b612-4cf9-8201-5b78b4a12e55`: depends only on the editorial output, validates identity/date/freshness/schema, binds the configured series and freezes the payload before publication. It retains its checkpoint, daily Telegram key, receipts and uncertain-effect blocking. No collection or model calls on this path.
 
@@ -65,14 +65,14 @@ Rollback: restore the old two-node workflow and old scripts, preserving pending 
 
 - [x] 2026-09-28: Owner approved the decomposition; current main, runtime, two live script hashes, delivery checkpoint 24 and workflow revision 6 inspected.
 - [x] M1: contracts and script separation; 31 focused contract tests, full lint/typecheck, app build and 623 unit tests passed.
-- [ ] M2: sender integration and native source/editor setup.
-- [ ] M3: canonical merge, actual no-send preview/replay, final workflow and receipt verification.
+- [x] M2: sender integration and native source/editor setup.
+- [x] M3: canonical merge, actual no-send preview/replay, final workflow and receipt verification.
 
 ## Surprises & Discoveries
 
 - Workflow handoffs contain only direct predecessors and cap serialized output at 65,536 characters. Long mail evidence needs a private immutable snapshot reference, not silent truncation or global runtime-limit changes.
 - Native directory assignment rejects other Pods' protected workspaces. Evidence therefore uses `/Users/patrickhofmann/Library/Application Support/OpenApe Briefing Evidence/mail`, assigned read/write only to mail and read-only to editorial.
-- New program assignments have isolated encrypted authentication state. Reusing an executable does not reuse its provider login. Complete supported native setup; do not copy owner login stores.
+- New program assignments have isolated encrypted authentication state. Reusing an executable does not reuse its provider login. The owner explicitly confirmed a targeted private-file import for this source assignment. Native reads and forced renewal passed; temporary imports were removed.
 
 ## Decision Log
 
@@ -88,4 +88,12 @@ Read this plan and current instructions; inspect Git/live revisions; run baselin
 
 ## Outcomes & Retrospective
 
-Pending implementation and actual native acceptance. Do not infer future scheduled delivery from a manual preview.
+[Issue 1400](https://repos.openape.ai/patrick/monorepo/issues/1400), [PR 164](https://repos.openape.ai/patrick/monorepo/pulls/164), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3KEEMTW4EN59AFD8HP34X7F). Implementation merged as `0b8216bb1b17269bbaa5c1d03cb919ee45b87fae` after exact-source CI 5201. Full lint/typecheck, Pods build and 623 unit tests passed; the clean merged deployment gate `pnpm check:ci` passed (`1790582152595-0b8216bb-unit/summary.json`).
+
+The existing workflow is active at revision 7, daily 07:00 Europe/Vienna. Mail evidence and Calendar/Issues collection feed the dedicated German editorial Pod; the existing sender consumes only its validated report. New source Pod `51832859-53e0-4cbc-a44c-61ad76aad931` and editorial Pod `6c9d0c12-32fa-4d56-a84a-9a035a030914` are active without independent schedules. The mail approval poll remains enabled every 60 seconds; the sender schedule remains disabled and Daily action website remains paused. Reports server stays at `prod-7bab2ba6`.
+
+Actual manual workflow `e6e4d970-e88a-4857-a7d2-e1b0c94ac6a8` completed all four nodes. Private preview publication `01M3KGPJA9V7B7SWKB9Y2VTDWG`, version 1, digest `48a9b702a3312c64b221f9de1c815eda230b71d2f07f0966bf0acd732b99d48c` matches the frozen payload and server receipt. Editor-only replay `59f48f07-ad72-4b21-8370-a4ecc491af11` completed using its saved input, with only agent operations and no provider, publication or delivery operations. Preview sender has one completed Reports effect and zero Telegram POSTs. Sender checkpoint 26 retains message 243 and September 28 delivery, with no pending operation. No archive grant was created or consumed by the preview.
+
+Owner latest/dated API access and anonymous page/API/asset/publication denial pass on both domains. German copy and consolidated mail cards were inspected directly in Firefox at desktop and 390×844 mobile size. The answered MIAS conversation has no next action. Standard preview series was restored and the temporary replay selector removed; final scripts were revalidated. The next regular delivery is September 29 at 07:00; this manual preview does not prove that future delivery.
+
+Patrick explicitly confirmed the targeted Repos authentication transfer for the new source Pod. Supported private-file `program importState` plus the existing bootstrap pattern initialized only that isolated program's login/signing state; temporary import files were removed. Actual native source reads succeeded for both calendars and owned issues, including forced token renewal. The source remains limited to calendar and issue reads. Editorial receives only its read-only evidence directory and no provider or delivery capability.
