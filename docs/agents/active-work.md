@@ -2,31 +2,32 @@
 
 ## Pods browser/desktop visual parity — issue 1404
 
-[Issue 1404](https://repos.openape.ai/patrick/monorepo/issues/1404),
-[approved plan and desktop preview](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3MQ93SGG9D2W2R80HYCREK9).
-Own checkout `openape-monorepo.worktrees/pods-workspace-landing`, branch
-`feature/issue-1404-browser-desktop-parity`, base `961960578a934c89a9aacfdc1c601712052908e4`.
+[Issue 1404](https://repos.openape.ai/patrick/monorepo/issues/1404) is delivered via
+[PR 171](https://repos.openape.ai/patrick/monorepo/pulls/171), reviewed source
+`19517fa221683e4e4d005c85c70524bc6a85992a`, canonical merge
+`2943d7acdd6942b680fec7dc9c8f7f60b5f9622e`. Own checkout:
+`openape-monorepo.worktrees/pods-workspace-landing`; implementation branch
+`feature/issue-1404-browser-desktop-parity`, rollout receipt branch
+`feature/issue-1404-rollout-evidence`.
 
-Owner approved the plan on 2026-09-28 and requested implementation without further
-questions. Shared shell, read-only workflow projection, six Pod views and browser
-settings now use desktop components through explicit native/HTTP adapters.
-Existing owner scope, command allowlist, revisions, pending receipts and draft
-protection remain enforced. Device-only actions are visibly desktop-only.
-The local plan is `.claude/plans/2026-09-28-pods-browser-desktop-parity.html`.
+The browser shares the desktop frame, Workflows, inventory, six Pod views and
+App settings through explicit HTTP/native adapters. Local-only capabilities remain
+explicitly desktop-only. Snapshot updates refresh untouched forms while dirty
+inputs retain their original revision. The public landing and DDISA flow remain.
 
-Paired browser tests passed for 1280px English/light and 390px German/dark with
-identical Pod view geometry and no page overflow. Full lint/typecheck and both app builds pass; Pods has 654 passing tests and relay
-has 29. Real disposable DDISA acceptance passes in Chromium through login, all
-six Pod tabs, App settings and sign-out, with no browser exceptions. Untouched remote forms refresh from new desktop snapshots while edited inputs
-keep their original revision. A discovered dark-mode run-card contrast issue is fixed in the shared component. Next: publish
-native PR/exact-head CI, merge and tested-image relay rollout.
-Implementation `ca769ac564dbb786b9dec49d1f1d699f1692a850` is in
-[PR 171](https://repos.openape.ai/patrick/monorepo/pulls/171).
-[Verified Test Runs evidence](https://testrun.openape.ai/r/rjcC2AAVQ_nFpqTF2M2EzXn5)
-contains the actual commands and 15 inspected synthetic screenshots. Production
-SSO reached the existing private workspace through normal DDISA discovery; the
-session is ready for post-deployment read-only acceptance. Previous healthy relay
-image: `registry.openape.ai/openape-pods-relay:prod-96196057`.
+Verified: full lint/typecheck, both app builds, 654 Pods tests, 29 relay tests,
+three paired layout/welcome cases, real disposable DDISA Chromium acceptance,
+exact-source external CI and clean-merge `pnpm check:ci`. The relay is deployed as
+`registry.openape.ai/openape-pods-relay:prod-2943d7ac`; previous healthy image
+`prod-96196057`. Health, public routes/assets and unauthenticated session rejection
+pass. The actual owner session verified the workflow graph, Pod links, all six
+Pod views, archive and App settings without browser errors or data mutations.
+
+[Final Test Runs rollout evidence](https://testrun.openape.ai/r/B5Q-99zJDP4J8bEE3X4-imhV)
+links the inspected synthetic comparison screenshots. Private production screenshots
+were inspected without publishing owner data. [Completed plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3MQ93SGG9D2W2R80HYCREK9)
+is mirrored in `.claude/plans/2026-09-28-pods-browser-desktop-parity.html`.
+No product work remains for this issue; no native desktop binary was released.
 
 ## Pods public workspace entry — issue 1403
 
