@@ -59,3 +59,5 @@ The sender freezes body/digest/key in `pendingReport` before POST and verifies t
 Telegram retains `calendar-briefing:CHAT_ID:DATE`, its pending-message checkpoint, digest effect receipts and matching chat/message verification. Link previews are disabled. Any uncertain Telegram send blocks subsequent automatic sends until external evidence resolves it. Do not clear that state based on report publication success.
 
 Before enabling live publication, run the actual two-node workflow preview and inspect its source coverage, private report and publication receipt. Do not send a test Telegram message. Record first regular scheduled delivery separately with workflow/run identity, publication ID/version/digest, message ID, delivery checkpoint and completed effect receipt. Published editions remain readable with the Mac offline; fresh collection still requires the Mac.
+
+When provider conversation bodies are truncated or exceed the decision bound, no reply action is inferred. A bounded excerpt of the two latest visible messages may still be summarized in German, explicitly labelled partial. The text model cannot change that fixed non-action disposition.
