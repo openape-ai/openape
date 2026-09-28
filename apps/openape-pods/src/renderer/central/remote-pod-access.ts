@@ -1,4 +1,4 @@
-import { reactive, shallowRef } from 'vue'
+import { computed, reactive, shallowRef } from 'vue'
 import type { CentralClient, CentralCommand, CentralRuntime, CentralSummary } from '../../contracts/central'
 import { parseCentralCommand } from '../../contracts/central'
 import { parseWorkspace } from '../../contracts/control'
@@ -79,7 +79,7 @@ export function remotePodAccess(client: CentralClient, host: () => CentralRuntim
     finally { state.busy = false }
   }
   const access: PodAccess = {
-    remote: true, key: id => `${host().id}:${id}`, edits,
+    revision: computed(() => summary.value.revision), remote: true, key: id => `${host().id}:${id}`, edits,
     api: {
       workspace: async body => body.type === 'list' ? host().workspace : parseWorkspace(await command('workspace', body)),
       details: async (body) => { checkPod(body); return body.type === 'list' ? summary.value.pod.details : parsePodDetails(await command('details', body)) },

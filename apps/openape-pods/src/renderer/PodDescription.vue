@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref } from 'vue'
+import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { descriptionDrafts } from './form-buffer'
 import { usePodAccess, usePodEdits } from './pod-access'
 import { t, diagnostic } from './i18n'
@@ -25,6 +25,7 @@ async function save() {
   catch (failure) { error.value = String(failure) }
   finally { busy.value = false }
 }
+watch(() => access.revision?.value, () => { if (!busy.value && !error.value && text.value === saved.value) void load() })
 usePodEdits('description', () => text.value !== saved.value)
 onMounted(async () => {
   const draft = access.remote ? descriptionDrafts.get(access.key(props.podId)) : undefined
