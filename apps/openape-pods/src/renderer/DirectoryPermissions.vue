@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import type { DirectoryAccess, ResourceState, PodResource } from '../contracts/resources'
 import { t } from './i18n'
 
-const props = defineProps<{ state: ResourceState, busy: boolean }>()
+const props = defineProps<{ state: ResourceState, busy: boolean, readonly?: boolean }>()
 const emit = defineEmits<{ add: [], revoke: [resource: PodResource], access: [resource: PodResource, access: DirectoryAccess] }>()
 const selection = ref('')
 const references = computed(() => props.state.resources.filter(resource => ['reference', 'directory'].includes(resource.kind) && resource.state !== 'revoked'))
@@ -36,7 +36,7 @@ function changeAccess(resource: PodResource, event: Event): void {
           <svg class="directory-icon" aria-hidden="true" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><path :d="resource.kind === 'directory' ? 'M3 8h10l3 3h13v16H3z' : 'M7 3h12l6 6v20H7zM19 3v7h6'" /></svg>
           <span class="directory-label"><strong>{{ resource.name }}</strong><span class="directory-path">{{ resource.configuration.path }}</span><small>{{ t(resource.kind === 'reference' ? 'Read-only snapshots' : 'Direct folder access') }}</small></span>
         </button>
-        <select v-if="resource.kind === 'directory'" :value="resource.configuration.access" :aria-label="t('Access for {name}', { name: resource.name })" :disabled="busy" @change="changeAccess(resource, $event)">
+        <select v-if="resource.kind === 'directory'" :value="resource.configuration.access" :aria-label="t('Access for {name}', { name: resource.name })" :disabled="busy || readonly" @change="changeAccess(resource, $event)">
           <option value="read">
             {{ t('Read') }}
           </option>
@@ -46,7 +46,7 @@ function changeAccess(resource: PodResource, event: Event): void {
         </select>
       </article>
       <footer class="directory-toolbar">
-        <button class="text-button" :aria-label="t('Add directory')" :title="t('Add directory')" :disabled="busy" @click="emit('add')">
+        <button class="text-button" :aria-label="t('Add directory')" :title="t('Add directory')" :disabled="busy || readonly" @click="emit('add')">
           ＋
         </button>
         <button class="text-button" :aria-label="t('Remove directory access')" :title="t('Remove directory access')" :disabled="busy || !selected" @click="selected && emit('revoke', selected)">

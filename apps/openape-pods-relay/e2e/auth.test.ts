@@ -1,3 +1,4 @@
+import { verifyBrowserWorkspace } from '../../openape-pods/test/workspace/browser-acceptance'
 import { centralFixture } from '../../openape-pods/test/workspace/central-fixture'
 import { capabilities } from '@openape/pods-protocol'
 import { generateKeyPairSync, randomBytes, randomUUID } from 'node:crypto'
@@ -62,6 +63,7 @@ it('registers a desktop and mobile through real DDISA callbacks and rejects repl
   }
   const unauthenticated = await fetch(`${relay.url}/api/workspace/v1/inventory`)
   expect(unauthenticated.status).toBe(401)
+  expect((await fetch(`${relay.url}/api/workspace/v1/session`)).status).toBe(401)
   const login = await fetch(`${relay.url}/workspace-auth/login`, { method: 'POST', headers: { origin: relay.url, 'content-type': 'application/json' }, body: JSON.stringify({ email }) })
   expect(login.status, await login.clone().text()).toBe(200)
   const flowCookie = login.headers.getSetCookie().map(value => value.split(';')[0]).join('; ')
@@ -72,6 +74,8 @@ it('registers a desktop and mobile through real DDISA callbacks and rejects repl
   const webLogin = await fetch(webCallback, { redirect: 'manual', headers: { cookie: flowCookie } })
   expect(webLogin.headers.get('location'), await webLogin.clone().text()).toBe('/workspace')
   const webCookie = webLogin.headers.getSetCookie().map(value => value.split(';')[0]).join('; ')
+  const browserSession = await fetch(`${relay.url}/api/workspace/v1/session`, { headers: { cookie: webCookie } })
+  expect(await browserSession.json()).toEqual({ subject: email })
   const runtimePath = '/api/runtime/v1/workspace'
   async function central(body: Record<string, unknown>) {
     const encoded = JSON.stringify(body)
@@ -96,6 +100,7 @@ it('registers a desktop and mobile through real DDISA callbacks and rejects repl
   expect(workspaceInventory.status, await workspaceInventory.clone().text()).toBe(200)
   expect(await workspaceInventory.json()).toMatchObject([{ id: desktop.registration.id, online: true }])
   expect(workspaceInventory.headers.get('cache-control')).toContain('no-store')
+  await verifyBrowserWorkspace(relay.url, email, loginToken)
   const download = await fetch(`${relay.url}/api/workspace/v1/artifact?runtimeId=${desktop.registration.id}&podId=${fixture.view.id}&path=workspace/example.bin`, { headers: { cookie: webCookie } })
   expect(download.status).toBe(200)
   expect(sha256(new Uint8Array(await download.arrayBuffer()))).toBe(artifactHash)
