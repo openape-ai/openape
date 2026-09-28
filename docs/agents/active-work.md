@@ -1,5 +1,21 @@
 # Active work
 
+## Pods Variant A — issue 1402
+
+[Issue 1402](https://repos.openape.ai/patrick/monorepo/issues/1402),
+[approved scope and plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3M9ZTF4N6PQR30V8CM6MQCX).
+Checkout `openape-monorepo.worktrees/pods-ux-verification`, branch
+`feature/issue-1402-pods-ux`, base `d1da9ac7aff30f1425ffbbae08b91866bf85b99d`.
+
+Shared Workflows/Pods/Settings navigation, current/archive inventories, native
+Pod editing from the central desktop, three personal accounts and app-wide timed
+MCP off/read/write access are implemented. The manual `report --browser` mode
+captures real components and production CSS into a fresh evidence directory.
+Full monorepo lint/typecheck and initial component/browser checks passed. The
+linked native PR owns the final tested source SHA, Test Runs report and external
+CI result. No installed app or real Pod/account data is changed. Next step:
+review the PR and its inspected screenshots before a separately requested release.
+
 ## Generic Reports acceptance — issue 1401
 
 Implementation PR 166 and release-version PR 167 are merged. Reports image `prod-e40ae6ea` is healthy after clean-main `pnpm check:ci`; previous image `prod-7bab2ba6` was rehearsed against migrated data. Production preserves every original legacy row. Real PR and morning previews passed without Telegram sends; the activated PR monitor already completed one natural report and confirmed Telegram notification. Test Runs evidence and guidance are verified.
