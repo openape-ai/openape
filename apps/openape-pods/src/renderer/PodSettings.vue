@@ -13,10 +13,10 @@ export default defineComponent({
   components: { PodSchedule, PodIdentity, PodLifecycle },
   props: { selectedPodId: { type: String, default: '' } },
   emits: ['selected', 'accounts'],
-  setup() { return { access: usePodAccess() } },
+  setup() { const access = usePodAccess(); return { access, remoteRevision: access.revision } },
   data() { return { newGroup: '', confirmReload: false, initialized: false, organization: { revision: 1, groups: [] } as Organization, pods: [] as StoredPod[], selectedId: '', name: '', revision: 0, error: '', message: '', busy: false } },
   computed: { selectedGroup(): string { return this.organization.groups.find(group => group.podIds.includes(this.selectedId))?.id ?? '' }, selectedPod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.selectedId) } },
-  watch: { async selectedPodId(id: string) { if (id === this.selectedId) return; await this.reload(); const pod = this.pods.find(pod => pod.id === id); if (pod) this.select(pod); else this.newPod() } },
+  watch: { async remoteRevision() { if (this.busy || this.error || this.name !== this.selectedPod?.name || this.newGroup) return; await this.reload(); const pod = this.selectedPod; if (pod) { this.name = pod.name; this.revision = pod.revision } }, async selectedPodId(id: string) { if (id === this.selectedId) return; await this.reload(); const pod = this.pods.find(pod => pod.id === id); if (pod) this.select(pod); else this.newPod() } },
   async mounted() {
     trackPodEdits(this.access, 'settings', () => this.initialized && (this.name !== (this.selectedPod?.name ?? '') || !!this.newGroup))
     await this.reload(); const selected = this.pods.find(pod => pod.id === this.selectedPodId); if (selected) {

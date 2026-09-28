@@ -110,3 +110,17 @@ it('accepts an applied description receipt and clears the navigation guard', asy
   expect(wrapper!.get('.workflow-inventory').isVisible()).toBe(true)
   expect(wrapper!.find('[aria-label="Unsaved changes"]').exists()).toBe(false)
 })
+
+it('refreshes untouched remote forms while preserving edited text and its original revision', async () => {
+  const fixture = await open(); await pod()
+  fixture.view.details.description = { text: 'Changed on desktop', revision: 2, state: 'ready', error: null, updatedAt: 2 }
+  fixture.host.revision++; fixture.wake(); await flushPromises()
+  expect((wrapper!.get('#pod-description').element as HTMLTextAreaElement).value).toBe('Changed on desktop')
+  await wrapper!.get('#pod-description').setValue('Unsaved local change')
+  fixture.view.details.description = { ...fixture.view.details.description, text: 'Another desktop change', revision: 3 }
+  fixture.host.revision++; fixture.wake(); await flushPromises()
+  expect((wrapper!.get('#pod-description').element as HTMLTextAreaElement).value).toBe('Unsaved local change')
+  const command = vi.spyOn(fixture.client, 'command').mockRejectedValueOnce(new WorkspaceRequestError(409, 'Workspace changed; reload before saving'))
+  await wrapper!.get('#pod-description').element.closest('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); await flushPromises()
+  expect(command.mock.calls[0]![2].body).toMatchObject({ revision: 2, text: 'Unsaved local change' })
+})

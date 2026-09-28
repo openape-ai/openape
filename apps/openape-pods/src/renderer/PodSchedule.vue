@@ -10,9 +10,9 @@ import type { ScheduleCommand, ScheduleView } from '../contracts/scheduling'
 export default defineComponent({
   props: { pod: { type: Object as PropType<StoredPod>, required: true } },
   emits: ['changed'],
-  setup() { return { access: usePodAccess() } },
+  setup() { const access = usePodAccess(); return { access, remoteRevision: access.revision } },
   data() { return { saved: '', view: null as ScheduleView | null, kind: 'interval', minutes: 60, time: '08:00', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, enabled: false, concurrency: 2, error: '', message: '', busy: false } },
-  watch: { 'pod.id': { immediate: true, handler() { void this.load() } } },
+  watch: { remoteRevision() { if (!this.busy && !this.error && this.editState() === this.saved) void this.load() }, 'pod.id': { immediate: true, handler() { void this.load() } } },
   beforeUnmount() { if (this.access.remote && this.editState() === this.saved) scheduleDrafts.delete(this.access.key(this.pod.id)); else if (this.access.remote) scheduleDrafts.set(this.access.key(this.pod.id), { kind: this.kind, minutes: this.minutes, time: this.time, timezone: this.timezone, enabled: this.enabled, saved: this.saved }) },
   methods: {
     t, diagnostic, label, dateTime,

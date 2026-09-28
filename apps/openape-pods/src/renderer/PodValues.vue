@@ -9,8 +9,9 @@ import PodResources from './PodResources.vue'
 export default defineComponent({
   components: { PodResources },
   props: { requestedSecret: { type: String, default: '' }, podId: { type: String, required: true } },
-  setup() { return { access: usePodAccess() } },
+  setup() { const access = usePodAccess(); return { access, remoteRevision: access.revision } },
   data() { return { variables: [] as PodVariable[], requiredAliases: [] as string[], name: '', value: '', revision: 0, busy: false, error: '' } },
+  watch: { remoteRevision() { if (!this.busy && !this.error) void this.load() } },
   async mounted() { const draft = variableDrafts.get(this.access.key(this.podId)); if (draft) Object.assign(this, draft); trackPodEdits(this.access, 'variables', () => !!this.name || !!this.value); await this.load() },
   beforeUnmount() { variableDrafts.set(this.access.key(this.podId), { name: this.name, value: this.value, revision: this.revision }) },
   methods: {
