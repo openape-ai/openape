@@ -588,12 +588,21 @@ exports. A release rollback therefore pairs the previous app with a full profile
 copy. Signed DMGs contain only the app, never an owner or fixture profile, Pods or
 runs. Examples and mail recipes remain explicit commands on an existing Pod.
 
-An archived pod can be deleted after a native owner confirmation bound to its current
-name and revision. Deletion journals pending filesystem/key cleanup, preserves shared
-account connections and original reference files, and erases only keys bound to that
-pod. Cleanup retries after restart or through Clean unused files. Global master chat
-may retain earlier discussion of the pod. Remote OpenApe agents/grants remain visible
-in OpenApe; local deletion does not use administrator APIs or claim remote revocation.
+In the central desktop/browser workspace, open Pod Settings and choose Archive pod.
+Archiving stops intake and preserves knowledge; run history keeps its retention policy.
+An archived Pod exposes Delete Pod with a separate review of its name and deletion
+scope. MCP uses `workspace` → `submit` with `channel: data` and
+`body: { type: 'deletePod', podId, revision, name }` after an explicit deletion request.
+Read current revisions first and poll the same operation ID until applied; deletion
+receipts remain readable after the Pod disappears, and identical retries do not repeat
+cleanup. Archive through `channel: workspace`, `type: update`, `lifecycle: archived`.
+
+Deletion requires an idle runtime and rejects Pods referenced by workflow configuration
+or history. It journals filesystem/key cleanup and removes the current central copies
+through the coordinated publication. Shared accounts, original files, backups and
+shared chat history remain. Remote OpenApe identities/grants are not revoked. The legacy
+local workspace retains its native confirmation; uncoordinated central deletion and
+restore remain disabled. Pending filesystem/key cleanup resumes on restart.
 
 ### Build artifacts and release gates
 

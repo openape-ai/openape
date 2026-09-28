@@ -175,7 +175,14 @@ inspect the actual run/effect ledger, and reconcile the observed outcome before
 allowing further work. There is deliberately no blind retry or destructive
 "reset sync" button. Do not remove the journals to force adoption. Production
 support for operator-assisted recovery and retention remains a rollout concern;
-central mode disables local restore/deletion/cleanup to prevent competing state.
+central mode disables uncoordinated local restore/deletion/cleanup to prevent competing state.
+Pod Settings exposes archive and confirmed deletion. MCP submits the reviewed archived
+Pod through `channel: data`, `type: deletePod` with its current `podId`, `revision`
+and `name`. The executor retains the idle and workflow-reference guards, purges local
+keys, and publishes removal through the normal completion transaction. That transaction
+also removes the deleted Pod’s stored artifacts. Owner-scoped operation receipts remain
+readable after removal; retry the same operation ID after a lost response. Shared chat
+history, prior operation receipts, backups and remote identities/grants remain.
 
 The approved live cutover uses a maintenance window: finish current runs, take paired
 backups, verify the candidate and its exact-source checks, stop the old executor,
