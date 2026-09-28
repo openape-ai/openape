@@ -132,5 +132,14 @@
     ],
     "quickCheck": "ok"
   },
-  "guidanceCommit": "2dfc4d3"
+  "guidanceCommit": "2dfc4d3",
+  "prUnchangedFollowup": {
+    "runId": "052f05f2-cd97-4d59-9037-312c0bf19679",
+    "state": "completed",
+    "summary": "No PR changes; no Telegram message sent. Activity check: 0 of 36 PRs read in detail.",
+    "checkpointRevision": 412,
+    "pending": 0,
+    "blocked": 0,
+    "unresolvedEffects": 0
+  }
 }
