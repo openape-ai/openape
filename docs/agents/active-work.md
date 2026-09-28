@@ -1,5 +1,28 @@
 # Active work
 
+## Pod archive and deletion: issue 1399
+
+[Issue 1399](https://repos.openape.ai/patrick/monorepo/issues/1399), branch
+`feature/issue-1399-pod-deletion`, checkout
+`/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-delete`,
+base `5a84e911567c7c77735c548781ac2379c510b9c0`.
+
+Central desktop/browser Settings now exposes archive and an explicit deletion review.
+MCP uses the same `workspace` command stream with `data/deletePod`. Existing idle,
+archived/name/revision and workflow-reference checks remain enforced. Coordinated
+cleanup erases local keys and files and current central artifacts; operation receipts
+remain owner-scoped and readable after the Pod disappears. Shared chat history, prior
+receipts, backups and remote identities/grants remain.
+
+Verification: full root lint/typecheck, Pods and relay builds, 605 Pods unit/component
+tests, 28 browser layout tests and 27 relay tests pass. New permanent checks cover
+consequential deletion contracts: confirmation/cancel/refusal, cleanup, stable retries,
+receipt ownership and preserving unrelated artifacts. EN desktop/light and DE
+390-pixel/dark deletion reviews were visually inspected.
+[Verification report](https://testrun.openape.ai/r/fjbkBDEeOW0PnVuzaQk7mfyw). Next: native PR, exact-source
+external checks and coordinated relay/desktop rollout; no owner Pod has been deleted.
+
+
 ## OpenApe Reports (September 27, 2026) — deployed; scheduled acceptance pending
 
 Owner follow-up: Reports is the general product; briefings and test runs are specialized formats. Branch `feature/issue-1397-reports-home` from `dc40f3a7` corrects the landing page, private collection labels and default page metadata. This is a presentation change; the existing publication contracts and owning workflow remain in place. Verification and final deployment receipt belong to issue 1397.

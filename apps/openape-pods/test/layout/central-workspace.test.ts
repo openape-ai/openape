@@ -76,3 +76,23 @@ it.each(['en', 'de'] as const)('shows Jev in the active desktop settings with re
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth)
   await page.screenshot({ path: `../../.artifacts/jev-desktop-settings-${language}.png` })
 })
+
+it.each(['en', 'de'] as const)('keeps the deletion review readable in the central workspace (%s)', async (language) => {
+  const fixture = centralFixture()
+  fixture.view.scripts.pod.lifecycle = 'archived'
+  applyLanguage(language)
+  document.documentElement.style.colorScheme = language === 'de' ? 'dark' : 'light'
+  const width = language === 'de' ? 390 : 1280
+  await page.viewport(width, 950)
+  wrapper = mount(CentralWorkspace, { attachTo: document.body, props: { client: fixture.client } })
+  await flushPromises(); await wrapper.find('.central-archived button').trigger('click'); await flushPromises()
+  await wrapper.findAll('.central-tabs button').find(button => button.text() === (language === 'de' ? 'Einstellungen' : 'Settings'))!.trigger('click')
+  await wrapper.get('.pod-lifecycle button').trigger('click'); await flushPromises()
+  const review = wrapper.get('[role="alertdialog"]')
+  review.element.scrollIntoView({ block: 'center' })
+  await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
+  expect(review.text()).toContain('Release monitor')
+  expect(review.element.getBoundingClientRect().width).toBeGreaterThan(250)
+  await page.screenshot({ path: `../../.artifacts/pod-deletion-${language}.png` })
+})

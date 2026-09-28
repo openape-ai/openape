@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PodLifecycle from './PodLifecycle.vue'
 import { t, diagnostic, label } from '../i18n'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import type { CentralClient, CentralCommand, CentralRunDetail, CentralRuntime, CentralStatus, CentralSummary } from '../../contracts/central'
@@ -79,7 +80,12 @@ async function refresh() {
       const target = selected.value
       if (!target || token !== generation) return
       const entry = inventory.find(item => item.id === target.runtimeId)?.workspace.pods.find(item => item.id === target.podId)
-      if (!entry?.online) { current.value = null; return }
+      if (!entry) {
+        generation++; selected.value = null; current.value = null; baseline.value = null; source.value = null; olderRuns.value = []; runDetail.value = null
+        code.value = ''; description.value = ''; runId.value = ''
+        return
+      }
+      if (!entry.online) { current.value = null; return }
       const detail = await props.client.read(target.runtimeId, target.podId)
       if (token !== generation || abort.signal.aborted) return
       const unchanged = !baseline.value || editorState() === savedEditor
@@ -114,7 +120,7 @@ async function send(channel: CentralCommand['channel'], body: Record<string, unk
       operation = await props.client.operation(id)
     }
     if (operation.state !== 'applied') throw new Error(operation.error ?? 'The command could not be confirmed. Inspect its outcome before retrying.')
-    operationId.value = ''; notice.value = 'Saved to your workspace.'
+    operationId.value = ''; notice.value = channel === 'data' && body.type === 'deletePod' ? 'Pod deleted.' : 'Saved to your workspace.'
     await refresh(); resetEditor()
     if (channel === 'scripts') selectSource(parseScriptView(operation.result).source)
   }
@@ -358,6 +364,7 @@ onBeforeUnmount(() => { generation++; abort.abort() })
               </article>
             </section>
             <section v-if="tab === 'Settings'">
+              <PodLifecycle :key="`${current.pod.id}:${current.pod.scripts.pod.revision}`" :pod="current.pod.scripts.pod" @command="send($event.channel, $event.body)" />
               <h2>{{ t('Pod settings') }}</h2><label>{{ t('Name') }}<input v-model="name" maxlength="100"></label><button @click="send('workspace', { type: 'update', id: current.pod.id, revision: baseline.scripts.pod.revision, name, lifecycle: baseline.scripts.pod.lifecycle })">
                 {{ t('Save name') }}
               </button>
