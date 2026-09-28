@@ -1,5 +1,20 @@
 # Active work
 
+## Pods public workspace entry — issue 1403
+
+[Issue 1403](https://repos.openape.ai/patrick/monorepo/issues/1403).
+Checkout `openape-monorepo.worktrees/pods-workspace-landing`, branch
+`feature/issue-1403-pods-workspace-landing`, base `e5c1814c`.
+The relay serves a public workspace landing page at `/` and reuses the existing
+DDISA login handler. The shared welcome screen supports retry, pending submissions
+and failed callbacks; sign-out returns to `/`. The proxy routes only the additional
+exact root path to the relay, preserving agent identity routes.
+Full lint/typecheck, relay build, component/layout checks and the existing real
+DDISA relay E2E provide acceptance. Production discovery for the owner resolves
+to `id.openape.ai` with the workspace callback and S256 PKCE. The native PR records
+the exact tested source, external checks and inspected Test Runs evidence.
+Next step: merge after exact-head checks and deploy the relay plus root proxy route.
+
 ## Pods Variant A — issue 1402
 
 [Issue 1402](https://repos.openape.ai/patrick/monorepo/issues/1402),
