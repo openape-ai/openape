@@ -238,3 +238,24 @@ it('shows when a runtime was last seen, keeps archived Pods archived offline and
   advance(30001)
   expect(store.inventory(actor.owner)[0]).toMatchObject({ online: false, lastSeenAt: 100000, workspace: { pods: [{ online: false, lifecycle: 'archived' }] } })
 })
+
+it('removes deleted Pod artifacts and keeps its owner receipt available without exposing other owners', () => {
+  const { store, actor, other, lease, state } = setup()
+  const pod = state.workspace.pods[0]!
+  const bytes = Buffer.from('Managed Pod content')
+  const hash = createHash('sha256').update(bytes).digest('hex')
+  const otherPodId = randomUUID()
+  store.putArtifact(actor, lease, pod.id, hash, bytes)
+  store.putArtifact(actor, lease, otherPodId, hash, bytes)
+  const command = { channel: 'data' as const, body: { type: 'deletePod', podId: pod.id, revision: pod.revision, name: pod.name } }
+  const id = randomUUID()
+  store.submit(actor.owner, actor.id, 1, command, id); store.claim(actor, lease)
+  state.workspace.pods = []; state.pods = []
+  const result = store.publish(actor, lease, randomUUID(), 1, state, { id, result: { pendingDeletion: 0 }, error: null })
+  store.heartbeat(actor, lease, result.hash)
+  expect(store.visibleOperation(actor.owner, id)).toMatchObject({ state: 'applied', result: { pendingDeletion: 0 } })
+  expect(store.submit(actor.owner, actor.id, 1, command, id).state).toBe('applied')
+  expect(() => store.visibleOperation(other, id)).toThrow('workspace_operation_not_found')
+  expect(store.db.prepare('SELECT pod_id FROM artifacts').all()).toEqual([{ pod_id: otherPodId }])
+  expect(() => store.read(actor.owner, actor.id, pod.id)).toThrow('pod_not_found')
+})

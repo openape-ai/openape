@@ -201,3 +201,40 @@ it('opens Jev, language, accounts and data through the active desktop settings e
   await wrapper.get('.account-status').trigger('click'); await flushPromises()
   expect(wrapper.find('[aria-label="Your accounts"]').exists()).toBe(true)
 })
+
+it('archives before deletion, confirms the reviewed Pod and clears deleted content', async () => {
+  const fixture = await open()
+  const command = vi.spyOn(fixture.client, 'command').mockImplementation(async (_runtime, _revision, command, id) => {
+    if (command.channel === 'workspace') {
+      fixture.view.scripts.pod.lifecycle = 'archived'; fixture.view.scripts.pod.revision++
+    }
+    if (command.channel === 'data') fixture.host.workspace.pods = fixture.host.workspace.pods.filter(pod => pod.id !== fixture.view.id)
+    return { id, runtimeId: fixture.host.id, command, state: 'applied', result: null, error: null, revision: ++fixture.host.revision }
+  })
+  const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.text() === text)!.trigger('click'); await flushPromises() }
+  await click('Settings')
+  expect(wrapper!.text()).not.toContain('Delete Pod…')
+  await click('Archive pod')
+  expect(command).toHaveBeenLastCalledWith(fixture.host.id, 1, { channel: 'workspace', body: { type: 'update', id: fixture.view.id, revision: 1, name: 'Release monitor', lifecycle: 'archived' } }, expect.any(String))
+  await click('Delete Pod…')
+  expect(wrapper!.get('[role="alertdialog"]').text()).toContain('Permanently delete Release monitor?')
+  await click('Cancel')
+  expect(command).toHaveBeenCalledTimes(1)
+  expect(wrapper!.find('[role="alertdialog"]').exists()).toBe(false)
+  await click('Delete Pod…'); await click('Delete Pod')
+  expect(command).toHaveBeenLastCalledWith(fixture.host.id, 2, { channel: 'data', body: { type: 'deletePod', podId: fixture.view.id, revision: 2, name: 'Release monitor' } }, expect.any(String))
+  expect(wrapper!.text()).toContain('Pod deleted.')
+  expect(wrapper!.text()).not.toContain('Release monitor')
+  expect(wrapper!.find('.central-tabs').exists()).toBe(false)
+})
+
+it('shows deletion refusal without removing the Pod or repeating the command', async () => {
+  const fixture = await open()
+  fixture.view.scripts.pod.lifecycle = 'archived'; fixture.wake(); await flushPromises()
+  const command = vi.spyOn(fixture.client, 'command').mockImplementation(async (_runtime, _revision, command, id) => ({ id, runtimeId: fixture.host.id, command, state: 'failed', result: null, error: 'Pod is referenced by workflow configuration or history', revision: fixture.host.revision }))
+  const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.text() === text)!.trigger('click'); await flushPromises() }
+  await click('Settings'); await click('Delete Pod…'); await click('Delete Pod')
+  expect(wrapper!.text()).toContain('Pod is referenced by workflow configuration or history')
+  expect(wrapper!.text()).toContain('Release monitor')
+  expect(command).toHaveBeenCalledOnce()
+})
