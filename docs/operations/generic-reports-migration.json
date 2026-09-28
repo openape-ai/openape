@@ -1,0 +1,394 @@
+{
+  "inspectedAt": "2026-09-28",
+  "base": "6b02cfc36508e1fe79dd4c4ffcbe81dc78edc85d",
+  "pods": [
+    {
+      "id": "43de5318-23aa-4f24-94f8-829a7e39dfbc",
+      "name": "Mail-Wissen · Delta Mind",
+      "lifecycle": "archived",
+      "hash": null,
+      "epoch": 0,
+      "schedule": {
+        "spec": {
+          "kind": "interval",
+          "seconds": 3600
+        },
+        "enabled": false,
+        "revision": 1,
+        "nextAt": 1789387513172,
+        "error": null,
+        "pending": 0,
+        "blocked": 0,
+        "blockedSince": null,
+        "concurrency": 2
+      },
+      "publisher": [],
+      "codeReports": false,
+      "checkpointRevision": 0
+    },
+    {
+      "id": "8c28f84b-afed-4de6-aaed-1eb0d6a8aea7",
+      "name": "Mail-Alarm",
+      "lifecycle": "archived",
+      "hash": null,
+      "epoch": 2,
+      "schedule": {
+        "spec": {
+          "kind": "interval",
+          "seconds": 900
+        },
+        "enabled": false,
+        "revision": 1,
+        "nextAt": 1789454478586,
+        "error": null,
+        "pending": 0,
+        "blocked": 0,
+        "blockedSince": null,
+        "concurrency": 2
+      },
+      "publisher": [],
+      "codeReports": false,
+      "checkpointRevision": 0
+    },
+    {
+      "id": "2e271ddb-0e23-4b44-98ad-4e7a9dc289bb",
+      "name": "Mail-Kurzbericht",
+      "lifecycle": "active",
+      "hash": "9a3d59ecbdf99bf1999ce4db270fba8abd155c3a5cbcacd3e11cc9013c9e4058",
+      "epoch": 6,
+      "schedule": {
+        "spec": {
+          "kind": "interval",
+          "seconds": 900
+        },
+        "enabled": false,
+        "revision": 3,
+        "nextAt": 1789970044567,
+        "error": "Pod tool call cancelled",
+        "pending": 1,
+        "blocked": 1,
+        "blockedSince": 1789827108083,
+        "concurrency": 2
+      },
+      "publisher": [],
+      "codeReports": false,
+      "checkpointRevision": 119
+    },
+    {
+      "id": "16e1ecdd-5af0-4bc6-96c9-68019c89efad",
+      "name": "Rechnungs-Emails ablegen",
+      "lifecycle": "archived",
+      "hash": null,
+      "epoch": 1,
+      "schedule": {
+        "spec": {
+          "kind": "interval",
+          "seconds": 900
+        },
+        "enabled": false,
+        "revision": 1,
+        "nextAt": 1789744637022,
+        "error": null,
+        "pending": 0,
+        "blocked": 0,
+        "blockedSince": null,
+        "concurrency": 2
+      },
+      "publisher": [],
+      "codeReports": false,
+      "checkpointRevision": 0
+    },
+    {
+      "id": "242121ca-59b7-4654-a26b-0e44d89f6992",
+      "name": "Test",
+      "lifecycle": "archived",
+      "hash": null,
+      "epoch": 0,
+      "schedule": {
+        "spec": {
+          "kind": "interval",
+          "seconds": 60
+        },
+        "enabled": false,
+        "revision": 1,
+        "nextAt": 1790089137784,
+        "error": null,
+        "pending": 0,
+        "blocked": 0,
+        "blockedSince": null,
+        "concurrency": 2
+      },
+      "publisher": [],
+      "codeReports": false,
+      "checkpointRevision": 0
+    },
+    {
+      "id": "98c32f74-ffaf-4628-bd41-95cea821572f",
+      "name": "IURIO PR monitor",
+      "lifecycle": "active",
+      "hash": "ee652c30a3934c735f982ad3338bcebb4256b0632e9058bfe7b7a84be2cdbe51",
+      "epoch": 41,
+      "schedule": {
+        "spec": {
+          "kind": "interval",
+          "seconds": 900
+        },
+        "enabled": true,
+        "revision": 2,
+        "nextAt": 1790595022294,
+        "error": null,
+        "pending": 0,
+        "blocked": 0,
+        "blockedSince": null,
+        "concurrency": 2
+      },
+      "publisher": [],
+      "codeReports": false,
+      "checkpointRevision": 401
+    },
+    {
+      "id": "e8062ed3-22a0-40f9-8f88-c2c239129331",
+      "name": "zaz Service-Agent · Test",
+      "lifecycle": "archived",
+      "hash": "9c2d27d33266f96aa49e06b11b93a866da641c31f564eceb95b8dcef68feb778",
+      "epoch": 2,
+      "schedule": {
+        "spec": null,
+        "enabled": false,
+        "revision": 0,
+        "nextAt": null,
+        "error": null,
+        "pending": 0,
+        "blocked": 0,
+        "blockedSince": null,
+        "concurrency": 2
+      },
+      "publisher": [],
+      "codeReports": false,
+      "checkpointRevision": 2
+    },
+    {
+      "id": "93139662-c618-48e2-8a1e-36299aff36f2",
+      "name": "zaz Service-Agent",
+      "lifecycle": "active",
+      "hash": "3cdc600ced5230a5b4b7203676f821d5ec173c55ff2359b63a5d6126094ffb6e",
+      "epoch": 2,
+      "schedule": {
+        "spec": {
+          "kind": "interval",
+          "seconds": 60
+        },
+        "enabled": true,
+        "revision": 1,
+        "nextAt": 1790595226303,
+        "error": "The permission service rejected the request (503); inspect the grant before retrying",
+        "pending": 1,
+        "blocked": 1,
+        "blockedSince": 1790432928433,
+        "concurrency": 2
+      },
+      "publisher": [],
+      "codeReports": false,
+      "checkpointRevision": 2
+    },
+    {
+      "id": "92d70bae-c6ad-4d21-8180-605d7d8b7ede",
+      "name": "IURIO Task monitor",
+      "lifecycle": "active",
+      "hash": "8cb14586e14d00e0d73c4175cbd0f2ff857b65426034244f129c183a0caf1a17",
+      "epoch": 8,
+      "schedule": {
+        "spec": {
+          "kind": "interval",
+          "seconds": 300
+        },
+        "enabled": true,
+        "revision": 2,
+        "nextAt": 1790595475691,
+        "error": null,
+        "pending": 0,
+        "blocked": 0,
+        "blockedSince": null,
+        "concurrency": 2
+      },
+      "publisher": [],
+      "codeReports": false,
+      "checkpointRevision": 7
+    },
+    {
+      "id": "449fa0fc-6f5f-4948-9cd9-6d69e7abb455",
+      "name": "Timing test · 15-minute no-op",
+      "lifecycle": "active",
+      "hash": "b9a849f899d6fffd19b74ad41db960a616303754547533d09aae397a89d8c760",
+      "epoch": 0,
+      "schedule": {
+        "spec": {
+          "kind": "interval",
+          "seconds": 900
+        },
+        "enabled": true,
+        "revision": 1,
+        "nextAt": 1790595238200,
+        "error": null,
+        "pending": 0,
+        "blocked": 0,
+        "blockedSince": null,
+        "concurrency": 2
+      },
+      "publisher": [],
+      "codeReports": false,
+      "checkpointRevision": 0
+    },
+    {
+      "id": "9443d95c-a224-42d1-b138-9988deb0885f",
+      "name": "Timing test · streamlined setup",
+      "lifecycle": "paused",
+      "hash": "b9a849f899d6fffd19b74ad41db960a616303754547533d09aae397a89d8c760",
+      "epoch": 0,
+      "schedule": {
+        "spec": {
+          "kind": "interval",
+          "seconds": 900
+        },
+        "enabled": false,
+        "revision": 2,
+        "nextAt": 1790345609353,
+        "error": null,
+        "pending": 0,
+        "blocked": 0,
+        "blockedSince": null,
+        "concurrency": 2
+      },
+      "publisher": [],
+      "codeReports": false,
+      "checkpointRevision": 0
+    },
+    {
+      "id": "11c24c9f-3efa-469c-a096-c6392f998238",
+      "name": "Daily action website",
+      "lifecycle": "paused",
+      "hash": "37a31b484be182f95002cd05f9bf93f0730c7d4ac7bb607f1ee8a86dcbc8115f",
+      "epoch": 7,
+      "schedule": {
+        "spec": {
+          "kind": "daily",
+          "time": "08:00",
+          "timezone": "Europe/Vienna"
+        },
+        "enabled": false,
+        "revision": 1,
+        "nextAt": 1790402400000,
+        "error": null,
+        "pending": 0,
+        "blocked": 0,
+        "blockedSince": null,
+        "concurrency": 2
+      },
+      "publisher": [],
+      "codeReports": false,
+      "checkpointRevision": 0
+    },
+    {
+      "id": "991849f7-b612-4cf9-8201-5b78b4a12e55",
+      "name": "Morgenbriefing · Calendar-Bot",
+      "lifecycle": "active",
+      "hash": "ce3ac5cbfc2b8e0f910dd036a8a4a23b62d42833797c0e25cac19c443e4c1009",
+      "epoch": 34,
+      "schedule": {
+        "spec": {
+          "kind": "daily",
+          "time": "07:00",
+          "timezone": "Europe/Vienna"
+        },
+        "enabled": false,
+        "revision": 3,
+        "nextAt": 1790485200000,
+        "error": null,
+        "pending": 0,
+        "blocked": 0,
+        "blockedSince": null,
+        "concurrency": 2
+      },
+      "publisher": [
+        {
+          "id": "8b4b409e-056e-48cf-9dd7-7e07d1e47161",
+          "revision": 1,
+          "authentication": {
+            "type": "ddisaAgent",
+            "credential": "reports_publisher_key",
+            "subject": "reports-briefing-cb6bf26a+patrick+hofmann_eco@id.openape.ai",
+            "issuer": "https://id.openape.ai"
+          }
+        }
+      ],
+      "codeReports": true,
+      "checkpointRevision": 26
+    },
+    {
+      "id": "890bca63-dc4d-4e93-a5cc-cc8c7bfe489d",
+      "name": "Mail-Prüfung · Morgenbriefing",
+      "lifecycle": "active",
+      "hash": "513896caefdb86b74e338c7c5795ce687c3bb3459bc4b303287fd9244ab7e27f",
+      "epoch": 58,
+      "schedule": {
+        "spec": {
+          "kind": "interval",
+          "seconds": 60
+        },
+        "enabled": true,
+        "revision": 3,
+        "nextAt": 1790595232428,
+        "error": null,
+        "pending": 0,
+        "blocked": 0,
+        "blockedSince": null,
+        "concurrency": 2
+      },
+      "publisher": [],
+      "codeReports": false,
+      "checkpointRevision": 2359
+    },
+    {
+      "id": "51832859-53e0-4cbc-a44c-61ad76aad931",
+      "name": "Morgenbriefing · Kalender und Issues",
+      "lifecycle": "active",
+      "hash": "c0d4b7c659e552c4f3b1dfb9a0ab4c16a49696d79cd40e69434ccc2d5b5b791c",
+      "epoch": 11,
+      "schedule": {
+        "spec": null,
+        "enabled": false,
+        "revision": 0,
+        "nextAt": null,
+        "error": null,
+        "pending": 0,
+        "blocked": 0,
+        "blockedSince": null,
+        "concurrency": 2
+      },
+      "publisher": [],
+      "codeReports": false,
+      "checkpointRevision": 0
+    },
+    {
+      "id": "6c9d0c12-32fa-4d56-a84a-9a035a030914",
+      "name": "Morgenbriefing · Redaktion",
+      "lifecycle": "active",
+      "hash": "c3836035970f26e5e027407784419e4bff550d48292e9a03150e49352159d052",
+      "epoch": 1,
+      "schedule": {
+        "spec": null,
+        "enabled": false,
+        "revision": 0,
+        "nextAt": null,
+        "error": null,
+        "pending": 0,
+        "blocked": 0,
+        "blockedSince": null,
+        "concurrency": 2
+      },
+      "publisher": [],
+      "codeReports": false,
+      "checkpointRevision": 0
+    }
+  ]
+}

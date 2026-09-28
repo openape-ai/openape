@@ -27,7 +27,7 @@ export async function loadRunBySlug(event: H3Event, slug: string): Promise<RunRo
   const db = useDb()
   const run = await db.select().from(runs).where(and(eq(runs.slug, slug), isNull(runs.deletedAt))).get()
   if (!run) throw createProblemError({ status: 404, title: 'Run not found' })
-  if (run.reportType === 'briefing' && run.visibility === 'private') {
+  if (['briefing', 'document'].includes(run.reportType) && run.visibility === 'private') {
     privateReportHeaders(event)
     const principal = await reportOwner(event)
     if (principal.subject !== run.createdBy) throw createProblemError({ status: 404, title: 'Report not found' })

@@ -4,7 +4,7 @@ export const runs = sqliteTable('runs', {
   id: text('id').primaryKey(),
   /** Unguessable share token — the public report URL is /r/<slug>. */
   slug: text('slug').notNull().unique(),
-  reportType: text('report_type', { enum: ['test', 'briefing'] }).notNull().default('test'),
+  reportType: text('report_type', { enum: ['test', 'briefing', 'document'] }).notNull().default('test'),
   visibility: text('visibility', { enum: ['shared', 'private'] }).notNull().default('shared'),
   title: text('title').notNull(),
   project: text('project'),
@@ -91,5 +91,22 @@ export const reportPublications = sqliteTable('report_publications', {
   digest: text('digest').notNull(),
   idempotencyKey: text('idempotency_key').notNull(),
   publisher: text('publisher').notNull(),
+  createdAt: integer('created_at').notNull(),
+})
+
+export const documentPublications = sqliteTable('document_publications', {
+  id: text('id').primaryKey(),
+  seriesId: text('series_id'),
+  version: integer('version').notNull(),
+  owner: text('owner').notNull(),
+  publisher: text('publisher').notNull(),
+  idempotencyKey: text('idempotency_key').notNull(),
+  digest: text('digest').notNull(),
+  artifactDigest: text('artifact_digest').notNull(),
+  policyVersion: text('policy_version').notNull(),
+  category: text('category'),
+  categoryKey: text('category_key'),
+  language: text('language'),
+  artifact: text('artifact').notNull(),
   createdAt: integer('created_at').notNull(),
 })
