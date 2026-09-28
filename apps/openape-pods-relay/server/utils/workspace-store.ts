@@ -178,6 +178,10 @@ export class WorkspaceStore {
       const operation = this.operation(actor.owner, centralId(completion.id))
       if (operation.runtimeId !== row.id || !['started', 'unknown'].includes(operation.state)) throw new ProtocolError('workspace_operation_conflict', 409)
       this.db.prepare('UPDATE operations SET state=?,result=?,error=?,revision=? WHERE id=?').run(completion.error ? 'failed' : 'applied', result, completion.error, revision, operation.id)
+      if (operation.command.channel === 'data' && operation.command.body.type === 'deletePod') {
+        const podId = centralId(operation.command.body.podId)
+        if (!this.scope(row).workspace.pods.some(pod => pod.id === podId)) this.db.prepare('DELETE FROM artifacts WHERE runtime_id=? AND pod_id=?').run(row.id, podId)
+      }
     }
     this.db.prepare('INSERT INTO publications VALUES(?,?,?,?)').run(id, row.id, requestHash, revision)
     this.db.prepare('DELETE FROM staged_parts WHERE runtime_id=?').run(row.id)
@@ -343,6 +347,7 @@ export class WorkspaceStore {
   visibleOperation(owner: Owner, id: string): CentralOperation {
     const operation = this.operation(owner, id)
     const row = this.ready(owner, operation.runtimeId)
+    if (operation.command.channel === 'data' && operation.command.body.type === 'deletePod') return operation
     this.ready(owner, operation.runtimeId, commandPodIds(operation.command, this.scope(row)))
     return operation
   }

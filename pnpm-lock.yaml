@@ -1220,6 +1220,15 @@ importers:
       nuxt:
         specifier: 'catalog:'
         version: 4.5.2(b160ccb43fc266624c2f929ad51ac29c)
+      postcss:
+        specifier: '>=8.5.18'
+        version: 8.5.25
+      postcss-value-parser:
+        specifier: 4.2.0
+        version: 4.2.0
+      sanitize-html:
+        specifier: ^2.14.0
+        version: 2.17.5
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.1
@@ -1227,6 +1236,9 @@ importers:
         specifier: 'catalog:'
         version: 2.4.0
     devDependencies:
+      '@types/sanitize-html':
+        specifier: ^2.13.0
+        version: 2.16.1
       '@vitejs/plugin-vue':
         specifier: 'catalog:'
         version: 6.0.7(vite@8.2.1(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))(vue@3.5.41(typescript@5.9.3))

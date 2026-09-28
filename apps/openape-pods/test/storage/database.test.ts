@@ -111,3 +111,30 @@ describe('durable pod state', () => {
     expect(readFileSync(store.path).equals(before)).toBe(true)
   })
 })
+
+it('migrates version 23 receipts intact and allows detaching only completed effects', () => {
+  let store = fixture(); const pod = store.createPod({ name: 'Receipts' })
+  const run = '00000000-0000-4000-8000-000000000001'
+  store.db.prepare('INSERT INTO runs VALUES(?,?,?,\'completed\',1,2,\'Done\',NULL,0,1)').run(run, pod.id, digest('script'))
+  store.db.prepare('INSERT INTO effect_ledger VALUES(?,?,?,?,?,\'completed\',?)').run(pod.id, 'delivered', 'http.request', digest('input'), run, '{"receipt":"original"}')
+  const receipts = store.db.prepare('SELECT * FROM effect_ledger').all()
+  store.db.exec(`
+    CREATE TABLE legacy_effects(pod_id TEXT NOT NULL REFERENCES pods(id),effect_key TEXT NOT NULL,operation TEXT NOT NULL,input_hash TEXT NOT NULL,run_id TEXT NOT NULL REFERENCES runs(id),state TEXT NOT NULL,result TEXT,PRIMARY KEY(pod_id,effect_key));
+    INSERT INTO legacy_effects SELECT * FROM effect_ledger;
+    DROP TABLE effect_ledger;
+    ALTER TABLE legacy_effects RENAME TO effect_ledger;
+    DROP TABLE run_deletion_jobs;
+    DROP INDEX runs_retention;
+    DROP INDEX accepted_events_run;
+    DROP INDEX workflow_nodes_run;
+    PRAGMA user_version=23;
+  `)
+  store = reopen(store)
+  expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(24)
+  expect(store.db.prepare('SELECT * FROM effect_ledger').all()).toEqual(receipts)
+  store.db.prepare('UPDATE effect_ledger SET run_id=NULL').run()
+  store.db.prepare('DELETE FROM runs').run()
+  expect(store.db.prepare('SELECT result FROM effect_ledger').get()?.result).toBe('{"receipt":"original"}')
+  expect(() => store.db.prepare('INSERT INTO effect_ledger VALUES(?,?,?,?,NULL,\'intent\',NULL)').run(pod.id, 'unresolved', 'http.request', digest('input'))).toThrow('CHECK')
+  expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+})

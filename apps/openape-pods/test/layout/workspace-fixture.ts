@@ -77,6 +77,7 @@ export function installWorkspace(overrides: Partial<PodsBridge> = {}): PodsBridg
     runs: async () => structuredClone(runs),
     scheduling: async () => ({ spec: null, enabled: false, revision: 1, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }),
     master: async () => ({ connected: true, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }),
+    mcpAccess: async () => ({ mode: 'off', duration: 'hour', expiresAt: null }),
     runtimeApproval: async () => ({ enabled: false }),
     codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }), chats: async () => ({ conversations: [], activeConversationId: null }),
     workflows: async () => ({ workflows: [], runs: [] }),

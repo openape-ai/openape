@@ -23,7 +23,7 @@ async function page(view: OnboardingView) {
 
 it('shows only the Codex and DDISA accounts', async () => {
   const { wrapper } = await page(state)
-  expect(wrapper.findAll('section.setup-connection').map(item => item.attributes('aria-label'))).toEqual(['Codex / GPT account', 'Your DDISA account'])
+  expect(wrapper.findAll('section.setup-connection').map(item => item.attributes('aria-label'))).toEqual(['DDISA/OpenApe', 'Codex'])
   for (const hidden of ['mail@example.invalid', 'Telegram', 'Microsoft', 'Expected account', 'Identity provider', 'Default for new pods', 'Use for new pods', 'Allow requests from this provider']) expect(wrapper.text()).not.toContain(hidden)
   expect(wrapper.findAll('select')).toHaveLength(0)
   expect(wrapper.findAll('input')).toHaveLength(1)
@@ -33,9 +33,9 @@ it('shows only the Codex and DDISA accounts', async () => {
 it('offers sign-in for both accounts when neither is signed in', async () => {
   const { wrapper, onboarding } = await page({ ...state, connections: [], owner: null })
   expect(wrapper.text().match(/Not signed in/g)).toHaveLength(2)
-  expect(buttons(wrapper, 'Codex / GPT account')).toEqual(['Sign in'])
-  expect(buttons(wrapper, 'Your DDISA account')).toEqual(['Sign in'])
-  await wrapper.get('section[aria-label="Codex / GPT account"] button').trigger('click'); await flushPromises()
+  expect(buttons(wrapper, 'Codex')).toEqual(['Sign in'])
+  expect(buttons(wrapper, 'DDISA/OpenApe')).toEqual(['Sign in'])
+  await wrapper.get('section[aria-label="Codex"] button').trigger('click'); await flushPromises()
   expect(onboarding).toHaveBeenLastCalledWith({ type: 'connect', provider: 'chatgpt', account: '' })
   await wrapper.get('input[type="email"]').setValue('owner@example.invalid')
   await wrapper.get('form').trigger('submit'); await flushPromises()
@@ -44,14 +44,14 @@ it('offers sign-in for both accounts when neither is signed in', async () => {
 })
 it('shows both signed-in accounts with their addresses', async () => {
   const { wrapper } = await page(state)
-  expect(wrapper.get('section[aria-label="Codex / GPT account"]').text()).toContain('model@example.invalid · Signed in')
-  expect(wrapper.get('section[aria-label="Your DDISA account"]').text()).toContain('owner@example.invalid · Signed in')
-  expect(buttons(wrapper, 'Codex / GPT account')).toEqual(['Disconnect'])
-  expect(buttons(wrapper, 'Your DDISA account')).toEqual(['Sign in again', 'Disconnect'])
+  expect(wrapper.get('section[aria-label="Codex"]').text()).toContain('model@example.invalid · Signed in')
+  expect(wrapper.get('section[aria-label="DDISA/OpenApe"]').text()).toContain('owner@example.invalid · Signed in')
+  expect(buttons(wrapper, 'Codex')).toEqual(['Disconnect'])
+  expect(buttons(wrapper, 'DDISA/OpenApe')).toEqual(['Sign in again', 'Disconnect'])
   expect((wrapper.get('input[type="email"]').element as HTMLInputElement).value).toBe('owner@example.invalid')
   wrapper.unmount()
 })
-it.each([['Codex / GPT account', codex, { type: 'connect', provider: 'chatgpt', account: '' }], ['Your DDISA account', owner, { type: 'connect', provider: 'openape', account: 'owner@example.invalid' }]] as const)('asks to sign in again when the %s expired', async (section, id, command) => {
+it.each([['Codex', codex, { type: 'connect', provider: 'chatgpt', account: '' }], ['DDISA/OpenApe', owner, { type: 'connect', provider: 'openape', account: 'owner@example.invalid' }]] as const)('asks to sign in again when the %s expired', async (section, id, command) => {
   const { wrapper, onboarding } = await page({ ...state, connections: state.connections.map(item => item.id === id ? { ...item, state: 'expired', error: 'Sign-in expired; reconnect' } : item) })
   expect(wrapper.get(`section[aria-label="${section}"]`).text()).toContain('Sign-in expired')
   const again = wrapper.get(`section[aria-label="${section}"]`).findAll('button').find(button => button.text() === 'Sign in again')!
@@ -62,7 +62,7 @@ it.each([['Codex / GPT account', codex, { type: 'connect', provider: 'chatgpt', 
 it('confirms before switching the DDISA account', async () => {
   const { wrapper, onboarding } = await page(state)
   await wrapper.get('input[type="email"]').setValue('other@example.invalid')
-  expect(buttons(wrapper, 'Your DDISA account')).toContain('Switch account')
+  expect(buttons(wrapper, 'DDISA/OpenApe')).toContain('Switch account')
   await wrapper.get('form').trigger('submit'); await flushPromises()
   expect(onboarding).toHaveBeenCalledTimes(1)
   expect(wrapper.text()).toContain('Your pods receive new agents under this account')
@@ -78,7 +78,7 @@ it('shows device sign-in and cancels only that pending connection', async () => 
 })
 it('requires a visible disconnect confirmation', async () => {
   const { wrapper, onboarding } = await page(state)
-  await wrapper.get('section[aria-label="Your DDISA account"]').findAll('button').find(button => button.text() === 'Disconnect')!.trigger('click'); await flushPromises()
+  await wrapper.get('section[aria-label="DDISA/OpenApe"]').findAll('button').find(button => button.text() === 'Disconnect')!.trigger('click'); await flushPromises()
   expect(onboarding).toHaveBeenCalledTimes(1)
   expect(wrapper.text()).toContain('affected pods paused')
   await wrapper.findAll('button').find(button => button.text() === 'Confirm disconnect')!.trigger('click'); await flushPromises()
