@@ -1,4 +1,5 @@
 <script lang="ts">
+import { usePodAccess, trackPodEdits } from './pod-access'
 import { emptyPackages, parsePackages } from '../contracts/dependencies'
 import { t, diagnostic, number } from './i18n'
 import { defineComponent } from 'vue'
@@ -13,7 +14,8 @@ export default defineComponent({
   components: { ScriptCode, ScriptPackages },
   props: { pod: { type: Object as PropType<StoredPod>, required: true } },
   emits: ['changed', 'values', 'ran'],
-  data() { return { available: [] as { name: string, expression: string }[], buffer: scriptBuffer(this.pod.id), choice: '', pending: null as ScriptSelection | 'new' | 'current' | null } },
+  setup(props) { const access = usePodAccess(); return { access, remoteRevision: access.revision, buffer: scriptBuffer(access.key(props.pod.id)) } },
+  data() { return { available: [] as { name: string, expression: string }[], choice: '', pending: null as ScriptSelection | 'new' | 'current' | null } },
   computed: {
     dependenciesReady(): boolean { return this.buffer.packages === JSON.stringify(this.buffer.source?.packages ?? emptyPackages(), null, 2) && (this.buffer.source?.dependenciesPrepared ?? true) },
     dirty(): boolean { return isDirty(this.buffer) },
@@ -23,12 +25,12 @@ export default defineComponent({
     sourceLabel(): string { const source = this.buffer.source; return source?.kind === 'version' ? t('Version {id}', { id: source.id.slice(0, 12) }) : source ? t('Draft {id} · revision {revision}', { id: source.id.slice(0, 8), revision: source.revision }) : t('New script') },
     evidence(): string { return this.buffer.source?.evidence ? JSON.stringify(JSON.parse(this.buffer.source.evidence) as unknown, null, 2) : '' },
   },
-  watch: { 'buffer.source': { handler() { this.syncChoice() } } },
-  async mounted() { if (!this.buffer.busy) { if (!this.buffer.view) await this.load(); else await this.refresh(false) } this.syncChoice(); await this.loadAvailable(); if (!this.buffer.source && !this.buffer.editing && this.buffer.view) await this.open('new') },
+  watch: { remoteRevision() { if (!this.buffer.busy && !this.buffer.error && !this.dirty) void this.refresh(false) }, 'buffer.source': { handler() { this.syncChoice() } } },
+  async mounted() { trackPodEdits(this.access, 'script', () => this.dirty); if (!this.buffer.busy) { if (!this.buffer.view) await this.load(); else await this.refresh(false) } this.syncChoice(); await this.loadAvailable(); if (!this.buffer.source && !this.buffer.editing && this.buffer.view) await this.open('new') },
   methods: {
     t, diagnostic, number,
     async loadAvailable() {
-      try { const resources = await window.pods.resources({ type: 'list', podId: this.pod.id }); this.available = [...(resources.variables ?? []).map(item => ({ name: item.name, expression: `context.variables[${JSON.stringify(item.name)}]` })), ...resources.resources.filter(item => item.kind === 'credential' && item.state === 'ready').map(item => ({ name: item.name, expression: `await context.credentials.get(${JSON.stringify(item.name)})` }))] }
+      try { const resources = await this.access.api.resources({ type: 'list', podId: this.pod.id }); this.available = [...(resources.variables ?? []).map(item => ({ name: item.name, expression: `context.variables[${JSON.stringify(item.name)}]` })), ...resources.resources.filter(item => item.kind === 'credential' && item.state === 'ready').map(item => ({ name: item.name, expression: `await context.credentials.get(${JSON.stringify(item.name)})` }))] }
       catch (error) { this.buffer.error = error instanceof Error ? error.message : 'Could not load variables' }
     },
     async prepareRun() {
@@ -40,20 +42,20 @@ export default defineComponent({
     },
     async finishRun() {
       await this.activate(); if (this.buffer.error) return
-      try { if (!this.buffer.source?.hash) throw new Error('Validate the script before running'); await window.pods.runs({ type: 'start', podId: this.pod.id, expectedScript: this.buffer.source.hash }); this.$emit('ran') }
+      try { if (!this.buffer.source?.hash) throw new Error('Validate the script before running'); await this.access.api.runs({ type: 'start', podId: this.pod.id, expectedScript: this.buffer.source.hash }); this.$emit('ran') }
       catch (error) { this.buffer.error = error instanceof Error ? error.message : 'Could not start run' }
     },
     syncChoice() { const source = this.buffer.source; this.choice = source ? `${source.kind}:${source.id}` : '' },
     apply(view: ScriptView) { this.buffer.view = view; this.buffer.source = view.source; this.buffer.code = view.source?.code ?? ''; this.buffer.packages = JSON.stringify(view.source?.packages ?? emptyPackages(), null, 2); this.buffer.toolCapabilities = view.source?.capabilities.filter(item => !item.startsWith('credential.')) ?? []; this.buffer.editing = !!view.source && this.pod.lifecycle !== 'archived'; this.buffer.compare = null; this.syncChoice() },
     async load(selection?: ScriptSelection) {
       this.buffer.busy = true; this.buffer.error = ''
-      try { this.apply(await window.pods.scripts({ type: 'list', podId: this.pod.id, ...(selection ? { selection } : {}) })) }
+      try { this.apply(await this.access.api.scripts({ type: 'list', podId: this.pod.id, ...(selection ? { selection } : {}) })) }
       catch (error) { this.buffer.error = error instanceof Error ? error.message : 'Could not load script' }
       finally { this.buffer.busy = false; this.syncChoice() }
     },
     choose() {
       const [kind, id] = this.choice.split(':')
-      if (kind !== 'version' && kind !== 'draft') return
+      if (!id || (kind !== 'version' && kind !== 'draft')) return
       this.requestSelection({ kind, id }); this.syncChoice()
     },
     requestSelection(selection: ScriptSelection | 'new' | 'current') {
@@ -94,13 +96,13 @@ export default defineComponent({
     },
     async command(command: ScriptCommand, message: string) {
       this.buffer.busy = true; this.buffer.error = ''; this.buffer.message = ''
-      try { this.apply(await window.pods.scripts(command)); this.buffer.message = message }
+      try { this.apply(await this.access.api.scripts(command)); this.buffer.message = message }
       catch (error) { this.buffer.error = error instanceof Error ? error.message : 'Script operation failed' }
       finally { this.buffer.busy = false }
     },
     async refresh(announce = true) {
       this.buffer.busy = true; this.buffer.error = ''
-      try { const view = await window.pods.scripts({ type: 'list', podId: this.pod.id }); if (!this.dirty) { this.apply(view); return } if (this.buffer.source && (view.resourceEpoch !== this.buffer.view?.resourceEpoch || view.pod.revision !== this.buffer.view?.pod.revision)) { this.buffer.source.credentialAccessApproved = false; this.buffer.source.validated = false; this.buffer.source.evidence = null } this.buffer.view = view; if (announce) this.buffer.message = 'History refreshed. Your editor text is preserved; reopen a draft to load its latest revision, or save as a new draft.' }
+      try { const view = await this.access.api.scripts({ type: 'list', podId: this.pod.id }); if (!this.dirty) { this.apply(view); return } if (this.buffer.source && (view.resourceEpoch !== this.buffer.view?.resourceEpoch || view.pod.revision !== this.buffer.view?.pod.revision)) { this.buffer.source.credentialAccessApproved = false; this.buffer.source.validated = false; this.buffer.source.evidence = null } this.buffer.view = view; if (announce) this.buffer.message = 'History refreshed. Your editor text is preserved; reopen a draft to load its latest revision, or save as a new draft.' }
       catch (error) { this.buffer.error = error instanceof Error ? error.message : 'Could not refresh scripts' }
       finally { this.buffer.busy = false }
     },
@@ -108,7 +110,7 @@ export default defineComponent({
     async compare() {
       const active = this.buffer.view?.pod.activeScript; if (!active) return
       this.buffer.busy = true; this.buffer.error = ''
-      try { const view = await window.pods.scripts({ type: 'list', podId: this.pod.id, selection: { kind: 'version', id: active } }); this.buffer.compare = view.source!.code }
+      try { const view = await this.access.api.scripts({ type: 'list', podId: this.pod.id, selection: { kind: 'version', id: active } }); this.buffer.compare = view.source!.code }
       catch (error) { this.buffer.error = error instanceof Error ? error.message : 'Could not load comparison' }
       finally { this.buffer.busy = false }
     },

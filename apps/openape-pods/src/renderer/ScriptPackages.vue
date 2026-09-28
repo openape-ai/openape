@@ -1,4 +1,5 @@
 <script lang="ts">
+import { usePodAccess } from './pod-access'
 import { defineComponent } from 'vue'
 import { parsePackages } from '../contracts/dependencies'
 import type { PackageOption } from '../contracts/package-catalog'
@@ -7,6 +8,7 @@ import { t, diagnostic } from './i18n'
 export default defineComponent({
   props: { modelValue: { type: String, required: true }, disabled: Boolean },
   emits: ['update:modelValue'],
+  setup() { return { access: usePodAccess() } },
   data() { return { selected: '', adding: false, query: '', searching: false, searched: false, results: [] as PackageOption[], candidate: null as PackageOption | null, error: '', requestId: 0 } },
   computed: {
     packages(): Record<string, string> { return parsePackages(JSON.parse(this.modelValue)).dependencies },
@@ -51,7 +53,7 @@ export default defineComponent({
       <span class="package-icon" aria-hidden="true">◇</span><strong>{{ name }}</strong><code>{{ version }}</code>
     </button>
     <div class="package-toolbar">
-      <button :disabled="disabled" :aria-label="t('Add dependency')" :title="t('Add dependency')" @click="open">
+      <button :disabled="disabled || access.remote" :aria-label="t('Add dependency')" :title="t('Add dependency')" @click="open">
         +
       </button>
       <button :disabled="disabled || !selected || !packages[selected]" :aria-label="t('Remove dependency')" :title="t('Remove dependency')" @click="remove">
@@ -59,6 +61,9 @@ export default defineComponent({
       </button>
     </div>
   </div>
+  <p v-if="access.remote" class="muted">
+    {{ t('Add dependencies on the desktop.') }}
+  </p>
   <section v-if="adding" class="package-picker" :aria-label="t('Add dependency')">
     <form class="package-search" @submit.prevent="search">
       <label>{{ t('Search npm or paste an npm package URL') }}<input v-model="query" autofocus :disabled="disabled || searching" :placeholder="t('Package name, search term or npm URL')"></label>

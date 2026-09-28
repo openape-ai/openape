@@ -1,4 +1,5 @@
 <script lang="ts">
+import { usePodAccess, trackPodEdits } from './pod-access'
 import { variableDrafts } from './form-buffer'
 import { defineComponent } from 'vue'
 import { t, diagnostic } from './i18n'
@@ -8,17 +9,20 @@ import PodResources from './PodResources.vue'
 export default defineComponent({
   components: { PodResources },
   props: { requestedSecret: { type: String, default: '' }, podId: { type: String, required: true } },
-  data() { return { variables: [] as PodVariable[], requiredAliases: [] as string[], ...(variableDrafts.get(this.podId) ?? { name: '', value: '', revision: 0 }), busy: false, error: '' } },
-  async mounted() { await this.load() },
-  beforeUnmount() { variableDrafts.set(this.podId, { name: this.name, value: this.value, revision: this.revision }) },
+  setup() { const access = usePodAccess(); return { access, remoteRevision: access.revision } },
+  data() { return { variables: [] as PodVariable[], requiredAliases: [] as string[], name: '', value: '', revision: 0, busy: false, error: '' } },
+  watch: { remoteRevision() { if (!this.busy && !this.error) void this.load() } },
+  async mounted() { const draft = variableDrafts.get(this.access.key(this.podId)); if (draft) Object.assign(this, draft); trackPodEdits(this.access, 'variables', () => !!this.name || !!this.value); await this.load() },
+  beforeUnmount() { variableDrafts.set(this.access.key(this.podId), { name: this.name, value: this.value, revision: this.revision }) },
   methods: {
     t, diagnostic,
     async load() {
       try {
-        const [resources, script, chat] = await Promise.all([window.pods.resources({ type: 'list', podId: this.podId }), window.pods.scripts({ type: 'list', podId: this.podId }), window.pods.master({ type: 'list', podId: this.podId })])
+        const [resources, script] = await Promise.all([this.access.api.resources({ type: 'list', podId: this.podId }), this.access.api.scripts({ type: 'list', podId: this.podId })])
         this.variables = resources.variables ?? []
         const scriptAliases = script.source?.capabilities.filter(item => item.startsWith('credential.')).map(item => item.slice(11)) ?? []
-        const chatAliases = chat.proposals.flatMap(proposal => proposal.podId === this.podId && proposal.state === 'pending' && proposal.body.provider === 'credential' && typeof proposal.body.alias === 'string' ? [proposal.body.alias] : [])
+        const chat = this.access.remote ? null : await window.pods.master({ type: 'list', podId: this.podId })
+        const chatAliases = chat?.proposals.flatMap(proposal => proposal.podId === this.podId && proposal.state === 'pending' && proposal.body.provider === 'credential' && typeof proposal.body.alias === 'string' ? [proposal.body.alias] : []) ?? []
         this.requiredAliases = [...new Set([...scriptAliases, ...chatAliases])]
       }
       catch (error) { this.error = error instanceof Error ? error.message : 'Could not load variables' }
@@ -27,13 +31,13 @@ export default defineComponent({
     reset() { this.name = ''; this.value = ''; this.revision = 0 },
     async save() {
       this.busy = true; this.error = ''
-      try { await window.pods.resources({ type: 'saveVariable', podId: this.podId, name: this.name, value: this.value, revision: this.revision }); this.reset(); await this.load() }
+      try { await this.access.api.resources({ type: 'saveVariable', podId: this.podId, name: this.name, value: this.value, revision: this.revision }); this.reset(); await this.load() }
       catch (error) { this.error = error instanceof Error ? error.message : 'Could not save variable' }
       finally { this.busy = false }
     },
     async remove(variable: PodVariable) {
       this.busy = true; this.error = ''
-      try { await window.pods.resources({ type: 'removeVariable', podId: this.podId, name: variable.name, revision: variable.revision }); await this.load() }
+      try { await this.access.api.resources({ type: 'removeVariable', podId: this.podId, name: variable.name, revision: variable.revision }); await this.load() }
       catch (error) { this.error = error instanceof Error ? error.message : 'Could not delete variable' }
       finally { this.busy = false }
     },

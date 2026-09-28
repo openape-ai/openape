@@ -4,19 +4,20 @@ import type { OnboardingView } from '../contracts/onboarding'
 import { t, diagnostic, label } from './i18n'
 
 export default defineComponent({
-  props: { available: { type: Boolean, default: true } },
+  props: { subject: { type: String, default: '' }, available: { type: Boolean, default: true } },
   emits: ['open'],
   data() { return { view: null as OnboardingView | null, error: '', closed: false, timer: null as ReturnType<typeof setTimeout> | null } },
   computed: {
     account() { return this.view?.connections.find(item => item.id === this.view?.owner) },
     status(): string {
+      if (this.subject) return t('Signed in')
       if (this.error) return t('Account status unavailable')
       if (!this.view) return t('Loading account…')
       if (!this.account) return t('Not signed in')
       return this.account.state === 'ready' ? t('Signed in') : label(this.account.state)
     },
   },
-  async mounted() { await this.refresh() },
+  async mounted() { if (!this.subject) await this.refresh() },
   beforeUnmount() { this.closed = true; if (this.timer) clearTimeout(this.timer) },
   methods: {
     t, diagnostic,
@@ -30,9 +31,9 @@ export default defineComponent({
 </script>
 
 <template>
-  <button class="account-status" :aria-label="t('OpenApe account')" :title="error ? diagnostic(error) : account?.account" @click="$emit('open')">
-    <span class="account-avatar" aria-hidden="true">{{ account?.account.slice(0, 1).toUpperCase() || '○' }}</span>
-    <span class="account-copy"><strong>{{ account?.account || t('OpenApe account') }}</strong><small>{{ status }}</small></span>
+  <button class="account-status" :aria-label="t('OpenApe account')" :title="error ? diagnostic(error) : (subject || account?.account)" @click="$emit('open')">
+    <span class="account-avatar" aria-hidden="true">{{ (subject || account?.account)?.slice(0, 1).toUpperCase() || '○' }}</span>
+    <span class="account-copy"><strong>{{ (subject || account?.account) || t('OpenApe account') }}</strong><small>{{ status }}</small></span>
   </button>
 </template>
 

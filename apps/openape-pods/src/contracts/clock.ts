@@ -11,7 +11,7 @@ export function nextDaily(spec: Extract<ScheduleSpec, { kind: 'daily' }>, after:
   const format = formatter(spec.timezone)
   const day = wallTime(format, after).day
   const [hour, minute] = spec.time.split(':').map(Number)
-  const target = hour * 60 + minute
+  const target = Number(hour) * 60 + Number(minute)
   const midnight = Date.parse(`${day}T00:00:00Z`)
   for (let offset = 0; offset < 4; offset++) {
     const utcDay = midnight + offset * 86400000
