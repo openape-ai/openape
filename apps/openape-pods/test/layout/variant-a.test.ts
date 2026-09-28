@@ -26,7 +26,8 @@ function fixture() {
   const bridge = installWorkspace({
     workspace: async () => ({ organization: { revision: 1, groups: [] }, pods: structuredClone(inventory) }),
     workflows: async () => structuredClone(workflows),
-    onboarding: async () => ({ owner: 'owner', complete: true, runtime: { ready: true, error: null }, connections: [{ id: 'owner', provider: 'openape', state: 'ready', account: 'owner@example.invalid', error: null, login: null }, { id: 'codex', provider: 'chatgpt', state: 'ready', account: 'AI account', error: null, login: null }] }),
+    programs: async (command) => { if (command.type === 'launchStatus') return null; throw new Error(`Unexpected program command: ${command.type}`) },
+    onboarding: async () => ({ owner: 'owner', complete: true, podIdentity: { podId, bound: true, ownerConnection: 'owner', issuer: 'https://pods.example.invalid', decisionIssuer: 'https://identity.example.invalid', subject: 'mail-knowledge@pods.example.invalid', brokerConnectionId: null }, runtime: { ready: true, error: null }, connections: [{ id: 'owner', provider: 'openape', state: 'ready', account: 'owner@example.invalid', error: null, login: null }, { id: 'codex', provider: 'chatgpt', state: 'ready', account: 'AI account', error: null, login: null }] }),
     mcpAccess: async (command) => { if (command.type === 'set') access = { mode: command.mode, duration: command.duration, expiresAt: command.mode === 'off' || command.duration === 'permanent' ? null : 1790614800000 }; return { ...access } },
     central: async (command) => {
       if (command.type === 'status') return { ...status, enabled: true }
@@ -50,6 +51,7 @@ it('shows workflows first and inventories standalone, workflow and archived Pods
   expect(wrapper!.get('.workflow-inventory strong').text()).toBe('Morning review')
   await wrapper!.get('.workflow-inventory button').trigger('click'); await flushPromises()
   expect(wrapper!.get('.workflow-node').text()).toContain('Mail knowledge')
+  expect(wrapper!.get('.workflow-panel').text()).toContain('Täglich')
   await shot('variant-a-workflow.png')
   await navigate(1)
   expect(wrapper!.findAll('.central-pod')).toHaveLength(2)
@@ -77,6 +79,7 @@ it('opens the native highlighted editor from a workflow and keeps MCP out of Pod
   await shot('variant-a-script.png')
   await tabs()[3]!.trigger('click'); await flushPromises()
   expect(wrapper!.get('.directory-list').text()).toContain('Orders')
+  expect(wrapper!.find('.program-permissions [role="alert"]').exists()).toBe(false)
   await shot('variant-a-permissions.png')
   await tabs()[4]!.trigger('click'); await flushPromises()
   expect(wrapper!.get('.central-content input').element).toBeDefined()

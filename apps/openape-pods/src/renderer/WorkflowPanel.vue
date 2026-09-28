@@ -47,6 +47,7 @@ export default defineComponent({
   watch: { selectedId() { this.removing = false; this.editing = false; this.error = '' } },
   methods: {
     t, diagnostic, label, dateTime,
+    scheduleLabel(kind?: WorkflowSchedule['kind']) { return kind ? t(({ interval: 'Interval', daily: 'Daily', once: 'One time', cron: 'Cron' } as const)[kind]) : t('Manual only') },
     podName(id: string) { return this.pods.find(pod => pod.id === id)?.name ?? id },
     edit(create = false) {
       const definition = create ? undefined : this.definition
@@ -118,7 +119,7 @@ export default defineComponent({
     </button>
     <div v-if="!definition && !editing && view.workflows.length" class="workflow-inventory">
       <button v-for="workflow in view.workflows" :key="workflow.id" class="inventory-row" @click="$emit('select', workflow.id)">
-        <span><strong>{{ workflow.name }}</strong><small>{{ workflow.nodes.length }} {{ t('Pods') }} · {{ workflow.schedule ? label(workflow.schedule.kind) : t('Manual only') }}</small></span><span class="badge">{{ workflow.paused ? label('paused') : workflow.enabled ? label('active') : t('Manual only') }}</span><span aria-hidden="true">›</span>
+        <span><strong>{{ workflow.name }}</strong><small>{{ workflow.nodes.length }} {{ t('Pods') }} · {{ scheduleLabel(workflow.schedule?.kind) }}</small></span><span class="badge">{{ workflow.paused ? label('paused') : workflow.enabled ? label('active') : t('Manual only') }}</span><span aria-hidden="true">›</span>
       </button>
     </div>
     <form v-if="editing" class="card workflow-editor" :aria-label="t('Edit workflow')" @submit.prevent="save">
@@ -202,7 +203,7 @@ export default defineComponent({
         <p>{{ t('Member pods may be paused individually; this workflow can still invoke them.') }}</p><p class="muted">
           {{ t('Review existing pod schedules to avoid separate, independent runs.') }}
         </p>
-        <p>{{ definition.enabled ? t('Schedule enabled') : t('Schedule off') }} · {{ label(definition.schedule?.kind ?? 'Manual only') }}<span v-if="definition.enabled && definition.nextAt"> · {{ dateTime(definition.nextAt) }}</span></p>
+        <p>{{ definition.enabled ? t('Schedule enabled') : t('Schedule off') }} · {{ scheduleLabel(definition.schedule?.kind) }}<span v-if="definition.enabled && definition.nextAt"> · {{ dateTime(definition.nextAt) }}</span></p>
         <div class="overview-actions">
           <button class="primary" :disabled="busy || !!active" @click="apply({ type: 'start', id: definition.id, revision: definition.revision })">
             {{ t('Run workflow once') }}
