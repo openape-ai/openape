@@ -75,3 +75,34 @@ These are the questions no lower level can answer. `handbook.test.ts` also stays
 ## Deliberately kept in `e2e/`
 
 Some checks inside the native files are pure logic but cost almost nothing there (the script and tool hash checks in `resources`, `script-runner` and `terminal`, < 0.1 s each), or need the script-entry frame protocol (the remaining `dispatcher` cases). Moving them would either save nothing or replace a real sandboxed process by a mock of its protocol, so they stay.
+
+## Variant A component and browser evidence
+
+`pnpm --filter @openape/pods report --browser` runs the existing unit/component
+suite and Vitest Browser suite with the production stylesheet. It creates a
+new `.artifacts/browser-reports/<timestamp>-<id>/` directory containing JSON
+outcomes, complete logs, a source/command receipt, screenshots, `testrun.json`
+and a self-contained `report.html`. It needs installed Chrome (or `CHROME_PATH`)
+but does not build, package or launch Electron and never reads an owner's Pod
+profile. Browser acceptance remains manual and is not added to automatic CI.
+
+Inspect the captured images against Variant A. Capture success alone does not
+approve appearance: the initial manifest marks visual review as skipped. After
+personal inspection, assemble the same immutable evidence with:
+
+```sh
+pnpm --filter @openape/pods report --browser --assemble /absolute/run/directory --reviewed
+ape-testruns upload /absolute/run/directory --json
+```
+
+The assembler rejects missing, older or altered screenshots and retains failed
+assertions/runner errors. It uses the recorded source revision and command
+outcomes, not the current HEAD. Use a clean committed source for delivery; dirty
+runs are explicitly labelled. Open the returned report and verify its images
+and **Test Runs** category before sharing it. Live sign-in, native execution,
+installed distribution and release signing are separate acceptance boundaries.
+
+Retained feature tests cover MCP mode/expiry/IPC denial, socket revocation,
+workflow graph editing, standalone/archive navigation, editor routing by runtime,
+script validation before execution, and the production UI at desktop/narrow
+widths. They protect consequential behavior rather than matching markup.

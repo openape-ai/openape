@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import RuntimeApprovalSettings from './RuntimeApprovalSettings.vue'
 import type { CodexConnection } from '../contracts/codex'
 import { t, diagnostic } from './i18n'
 
@@ -25,7 +24,7 @@ onMounted(() => request('status'))
   <section class="codex-settings" :aria-label="t('Work from Codex')">
     <h3>{{ t('Work from Codex') }}</h3>
     <p class="muted">
-      {{ t('Connected Codex can administer your Pods, assign permissions, activate scripts, enable schedules and start runs directly. Any confirmation follows your Codex settings. Conversations stay in Codex.') }}
+      {{ t('Codex uses the app-wide MCP access level above. Connecting Codex does not enable access. Conversations stay in Codex.') }}
     </p>
     <template v-if="connection">
       <p role="status">
@@ -46,7 +45,6 @@ onMounted(() => request('status'))
     <p v-if="error" role="alert" class="error-message">
       {{ diagnostic(error) }}
     </p>
-    <RuntimeApprovalSettings />
   </section>
 </template>
 

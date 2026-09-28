@@ -1,5 +1,5 @@
 import { createServer } from 'node:net'
-import type { Server } from 'node:net'
+import type { Server, Socket } from 'node:net'
 import { chmod, mkdir, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { parseCodexRequest } from '../../contracts/codex'
@@ -11,6 +11,7 @@ const maximumLine = 1024 * 1024
 // the macOS user, and each line carries exactly one pods_control request.
 export class CodexControlServer {
   private server: Server | undefined
+  private readonly sockets = new Set<Socket>()
   constructor(private readonly endpoint: string, private readonly execute: (request: CodexRequest) => Promise<unknown>) {}
 
   async start(): Promise<void> {
@@ -18,6 +19,8 @@ export class CodexControlServer {
     await mkdir(dirname(this.endpoint), { recursive: true, mode: 0o700 }); await chmod(dirname(this.endpoint), 0o700)
     await rm(this.endpoint, { force: true })
     const server = createServer((socket) => {
+      this.sockets.add(socket)
+      socket.on('close', () => this.sockets.delete(socket))
       let buffer = ''; let busy = false
       socket.on('error', () => socket.destroy())
       socket.on('data', (bytes) => {
@@ -44,6 +47,8 @@ export class CodexControlServer {
 
   async stop(): Promise<void> {
     const server = this.server; this.server = undefined
+    for (const socket of this.sockets) socket.destroy()
+    this.sockets.clear()
     if (server) await new Promise<void>(resolve => server.close(() => resolve()))
     await rm(this.endpoint, { force: true })
   }

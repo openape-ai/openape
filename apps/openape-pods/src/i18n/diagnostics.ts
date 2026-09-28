@@ -1,6 +1,7 @@
 import type { MessageKey } from './index'
 
 export const diagnosticPatterns = [
+  'Mail {p0} failed; inspect the assigned program',
   'Runtime permission {p0}; automatic approval cannot replace this decision',
   'Automatic runtime permission approval failed ({p0})',
   'Permission {p0}; review this Pod\'s permissions before retrying',

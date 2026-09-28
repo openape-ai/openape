@@ -6,9 +6,32 @@ import { WorkspaceRequestError } from '../../src/renderer/central/client'
 import { centralFixture } from './central-fixture'
 import type { CentralStatus } from '../../src/contracts/central'
 import { connected, connectionAfter, connectionLevel } from '../../src/renderer/central/status'
+import type { WorkflowCommand, WorkflowView } from '../../src/contracts/workflows'
 
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined })
+it('opens local workflows from the desktop landing page and resumes the selected workflow', async () => {
+  const { default: DesktopWorkspace } = await import('../../src/renderer/central/DesktopWorkspace.vue')
+  const { installWorkspace, podId } = await import('../layout/workspace-fixture')
+  const id = '00000000-0000-4000-8000-000000000003'
+  const view: WorkflowView = { workflows: [{ id, revision: 1, name: 'Morning review', nodes: [{ podId, after: [], handoff: true }], schedule: null, enabled: false, paused: true, nextAt: null }], runs: [] }
+  const workflows = vi.fn(async (command: WorkflowCommand) => {
+    if (command.type === 'pause') { view.workflows[0]!.paused = command.paused; view.workflows[0]!.revision++ }
+    return structuredClone(view)
+  })
+  installWorkspace({ workflows, central: async command => command.type === 'status' ? { enabled: false } : command.type === 'inventory' ? [] : { requestError: { status: 400, message: 'No fixture change feed' } } })
+  wrapper = mount(DesktopWorkspace); await flushPromises()
+  const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.text() === text)!.trigger('click'); await flushPromises() }
+  expect(workflows).toHaveBeenCalledExactlyOnceWith({ type: 'list' })
+  await wrapper.get('.workflow-inventory button').trigger('click'); await flushPromises()
+  expect(wrapper.find('.workflow-graph').text()).toContain('Mail knowledge')
+  await click('Resume workflow')
+  expect(workflows).toHaveBeenLastCalledWith({ type: 'pause', id, revision: 1, paused: false })
+  expect(wrapper.text()).toContain('Pause workflow')
+  workflows.mockRejectedValueOnce(new Error('Workflow connection unavailable'))
+  await click('Pause workflow')
+  expect(wrapper.get('[role="alert"]').text()).toContain('Workflow connection unavailable')
+})
 async function open() {
   const fixture = centralFixture()
   wrapper = mount(CentralWorkspace, { props: { client: fixture.client } })
@@ -16,10 +39,10 @@ async function open() {
   await wrapper.find('.central-pod').trigger('click'); await flushPromises()
   return fixture
 }
-it('hides open content when the Pod goes offline and disables opening offline Pods', async () => {
+it('hides open content when the Pod goes offline and prevents editing offline Pods', async () => {
   const fixture = await open()
   expect(wrapper!.text()).toContain('What this Pod does')
-  expect(wrapper!.findAll('.central-pod')[1]!.attributes('disabled')).toBeDefined()
+  expect(wrapper!.find('fieldset').attributes('disabled')).toBeUndefined()
   fixture.host.workspace.pods[0]!.online = false; fixture.wake(); await flushPromises()
   expect(wrapper!.text()).toContain('This Pod is offline')
   expect(wrapper!.find('[aria-label="Pod description"]').exists()).toBe(false)
@@ -66,6 +89,7 @@ it('retains an operation identity when the request acknowledgement is lost', asy
   fixture.client.command = vi.fn(async () => { throw new TypeError('Connection lost') })
   await wrapper!.findAll('button').find(item => item.text() === 'Save description')!.trigger('click'); await flushPromises()
   expect(wrapper!.text()).toContain('Check pending operation')
+  expect(wrapper!.get('.central-content > .text-button').attributes('disabled')).toBeDefined()
   expect(wrapper!.find('fieldset').attributes('disabled')).toBeDefined()
   expect(fixture.client.command).toHaveBeenCalledOnce()
 })
@@ -76,7 +100,7 @@ it('keeps the open Pod and its online state through a single failed read', async
   fixture.wake(); await flushPromises()
   expect(wrapper!.find('[role="alert"]').text()).toContain('Reconnecting to your workspace')
   expect(wrapper!.text()).toContain('What this Pod does')
-  expect(wrapper!.find('.central-pod small').text()).toContain('Online')
+  expect(wrapper!.find('.central-eyebrow').text()).toContain('ONLINE')
   fixture.wake(); await flushPromises(); fixture.wake(); await flushPromises()
   expect(wrapper!.find('[role="alert"]').text()).toMatch(/Workspace unreachable since .*socket hang up/)
   fixture.client.inventory = inventory
@@ -88,11 +112,14 @@ it('lists archived Pods in their own labelled section', async () => {
   fixture.host.workspace.pods[1]!.lifecycle = 'archived'
   wrapper = mount(CentralWorkspace, { props: { client: fixture.client } })
   await flushPromises()
-  expect(wrapper.find('details.central-archived summary').text()).toContain('Archived 1')
-  expect(wrapper.find('.central-sidebar h3').text()).toBe('Ungrouped 1')
-  expect(wrapper.find('.central-sidebar h2').text()).toBe('Pods')
-  expect(wrapper.find('details.central-archived').text()).toContain('Monthly report')
-  expect(wrapper.findAll('.central-pod').filter(item => item.text().includes('Monthly report'))).toHaveLength(1)
+  expect(wrapper.get('h1').text()).toBe('Pods')
+  expect(wrapper.findAll('.central-pod')).toHaveLength(1)
+  await wrapper.findAll('.inventory-toolbar button').find(button => button.text() === 'Archived')!.trigger('click')
+  expect(wrapper.findAll('.central-pod')).toHaveLength(1)
+  expect(wrapper.find('.central-pod').text()).toContain('Monthly report')
+  await wrapper.find('.central-pod').trigger('click'); await flushPromises()
+  expect(wrapper.text()).toContain('This Pod is offline')
+
 })
 it('shows a blocked schedule queue in the sidebar and the Pod overview', async () => {
   const fixture = centralFixture()
@@ -150,12 +177,9 @@ it('opens Jev, language, accounts and data through the active desktop settings e
     return { requestError: { status: 400, message: 'No fixture change feed' } }
   } })
   wrapper = mount(DesktopWorkspace); await flushPromises()
-  const click = async (text: string) => {
-    await wrapper!.findAll('button').find(button => button.text() === text)!.trigger('click')
-    await flushPromises()
-  }
-  await wrapper.get('.central-sidebar-bottom .central-settings-button').trigger('click'); await flushPromises()
-  expect(wrapper.get('h1').text()).toBe('App settings')
+  await wrapper.get('.workspace-navigation button[aria-label="App settings"]').trigger('click'); await flushPromises()
+  expect(wrapper.get('.app-settings h1').text()).toBe('App settings')
+  await wrapper.get('.jev-account-row button').trigger('click'); await flushPromises()
   expect(wrapper.get('.jev-connection label').text()).toBe('TypeSafe AI - Jev - API Key')
   expect(wrapper.get('input[type="password"]').attributes('autocomplete')).toBe('new-password')
   expect(wrapper.find('select[aria-label="Language"]').exists()).toBe(true)
@@ -163,16 +187,104 @@ it('opens Jev, language, accounts and data through the active desktop settings e
   await wrapper.get('.jev-connection form').trigger('submit'); await flushPromises()
   expect(onboarding).toHaveBeenLastCalledWith({ type: 'saveTypesafe', key: 'synthetic-key' })
   expect(wrapper.get<HTMLInputElement>('.jev-connection input').element.value).toBe('')
-  await click('Data & backups')
+  await wrapper.get('.app-settings details:last-child summary').trigger('click'); await flushPromises()
   expect(data).toHaveBeenLastCalledWith({ type: 'status' })
   expect(wrapper.find('[aria-label="Data and backups"]').exists()).toBe(true)
-  await click('Your accounts')
   expect(wrapper.find('[aria-label="Your accounts"]').exists()).toBe(true)
-  await click('Continue to workspace')
-  expect(wrapper.find('.central-desktop-settings').exists()).toBe(false)
-  await wrapper.get('.central-sidebar-bottom .central-settings-button').trigger('click'); await flushPromises()
-  expect(wrapper.find('.jev-connection').exists()).toBe(true)
-  await click('Back to workspace')
+  await wrapper.get('.workspace-navigation button[aria-label="Pods"]').trigger('click')
   await wrapper.get('.account-status').trigger('click'); await flushPromises()
   expect(wrapper.find('[aria-label="Your accounts"]').exists()).toBe(true)
+
+})
+
+it('archives before deletion, confirms the reviewed Pod and clears deleted content', async () => {
+  const fixture = await open()
+  const command = vi.spyOn(fixture.client, 'command').mockImplementation(async (_runtime, _revision, command, id) => {
+    if (command.channel === 'workspace') {
+      fixture.view.scripts.pod.lifecycle = 'archived'; fixture.view.scripts.pod.revision++
+    }
+    if (command.channel === 'data') fixture.host.workspace.pods = fixture.host.workspace.pods.filter(pod => pod.id !== fixture.view.id)
+    return { id, runtimeId: fixture.host.id, command, state: 'applied', result: null, error: null, revision: ++fixture.host.revision }
+  })
+  const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.text() === text)!.trigger('click'); await flushPromises() }
+  await click('Settings')
+  expect(wrapper!.text()).not.toContain('Delete Pod…')
+  await click('Archive pod')
+  expect(command).toHaveBeenLastCalledWith(fixture.host.id, 1, { channel: 'workspace', body: { type: 'update', id: fixture.view.id, revision: 1, name: 'Release monitor', lifecycle: 'archived' } }, expect.any(String))
+  await click('Delete Pod…')
+  expect(wrapper!.get('[role="alertdialog"]').text()).toContain('Permanently delete Release monitor?')
+  await click('Cancel')
+  expect(command).toHaveBeenCalledTimes(1)
+  expect(wrapper!.find('[role="alertdialog"]').exists()).toBe(false)
+  await click('Delete Pod…'); await click('Delete Pod')
+  expect(command).toHaveBeenLastCalledWith(fixture.host.id, 2, { channel: 'data', body: { type: 'deletePod', podId: fixture.view.id, revision: 2, name: 'Release monitor' } }, expect.any(String))
+  expect(wrapper!.text()).toContain('Pod deleted.')
+  expect(wrapper!.text()).not.toContain('Release monitor')
+  expect(wrapper!.find('.central-title').exists()).toBe(false)
+})
+
+it('shows deletion refusal without removing the Pod or repeating the command', async () => {
+  const fixture = await open()
+  fixture.view.scripts.pod.lifecycle = 'archived'; fixture.wake(); await flushPromises()
+  const command = vi.spyOn(fixture.client, 'command').mockImplementation(async (_runtime, _revision, command, id) => ({ id, runtimeId: fixture.host.id, command, state: 'failed', result: null, error: 'Pod is referenced by workflow configuration or history', revision: fixture.host.revision }))
+  const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.text() === text)!.trigger('click'); await flushPromises() }
+  await click('Settings'); await click('Delete Pod…'); await click('Delete Pod')
+  expect(wrapper!.text()).toContain('Pod is referenced by workflow configuration or history')
+  expect(wrapper!.text()).toContain('Release monitor')
+  expect(command).toHaveBeenCalledOnce()
+})
+
+it('mounts native editors only for this desktop and never sends another runtime Pod to local IPC', async () => {
+  const { default: DesktopWorkspace } = await import('../../src/renderer/central/DesktopWorkspace.vue')
+  const { installWorkspace, podId } = await import('../layout/workspace-fixture')
+  const fixture = centralFixture()
+  const details = vi.fn(async () => fixture.view.details)
+  const localId = '00000000-0000-4000-8000-000000000199'
+  installWorkspace({ details, central: async (command) => {
+    if (command.type === 'status') return { enabled: true, state: 'online', runtimeId: localId }
+    if (command.type === 'inventory') return [fixture.host]
+    if (command.type === 'read') return { revision: 1, total: 1, pod: fixture.view }
+    return { requestError: { status: 400, message: 'No fixture change feed' } }
+  } })
+  wrapper = mount(DesktopWorkspace); await flushPromises()
+  await wrapper.get('.workspace-navigation button[aria-label="Pods"]').trigger('click'); await flushPromises()
+  await wrapper.get('.central-pod').trigger('click'); await flushPromises()
+  expect(wrapper.get('.central-title h1').text()).toBe('Release monitor')
+  expect(details).not.toHaveBeenCalled()
+  expect(wrapper.find('[role="tabpanel"]').exists()).toBe(false)
+  fixture.host.workspace.pods[0]!.id = podId
+  expect(wrapper.find('.mcp-access').exists()).toBe(false)
+})
+
+it('creates a standalone Pod through the central command receipt and opens its saved settings', async () => {
+  const fixture = centralFixture()
+  const id = '00000000-0000-4000-8000-000000000201'
+  const command = vi.spyOn(fixture.client, 'command').mockImplementation(async (_runtime, _revision, command, receiptId) => {
+    const created = { ...fixture.host.workspace.pods[0]!, id, name: String(command.body.name) }
+    fixture.host.workspace.pods.push(created)
+    fixture.view.id = id; fixture.view.scripts.pod = created
+    return { id: receiptId, runtimeId: fixture.host.id, command, state: 'applied', result: null, error: null, revision: ++fixture.host.revision }
+  })
+  wrapper = mount(CentralWorkspace, { props: { client: fixture.client } }); await flushPromises()
+  await wrapper.findAll('button').find(button => button.text() === '＋ New pod')!.trigger('click')
+  await wrapper.get('[aria-label="New Pod name"]').setValue('Independent audit')
+  await wrapper.get('form.central-create').trigger('submit'); await flushPromises()
+  expect(command).toHaveBeenCalledExactlyOnceWith(fixture.host.id, 1, { channel: 'workspace', body: { type: 'create', name: 'Independent audit' } }, expect.any(String))
+  expect(wrapper.get('.central-title h1').text()).toBe('Independent audit')
+  await wrapper.findAll('.central-tabs button').find(button => button.text() === 'Settings')!.trigger('click')
+  expect(wrapper.get('input[maxlength="100"]').element).toHaveProperty('value', 'Independent audit')
+})
+
+it('keeps remote edits until navigation is explicitly confirmed', async () => {
+  await open()
+  await wrapper!.get('[aria-label="Pod description"]').setValue('Unfinished remote edit')
+  await wrapper!.get('.central-content > .text-button').trigger('click')
+  expect(wrapper!.get('[aria-label="Unsaved changes"]').text()).toContain('Keep editing')
+  await wrapper!.findAll('button').find(button => button.text() === 'Keep editing')!.trigger('click')
+  expect((wrapper!.get('[aria-label="Pod description"]').element as HTMLTextAreaElement).value).toBe('Unfinished remote edit')
+  await wrapper!.get('.central-content > .text-button').trigger('click')
+  await wrapper!.findAll('button').find(button => button.text() === 'Discard changes')!.trigger('click')
+  expect(wrapper!.find('.central-inventory').exists()).toBe(true)
+  await wrapper!.get('.central-pod').trigger('click'); await flushPromises()
+  expect((wrapper!.get('[aria-label="Pod description"]').element as HTMLTextAreaElement).value).not.toBe('Unfinished remote edit')
 })

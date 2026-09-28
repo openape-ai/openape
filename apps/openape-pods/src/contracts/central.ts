@@ -1,3 +1,4 @@
+import { parseDataCommand } from './data'
 import { parseCommand, parseWorkspace } from './control'
 import type { WorkspaceState } from './control'
 import { parseDetailsCommand, parsePodDetails } from './details'
@@ -25,7 +26,7 @@ export const centralTables = [
 export const centralHeartbeatMs = 10000
 export const centralLeaseMs = 30000
 export const centralMaxBytes = 32 * 1024 * 1024
-export type CentralChannel = 'workspace' | 'details' | 'scripts' | 'scheduling' | 'runs' | 'resources' | 'local'
+export type CentralChannel = 'workspace' | 'details' | 'scripts' | 'scheduling' | 'runs' | 'resources' | 'data' | 'local'
 export interface CentralCommand { channel: CentralChannel, body: Record<string, unknown> }
 export interface CentralPod {
   id: string
@@ -103,9 +104,9 @@ export function parseCentralCommand(value: unknown): CentralCommand {
   const item = centralObject(value)
   if (Object.keys(item).some(key => !['channel', 'body'].includes(key))) throw new Error('Invalid workspace command fields')
   const body = centralObject(item.body)
-  const parsers = { workspace: parseCommand, details: parseDetailsCommand, scripts: parseScriptCommand, scheduling: parseScheduleCommand, runs: parseRunCommand, resources: parseResourceCommand }
+  const parsers = { workspace: parseCommand, details: parseDetailsCommand, scripts: parseScriptCommand, scheduling: parseScheduleCommand, runs: parseRunCommand, resources: parseResourceCommand, data: parseDataCommand }
   const allowed: Record<Exclude<CentralChannel, 'local'>, string[]> = {
-    workspace: ['create', 'update', 'organize'], details: ['describe', 'activate'],
+    data: ['deletePod'], workspace: ['create', 'update', 'organize'], details: ['describe', 'activate'],
     scripts: ['save', 'validate', 'activate', 'prepareDependencies'], scheduling: ['save', 'lifecycle'],
     runs: ['start', 'cancel', 'recover', 'retryQueue', 'resolveHttp'], resources: ['saveVariable', 'removeVariable', 'revoke'],
   }

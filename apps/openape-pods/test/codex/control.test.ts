@@ -120,6 +120,24 @@ it('saves and starts the selected workflow directly while refusing an unselected
   expect(count(store, 'SELECT count(*) AS count FROM control_changes')).toBe(0)
 })
 
+it('creates a workflow only with local owner authority and all members selected, and replays its receipt', async () => {
+  const { store, pod, send, codex, master, workflows } = fixture()
+  const definition = { type: 'save' as const, id: randomUUID(), revision: 0, name: 'Morning review', nodes: [{ podId: pod.id, after: [], handoff: true }], schedule: null, enabled: false }
+  const action = { action: 'saveWorkflow', definition }
+  await expect(send(action)).rejects.toThrow('Select every')
+  await send({ action: 'select', podIds: [pod.id] })
+  const context = new ChatRegistry(store).get(codexConversationId)
+  await expect(master.execute(randomUUID(), action, new AbortController().signal, null, null, context)).rejects.toThrow('Select a workflow')
+  const request = { id: randomUUID(), action }
+  const result = { workflowId: definition.id, revision: 1 }
+  expect(await codex.execute(request, new AbortController().signal)).toEqual(result)
+  expect(await codex.execute(request, new AbortController().signal)).toEqual(result)
+  expect(workflows.view().workflows).toHaveLength(1)
+  await expect(send(action)).rejects.toThrow('Workflow changed')
+  await send({ action: 'select', podIds: [pod.id], workflowId: definition.id, workflowRevision: 1 })
+  await expect(send({ ...action, definition: { ...definition, id: randomUUID() } })).rejects.toThrow('Select only')
+})
+
 it('activates a validated retained version and resumes without creating a review', async () => {
   const { store, pod, resources, send, current } = fixture()
   installExample(store, resources, pod.id, 'deterministic', 'a'.repeat(64))
@@ -171,4 +189,15 @@ it('discovers Jev before Pod creation and refreshes connection availability with
   const inspected = await send({ action: 'inspect', podId: pod.id, revision: pod.revision })
   expect(inspected).toMatchObject({ jev: { id, state: 'ready' } })
   expect(JSON.stringify(inspected)).not.toContain('never-expose-this')
+})
+
+it('journals a local private Jev import without accepting a raw key or unselected Pod', async () => {
+  const { pod, codex, send } = fixture()
+  const request = { id: randomUUID(), action: { action: 'resources', revision: pod.revision, command: { type: 'importJev', podId: pod.id, epoch: 0 }, path: '/private/jev-key' } }
+  expect(() => codex.administration({ type: 'begin', request })).toThrow('context_required')
+  await send({ action: 'select', podIds: [pod.id] })
+  expect(() => codex.administration({ type: 'begin', request: { ...request, action: { ...request.action, command: { ...request.action.command, key: 'forbidden' } } } })).toThrow('Invalid')
+  expect(codex.administration({ type: 'begin', request })).toEqual({ completed: false })
+  codex.administration({ type: 'complete', request, result: { jev: { state: 'ready' } } })
+  expect(codex.administration({ type: 'begin', request })).toEqual({ completed: true, result: { jev: { state: 'ready' } } })
 })

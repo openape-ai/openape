@@ -43,7 +43,7 @@ it('shows unset values and the missing secret in German, and keeps the secret fo
     resources: async () => ({ resources: [], epoch: 1, variables: [{ name: 'application_id', value: '', revision: 1 }, { name: 'chat_id', value: '', revision: 1 }] }),
     scripts: async () => ({ resourceEpoch: 1, credentialAliases: ['notification_token'], pod: { id: podId, name: 'Mail knowledge', revision: 2, lifecycle: 'paused', activeScript: null }, versions: [], drafts: [], source: { kind: 'draft', id: crypto.randomUUID(), code: 'export async function run() {}', capabilities: ['credential.notification_token'], revision: 1, assignmentRevision: 1, hash: null, validated: false, evidence: null, credentialAccessApproved: false } }),
   })
-  const wrapper = mount(App, { attachTo: document.body }); await flushPromises()
+  const wrapper = mount(App, { attachTo: document.body, props: { initialPodId: '00000000-0000-4000-8000-000000000001' } }); await flushPromises()
   const tab = (name: string) => wrapper.findAll('[role="tab"]').find(item => item.text() === name)!
   await tab('Variablen und Geheimnisse').trigger('click'); await flushPromises()
   expect(wrapper.findAll('.value-row')).toHaveLength(2)

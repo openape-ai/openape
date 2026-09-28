@@ -588,12 +588,21 @@ exports. A release rollback therefore pairs the previous app with a full profile
 copy. Signed DMGs contain only the app, never an owner or fixture profile, Pods or
 runs. Examples and mail recipes remain explicit commands on an existing Pod.
 
-An archived pod can be deleted after a native owner confirmation bound to its current
-name and revision. Deletion journals pending filesystem/key cleanup, preserves shared
-account connections and original reference files, and erases only keys bound to that
-pod. Cleanup retries after restart or through Clean unused files. Global master chat
-may retain earlier discussion of the pod. Remote OpenApe agents/grants remain visible
-in OpenApe; local deletion does not use administrator APIs or claim remote revocation.
+In the central desktop/browser workspace, open Pod Settings and choose Archive pod.
+Archiving stops intake and preserves knowledge; run history keeps its retention policy.
+An archived Pod exposes Delete Pod with a separate review of its name and deletion
+scope. MCP uses `workspace` → `submit` with `channel: data` and
+`body: { type: 'deletePod', podId, revision, name }` after an explicit deletion request.
+Read current revisions first and poll the same operation ID until applied; deletion
+receipts remain readable after the Pod disappears, and identical retries do not repeat
+cleanup. Archive through `channel: workspace`, `type: update`, `lifecycle: archived`.
+
+Deletion requires an idle runtime and rejects Pods referenced by workflow configuration
+or history. It journals filesystem/key cleanup and removes the current central copies
+through the coordinated publication. Shared accounts, original files, backups and
+shared chat history remain. Remote OpenApe identities/grants are not revoked. The legacy
+local workspace retains its native confirmation; uncoordinated central deletion and
+restore remain disabled. Pending filesystem/key cleanup resumes on restart.
 
 ### Build artifacts and release gates
 
@@ -751,3 +760,13 @@ and the workflow chapter in the shared handbook.
 
 Use the existing installed MCP server: [setup and central workspace commands](docs/claude-code.md).
 Claude Code and Codex share the desktop executor and central data.
+
+## Morning mail protection and Jev evaluation
+
+`examples/mail-triage.mjs` uses `jev.evaluate` for structured mail disposition and priority. Uncertain archival judgments remain in the Inbox; `agent.run` only summarizes selected important messages. Assign the pinned Jev connection and a sufficient per-run attempt budget (100 for the initial two-mailbox review). Provider or parsing errors remain explicit coverage gaps, never an LLM classification fallback.
+
+The reviewed `examples/microsoft-mail.mjs` companion requires `PODS_MAIL_POLICY` to point to an owner-maintained, Pod-read-only JSON policy; `examples/mail-protection-policy.json` documents the format. Domain entries match the exact domain and its subdomains, never a substring. The `protection --account ...` read operation incrementally collects all available Sent Items To/Cc/Bcc recipients through Microsoft Graph delta queries. Its private per-mailbox recipient union never shrinks when sent messages disappear. Already deleted historical Sent Items cannot be reconstructed. Continue bounded pages until `ready:true`; incomplete metadata, an unavailable source or an incomplete conversation prohibits archival. The companion independently refreshes protection when preparing and immediately before executing a move. Policy changes do not require trusting a cached model decision.
+
+Local Codex can initialize a missing native Jev connection using resources command `{type:"importJev",podId,epoch}` with outer `revision` and `path` to an existing private owner key file. Key values never enter the MCP request, journal or response; no Pod permission is assigned implicitly. Existing connections must be replaced through the protected App settings form. Once connected, use the existing `assignJev` permission flow.
+
+Replacing the assigned companion expires its prior pending archive batches locally. Their old links cannot authorize the replacement program. Fresh proposals remain manual expiring one-time approvals; do not approve a grant merely to verify setup.
