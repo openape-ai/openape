@@ -136,16 +136,16 @@ describe('private briefing publication and viewing', () => {
         for (const width of [1440, 390]) {
           await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 })
           for (const theme of ['light', 'dark']) {
-            await page.getByLabel('Appearance', { exact: true }).selectOption(theme)
+            await page.getByLabel('Darstellung', { exact: true }).selectOption(theme)
             await expect.poll(() => page.locator('.briefing').getAttribute('data-theme')).toBe(theme)
             expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
             await page.screenshot({ path: `${artifacts}/${width}-${theme}.png`, fullPage: true })
           }
         }
-        await expect.poll(() => page.getByLabel('Previous editions').inputValue()).toBe('1')
-        await page.getByLabel('Previous editions').selectOption('2')
+        await expect.poll(() => page.getByLabel('Frühere Ausgaben').inputValue()).toBe('1')
+        await page.getByLabel('Frühere Ausgaben').selectOption('2')
         await page.waitForURL('**?v=2')
-        await page.getByText('Edition 2', { exact: true }).waitFor()
+        await page.getByText('Ausgabe 2', { exact: true }).waitFor()
       }
       expect(errors).toEqual([])
       await context.close()

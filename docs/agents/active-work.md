@@ -1,5 +1,9 @@
 # Active work
 
+## Reports briefing corrections (September 28, 2026)
+
+[Issue 1398](https://repos.openape.ai/patrick/monorepo/issues/1398). Own checkout `reports`, branch `bugfix/issue-1398-briefing-context`, base `5a84e911`. German briefing copy, one mail presentation and fresh sent/incoming conversation evidence before suggesting reply actions. Existing archive policy, schedules and Telegram receipts remain unchanged. Verified: full lint/typecheck, Testrun build, 603 Pods unit tests, 45 Reports unit tests, 8 component/layout tests and 4 authenticated HTTP/browser tests pass. Phone/desktop light/dark screenshots were inspected directly. Next: native PR, tested-image rollout and actual no-send workflow preview. Delivered editions remain immutable; only new publications receive revised generated content.
+
 ## OpenApe Reports (September 27, 2026) — deployed; scheduled acceptance pending
 
 Owner follow-up: Reports is the general product; briefings and test runs are specialized formats. Branch `feature/issue-1397-reports-home` from `dc40f3a7` corrects the landing page, private collection labels and default page metadata. This is a presentation change; the existing publication contracts and owning workflow remain in place. Verification and final deployment receipt belong to issue 1397.
