@@ -10,10 +10,12 @@ import { testrunClient } from './client.ts'
 import { openCommand } from './commands/open.ts'
 import { listCommand, rmCommand, showCommand } from './commands/runs.ts'
 import { uploadCommand } from './commands/upload.ts'
+import { publishCommand } from './commands/publish.ts'
 import agent from './docs/agent.md'
 import auth from './docs/auth.md'
 import cli from './docs/cli.md'
 import manifest from './docs/manifest.md'
+import documents from './docs/documents.md'
 
 const DESCRIPTOR = {
   name: 'testruns',
@@ -23,7 +25,7 @@ const DESCRIPTOR = {
   configFile: 'auth-testruns.json',
 } as const
 
-const DOCS: Record<string, string> = { agent, auth, cli, manifest }
+const DOCS: Record<string, string> = { agent, auth, cli, manifest, documents }
 
 const main = defineCommand({
   meta: {
@@ -41,6 +43,7 @@ const main = defineCommand({
   },
   subCommands: {
     upload: uploadCommand,
+    publish: publishCommand,
     list: listCommand,
     show: showCommand,
     rm: rmCommand,

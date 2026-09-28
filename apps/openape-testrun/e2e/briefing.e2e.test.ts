@@ -40,7 +40,7 @@ async function identity(email: string) {
 beforeAll(async () => {
   idp = await startIdp({ managementToken, ddisaMockRecords: { 'reports.test': { version: 'ddisa1', idp: 'https://idp.reports.test', mode: 'open' } } })
   app = await startServer({ cwd: appRoot, readyPath: '/api/health', timeoutMs: 180000, env: ({ url }) => ({
-    NUXT_IGNORE_LOCK: '1', NUXT_TURSO_URL: `file:${join(makeTempDir('reports-e2e-'), 'reports.db')}`, NUXT_OPENAPE_SP_SESSION_SECRET: 'reports-e2e-secret-at-least-32-characters-long', NUXT_OPENAPE_SP_CLIENT_ID: new URL(url).host, NUXT_FALLBACK_IDP_URL: idp.url, NUXT_PUBLIC_URL: url, NUXT_BRIEFING_URL: url,
+    NUXT_DOCUMENT_PUBLISHING_ENABLED: 'true', NUXT_IGNORE_LOCK: '1', NUXT_TURSO_URL: `file:${join(makeTempDir('reports-e2e-'), 'reports.db')}`, NUXT_OPENAPE_SP_SESSION_SECRET: 'reports-e2e-secret-at-least-32-characters-long', NUXT_OPENAPE_SP_CLIENT_ID: new URL(url).host, NUXT_FALLBACK_IDP_URL: idp.url, NUXT_PUBLIC_URL: url, NUXT_BRIEFING_URL: url,
     NUXT_OPENAPE_SP_ADDITIONAL_REDIRECT_URIS: JSON.stringify([`${url.replace('127.0.0.1', 'localhost')}/api/callback`]),
     DDISA_MOCK_RECORDS: JSON.stringify({ 'reports.test': { version: 'ddisa1', idp: idp.url, mode: 'open' } }), OPENAPE_SP_ALLOW_INSECURE_IDP: '1',
   }) })
@@ -153,5 +153,88 @@ describe('private briefing publication and viewing', () => {
     const screenshots = [1440, 390].flatMap(width => ['light', 'dark'].map(theme => ({ title: `${width}px · ${theme}`, shot: `${width}-${theme}.png` })))
     writeFileSync(`${artifacts}/testrun.json`, JSON.stringify({ title: 'OpenApe Reports — private briefing acceptance', project: 'OpenApe Reports', tests: [{ id: 'briefing', title: 'Real DDISA login, owner privacy, editions and responsive reading', status: 'passed', steps: screenshots }] }, null, 2))
     writeFileSync(`${artifacts}/report.html`, `<!doctype html><html lang="en"><meta charset="utf-8"><title>OpenApe Reports verification</title><style>body{font:16px/1.6 system-ui;max-width:1100px;margin:auto;padding:30px;background:#f7f6f1;color:#213c36}img{max-width:100%;border:1px solid #ddd}section{margin:40px 0}strong{color:#326354}</style><h1>OpenApe Reports</h1><p><strong>Passed:</strong> actual DDISA callback on canonical and alias origins; owner-only viewing; immutable editions; mobile, desktop and light/dark rendering. Synthetic data only.</p>${screenshots.map(shot => `<section><h2>${shot.title}</h2><img alt="${shot.title}" src="data:image/png;base64,${readFileSync(`${artifacts}/${shot.shot}`).toString('base64')}"></section>`).join('')}</html>`)
+  }, 180000)
+})
+
+describe('client documents and category privacy', () => {
+  it('isolates saved, historical and direct documents, retains client layouts and embedded screenshots', async () => {
+    const screenshot = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+    const response = await call('POST', '/api/report-series', { name: 'Client documents' })
+    const documents = await response.json()
+    await call('PUT', `/api/report-series/${documents.id}/publisher`, { publisher, expectedRevision: 1 })
+    const attack = '<script>parent.document.body.dataset.attacked="yes";window.attacked=true</script><img src="https://attacker.invalid/pixel" onerror="window.attacked=true"><svg><foreignObject><p onload="window.attacked=true">SVG</p></foreignObject></svg><math><mtext><table><mglyph><style><!--</style><img title="--><img src=x onerror=window.attacked=true>"><form id="document"><input name="cookie"></form><base href="https://attacker.invalid"><meta http-equiv="refresh" content="0;url=https://attacker.invalid"><iframe srcdoc="<script>alert(1)</script>"></iframe><a href="&#106;avascript:alert(1)">Executable URL</a>'
+    const firstBody = { type: 'document', schemaVersion: 1, seriesId: documents.id, title: 'Technischer Bericht', language: 'de', category: 'PR Updates', html: `<main><h1>Technischer Bericht</h1><p>Geprüfte Änderung mit belegten Grenzen.</p><img src="asset:shot.png" alt="Evidence screenshot"></main>${attack}`, css: '@import "https://attacker.invalid/import";body{font:18px/1.6 system-ui;margin:0;padding:32px;background:#edf5f0;color:#173d32}main{display:grid;gap:20px}h1{font:42px Georgia}img{max-width:100%;background:url(https://attacker.invalid/css)}@media(max-width:600px){body{padding:16px}h1{font-size:28px}}', assets: [{ name: 'shot.png', contentType: 'image/png', data: screenshot }] }
+    const posted = await call('POST', '/api/reports', firstBody, agentToken, { 'idempotency-key': 'doc:one' })
+    expect(posted.status, await posted.clone().text()).toBe(201)
+    const first = await posted.json()
+    const secondBody = { ...firstBody, title: 'Engineering notes', language: 'en', html: '<article><h1>Engineering notes</h1><p>A separate edition, on the same day.</p><div class="cards"><section>Behavior verified</section><section>Limits recorded</section></div></article>', css: 'body{font:17px/1.7 Georgia;background:#142434;color:#edf1f7;padding:30px}.cards{display:grid;grid-template-columns:1fr 1fr;gap:18px}section{padding:30px;border:1px solid #6891aa}@media(max-width:600px){.cards{grid-template-columns:1fr}}' }
+    const second = await (await call('POST', '/api/reports', secondBody, agentToken, { 'idempotency-key': 'doc:two' })).json()
+    expect(second.slug).not.toBe(first.slug); expect(second.version).toBe(2)
+    expect((await (await call('GET', `/api/reports/publication?seriesId=${documents.id}&key=doc:one`, undefined, agentToken)).json()).id).toBe(first.id)
+    expect((await (await call('POST', '/api/reports', firstBody, agentToken, { 'idempotency-key': 'doc:one' })).json()).id).toBe(first.id)
+    expect((await (await call('GET', `/api/reports/publication?seriesId=${documents.id}&key=doc:one`)).json()).id).toBe(first.id)
+    const testRun = await (await call('POST', '/api/runs', { title: 'Safe screenshot upload', tests: [{ id: 'raster', title: 'Raster image', status: 'passed', steps: [{ title: 'Image', shot: 'shot.png' }] }] })).json()
+    const assetPath = `/api/runs/${testRun.id}/assets/shot.png`
+    const invalidAsset = await fetch(`${base}${assetPath}`, { method: 'PUT', headers: { authorization: `Bearer ${ownerToken}`, 'content-type': 'text/html' }, body: '<script>window.attacked=true</script>' })
+    expect(invalidAsset.status).toBe(415)
+    const validAsset = await fetch(`${base}${assetPath}`, { method: 'PUT', headers: { authorization: `Bearer ${ownerToken}`, 'content-type': 'text/html' }, body: Buffer.from(screenshot, 'base64') })
+    expect(validAsset.status).toBe(201)
+    const servedAsset = await fetch(`${base}/api/public/runs/${testRun.slug}/assets/shot.png`)
+    expect(servedAsset.headers.get('content-type')).toBe('image/png')
+    expect(servedAsset.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(servedAsset.headers.get('content-security-policy')).toContain('sandbox')
+    const collection = await (await call('GET', '/api/reports')).json()
+    const category = collection.categories.find((item: { label: string }) => item.label === 'PR Updates')
+    expect(category.count).toBe(2)
+    expect((await (await call('GET', `/api/reports?category=${category.key}`)).json()).reports).toHaveLength(2)
+    expect((await (await call('GET', '/api/reports', undefined, otherToken)).json()).categories).toEqual([])
+    for (const token of ['', otherToken, agentToken]) {
+      for (const path of [`/api/public/runs/${first.slug}`, `/api/public/runs/${first.slug}/document`, `/api/public/runs/${first.slug}/document?v=1`]) {
+        const denied = await call('GET', path, undefined, token)
+        expect([401, 404]).toContain(denied.status)
+        expect(await denied.text()).not.toContain('Geprüfte Änderung')
+      }
+    }
+    const preview = await call('POST', '/api/reports/preview', firstBody)
+    expect(preview.status).toBe(200)
+    expect(preview.headers.get('content-security-policy')).toContain('sandbox')
+    expect(preview.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(await preview.text()).not.toContain('attacker.invalid')
+    expect((await call('POST', '/api/reports/preview', firstBody, '')).status).toBe(401)
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
+    const page = await context.newPage()
+    const login = await context.request.post(`${base}/api/login`, { data: { email: owner } })
+    const authorization = await context.request.get((await login.json()).redirectUrl, { headers: { authorization: `Bearer ${idpToken}` }, maxRedirects: 0 })
+    await page.goto(authorization.headers().location!)
+    await page.waitForURL('**/reports')
+    const outbound: string[] = []
+    page.on('request', (request) => { if (request.url().includes('attacker.invalid')) outbound.push(request.url()) })
+    const artifacts = resolve(appRoot, '.artifacts/documents'); mkdirSync(artifacts, { recursive: true })
+    for (const [edition, title] of [[first, 'Technischer Bericht'], [second, 'Engineering notes']] as const) {
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 })
+        await page.goto(`${base}/r/${edition.slug}`)
+        await page.frameLocator('iframe').getByRole('heading', { name: title }).waitFor()
+        expect(await page.locator('iframe').getAttribute('sandbox')).toBe('')
+        expect(await page.evaluate(() => document.body.dataset.attacked)).toBeUndefined()
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+        const frame = page.frames().find(frame => frame.url().endsWith('/document'))!
+        expect(await frame.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+        expect(await frame.evaluate(() => 'attacked' in window)).toBe(false)
+        if (edition === first) expect(await frame.locator('img[alt="Evidence screenshot"]').evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth === 1)).toBe(true)
+        await page.screenshot({ path: `${artifacts}/${edition === first ? 'german' : 'english'}-${width}.png`, fullPage: true })
+      }
+    }
+    const direct = await page.goto(`${base}/api/public/runs/${first.slug}/document`)
+    expect(direct!.headers()['content-security-policy']).toContain('sandbox')
+    expect(direct!.headers()['cache-control']).toBe('private, no-store')
+    expect(await page.evaluate(() => 'attacked' in window)).toBe(false)
+    expect(await page.locator('script, form, svg, iframe, base').count()).toBe(0)
+    expect(outbound).toEqual([])
+    await page.goto(`${base}/reports?category=${category.key}`)
+    await page.getByRole('heading', { name: 'Engineering notes' }).waitFor()
+    await page.screenshot({ path: `${artifacts}/category-mobile.png`, fullPage: true })
+    await context.close()
+    writeFileSync(`${artifacts}/testrun.json`, JSON.stringify({ title: 'Generic Reports — document security and rendering', project: 'OpenApe Reports', tests: [{ id: 'documents', title: 'Immutable editions, private categories and isolated client documents', status: 'passed', steps: ['german-1440', 'german-390', 'english-1440', 'english-390', 'category-mobile'].map(name => ({ title: name, shot: `${name}.png` })) }] }, null, 2))
   }, 180000)
 })
