@@ -678,3 +678,12 @@ and an explicit removal/rollback check. Production operations, exact source/targ
 hashes, native activation and seven-day observation will be recorded in the
 synchronized plan and restricted operator receipts. No issue authority changes
 are implied by merging this preparation increment.
+
+## Generic Reports — issue 1401
+
+- Approved plan: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3KTXVW1069NJZYPCNXNSTEA
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1401
+- Worktree: `openape-monorepo.worktrees/generic-reports`; branch `feature/issue-1401-generic-reports`.
+- Base: `6b02cfc36508e1fe79dd4c4ffcbe81dc78edc85d`. Frozen install and doctor pass.
+- Implemented generic private documents/categories, parser sanitization, HTTP/iframe sandbox, compatible adapters and the receipt-first PR client. Full lint/typecheck and app builds pass; Reports 57 unit + 16 E2E + nine layout tests, Pods 629 tests and CLI four tests pass. Migration twice preserves all legacy rows; the deployed rollback image safely rejects new private documents. See `docs/operations/generic-reports-migration.md`.
+- Next: native PR/exact-source CI, clean-main deployment, real no-send producer previews, evidence upload, guidance and activation. Production, schedules and guidance are unchanged until acceptance.
