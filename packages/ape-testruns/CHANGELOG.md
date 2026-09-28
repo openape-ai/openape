@@ -1,5 +1,11 @@
 # @openape/ape-testruns
 
+## 0.3.0
+
+### Minor Changes
+
+- 9c6676a: Publish private client-authored documents with extensible categories, immutable links, exact retry keys and sanitized previews. Existing test uploads remain compatible.
+
 ## 0.2.2
 
 ### Patch Changes
