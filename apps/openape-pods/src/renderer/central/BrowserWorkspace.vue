@@ -95,7 +95,7 @@ onBeforeUnmount(() => { closed = true })
       </template>
     </section>
     <AppSettings v-if="subject && page === 'App settings'" browser :subject="subject" @logout="logout" />
-    <CentralWorkspace v-if="subject" v-show="page === 'Pods'" ref="workspace" :client="client" embedded shared-editor @inventory="inventory" @connection="connectionError = $event" @login="expired" />
+    <CentralWorkspace v-if="subject" v-show="page === 'Pods'" ref="workspace" :client="client" embedded shared-editor @settings="navigate('App settings')" @inventory="inventory" @connection="connectionError = $event" @login="expired" />
   </WorkspaceFrame>
 </template>
 

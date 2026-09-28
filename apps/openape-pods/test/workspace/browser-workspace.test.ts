@@ -25,7 +25,7 @@ it('uses the desktop shell and every Pod section without a native bridge', async
     await click(tab)
     expect(wrapper!.findAll('[role="alert"]').map(item => item.text()).join(' ')).toBe('')
   }
-  await wrapper!.get('[aria-label="App settings"]').trigger('click'); await flushPromises()
+  await click('Permissions'); await click('Work from Codex')
   expect(wrapper!.get('.app-settings').text()).toContain('Manage these accounts on the desktop.')
   await click('Sign out')
   expect(wrapper!.emitted('logout')).toHaveLength(1)
