@@ -1,7 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm'
 import { defineEventHandler, getRouterParam } from 'h3'
 import { useDb } from '../../../database/drizzle'
-import { assets, reportPublications, runVersions } from '../../../database/schema'
+import { assets, documentPublications, reportPublications, runVersions, runs } from '../../../database/schema'
 import { createProblemError } from '../../../utils/problem'
 import { renderMarkdown, renderMarkdownInline } from '../../../utils/markdown'
 import { loadRunBySlug, requestedVersion } from '../../../utils/run-access'
@@ -13,6 +13,15 @@ export default defineEventHandler(async (event) => {
   const run = await loadRunBySlug(event, slug)
   const version = requestedVersion(event, run)
   const db = useDb()
+
+  if (run.reportType === 'document') {
+    const document = await db.select().from(documentPublications).where(eq(documentPublications.id, run.id)).get()
+    if (!document) throw createProblemError({ status: 404, title: 'Document not found' })
+    const editions = document.seriesId
+      ? await db.select({ id: documentPublications.id, version: documentPublications.version, title: runs.title, slug: runs.slug }).from(documentPublications).innerJoin(runs, eq(runs.id, documentPublications.id)).where(and(eq(documentPublications.seriesId, document.seriesId), eq(documentPublications.owner, run.createdBy))).orderBy(desc(documentPublications.version))
+      : []
+    return { type: 'document' as const, title: run.title, category: document.category ?? 'Uncategorized', language: document.language, version: document.version, editions, documentUrl: `/api/public/runs/${run.slug}/document`, artifactDigest: document.artifactDigest, policyVersion: document.policyVersion }
+  }
 
   let shown: Pick<typeof run, 'title' | 'project' | 'summary' | 'status' | 'passedCount' | 'failedCount' | 'skippedCount' | 'manifest' | 'startedAt' | 'finishedAt' | 'createdAt'> = run
   if (version !== run.version) {

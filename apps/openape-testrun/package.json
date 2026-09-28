@@ -26,7 +26,10 @@
     "marked": "catalog:",
     "nuxt": "catalog:",
     "tailwindcss": "catalog:",
-    "ulid": "catalog:"
+    "ulid": "catalog:",
+    "sanitize-html": "^2.14.0",
+    "postcss": "8.5.25",
+    "postcss-value-parser": "4.2.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "catalog:",
@@ -36,6 +39,7 @@
     "openape-e2e": "workspace:*",
     "playwright": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@types/sanitize-html": "^2.13.0"
   }
 }
