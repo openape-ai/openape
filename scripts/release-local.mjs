@@ -8,10 +8,10 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { readdirSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { gitRemotes, repository, resolveTruthRemote } from './repository.mjs'
-import { releaseOptions } from './release-options.mjs'
+import { blocksRelease, releaseOptions } from './release-options.mjs'
 
 const ROOT = new URL('..', import.meta.url).pathname
 const { dryRun, filter } = releaseOptions(process.argv.slice(2))
@@ -57,8 +57,9 @@ const base = `${remote}/${repository.defaultBranch}`
 const head = capture('git', ['rev-parse', 'HEAD'])
 if (head !== capture('git', ['rev-parse', base])) fail(`HEAD must equal ${base}. Merge the version PR and update this checkout first.`)
 
-const csFiles = readdirSync(resolve(ROOT, '.changeset')).filter(f => f.endsWith('.md') && f !== 'README.md')
-if (csFiles.length > 0) fail('Pending changesets: run pnpm version-packages on a feature branch, then merge the version PR before publishing.')
+const csFiles = readdirSync(resolve(ROOT, '.changeset')).filter(f => f.endsWith('.md') && f !== 'README.md'
+  && blocksRelease(readFileSync(resolve(ROOT, '.changeset', f), 'utf8'), filter))
+if (csFiles.length > 0) fail('Pending changesets in the selected release scope: run pnpm version-packages on a feature branch, then merge the version PR before publishing.')
 
 console.log(JSON.stringify({ repository: repository.url, remote, branch, sha: head, dryRun, filter: filter ?? null }))
 // Validate the requested package and show its exact publication scope first.

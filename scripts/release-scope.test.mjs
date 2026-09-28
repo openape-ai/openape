@@ -6,6 +6,17 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 // eslint-disable-next-line test/no-import-node-test
 import { it } from 'node:test'
+import { blocksRelease } from './release-options.mjs'
+
+it('pending release metadata blocks its selected package and fails closed when ambiguous', () => {
+  const changeset = '---\n"@openape/ape-testruns": minor\n"@openape/cli-auth": patch\n---\nRelease notes'
+  assert.equal(blocksRelease(changeset), true)
+  assert.equal(blocksRelease(changeset, '@openape/ape-testruns'), true)
+  assert.equal(blocksRelease(changeset, '@openape/apes'), false)
+  for (const invalid of ['missing metadata', '---\n@openape/apes: [patch]\n---\n', '---\n# ambiguous\n---\n']) {
+    assert.throws(() => blocksRelease(invalid, '@openape/ape-testruns'))
+  }
+})
 
 const script = fileURLToPath(new URL('./publish-chain.mjs', import.meta.url))
 it('a filtered release dry-run only looks up the authorized package', () => {
