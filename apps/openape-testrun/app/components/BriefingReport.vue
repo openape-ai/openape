@@ -3,6 +3,10 @@ import { computed, onMounted, ref } from 'vue'
 import type { Briefing } from '../../shared/briefing'
 
 const props = defineProps<{ report: Briefing, version: number, latestVersion: number, editions: { version: number, date: string }[] }>()
+const importantItems = computed(() => props.report.importantItems.filter(item => !props.report.emails.some(mail => mail.subject === item.title && mail.summary === item.summary)))
+const nextActions = computed(() => props.report.nextActions.filter(action => !props.report.emails.some(mail => mail.nextAction === action.text)))
+const sourceStatus: Record<string, string> = { fresh: 'Aktuell', stale: 'Veraltet', missing: 'Fehlt', error: 'Fehler', partial: 'Teilweise' }
+const mailStatus: Record<string, string> = { action: 'Du bist am Zug', keep: 'Zur Information', archive: 'Archivierung vorgeschlagen' }
 const ready = ref(false)
 onMounted(() => { ready.value = true })
 const theme = ref<'system' | 'light' | 'dark'>('system')
@@ -10,29 +14,29 @@ const selectedVersion = computed({
   get: () => props.version,
   set: (value: number) => { if (value !== props.version) window.location.search = `?v=${value}` },
 })
-const dateLabel = computed(() => new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${props.report.editionDate}T12:00:00Z`)))
+const dateLabel = computed(() => new Intl.DateTimeFormat('de-AT', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${props.report.editionDate}T12:00:00Z`)))
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Vienna', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 const stale = computed(() => props.report.editionDate < today && props.version === props.latestVersion)
 const orderedCalendar = computed(() => [...props.report.calendar].sort((a, b) => Date.parse(a.start) - Date.parse(b.start)))
-function time(value: string) { return new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Vienna', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
-function shortDate(value: string) { return new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Vienna', day: 'numeric', month: 'short' }).format(new Date(value)) }
+function time(value: string) { return new Intl.DateTimeFormat('de-AT', { timeZone: 'Europe/Vienna', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
+function shortDate(value: string) { return new Intl.DateTimeFormat('de-AT', { timeZone: 'Europe/Vienna', day: 'numeric', month: 'short' }).format(new Date(value)) }
 </script>
 
 <template>
-  <div class="briefing" :data-theme="theme">
+  <div lang="de" class="briefing" :data-theme="theme">
     <div class="paper">
       <header class="masthead">
         <a class="brand" href="/reports"><span class="brand-mark" aria-hidden="true">o.</span> OpenApe <span>Reports</span></a>
         <div class="toolbar">
-          <span class="private-label"><span aria-hidden="true">●</span> Private edition</span>
-          <label class="sr-only" for="briefing-theme">Appearance</label>
-          <select id="briefing-theme" v-model="theme" :disabled="!ready" aria-label="Appearance">
+          <span class="private-label"><span aria-hidden="true">●</span> Private Ausgabe</span>
+          <label class="sr-only" for="briefing-theme">Darstellung</label>
+          <select id="briefing-theme" v-model="theme" :disabled="!ready" aria-label="Darstellung">
             <option value="system">
               Auto
             </option><option value="light">
-              Light
+              Hell
             </option><option value="dark">
-              Dark
+              Dunkel
             </option>
           </select>
         </div>
@@ -40,7 +44,7 @@ function shortDate(value: string) { return new Intl.DateTimeFormat('en-GB', { ti
       <main>
         <section class="opening" aria-labelledby="briefing-title">
           <p class="kicker">
-            Your morning, in perspective
+            Dein Morgen im Überblick
           </p>
           <p class="edition-date">
             {{ dateLabel }}
@@ -52,85 +56,61 @@ function shortDate(value: string) { return new Intl.DateTimeFormat('en-GB', { ti
             {{ report.overview }}
           </p>
           <div class="edition-meta">
-            <span>Prepared at {{ time(report.generatedAt) }} · Vienna</span><span>Edition {{ version }}</span>
+            <span>Erstellt um {{ time(report.generatedAt) }} · Wien</span><span>Ausgabe {{ version }}</span>
           </div>
           <p v-if="stale" class="notice">
-            Latest available edition · {{ shortDate(report.generatedAt) }}. A newer briefing has not been published yet.
+            Neueste verfügbare Ausgabe · {{ shortDate(report.generatedAt) }}. Ein neuerer Bericht wurde noch nicht veröffentlicht.
           </p>
           <p v-if="version !== latestVersion" class="notice">
-            You are reading a previous edition. <a :href="`?v=${latestVersion}`">Read the latest →</a>
+            Du liest eine frühere Ausgabe. <a :href="`?v=${latestVersion}`">Zur neuesten Ausgabe →</a>
           </p>
         </section>
-        <nav class="section-nav" aria-label="Briefing sections">
-          <a href="#focus">In focus</a><a href="#agenda">Your day</a><a href="#inbox">Inbox</a><a href="#repositories">Issues</a><a href="#sources">Sources</a>
+        <nav class="section-nav" aria-label="Berichtsabschnitte">
+          <a v-if="importantItems.length || nextActions.length" href="#focus">Im Fokus</a><a href="#inbox">Nachrichten</a><a href="#agenda">Kalender</a><a href="#repositories">Issues</a><a href="#sources">Quellen</a>
         </nav>
-        <div class="primary-grid">
-          <section id="focus" class="focus section" aria-labelledby="focus-title">
+        <div v-if="importantItems.length || nextActions.length" id="focus" class="primary-grid">
+          <section v-if="importantItems.length" class="focus section" aria-labelledby="focus-title">
             <div class="section-heading">
-              <span class="section-number">01</span><h2 id="focus-title">
-                Worth your attention
+              <h2 id="focus-title">
+                Wichtig für dich
               </h2>
             </div>
-            <div v-if="!report.importantItems.length" class="empty">
-              No important items were identified in the available sources.
+            <div v-if="!importantItems.length" class="empty">
+              In den verfügbaren Quellen wurden keine wichtigen Punkte erkannt.
             </div>
-            <article v-for="(item, index) in report.importantItems" :key="item.id" class="focus-item">
+            <article v-for="(item, index) in importantItems" :key="item.id" class="focus-item">
               <span class="item-index">{{ String(index + 1).padStart(2, '0') }}</span>
               <div>
                 <p v-if="item.priority === 'high'" class="priority">
-                  Priority
+                  Wichtig
                 </p><h3>{{ item.title }}</h3><p>{{ item.summary }}</p><div class="source-links">
                   <a v-for="id in item.sourceIds" :key="id" :href="`#source-${id}`">{{ report.sources.find(source => source.id === id)?.label }}</a>
                 </div>
               </div>
             </article>
           </section>
-          <aside class="actions section" aria-labelledby="actions-title">
+          <aside v-if="nextActions.length" class="actions section" aria-labelledby="actions-title">
             <p class="kicker">
-              A clear next step
+              Was als Nächstes ansteht
             </p><h2 id="actions-title">
-              Next actions
-            </h2><p v-if="!report.nextActions.length" class="empty">
-              No actions identified.
+              Nächste Schritte
+            </h2><p v-if="!nextActions.length" class="empty">
+              Keine offenen Schritte erkannt.
             </p><ol>
-              <li v-for="action in report.nextActions" :key="action.id">
-                <p>{{ action.text }}</p><span v-if="action.dueDate" class="minor">Due {{ action.dueDate }}</span><a v-if="action.url" :href="action.url" rel="noopener noreferrer" target="_blank">Open source ↗</a>
+              <li v-for="action in nextActions" :key="action.id">
+                <p>{{ action.text }}</p><span v-if="action.dueDate" class="minor">Fällig am {{ action.dueDate }}</span><a v-if="action.url" :href="action.url" rel="noopener noreferrer" target="_blank">Quelle öffnen ↗</a>
               </li>
             </ol>
           </aside>
         </div>
-        <section id="agenda" class="section agenda" aria-labelledby="agenda-title">
-          <div class="section-heading">
-            <span class="section-number">02</span><h2 id="agenda-title">
-              Your day, at a glance
-            </h2><span class="section-count">{{ report.calendar.length }} events</span>
-          </div>
-          <p v-if="!report.calendar.length" class="empty">
-            No events in the collected calendar data. Check source coverage below.
-          </p>
-          <article v-for="event in orderedCalendar" :key="event.account + event.id" class="event">
-            <div class="event-time">
-              <strong>{{ event.allDay ? 'All day' : time(event.start) }}</strong><span>{{ event.allDay ? event.start : shortDate(event.start) }}</span>
-            </div>
-            <div class="event-detail">
-              <p class="minor">
-                {{ event.account }}
-              </p><h3><a v-if="event.url" :href="event.url" target="_blank" rel="noopener noreferrer">{{ event.title }} ↗</a><span v-else>{{ event.title }}</span></h3><p v-if="event.location">
-                {{ event.location }}
-              </p><p v-if="!event.allDay" class="minor">
-                Until {{ time(event.end) }}
-              </p>
-            </div>
-          </article>
-        </section>
         <section id="inbox" class="section inbox" aria-labelledby="inbox-title">
           <div class="section-heading">
-            <span class="section-number">03</span><h2 id="inbox-title">
-              From your inbox
-            </h2><span class="section-count">{{ report.emails.length }} selected</span>
+            <h2 id="inbox-title">
+              Deine Nachrichten
+            </h2><span class="section-count">{{ report.emails.length }} ausgewählt</span>
           </div>
           <p v-if="!report.emails.length" class="empty">
-            No relevant messages in the available review. Source coverage is shown below.
+            Keine relevanten Nachrichten in der verfügbaren Prüfung. Die Quellenabdeckung steht weiter unten.
           </p>
           <div class="mail-grid">
             <article v-for="mail in report.emails" :key="mail.account + mail.id" class="mail-card">
@@ -139,20 +119,44 @@ function shortDate(value: string) { return new Intl.DateTimeFormat('en-GB', { ti
               </div><p class="sender">
                 {{ mail.sender }}
               </p><h3>{{ mail.subject }}</h3><p>{{ mail.summary }}</p><p v-if="mail.nextAction" class="mail-action">
-                <strong>Next:</strong> {{ mail.nextAction }}
+                <strong>Dein nächster Schritt:</strong> {{ mail.nextAction }}
               </p><div class="mail-footer">
-                <span class="tag">{{ mail.disposition }}</span><a v-if="mail.url" :href="mail.url" target="_blank" rel="noopener noreferrer">Read email ↗</a><a v-if="mail.approvalUrl" :href="mail.approvalUrl" target="_blank" rel="noopener noreferrer">Review archive request ↗</a>
+                <span class="tag">{{ mailStatus[mail.disposition] ?? mail.disposition }}</span><a v-if="mail.url" :href="mail.url" target="_blank" rel="noopener noreferrer">E-Mail öffnen ↗</a><a v-if="mail.approvalUrl" :href="mail.approvalUrl" target="_blank" rel="noopener noreferrer">Archivierung prüfen ↗</a>
               </div>
             </article>
           </div>
         </section>
+        <section id="agenda" class="section agenda" aria-labelledby="agenda-title">
+          <div class="section-heading">
+            <h2 id="agenda-title">
+              Dein Kalender
+            </h2><span class="section-count">{{ report.calendar.length }} Termine</span>
+          </div>
+          <p v-if="!report.calendar.length" class="empty">
+            Keine Termine in den erfassten Kalenderdaten. Beachte die Quellenabdeckung weiter unten.
+          </p>
+          <article v-for="event in orderedCalendar" :key="event.account + event.id" class="event">
+            <div class="event-time">
+              <strong>{{ event.allDay ? 'Ganztägig' : time(event.start) }}</strong><span>{{ event.allDay ? event.start : shortDate(event.start) }}</span>
+            </div>
+            <div class="event-detail">
+              <p class="minor">
+                {{ event.account }}
+              </p><h3><a v-if="event.url" :href="event.url" target="_blank" rel="noopener noreferrer">{{ event.title }} ↗</a><span v-else>{{ event.title }}</span></h3><p v-if="event.location">
+                {{ event.location }}
+              </p><p v-if="!event.allDay" class="minor">
+                Bis {{ time(event.end) }}
+              </p>
+            </div>
+          </article>
+        </section>
         <section id="repositories" class="section" aria-labelledby="issues-title">
           <div class="section-heading">
-            <span class="section-number">04</span><h2 id="issues-title">
-              Open threads
-            </h2><span class="section-count">{{ report.issues.length }} selected issues</span>
+            <h2 id="issues-title">
+              Offene Repository-Issues
+            </h2><span class="section-count">{{ report.issues.length }} ausgewählte Issues</span>
           </div><p v-if="!report.issues.length" class="empty">
-            No open issues in the collected subset.
+            Keine offenen Issues im erfassten Ausschnitt.
           </p><article v-for="issue in report.issues" :key="issue.url" class="issue">
             <span class="issue-dot" aria-hidden="true">○</span><div>
               <p class="minor">
@@ -163,32 +167,32 @@ function shortDate(value: string) { return new Intl.DateTimeFormat('en-GB', { ti
         </section>
         <section id="sources" class="section sources" aria-labelledby="sources-title">
           <div class="section-heading">
-            <span class="section-number">05</span><h2 id="sources-title">
-              Behind this briefing
+            <h2 id="sources-title">
+              Quellen und Abdeckung
             </h2>
           </div><p class="sources-intro">
-            This edition reflects the sources available at generation time. Missing information is shown explicitly.
+            Diese Ausgabe basiert auf den zum Erstellungszeitpunkt verfügbaren Quellen. Fehlende Informationen werden ausdrücklich ausgewiesen.
           </p><div v-if="report.gaps.length" class="gap-list">
             <p v-for="(gap, index) in report.gaps" :key="index">
-              <strong>{{ report.sources.find(source => source.id === gap.sourceId)?.label }}:</strong> {{ gap.reason }}<span v-if="gap.lastSuccessAt"> Last successful collection: {{ shortDate(gap.lastSuccessAt) }} {{ time(gap.lastSuccessAt) }}.</span>
+              <strong>{{ report.sources.find(source => source.id === gap.sourceId)?.label }}:</strong> {{ gap.reason }}<span v-if="gap.lastSuccessAt"> Zuletzt erfolgreich erfasst: {{ shortDate(gap.lastSuccessAt) }} {{ time(gap.lastSuccessAt) }}.</span>
             </p>
           </div><div class="source-grid">
             <article v-for="source in report.sources" :id="`source-${source.id}`" :key="source.id" class="source">
-              <div><h3>{{ source.label }}</h3><span class="source-status" :data-status="source.status">{{ source.status }}</span></div><p>{{ source.coverage }}</p><p v-if="source.total !== undefined" class="minor">
-                {{ source.total }} total<span v-if="source.limit !== undefined"> · collection limit {{ source.limit }}</span>
+              <div><h3>{{ source.label }}</h3><span class="source-status" :data-status="source.status">{{ sourceStatus[source.status] }}</span></div><p>{{ source.coverage }}</p><p v-if="source.total !== undefined" class="minor">
+                {{ source.total }} insgesamt<span v-if="source.limit !== undefined"> · Erfassungsgrenze {{ source.limit }}</span>
               </p><p class="minor">
-                {{ source.collectedAt ? `Collected ${shortDate(source.collectedAt)} at ${time(source.collectedAt)}` : 'No collection timestamp' }}
-              </p><a v-if="source.url" :href="source.url" target="_blank" rel="noopener noreferrer">Open source ↗</a>
-              <a v-if="source.approvalUrl" :href="source.approvalUrl" target="_blank" rel="noopener noreferrer">Review {{ source.approvalCount }} archive suggestions ↗</a>
+                {{ source.collectedAt ? `Erfasst am ${shortDate(source.collectedAt)} um ${time(source.collectedAt)}` : 'Kein Erfassungszeitpunkt verfügbar' }}
+              </p><a v-if="source.url" :href="source.url" target="_blank" rel="noopener noreferrer">Quelle öffnen ↗</a>
+              <a v-if="source.approvalUrl" :href="source.approvalUrl" target="_blank" rel="noopener noreferrer">{{ source.approvalCount }} Archivierungsvorschläge prüfen ↗</a>
             </article>
           </div>
         </section>
       </main>
       <footer class="footer">
-        <div><strong>A little clarity for the day ahead.</strong><p>OpenApe Reports · Private to your account</p></div><div class="archive">
-          <label for="briefing-edition">Previous editions</label><select id="briefing-edition" v-model.number="selectedVersion" :disabled="!ready">
+        <div><strong>Mit Klarheit in den Tag.</strong><p>OpenApe Reports · Nur für dein Konto</p></div><div class="archive">
+          <label for="briefing-edition">Frühere Ausgaben</label><select id="briefing-edition" v-model.number="selectedVersion" :disabled="!ready">
             <option v-for="edition in editions" :key="edition.version" :value="edition.version">
-              {{ edition.date }} · edition {{ edition.version }}
+              {{ edition.date }} · Ausgabe {{ edition.version }}
             </option>
           </select>
         </div>

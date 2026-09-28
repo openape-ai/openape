@@ -63,23 +63,23 @@ export function buildBriefing(now, seriesId, data, mailReview, preview) {
   if (!mailReview || mailReview.date !== editionDate || !Array.isArray(mailReview.accounts) || !Array.isArray(mailReview.gaps)) throw new Error('Current workflow mail review is missing')
   const generatedAt = now.toISOString()
   const report = { schemaVersion: 1, type: 'briefing', seriesId, editionDate, timezone, generatedAt,
-    title: preview ? 'Morning briefing · Preview' : 'Your morning briefing', overview: '',
+    title: preview ? 'Morgenbericht · Vorschau' : 'Dein Morgenbericht', overview: '',
     importantItems: [], nextActions: [], calendar: [], emails: [], issues: [], sources: [], gaps: [] }
   for (const item of data.filter(item => item.account)) {
     const sourceId = `calendar-${report.sources.length}`
     const failed = item.errors.length > 0
-    report.sources.push({ id: sourceId, label: `Calendar · ${item.account}`, collectedAt: generatedAt, status: failed ? 'partial' : 'fresh', coverage: 'Today and the next seven days; upcoming collection limit 50.', limit: 50 })
+    report.sources.push({ id: sourceId, label: `Kalender · ${item.account}`, collectedAt: generatedAt, status: failed ? 'partial' : 'fresh', coverage: 'Heute und die nächsten sieben Tage; maximal 50 kommende Termine.', limit: 50 })
     for (const reason of item.errors) report.gaps.push({ sourceId, reason })
     const events = new Map()
     for (const event of [...(item.today ?? []), ...(item.upcoming ?? [])]) events.set(event.id, event)
     if ((item.upcoming?.length ?? 0) >= 50) {
       report.sources.at(-1).status = 'partial'
-      report.gaps.push({ sourceId, reason: 'The upcoming-event limit was reached; later events may be missing.' })
+      report.gaps.push({ sourceId, reason: 'Die Erfassungsgrenze für kommende Termine wurde erreicht; spätere Termine können fehlen.' })
     }
     report.sources.at(-1).total = events.size
     for (const event of events.values()) {
       if (typeof event.subject !== 'string' || typeof event.id !== 'string') throw new Error('Calendar event has no identity or title')
-      report.calendar.push({ id: event.id, account: item.account, title: event.subject || '(Untitled event)',
+      report.calendar.push({ id: event.id, account: item.account, title: event.subject || '(Termin ohne Titel)',
         start: event.is_all_day ? parts(event.start).dayKey : new Date(event.start).toISOString(),
         end: event.is_all_day ? parts(event.end).dayKey : new Date(event.end).toISOString(),
         allDay: event.is_all_day === true, location: event.location || '', ...(event.url ? { url: safeLink(event.url) } : {}) })
@@ -91,28 +91,25 @@ export function buildBriefing(now, seriesId, data, mailReview, preview) {
   for (const item of mailReview.accounts) {
     const sourceId = `mail-${report.sources.length}`
     const status = staleMail ? 'stale' : item.checked < item.total ? 'partial' : 'fresh'
-    report.sources.push({ id: sourceId, label: `Mail review · ${item.account}`, collectedAt: mailReview.collectedAt, status,
-      coverage: `${item.checked}/${item.total} inbox messages checked. ${item.archiveCount} archive suggestions.${preview ? ' Preview: no archive approval was created.' : ' Archive actions still require your explicit approval.'}`,
+    report.sources.push({ id: sourceId, label: `Mail-Prüfung · ${item.account}`, collectedAt: mailReview.collectedAt, status,
+      coverage: `${item.checked}/${item.total} Nachrichten im Posteingang geprüft. ${item.archiveCount} Archivierungsvorschläge.${preview ? ' Vorschau: Es wurde keine Archivierungsfreigabe erstellt.' : ' Archivierungen benötigen weiterhin deine ausdrückliche Freigabe.'}`,
       total: item.total, limit: item.checked, ...(item.grant?.url ? { approvalUrl: safeLink(item.grant.url), approvalCount: item.grant.count } : {}) })
-    if (staleMail) report.gaps.push({ sourceId, reason: 'The mail review is more than two hours old.' })
-    if (item.checked < item.total) report.gaps.push({ sourceId, reason: `${item.total - item.checked} inbox messages are outside this review.` })
+    if (staleMail) report.gaps.push({ sourceId, reason: 'Die Mail-Prüfung ist mehr als zwei Stunden alt.' })
+    if (item.checked < item.total) report.gaps.push({ sourceId, reason: `${item.total - item.checked} Nachrichten wurden in dieser Prüfung nicht erfasst.` })
     for (const mail of item.important) {
-      const id = `${sourceId}-${report.emails.length}`
-      report.emails.push({ id: mail.id, account: item.account, sender: mail.sender, subject: mail.subject || '(No subject)', receivedAt: new Date(mail.receivedAt).toISOString(), disposition: mail.disposition,
+      report.emails.push({ id: mail.id, account: item.account, sender: mail.sender, subject: mail.subject || '(Ohne Betreff)', receivedAt: new Date(mail.receivedAt).toISOString(), disposition: mail.disposition,
         summary: mail.summary, nextAction: mail.nextAction || '', url: safeLink(mail.url) })
-      report.importantItems.push({ id, title: mail.subject || '(No subject)', summary: mail.summary, priority: mail.priority >= 4 ? 'high' : 'normal', sourceIds: [sourceId] })
-      if (mail.nextAction) report.nextActions.push({ id, text: mail.nextAction, sourceIds: [sourceId], url: safeLink(mail.url) })
     }
   }
   const reviewId = 'mail-review-coverage'
-  report.sources.push({ id: reviewId, label: 'Workflow mail coverage', collectedAt: mailReview.collectedAt, status: mailReview.gaps.length ? 'partial' : 'fresh', coverage: 'Existing mail-review output; no second classification.' })
+  report.sources.push({ id: reviewId, label: 'Abdeckung der Mail-Prüfung', collectedAt: mailReview.collectedAt, status: mailReview.gaps.length ? 'partial' : 'fresh', coverage: 'Ergebnisse der vorhandenen Mail-Prüfung.' })
   for (const reason of mailReview.gaps) report.gaps.push({ sourceId: reviewId, reason })
   const repos = data.find(item => item.repos)?.repos
-  report.sources.push({ id: 'issues', label: 'Open repository issues', collectedAt: generatedAt, status: repos ? (repos.total > 10 ? 'partial' : 'fresh') : 'missing', coverage: 'Repositories owned by Patrick; up to ten most recently updated open issues.', ...(repos ? { total: repos.total } : {}), limit: 10, url: 'https://repos.openape.ai/issues' })
-  if (!repos) report.gaps.push({ sourceId: 'issues', reason: data.find(item => item.reposError)?.reposError || 'Repository issue collection failed.' })
+  report.sources.push({ id: 'issues', label: 'Offene Repository-Issues', collectedAt: generatedAt, status: repos ? (repos.total > 10 ? 'partial' : 'fresh') : 'missing', coverage: 'Patricks Repositories; bis zu zehn zuletzt aktualisierte offene Issues.', ...(repos ? { total: repos.total } : {}), limit: 10, url: 'https://repos.openape.ai/issues' })
+  if (!repos) report.gaps.push({ sourceId: 'issues', reason: data.find(item => item.reposError)?.reposError || 'Repository-Issues konnten nicht erfasst werden.' })
   for (const issue of repos?.issues ?? []) report.issues.push({ repository: issue.repository, number: issue.number, title: issue.title, state: 'open', updatedAt: new Date(issue.updatedAt).toISOString(), url: safeLink(issue.url) })
   const todayEvents = report.calendar.filter(event => parts(event.start).dayKey === editionDate).length
-  report.overview = `${todayEvents} collected calendar events today, ${report.emails.length} relevant messages and ${repos ? repos.total : 'unavailable'} open repository issues. ${report.nextActions.length} next actions are identified below.${report.gaps.length ? ` ${report.gaps.length} source gaps or limitations need attention.` : ''}`
+  report.overview = `${todayEvents} ${todayEvents === 1 ? 'Termin' : 'Termine'} heute, ${report.emails.length} relevante Nachrichten und ${repos ? repos.total : 'nicht verfügbare'} offene Repository-Issues. ${report.emails.filter(mail => mail.nextAction).length} nächste Schritte stehen bei den jeweiligen Nachrichten.${report.gaps.length ? ` Bitte beachte ${report.gaps.length} Hinweise zur Quellenabdeckung.` : ''}`
   const body = JSON.stringify(report)
   if (Buffer.byteLength(body) > 60 * 1024) throw new Error('Briefing exceeds the 60 KiB publication limit; no partial publication')
   return report
@@ -143,11 +140,11 @@ export async function publish(context, pending, origin) {
 }
 
 export function notification(date, publication, report) {
-  const lines = [`📅 Morning briefing · ${date}`, '', 'Your private briefing:', publication.edition_url, '', `Latest: ${publication.url}`]
+  const lines = [`📅 Morgenbericht · ${date}`, '', 'Dein privater Morgenbericht:', publication.edition_url, '', `Neueste Ausgabe: ${publication.url}`]
   for (const source of report.sources) {
-    if (source.approvalUrl) lines.push('', `${source.approvalCount} archive suggestions · review and approve:`, source.approvalUrl)
+    if (source.approvalUrl) lines.push('', `${source.approvalCount} Archivierungsvorschläge · prüfen und freigeben:`, source.approvalUrl)
   }
-  if (report.gaps.length) lines.push('', `⚠ ${report.gaps.length} source gaps or limitations are explained in the briefing.`)
+  if (report.gaps.length) lines.push('', `⚠ ${report.gaps.length} Hinweise zur Quellenabdeckung findest du im Bericht.`)
   const text = lines.join('\n')
   if (text.length > 4096) throw new Error('Notification exceeds Telegram limit; no partial send')
   return text
@@ -204,12 +201,12 @@ export async function run(context) {
       const item = { account, errors: [] }
       for (const [field, argv] of [['today', ['calendar', 'today', '--account', account, '--json']], ['upcoming', ['calendar', 'list', '--account', account, '--days', '8', '--limit', '50', '--json']]]) {
         try { item[field] = readArray(await context.tools.invoke({ application: 'o365-cli', argv }), `${account}/${field}`) }
-        catch { item.errors.push(`${account}/${field}: calendar collection failed; events may be missing`) }
+        catch { item.errors.push(`${account}/${field}: Kalender konnte nicht erfasst werden; Termine können fehlen`) }
       }
       data.push(item)
     }
     try { data.push({ repos: readIssues(await context.tools.invoke({ application: 'repos-issues', argv: ['list'] })) }) }
-    catch { data.push({ reposError: 'Repository issue collection failed; open issues may be missing' }) }
+    catch { data.push({ reposError: 'Repository-Issues konnten nicht erfasst werden; offene Issues können fehlen' }) }
     if (data.some(item => item.reposError || item.errors?.length)) return gap('Required calendar or repository collection failed; no publication or send')
     const mailReview = Object.values(context.input.workflow?.outputs ?? {}).find(output => output.schema === 'morning-mail-review/v1')?.data
     let report
