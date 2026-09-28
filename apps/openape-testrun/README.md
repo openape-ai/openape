@@ -1,6 +1,42 @@
 # OpenApe Reports
 
-The existing Testrun service stores shared test reports and private structured briefings. Package, image, database and CLI identity remain `openape-testrun` / `testrun.openape.ai`. `report.openape.ai` is the general reading entry point; `ape-testruns` and old `/r/:slug?v=N` links are unchanged.
+OpenApe Reports stores client-authored private documents, shared test reports and compatible private structured briefings. Package, image, database and CLI identity remain `openape-testrun` / `testrun.openape.ai`. `report.openape.ai` is the general reading entry point; `ape-testruns` and old `/r/:slug?v=N` links are unchanged.
+
+## Generic client documents
+
+Enable new publishing with `NUXT_DOCUMENT_PUBLISHING_ENABLED=true` after the migration
+and rollback acceptance. It defaults off; disabling it preserves all persisted data
+and compatibility adapters. The [migration matrix](../../docs/operations/generic-reports-migration.md)
+records rollout state and evidence.
+
+`POST /api/reports` also accepts document/v1 with a stable `Idempotency-Key`.
+Clients supply title, static HTML, CSS, optional language/category/series and bounded
+raster assets. See the [complete envelope and CLI contract](../../packages/ape-testruns/src/docs/documents.md).
+Each document has its own immutable private link; calendar dates do not define identity.
+Retries compare original request bytes and reuse the persisted sanitized artifact.
+The receipt includes distinct request/artifact SHA-256 hashes and sanitizer policy.
+An optional series orders editions without applying the legacy briefing daily rule.
+
+HTML is parsed by the existing maintained `sanitize-html` dependency. PostCSS and
+postcss-value-parser (already resolved in the repository, now explicit dependencies)
+parse client CSS; no regex sanitizer is used. HTML scripts, executable attributes,
+forms, namespaces, metadata overrides and navigation are excluded. CSS fetches and
+unsupported functions/at-rules are removed, escapes/markup rejected. Static CSS stays
+inside a sandboxed iframe without scripts or same-origin privileges. The authenticated
+HTML response also carries sandbox CSP, private/no-store and nosniff, including direct
+navigation. Images are verified PNG/JPEG/WebP bytes embedded in that private response;
+there is no raw original-HTML route or external resource fetch.
+
+`GET /api/reports` lists only the owner's accessible reports with category keys/counts,
+filters and pagination. Legacy briefings map to Briefings, tests to Test Runs, absent
+categories to Uncategorized. New bounded NFC labels appear on first publication.
+`POST /api/reports/preview` returns the same isolated artifact without persistence.
+`GET /api/reports/publication?key=KEY&seriesId=ID` reconciles exact receipts for the owner
+or currently bound publisher. The legacy audience remains `testrun.openape.ai`.
+
+Screenshot PUT validates raster signatures; response MIME is derived from bytes for
+both new and historical assets. Unsupported historical bytes remain downloadable as
+attachments with nosniff and sandbox rather than executable content at the app origin.
 
 ## Contracts
 

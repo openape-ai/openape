@@ -61,6 +61,13 @@ export async function migrateReports(client: Client) {
       publisher TEXT NOT NULL, created_at INTEGER NOT NULL,
       UNIQUE(series_id, edition_date), UNIQUE(series_id, idempotency_key), UNIQUE(series_id, version)
     )`)
+    await tx.execute(`CREATE TABLE IF NOT EXISTS document_publications (
+      id TEXT PRIMARY KEY, series_id TEXT, version INTEGER NOT NULL,
+      owner TEXT NOT NULL, publisher TEXT NOT NULL, idempotency_key TEXT NOT NULL,
+      digest TEXT NOT NULL, artifact_digest TEXT NOT NULL, policy_version TEXT NOT NULL,
+      category TEXT, category_key TEXT, language TEXT, artifact TEXT NOT NULL,
+      created_at INTEGER NOT NULL, UNIQUE(owner, idempotency_key), UNIQUE(series_id, version)
+    )`)
     for (const statement of [
       'CREATE INDEX IF NOT EXISTS idx_runs_creator ON runs(created_by)',
       'CREATE INDEX IF NOT EXISTS idx_runs_created ON runs(created_at)',

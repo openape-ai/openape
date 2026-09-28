@@ -3,16 +3,18 @@ import type { PublicRun } from '../../components/TestReport.vue'
 import type { Briefing } from '../../../shared/briefing'
 import TestReport from '../../components/TestReport.vue'
 import BriefingReport from '../../components/BriefingReport.vue'
+import DocumentReport from '../../components/DocumentReport.vue'
+import type { PrivateDocument } from '../../components/DocumentReport.vue'
 
 interface PrivateBriefing { type: 'briefing', briefing: Briefing, version: number, latest_version: number, editions: { version: number, date: string }[] }
 const route = useRoute()
-const { data, error } = await useFetch<PublicRun & { type?: 'test' } | PrivateBriefing>(
+const { data, error } = await useFetch<PublicRun & { type?: 'test' } | PrivateBriefing | PrivateDocument>(
   `/api/public/runs/${route.params.slug}`,
   { query: computed(() => (route.query.v ? { v: route.query.v } : {})) },
 )
 useSeoMeta({
-  title: () => data.value && data.value.type !== 'briefing' ? `${data.value.title} — OpenApe Testrun` : 'OpenApe Reports',
-  description: () => data.value && data.value.type !== 'briefing' ? `${data.value.status.toUpperCase()}: ${data.value.passed} passed, ${data.value.failed} failed` : 'Your private report',
+  title: () => data.value && data.value.type !== 'briefing' && data.value.type !== 'document' ? `${data.value.title} — OpenApe Testrun` : 'OpenApe Reports',
+  description: () => data.value && data.value.type !== 'briefing' && data.value.type !== 'document' ? `${data.value.status.toUpperCase()}: ${data.value.passed} passed, ${data.value.failed} failed` : 'Your private report',
   robots: 'noindex, nofollow', referrer: 'no-referrer',
 })
 </script>
@@ -22,13 +24,14 @@ useSeoMeta({
     <p class="eyebrow">
       OpenApe Reports
     </p>
-    <h1>{{ error.statusCode === 401 ? 'Your briefing, privately.' : 'Report unavailable' }}</h1>
+    <h1>{{ error.statusCode === 401 ? 'Your report, privately.' : 'Report unavailable' }}</h1>
     <p>{{ error.statusCode === 401 ? 'Sign in with your OpenApe account to read this report.' : 'This report is unavailable for your account.' }}</p>
     <NuxtLink :to="{ path: '/', query: { returnTo: route.fullPath } }">
       Sign in with OpenApe →
     </NuxtLink>
   </main>
   <BriefingReport v-else-if="data?.type === 'briefing'" :report="data.briefing" :version="data.version" :latest-version="data.latest_version" :editions="data.editions" />
+  <DocumentReport v-else-if="data?.type === 'document'" :report="data" />
   <TestReport v-else-if="data" :run="data" />
 </template>
 
