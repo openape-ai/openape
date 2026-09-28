@@ -62,6 +62,8 @@ describe('workspace shell with the production stylesheet', () => {
     expect(wrapper!.get('h1').text()).toBe('Mail knowledge')
     for (const [width, height, scheme] of sizes[language]) {
       await show(width, height, scheme)
+      const brand = wrapper!.get('.workspace-brand').element.getBoundingClientRect()
+      expect(brand.top, 'brand clears native macOS window controls').toBeGreaterThanOrEqual(36)
       for (const name of tabs[language]) {
         await click('[role="tab"]', name)
         expect(wrapper!.get('[role="tab"][aria-selected="true"]').text()).toBe(name)
