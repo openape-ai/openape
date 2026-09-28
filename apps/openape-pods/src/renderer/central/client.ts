@@ -5,7 +5,8 @@ import type { ScriptView } from '../../contracts/scripts'
 export class WorkspaceRequestError extends Error {
   constructor(readonly status: number, message: string) { super(message) }
 }
-export function browserWorkspaceClient(): CentralClient {
+export interface BrowserWorkspaceClient extends CentralClient { session: () => Promise<{ subject: string }> }
+export function browserWorkspaceClient(): BrowserWorkspaceClient {
   async function request<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
     const response = await fetch(`/api/workspace/v1/${path}`, { credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal, ...(body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}) })
     if (!response.ok) {
@@ -16,6 +17,7 @@ export function browserWorkspaceClient(): CentralClient {
   }
   const pod = <T>(runtimeId: string, podId: string, view: Record<string, string>) => request<T>(`pod?${new URLSearchParams({ runtimeId, podId, ...view })}`)
   return {
+    session: () => request('session'),
     inventory: () => request('inventory'),
     read: (runtimeId, podId) => pod(runtimeId, podId, { view: 'summary' }),
     runs: (runtimeId, podId, offset) => pod(runtimeId, podId, { view: 'runs', offset: String(offset) }),

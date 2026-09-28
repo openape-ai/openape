@@ -1,26 +1,40 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { descriptionDrafts } from './form-buffer'
+import { usePodAccess, usePodEdits } from './pod-access'
 import { t, diagnostic } from './i18n'
 
 const props = defineProps<{ podId: string }>()
+const access = usePodAccess()
+const saved = ref('')
+
 const text = ref(''); const revision = ref(0); const error = ref(''); const busy = ref(false)
 async function load() {
   try {
-    const view = await window.pods.details({ type: 'list', podId: props.podId })
-    text.value = view.description?.text ?? ''; revision.value = view.description?.revision ?? 0
+    const view = await access.api.details({ type: 'list', podId: props.podId })
+    text.value = view.description?.text ?? ''; revision.value = view.description?.revision ?? 0; saved.value = text.value
   }
   catch (failure) { error.value = String(failure) }
 }
 async function save() {
   busy.value = true; error.value = ''
   try {
-    const view = await window.pods.details({ type: 'describe', podId: props.podId, text: text.value, revision: revision.value })
-    revision.value = view.description!.revision
+    const view = await access.api.details({ type: 'describe', podId: props.podId, text: text.value, revision: revision.value })
+    revision.value = view.description!.revision; saved.value = text.value
   }
   catch (failure) { error.value = String(failure) }
   finally { busy.value = false }
 }
-onMounted(load)
+watch(() => access.revision?.value, () => { if (!busy.value && !error.value && text.value === saved.value) void load() })
+usePodEdits('description', () => text.value !== saved.value)
+onMounted(async () => {
+  const draft = access.remote ? descriptionDrafts.get(access.key(props.podId)) : undefined
+  if (draft) { text.value = draft.text; revision.value = draft.revision; saved.value = draft.saved }
+  else {
+    await load()
+  }
+})
+onBeforeUnmount(() => { if (access.remote && text.value !== saved.value) descriptionDrafts.set(access.key(props.podId), { text: text.value, revision: revision.value, saved: saved.value }); else descriptionDrafts.delete(access.key(props.podId)) })
 </script>
 
 <template>

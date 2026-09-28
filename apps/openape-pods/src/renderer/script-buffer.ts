@@ -14,3 +14,5 @@ export function scriptBuffer(podId: string): ScriptBuffer {
 export function isDirty(buffer: ScriptBuffer): boolean {
   return buffer.editing && (buffer.packages !== JSON.stringify(buffer.source?.packages ?? emptyPackages(), null, 2) || buffer.code !== (buffer.source?.code ?? '') || JSON.stringify([...buffer.toolCapabilities].sort()) !== JSON.stringify((buffer.source?.capabilities.filter(item => !item.startsWith('credential.')) ?? []).sort()))
 }
+
+export function clearScriptBuffer(key: string): void { buffers.delete(key) }

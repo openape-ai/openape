@@ -16,10 +16,10 @@ export function parseOnboardingCommand(value: unknown): OnboardingCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid setup request')
   const item = value as Record<string, unknown>
   const fields: Record<string, string[]> = { saveTypesafe: ['key'], enableBroker: ['id', 'issuer', 'domain'], revokeBroker: ['id'], list: ['podId'], connect: ['provider', 'account', 'switchAccount'], openLogin: ['id'], cancel: ['id'], disconnect: ['id'], folders: ['id'], assign: ['setup'], finish: [] }
-  if (typeof item.type !== 'string' || !Object.hasOwn(fields, item.type) || Object.keys(item).some(key => key !== 'type' && !fields[item.type as string].includes(key))) throw new Error('Unsupported setup request')
+  if (typeof item.type !== 'string' || !Object.hasOwn(fields, item.type) || Object.keys(item).some(key => key !== 'type' && !fields[item.type as string]?.includes(key))) throw new Error('Unsupported setup request')
   if (item.type === 'saveTypesafe') parseTypesafeKey(item.key)
   if (item.type === 'assign' || item.type === 'folders' || (item.type === 'connect' && item.provider === 'microsoft')) throw new Error('Configure application accounts in the pod Permissions tab')
-  if (fields[item.type].includes('id') && !uuid(item.id)) throw new Error('Invalid connection identity')
+  if (fields[item.type]?.includes('id') && !uuid(item.id)) throw new Error('Invalid connection identity')
   if (item.podId !== undefined && !uuid(item.podId)) throw new Error('Invalid pod identity request')
   if (item.type === 'enableBroker') {
     if (typeof item.issuer !== 'string' || typeof item.domain !== 'string' || item.domain.length > 253 || !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(item.domain)) throw new Error('Enter an exact agent identity domain')

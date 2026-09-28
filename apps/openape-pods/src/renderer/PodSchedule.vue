@@ -1,4 +1,6 @@
 <script lang="ts">
+import { scheduleDrafts } from './form-buffer'
+import { usePodAccess, trackPodEdits } from './pod-access'
 import { t, diagnostic, label, dateTime } from './i18n'
 import { defineComponent } from 'vue'
 import type { PropType } from 'vue'
@@ -8,14 +10,17 @@ import type { ScheduleCommand, ScheduleView } from '../contracts/scheduling'
 export default defineComponent({
   props: { pod: { type: Object as PropType<StoredPod>, required: true } },
   emits: ['changed'],
-  data() { return { view: null as ScheduleView | null, kind: 'interval', minutes: 60, time: '08:00', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, enabled: false, concurrency: 2, error: '', message: '', busy: false } },
-  watch: { 'pod.id': { immediate: true, handler() { void this.load() } } },
+  setup() { const access = usePodAccess(); return { access, remoteRevision: access.revision } },
+  data() { return { saved: '', view: null as ScheduleView | null, kind: 'interval', minutes: 60, time: '08:00', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, enabled: false, concurrency: 2, error: '', message: '', busy: false } },
+  watch: { remoteRevision() { if (!this.busy && !this.error && this.editState() === this.saved) void this.load() }, 'pod.id': { immediate: true, handler() { void this.load() } } },
+  beforeUnmount() { if (this.access.remote && this.editState() === this.saved) scheduleDrafts.delete(this.access.key(this.pod.id)); else if (this.access.remote) scheduleDrafts.set(this.access.key(this.pod.id), { kind: this.kind, minutes: this.minutes, time: this.time, timezone: this.timezone, enabled: this.enabled, saved: this.saved }) },
   methods: {
     t, diagnostic, label, dateTime,
+    editState() { return JSON.stringify([this.kind, this.minutes, this.time, this.timezone, this.enabled]) },
     async load() {
       this.busy = true; this.error = ''
       try {
-        this.view = await window.pods.scheduling({ type: 'list', podId: this.pod.id })
+        this.view = await this.access.api.scheduling({ type: 'list', podId: this.pod.id })
         this.enabled = this.view.enabled; this.concurrency = this.view.concurrency
         const spec = this.view.spec
         if (spec) {
@@ -24,13 +29,17 @@ export default defineComponent({
           }
           else { this.time = spec.time; this.timezone = spec.timezone }
         }
+        this.saved = this.editState()
+        const draft = this.access.remote ? scheduleDrafts.get(this.access.key(this.pod.id)) : undefined
+        if (draft) Object.assign(this, draft)
+        trackPodEdits(this.access, 'schedule', () => this.editState() !== this.saved)
       }
       catch (error) { this.error = error instanceof Error ? error.message : 'Could not load schedule' }
       finally { this.busy = false }
     },
     async act(command: ScheduleCommand) {
       this.busy = true; this.error = ''; this.message = ''
-      try { this.view = await window.pods.scheduling(command); this.message = 'Saved on this Mac.'; this.$emit('changed') }
+      try { this.view = await this.access.api.scheduling(command); this.saved = this.editState(); this.message = this.access.remote ? 'Saved to your workspace.' : 'Saved on this Mac.'; this.$emit('changed') }
       catch (error) { this.error = error instanceof Error ? error.message : 'Schedule operation failed' }
       finally { this.busy = false }
     },
@@ -75,7 +84,7 @@ export default defineComponent({
     <button class="secondary" :disabled="busy || pod.lifecycle === 'archived'" @click="act({ type: 'lifecycle', podId: pod.id, revision: pod.revision, lifecycle: pod.lifecycle === 'active' ? 'paused' : 'active' })">
       {{ pod.lifecycle === 'active' ? t("Pause automatic execution") : t("Resume automatic execution") }}
     </button>
-    <form class="limit-form" @submit.prevent="act({ type: 'concurrency', podId: pod.id, maximum: concurrency })">
+    <form v-if="!access.remote" class="limit-form" @submit.prevent="act({ type: 'concurrency', podId: pod.id, maximum: concurrency })">
       <label>{{ t("Concurrent pods on this Mac") }}<input v-model.number="concurrency" type="number" min="1" max="16" required :disabled="busy"></label><button class="secondary" :disabled="busy">
         {{ t("Save concurrency limit") }}
       </button>
