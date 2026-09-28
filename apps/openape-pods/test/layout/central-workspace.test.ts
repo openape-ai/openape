@@ -22,6 +22,12 @@ it('renders the same workspace at desktop and narrow browser sizes without overf
   applyLanguage('de'); document.documentElement.style.colorScheme = 'dark'
   await flushPromises(); await page.viewport(560, 950)
   await page.screenshot({ path: screenshotPath('central-workspace-de-dark.png') })
+  await wrapper.get('textarea').setValue('Unsaved remote description')
+  await wrapper.get('.central-content > .text-button').trigger('click'); await flushPromises()
+  const prompt = wrapper.get('[aria-label="Ungespeicherte Änderungen"]')
+  expect(prompt.text()).toContain('Weiter bearbeiten')
+  expect(prompt.element.getBoundingClientRect().right).toBeLessThanOrEqual(560)
+  await page.screenshot({ path: screenshotPath('central-unsaved-edits.png') })
 })
 
 it('keeps Script and Permissions free of Jev setup in the narrow central workspace', async () => {
