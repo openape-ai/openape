@@ -82,6 +82,16 @@ export class MasterControl {
     if (action.action === 'create' && boundPod) throw new Error('Creation conversation already has a pod')
     signal.throwIfAborted()
     if ('podId' in action) this.assertPod(action.podId, action.revision, action.action === 'inspect')
+    if (action.action === 'saveWorkflow' && action.definition.revision === 0 && authority === 'owner') {
+      if (!this.workflows || !context || context.context.workflow) throw new Error('Select only the member Pods before creating a workflow')
+      if (action.definition.nodes.some(node => !context.context.pods.some(pod => pod.id === node.podId))) throw new Error('Select every workflow Pod before saving')
+      return this.store.transaction(() => {
+        this.workflows!.save(action.definition)
+        const result = { workflowId: action.definition.id, revision: 1 }
+        this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'completed\',?,NULL)').run(key, hash, request, JSON.stringify(result))
+        return result
+      })
+    }
     if (action.action === 'inspectWorkflow' || action.action === 'runWorkflow' || action.action === 'saveWorkflow') {
       if (!context?.context.workflow) throw new Error('Select a workflow before using this action')
       const workflow = context.context.workflow

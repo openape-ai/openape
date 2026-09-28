@@ -47,6 +47,7 @@ export interface RunServiceScope {
   registerDomain: (path: string, ownerPid: number) => void
 }
 export interface RunServices {
+  mailArchive?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
   jev?: (request: JevRequest, signal: AbortSignal, scope: RunServiceScope) => Promise<JevEvaluation>
   shell?: (scope: RunServiceScope, signal: AbortSignal) => Promise<{ home: string, environment: Record<string, string>, shell?: { cli: string, environment: Record<string, string> } }>
   closeShell?: (scope: RunServiceScope) => Promise<void>
@@ -173,6 +174,13 @@ export class RunDispatcher {
         event: (type, data) => { this.runs.assertLease(id); this.runs.append(id, type, data); if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
         request: async (operation, payload, operationSignal) => {
           assertCurrent()
+          if (operation === 'mail.archive') {
+            if (!this.services?.mailArchive) throw new Error('Mail archive service is unavailable')
+            const work = this.services.mailArchive(payload, operationSignal, scope)
+            pendingAgents.add(work)
+            try { const result = await work; assertCurrent(); return result }
+            finally { pendingAgents.delete(work) }
+          }
           if (operation.startsWith('mail.workflow.')) {
             const attempt = this.store.db.prepare('SELECT w.definition,w.id FROM workflow_attempts a JOIN workflow_runs w ON w.id=a.workflow_run_id WHERE a.run_id=?').get(id)
             const configuration = attempt ? (JSON.parse(attempt.definition as string) as WorkflowDefinition).mail : null

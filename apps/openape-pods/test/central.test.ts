@@ -1,9 +1,12 @@
 // @vitest-environment node
+import { DataControl } from '../src/worker/data/control'
+import { parseCentralCommand } from '../src/contracts/central'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
+import { RunRetention } from '../src/worker/data/run-retention'
 import { PodDatabase } from '../src/worker/storage/database'
 import { ResourceRegistry } from '../src/worker/resources/registry'
 import { RunDispatcher } from '../src/worker/runs/dispatcher'
@@ -63,7 +66,7 @@ it('adopts the current schema repeatedly without credentials or local process le
   const { store, projection, actor, pod } = fixture()
   const first = projection.snapshot(actor.owner)
   expect(first.workspace.pods[0]?.id).toBe(pod.id)
-  expect(first.archive.schema).toBe(23)
+  expect(first.archive.schema).toBe(24)
   expect(Object.keys(first.archive.tables)).not.toContain('connections')
   expect(Object.keys(first.archive.tables)).not.toContain('run_leases')
   expect(first).toEqual(projection.snapshot(actor.owner))
@@ -264,4 +267,67 @@ it('publishes only TypeSafe availability through both full and partitioned centr
   expect(JSON.stringify(restored)).not.toContain('not-for-central')
   setup.execute({ type: 'save', connection: { id, provider: 'typesafe', account: 'TypeSafe / Jev', state: 'expired', error: null }, metadata: { verifiedAt: 12 } })
   expect(projection.snapshot(actor.owner).workspace.jev?.state).toBe('expired')
+})
+
+it('publishes retention to central list, detail and archive while preserving account Pods and detached receipts', async () => {
+  const f = connected()
+  const ids = Array.from({ length: 55 }, () => randomUUID())
+  for (const [index, id] of ids.entries()) f.store.db.prepare('INSERT INTO runs VALUES(?,?,?,\'completed\',?,?,\'Done\',NULL,0,1)').run(id, f.pod.id, 'a'.repeat(64), index, index + 1)
+  f.store.db.prepare('INSERT INTO effect_ledger VALUES(?,?,?,?,?,\'completed\',\'{"receipt":"once"}\')').run(f.pod.id, 'delivery', 'http.request', 'b'.repeat(64), ids[0]!)
+  f.controller.start()
+  await vi.waitFor(() => expect(f.controller.available, f.controller.error ?? '').toBe(true))
+  expect(f.server.view(f.actor.owner, f.actor.id, f.pod.id, { view: 'runs', offset: 0 })).toMatchObject({ total: 55 })
+  await new RunRetention(f.store).prune()
+  await vi.waitFor(() => expect(f.server.view(f.actor.owner, f.actor.id, f.pod.id, { view: 'runs', offset: 0 })).toMatchObject({ total: 50 }), { timeout: 5000 })
+  expect(() => f.server.view(f.actor.owner, f.actor.id, f.pod.id, { view: 'run', runId: ids[0]! })).toThrow('run_not_found')
+  expect(f.server.inventory(f.actor.owner)[0]?.workspace.pods.map(pod => pod.id)).toEqual([f.pod.id])
+  const session = f.server.db.prepare('SELECT lease FROM runtimes WHERE id=?').get(f.actor.id)!
+  const snapshot = f.server.archive(f.actor, String(session.lease))!
+  expect(snapshot.archive.tables.runs).toHaveLength(50)
+  expect(snapshot.archive.tables.effect_ledger).toMatchObject([{ run_id: null, result: '{"receipt":"once"}' }])
+  expect(JSON.stringify(snapshot)).not.toContain(ids[0])
+  expect(f.server.db.prepare('SELECT * FROM staged_parts').all()).toEqual([])
+  expect(f.server.db.prepare('SELECT snapshot FROM runtimes').get()?.snapshot).toBeNull()
+})
+
+it('deletes through MCP with coordinated cleanup and keeps an owner-scoped receipt after removal', async () => {
+  const { root, store, projection, actor, pod } = fixture()
+  const data = new DataControl(store, 'unused-helper')
+  const credentialId = randomUUID()
+  new ResourceRegistry(store, () => {}).assignCredential(pod.id, 'service_key', credentialId, 0)
+  store.updatePod(pod.id, pod.revision, { name: pod.name, lifecycle: 'archived' })
+  const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
+  const { FixtureWorker } = await import('../src/main/worker')
+  const worker = new FixtureWorker(() => {})
+  const purgePodKeys = vi.fn(async () => {})
+  Object.assign(worker, { connections: { busy: () => false, purgePodKeys }, dispatch: async ({ data: command }: { data: Parameters<DataControl['execute']>[0] }) => data.execute(command) })
+  const execute = vi.fn((command: import('../src/contracts/central').CentralCommand) => worker.centralExecute(command))
+  const controller = new CentralController(root, relay(server, actor), { snapshot: async () => projection.snapshot(actor.owner), execute, gate: async () => {} }, '/unused-no-artifacts')
+  worker.central = controller
+  cleanup.push(() => controller.stop()); controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+  const body = { type: 'deletePod' as const, podId: pod.id, revision: 2, name: pod.name }
+  await expect(worker.data(body)).rejects.toThrow('local deletion and restore are disabled')
+  const id = randomUUID()
+  const query = { type: 'submit', runtimeId: actor.id, revision: 1, id, command: { channel: 'data', body } }
+  const call = (query: Record<string, unknown>) => worker.codex({ id: randomUUID(), action: { action: 'workspace', query } })
+  await call(query)
+  await vi.waitFor(() => expect(server.operation(actor.owner, id).state, controller.error ?? '').toBe('applied'), { timeout: 5000 })
+  expect(await call({ type: 'operation', id })).toMatchObject({ id, state: 'applied' })
+  expect(await call(query)).toMatchObject({ id, state: 'applied' })
+  expect(execute).toHaveBeenCalledOnce()
+  expect(store.listPods()).toEqual([])
+  expect(purgePodKeys).toHaveBeenCalledExactlyOnceWith(pod.id, [credentialId])
+  expect(data.retention.jobs()).toEqual([])
+  expect(server.inventory(actor.owner)[0]?.workspace.pods).toEqual([])
+  expect(() => server.read(actor.owner, actor.id, pod.id)).toThrow()
+  expect(() => server.visibleOperation({ ...actor.owner, subject: 'other' }, id)).toThrow('workspace_operation_not_found')
+})
+
+it('allows only reviewed deletion through the central data channel', () => {
+  const body = { type: 'deletePod', podId: randomUUID(), revision: 2, name: 'Reviewed Pod' }
+  expect(parseCentralCommand({ channel: 'data', body }).body).toEqual(body)
+  for (const command of [{ type: 'restore' }, { type: 'cleanup' }, { type: 'jobs' }, { ...body, name: '' }, { ...body, revision: 0 }, { ...body, force: true }]) {
+    expect(() => parseCentralCommand({ channel: 'data', body: command })).toThrow()
+  }
 })

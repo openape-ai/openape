@@ -67,7 +67,7 @@ it('continues to the workspace only after the worker accepted the finish', async
 it('keeps the owner account reachable from the collapsed sidebar', async () => {
   const owner = randomUUID()
   installWorkspace({ onboarding: async () => ({ connections: [{ id: owner, provider: 'openape', account: 'original@example.invalid', state: 'ready', error: null, login: null }], owner, runtime: { ready: true, error: null }, complete: true }) })
-  const wrapper = mount(App, { attachTo: document.body }); await flushPromises()
+  const wrapper = mount(App, { attachTo: document.body, props: { initialPodId: '00000000-0000-4000-8000-000000000001' } }); await flushPromises()
   await wrapper.get('button[aria-label="Collapse sidebar"]').trigger('click')
   await vi.waitFor(() => expect(wrapper.get('.account-avatar').text()).toBe('O'), { timeout: 3000 })
   wrapper.unmount()

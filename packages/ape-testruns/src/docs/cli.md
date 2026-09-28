@@ -18,7 +18,11 @@ ape-testruns open <id>         Open the public report in a browser.
 ape-testruns rm <id>           Delete a run; its share link 404s afterwards.
 ape-testruns whoami            Show identity as seen by the server.
 ape-testruns logout            Drop the cached SP token (apes session untouched).
-ape-testruns docs <topic>      agent | auth | cli | manifest
+ape-testruns publish <file>    Publish a private client document; --key is required.
+  --category <label>           Client category, for example Test Runs.
+  --series-id <id>             Optional existing series.
+  --preview-output <file>      Save sanitized HTML without publication.
+ape-testruns docs <topic>      agent | auth | cli | manifest | documents
 ```
 
 Global:

@@ -1,5 +1,198 @@
 # Active work
 
+## Pods public workspace entry — issue 1403
+
+[Issue 1403](https://repos.openape.ai/patrick/monorepo/issues/1403).
+Checkout `openape-monorepo.worktrees/pods-workspace-landing`, branch
+`feature/issue-1403-pods-workspace-landing`, base `e5c1814c`.
+The relay serves a public workspace landing page at `/` and reuses the existing
+DDISA login handler. The shared welcome screen supports retry, pending submissions
+and failed callbacks; sign-out returns to `/`. The proxy routes only the additional
+exact root path to the relay, preserving agent identity routes.
+Full lint/typecheck, relay build, component/layout checks and the existing real
+DDISA relay E2E provide acceptance. Production discovery for the owner resolves
+to `id.openape.ai` with the workspace callback and S256 PKCE. The native PR records
+the exact tested source, external checks and inspected Test Runs evidence.
+Next step: merge after exact-head checks and deploy the relay plus root proxy route.
+
+## Pods Variant A — issue 1402
+
+[Issue 1402](https://repos.openape.ai/patrick/monorepo/issues/1402),
+[approved scope and plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3M9ZTF4N6PQR30V8CM6MQCX).
+Checkout `openape-monorepo.worktrees/pods-ux-verification`, branch
+`feature/issue-1402-pods-ux`, base `d1da9ac7aff30f1425ffbbae08b91866bf85b99d`.
+
+Shared Workflows/Pods/Settings navigation, current/archive inventories, native
+Pod editing from the central desktop, three personal accounts and app-wide timed
+MCP off/read/write access are implemented. The manual `report --browser` mode
+captures real components and production CSS into a fresh evidence directory.
+Full monorepo lint/typecheck and initial component/browser checks passed. The
+linked native PR owns the final tested source SHA, Test Runs report and external
+CI result. [PR 169](https://repos.openape.ai/patrick/monorepo/pulls/169) is merged;
+the owner-requested signed local installation completed on September 28.
+Build `0.1.0+fbd0188b` passed mounted-DMG acceptance and owner UI verification,
+with paired rollback and unchanged Pod, schedule and workflow rows.
+See the [installation report](https://report.openape.ai/r/mNLilvsZA48fCLkTP944g52n)
+and [inspected UI report](https://report.openape.ai/r/gRqECh3W9qN9RJMHfZGeLQzw).
+
+## Generic Reports acceptance — issue 1401
+
+Implementation PR 166 and release-version PR 167 are merged. Reports image `prod-e40ae6ea` is healthy after clean-main `pnpm check:ci`; previous image `prod-7bab2ba6` was rehearsed against migrated data. Production preserves every original legacy row. Real PR and morning previews passed without Telegram sends; the activated PR monitor already completed one natural report and confirmed Telegram notification. Test Runs evidence and guidance are verified.
+
+Current branch `feature/issue-1401-reports-acceptance` starts from canonical `983583f8`; dedicated clone `openape-monorepo.worktrees/generic-reports-release`. See [migration matrix](../operations/generic-reports-migration.md) and [live receipt](../operations/generic-reports-live-receipt.json). Remaining external blocker: npm login expired; CLI 0.3.0 registry release awaits owner renewal. Keep issue 1401 and its plan open until that publication is verified. No further Pod run or notification is needed for acceptance.
+
+## Morning editorial workflow (September 28, 2026) — deployed
+
+[Issue 1400](https://repos.openape.ai/patrick/monorepo/issues/1400), [PR 164](https://repos.openape.ai/patrick/monorepo/pulls/164), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3KEEMTW4EN59AFD8HP34X7F). Implementation merged as `0b8216bb1b17269bbaa5c1d03cb919ee45b87fae` after exact-source CI 5201. Full lint/typecheck, Pods build and 623 unit tests passed; the clean merged deployment gate `pnpm check:ci` passed (`1790582152595-0b8216bb-unit/summary.json`).
+
+The existing workflow is active at revision 7, daily 07:00 Europe/Vienna. Mail evidence and Calendar/Issues collection feed the dedicated German editorial Pod; the existing sender consumes only its validated report. New source Pod `51832859-53e0-4cbc-a44c-61ad76aad931` and editorial Pod `6c9d0c12-32fa-4d56-a84a-9a035a030914` are active without independent schedules. The mail approval poll remains enabled every 60 seconds; the sender schedule remains disabled and Daily action website remains paused. Reports server stays at `prod-7bab2ba6`.
+
+Actual manual workflow `e6e4d970-e88a-4857-a7d2-e1b0c94ac6a8` completed all four nodes. Private preview publication `01M3KGPJA9V7B7SWKB9Y2VTDWG`, version 1, digest `48a9b702a3312c64b221f9de1c815eda230b71d2f07f0966bf0acd732b99d48c` matches the frozen payload and server receipt. Editor-only replay `59f48f07-ad72-4b21-8370-a4ecc491af11` completed using its saved input, with only agent operations and no provider, publication or delivery operations. Preview sender has one completed Reports effect and zero Telegram POSTs. Sender checkpoint 26 retains message 243 and September 28 delivery, with no pending operation. No archive grant was created or consumed by the preview.
+
+Owner latest/dated API access and anonymous page/API/asset/publication denial pass on both domains. German copy and consolidated mail cards were inspected directly in Firefox at desktop and 390×844 mobile size. The answered MIAS conversation has no next action. Standard preview series was restored and the temporary replay selector removed; final scripts were revalidated. The next regular delivery is September 29 at 07:00; this manual preview does not prove that future delivery.
+
+Patrick explicitly confirmed the targeted Repos authentication transfer for the new source Pod. Supported private-file `program importState` plus the existing bootstrap pattern initialized only that isolated program's login/signing state; temporary import files were removed. Actual native source reads succeeded for both calendars and owned issues, including forced token renewal. The source remains limited to calendar and issue reads. Editorial receives only its read-only evidence directory and no provider or delivery capability.
+
+Receipt checkout `reports`, branch `feature/issue-1400-editorial-receipt`, base `0b8216bb`. Only installation evidence changes after PR 164; no new application deployment.
+
+## Pod archive and deletion: issue 1399
+
+[Issue 1399](https://repos.openape.ai/patrick/monorepo/issues/1399), branch
+`feature/issue-1399-pod-deletion`, checkout
+`/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-delete`,
+base `5a84e911567c7c77735c548781ac2379c510b9c0`.
+
+Central desktop/browser Settings now exposes archive and an explicit deletion review.
+MCP uses the same `workspace` command stream with `data/deletePod`. Existing idle,
+archived/name/revision and workflow-reference checks remain enforced. Coordinated
+cleanup erases local keys and files and current central artifacts; operation receipts
+remain owner-scoped and readable after the Pod disappears. Shared chat history, prior
+receipts, backups and remote identities/grants remain.
+
+Verification: full root lint/typecheck, Pods and relay builds, 605 Pods unit/component
+tests, 28 browser layout tests and 27 relay tests pass. New permanent checks cover
+consequential deletion contracts: confirmation/cancel/refusal, cleanup, stable retries,
+receipt ownership and preserving unrelated artifacts. EN desktop/light and DE
+390-pixel/dark deletion reviews were visually inspected.
+[Verification report](https://testrun.openape.ai/r/fjbkBDEeOW0PnVuzaQk7mfyw).
+[PR 163](https://repos.openape.ai/patrick/monorepo/pulls/163). Next: exact-source external checks and coordinated relay/desktop rollout; no owner Pod has been deleted.
+
+## Reports briefing corrections (September 28, 2026)
+
+[Issue 1398](https://repos.openape.ai/patrick/monorepo/issues/1398). Own checkout `reports`, branch `bugfix/issue-1398-briefing-context`, base `5a84e911`. German briefing copy, one mail presentation and fresh sent/incoming conversation evidence before suggesting reply actions. Existing archive policy, schedules and Telegram receipts remain unchanged. Verified: full lint/typecheck, Testrun build, 603 Pods unit tests, 45 Reports unit tests, 8 component/layout tests and 4 authenticated HTTP/browser tests pass. Phone/desktop light/dark screenshots were inspected directly. Next: native PR, tested-image rollout and actual no-send workflow preview. Delivered editions remain immutable; only new publications receive revised generated content.
+
+## OpenApe Reports (September 27, 2026) — deployed; scheduled acceptance pending
+
+Owner follow-up: Reports is the general product; briefings and test runs are specialized formats. Branch `feature/issue-1397-reports-home` from `dc40f3a7` corrects the landing page, private collection labels and default page metadata. This is a presentation change; the existing publication contracts and owning workflow remain in place. Verification and final deployment receipt belong to issue 1397.
+
+[Issue 1397](https://repos.openape.ai/patrick/monorepo/issues/1397), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3HW6FG47VR534XC5EAFNS1R). Isolated checkout `reports`, receipt branch `feature/issue-1397-rollout-receipt`, based on merged main `972df1b8715db1e3166f7c09bd28762496ca03b4`. Implementation [PR 158](https://repos.openape.ai/patrick/monorepo/pulls/158) source `2873623ad08664a00f2371e84bdb2b836d0e13c9` passed exact-source external CI run 5187 before merge.
+
+**Implementation and deployment accepted.** Chatty runs healthy `prod-972df1b8`, deployed through the existing tested-image pipeline from clean `reports-release` after `pnpm check:ci` (`1790532415331-972df1b8-unit/summary.json`). Exoscale A record `report.openape.ai` points to `85.217.175.26`, TTL 300; its explicit Traefik router shares the Testrun service. Public TLS/health and real owner login on the alias work. Existing canonical CLI/SP identity remains `testrun.openape.ai`. All 283 legacy runs, 168 archives and 695 assets were compared in both directions against the protected pre-migration database backup: zero differences; SQLite integrity passes. Existing test JSON differs only by the additive `type: test` discriminator.
+
+Minimum safe rollback is [PR 157](https://repos.openape.ai/patrick/monorepo/pulls/157), `prod-183395e4`, retained as `TESTRUN_TAG_PREV`. It was rehearsed against the final schema with private head/archive/assets and shared test data. Do not deploy older images after private content exists. Protected database and edge backups are under `/home/openape/backups/reports-2026-09-27/` on Chatty.
+
+Focused checks pass: 45 Testrun unit tests, 107 auth tests, 7 browser component/layout tests, 14 HTTP/CLI/browser tests, 600 Pods unit tests and four CLI tests. Both login origins and phone/desktop light/dark screenshots were inspected. Full root lint/typecheck and both affected app builds pass. [Public synthetic evidence](https://testrun.openape.ai/r/AeJDx48LWOG_vVrS_KKBgCsv) contains no personal briefing data.
+
+**Actual no-send preview accepted.** Workflow `30030e0b-5476-4afe-99c2-e36dd96d318a` and sender run `e7f21c3e-cb2a-4450-9717-1e018fe03077` completed with real sources. Private edition `01M3J13JNVV58VYBV6JHM57NM6`, version 1, digest `c8f15b19e1be1b5a254fb87ee41a3b86adebd92c5448b143955d36eb4905d46f` matches the server receipt and checkpoint 18. Exactly one completed Reports HTTP effect exists for that run; zero Telegram send effects. Prior message 242 and daily delivery state remain unchanged. Owner production UI was inspected; anonymous API/asset/version GETs return 401, HEAD returns generic empty 404, and pages expose only login on both domains.
+
+**Next: M6, first regular Reports delivery.** Sender hash `354055afdf1dccb596663e7ae1012bd6d824c86c0519b48204f584e390179b7b` is validated and active with `publication_mode=live` revision 2. Workflow `5f7ea0d7-1f9c-4c74-8c8a-afd513950001` remains revision 6, daily 07:00 Europe/Vienna; next September 28. Sender's independent schedule stays disabled. Mail-review script and its approval poll are unchanged; Daily action website remains paused. Dedicated DDISA publisher may publish only to the two owner-bound series. Manual runs use the separate preview series and never send Telegram. A single read-only Codex follow-up is scheduled for September 28 at 07:10; it does not generate or send anything. Keep issue and plan open until actual scheduled publication and Telegram receipt match. No extra Telegram test messages.
+
+
+## Pods: contact protection and Jev evaluation (September 26, 2026)
+
+[Issue 1396](https://repos.openape.ai/patrick/monorepo/issues/1396), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3FKATZRY0Z3BY2YMMMVEFW9). Existing checkout `mail-briefing-grants`, branch `feature/issue-1396-mail-protection-jev`, base `40113402`.
+
+The assigned Microsoft companion retains a per-mailbox union of Sent Items To/Cc/Bcc recipients and enforces an owner-controlled address/domain policy before proposals and actual moves. Incomplete scans and conversation evidence prohibit archival. Jev supplies bounded structured decisions and priorities; free-form LLM calls only summarize selected important messages. A local-only private-file import initializes a missing native Jev connection without exposing its key or implicitly assigning it to a Pod. Changed application bindings expire old pending archive batches locally and require fresh owner review.
+
+PR 154 is merged at 84ccff34 and the signed f182add0 app is installed with all 14 Pods preserved. Existing decision polling is disabled during rollout. The first live preview failed closed on Jev context size; bugfix/issue-1396-sent-delta-pages uses a conservative 24 KB state bound, Microsoft delta page-size headers and progress logs. Final source/check/PR, contact counts, Jev acceptance and schedule receipts belong to the issue. No mail may move during setup; keep manual per-batch approval and use preview delivery during acceptance.
+
+## Morning mail triage and archive approvals (September 26, 2026)
+
+[Issue 1395](https://repos.openape.ai/patrick/monorepo/issues/1395), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3F3FK9MX2BH6QWBCWBZZCJE). Checkout `mail-briefing-grants`, follow-up branch `bugfix/issue-1395-archive-service-lifetime`, [PR 153](https://repos.openape.ai/patrick/monorepo/pulls/153). PRs 150–152 are merged. The dedicated archive service uses exact manually confirmed once grants, frozen readable mail metadata, version/folder rechecks and durable uncertain outcomes. Generic program calls remain read-only. Follow-up fixes cover mailbox read permission reuse, the archive script boundary and native request lifetime, and owner workflow controls in connected desktop settings.
+
+Native/renderer source `7c104c0436eae9a2e9202aec69f33012831d7ff4` passed full lint/typecheck/build, 576 unit/component tests, 26 browser component tests and the full local deployment contract. Recipe source `c0d7e1ea217874926d6c80aca108c670497a56eb` adds explicit mail dates and invalidates older relative-date summaries. The real two-node workflow preview `a9993b53-1146-40e8-8eec-09e3f42a6aab` completed both nodes with 338 reviewed messages, zero gaps and no Telegram send. A second preview verifies the corrected date summaries. Workflow `5f7ea0d7-1f9c-4c74-8c8a-afd513950001` is configured for 07:00 Europe/Vienna, initially disabled and paused. Next: finish exact-head CI, native grant acceptance, owner UI verification and the single-schedule cutover. Final signed artifact, paired backup, concrete grant and activation evidence are recorded in the linked issue as the authoritative delivery receipt. No mail has moved during setup.
+
+## IdP pending grant expiry (September 26, 2026)
+
+[Issue 1394](https://repos.openape.ai/patrick/monorepo/issues/1394).
+Worktree `pending-grant-expiry`, branch `bugfix/issue-1394-pending-grant-expiry`, base `531a91ba`.
+The production Drizzle store now expires unanswered requests older than 48 hours before reads, decisions and broker capacity checks. Expiry and broker audit records commit atomically. Existing approved and terminal grants retain their statuses.
+
+Permanent SQLite-backed regression coverage extends the existing broker-store suite because the earlier default-store tests missed the production implementation. The original implementation failed 11 new cases; all 344 IdP tests now pass, including the additional decision-boundary case. Full `pnpm lint`, `pnpm typecheck` and `pnpm --filter openape-free-idp build` pass. A separate built-server smoke with the actual production Drizzle plugin, isolated SQLite and SSH challenge authentication verifies the pending inbox, persisted expiry and HTTP 400 for an old approval link; fresh pending and approved grants remain unchanged.
+
+[PR 148](https://repos.openape.ai/patrick/monorepo/pulls/148) passed external CI at `c836ee53`; its main-branch synchronization preserves the parallel Pods entry. Merge, production image, backup, final live verification and issue closure are recorded in the linked issue as the authoritative delivery receipt.
+
+## Pods: central desktop settings (September 26, 2026) — signed evidence; superseded by installed Variant A
+
+[Issue 1393](https://repos.openape.ai/patrick/monorepo/issues/1393),
+[PR 146](https://repos.openape.ai/patrick/monorepo/pulls/146),
+[PR 147](https://repos.openape.ai/patrick/monorepo/pulls/147),
+[inspected sidebar and settings screenshots](https://testrun.openape.ai/r/Z8Rrx-TCsYAZj17DQLcoAjRn).
+
+Both implementation PRs passed exact-head external CI. The active central desktop now shows the DDISA account and App settings at the bottom left. The Pod list scrolls separately. Account access opens account settings; App settings exposes Jev, language, Codex preferences and data/backups. The previous Jev acceptance had covered the alternate local shell instead of this active entry point.
+
+Signed local build: clean merged `7689b6356f8e0190bac7982a22c07569b789792d`, tree identical to tested source `5a46ba7a`. Full `pnpm check:ci`, full lint/typecheck, fresh Pods build, 543 unit/component tests, four focused browser tests and signed mounted-DMG acceptance pass. Permanent tests protect the active navigation, Jev key submission through existing IPC and footer visibility with 30 Pods in English/light and German/narrow/dark layouts. The package smoke runs only synthetic data in an isolated profile; its alternate-shell screenshot is not the central-workspace UI acceptance.
+
+DMG SHA-256: `69b1b6bf1e30a12a2d09086a1653a16a611cc93a7bf75a9a9c02d3fa2cfdcd89`. Apple accepted app `5515b4c8-6bbd-41e8-abc4-db8714e4756a` and DMG `a5eebdcf-96a3-498c-afe1-b2241fa3e95a`; stapling and Gatekeeper checks pass. The ASAR inventory has no owner database/profile/run data. Schema remains 24.
+
+Worktree: `pods-jev-settings`; release artifact: `apps/openape-pods/release/distribution/OpenApe-Pods-0.1.0-arm64-signed-local.dmg`; evidence: `apps/openape-pods/.artifacts/issue-1393-sidebar/`. At this September 26 checkpoint, installation was pending because the owner Mac was locked. This artifact was superseded by the September 28 Variant A installation below; it is not the installed binary.
+
+
+September 28 closeout: [PR 169](https://repos.openape.ai/patrick/monorepo/pulls/169) is merged. Signed, notarized and stapled build `0.1.0+fbd0188b` is installed in the owner Applications directory. The paired rollback backup and actual owner UI were verified; all 16 Pods, 13 schedule configurations, one workflow and schema 24 were preserved. See the [verified installation report](https://report.openape.ai/r/mNLilvsZA48fCLkTP944g52n). No server deployment is implied.
+
+## Pods: run retention and signed release (September 26, 2026) — installed and verified
+
+[Issue 1391](https://repos.openape.ai/patrick/monorepo/issues/1391),
+[issue 1390](https://repos.openape.ai/patrick/monorepo/issues/1390),
+[PR 144](https://repos.openape.ai/patrick/monorepo/pulls/144),
+[PR 143](https://repos.openape.ai/patrick/monorepo/pulls/143),
+[approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3E5TH9XNWQJGJX4NE11PV2W).
+
+PR 144 merged after exact-head CI success (`1856dd99a7e5a51c2fdb06b993c6a3ca456f1026`) at `9237c1966ec8911b907d6d801051c77f52d3c7f8`, which includes PR 143. Main CI also passed. One signed-local DMG was built from the clean merge worktree with frozen dependencies, the full `pnpm check:ci` contract and a fresh Pods build. No relay deployment was required.
+
+DMG SHA-256: `2331cf7b10554ef9324e695d32448eab0a37380bd79fa688335a19d5282b87c8`.
+
+Apple accepted the app (`a451ba7a-d786-4ae3-83cf-75e3439241e1`) and DMG (`e944956e-578b-4230-8129-e11f96ee8c13`); both tickets were stapled and validated. Deep/strict code-sign verification and Gatekeeper passed, including the installed app: `Notarized Developer ID`. The signed DMG acceptance test passed; `.artifacts/data-dmg.png` was visually inspected. Its acceptance Pod existed only in the isolated disposable test profile.
+
+Before signing, the unsigned assembly of the exact build was inspected (2,515 resource entries / 3,214 asar entries). The signed app and read-only mounted DMG were checked again (2,518 / 3,218). No control.sqlite, runs/, pods/, profile or fixture profile data was present. Only OpenApe Pods.app was installed; no Pod, script, schedule or profile was imported or seeded.
+
+The old app quit normally through bundle ID `ai.openape.pods`, with no active run leases. Existing MCP shim processes were left alone. Paired rollback: `/Users/patrickhofmann/Library/Application Support/OpenApe Pods Rollback/2026-09-26-103952-issue-1391` (old 9f00ed4d app moved there plus cp -cR full profile). Backup schema 23, 12 Pods, 2,560 runs and 34,799 run-directory entries were verified; copied database/WAL hashes matched.
+
+| Pod | Runs before | Runs after |
+| --- | ---: | ---: |
+| Daily action website | 1 | 1 |
+| IURIO PR monitor | 177 | 50 |
+| IURIO Task monitor | 637 | 51 |
+| Mail-Alarm | 0 | 0 |
+| Mail-Kurzbericht | 108 | 50 |
+| Mail-Wissen · Delta Mind | 0 | 0 |
+| Rechnungs-Emails ablegen | 0 | 0 |
+| Test | 0 | 0 |
+| Timing test · 15-minute no-op | 78 | 50 |
+| Timing test · streamlined setup | 1 | 1 |
+| zaz Service-Agent | 1553 | 50 |
+| zaz Service-Agent · Test | 5 | 5 |
+
+After startup: schema 24; 2,560 → 258 run rows and matching folders; 34,799 → 2,808 entries under runs/. Cleanup journal empty, no orphan/missing run folders, no foreign-key errors and no data_settings.error. The IURIO Task monitor retains one old cancelled run with a still-pending approval, in addition to the newest 50. No eligible old runs remain.
+
+All 12 Pod identities/configuration records and schedule configurations are unchanged. All 26 effect receipts have identical pod/key, operation, input hash, state and result; 18 obsolete run links were detached. Schedule configuration SHA-256: `60e61a6622f02a1356b2759233a3313819c490642b0482032ee702a167ce7288`. Receipt-content SHA-256: `7e2befb39ad86c2f74cf9c97c1f6709050286eb45917d413000cd28a565217a6`.
+
+Live central inventory retains the same 12 Pods, with each history count matching local storage. The removed zaz run `11503fb4-152c-4b9e-9075-2cb2b51bd40f` returns `404 run_not_found`; controller/relay tests additionally verify central archive removal. No new or duplicate Pod was created. Existing blocked Mail-Kurzbericht remains unchanged.
+
+All four enabled schedules completed naturally after startup: zaz Service-Agent at 10:40:23, IURIO Task monitor at 10:42:56, IURIO PR monitor at 10:45:23, Timing test · 15-minute no-op at 10:48:58 (Europe/Vienna). All 14 post-install runs observed through 10:49 completed successfully. No schedule was changed and no manual run was injected.
+
+Worker CPU: NodeService PID 56984, parent app PID 56979; ps time 0:17.25 → 0:22.05, **4.80 CPU seconds over 300.000 wall seconds** after cleanup. Same-session old-app measurement: 10.69 CPU seconds / 300.002 s (PID 24172, parent 24166, 42:07.69 → 42:18.38). Historical owner baseline: 14.5 s / five minutes, then with the IURIO Task monitor running every minute; its current cadence is five minutes. These are operating observations, not a controlled benchmark.
+
+Validation receipts: release `.openape/check-results/1790411276414-9237c196-unit/summary.json`; all 542 Pods unit/component tests; full lint/typecheck/build and normal commit/push hooks. The restart test injects EIO because chmod is not a reliable failure mechanism under root CI. Synthetic cleanup: 2,500 runs / 30,000 files → 50 rows/folders in 98 passes, max 17.42 ms and mean 14.04 ms; idle mean 0.117 ms.
+
+Release worktree: `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-release-1391`. DMG: `apps/openape-pods/release/distribution/OpenApe-Pods-0.1.0-arm64-signed-local.dmg`. Local evidence: `apps/openape-pods/.artifacts/issue-1391/`.
+
+Release evidence branch: `feature/issue-1391-release-evidence` in `pods-run-retention`.
+New owner follow-up: [issue 1392](https://repos.openape.ai/patrick/monorepo/issues/1392),
+per-Pod opt-in parallel runs, disabled by default. Current runs are already serialized
+within each Pod; the existing concurrency limit applies across different Pods.
+The new option is not implemented or included in this signed release.
+
 ## Pods: repeated timer approvals (September 25, 2026)
 
 [Issue 1389](https://repos.openape.ai/patrick/monorepo/issues/1389).
@@ -13,8 +206,12 @@ Live timer recovery reused the same Pod-scoped always grant on a second no-op ru
 without a pending approval (two seconds). Full lint/typecheck, IdP application build and 26 focused component/broker tests
 pass. Commit/push affected unit gates pass.
 [PR 142](https://repos.openape.ai/patrick/monorepo/pulls/142), implementation
-`365049fd2ce8bef774f51b177c7126fac44770b1`. Next: exact-head external CI,
-then merge/release the inbox change; the live timer recovery is already effective.
+`365049fd2ce8bef774f51b177c7126fac44770b1`. September 28 integration preserves
+current main and the signed-release closeout from PR 149. The native PR records
+the final source, repeated checks and merge result. The inbox change still requires
+a separately verified IdP deployment; this merge does not claim a server release.
+The historical live timer recovery is already effective.
+
 
 ## Pods: local MCP runtime approval (September 25, 2026) — verified locally
 
@@ -552,3 +749,12 @@ and an explicit removal/rollback check. Production operations, exact source/targ
 hashes, native activation and seven-day observation will be recorded in the
 synchronized plan and restricted operator receipts. No issue authority changes
 are implied by merging this preparation increment.
+
+## Generic Reports — issue 1401
+
+- Approved plan: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3KTXVW1069NJZYPCNXNSTEA
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1401
+- Worktree: `openape-monorepo.worktrees/generic-reports`; branch `feature/issue-1401-generic-reports`.
+- Base: `6b02cfc36508e1fe79dd4c4ffcbe81dc78edc85d`. Frozen install and doctor pass.
+- Implemented generic private documents/categories, parser sanitization, HTTP/iframe sandbox, compatible adapters and the receipt-first PR client. Full lint/typecheck and app builds pass; Reports 57 unit + 16 E2E + nine layout tests, Pods 629 tests and CLI four tests pass. Migration twice preserves all legacy rows; the deployed rollback image safely rejects new private documents. See `docs/operations/generic-reports-migration.md`.
+- Next: native PR/exact-source CI, clean-main deployment, real no-send producer previews, evidence upload, guidance and activation. Production, schedules and guidance are unchanged until acceptance.

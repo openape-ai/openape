@@ -37,7 +37,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 23
+export const schemaVersion = 24
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -279,6 +279,19 @@ PRAGMA user_version=20;`)
       if (version < 21) { migrateChats(this.db); this.db.exec('PRAGMA user_version=21;') }
       if (version < 22) { migrateRemote(this.db); this.db.exec('PRAGMA user_version=22;') }
       if (version < 23) this.db.exec('ALTER TABLE pod_descriptions ADD COLUMN manual INTEGER NOT NULL DEFAULT 0; PRAGMA user_version=23;')
+      if (version < 24) {
+        this.db.exec(`
+CREATE TABLE effect_ledger_v24(pod_id TEXT NOT NULL REFERENCES pods(id),effect_key TEXT NOT NULL,operation TEXT NOT NULL,input_hash TEXT NOT NULL,run_id TEXT REFERENCES runs(id),state TEXT NOT NULL,result TEXT,PRIMARY KEY(pod_id,effect_key),CHECK(run_id IS NOT NULL OR state='completed'));
+INSERT INTO effect_ledger_v24 SELECT * FROM effect_ledger ORDER BY rowid;
+DROP TABLE effect_ledger;
+ALTER TABLE effect_ledger_v24 RENAME TO effect_ledger;
+CREATE INDEX effects_run ON effect_ledger(run_id);
+CREATE INDEX runs_retention ON runs(pod_id,started_at DESC);
+CREATE INDEX accepted_events_run ON accepted_events(run_id);
+CREATE INDEX workflow_nodes_run ON workflow_nodes(run_id);
+CREATE TABLE run_deletion_jobs(run_id TEXT PRIMARY KEY,error TEXT);
+PRAGMA user_version=24;`)
+      }
     })
   }
 

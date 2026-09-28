@@ -1,11 +1,36 @@
 // @vitest-environment node
 import { expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RuntimeApprovalPolicy } from '../../src/main/codex/runtime-approval'
+import { handleMailArchive } from '../../src/main/mail/archive/handler'
+import type { ServiceRequest } from '../../src/contracts/services'
 
 vi.mock('electron', () => ({ utilityProcess: { fork: vi.fn() }, safeStorage: {}, app: { getPath: () => '/nonexistent' } }))
+vi.mock('../../src/main/mail/archive/handler', () => ({ handleMailArchive: vi.fn() }))
+
+it.each([false, true])('keeps archive authority alive until its asynchronous operation settles (failure: %s)', async (failure) => {
+  const { FixtureWorker } = await import('../../src/main/worker')
+  const worker = new FixtureWorker(() => {})
+  const id = '00000000-0000-4000-8000-000000000001'
+  const dispatch = vi.fn(async (command: Record<string, unknown>) => 'runContext' in command ? { name: 'Mail review', reason: 'manual' } : { resources: [], epoch: 0 })
+  Object.assign(worker, { root: '/unused', credentials: {}, connections: {}, dispatch })
+  let signal: AbortSignal | undefined
+  vi.mocked(handleMailArchive).mockImplementationOnce(async (input) => {
+    signal = input.signal
+    await new Promise<void>(resolve => setImmediate(resolve))
+    input.signal.throwIfAborted()
+    if (failure) throw new Error('Provider unavailable')
+    return { state: 'pending', count: 1 }
+  })
+  const service = worker as unknown as { executeService: (request: ServiceRequest) => Promise<unknown> }
+  const operation = service.executeService({ id, kind: 'mailArchive', scope: { podId: id, runId: id, epoch: 0, assignmentRevision: 1, capabilities: [] }, body: { operation: 'process' } })
+  if (failure) await expect(operation).rejects.toThrow('Provider unavailable')
+  else await expect(operation).resolves.toEqual({ state: 'pending', count: 1 })
+  expect(signal?.aborted).toBe(true)
+  expect(dispatch).toHaveBeenCalledTimes(failure ? 2 : 3)
+})
 
 // Last link of the suspend chain (powerMonitor → FixtureWorker → worker
 // process): test/main/app.test.ts covers the first, worker-entry.test.ts the last.
@@ -106,6 +131,29 @@ it('records only local MCP creation, including a queued central creation on this
     Object.assign(worker, { request: async () => workspace(ids[2]!) })
     await worker.centralExecute(command, ids[2])
     expect(policy.allows(ids[2]!)).toBe(false)
+  }
+  finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+it('imports an initial Jev connection from a private file and refuses replacement or stale resources', async () => {
+  const { FixtureWorker } = await import('../../src/main/worker')
+  const root = mkdtempSync(join(tmpdir(), 'pods-jev-import-'))
+  try {
+    const path = join(root, 'key'); writeFileSync(path, 'synthetic-jev-key', { mode: 0o600 })
+    const worker = new FixtureWorker(() => {})
+    const id = '00000000-0000-4000-8000-000000000001'
+    const dispatch = vi.fn(async () => ({ completed: false }))
+    let connected = false
+    const resources = vi.spyOn(worker, 'resources').mockImplementation(async () => ({ epoch: 1, resources: [], variables: [], jev: connected ? { id, state: 'ready', verifiedAt: 1 } : null }))
+    const onboarding = vi.spyOn(worker, 'onboarding').mockImplementation(async (command) => { expect(command).toEqual({ type: 'saveTypesafe', key: 'synthetic-jev-key' }); connected = true; return {} as never })
+    Object.assign(worker, { dispatch })
+    const action = { action: 'resources', revision: 1, path, command: { type: 'importJev', podId: id, epoch: 1 } }
+    expect(await worker.codex({ id, action })).toEqual({ jev: { id, state: 'ready', verifiedAt: 1 } })
+    expect(JSON.stringify(dispatch.mock.calls)).not.toContain('synthetic-jev-key')
+    await expect(worker.codex({ id, action })).rejects.toThrow('Secret import failed')
+    connected = false
+    await expect(worker.codex({ id, action: { ...action, command: { ...action.command, epoch: 0 } } })).rejects.toThrow('Secret import failed')
+    expect(onboarding).toHaveBeenCalledTimes(1); expect(resources).toHaveBeenCalledTimes(4)
   }
   finally { rmSync(root, { recursive: true, force: true }) }
 })
