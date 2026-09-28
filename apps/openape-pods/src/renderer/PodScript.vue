@@ -14,7 +14,7 @@ export default defineComponent({
   components: { ScriptCode, ScriptPackages },
   props: { pod: { type: Object as PropType<StoredPod>, required: true } },
   emits: ['changed', 'values', 'ran'],
-  setup(props) { const access = usePodAccess(); return { access, buffer: scriptBuffer(access.key(props.pod.id)) } },
+  setup(props) { const access = usePodAccess(); return { access, remoteRevision: access.revision, buffer: scriptBuffer(access.key(props.pod.id)) } },
   data() { return { available: [] as { name: string, expression: string }[], choice: '', pending: null as ScriptSelection | 'new' | 'current' | null } },
   computed: {
     dependenciesReady(): boolean { return this.buffer.packages === JSON.stringify(this.buffer.source?.packages ?? emptyPackages(), null, 2) && (this.buffer.source?.dependenciesPrepared ?? true) },
@@ -25,7 +25,7 @@ export default defineComponent({
     sourceLabel(): string { const source = this.buffer.source; return source?.kind === 'version' ? t('Version {id}', { id: source.id.slice(0, 12) }) : source ? t('Draft {id} · revision {revision}', { id: source.id.slice(0, 8), revision: source.revision }) : t('New script') },
     evidence(): string { return this.buffer.source?.evidence ? JSON.stringify(JSON.parse(this.buffer.source.evidence) as unknown, null, 2) : '' },
   },
-  watch: { 'buffer.source': { handler() { this.syncChoice() } } },
+  watch: { remoteRevision() { if (!this.buffer.busy && !this.buffer.error && !this.dirty) void this.refresh(false) }, 'buffer.source': { handler() { this.syncChoice() } } },
   async mounted() { trackPodEdits(this.access, 'script', () => this.dirty); if (!this.buffer.busy) { if (!this.buffer.view) await this.load(); else await this.refresh(false) } this.syncChoice(); await this.loadAvailable(); if (!this.buffer.source && !this.buffer.editing && this.buffer.view) await this.open('new') },
   methods: {
     t, diagnostic, number,

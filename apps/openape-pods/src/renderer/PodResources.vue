@@ -12,9 +12,10 @@ export default defineComponent({
   components: { ProgramPermissions, DirectoryPermissions },
   props: { requestedSecret: { type: String, default: '' }, requiredAliases: { type: Array as PropType<string[]>, default: () => [] }, mode: { type: String, default: 'permissions' }, selectedPodId: { type: String, default: '' } },
   emits: ['selected', 'discuss'],
-  setup() { return { access: usePodAccess() } },
+  setup() { const access = usePodAccess(); return { access, remoteRevision: access.revision } },
   data() { return { pods: [] as StoredPod[], podId: '', state: { resources: [], epoch: 0 } as ResourceState, busy: false, error: '', credentialAlias: this.requestedSecret, credentialValue: '' } },
   computed: { missingAliases(): string[] { return this.requiredAliases.filter(alias => !this.visibleResources.some(resource => resource.name === alias && resource.state === 'ready')) }, visibleResources() { return this.state.resources.filter(resource => this.mode === 'values' ? resource.kind === 'credential' : this.access.remote && !['reference', 'directory', 'credential'].includes(resource.kind) && !['program', 'http', 'jev'].includes(String(resource.configuration.type))) } },
+  watch: { remoteRevision() { if (!this.busy && !this.error && this.podId) void this.load() } },
   async mounted() {
     try { this.pods = (await this.access.api.workspace({ type: 'list' })).pods; this.podId = this.selectedPodId || this.pods[0]?.id || ''; if (this.podId) await this.load() }
     catch (error) { this.error = error instanceof Error ? error.message : 'Could not load resources' }

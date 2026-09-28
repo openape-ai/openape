@@ -1,10 +1,11 @@
 import { inject, onBeforeUnmount, reactive } from 'vue'
-import type { InjectionKey } from 'vue'
+import type { InjectionKey, Ref } from 'vue'
 import type { PodsBridge } from '../contracts/ipc'
 
 export type PodApi = Pick<PodsBridge, 'workspace' | 'details' | 'scripts' | 'resources' | 'scheduling' | 'runs' | 'data' | 'workflows'>
 export interface PodAccess {
   api: PodApi
+  revision?: Readonly<Ref<number>>
   remote: boolean
   key: (podId: string) => string
   edits: Map<string, () => boolean>
