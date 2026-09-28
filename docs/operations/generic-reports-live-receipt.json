@@ -1,0 +1,136 @@
+{
+  "date": "2026-09-28",
+  "productionImage": "prod-e40ae6ea",
+  "previousImage": "prod-7bab2ba6",
+  "implementationPr": 166,
+  "releasePr": 167,
+  "externalCi": [
+    5205,
+    5206
+  ],
+  "mainGate": "1790597799421-e40ae6ea-unit/summary.json",
+  "cliRegistryRelease": "blocked: npm login expired; owner renewal requested",
+  "prPreview": {
+    "id": "ce9f8d60-ab1b-4d23-a665-0d238655f24e",
+    "podId": "98c32f74-ffaf-4628-bd41-95cea821572f",
+    "scriptHash": "158083853caa5f07eec600317cc194afd2a058a99eac123d3a0fb6307e9b6df8",
+    "state": "completed",
+    "startedAt": 1790598050337,
+    "finishedAt": 1790598165929,
+    "summary": "Private preview published. No Telegram delivery or baseline change.\nhttps://report.openape.ai/r/Xje1MuC_Ymz0_IMXx5Awm_ko",
+    "error": null,
+    "checkpointRevision": 407,
+    "recovery": null,
+    "report": "https://report.openape.ai/r/Xje1MuC_Ymz0_IMXx5Awm_ko",
+    "telegramRequests": 0,
+    "desktopAnd320pxInspected": true
+  },
+  "prRegular": {
+    "id": "60dea231-dc09-4c68-8051-8e5bf76e4696",
+    "podId": "98c32f74-ffaf-4628-bd41-95cea821572f",
+    "scriptHash": "158083853caa5f07eec600317cc194afd2a058a99eac123d3a0fb6307e9b6df8",
+    "state": "completed",
+    "startedAt": 1790598538705,
+    "finishedAt": 1790598585741,
+    "summary": "1 Telegram notifications confirmed.",
+    "error": null,
+    "checkpointRevision": 411,
+    "recovery": null,
+    "report": "https://report.openape.ai/r/lmBAnCAovkSe77C7Kjvl_Okh",
+    "reportReceiptReadAt": 1790598583837,
+    "telegramPostAt": 1790598584627,
+    "telegramConfirmed": 1
+  },
+  "morningPreview": {
+    "id": "48e19c78-e56e-4792-9c4e-73fdf17c9fc8",
+    "podId": "991849f7-b612-4cf9-8201-5b78b4a12e55",
+    "scriptHash": "ce3ac5cbfc2b8e0f910dd036a8a4a23b62d42833797c0e25cac19c443e4c1009",
+    "state": "completed",
+    "startedAt": 1790598260343,
+    "finishedAt": 1790598266106,
+    "summary": "Private live-source preview published: https://report.openape.ai/r/TVs2vMsL8F12S_YnBmqVXRU0?v=1; Telegram target confirmed; no send",
+    "error": null,
+    "checkpointRevision": 28,
+    "recovery": null,
+    "workflowRunId": "df1e3384-e4a8-4394-b59a-0ae22c5c9ba6",
+    "telegramPosts": 0,
+    "standardPreviewRestored": "01M3J0X2QHEK44RGYEBZ2YRJE5",
+    "variableRevision": 5
+  },
+  "evidence": {
+    "shared": "https://testrun.openape.ai/r/x7D_27wRLzOs5uuzwKzGeYO4",
+    "private": "https://report.openape.ai/r/YV41j4cu_s88SMPVTxdMfSux",
+    "inspectedScreenshots": 5
+  },
+  "prSchedule": {
+    "enabled": true,
+    "seconds": 900,
+    "revision": 2
+  },
+  "morningSchedule": {
+    "enabled": true,
+    "revision": 7,
+    "time": "07:00",
+    "timezone": "Europe/Vienna"
+  },
+  "plansServiceUnchanged": true,
+  "productionAcceptance": {
+    "results": [
+      {
+        "endpoint": "https://report.openape.ai",
+        "ownerDocument": 200,
+        "anonymousRoutes": 4,
+        "privateNoStore": true,
+        "sandbox": true,
+        "artifactDigestMatches": true,
+        "embeddedScreenshots": 5,
+        "category": "Test Runs",
+        "legacyScreenshotPreserved": true
+      },
+      {
+        "endpoint": "https://testrun.openape.ai",
+        "ownerDocument": 200,
+        "anonymousRoutes": 4,
+        "privateNoStore": true,
+        "sandbox": true,
+        "artifactDigestMatches": true,
+        "embeddedScreenshots": 5,
+        "category": "Test Runs",
+        "legacyScreenshotPreserved": true
+      }
+    ],
+    "replay": 200,
+    "changedPayload": 409
+  },
+  "legacyPreservation": {
+    "legacyRows": [
+      {
+        "table": "runs",
+        "originalRows": 289,
+        "identicalRows": 289
+      },
+      {
+        "table": "run_versions",
+        "originalRows": 169,
+        "identicalRows": 169
+      },
+      {
+        "table": "assets",
+        "originalRows": 717,
+        "identicalRows": 717
+      },
+      {
+        "table": "report_series",
+        "originalRows": 3,
+        "identicalRows": 3
+      },
+      {
+        "table": "report_publications",
+        "originalRows": 4,
+        "identicalRows": 4
+      }
+    ],
+    "quickCheck": "ok"
+  },
+  "guidanceCommit": "2dfc4d3"
+}
