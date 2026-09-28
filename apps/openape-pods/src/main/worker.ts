@@ -192,7 +192,8 @@ export class FixtureWorker {
   }
 
   async data(command: DataInternal): Promise<DataView> {
-    if (this.central && command.type !== 'status' && command.type !== 'backup') throw new Error('Central workspaces require coordinated backup and retention; local deletion and restore are disabled')
+    const coordinatedDeletion = command.type === 'deletePod' && this.central?.executing
+    if (this.central && !coordinatedDeletion && command.type !== 'status' && command.type !== 'backup') throw new Error('Central workspaces require coordinated backup and retention; local deletion and restore are disabled')
     await this.setupReady
     if (command.type !== 'status' && (this.connections?.busy() || this.programs?.busy())) throw new Error('Finish or cancel account setup before changing application data')
     const view = parseDataView(await this.dispatch({ data: command }))
@@ -481,6 +482,7 @@ export class FixtureWorker {
       }
       return result
     }
+    if (channel === 'data') return this.data(command)
     if (channel === 'scripts') return this.scripts(command)
     if (channel === 'details') return this.details(command)
     if (channel === 'scheduling') return this.scheduling(command)
