@@ -1,5 +1,9 @@
 # Active work
 
+## Morning editorial workflow (September 28, 2026)
+
+[Issue 1400](https://repos.openape.ai/patrick/monorepo/issues/1400), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3KEEMTW4EN59AFD8HP34X7F). Own checkout `reports`, branch `feature/issue-1400-editorial-workflow`, canonical baseline `f60c762a`. Split existing mail evidence and Calendar/Issues collection into source nodes, add a tool-free German editorial node, retain the existing publisher identity and delivery checkpoints. Sources pass bounded workflow data and immutable private evidence; editor-only replay reads saved inputs. New Pods have no independent schedules. Initial 31 focused contract checks pass. Next: full gates, native PR, isolated source authentication, actual no-send preview/replay, workflow cutover and owner UI verification. Existing live workflow remains revision 6 during preparation.
+
 ## Pod archive and deletion: issue 1399
 
 [Issue 1399](https://repos.openape.ai/patrick/monorepo/issues/1399), branch
