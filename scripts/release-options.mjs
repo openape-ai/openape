@@ -9,3 +9,15 @@ export function releaseOptions(argv) {
   }
   return { filter, dryRun }
 }
+
+export function blocksRelease(changeset, filter) {
+  if (!filter) return true
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(changeset)?.[1]
+  if (!frontmatter) throw new Error('Invalid changeset release metadata')
+  const packages = frontmatter.split(/\r?\n/).filter(line => line.trim()).map((line) => {
+    const match = /^\s*["']?(@[a-z0-9-]+\/[a-z0-9-]+|[a-z0-9-]+)["']?:\s*(?:major|minor|patch)\s*$/.exec(line)
+    if (!match) throw new Error('Unsupported changeset release metadata; review before publishing')
+    return match[1]
+  })
+  return packages.includes(filter)
+}

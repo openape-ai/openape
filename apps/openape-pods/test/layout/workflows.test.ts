@@ -1,3 +1,4 @@
+import { screenshotPath } from './evidence'
 import { flushPromises, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -12,7 +13,7 @@ import { installWorkspace } from './workspace-fixture'
 // `workflows` E2E. The graph comes from the worker in
 // test/scheduling/workflow-graph-ui.test.ts; here only its layout matters.
 const frame = () => new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done())))
-const artifact = (name: string) => `../../.artifacts/${name}`
+const artifact = (name: string) => screenshotPath(`${name}`)
 const hash = 'e'.repeat(64)
 const members: StoredPod[] = ['Inbox filter', 'Important mail summary with a deliberately long name', 'Archive audit', 'Delivery confirmation'].map((name, index) => ({ id: `00000000-0000-4000-8000-00000000010${index}`, name, revision: 1, lifecycle: 'paused', activeScript: hash }))
 const id = '00000000-0000-4000-8000-0000000001a0'
@@ -25,7 +26,7 @@ afterEach(() => { wrapper?.unmount(); wrapper = undefined; document.documentElem
 async function open(view: WorkflowView) {
   installWorkspace({ workspace: async () => ({ organization: { revision: 1, groups: [] }, pods: structuredClone(members) }), workflows: async () => structuredClone(view) })
   wrapper = mount(App, { attachTo: document.body }); await flushPromises()
-  await wrapper.findAll('button').find(button => button.text().trim() === 'Synthetic inbox workflow')!.trigger('click'); await flushPromises(); await frame()
+  await wrapper.findAll('button').find(button => button.find('strong').exists() && button.find('strong').text() === 'Synthetic inbox workflow')!.trigger('click'); await flushPromises(); await frame()
 }
 async function show(width: number, scheme: 'light' | 'dark') {
   await page.viewport(width, 900); document.documentElement.style.colorScheme = scheme; await frame()

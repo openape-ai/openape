@@ -1,3 +1,6 @@
+import { MailArchiveService } from './mail/archive/service'
+import { ArchiveStore } from './mail/archive/store'
+import { handleMailArchive } from './mail/archive/handler'
 import type { RuntimeApprovalPolicy } from './codex/runtime-approval'
 import { assignedJev, parseJevRequest, typesafeOrigin } from '../contracts/jev'
 import { executeJev } from './connections/jev-service'
@@ -79,6 +82,7 @@ export class FixtureWorker {
   central: CentralController | null = null
   private shellIdentities = new Map<string, { close: () => Promise<void> }>()
   private openedApprovals = new Set<string>()
+  private archiveService?: MailArchiveService
   private programs: ProgramManager | null = null
   private connections: ConnectionManager | null = null
   private providerGateway: Awaited<ReturnType<typeof startAgentGateway>> | null = null
@@ -188,7 +192,8 @@ export class FixtureWorker {
   }
 
   async data(command: DataInternal): Promise<DataView> {
-    if (this.central && command.type !== 'status' && command.type !== 'backup') throw new Error('Central workspaces require coordinated backup and retention; local deletion and restore are disabled')
+    const coordinatedDeletion = command.type === 'deletePod' && this.central?.executing
+    if (this.central && !coordinatedDeletion && command.type !== 'status' && command.type !== 'backup') throw new Error('Central workspaces require coordinated backup and retention; local deletion and restore are disabled')
     await this.setupReady
     if (command.type !== 'status' && (this.connections?.busy() || this.programs?.busy())) throw new Error('Finish or cancel account setup before changing application data')
     const view = parseDataView(await this.dispatch({ data: command }))
@@ -312,13 +317,20 @@ export class FixtureWorker {
     }
     catch (error) {
       await this.dispatch({ codexAdministration: { type: 'failed', request } })
-      if (action.kind === 'importSecret') throw new Error('Secret import failed; inspect the private file, current Pod revision and resource epoch before retrying')
+      if (action.kind === 'importSecret' || action.kind === 'importJev') throw new Error('Secret import failed; inspect the private file, current Pod revision and resource epoch before retrying')
       throw error
     }
   }
 
   private async administer(action: ReturnType<typeof parseAdministration>): Promise<unknown> {
     const { command } = action
+    if (action.kind === 'importJev') {
+      const before = await this.resources({ type: 'list', podId: command.podId })
+      if (before.epoch !== action.command.epoch) throw new Error('Pod permissions changed; reload before importing Jev')
+      if (before.jev) throw new Error('A Jev connection already exists; replace it through App settings')
+      await importPrivateSecret(action.path, key => this.onboarding({ type: 'saveTypesafe', key }))
+      return { jev: (await this.resources({ type: 'list', podId: command.podId })).jev }
+    }
     if (action.kind === 'description') return { description: (await this.details(action.command)).description }
     if (action.kind === 'setup') { await this.master(action.command); return { status: 'applied' } }
     if (action.kind === 'scripts') {
@@ -470,6 +482,7 @@ export class FixtureWorker {
       }
       return result
     }
+    if (channel === 'data') return this.data(command)
     if (channel === 'scripts') return this.scripts(command)
     if (channel === 'details') return this.details(command)
     if (channel === 'scheduling') return this.scheduling(command)
@@ -490,7 +503,7 @@ export class FixtureWorker {
 
   private async executeService(request: ServiceRequest): Promise<unknown> {
     if (!request || typeof request.id !== 'string' || !/^[a-f0-9-]{36}$/.test(request.id) || this.services.has(request.id) || this.services.size >= 16) throw new Error('Invalid or excessive broker request')
-    if (request.kind !== undefined && request.kind !== 'credential' && request.kind !== 'jev' && request.kind !== 'http' && request.kind !== 'shell' && request.kind !== 'shellClose') throw new Error('Unsupported broker service')
+    if (request.kind !== undefined && request.kind !== 'mailArchive' && request.kind !== 'credential' && request.kind !== 'jev' && request.kind !== 'http' && request.kind !== 'shell' && request.kind !== 'shellClose') throw new Error('Unsupported broker service')
     const scope = parseServiceScope(request.scope)
     const controller = new AbortController(); this.services.set(request.id, controller)
     const check = async (domain?: { path: string, ownerPid: number }) => parseResourceState(await this.dispatch({ serviceCheck: { scope, ...(domain ? { domain } : {}) } }))
@@ -559,6 +572,13 @@ export class FixtureWorker {
         return value
       }
       const state = await check()
+      if (request.kind === 'mailArchive') {
+        if (!this.credentials || !this.connections) throw new Error('Connection service unavailable')
+        this.archiveService ??= new MailArchiveService(new ArchiveStore(join(this.root, 'mail-archive')))
+        const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
+        const result = await handleMailArchive({ service: this.archiveService, body: request.body, scope, root: this.root, helper: join(dist, 'native/pods-helper'), credentials: this.credentials, connections: this.connections, check, signal: controller.signal, observe, previous })
+        await check(); controller.signal.throwIfAborted(); return result
+      }
       if (request.kind === 'jev') {
         if (!this.credentials || !this.connections) throw new Error('Connection service unavailable')
         const assignment = assignedJev(state.resources, scope.podId, scope.capabilities)

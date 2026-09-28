@@ -15,7 +15,7 @@ export default defineComponent({
       if (event.key === 'Escape') { this.escapeTab = true; return }
       if (event.key === 'Tab' && this.escapeTab) { this.escapeTab = false; return }
       this.escapeTab = false
-      if (event.key !== 'Tab' || event.shiftKey || this.readonly || this.disabled) return
+      if (event.key !== 'Tab' || event.shiftKey || this.$props.readonly || this.$props.disabled) return
       event.preventDefault()
       const input = event.target as HTMLTextAreaElement
       const start = input.selectionStart; const end = input.selectionEnd
