@@ -1,24 +1,28 @@
 <script lang="ts">
+import { usePodAccess, trackPodEdits } from './pod-access'
 import { t, diagnostic, label } from './i18n'
 import { settingsDrafts } from './form-buffer'
 import PodSchedule from './PodSchedule.vue'
+import PodLifecycle from './central/PodLifecycle.vue'
 import PodIdentity from './PodIdentity.vue'
 import { defineComponent } from 'vue'
 import type { Organization } from '../contracts/groups'
 import type { StoredPod } from '../contracts/control'
 
 export default defineComponent({
-  components: { PodSchedule, PodIdentity },
+  components: { PodSchedule, PodIdentity, PodLifecycle },
   props: { selectedPodId: { type: String, default: '' } },
   emits: ['selected', 'accounts'],
-  data() { return { confirmReload: false, initialized: false, organization: { revision: 1, groups: [] } as Organization, pods: [] as StoredPod[], selectedId: '', name: '', revision: 0, error: '', message: '', busy: false } },
+  setup() { return { access: usePodAccess() } },
+  data() { return { newGroup: '', confirmReload: false, initialized: false, organization: { revision: 1, groups: [] } as Organization, pods: [] as StoredPod[], selectedId: '', name: '', revision: 0, error: '', message: '', busy: false } },
   computed: { selectedGroup(): string { return this.organization.groups.find(group => group.podIds.includes(this.selectedId))?.id ?? '' }, selectedPod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.selectedId) } },
   watch: { async selectedPodId(id: string) { if (id === this.selectedId) return; await this.reload(); const pod = this.pods.find(pod => pod.id === id); if (pod) this.select(pod); else this.newPod() } },
   async mounted() {
+    trackPodEdits(this.access, 'settings', () => this.initialized && (this.name !== (this.selectedPod?.name ?? '') || !!this.newGroup))
     await this.reload(); const selected = this.pods.find(pod => pod.id === this.selectedPodId); if (selected) {
       this.select(selected)
     }
-    else { const draft = settingsDrafts.get(''); if (draft) Object.assign(this, draft); this.initialized = true }
+    else { const draft = settingsDrafts.get(this.access.key('')); if (draft) Object.assign(this, draft); this.initialized = true }
   },
   beforeUnmount() { this.remember() },
   methods: {
@@ -28,28 +32,34 @@ export default defineComponent({
       this.error = ''; await this.reload(); if (this.error) return
       const saved = this.pods.find(pod => pod.id === id)
       if (!saved) { this.error = 'Saved pod is missing from response'; return }
-      settingsDrafts.delete(id); this.initialized = false; this.select(saved); this.confirmReload = false
+      settingsDrafts.delete(this.access.key(id)); this.initialized = false; this.select(saved); this.confirmReload = false
     },
     async reload() {
       this.busy = true
-      try { const state = await window.pods.workspace({ type: 'list' }); this.pods = state.pods; this.organization = state.organization }
+      try { const state = await this.access.api.workspace({ type: 'list' }); this.pods = state.pods; this.organization = state.organization }
       catch (error) { this.error = error instanceof Error ? error.message : 'Could not load pods' }
+      finally { this.busy = false }
+    },
+    async createGroup() {
+      this.busy = true; this.error = ''
+      try { const state = await this.access.api.workspace({ type: 'organize', action: 'create', revision: this.organization.revision, name: this.newGroup }); this.organization = state.organization; this.newGroup = '' }
+      catch (error) { this.error = error instanceof Error ? error.message : 'Could not create group' }
       finally { this.busy = false }
     },
     async moveGroup(event: Event) {
       this.busy = true; this.error = ''
-      try { const state = await window.pods.workspace({ type: 'organize', revision: this.organization.revision, action: 'move', podId: this.selectedId, groupId: (event.target as HTMLSelectElement).value || null }); this.organization = state.organization; this.$emit('selected', this.selectedId) }
+      try { const state = await this.access.api.workspace({ type: 'organize', revision: this.organization.revision, action: 'move', podId: this.selectedId, groupId: (event.target as HTMLSelectElement).value || null }); this.organization = state.organization; this.$emit('selected', this.selectedId) }
       catch (error) { this.error = error instanceof Error ? error.message : 'Could not update groups' }
       finally { this.busy = false; (event.target as HTMLSelectElement).value = this.selectedGroup }
     },
-    remember() { if (!this.initialized) return; if (this.name !== (this.selectedPod?.name ?? '')) settingsDrafts.set(this.selectedId, { name: this.name, revision: this.revision }); else settingsDrafts.delete(this.selectedId) },
-    select(pod: StoredPod) { this.remember(); const draft = settingsDrafts.get(pod.id); this.selectedId = pod.id; this.name = draft?.name ?? pod.name; this.revision = draft?.revision ?? pod.revision; this.initialized = true; this.$emit('selected', pod.id); this.message = ''; this.error = '' },
+    remember() { if (!this.initialized) return; if (this.name !== (this.selectedPod?.name ?? '') || this.newGroup) settingsDrafts.set(this.access.key(this.selectedId), { name: this.name, revision: this.revision, newGroup: this.newGroup }); else settingsDrafts.delete(this.access.key(this.selectedId)) },
+    select(pod: StoredPod) { this.remember(); const draft = settingsDrafts.get(this.access.key(pod.id)); this.selectedId = pod.id; this.newGroup = draft?.newGroup ?? ''; this.name = draft?.name ?? pod.name; this.revision = draft?.revision ?? pod.revision; this.initialized = true; this.$emit('selected', pod.id); this.message = ''; this.error = '' },
     newPod() { this.selectedId = ''; this.name = ''; this.revision = 0; this.$emit('selected', ''); this.message = ''; this.error = '' },
     async remove() {
       const pod = this.selectedPod; if (!pod || pod.lifecycle !== 'archived') return
       this.busy = true; this.error = ''
       try {
-        await window.pods.data({ type: 'deletePod', podId: pod.id, revision: pod.revision, name: pod.name })
+        await this.access.api.data({ type: 'deletePod', podId: pod.id, revision: pod.revision, name: pod.name })
         await this.reload()
         if (!this.pods.some(item => item.id === pod.id)) { this.newPod(); this.message = 'Local pod deleted.' }
       }
@@ -59,7 +69,7 @@ export default defineComponent({
     async archive() {
       const pod = this.selectedPod; if (!pod) return
       this.busy = true; this.error = ''
-      try { this.pods = (await window.pods.workspace({ type: 'update', id: pod.id, revision: pod.revision, name: pod.name, lifecycle: 'archived' })).pods; this.select(this.pods.find(item => item.id === pod.id)!); this.message = 'Archived. History is retained.' }
+      try { this.pods = (await this.access.api.workspace({ type: 'update', id: pod.id, revision: pod.revision, name: pod.name, lifecycle: 'archived' })).pods; this.select(this.pods.find(item => item.id === pod.id)!); this.message = 'Archived. History is retained.' }
       catch (error) { this.error = error instanceof Error ? error.message : 'Could not archive pod' }
       finally { this.busy = false }
     },
@@ -67,11 +77,11 @@ export default defineComponent({
       this.busy = true; this.error = ''; this.message = ''
       try {
         const command = this.selectedId ? { type: 'update' as const, id: this.selectedId, revision: this.revision, name: this.name, lifecycle: this.selectedPod!.lifecycle } : { type: 'create' as const, name: this.name }
-        const state = await window.pods.workspace(command)
+        const state = await this.access.api.workspace(command)
         this.pods = state.pods
         const saved = this.selectedId ? this.pods.find(pod => pod.id === this.selectedId) : this.pods.at(-1)
         if (!saved) throw new Error('Saved pod is missing from response')
-        settingsDrafts.delete(this.selectedId); this.name = saved.name; this.select(saved); if (command.type === 'create') settingsDrafts.delete(''); this.message = 'Settings saved.'
+        settingsDrafts.delete(this.access.key(this.selectedId)); this.name = saved.name; this.select(saved); if (command.type === 'create') settingsDrafts.delete(this.access.key('')); this.message = 'Settings saved.'
       }
       catch (error) { this.error = error instanceof Error ? error.message : 'Could not save pod' }
       finally { this.busy = false }
@@ -88,7 +98,7 @@ export default defineComponent({
       </button>
     </div>
     <p class="muted">
-      {{ t("Settings are saved on this Mac.") }}
+      {{ t(access.remote ? 'Settings are saved on the connected desktop.' : 'Settings are saved on this Mac.') }}
     </p>
     <div v-if="!selectedPodId" class="saved-pods">
       <button v-for="pod in pods" :key="pod.id" class="secondary" :aria-pressed="selectedId === pod.id" @click="select(pod)">
@@ -132,9 +142,20 @@ export default defineComponent({
       </option>
     </select>
   </article>
-  <PodIdentity v-if="selectedPod" :key="selectedPod.id" :pod-id="selectedPod.id" @accounts="$emit('accounts')" />
+  <form v-if="selectedPod && access.remote" class="card" @submit.prevent="createGroup">
+    <label>{{ t('New group') }}<input v-model="newGroup" maxlength="100" required></label><button class="secondary" :disabled="busy || !newGroup.trim()">
+      {{ t('Create group') }}
+    </button>
+  </form>
+  <PodIdentity v-if="selectedPod && !access.remote" :key="selectedPod.id" :pod-id="selectedPod.id" @accounts="$emit('accounts')" />
+  <article v-if="selectedPod && access.remote" class="card">
+    <h2>{{ t('Pod identity') }}</h2><p class="muted">
+      {{ t('Manage this Pod’s identity on the desktop.') }}
+    </p>
+  </article>
   <PodSchedule v-if="selectedPod" :key="selectedPod.id" :pod="selectedPod" @changed="reload" />
-  <details v-if="selectedPod" class="card lifecycle-panel">
+  <PodLifecycle v-if="selectedPod && access.remote" :pod="selectedPod" @command="command => command.channel === 'data' ? remove() : archive()" />
+  <details v-if="selectedPod && !access.remote" class="card lifecycle-panel">
     <summary>{{ t("More options") }}</summary>
     <h2>{{ t("Pod lifecycle") }}</h2><p class="muted">
       {{ t("Archiving stops intake and preserves knowledge. Run history follows the 50-run retention policy.") }}

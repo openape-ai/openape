@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RemotePodEditor from './RemotePodEditor.vue'
 import ScriptCode from '../ScriptCode.vue'
 import type { WorkflowView } from '../../contracts/workflows'
 import PodLifecycle from './PodLifecycle.vue'
@@ -11,8 +12,8 @@ import type { ScriptSource } from '../../contracts/scripts'
 import { WorkspaceRequestError } from './client'
 import { connected, connectionAfter, connectionLevel } from './status'
 
-const props = defineProps<{ client: CentralClient, desktop?: boolean, desktopStatus?: CentralStatus | null, embedded?: boolean, workflows?: WorkflowView }>()
-const emit = defineEmits<{ settings: [], login: [], logout: [] }>()
+const props = defineProps<{ client: CentralClient, desktop?: boolean, desktopStatus?: CentralStatus | null, embedded?: boolean, workflows?: WorkflowView, sharedEditor?: boolean }>()
+const emit = defineEmits<{ settings: [], login: [], logout: [], inventory: [value: CentralRuntime[]], connection: [error: string] }>()
 const runtimes = ref<CentralRuntime[]>([])
 const selected = ref<{ runtimeId: string, podId: string } | null>(null)
 const current = shallowRef<CentralSummary | null>(null)
@@ -24,6 +25,9 @@ const connection = shallowRef(connected)
 const connectionError = computed(() => connection.value.error)
 const notice = ref('')
 const busy = ref(false)
+const remoteDirty = ref(false)
+const remoteBusy = ref(false)
+const pendingDestination = shallowRef<(() => void) | null>(null)
 const authenticated = ref(true)
 const tab = ref('Overview')
 const tabs = ['Overview', 'Script', 'Values', 'Permissions', 'Settings', 'History']
@@ -58,7 +62,7 @@ const runList = computed(() => [...current.value?.pod.runs.runs ?? [], ...olderR
 const activeRuntime = computed(() => runtimes.value.find(item => item.id === props.desktopStatus?.runtimeId && item.online) ?? (runtime.value?.online ? runtime.value : runtimes.value.find(item => item.online)))
 const localEditor = computed(() => props.desktop && !!props.desktopStatus?.runtimeId && selected.value?.runtimeId === props.desktopStatus.runtimeId)
 function visiblePods(host: CentralRuntime) { return host.workspace.pods.filter(pod => (pod.lifecycle === 'archived') === archived.value && pod.name.toLowerCase().includes(search.value.toLowerCase())) }
-function memberships(runtimeId: string, id: string) { return runtimeId === props.desktopStatus?.runtimeId ? props.workflows?.workflows.filter(item => item.nodes.some(node => node.podId === id)).map(item => item.name).join(' · ') : '' }
+function memberships(runtimeId: string, id: string) { const view = runtimeId === props.desktopStatus?.runtimeId ? props.workflows : runtimes.value.find(item => item.id === runtimeId)?.workflows; return view?.workflows.filter(item => item.nodes.some(node => node.podId === id)).map(item => item.name).join(' · ') }
 async function createPod() {
   const target = activeRuntime.value
   if (!target) return
@@ -95,7 +99,7 @@ async function refresh() {
     try {
       const inventory = await props.client.inventory()
       if (abort.signal.aborted) return
-      runtimes.value = inventory; authenticated.value = true; connection.value = connected
+      runtimes.value = inventory; emit('inventory', inventory); authenticated.value = true; connection.value = connected
       const target = selected.value
       if (!target || token !== generation) return
       const entry = inventory.find(item => item.id === target.runtimeId)?.workspace.pods.find(item => item.id === target.podId)
@@ -104,7 +108,7 @@ async function refresh() {
         code.value = ''; description.value = ''; runId.value = ''
         return
       }
-      if (!entry.online) { current.value = null; return }
+      if (!entry.online) { if (!props.sharedEditor) current.value = null; return }
       const detail = await props.client.read(target.runtimeId, target.podId)
       if (token !== generation || abort.signal.aborted) return
       const unchanged = !baseline.value || editorState() === savedEditor
@@ -114,14 +118,14 @@ async function refresh() {
     }
     catch (cause) {
       // Keep the last known inventory and content; the service's online flags stay authoritative.
-      if (cause instanceof WorkspaceRequestError && cause.status === 401) { authenticated.value = false; current.value = null; baseline.value = null; code.value = ''; description.value = ''; runtimes.value = [] }
+      if (cause instanceof WorkspaceRequestError && cause.status === 401) { if (props.sharedEditor) emit('login'); authenticated.value = false; current.value = null; baseline.value = null; code.value = ''; description.value = ''; runtimes.value = [] }
       connection.value = connectionAfter(connection.value, cause instanceof Error ? cause.message : 'Workspace is unavailable', Date.now())
     }
   })().finally(() => { refreshing = null })
   return refreshing
 }
 async function select(runtimeId: string, podId: string, discard = false) {
-  if (busy.value || operationId.value) return
+  if (busy.value || operationId.value || remoteBusy.value) return
   if (!discard && hasUnsavedEdits()) { pendingNavigation.value = { runtimeId, podId }; return }
   generation++; selected.value = { runtimeId, podId }; current.value = null; baseline.value = null; source.value = null; olderRuns.value = []; runDetail.value = null
   code.value = ''; description.value = ''; runId.value = ''; error.value = ''; notice.value = ''
@@ -233,25 +237,32 @@ async function watchChanges() {
     }
   }
 }
-function hasUnsavedEdits() { return !localEditor.value && !!baseline.value && editorState() !== savedEditor }
+function hasUnsavedEdits() { if (props.sharedEditor) return !!selected.value && remoteDirty.value; return !localEditor.value && !!baseline.value && editorState() !== savedEditor }
 function showInventory(discard = false) {
-  if (busy.value || operationId.value) return
+  if (busy.value || operationId.value || remoteBusy.value) return
   if (!discard && hasUnsavedEdits()) { pendingNavigation.value = 'inventory'; return }
   generation++; selected.value = null; current.value = null; baseline.value = null
 }
 async function discardAndNavigate() {
+  if (pendingDestination.value) { const next = pendingDestination.value; pendingDestination.value = null; next(); return }
   const destination = pendingNavigation.value
   pendingNavigation.value = null
   if (destination === 'inventory') showInventory(true)
   else if (destination) await select(destination.runtimeId, destination.podId, true)
 }
-defineExpose({ select, showInventory })
+function requestNavigation(next: () => void) {
+  if (busy.value || operationId.value || remoteBusy.value) return
+  if (hasUnsavedEdits()) { pendingDestination.value = next; return }
+  next()
+}
+watch(connectionError, value => emit('connection', value ?? ''))
+defineExpose({ select, showInventory, requestNavigation, refresh })
 onMounted(async () => { await refresh(); await watchChanges() })
 onBeforeUnmount(() => { generation++; abort.abort() })
 </script>
 
 <template>
-  <div class="central-workspace" :class="{ 'central-desktop': desktop, 'central-embedded': embedded, 'central-detail': !!selected }">
+  <div class="central-workspace" :class="{ 'shared-editor': sharedEditor, 'central-desktop': desktop, 'central-embedded': embedded, 'central-detail': !!selected }">
     <header v-if="!embedded" class="central-header">
       <div><span class="central-mark">◉</span><strong>{{ t('OpenApe Pods') }}</strong><span class="central-muted">{{ t('Your workspace') }}</span></div><button v-if="!desktop && authenticated" @click="emit('logout')">
         {{ t('Sign out') }}
@@ -296,7 +307,7 @@ onBeforeUnmount(() => { generation++; abort.abort() })
             {{ host.online ? t('Desktop online') : host.lastSeenAt ? t('Desktop offline since {time}', { time: time(host.lastSeenAt) }) : t('Desktop offline') }}<span v-if="runtimes.length > 1"> · {{ host.id }}</span>
           </p>
           <button v-for="pod in visiblePods(host)" :key="pod.id" class="inventory-row central-pod" :disabled="busy" @click="select(host.id, pod.id)">
-            <span><strong>{{ pod.name }}</strong><small>{{ memberships(host.id, pod.id) || (host.id === desktopStatus?.runtimeId ? t('Standalone Pod') : host.workspace.organization.groups.find(group => group.podIds.includes(pod.id))?.name || t('Ungrouped')) }}</small></span><small v-if="pod.queue?.blocked" class="central-blocked">{{ t('Schedule blocked') }}</small><span class="badge">{{ pod.online ? label(pod.lifecycle) : t('Offline') }}</span><span aria-hidden="true">›</span>
+            <span><strong>{{ pod.name }}</strong><small>{{ memberships(host.id, pod.id) || (host.id === desktopStatus?.runtimeId || sharedEditor ? t('Standalone Pod') : host.workspace.organization.groups.find(group => group.podIds.includes(pod.id))?.name || t('Ungrouped')) }}</small></span><small v-if="pod.queue?.blocked" class="central-blocked">{{ t('Schedule blocked') }}</small><span class="badge">{{ pod.online ? label(pod.lifecycle) : t('Offline') }}</span><span aria-hidden="true">›</span>
           </button>
           <p v-if="!visiblePods(host).length" class="central-muted">
             {{ archived ? t('No archived Pods') : t('No matching Pods') }}
@@ -330,19 +341,20 @@ onBeforeUnmount(() => { generation++; abort.abort() })
             {{ t('Check pending operation') }}
           </button> {{ t('Review its result before making another change.') }}
         </p>
-        <section v-if="pendingNavigation" class="central-card" role="alert" :aria-label="t('Unsaved changes')">
+        <section v-if="pendingNavigation || pendingDestination" class="central-card" role="alert" :aria-label="t('Unsaved changes')">
           <p>{{ t('Unsaved changes') }}</p><button @click="discardAndNavigate">
             {{ t('Discard changes') }}
-          </button><button @click="pendingNavigation = null">
+          </button><button @click="pendingNavigation = null; pendingDestination = null">
             {{ t('Keep editing') }}
           </button>
         </section>
-        <div v-if="selected && !available" class="central-empty">
+        <div v-if="selected && !available && !(sharedEditor && current)" class="central-empty">
           <h1>{{ listed?.name ?? t('Your Pods') }}</h1><p>{{ listed ? t('This Pod is offline. Its contents will be available when it reconnects.') : t('Choose an online Pod to see its scripts, settings and recent runs.') }}</p><button @click="refresh">
             {{ t('Refresh') }}
           </button>
         </div>
         <slot v-else-if="localEditor && current && $slots['local-editor']" name="local-editor" :pod-id="current.pod.id" />
+        <RemotePodEditor v-else-if="sharedEditor && current && runtime" :key="`${runtime.id}:${current.pod.id}`" :client="client" :runtime="runtime" :summary="current" :online="available" @dirty="remoteDirty = $event" @busy="remoteBusy = $event" />
         <template v-else-if="current && baseline">
           <div class="central-title">
             <div><span class="central-eyebrow">{{ t('POD · ONLINE') }}</span><h1>{{ current.pod.scripts.pod.name }}</h1><p>{{ label(current.pod.scripts.pod.lifecycle) }} · {{ current.total }} {{ t('recent runs') }}</p></div><button :disabled="busy" @click="resetEditor">
@@ -464,4 +476,9 @@ onBeforeUnmount(() => { generation++; abort.abort() })
 .central-sidebar-bottom .central-settings-button{display:flex;align-items:center;gap:10px;text-align:left;border-color:transparent;background:transparent}
 @media(max-width:760px){.central-desktop .central-sidebar{position:static;height:auto;max-height:420px;overflow:visible}.central-desktop .central-pod-list{flex:auto}.central-sidebar-bottom{flex-shrink:0}}
 .central-layout{display:block;min-height:0}.central-inventory{max-width:1050px;margin:auto;padding:28px 32px}.central-content{margin:auto}.central-content:has(>.text-button){display:grid;gap:18px}.central-embedded{min-height:0;background:transparent}.central-embedded .central-content,.central-embedded .central-inventory{padding:0;max-width:none}.central-inventory .inventory-row{display:flex!important;border:1px solid var(--border)!important;background:var(--surface)!important;padding:18px;margin:12px 0}.central-inventory .inventory-row span{white-space:normal}.central-inventory .inventory-row small{white-space:normal}.inventory-toolbar .central-tabs{margin:0}.inventory-toolbar input{width:220px}.central-tabs [aria-pressed=true]{color:var(--accent);border-bottom:2px solid var(--accent)}.central-create{flex-wrap:wrap}.central-create input{flex:1;min-width:150px}.central-inventory h1{margin:0;font-size:26px}.central-inventory .central-runtime{overflow-wrap:anywhere}
+</style>
+
+<style>
+.shared-editor .remote-editor{font:inherit;color:inherit}
+.shared-editor .remote-editor button,.shared-editor .remote-editor input,.shared-editor .remote-editor textarea,.shared-editor .remote-editor select{font-family:inherit}
 </style>

@@ -1,4 +1,5 @@
 <script lang="ts">
+import { usePodAccess } from './pod-access'
 import { t, diagnostic, label, dateTime } from './i18n'
 import { runSteps, runHeadline, runFailure, duration } from './run-activity'
 import RunApproval from './RunApproval.vue'
@@ -10,6 +11,7 @@ export default defineComponent({
   components: { RunApproval },
   props: { selectedPodId: { type: String, default: '' }, selectedRunId: { type: String, default: '' } },
   emits: ['selected', 'navigate'],
+  setup() { return { access: usePodAccess() } },
   data() {
     return { now: Date.now(), pods: [] as StoredPod[], podId: '', runId: '', observations: {} as Record<string, string>, view: { runs: [], events: [] } as RunView, busy: false, error: '', scheduleError: '', pending: 0, blocked: 0, timer: null as ReturnType<typeof setTimeout> | null, closed: false }
   },
@@ -25,7 +27,7 @@ export default defineComponent({
     failure() { return runFailure(this.selectedRun?.error ?? null) },
   },
   async mounted() {
-    try { this.pods = (await window.pods.workspace({ type: 'list' })).pods; this.runId = this.selectedRunId; this.podId = this.selectedPodId || this.pods[0]?.id || ''; if (this.podId) await this.load() }
+    try { this.pods = (await this.access.api.workspace({ type: 'list' })).pods; this.runId = this.selectedRunId; this.podId = this.selectedPodId || this.pods[0]?.id || ''; if (this.podId) await this.load() }
     catch (error) { this.error = error instanceof Error ? error.message : 'Could not load runs' }
     this.scheduleRefresh()
   },
@@ -43,7 +45,7 @@ export default defineComponent({
     async act(command: RunCommand, preserveError = false) {
       this.busy = true; if (command.type === 'start') this.runId = ''; if (!preserveError) this.error = ''
       try {
-        const [view, schedule] = await Promise.all([window.pods.runs(command), window.pods.scheduling({ type: 'list', podId: this.podId })])
+        const [view, schedule] = await Promise.all([this.access.api.runs(command), this.access.api.scheduling({ type: 'list', podId: this.podId })])
         this.view = view; this.pending = schedule.pending; this.blocked = schedule.blocked
         this.scheduleError = schedule.error ?? ''
         if (this.runId && !this.view.runs.some(run => run.id === this.runId)) this.runId = ''
@@ -146,10 +148,10 @@ export default defineComponent({
         <p>{{ t('Inspect the destination before retrying. Pods cannot tell whether a request without a receipt was delivered.') }}</p>
         <article v-for="effect in view.effects" :key="effect.key">
           <label>{{ t('Your observation') }}<textarea v-model="observations[effect.key]" maxlength="4000" /></label>
-          <button :disabled="busy || !observations[effect.key]?.trim()" @click="act({ type: 'resolveHttp', podId, runId: effect.runId, key: effect.key, applied: true, evidence: observations[effect.key] })">
+          <button :disabled="busy || !observations[effect.key]?.trim()" @click="act({ type: 'resolveHttp', podId, runId: effect.runId, key: effect.key, applied: true, evidence: observations[effect.key] ?? '' })">
             {{ t('Already delivered') }}
           </button>
-          <button :disabled="busy || !observations[effect.key]?.trim()" @click="act({ type: 'resolveHttp', podId, runId: effect.runId, key: effect.key, applied: false, evidence: observations[effect.key] })">
+          <button :disabled="busy || !observations[effect.key]?.trim()" @click="act({ type: 'resolveHttp', podId, runId: effect.runId, key: effect.key, applied: false, evidence: observations[effect.key] ?? '' })">
             {{ t('Not delivered · allow retry') }}
           </button>
           <small>{{ effect.key }}</small>
@@ -201,7 +203,7 @@ export default defineComponent({
 <style scoped>
 .runs-panel { max-width: 900px; }
 .run-date { font-size: 13px; margin: 8px 0 20px; }
-.run-problem, .run-outcome { padding: 20px; border-radius: 12px; background: #edf3e9; }
+.run-problem, .run-outcome { padding: 20px; border-radius: 12px; background: light-dark(#edf3e9, #233829); }
 .run-problem { background: #fff5f0; color: #573e31; border: 1px solid #ebcfbf; }
 h3 { margin: 0 0 12px; } p { line-height: 1.5; }
 .next-action { border-top: 1px solid #81908344; padding-top: 16px; margin-top: 18px; }
@@ -210,8 +212,8 @@ h3 { margin: 0 0 12px; } p { line-height: 1.5; }
 .run-steps { list-style: none; padding: 0; display: grid; gap: 14px; }
 .run-steps li { display: flex; align-items: start; gap: 12px; }
 .run-steps p { font-size: 13px; margin: 3px 0; }
-.step { background: #e9eee5; border-radius: 50%; width: 26px; text-align: center; flex-shrink: 0; }
-.step.failed { background: #f8ddd5; }
+.step { background: light-dark(#e9eee5, #344735); border-radius: 50%; width: 26px; text-align: center; flex-shrink: 0; }
+.step.failed { background: light-dark(#f8ddd5, #633b32); }
 .run-details, .queued-starts { margin-top: 20px; } summary { cursor: pointer; }
 .run-history { border-top: 1px solid #81908344; margin-top: 24px; padding-top: 20px; }
 .history-entry { width: 100%; display: flex; justify-content: space-between; gap: 15px; text-align: left; margin: 8px 0; flex-wrap: wrap; }
