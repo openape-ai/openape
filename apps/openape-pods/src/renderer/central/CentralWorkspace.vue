@@ -354,7 +354,7 @@ onBeforeUnmount(() => { generation++; abort.abort() })
           </button>
         </div>
         <slot v-else-if="localEditor && current && $slots['local-editor']" name="local-editor" :pod-id="current.pod.id" />
-        <RemotePodEditor v-else-if="sharedEditor && current && runtime" :key="`${runtime.id}:${current.pod.id}`" :client="client" :runtime="runtime" :summary="current" :online="available" @dirty="remoteDirty = $event" @busy="remoteBusy = $event" />
+        <RemotePodEditor v-else-if="sharedEditor && current && runtime" :key="`${runtime.id}:${current.pod.id}`" :client="client" :runtime="runtime" :summary="current" :online="available" @dirty="remoteDirty = $event" @busy="remoteBusy = $event" @settings="emit('settings')" />
         <template v-else-if="current && baseline">
           <div class="central-title">
             <div><span class="central-eyebrow">{{ t('POD · ONLINE') }}</span><h1>{{ current.pod.scripts.pod.name }}</h1><p>{{ label(current.pod.scripts.pod.lifecycle) }} · {{ current.total }} {{ t('recent runs') }}</p></div><button :disabled="busy" @click="resetEditor">

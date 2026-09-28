@@ -9,7 +9,7 @@ import { clearScriptBuffer } from '../script-buffer'
 import { settingsDrafts, variableDrafts, descriptionDrafts, scheduleDrafts } from '../form-buffer'
 
 const props = defineProps<{ client: CentralClient, runtime: CentralRuntime, summary: CentralSummary, online: boolean }>()
-const emit = defineEmits<{ dirty: [value: boolean], busy: [value: boolean] }>()
+const emit = defineEmits<{ dirty: [value: boolean], busy: [value: boolean], settings: [] }>()
 const abort = new AbortController()
 const remote = remotePodAccess(props.client, () => props.runtime, props.summary, abort.signal)
 provide(podAccessKey, remote.access)
@@ -37,7 +37,7 @@ onUnmounted(() => {
     {{ t('Check pending operation') }}
   </button>
   <fieldset class="remote-editor" :disabled="!online || remote.state.busy || !!remote.state.operation">
-    <App :initial-pod-id="summary.pod.id" :refresh-token="remote.summary.value.revision" embedded />
+    <App :initial-pod-id="summary.pod.id" :refresh-token="remote.summary.value.revision" embedded @settings="emit('settings')" />
   </fieldset>
 </template>
 
