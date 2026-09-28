@@ -34,6 +34,15 @@ without login (unguessable capability URL).
 4. **Present the link.** That's the deliverable:
    "Proof: https://testrun.openape.ai/r/<slug> (2 passed, 1 failed)".
 
+## Private client documents
+
+Use `ape-testruns docs documents` for private client-authored HTML/CSS reports.
+Publish actual verification evidence with category `Test Runs`; preserve the
+request file and retry key. The client chooses layout, language and content.
+Existing `upload` manifests remain compatible and appear under Test Runs.
+Personally inspect relevant screenshots and verify the hosted report before
+sharing its link. Private document links require owner authentication.
+
 ## Auth
 
 One-time per device: `apes login <email>` (human approves via browser).
@@ -49,7 +58,7 @@ ape-testruns show <id>            # JSON: manifest, assets, share URL
 ape-testruns open <id> [--print-only]
 ape-testruns rm <id>              # share link stops working
 ape-testruns whoami [--json]
-ape-testruns docs <topic>         # agent, auth, cli, manifest
+ape-testruns docs <topic>         # agent, auth, cli, manifest, documents
 ```
 
 `--endpoint <url>` on any command (or env `APE_TESTRUNS_ENDPOINT`) targets a
