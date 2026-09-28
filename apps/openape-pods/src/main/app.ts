@@ -82,6 +82,7 @@ const codexTarget = { executable: process.execPath, script: join(__dirname, '../
 const mcpAccess = new McpAccessPolicy(profileBase)
 const codexServer = new CodexControlServer(codexTarget.socket, async (request) => { mcpAccess.assert(request); return worker.codex(request) })
 let mcpTransition = Promise.resolve()
+let mcpExpiry: ReturnType<typeof setInterval> | undefined
 let mcpRunning: boolean | undefined
 function syncMcp(): Promise<void> {
   const previous = mcpTransition
@@ -321,9 +322,7 @@ async function start(): Promise<void> {
       if (connection.state === 'connected') await syncMcp()
       return connection
     }
-    const connection = await registration.disconnect()
-    if (connection.state !== 'edited') { mcpAccess.set('off', mcpAccess.get().duration); await syncMcp() }
-    return connection
+    return registration.disconnect()
   })
   ipcMain.handle(channels.chats, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
@@ -439,10 +438,10 @@ async function start(): Promise<void> {
   if (central) watchCentral(central)
   await refreshLauncher(join(codexDirectory, 'openape-pods-mcp'), codexTarget)
   await syncMcp()
-  const expiry = setInterval(() => {
+  mcpExpiry = setInterval(() => {
     void syncMcp().catch((error: unknown) => console.error('Could not stop MCP', error))
   }, 1000)
-  expiry.unref()
+  mcpExpiry.unref()
 }
 // Tells the owner once when scheduling has been paused for five minutes, and again when it resumes.
 function watchCentral(controller: CentralController): void {
@@ -458,7 +457,8 @@ function watchCentral(controller: CentralController): void {
   }, 30000).unref()
 }
 async function shutdown(): Promise<void> {
-  try { await codexServer.stop(); await central?.stop(); await remote.stop(); await worker.stop(); stopped = true; tray?.destroy(); app.quit() }
+  clearInterval(mcpExpiry)
+  try { await mcpTransition; await codexServer.stop(); await central?.stop(); await remote.stop(); await worker.stop(); stopped = true; tray?.destroy(); app.quit() }
   catch (error) { console.error('Worker shutdown failed', error); app.exit(1) }
 }
 if (!app.requestSingleInstanceLock()) {
