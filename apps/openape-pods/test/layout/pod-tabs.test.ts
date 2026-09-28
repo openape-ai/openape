@@ -1,3 +1,4 @@
+import { screenshotPath } from './evidence'
 import { flushPromises, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -15,7 +16,7 @@ import { installWorkspace, podId, pods } from './workspace-fixture'
 // `programs` E2E files. Behaviour of the same tabs lives in test/workspace,
 // test/programs and test/credentials; native execution stays in e2e/.
 const frame = () => new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done())))
-const artifact = (name: string) => `../../.artifacts/${name}`
+const artifact = (name: string) => screenshotPath(`${name}`)
 const hash = 'a'.repeat(64)
 let wrapper: VueWrapper | undefined
 afterEach(() => {
@@ -26,7 +27,7 @@ afterEach(() => {
 
 async function openTab(tab: string, overrides: Partial<PodsBridge> = {}) {
   installWorkspace({ programs: async command => command.type === 'launchStatus' ? null : Promise.reject(new Error('Sign in with your DDISA account before setting up a pod')), ...overrides })
-  wrapper = mount(App, { attachTo: document.body }); await flushPromises()
+  wrapper = mount(App, { attachTo: document.body, props: { initialPodId: '00000000-0000-4000-8000-000000000001' } }); await flushPromises()
   await wrapper.findAll('[role="tab"]').find(item => item.text() === tab)!.trigger('click'); await flushPromises(); await frame()
 }
 async function show(width: number, height: number, scheme: 'light' | 'dark' = 'light') {

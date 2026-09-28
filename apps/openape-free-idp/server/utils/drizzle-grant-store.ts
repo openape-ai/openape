@@ -14,6 +14,8 @@ interface ExtendedGrantStore extends GrantStore {
 
 type GrantRow = typeof grants.$inferSelect
 
+const PENDING_REQUEST_TTL_SECONDS = 48 * 3600
+
 export function grantToRow(grant: OpenApeGrant) {
   return {
     id: grant.id,
@@ -63,10 +65,24 @@ export function rowToGrant(row: GrantRow): OpenApeGrant {
 export function createDrizzleGrantStore(): ExtendedGrantStore {
   const db = useDb()
 
+  async function expirePendingRequests() {
+    const cutoff = Math.floor(Date.now() / 1000) - PENDING_REQUEST_TTL_SECONDS
+    await db.transaction(async (tx) => {
+      const expired = await tx.update(grants)
+        .set({ status: 'expired' })
+        .where(and(eq(grants.status, 'pending'), lt(grants.createdAt, cutoff)))
+        .returning()
+      for (const row of expired) {
+        if (row.brokered) await tx.insert(brokerAudit).values(brokerAuditRow(rowToGrant(row), 'expired'))
+      }
+    }, { behavior: 'immediate' })
+  }
+
   return {
     async save(grant) {
       const row = grantToRow(grant)
       if (grant.brokered) {
+        await expirePendingRequests()
         await db.transaction(async (tx) => {
           const connection = await tx.select().from(brokerConnections).where(eq(brokerConnections.id, grant.brokered!.connection_id)).get()
           if (!connection || connection.status !== 'active' || connection.owner !== grant.brokered!.owner) throw createError({ statusCode: 403, statusMessage: 'Broker connection is missing or revoked' })
@@ -103,17 +119,19 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
     },
 
     async findById(id) {
+      await expirePendingRequests()
       const row = await db.select().from(grants).where(eq(grants.id, id)).get()
       return row ? rowToGrant(row) : null
     },
 
     async updateStatus(id, status, extra?) {
+      await expirePendingRequests()
       await db.transaction(async (tx) => {
         const existing = await tx.select().from(grants).where(eq(grants.id, id)).get()
         if (!existing)
           throw new Error(`Grant not found: ${id}`)
 
-        if (existing.brokered && (status === 'approved' || status === 'denied') && existing.status !== 'pending') throw createError({ statusCode: 409, statusMessage: 'Grant was already decided' })
+        if ((existing.brokered || existing.status === 'expired') && (status === 'approved' || status === 'denied') && existing.status !== 'pending') throw createError({ statusCode: 409, statusMessage: 'Grant was already decided' })
         const updates: Record<string, unknown> = { status }
         if (extra?.decided_by !== undefined) updates.decidedBy = extra.decided_by
         if (extra?.decided_at !== undefined) updates.decidedAt = extra.decided_at
@@ -136,33 +154,39 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
     },
 
     async findPending() {
+      await expirePendingRequests()
       const rows = await db.select().from(grants).where(eq(grants.status, 'pending')).orderBy(desc(grants.createdAt))
       return rows.map(rowToGrant)
     },
 
     async findByRequester(requester) {
+      await expirePendingRequests()
       const rows = await db.select().from(grants).where(eq(grants.requester, requester)).orderBy(desc(grants.createdAt))
       return rows.map(rowToGrant)
     },
 
     async findAll() {
+      await expirePendingRequests()
       const rows = await db.select().from(grants).orderBy(desc(grants.createdAt))
       return rows.map(rowToGrant)
     },
 
     async findByDelegate(delegate) {
+      await expirePendingRequests()
       const condition = and(eq(grants.type, 'delegation'), sql`json_extract(${grants.request}, '$.delegate') = ${delegate}`)
       const rows = await db.select().from(grants).where(condition).orderBy(desc(grants.createdAt))
       return rows.map(rowToGrant)
     },
 
     async findByDelegator(delegator) {
+      await expirePendingRequests()
       const condition = and(eq(grants.type, 'delegation'), sql`json_extract(${grants.request}, '$.delegator') = ${delegator}`)
       const rows = await db.select().from(grants).where(condition).orderBy(desc(grants.createdAt))
       return rows.map(rowToGrant)
     },
 
     async listGrants(params?: GrantListParams): Promise<PaginatedResponse<OpenApeGrant>> {
+      await expirePendingRequests()
       const limit = Math.min(Math.max(params?.limit ?? 20, 1), 1000)
       const conditions = []
 
