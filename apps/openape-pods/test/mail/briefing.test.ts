@@ -43,7 +43,10 @@ it('renders actionable mail and the exact grant link alongside calendar and issu
   const { buildBriefing } = await example('morning-mail-briefing.mjs')
   const report = buildBriefing(new Date('2026-09-26T05:00:00Z'), 'series', [{ account: 'owner@example.test', today: [], upcoming: [], errors: [] }, { repos: { total: 1, issues: [{ updatedAt: Date.parse('2026-09-26T05:00:00Z'), title: 'An open issue', repository: 'patrick/monorepo', number: 123, url: 'https://repos.openape.ai/patrick/monorepo/issues/123' }] } }], { date: '2026-09-26', collectedAt: '2026-09-26T05:00:00Z', accounts: [{ account: 'owner@example.test', total: 12, checked: 12, important: [{ id: 'mail', disposition: 'action', subject: 'Please confirm', receivedAt: '2026-09-22T13:47:13Z', sender: 'partner@example.test', summary: 'A decision is due today.', nextAction: 'Reply before noon.' }], archiveCount: 3, grant: { count: 3, url: 'https://id.example.test/grant-approval?grant_id=fixture' } }], gaps: [] })
   const text = JSON.stringify(report)
-  for (const textPart of ['Please confirm', '2026-09-22', 'A decision is due today.', 'Reply before noon.', '3 archive suggestions', 'grant_id=fixture', 'An open issue', '0 collected calendar events']) expect(text).toContain(textPart)
+  for (const textPart of ['Please confirm', '2026-09-22', 'A decision is due today.', 'Reply before noon.', '3 Archivierungsvorschläge', 'grant_id=fixture', 'An open issue', '0 Termine heute']) expect(text).toContain(textPart)
+  expect(report.importantItems).toEqual([])
+  expect(report.nextActions).toEqual([])
+  expect(report.title).toBe('Dein Morgenbericht')
   expect(report.sources.find((source: { approvalUrl?: string }) => source.approvalUrl)?.approvalCount).toBe(3)
 })
 it('requires current workflow output rather than silently reporting no mail', async () => {
@@ -63,4 +66,45 @@ it('publishes explicit mail-source gaps so the briefing can still explain missin
   const response = await run({ workspace, input: { eventIds: [], reason: 'manual', workflow: { runId: 'fixture', outputs: {} }, checkpointRevision: 0, checkpoint: {} }, variables: { delivery_mode: 'live' }, workflow: { publish }, tools: { invoke: async () => ({ exitCode: 1 }) }, progress: { commit: async () => ({ revision: ++revision }) } })
   expect(response.status).toBe('completed')
   expect(publish).toHaveBeenCalledWith({ schema: 'morning-mail-review/v1', data: expect.objectContaining({ gaps: [expect.stringContaining('delta-mind.at'), expect.stringContaining('docpit.eu')], preview: true }) })
+})
+
+it('refreshes selected conversation evidence, includes sent replies and summarizes each thread once', async () => {
+  const { reviewImportant } = await example('mail-triage.mjs')
+  const messages = [
+    { id: 'old', version: 'v1', conversation: 'thread', sender: 'partner@example.test', subject: 'Please update us', receivedAt: '2026-09-21T10:00:00Z', body: 'Send the outcome.' },
+    { id: 'recent', version: 'v1', conversation: 'thread', sender: 'partner@example.test', subject: 'Re: Please update us', receivedAt: '2026-09-21T11:00:00Z', body: 'Please let us know when support replies.' },
+  ]
+  const sent = { id: 'sent', sender: 'owner@example.test', body: 'Support removed the incorrect link; this is the requested update.', receivedAt: '2026-09-21T12:00:00Z' }
+  const evaluate = vi.fn(async ({ state }) => {
+    expect(state.conversations[0].owner).toBe('owner@example.test')
+    expect(state.conversations[0].messages.at(-1)).toEqual(sent)
+    return { model: 'jev-1.13.0', answers: { category_0: { ...judgment('keep'), probabilities: { keep: 0.97 } }, priority_0: { type: 'score', score: 1 } } }
+  })
+  const run = vi.fn(async ({ prompt }) => {
+    expect(prompt).toContain(sent.body)
+    return { response: JSON.stringify([{ id: 'recent', summary: 'Die Rückmeldung wurde gesendet; die Gegenseite ist am Zug.', nextAction: 'An incorrect repeated reply request.' }]) }
+  })
+  const read = vi.fn(async () => ({ messages: [sent, ...messages], truncated: false }))
+  const gaps: string[] = []
+  const result = await reviewImportant({ jev: { evaluate }, agent: { run } }, 'owner@example.test', messages, messages.map(mail => ({ ...mail, disposition: 'action', priority: 5 })), read, gaps)
+  expect(read).toHaveBeenCalledTimes(1)
+  expect(result).toMatchObject([{ id: 'recent', disposition: 'keep', nextAction: '' }])
+  expect(gaps).toEqual([])
+})
+it('does not invent a reply task when a selected conversation is missing or truncated', async () => {
+  const { reviewImportant } = await example('mail-triage.mjs')
+  const mail = { id: 'one', version: 'v1', conversation: 'thread', subject: 'A request', receivedAt: '2026-09-21T10:00:00Z' }
+  const evaluate = vi.fn(); const run = vi.fn(); const gaps: string[] = []
+  const result = await reviewImportant({ jev: { evaluate }, agent: { run } }, 'owner@example.test', [mail], [{ ...mail, disposition: 'action', priority: 5 }], async () => ({ messages: [mail], truncated: true }), gaps)
+  expect(result).toMatchObject([{ disposition: 'keep', nextAction: '' }])
+  expect(gaps).toHaveLength(1)
+  expect(evaluate).not.toHaveBeenCalled(); expect(run).not.toHaveBeenCalled()
+})
+it('keeps an evidenced owner obligation actionable even after an owner reply', async () => {
+  const { reviewImportant } = await example('mail-triage.mjs')
+  const mail = { id: 'one', version: 'v1', conversation: 'thread', sender: 'partner@example.test', subject: 'Missing document', receivedAt: '2026-09-21T10:00:00Z' }
+  const sent = { id: 'sent', sender: 'owner@example.test', body: 'I will send the document tomorrow.', receivedAt: '2026-09-21T12:00:00Z' }
+  const evaluate = vi.fn(async () => ({ model: 'jev-1.13.0', answers: { category_0: { ...judgment('action'), probabilities: { action: 0.97 } }, priority_0: { type: 'score', score: 3 } } }))
+  const result = await reviewImportant({ jev: { evaluate }, agent: { run: async () => ({ response: JSON.stringify([{ id: 'one', summary: 'Die zugesagte Unterlage fehlt noch.', nextAction: 'Sende die zugesagte Unterlage.' }]) }) } }, 'owner@example.test', [mail], [{ ...mail, disposition: 'action', priority: 5 }], async () => ({ messages: [mail, sent], truncated: false }), [])
+  expect(result).toMatchObject([{ disposition: 'action', nextAction: 'Sende die zugesagte Unterlage.' }])
 })

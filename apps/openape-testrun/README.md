@@ -16,6 +16,14 @@ One SQLite write transaction archives the previous head, replaces it and records
 
 The signed SP session or exchanged bearer establishes owner identity. The dedicated publisher path discovers the authoritative issuer through DDISA and verifies asymmetric signature, issuer, `apes-cli` audience, subject, expiration and direct agent claims. Delegated/scoped raw tokens are rejected. JWKS fetches are public-URL checked, bounded, time-limited and refuse redirects. The existing legacy authentication fallback never authorizes private viewing.
 
+## Briefing language and mail presentation
+
+The morning sender and briefing controls use German. Original source subjects and repository titles retain their source language. Published report bodies are immutable: changing the recipe affects the next edition and separate previews, not a previously delivered snapshot.
+
+Mail summaries and next actions appear together in one mail section. The renderer also suppresses exact mail summaries/actions duplicated by older sender versions while retaining unrelated important items and actions.
+
+The mail-review recipe reads each selected conversation across inbox and sent messages before suggesting an action. It selects at most five distinct conversations per account, refreshes their context on every review (even when an inbox message version is unchanged), and passes chronological evidence to both Jev and the German summary. An owner reply can satisfy a request, but a remaining promise or a newer question can still require action. Missing, truncated or oversized context produces an explicit gap and no reply task. This separate briefing review cannot add archive candidates or change the owner approval process.
+
 ## Deployment and rollback
 
 Use canonical native PRs and the established tested-image pipeline. Run full lint/typecheck, the app build and relevant tests before commit; exact-head external CI is the merge gate. Before deployment, use clean merged canonical main and `pnpm check:ci`, then `pnpm deploy:image testrun --dry-run` and `pnpm deploy:image testrun`.
