@@ -40,6 +40,7 @@ const scheduleKind = ref('interval')
 const scheduleEnabled = ref(false)
 const newName = ref('')
 const creating = ref(false)
+const pendingNavigation = ref<'inventory' | { runtimeId: string, podId: string } | null>(null)
 const archived = ref(false)
 const search = ref('')
 const newGroup = ref('')
@@ -119,8 +120,9 @@ async function refresh() {
   })().finally(() => { refreshing = null })
   return refreshing
 }
-async function select(runtimeId: string, podId: string) {
-  if (busy.value) return
+async function select(runtimeId: string, podId: string, discard = false) {
+  if (busy.value || operationId.value) return
+  if (!discard && hasUnsavedEdits()) { pendingNavigation.value = { runtimeId, podId }; return }
   generation++; selected.value = { runtimeId, podId }; current.value = null; baseline.value = null; source.value = null; olderRuns.value = []; runDetail.value = null
   code.value = ''; description.value = ''; runId.value = ''; error.value = ''; notice.value = ''
   await refreshing; await refresh()
@@ -231,7 +233,18 @@ async function watchChanges() {
     }
   }
 }
-function showInventory() { generation++; selected.value = null; current.value = null }
+function hasUnsavedEdits() { return !localEditor.value && !!baseline.value && editorState() !== savedEditor }
+function showInventory(discard = false) {
+  if (busy.value || operationId.value) return
+  if (!discard && hasUnsavedEdits()) { pendingNavigation.value = 'inventory'; return }
+  generation++; selected.value = null; current.value = null; baseline.value = null
+}
+async function discardAndNavigate() {
+  const destination = pendingNavigation.value
+  pendingNavigation.value = null
+  if (destination === 'inventory') showInventory(true)
+  else if (destination) await select(destination.runtimeId, destination.podId, true)
+}
 defineExpose({ select, showInventory })
 onMounted(async () => { await refresh(); await watchChanges() })
 onBeforeUnmount(() => { generation++; abort.abort() })
@@ -295,7 +308,7 @@ onBeforeUnmount(() => { generation++; abort.abort() })
         <slot name="account" />
       </section>
       <div class="central-content">
-        <button v-if="selected" class="text-button" @click="showInventory">
+        <button v-if="selected" class="text-button" :disabled="busy || !!operationId" @click="showInventory()">
           ‹ {{ t('Pods') }}
         </button>
         <p v-if="desktopStatus && desktopStatus.state !== 'online'" role="alert" class="central-error">
@@ -317,6 +330,13 @@ onBeforeUnmount(() => { generation++; abort.abort() })
             {{ t('Check pending operation') }}
           </button> {{ t('Review its result before making another change.') }}
         </p>
+        <section v-if="pendingNavigation" class="central-card" role="alert" :aria-label="t('Unsaved changes')">
+          <p>{{ t('Unsaved changes') }}</p><button @click="discardAndNavigate">
+            {{ t('Discard changes') }}
+          </button><button @click="pendingNavigation = null">
+            {{ t('Keep editing') }}
+          </button>
+        </section>
         <div v-if="selected && !available" class="central-empty">
           <h1>{{ listed?.name ?? t('Your Pods') }}</h1><p>{{ listed ? t('This Pod is offline. Its contents will be available when it reconnects.') : t('Choose an online Pod to see its scripts, settings and recent runs.') }}</p><button @click="refresh">
             {{ t('Refresh') }}

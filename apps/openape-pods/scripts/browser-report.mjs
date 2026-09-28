@@ -23,11 +23,12 @@ const shots = [
   ['variant-a-mcp-dark.png', 'Timed MCP access in a narrow dark window'],
   ['workflows-560.png', 'Workflow graph in a narrow dark window'],
   ['workspace-source.png', 'Retained source evidence'],
+  ['central-unsaved-edits.png', 'Remote edits require explicit discard before leaving'],
 ]
 if (assemble < 0) {
   mkdirSync(join(directory, 'screenshots'), { recursive: true })
   const source = { revision: git('rev-parse', 'HEAD'), dirty: !!git('status', '--porcelain'), diffHash: createHash('sha256').update(git('diff', 'HEAD')).digest('hex') }
-  const receipt = { source, environment: { node: process.versions.node, browser: 'Chrome via Vitest Browser / Playwright', screenshotSettings: 'Variant A: de, 1280x1000 light / 560x1000 dark; workflow: en, 560x900 dark; source: en, 1060x850 light (element capture)' }, startedAt: new Date().toISOString(), commands: [] }
+  const receipt = { source, environment: { node: process.versions.node, browser: 'Chrome via Vitest Browser / Playwright', screenshotSettings: 'Variant A: de, 1280x1000 light / 560x1000 dark; workflow: en, 560x900 dark; source: en, 1060x850 light (element capture); unsaved edits: de, 560x950 dark' }, startedAt: new Date().toISOString(), commands: [] }
   const vitest = join(root, 'node_modules/vitest/vitest.mjs')
   for (const [name, config] of [['components', []], ['browser', ['--config', 'vitest.browser.config.ts']]]) {
     const command = ['run', ...config, '--reporter=default', '--reporter=json', `--outputFile.json=${join(directory, `${name}.json`)}`]
