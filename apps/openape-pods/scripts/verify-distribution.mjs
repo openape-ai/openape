@@ -39,9 +39,11 @@ try {
   await build({ entry: { identity: resolve('e2e/fixtures/shell-identity.ts') }, outDir: root, format: ['esm'], platform: 'node', target: 'node24', silent: true, removeNodeProtocol: false, outExtension: () => ({ js: '.mjs' }) })
   const { fixtureShellIdentity } = await import(pathToFileURL(join(root, 'identity.mjs')).href)
   identity = await fixtureShellIdentity(profile); await identity.encrypt(app, true)
+  await page.getByRole('button', { name: 'Pods', exact: true }).click()
+  await page.getByRole('button', { name: 'DMG acceptance Standalone Pod', exact: false }).click()
   await page.getByRole('tab', { name: 'History', exact: true }).click(); await page.evaluate(async () => { const pod = (await window.pods.workspace({ type: 'list' })).pods[0]; await window.pods.runs({ type: 'installExample', podId: pod.id, variant: 'deterministic' }) }); await page.getByRole('button', { name: 'Run now', exact: true }).click()
   await page.getByText('Local example completed (1)', { exact: true }).waitFor()
-  await page.getByRole('button', { name: 'App settings', exact: true }).click(); await page.getByRole('button', { name: 'Data & backups', exact: true }).click(); await page.getByRole('heading', { name: 'Data & backups', exact: true }).waitFor()
+  await page.getByRole('button', { name: 'App settings', exact: true }).click(); await page.locator('summary').filter({ hasText: 'Data & backups' }).click(); await page.getByRole('heading', { name: 'Data & backups', exact: true }).waitFor()
   await mkdir('.artifacts', { recursive: true }); await page.screenshot({ path: '.artifacts/data-dmg.png' })
   console.log(JSON.stringify({ image, sha256: sha256(image), npmPackages: bom.packages.length, result: 'passed', signed: signedLocal, actualProvider: false }))
 }

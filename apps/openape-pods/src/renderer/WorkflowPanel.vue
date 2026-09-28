@@ -13,13 +13,13 @@ import { nextWorkflowDue } from '../contracts/workflow-clock'
 export default defineComponent({
   components: { MailWorkflowSettings, MailWorkflowReview },
   props: { view: { type: Object as PropType<WorkflowView>, required: true }, pods: { type: Array as PropType<StoredPod[]>, required: true }, selectedId: { type: String, default: '' } },
-  emits: ['changed', 'select'],
-  data() { return { mail: null as MailWorkflowConfiguration | null, editing: false, id: '', revision: 0, name: '', nodes: [] as WorkflowNode[], kind: 'none', seconds: 900, time: '09:00', timezone: 'Europe/Vienna', at: '', expression: '0 9 * * 1-5', enabled: false, busy: false, error: '' } },
+  emits: ['changed', 'select', 'openPod'],
+  data() { return { mail: null as MailWorkflowConfiguration | null, editing: false, removing: false, id: '', revision: 0, name: '', nodes: [] as WorkflowNode[], kind: 'none', seconds: 900, time: '09:00', timezone: 'Europe/Vienna', at: '', expression: '0 9 * * 1-5', enabled: false, busy: false, error: '' } },
   computed: {
     definition(): WorkflowDefinition | undefined { return this.view.workflows.find(item => item.id === this.selectedId) },
     history() { return this.view.runs.filter(run => run.workflowId === this.selectedId) },
     active() { return this.history.find(run => run.finishedAt === null) },
-    availablePods() { return this.pods.filter(pod => pod.lifecycle !== 'archived') },
+    availablePods() { return this.pods.filter(pod => pod.lifecycle !== 'archived' || this.nodes.some(node => node.podId === pod.id)) },
     graphError(): string {
       try { parseWorkflowNodes(this.nodes); return '' }
       catch (error) { return error instanceof Error ? error.message : String(error) }
@@ -44,9 +44,10 @@ export default defineComponent({
       catch (error) { return { dates: [], error: error instanceof Error ? error.message : String(error) } }
     },
   },
-  watch: { selectedId() { this.editing = false; this.error = '' } },
+  watch: { selectedId() { this.removing = false; this.editing = false; this.error = '' } },
   methods: {
     t, diagnostic, label, dateTime,
+    scheduleLabel(kind?: WorkflowSchedule['kind']) { return kind ? t(({ interval: 'Interval', daily: 'Daily', once: 'One time', cron: 'Cron' } as const)[kind]) : t('Manual only') },
     podName(id: string) { return this.pods.find(pod => pod.id === id)?.name ?? id },
     edit(create = false) {
       const definition = create ? undefined : this.definition
@@ -100,8 +101,25 @@ export default defineComponent({
       <button v-if="definition && !editing" class="secondary" :disabled="busy" @click="edit()">
         {{ t('Edit workflow') }}
       </button>
-      <button v-if="definition && !editing && !active" class="secondary" :disabled="busy" @click="apply({ type: 'delete', id: definition.id, revision: definition.revision })">
+      <button v-if="definition && !editing && !active" class="secondary" :disabled="busy" @click="removing = true">
         {{ t('Remove workflow') }}
+      </button>
+    </div>
+    <div v-if="removing && definition" class="card" role="alert">
+      <p>{{ t('Remove this workflow? Its Pods and their data are kept.') }}</p>
+      <button class="secondary" :disabled="busy" @click="apply({ type: 'delete', id: definition.id, revision: definition.revision }); removing = false">
+        {{ t('Remove workflow') }}
+      </button>
+      <button class="secondary" @click="removing = false">
+        {{ t('Cancel') }}
+      </button>
+    </div>
+    <button v-if="definition && !editing" class="text-button" @click="$emit('select', '')">
+      ‹ {{ t('All workflows') }}
+    </button>
+    <div v-if="!definition && !editing && view.workflows.length" class="workflow-inventory">
+      <button v-for="workflow in view.workflows" :key="workflow.id" class="inventory-row" @click="$emit('select', workflow.id)">
+        <span><strong>{{ workflow.name }}</strong><small>{{ workflow.nodes.length }} {{ t('Pods') }} · {{ scheduleLabel(workflow.schedule?.kind) }}</small></span><span class="badge">{{ workflow.paused ? label('paused') : workflow.enabled ? label('active') : t('Manual only') }}</span><span aria-hidden="true">›</span>
       </button>
     </div>
     <form v-if="editing" class="card workflow-editor" :aria-label="t('Edit workflow')" @submit.prevent="save">
@@ -185,7 +203,7 @@ export default defineComponent({
         <p>{{ t('Member pods may be paused individually; this workflow can still invoke them.') }}</p><p class="muted">
           {{ t('Review existing pod schedules to avoid separate, independent runs.') }}
         </p>
-        <p>{{ definition.enabled ? t('Schedule enabled') : t('Schedule off') }} · {{ label(definition.schedule?.kind ?? 'Manual only') }}<span v-if="definition.enabled && definition.nextAt"> · {{ dateTime(definition.nextAt) }}</span></p>
+        <p>{{ definition.enabled ? t('Schedule enabled') : t('Schedule off') }} · {{ scheduleLabel(definition.schedule?.kind) }}<span v-if="definition.enabled && definition.nextAt"> · {{ dateTime(definition.nextAt) }}</span></p>
         <div class="overview-actions">
           <button class="primary" :disabled="busy || !!active" @click="apply({ type: 'start', id: definition.id, revision: definition.revision })">
             {{ t('Run workflow once') }}
@@ -195,15 +213,15 @@ export default defineComponent({
         </div>
       </article>
     </template>
-    <article v-else-if="!editing" class="card">
+    <article v-else-if="!editing && !view.workflows.length" class="card">
       <h2>{{ t('No workflows yet') }}</h2><p>{{ t('Create a workflow from existing pods to control their order and timing.') }}</p>
     </article>
     <MailWorkflowSettings v-if="definition?.mail && !editing" :key="`${definition.id}:${definition.revision}`" :configuration="definition.mail" :pods="pods" readonly />
     <div v-if="layers.length" class="workflow-graph" :aria-label="t('Workflow graph')">
       <div v-for="(layer, index) in layers" :key="index" class="workflow-layer">
-        <article v-for="node in layer" :key="node.podId" class="workflow-node">
+        <button v-for="node in layer" :key="node.podId" class="workflow-node" :disabled="editing" @click="$emit('openPod', node.podId)">
           <strong>{{ podName(node.podId) }}</strong><small>{{ node.after.length ? `${t('Starts after')}: ${node.after.map(podName).join(', ')}` : t('Starts with the workflow') }}</small><span v-if="active" class="badge">{{ label(active.nodes.find(item => item.podId === node.podId)?.state) }}</span>
-        </article>
+        </button>
       </div>
     </div>
     <section v-if="definition && !editing" class="workflow-history">
@@ -251,7 +269,7 @@ export default defineComponent({
 .workflow-graph { display:flex; gap:28px; overflow-x:auto; padding:8px 2px 18px; align-items:center; }
 .workflow-layer { display:grid; flex:1 0 180px; gap:14px; max-width:280px; position:relative; }
 .workflow-layer+.workflow-layer::before { content:'→'; position:absolute; left:-23px; top:50%; color:var(--muted); }
-.workflow-node { display:grid; gap:10px; padding:16px; border:1px solid var(--border); border-radius:12px; background:var(--surface); overflow-wrap:anywhere; }
+.workflow-node { font:inherit;color:inherit;text-align:left;cursor:pointer;display:grid; gap:10px; padding:16px; border:1px solid var(--border); border-radius:12px; background:var(--surface); overflow-wrap:anywhere; }
 .workflow-node small { line-height:1.5; }
 .workflow-run-nodes { padding-left:22px; }
 .workflow-run-nodes li { padding:12px 0; }
