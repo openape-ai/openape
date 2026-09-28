@@ -91,14 +91,18 @@ it('refreshes selected conversation evidence, includes sent replies and summariz
   expect(result).toMatchObject([{ id: 'recent', disposition: 'keep', nextAction: '' }])
   expect(gaps).toEqual([])
 })
-it('does not invent a reply task when a selected conversation is missing or truncated', async () => {
+it('labels incomplete conversation excerpts and never classifies them into a reply task', async () => {
   const { reviewImportant } = await example('mail-triage.mjs')
   const mail = { id: 'one', version: 'v1', conversation: 'thread', subject: 'A request', receivedAt: '2026-09-21T10:00:00Z' }
-  const evaluate = vi.fn(); const run = vi.fn(); const gaps: string[] = []
+  const evaluate = vi.fn(); const run = vi.fn(async ({ prompt }) => {
+    expect(prompt).toContain('\"truncated\":true')
+    return { response: JSON.stringify([{ id: 'one', summary: 'Die sichtbare Antwort meldet eine Rückmeldung an den Absender.', nextAction: 'Reply again.' }]) }
+  }); const gaps: string[] = []
   const result = await reviewImportant({ jev: { evaluate }, agent: { run } }, 'owner@example.test', [mail], [{ ...mail, disposition: 'action', priority: 5 }], async () => ({ messages: [mail], truncated: true }), gaps)
   expect(result).toMatchObject([{ disposition: 'keep', nextAction: '' }])
   expect(gaps).toHaveLength(1)
-  expect(evaluate).not.toHaveBeenCalled(); expect(run).not.toHaveBeenCalled()
+  expect(result[0].summary).toContain('nur teilweise geprüft')
+  expect(evaluate).not.toHaveBeenCalled(); expect(run).toHaveBeenCalledTimes(1)
 })
 it('keeps an evidenced owner obligation actionable even after an owner reply', async () => {
   const { reviewImportant } = await example('mail-triage.mjs')
