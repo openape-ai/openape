@@ -1,4 +1,5 @@
 <script lang="ts">
+import { usePodAccess } from './pod-access'
 import { t, diagnostic, label, dateTime } from './i18n'
 import { defineComponent } from 'vue'
 import WorkspaceFrame from './WorkspaceFrame.vue'
@@ -28,8 +29,9 @@ import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
   components: { WorkspaceFrame, AppSettings, PodInventory, WorkflowPanel, AccountStatus, RunApproval, PodDescription, DataManagement, Onboarding, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
-  props: { embedded: Boolean, initialPodId: { type: String, default: '' } },
+  props: { embedded: Boolean, initialPodId: { type: String, default: '' }, refreshToken: { type: Number, default: 0 } },
   emits: ['settings'],
+  setup() { return { access: usePodAccess() } },
   data() {
     return { requestedRun: '', workflowId: '', workflows: { workflows: [], runs: [] } as WorkflowView, requestedSecret: '', approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: this.initialPodId ? 'Overview' : 'Workflows', tabs: ['Overview', 'Script', 'Values', 'Permissions', 'Settings', 'History'], pods: [] as StoredPod[], podId: this.initialPodId, creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
@@ -44,8 +46,9 @@ export default defineComponent({
     needsRecovery(): boolean { const run = this.runs[0]; return !!run && ['interrupted', 'failed', 'cancelled', 'blocked'].includes(run.state) && run.recovery?.state !== 'retryQueued' },
     nextRun(): string { if (!this.pod || this.pod.lifecycle !== 'active' || !this.schedule?.enabled) return t('Manual only'); return this.schedule.nextAt ? dateTime(this.schedule.nextAt) : t('No scheduled time') },
   },
+  watch: { refreshToken() { void this.refresh() } },
   async mounted() {
-    try { this.unsubscribe = window.pods.onStatus((status) => { this.status = status }); this.status = await window.pods.getStatus(); await this.refresh() }
+    try { if (this.access.remote) { await this.refresh(); return }; this.unsubscribe = window.pods.onStatus((status) => { this.status = status }); this.status = await window.pods.getStatus(); await this.refresh() }
     catch (error) { this.connectionError = error instanceof Error ? error.message : 'Could not reach the desktop worker' }
     this.poll()
   },
@@ -58,15 +61,15 @@ export default defineComponent({
     workspaceChanged(state: WorkspaceState) { if (state.organization.revision < this.organization.revision) return; this.pods = state.pods; this.organization = state.organization },
     poll() { if (this.closed) return; this.timer = setTimeout(async () => { await this.refresh(); this.poll() }, 1000) },
     async refresh() {
-      if (this.busy || this.status?.worker.state !== 'ready') return
+      if (this.busy || (!this.access.remote && this.status?.worker.state !== 'ready')) return
       this.busy = true
       try {
-        const [workspace, workflows] = await Promise.all([window.pods.workspace({ type: 'list' }), window.pods.workflows({ type: 'list' })])
+        const [workspace, workflows] = await Promise.all([this.access.api.workspace({ type: 'list' }), this.access.api.workflows({ type: 'list' })])
         this.workspaceChanged(workspace); this.workflows = workflows
         if (!this.pods.some(pod => pod.id === this.podId)) this.podId = this.creating || this.embedded ? '' : this.pods[0]?.id ?? ''
         const id = this.podId
         if (!id) { this.details = null; this.runs = []; this.schedule = null; this.resourceCount = 0; return }
-        const [details, runs, schedule, resources] = await Promise.all([window.pods.details({ type: 'list', podId: id }), window.pods.runs({ type: 'list', podId: id }), window.pods.scheduling({ type: 'list', podId: id }), window.pods.resources({ type: 'list', podId: id })])
+        const [details, runs, schedule, resources] = await Promise.all([this.access.api.details({ type: 'list', podId: id }), this.access.api.runs({ type: 'list', podId: id }), this.access.api.scheduling({ type: 'list', podId: id }), this.access.api.resources({ type: 'list', podId: id })])
         if (this.podId !== id) return
         this.details = details; this.runs = runs.runs; this.approvals = runs.approvals ?? []; this.schedule = schedule; this.resourceCount = resources.resources.filter(resource => resource.state === 'ready').length; this.dataError = ''
       }
@@ -78,19 +81,21 @@ export default defineComponent({
     async selectTab(tab: string) { await this.refresh(); this.selected = tab },
     createPod() { this.creating = true; this.podId = ''; this.selected = 'Settings' },
     async runOnce() {
-      if (!this.pod) return; try { await window.pods.runs({ type: 'start', podId: this.pod.id, expectedScript: this.pod.activeScript ?? undefined }); this.selected = 'History'; await this.refresh() }
+      if (!this.pod) return; try { await this.access.api.runs({ type: 'start', podId: this.pod.id, expectedScript: this.pod.activeScript ?? undefined }); this.selected = 'History'; await this.refresh() }
       catch (error) { this.dataError = error instanceof Error ? error.message : 'Could not start run' }
     },
     async pause() {
       if (!this.pod) return
-      try { await window.pods.scheduling({ type: 'lifecycle', podId: this.pod.id, revision: this.pod.revision, lifecycle: this.pod.lifecycle === 'active' ? 'paused' : 'active' }); await this.refresh() }
+      try { await this.access.api.scheduling({ type: 'lifecycle', podId: this.pod.id, revision: this.pod.revision, lifecycle: this.pod.lifecycle === 'active' ? 'paused' : 'active' }); await this.refresh() }
       catch (error) { this.dataError = error instanceof Error ? error.message : 'Could not change lifecycle' }
     },
     moveTab(event: KeyboardEvent, index: number) {
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
       event.preventDefault()
       const next = event.key === 'Home' ? 0 : event.key === 'End' ? this.tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + this.tabs.length) % this.tabs.length
-      this.selected = this.tabs[next]; (this.$refs.tabButtons as HTMLButtonElement[])[next].focus()
+      const tab = this.tabs[next]
+      if (tab) this.selected = tab
+      ;(this.$refs.tabButtons as HTMLButtonElement[])[next]?.focus()
     },
   },
 })
@@ -166,7 +171,7 @@ export default defineComponent({
               </p><div class="overview-actions">
                 <button class="text-button" @click="selected = 'History'">
                   {{ t('View run trace') }}
-                </button><button class="text-button" @click="selected = 'Knowledge'">
+                </button><button v-if="!access.remote" class="text-button" @click="selected = 'Knowledge'">
                   {{ t('Results and sources') }}
                 </button>
               </div>

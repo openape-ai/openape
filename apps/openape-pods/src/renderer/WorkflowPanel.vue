@@ -12,7 +12,7 @@ import { nextWorkflowDue } from '../contracts/workflow-clock'
 
 export default defineComponent({
   components: { MailWorkflowSettings, MailWorkflowReview },
-  props: { view: { type: Object as PropType<WorkflowView>, required: true }, pods: { type: Array as PropType<StoredPod[]>, required: true }, selectedId: { type: String, default: '' } },
+  props: { readOnly: Boolean, view: { type: Object as PropType<WorkflowView>, required: true }, pods: { type: Array as PropType<StoredPod[]>, required: true }, selectedId: { type: String, default: '' } },
   emits: ['changed', 'select', 'openPod'],
   data() { return { mail: null as MailWorkflowConfiguration | null, editing: false, removing: false, id: '', revision: 0, name: '', nodes: [] as WorkflowNode[], kind: 'none', seconds: 900, time: '09:00', timezone: 'Europe/Vienna', at: '', expression: '0 9 * * 1-5', enabled: false, busy: false, error: '' } },
   computed: {
@@ -50,6 +50,7 @@ export default defineComponent({
     scheduleLabel(kind?: WorkflowSchedule['kind']) { return kind ? t(({ interval: 'Interval', daily: 'Daily', once: 'One time', cron: 'Cron' } as const)[kind]) : t('Manual only') },
     podName(id: string) { return this.pods.find(pod => pod.id === id)?.name ?? id },
     edit(create = false) {
+      if (this.readOnly) return
       const definition = create ? undefined : this.definition
       this.id = definition?.id ?? crypto.randomUUID(); this.revision = definition?.revision ?? 0; this.name = definition?.name ?? ''; this.nodes = (definition?.nodes ?? []).map(node => ({ ...node, after: [...node.after] })); this.enabled = definition?.enabled ?? false
       const spec = definition?.schedule; this.kind = spec?.kind ?? 'none'
@@ -72,7 +73,7 @@ export default defineComponent({
       return parseWorkflowSchedule(this.kind === 'interval' ? { kind: 'interval', seconds: Number(this.seconds) } : this.kind === 'daily' ? { kind: 'daily', time: this.time, timezone: this.timezone } : this.kind === 'once' ? { kind: 'once', at: Date.parse(this.at) } : { kind: 'cron', expression: this.expression, timezone: this.timezone })
     },
     async apply(command: WorkflowCommand): Promise<boolean> {
-      if (this.busy) return false
+      if (this.busy || this.readOnly) return false
       this.busy = true; this.error = ''
       try { this.$emit('changed', await window.pods.workflows(command)); return true }
       catch (error) { this.error = error instanceof Error ? error.message : String(error); return false }
@@ -91,23 +92,26 @@ export default defineComponent({
 
 <template>
   <section class="workflow-panel">
+    <p v-if="readOnly" class="muted">
+      {{ t('Manage workflows on the desktop.') }}
+    </p>
     <p v-if="error" role="alert" class="error-message">
       {{ diagnostic(error) }}
     </p>
     <div class="overview-actions">
-      <button class="secondary" :disabled="busy" @click="edit(true)">
+      <button class="secondary" :disabled="readOnly || busy" @click="edit(true)">
         {{ t('New workflow') }}
       </button>
-      <button v-if="definition && !editing" class="secondary" :disabled="busy" @click="edit()">
+      <button v-if="definition && !editing" class="secondary" :disabled="readOnly || busy" @click="edit()">
         {{ t('Edit workflow') }}
       </button>
-      <button v-if="definition && !editing && !active" class="secondary" :disabled="busy" @click="removing = true">
+      <button v-if="definition && !editing && !active" class="secondary" :disabled="readOnly || busy" @click="removing = true">
         {{ t('Remove workflow') }}
       </button>
     </div>
     <div v-if="removing && definition" class="card" role="alert">
       <p>{{ t('Remove this workflow? Its Pods and their data are kept.') }}</p>
-      <button class="secondary" :disabled="busy" @click="apply({ type: 'delete', id: definition.id, revision: definition.revision }); removing = false">
+      <button class="secondary" :disabled="readOnly || busy" @click="apply({ type: 'delete', id: definition.id, revision: definition.revision }); removing = false">
         {{ t('Remove workflow') }}
       </button>
       <button class="secondary" @click="removing = false">
@@ -188,7 +192,7 @@ export default defineComponent({
       <label><input type="checkbox" :checked="!!mail" @change="toggleMail">{{ t('Configure mail filtering and notification') }}</label>
       <MailWorkflowSettings v-if="mail" :key="id" :configuration="mail" :pods="pods.filter(pod => nodes.some(node => node.podId === pod.id))" @update="mail = $event" />
       <div class="overview-actions">
-        <button type="submit" class="primary" :disabled="busy || !!graphError || !!preview.error">
+        <button type="submit" class="primary" :disabled="readOnly || busy || !!graphError || !!preview.error">
           {{ t('Save workflow') }}
         </button><button type="button" class="secondary" @click="editing = false">
           {{ t('Cancel') }}
@@ -205,9 +209,9 @@ export default defineComponent({
         </p>
         <p>{{ definition.enabled ? t('Schedule enabled') : t('Schedule off') }} · {{ scheduleLabel(definition.schedule?.kind) }}<span v-if="definition.enabled && definition.nextAt"> · {{ dateTime(definition.nextAt) }}</span></p>
         <div class="overview-actions">
-          <button class="primary" :disabled="busy || !!active" @click="apply({ type: 'start', id: definition.id, revision: definition.revision })">
+          <button class="primary" :disabled="readOnly || busy || !!active" @click="apply({ type: 'start', id: definition.id, revision: definition.revision })">
             {{ t('Run workflow once') }}
-          </button><button class="secondary" :disabled="busy" @click="apply({ type: 'pause', id: definition.id, revision: definition.revision, paused: !(active?.paused ?? definition.paused) })">
+          </button><button class="secondary" :disabled="readOnly || busy" @click="apply({ type: 'pause', id: definition.id, revision: definition.revision, paused: !(active?.paused ?? definition.paused) })">
             {{ t((active?.paused ?? definition.paused) ? 'Resume workflow' : 'Pause workflow') }}
           </button>
         </div>
@@ -234,14 +238,14 @@ export default defineComponent({
         </div><p v-if="run.reason" role="status">
           {{ diagnostic(run.reason) }}
         </p>
-        <MailWorkflowReview v-if="definition.mail" :batch-id="run.id" />
+        <MailWorkflowReview v-if="definition.mail && !readOnly" :batch-id="run.id" />
         <ol class="workflow-run-nodes">
           <li v-for="node in run.nodes" :key="node.podId">
             <div>
               <strong>{{ podName(node.podId) }}</strong> · {{ label(node.state) }}<p v-if="node.reason">
                 {{ diagnostic(node.reason) }}
               </p>
-            </div><button v-if="node.state === 'blocked' && !run.finishedAt" class="secondary" :disabled="busy" @click="apply({ type: 'retry', runId: run.id, podId: node.podId })">
+            </div><button v-if="node.state === 'blocked' && !run.finishedAt" class="secondary" :disabled="readOnly || busy" @click="apply({ type: 'retry', runId: run.id, podId: node.podId })">
               {{ t('Retry blocked node') }}
             </button>
           </li>
@@ -249,7 +253,7 @@ export default defineComponent({
         <p v-if="run.state === 'blocked'" class="muted">
           {{ t('Retry keeps completed nodes and their effects. Reconcile uncertain effects in the pod history first.') }}
         </p>
-        <button v-if="!run.finishedAt" class="secondary" :disabled="busy" @click="apply({ type: 'cancel', runId: run.id })">
+        <button v-if="!run.finishedAt" class="secondary" :disabled="readOnly || busy" @click="apply({ type: 'cancel', runId: run.id })">
           {{ t(run.reason === 'Workflow cancellation requested' ? 'Finish cancellation' : 'Cancel workflow') }}
         </button>
       </article>

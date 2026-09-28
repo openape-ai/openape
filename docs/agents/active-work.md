@@ -1,5 +1,26 @@
 # Active work
 
+## Pods browser/desktop visual parity — issue 1404
+
+[Issue 1404](https://repos.openape.ai/patrick/monorepo/issues/1404),
+[approved plan and desktop preview](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3MQ93SGG9D2W2R80HYCREK9).
+Own checkout `openape-monorepo.worktrees/pods-workspace-landing`, branch
+`feature/issue-1404-browser-desktop-parity`, base `961960578a934c89a9aacfdc1c601712052908e4`.
+
+Owner approved the plan on 2026-09-28 and requested implementation without further
+questions. Shared shell, read-only workflow projection, six Pod views and browser
+settings now use desktop components through explicit native/HTTP adapters.
+Existing owner scope, command allowlist, revisions, pending receipts and draft
+protection remain enforced. Device-only actions are visibly desktop-only.
+The local plan is `.claude/plans/2026-09-28-pods-browser-desktop-parity.html`.
+
+Paired browser tests passed for 1280px English/light and 390px German/dark with
+identical Pod view geometry and no page overflow. Full lint/typecheck and both app builds pass; Pods has 653 passing tests and relay
+has 29. Real disposable DDISA acceptance passes in Chromium through login, all
+six Pod tabs, App settings and sign-out, with no browser exceptions. A discovered
+dark-mode run-card contrast issue is fixed in the shared component. Next: publish
+inspected evidence, native PR/exact-head CI, merge and tested-image relay rollout.
+
 ## Pods public workspace entry — issue 1403
 
 [Issue 1403](https://repos.openape.ai/patrick/monorepo/issues/1403).

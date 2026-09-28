@@ -259,3 +259,33 @@ it('removes deleted Pod artifacts and keeps its owner receipt available without 
   expect(store.db.prepare('SELECT pod_id FROM artifacts').all()).toEqual([{ pod_id: otherPodId }])
   expect(() => store.read(actor.owner, actor.id, pod.id)).toThrow('pod_not_found')
 })
+
+it('projects owner-scoped workflow summaries without exposing the archive or mail configuration', () => {
+  const { store, actor, other, state, lease, advance } = setup()
+  const id = randomUUID(); const runId = randomUUID(); const podId = state.pods[0]!.id
+  const nodes = [{ podId, after: [], handoff: false }]
+  state.archive.tables = {
+    workflows: [{ id, revision: 2, name: 'Morning review', nodes: JSON.stringify(nodes), schedule: null, enabled: 0, paused: 0, next_at: null, archived: 0, mail: '{"private":"must not be projected"}' }],
+    workflow_runs: [{ id: runId, workflow_id: id, revision: 2, definition: JSON.stringify({ nodes }), paused: 0, state: 'completed', reason: null, started_at: 100, finished_at: 200 }],
+    workflow_nodes: [{ workflow_run_id: runId, pod_id: podId, state: 'completed', reason: null, run_id: randomUUID(), script_hash: 'a'.repeat(64) }],
+  }
+  store.publish(actor, lease, randomUUID(), 1, state)
+  const view = store.inventory(actor.owner)[0]!.workflows!
+  expect(view.workflows).toEqual([{ id, revision: 2, name: 'Morning review', nodes, schedule: null, enabled: false, paused: false, nextAt: null }])
+  expect(view.runs[0]).toMatchObject({ id: runId, workflowId: id, nodes: [{ podId, state: 'completed' }] })
+  expect(JSON.stringify(view)).not.toContain('private')
+  expect(store.inventory(other)).toEqual([])
+  advance(31000)
+  expect(store.inventory(actor.owner)[0]).toMatchObject({ online: false, workflows: view })
+})
+
+it('distinguishes unavailable workflow data from an empty synchronized inventory', () => {
+  const { store, actor, state, lease } = setup()
+  expect(store.inventory(actor.owner)[0]!.workflows).toBeUndefined()
+  state.archive.tables = { workflows: [], workflow_runs: [], workflow_nodes: [] }
+  store.publish(actor, lease, randomUUID(), 1, state)
+  expect(store.inventory(actor.owner)[0]!.workflows).toEqual({ workflows: [], runs: [] })
+  state.archive.tables.workflows = [{ id: randomUUID(), archived: 0, nodes: 'not-json' }]
+  store.publish(actor, lease, randomUUID(), 2, state)
+  expect(() => store.inventory(actor.owner)).toThrow()
+})

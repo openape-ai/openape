@@ -1,3 +1,4 @@
+import { workspaceWorkflows } from './workspace-workflows'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -261,7 +262,7 @@ export class WorkspaceStore {
       if (!this.hasData(row)) return { id: row.id, revision: row.revision, online, lastSeenAt, workspace: { pods: [], organization: { revision: 1, groups: [] } } }
       const read = this.reader(row.id)
       const workspace = read('workspace') as WorkspaceState
-      return { id: row.id, revision: row.revision, online, lastSeenAt, workspace: { ...workspace, pods: workspace.pods.map((pod) => {
+      return { id: row.id, revision: row.revision, online, lastSeenAt, workflows: workspaceWorkflows(read, Object.keys(this.manifest(row.id))), workspace: { ...workspace, pods: workspace.pods.map((pod) => {
         const view = read(`pod/${pod.id}`) as PodView
         if (!online || !view.ready) return { id: pod.id, name: pod.name, online: false, revision: 1, lifecycle: pod.lifecycle === 'archived' ? 'archived' as const : 'paused' as const, activeScript: null }
         const { blocked, blockedSince = null, error } = view.scheduling
