@@ -1,10 +1,10 @@
+# Active work
+
 ## Generic Reports acceptance — issue 1401
 
 Implementation PR 166 and release-version PR 167 are merged. Reports image `prod-e40ae6ea` is healthy after clean-main `pnpm check:ci`; previous image `prod-7bab2ba6` was rehearsed against migrated data. Production preserves every original legacy row. Real PR and morning previews passed without Telegram sends; the activated PR monitor already completed one natural report and confirmed Telegram notification. Test Runs evidence and guidance are verified.
 
 Current branch `feature/issue-1401-reports-acceptance` starts from canonical `983583f8`; dedicated clone `openape-monorepo.worktrees/generic-reports-release`. See [migration matrix](../operations/generic-reports-migration.md) and [live receipt](../operations/generic-reports-live-receipt.json). Remaining external blocker: npm login expired; CLI 0.3.0 registry release awaits owner renewal. Keep issue 1401 and its plan open until that publication is verified. No further Pod run or notification is needed for acceptance.
-
-# Active work
 
 ## Morning editorial workflow (September 28, 2026) — deployed
 
