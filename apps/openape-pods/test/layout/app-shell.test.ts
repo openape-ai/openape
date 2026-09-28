@@ -1,3 +1,4 @@
+import { screenshotPath } from './evidence'
 import { flushPromises, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -23,13 +24,13 @@ const sizes = {
   de: [[880, 640, 'light'], [560, 560, 'dark']],
 } as const
 const frame = () => new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done())))
-const artifact = (name: string) => `../../.artifacts/${name}`
+const artifact = (name: string) => screenshotPath(`${name}`)
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; document.documentElement.style.colorScheme = ''; applyLanguage('en') })
 
 async function mountWorkspace(overrides: Partial<PodsBridge> = {}) {
   installWorkspace(overrides)
-  wrapper = mount(App, { attachTo: document.body })
+  wrapper = mount(App, { attachTo: document.body, props: { initialPodId: '00000000-0000-4000-8000-000000000001' } })
   await flushPromises(); await frame()
   return wrapper
 }
@@ -48,7 +49,7 @@ function overflow() {
   return {
     page: document.documentElement.scrollWidth - innerWidth,
     content: content.scrollWidth - content.clientWidth,
-    footer: Math.round(document.querySelector('.workspace')!.getBoundingClientRect().bottom - innerHeight),
+    footer: Math.round(document.querySelector('.workspace-frame')!.getBoundingClientRect().bottom - innerHeight),
   }
 }
 const fits = { page: 0, content: expect.toSatisfy((value: number) => value <= 1), footer: expect.toSatisfy((value: number) => value <= 1) }
@@ -58,7 +59,7 @@ describe('workspace shell with the production stylesheet', () => {
     applyLanguage(language)
     await mountWorkspace()
     // Guard against measuring an empty shell: the seeded pods must be rendered.
-    expect(wrapper!.findAll('.pod-button').map(button => button.text())).toEqual([expect.stringContaining('Mail knowledge'), expect.stringContaining('Archived research')])
+    expect(wrapper!.get('h1').text()).toBe('Mail knowledge')
     for (const [width, height, scheme] of sizes[language]) {
       await show(width, height, scheme)
       for (const name of tabs[language]) {
@@ -113,6 +114,8 @@ describe('workspace shell with the production stylesheet', () => {
     const longName = 'LongGroupName'.repeat(7)
     await mountWorkspace({ workspace: async () => ({ organization: { revision: 2, groups: [{ id: '00000000-0000-4000-8000-0000000000a1', name: longName, collapsed: false, podIds: [pods[0]!.id] }] }, pods: structuredClone(pods) }) })
     await show(560, 840, 'dark')
+    await click('.workspace-navigation button[aria-label="Pods"]')
+    await wrapper!.get('.inventory-groups summary').trigger('click'); await frame()
     const label = Array.from(document.querySelectorAll<HTMLElement>('.group-name')).find(element => element.textContent === longName)!
     expect(label.clientWidth).toBeGreaterThan(0)
     expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth)
@@ -127,7 +130,7 @@ describe('workspace shell with the production stylesheet', () => {
     applyLanguage('de')
     await mountWorkspace()
     await show(560, 840, 'dark')
-    await click('.nav-button[aria-label]')
+    await click('.workspace-navigation button[aria-label="App-Einstellungen"]')
     const select = document.querySelector<HTMLElement>('.language-control select')!
     expect(select.getBoundingClientRect().width).toBeGreaterThan(0)
     expect(select.getBoundingClientRect().right).toBeLessThanOrEqual(innerWidth)
