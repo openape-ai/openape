@@ -64,6 +64,11 @@ describe('workspace shell with the production stylesheet', () => {
       await show(width, height, scheme)
       const brand = wrapper!.get('.workspace-brand').element.getBoundingClientRect()
       expect(brand.top, 'brand clears native macOS window controls').toBeGreaterThanOrEqual(36)
+      if (width > 600) {
+        const settings = wrapper!.get('.nav-settings').element.getBoundingClientRect()
+        const account = wrapper!.get('.workspace-account').element.getBoundingClientRect()
+        expect(settings.bottom, 'settings sits directly above the account').toBeCloseTo(account.top, 0)
+      }
       for (const name of tabs[language]) {
         await click('[role="tab"]', name)
         expect(wrapper!.get('[role="tab"][aria-selected="true"]').text()).toBe(name)
