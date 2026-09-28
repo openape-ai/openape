@@ -1,3 +1,4 @@
+import { screenshotPath } from './evidence'
 import { flushPromises, mount } from '@vue/test-utils'
 import { expect, it } from 'vitest'
 import { page } from 'vitest/browser'
@@ -14,7 +15,7 @@ it.each(['en', 'de'] as const)('keeps the execution preference readable and oper
     await page.viewport(language === 'de' ? 560 : 1060, 850)
     document.documentElement.style.colorScheme = language === 'de' ? 'dark' : 'light'
     await flushPromises()
-    await view.get('.nav-button[aria-label]').trigger('click'); await flushPromises()
+    await view.findAll('.workspace-navigation nav button')[2]!.trigger('click'); await flushPromises()
     const checkbox = view.get<HTMLInputElement>('.runtime-approval-option input')
     await checkbox.setValue(true); await flushPromises()
     view.get('.runtime-approval-settings').element.scrollIntoView({ block: 'center' }); await frame()
@@ -23,7 +24,7 @@ it.each(['en', 'de'] as const)('keeps the execution preference readable and oper
     expect(label.width).toBeGreaterThan(100)
     expect(label.right).toBeLessThanOrEqual(innerWidth)
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth)
-    await page.screenshot({ path: `../../.artifacts/runtime-approval-${language}.png` })
+    await page.screenshot({ path: screenshotPath(`runtime-approval-${language}.png`) })
   }
   finally { view.unmount(); applyLanguage('en'); document.documentElement.style.colorScheme = '' }
 })

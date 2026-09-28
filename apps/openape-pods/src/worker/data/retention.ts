@@ -1,3 +1,4 @@
+import { RunRetention } from './run-retention'
 import { removePackageTree } from '../dependencies/store'
 import { lstat, readdir, rm, statfs } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -10,10 +11,12 @@ import { storageBytes } from './files'
 export interface DeletionJob { podId: string, runIds: string[], keyIds: string[] }
 const validId = (value: string) => /^[a-f0-9-]{36}$/.test(value)
 export class DataRetention {
-  constructor(private readonly store: PodDatabase, private readonly helper: string) {}
+  private settledRuns = new Map<string, { changedMs: number, bytes: number }>()
+  readonly runs: RunRetention
+  constructor(private readonly store: PodDatabase, private readonly helper: string) { this.runs = new RunRetention(store) }
   async view(): Promise<DataView> {
-    let usedBytes = 0
-    for (const directory of ['blobs', 'pods', 'snapshots', 'runs', 'dependencies', 'dependency-staging']) {
+    let usedBytes = await this.runBytes()
+    for (const directory of ['blobs', 'pods', 'snapshots', 'dependencies', 'dependency-staging']) {
       usedBytes += await storageBytes(join(this.store.root, directory))
     }
     for (const name of ['control.sqlite', 'control.sqlite-wal']) {
@@ -21,11 +24,34 @@ export class DataRetention {
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
     }
     const disk = await statfs(this.store.root); const limitBytes = this.store.db.prepare('SELECT limit_bytes FROM data_settings WHERE id=1').get()!.limit_bytes as number
-    const view: DataView = { usedBytes, freeBytes: disk.bavail * disk.bsize, limitBytes, pendingDeletion: this.jobs().length, busy: !!this.store.db.prepare('SELECT 1 FROM program_leases UNION ALL SELECT 1 FROM run_leases UNION ALL SELECT 1 FROM master_session WHERE state=\'running\' UNION ALL SELECT 1 FROM master_actions WHERE state=\'running\' LIMIT 1').get(), error: usedBytes >= limitBytes ? 'Storage limit reached. Export a backup and remove unused data before continuing.' : disk.bavail * disk.bsize < 256 * 1024 * 1024 ? 'Less than 256 MiB free disk space remains. Free space before continuing.' : this.store.db.prepare('SELECT error FROM deletion_jobs WHERE error IS NOT NULL LIMIT 1').get()?.error as string | null ?? null }
+    const view: DataView = { usedBytes, freeBytes: disk.bavail * disk.bsize, limitBytes, pendingDeletion: this.jobs().length + Number(this.store.db.prepare('SELECT count(*) AS count FROM run_deletion_jobs').get()!.count), busy: !!this.store.db.prepare('SELECT 1 FROM program_leases UNION ALL SELECT 1 FROM run_leases UNION ALL SELECT 1 FROM master_session WHERE state=\'running\' UNION ALL SELECT 1 FROM master_actions WHERE state=\'running\' LIMIT 1').get(), error: usedBytes >= limitBytes ? 'Storage limit reached. Export a backup and remove unused data before continuing.' : disk.bavail * disk.bsize < 256 * 1024 * 1024 ? 'Less than 256 MiB free disk space remains. Free space before continuing.' : this.store.db.prepare('SELECT error FROM deletion_jobs WHERE error IS NOT NULL UNION ALL SELECT error FROM run_deletion_jobs WHERE error IS NOT NULL LIMIT 1').get()?.error as string | null ?? null }
     const error = usedBytes >= limitBytes || view.freeBytes < 256 * 1024 * 1024 ? view.error : null
     // Every write grows the WAL by a page, which this measurement includes; a byte-exact rewrite would change the database every five seconds forever.
     this.store.db.prepare('UPDATE data_settings SET used_bytes=?,error=? WHERE id=1 AND (abs(used_bytes-?)>=1048576 OR error IS NOT ?)').run(usedBytes, error, usedBytes, error)
     return view
+  }
+
+  // A run finished five minutes ago without a lease no longer writes its folder, so only a changed folder mtime re-measures it.
+  private async runBytes(): Promise<number> {
+    const root = join(this.store.root, 'runs')
+    let names: string[] = []
+    try { names = await readdir(root) }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+    const settled = new Set(this.store.db.prepare('SELECT id FROM runs WHERE finished_at<? AND id NOT IN (SELECT run_id FROM run_leases)').all(Date.now() - 300000).map(row => row.id as string))
+    const next = new Map<string, { changedMs: number, bytes: number }>()
+    let bytes = 0
+    for (const name of names) {
+      const path = join(root, name)
+      let info
+      try { info = await lstat(path) }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; throw error }
+      const cached = this.settledRuns.get(name)
+      const size = cached?.changedMs === info.mtimeMs ? cached.bytes : await storageBytes(path)
+      if (info.isDirectory() && (cached || settled.has(name))) next.set(name, { changedMs: info.mtimeMs, bytes: size })
+      bytes += size
+    }
+    this.settledRuns = next
+    return bytes
   }
 
   async inspectionDue(): Promise<boolean> {
@@ -75,6 +101,7 @@ export class DataRetention {
   }
 
   async cleanDeletedFiles(): Promise<void> {
+    await this.runs.recover()
     for (const job of this.jobs()) {
       try {
         await removePackageTree(join(this.store.root, 'dependencies', job.podId))

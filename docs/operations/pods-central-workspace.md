@@ -112,12 +112,17 @@ native capture. Runtime/security state is never reconstructed from this archive.
 
 ## Browser and service configuration
 
-The web entry is `/workspace`. It uses the existing DDISA SP implementation with
+The public entry at `/` explains the workspace and starts sign-in through
+`/workspace-auth/login`. Email-based DDISA discovery selects the identity provider;
+the existing callback returns to `/workspace`. The same sign-in screen handles
+workspace login requests and callback failures. Sign-out returns to `/`.
+
+The workspace uses the existing DDISA SP implementation with
 an independent HttpOnly workspace cookie. Mutations require the configured
 Origin; APIs return no-store responses. Only direct human sessions are accepted.
 Pilot membership is checked on every authenticated request. Provider endpoints
 such as `/authorize`, `/token` and identity enrollment retain their routing.
-The proxy additions route `/workspace`, `/workspace-auth/`, `/api/workspace/v1/`
+The proxy additions route `/`, `/workspace`, `/workspace-auth/`, `/api/workspace/v1/`
 and `/pods-assets/` to the workspace service.
 
 Configure through the approved secrets and deployment process:
@@ -175,7 +180,14 @@ inspect the actual run/effect ledger, and reconcile the observed outcome before
 allowing further work. There is deliberately no blind retry or destructive
 "reset sync" button. Do not remove the journals to force adoption. Production
 support for operator-assisted recovery and retention remains a rollout concern;
-central mode disables local restore/deletion/cleanup to prevent competing state.
+central mode disables uncoordinated local restore/deletion/cleanup to prevent competing state.
+Pod Settings exposes archive and confirmed deletion. MCP submits the reviewed archived
+Pod through `channel: data`, `type: deletePod` with its current `podId`, `revision`
+and `name`. The executor retains the idle and workflow-reference guards, purges local
+keys, and publishes removal through the normal completion transaction. That transaction
+also removes the deleted Pod’s stored artifacts. Owner-scoped operation receipts remain
+readable after removal; retry the same operation ID after a lost response. Shared chat
+history, prior operation receipts, backups and remote identities/grants remain.
 
 The approved live cutover uses a maintenance window: finish current runs, take paired
 backups, verify the candidate and its exact-source checks, stop the old executor,

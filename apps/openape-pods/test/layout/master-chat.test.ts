@@ -1,3 +1,4 @@
+import { screenshotPath } from './evidence'
 import { flushPromises, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, expect, it } from 'vitest'
@@ -12,7 +13,7 @@ const frame = () => new Promise<void>(done => requestAnimationFrame(() => reques
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; applyLanguage('en'); document.documentElement.style.colorScheme = '' })
 it.each(['en', 'de'] as const)('keeps direct description and creation forms usable without conversation UI (%s)', async (language) => {
   applyLanguage(language); installWorkspace()
-  wrapper = mount(App, { attachTo: document.body }); await flushPromises()
+  wrapper = mount(App, { attachTo: document.body, props: { initialPodId: '00000000-0000-4000-8000-000000000001' } }); await flushPromises()
   expect(wrapper.find('.master-compose').exists()).toBe(false)
   expect(wrapper.findAll('[role="tab"]').map(tab => tab.text())).not.toContain('Chat')
   for (const width of [1060, 760, 560]) {
@@ -21,9 +22,9 @@ it.each(['en', 'de'] as const)('keeps direct description and creation forms usab
     expect(description.width).toBeGreaterThan(100)
     expect(description.right).toBeLessThanOrEqual(innerWidth)
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth)
-    await page.screenshot({ path: `../../.artifacts/codex-management-${language}-${width}.png` })
+    await page.screenshot({ path: screenshotPath(`codex-management-${language}-${width}.png`) })
   }
-  await wrapper.get('.new-pod').trigger('click'); await flushPromises(); await frame()
+  await wrapper.findAll('.workspace-navigation button').find(button => button.text().includes('Pods'))!.trigger('click'); await flushPromises(); await wrapper.get('.new-pod').trigger('click'); await flushPromises(); await frame()
   expect(wrapper.find('input').exists()).toBe(true)
   expect(wrapper.find('.master-compose').exists()).toBe(false)
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth)
