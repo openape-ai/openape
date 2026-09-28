@@ -211,6 +211,11 @@ current main and the signed-release closeout from PR 149. The native PR records
 the final source, repeated checks and merge result. The inbox change still requires
 a separately verified IdP deployment; this merge does not claim a server release.
 The historical live timer recovery is already effective.
+The integration CI exposed a five-second timeout in the first desktop workflow
+component test while it dynamically loaded the desktop module graph. Static
+suite imports move module preparation outside the behavioral test; assertions
+and the default timeout remain unchanged. The native PR records the failed run
+and verification of the corrected test harness.
 
 
 ## Pods: local MCP runtime approval (September 25, 2026) — verified locally
