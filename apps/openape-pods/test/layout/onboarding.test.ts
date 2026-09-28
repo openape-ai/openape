@@ -1,3 +1,4 @@
+import { screenshotPath } from './evidence'
 import { flushPromises, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -43,17 +44,20 @@ describe('accounts, identity and data views with the production stylesheet', () 
     await open()
     await show(560, 840, 'dark')
     for (const target of [accountsLabel, dataLabel]) {
-      await click('.nav-button[aria-label]')
+      await wrapper!.findAll('.workspace-navigation nav button')[2]!.trigger('click'); await flushPromises()
+      if (!wrapper!.find('input[type="password"]').exists()) { await wrapper!.get('.jev-account-row button').trigger('click'); await flushPromises() }
       expect(wrapper!.find('input[type="password"]').exists()).toBe(true)
       wrapper!.get('.jev-connection').element.scrollIntoView({ block: 'center' }); await frame()
       expect(pageFits(), `${language} settings`).toBe(true)
-      await page.screenshot({ path: `../../.artifacts/jev-settings-${language}.png` })
-      await click('button', target)
+      await page.screenshot({ path: screenshotPath(`jev-settings-${language}.png`) })
+      if (target === dataLabel) { await wrapper!.get('.app-settings details:last-child summary').trigger('click'); await frame() }
+      else { await wrapper!.findAll('.setup-connection button')[0]!.trigger('click'); await flushPromises() }
       expect(document.querySelector('h1, h2')).not.toBeNull()
       expect(pageFits(), `${language} ${target}`).toBe(true)
 
     }
-    await click('.pod-button')
+    await wrapper!.findAll('.workspace-navigation nav button')[1]!.trigger('click'); await flushPromises()
+    await click('.inventory-row')
     await click('[role="tab"]', language === 'en' ? 'Settings' : 'Einstellungen')
     expect(document.querySelector('[aria-label="Pod identity"], [aria-label="Pod-Identität"]')).not.toBeNull()
     expect(pageFits(), `${language} pod identity`).toBe(true)
@@ -65,7 +69,7 @@ describe('accounts, identity and data views with the production stylesheet', () 
     await click('button[aria-label="Collapse sidebar"]')
     await expect.poll(() => document.querySelector('.account-avatar')!.textContent).toBe('O')
     const avatar = document.querySelector('.account-avatar')!.getBoundingClientRect()
-    const sidebar = document.querySelector('.sidebar')!.getBoundingClientRect()
+    const sidebar = document.querySelector('.workspace-navigation')!.getBoundingClientRect()
     expect(avatar.width).toBeGreaterThan(0)
     expect(avatar.right).toBeLessThanOrEqual(sidebar.right)
   })

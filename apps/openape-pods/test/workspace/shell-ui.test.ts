@@ -11,7 +11,7 @@ import { installWorkspace, podId, pods } from '../layout/workspace-fixture'
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; vi.unstubAllGlobals() })
 async function mountApp() {
-  wrapper = mount(App, { attachTo: document.body })
+  wrapper = mount(App, { attachTo: document.body, props: { initialPodId: '00000000-0000-4000-8000-000000000001' } })
   await flushPromises()
   return wrapper
 }
@@ -36,7 +36,7 @@ describe('workspace shell', () => {
     installWorkspace({ runs })
     await mountApp()
     expect(button('Run now').attributes('disabled')).toBeUndefined()
-    await wrapper!.findAll('.pod-button').find(item => item.text().includes('Archived research'))!.trigger('click'); await flushPromises()
+    await wrapper!.findAll('.workspace-navigation button').find(item => item.text().includes('Pods'))!.trigger('click'); await flushPromises(); await wrapper!.findAll('.inventory-toolbar button').find(item => item.text().includes('Archived'))!.trigger('click'); await flushPromises(); await wrapper!.findAll('.inventory-row').find(item => item.text().includes('Archived research'))!.trigger('click'); await flushPromises()
     expect(wrapper!.get('h1').text()).toBe('Archived research')
     expect(button('Run now').attributes('disabled')).toBeDefined()
     expect(runs.mock.calls.some(([command]) => command.type === 'start')).toBe(false)
@@ -48,7 +48,8 @@ describe('workspace shell', () => {
     await button('Results and sources').trigger('click'); await flushPromises()
     await button('Work from Codex').trigger('click'); await flushPromises()
     expect(wrapper!.get('h1').text()).toBe('App settings')
-    expect(wrapper!.text()).toContain('Connected Codex can administer')
+    expect(wrapper!.text()).toContain('Codex uses the app-wide MCP access level')
+    await wrapper!.get('.jev-account-row button').trigger('click'); await flushPromises()
     expect(wrapper!.get('.jev-connection label').text()).toBe('TypeSafe AI - Jev - API Key')
   })
 
@@ -74,6 +75,7 @@ describe('pod groups', () => {
     const workspace = vi.fn(async () => organized())
     installWorkspace({ workspace })
     await mountApp()
+    await wrapper!.findAll('.workspace-navigation button').find(item => item.text().includes('Pods'))!.trigger('click'); await flushPromises()
     const pod = wrapper!.findAll('.pod-button').find(item => item.text().includes('Mail knowledge'))!
     await pod.trigger('dragstart', { dataTransfer: { setData: () => {}, effectAllowed: '' } })
     await wrapper!.get('[aria-label="Work group"]').trigger('drop'); await flushPromises()

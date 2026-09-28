@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdir, writeFile } from 'node:fs/promises'
+import { access, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { channels } from '../../src/contracts/ipc'
@@ -141,4 +141,15 @@ it('exposes automatic runtime approval only through the validated desktop prefer
   await expect(main.invoke(channels.runtimeApproval, { type: 'set', enabled: 'true' })).rejects.toThrow()
   await expect(main.invoke(channels.runtimeApproval, { type: 'set', enabled: true, podId })).rejects.toThrow()
   expect(await main.invoke(channels.runtimeApproval, { type: 'set', enabled: false })).toEqual({ enabled: false })
+})
+
+it('restricts MCP grants to the trusted renderer and never accepts an agent-provided expiry', async () => {
+  main = await startMain()
+  expect(await main.invoke(channels.mcpAccess, { type: 'get' })).toEqual({ mode: 'off', duration: 'hour', expiresAt: null })
+  await expect(main.invoke(channels.mcpAccess, { type: 'set', mode: 'read', duration: 'hour' }, true)).rejects.toThrow()
+  await expect(main.invoke(channels.mcpAccess, { type: 'set', mode: 'write', duration: 'hour', expiresAt: null })).rejects.toThrow()
+  expect(await main.invoke(channels.mcpAccess, { type: 'set', mode: 'read', duration: 'hour' })).toMatchObject({ mode: 'read', duration: 'hour', expiresAt: expect.any(Number) })
+  await expect(access(join(main.root, 'codex/control.sock'))).resolves.toBeUndefined()
+  expect(await main.invoke(channels.mcpAccess, { type: 'set', mode: 'off', duration: 'day' })).toEqual({ mode: 'off', duration: 'day', expiresAt: null })
+  await expect(access(join(main.root, 'codex/control.sock'))).rejects.toThrow()
 })

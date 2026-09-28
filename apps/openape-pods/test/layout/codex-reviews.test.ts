@@ -1,3 +1,4 @@
+import { screenshotPath } from './evidence'
 import { flushPromises, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, expect, it } from 'vitest'
@@ -28,5 +29,5 @@ it('stacks before and after in a narrow dark window and keeps them side by side 
   const [narrowBefore, narrowAfter] = columns()
   expect(narrowAfter!.top).toBeGreaterThan(narrowBefore!.bottom - 1)
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth)
-  await page.screenshot({ path: '../../.artifacts/codex-reviews-560-dark.png' })
+  await page.screenshot({ path: screenshotPath('codex-reviews-560-dark.png') })
 })
