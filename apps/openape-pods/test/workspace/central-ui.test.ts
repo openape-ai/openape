@@ -2,6 +2,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
 import CentralWorkspace from '../../src/renderer/central/CentralWorkspace.vue'
+import DesktopWorkspace from '../../src/renderer/central/DesktopWorkspace.vue'
+import { installWorkspace, podId } from '../layout/workspace-fixture'
 import { WorkspaceRequestError } from '../../src/renderer/central/client'
 import { centralFixture } from './central-fixture'
 import type { CentralStatus } from '../../src/contracts/central'
@@ -11,8 +13,6 @@ import type { WorkflowCommand, WorkflowView } from '../../src/contracts/workflow
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined })
 it('opens local workflows from the desktop landing page and resumes the selected workflow', async () => {
-  const { default: DesktopWorkspace } = await import('../../src/renderer/central/DesktopWorkspace.vue')
-  const { installWorkspace, podId } = await import('../layout/workspace-fixture')
   const id = '00000000-0000-4000-8000-000000000003'
   const view: WorkflowView = { workflows: [{ id, revision: 1, name: 'Morning review', nodes: [{ podId, after: [], handoff: true }], schedule: null, enabled: false, paused: true, nextAt: null }], runs: [] }
   const workflows = vi.fn(async (command: WorkflowCommand) => {
@@ -167,8 +167,6 @@ it('warns when a scheduler step timed out although the desktop is online', async
 })
 
 it('opens Jev, language, accounts and data through the active desktop settings entry point', async () => {
-  const { default: DesktopWorkspace } = await import('../../src/renderer/central/DesktopWorkspace.vue')
-  const { installWorkspace } = await import('../layout/workspace-fixture')
   const onboarding = vi.fn(async () => ({ connections: [], complete: true, owner: null, runtime: { ready: true, error: null } }))
   const data = vi.fn(async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }))
   installWorkspace({ onboarding, data, central: async (command) => {
@@ -235,8 +233,6 @@ it('shows deletion refusal without removing the Pod or repeating the command', a
 })
 
 it('mounts native editors only for this desktop and never sends another runtime Pod to local IPC', async () => {
-  const { default: DesktopWorkspace } = await import('../../src/renderer/central/DesktopWorkspace.vue')
-  const { installWorkspace, podId } = await import('../layout/workspace-fixture')
   const fixture = centralFixture()
   const details = vi.fn(async () => fixture.view.details)
   const localId = '00000000-0000-4000-8000-000000000199'

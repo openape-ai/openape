@@ -227,7 +227,11 @@ const alwaysOpen = ref({})
 const patternDrafts = ref({})
 const ruleErrors = ref({})
 const ruleBusy = ref(null)
-function toggleAlwaysPanel(grant) {
+async function toggleAlwaysPanel(grant) {
+  if (grant.brokered) {
+    await approveGrant(grant.id, 'always')
+    return
+  }
   const open = !alwaysOpen.value[grant.id]
   alwaysOpen.value = { ...alwaysOpen.value, [grant.id]: open }
   if (open && patternDrafts.value[grant.id] === undefined) {

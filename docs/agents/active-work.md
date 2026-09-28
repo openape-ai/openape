@@ -193,6 +193,31 @@ per-Pod opt-in parallel runs, disabled by default. Current runs are already seri
 within each Pod; the existing concurrency limit applies across different Pods.
 The new option is not implemented or included in this signed release.
 
+## Pods: repeated timer approvals (September 25, 2026)
+
+[Issue 1389](https://repos.openape.ai/patrick/monorepo/issues/1389).
+Worktree `openape-monorepo/openape-timer-investigation`, branch
+`bugfix/issue-1389-pods-standing-grant`, canonical base
+`a23d519d7543ab572585d9bd6ba141155fcbba19`.
+The inbox Always allow action now approves brokered requests with lifetime always,
+matching the existing detail page. Ordinary standing-rule and broker policy behavior
+remain unchanged. Component coverage exercises both entry points.
+Live timer recovery reused the same Pod-scoped always grant on a second no-op run
+without a pending approval (two seconds). Full lint/typecheck, IdP application build and 26 focused component/broker tests
+pass. Commit/push affected unit gates pass.
+[PR 142](https://repos.openape.ai/patrick/monorepo/pulls/142), implementation
+`365049fd2ce8bef774f51b177c7126fac44770b1`. September 28 integration preserves
+current main and the signed-release closeout from PR 149. The native PR records
+the final source, repeated checks and merge result. The inbox change still requires
+a separately verified IdP deployment; this merge does not claim a server release.
+The historical live timer recovery is already effective.
+The integration CI exposed a five-second timeout in the first desktop workflow
+component test while it dynamically loaded the desktop module graph. Static
+suite imports move module preparation outside the behavioral test; assertions
+and the default timeout remain unchanged. The native PR records the failed run
+and verification of the corrected test harness.
+
+
 ## Pods: local MCP runtime approval (September 25, 2026) — verified locally
 
 [Issue 1388](https://repos.openape.ai/patrick/monorepo/issues/1388),
