@@ -2463,5 +2463,10 @@
   "Archive message details exceed the grant display limit": "Die Nachrichtendetails überschreiten das Anzeigelimit einer Freigabe",
   "Invalid Jev key import": "Ungültiger Import des Jev-Schlüssels",
   "Pod permissions changed; reload before importing Jev": "Pod-Berechtigungen geändert; vor dem Jev-Import neu laden",
-  "A Jev connection already exists; replace it through App settings": "Eine Jev-Verbindung besteht bereits; ersetze sie in den App-Einstellungen"
+  "A Jev connection already exists; replace it through App settings": "Eine Jev-Verbindung besteht bereits; ersetze sie in den App-Einstellungen",
+  "Delete Pod…": "Pod löschen …",
+  "Delete Pod": "Pod löschen",
+  "Pod deleted.": "Pod gelöscht.",
+  "This permanently removes this Pod’s workspace, scripts, knowledge, run history and local keys, including the current central copies. Shared accounts, original files, remote identities/grants, backups and shared chat history remain.": "Dies löscht Arbeitsverzeichnis, Skripte, Wissen, Laufverlauf und lokale Schlüssel dieses Pods endgültig, einschließlich der aktuellen zentralen Kopien. Gemeinsame Konten, Originaldateien, entfernte Identitäten/Freigaben, Backups und gemeinsamer Chatverlauf bleiben erhalten.",
+  "Archive this Pod before deleting it.": "Archiviere diesen Pod, bevor du ihn löschst."
 }
