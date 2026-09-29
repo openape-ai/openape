@@ -24,6 +24,11 @@ function contractOf(store: PodDatabase, podId: string, hash: string | null): Gra
   return contract === undefined ? null : parseGraphContract(contract)
 }
 
+/** The contract of the active script of every Pod that has one. */
+export function podContracts(store: PodDatabase): Record<string, GraphContract | null> {
+  return Object.fromEntries(store.db.prepare('SELECT id,active_script FROM pods WHERE active_script IS NOT NULL').all().map(row => [row.id as string, contractOf(store, row.id as string, row.active_script as string)]))
+}
+
 /** Diagnostics of a saved graph against the active scripts and rights of its member Pods. */
 export function inspectGraph(store: PodDatabase, definition: WorkflowDefinition): { contracts: Record<string, GraphContract | null>, edges: GraphEdge[], nodeKinds: Record<string, GraphNodeKind>, diagnostics: GraphDiagnostic[] } {
   const contracts: Record<string, GraphContract | null> = {}; const facts: Record<string, GraphMemberFacts> = {}

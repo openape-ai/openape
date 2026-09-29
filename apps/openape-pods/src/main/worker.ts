@@ -103,7 +103,7 @@ export class FixtureWorker {
   private centralAction(type: string): CentralController | null {
     if (!this.central || this.central.executing) return null
     if (!this.central.available) throw new Error(this.central.offlineMessage())
-    return type === 'list' ? null : this.central
+    return ['list', 'graph', 'gateOpen'].includes(type) ? null : this.central
   }
 
   constructor(private readonly publish: (status: WorkerStatus) => void, private readonly runtimeApproval: RuntimeApprovalPolicy | null = null) {}
@@ -435,7 +435,17 @@ export class FixtureWorker {
     return view
   }
 
-  async workflows(command: WorkflowCommand): Promise<WorkflowView> { const central = this.centralAction(command.type); if (central) return central.local(() => this.workflows(command)); return parseWorkflowView(await this.dispatch({ workflow: command })) }
+  async workflows(command: WorkflowCommand): Promise<WorkflowView> {
+    if (command.type === 'gateOpen') {
+      const view = parseWorkflowView(await this.dispatch({ workflow: { type: 'list' } }))
+      const url = view.gates?.batches.find(batch => batch.id === command.batchId && batch.state === 'pending')?.url
+      // The address was built by the app from the issuer of the Pod identity, never from item data.
+      if (!url || new URL(url).protocol !== 'https:') throw new Error('No approval is waiting for this batch')
+      await shell.openExternal(url)
+      return view
+    }
+    const central = this.centralAction(command.type); if (central) return central.local(() => this.workflows(command)); return parseWorkflowView(await this.dispatch({ workflow: command }))
+  }
 
   async scheduling(command: ScheduleCommand): Promise<ScheduleView> { const central = this.centralAction(command.type); if (central) return central.local(() => this.scheduling(command)); return parseScheduleView(await this.dispatch({ schedule: command })) }
 
