@@ -306,3 +306,28 @@ describe('graph panel', () => {
     expect(wrapper.find('a').exists()).toBe(false)
   })
 })
+
+describe('sharing entry points', () => {
+  it('are absent until the sharing flow exists', async () => {
+    window.pods = { workflows: vi.fn(async () => structuredClone({ ...view, graph: detail })) } as unknown as typeof window.pods
+    const overview = mount(GraphOverview, { props: { view, pods, organization } })
+    const panel = mount(GraphPanel, { props: { view, pods, organization, selectedId: graphId } }); await flushPromises()
+    for (const wrapper of [overview, panel]) {
+      expect(wrapper.text()).not.toContain('Share')
+      expect(wrapper.text()).not.toContain('Import')
+      expect(wrapper.findAll('button').filter(item => item.attributes('disabled') !== undefined).map(item => item.text())).toEqual([])
+    }
+  })
+  it('lead to the flow once it is switched on, and never from a read-only view', async () => {
+    window.pods = { workflows: vi.fn(async () => structuredClone({ ...view, graph: detail })) } as unknown as typeof window.pods
+    const overview = mount(GraphOverview, { props: { view, pods, organization, sharing: true } })
+    await button(overview, 'Import').trigger('click')
+    expect(overview.emitted('import')).toHaveLength(1)
+    const panel = mount(GraphPanel, { props: { view, pods, organization, selectedId: graphId, sharing: true } }); await flushPromises()
+    await button(panel, 'Share').trigger('click')
+    expect(panel.emitted('share')).toEqual([[graphId]])
+    const readOnly = mount(GraphPanel, { props: { view: { ...view, graphs: { [graphId]: detail } }, pods, organization, selectedId: graphId, sharing: true, readOnly: true } }); await flushPromises()
+    expect(readOnly.findAll('button').map(item => item.text())).not.toContain('Share')
+    expect(mount(GraphOverview, { props: { view, pods, organization, sharing: true, readOnly: true } }).findAll('button').map(item => item.text())).not.toContain('Import')
+  })
+})

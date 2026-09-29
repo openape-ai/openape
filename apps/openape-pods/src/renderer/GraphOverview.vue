@@ -5,6 +5,7 @@ import type { StoredPod } from '../contracts/control'
 import type { Organization } from '../contracts/groups'
 import type { WorkflowDefinition, WorkflowView } from '../contracts/workflows'
 import { t } from './i18n'
+import { sharingAvailable } from './utils/sharing'
 
 interface Section { id: string | null, name: string, graphs: WorkflowDefinition[], pods: StoredPod[] }
 
@@ -14,8 +15,9 @@ export default defineComponent({
     pods: { type: Array as PropType<StoredPod[]>, required: true },
     organization: { type: Object as PropType<Organization>, required: true },
     readOnly: Boolean,
+    sharing: { type: Boolean, default: sharingAvailable },
   },
-  emits: ['select', 'openPod', 'create'],
+  emits: ['select', 'openPod', 'create', 'import'],
   computed: {
     sections(): Section[] {
       const members = new Set(this.view.workflows.flatMap(graph => graph.nodes.map(node => node.podId)))
@@ -54,9 +56,14 @@ export default defineComponent({
           {{ summary }}
         </p>
       </div>
-      <button v-if="!readOnly" class="primary" @click="$emit('create', null)">
-        {{ t('Create new') }}
-      </button>
+      <div v-if="!readOnly" class="graph-overview-actions">
+        <button v-if="sharing" class="secondary" @click="$emit('import')">
+          {{ t('Import') }}
+        </button>
+        <button class="primary" @click="$emit('create', null)">
+          {{ t('Create new') }}
+        </button>
+      </div>
     </header>
     <p v-if="!sections.length" class="muted">
       {{ t('No graph and no pod yet.') }}
@@ -87,6 +94,7 @@ export default defineComponent({
 <style>
 .graph-overview{display:flex;flex-direction:column;gap:24px;min-width:0}
 .graph-overview-heading,.graph-group header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.graph-overview-actions{display:flex;flex-wrap:wrap;gap:12px}
 .graph-overview h1{margin:0;font-size:22px}
 .graph-overview h2{margin:0;font-size:16px}
 .graph-overview p{margin:4px 0 0}
