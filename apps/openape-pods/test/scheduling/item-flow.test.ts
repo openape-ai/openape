@@ -1,64 +1,13 @@
 // @vitest-environment node
-import { randomUUID } from 'node:crypto'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { GraphContract } from '../../src/contracts/graphs'
-import type { AgentRuntime } from '../../src/worker/agent/executor'
 import { RunRetention } from '../../src/worker/data/run-retention'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
-import { RunDispatcher } from '../../src/worker/runs/dispatcher'
 import { installExample } from '../../src/worker/runs/examples'
 import { executeScript } from '../../src/worker/runs/runner'
-import { PodDatabase } from '../../src/worker/storage/database'
-import { WorkflowEngine } from '../../src/worker/workflows/engine'
+import { closeGraphs, graphFixture as fixture } from './graph-fixture'
 
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
-const stores: PodDatabase[] = []
-afterEach(() => { vi.restoreAllMocks(); for (const store of stores.splice(0)) { store.close(); rmSync(store.root, { recursive: true, force: true }) } })
-
-interface Item { key: string, channel: string, data: Record<string, unknown> }
-type Emit = (channel: string, item: { key: string, data: Record<string, unknown>, reason?: string, confidence?: number }) => Promise<unknown>
-type Behaviour = (items: Item[], emit: Emit, variables: Record<string, string>) => Promise<void>
-const channel = (name: string) => ({ name, title: name, fields: ['subject'] })
-
-function fixture(gates: unknown[] = []) {
-  const store = new PodDatabase(mkdtempSync(join(tmpdir(), 'pods-item-flow-'))); stores.push(store)
-  const resources = new ResourceRegistry(store, () => {})
-  vi.spyOn(resources, 'capture').mockResolvedValue({ id: randomUUID(), files: [] } as never)
-  const dispatcher = new RunDispatcher(store, resources, { helper: '/unused', environment: {} } as AgentRuntime)
-  const engine = new WorkflowEngine(store, dispatcher, { inspect: vi.fn(async () => {}) })
-  const behaviours = new Map<string, Behaviour>(); const started: string[] = []; const contracts: Record<string, GraphContract> = {}
-  vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input, signal, hooks) => {
-    started.push(input.podId)
-    const items = await hooks.request('graph.contract', contracts[input.podId], signal) as Item[]
-    await behaviours.get(input.podId)!(items, (name, item) => hooks.request('graph.emit', { ...item, channel: name }, signal), input.variables ?? {})
-    return { status: 'completed', summary: 'done', completedInputIds: input.eventIds, gapIds: [] }
-  })
-  const pod = (name: string, contract: GraphContract, behaviour: Behaviour) => {
-    const { id } = store.createPod({ name }); installExample(store, resources, id, 'deterministic', 'a'.repeat(64))
-    const row = store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=?').get(id)!
-    store.db.prepare('UPDATE scripts SET manifest=? WHERE pod_id=?').run(JSON.stringify({ ...JSON.parse(String(row.manifest)), contract }), id)
-    contracts[id] = contract; behaviours.set(id, behaviour)
-    return id
-  }
-  const id = randomUUID()
-  const save = (pods: string[], channels: string[]) => engine.save({ type: 'save', id, revision: 0, name: 'Mail', nodes: pods.map(podId => ({ podId, after: [], handoff: false })), schedule: null, enabled: false, mode: 'channels', groupId: null, channels: channels.map(channel), gates: gates as never, values: [{ name: 'threshold', value: '0.8', revision: 0 }] })
-  /** Drives one graph run until no node is left to start. */
-  const run = async () => {
-    const runId = engine.start(id, 1)
-    for (let round = 0; round < 12 && !['completed', 'blocked'].includes(engine.run(runId).state); round++) {
-      engine.tick()
-      await vi.waitFor(() => expect(store.db.prepare('SELECT count(*) AS count FROM run_leases').get()?.count).toBe(0))
-    }
-    return engine.run(runId)
-  }
-  const trace = (key: string) => store.db.prepare('SELECT node,outcome,channel,reason,confidence FROM graph_item_events WHERE workflow_id=? AND key=? ORDER BY id').all(id, key)
-  const pending = (node: string) => store.db.prepare('SELECT i.key FROM graph_deliveries d JOIN graph_items i ON i.id=d.item_id WHERE d.node=? AND d.state=\'pending\' ORDER BY i.key').all(node).map(row => row.key)
-  const count = (table: string) => store.db.prepare(`SELECT count(*) AS count FROM ${table}`).get()!.count as number
-  return { store, engine, id, pod, save, run, trace, pending, count, started, behaviours }
-}
+afterEach(closeGraphs)
 
 const keys = ['mail-1', 'mail-2', 'mail-3', 'mail-4', 'mail-5']
 function mailGraph(f: ReturnType<typeof fixture>) {
@@ -125,16 +74,16 @@ it('skips a node without pending items and starts no run for it', async () => {
   expect(run.nodes.filter(node => node.runId === null).map(node => node.reason)).toEqual(['No items to process', 'No items to process', 'No items to process'])
 })
 
-it('holds items at a gate across runs and starts nothing behind it', async () => {
+it('holds items at a gate across runs and hands nothing on without a decision', async () => {
   const f = fixture([{ key: 'batch', title: 'Batch', kind: 'approve', takes: 'mail.open', gives: 'mail.approved', excluded: null }])
   const source = f.pod('Source', { takes: [], gives: ['mail.open'], summary: 'Reads mail' }, async (_items, emit) => { await emit('mail.open', { key: `mail-${f.count('graph_items')}`, data: {} }) })
   const archive = f.pod('Archive', { takes: ['mail.approved'], gives: [], summary: 'Archives mail' }, async () => {})
   f.save([source, archive], ['mail.open', 'mail.approved'])
   expect((await f.run()).state).toBe('completed')
-  f.store.db.prepare('UPDATE workflows SET revision=1').run()
   expect((await f.run()).state).toBe('completed')
   expect(f.pending('gate:batch')).toEqual(['mail-0', 'mail-1'])
-  expect(f.started).toEqual([source, source])
+  expect(f.pending(archive)).toEqual([])
+  expect(f.trace('mail-0').map(event => event.outcome)).toEqual(['emitted', 'held'])
 })
 
 it('passes graph values to the script and lets a Pod variable of another name stand beside them', async () => {
@@ -174,7 +123,8 @@ it('keeps the items of the three most recent runs and every pending item', async
   await new RunRetention(f.store).prune()
   expect(f.store.db.prepare('SELECT key FROM graph_items ORDER BY key').all().map(row => row.key)).toEqual(['held-1', 'open-3', 'open-4', 'open-5'])
   expect(f.trace('open-1')).toEqual([])
-  expect(f.trace('held-1')).toHaveLength(1)
+  expect(f.trace('held-1').map(event => event.outcome)).toEqual(['emitted', 'held'])
   expect(f.trace('open-5')).toHaveLength(2)
   expect(f.count('graph_deliveries')).toBe(4)
+  expect(f.count('graph_gate_batches')).toBe(1)
 })

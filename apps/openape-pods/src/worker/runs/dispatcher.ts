@@ -39,6 +39,7 @@ import { graphEmitter, parseGraphContract } from '../../contracts/graphs'
 import type { GraphEmit } from '../../contracts/graphs'
 import { graphRun, pendingItems, settleItems } from '../workflows/items'
 import type { DeliveredItem } from '../workflows/items'
+import { gateCoverage, gateRound } from '../workflows/gates'
 import { installExample } from './examples'
 
 export interface RunServiceScope {
@@ -53,6 +54,7 @@ export interface RunServiceScope {
 }
 export interface RunServices {
   mailArchive?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
+  gate?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
   jev?: (request: JevRequest, signal: AbortSignal, scope: RunServiceScope) => Promise<JevEvaluation>
   shell?: (scope: RunServiceScope, signal: AbortSignal) => Promise<{ home: string, environment: Record<string, string>, shell?: { cli: string, environment: Record<string, string> } }>
   closeShell?: (scope: RunServiceScope) => Promise<void>
@@ -60,6 +62,12 @@ export interface RunServices {
   credential?: (alias: string, signal: AbortSignal, scope: RunServiceScope) => Promise<string>
   provider?: AgentGatewayServices['provider']
   tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
+}
+
+function archiveTarget(payload: unknown): { operation: 'process', target: unknown } {
+  const request = payload as { operation?: unknown, target?: unknown } | null
+  if (!request || typeof request !== 'object' || request.operation !== 'process' || Object.keys(request).some(key => !['operation', 'target'].includes(key))) throw new Error('Channel graphs archive only through an approval gate')
+  return { operation: 'process', target: request.target }
 }
 
 const maxAgentPauseMs = 2 * maxAgentTimeoutSeconds * 1000
@@ -204,7 +212,9 @@ export class RunDispatcher {
           assertCurrent()
           if (operation === 'mail.archive') {
             if (!this.services?.mailArchive) throw new Error('Mail archive service is unavailable')
-            const work = this.services.mailArchive(payload, operationSignal, scope)
+            // In a graph the script never names what may move; the consumed gate batches do.
+            const request = graph ? { ...archiveTarget(payload), gate: gateCoverage(this.store, graph, delivered) } : payload
+            const work = this.services.mailArchive(request, operationSignal, scope)
             pendingAgents.add(work)
             try { const result = await work; assertCurrent(); return result }
             finally { pendingAgents.delete(work) }
@@ -240,6 +250,11 @@ export class RunDispatcher {
           if (operation === 'graph.contract') {
             if (!contract || JSON.stringify(parseGraphContract(payload)) !== JSON.stringify(contract)) throw new Error('Script contract changed since validation')
             if (!graph) return []
+            await gateRound(this.store, graph, async (body) => {
+              if (!this.services?.gate) throw new Error('Approval service is unavailable')
+              return retryService('approval', async () => { assertCurrent(); return this.services!.gate!(body, operationSignal, scope) }, operationSignal)
+            })
+            assertCurrent()
             delivered = pendingItems(this.store, graph.workflowId, graph.node)
             return delivered.map(({ key, channel, data }) => ({ key, channel, data }))
           }

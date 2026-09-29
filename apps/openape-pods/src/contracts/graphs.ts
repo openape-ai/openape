@@ -13,7 +13,7 @@ export interface GraphItem { key: string, channel: string, data: Record<string, 
 export interface GraphEmit { key: string, data: Record<string, unknown>, reason?: string, confidence?: number }
 export type GraphNodeKind = 'gate' | 'effect' | 'decision' | 'code'
 export interface GraphEdge { from: string, to: string, channel: string }
-export type GraphDiagnosticCode = 'channel-without-producer' | 'channel-without-consumer' | 'channel-undeclared' | 'emit-undeclared' | 'cycle' | 'archive-without-gate' | 'summary-invalid' | 'contract-missing' | 'member-elsewhere' | 'value-name-conflict'
+export type GraphDiagnosticCode = 'channel-without-producer' | 'channel-without-consumer' | 'channel-undeclared' | 'emit-undeclared' | 'cycle' | 'archive-without-gate' | 'summary-invalid' | 'contract-missing' | 'member-elsewhere' | 'value-name-conflict' | 'gate-consumer'
 export interface GraphDiagnostic { level: 'error', code: GraphDiagnosticCode, message: string, node: string | null, channel: string | null }
 /** What the store knows about a member Pod beyond its contract. */
 export interface GraphMemberFacts { archive?: boolean, elsewhere?: boolean, emits?: string[], variables?: string[] }
@@ -30,6 +30,7 @@ export const graphDiagnosticMessages: Record<GraphDiagnosticCode, string> = {
   'contract-missing': 'The validated script exports no contract',
   'member-elsewhere': 'The pod belongs to another graph or another group',
   'value-name-conflict': 'A graph value and a pod variable share a name',
+  'gate-consumer': 'An approval gate needs exactly one pod that takes what it gives',
 }
 
 const uuid = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value)
@@ -154,6 +155,10 @@ export function diagnoseGraph(definition: WorkflowDefinition, contracts: Record<
       if (!contract.gives.includes(channel)) report('emit-undeclared', podId, channel)
     }
     nodes.push({ id: podId, takes: contract.takes, gives: contract.gives })
+  }
+  // The Pod that takes what an approval gate gives requests the grant, so there is exactly one.
+  for (const gate of definition.gates) {
+    if (gate.kind === 'approve' && (nodes.filter(node => node.takes.includes(gate.gives)).length !== 1 || definition.gates.some(other => other.takes === gate.gives))) report('gate-consumer', `gate:${gate.key}`, gate.gives)
   }
   nodes.push(...definition.gates.map(gateNode))
   for (const node of nodes) {

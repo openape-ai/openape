@@ -15,10 +15,12 @@ export interface ArchiveAuthority {
   consume: (record: ArchiveRecord) => Promise<void>
   assertActive: (record: ArchiveRecord) => Promise<void>
 }
+export interface CoveredBatch { id: string, grantId: string, expiresAt: number, mailbox: string, items: { id: string, version: string, reason: string }[] }
 function view(record: ArchiveRecord): ArchiveView { return { id: record.manifest.id, mailbox: record.manifest.mailbox, count: record.manifest.items.length, state: record.state, url: record.url, outcomes: record.outcomes, error: record.error } }
 export class MailArchiveService {
   private busy = new Set<string>()
   constructor(private readonly store: ArchiveStore) {}
+  records(podId: string): Promise<ArchiveRecord[]> { return this.store.list(podId) }
   async run<T>(podId: string, work: () => Promise<T>): Promise<T> {
     if (this.busy.has(podId)) throw new Error('Mail archive operation already running for this Pod')
     this.busy.add(podId)
@@ -89,30 +91,65 @@ export class MailArchiveService {
       record.state = 'executing'; await this.store.save(record)
       try {
         await authority.consume(record)
-        for (const item of record.manifest.items) {
-          if (record.manifest.expiresAt <= Date.now()) { record.outcomes.push({ id: item.id, state: 'skipped', reason: 'Archive approval expired' }); await this.store.save(record); continue }
-          await authority.assertActive(record)
-          const current = await provider.read(item.id)
-          if (!current || !sameArchiveMail(item, parseArchiveMail(current))) {
-            record.outcomes.push({ id: item.id, state: 'skipped', reason: 'Message changed or is no longer in the Inbox' }); await this.store.save(record); continue
-          }
-          record.outcomes.push({ id: item.id, state: 'unknown', reason: 'Move started; provider receipt pending' }); await this.store.save(record)
-          const result = await provider.move(item)
-          const outcome = record.outcomes.at(-1)!
-          if (result.state === 'skipped') { outcome.state = 'skipped'; outcome.reason = result.reason }
-          else {
-            const receipt = parseArchiveMail(result.receipt)
-            if (receipt.id !== item.id || receipt.internetMessageId !== item.internetMessageId || receipt.folder === item.folder) throw new Error('Archive receipt does not identify the reviewed message')
-            outcome.state = 'archived'; outcome.reason = 'Provider confirmed archival'; outcome.receipt = receipt
-          }
-          await this.store.save(record)
-        }
-        record.state = 'completed'; await this.store.save(record)
+        await this.move(record, provider, () => authority.assertActive(record))
       }
       catch (error) { record.state = 'unknown'; record.error = String(error); await this.store.save(record) }
       output.push(view(record))
       if (record.state === 'unknown') break
     }
     return output
+  }
+
+  /**
+   * Channel mode: moves the messages of one gate batch whose grant the owner approved and the gate
+   * consumed. A batch is executed at most once; without it nothing moves.
+   */
+  async processCovered(podId: string, batch: CoveredBatch, provider: ArchiveProvider, assertActive: () => Promise<void>): Promise<ArchiveView> {
+    const records = await this.store.list(podId)
+    for (const record of records.filter(record => ['preparing', 'executing'].includes(record.state))) {
+      record.state = 'unknown'; record.error = 'Interrupted archive operation; inspect grant and provider receipts before proceeding'
+      await this.store.save(record)
+    }
+    const unresolved = records.find(record => record.state === 'unknown')
+    if (unresolved) return view(unresolved)
+    const known = records.find(record => record.manifest.id === batch.id)
+    if (known) return view(known)
+    // A refused, expired or unconsumed grant ends here: no record, no message read, nothing moved.
+    await assertActive()
+    const record: ArchiveRecord = { manifest: { version: 1, id: batch.id, podId, applicationId: provider.applicationId, applicationHash: provider.applicationHash, mailbox: batch.mailbox, expiresAt: batch.expiresAt, items: [] }, state: 'executing', grantId: batch.grantId, outcomes: [] }
+    await this.store.save(record)
+    try {
+      for (const approved of batch.items) {
+        const mail = await provider.read(approved.id)
+        if (!mail || mail.id !== approved.id || mail.version !== approved.version) { record.outcomes.push({ id: approved.id, state: 'skipped', reason: 'Message changed or is no longer in the Inbox' }); continue }
+        record.manifest.items.push({ ...parseArchiveMail(mail), reason: approved.reason })
+      }
+      await this.store.save(record)
+      await this.move(record, provider, assertActive)
+    }
+    catch (error) { record.state = 'unknown'; record.error = String(error); await this.store.save(record) }
+    return view(record)
+  }
+
+  private async move(record: ArchiveRecord, provider: ArchiveProvider, assertActive: () => Promise<void>): Promise<void> {
+    for (const item of record.manifest.items) {
+      if (record.manifest.expiresAt <= Date.now()) { record.outcomes.push({ id: item.id, state: 'skipped', reason: 'Archive approval expired' }); await this.store.save(record); continue }
+      await assertActive()
+      const current = await provider.read(item.id)
+      if (!current || !sameArchiveMail(item, parseArchiveMail(current))) {
+        record.outcomes.push({ id: item.id, state: 'skipped', reason: 'Message changed or is no longer in the Inbox' }); await this.store.save(record); continue
+      }
+      record.outcomes.push({ id: item.id, state: 'unknown', reason: 'Move started; provider receipt pending' }); await this.store.save(record)
+      const result = await provider.move(item)
+      const outcome = record.outcomes.at(-1)!
+      if (result.state === 'skipped') { outcome.state = 'skipped'; outcome.reason = result.reason }
+      else {
+        const receipt = parseArchiveMail(result.receipt)
+        if (receipt.id !== item.id || receipt.internetMessageId !== item.internetMessageId || receipt.folder === item.folder) throw new Error('Archive receipt does not identify the reviewed message')
+        outcome.state = 'archived'; outcome.reason = 'Provider confirmed archival'; outcome.receipt = receipt
+      }
+      await this.store.save(record)
+    }
+    record.state = 'completed'; await this.store.save(record)
   }
 }
