@@ -1,4 +1,4 @@
-import { parseWorkflowView, parseWorkflowNodes } from '../../../openape-pods/src/contracts/workflows'
+import { parseWorkflowView, parseWorkflowNodes, sequenceParts } from '../../../openape-pods/src/contracts/workflows'
 import type { WorkflowView } from '../../../openape-pods/src/contracts/workflows'
 
 export function workspaceWorkflows(read: (key: string) => unknown, keys: string[]): WorkflowView | undefined {
@@ -18,6 +18,7 @@ export function workspaceWorkflows(read: (key: string) => unknown, keys: string[
     id: row.id, revision: row.revision, name: row.name, nodes: json(row.nodes),
     schedule: row.schedule === null ? null : json(row.schedule), enabled: flag(row.enabled),
     paused: flag(row.paused), nextAt: row.next_at,
+    ...sequenceParts, mode: row.mode ?? 'sequence', groupId: row.group_id ?? null,
   }))
   const nodes = rows('workflow_nodes')
   const runs = rows('workflow_runs').sort((a, b) => Number(a.finished_at !== null) - Number(b.finished_at !== null) || Number(b.started_at) - Number(a.started_at)).slice(0, 100).map((row) => {

@@ -37,7 +37,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 25
+export const schemaVersion = 26
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -298,6 +298,21 @@ ALTER TABLE run_inputs ADD COLUMN retry_at INTEGER;
 ALTER TABLE run_inputs ADD COLUMN retry_attempt INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE run_inputs ADD COLUMN retry_epoch INTEGER;
 PRAGMA user_version=25;`)
+      }
+      if (version < 26) {
+        this.db.exec(`
+ALTER TABLE workflows ADD COLUMN mode TEXT NOT NULL DEFAULT 'sequence';
+ALTER TABLE workflows ADD COLUMN group_id TEXT;
+CREATE TABLE workflow_channels(workflow_id TEXT NOT NULL, name TEXT NOT NULL, title TEXT NOT NULL, fields TEXT NOT NULL, PRIMARY KEY(workflow_id, name));
+CREATE TABLE workflow_gates(workflow_id TEXT NOT NULL, key TEXT NOT NULL, definition TEXT NOT NULL, PRIMARY KEY(workflow_id, key));
+CREATE TABLE workflow_values(workflow_id TEXT NOT NULL, name TEXT NOT NULL, value TEXT NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY(workflow_id, name));
+CREATE TABLE graph_items(id TEXT PRIMARY KEY, workflow_id TEXT NOT NULL, workflow_run_id TEXT NOT NULL, key TEXT NOT NULL, channel TEXT NOT NULL, node TEXT NOT NULL, payload TEXT NOT NULL, created_at INTEGER NOT NULL);
+CREATE INDEX graph_items_key ON graph_items(workflow_id, key);
+CREATE TABLE graph_deliveries(item_id TEXT NOT NULL, node TEXT NOT NULL, state TEXT NOT NULL, workflow_run_id TEXT, updated_at INTEGER NOT NULL, PRIMARY KEY(item_id, node));
+CREATE INDEX graph_deliveries_pending ON graph_deliveries(node, state);
+CREATE TABLE graph_item_events(id INTEGER PRIMARY KEY AUTOINCREMENT, workflow_id TEXT NOT NULL, workflow_run_id TEXT NOT NULL, key TEXT NOT NULL, node TEXT NOT NULL, outcome TEXT NOT NULL, channel TEXT, reason TEXT, confidence REAL, at INTEGER NOT NULL);
+CREATE INDEX graph_item_events_key ON graph_item_events(workflow_id, key, id);
+PRAGMA user_version=26;`)
       }
     })
   }
