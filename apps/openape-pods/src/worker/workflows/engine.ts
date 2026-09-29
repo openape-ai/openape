@@ -2,18 +2,43 @@ import { retryReady } from '../scheduling/retry'
 import { randomUUID } from 'node:crypto'
 import type { WorkflowCommand, WorkflowDefinition, WorkflowRunView, WorkflowView } from '../../contracts/workflows'
 import { parseWorkflowCommand } from '../../contracts/workflows'
+import { graphDiagnosticMessages } from '../../contracts/graphs'
+import type { GraphMode } from '../../contracts/graphs'
 import type { PodDatabase } from '../storage/database'
 import type { RunTrigger } from '../runs/store'
 import { nextWorkflowDue } from './clock'
 
 interface Driver { start: (podId: string, trigger: RunTrigger) => string, cancelPod: (podId: string) => void }
 interface Recovery { inspect: (podId: string, runId: string) => Promise<void> }
+export function workflowDefinitions(store: PodDatabase): WorkflowDefinition[] {
+  const parts = (table: string, id: string) => store.db.prepare(`SELECT * FROM ${table} WHERE workflow_id=? ORDER BY rowid`).all(id)
+  return store.db.prepare('SELECT * FROM workflows WHERE archived=0 ORDER BY rowid').all().map((row) => {
+    const id = row.id as string
+    return {
+      id,
+      revision: row.revision as number,
+      name: row.name as string,
+      nodes: JSON.parse(row.nodes as string),
+      schedule: row.schedule ? JSON.parse(row.schedule as string) : null,
+      enabled: row.enabled === 1,
+      paused: row.paused === 1,
+      nextAt: row.next_at as number | null,
+      ...(row.mail ? { mail: JSON.parse(row.mail as string) } : {}),
+      mode: row.mode as GraphMode,
+      groupId: row.group_id as string | null,
+      channels: parts('workflow_channels', id).map(item => ({ name: item.name as string, title: item.title as string, fields: JSON.parse(item.fields as string) })),
+      gates: parts('workflow_gates', id).map(item => JSON.parse(item.definition as string)),
+      values: parts('workflow_values', id).map(item => ({ name: item.name as string, value: item.value as string, revision: item.revision as number })),
+    }
+  })
+}
+const notRunnable = 'Channel graphs cannot run before item flow is available'
 interface NodeRow { pod_id: string, script_hash: string | null, assignment_revision: number, resource_epoch: number, state: string, run_id: string | null, reason: string | null, output: string | null }
 export class WorkflowEngine {
   constructor(private readonly store: PodDatabase, private readonly driver: Driver, private readonly recovery: Recovery, private readonly now: () => number = Date.now) {}
 
   view(): WorkflowView {
-    const workflows = this.store.db.prepare('SELECT * FROM workflows WHERE archived=0 ORDER BY rowid').all().map(row => ({ id: row.id as string, revision: row.revision as number, name: row.name as string, nodes: JSON.parse(row.nodes as string), schedule: row.schedule ? JSON.parse(row.schedule as string) : null, enabled: row.enabled === 1, paused: row.paused === 1, nextAt: row.next_at as number | null, ...(row.mail ? { mail: JSON.parse(row.mail as string) } : {}) }))
+    const workflows = workflowDefinitions(this.store)
     const runs = this.store.db.prepare('SELECT id FROM workflow_runs ORDER BY finished_at IS NULL DESC,started_at DESC,rowid DESC LIMIT 100').all().map(row => this.run(row.id as string))
     return { workflows, runs }
   }
@@ -38,7 +63,8 @@ export class WorkflowEngine {
   }
 
   save(command: Extract<WorkflowCommand, { type: 'save' }>): void {
-    const parsed = parseWorkflowCommand(command) as typeof command
+    const parsed = parseWorkflowCommand(command) as Required<typeof command>
+    if (parsed.mode === 'channels' && parsed.enabled) throw new Error(notRunnable)
     this.store.transaction(() => {
       const row = this.store.db.prepare('SELECT revision,schedule,next_at,archived FROM workflows WHERE id=?').get(parsed.id)
       if (row?.archived === 1) throw new Error('Workflow not found')
@@ -49,7 +75,16 @@ export class WorkflowEngine {
       }
       const schedule = parsed.schedule ? JSON.stringify(parsed.schedule) : null
       const nextAt = schedule === row?.schedule ? row.next_at as number | null : parsed.schedule ? nextWorkflowDue(parsed.schedule, null, this.now()) : null
-      this.store.db.prepare('INSERT INTO workflows(id,revision,name,nodes,schedule,enabled,next_at,mail) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,name=excluded.name,nodes=excluded.nodes,schedule=excluded.schedule,enabled=excluded.enabled,next_at=excluded.next_at,mail=excluded.mail').run(parsed.id, parsed.revision + 1, parsed.name, JSON.stringify(parsed.nodes), schedule, Number(parsed.enabled), nextAt, parsed.mail ? JSON.stringify(parsed.mail) : null)
+      if (parsed.groupId && !this.store.db.prepare('SELECT 1 FROM pod_groups WHERE id=?').get(parsed.groupId)) throw new Error('Graph group not found')
+      const names = JSON.stringify(parsed.values.map(value => value.name)); const members = JSON.stringify(parsed.nodes.map(node => node.podId))
+      if (this.store.db.prepare('SELECT 1 FROM pod_variables WHERE name IN (SELECT value FROM json_each(?)) AND pod_id IN (SELECT value FROM json_each(?))').get(names, members)) throw new Error(graphDiagnosticMessages['value-name-conflict'])
+      this.store.db.prepare('INSERT INTO workflows(id,revision,name,nodes,schedule,enabled,next_at,mail,mode,group_id) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,name=excluded.name,nodes=excluded.nodes,schedule=excluded.schedule,enabled=excluded.enabled,next_at=excluded.next_at,mail=excluded.mail,mode=excluded.mode,group_id=excluded.group_id').run(parsed.id, parsed.revision + 1, parsed.name, JSON.stringify(parsed.nodes), schedule, Number(parsed.enabled), nextAt, parsed.mail ? JSON.stringify(parsed.mail) : null, parsed.mode, parsed.groupId)
+      this.store.db.prepare('DELETE FROM workflow_channels WHERE workflow_id=?').run(parsed.id)
+      for (const channel of parsed.channels) this.store.db.prepare('INSERT INTO workflow_channels VALUES(?,?,?,?)').run(parsed.id, channel.name, channel.title, JSON.stringify(channel.fields))
+      this.store.db.prepare('DELETE FROM workflow_gates WHERE workflow_id=?').run(parsed.id)
+      for (const gate of parsed.gates) this.store.db.prepare('INSERT INTO workflow_gates VALUES(?,?,?)').run(parsed.id, gate.key, JSON.stringify(gate))
+      this.store.db.prepare('DELETE FROM workflow_values WHERE workflow_id=? AND name NOT IN (SELECT value FROM json_each(?))').run(parsed.id, names)
+      for (const value of parsed.values) this.store.db.prepare('INSERT INTO workflow_values VALUES(?,?,?,1) ON CONFLICT(workflow_id,name) DO UPDATE SET revision=revision+1,value=excluded.value WHERE value!=excluded.value').run(parsed.id, value.name, value.value)
       this.store.db.prepare('DELETE FROM workflow_members WHERE workflow_id=?').run(parsed.id)
       for (const node of parsed.nodes) this.store.db.prepare('INSERT INTO workflow_members VALUES(?,?)').run(parsed.id, node.podId)
     })
@@ -76,6 +111,7 @@ export class WorkflowEngine {
     return this.store.transaction(() => {
       const definition = this.definition(id)
       if (definition.revision !== revision) throw new Error('Workflow changed; reload before running')
+      if (definition.mode === 'channels') throw new Error(notRunnable)
       const active = this.store.db.prepare('SELECT id FROM workflow_runs WHERE workflow_id=? AND finished_at IS NULL').get(id)
       if (active) {
         if (operationId) this.store.db.prepare('INSERT INTO control_runs VALUES(?,?,\'workflow\')').run(operationId, active.id)

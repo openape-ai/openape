@@ -3,15 +3,19 @@ import type { MailWorkflowConfiguration, MailBatchReview, MailEffectResolution }
 import { Cron } from 'croner'
 import { parseSchedule } from './scheduling'
 import type { ScheduleSpec } from './scheduling'
+import { parseGraphChannels, parseGraphGates, parseGraphGroup, parseGraphMode, parseGraphValues } from './graphs'
+import type { GraphChannel, GraphGate, GraphMode, GraphValue } from './graphs'
 
 export type WorkflowSchedule = ScheduleSpec | { kind: 'once', at: number } | { kind: 'cron', expression: string, timezone: string }
 export interface WorkflowNode { podId: string, after: string[], handoff: boolean }
-export interface WorkflowDefinition { mail?: MailWorkflowConfiguration | null, id: string, revision: number, name: string, nodes: WorkflowNode[], schedule: WorkflowSchedule | null, enabled: boolean, paused: boolean, nextAt: number | null }
+export interface GraphParts { mode: GraphMode, groupId: string | null, channels: GraphChannel[], gates: GraphGate[], values: GraphValue[] }
+export const sequenceParts: GraphParts = { mode: 'sequence', groupId: null, channels: [], gates: [], values: [] }
+export interface WorkflowDefinition extends GraphParts { mail?: MailWorkflowConfiguration | null, id: string, revision: number, name: string, nodes: WorkflowNode[], schedule: WorkflowSchedule | null, enabled: boolean, paused: boolean, nextAt: number | null }
 export type WorkflowNodeState = 'waiting' | 'running' | 'completed' | 'blocked'
 export interface WorkflowNodeView extends WorkflowNode { state: WorkflowNodeState, runId: string | null, reason: string | null, scriptHash: string | null }
 export interface WorkflowRunView { paused: boolean, id: string, workflowId: string, revision: number, state: 'waiting' | 'running' | 'blocked' | 'completed' | 'cancelled', reason: string | null, startedAt: number, finishedAt: number | null, nodes: WorkflowNodeView[] }
 export interface WorkflowView { mailReview?: MailBatchReview | null, workflows: WorkflowDefinition[], runs: WorkflowRunView[] }
-export type WorkflowCommand = { type: 'mailReview', batchId: string } | { type: 'mailResolve', resolution: MailEffectResolution } | { type: 'list' } | { type: 'save', mail?: MailWorkflowConfiguration | null, id: string, revision: number, name: string, nodes: WorkflowNode[], schedule: WorkflowSchedule | null, enabled: boolean } | { type: 'delete', id: string, revision: number } | { type: 'start', id: string, revision: number } | { type: 'retry', runId: string, podId: string } | { type: 'cancel', runId: string } | { type: 'pause', id: string, revision: number, paused: boolean }
+export type WorkflowCommand = { type: 'mailReview', batchId: string } | { type: 'mailResolve', resolution: MailEffectResolution } | { type: 'list' } | ({ type: 'save', mail?: MailWorkflowConfiguration | null, id: string, revision: number, name: string, nodes: WorkflowNode[], schedule: WorkflowSchedule | null, enabled: boolean } & Partial<GraphParts>) | { type: 'delete', id: string, revision: number } | { type: 'start', id: string, revision: number } | { type: 'retry', runId: string, podId: string } | { type: 'cancel', runId: string } | { type: 'pause', id: string, revision: number, paused: boolean }
 
 const uuid = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value)
 function object(value: unknown): Record<string, unknown> {
@@ -54,7 +58,7 @@ export function parseWorkflowNodes(value: unknown): WorkflowNode[] {
 }
 export function parseWorkflowCommand(value: unknown): WorkflowCommand {
   const item = object(value)
-  const allowed = item.type === 'mailReview' ? ['type', 'batchId'] : item.type === 'mailResolve' ? ['type', 'resolution'] : item.type === 'list' ? ['type'] : item.type === 'save' ? ['type', 'id', 'revision', 'name', 'nodes', 'schedule', 'enabled', 'mail'] : item.type === 'pause' ? ['type', 'id', 'revision', 'paused'] : item.type === 'start' || item.type === 'delete' ? ['type', 'id', 'revision'] : item.type === 'retry' ? ['type', 'runId', 'podId'] : item.type === 'cancel' ? ['type', 'runId'] : []
+  const allowed = item.type === 'mailReview' ? ['type', 'batchId'] : item.type === 'mailResolve' ? ['type', 'resolution'] : item.type === 'list' ? ['type'] : item.type === 'save' ? ['type', 'id', 'revision', 'name', 'nodes', 'schedule', 'enabled', 'mail', 'mode', 'groupId', 'channels', 'gates', 'values'] : item.type === 'pause' ? ['type', 'id', 'revision', 'paused'] : item.type === 'start' || item.type === 'delete' ? ['type', 'id', 'revision'] : item.type === 'retry' ? ['type', 'runId', 'podId'] : item.type === 'cancel' ? ['type', 'runId'] : []
   if (!allowed.length) throw new Error('Unsupported workflow command')
   keys(item, allowed)
   if (item.type === 'mailReview') {
@@ -85,7 +89,10 @@ export function parseWorkflowCommand(value: unknown): WorkflowCommand {
     while (pending.length) { const id = pending.pop()!; if (ancestors.has(id)) continue; ancestors.add(id); pending.push(...nodes.find(node => node.podId === id)!.after) }
     if (!filter || !notify || !ancestors.has(filter.podId)) throw new Error('Mail notification must depend on the configured filter pod')
   }
-  return { type: 'save', id: item.id, revision: item.revision as number, name: item.name.trim(), nodes, schedule, enabled: item.enabled, ...(mail !== undefined ? { mail } : {}) }
+  const graph: GraphParts = { mode: parseGraphMode(item.mode ?? 'sequence'), groupId: parseGraphGroup(item.groupId ?? null), channels: parseGraphChannels(item.channels ?? []), gates: parseGraphGates(item.gates ?? []), values: parseGraphValues(item.values ?? []) }
+  if (graph.mode === 'sequence' && (graph.channels.length || graph.gates.length || graph.values.length)) throw new Error('Channels, gates and graph values need channel mode')
+  if (graph.mode === 'channels' && (mail || nodes.some(node => node.after.length || node.handoff))) throw new Error('Channel graphs cannot use dependencies, handoff or mail rules')
+  return { type: 'save', id: item.id, revision: item.revision as number, name: item.name.trim(), nodes, schedule, enabled: item.enabled, ...(mail !== undefined ? { mail } : {}), ...graph }
 }
 export function parseWorkflowView(value: unknown): WorkflowView {
   const item = object(value)
