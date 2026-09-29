@@ -20,6 +20,8 @@ import type { AgentRuntime } from '../agent/executor'
 import type { ResourceRegistry } from '../resources/registry'
 import { assignedMail } from '../../main/mail/assigned'
 import { parseMailRequest } from '../../main/mail/contract'
+import { graphEmitter, parseGraphContract, syntheticGraphItems } from '../../contracts/graphs'
+import type { GraphContract } from '../../contracts/graphs'
 
 export async function validateDraft(store: PodDatabase, resources: ResourceRegistry, runtime: AgentRuntime, draftId: string, revision: number, signal: AbortSignal, proposedVariables?: Record<string, string>): Promise<{ hash: string, evidence: string }> {
   const draft = store.db.prepare('SELECT * FROM script_drafts WHERE id=? AND revision=?').get(draftId, revision)
@@ -48,7 +50,18 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
   try {
     const home = join(root, 'home'); await mkdir(home, { mode: 0o700 })
     const input = { home, directories: [], variables, version: 1 as const, runId: randomUUID(), podId: pod.id, scriptHash: hash, assignmentRevision: pod.bindingRevision, reason: 'manual' as const, eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: epoch, workspace: join(root, 'workspace'), references: [], limits: { timeMs: 5000, frameBytes: 256 * 1024 } }
-    const result = await executeScript({ ...runtime, dependencyRoot }, root, artifact, input, signal, { event: () => {}, request: async (operation, payload) => {
+    let contract: GraphContract | undefined; let refusedEmit: Error | undefined
+    let checkEmit = graphEmitter(contract)
+    const checked = executeScript({ ...runtime, dependencyRoot }, root, artifact, input, signal, { event: () => {}, request: async (operation, payload) => {
+      if (operation === 'graph.contract') {
+        if (contract) throw new Error('Invalid graph contract')
+        contract = parseGraphContract(payload); checkEmit = graphEmitter(contract)
+        return syntheticGraphItems(contract)
+      }
+      if (operation === 'graph.emit') {
+        try { checkEmit(payload); return { emitted: true } }
+        catch (error) { refusedEmit ??= error as Error; throw error }
+      }
       if (operation === 'workflow.publish') { parseWorkflowOutput(payload); return { published: true } }
       if (operation === 'mail.archive') throw new Error('Archive proposals require live provider data; synthetic validation never creates grants or moves mail')
       if (operation === 'mail.workflow.filter') return { complete: true, output: { schema: 'mail-filter-result/v1', batchId: 'synthetic', mailbox: 'fixture@example.invalid', baseline: true, mode: 'preview', retained: [], archived: [], reportReceipts: [] } }
@@ -87,6 +100,10 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
       }
       throw new Error('Validation rejected an undeclared service request')
     } })
+    // A script may swallow or rephrase the refusal; the refusal itself decides.
+    await Promise.allSettled([checked])
+    if (refusedEmit) throw refusedEmit
+    const result = await checked
     if (!['completed', 'completedWithGaps'].includes(result.status)) throw new Error('Draft did not complete its synthetic contract check')
     if (result.gapIds.some(id => !fixture.db.prepare('SELECT 1 FROM claims WHERE pod_id=? AND id=? AND kind=\'gap\'').get(fixturePod.id, id))) throw new Error('Draft returned an uncommitted validation gap')
     signal.throwIfAborted()
@@ -94,7 +111,7 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
     store.transaction(() => {
       if (JSON.stringify(new PodVariables(store).list(pod.id)) !== variableState) throw new Error('Variables changed during validation; validate again')
       if (store.getPod(pod.id).lifecycle === 'archived' || store.getPod(pod.id).bindingRevision !== pod.bindingRevision || resources.epoch(pod.id) !== epoch || store.db.prepare('SELECT revision FROM script_drafts WHERE id=?').get(draftId)?.revision !== revision) throw new Error('Draft, script binding or permissions changed during validation')
-      store.storeScript(pod.id, { schemaVersion: 1, contentHash: hash, entrypoint: 'run.mjs', dependencyLockHash, runtimeVersion: 'electron-40.9.3/codex-0.153.4/contract-1', capabilities, triggers: ['manual', 'schedule', 'event'], inputSchemaHash: digest(JSON.stringify(inputSchema)), outputSchemaHash: digest(JSON.stringify(resultSchema)), checkpointSchemaVersion: 1, assignmentRevision: pod.bindingRevision, effects: resources.list(pod.id).some(resource => resource.state === 'ready' && resource.configuration.type === 'http' && capabilities.includes(String(resource.configuration.capability)) && (resource.configuration.methods as string[]).some(isHttpEffect)) ? 'reconciledEffects' : 'readOnly' }, code)
+      store.storeScript(pod.id, { schemaVersion: 1, contentHash: hash, entrypoint: 'run.mjs', dependencyLockHash, runtimeVersion: 'electron-40.9.3/codex-0.153.4/contract-1', capabilities, triggers: ['manual', 'schedule', 'event'], inputSchemaHash: digest(JSON.stringify(inputSchema)), outputSchemaHash: digest(JSON.stringify(resultSchema)), checkpointSchemaVersion: 1, assignmentRevision: pod.bindingRevision, ...contract ? { contract } : {}, effects: resources.list(pod.id).some(resource => resource.state === 'ready' && resource.configuration.type === 'http' && capabilities.includes(String(resource.configuration.capability)) && (resource.configuration.methods as string[]).some(isHttpEffect)) ? 'reconciledEffects' : 'readOnly' }, code)
       if (dependencyHash) store.db.prepare('INSERT OR IGNORE INTO script_dependencies VALUES(?,?,?)').run(pod.id, hash, dependencyHash)
       store.db.prepare('INSERT OR REPLACE INTO validations VALUES(?,?,?,?,?)').run(pod.id, hash, pod.bindingRevision, epoch, evidence)
       store.db.prepare('UPDATE script_drafts SET script_hash=?,validation=? WHERE id=? AND revision=?').run(hash, evidence, draftId, revision)
