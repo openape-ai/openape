@@ -4,7 +4,7 @@ import type { WorkflowCommand, WorkflowDefinition, WorkflowRunView, WorkflowView
 import { parseWorkflowCommand } from '../../contracts/workflows'
 import { graphDiagnosticMessages } from '../../contracts/graphs'
 import type { GraphMode } from '../../contracts/graphs'
-import { graphNodes, hasPendingItems, inspectGraph } from './items'
+import { graphNodes, hasPendingItems, inspectGraph, podContracts } from './items'
 import type { GraphNode } from './items'
 import { gateNeedsRound, gateView } from './gates'
 import type { PodDatabase } from '../storage/database'
@@ -57,7 +57,7 @@ export class WorkflowEngine {
   view(): WorkflowView {
     const workflows = workflowDefinitions(this.store)
     const runs = this.store.db.prepare('SELECT id FROM workflow_runs ORDER BY finished_at IS NULL DESC,started_at DESC,rowid DESC LIMIT 100').all().map(row => this.run(row.id as string))
-    return { workflows, runs, gates: gateView(this.store) }
+    return { workflows, runs, gates: gateView(this.store), contracts: podContracts(this.store) }
   }
 
   private definition(id: string): WorkflowDefinition {

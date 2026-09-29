@@ -5,7 +5,7 @@ import { defineComponent } from 'vue'
 import WorkspaceFrame from './WorkspaceFrame.vue'
 import AppSettings from './AppSettings.vue'
 import PodInventory from './PodInventory.vue'
-import WorkflowPanel from './WorkflowPanel.vue'
+import GraphPanel from './GraphPanel.vue'
 import type { WorkflowView } from '../contracts/workflows'
 import type { Organization } from '../contracts/groups'
 import DataManagement from './DataManagement.vue'
@@ -28,7 +28,7 @@ import type { ScheduleView } from '../contracts/scheduling'
 import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
-  components: { WorkspaceFrame, AppSettings, PodInventory, WorkflowPanel, AccountStatus, RunApproval, PodDescription, DataManagement, Onboarding, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
+  components: { WorkspaceFrame, AppSettings, PodInventory, GraphPanel, AccountStatus, RunApproval, PodDescription, DataManagement, Onboarding, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
   props: { embedded: Boolean, initialPodId: { type: String, default: '' }, refreshToken: { type: Number, default: 0 } },
   emits: ['settings'],
   setup() { return { access: usePodAccess() } },
@@ -114,7 +114,7 @@ export default defineComponent({
         <button v-if="!globalPage && !embedded" class="text-button" @click="selected = 'Pods'">
           ‹ {{ t('Pods') }}
         </button>
-        <div v-if="!['App settings', 'Pods'].includes(selected)" class="page-heading">
+        <div v-if="!['App settings', 'Pods', 'Workflows'].includes(selected)" class="page-heading">
           <h1>{{ globalPage ? (selected === 'Setup' ? t('Your accounts') : label(selected)) : creating ? t('New pod') : pod?.name ?? t('Your pods') }}</h1><span v-if="pod && !globalPage" class="muted">{{ nextRun }}</span>
         </div>
         <div v-if="attention" class="fixture-note">
@@ -134,7 +134,7 @@ export default defineComponent({
         <AppSettings v-if="selected === 'App settings'" />
         <PodInventory v-else-if="selected === 'Pods'" :pods="pods" :workflows="workflows" :organization="organization" :available="status?.worker.state === 'ready' && !attention" @updated="workspaceChanged" @select="selectPod" @create="createPod" />
         <template v-else-if="selected === 'Workflows'">
-          <WorkflowPanel :view="workflows" :pods="pods" :selected-id="workflowId" @changed="workflows = $event" @select="workflowId = $event" @open-pod="selectPod" />
+          <GraphPanel :view="workflows" :pods="pods" :organization="organization" :selected-id="workflowId" @changed="workflows = $event" @workspace="workspaceChanged" @select="workflowId = $event" @open-pod="selectPod" />
         </template>
         <DataManagement v-else-if="selected === 'Data'" />
         <Onboarding v-else-if="selected === 'Setup'" @finished="selected = 'Overview'" />
@@ -161,6 +161,13 @@ export default defineComponent({
         <section v-else id="panel-Overview" role="tabpanel" aria-labelledby="tab-Overview">
           <template v-if="pod">
             <PodDescription :key="pod.id" :pod-id="pod.id" />
+            <article v-if="workflows.contracts?.[pod.id]" class="card pod-contract">
+              <div class="card-heading">
+                <h2>{{ t('Contract') }}</h2><span class="badge">{{ workflows.contracts[pod.id]!.summary }}</span>
+              </div>
+              <p><strong>{{ t('Takes') }}</strong> {{ workflows.contracts[pod.id]!.takes.join(', ') || t('Nothing, starts with the graph') }}</p>
+              <p><strong>{{ t('Gives') }}</strong> {{ workflows.contracts[pod.id]!.gives.join(', ') || t('Nothing') }}</p>
+            </article>
             <article class="card">
               <div class="card-heading">
                 <h2>{{ t('Last run') }}</h2><span class="badge">{{ label(runs[0]?.state ?? 'Not run yet') }}</span>

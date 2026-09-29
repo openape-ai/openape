@@ -14,6 +14,7 @@ import { confirmDomainsStopped, inspectDomainRecords  } from './recovery/domains
 import { parseWorkflowCommand } from '../contracts/workflows'
 import { WorkflowEngine } from './workflows/engine'
 import { chooseGateItem, discardGateBatch, excludeGateItems } from './workflows/gates'
+import { graphDetail } from './workflows/detail'
 import type { RunContextRequest, ServiceCheck  } from '../contracts/services'
 import { DependencyStore } from './dependencies/store'
 import { programRequest } from '../main/programs/invoke'
@@ -267,7 +268,8 @@ port.on('message', async (event) => {
     }
     if (request.command && typeof request.command === 'object' && 'workflow' in request.command) {
       const command = parseWorkflowCommand(request.command.workflow)
-      if (command.type !== 'list') store.assertStorage()
+      if (command.type === 'graph') { port.postMessage({ id: request.id, state: { ...workflows.view(), graph: graphDetail(store, workflows.view().workflows.find(item => item.id === command.id), command.key) } }); return }
+      if (command.type !== 'list' && command.type !== 'gateOpen') store.assertStorage()
       if (command.type === 'mailReview') { port.postMessage({ id: request.id, state: { ...workflows.view(), mailReview: reviewMailBatch(store, command.batchId) } }); return }
       if (command.type === 'mailResolve') {
         const review = reviewMailBatch(store, command.resolution.batchId)
@@ -286,7 +288,7 @@ port.on('message', async (event) => {
       if (command.type === 'gateExclude') excludeGateItems(store, command.batchId, command.itemIds, Date.now())
       if (command.type === 'gateChoose') chooseGateItem(store, command.id, command.gate, command.itemId, command.option, Date.now())
       if (command.type === 'gateDiscard') discardGateBatch(store, command.batchId, Date.now())
-      if (command.type !== 'list') workflows.tick()
+      if (command.type !== 'list' && command.type !== 'gateOpen') workflows.tick()
       port.postMessage({ id: request.id, state: workflows.view() })
       return
     }
