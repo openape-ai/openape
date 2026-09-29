@@ -5,6 +5,8 @@ import { parseWorkflowCommand } from '../../contracts/workflows'
 import { graphDiagnosticMessages } from '../../contracts/graphs'
 import type { GraphMode } from '../../contracts/graphs'
 import { graphNodes, hasPendingItems, inspectGraph } from './items'
+import type { GraphNode } from './items'
+import { gateNeedsRound, gateView } from './gates'
 import type { PodDatabase } from '../storage/database'
 import type { RunTrigger } from '../runs/store'
 import { nextWorkflowDue } from './clock'
@@ -33,6 +35,21 @@ export function workflowDefinitions(store: PodDatabase): WorkflowDefinition[] {
     }
   })
 }
+/** The Pods whose items can reach a node in this run. A gate never runs, so the Pods before it count instead. */
+function podsBefore(graph: GraphNode[], id: string): string[] {
+  const found = new Set<string>(); const seen = new Set<string>(); const pending = [id]
+  while (pending.length) {
+    const next = pending.pop()
+    const current = graph.find(node => node.id === next)
+    if (!current || seen.has(current.id)) continue
+    seen.add(current.id)
+    for (const giver of graph.filter(node => node.id !== id && node.gives.some(channel => current.takes.includes(channel)))) {
+      if (giver.id.startsWith('gate:')) pending.push(giver.id)
+      else found.add(giver.id)
+    }
+  }
+  return [...found]
+}
 interface NodeRow { pod_id: string, script_hash: string | null, assignment_revision: number, resource_epoch: number, state: string, run_id: string | null, reason: string | null, output: string | null }
 export class WorkflowEngine {
   constructor(private readonly store: PodDatabase, private readonly driver: Driver, private readonly recovery: Recovery, private readonly now: () => number = Date.now) {}
@@ -40,7 +57,7 @@ export class WorkflowEngine {
   view(): WorkflowView {
     const workflows = workflowDefinitions(this.store)
     const runs = this.store.db.prepare('SELECT id FROM workflow_runs ORDER BY finished_at IS NULL DESC,started_at DESC,rowid DESC LIMIT 100').all().map(row => this.run(row.id as string))
-    return { workflows, runs }
+    return { workflows, runs, gates: gateView(this.store) }
   }
 
   private definition(id: string): WorkflowDefinition {
@@ -203,8 +220,7 @@ export class WorkflowEngine {
       if (node.state !== 'waiting') continue
       const spec = definition.nodes.find(item => item.podId === node.pod_id)!
       const takes = graph?.find(item => item.id === node.pod_id)!.takes ?? []
-      // Gates never run; what they give arrives across runs, whenever the owner decides.
-      const producers = graph?.filter(item => item.id !== node.pod_id && item.gives.some(channel => takes.includes(channel))).map(item => item.id)
+      const producers = graph ? podsBefore(graph, node.pod_id) : undefined
       const predecessors = this.nodes(id).filter(other => (producers ?? spec.after).includes(other.pod_id))
       if (predecessors.some(other => other.state !== 'completed')) {
         this.store.db.prepare('UPDATE workflow_nodes SET reason=? WHERE workflow_run_id=? AND pod_id=?').run(predecessors.some(other => other.state === 'blocked') ? 'Blocked by a predecessor' : 'Waiting for all predecessors to complete', id, node.pod_id)
@@ -214,7 +230,9 @@ export class WorkflowEngine {
         this.store.db.prepare('UPDATE workflow_nodes SET state=\'blocked\',reason=\'A required predecessor output is missing\' WHERE workflow_run_id=? AND pod_id=? AND state=\'waiting\'').run(id, node.pod_id)
         continue
       }
-      if (takes.length && !hasPendingItems(this.store, row.workflow_id as string, node.pod_id)) {
+      // The Pod behind an approval gate asks for the decision, so it also runs while the gate holds items.
+      const waiting = definition.gates?.some(gate => gate.kind === 'approve' && takes.includes(gate.gives) && gateNeedsRound(this.store, row.workflow_id as string, gate.key))
+      if (takes.length && !waiting && !hasPendingItems(this.store, row.workflow_id as string, node.pod_id)) {
         this.store.db.prepare('UPDATE workflow_nodes SET state=\'completed\',reason=\'No items to process\' WHERE workflow_run_id=? AND pod_id=? AND state=\'waiting\'').run(id, node.pod_id)
         continue
       }

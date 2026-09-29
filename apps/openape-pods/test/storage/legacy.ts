@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 export function removeGraphSchema(database: DatabaseSync): void {
-  database.exec('DROP TABLE graph_item_events; DROP TABLE graph_deliveries; DROP TABLE graph_items; DROP TABLE workflow_values; DROP TABLE workflow_gates; DROP TABLE workflow_channels; ALTER TABLE workflows DROP COLUMN mode; ALTER TABLE workflows DROP COLUMN group_id;')
+  database.exec('DROP INDEX graph_gate_batches_open; DROP TABLE graph_gate_batches; DROP TABLE graph_item_events; DROP TABLE graph_deliveries; DROP TABLE graph_items; DROP TABLE workflow_values; DROP TABLE workflow_gates; DROP TABLE workflow_channels; ALTER TABLE workflows DROP COLUMN mode; ALTER TABLE workflows DROP COLUMN group_id;')
 }
 
 export function removeRemoteSchema(database: DatabaseSync): void {

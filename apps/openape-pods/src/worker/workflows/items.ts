@@ -105,6 +105,9 @@ export function pruneItems(store: PodDatabase): void {
       DELETE FROM graph_item_events WHERE NOT EXISTS (SELECT 1 FROM retained_items r WHERE r.workflow_id=graph_item_events.workflow_id AND r.key=graph_item_events.key);
       DELETE FROM graph_deliveries WHERE item_id NOT IN (SELECT id FROM retained_items);
       DELETE FROM graph_items WHERE id NOT IN (SELECT id FROM retained_items);
+      DELETE FROM graph_gate_batches WHERE state IN ('approved','denied','expired','superseded') AND NOT EXISTS (
+        SELECT 1 FROM json_each(graph_gate_batches.items) entry JOIN retained_items r ON r.id IN (json_extract(entry.value,'$.itemId'), json_extract(entry.value,'$.emittedId'))
+      );
       DELETE FROM retained_items;
     `)
   })

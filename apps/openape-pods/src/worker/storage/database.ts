@@ -39,7 +39,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 26
+export const schemaVersion = 27
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -315,6 +315,12 @@ CREATE INDEX graph_deliveries_pending ON graph_deliveries(node, state);
 CREATE TABLE graph_item_events(id INTEGER PRIMARY KEY AUTOINCREMENT, workflow_id TEXT NOT NULL, workflow_run_id TEXT NOT NULL, key TEXT NOT NULL, node TEXT NOT NULL, outcome TEXT NOT NULL, channel TEXT, reason TEXT, confidence REAL, at INTEGER NOT NULL);
 CREATE INDEX graph_item_events_key ON graph_item_events(workflow_id, key, id);
 PRAGMA user_version=26;`)
+      }
+      if (version < 27) {
+        this.db.exec(`
+CREATE TABLE graph_gate_batches(id TEXT PRIMARY KEY, workflow_id TEXT NOT NULL, gate TEXT NOT NULL, pod_id TEXT NOT NULL, state TEXT NOT NULL, grant_id TEXT, url TEXT, title TEXT NOT NULL, digest TEXT NOT NULL, expires_at INTEGER NOT NULL, items TEXT NOT NULL, error TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+CREATE INDEX graph_gate_batches_open ON graph_gate_batches(workflow_id, gate, state);
+PRAGMA user_version=27;`)
       }
     })
   }

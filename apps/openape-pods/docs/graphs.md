@@ -6,7 +6,7 @@ any engine code exists. It belongs to
 [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3PF2RKZPA2V0AQ2SJTXD6DX).
 Definition types, derived edges, diagnostics and storage exist since migration
 v26, the script contract, `context.items` and `context.emit` since M2, and the
-item flow since M3. A channel-mode graph with any diagnostic can be saved but
+item flow since M3 and approval gates since M4 (migration v27). A channel-mode graph with any diagnostic can be saved but
 neither enabled nor started. Sequence workflows are described in
 [workflows.md](workflows.md) and do not change.
 
@@ -138,6 +138,7 @@ enabled.
 | `contract-missing` | A member Pod's validated script exports no contract |
 | `member-elsewhere` | The Pod is a member of another graph or lives in another group |
 | `value-name-conflict` | A graph value and a Pod variable of a member share a name |
+| `gate-consumer` | What an approval gate gives is not taken by exactly one Pod |
 
 `contract-missing` and `value-name-conflict` are stated in the plan's text but
 were not rows of its table; they are listed here so every refusal has a code.
@@ -204,6 +205,67 @@ export interface GraphEmit {
   the runner reply is limited to 256 KiB. The rest stays pending.
 - Graph values are merged into `context.variables`.
 
+## Approval gates
+
+A gate has no script and no identity of its own. The one Pod that takes what an
+approval gate gives requests the grant with its own agent identity, inside its
+own run. That Pod therefore also runs while the gate holds items.
+
+```ts
+export interface GateManifest {
+  version: 1
+  id: string // batch
+  workflowId: string
+  gate: string
+  title: string
+  podId: string // the Pod that takes what the gate gives
+  expiresAt: number
+  digest: string
+  items: { key: string, hash: string, title: string }[]
+}
+```
+
+- `hash` is the SHA-256 of the item payload. `digest` is the SHA-256 over the
+  sorted lines `key`, `hash` of every item, so the approval binds keys and
+  payloads, including a message identity and version.
+- The grant uses the existing grant API: `grant_type: 'once'`, audience
+  `pods-graph-gate`, `command: ['pods-graph-gate', 'approve', <batch JSON with count and digest>]`,
+  permission `graph.gate:<batch>`, `waits_until` at the expiry. No new claim,
+  endpoint or error format.
+- One round per run of the consumer Pod: expire overdue batches, read the
+  decision of every pending batch, consume an approved grant and hand its items
+  to `gives`, then freeze at most one new batch from the held items.
+- A refused or expired batch ends the stay of its items at the gate with the
+  event `refused` or `expired`. Nothing is handed on.
+- Excluding an item in the app supersedes the batch. Its pending grant is never
+  consumed, the excluded item goes to `excluded` if set, and the remaining items
+  form a new batch with a new grant in the next round.
+- A failure while reading, consuming or requesting a grant sets the batch to
+  `unknown` and blocks the gate. The owner reconciles by discarding the batch,
+  which hands nothing on.
+- A `choose` gate needs no grant: the owner picks one option per held item in
+  the app and the item goes to the channel of that option.
+- Gate decisions are owner commands of the app (`gateExclude`, `gateChoose`,
+  `gateDiscard`). No tool action approves, excludes or chooses.
+
+In channel mode a Pod archives mail only with
+`context.mail.archive.process({ application, mailbox })`. The messages come from
+the consumed batches behind the items the Pod received in this run; each item
+payload must carry `id` and `version`. `prepare` is refused. Before anything
+moves, the grant must be consumed, manually decided by the owner, bound to the
+same digest and not expired, and each message must still have the approved
+version.
+
+| Batch state | Meaning |
+| --- | --- |
+| `preparing` | Frozen, grant not requested yet |
+| `pending` | Awaits the owner's decision |
+| `consuming` | Approved, grant being consumed |
+| `approved` | Grant consumed, items handed on |
+| `denied`, `expired` | Nothing handed on |
+| `superseded` | The owner excluded an item; replaced by a new batch |
+| `unknown` | Outcome unclear; blocks the gate until the owner discards the batch |
+
 ## Storage (migration v26)
 
 ```sql
@@ -222,6 +284,13 @@ CREATE INDEX graph_deliveries_pending ON graph_deliveries(node, state);
 
 CREATE TABLE graph_item_events(id INTEGER PRIMARY KEY AUTOINCREMENT, workflow_id TEXT NOT NULL, workflow_run_id TEXT NOT NULL, key TEXT NOT NULL, node TEXT NOT NULL, outcome TEXT NOT NULL, channel TEXT, reason TEXT, confidence REAL, at INTEGER NOT NULL);
 CREATE INDEX graph_item_events_key ON graph_item_events(workflow_id, key, id);
+```
+
+Migration v27 adds the gate batches:
+
+```sql
+CREATE TABLE graph_gate_batches(id TEXT PRIMARY KEY, workflow_id TEXT NOT NULL, gate TEXT NOT NULL, pod_id TEXT NOT NULL, state TEXT NOT NULL, grant_id TEXT, url TEXT, title TEXT NOT NULL, digest TEXT NOT NULL, expires_at INTEGER NOT NULL, items TEXT NOT NULL, error TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+CREATE INDEX graph_gate_batches_open ON graph_gate_batches(workflow_id, gate, state);
 ```
 
 | Column | Values |
