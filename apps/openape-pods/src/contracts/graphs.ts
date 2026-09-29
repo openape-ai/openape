@@ -32,6 +32,7 @@ export interface GraphDetail {
   waiting: Record<string, number>
   items: { key: string, title: string, outcome: string, node: string }[]
   trace: { key: string, title: string, events: GraphTraceEvent[] } | null
+  traces?: Record<string, GraphTraceEvent[]>
 }
 export interface GraphDiagnostic { level: 'error', code: GraphDiagnosticCode, message: string, node: string | null, channel: string | null }
 /** What the store knows about a member Pod beyond its contract. */
