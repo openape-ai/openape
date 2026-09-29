@@ -4,7 +4,7 @@ import { Cron } from 'croner'
 import { parseSchedule } from './scheduling'
 import type { ScheduleSpec } from './scheduling'
 import { parseGraphChannels, parseGraphGates, parseGraphGroup, parseGraphMode, parseGraphValues } from './graphs'
-import type { GraphChannel, GraphGate, GraphMode, GraphValue } from './graphs'
+import type { GraphChannel, GraphContract, GraphDetail, GraphGate, GraphMode, GraphValue } from './graphs'
 import type { GateBatchView, GateHeldItem } from './gates'
 
 export type WorkflowSchedule = ScheduleSpec | { kind: 'once', at: number } | { kind: 'cron', expression: string, timezone: string }
@@ -15,8 +15,8 @@ export interface WorkflowDefinition extends GraphParts { mail?: MailWorkflowConf
 export type WorkflowNodeState = 'waiting' | 'running' | 'completed' | 'blocked'
 export interface WorkflowNodeView extends WorkflowNode { state: WorkflowNodeState, runId: string | null, reason: string | null, scriptHash: string | null }
 export interface WorkflowRunView { paused: boolean, id: string, workflowId: string, revision: number, state: 'waiting' | 'running' | 'blocked' | 'completed' | 'cancelled', reason: string | null, startedAt: number, finishedAt: number | null, nodes: WorkflowNodeView[] }
-export interface WorkflowView { mailReview?: MailBatchReview | null, workflows: WorkflowDefinition[], runs: WorkflowRunView[], gates?: { batches: GateBatchView[], held: GateHeldItem[] } }
-export type WorkflowCommand = { type: 'mailReview', batchId: string } | { type: 'mailResolve', resolution: MailEffectResolution } | { type: 'list' } | ({ type: 'save', mail?: MailWorkflowConfiguration | null, id: string, revision: number, name: string, nodes: WorkflowNode[], schedule: WorkflowSchedule | null, enabled: boolean } & Partial<GraphParts>) | { type: 'delete', id: string, revision: number } | { type: 'start', id: string, revision: number } | { type: 'retry', runId: string, podId: string } | { type: 'cancel', runId: string } | { type: 'pause', id: string, revision: number, paused: boolean } | { type: 'gateExclude', batchId: string, itemIds: string[] } | { type: 'gateChoose', id: string, gate: string, itemId: string, option: string } | { type: 'gateDiscard', batchId: string }
+export interface WorkflowView { mailReview?: MailBatchReview | null, workflows: WorkflowDefinition[], runs: WorkflowRunView[], gates?: { batches: GateBatchView[], held: GateHeldItem[] }, graph?: GraphDetail | null, contracts?: Record<string, GraphContract | null> }
+export type WorkflowCommand = { type: 'mailReview', batchId: string } | { type: 'mailResolve', resolution: MailEffectResolution } | { type: 'list' } | ({ type: 'save', mail?: MailWorkflowConfiguration | null, id: string, revision: number, name: string, nodes: WorkflowNode[], schedule: WorkflowSchedule | null, enabled: boolean } & Partial<GraphParts>) | { type: 'delete', id: string, revision: number } | { type: 'start', id: string, revision: number } | { type: 'retry', runId: string, podId: string } | { type: 'cancel', runId: string } | { type: 'pause', id: string, revision: number, paused: boolean } | { type: 'gateExclude', batchId: string, itemIds: string[] } | { type: 'gateChoose', id: string, gate: string, itemId: string, option: string } | { type: 'gateDiscard', batchId: string } | { type: 'graph', id: string, key?: string } | { type: 'gateOpen', batchId: string }
 
 const uuid = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value)
 function object(value: unknown): Record<string, unknown> {
@@ -59,7 +59,7 @@ export function parseWorkflowNodes(value: unknown): WorkflowNode[] {
 }
 export function parseWorkflowCommand(value: unknown): WorkflowCommand {
   const item = object(value)
-  const allowed = item.type === 'mailReview' ? ['type', 'batchId'] : item.type === 'mailResolve' ? ['type', 'resolution'] : item.type === 'list' ? ['type'] : item.type === 'save' ? ['type', 'id', 'revision', 'name', 'nodes', 'schedule', 'enabled', 'mail', 'mode', 'groupId', 'channels', 'gates', 'values'] : item.type === 'pause' ? ['type', 'id', 'revision', 'paused'] : item.type === 'start' || item.type === 'delete' ? ['type', 'id', 'revision'] : item.type === 'retry' ? ['type', 'runId', 'podId'] : item.type === 'cancel' ? ['type', 'runId'] : item.type === 'gateExclude' ? ['type', 'batchId', 'itemIds'] : item.type === 'gateChoose' ? ['type', 'id', 'gate', 'itemId', 'option'] : item.type === 'gateDiscard' ? ['type', 'batchId'] : []
+  const allowed = item.type === 'mailReview' ? ['type', 'batchId'] : item.type === 'mailResolve' ? ['type', 'resolution'] : item.type === 'list' ? ['type'] : item.type === 'save' ? ['type', 'id', 'revision', 'name', 'nodes', 'schedule', 'enabled', 'mail', 'mode', 'groupId', 'channels', 'gates', 'values'] : item.type === 'pause' ? ['type', 'id', 'revision', 'paused'] : item.type === 'start' || item.type === 'delete' ? ['type', 'id', 'revision'] : item.type === 'retry' ? ['type', 'runId', 'podId'] : item.type === 'cancel' ? ['type', 'runId'] : item.type === 'gateExclude' ? ['type', 'batchId', 'itemIds'] : item.type === 'gateChoose' ? ['type', 'id', 'gate', 'itemId', 'option'] : item.type === 'gateDiscard' || item.type === 'gateOpen' ? ['type', 'batchId'] : item.type === 'graph' ? ['type', 'id', 'key'] : []
   if (!allowed.length) throw new Error('Unsupported workflow command')
   keys(item, allowed)
   if (item.type === 'mailReview') {
@@ -68,9 +68,17 @@ export function parseWorkflowCommand(value: unknown): WorkflowCommand {
   }
   if (item.type === 'mailResolve') return { type: 'mailResolve', resolution: parseMailEffectResolution(item.resolution) }
   if (item.type === 'list') return { type: 'list' }
+  if (item.type === 'gateOpen') {
+    if (!uuid(item.batchId)) throw new Error('Invalid gate decision')
+    return { type: 'gateOpen', batchId: item.batchId }
+  }
   if (item.type === 'gateExclude' || item.type === 'gateDiscard') {
     if (!uuid(item.batchId) || (item.type === 'gateExclude' && (!Array.isArray(item.itemIds) || !item.itemIds.length || item.itemIds.length > 30 || !item.itemIds.every(uuid)))) throw new Error('Invalid gate decision')
     return item.type === 'gateDiscard' ? { type: 'gateDiscard', batchId: item.batchId } : { type: 'gateExclude', batchId: item.batchId, itemIds: [...item.itemIds as string[]] }
+  }
+  if (item.type === 'graph') {
+    if (!uuid(item.id) || (item.key !== undefined && (typeof item.key !== 'string' || !item.key || item.key.length > 200))) throw new Error('Invalid workflow run identity')
+    return { type: 'graph', id: item.id, ...(item.key === undefined ? {} : { key: item.key }) }
   }
   if (item.type === 'gateChoose') {
     if (!uuid(item.id) || !uuid(item.itemId) || typeof item.gate !== 'string' || !/^[a-z][a-z0-9-]{0,31}$/.test(item.gate) || typeof item.option !== 'string' || !/^[a-z][a-z0-9-]{0,31}$/.test(item.option)) throw new Error('Invalid gate decision')
@@ -121,6 +129,10 @@ export function parseWorkflowView(value: unknown): WorkflowView {
       if (!['waiting', 'running', 'completed', 'blocked'].includes(node.state as string) || (node.runId !== null && !uuid(node.runId)) || (node.reason !== null && typeof node.reason !== 'string') || (node.scriptHash !== null && (typeof node.scriptHash !== 'string' || !/^[a-f0-9]{64}$/.test(node.scriptHash)))) throw new Error('Invalid workflow node state')
       return { podId: node.podId, after: node.after, handoff: node.handoff }
     }))
+  }
+  if (item.graph !== undefined && item.graph !== null) {
+    const graph = object(item.graph)
+    if (!uuid(graph.workflowId) || !Array.isArray(graph.edges) || graph.edges.length > 4096 || !Array.isArray(graph.diagnostics) || !Array.isArray(graph.counts) || !Array.isArray(graph.items) || graph.items.length > 200) throw new Error('Invalid graph view')
   }
   if (item.gates !== undefined) {
     const gates = object(item.gates)
