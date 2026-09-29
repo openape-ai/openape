@@ -5,8 +5,9 @@ any engine code exists. It belongs to
 [issue 1407](https://repos.openape.ai/patrick/monorepo/issues/1407) and the
 [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3PF2RKZPA2V0AQ2SJTXD6DX).
 Definition types, derived edges, diagnostics and storage exist since migration
-v26; the script contract, `context.items` and `context.emit` since M2. A channel-mode graph can be saved but neither enabled nor started until the
-item flow exists. Sequence workflows are described in
+v26, the script contract, `context.items` and `context.emit` since M2, and the
+item flow since M3. A channel-mode graph with any diagnostic can be saved but
+neither enabled nor started. Sequence workflows are described in
 [workflows.md](workflows.md) and do not change.
 
 A change to this contract needs a new entry in the plan's decision log.
@@ -188,6 +189,20 @@ export interface GraphEmit {
 - Emitting the same key to the same channel twice in one run is refused.
 - A node without `takes` is a source and starts on the graph schedule.
 - Graph values appear in `context.variables` next to Pod variables.
+
+## Item flow
+
+- A node is ready when every member Pod that gives one of its taken channels has
+  completed in this run. Gates never run; what they give arrives across runs.
+- A node that takes channels and has no pending delivery is set to `completed`
+  with the reason `No items to process`. No run starts and no model is called.
+- Emits are buffered during the run. When the run completes, one transaction
+  marks the delivered items `done`, writes the emitted items and creates one
+  pending delivery per consumer. Any other outcome writes no item, leaves every
+  delivery pending and records `failed` for each delivered item.
+- One run receives at most 500 items and at most 200 KiB of item JSON, because
+  the runner reply is limited to 256 KiB. The rest stays pending.
+- Graph values are merged into `context.variables`.
 
 ## Storage (migration v26)
 
