@@ -1,5 +1,14 @@
 # Active work
 
+## Pods graphs — issue 1407
+
+[Issue 1407](https://repos.openape.ai/patrick/monorepo/issues/1407) tracks the
+[approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3PF2RKZPA2V0AQ2SJTXD6DX)
+for channel-mode graphs. Own checkout `openape-monorepo.worktrees/pod-graphs`,
+branch `feature/issue-1407-pod-graphs`, base `f93b91a9`. M0 froze the v1 contract
+in `apps/openape-pods/docs/graphs.md`; no product code exists yet. Next step: M1
+(contracts and storage, schema 26), one milestone per pull request.
+
 ## Pods infrastructure recovery — issue 1405
 
 [Issue 1405](https://repos.openape.ai/patrick/monorepo/issues/1405) is delivered via

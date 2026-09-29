@@ -1,0 +1,274 @@
+# Graphs: frozen v1 contract
+
+This document freezes the types, names and limits of channel-mode graphs before
+any engine code exists. It belongs to
+[issue 1407](https://repos.openape.ai/patrick/monorepo/issues/1407) and the
+[approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3PF2RKZPA2V0AQ2SJTXD6DX).
+Nothing described here is implemented yet. Sequence workflows are described in
+[workflows.md](workflows.md) and do not change.
+
+A change to this contract needs a new entry in the plan's decision log.
+
+## Terms
+
+| Term | Meaning |
+| --- | --- |
+| Pod | One sandboxed script with its own rights |
+| Channel | A named stream of items inside one graph |
+| Item | One unit of work with a stable key, for example one email |
+| Contract | The channels a Pod takes and gives, plus a short summary |
+| Gate | A node without a script that holds items until the owner decides |
+| Edge | Derived wherever one node gives a channel that another node takes |
+| Node | A member Pod or a gate |
+
+Edges and node kinds are derived. They are never stored and never declared.
+
+## Names
+
+| Name | Pattern | Length |
+| --- | --- | --- |
+| Channel | `^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){0,4}$` | at most 64 |
+| Gate key | `^[a-z][a-z0-9-]*$` | at most 32 |
+| Option key | `^[a-z][a-z0-9-]*$` | at most 32 |
+| Item key | printable characters, no control characters | 1 to 200 |
+| Graph value name | the existing credential alias rule used by Pod variables | unchanged |
+
+A node is identified by the Pod UUID, or by `gate:<key>` for a gate. Channel
+names come only from contracts and the graph definition. Item data can never
+become a channel name.
+
+## Definition types
+
+```ts
+export type GraphMode = 'sequence' | 'channels'
+
+export interface GraphChannel {
+  name: string
+  title: string // 1 to 60 characters
+  fields: string[] // documented payload field names, at most 16, each at most 40 characters
+}
+
+export interface GraphGateOption { key: string, title: string, channel: string }
+
+export type GraphGate
+  = | { key: string, title: string, kind: 'approve', takes: string, gives: string, excluded: string | null }
+    | { key: string, title: string, kind: 'choose', takes: string, options: GraphGateOption[] } // 2 to 8 options
+
+export interface GraphValue { name: string, value: string, revision: number }
+
+export interface GraphContract {
+  takes: string[] // at most 8
+  gives: string[] // at most 16
+  summary: string // 1 to 40 characters
+}
+
+export type GraphNodeKind = 'gate' | 'effect' | 'decision' | 'code'
+
+export interface GraphEdge { from: string, to: string, channel: string }
+
+export interface GraphDiagnostic {
+  level: 'error'
+  code: GraphDiagnosticCode
+  message: string
+  node: string | null
+  channel: string | null
+}
+```
+
+`WorkflowDefinition` gains five fields. Existing records read as
+`mode: 'sequence'`, `groupId: null` and three empty lists.
+
+```ts
+export interface WorkflowDefinition {
+  // existing fields unchanged
+  mode: GraphMode
+  groupId: string | null
+  channels: GraphChannel[]
+  gates: GraphGate[]
+  values: GraphValue[]
+}
+```
+
+In channel mode `nodes[].after` must be empty and `nodes[].handoff` must be
+`false`. The member list still uses `nodes`, so one Pod reservation covers both
+modes.
+
+## Derived edges and node kinds
+
+```ts
+export function deriveEdges(members: { podId: string, contract: GraphContract }[], gates: GraphGate[]): GraphEdge[]
+export function diagnoseGraph(definition: WorkflowDefinition, contracts: Record<string, GraphContract | null>): GraphDiagnostic[]
+```
+
+An edge exists for every pair of nodes where the first gives a channel and the
+second takes it. A gate of kind `approve` gives `gives` and, if set, `excluded`.
+A gate of kind `choose` gives every option channel.
+
+The node kind is the first match:
+
+1. `gate` if the node is a gate.
+2. `effect` if the Pod holds a read-write directory, an archive or draft right,
+   or an HTTP destination that allows a method other than GET.
+3. `decision` if its script manifest declares `jev.evaluate`.
+4. `code` otherwise.
+
+## Diagnostics
+
+Every diagnostic has level `error`. A graph with any diagnostic cannot be
+enabled.
+
+| Code | Raised when |
+| --- | --- |
+| `channel-without-producer` | A taken channel has no node that gives it |
+| `channel-without-consumer` | A given channel has no node that takes it |
+| `channel-undeclared` | A contract or gate names a channel missing from the graph's channel list |
+| `emit-undeclared` | A script emits a channel missing from its contract |
+| `cycle` | The derived edges contain a cycle |
+| `archive-without-gate` | A Pod with an archive right has no gate among its ancestors |
+| `summary-invalid` | The contract has no summary or one longer than 40 characters |
+| `contract-missing` | A member Pod's validated script exports no contract |
+| `member-elsewhere` | The Pod is a member of another graph or lives in another group |
+| `value-name-conflict` | A graph value and a Pod variable of a member share a name |
+
+`contract-missing` and `value-name-conflict` are stated in the plan's text but
+were not rows of its table; they are listed here so every refusal has a code.
+
+## Script contract and runtime
+
+```js
+export const contract = {
+  takes: ['mail.category.invoice'],
+  gives: ['invoice.filed'],
+  summary: 'PDF in Buchhaltung',
+}
+```
+
+```ts
+export interface GraphItem {
+  key: string
+  channel: string
+  data: Record<string, unknown>
+}
+
+export interface GraphEmit {
+  key: string
+  data: Record<string, unknown>
+  reason?: string // at most 500 characters
+  confidence?: number // 0 to 1
+}
+
+// context.items: GraphItem[]
+// context.emit(channel: string, item: GraphEmit): Promise<void>
+```
+
+- A script without `contract` behaves exactly as today and cannot join a
+  channel-mode graph.
+- `context.items` holds the pending deliveries for this node, oldest first, at
+  most 500 per run. The rest stays pending for the next run.
+- `context.emit` is the operation `graph.emit`. It is refused for a channel
+  outside `contract.gives`, for an oversized payload or reason, and beyond 500
+  emits per run.
+- Emitting the same key to the same channel twice in one run is refused.
+- A node without `takes` is a source and starts on the graph schedule.
+- Graph values appear in `context.variables` next to Pod variables.
+
+## Storage (migration v26)
+
+```sql
+ALTER TABLE workflows ADD COLUMN mode TEXT NOT NULL DEFAULT 'sequence';
+ALTER TABLE workflows ADD COLUMN group_id TEXT;
+
+CREATE TABLE workflow_channels(workflow_id TEXT NOT NULL, name TEXT NOT NULL, title TEXT NOT NULL, fields TEXT NOT NULL, PRIMARY KEY(workflow_id, name));
+CREATE TABLE workflow_gates(workflow_id TEXT NOT NULL, key TEXT NOT NULL, definition TEXT NOT NULL, PRIMARY KEY(workflow_id, key));
+CREATE TABLE workflow_values(workflow_id TEXT NOT NULL, name TEXT NOT NULL, value TEXT NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY(workflow_id, name));
+
+CREATE TABLE graph_items(id TEXT PRIMARY KEY, workflow_id TEXT NOT NULL, workflow_run_id TEXT NOT NULL, key TEXT NOT NULL, channel TEXT NOT NULL, node TEXT NOT NULL, payload TEXT NOT NULL, created_at INTEGER NOT NULL);
+CREATE INDEX graph_items_key ON graph_items(workflow_id, key);
+
+CREATE TABLE graph_deliveries(item_id TEXT NOT NULL, node TEXT NOT NULL, state TEXT NOT NULL, workflow_run_id TEXT, updated_at INTEGER NOT NULL, PRIMARY KEY(item_id, node));
+CREATE INDEX graph_deliveries_pending ON graph_deliveries(node, state);
+
+CREATE TABLE graph_item_events(id INTEGER PRIMARY KEY AUTOINCREMENT, workflow_id TEXT NOT NULL, workflow_run_id TEXT NOT NULL, key TEXT NOT NULL, node TEXT NOT NULL, outcome TEXT NOT NULL, channel TEXT, reason TEXT, confidence REAL, at INTEGER NOT NULL);
+CREATE INDEX graph_item_events_key ON graph_item_events(workflow_id, key, id);
+```
+
+| Column | Values |
+| --- | --- |
+| `graph_deliveries.state` | `pending`, `done` |
+| `graph_item_events.outcome` | `emitted`, `consumed`, `held`, `approved`, `excluded`, `chosen`, `refused`, `expired`, `changed`, `failed` |
+
+An item's trace is every `graph_item_events` row with its `workflow_id` and
+`key`, ordered by `id`.
+
+## Limits
+
+| Subject | Limit |
+| --- | --- |
+| Channels per graph | 32 |
+| Gates per graph | 8 |
+| Member Pods per graph | 32 (unchanged) |
+| Graph values | 32 entries, 16,384 characters each |
+| Item payload | 1,024 bytes of JSON |
+| Emit reason | 500 characters |
+| Items delivered to one run | 500 |
+| Emits per run | 500 |
+| Approve batch | 30 items, 12 hours, 4 pending batches per gate |
+
+Payloads hold metadata only: sender, subject, identifiers, file path. They never
+hold message bodies or attachments.
+
+The payload limit is 1,024 bytes instead of the 8 KiB first proposed. The
+measurement below shows why.
+
+## Volume measurement
+
+Measured on 29 September 2026 at commit `f93b91a9` with a synthetic run of 500
+items through a chain of 5 nodes (2,000 items, 2,000 deliveries, 2,500 events),
+using the real `PodDatabase`, `CentralProjection.snapshot`, `splitSnapshot` and
+`partBatches`. One transaction per emit.
+
+| Payload | Reason | Database growth | Central publication | Parts | Write time | Snapshot time |
+| --- | --- | --- | --- | --- | --- | --- |
+| 300 B | 80 | 2.5 MiB | 2.4 MiB | 407 | 196 ms | 19 ms |
+| 1,024 B | 200 | 4.4 MiB | 4.1 MiB | 407 | 200 ms | 20 ms |
+| 2,048 B | 500 | 10.4 MiB | 6.8 MiB | 407 | 251 ms | 26 ms |
+| 8,192 B | 500 | 19.1 MiB | 18.5 MiB | 407 | 391 ms | 56 ms |
+
+Consequences:
+
+- Run time is not a constraint.
+- The central snapshot is a full read of every listed table with a hard cap of
+  32 MiB for the whole workspace. At 8 KiB payloads two such runs exceed it. At
+  1,024 bytes eight runs do.
+- Tables are published in chunks of 16 rows by row position. Appending uploads
+  only new chunks. Deleting old rows shifts every later chunk, so retention
+  re-uploads the remaining rows of that table.
+- Item tables therefore need their own retention and cannot rely on the 50-run
+  rule alone. v1 keeps items, deliveries and events of the 3 most recent runs
+  per graph, plus every item that still has a pending delivery.
+
+## Reply drafts
+
+Reply drafts are not part of the v1 contract. Scripts can invoke only granted
+commands whose adapter action is `read`, `list` or `get`, so no draft can be
+created today. Two write paths were compared on 29 September 2026.
+
+| | Provider request from the script | Granted draft command |
+| --- | --- | --- |
+| Works today | Yes, mechanically | No, refused by the read-only rule |
+| Who holds the mailbox token | The script | The application's encrypted state |
+| Token refresh | Not possible for a script | Done by the mail program |
+| Replay protection | Effect ledger | Effect ledger, to be wired for commands |
+| Draft content in the central publication | Only avoided with a digest receipt, which also drops the draft id | Receipt holds the draft id only |
+
+Recommendation: a granted draft command. The adapter action `draft` is admitted
+for scripts as the single addition to `read`, `list` and `get`. Every call is
+wrapped in the effect ledger under the operation `mail.draft` with a required
+key, and its receipt is the created draft id. An interrupted call blocks the Pod
+until the owner reconciles it, exactly like an uncertain HTTP delivery. Sending
+mail stays unavailable to scripts.
+
+This needs three additions that do not exist yet: the admitted action, the
+ledger wrapper with owner reconciliation for an operation other than
+`http.request`, and a `draft` operation in the mail program. It uses the existing
+program grants and introduces no new grant claim, endpoint or error format.
