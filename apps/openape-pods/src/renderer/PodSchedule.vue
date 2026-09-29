@@ -59,6 +59,9 @@ export default defineComponent({
     <p class="muted">
       {{ t("Schedules run while Pods is open. Missed times produce one catch-up. Pausing stops new automatic runs; an existing run can finish.") }}
     </p>
+    <p v-if="view?.retry" role="status">
+      {{ t('Waiting for service recovery. Next attempt: {time}', { time: dateTime(view.retry.at) }) }}
+    </p>
     <form @submit.prevent="save">
       <label for="schedule-repeat">{{ t("Repeat") }}</label><select id="schedule-repeat" v-model="kind" :disabled="busy">
         <option value="interval">

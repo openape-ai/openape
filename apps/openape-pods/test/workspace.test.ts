@@ -71,3 +71,19 @@ it('preserves the creation form draft without starting a chat', async () => {
   }
   finally { wrapper.unmount() }
 })
+
+it('shows automatic recovery in the shared Overview and schedule settings without offering another run', async () => {
+  const bridge = installWorkspace()
+  const schedule = await bridge.scheduling({ type: 'list', podId: '00000000-0000-4000-8000-000000000001' })
+  const history = await bridge.runs({ type: 'list', podId: '00000000-0000-4000-8000-000000000001' })
+  history.runs[0] = { ...history.runs[0]!, state: 'failed', error: 'Permission service temporarily unavailable' }
+  installWorkspace({ scheduling: async () => ({ ...schedule, pending: 1, retry: { at: Date.UTC(2026, 8, 29, 8), attempt: 2, error: 'Permission service temporarily unavailable' } }), runs: async () => history })
+  const wrapper = mount(App, { props: { initialPodId: '00000000-0000-4000-8000-000000000001' } })
+  await flushPromises()
+  expect(wrapper.text()).toContain('Waiting for service recovery. Next attempt:')
+  expect(wrapper.text()).not.toContain('Prepare retry')
+  expect(wrapper.findAll('button').find(button => button.text() === 'Run now')!.attributes('disabled')).toBeDefined()
+  await wrapper.get('#tab-Settings').trigger('click'); await flushPromises()
+  expect(wrapper.get('.schedule-panel [role="status"]').text()).toContain('Waiting for service recovery. Next attempt:')
+  wrapper.unmount()
+})

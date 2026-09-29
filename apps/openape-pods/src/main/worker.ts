@@ -1,3 +1,5 @@
+import { InfrastructureError, retryInfrastructure } from '../contracts/infrastructure'
+import type { InfrastructureFailure } from '../contracts/infrastructure'
 import { MailArchiveService } from './mail/archive/service'
 import { ArchiveStore } from './mail/archive/store'
 import { handleMailArchive } from './mail/archive/handler'
@@ -142,9 +144,9 @@ export class FixtureWorker {
       if (message && typeof message === 'object' && 'service' in message) {
         const request = message.service as ServiceRequest
         const respond = async () => {
-          let reply: { id: string, value?: unknown, error?: string }
+          let reply: { id: string, value?: unknown, error?: string, infrastructure?: InfrastructureFailure }
           try { reply = { id: request.id, value: await this.executeService(request) } }
-          catch (error) { reply = { id: request.id, error: error instanceof Error ? error.message : 'Mail broker failed' } }
+          catch (error) { reply = { id: request.id, error: error instanceof Error ? error.message : 'Mail broker failed', ...(error instanceof InfrastructureError && ['http', 'shell', 'tool'].includes(request.kind ?? 'tool') ? { infrastructure: error.failure } : {}) } }
           if (this.child === child) child.postMessage({ serviceReply: reply })
         }
         void respond().catch((error: unknown) => { console.error('Broker response failed', error); child.kill() })
@@ -547,7 +549,7 @@ export class FixtureWorker {
         await check(); controller.signal.throwIfAborted()
         const monitoring = new AbortController()
         const monitor = (async () => {
-          try { while (!monitoring.signal.aborted) { await delay(1000, undefined, { signal: monitoring.signal }); await authority.assertActive(assignment.grantId, monitoring.signal) } }
+          try { while (!monitoring.signal.aborted) { await delay(1000, undefined, { signal: monitoring.signal }); await retryInfrastructure(() => authority.assertActive(assignment.grantId, monitoring.signal), monitoring.signal, async (retry) => { if (!monitoring.signal.aborted) await this.dispatch({ serviceCheck: { scope, infrastructure: retry } }) }) } }
           catch (error) {
             if (!monitoring.signal.aborted) {
               console.error('Pod execution authority lost', error)

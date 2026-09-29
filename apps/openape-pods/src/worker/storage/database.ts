@@ -37,7 +37,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 24
+export const schemaVersion = 25
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -291,6 +291,13 @@ CREATE INDEX accepted_events_run ON accepted_events(run_id);
 CREATE INDEX workflow_nodes_run ON workflow_nodes(run_id);
 CREATE TABLE run_deletion_jobs(run_id TEXT PRIMARY KEY,error TEXT);
 PRAGMA user_version=24;`)
+      }
+      if (version < 25) {
+        this.db.exec(`
+ALTER TABLE run_inputs ADD COLUMN retry_at INTEGER;
+ALTER TABLE run_inputs ADD COLUMN retry_attempt INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE run_inputs ADD COLUMN retry_epoch INTEGER;
+PRAGMA user_version=25;`)
       }
     })
   }

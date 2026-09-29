@@ -1,5 +1,30 @@
 # Active work
 
+## Pods infrastructure recovery — issue 1405
+
+[Issue 1405](https://repos.openape.ai/patrick/monorepo/issues/1405),
+[approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3N9DHVZSN98TPTDTE2NFGWJ).
+Own checkout `openape-monorepo.worktrees/pods-infrastructure-retry`, branch
+`bugfix/issue-1405-pods-infrastructure-retry`, base
+`c43d4830fb2f983ba5b2b0cb0584e097fa3976d8`.
+
+Trusted transient authorization/read errors now retry the same operation with
+2–60 second backoff. Pre-script outages release capacity with persisted retry
+metadata (schema 25). Script execution, checkpoints and ambiguous external effects
+prevent whole-run replay. Owner pause/cancel and changed permissions stop retries.
+JWKS/consume transport hooks preserve mandatory signature and grant validation.
+The mandatory commit audit also requires the targeted fast-uri 4.1.4 security
+patch; its September 2 release satisfies the seven-day quarantine.
+
+Verified: full monorepo lint/typecheck, Pods build, 672 Pods tests, 257 grant tests,
+632 apes tests (eight existing skips), 13 native dispatcher cases and seven
+browser cases. [Private Test Runs evidence](https://report.openape.ai/r/uTjyOS6SnQZByQ5ii8gZpTAO)
+contains the inspected German retry-state screenshot. zaz was recovered through
+the supported command and continues without blocked inputs; these checks do not
+claim the new binary is installed. Next: review the native PR and exact-source
+external CI, merge, run the full deployment gate, sign/notarize and verify the
+installed app with a paired app/profile rollback backup.
+
 ## Pods browser/desktop visual parity — issue 1404
 
 [Issue 1404](https://repos.openape.ai/patrick/monorepo/issues/1404) is delivered via
