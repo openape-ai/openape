@@ -14,6 +14,25 @@ export interface GraphEmit { key: string, data: Record<string, unknown>, reason?
 export type GraphNodeKind = 'gate' | 'effect' | 'decision' | 'code'
 export interface GraphEdge { from: string, to: string, channel: string }
 export type GraphDiagnosticCode = 'channel-without-producer' | 'channel-without-consumer' | 'channel-undeclared' | 'emit-undeclared' | 'cycle' | 'archive-without-gate' | 'summary-invalid' | 'contract-missing' | 'member-elsewhere' | 'value-name-conflict' | 'gate-consumer'
+/** A right of a Pod as the inspector shows it: a fixed label and the name, path or origin it applies to. */
+export interface GraphRight { label: string, target: string }
+/** One step of one item through the graph, as the owner reads it. */
+export interface GraphTraceEvent { node: string, outcome: string, channel: string | null, reason: string | null, confidence: number | null, at: number }
+export interface GraphEdgeCount { from: string, to: string, channel: string, count: number }
+/** Everything the graph view shows beyond the saved definition. Derived on request, never stored. */
+export interface GraphDetail {
+  workflowId: string
+  contracts: Record<string, GraphContract | null>
+  edges: GraphEdge[]
+  nodeKinds: Record<string, GraphNodeKind>
+  diagnostics: GraphDiagnostic[]
+  rights: Record<string, GraphRight[]>
+  lastRun: { id: string, startedAt: number, state: string } | null
+  counts: GraphEdgeCount[]
+  waiting: Record<string, number>
+  items: { key: string, title: string, outcome: string, node: string }[]
+  trace: { key: string, title: string, events: GraphTraceEvent[] } | null
+}
 export interface GraphDiagnostic { level: 'error', code: GraphDiagnosticCode, message: string, node: string | null, channel: string | null }
 /** What the store knows about a member Pod beyond its contract. */
 export interface GraphMemberFacts { archive?: boolean, elsewhere?: boolean, emits?: string[], variables?: string[] }
