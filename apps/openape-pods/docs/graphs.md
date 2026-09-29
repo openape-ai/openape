@@ -5,7 +5,7 @@ any engine code exists. It belongs to
 [issue 1407](https://repos.openape.ai/patrick/monorepo/issues/1407) and the
 [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3PF2RKZPA2V0AQ2SJTXD6DX).
 Definition types, derived edges, diagnostics and storage exist since migration
-v26. A channel-mode graph can be saved but neither enabled nor started until the
+v26; the script contract, `context.items` and `context.emit` since M2. A channel-mode graph can be saved but neither enabled nor started until the
 item flow exists. Sequence workflows are described in
 [workflows.md](workflows.md) and do not change.
 
@@ -171,6 +171,15 @@ export interface GraphEmit {
 
 - A script without `contract` behaves exactly as today and cannot join a
   channel-mode graph.
+- The runtime announces the exported contract once, before `run` starts, with
+  the operation `graph.contract`. The reply is the list of items for this run.
+  Validation answers with two synthetic items per taken channel (`synthetic-1`,
+  `synthetic-2`, empty `data`). A run refuses a contract that differs from the
+  validated one.
+- An invalid contract (unknown field, invalid channel name, missing or overlong
+  `summary`) fails validation; the script is not stored.
+- Any refused emit fails validation, even when the script catches the refusal.
+  The validated contract is stored in the script manifest as `contract`.
 - `context.items` holds the pending deliveries for this node, oldest first, at
   most 500 per run. The rest stays pending for the next run.
 - `context.emit` is the operation `graph.emit`. It is refused for a channel
