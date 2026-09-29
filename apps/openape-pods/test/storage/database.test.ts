@@ -127,10 +127,13 @@ it('migrates version 23 receipts intact and allows detaching only completed effe
     DROP INDEX runs_retention;
     DROP INDEX accepted_events_run;
     DROP INDEX workflow_nodes_run;
+    ALTER TABLE run_inputs DROP COLUMN retry_at;
+    ALTER TABLE run_inputs DROP COLUMN retry_attempt;
+    ALTER TABLE run_inputs DROP COLUMN retry_epoch;
     PRAGMA user_version=23;
   `)
   store = reopen(store)
-  expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(24)
+  expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(25)
   expect(store.db.prepare('SELECT * FROM effect_ledger').all()).toEqual(receipts)
   store.db.prepare('UPDATE effect_ledger SET run_id=NULL').run()
   store.db.prepare('DELETE FROM runs').run()

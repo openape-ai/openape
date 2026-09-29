@@ -99,3 +99,17 @@ it.each(['en', 'de'] as const)('keeps the deletion review readable in the centra
   expect(review.element.getBoundingClientRect().width).toBeGreaterThan(250)
   await page.screenshot({ path: screenshotPath(`pod-deletion-${language}.png`) })
 })
+
+it('shows automatic infrastructure recovery in the narrow German schedule', async () => {
+  const fixture = centralFixture()
+  fixture.view.scheduling.retry = { at: Date.UTC(2026, 8, 29, 8), attempt: 2, error: 'Permission service temporarily unavailable' }
+  applyLanguage('de'); document.documentElement.style.colorScheme = 'dark'
+  await page.viewport(560, 1600)
+  wrapper = mount(CentralWorkspace, { attachTo: document.body, props: { client: fixture.client } })
+  await flushPromises(); await wrapper.find('.central-pod').trigger('click'); await flushPromises()
+  await wrapper.findAll('.central-tabs button').find(button => button.text() === 'Einstellungen')!.trigger('click'); await flushPromises()
+  expect(wrapper.text()).toContain('Warte auf den Dienst. Nächster Versuch:')
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(560)
+  await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+  await page.screenshot({ path: screenshotPath('infrastructure-retry-de-dark.png') })
+})

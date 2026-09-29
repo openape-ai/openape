@@ -1,3 +1,4 @@
+import { InfrastructureError, infrastructureFailure } from '../../contracts/infrastructure'
 import { randomUUID } from 'node:crypto'
 import type { ServiceScope } from '../../contracts/services'
 
@@ -6,11 +7,11 @@ export class MailBridge {
   constructor(private readonly send: (value: unknown) => void) {}
   accept(value: unknown): void {
     if (!value || typeof value !== 'object') throw new Error('Invalid mail broker reply')
-    const reply = value as { id?: string, error?: string, value?: unknown }
+    const reply = value as { id?: string, error?: string, value?: unknown, infrastructure?: unknown }
     const pending = reply.id ? this.pending.get(reply.id) : undefined
     if (!pending || !reply.id) throw new Error('Unexpected mail broker reply')
     this.pending.delete(reply.id)
-    if (reply.error) pending.reject(new Error(reply.error))
+    if (reply.error) pending.reject(reply.infrastructure ? new InfrastructureError(infrastructureFailure(reply.infrastructure)) : new Error(reply.error))
     else pending.resolve(reply.value)
   }
 

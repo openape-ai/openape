@@ -66,7 +66,7 @@ it('adopts the current schema repeatedly without credentials or local process le
   const { store, projection, actor, pod } = fixture()
   const first = projection.snapshot(actor.owner)
   expect(first.workspace.pods[0]?.id).toBe(pod.id)
-  expect(first.archive.schema).toBe(24)
+  expect(first.archive.schema).toBe(25)
   expect(Object.keys(first.archive.tables)).not.toContain('connections')
   expect(Object.keys(first.archive.tables)).not.toContain('run_leases')
   expect(first).toEqual(projection.snapshot(actor.owner))

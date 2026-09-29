@@ -1,3 +1,4 @@
+import { transientNetwork, transientResponse } from '../../contracts/infrastructure'
 import { createPrivateKey, randomUUID, sign } from 'node:crypto'
 import type { HttpAuthentication } from '../../contracts/http'
 import { publicHttps } from './http'
@@ -20,13 +21,19 @@ export class DdisaAgentTokens {
     const issuedAt = Math.floor(this.now() / 1000)
     const unsigned = `${encode({ alg: 'EdDSA', typ: 'JWT' })}.${encode({ iss: authentication.subject, sub: authentication.subject, aud: `${authentication.issuer}/token`, jti: randomUUID(), iat: issuedAt, exp: issuedAt + 300 })}`
     const assertion = `${unsigned}.${sign(null, Buffer.from(unsigned), createPrivateKey(await readKey())).toString('base64url')}`
-    const response = await this.transport(`${authentication.issuer}/token`, {
-      method: 'POST',
-      redirect: 'error',
-      signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]),
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ grant_type: 'client_credentials', client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer', client_assertion: assertion }),
-    })
+    let response: Response
+    try {
+      response = await this.transport(`${authentication.issuer}/token`, {
+        method: 'POST',
+        redirect: 'error',
+        signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]),
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ grant_type: 'client_credentials', client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer', client_assertion: assertion }),
+      })
+    }
+    catch (error) { transientNetwork(error, 'authorization', signal) }
+    try { transientResponse(response, 'authorization') }
+    catch (error) { await response.body?.cancel(); throw error }
     if (!response.ok) throw new Error(`DDISA agent authentication failed (${response.status})`)
     let reply: { access_token?: unknown, expires_in?: unknown }
     try { reply = await response.json() as typeof reply }
