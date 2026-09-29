@@ -184,3 +184,105 @@ immutable ID and destination. A concurrent change between GET and POST remains
 a provider limitation, disclosed on the grant. No atomic version guarantee is
 claimed. Neither preview nor triage moves mail. Manual example runs preview;
 only scheduled polling can act on a separately approved concrete mail batch.
+
+## Graphs: workflows in channel mode
+
+A workflow has a `mode`. `sequence` is everything described above and does not
+change. `channels` turns the workflow into a graph: every member Pod exports a
+contract, and the connections follow from what the Pods take and give. The
+frozen contract with all types, limits and storage is [graphs.md](graphs.md).
+
+| | Sequence | Channels |
+| --- | --- | --- |
+| Order | `after` per node | derived from `takes` and `gives` |
+| Data between Pods | one output per predecessor (`handoff`) | items on named channels |
+| Human decision | none | gates |
+| Mail rules (`mail`) | supported | refused; mail moves only behind an approve gate |
+| Trace | per node | per item |
+
+### Tool actions
+
+| Action | Graph behaviour |
+| --- | --- |
+| `saveWorkflow` | The definition adds `mode`, `groupId`, `channels`, `gates` and `values` |
+| `inspectWorkflow` | Returns `contracts`, `edges`, `nodeKinds` and `diagnostics` for a graph |
+| `setGraphValue` | Changes one value of the selected graph; the graph revision advances |
+| `runWorkflow` | Refused while the graph has a diagnostic |
+
+There is no action that approves a gate, excludes an item or chooses an option.
+Those are owner decisions: approval at the identity provider, the other two in
+the app.
+
+### Worked example: email management
+
+One graph per company, in the group of that company.
+
+```mermaid
+flowchart LR
+  intake[Intake] -- mail.open --> triage[Triage]
+  triage -- mail.useful --> categorise[Categorisation]
+  triage -- mail.newsletter --> batch{{Newsletter batch}}
+  triage -- mail.unsure --> review{{Review}}
+  review -- mail.useful --> categorise
+  review -- mail.newsletter --> batch
+  batch -- mail.approved --> archive[Archive]
+  batch -- mail.kept --> categorise
+  categorise -- mail.category.invoice --> invoices[Invoice filing]
+  categorise -- mail.category.other --> memory[Memory]
+  invoices -- invoice.filed --> memory
+```
+
+```json
+{
+  "type": "save", "id": "<new UUID>", "revision": 0, "name": "E-Mail-Management",
+  "mode": "channels", "groupId": "<group UUID>", "schedule": null, "enabled": false,
+  "nodes": [{ "podId": "<intake>", "after": [], "handoff": false }],
+  "channels": [
+    { "name": "mail.open", "title": "New mail", "fields": ["id", "version", "sender", "subject"] },
+    { "name": "mail.newsletter", "title": "Newsletter", "fields": ["id", "version", "sender", "subject"] }
+  ],
+  "gates": [
+    { "key": "newsletter-batch", "title": "Newsletter-Sammelfreigabe", "kind": "approve", "takes": "mail.newsletter", "gives": "mail.approved", "excluded": "mail.kept" },
+    { "key": "review", "title": "Prüfen", "kind": "choose", "takes": "mail.unsure", "options": [
+      { "key": "useful", "title": "Nützlich", "channel": "mail.useful" },
+      { "key": "newsletter", "title": "Newsletter", "channel": "mail.newsletter" }
+    ] }
+  ],
+  "values": [{ "name": "whitelist", "value": "partner@example.test", "revision": 0 }]
+}
+```
+
+The triage Pod shows the routing rule of trust invariant 3: below its threshold
+an item counts as useful or goes to review, never into the archive batch.
+
+```js
+export const contract = {
+  takes: ['mail.open'],
+  gives: ['mail.useful', 'mail.newsletter', 'mail.unsure'],
+  summary: 'Newsletter oder nützlich',
+}
+
+export async function run(context) {
+  const threshold = Number(context.variables.threshold)
+  for (const item of context.items) {
+    const result = await context.jev.evaluate({ state: item.data, questions: { newsletter: { type: 'noul', instructions: 'Is this a newsletter or bulk mail?' } } })
+    const probability = result.answers.newsletter.noul
+    const channel = probability >= threshold ? 'mail.newsletter' : probability <= 1 - threshold ? 'mail.useful' : 'mail.unsure'
+    await context.emit(channel, { key: item.key, data: item.data, reason: 'Newsletter probability', confidence: probability })
+  }
+  return { status: 'completed', summary: `${context.items.length} sorted`, completedInputIds: context.input.eventIds, gapIds: [] }
+}
+```
+
+The archive Pod names no message. It receives the approved items and moves
+exactly those:
+
+```js
+export const contract = { takes: ['mail.approved'], gives: [], summary: 'Archiviert Freigegebenes' }
+
+export async function run(context) {
+  const batches = await context.mail.archive.process({ application: 'pods-mail', mailbox: context.variables.mailbox })
+  const archived = batches.flatMap(batch => batch.outcomes).filter(outcome => outcome.state === 'archived').length
+  return { status: 'completed', summary: `${archived} archived`, completedInputIds: context.input.eventIds, gapIds: [] }
+}
+```
