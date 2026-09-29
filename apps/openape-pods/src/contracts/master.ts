@@ -1,4 +1,5 @@
 import { parseWorkflowCommand } from './workflows'
+import { parseGraphValues } from './graphs'
 import type { WorkflowCommand } from './workflows'
 import type { ChangeSet } from './control-api'
 import { chatId } from './chats'
@@ -80,6 +81,7 @@ export function parseMasterView(value: unknown): MasterView {
 export type MasterAction =
   | { action: 'inspectWorkflow' | 'runWorkflow' }
   | { action: 'saveWorkflow', definition: Extract<WorkflowCommand, { type: 'save' }> }
+  | { action: 'setGraphValue', name: string, value: string, valueRevision: number }
   | { action: 'list' }
   | { action: 'runtime' }
   | { action: 'create', name: string }
@@ -96,6 +98,11 @@ export type MasterAction =
 export function parseMasterAction(value: unknown): MasterAction {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid master action')
   const item = { ...value } as Record<string, unknown>
+  if (item.action === 'setGraphValue') {
+    if (Object.keys(item).some(key => !['action', 'name', 'value', 'valueRevision'].includes(key))) throw new Error('Invalid workflow action fields')
+    const [value] = parseGraphValues([{ name: item.name, value: item.value, revision: item.valueRevision }])
+    return { action: 'setGraphValue', name: value!.name, value: value!.value, valueRevision: value!.revision }
+  }
   if (['inspectWorkflow', 'runWorkflow', 'saveWorkflow'].includes(String(item.action))) {
     const allowed = item.action === 'saveWorkflow' ? ['action', 'definition'] : ['action']
     if (Object.keys(item).some(key => !allowed.includes(key))) throw new Error('Invalid workflow action fields')
@@ -134,8 +141,9 @@ export const masterTool = {
   inputSchema: {
     type: 'object', required: ['action'], additionalProperties: false,
     properties: {
-      action: { type: 'string', enum: ['inspectWorkflow', 'saveWorkflow', 'runWorkflow', 'runtime', 'list', 'create', 'inspect', 'revise', 'setVariable', 'prepareSchedule', 'setGroup', 'draft', 'validate', 'activate', 'run', 'pause', 'resume', 'rollback', 'requestAccess', 'installMailRecipe'] },
-      definition: { type: 'object', description: 'Existing selected workflow save command: type save, id, revision, name, nodes, schedule, enabled. Preserve enabled/paused schedules; added members must already be explicitly selected. Owner reviews before apply.' },
+      action: { type: 'string', enum: ['inspectWorkflow', 'saveWorkflow', 'setGraphValue', 'runWorkflow', 'runtime', 'list', 'create', 'inspect', 'revise', 'setVariable', 'prepareSchedule', 'setGroup', 'draft', 'validate', 'activate', 'run', 'pause', 'resume', 'rollback', 'requestAccess', 'installMailRecipe'] },
+      definition: { type: 'object', description: 'Existing selected workflow save command: type save, id, revision, name, nodes, schedule, enabled. A graph adds mode "channels", groupId, channels, gates and values; its nodes carry no after and no handoff. Preserve enabled/paused schedules; added members must already be explicitly selected. Owner reviews before apply.' },
+      valueRevision: { type: 'integer', minimum: 0, description: 'setGraphValue: 0 for a new graph value, otherwise its current revision from inspectWorkflow.' },
       podId: { type: 'string', description: 'Exact pod UUID from list/create.' }, revision: { type: 'integer', minimum: 1, description: 'Current pod settings revision.' },
       name: { type: ['string', 'null'], description: 'Pod/variable/group name; null only removes group membership.' },
       value: { type: 'string', description: 'Ordinary, non-secret variable value only.' }, variableRevision: { type: 'integer', minimum: 0 },
