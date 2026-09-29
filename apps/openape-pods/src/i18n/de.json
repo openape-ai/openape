@@ -1817,6 +1817,8 @@
   "Graph group not found": "Graph-Gruppe nicht gefunden",
   "A graph value and a pod variable share a name": "Ein Graph-Wert und eine Pod-Variable tragen denselben Namen",
   "No items to process": "Keine Elemente zu verarbeiten",
+  "Share": "Teilen",
+  "Import": "Importieren",
   "Collective approval": "Sammelfreigabe",
   "Review": "Prüfen",
   "Back to the graph": "Zurück zum Graphen",
