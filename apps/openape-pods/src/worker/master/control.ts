@@ -27,6 +27,8 @@ import { runtimeReference } from './reference'
 import { PodVariables } from '../resources/variables'
 import { PodGroups } from '../workspace/groups'
 import { modelResources } from './resources'
+import { inspectGraph } from '../workflows/items'
+import type { WorkflowDefinition } from '../../contracts/workflows'
 
 export class MasterControl {
   private receipt(set: ChangeSet) { return { changeSetId: set.id, revision: set.revision, state: set.state, targets: set.targets.map(target => ({ podId: target.podId, name: target.name, actions: target.actions.map(action => action.action) })), workflowId: set.workflow?.before.id ?? null } }
@@ -53,16 +55,17 @@ export class MasterControl {
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly dispatcher: RunDispatcher, private readonly scheduler: Scheduler, private readonly runtime: AgentRuntime, private readonly workflows?: WorkflowEngine) {}
   async execute(key: string, value: unknown, signal: AbortSignal, selectedPod: string | null = null, creationId: string | null = null, context?: Conversation, authority: 'conversation' | 'owner' = 'conversation'): Promise<unknown> {
     if (!key || key.length > 300) throw new Error('Invalid master operation identity')
-    const action = parseMasterAction(value)
-    if (action.action === 'setSchedule' && authority !== 'owner') throw new Error('Schedule activation requires owner authority')
+    const requested = parseMasterAction(value)
+    if (requested.action === 'setSchedule' && authority !== 'owner') throw new Error('Schedule activation requires owner authority')
+    if (context) context = new ChatRegistry(this.store).assertRevision(context.id, context.revision)
+    const action = requested.action === 'setGraphValue' ? this.graphValue(requested, context) : requested
     if (context) {
-      context = new ChatRegistry(this.store).assertRevision(context.id, context.revision)
       if ('podId' in action && !context.context.pods.some(pod => pod.id === action.podId)) throw new Error('context_required: select this Pod with + before inspecting or changing it')
     }
     const remoteOwner = context ? this.store.db.prepare('SELECT owner FROM remote_conversations WHERE conversation_id=?').get(context.id)?.owner as string | undefined : undefined
     if (remoteOwner && authority === 'owner') throw new Error('Local owner authority cannot be used for a remote conversation')
     if (remoteOwner) {
-      if (['create', 'setGroup', 'inspectWorkflow', 'runWorkflow', 'saveWorkflow'].includes(action.action)) throw new Error('This operation requires the desktop workspace')
+      if (['create', 'setGroup', 'inspectWorkflow', 'runWorkflow', 'saveWorkflow', 'setGraphValue'].includes(action.action)) throw new Error('This operation requires the desktop workspace')
       for (const pod of context!.context.pods) {
         if (this.store.db.prepare('SELECT owner FROM remote_pods WHERE pod_id=?').get(pod.id)?.owner !== remoteOwner) throw new Error('Conversation contains another owner’s Pod')
       }
@@ -96,7 +99,7 @@ export class MasterControl {
       if (!context?.context.workflow) throw new Error('Select a workflow before using this action')
       const workflow = context.context.workflow
       return this.store.transaction(() => {
-        const result = authority === 'owner' && action.action !== 'inspectWorkflow' ? this.executeWorkflow(action, context, key) : action.action === 'inspectWorkflow' ? { definition: context.context.workflow, changed: context.workflowChanged } : this.receipt(this.changes().prepareWorkflow(context, action.action === 'saveWorkflow' ? action.definition : { type: 'start', id: workflow.id, revision: workflow.revision }))
+        const result = authority === 'owner' && action.action !== 'inspectWorkflow' ? this.executeWorkflow(action, context, key) : action.action === 'inspectWorkflow' ? this.inspectWorkflow(workflow, context.workflowChanged) : this.receipt(this.changes().prepareWorkflow(context, action.action === 'saveWorkflow' ? action.definition : { type: 'start', id: workflow.id, revision: workflow.revision }))
         this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'completed\',?,NULL)').run(key, hash, request, JSON.stringify(result)); return result
       })
     }
@@ -123,6 +126,23 @@ export class MasterControl {
       this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'completed\',?,NULL)').run(key, hash, request, JSON.stringify(result))
       return result
     })
+  }
+
+  /** A graph value is one field of the definition, so setting it is a save of the selected graph. */
+  private graphValue(action: Extract<MasterAction, { action: 'setGraphValue' }>, context?: Conversation | null): Extract<MasterAction, { action: 'saveWorkflow' }> {
+    const selected = context?.context.workflow
+    if (!selected) throw new Error('Select a workflow before using this action')
+    if (selected.mode !== 'channels') throw new Error('Channels, gates and graph values need channel mode')
+    if ((selected.values.find(value => value.name === action.name)?.revision ?? 0) !== action.valueRevision) throw new Error('Graph value changed; inspect the workflow again')
+    const { paused: _paused, nextAt: _nextAt, ...saved } = selected
+    return { action: 'saveWorkflow', definition: { ...saved, type: 'save', values: [...selected.values.filter(value => value.name !== action.name), { name: action.name, value: action.value, revision: action.valueRevision }] } }
+  }
+
+  /** The contract and rights of the member Pods are read now, so the diagnostics describe the graph as it would run. */
+  private inspectWorkflow(definition: WorkflowDefinition, changed: boolean) {
+    if (definition.mode !== 'channels') return { definition, changed }
+    const { contracts, edges, nodeKinds, diagnostics } = inspectGraph(this.store, definition)
+    return { definition, changed, contracts, edges, nodeKinds, diagnostics }
   }
 
   private executeWorkflow(action: Extract<MasterAction, { action: 'saveWorkflow' | 'runWorkflow' | 'inspectWorkflow' }>, context: Conversation, key: string) {

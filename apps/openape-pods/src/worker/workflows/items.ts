@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { diagnoseGraph, graphLimits, parseGraphContract } from '../../contracts/graphs'
-import type { GraphContract, GraphDiagnostic, GraphEmit, GraphGate, GraphItem, GraphMemberFacts } from '../../contracts/graphs'
+import { deriveEdges, diagnoseGraph, graphLimits, parseGraphContract } from '../../contracts/graphs'
+import type { GraphContract, GraphDiagnostic, GraphEdge, GraphEmit, GraphGate, GraphItem, GraphMemberFacts, GraphNodeKind } from '../../contracts/graphs'
+import { isHttpEffect } from '../../contracts/http'
 import type { WorkflowDefinition } from '../../contracts/workflows'
 import type { PodDatabase } from '../storage/database'
 
@@ -14,17 +15,25 @@ export interface GraphRun { workflowId: string, workflowRunId: string, node: str
 
 const gateNode = (gate: GraphGate): GraphNode => ({ id: `gate:${gate.key}`, takes: [gate.takes], gives: gate.kind === 'approve' ? [gate.gives, ...gate.excluded === null ? [] : [gate.excluded]] : gate.options.map(option => option.channel) })
 
-function contractOf(store: PodDatabase, podId: string, hash: string | null): GraphContract | null {
+function manifestOf(store: PodDatabase, podId: string, hash: string | null): { contract?: unknown, capabilities?: string[] } {
   const row = hash ? store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(podId, hash) : undefined
-  const contract = row ? (JSON.parse(row.manifest as string) as { contract?: unknown }).contract : undefined
+  return row ? JSON.parse(row.manifest as string) : {}
+}
+function contractOf(store: PodDatabase, podId: string, hash: string | null): GraphContract | null {
+  const { contract } = manifestOf(store, podId, hash)
   return contract === undefined ? null : parseGraphContract(contract)
 }
 
 /** Diagnostics of a saved graph against the active scripts and rights of its member Pods. */
-export function inspectGraph(store: PodDatabase, definition: WorkflowDefinition): { contracts: Record<string, GraphContract | null>, diagnostics: GraphDiagnostic[] } {
+export function inspectGraph(store: PodDatabase, definition: WorkflowDefinition): { contracts: Record<string, GraphContract | null>, edges: GraphEdge[], nodeKinds: Record<string, GraphNodeKind>, diagnostics: GraphDiagnostic[] } {
   const contracts: Record<string, GraphContract | null> = {}; const facts: Record<string, GraphMemberFacts> = {}
+  const nodeKinds: Record<string, GraphNodeKind> = Object.fromEntries(definition.gates.map(gate => [`gate:${gate.key}`, 'gate']))
   for (const { podId } of definition.nodes) {
-    contracts[podId] = contractOf(store, podId, store.getPod(podId).activeScript)
+    const active = store.getPod(podId).activeScript
+    contracts[podId] = contractOf(store, podId, active)
+    const rights = store.db.prepare('SELECT kind,configuration FROM resources WHERE pod_id=? AND state=\'ready\'').all(podId).map(row => ({ kind: row.kind as string, ...JSON.parse(row.configuration as string) as { cliId?: string, access?: string, type?: string, methods?: string[] } }))
+    const writes = rights.some(right => right.cliId === 'pods-mail' || (right.kind === 'directory' && right.access === 'readWrite') || (right.type === 'http' && (right.methods ?? []).some(isHttpEffect)))
+    nodeKinds[podId] = writes ? 'effect' : manifestOf(store, podId, active).capabilities?.includes('jev.evaluate') ? 'decision' : 'code'
     const group = store.db.prepare('SELECT group_id FROM pod_memberships WHERE pod_id=?').get(podId)?.group_id ?? null
     facts[podId] = {
       archive: store.db.prepare('SELECT configuration FROM resources WHERE pod_id=? AND kind=\'tool\' AND state=\'ready\'').all(podId).some(row => (JSON.parse(row.configuration as string) as { cliId?: string }).cliId === 'pods-mail'),
@@ -32,7 +41,8 @@ export function inspectGraph(store: PodDatabase, definition: WorkflowDefinition)
       variables: store.db.prepare('SELECT name FROM pod_variables WHERE pod_id=?').all(podId).map(row => row.name as string),
     }
   }
-  return { contracts, diagnostics: diagnoseGraph(definition, contracts, facts) }
+  const members = definition.nodes.flatMap(({ podId }) => contracts[podId] ? [{ podId, contract: contracts[podId] }] : [])
+  return { contracts, edges: deriveEdges(members, definition.gates), nodeKinds, diagnostics: diagnoseGraph(definition, contracts, facts) }
 }
 
 /** Nodes of one run, with the contracts of the scripts pinned when the run started. */
