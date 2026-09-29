@@ -284,4 +284,25 @@ describe('graph panel', () => {
     expect(workflows).toHaveBeenLastCalledWith({ type: 'gateExclude', batchId, itemIds: [id(1)] })
     expect(wrapper.find('[role="alert"]').text()).toBe('Only a batch that awaits approval can be changed')
   })
+  it('reads a published view without a worker and links the approval instead of deciding', async () => {
+    const workflows = bridge(() => { throw new Error('A published view must not ask the worker') })
+    const events = [{ node: triage, outcome: 'emitted', channel: 'mail.newsletter', reason: 'Bulk sender', confidence: 0.93, at: 1 }, { node: 'gate:batch', outcome: 'held', channel: 'mail.newsletter', reason: null, confidence: null, at: 2 }]
+    const published: WorkflowView = { ...view, graphs: { [graphId]: { ...detail, traces: { 'mail-1': events } } } }
+    const wrapper = mount(GraphPanel, { props: { view: published, pods, organization, selectedId: graphId, readOnly: true } }); await flushPromises()
+    expect(wrapper.findAll('.graph-node')).toHaveLength(5)
+    await button(wrapper, 'Last run').trigger('click')
+    expect(wrapper.findAll('.graph-count').map(count => count.text())).toEqual(['42', '25'])
+    await wrapper.find('.item-trace .inventory-row').trigger('click'); await flushPromises()
+    expect(wrapper.findAll('.item-trace li').map(row => row.find('strong').text())).toEqual(['Triage', 'Newsletter batch'])
+    await button(wrapper, 'Open approval').trigger('click')
+    expect(wrapper.find('.gate-review a').attributes()).toMatchObject({ href: batch.url, target: '_blank', rel: 'noopener noreferrer' })
+    expect(wrapper.find('.gate-review a').text()).toBe('Approve at the identity provider (3)')
+    expect(wrapper.findAll('.gate-review input')).toHaveLength(0)
+    expect(wrapper.findAll('.gate-review button').map(item => item.text())).toEqual(['Back to the graph'])
+    expect(workflows).not.toHaveBeenCalled()
+  })
+  it('shows no approval link for an address that is not https', () => {
+    const wrapper = mount(GateReview, { props: { gate: approve, batches: [{ ...batch, url: 'javascript:alert(1)' }], readOnly: true } })
+    expect(wrapper.find('a').exists()).toBe(false)
+  })
 })
