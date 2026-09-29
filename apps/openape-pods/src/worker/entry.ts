@@ -13,6 +13,7 @@ import { reviewMailBatch, reconcileMailEffect } from './mail/workflow'
 import { confirmDomainsStopped, inspectDomainRecords  } from './recovery/domains'
 import { parseWorkflowCommand } from '../contracts/workflows'
 import { WorkflowEngine } from './workflows/engine'
+import { chooseGateItem, discardGateBatch, excludeGateItems } from './workflows/gates'
 import type { RunContextRequest, ServiceCheck  } from '../contracts/services'
 import { DependencyStore } from './dependencies/store'
 import { programRequest } from '../main/programs/invoke'
@@ -69,7 +70,7 @@ const runtime: AgentRuntime = {
   runtimeDirectories: [dirname(dirname(executable))], environment: { ELECTRON_RUN_AS_NODE: '1' },
   binary: join(dist, 'vendor/codex'), catalog: join(dist, 'vendor/models.json'), manifest: join(dist, 'vendor/manifest.json'), sdkHost: join(dist, 'runtime/sdk-host.mjs'),
 }
-const runServices: RunServices = { mailArchive: async (body, signal, scope) => mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'mailArchive'), shell: async (scope, signal) => {
+const runServices: RunServices = { gate: async (body, signal, scope) => mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'gate'), mailArchive: async (body, signal, scope) => mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'mailArchive'), shell: async (scope, signal) => {
   const { podId, runId, epoch, assignmentRevision, capabilities } = scope
   return await mailBridge.execute({ podId, runId, epoch, assignmentRevision, capabilities }, {}, signal, 'shell') as Awaited<ReturnType<NonNullable<RunServices['shell']>>>
 }, closeShell: async (scope) => {
@@ -282,6 +283,9 @@ port.on('message', async (event) => {
       if (command.type === 'pause') workflows.pause(command.id, command.revision, command.paused)
       if (command.type === 'retry') await workflows.retry(command.runId, command.podId)
       if (command.type === 'cancel') await workflows.cancel(command.runId)
+      if (command.type === 'gateExclude') excludeGateItems(store, command.batchId, command.itemIds, Date.now())
+      if (command.type === 'gateChoose') chooseGateItem(store, command.id, command.gate, command.itemId, command.option, Date.now())
+      if (command.type === 'gateDiscard') discardGateBatch(store, command.batchId, Date.now())
       if (command.type !== 'list') workflows.tick()
       port.postMessage({ id: request.id, state: workflows.view() })
       return
