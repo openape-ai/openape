@@ -148,3 +148,49 @@ it('continues a scheduler tick past a step whose promise never settles and names
   expect(expired).toHaveBeenCalledOnce()
   await expect(boundedStep(50, async () => { throw new Error('Storage inspection failed') }, expired)).rejects.toThrow('Storage inspection failed')
 })
+
+it('persists delayed pre-script retries, releases capacity and resumes the original inputs after restart', () => {
+  const f = fixture(); const pod = f.pod()
+  const input = f.scheduler.acceptEvent(pod, 'fixture', 'retry', {})
+  f.scheduler.tick()
+  const first = f.started[0]!
+  f.runs.finish(first.id, 'failed', 'Run failed', 'Permission service temporarily unavailable', [], 0)
+  const retry = f.scheduler.view(pod).retry!
+  expect(f.scheduler.view(pod)).toMatchObject({ blocked: 0, pending: 1, retry: { attempt: 1 } })
+  expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0)
+  f.time(retry.at - 1); f.scheduler.tick(); expect(f.started).toHaveLength(1)
+  f.store.close(); stores.splice(stores.indexOf(f.store), 1)
+  const restored = new PodDatabase(f.store.root); stores.push(restored)
+  const runs = new RunStore(restored)
+  const resumed = vi.fn((podId: string, trigger: RunTrigger) => runs.reserve(podId, restored.getPod(podId).activeScript!, 0, trigger).run.id)
+  new Scheduler(restored, { start: resumed }, () => retry.at).tick()
+  expect(resumed).toHaveBeenCalledWith(pod, { reason: 'event', eventIds: [input] })
+  const second = resumed.mock.results[0]!.value as string
+  runs.finish(second, 'completed', 'Recovered', null, [input])
+  expect(restored.db.prepare('SELECT state FROM accepted_events WHERE id=?').get(input)?.state).toBe('processed')
+})
+
+it('keeps delayed retries paused and blocks them when their resource binding changes', () => {
+  const f = fixture(); const pod = f.pod()
+  f.scheduler.acceptEvent(pod, 'fixture', 'retry', {}); f.scheduler.tick()
+  f.runs.finish(f.started[0]!.id, 'failed', 'Run failed', 'Permission service temporarily unavailable', [], 0)
+  f.time(f.scheduler.view(pod).retry!.at)
+  f.scheduler.lifecycle(pod, 1, 'paused'); f.scheduler.tick(); expect(f.started).toHaveLength(1)
+  f.scheduler.lifecycle(pod, 1, 'active')
+  f.store.db.prepare('INSERT INTO resource_epochs VALUES(?,1)').run(pod)
+  f.scheduler.tick()
+  expect(f.started).toHaveLength(1)
+  expect(f.scheduler.view(pod)).toMatchObject({ blocked: 1, pending: 0, error: expect.stringContaining('permissions changed') })
+})
+
+it.each(['process', 'effect', 'checkpoint'])('never automatically restarts after %s work', (kind) => {
+  const f = fixture(); const pod = f.pod()
+  f.scheduler.acceptEvent(pod, 'fixture', 'unsafe', {}); f.scheduler.tick()
+  const id = f.started[0]!.id
+  if (kind === 'process') f.runs.append(id, 'process', { pid: 123 })
+  if (kind === 'effect') f.store.db.prepare('INSERT INTO effect_ledger VALUES(?,\'sent\',\'http.request\',\'hash\',?,\'completed\',\'{}\')').run(pod, id)
+  if (kind === 'checkpoint') f.store.commitProgress({ podId: pod, expectedRevision: 0, checkpoint: { saved: true }, sources: [], claims: [] })
+  f.runs.finish(id, 'failed', 'Run failed', 'Permission service temporarily unavailable', [], 0)
+  expect(f.scheduler.view(pod)).toMatchObject({ blocked: 1, pending: 0 })
+  expect(f.scheduler.view(pod).retry).toBeUndefined()
+})

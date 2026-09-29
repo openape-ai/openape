@@ -269,7 +269,7 @@ it('keeps the newest 50 rows and folders while preserving Pod data and processed
   const before = { pods: f.store.listPods(), checkpoint: f.store.checkpoint(f.pod.id), knowledge: f.store.knowledge(f.pod.id), schedules: f.store.db.prepare('SELECT * FROM schedules').all() }
   const event = randomUUID()
   f.store.db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at,state,run_id) VALUES(?,?,\'manual\',\'original\',\'{"body":"old input"}\',1,\'processed\',?)').run(event, f.pod.id, f.runId)
-  f.store.db.prepare('INSERT INTO run_inputs VALUES(?,\'manual\',?)').run(f.runId, JSON.stringify([event]))
+  f.store.db.prepare('INSERT INTO run_inputs(run_id,reason,event_ids) VALUES(?,\'manual\',?)').run(f.runId, JSON.stringify([event]))
   f.store.db.prepare('INSERT INTO run_events VALUES(?,1,\'finished\',\'{}\',1)').run(f.runId)
   f.store.db.prepare('INSERT INTO execution_domains VALUES(?,?,1)').run(join(f.root, 'runs', f.runId, 'domain'), f.runId)
   const operation = randomUUID()
@@ -310,7 +310,7 @@ it.each(['lease', 'intent', 'unknown', 'needsReview', 'ready', 'retryQueued', 'p
   }
   else if (['pending', 'claimed', 'blocked', 'linkedInput'].includes(protection)) {
     db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at,state,run_id) VALUES(?,?,\'manual\',?,\'{}\',1,?,?)').run(event, f.pod.id, event, protection === 'linkedInput' ? 'pending' : protection, protection === 'linkedInput' ? null : f.runId)
-    db.prepare('INSERT INTO run_inputs VALUES(?,\'manual\',?)').run(f.runId, JSON.stringify([event]))
+    db.prepare('INSERT INTO run_inputs(run_id,reason,event_ids) VALUES(?,\'manual\',?)').run(f.runId, JSON.stringify([event]))
     settle = () => { db.prepare('UPDATE accepted_events SET state=\'processed\'').run() }
   }
   else if (protection === 'approval') {

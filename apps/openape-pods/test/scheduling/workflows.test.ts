@@ -216,3 +216,17 @@ it('protects earlier attempts of unfinished workflows and detaches only after th
   expect(f.store.getPod(pod).id).toBe(pod)
   expect(f.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
 })
+
+it('retries infrastructure failures without rerunning completed workflow siblings and honors pause', () => {
+  const f = fixture(); const a = f.pod(); const b = f.pod()
+  const id = f.workflow([a, b]); const workflow = f.engine.start(id, 1)
+  f.engine.tick(); f.complete(a)
+  const attempt = f.started.find(run => run.podId === b)!
+  f.runs.finish(attempt.id, 'failed', 'Run failed', 'Permission service temporarily unavailable', [], 0)
+  const retryAt = Number(f.store.db.prepare('SELECT retry_at FROM run_inputs WHERE run_id=?').get(attempt.id)!.retry_at)
+  f.time(retryAt - 1); f.engine.tick(); expect(f.started).toHaveLength(2)
+  f.engine.pause(id, 1, true); f.time(retryAt); f.engine.tick(); expect(f.started).toHaveLength(2)
+  f.engine.pause(id, 2, false); f.engine.tick()
+  expect(f.started.map(run => run.podId)).toEqual([a, b, b])
+  f.complete(b); f.engine.tick(); expect(f.engine.run(workflow).state).toBe('completed')
+})

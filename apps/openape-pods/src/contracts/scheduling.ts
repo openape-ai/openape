@@ -1,5 +1,5 @@
 export type ScheduleSpec = { kind: 'interval', seconds: number } | { kind: 'daily', time: string, timezone: string }
-export interface ScheduleView { spec: ScheduleSpec | null, enabled: boolean, revision: number, nextAt: number | null, error: string | null, pending: number, blocked: number, blockedSince?: number | null, concurrency: number }
+export interface ScheduleView { retry?: { at: number, attempt: number, error: string }, spec: ScheduleSpec | null, enabled: boolean, revision: number, nextAt: number | null, error: string | null, pending: number, blocked: number, blockedSince?: number | null, concurrency: number }
 export type ScheduleCommand = { type: 'list', podId: string } | { type: 'save', podId: string, revision: number, spec: ScheduleSpec, enabled: boolean } | { type: 'concurrency', podId: string, maximum: number } | { type: 'lifecycle', podId: string, revision: number, lifecycle: 'active' | 'paused' }
 export function parseSchedule(value: unknown): ScheduleSpec {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid schedule')
@@ -27,6 +27,7 @@ export function parseScheduleCommand(value: unknown): ScheduleCommand {
 export function parseScheduleView(value: unknown): ScheduleView {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid schedule view')
   const view = value as ScheduleView
+  if (view.retry && (!Number.isSafeInteger(view.retry.at) || !Number.isSafeInteger(view.retry.attempt) || view.retry.attempt < 1 || typeof view.retry.error !== 'string')) throw new Error('Invalid infrastructure retry state')
   if (view.spec !== null) parseSchedule(view.spec)
   if (typeof view.enabled !== 'boolean' || !Number.isSafeInteger(view.revision) || view.revision < 0 || (view.nextAt !== null && !Number.isSafeInteger(view.nextAt)) || (view.error !== null && typeof view.error !== 'string') || !Number.isSafeInteger(view.pending) || view.pending < 0 || !Number.isSafeInteger(view.blocked) || view.blocked < 0 || !Number.isSafeInteger(view.concurrency) || view.concurrency < 1 || view.concurrency > 16) throw new Error('Invalid schedule state')
   return view

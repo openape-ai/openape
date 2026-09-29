@@ -439,7 +439,9 @@ onBeforeUnmount(() => { generation++; abort.abort() })
                 <label>{{ t('Time') }}<input v-model="dailyTime" type="time"></label><label>{{ t('Timezone') }}<input v-model="timezone"></label>
               </template><label class="central-check"><input v-model="scheduleEnabled" type="checkbox"> {{ t('Schedule enabled') }}</label><button @click="saveSchedule">
                 {{ t('Save schedule') }}
-              </button><p>{{ t('Next run:') }} {{ current.pod.scheduling.nextAt ? new Date(current.pod.scheduling.nextAt).toLocaleString() : t('Not scheduled') }}</p><p v-if="current.pod.scheduling.error" role="alert">
+              </button><p>{{ t('Next run:') }} {{ current.pod.scheduling.nextAt ? new Date(current.pod.scheduling.nextAt).toLocaleString() : t('Not scheduled') }}</p><p v-if="current.pod.scheduling.retry" role="status">
+                {{ t('Waiting for service recovery. Next attempt: {time}', { time: time(current.pod.scheduling.retry.at) }) }}
+              </p><p v-if="current.pod.scheduling.error" role="alert">
                 {{ current.pod.scheduling.error }}
               </p>
             </section>

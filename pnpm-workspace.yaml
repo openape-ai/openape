@@ -15,9 +15,6 @@ minimumReleaseAgeExclude:
   # brace-expansion 1.1.18/2.1.4/5.0.9: GHSA-rgw5-rvv9-x895.
   # Published 2026-07-30 10:17 UTC; eligible 2026-08-06 10:17 UTC.
   - brace-expansion
-  # fast-uri 4.1.2: security advisory from 2026-08-04.
-  # Published 2026-07-31 09:09 UTC; eligible 2026-08-07 09:09 UTC.
-  - fast-uri
   # ip-address 10.4.0 resolved under the >=10.3.1 override.
   # Published 2026-07-31 05:07 UTC; eligible 2026-08-07 05:07 UTC.
   - ip-address
@@ -93,7 +90,8 @@ overrides:
   defu: '>=6.1.5'
   devalue: '>=5.8.1'
   drizzle-orm: '>=0.45.2'
-  fast-uri: '>=4.1.3 <5'
+  # GHSA-qw65-cvwx-89v3 / GHSA-58mr-gqgx-xq4g; released 2026-09-02.
+  fast-uri: 4.1.4
   ip-address: '>=10.3.1'
   flatted: '>=3.4.2'
   hono: 4.12.34
