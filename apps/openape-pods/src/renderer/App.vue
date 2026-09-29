@@ -43,7 +43,7 @@ export default defineComponent({
     workerLabel(): string { if (this.connectionError) return t('Unavailable'); return label({ starting: 'Starting', ready: 'Ready', error: 'Needs attention', stopped: 'Stopped' }[this.status?.worker.state ?? 'starting']) },
     attention(): boolean { return !!this.connectionError || this.status?.worker.state === 'error' },
     currentRun(): RunRecord | undefined { return this.runs.find(run => run.state === 'running') },
-    needsRecovery(): boolean { const run = this.runs[0]; return !!run && ['interrupted', 'failed', 'cancelled', 'blocked'].includes(run.state) && run.recovery?.state !== 'retryQueued' },
+    needsRecovery(): boolean { const run = this.runs[0]; return !this.schedule?.retry && !!run && ['interrupted', 'failed', 'cancelled', 'blocked'].includes(run.state) && run.recovery?.state !== 'retryQueued' },
     nextRun(): string { if (!this.pod || this.pod.lifecycle !== 'active' || !this.schedule?.enabled) return t('Manual only'); return this.schedule.nextAt ? dateTime(this.schedule.nextAt) : t('No scheduled time') },
   },
   watch: { refreshToken() { void this.refresh() } },
@@ -166,7 +166,7 @@ export default defineComponent({
                 <h2>{{ t('Last run') }}</h2><span class="badge">{{ label(runs[0]?.state ?? 'Not run yet') }}</span>
               </div><p>{{ runs[0] ? diagnostic(runHeadline(runs[0])) : t('Ready for its first manual run.') }}</p><p v-if="runs[0]" class="muted">
                 {{ dateTime(runs[0].startedAt) }}
-              </p><p v-if="runs[0]?.error" class="error-message">
+              </p><p v-if="runs[0]?.error && !schedule?.retry" class="error-message">
                 {{ diagnostic(runFailure(runs[0].error)?.help) }}
               </p><div class="overview-actions">
                 <button class="text-button" @click="selected = 'History'">
@@ -180,10 +180,13 @@ export default defineComponent({
               <button v-if="needsRecovery && !currentRun" class="primary" @click="selected = 'History'">
                 {{ t('Prepare retry') }}
               </button>
-              <button v-else class="primary" :disabled="!pod.activeScript || !!currentRun || pod.lifecycle === 'archived' || attention" @click="runOnce">
+              <button v-else class="primary" :disabled="!pod.activeScript || !!currentRun || !!schedule?.retry || pod.lifecycle === 'archived' || attention" @click="runOnce">
                 {{ t('Run now') }}
               </button><span v-if="!pod.activeScript" class="muted">{{ t('Prepare the script before its first run.') }}</span><span v-else-if="currentRun" class="muted">{{ t('A run is active') }}</span>
             </div>
+            <p v-if="schedule?.retry" role="status">
+              {{ t('Waiting for service recovery. Next attempt: {time}', { time: dateTime(schedule.retry.at) }) }}
+            </p>
             <p v-if="schedule?.blocked" class="error-message">
               {{ t('Unfinished work is waiting. Open run history to prepare a retry.') }}
             </p>
