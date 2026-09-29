@@ -30,3 +30,16 @@ export function centralFixture() {
   }
   return { client, host, view, wake: () => wake?.() }
 }
+
+export function groupedCentralFixture() {
+  const fixture = centralFixture()
+  const { host } = fixture
+  const pod = host.workspace.pods[0]!
+  host.workspace.pods.push({ ...pod, id: 'standalone', name: 'Standalone review' }, { ...pod, id: 'archived', name: 'Archived workflow Pod', lifecycle: 'archived' })
+  host.workspace.organization.groups = [
+    { id: 'operations', name: 'Operations', collapsed: false, podIds: [pod.id, 'standalone', 'archived'] },
+    { id: 'empty', name: 'Empty group', collapsed: false, podIds: [] },
+  ]
+  host.workflows = { workflows: [{ id: 'workflow', revision: 1, name: 'Morning review', nodes: [{ podId: pod.id, after: [], handoff: true }, { podId: 'archived', after: [pod.id], handoff: true }], schedule: null, enabled: false, paused: true, nextAt: null }], runs: [] }
+  return fixture
+}
