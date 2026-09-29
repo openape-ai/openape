@@ -41,7 +41,9 @@ export class RunStore {
         this.store.db.prepare('UPDATE workflow_nodes SET state=\'running\',run_id=?,reason=NULL WHERE workflow_run_id=? AND pod_id=?').run(id, trigger.workflowRunId, podId)
       }
       if (trigger.operationId) this.store.db.prepare('INSERT INTO control_runs VALUES(?,?,\'pod\')').run(trigger.operationId, id)
-      this.store.db.prepare('INSERT INTO run_inputs VALUES(?,?,?)').run(id, trigger.reason, JSON.stringify(trigger.eventIds))
+      const previousAttempts = trigger.eventIds.map(eventId => Number(this.store.db.prepare('SELECT i.retry_attempt FROM accepted_events e JOIN run_inputs i ON i.run_id=e.run_id WHERE e.id=?').get(eventId)?.retry_attempt ?? 0))
+      if (trigger.workflowRunId) previousAttempts.push(Number(this.store.db.prepare('SELECT max(i.retry_attempt) AS attempt FROM workflow_attempts a JOIN run_inputs i ON i.run_id=a.run_id WHERE a.workflow_run_id=? AND a.pod_id=?').get(trigger.workflowRunId, podId)?.attempt ?? 0))
+      this.store.db.prepare('INSERT INTO run_inputs(run_id,reason,event_ids,retry_attempt) VALUES(?,?,?,?)').run(id, trigger.reason, JSON.stringify(trigger.eventIds), Math.max(0, ...previousAttempts))
       for (const eventId of trigger.eventIds) {
         const claimed = this.store.db.prepare('UPDATE accepted_events SET state=\'claimed\',run_id=? WHERE id=? AND pod_id=? AND state=\'pending\'').run(id, eventId, podId)
         if (claimed.changes !== 1) throw new Error('Event is no longer available for this run')
@@ -126,7 +128,35 @@ export class RunStore {
     })
   }
 
-  finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = []): void {
+  private deferInfrastructure(id: string, epoch: number, before: number, after: number): void {
+    const run = this.get(id)
+    const pod = this.store.getPod(run.podId)
+    const inputs = this.store.db.prepare('SELECT * FROM run_inputs WHERE run_id=?').get(id)!
+    const initial = this.store.db.prepare('SELECT assignment_revision FROM runs WHERE id=?').get(id)!
+    if (before !== after || pod.activeScript !== run.scriptHash || pod.bindingRevision !== initial.assignment_revision || (this.store.db.prepare('SELECT epoch FROM resource_epochs WHERE pod_id=?').get(pod.id)?.epoch ?? 0) !== epoch) return
+    if (this.store.db.prepare('SELECT 1 FROM run_events WHERE run_id=? AND type=\'process\' UNION ALL SELECT 1 FROM effect_ledger WHERE run_id=? LIMIT 1').get(id, id)) return
+    const attempt = Number(inputs.retry_attempt) + 1
+    const nextAt = Date.now() + Math.min(60000, 2000 * 2 ** Math.min(attempt - 1, 5))
+    const workflow = this.store.db.prepare('SELECT workflow_run_id FROM workflow_attempts WHERE run_id=?').get(id)
+    if (workflow) {
+      this.store.db.prepare('UPDATE workflow_nodes SET state=\'waiting\',reason=? WHERE workflow_run_id=? AND pod_id=?').run('Waiting for service recovery', workflow.workflow_run_id, pod.id)
+    }
+    else {
+      let ids = JSON.parse(inputs.event_ids as string) as string[]
+      if (!ids.length) {
+        const eventId = randomUUID()
+        this.store.db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at,state,run_id) VALUES(?,?,\'manual\',?,\'{}\',?,\'pending\',?)').run(eventId, pod.id, `infrastructure:${id}`, Date.now(), id)
+        ids = [eventId]
+        this.store.db.prepare('UPDATE run_inputs SET event_ids=? WHERE run_id=?').run(JSON.stringify(ids), id)
+      }
+      this.store.db.prepare('UPDATE accepted_events SET state=\'pending\' WHERE run_id=? AND state=\'blocked\'').run(id)
+    }
+    this.store.db.prepare('UPDATE run_inputs SET retry_at=?,retry_attempt=?,retry_epoch=? WHERE run_id=?').run(nextAt, attempt, epoch, id)
+    this.store.db.prepare('UPDATE runs SET summary=? WHERE id=?').run('Waiting for service recovery; automatic retry scheduled', id)
+    this.append(id, 'infrastructure', { operation: 'runtime authorization', attempt, nextAt, error: run.error })
+  }
+
+  finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = [], retryEpoch?: number): void {
     this.store.transaction(() => {
       this.assertLease(id)
       const run = this.get(id)
@@ -153,6 +183,7 @@ export class RunStore {
         const completed = state === 'completed' && !unresolved
         this.store.db.prepare('UPDATE workflow_nodes SET state=?,reason=?,output=? WHERE workflow_run_id=? AND pod_id=? AND run_id=?').run(completed ? 'completed' : 'blocked', completed ? null : error ?? (unresolved ? 'External effects need review' : summary), this.store.db.prepare('SELECT output FROM workflow_nodes WHERE workflow_run_id=? AND pod_id=?').get(attempt.workflow_run_id as string, run.podId)?.output as string | null, attempt.workflow_run_id as string, run.podId, id)
       }
+      if (retryEpoch !== undefined) this.deferInfrastructure(id, retryEpoch, run.checkpointRevision, revision)
       this.append(id, 'finished', { state, summary, error, checkpointRevision: revision })
       this.store.db.prepare('DELETE FROM run_leases WHERE run_id=? AND boot_id=?').run(id, this.bootId)
     })

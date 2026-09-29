@@ -2518,5 +2518,17 @@
   "Invalid Pod binding": "Ungültige Pod-Zuordnung",
   "Review the pending operation before making another change.": "Prüfe den ausstehenden Vorgang, bevor du eine weitere Änderung vornimmst.",
   "This Pod is offline.": "Dieser Pod ist offline.",
-  "DDISA/OpenApe": "DDISA/OpenApe"
+  "DDISA/OpenApe": "DDISA/OpenApe",
+  "Waiting for service recovery. Next attempt: {time}": "Warte auf den Dienst. Nächster Versuch: {time}",
+  "Service available again": "Dienst wieder verfügbar",
+  "Waiting for service recovery": "Warte auf den Dienst",
+  "Invalid infrastructure failure": "Ungültiger Dienstfehler",
+  "Invalid infrastructure retry": "Ungültiger Wiederholungsversuch",
+  "Invalid infrastructure retry state": "Ungültiger Wiederholungsstatus",
+  "Tool execution was interrupted by a permission service outage; review before retrying": "Die Werkzeugausführung wurde durch einen Ausfall des Berechtigungsdienstes unterbrochen. Vor einem erneuten Versuch prüfen.",
+  "HTTP delivery may be uncertain; permission service became unavailable after sending": "Die HTTP-Zustellung ist möglicherweise unklar. Der Berechtigungsdienst ist nach dem Senden ausgefallen.",
+  "Script or permissions changed during infrastructure retry; review before running": "Skript oder Berechtigungen wurden während des Wartens geändert. Vor der Ausführung prüfen.",
+  "Permission service temporarily unavailable": "Berechtigungsdienst vorübergehend nicht verfügbar",
+  "HTTP service temporarily unavailable": "HTTP-Dienst vorübergehend nicht verfügbar",
+  "Infrastructure retry cancelled because the owner paused execution": "Wiederholungsversuch abgebrochen, weil die Ausführung pausiert wurde"
 }

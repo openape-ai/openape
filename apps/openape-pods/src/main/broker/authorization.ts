@@ -1,3 +1,4 @@
+import { transientNetwork, transientResponse } from '../../contracts/infrastructure'
 import type { BrokeredGrant } from '@openape/core'
 import { sameBrokeredGrant } from '@openape/grants'
 import { authorizeAssignedCommand } from '@openape/apes/assigned'
@@ -35,7 +36,14 @@ export class AgentAuthority {
   private async request(path: string, method: 'GET' | 'POST', signal: AbortSignal, body?: unknown): Promise<unknown> {
     const token = await this.connection.accessToken()
     signal.throwIfAborted()
-    const response = await fetch(new URL(path, this.connection.issuer), { method, redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]), headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) })
+    const safe = method === 'GET' || path.endsWith('/token')
+    let response: Response
+    try { response = await fetch(new URL(path, this.connection.issuer), { method, redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]), headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }) }
+    catch (error) { if (safe) transientNetwork(error, 'authorization', signal); throw error }
+    if (safe) {
+      try { transientResponse(response, 'authorization') }
+      catch (error) { await response.body?.cancel(); throw error }
+    }
     if (!response.body) throw new Error('Identity service returned no response')
     const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let size = 0
     try {
@@ -123,6 +131,13 @@ export class AgentAuthority {
     const reply = await this.request(`/api/grants/${encodeURIComponent(assignment.grantId)}/token`, 'POST', signal) as { authz_jwt?: unknown }
     if (!reply || typeof reply.authz_jwt !== 'string') throw new Error('Missing assigned grant token')
     const issuer = (this.connection.decisionIssuer ?? this.connection.issuer).replace(/\/$/, '')
-    await authorizeAssignedCommand(assignment.command, reply.authz_jwt, { issuer, brokered: this.connection.brokered, subject: this.connection.subject, targetHost: this.connection.targetHost, grantId: assignment.grantId, jwksUri: `${issuer}/.well-known/jwks.json`, grantsEndpoint: `${issuer}/api/grants`, signal })
+    await authorizeAssignedCommand(assignment.command, reply.authz_jwt, { issuer, brokered: this.connection.brokered, subject: this.connection.subject, targetHost: this.connection.targetHost, grantId: assignment.grantId, jwksUri: `${issuer}/.well-known/jwks.json`, grantsEndpoint: `${issuer}/api/grants`, signal, fetch: async (url, options) => {
+      let response: Response
+      try { response = await fetch(url, options) }
+      catch (error) { transientNetwork(error, 'authorization', signal) }
+      try { transientResponse(response, 'authorization') }
+      catch (error) { await response.body?.cancel(); throw error }
+      return response
+    } })
   }
 }

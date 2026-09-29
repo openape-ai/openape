@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import { AgentAuthority } from '../src/main/broker/authorization'
+import { InfrastructureError } from '../src/contracts/infrastructure'
 import type { RunApproval } from '../src/contracts/activity'
 
 const cleanup: (() => Promise<void>)[] = []
@@ -17,12 +18,14 @@ async function fixture(initial = 'used', decision = 'approved') {
   const resolved = await resolveCommand(adapter, argv)
   const command = { cliId: 'pod-runtime', adapterPath, adapterDigest: adapter.digest, argv, permission: resolved.permission }
   const keys = generateKeyPairSync('ed25519')
-  const state = { grantType: 'once', initial, decision, creates: 0, consumes: [] as string[], tokens: [] as string[], bodies: [] as Record<string, unknown>[], active: true, tokenError: false, subject: 'pod@example.test', progress: [] as RunApproval[], grants: new Map<string, string>(), staleAdapters: new Set<string>() }
+  const state = { unavailablePath: '', unavailable: 0, grantType: 'once', initial, decision, creates: 0, consumes: [] as string[], tokens: [] as string[], bodies: [] as Record<string, unknown>[], active: true, tokenError: false, subject: 'pod@example.test', progress: [] as RunApproval[], grants: new Map<string, string>(), staleAdapters: new Set<string>() }
   let origin = ''
   const server = createServer(async (request, response) => {
     response.setHeader('Content-Type', 'application/json')
     const reply = (body: unknown) => response.end(JSON.stringify(body))
+    if (state.unavailablePath && request.url?.endsWith(state.unavailablePath)) { response.statusCode = 503; reply({ title: 'Temporary failure' }); return }
     if (request.url === '/.well-known/jwks.json') { reply({ keys: [{ ...keys.publicKey.export({ format: 'jwk' }), kid: 'key', alg: 'EdDSA', use: 'sig' }] }); return }
+    if (state.unavailable && request.method === 'GET' && request.url?.startsWith('/api/grants/')) { response.statusCode = state.unavailable; reply({ title: 'Temporary failure' }); return }
     const id = request.url?.split('/')[3] ?? ''
     if (request.url?.startsWith('/api/pods/agents/')) { const grantId = new URL(request.url, origin).searchParams.get('grant'); reply({ email: 'pod@example.test', owner: 'owner@example.test', active: state.active, keyIds: ['key'], grantId, grantActive: true }); return }
     if (request.url === '/api/grants' && request.method === 'POST') {
@@ -149,4 +152,29 @@ it('records the pending grant before an automatic approval failure and never con
   await expect(authority.authorize({ command: f.command, grantId: '' }, new AbortController().signal)).rejects.toThrow('Owner connection')
   expect(f.state.progress).toMatchObject([{ grantId: 'fresh-1', state: 'pending' }])
   expect(f.state.consumes).toEqual([])
+})
+
+it('classifies a permission-service outage before execution and revalidates the grant after recovery', async () => {
+  const f = await fixture('approved'); f.state.grantType = 'always'; f.state.unavailable = 503
+  const assignment = { command: f.command, grantId: 'old' }
+  await expect(f.authority.authorize(assignment, new AbortController().signal)).rejects.toBeInstanceOf(InfrastructureError)
+  expect(f.state.consumes).toEqual([])
+  f.state.unavailable = 0
+  await f.authority.authorize(assignment, new AbortController().signal)
+  expect(f.state.consumes).toEqual(['old'])
+  f.state.unavailable = 403
+  await expect(f.authority.authorize(assignment, new AbortController().signal)).rejects.not.toBeInstanceOf(InfrastructureError)
+  expect(f.state.consumes).toEqual(['old'])
+})
+
+it.each(['/.well-known/jwks.json', '/consume'])('recovers a permission outage at %s before any operation executes', async (path) => {
+  const f = await fixture('approved')
+  f.state.grantType = 'always'
+  f.state.unavailablePath = path
+  const assignment = { grantId: 'old', command: f.command }
+  await expect(f.authority.authorize(assignment, new AbortController().signal)).rejects.toBeInstanceOf(InfrastructureError)
+  expect(f.state.consumes).toEqual([])
+  f.state.unavailablePath = ''
+  await f.authority.authorize(assignment, new AbortController().signal)
+  expect(f.state.consumes).toEqual(['old'])
 })

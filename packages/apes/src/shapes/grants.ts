@@ -174,6 +174,7 @@ export interface AssignedGrantScope {
   grantsEndpoint: string
   runAs?: string
   signal?: AbortSignal
+  fetch?: (url: string, options: RequestInit) => Promise<Response>
 }
 export async function verifyAndConsume(token: string, resolved: ResolvedCommand, scope?: AssignedGrantScope): Promise<void> {
   const payload = decodePayload(token)
@@ -183,10 +184,18 @@ export async function verifyAndConsume(token: string, resolved: ResolvedCommand,
 
   const discovery = scope ? {} : await discoverEndpoints(issuer)
   const jwksUri = scope?.jwksUri ?? String(discovery.jwks_uri ?? `${issuer}/.well-known/jwks.json`)
+  const transport = scope?.fetch ?? fetch
+  let jwks: Parameters<typeof verifyAuthzJWT>[1]['jwks']
+  if (scope?.fetch) {
+    const response = await transport(jwksUri, { redirect: 'error', signal: AbortSignal.any([...(scope.signal ? [scope.signal] : []), AbortSignal.timeout(10000)]) })
+    if (!response.ok) throw new Error(`JWKS request failed: ${response.status}`)
+    jwks = await response.json() as typeof jwks
+  }
   const result = await verifyAuthzJWT(token, {
     expectedIss: issuer,
     expectedAud: resolved.adapter.cli.audience ?? 'shapes',
     jwksUri,
+    jwks,
   })
 
   if (!result.valid || !result.claims) {
@@ -237,9 +246,9 @@ export async function verifyAndConsume(token: string, resolved: ResolvedCommand,
   }
 
   const grantsEndpoint = scope?.grantsEndpoint ?? await getGrantsEndpoint(issuer)
-  const consume = await fetch(`${grantsEndpoint}/${encodeURIComponent(claims.grant_id)}/consume`, {
+  const consume = await transport(`${grantsEndpoint}/${encodeURIComponent(claims.grant_id)}/consume`, {
     method: 'POST',
-    ...(scope ? { redirect: 'error' as const, signal: scope.signal ?? AbortSignal.timeout(10000) } : {}),
+    ...(scope ? { redirect: 'error' as const, signal: AbortSignal.any([...(scope.signal ? [scope.signal] : []), AbortSignal.timeout(10000)]) } : {}),
     headers: {
       Authorization: `Bearer ${token}`,
     },
