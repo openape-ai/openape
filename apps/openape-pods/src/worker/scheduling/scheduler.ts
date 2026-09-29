@@ -1,3 +1,4 @@
+import { infrastructureRetry, retryReady } from './retry'
 import { randomUUID } from 'node:crypto'
 import { parseSchedule } from '../../contracts/scheduling'
 import type { ScheduleSpec, ScheduleView } from '../../contracts/scheduling'
@@ -13,7 +14,9 @@ export class Scheduler {
     this.store.getPod(podId)
     const row = this.store.db.prepare('SELECT * FROM schedules WHERE pod_id=?').get(podId)
     const count = (state: string) => this.store.db.prepare('SELECT count(*) AS count FROM accepted_events WHERE pod_id=? AND state=?').get(podId, state)!.count as number
-    return { spec: row ? parseSchedule(JSON.parse(row.spec as string)) : null, enabled: row?.enabled === 1, revision: row?.revision as number ?? 0, nextAt: row?.next_at as number | null ?? null, error: row?.error as string | null ?? this.store.db.prepare('SELECT o.error FROM reference_observations o JOIN resources r ON r.id=o.resource_id AND r.pod_id=o.pod_id WHERE o.pod_id=? AND o.error IS NOT NULL AND r.state=\'ready\' LIMIT 1').get(podId)?.error as string | null ?? this.store.db.prepare('SELECT error FROM accepted_events WHERE pod_id=? AND state=\'blocked\' ORDER BY sequence LIMIT 1').get(podId)?.error as string | null ?? null, pending: count('pending'), blocked: count('blocked'), blockedSince: this.store.db.prepare('SELECT min(coalesce(r.finished_at,e.accepted_at)) AS since FROM accepted_events e LEFT JOIN runs r ON r.id=e.run_id WHERE e.pod_id=? AND e.state=\'blocked\'').get(podId)!.since as number | null, concurrency: this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency as number }
+    const retryRun = this.store.db.prepare('SELECT run_id FROM accepted_events WHERE pod_id=? AND state=\'pending\' AND run_id IS NOT NULL ORDER BY sequence LIMIT 1').get(podId)
+    const retry = infrastructureRetry(this.store, retryRun ? String(retryRun.run_id) : null)
+    return { ...(retry ? { retry: { at: retry.at, attempt: retry.attempt, error: retry.error } } : {}), spec: row ? parseSchedule(JSON.parse(row.spec as string)) : null, enabled: row?.enabled === 1, revision: row?.revision as number ?? 0, nextAt: row?.next_at as number | null ?? null, error: row?.error as string | null ?? this.store.db.prepare('SELECT o.error FROM reference_observations o JOIN resources r ON r.id=o.resource_id AND r.pod_id=o.pod_id WHERE o.pod_id=? AND o.error IS NOT NULL AND r.state=\'ready\' LIMIT 1').get(podId)?.error as string | null ?? this.store.db.prepare('SELECT error FROM accepted_events WHERE pod_id=? AND state=\'blocked\' ORDER BY sequence LIMIT 1').get(podId)?.error as string | null ?? null, pending: count('pending'), blocked: count('blocked'), blockedSince: this.store.db.prepare('SELECT min(coalesce(r.finished_at,e.accepted_at)) AS since FROM accepted_events e LEFT JOIN runs r ON r.id=e.run_id WHERE e.pod_id=? AND e.state=\'blocked\'').get(podId)!.since as number | null, concurrency: this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency as number }
   }
 
   save(podId: string, revision: number, spec: ScheduleSpec, enabled: boolean): void {
@@ -90,9 +93,12 @@ export class Scheduler {
     for (const row of ready) {
       if (!available()) break
       const podId = row.pod_id as string
-      const events = this.store.db.prepare('SELECT id,source FROM accepted_events WHERE pod_id=? AND state=\'pending\' ORDER BY (source=\'manual\') DESC,sequence LIMIT 50').all(podId)
+      const events = this.store.db.prepare('SELECT id,source,run_id FROM accepted_events WHERE pod_id=? AND state=\'pending\' ORDER BY (source=\'manual\') DESC,sequence LIMIT 50').all(podId)
       const reason = events.some(event => event.source === 'manual') ? 'manual' : events.every(event => event.source === 'schedule') ? 'schedule' : 'event'
-      try { this.driver.start(podId, { reason, eventIds: events.map(event => event.id as string) }) }
+      try {
+        if (events.some(event => !retryReady(this.store, podId, event.run_id as string | null, this.now()))) continue
+        this.driver.start(podId, { reason, eventIds: events.map(event => event.id as string) })
+      }
       catch (error) {
         const message = error instanceof Error ? error.message : 'Queued run could not start'
         this.store.transaction(() => { for (const event of events) this.store.db.prepare('UPDATE accepted_events SET state=\'blocked\',error=? WHERE id=? AND state=\'pending\'').run(message, event.id as string) })

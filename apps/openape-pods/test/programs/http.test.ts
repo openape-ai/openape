@@ -2,6 +2,7 @@ import { generateKeyPairSync, verify } from 'node:crypto'
 import { expect, it, vi } from 'vitest'
 import { httpRequestBodyChars, httpResponseBodyBytes, parseHttpAuthentication, parseHttpRequest, parseHttpPermission } from '../../src/contracts/http'
 import { DdisaAgentTokens } from '../../src/main/programs/ddisa-agent'
+import { InfrastructureError } from '../../src/contracts/infrastructure'
 import { requestHttp } from '../../src/main/programs/http'
 
 it('requires an assigned HTTPS origin and method, bounds payloads and requires stable effect identities', () => {
@@ -71,4 +72,15 @@ it('mints a DDISA agent token from the assigned key, caches it per credential an
   expect(await tokens.bearer('pod-a', authentication, 'credential-2', readKey, signal)).toBe('token-5')
   const refused = new DdisaAgentTokens(async () => new Response('{}', { status: 401 }), () => now)
   await expect(refused.bearer('pod-a', authentication, 'credential-2', readKey, signal)).rejects.toThrow('authentication failed (401)')
+})
+
+it('retries only safe reads on temporary HTTP responses and transport failures', async () => {
+  const signal = new AbortController().signal
+  const read = parseHttpRequest({ url: 'https://api.example.invalid/items', method: 'GET' })
+  const write = parseHttpRequest({ url: read.url, method: 'POST', key: 'write-once' })
+  await expect(requestHttp(read, signal, async () => new Response(null, { status: 503 }))).rejects.toBeInstanceOf(InfrastructureError)
+  await expect(requestHttp(write, signal, async () => new Response(null, { status: 503 }))).resolves.toMatchObject({ status: 503 })
+  const broken = async () => { throw new Error('Network failed', { cause: { code: 'ECONNRESET' } }) }
+  await expect(requestHttp(read, signal, broken)).rejects.toBeInstanceOf(InfrastructureError)
+  await expect(requestHttp(write, signal, broken)).rejects.not.toBeInstanceOf(InfrastructureError)
 })

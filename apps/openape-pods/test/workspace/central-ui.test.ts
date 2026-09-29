@@ -284,3 +284,13 @@ it('keeps remote edits until navigation is explicitly confirmed', async () => {
   await wrapper!.get('.central-pod').trigger('click'); await flushPromises()
   expect((wrapper!.get('[aria-label="Pod description"]').element as HTMLTextAreaElement).value).not.toBe('Unfinished remote edit')
 })
+
+it('shows the automatic retry time instead of a blocked queue for a temporary service outage', async () => {
+  const fixture = centralFixture()
+  fixture.view.scheduling.retry = { at: Date.UTC(2026, 8, 29, 8), attempt: 2, error: 'Permission service temporarily unavailable' }
+  wrapper = mount(CentralWorkspace, { props: { client: fixture.client } })
+  await flushPromises(); await wrapper.find('.central-pod').trigger('click'); await flushPromises()
+  await wrapper.findAll('.central-tabs button').find(button => button.text() === 'Settings')!.trigger('click'); await flushPromises()
+  expect(wrapper.text()).toContain('Waiting for service recovery. Next attempt:')
+  expect(wrapper.find('.central-blocked').exists()).toBe(false)
+})

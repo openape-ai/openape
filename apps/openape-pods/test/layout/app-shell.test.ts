@@ -147,3 +147,18 @@ describe('workspace shell with the production stylesheet', () => {
     select.style.removeProperty('min-width')
   })
 })
+
+it('shows automatic service recovery in the shared narrow German workspace', async () => {
+  applyLanguage('de')
+  const bridge = installWorkspace()
+  const schedule = await bridge.scheduling({ type: 'list', podId: pods[0]!.id })
+  await mountWorkspace({ scheduling: async () => ({ ...schedule, pending: 1, retry: { at: Date.UTC(2026, 8, 29, 8), attempt: 2, error: 'Permission service temporarily unavailable' } }) })
+  await show(560, 850, 'dark')
+  expect(wrapper!.text()).toContain('Warte auf den Dienst. Nächster Versuch:')
+  expect(overflow()).toEqual(fits)
+  wrapper!.get('[role="status"]').element.scrollIntoView({ block: 'nearest' }); await frame()
+  await page.screenshot({ path: artifact('infrastructure-shared-de-dark.png') })
+  await click('[role="tab"]', 'Einstellungen')
+  expect(wrapper!.get('.schedule-panel [role="status"]').text()).toContain('Warte auf den Dienst.')
+  expect(overflow()).toEqual(fits)
+})

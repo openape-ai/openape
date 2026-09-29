@@ -1,3 +1,4 @@
+import { retryReady } from '../scheduling/retry'
 import { randomUUID } from 'node:crypto'
 import type { WorkflowCommand, WorkflowDefinition, WorkflowRunView, WorkflowView } from '../../contracts/workflows'
 import { parseWorkflowCommand } from '../../contracts/workflows'
@@ -170,6 +171,7 @@ export class WorkflowEngine {
       if (count >= maximum) { this.store.db.prepare('UPDATE workflow_nodes SET reason=? WHERE workflow_run_id=? AND pod_id=?').run('Waiting for an execution slot', id, node.pod_id); continue }
       try {
         this.assertPinned(node)
+        if (!retryReady(this.store, node.pod_id, node.run_id, this.now(), false)) continue
         this.driver.start(node.pod_id, { reason: row.trigger === 'schedule' ? 'schedule' : 'manual', eventIds: [], workflowRunId: id })
       }
       catch (error) { this.store.db.prepare('UPDATE workflow_nodes SET state=\'blocked\',reason=? WHERE workflow_run_id=? AND pod_id=? AND state=\'waiting\'').run(error instanceof Error ? error.message : 'Workflow node could not start', id, node.pod_id) }

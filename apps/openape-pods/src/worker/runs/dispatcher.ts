@@ -1,3 +1,4 @@
+import { InfrastructureError, retryInfrastructure } from '../../contracts/infrastructure'
 import { assignedJev, parseJevRequest, parseJevResult } from '../../contracts/jev'
 import type { JevRequest, JevEvaluation } from '../../contracts/jev'
 import { MailWorkflow } from '../mail/workflow'
@@ -132,6 +133,25 @@ export class RunDispatcher {
     let activeAgentCalls = 0; let agentPausedMs = 0; let agentSince = 0
     const agentBudgetPaused = () => activeAgentCalls > 0 && agentPausedMs + (Date.now() - agentSince) < maxAgentPauseMs
     let shellScope: RunServiceScope | undefined
+    let infrastructureWaiting = 0
+    let scriptStarted = false
+    const retryService = async <T>(operation: string, work: () => Promise<T>, signal: AbortSignal, budgetMs?: number) => {
+      let waiting = false
+      try {
+        return await retryInfrastructure(async () => {
+          assertCurrent()
+          if (waiting && ((pod.lifecycle === 'active' && this.store.getPod(pod.id).lifecycle !== 'active') || this.store.db.prepare('SELECT 1 FROM workflow_attempts a JOIN workflow_runs w ON w.id=a.workflow_run_id WHERE a.run_id=? AND w.paused=1').get(id))) {
+            this.cancelPod(pod.id, 'Infrastructure retry cancelled because the owner paused execution')
+            signal.throwIfAborted()
+          }
+          return work()
+        }, signal, (retry) => {
+          if (retry && !waiting) { waiting = true; infrastructureWaiting++ }
+          this.runs.append(id, 'infrastructure', { operation, ...(retry ?? { state: 'restored' }) })
+        }, budgetMs)
+      }
+      finally { if (waiting) infrastructureWaiting-- }
+    }
     try {
       await mkdir(directory, { recursive: true, mode: 0o700 })
       const manifestRow = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(pod.id, run.scriptHash)
@@ -156,13 +176,13 @@ export class RunDispatcher {
       const invokeTool = async (body: unknown, toolSignal: AbortSignal) => {
         assertCurrent()
         if (!manifest.capabilities.some(capability => capability === 'mail.read' || capability.startsWith('tool.app_')) || !this.services?.tool) throw new Error('No tool capability is assigned to this pod')
-        const operation = this.services.tool(body, toolSignal, scope)
+        const operation = retryService('tool authorization', async () => { assertCurrent(); return this.services!.tool!(body, toolSignal, scope) }, toolSignal)
         pendingAgents.add(operation)
         try { const reply = await operation; assertCurrent(); return reply }
         finally { pendingAgents.delete(operation) }
       }
       if (this.services?.shell) {
-        const environment = await this.services.shell(scope, signal)
+        const environment = await retryService('runtime authorization', () => this.services!.shell!(scope, signal), signal, 30000)
         Object.assign(runtime, { home: environment.home, shell: environment.shell, environment: { ...environment.environment, ...runtime.environment } })
         shellScope = scope
       }
@@ -170,8 +190,8 @@ export class RunDispatcher {
       let mail: MailRecipeSession | undefined
       this.runs.append(id, 'environment', { script: artifact, workspace: input.workspace, values: Object.fromEntries(Object.entries(runtime.environment).filter(([key]) => ['HOME', 'TMPDIR', 'PATH', 'SHELL', 'PODS_POD_ID', 'LANG', 'TERM'].includes(key))) })
       const result = await executeScript(runtime, directory, artifact, input, signal, {
-        budgetPaused: () => agentBudgetPaused() || this.runs.approvals(pod.id).some(item => item.runId === id),
-        event: (type, data) => { this.runs.assertLease(id); this.runs.append(id, type, data); if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
+        budgetPaused: () => infrastructureWaiting > 0 || agentBudgetPaused() || this.runs.approvals(pod.id).some(item => item.runId === id),
+        event: (type, data) => { this.runs.assertLease(id); this.runs.append(id, type, data); if (type === 'process') scriptStarted = true; if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
         request: async (operation, payload, operationSignal) => {
           assertCurrent()
           if (operation === 'mail.archive') {
@@ -251,7 +271,7 @@ export class RunDispatcher {
             const request = parseHttpRequest(payload)
             assignedHttp(this.resources.list(pod.id), scope, request)
             const pending = executeHttpEffect(new EffectLedger(this.store), pod.id, id, request, async () => {
-              const result = await this.services!.http!(request, operationSignal, scope)
+              const result = await retryService('HTTP request', async () => { assertCurrent(); return this.services!.http!(request, operationSignal, scope) }, operationSignal)
               assertCurrent(); operationSignal.throwIfAborted(); return result
             })
             pendingAgents.add(pending)
@@ -294,7 +314,7 @@ export class RunDispatcher {
     catch (error) {
       const message = error instanceof Error ? error.message : 'Run failed'
       await Promise.allSettled(pendingAgents)
-      await this.finish(id, signal.aborted ? 'cancelled' : 'failed', signal.aborted ? 'Run cancelled' : 'Run failed', message)
+      await this.finish(id, signal.aborted ? 'cancelled' : 'failed', signal.aborted ? 'Run cancelled' : 'Run failed', message, [], !signal.aborted && !scriptStarted && error instanceof InfrastructureError ? epoch : undefined)
     }
     finally {
       try { if (shellScope) await this.services?.closeShell?.(shellScope) }
@@ -303,13 +323,13 @@ export class RunDispatcher {
     }
   }
 
-  private async finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = []): Promise<void> {
+  private async finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = [], retryEpoch?: number): Promise<void> {
     try { await confirmDomainsStopped(this.store, id, this.runtime.helper) }
     catch (failure) {
       this.runs.interrupt(id, failure instanceof Error ? failure.message : 'Execution cleanup is unverified')
       return
     }
-    this.runs.finish(id, state, summary, error, completedInputIds)
+    this.runs.finish(id, state, summary, error, completedInputIds, retryEpoch)
   }
 
 }

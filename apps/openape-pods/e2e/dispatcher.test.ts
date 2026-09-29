@@ -214,3 +214,33 @@ it('runs mail workflow recipes through native script IPC with a quiet baseline a
   expect(calls).toHaveLength(2)
   expect(f.store.db.prepare('SELECT * FROM effect_ledger').all()).toEqual([])
 })
+
+it.each(['recover', 'pause', 'cancel'])('handles an infrastructure outage without restarting or duplicating a POST (%s)', async (action) => {
+  const { InfrastructureError } = await import('../src/contracts/infrastructure')
+  let calls = 0; let delivered = 0
+  const f = await setup({ http: async () => {
+    if (++calls === 1) {
+      if (action === 'pause') f.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(f.pod.id)
+      if (action === 'cancel') f.dispatcher.cancelPod(f.pod.id)
+      throw new InfrastructureError({ phase: 'authorization', retryAfterMs: 0 })
+    }
+    delivered++
+    return { status: 200, headers: {}, body: '{}' }
+  } })
+  const capability = 'tool.http_fixture.request'
+  f.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), f.pod.id, 'tool', 'ready', 'Fixture HTTP', JSON.stringify({ type: 'http', origin: 'https://example.com', methods: ['POST'], capability, authority: { identity: { podId: f.pod.id }, grantId: 'approved' } }))
+  await f.dispatcher.install(f.pod.id, 'deterministic')
+  const original = JSON.parse(f.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=?').get(f.pod.id)!.manifest as string)
+  const code = `export async function run(ctx) { ctx.log('script entered once'); await ctx.http.request({url:'https://example.com/send',method:'POST',headers:{},key:'fixed-delivery'}); return {status:'completed',summary:'Delivered once',completedInputIds:ctx.input.eventIds,gapIds:[]}; }`
+  const manifest = f.store.storeScript(f.pod.id, { ...original, capabilities: [capability], contentHash: digest(code) }, code)
+  f.store.db.prepare('INSERT INTO validations VALUES(?,?,?,?,?)').run(f.pod.id, manifest.contentHash, 1, 0, '{}')
+  f.store.db.prepare('UPDATE pods SET lifecycle=\'active\',active_script=? WHERE id=?').run(manifest.contentHash, f.pod.id)
+  const id = f.dispatcher.start(f.pod.id)
+  await expect.poll(() => f.dispatcher.runs.get(id).state, { timeout: 15000 }).toBe(action === 'recover' ? 'completed' : 'cancelled')
+  expect(calls).toBe(action === 'recover' ? 2 : 1); expect(delivered).toBe(action === 'recover' ? 1 : 0)
+  const events = f.dispatcher.runs.events(f.pod.id, id)
+  expect(events.filter(event => event.type === 'process')).toHaveLength(1)
+  expect(events.filter(event => event.type === 'log')).toHaveLength(1)
+  expect(events.filter(event => event.type === 'infrastructure')).toHaveLength(action === 'recover' ? 2 : action === 'pause' ? 1 : 0)
+  expect(f.store.db.prepare('SELECT state FROM effect_ledger').get()?.state).toBe(action === 'recover' ? 'completed' : 'unknown')
+})

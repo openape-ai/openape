@@ -19,6 +19,7 @@ export function runActivity(events: RunEvent[]): ActivityItem[] {
       const next = { sequence: event.sequence, at: event.at, title: 'Permission review', state: data.state === 'approved' ? 'completed' : String(data.state) }
       items.push(next); active.set(key, next); continue
     }
+    if (event.type === 'infrastructure') { items.push({ sequence: event.sequence, at: event.at, title: data.state === 'restored' ? 'Service available again' : 'Waiting for service recovery', state: data.state === 'restored' ? 'completed' : 'waiting' }); continue }
     const titles: Record<string, string> = { started: 'Run prepared', process: 'Script started', checkpoint: 'Progress saved', finished: 'Run finished', interrupted: 'Run interrupted' }
     const title = titles[event.type]
     if (title) items.push({ sequence: event.sequence, at: event.at, title, state: event.type === 'finished' ? String(data.state) : event.type === 'interrupted' ? 'interrupted' : 'completed' })
