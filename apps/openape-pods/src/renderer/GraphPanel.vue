@@ -74,6 +74,13 @@ export default defineComponent({
     },
     async load(key?: string) {
       if (!this.selectedId) { this.detail = null; return }
+      // A published view carries its pictures along; there is no worker to ask.
+      const published = this.view.graphs?.[this.selectedId]
+      if (this.view.graphs) {
+        const events = key === undefined ? undefined : published?.traces?.[key]
+        this.detail = published ? { ...published, trace: key !== undefined && events ? { key, title: published.items.find(item => item.key === key)?.title ?? key, events } : null } : null
+        return
+      }
       await this.send({ type: 'graph', id: this.selectedId, ...(key === undefined ? {} : { key }) })
     },
     async decide(command: WorkflowCommand) { if (await this.send(command)) await this.load() },
