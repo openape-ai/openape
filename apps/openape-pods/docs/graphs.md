@@ -4,7 +4,9 @@ This document freezes the types, names and limits of channel-mode graphs before
 any engine code exists. It belongs to
 [issue 1407](https://repos.openape.ai/patrick/monorepo/issues/1407) and the
 [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3PF2RKZPA2V0AQ2SJTXD6DX).
-Nothing described here is implemented yet. Sequence workflows are described in
+Definition types, derived edges, diagnostics and storage exist since migration
+v26. A channel-mode graph can be saved but neither enabled nor started until the
+item flow exists. Sequence workflows are described in
 [workflows.md](workflows.md) and do not change.
 
 A change to this contract needs a new entry in the plan's decision log.
@@ -97,8 +99,14 @@ modes.
 
 ```ts
 export function deriveEdges(members: { podId: string, contract: GraphContract }[], gates: GraphGate[]): GraphEdge[]
-export function diagnoseGraph(definition: WorkflowDefinition, contracts: Record<string, GraphContract | null>): GraphDiagnostic[]
+export interface GraphMemberFacts { archive?: boolean, elsewhere?: boolean, emits?: string[], variables?: string[] }
+export function diagnoseGraph(definition: WorkflowDefinition, contracts: Record<string, GraphContract | null>, facts?: Record<string, GraphMemberFacts>): GraphDiagnostic[]
 ```
+
+`facts` carries what only the store knows about a member Pod: an archive right,
+membership in another graph or group, the channels its validated script emitted
+and the names of its Pod variables. Four diagnostics depend on it and cannot be
+derived from contracts alone.
 
 An edge exists for every pair of nodes where the first gives a channel and the
 second takes it. A gate of kind `approve` gives `gives` and, if set, `excluded`.

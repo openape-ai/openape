@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { removeWorkflowSchema } from './legacy'
+import { removeGraphSchema, removeWorkflowSchema } from './legacy'
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -8,6 +8,8 @@ import { DatabaseSync } from 'node:sqlite'
 import { afterEach, describe, expect, it } from 'vitest'
 import { digest, parseManifest, PodDatabase } from '../../src/worker/storage/database'
 import type { CommitPoint, ProgressInput, ScriptManifest } from '../../src/worker/storage/database'
+import { workflowDefinitions } from '../../src/worker/workflows/engine'
+import { sequenceParts } from '../../src/contracts/workflows'
 
 const roots: string[] = []; const stores: PodDatabase[] = []
 function fixture(): PodDatabase {
@@ -118,6 +120,7 @@ it('migrates version 23 receipts intact and allows detaching only completed effe
   store.db.prepare('INSERT INTO runs VALUES(?,?,?,\'completed\',1,2,\'Done\',NULL,0,1)').run(run, pod.id, digest('script'))
   store.db.prepare('INSERT INTO effect_ledger VALUES(?,?,?,?,?,\'completed\',?)').run(pod.id, 'delivered', 'http.request', digest('input'), run, '{"receipt":"original"}')
   const receipts = store.db.prepare('SELECT * FROM effect_ledger').all()
+  removeGraphSchema(store.db)
   store.db.exec(`
     CREATE TABLE legacy_effects(pod_id TEXT NOT NULL REFERENCES pods(id),effect_key TEXT NOT NULL,operation TEXT NOT NULL,input_hash TEXT NOT NULL,run_id TEXT NOT NULL REFERENCES runs(id),state TEXT NOT NULL,result TEXT,PRIMARY KEY(pod_id,effect_key));
     INSERT INTO legacy_effects SELECT * FROM effect_ledger;
@@ -133,11 +136,28 @@ it('migrates version 23 receipts intact and allows detaching only completed effe
     PRAGMA user_version=23;
   `)
   store = reopen(store)
-  expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(25)
+  expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(26)
   expect(store.db.prepare('SELECT * FROM effect_ledger').all()).toEqual(receipts)
   store.db.prepare('UPDATE effect_ledger SET run_id=NULL').run()
   store.db.prepare('DELETE FROM runs').run()
   expect(store.db.prepare('SELECT result FROM effect_ledger').get()?.result).toBe('{"receipt":"original"}')
   expect(() => store.db.prepare('INSERT INTO effect_ledger VALUES(?,?,?,?,NULL,\'intent\',NULL)').run(pod.id, 'unresolved', 'http.request', digest('input'))).toThrow('CHECK')
+  expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+})
+
+it('upgrades a version 25 database and loads its workflows as sequence', () => {
+  let store = fixture(); const pod = store.createPod({ name: 'Member' })
+  const id = '00000000-0000-4000-8000-0000000000a0'; const nodes = [{ podId: pod.id, after: [], handoff: false }]
+  removeGraphSchema(store.db); store.db.exec('PRAGMA user_version=25')
+  store.db.prepare('INSERT INTO workflows(id,revision,name,nodes,schedule,enabled,next_at,mail) VALUES(?,3,?,?,NULL,0,NULL,NULL)').run(id, 'Morgenbriefing', JSON.stringify(nodes))
+  store = reopen(store)
+  expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(26)
+  expect(workflowDefinitions(store)).toEqual([{ id, revision: 3, name: 'Morgenbriefing', nodes, schedule: null, enabled: false, paused: true, nextAt: null, ...sequenceParts }])
+  for (const table of ['workflow_channels', 'workflow_gates', 'workflow_values', 'graph_items', 'graph_deliveries', 'graph_item_events']) expect(store.db.prepare(`SELECT count(*) AS count FROM ${table}`).get()?.count, table).toBe(0)
+  const backups = readdirSync(store.root).filter(file => file.startsWith('before-v25-'))
+  expect(backups).toHaveLength(1)
+  const backup = new DatabaseSync(join(store.root, backups[0]!), { readOnly: true })
+  try { expect(backup.prepare('SELECT name FROM workflows').get()?.name).toBe('Morgenbriefing') }
+  finally { backup.close() }
   expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
 })

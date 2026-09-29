@@ -9,12 +9,13 @@ import { centralFixture } from './central-fixture'
 import type { CentralStatus } from '../../src/contracts/central'
 import { connected, connectionAfter, connectionLevel } from '../../src/renderer/central/status'
 import type { WorkflowCommand, WorkflowView } from '../../src/contracts/workflows'
+import { sequenceParts } from '../../src/contracts/workflows'
 
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined })
 it('opens local workflows from the desktop landing page and resumes the selected workflow', async () => {
   const id = '00000000-0000-4000-8000-000000000003'
-  const view: WorkflowView = { workflows: [{ id, revision: 1, name: 'Morning review', nodes: [{ podId, after: [], handoff: true }], schedule: null, enabled: false, paused: true, nextAt: null }], runs: [] }
+  const view: WorkflowView = { workflows: [{ ...sequenceParts, id, revision: 1, name: 'Morning review', nodes: [{ podId, after: [], handoff: true }], schedule: null, enabled: false, paused: true, nextAt: null }], runs: [] }
   const workflows = vi.fn(async (command: WorkflowCommand) => {
     if (command.type === 'pause') { view.workflows[0]!.paused = command.paused; view.workflows[0]!.revision++ }
     return structuredClone(view)
