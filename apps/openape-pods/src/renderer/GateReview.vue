@@ -69,7 +69,7 @@ export default defineComponent({
           {{ diagnostic(batch.error) }}
         </p>
         <label v-for="item in batch.items" :key="item.itemId" class="gate-row">
-          <input type="checkbox" :checked="!(excluded[batch.id] ?? []).includes(item.itemId)" :disabled="batch.state !== 'pending' || busy || readOnly" @change="toggle(batch.id, item.itemId)">
+          <input v-if="!readOnly" type="checkbox" :checked="!(excluded[batch.id] ?? []).includes(item.itemId)" :disabled="batch.state !== 'pending' || busy || readOnly" @change="toggle(batch.id, item.itemId)">
           <span>{{ item.title }}</span>
         </label>
         <p class="muted">
@@ -80,9 +80,10 @@ export default defineComponent({
             {{ t('Discard batch; nothing is handed on') }}
           </button>
           <template v-else-if="batch.state === 'pending'">
-            <button v-if="excluded[batch.id]?.length" class="secondary" :disabled="busy || readOnly || included(batch) === batch.items.length" @click="exclude(batch)">
+            <button v-if="excluded[batch.id]?.length && !readOnly" class="secondary" :disabled="busy || readOnly || included(batch) === batch.items.length" @click="exclude(batch)">
               {{ t('Exclude ({count}) and request approval again', { count: excluded[batch.id]!.length }) }}
             </button>
+            <a v-else-if="readOnly && batch.url?.startsWith('https://')" class="primary" :href="batch.url" target="_blank" rel="noopener noreferrer">{{ t('Approve at the identity provider ({count})', { count: batch.items.length }) }}</a>
             <button v-else class="primary" :disabled="busy || !batch.url" @click="$emit('approve', batch.id)">
               {{ t('Approve at the identity provider ({count})', { count: batch.items.length }) }}
             </button>

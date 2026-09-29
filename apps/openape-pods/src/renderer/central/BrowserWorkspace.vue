@@ -7,6 +7,7 @@ import WorkspaceFrame from '../WorkspaceFrame.vue'
 import AccountStatus from '../AccountStatus.vue'
 import AppSettings from '../AppSettings.vue'
 import WorkflowPanel from '../WorkflowPanel.vue'
+import GraphPanel from '../GraphPanel.vue'
 import CentralWorkspace from './CentralWorkspace.vue'
 import { t, diagnostic } from '../i18n'
 
@@ -88,7 +89,8 @@ onBeforeUnmount(() => { closed = true })
         <p v-if="!runtime.online" class="muted">
           {{ t('Desktop offline') }} · {{ t('Showing the last synchronized workflows.') }}
         </p>
-        <WorkflowPanel v-if="runtime.workflows" :key="runtime.id" :view="runtime.workflows" :pods="runtime.workspace.pods" :selected-id="workflowId" read-only @select="workflowId = $event" @open-pod="openPod" />
+        <GraphPanel v-if="runtime.workflows?.graphs" :key="`graphs:${runtime.id}`" :view="runtime.workflows" :pods="runtime.workspace.pods" :organization="runtime.workspace.organization" :selected-id="workflowId" read-only @select="workflowId = $event" @open-pod="openPod" />
+        <WorkflowPanel v-else-if="runtime.workflows" :key="runtime.id" :view="runtime.workflows" :pods="runtime.workspace.pods" :selected-id="workflowId" read-only @select="workflowId = $event" @open-pod="openPod" />
         <p v-else class="muted" role="status">
           {{ t('Workflow data is not available yet. Reconnect the desktop to synchronize it.') }}
         </p>
