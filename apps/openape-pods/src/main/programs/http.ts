@@ -1,7 +1,8 @@
+import { InfrastructureError, transientNetwork, transientResponse } from '../../contracts/infrastructure'
 import { request as httpsRequest } from 'node:https'
 import { lookup } from 'node:dns/promises'
 import { BlockList } from 'node:net'
-import { httpResponseBodyBytes, parseHttpReply } from '../../contracts/http'
+import { isHttpEffect, httpResponseBodyBytes, parseHttpReply } from '../../contracts/http'
 import type { HttpRequest, HttpReply } from '../../contracts/http'
 
 type Transport = (url: string, options: RequestInit) => Promise<Response>
@@ -42,6 +43,10 @@ export async function requestHttp(request: HttpRequest, signal: AbortSignal, tra
   signal.throwIfAborted()
   try {
     const response = await transport(request.url, { method: request.method, headers: request.headers, body: request.body, redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(30000)]) })
+    if (!isHttpEffect(request.method)) {
+      try { transientResponse(response, 'read') }
+      catch (error) { await response.body?.cancel(); throw error }
+    }
     if (response.status >= 300 && response.status < 400) throw new Error('HTTP redirects are not allowed')
     const reader = response.body?.getReader(); const chunks: Uint8Array[] = []; let size = 0
     if (reader) {
@@ -54,5 +59,13 @@ export async function requestHttp(request: HttpRequest, signal: AbortSignal, tra
     const reply = { status: response.status, headers, body: Buffer.concat(chunks).toString('utf8') }
     return parseHttpReply(reply)
   }
-  catch { throw new Error('HTTP request failed; delivery may be uncertain') }
+  catch (error) {
+    signal.throwIfAborted()
+    if (!isHttpEffect(request.method)) {
+      if (error instanceof InfrastructureError) throw error
+      try { transientNetwork(error, 'read', signal) }
+      catch (failure) { if (failure instanceof InfrastructureError) throw failure }
+    }
+    throw new Error('HTTP request failed; delivery may be uncertain')
+  }
 }

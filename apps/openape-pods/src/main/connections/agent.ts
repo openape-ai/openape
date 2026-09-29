@@ -1,3 +1,4 @@
+import { transientNetwork, transientResponse } from '../../contracts/infrastructure'
 import { enrollBrokerAgent } from './broker'
 import { createHash, generateKeyPairSync, sign } from 'node:crypto'
 import { readFile, writeFile } from 'node:fs/promises'
@@ -24,7 +25,14 @@ function origin(value: string): string {
   return url.origin
 }
 async function post(issuer: string, path: string, body: unknown, bearer?: string): Promise<Record<string, unknown>> {
-  const response = await fetch(`${origin(issuer)}${path}`, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000), headers: { 'Content-Type': 'application/json', ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}) }, body: JSON.stringify(body) })
+  let response: Response
+  const authentication = path.startsWith('/api/auth/')
+  try { response = await fetch(`${origin(issuer)}${path}`, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000), headers: { 'Content-Type': 'application/json', ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}) }, body: JSON.stringify(body) }) }
+  catch (error) { if (authentication) transientNetwork(error, 'authorization'); throw error }
+  if (authentication) {
+    try { transientResponse(response, 'authorization') }
+    catch (error) { await response.body?.cancel(); throw error }
+  }
   if (!response.ok) throw new Error(`Pod identity connection failed (${response.status})`)
   const text = await response.text()
   if (text.length > 128 * 1024) throw new Error('Oversized identity response')

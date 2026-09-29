@@ -1,3 +1,4 @@
+import { InfrastructureError } from '../../contracts/infrastructure'
 import { ProgramState } from '../programs/state'
 import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -116,6 +117,10 @@ export class PodToolBroker {
       if (cache) secrets.push(...secretStrings(parseCredentialJSON(await readFile(cache, 'utf8'))))
       for (const secret of secrets) { stdout = stdout.replaceAll(secret, '[REDACTED]'); stderr = stderr.replaceAll(secret, '[REDACTED]') }
       return { exitCode, stdout, stderr }
+    }
+    catch (error) {
+      if (error instanceof InfrastructureError) throw new Error('Tool execution was interrupted by a permission service outage; review before retrying')
+      throw error
     }
     finally {
       clearTimeout(deadline); monitoring.abort(); lease.signal.removeEventListener('abort', stop)
