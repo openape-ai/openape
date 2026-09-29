@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto'
 
+export { itemTitle } from './graph-projection'
+
 export const gateAudience = 'pods-graph-gate'
 export const gateLimits = { batchItems: 30, expiryMs: 12 * 60 * 60 * 1000, pendingBatches: 4, summaryLength: 4096 } as const
 export type GateBatchState = 'preparing' | 'pending' | 'consuming' | 'approved' | 'denied' | 'expired' | 'superseded' | 'unknown'
@@ -16,12 +18,6 @@ export const payloadHash = (data: Record<string, unknown>): string => sha256(JSO
 /** Binds the keys and the payloads of a batch, independent of their order. */
 export function gateDigest(items: { key: string, hash: string }[]): string {
   return sha256(items.map(item => `${item.key}\n${item.hash}`).sort().join('\n'))
-}
-/** Mail content is data: the title is shortened, single-line text and nothing else. */
-export function itemTitle(key: string, data: Record<string, unknown>): string {
-  const parts = [data.subject, data.sender].filter((part): part is string => typeof part === 'string' && !!part.trim())
-  // eslint-disable-next-line no-control-regex
-  return (parts.length ? parts.join(' · ') : key).replace(/[\u0000-\u001F\u007F]+/g, ' ').trim().slice(0, 120)
 }
 export function parseGateManifest(value: unknown): GateManifest {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid gate batch')

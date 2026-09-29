@@ -19,6 +19,7 @@ export const centralTables = [
   'mail_inventory', 'mail_items', 'mail_receipts', 'mail_extractions', 'mail_contexts', 'source_derivations',
   'master_messages', 'script_drafts', 'access_proposals', 'pod_organization', 'pod_groups', 'pod_memberships',
   'pod_variables', 'master_message_scopes', 'pod_chat_origins', 'pod_descriptions', 'draft_packages', 'dependency_sets', 'script_dependencies',
+  'workflow_channels', 'workflow_gates', 'workflow_values', 'graph_items', 'graph_deliveries', 'graph_item_events', 'graph_gate_batches',
   'workflows', 'workflow_members', 'workflow_runs', 'workflow_nodes', 'workflow_attempts', 'workflow_mail_scopes',
   'workflow_mail_pending', 'workflow_mail_processed', 'workflow_mail_participants', 'workflow_mail_batches', 'workflow_mail_audit',
   'chat_conversations', 'chat_contexts', 'chat_members', 'chat_message_context', 'control_runs', 'control_changes',

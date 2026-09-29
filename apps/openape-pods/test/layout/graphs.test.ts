@@ -7,6 +7,8 @@ import type { GraphDetail, GraphGate } from '../../src/contracts/graphs'
 import type { WorkflowDefinition, WorkflowView } from '../../src/contracts/workflows'
 import { sequenceParts } from '../../src/contracts/workflows'
 import App from '../../src/renderer/App.vue'
+import BrowserWorkspace from '../../src/renderer/central/BrowserWorkspace.vue'
+import { browserFixture } from '../workspace/browser-fixture'
 import GraphView from '../../src/renderer/GraphView.vue'
 import { applyLanguage } from '../../src/renderer/i18n'
 import { screenshotPath } from './evidence'
@@ -123,5 +125,30 @@ describe('graph pages in the app', () => {
     await click('Freigabe öffnen')
     for (const row of rectangles('.gate-row')) expect(row.right).toBeLessThanOrEqual(390)
     await shot('phone-approval')
+  })
+})
+
+describe('graph in the browser workspace', () => {
+  it('shows the published graph, its counts and one item trace read-only, without a worker', async () => {
+    await page.viewport(1280, 900); applyLanguage('de')
+    const fixture = await browserFixture()
+    fixture.host.workspace.pods = pods.map(pod => ({ ...pod, online: true }))
+    fixture.host.workspace.organization = { revision: 1, groups: [{ id: group, name: 'Delta Mind', collapsed: false, podIds: pods.map(pod => pod.id) }] }
+    fixture.host.workflows = { ...view, graphs: { [graphId]: { ...detail, traces: { 'mail-0': trace.events } } } }
+    Reflect.deleteProperty(window, 'pods')
+    wrapper = mount(BrowserWorkspace, { props: { client: fixture.client }, attachTo: document.body }); await flushPromises(); await frame()
+    const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.isVisible() && button.text().includes(text))!.trigger('click'); await flushPromises(); await frame() }
+    expect(wrapper.findAll('button').map(button => button.text())).not.toContain('Neu anlegen')
+    await click('E-Mail-Management'); await click('Letzte Ausführung')
+    expect(rectangles('.graph-node')).toHaveLength(10)
+    expect(rectangles('.graph-count')).toHaveLength(6)
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth)
+    await page.screenshot({ path: screenshotPath('graphs-browser-last-run.png') })
+    await click('Nur heute: 20 % auf alles')
+    expect(document.querySelectorAll('.item-trace li')).toHaveLength(5)
+    await click('Freigabe öffnen')
+    expect(document.querySelector<HTMLAnchorElement>('.gate-review a')!.href).toBe(batch.url)
+    expect(document.querySelectorAll('.gate-review input')).toHaveLength(0)
+    await page.screenshot({ path: screenshotPath('graphs-browser-approval.png') })
   })
 })
