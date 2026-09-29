@@ -10,7 +10,7 @@ vi.mock('../../src/main/broker/authorization', () => ({ AgentAuthority: class { 
 vi.mock('../../src/main/connections/agent', () => ({ PodIdentityManager: class { connection() { return {} } } }))
 vi.mock('../../src/main/programs/http', () => ({ requestHttp: mocks.send }))
 vi.mock('@openape/apes', () => ({ loadAdapter: () => ({ digest: 'digest' }), resolveCommand: async () => ({ permission: 'http' }) }))
-afterEach(() => { vi.resetAllMocks() })
+afterEach(() => { vi.resetAllMocks(); vi.useRealTimers() })
 const podId = '00000000-0000-4000-8000-000000000001'
 const scope = { podId, runId: podId, epoch: 1, assignmentRevision: 1, capabilities: ['tool.http_fixture.request'] }
 const resources: PodResource[] = [{ id: podId, podId, revision: 1, kind: 'tool', state: 'ready', name: 'Fixture', configuration: { type: 'http', origin: 'https://example.com', methods: ['GET', 'POST'], capability: scope.capabilities[0], authority: { identity: { podId }, grantId: 'approved' } } }]
@@ -33,4 +33,19 @@ it('permits a read retry after transient authority loss but never retries a revo
   mocks.authorize.mockRejectedValueOnce(new Error('Permission revoked'))
   await expect(execute('GET')).rejects.not.toBeInstanceOf(InfrastructureError)
   expect(mocks.send).toHaveBeenCalledTimes(1)
+})
+
+it('keeps an authority failure during token minting retryable without marking a POST as sent', async () => {
+  vi.useFakeTimers()
+  let release: (token: string) => void = () => {}
+  const token = new Promise<string>((resolve) => { release = resolve })
+  const authentication = { type: 'ddisaAgent', credential: 'agent_key', subject: 'agent@example.com', issuer: 'https://id.example.com' }
+  const assigned = resources.map(resource => ({ ...resource, configuration: { ...resource.configuration, authentication } }))
+  mocks.assertActive.mockRejectedValue(failure())
+  const work = executeHttp(assigned, scope, { url: 'https://example.com/send', method: 'POST', headers: {}, key: 'delivery:1' }, '/unused', {} as CredentialCache, new AbortController().signal, undefined, undefined, { token: async () => token, reject: () => {} })
+  const outcome = expect(work).rejects.toBeInstanceOf(InfrastructureError)
+  await vi.advanceTimersByTimeAsync(1000)
+  release('synthetic-token')
+  await outcome
+  expect(mocks.send).not.toHaveBeenCalled()
 })
