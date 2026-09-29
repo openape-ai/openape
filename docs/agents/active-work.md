@@ -1,5 +1,31 @@
 # Active work
 
+## Pods groups and workflow visibility — issue 1406
+
+[Issue 1406](https://repos.openape.ai/patrick/monorepo/issues/1406),
+[PR 173](https://repos.openape.ai/patrick/monorepo/pulls/173).
+Checkout `openape-monorepo/openape-monorepo.worktrees/pods-list-groups`, branch
+`bugfix/issue-1406-pods-list-groups`, implementation source
+`f54d8d85c5ec111c5285569ec1582fe20de0c0c4`, base `c43d4830`.
+
+The shared inventory restores named group sections and adds a default-on checkbox
+for workflow Pods. Search, archived Pods and runtime boundaries compose with the
+filter. Group counts track visible Pods. The checkbox persists while mounted.
+The existing fast-uri override is pinned to patched 4.1.5 to clear two blocking
+high-severity advisories; no other dependency resolution changes are included.
+
+Verified: full lint/typecheck, desktop and relay builds, 657 Pods tests, 36 browser
+tests, 29 relay tests and the full affected unit/pre-push contract on Node 24.15.0.
+The running installed desktop (source `fbd0188b`) and authenticated live web UI
+confirmed both entry paths. Full DesktopWorkspace/BrowserWorkspace screenshots
+include WorkspaceFrame and its cube logo; isolated legacy-header images are not
+acceptance evidence. [Inspected Test Runs report](https://report.openape.ai/r/zwRyTTlW3EoUYuMyicCCUqA0)
+is published and its category and image display are verified.
+
+Next: review the native PR and its exact-source external checks, then follow the
+normal merge and rollout flow. Production deployment and native installation
+have not been performed; the issue remains open.
+
 ## Pods browser/desktop visual parity — issue 1404
 
 [Issue 1404](https://repos.openape.ai/patrick/monorepo/issues/1404) is delivered via
