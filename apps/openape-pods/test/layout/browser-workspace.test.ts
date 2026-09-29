@@ -50,3 +50,34 @@ it.each([{ width: 1280, language: 'en', theme: 'light' }, { width: 390, language
     wrapper.unmount(); wrapper = undefined
   }
 })
+
+it.each([390, 1280])('shows grouped Pods and filters workflow members in both full workspaces at %s px', async (width) => {
+  await page.viewport(width, 1000)
+  applyLanguage('de'); document.documentElement.style.colorScheme = width === 390 ? 'dark' : 'light'
+  for (const surface of ['desktop', 'browser']) {
+    const fixture = await browserFixture()
+    const pod = fixture.host.workspace.pods[0]!
+    fixture.host.workspace.pods.push({ ...pod, id: 'standalone', name: 'Standalone review' }, { ...pod, id: 'monthly', name: 'Monthly report' })
+    fixture.host.workspace.organization.groups = [{ id: 'operations', name: 'Operations', collapsed: false, podIds: [pod.id, 'standalone'] }]
+    fixture.bridge.workspace = async () => structuredClone(fixture.host.workspace)
+    if (surface === 'browser') Reflect.deleteProperty(window, 'pods')
+    wrapper = surface === 'browser' ? mount(BrowserWorkspace, { props: { client: fixture.client }, attachTo: document.body }) : mount(DesktopWorkspace, { attachTo: document.body })
+    await flushPromises(); await frame(); await navigate(t('Pods'))
+    expect(wrapper.get('.workspace-logo svg').isVisible()).toBe(true)
+    expect(wrapper.find('.central-header').exists()).toBe(false)
+    const checkbox = wrapper.get('.workflow-pods-filter input')
+    const filter = wrapper.get('.workflow-pods-filter')
+    expect(filter.text()).toBe('Pods in Workflows anzeigen')
+    expect(checkbox.element.getBoundingClientRect().width).toBeGreaterThan(10)
+    expect(filter.element.getBoundingClientRect().right).toBeLessThanOrEqual(width)
+    expect(wrapper.findAll('.inventory-group h2').map(heading => heading.text())).toEqual(['Operations 2', 'Nicht gruppiert 1'])
+    await capture(`pod-groups-${surface}-${width}.png`)
+    await checkbox.setValue(false)
+    expect(wrapper.findAll('.central-pod strong').map(name => name.text())).toEqual(['Standalone review', 'Monthly report'])
+    expect(wrapper.findAll('.inventory-group h2').map(heading => heading.text())).toEqual(['Operations 1', 'Nicht gruppiert 1'])
+    await capture(`pod-groups-filtered-${surface}-${width}.png`)
+    await navigate(t('Workflows')); await navigate(t('Pods'))
+    expect((wrapper.get('.workflow-pods-filter input').element as HTMLInputElement).checked).toBe(false)
+    wrapper.unmount(); wrapper = undefined
+  }
+})

@@ -2487,6 +2487,7 @@
   "Every Pod has its own script, permissions and history.": "Jeder Pod hat ein eigenes Skript, Berechtigungen und einen Verlauf.",
   "Current Pods": "Aktuelle Pods",
   "Search Pods": "Pods suchen",
+  "Show Pods in workflows": "Pods in Workflows anzeigen",
   "Standalone Pod": "Eigenständiger Pod",
   "No archived Pods": "Keine archivierten Pods",
   "No matching Pods": "Keine passenden Pods",

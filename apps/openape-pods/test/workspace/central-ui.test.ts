@@ -5,7 +5,7 @@ import CentralWorkspace from '../../src/renderer/central/CentralWorkspace.vue'
 import DesktopWorkspace from '../../src/renderer/central/DesktopWorkspace.vue'
 import { installWorkspace, podId } from '../layout/workspace-fixture'
 import { WorkspaceRequestError } from '../../src/renderer/central/client'
-import { centralFixture } from './central-fixture'
+import { centralFixture, groupedCentralFixture } from './central-fixture'
 import type { CentralStatus } from '../../src/contracts/central'
 import { connected, connectionAfter, connectionLevel } from '../../src/renderer/central/status'
 import type { WorkflowCommand, WorkflowView } from '../../src/contracts/workflows'
@@ -283,4 +283,53 @@ it('keeps remote edits until navigation is explicitly confirmed', async () => {
   expect(wrapper!.find('.central-inventory').exists()).toBe(true)
   await wrapper!.get('.central-pod').trigger('click'); await flushPromises()
   expect((wrapper!.get('[aria-label="Pod description"]').element as HTMLTextAreaElement).value).not.toBe('Unfinished remote edit')
+})
+
+it.each([false, true])('groups the shared inventory and filters workflow Pods (desktop: %s)', async (desktop) => {
+  const fixture = groupedCentralFixture()
+  const workflows = structuredClone(fixture.host.workflows!)
+  if (desktop) fixture.host.workflows = { workflows: [], runs: [] }
+  wrapper = mount(CentralWorkspace, { props: {
+    client: fixture.client, sharedEditor: true, desktop,
+    ...(desktop ? { desktopStatus: { runtimeId: fixture.host.id, state: 'online' } as CentralStatus, workflows } : {}),
+  } })
+  await flushPromises()
+  const rows = () => wrapper!.findAll('.central-pod').map(row => row.get('strong').text())
+  const groups = () => wrapper!.findAll('.inventory-group h2').map(heading => heading.text())
+  expect(groups()).toEqual(['Operations 2', 'Ungrouped 1'])
+  expect(rows()).toEqual(['Release monitor', 'Standalone review', 'Monthly report'])
+  const checkbox = wrapper.get('input[type="checkbox"]')
+  expect((checkbox.element as HTMLInputElement).checked).toBe(true)
+  await checkbox.setValue(false)
+  expect(groups()).toEqual(['Operations 1', 'Ungrouped 1'])
+  expect(rows()).toEqual(['Standalone review', 'Monthly report'])
+  await wrapper.get('input[type="search"]').setValue('release')
+  expect(rows()).toEqual([])
+  expect(wrapper.text()).toContain('No matching Pods')
+  await checkbox.setValue(true)
+  expect(rows()).toEqual(['Release monitor'])
+  await wrapper.get('input[type="search"]').setValue('')
+  await wrapper.findAll('.inventory-toolbar button').find(button => button.text() === 'Archived')!.trigger('click')
+  expect(rows()).toEqual(['Archived workflow Pod'])
+  await checkbox.setValue(false)
+  expect(rows()).toEqual([])
+  expect(wrapper.text()).toContain('No archived Pods')
+})
+
+it('keeps workflow membership scoped to its runtime and updates groups from inventory changes', async () => {
+  const fixture = groupedCentralFixture()
+  const second = structuredClone(fixture.host)
+  second.id = 'second-runtime'; second.workflows = { workflows: [], runs: [] }
+  fixture.client.inventory = async () => structuredClone([fixture.host, second])
+  wrapper = mount(CentralWorkspace, { props: { client: fixture.client } })
+  await flushPromises()
+  await wrapper.get('input[type="checkbox"]').setValue(false)
+  expect(wrapper.findAll('.central-pod strong').filter(name => name.text() === 'Release monitor')).toHaveLength(1)
+  fixture.host.workflows = { workflows: [], runs: [] }
+  fixture.host.workspace.organization.groups[0]!.name = 'Updated operations'
+  fixture.wake(); await flushPromises()
+  expect(wrapper.findAll('.central-pod strong').filter(name => name.text() === 'Release monitor')).toHaveLength(2)
+  expect(wrapper.findAll('.inventory-group h2').map(heading => heading.text())).toContain('Updated operations 2')
+  await wrapper.find('.central-pod').trigger('click'); await flushPromises()
+  expect(wrapper.text()).toContain('What this Pod does')
 })

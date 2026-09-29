@@ -47,6 +47,7 @@ const creating = ref(false)
 const pendingNavigation = ref<'inventory' | { runtimeId: string, podId: string } | null>(null)
 const archived = ref(false)
 const search = ref('')
+const showWorkflowPods = ref(true)
 const newGroup = ref('')
 const runId = ref('')
 const groupId = ref('')
@@ -61,8 +62,23 @@ const available = computed(() => !!listed.value?.online && !!current.value && (s
 const runList = computed(() => [...current.value?.pod.runs.runs ?? [], ...olderRuns.value])
 const activeRuntime = computed(() => runtimes.value.find(item => item.id === props.desktopStatus?.runtimeId && item.online) ?? (runtime.value?.online ? runtime.value : runtimes.value.find(item => item.online)))
 const localEditor = computed(() => props.desktop && !!props.desktopStatus?.runtimeId && selected.value?.runtimeId === props.desktopStatus.runtimeId)
-function visiblePods(host: CentralRuntime) { return host.workspace.pods.filter(pod => (pod.lifecycle === 'archived') === archived.value && pod.name.toLowerCase().includes(search.value.toLowerCase())) }
-function memberships(runtimeId: string, id: string) { const view = runtimeId === props.desktopStatus?.runtimeId ? props.workflows : runtimes.value.find(item => item.id === runtimeId)?.workflows; return view?.workflows.filter(item => item.nodes.some(node => node.podId === id)).map(item => item.name).join(' · ') }
+function podWorkflows(host: CentralRuntime, podId: string) {
+  const view = host.id === props.desktopStatus?.runtimeId ? props.workflows ?? host.workflows : host.workflows
+  return view?.workflows.filter(workflow => workflow.nodes.some(node => node.podId === podId)) ?? []
+}
+function visiblePods(host: CentralRuntime) {
+  return host.workspace.pods.filter(pod => (pod.lifecycle === 'archived') === archived.value
+    && pod.name.toLowerCase().includes(search.value.toLowerCase())
+    && (showWorkflowPods.value || !podWorkflows(host, pod.id).length))
+}
+function podGroups(host: CentralRuntime) {
+  const pods = visiblePods(host)
+  const groups = host.workspace.organization.groups
+  return [
+    ...groups.map(group => ({ id: group.id, name: group.name, pods: pods.filter(pod => group.podIds.includes(pod.id)) })),
+    { id: '', name: t('Ungrouped'), pods: pods.filter(pod => !groups.some(group => group.podIds.includes(pod.id))) },
+  ].filter(group => group.pods.length)
+}
 async function createPod() {
   const target = activeRuntime.value
   if (!target) return
@@ -302,13 +318,17 @@ onBeforeUnmount(() => { generation++; abort.abort() })
             </button>
           </div><input v-model="search" type="search" :aria-label="t('Search Pods')" :placeholder="t('Search Pods')">
         </div>
+        <label class="central-check workflow-pods-filter"><input v-model="showWorkflowPods" type="checkbox">{{ t('Show Pods in workflows') }}</label>
         <section v-for="host in runtimes" :key="host.id">
           <p class="central-runtime">
             {{ host.online ? t('Desktop online') : host.lastSeenAt ? t('Desktop offline since {time}', { time: time(host.lastSeenAt) }) : t('Desktop offline') }}<span v-if="runtimes.length > 1"> · {{ host.id }}</span>
           </p>
-          <button v-for="pod in visiblePods(host)" :key="pod.id" class="inventory-row central-pod" :disabled="busy" @click="select(host.id, pod.id)">
-            <span><strong>{{ pod.name }}</strong><small>{{ memberships(host.id, pod.id) || (host.id === desktopStatus?.runtimeId || sharedEditor ? t('Standalone Pod') : host.workspace.organization.groups.find(group => group.podIds.includes(pod.id))?.name || t('Ungrouped')) }}</small></span><small v-if="pod.queue?.blocked" class="central-blocked">{{ t('Schedule blocked') }}</small><span class="badge">{{ pod.online ? label(pod.lifecycle) : t('Offline') }}</span><span aria-hidden="true">›</span>
-          </button>
+          <section v-for="group in podGroups(host)" :key="group.id" class="inventory-group" :aria-label="t('{group} group', { group: group.name })">
+            <h2>{{ group.name }} <small>{{ group.pods.length }}</small></h2>
+            <button v-for="pod in group.pods" :key="pod.id" class="inventory-row central-pod" :disabled="busy" @click="select(host.id, pod.id)">
+              <span><strong>{{ pod.name }}</strong><small>{{ podWorkflows(host, pod.id).map(workflow => workflow.name).join(' · ') || t('Standalone Pod') }}</small></span><small v-if="pod.queue?.blocked" class="central-blocked">{{ t('Schedule blocked') }}</small><span class="badge">{{ pod.online ? label(pod.lifecycle) : t('Offline') }}</span><span aria-hidden="true">›</span>
+            </button>
+          </section>
           <p v-if="!visiblePods(host).length" class="central-muted">
             {{ archived ? t('No archived Pods') : t('No matching Pods') }}
           </p>
@@ -476,6 +496,8 @@ onBeforeUnmount(() => { generation++; abort.abort() })
 .central-sidebar-bottom .central-settings-button{display:flex;align-items:center;gap:10px;text-align:left;border-color:transparent;background:transparent}
 @media(max-width:760px){.central-desktop .central-sidebar{position:static;height:auto;max-height:420px;overflow:visible}.central-desktop .central-pod-list{flex:auto}.central-sidebar-bottom{flex-shrink:0}}
 .central-layout{display:block;min-height:0}.central-inventory{max-width:1050px;margin:auto;padding:28px 32px}.central-content{margin:auto}.central-content:has(>.text-button){display:grid;gap:18px}.central-embedded{min-height:0;background:transparent}.central-embedded .central-content,.central-embedded .central-inventory{padding:0;max-width:none}.central-inventory .inventory-row{display:flex!important;border:1px solid var(--border)!important;background:var(--surface)!important;padding:18px;margin:12px 0}.central-inventory .inventory-row span{white-space:normal}.central-inventory .inventory-row small{white-space:normal}.inventory-toolbar .central-tabs{margin:0}.inventory-toolbar input{width:220px}.central-tabs [aria-pressed=true]{color:var(--accent);border-bottom:2px solid var(--accent)}.central-create{flex-wrap:wrap}.central-create input{flex:1;min-width:150px}.central-inventory h1{margin:0;font-size:26px}.central-inventory .central-runtime{overflow-wrap:anywhere}
+.inventory-group h2{display:flex;align-items:baseline;gap:10px;overflow-wrap:anywhere}.inventory-group h2 small{font-size:12px;font-weight:400;color:var(--muted)}
+.workflow-pods-filter{cursor:pointer}.workflow-pods-filter input{flex-shrink:0}
 </style>
 
 <style>
