@@ -56,6 +56,7 @@ export async function executeHttp(resources: PodResource[], scope: ServiceScope,
   try {
     const token = authentication ? await bearer!.token(authentication) : undefined
     const outgoing = token ? { ...request, headers: { ...request.headers, authorization: `Bearer ${token}` } } : request
+    combined.throwIfAborted()
     sent = true
     let reply = await requestHttp(outgoing, combined)
     if (token) reply = redact(reply, token)
