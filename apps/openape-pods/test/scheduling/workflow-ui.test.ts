@@ -2,10 +2,11 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import WorkflowPanel from '../../src/renderer/WorkflowPanel.vue'
 import type { WorkflowView } from '../../src/contracts/workflows'
+import { sequenceParts } from '../../src/contracts/workflows'
 
 const pods = [1, 2, 3].map(index => ({ id: `00000000-0000-4000-8000-00000000000${index}`, name: ['Filter inbox', 'Important mail', 'Archive audit'][index - 1]!, revision: 1, lifecycle: 'paused' as const, activeScript: 'a'.repeat(64) }))
 const id = '00000000-0000-4000-8000-000000000010'
-const view: WorkflowView = { workflows: [{ id, name: 'Inbox workflow', revision: 1, nodes: pods.map((pod, index) => ({ podId: pod.id, after: index ? [pods[0]!.id] : [], handoff: false })), enabled: false, paused: true, schedule: null, nextAt: null }], runs: [] }
+const view: WorkflowView = { workflows: [{ ...sequenceParts, id, name: 'Inbox workflow', revision: 1, nodes: pods.map((pod, index) => ({ podId: pod.id, after: index ? [pods[0]!.id] : [], handoff: false })), enabled: false, paused: true, schedule: null, nextAt: null }], runs: [] }
 it('creates explicit dependencies without editing pods and prevents cycle submission', async () => {
   const workflows = vi.fn().mockResolvedValue(view)
   const workspace = vi.fn(); const scripts = vi.fn(); const scheduling = vi.fn()
