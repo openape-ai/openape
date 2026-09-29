@@ -76,7 +76,9 @@ function mailGraph(f: ReturnType<typeof fixture>) {
 it('routes five items into two channels and records every node each item passed', async () => {
   const f = fixture(); const g = mailGraph(f)
   expect((await f.run()).state).toBe('completed')
-  expect(f.started).toEqual([g.source, g.classifier, g.sinkA, g.sinkB])
+  // Both sinks become ready in the same tick; which process starts first is not part of the contract.
+  expect(f.started.slice(0, 2)).toEqual([g.source, g.classifier])
+  expect(f.started.slice(2).sort()).toEqual([g.sinkA, g.sinkB].sort())
   expect(g.received).toEqual({ a: ['mail-1', 'mail-2', 'mail-3'], b: ['mail-4', 'mail-5'] })
   expect(f.trace('mail-1')).toEqual([
     { node: g.source, outcome: 'emitted', channel: 'mail.open', reason: null, confidence: null },
