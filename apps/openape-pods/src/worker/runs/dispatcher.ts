@@ -36,6 +36,9 @@ import type { AgentRuntime } from '../agent/executor'
 import type { AgentGatewayServices } from '../agent/gateway'
 import { parseProgress } from './progress'
 import { graphEmitter, parseGraphContract } from '../../contracts/graphs'
+import type { GraphEmit } from '../../contracts/graphs'
+import { graphRun, pendingItems, settleItems } from '../workflows/items'
+import type { DeliveredItem } from '../workflows/items'
 import { installExample } from './examples'
 
 export interface RunServiceScope {
@@ -136,6 +139,8 @@ export class RunDispatcher {
     let shellScope: RunServiceScope | undefined
     let infrastructureWaiting = 0
     let scriptStarted = false
+    const graph = graphRun(this.store, id); let delivered: DeliveredItem[] = []; const emits: (GraphEmit & { channel: string })[] = []
+    const settle = (completed: boolean) => { if (graph) settleItems(this.store, graph, completed && this.runs.get(id).state === 'completed', delivered, emits, Date.now()) }
     const retryService = async <T>(operation: string, work: () => Promise<T>, signal: AbortSignal, budgetMs?: number) => {
       let waiting = false
       try {
@@ -168,7 +173,7 @@ export class RunDispatcher {
       const folders = await podDirectories(this.store.root, pod.id)
       const directories = await assignedDirectories(this.store.root, pod.id, this.resources.list(pod.id))
       assertCurrent()
-      const input: RunInput = { workflow: workflowInput(this.store, id), home: folders.home, directories: directories.map(({ path, access }) => ({ path, access })), variables: new PodVariables(this.store).values(pod.id), version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.bindingRevision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: folders.workspace, references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: 300000, frameBytes: 256 * 1024 } }
+      const input: RunInput = { workflow: workflowInput(this.store, id), home: folders.home, directories: directories.map(({ path, access }) => ({ path, access })), variables: { ...Object.fromEntries((graph?.definition.values ?? []).map(value => [value.name, value.value])), ...new PodVariables(this.store).values(pod.id) }, version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.bindingRevision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: folders.workspace, references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: 300000, frameBytes: 256 * 1024 } }
       this.runs.append(id, 'snapshot', { id: snapshots.id, files: input.references })
       const dependencies = new DependencyStore(this.store); const dependencyHash = dependencies.scriptSet(pod.id, run.scriptHash)
       const dependencyRoot = dependencyHash ? await dependencies.verify(pod.id, dependencyHash) : undefined
@@ -234,12 +239,15 @@ export class RunDispatcher {
           }
           if (operation === 'graph.contract') {
             if (!contract || JSON.stringify(parseGraphContract(payload)) !== JSON.stringify(contract)) throw new Error('Script contract changed since validation')
-            // Deliveries exist only once the engine writes items.
-            return []
+            if (!graph) return []
+            delivered = pendingItems(this.store, graph.workflowId, graph.node)
+            return delivered.map(({ key, channel, data }) => ({ key, channel, data }))
           }
           if (operation === 'graph.emit') {
-            const { channel, key } = checkEmit(payload)
-            this.runs.append(id, 'emit', { channel, key }); return { emitted: true }
+            const emit = checkEmit(payload)
+            // Emits become items only when the run completes, so a failed run hands nothing on.
+            emits.push(emit)
+            this.runs.append(id, 'emit', { channel: emit.channel, key: emit.key }); return { emitted: true }
           }
           if (operation === 'workflow.publish') { publishWorkflowOutput(this.store, id, payload); return { published: true } }
           if (operation === 'mail.next' || operation === 'mail.commit') {
@@ -321,12 +329,12 @@ export class RunDispatcher {
         if (!this.store.db.prepare('SELECT 1 FROM claims WHERE pod_id=? AND id=? AND kind=\'gap\'').get(pod.id, gap)) throw new Error('Result references an uncommitted gap')
       }
       if (shellScope) { await this.services?.closeShell?.(shellScope); shellScope = undefined }
-      await this.finish(id, result.status, result.summary, result.status === 'failed' || result.status === 'blocked' ? result.summary : null, result.completedInputIds)
+      await this.finish(id, result.status, result.summary, result.status === 'failed' || result.status === 'blocked' ? result.summary : null, result.completedInputIds, undefined, () => settle(true))
     }
     catch (error) {
       const message = error instanceof Error ? error.message : 'Run failed'
       await Promise.allSettled(pendingAgents)
-      await this.finish(id, signal.aborted ? 'cancelled' : 'failed', signal.aborted ? 'Run cancelled' : 'Run failed', message, [], !signal.aborted && !scriptStarted && error instanceof InfrastructureError ? epoch : undefined)
+      await this.finish(id, signal.aborted ? 'cancelled' : 'failed', signal.aborted ? 'Run cancelled' : 'Run failed', message, [], !signal.aborted && !scriptStarted && error instanceof InfrastructureError ? epoch : undefined, () => settle(false))
     }
     finally {
       try { if (shellScope) await this.services?.closeShell?.(shellScope) }
@@ -335,13 +343,13 @@ export class RunDispatcher {
     }
   }
 
-  private async finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = [], retryEpoch?: number): Promise<void> {
+  private async finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = [], retryEpoch?: number, settle: () => void = () => {}): Promise<void> {
     try { await confirmDomainsStopped(this.store, id, this.runtime.helper) }
     catch (failure) {
       this.runs.interrupt(id, failure instanceof Error ? failure.message : 'Execution cleanup is unverified')
       return
     }
-    this.runs.finish(id, state, summary, error, completedInputIds, retryEpoch)
+    this.store.transaction(() => { this.runs.finish(id, state, summary, error, completedInputIds, retryEpoch); settle() })
   }
 
 }

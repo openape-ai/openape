@@ -4,6 +4,7 @@ import type { WorkflowCommand, WorkflowDefinition, WorkflowRunView, WorkflowView
 import { parseWorkflowCommand } from '../../contracts/workflows'
 import { graphDiagnosticMessages } from '../../contracts/graphs'
 import type { GraphMode } from '../../contracts/graphs'
+import { graphNodes, hasPendingItems, inspectGraph } from './items'
 import type { PodDatabase } from '../storage/database'
 import type { RunTrigger } from '../runs/store'
 import { nextWorkflowDue } from './clock'
@@ -32,7 +33,6 @@ export function workflowDefinitions(store: PodDatabase): WorkflowDefinition[] {
     }
   })
 }
-const notRunnable = 'Channel graphs cannot run before item flow is available'
 interface NodeRow { pod_id: string, script_hash: string | null, assignment_revision: number, resource_epoch: number, state: string, run_id: string | null, reason: string | null, output: string | null }
 export class WorkflowEngine {
   constructor(private readonly store: PodDatabase, private readonly driver: Driver, private readonly recovery: Recovery, private readonly now: () => number = Date.now) {}
@@ -64,7 +64,6 @@ export class WorkflowEngine {
 
   save(command: Extract<WorkflowCommand, { type: 'save' }>): void {
     const parsed = parseWorkflowCommand(command) as Required<typeof command>
-    if (parsed.mode === 'channels' && parsed.enabled) throw new Error(notRunnable)
     this.store.transaction(() => {
       const row = this.store.db.prepare('SELECT revision,schedule,next_at,archived FROM workflows WHERE id=?').get(parsed.id)
       if (row?.archived === 1) throw new Error('Workflow not found')
@@ -87,7 +86,15 @@ export class WorkflowEngine {
       for (const value of parsed.values) this.store.db.prepare('INSERT INTO workflow_values VALUES(?,?,?,1) ON CONFLICT(workflow_id,name) DO UPDATE SET revision=revision+1,value=excluded.value WHERE value!=excluded.value').run(parsed.id, value.name, value.value)
       this.store.db.prepare('DELETE FROM workflow_members WHERE workflow_id=?').run(parsed.id)
       for (const node of parsed.nodes) this.store.db.prepare('INSERT INTO workflow_members VALUES(?,?)').run(parsed.id, node.podId)
+      if (parsed.enabled) this.assertRunnable(this.definition(parsed.id))
     })
+  }
+
+  /** A channel graph with any diagnostic neither starts nor becomes enabled. */
+  private assertRunnable(definition: WorkflowDefinition): void {
+    if (definition.mode !== 'channels') return
+    const [first] = inspectGraph(this.store, definition).diagnostics
+    if (first) throw new Error(first.message)
   }
 
   delete(id: string, revision: number): void {
@@ -111,7 +118,7 @@ export class WorkflowEngine {
     return this.store.transaction(() => {
       const definition = this.definition(id)
       if (definition.revision !== revision) throw new Error('Workflow changed; reload before running')
-      if (definition.mode === 'channels') throw new Error(notRunnable)
+      this.assertRunnable(definition)
       const active = this.store.db.prepare('SELECT id FROM workflow_runs WHERE workflow_id=? AND finished_at IS NULL').get(id)
       if (active) {
         if (operationId) this.store.db.prepare('INSERT INTO control_runs VALUES(?,?,\'workflow\')').run(operationId, active.id)
@@ -190,16 +197,25 @@ export class WorkflowEngine {
     if (!allCompleted) {
       for (const node of this.nodes(id)) this.assertPinned(node)
     }
+    // Run snapshots written before graphs existed carry no mode.
+    const graph = definition.mode === 'channels' ? graphNodes(this.store, id, definition) : null
     for (const node of this.nodes(id)) {
       if (node.state !== 'waiting') continue
       const spec = definition.nodes.find(item => item.podId === node.pod_id)!
-      const predecessors = this.nodes(id).filter(other => spec.after.includes(other.pod_id))
+      const takes = graph?.find(item => item.id === node.pod_id)!.takes ?? []
+      // Gates never run; what they give arrives across runs, whenever the owner decides.
+      const producers = graph?.filter(item => item.id !== node.pod_id && item.gives.some(channel => takes.includes(channel))).map(item => item.id)
+      const predecessors = this.nodes(id).filter(other => (producers ?? spec.after).includes(other.pod_id))
       if (predecessors.some(other => other.state !== 'completed')) {
         this.store.db.prepare('UPDATE workflow_nodes SET reason=? WHERE workflow_run_id=? AND pod_id=?').run(predecessors.some(other => other.state === 'blocked') ? 'Blocked by a predecessor' : 'Waiting for all predecessors to complete', id, node.pod_id)
         continue
       }
       if (spec.handoff && predecessors.some(other => !other.output)) {
         this.store.db.prepare('UPDATE workflow_nodes SET state=\'blocked\',reason=\'A required predecessor output is missing\' WHERE workflow_run_id=? AND pod_id=? AND state=\'waiting\'').run(id, node.pod_id)
+        continue
+      }
+      if (takes.length && !hasPendingItems(this.store, row.workflow_id as string, node.pod_id)) {
+        this.store.db.prepare('UPDATE workflow_nodes SET state=\'completed\',reason=\'No items to process\' WHERE workflow_run_id=? AND pod_id=? AND state=\'waiting\'').run(id, node.pod_id)
         continue
       }
       const count = this.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count as number
