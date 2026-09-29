@@ -35,6 +35,7 @@ import { executeAgent } from '../agent/executor'
 import type { AgentRuntime } from '../agent/executor'
 import type { AgentGatewayServices } from '../agent/gateway'
 import { parseProgress } from './progress'
+import { graphEmitter, parseGraphContract } from '../../contracts/graphs'
 import { installExample } from './examples'
 
 export interface RunServiceScope {
@@ -186,6 +187,8 @@ export class RunDispatcher {
         Object.assign(runtime, { home: environment.home, shell: environment.shell, environment: { ...environment.environment, ...runtime.environment } })
         shellScope = scope
       }
+      const contract = manifest.contract === undefined ? undefined : parseGraphContract(manifest.contract)
+      const checkEmit = graphEmitter(contract)
       let mailWorkflow: MailWorkflow | undefined
       let mail: MailRecipeSession | undefined
       this.runs.append(id, 'environment', { script: artifact, workspace: input.workspace, values: Object.fromEntries(Object.entries(runtime.environment).filter(([key]) => ['HOME', 'TMPDIR', 'PATH', 'SHELL', 'PODS_POD_ID', 'LANG', 'TERM'].includes(key))) })
@@ -228,6 +231,15 @@ export class RunDispatcher {
             pendingAgents.add(work)
             try { return await work }
             finally { pendingAgents.delete(work) }
+          }
+          if (operation === 'graph.contract') {
+            if (!contract || JSON.stringify(parseGraphContract(payload)) !== JSON.stringify(contract)) throw new Error('Script contract changed since validation')
+            // Deliveries exist only once the engine writes items.
+            return []
+          }
+          if (operation === 'graph.emit') {
+            const { channel, key } = checkEmit(payload)
+            this.runs.append(id, 'emit', { channel, key }); return { emitted: true }
           }
           if (operation === 'workflow.publish') { publishWorkflowOutput(this.store, id, payload); return { published: true } }
           if (operation === 'mail.next' || operation === 'mail.commit') {

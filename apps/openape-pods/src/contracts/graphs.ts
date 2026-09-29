@@ -9,6 +9,8 @@ export type GraphGate
     | { key: string, title: string, kind: 'choose', takes: string, options: GraphGateOption[] }
 export interface GraphValue { name: string, value: string, revision: number }
 export interface GraphContract { takes: string[], gives: string[], summary: string }
+export interface GraphItem { key: string, channel: string, data: Record<string, unknown> }
+export interface GraphEmit { key: string, data: Record<string, unknown>, reason?: string, confidence?: number }
 export type GraphNodeKind = 'gate' | 'effect' | 'decision' | 'code'
 export interface GraphEdge { from: string, to: string, channel: string }
 export type GraphDiagnosticCode = 'channel-without-producer' | 'channel-without-consumer' | 'channel-undeclared' | 'emit-undeclared' | 'cycle' | 'archive-without-gate' | 'summary-invalid' | 'contract-missing' | 'member-elsewhere' | 'value-name-conflict'
@@ -16,7 +18,7 @@ export interface GraphDiagnostic { level: 'error', code: GraphDiagnosticCode, me
 /** What the store knows about a member Pod beyond its contract. */
 export interface GraphMemberFacts { archive?: boolean, elsewhere?: boolean, emits?: string[], variables?: string[] }
 
-export const graphLimits = { channels: 32, gates: 8, values: 32, valueLength: 16384 } as const
+export const graphLimits = { channels: 32, gates: 8, values: 32, valueLength: 16384, takes: 8, gives: 16, payloadBytes: 1024, reasonLength: 500, emits: 500 } as const
 export const graphDiagnosticMessages: Record<GraphDiagnosticCode, string> = {
   'channel-without-producer': 'A taken channel has no node that gives it',
   'channel-without-consumer': 'A given channel has no node that takes it',
@@ -89,6 +91,41 @@ export function parseGraphValues(value: unknown): GraphValue[] {
   if (values.length > graphLimits.values) throw new Error('A graph supports at most 32 values')
   unique(values.map(item => item.name))
   return values
+}
+
+function channelList(value: unknown, limit: number): string[] {
+  if (!Array.isArray(value) || value.length > limit || value.some(name => !channelName(name))) throw new Error('Invalid graph contract')
+  unique(value)
+  return [...value]
+}
+export function parseGraphContract(value: unknown): GraphContract {
+  const contract = list([value], ['takes', 'gives', 'summary'], 'Invalid graph contract')[0]!
+  if (typeof contract.summary !== 'string' || !contract.summary.trim() || contract.summary.length > 40) throw new Error(graphDiagnosticMessages['summary-invalid'])
+  return { takes: channelList(contract.takes, graphLimits.takes), gives: channelList(contract.gives, graphLimits.gives), summary: contract.summary }
+}
+/** Two items per taken channel, so a validated script meets every channel more than once. */
+export function syntheticGraphItems(contract: GraphContract): GraphItem[] {
+  return contract.takes.flatMap(channel => [1, 2].map(index => ({ key: `synthetic-${index}`, channel, data: {} })))
+}
+/** Checks every emit of one run against the contract and the per-run limits. */
+export function graphEmitter(contract: GraphContract | undefined): (payload: unknown) => GraphEmit & { channel: string } {
+  const emitted = new Set<string>()
+  return (payload) => {
+    if (!contract) throw new Error('Script declares no contract')
+    const emit = list([payload], ['channel', 'key', 'data', 'reason', 'confidence'], 'Invalid graph emit')[0]!
+    // eslint-disable-next-line no-control-regex
+    if (!channelName(emit.channel) || typeof emit.key !== 'string' || !emit.key || emit.key.length > 200 || /[\u0000-\u001F\u007F]/.test(emit.key) || !emit.data || typeof emit.data !== 'object' || Array.isArray(emit.data)) throw new Error('Invalid graph emit')
+    if (emit.confidence !== undefined && (typeof emit.confidence !== 'number' || !(emit.confidence >= 0 && emit.confidence <= 1))) throw new Error('Invalid graph emit')
+    if (emit.reason !== undefined && typeof emit.reason !== 'string') throw new Error('Invalid graph emit')
+    if (!contract.gives.includes(emit.channel)) throw new Error(graphDiagnosticMessages['emit-undeclared'])
+    if (new TextEncoder().encode(JSON.stringify(emit.data)).length > graphLimits.payloadBytes) throw new Error('Item payload exceeds 1,024 bytes')
+    if (emit.reason !== undefined && emit.reason.length > graphLimits.reasonLength) throw new Error('Emit reason exceeds 500 characters')
+    const identity = JSON.stringify([emit.channel, emit.key])
+    if (emitted.has(identity)) throw new Error('The item was already emitted to this channel')
+    if (emitted.size >= graphLimits.emits) throw new Error('A run supports at most 500 emits')
+    emitted.add(identity)
+    return structuredClone({ channel: emit.channel, key: emit.key, data: emit.data as Record<string, unknown>, ...emit.reason === undefined ? {} : { reason: emit.reason }, ...emit.confidence === undefined ? {} : { confidence: emit.confidence } })
+  }
 }
 
 interface Node { id: string, takes: string[], gives: string[] }
