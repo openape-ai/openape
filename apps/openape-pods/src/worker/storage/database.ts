@@ -1,5 +1,6 @@
 import { migrateRemote } from '../remote/migration.ts'
 import { migrateChats } from '../master/chat-migration.ts'
+import type { GraphContract } from '../../contracts/graphs.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, statfsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -26,6 +27,7 @@ export interface ScriptManifest {
   checkpointSchemaVersion: number
   assignmentRevision: number
   effects: 'readOnly' | 'reconciledEffects'
+  contract?: GraphContract
 }
 export interface SourceInput { id: string, locator: string, version: string, content: string }
 export interface ClaimInput { id: string, matter: string, kind: 'finding' | 'question' | 'gap', text: string, sourceIds: string[], supersedes?: string }
@@ -53,7 +55,7 @@ function hash(value: unknown): asserts value is string {
   if (typeof value !== 'string' || !/^[a-f0-9]{64}$/.test(value)) throw new Error('Invalid content hash')
 }
 export function parseManifest(value: unknown): ScriptManifest {
-  record(value, ['schemaVersion', 'contentHash', 'entrypoint', 'dependencyLockHash', 'runtimeVersion', 'capabilities', 'triggers', 'inputSchemaHash', 'outputSchemaHash', 'checkpointSchemaVersion', 'assignmentRevision', 'effects'])
+  record(value, ['schemaVersion', 'contentHash', 'entrypoint', 'dependencyLockHash', 'runtimeVersion', 'capabilities', 'triggers', 'inputSchemaHash', 'outputSchemaHash', 'checkpointSchemaVersion', 'assignmentRevision', 'effects', 'contract'])
   if (value.schemaVersion !== 1 || value.entrypoint !== 'run.mjs' || !['readOnly', 'reconciledEffects'].includes(value.effects as string)) throw new Error('Unsupported script contract')
   for (const key of ['contentHash', 'dependencyLockHash', 'inputSchemaHash', 'outputSchemaHash']) hash(value[key])
   text(value.runtimeVersion, 'runtime', 100); integer(value.checkpointSchemaVersion); integer(value.assignmentRevision)
