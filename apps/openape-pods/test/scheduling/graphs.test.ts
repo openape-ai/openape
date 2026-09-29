@@ -143,11 +143,12 @@ describe('graph storage', () => {
     expect(() => f.engine.save(f.command())).toThrow('share a name')
     expect(f.engine.view().workflows).toEqual([])
   })
-  it('never enables or starts a channel graph before item flow exists', () => {
+  it('never enables or starts a channel graph that has a diagnostic', () => {
     const f = fixture()
-    expect(() => f.engine.save(f.command({ enabled: true, schedule: { kind: 'interval', seconds: 3600 } }))).toThrow('cannot run')
+    expect(() => f.engine.save(f.command({ enabled: true, schedule: { kind: 'interval', seconds: 3600 } }))).toThrow('The pod belongs to another graph or another group')
+    expect(f.engine.view().workflows).toEqual([])
     f.engine.save(f.command())
-    expect(() => f.engine.start(f.id, 1)).toThrow('cannot run')
+    expect(() => f.engine.start(f.id, 1)).toThrow('The pod belongs to another graph or another group')
     f.engine.tick()
     expect(f.driver.start).not.toHaveBeenCalled()
     expect(f.store.db.prepare('SELECT count(*) AS count FROM workflow_runs').get()?.count).toBe(0)

@@ -1,6 +1,7 @@
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { PodDatabase } from '../storage/database'
+import { pruneItems } from '../workflows/items'
 
 export const retainedRunCount = 50
 export const runRetentionBatch = 25
@@ -16,6 +17,7 @@ export class RunRetention {
       await this.cleanFiles()
       if (this.store.db.prepare('SELECT 1 FROM run_deletion_jobs LIMIT 1').get()) return
       this.removeHistory()
+      pruneItems(this.store)
       await this.cleanFiles()
     }
     finally { this.cleaning = false }
