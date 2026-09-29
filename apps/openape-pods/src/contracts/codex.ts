@@ -32,7 +32,7 @@ export const codexTool = {
       runtimePath: { type: 'string', description: 'program add/replace: optional owner-controlled JSON runtime descriptor (interpreter, fixed arguments, read-only package directories, non-secret environment). See runtime help.' },
       commandName: { type: 'string', description: 'program add/replace: optional CLI name.' },
       enabled: { type: 'boolean', description: 'setSchedule: enable or disable this schedule; resume separately after script validation.' },
-      definition: { type: 'object', description: 'Selected workflow save command: type save, id, revision, name, nodes, schedule, enabled. All members must be selected.' },
+      definition: { type: 'object', description: 'Selected workflow save command: type save, id, revision, name, nodes, schedule, enabled. A graph adds mode "channels", groupId, channels, gates and values. All members must be selected.' },
       podIds: { type: 'array', items: { type: 'string' }, maxItems: 32, description: 'select: exact Pod UUIDs from list; replaces the current selection.' },
       workflowId: { type: ['string', 'null'], description: 'select: optional workflow UUID from list.' },
       workflowRevision: { type: ['integer', 'null'], description: 'select: current revision of that workflow.' },

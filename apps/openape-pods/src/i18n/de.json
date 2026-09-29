@@ -1817,6 +1817,7 @@
   "Graph group not found": "Graph-Gruppe nicht gefunden",
   "A graph value and a pod variable share a name": "Ein Graph-Wert und eine Pod-Variable tragen denselben Namen",
   "No items to process": "Keine Elemente zu verarbeiten",
+  "Graph value changed; inspect the workflow again": "Der Graph-Wert wurde geändert; Workflow erneut prüfen",
   "An approval gate needs exactly one pod that takes what it gives": "Eine Freigabe benötigt genau einen Pod, der ihre Ausgabe annimmt",
   "Invalid gate batch": "Ungültiger Freigabe-Batch",
   "Gate batch does not match its digest": "Der Freigabe-Batch passt nicht zu seinem Prüfwert",
