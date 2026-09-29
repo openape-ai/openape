@@ -6,6 +6,7 @@ import DesktopWorkspace from '../../src/renderer/central/DesktopWorkspace.vue'
 import type { CentralStatus } from '../../src/contracts/central'
 import type { McpAccess } from '../../src/contracts/mcp-access'
 import type { WorkflowView } from '../../src/contracts/workflows'
+import { sequenceParts } from '../../src/contracts/workflows'
 import { applyLanguage } from '../../src/renderer/i18n'
 import { scriptBuffer } from '../../src/renderer/script-buffer'
 import { installWorkspace, pods, podId } from './workspace-fixture'
@@ -20,7 +21,7 @@ function fixture() {
   const standalone = { ...pods[0]!, id: '00000000-0000-4000-8000-000000000003', name: 'Release notes' }
   const inventory = [...structuredClone(pods), standalone]
   central.host.workspace.pods = inventory.map(pod => ({ ...pod, online: true }))
-  const workflows: WorkflowView = { workflows: [{ id: '00000000-0000-4000-8000-000000000004', revision: 1, name: 'Morning review', nodes: [{ podId, after: [], handoff: false }], schedule: { kind: 'daily', time: '09:00', timezone: 'Europe/Vienna' }, enabled: true, paused: false, nextAt: 1790665200000 }], runs: [] }
+  const workflows: WorkflowView = { workflows: [{ ...sequenceParts, id: '00000000-0000-4000-8000-000000000004', revision: 1, name: 'Morning review', nodes: [{ podId, after: [], handoff: false }], schedule: { kind: 'daily', time: '09:00', timezone: 'Europe/Vienna' }, enabled: true, paused: false, nextAt: 1790665200000 }], runs: [] }
   const status: CentralStatus = { state: 'online', runtimeId: central.host.id, error: null, since: 1790000000000, lastOnlineAt: 1790000000000, gateUntil: 0, lastTickAt: null, tickingSince: null, tickPhase: null, tickTimeout: null, format: 2, lastPublication: null }
   let access: McpAccess = { mode: 'off', duration: 'hour', expiresAt: null }
   const bridge = installWorkspace({

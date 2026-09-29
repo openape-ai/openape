@@ -7,6 +7,7 @@ import App from '../../src/renderer/App.vue'
 import { applyLanguage } from '../../src/renderer/i18n'
 import type { StoredPod } from '../../src/contracts/control'
 import type { WorkflowView } from '../../src/contracts/workflows'
+import { sequenceParts } from '../../src/contracts/workflows'
 import { installWorkspace } from './workspace-fixture'
 
 // Geometry and keyboard behaviour formerly asserted by the packaged
@@ -18,7 +19,7 @@ const hash = 'e'.repeat(64)
 const members: StoredPod[] = ['Inbox filter', 'Important mail summary with a deliberately long name', 'Archive audit', 'Delivery confirmation'].map((name, index) => ({ id: `00000000-0000-4000-8000-00000000010${index}`, name, revision: 1, lifecycle: 'paused', activeScript: hash }))
 const id = '00000000-0000-4000-8000-0000000001a0'
 const nodes = members.map((pod, index) => ({ podId: pod.id, after: index === 0 ? [] : index === 3 ? [members[1]!.id, members[2]!.id] : [members[0]!.id], handoff: false }))
-const definition = { id, revision: 1, name: 'Synthetic inbox workflow', nodes, schedule: { kind: 'cron' as const, expression: '0 9 * * 1-5', timezone: 'Europe/Vienna' }, enabled: false, paused: true, nextAt: null }
+const definition = { ...sequenceParts, id, revision: 1, name: 'Synthetic inbox workflow', nodes, schedule: { kind: 'cron' as const, expression: '0 9 * * 1-5', timezone: 'Europe/Vienna' }, enabled: false, paused: true, nextAt: null }
 const completed: WorkflowView = { workflows: [definition], runs: [{ paused: false, id: '00000000-0000-4000-8000-0000000001b0', workflowId: id, revision: 1, state: 'completed', reason: null, startedAt: 1_790_000_000_000, finishedAt: 1_790_000_009_000, nodes: nodes.map((node, index) => ({ ...node, state: 'completed', runId: `00000000-0000-4000-8000-00000000011${index}`, reason: null, scriptHash: hash })) }] }
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; document.documentElement.style.colorScheme = ''; applyLanguage('en') })
