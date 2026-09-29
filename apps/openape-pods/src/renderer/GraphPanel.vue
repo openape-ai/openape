@@ -18,6 +18,7 @@ import { edgeCounts, nodeCounts } from './utils/graph-counts'
 import { contractScript, newGraph, withMember } from './utils/graph-create'
 import type { CreateRequest } from './utils/graph-create'
 import { traceRows } from './utils/item-trace'
+import { sharingAvailable } from './utils/sharing'
 
 export default defineComponent({
   components: { GateReview, GraphCreate, GraphInspector, GraphOverview, GraphView, ItemTrace, WorkflowPanel },
@@ -27,8 +28,9 @@ export default defineComponent({
     organization: { type: Object as PropType<Organization>, required: true },
     selectedId: { type: String, default: '' },
     readOnly: Boolean,
+    sharing: { type: Boolean, default: sharingAvailable },
   },
-  emits: ['changed', 'select', 'openPod', 'workspace'],
+  emits: ['changed', 'select', 'openPod', 'workspace', 'share', 'import'],
   data() { return { detail: null as GraphDetail | null, node: '', mode: 'plan' as 'plan' | 'run', page: 'graph' as 'graph' | 'trace' | 'gate' | 'create', gate: '', createIn: null as string | null, busy: false, error: '' } },
   computed: {
     definition(): WorkflowDefinition | undefined { return this.view.workflows.find(item => item.id === this.selectedId) },
@@ -122,7 +124,7 @@ export default defineComponent({
 
 <template>
   <GraphCreate v-if="page === 'create'" :view="view" :pods="pods" :organization="organization" :group-id="createIn" :busy="busy" :error="error" @create="create" @cancel="page = 'graph'" />
-  <GraphOverview v-else-if="!definition" :view="view" :pods="pods" :organization="organization" :read-only="readOnly" @select="$emit('select', $event)" @open-pod="$emit('openPod', $event)" @create="startCreate" />
+  <GraphOverview v-else-if="!definition" :view="view" :pods="pods" :organization="organization" :read-only="readOnly" :sharing="sharing" @select="$emit('select', $event)" @open-pod="$emit('openPod', $event)" @create="startCreate" @import="$emit('import')" />
   <section v-else class="graph-panel">
     <header class="graph-panel-heading">
       <p>
@@ -130,7 +132,12 @@ export default defineComponent({
           {{ t('Graphs') }}
         </button> <span class="muted">/ {{ groupName }}</span>
       </p>
-      <h1>{{ definition.name }}</h1>
+      <div class="graph-panel-title">
+        <h1>{{ definition.name }}</h1>
+        <button v-if="sharing && !readOnly" class="secondary" @click="$emit('share', definition.id)">
+          {{ t('Share') }}
+        </button>
+      </div>
       <p class="muted">
         {{ headline }}
       </p>
@@ -163,6 +170,7 @@ export default defineComponent({
 .graph-panel{display:flex;flex-direction:column;gap:16px;min-width:0}
 .graph-panel-heading h1{margin:2px 0;font-size:22px;overflow-wrap:anywhere}
 .graph-panel-heading p{margin:0}
+.graph-panel-title{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
 .graph-panel-body{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);align-items:start;gap:16px}
 .graph-panel-hint{margin:0;padding:20px;border:1px dashed var(--border);border-radius:12px}
 @media (max-width:900px){.graph-panel-body{grid-template-columns:minmax(0,1fr)}}
