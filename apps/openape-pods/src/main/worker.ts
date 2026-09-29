@@ -3,6 +3,7 @@ import type { InfrastructureFailure } from '../contracts/infrastructure'
 import { MailArchiveService } from './mail/archive/service'
 import { ArchiveStore } from './mail/archive/store'
 import { handleMailArchive } from './mail/archive/handler'
+import { handleGate } from './gates/handler'
 import type { RuntimeApprovalPolicy } from './codex/runtime-approval'
 import { assignedJev, parseJevRequest, typesafeOrigin } from '../contracts/jev'
 import { executeJev } from './connections/jev-service'
@@ -505,7 +506,7 @@ export class FixtureWorker {
 
   private async executeService(request: ServiceRequest): Promise<unknown> {
     if (!request || typeof request.id !== 'string' || !/^[a-f0-9-]{36}$/.test(request.id) || this.services.has(request.id) || this.services.size >= 16) throw new Error('Invalid or excessive broker request')
-    if (request.kind !== undefined && request.kind !== 'mailArchive' && request.kind !== 'credential' && request.kind !== 'jev' && request.kind !== 'http' && request.kind !== 'shell' && request.kind !== 'shellClose') throw new Error('Unsupported broker service')
+    if (request.kind !== undefined && request.kind !== 'gate' && request.kind !== 'mailArchive' && request.kind !== 'credential' && request.kind !== 'jev' && request.kind !== 'http' && request.kind !== 'shell' && request.kind !== 'shellClose') throw new Error('Unsupported broker service')
     const scope = parseServiceScope(request.scope)
     const controller = new AbortController(); this.services.set(request.id, controller)
     const check = async (domain?: { path: string, ownerPid: number }) => parseResourceState(await this.dispatch({ serviceCheck: { scope, ...(domain ? { domain } : {}) } }))
@@ -574,6 +575,11 @@ export class FixtureWorker {
         return value
       }
       const state = await check()
+      if (request.kind === 'gate') {
+        if (!this.connections) throw new Error('Connection service unavailable')
+        const result = await handleGate({ body: request.body, scope, connections: this.connections, check, signal: controller.signal })
+        await check(); controller.signal.throwIfAborted(); return result
+      }
       if (request.kind === 'mailArchive') {
         if (!this.credentials || !this.connections) throw new Error('Connection service unavailable')
         this.archiveService ??= new MailArchiveService(new ArchiveStore(join(this.root, 'mail-archive')))
