@@ -271,7 +271,7 @@ it('projects owner-scoped workflow summaries without exposing the archive or mai
   }
   store.publish(actor, lease, randomUUID(), 1, state)
   const view = store.inventory(actor.owner)[0]!.workflows!
-  expect(view.workflows).toEqual([{ id, revision: 2, name: 'Morning review', nodes, schedule: null, enabled: false, paused: false, nextAt: null }])
+  expect(view.workflows).toEqual([{ mode: 'sequence', groupId: null, channels: [], gates: [], values: [], id, revision: 2, name: 'Morning review', nodes, schedule: null, enabled: false, paused: false, nextAt: null }])
   expect(view.runs[0]).toMatchObject({ id: runId, workflowId: id, nodes: [{ podId, state: 'completed' }] })
   expect(JSON.stringify(view)).not.toContain('private')
   expect(store.inventory(other)).toEqual([])

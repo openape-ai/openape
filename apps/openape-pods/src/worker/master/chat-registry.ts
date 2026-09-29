@@ -3,6 +3,7 @@ import type { ChatsCommand, ChatsView, Conversation, ChatContext } from '../../c
 import { parseChatsCommand } from '../../contracts/chats'
 import { codexConversationId } from '../../contracts/codex'
 import type { WorkflowDefinition } from '../../contracts/workflows'
+import { workflowDefinitions } from '../workflows/engine'
 import type { PodDatabase } from '../storage/database'
 
 export class ChatRegistry {
@@ -11,9 +12,8 @@ export class ChatRegistry {
   private snapshot(podIds: string[], workflowId: string | null, revision: number | null): ChatContext {
     let workflow: WorkflowDefinition | null = null
     if (workflowId) {
-      const row = this.store.db.prepare('SELECT * FROM workflows WHERE id=? AND archived=0').get(workflowId)
-      if (!row || row.revision !== revision) throw new Error('Workflow changed; review its current members')
-      workflow = { id: workflowId, revision: row.revision as number, name: row.name as string, nodes: JSON.parse(row.nodes as string), schedule: row.schedule ? JSON.parse(row.schedule as string) : null, enabled: row.enabled === 1, paused: row.paused === 1, nextAt: row.next_at as number | null, ...(row.mail ? { mail: JSON.parse(row.mail as string) } : {}) }
+      workflow = workflowDefinitions(this.store).find(item => item.id === workflowId) ?? null
+      if (workflow?.revision !== revision) throw new Error('Workflow changed; review its current members')
     }
     const ids = [...new Set([...podIds, ...workflow?.nodes.map(node => node.podId) ?? []])]
     if (ids.length > 32) throw new Error('Select at most 32 Pods including workflow members')
