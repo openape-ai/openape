@@ -2,7 +2,7 @@
 import { defineComponent } from 'vue'
 import type { PropType } from 'vue'
 import type { GateBatchView } from '../contracts/gates'
-import type { GraphContract, GraphGate, GraphNodeKind, GraphRight } from '../contracts/graphs'
+import type { GraphChannel, GraphContract, GraphGate, GraphNodeKind, GraphRight } from '../contracts/graphs'
 import { kindLabels } from './utils/graph-kinds'
 import { label, t } from './i18n'
 
@@ -11,6 +11,7 @@ export interface InspectedNode { id: string, name: string, kind: GraphNodeKind, 
 export default defineComponent({
   props: {
     node: { type: Object as PropType<InspectedNode>, required: true },
+    channels: { type: Array as PropType<GraphChannel[]>, default: () => [] },
     run: Boolean,
     batches: { type: Array as PropType<GateBatchView[]>, default: () => [] },
   },
@@ -28,7 +29,7 @@ export default defineComponent({
     },
     waiting(): number { return this.batches.filter(batch => batch.state === 'pending').reduce((sum, batch) => sum + batch.items.length, 0) },
   },
-  methods: { t, label, kindLabel(kind: GraphNodeKind) { return t(kindLabels[kind]) } },
+  methods: { t, label, channelTitle(name: string) { return this.channels.find(channel => channel.name === name)?.title || name }, kindLabel(kind: GraphNodeKind) { return t(kindLabels[kind]) } },
 })
 </script>
 
@@ -45,15 +46,25 @@ export default defineComponent({
       </p>
     </header>
     <section>
-      <h3>{{ t('Takes') }}</h3>
-      <p>{{ takes.length ? takes.join(', ') : t('Nothing, starts with the graph') }}</p>
+      <h3>{{ t('Receives') }}</h3>
+      <p v-for="name in takes" :key="name">
+        {{ channelTitle(name) }}<small v-if="channelTitle(name) !== name" class="graph-channel-name">{{ name }}</small>
+      </p>
+      <p v-if="!takes.length">
+        {{ t('Nothing, starts with the network') }}
+      </p>
     </section>
     <section>
-      <h3>{{ t('Gives') }}</h3>
-      <p>{{ gives.length ? gives.join(', ') : t('Nothing') }}</p>
+      <h3>{{ t('Produces') }}</h3>
+      <p v-for="name in gives" :key="name">
+        {{ channelTitle(name) }}<small v-if="channelTitle(name) !== name" class="graph-channel-name">{{ name }}</small>
+      </p>
+      <p v-if="!gives.length">
+        {{ t('Nothing') }}
+      </p>
     </section>
     <section v-if="!node.gate">
-      <h3>{{ t('May') }}</h3>
+      <h3>{{ t('Allowed actions') }}</h3>
       <ul v-if="node.rights.length">
         <li v-for="(right, index) in node.rights" :key="index">
           {{ right.target ? `${label(right.label)}: ${right.target}` : label(right.label) }}
@@ -87,6 +98,8 @@ export default defineComponent({
 .graph-inspector{box-sizing:border-box;display:flex;flex-direction:column;gap:14px;min-width:0;padding:20px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
 .graph-inspector header small,.graph-inspector h3{margin:0;font-size:12px;font-weight:650;color:var(--muted)}
 .graph-inspector h2{margin:2px 0 4px;font-size:18px}
-.graph-inspector p,.graph-inspector ul{margin:2px 0 0;overflow-wrap:anywhere}
+.graph-inspector p,.graph-channel-name{display:block;font-size:12px;color:var(--muted)}
+.graph-inspector ul{margin:2px 0 0;overflow-wrap:anywhere}
+.graph-channel-name{display:block;font-size:12px;color:var(--muted)}
 .graph-inspector ul{padding-left:18px}
 </style>

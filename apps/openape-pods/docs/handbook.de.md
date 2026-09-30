@@ -401,15 +401,19 @@ Verwende examples/mail-notification.mjs aus dem Quellcode. Der erste erfolgreich
 
 Prüfe das Skript und führe es manuell aus, bevor du in Einstellungen ein 15-Minuten-Intervall aktivierst. Bestätige den Geheimniszugriff für den exakten Quelltext. Das Rezept speichert eine ausstehende Meldung vor dem Versand und die Empfangsbestätigung vor dem Fortschritt. Bei unklarem Versand prüfst du das Ziel und klärst das Ergebnis in Historie, bevor du erneut startest.
 
-## Pods in Workflows verbinden
+## Pods in Netzwerken und Workflows verbinden
 
-Workflows steht neben den Gruppen in der Seitenleiste. Wähle vorhandene Pods und für jeden Pod Startet nach. Ein Pod wartet, bis alle ausgewählten Vorgänger erfolgreich fertig sind. Unabhängige Zweige können parallel laufen. Das Verbinden ändert weder Skripte und Berechtigungen noch die eigenen Zeitpläne der Pods.
+Netzwerke & Workflows ist ein gemeinsamer Bereich mit den Filtern Alle, Netzwerke und Workflows. Netzwerke tauschen Einträge über die deklarierten Kanäle ihrer Pods aus; Workflows verwenden Startet nach-Abhängigkeiten. Netzwerk erstellen und Workflow erstellen öffnen den jeweiligen vorhandenen Editor. Ein Workflow-Knoten wartet auf alle erfolgreichen Vorgänger; unabhängige Zweige können parallel laufen. Die Rechte und unabhängigen Zeitpläne der Pods bleiben erhalten.
+
+Struktur zeigt mögliche Verbindungen aus den Verträgen. Letzte Ausführung hebt aufgezeichnete Übergaben hervor; unbenutzte Verbindungen bleiben sichtbar. Ein Übergabezähler bestätigt keine erfolgreiche externe Aktion: Prüfe den Eintragsverlauf und das tatsächliche Ergebnis. Wähle einen Pod, um Empfängt, Liefert, Erlaubte Aktionen und Freigabe zu lesen; Kanalbezeichnungen behalten ihre genauen technischen Namen. Offene Entscheidungen und wartende Freigaben werden getrennt gezählt.
+
+Prompt-Engineering beschreibt eine begrenzte Aufgabe und ihre Ergebniskriterien innerhalb eines Pods. Loop-Engineering verwendet endliche Versuchs- und Zeitlimits im Script und ein sichtbares Fehler- oder Prüfergebnis beim Erreichen des Limits. Graph-Engineering koordiniert validierte Übergaben und menschliche Freigaben. Ein Modell vergibt keine Rechte und genehmigt keine Freigabe. Netzwerke laufen weiterhin in begrenzten manuellen oder geplanten Ausführungen; Rückkopplungen zwischen Pods werden nicht unterstützt.
 
 Ein Workflow besitzt einen eigenen Intervall-, Tages-, Einmal- oder Cron-Zeitplan. Neue Zeitpläne sind ausgeschaltet. Einmal ausführen funktioniert auch bei pausierten Workflows und Pods. Pausieren verhindert neue Starts; bereits laufende Pods können abschließen. Der Verlauf zeigt Warte- und Sperrgründe. Wiederholen erhält fertige Schritte; unklare externe Ergebnisse müssen zuerst geklärt werden.
 
 Mail-Workflows benötigen separat geprüfte Skripte für feste Nachrichtenpakete. Prüfe Postfach, zugewiesene Anwendung, Archivregeln, geschützte Kommunikationspartner und Telegram-Ziel. Der erste Lauf setzt einen stillen Ausgangspunkt. Die Vorschau verschiebt nichts und sendet nichts über Telegram. Geschützte Absender, Empfänger und bekannte Unterhaltungen bleiben zur menschlichen Prüfung erhalten. Autonomes Archivieren bleibt gesperrt, bis bedingte Verschiebungen beim Anbieter verifiziert sind.
 
-1. Wähle Workflows → Neuer Workflow, gib einen Namen ein und füge vorhandene Pods hinzu.
+1. Wähle Netzwerke & Workflows. Filtere nach Netzwerken oder Workflows und wähle Netzwerk erstellen oder Workflow erstellen. Gib einen Namen ein und wähle bestehende Pods.
 2. Wähle alle erforderlichen Vorgänger, prüfe den Graphen und die nächsten Termine und speichere mit ausgeschaltetem Zeitplan. Zyklen lassen sich nicht speichern.
 3. Prüfe einen synthetischen Lauf und jeden Mail-Beleg vor einer Live-Einrichtung. Installation, Postfachänderungen, Telegram-Nachrichten und Aktivierung benötigen eine gesonderte Freigabe.
 

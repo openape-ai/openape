@@ -18,6 +18,8 @@ import { edgeCounts, nodeCounts } from './utils/graph-counts'
 import { contractScript, newGraph, withMember } from './utils/graph-create'
 import type { CreateRequest } from './utils/graph-create'
 import { traceRows } from './utils/item-trace'
+import { arrangementLabel, waitingDecisions } from './utils/graph-presentation'
+import type { ArrangementFilter } from './utils/graph-presentation'
 import { sharingAvailable } from './utils/sharing'
 
 export default defineComponent({
@@ -31,7 +33,7 @@ export default defineComponent({
     sharing: { type: Boolean, default: sharingAvailable },
   },
   emits: ['changed', 'select', 'openPod', 'workspace', 'share', 'import'],
-  data() { return { detail: null as GraphDetail | null, node: '', mode: 'plan' as 'plan' | 'run', page: 'graph' as 'graph' | 'trace' | 'gate' | 'create', gate: '', createIn: null as string | null, busy: false, error: '' } },
+  data() { return { detail: null as GraphDetail | null, node: '', mode: 'plan' as 'plan' | 'run', overviewFilter: 'all' as ArrangementFilter, page: 'graph' as 'graph' | 'trace' | 'gate' | 'create' | 'workflow-create', gate: '', createIn: null as string | null, busy: false, error: '' } },
   computed: {
     definition(): WorkflowDefinition | undefined { return this.view.workflows.find(item => item.id === this.selectedId) },
     groupName(): string { return this.organization.groups.find(group => group.id === this.definition?.groupId)?.name ?? t('Ungrouped') },
@@ -52,16 +54,16 @@ export default defineComponent({
     headline(): string {
       const detail = this.detail
       if (!detail?.lastRun) return t('Not run yet')
-      const waiting = Object.entries(detail.waiting).filter(([node]) => node.startsWith('gate:')).reduce((sum, [, count]) => sum + count, 0)
-      return waiting ? t('Last run {time} · waiting for approval: {count}', { time: dateTime(detail.lastRun.startedAt), count: waiting }) : t('Last run {time}', { time: dateTime(detail.lastRun.startedAt) })
+      const counts = waitingDecisions(this.definition!, this.view.gates)
+      return [t('Last run {time}', { time: dateTime(detail.lastRun.startedAt) }), ...(counts.choices ? [t('Choices waiting: {count}', { count: counts.choices })] : []), ...(counts.approvals ? [t('Approvals waiting: {count}', { count: counts.approvals })] : [])].join(' · ')
     },
     rows() { return traceRows(this.detail?.trace?.events ?? [], this.names, this.kinds) },
   },
   watch: {
-    selectedId: { immediate: true, handler() { this.page = 'graph'; this.node = ''; this.mode = 'plan'; void this.load() } },
+    selectedId: { immediate: true, async handler() { this.page = 'graph'; this.node = ''; this.mode = 'plan'; await this.load() } },
   },
   methods: {
-    t, diagnostic,
+    t, diagnostic, arrangementLabel,
     async send(command: WorkflowCommand): Promise<WorkflowView | null> {
       this.busy = true; this.error = ''
       try {
@@ -124,12 +126,13 @@ export default defineComponent({
 
 <template>
   <GraphCreate v-if="page === 'create'" :view="view" :pods="pods" :organization="organization" :group-id="createIn" :busy="busy" :error="error" @create="create" @cancel="page = 'graph'" />
-  <GraphOverview v-else-if="!definition" :view="view" :pods="pods" :organization="organization" :read-only="readOnly" :sharing="sharing" @select="$emit('select', $event)" @open-pod="$emit('openPod', $event)" @create="startCreate" @import="$emit('import')" />
+  <WorkflowPanel v-else-if="page === 'workflow-create' && !readOnly" create-on-mount :view="view" :pods="pods" @changed="$emit('changed', $event)" @select="$emit('select', $event); page = 'graph'" @cancel="page = 'graph'" />
+  <GraphOverview v-else-if="!definition" v-model:filter="overviewFilter" :view="view" :pods="pods" :organization="organization" :read-only="readOnly" :sharing="sharing" @select="$emit('select', $event)" @open-pod="$emit('openPod', $event)" @create="startCreate" @create-workflow="page = 'workflow-create'" @import="$emit('import')" />
   <section v-else class="graph-panel">
     <header class="graph-panel-heading">
       <p>
         <button class="text-button" @click="$emit('select', '')">
-          {{ t('Graphs') }}
+          {{ t('Networks & workflows') }}
         </button> <span class="muted">/ {{ groupName }}</span>
       </p>
       <div class="graph-panel-title">
@@ -139,7 +142,7 @@ export default defineComponent({
         </button>
       </div>
       <p class="muted">
-        {{ headline }}
+        {{ t(arrangementLabel(definition.mode)) }} · {{ headline }}
       </p>
     </header>
     <p v-if="error" role="alert" class="error-message">
@@ -150,7 +153,7 @@ export default defineComponent({
     <template v-else-if="detail">
       <GraphView :definition="definition" :detail="detail" :pods="pods" :selected="node" :mode="mode" @select="node = $event" @mode="mode = $event" />
       <div class="graph-panel-body">
-        <GraphInspector v-if="inspected" :node="inspected" :run="mode === 'run'" :batches="(view.gates?.batches ?? []).filter(batch => batch.workflowId === definition!.id && `gate:${batch.gate}` === node)" @open-pod="$emit('openPod', $event)" @open-gate="openGate" />
+        <GraphInspector v-if="inspected" :node="inspected" :channels="definition.channels" :run="mode === 'run'" :batches="(view.gates?.batches ?? []).filter(batch => batch.workflowId === definition!.id && `gate:${batch.gate}` === node)" @open-pod="$emit('openPod', $event)" @open-gate="openGate" />
         <p v-else class="muted graph-panel-hint">
           {{ t('Select a node to read its contract.') }}
         </p>

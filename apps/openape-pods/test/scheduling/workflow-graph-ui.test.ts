@@ -55,7 +55,7 @@ it('preserves graph metadata when editing its schedule through the workflow pane
   Object.assign(view.workflows[0]!, metadata)
   window.pods.workflows = vi.fn(async (command) => { structuredClone(command); return view })
   const wrapper = mount(WorkflowPanel, { props: { view, pods, selectedId: id } })
-  await wrapper.findAll('button').find(button => button.text() === 'Edit workflow')!.trigger('click')
+  await wrapper.findAll('button').find(button => button.text() === 'Edit network')!.trigger('click')
   await wrapper.findAll('label').find(label => label.text().includes('Enable automatic schedule'))!.get('input').setValue(true)
   await wrapper.get('form').trigger('submit')
   await flushPromises()
