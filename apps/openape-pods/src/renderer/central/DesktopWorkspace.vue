@@ -8,9 +8,10 @@ import App from '../App.vue'
 import WorkspaceFrame from '../WorkspaceFrame.vue'
 import AppSettings from '../AppSettings.vue'
 import AccountStatus from '../AccountStatus.vue'
-import WorkflowPanel from '../WorkflowPanel.vue'
+import GraphPanel from '../GraphPanel.vue'
 import type { WorkflowView } from '../../contracts/workflows'
-import type { StoredPod } from '../../contracts/control'
+import type { StoredPod, WorkspaceState } from '../../contracts/control'
+import type { Organization } from '../../contracts/groups'
 
 const invoke = window.pods.central!
 const client = desktopWorkspaceClient(invoke)
@@ -18,6 +19,7 @@ const page = ref('Workflows')
 const workspace = ref<InstanceType<typeof CentralWorkspace> | null>(null)
 const workflows = ref<WorkflowView>({ workflows: [], runs: [] })
 const pods = ref<StoredPod[]>([])
+const organization = ref<Organization>({ revision: 1, groups: [] })
 const workflowId = ref('')
 const error = ref('')
 const registering = ref(false)
@@ -27,13 +29,18 @@ let closed = false
 async function poll() {
   try {
     const [value, view, inventory] = await Promise.all([invoke({ type: 'status' }), window.pods.workflows({ type: 'list' }), window.pods.workspace({ type: 'list' })])
-    status.value = (value as CentralStatus & { enabled?: boolean }).enabled === false ? null : value as CentralStatus; workflows.value = view; pods.value = inventory.pods; error.value = ''
+    status.value = (value as CentralStatus & { enabled?: boolean }).enabled === false ? null : value as CentralStatus; workflows.value = view; workspaceChanged(inventory); error.value = ''
   }
   catch (cause) { error.value = String(cause) }
   if (!closed) timer = setTimeout(() => { void poll() }, 1000)
 }
 onMounted(poll)
 onBeforeUnmount(() => { closed = true; clearTimeout(timer) })
+function workspaceChanged(state: WorkspaceState) {
+  if (state.organization.revision < organization.value.revision) return
+  pods.value = state.pods
+  organization.value = state.organization
+}
 async function register() {
   registering.value = true; error.value = ''
   try { await invoke({ type: 'register' }) }
@@ -62,14 +69,7 @@ async function openPod(id: string) {
       {{ diagnostic(error) }}
     </p>
     <section v-show="page === 'Workflows'">
-      <header class="inventory-heading">
-        <div>
-          <h1>{{ t('Workflows') }}</h1><p class="muted">
-            {{ t('Connect Pods. Control their order and timing.') }}
-          </p>
-        </div>
-      </header>
-      <WorkflowPanel :view="workflows" :pods="pods" :selected-id="workflowId" @changed="workflows = $event" @select="workflowId = $event" @open-pod="openPod" />
+      <GraphPanel :view="workflows" :pods="pods" :organization="organization" :selected-id="workflowId" @changed="workflows = $event" @workspace="workspaceChanged" @select="workflowId = $event" @open-pod="openPod" />
     </section>
     <AppSettings v-if="page === 'App settings'">
       <template #connection>
