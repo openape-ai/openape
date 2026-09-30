@@ -121,10 +121,10 @@ export function document(observations, generatedAt, seriesId) {
 export async function run(context) {
   let revision = context.input.checkpointRevision; let state = context.input.checkpoint ?? {}
   const commit = async (next) => { revision = (await context.progress.commit({ expectedRevision: revision, checkpoint: next, sources: [], claims: [] })).revision; state = next }
-  const finish = async (summary, incomplete) => {
+  const finish = async (summary, incomplete, delivered = false) => {
     const id = `linde-gap-${context.input.runId}`
     if (incomplete) await context.progress.commit({ expectedRevision: revision, checkpoint: state, sources: [{ id, locator: 'linde:server-report', version: context.input.runId, content: summary }], claims: [{ id, matter: 'Linde server report', kind: 'gap', text: summary, sourceIds: [id] }] })
-    return { status: incomplete ? 'completedWithGaps' : 'completed', summary, gapIds: incomplete ? [id] : [], completedInputIds: context.input.eventIds }
+    return { status: incomplete && !delivered ? 'completedWithGaps' : 'completed', summary, gapIds: incomplete ? [id] : [], completedInputIds: context.input.eventIds }
   }
   const mode = context.variables.delivery_mode; const seriesId = context.variables.reports_series_id; const chatId = context.variables.telegram_chat_id
   if (!['preview', 'live'].includes(mode) || !/^[A-Z0-9]{26}$/.test(seriesId ?? '') || !/^\d+$/.test(chatId ?? '')) return finish('Missing reviewed reporting configuration; no report or message sent.', true)
@@ -169,7 +169,7 @@ export async function run(context) {
     const message = JSON.parse(reply.body)
     if (reply.status !== 200 || message.ok !== true || !Number.isInteger(message.result?.message_id) || String(message.result?.chat?.id) !== chatId) throw new Error('Telegram did not confirm delivery to the assigned personal chat')
     await commit({ ...state, pending: null, last: { key: pending.key, url: publication.url, messageId: message.result.message_id, deliveredAt: new Date().toISOString() } })
-    return finish(`Report published and Telegram delivery confirmed: ${publication.url}. ${pending.summary}`, pending.gaps > 0)
+    return finish(`Report published and Telegram delivery confirmed: ${publication.url}. ${pending.summary}`, pending.gaps > 0, true)
   }
   catch (error) { return finish(`Report delivery incomplete: ${error instanceof Error ? error.message : 'unknown error'}. The pending publication and delivery keys are preserved.`, true) }
 }

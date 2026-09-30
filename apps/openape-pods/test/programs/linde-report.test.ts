@@ -51,13 +51,18 @@ it('publishes and notifies on healthy runs, preserves receipts and skips replay 
   await run(f.context)
   expect(f.http.mock.calls.filter(([request]) => request.method === 'POST')).toHaveLength(4)
 })
-it('still publishes an incomplete report and notification when one server cannot be reached', async () => {
+it('completes delivered reports with recorded gaps so the next scheduled workflow can run', async () => {
   const f = fixture(hosts[2])
   const result = await run(f.context)
-  expect(result.status).toBe('completedWithGaps')
+  expect(result.status).toBe('completed')
   expect(f.report().html).toContain('SSH timeout')
   expect(f.http.mock.calls.filter(([request]) => request.method === 'POST')).toHaveLength(2)
   expect(result.gapIds).toHaveLength(1)
+  expect(f.context.progress.commit.mock.calls.at(-1)![0].claims).toMatchObject([{ kind: 'gap', id: result.gapIds[0] }])
+  f.context.input.checkpoint = f.checkpoint(); f.context.input.checkpointRevision = f.revision()
+  f.context.input.eventIds = ['next-slot']; f.context.input.runId = 'run2'
+  await expect(run(f.context)).resolves.toMatchObject({ status: 'completed' })
+  expect(f.http.mock.calls.filter(([request]) => request.method === 'POST')).toHaveLength(4)
 })
 it('retains the frozen publication and effect key when notification delivery is uncertain', async () => {
   const f = fixture()
