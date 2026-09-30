@@ -1,3 +1,5 @@
+import { resolveSshTarget, sshGrantArgv } from './ssh/configuration'
+import { invokeSsh } from './ssh/invoke'
 import { InfrastructureError, retryInfrastructure } from '../contracts/infrastructure'
 import type { InfrastructureFailure } from '../contracts/infrastructure'
 import { MailArchiveService } from './mail/archive/service'
@@ -386,6 +388,15 @@ export class FixtureWorker {
       const authority = await this.connections.approve(command.podId, join(vendor, 'pod-http-shapes.toml'), [['pod-http', 'request', '--origin', typesafeOrigin, '--method', 'POST']])
       return parseResourceState(await this.dispatch({ resource: { ...command, type: 'approveJev', authority } }))
     }
+    if (command.type === 'assignSsh') {
+      if (!this.connections) throw new Error('Connection setup is not ready')
+      const before = parseResourceState(await this.dispatch({ resource: { type: 'list', podId: command.podId } }))
+      if (before.epoch !== command.epoch) throw new Error('Pod or SSH permissions changed; reload before assigning access')
+      const binding = await resolveSshTarget(command.target)
+      const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
+      const authority = await this.connections.approve(command.podId, join(vendor, 'pod-ssh-shapes.toml'), [sshGrantArgv(binding)])
+      return parseResourceState(await this.dispatch({ resource: { type: 'approveSsh', podId: command.podId, epoch: command.epoch, binding, authority } }))
+    }
     if (command.type === 'assignHttp') {
       if (!this.connections) throw new Error('Connection setup is not ready')
       const before = parseResourceState(await this.dispatch({ resource: { type: 'list', podId: command.podId } }))
@@ -626,6 +637,11 @@ export class FixtureWorker {
         }
         const result = await executeHttp(state.resources, scope, parseHttpRequest(request.body), vendor, credentials, controller.signal, observe, previous, bearer)
         await check(); controller.signal.throwIfAborted(); return result
+      }
+      if (request.kind === undefined && request.body && typeof request.body === 'object' && 'sshInventory' in request.body) {
+        if (!this.credentials) throw new Error('Credential store is unavailable')
+        const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
+        return await invokeSsh({ resources: state.resources, scope, body: request.body, dist, root: join(this.root, 'runs', scope.runId), credentials: this.credentials, signal: controller.signal, check, observe, previous })
       }
       if (request.body && typeof request.body === 'object' && ('applicationId' in request.body || 'application' in request.body)) {
         if (!this.credentials) throw new Error('Credential store is unavailable')

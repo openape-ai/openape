@@ -1,5 +1,6 @@
 <script lang="ts">
 import { usePodAccess } from './pod-access'
+import SshPermissions from './SshPermissions.vue'
 import ProgramPermissions from './ProgramPermissions.vue'
 import DirectoryPermissions from './DirectoryPermissions.vue'
 import { t, diagnostic, label } from './i18n'
@@ -9,12 +10,12 @@ import type { StoredPod } from '../contracts/control'
 import type { ResourceCommand, ResourceState } from '../contracts/resources'
 
 export default defineComponent({
-  components: { ProgramPermissions, DirectoryPermissions },
+  components: { ProgramPermissions, DirectoryPermissions, SshPermissions },
   props: { requestedSecret: { type: String, default: '' }, requiredAliases: { type: Array as PropType<string[]>, default: () => [] }, mode: { type: String, default: 'permissions' }, selectedPodId: { type: String, default: '' } },
   emits: ['selected', 'discuss'],
   setup() { const access = usePodAccess(); return { access, remoteRevision: access.revision } },
   data() { return { pods: [] as StoredPod[], podId: '', state: { resources: [], epoch: 0 } as ResourceState, busy: false, error: '', credentialAlias: this.requestedSecret, credentialValue: '' } },
-  computed: { missingAliases(): string[] { return this.requiredAliases.filter(alias => !this.visibleResources.some(resource => resource.name === alias && resource.state === 'ready')) }, visibleResources() { return this.state.resources.filter(resource => this.mode === 'values' ? resource.kind === 'credential' : this.access.remote && !['reference', 'directory', 'credential'].includes(resource.kind) && !['program', 'http', 'jev'].includes(String(resource.configuration.type))) } },
+  computed: { missingAliases(): string[] { return this.requiredAliases.filter(alias => !this.visibleResources.some(resource => resource.name === alias && resource.state === 'ready')) }, visibleResources() { return this.state.resources.filter(resource => this.mode === 'values' ? resource.kind === 'credential' : this.access.remote && !['reference', 'directory', 'credential'].includes(resource.kind) && !['program', 'http', 'jev', 'sshInventory'].includes(String(resource.configuration.type))) } },
   watch: { remoteRevision() { if (!this.busy && !this.error && this.podId) void this.load() } },
   async mounted() {
     try { this.pods = (await this.access.api.workspace({ type: 'list' })).pods; this.podId = this.selectedPodId || this.pods[0]?.id || ''; if (this.podId) await this.load() }
@@ -97,6 +98,7 @@ export default defineComponent({
           {{ t("Revoke access") }}
         </button>
       </article>
+      <SshPermissions v-if="mode !== 'values'" :state="state" :busy="busy" :read-only="access.remote" @assign="target => act({ type: 'assignSsh', podId, epoch: state.epoch, target })" @revoke="resource => act({ type: 'revoke', podId, id: resource.id, revision: resource.revision })" />
       <ProgramPermissions v-if="mode !== 'values'" :pod-id="podId" :state="state" @updated="value => { state = value }" />
       <div v-if="state.snapshot" class="snapshot-result" role="status">
         <h3>{{ t("Snapshot ready") }}</h3><p>{{ t("Each file is copied and hashed. Its source remains unchanged.") }}</p>
