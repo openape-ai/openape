@@ -84,17 +84,17 @@ describe('inspector', () => {
   const node = { id: archive, name: 'Archive', kind: 'effect' as const, contract: contracts[archive]!, gate: null, rights: detail.rights[archive]!, approval: 'Newsletter batch', counts: { received: 3, given: 0, waiting: 0 } }
   it('shows contract, rights and the approval a Pod depends on', async () => {
     const wrapper = mount(GraphInspector, { props: { node, run: true } })
-    expect(wrapper.findAll('section').map(section => section.text())).toEqual(['Takesmail.approved', 'GivesNothing', 'MayMove approved mail: pods-mail', 'ApprovalRuns only after the approval "Newsletter batch"', 'Last runIn: 3 · out: 0'])
+    expect(wrapper.findAll('section').map(section => section.text())).toEqual(['Receivesmail.approved', 'ProducesNothing', 'Allowed actionsMove approved mail: pods-mail', 'ApprovalRuns only after the approval "Newsletter batch"', 'Last runIn: 3 · out: 0'])
     await button(wrapper, 'Open pod: script, rights, values').trigger('click')
     expect(wrapper.emitted('openPod')).toEqual([[archive]])
   })
   it('hides the last run in the blueprint and names a source without rights', () => {
     const wrapper = mount(GraphInspector, { props: { node: { ...node, id: intake, name: 'Intake', kind: 'code', contract: contracts[intake]!, rights: [], approval: null } } })
-    expect(wrapper.findAll('section').map(section => section.text())).toEqual(['TakesNothing, starts with the graph', 'Givesmail.open', 'MayNothing beyond its own folder', 'ApprovalNone'])
+    expect(wrapper.findAll('section').map(section => section.text())).toEqual(['ReceivesNothing, starts with the network', 'Producesmail.open', 'Allowed actionsNothing beyond its own folder', 'ApprovalNone'])
   })
   it('shows a gate without rights and opens its approval with the number of waiting items', async () => {
     const wrapper = mount(GraphInspector, { props: { node: { ...node, id: 'gate:batch', name: approve.title, kind: 'gate', contract: null, gate: approve, rights: [] }, batches: [batch] } })
-    expect(wrapper.findAll('section').map(section => section.text())).toEqual(['Takesmail.newsletter', 'Givesmail.approved, mail.kept', 'ApprovalOne approval for the whole batch'])
+    expect(wrapper.findAll('section').map(section => section.text())).toEqual(['Receivesmail.newsletter', 'Producesmail.approvedmail.kept', 'ApprovalOne approval for the whole batch'])
     await button(wrapper, 'Open approval (3)').trigger('click')
     expect(wrapper.emitted('openGate')).toEqual([['batch']])
   })
@@ -174,11 +174,11 @@ describe('gate review', () => {
 describe('overview', () => {
   it('groups graphs and single Pods and shows what waits for approval', async () => {
     const wrapper = mount(GraphOverview, { props: { view, pods, organization } })
-    expect(wrapper.find('.graph-overview-heading p').text()).toBe('Groups: 1 · Graphs: 1 · Single pods: 1')
+    expect(wrapper.find('.graph-overview-heading p').text()).toBe('Networks connect Pods. Workflows define ordered processes.')
     expect(wrapper.findAll('.graph-group').map(section => section.find('h2').text())).toEqual(['Delta Mind', 'Ungrouped'])
-    expect(wrapper.findAll('.graph-card').map(card => card.text())).toEqual(['Graph · Pods: 3 · hourlyEmail managementWaiting for approval: 4', 'PodPR monitor'])
+    expect(wrapper.findAll('.graph-card').map(card => card.text())).toEqual(['Network · Pods: 3 · hourlyEmail managementChoices waiting: 1Approvals waiting: 3', 'PodPR monitor'])
     await wrapper.findAll('.graph-card')[0]!.trigger('click'); await wrapper.findAll('.graph-card')[1]!.trigger('click')
-    await button(wrapper, 'Create new').trigger('click'); await button(wrapper, '+ Create in Delta Mind').trigger('click')
+    await button(wrapper, 'Create network').trigger('click'); await button(wrapper, '+ Create network in Delta Mind').trigger('click')
     expect(wrapper.emitted('select')).toEqual([[graphId]])
     expect(wrapper.emitted('openPod')).toEqual([[single]])
     expect(wrapper.emitted('create')).toEqual([[null], [group]])
@@ -186,9 +186,9 @@ describe('overview', () => {
   it('names a sequence workflow, a manual graph and hides creation in a read-only view', () => {
     const sequence = { ...definition, id: id(5), name: 'Morgenbriefing', mode: 'sequence' as const, groupId: null, enabled: false, gates: [], channels: [] }
     const wrapper = mount(GraphOverview, { props: { view: { workflows: [sequence], runs: [] }, pods, organization, readOnly: true } })
-    expect(wrapper.findAll('.graph-card')[0]!.text()).toBe('Sequence · Pods: 3 · Manual onlyMorgenbriefing')
-    expect(wrapper.findAll('button').map(item => item.text())).not.toContain('Create new')
-    expect(mount(GraphOverview, { props: { view: { workflows: [], runs: [] }, pods: [], organization: { revision: 1, groups: [] } } }).text()).toContain('No graph and no pod yet.')
+    expect(wrapper.findAll('.graph-card')[0]!.text()).toBe('Workflow · Pods: 3 · Manual onlyMorgenbriefing')
+    expect(wrapper.findAll('button').map(item => item.text())).not.toContain('Create network')
+    expect(mount(GraphOverview, { props: { view: { workflows: [], runs: [] }, pods: [], organization: { revision: 1, groups: [] } } }).text()).toContain('No network, workflow or pod yet.')
   })
 })
 
@@ -212,7 +212,7 @@ describe('create by hand', () => {
     await summary!.setValue('PDF in accounting')
     const [, graph, takes] = wrapper.findAll('select')
     await graph!.setValue(graphId)
-    expect(takes!.findAll('option').map(option => option.text())).toEqual(['Nothing, starts with the graph', ...definition.channels.map(channel => channel.name)])
+    expect(takes!.findAll('option').map(option => option.text())).toEqual(['Nothing, starts with the network', ...definition.channels.map(channel => channel.name)])
     await takes!.setValue('mail.useful')
     await wrapper.find('form').trigger('submit')
     expect(wrapper.emitted('create')).toEqual([[{ kind: 'pod', name: 'Invoice filing', summary: 'PDF in accounting', groupId: group, graphId, takes: ['mail.useful'], gives: ['invoice.filed', 'invoice.failed'] }]])
@@ -245,12 +245,13 @@ describe('create by hand', () => {
   })
 })
 
+function bridge(reply: (command: { type: string, id?: string }) => WorkflowView) {
+  const workflows = vi.fn(async (command: { type: string, id?: string }) => structuredClone(reply(command)))
+  window.pods = { workflows, workspace: vi.fn(), scripts: vi.fn() } as unknown as typeof window.pods
+  return workflows
+}
+
 describe('graph panel', () => {
-  function bridge(reply: (command: { type: string }) => WorkflowView) {
-    const workflows = vi.fn(async (command: { type: string }) => structuredClone(reply(command)))
-    window.pods = { workflows, workspace: vi.fn(), scripts: vi.fn() } as unknown as typeof window.pods
-    return workflows
-  }
   it('opens the overview without a selected graph and loads the detail of a selected one', async () => {
     const workflows = bridge(() => ({ ...view, graph: detail }))
     const overview = mount(GraphPanel, { props: { view, pods, organization } })
@@ -259,7 +260,7 @@ describe('graph panel', () => {
     const wrapper = mount(GraphPanel, { props: { view, pods, organization, selectedId: graphId } }); await flushPromises()
     expect(workflows).toHaveBeenCalledWith({ type: 'graph', id: graphId })
     expect(wrapper.find('.graph-panel-heading').text()).toContain('Email management')
-    expect(wrapper.find('.graph-panel-heading').text()).toContain('waiting for approval: 25')
+    expect(wrapper.find('.graph-panel-heading').text()).toContain('Choices waiting: 1 · Approvals waiting: 3')
     expect(wrapper.text()).toContain('Select a node to read its contract.')
     await wrapper.findAll('.graph-node')[1]!.trigger('click')
     expect(wrapper.find('.graph-inspector h2').text()).toBe('Triage')
@@ -380,11 +381,69 @@ describe('connected desktop graphs', () => {
   })
   it('updates the group overview after creating a group through the graph surface', async () => {
     const { workspace } = await open()
-    await click('Create new')
+    await click('Create network')
     await click('Group')
     await desktop!.get('input').setValue('IURIO')
     await desktop!.get('form').trigger('submit'); await flushPromises()
     expect(workspace).toHaveBeenCalledWith({ type: 'organize', revision: 4, action: 'create', name: 'IURIO' })
     expect(desktop!.findAll('.graph-group h2').map(item => item.text())).toEqual(['Delta Mind', 'IURIO', 'Ungrouped'])
+  })
+})
+
+describe('networks and workflows presentation', () => {
+  it('keeps the chosen mode filter when returning from a detail and reuses the workflow editor', async () => {
+    const sequence = { ...definition, id: id(5), name: 'Morning briefing', mode: 'sequence' as const, gates: [], channels: [] }
+    const published = { ...view, workflows: [definition, sequence], graphs: { [graphId]: detail } }
+    const workflows = bridge(() => published)
+    const wrapper = mount(GraphPanel, { props: { view: published, pods, organization } })
+    await button(wrapper, 'Networks').trigger('click')
+    expect(wrapper.findAll('.graph-card').map(card => card.find('strong').text())).toEqual(['Email management'])
+    await wrapper.get('.graph-card').trigger('click')
+    await wrapper.setProps({ selectedId: graphId }); await flushPromises()
+    await button(wrapper, 'Networks & workflows').trigger('click')
+    await wrapper.setProps({ selectedId: '' }); await flushPromises()
+    expect(button(wrapper, 'Networks').attributes('aria-pressed')).toBe('true')
+    await button(wrapper, 'Workflows').trigger('click')
+    expect(wrapper.findAll('.graph-card').map(card => card.find('strong').text())).toEqual(['Morning briefing'])
+    await button(wrapper, 'Create workflow').trigger('click')
+    expect(wrapper.find('form[aria-label="Edit workflow"]').exists()).toBe(true)
+    await button(wrapper, 'Cancel').trigger('click')
+    expect(button(wrapper, 'Workflows').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.find('.graph-create').exists()).toBe(false)
+    await button(wrapper, 'Create workflow').trigger('click')
+    await wrapper.get('form input[required]').setValue('New ordered workflow')
+    await wrapper.get('form input[type="checkbox"]').setValue(true)
+    await wrapper.get('form').trigger('submit'); await flushPromises()
+    expect(workflows).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'save', revision: 0, name: 'New ordered workflow', schedule: null, enabled: false, nodes: [{ podId: pods[0]!.id, after: [], handoff: false }] }))
+    expect(wrapper.emitted('changed')).toEqual([[published]])
+    expect(wrapper.emitted('select')!.at(-1)![0]).toBe(workflows.mock.calls.at(-1)![0].id)
+  })
+  it('counts choices and approvals separately without counting held approval items or duplicate batches twice', () => {
+    const held = [...batch.items.map(item => ({ itemId: item.itemId, key: item.key, title: item.title, workflowId: graphId, gate: approve.key })), ...view.gates!.held, ...view.gates!.held]
+    const batches = [batch, { ...batch, id: id(5) }, { ...batch, id: id(6), state: 'unknown' as const, items: [{ ...batch.items[0]!, itemId: single }] }]
+    const wrapper = mount(GraphOverview, { props: { view: { ...view, gates: { batches, held } }, pods, organization } })
+    expect(wrapper.findAll('.graph-waiting').map(item => item.text())).toEqual(['Choices waiting: 1', 'Approvals waiting: 3'])
+  })
+  it('offers an empty filter reset and no creation or mutations in the browser', async () => {
+    const wrapper = mount(GraphOverview, { props: { view, pods, organization, filter: 'sequence', readOnly: true } })
+    expect(wrapper.findAll('.graph-group')).toHaveLength(0)
+    expect(wrapper.text()).toContain('No results for this filter.')
+    expect(wrapper.text()).not.toContain('Create workflow')
+    await button(wrapper, 'Show all').trigger('click')
+    expect(wrapper.emitted('update:filter')).toEqual([['all']])
+  })
+  it('shows readable channel titles with exact names once and keeps unknown channels readable', () => {
+    const node = { id: triage, name: 'Triage', kind: 'decision' as const, contract: { ...contracts[triage]!, gives: ['mail.newsletter', 'mail.unknown'] }, gate: null, rights: [], approval: null, counts: { received: 0, given: 0, waiting: 0 } }
+    const wrapper = mount(GraphInspector, { props: { node, channels: [{ name: 'mail.open', title: 'New mail', fields: [] }, { name: 'mail.newsletter', title: 'mail.newsletter', fields: [] }] } })
+    expect(wrapper.findAll('section')[0]!.text()).toBe('ReceivesNew mailmail.open')
+    expect(wrapper.findAll('.graph-channel-name').map(item => item.text())).toEqual(['mail.open'])
+    expect(wrapper.findAll('section')[1]!.text()).toBe('Producesmail.newslettermail.unknown')
+  })
+  it('distinguishes used and unused delivery edges without removing either from the last run', () => {
+    const wrapper = mount(GraphView, { props: { definition, detail, pods, mode: 'run' } })
+    expect(wrapper.findAll('.graph-edges path')).toHaveLength(4)
+    expect(wrapper.findAll('.graph-edges path[data-active="true"]')).toHaveLength(2)
+    expect(wrapper.findAll('.graph-edges path[data-active="false"]')).toHaveLength(2)
+    expect(wrapper.text()).toContain('not confirmed external effects')
   })
 })

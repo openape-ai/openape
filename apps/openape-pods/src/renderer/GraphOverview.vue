@@ -5,6 +5,8 @@ import type { StoredPod } from '../contracts/control'
 import type { Organization } from '../contracts/groups'
 import type { WorkflowDefinition, WorkflowView } from '../contracts/workflows'
 import { t } from './i18n'
+import { arrangementLabel, waitingDecisions } from './utils/graph-presentation'
+import type { ArrangementFilter } from './utils/graph-presentation'
 import { sharingAvailable } from './utils/sharing'
 
 interface Section { id: string | null, name: string, graphs: WorkflowDefinition[], pods: StoredPod[] }
@@ -14,34 +16,32 @@ export default defineComponent({
     view: { type: Object as PropType<WorkflowView>, required: true },
     pods: { type: Array as PropType<StoredPod[]>, required: true },
     organization: { type: Object as PropType<Organization>, required: true },
+    filter: { type: String as PropType<ArrangementFilter>, default: 'all' },
     readOnly: Boolean,
     sharing: { type: Boolean, default: sharingAvailable },
   },
-  emits: ['select', 'openPod', 'create', 'import'],
+  emits: ['select', 'openPod', 'create', 'createWorkflow', 'import', 'update:filter'],
   computed: {
     sections(): Section[] {
+      const definitions = this.view.workflows.filter(item => this.filter === 'all' || item.mode === this.filter)
       const members = new Set(this.view.workflows.flatMap(graph => graph.nodes.map(node => node.podId)))
-      const current = this.pods.filter(pod => pod.lifecycle !== 'archived' && !members.has(pod.id))
+      const current = this.pods.filter(pod => this.filter === 'all' && pod.lifecycle !== 'archived' && !members.has(pod.id))
       const grouped = new Set(this.organization.groups.flatMap(group => group.podIds))
-      const groups = this.organization.groups.map(group => ({ id: group.id as string | null, name: group.name, graphs: this.view.workflows.filter(graph => graph.groupId === group.id), pods: current.filter(pod => group.podIds.includes(pod.id)) }))
+      const groups = this.organization.groups.map(group => ({ id: group.id as string | null, name: group.name, graphs: definitions.filter(graph => graph.groupId === group.id), pods: current.filter(pod => group.podIds.includes(pod.id)) }))
       const known = new Set(this.organization.groups.map(group => group.id))
-      const loose = { id: null, name: t('Ungrouped'), graphs: this.view.workflows.filter(graph => !graph.groupId || !known.has(graph.groupId)), pods: current.filter(pod => !grouped.has(pod.id)) }
-      return [...groups, ...loose.graphs.length || loose.pods.length ? [loose] : []]
+      const loose = { id: null, name: t('Ungrouped'), graphs: definitions.filter(graph => !graph.groupId || !known.has(graph.groupId)), pods: current.filter(pod => !grouped.has(pod.id)) }
+      return [...groups, ...loose.graphs.length || loose.pods.length ? [loose] : []].filter(section => this.filter === 'all' || section.graphs.length || section.pods.length)
     },
     summary(): string {
-      return t('Groups: {groups} · Graphs: {graphs} · Single pods: {pods}', { groups: this.organization.groups.length, graphs: this.view.workflows.length, pods: this.sections.reduce((sum, section) => sum + section.pods.length, 0) })
+      return t('Networks connect Pods. Workflows define ordered processes.')
     },
   },
   methods: {
     t,
-    waiting(graph: WorkflowDefinition): number {
-      const gates = this.view.gates
-      if (!gates) return 0
-      return gates.batches.filter(batch => batch.workflowId === graph.id && batch.state === 'pending').reduce((sum, batch) => sum + batch.items.length, 0) + gates.held.filter(item => item.workflowId === graph.id).length
-    },
+    waiting(graph: WorkflowDefinition) { return waitingDecisions(graph, this.view.gates) },
     meta(graph: WorkflowDefinition): string {
       const schedule = graph.paused && graph.enabled ? t('paused') : !graph.schedule || !graph.enabled ? t('Manual only') : graph.schedule.kind === 'interval' && graph.schedule.seconds === 3600 ? t('hourly') : graph.schedule.kind === 'daily' ? t('daily at {time}', { time: graph.schedule.time }) : t('scheduled')
-      return `${graph.mode === 'channels' ? t('Graph') : t('Sequence')} · ${t('Pods: {count}', { count: graph.nodes.length })} · ${schedule}`
+      return `${t(arrangementLabel(graph.mode))} · ${t('Pods: {count}', { count: graph.nodes.length })} · ${schedule}`
     },
   },
 })
@@ -51,7 +51,7 @@ export default defineComponent({
   <section class="graph-overview">
     <header class="graph-overview-heading">
       <div>
-        <h1>{{ t('Graphs') }}</h1>
+        <h1>{{ t('Networks & workflows') }}</h1>
         <p class="muted">
           {{ summary }}
         </p>
@@ -60,27 +60,44 @@ export default defineComponent({
         <button v-if="sharing" class="secondary" @click="$emit('import')">
           {{ t('Import') }}
         </button>
-        <button class="primary" @click="$emit('create', null)">
-          {{ t('Create new') }}
+        <button v-if="filter !== 'sequence'" class="primary" @click="$emit('create', null)">
+          {{ t('Create network') }}
+        </button>
+        <button v-if="filter !== 'channels'" class="secondary" @click="$emit('createWorkflow')">
+          {{ t('Create workflow') }}
         </button>
       </div>
     </header>
+    <div class="graph-modes" role="group" :aria-label="t('Filter networks and workflows')">
+      <button v-for="option in ([['all', 'All'], ['channels', 'Networks'], ['sequence', 'Workflows']] as const)" :key="option[0]" :aria-pressed="filter === option[0]" @click="$emit('update:filter', option[0])">
+        {{ t(option[1]) }}
+      </button>
+    </div>
     <p v-if="!sections.length" class="muted">
-      {{ t('No graph and no pod yet.') }}
+      {{ t(filter === 'all' ? 'No network, workflow or pod yet.' : 'No results for this filter.') }}
     </p>
+    <button v-if="!sections.length && filter !== 'all'" class="text-button" @click="$emit('update:filter', 'all')">
+      {{ t('Show all') }}
+    </button>
     <section v-for="section in sections" :key="section.id ?? 'ungrouped'" class="graph-group">
       <header>
         <h2>{{ section.name }}</h2>
-        <button v-if="!readOnly && section.id" class="text-button" @click="$emit('create', section.id)">
-          {{ t('+ Create in {group}', { group: section.name }) }}
+        <button v-if="!readOnly && section.id && filter !== 'sequence'" class="text-button" @click="$emit('create', section.id)">
+          {{ t('+ Create network in {group}', { group: section.name }) }}
         </button>
       </header>
       <div class="graph-cards">
         <button v-for="graph in section.graphs" :key="graph.id" class="graph-card" @click="$emit('select', graph.id)">
           <small>{{ meta(graph) }}</small>
           <strong>{{ graph.name }}</strong>
-          <span v-if="waiting(graph)" class="graph-waiting">{{ t('Waiting for approval: {count}', { count: waiting(graph) }) }}</span>
+          <span v-if="waiting(graph).choices" class="graph-waiting">{{ t('Choices waiting: {count}', { count: waiting(graph).choices }) }}</span>
+          <span v-if="waiting(graph).approvals" class="graph-waiting">{{ t('Approvals waiting: {count}', { count: waiting(graph).approvals }) }}</span>
         </button>
+      </div>
+      <h3 v-if="section.pods.length" class="graph-single-heading">
+        {{ t('Standalone Pods') }}
+      </h3>
+      <div v-if="section.pods.length" class="graph-cards">
         <button v-for="pod in section.pods" :key="pod.id" class="graph-card" @click="$emit('openPod', pod.id)">
           <small>{{ t('Pod') }}</small>
           <strong>{{ pod.name }}</strong>
@@ -94,6 +111,7 @@ export default defineComponent({
 <style>
 .graph-overview{display:flex;flex-direction:column;gap:24px;min-width:0}
 .graph-overview-heading,.graph-group header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.graph-overview>.graph-modes{align-self:flex-start;flex-wrap:wrap}.graph-single-heading{margin:4px 0 0;font-size:13px;color:var(--muted)}
 .graph-overview-actions{display:flex;flex-wrap:wrap;gap:12px}
 .graph-overview h1{margin:0;font-size:22px}
 .graph-overview h2{margin:0;font-size:16px}

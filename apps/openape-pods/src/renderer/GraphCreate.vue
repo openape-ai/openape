@@ -61,7 +61,7 @@ export default defineComponent({
     </header>
     <div class="graph-modes" role="group" :aria-label="t('What to create')">
       <button type="button" :aria-pressed="kind === 'graph'" @click="kind = 'graph'">
-        {{ t('Graph') }}
+        {{ t('Network') }}
       </button><button type="button" :aria-pressed="kind === 'pod'" @click="kind = 'pod'">
         {{ t('Pod') }}
       </button><button type="button" :aria-pressed="kind === 'group'" @click="kind = 'group'">
@@ -70,14 +70,14 @@ export default defineComponent({
     </div>
     <div class="graph-create-fields">
       <fieldset>
-        <legend>{{ kind === 'graph' ? t('Graph') : kind === 'pod' ? t('Pod') : t('Group') }}</legend>
+        <legend>{{ kind === 'graph' ? t('Network') : kind === 'pod' ? t('Pod') : t('Group') }}</legend>
         <label>{{ t('Name') }}<input v-model="name" type="text" maxlength="100" required></label>
         <label v-if="kind === 'pod'">{{ t('Subtitle, at most 40 characters') }}<input v-model="summary" type="text" maxlength="40"></label>
         <label v-if="kind !== 'group'">{{ t('Group') }}<select v-model="group">
           <option value="">{{ t('Ungrouped') }}</option>
           <option v-for="item in organization.groups" :key="item.id" :value="item.id">{{ item.name }}</option>
         </select></label>
-        <label v-if="kind === 'pod'">{{ t('Graph') }}<select v-model="graph">
+        <label v-if="kind === 'pod'">{{ t('Network') }}<select v-model="graph">
           <option value="">{{ t('None, single pod') }}</option>
           <option v-for="item in graphs" :key="item.id" :value="item.id">{{ item.name }}</option>
         </select></label>
@@ -94,9 +94,9 @@ export default defineComponent({
         </p>
       </fieldset>
       <fieldset v-if="kind === 'graph'">
-        <legend>{{ t('Pods in this graph') }}</legend>
+        <legend>{{ t('Pods in this network') }}</legend>
         <p v-if="!candidates.length" class="muted">
-          {{ t('This group has no free pod. Create pods in this graph afterwards.') }}
+          {{ t('This group has no free pod. Create pods in this network afterwards.') }}
         </p>
         <label v-for="pod in candidates" :key="pod.id" class="graph-create-check"><input v-model="members" type="checkbox" :value="pod.id"><span>{{ pod.name }}</span></label>
         <p class="muted">
@@ -105,11 +105,11 @@ export default defineComponent({
       </fieldset>
       <fieldset v-if="kind === 'pod'">
         <legend>{{ t('Contract') }}</legend>
-        <label>{{ t('Takes') }}<select v-model="takes">
-          <option value="">{{ t('Nothing, starts with the graph') }}</option>
+        <label>{{ t('Receives') }}<select v-model="takes">
+          <option value="">{{ t('Nothing, starts with the network') }}</option>
           <option v-for="channel in channels" :key="channel" :value="channel">{{ channel }}</option>
         </select></label>
-        <label>{{ t('Gives') }}<input v-model="gives" type="text" :placeholder="t('for example invoice.filed')"></label>
+        <label>{{ t('Produces') }}<input v-model="gives" type="text" :placeholder="t('for example invoice.filed')"></label>
         <p class="muted">
           {{ t('The pod starts with an empty script for this contract. Validate and activate it in its Script tab.') }}
         </p>
