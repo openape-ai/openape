@@ -14,7 +14,7 @@ export async function verifyBrowserWorkspace(url: string, email: string, loginTo
     const failures: string[] = []
     page.on('pageerror', error => failures.push(error.message))
     await page.goto(authorization.headers.get('location')!)
-    await expect.poll(async () => ({ errors: failures, content: (await page.locator('body').textContent())?.slice(0, 2000), ready: await page.getByRole('heading', { name: 'Workflows', exact: true }).isVisible() }), { timeout: 15000 }).toMatchObject({ errors: [], ready: true })
+    await expect.poll(async () => ({ errors: failures, content: (await page.locator('body').textContent())?.slice(0, 2000), ready: await page.getByRole('heading', { name: 'Networks & workflows', exact: true }).isVisible() }), { timeout: 15000 }).toMatchObject({ errors: [], ready: true })
     expect(await page.locator('.account-status').textContent()).toContain(email)
     await page.getByRole('button', { name: 'Pods', exact: true }).click()
     await page.locator('.central-pod').first().click()

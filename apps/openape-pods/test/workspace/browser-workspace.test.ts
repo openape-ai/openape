@@ -18,6 +18,7 @@ async function pod() { await wrapper!.get('[aria-label="Pods"]').trigger('click'
 
 it('uses the desktop shell and every Pod section without a native bridge', async () => {
   await open()
+  expect(wrapper!.get('h1').text()).toBe('Networks & workflows')
   expect(wrapper!.get('.workflow-inventory').text()).toContain('Morning review')
   expect(wrapper!.get('.account-status').text()).toContain('owner@example.invalid')
   await pod()
@@ -36,11 +37,11 @@ it('preserves descriptions across tabs and guards sidebar navigation until disca
   await wrapper!.get('#pod-description').setValue('Unsaved browser draft')
   await click('History'); await click('Overview')
   expect((wrapper!.get('#pod-description').element as HTMLTextAreaElement).value).toBe('Unsaved browser draft')
-  await wrapper!.get('[aria-label="Workflows"]').trigger('click'); await flushPromises()
+  await wrapper!.get('[aria-label="Networks & workflows"]').trigger('click'); await flushPromises()
   expect(wrapper!.get('[aria-label="Unsaved changes"]').isVisible()).toBe(true)
   await click('Keep editing')
   expect((wrapper!.get('#pod-description').element as HTMLTextAreaElement).value).toBe('Unsaved browser draft')
-  await wrapper!.get('[aria-label="Workflows"]').trigger('click'); await flushPromises(); await click('Discard changes')
+  await wrapper!.get('[aria-label="Networks & workflows"]').trigger('click'); await flushPromises(); await click('Discard changes')
   expect(wrapper!.get('.workflow-inventory').isVisible()).toBe(true)
 })
 
@@ -106,7 +107,7 @@ it('accepts an applied description receipt and clears the navigation guard', asy
   await wrapper!.get('#pod-description').setValue('Saved browser description')
   await wrapper!.get('#pod-description').element.closest('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); await flushPromises()
   expect(wrapper!.findAll('[role="alert"]').map(item => item.text()).join(' ')).toBe('')
-  await wrapper!.get('[aria-label="Workflows"]').trigger('click'); await flushPromises()
+  await wrapper!.get('[aria-label="Networks & workflows"]').trigger('click'); await flushPromises()
   expect(wrapper!.get('.workflow-inventory').isVisible()).toBe(true)
   expect(wrapper!.find('[aria-label="Unsaved changes"]').exists()).toBe(false)
 })
