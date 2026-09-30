@@ -1,3 +1,4 @@
+import { assignedSsh } from '../../contracts/ssh'
 import { assignedJev, parseJevRequest, syntheticJevResult } from '../../contracts/jev'
 import { parseWorkflowOutput } from '../../contracts/workflows'
 import { parseAgentRequest } from '../../contracts/agent'
@@ -85,6 +86,10 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
       if (operation === 'agent.run') {
         parseAgentRequest(payload)
         return { threadId: 'synthetic-validation', response: '{"claims":[]}' }
+      }
+      if (operation === 'tools.invoke' && payload && typeof payload === 'object' && 'sshInventory' in payload) {
+        assignedSsh(resources.list(pod.id), pod.id, capabilities, payload)
+        throw new Error('Synthetic validation has no SSH host observations; handle collection failures explicitly')
       }
       if (operation === 'tools.invoke' && payload && typeof payload === 'object' && ('applicationId' in payload || 'application' in payload)) {
         const { assignment, argv } = programRequest(resources.list(pod.id), pod.id, capabilities, payload)

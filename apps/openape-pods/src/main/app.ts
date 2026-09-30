@@ -1,3 +1,4 @@
+import { resolveSshTarget } from './ssh/configuration'
 import { McpAccessPolicy } from './codex/access'
 import { parseMcpAccessCommand } from '../contracts/mcp-access'
 import { RuntimeApprovalPolicy } from './codex/runtime-approval'
@@ -388,6 +389,13 @@ async function start(): Promise<void> {
   ipcMain.handle(channels.resources, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     const command = parseResourceCommand(value)
+    if (command.type === 'assignSsh') {
+      if (!window) throw new Error('Owner window is unavailable')
+      const binding = await resolveSshTarget(command.target)
+      const answer = await dialog.showMessageBox(window, { type: 'question', title: 'Allow fixed SSH inventory', message: binding.target.alias, detail: `${binding.hosts.map(host => `${host.user}@${host.hostname}:${host.port}`).join(' → ')}\n\nProfile: ${binding.target.profile}\nOnly fixed server observations. Keys remain on this Mac. The Pod stays paused.`, buttons: ['Cancel', 'Allow fixed inventory'], defaultId: 0, cancelId: 0 })
+      if (answer.response !== 1) return worker.resources({ type: 'list', podId: command.podId })
+      if (JSON.stringify(binding) !== JSON.stringify(await resolveSshTarget(command.target))) throw new Error('SSH configuration changed during review; try again')
+    }
     if (command.type === 'assignHttp') {
       if (!window) throw new Error('Owner window is unavailable')
       const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Allow HTTP destination'), message: command.permission.origin, detail: t('Allowed methods: {methods}\n\nScripts with this permission can send data to this destination. Token values remain in Variables and secrets. The pod stays paused.', { methods: command.permission.methods.join(', ') }), buttons: [t('Cancel'), t('Allow HTTP destination')], defaultId: 0, cancelId: 0 })

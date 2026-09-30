@@ -1,0 +1,14 @@
+schema = "openape-shapes/v1"
+[cli]
+id = "pod-ssh"
+executable = "pod-ssh"
+audience = "shapes"
+version = "1"
+[[operation]]
+id = "inventory"
+command = ["inventory"]
+required_options = ["binding", "profile"]
+display = "Read fixed SSH inventory {profile} for reviewed binding {binding}"
+action = "read"
+risk = "low"
+resource_chain = ["ssh-binding:hash={binding}", "inventory-profile:name={profile}"]
