@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, cpSync, readFileSync, writeFileSync, rmSync, ex
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { readHandbooks, sectionMarkdown } from '../apps/openape-pods/scripts/handbook-content.mjs'
+import { readHandbooks } from '../apps/openape-pods/scripts/handbook-content.mjs'
 
 test('guide regeneration preserves Pods, shared handbook content, images and web stories', () => {
   const root = mkdtempSync(join(tmpdir(), 'pods-guide-generator-'))
@@ -15,15 +15,29 @@ test('guide regeneration preserves Pods, shared handbook content, images and web
     cpSync(resolve('apps/openape-pods/docs'), join(root, 'apps/openape-pods/docs'), { recursive: true })
     writeFileSync(join(root, 'apps/openape-free-idp/docs/stories.json'), JSON.stringify({ stories: [{ order: 1, title: 'Sign in', intro: 'Use your account.', steps: [{ title: 'Choose account', caption: 'Review the account.', shot: 'account.png' }] }] }))
     writeFileSync(join(root, 'apps/openape-free-idp/public/docs/screenshots/account.png'), 'synthetic image')
+    const handbookFile = join(root, 'apps/openape-pods/docs/handbook.json')
+    const handbook = JSON.parse(readFileSync(handbookFile, 'utf8'))
+    handbook.sections[0] = {
+      ...handbook.sections[0], title: 'Synthetic chapter',
+      paragraphs: ['Fixture paragraph.'], steps: ['Open the workspace.', 'Review the activity.'],
+      code: 'console.log("fixture")', image: 'handbook-fixture.png',
+    }
+    writeFileSync(handbookFile, JSON.stringify(handbook))
+    writeFileSync(join(root, 'apps/openape-pods/docs/images/handbook-fixture.png'), 'synthetic image')
     const generate = () => execFileSync(process.execPath, [join(root, 'apps/docs/scripts/aggregate-guides.mjs')], { stdio: 'pipe' })
     generate()
     const page = join(root, 'apps/docs/content/5.apps/11.pods.md')
     const first = readFileSync(page, 'utf8')
     const { en } = readHandbooks(join(root, 'apps/openape-pods/docs'))
     for (const section of en.sections) {
-      for (const block of sectionMarkdown(section, '/guides/pods')) assert.ok(first.includes(block), `Missing ${section.id} content`)
       if (section.image) assert.ok(existsSync(join(root, 'apps/docs/public/guides/pods', section.image)))
     }
+    assert.ok(first.includes([
+      '## Synthetic chapter', 'Fixture paragraph.',
+      '1. Open the workspace.\n2. Review the activity.',
+      '```javascript\nconsole.log("fixture")\n```',
+      '![Synthetic chapter](/guides/pods/handbook-fixture.png)',
+    ].join('\n\n')), 'Generated guide must preserve independently specified chapter content')
     assert.match(readFileSync(join(root, 'apps/docs/content/5.apps/01.index.md'), 'utf8'), /to="\/apps\/pods"/)
     assert.match(readFileSync(join(root, 'apps/docs/content/5.apps/02.idp.md'), 'utf8'), /Choose account/)
     assert.ok(existsSync(join(root, 'apps/docs/public/guides/idp/account.png')))
