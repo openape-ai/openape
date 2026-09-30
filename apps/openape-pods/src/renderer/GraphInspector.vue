@@ -98,8 +98,7 @@ export default defineComponent({
 .graph-inspector{box-sizing:border-box;display:flex;flex-direction:column;gap:14px;min-width:0;padding:20px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
 .graph-inspector header small,.graph-inspector h3{margin:0;font-size:12px;font-weight:650;color:var(--muted)}
 .graph-inspector h2{margin:2px 0 4px;font-size:18px}
-.graph-inspector p,.graph-channel-name{display:block;font-size:12px;color:var(--muted)}
-.graph-inspector ul{margin:2px 0 0;overflow-wrap:anywhere}
+.graph-inspector p,.graph-inspector ul{margin:2px 0 0;overflow-wrap:anywhere}
 .graph-channel-name{display:block;font-size:12px;color:var(--muted)}
 .graph-inspector ul{padding-left:18px}
 </style>
