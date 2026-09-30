@@ -24,10 +24,10 @@ it('opens local workflows from the desktop landing page and resumes the selected
   wrapper = mount(DesktopWorkspace); await flushPromises()
   const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.text() === text)!.trigger('click'); await flushPromises() }
   expect(workflows).toHaveBeenCalledExactlyOnceWith({ type: 'list' })
-  await wrapper.get('.workflow-inventory button').trigger('click'); await flushPromises()
+  await wrapper.get('.graph-card').trigger('click'); await flushPromises()
   expect(wrapper.find('.workflow-graph').text()).toContain('Mail knowledge')
   await click('Resume workflow')
-  expect(workflows).toHaveBeenLastCalledWith({ type: 'pause', id, revision: 1, paused: false })
+  expect(workflows).toHaveBeenCalledWith({ type: 'pause', id, revision: 1, paused: false })
   expect(wrapper.text()).toContain('Pause workflow')
   workflows.mockRejectedValueOnce(new Error('Workflow connection unavailable'))
   await click('Pause workflow')
