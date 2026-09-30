@@ -49,8 +49,8 @@ async function navigate(index: number) { await wrapper!.findAll('.workspace-navi
 async function shot(name: string) { await frame(); expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth); await page.screenshot({ path: screenshotPath(name) }) }
 it('shows workflows first and inventories standalone, workflow and archived Pods separately', async () => {
   await open()
-  expect(wrapper!.get('.workflow-inventory strong').text()).toBe('Morning review')
-  await wrapper!.get('.workflow-inventory button').trigger('click'); await flushPromises()
+  expect(wrapper!.get('.graph-card strong').text()).toBe('Morning review')
+  await wrapper!.get('.graph-card').trigger('click'); await flushPromises()
   expect(wrapper!.get('.workflow-node').text()).toContain('Mail knowledge')
   expect(wrapper!.get('.workflow-panel').text()).toContain('Täglich')
   await shot('variant-a-workflow.png')
@@ -70,7 +70,7 @@ it('shows workflows first and inventories standalone, workflow and archived Pods
 })
 it('opens the native highlighted editor from a workflow and keeps MCP out of Pod sections', async () => {
   await open()
-  await wrapper!.get('.workflow-inventory button').trigger('click'); await flushPromises()
+  await wrapper!.get('.graph-card').trigger('click'); await flushPromises()
   await wrapper!.get('.workflow-node').trigger('click'); await flushPromises(); await frame()
   expect(wrapper!.get('.central-content h1').text()).toBe('Mail knowledge')
   const tabs = () => wrapper!.findAll('[role="tab"]')
