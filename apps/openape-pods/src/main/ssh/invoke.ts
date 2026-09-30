@@ -68,7 +68,7 @@ export async function invokeSsh(input: { resources: PodResource[], scope: Servic
     const config = join(workspace, 'config')
     await writeFile(config, sshConfiguration(binding), { mode: 0o600, flag: 'wx' })
     await current()
-    const domain = await superviseProcess(join(dist, 'native/pods-helper'), '/usr/bin/ssh', ['-F', config, '-T', ...(binding.target.jumps.length ? ['-J', binding.target.jumps.join(',')] : []), binding.target.alias, inventoryCommand()], workspace, {}, input.root, async (path, ownerPid) => { await check({ path, ownerPid }); signal.throwIfAborted() })
+    const domain = await superviseProcess(join(dist, 'native/pods-helper'), '/usr/bin/ssh', ['-F', 'config', '-T', ...(binding.target.jumps.length ? ['-J', binding.target.jumps.join(',')] : []), binding.target.alias, inventoryCommand()], workspace, {}, input.root, async (path, ownerPid) => { await check({ path, ownerPid }); signal.throwIfAborted() })
     return await collectInventory(domain, signal, current)
   }
   finally { await rm(workspace, { recursive: true, force: true }) }
