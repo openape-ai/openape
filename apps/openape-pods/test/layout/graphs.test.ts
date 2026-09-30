@@ -7,6 +7,7 @@ import type { GraphDetail, GraphGate } from '../../src/contracts/graphs'
 import type { WorkflowDefinition, WorkflowView } from '../../src/contracts/workflows'
 import { sequenceParts } from '../../src/contracts/workflows'
 import App from '../../src/renderer/App.vue'
+import DesktopWorkspace from '../../src/renderer/central/DesktopWorkspace.vue'
 import BrowserWorkspace from '../../src/renderer/central/BrowserWorkspace.vue'
 import { browserFixture } from '../workspace/browser-fixture'
 import GraphView from '../../src/renderer/GraphView.vue'
@@ -80,18 +81,19 @@ describe('graph view on its own', () => {
   })
 })
 
-describe('graph pages in the app', () => {
+describe.each(['local', 'connected'] as const)('graph pages in the %s desktop', (surface) => {
   async function open(language: 'de' | 'en' = 'de') {
     installWorkspace({
       language: async () => language,
+      central: async command => command.type === 'status' ? { enabled: true, state: 'online', runtimeId: id(99) } : command.type === 'inventory' ? [] : { requestError: { status: 400, message: 'No fixture change feed' } },
       workspace: async () => ({ organization: { revision: 1, groups: [{ id: group, name: 'Delta Mind', collapsed: false, podIds: pods.map(pod => pod.id) }] }, pods: structuredClone(pods) }),
       workflows: async command => structuredClone({ ...view, ...command.type === 'graph' ? { graph: { ...detail, trace: command.key ? trace : null } } : {} }),
     })
     applyLanguage(language)
-    wrapper = mount(App, { attachTo: document.body }); await flushPromises(); await frame()
+    wrapper = mount(surface === 'connected' ? DesktopWorkspace : App, { attachTo: document.body }); await flushPromises(); await frame()
   }
   const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.text().includes(text))!.trigger('click'); await flushPromises(); await frame() }
-  const shot = async (name: string) => { expect(document.documentElement.scrollWidth, `${name}: page overflow`).toBeLessThanOrEqual(innerWidth); await page.screenshot({ path: screenshotPath(`graphs-${name}.png`) }) }
+  const shot = async (name: string) => { expect(document.documentElement.scrollWidth, `${name}: page overflow`).toBeLessThanOrEqual(innerWidth); await page.screenshot({ path: screenshotPath(`graphs-${surface}-${name}.png`) }) }
 
   it('shows overview, blueprint, last run, item trace, approval and creation without widening the page', async () => {
     await page.viewport(1280, 900)

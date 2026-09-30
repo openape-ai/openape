@@ -3,11 +3,33 @@
 ## Pods graphs — issue 1407
 
 [Issue 1407](https://repos.openape.ai/patrick/monorepo/issues/1407) tracks the
-[approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3PF2RKZPA2V0AQ2SJTXD6DX)
-for channel-mode graphs. Own checkout `openape-monorepo.worktrees/pod-graphs`,
-branch `feature/issue-1407-pod-graphs`, base `f93b91a9`. M0 froze the v1 contract
-in `apps/openape-pods/docs/graphs.md`; no product code exists yet. Next step: M1
-(contracts and storage, schema 26), one milestone per pull request.
+[approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3PF2RKZPA2V0AQ2SJTXD6DX).
+M0–M8 merged through PRs 176–184 at `dd1c373d`, but M6 acceptance is reopened:
+the installed connected desktop entered `central/DesktopWorkspace.vue`, which
+still rendered the old workflow panel. Synthetic component/browser evidence did
+not establish that installed entry point.
+
+Correction checkout: `openape-monorepo.worktrees/desktop-graph-integration`,
+branch `bugfix/issue-1407-connected-desktop-graph`, base `dd1c373d`.
+Connect GraphPanel and organization state, retain sequence editing and exercise
+native gate commands in synthetic fixtures. Verification: root lint/typecheck and Pods build pass; 823 unit/component tests
+and 42 browser tests pass. Three new connected-shell regression tests fail
+against the original shell and pass with the integration. They cover groups,
+edges, counts, traces, choose/approval commands and group creation. The existing
+sequence interaction tests remain active. Connected desktop and narrow dark
+layout screenshots were personally inspected.
+
+The required production audit initially blocked on new undici/brace-expansion
+advisories. Exact patched versions (undici 8.10.2 and brace-expansion
+1.1.20/2.1.6/5.0.11) exceed the seven-day quarantine; the production audit now
+passes with no high findings. No new dependency or audit exception was added.
+
+Next: required lint/typecheck/build/test and exact-head CI, native PR merge,
+signed internal installation preserving the profile/runtime identity/sign-ins,
+then installed connected UI acceptance using both existing M9 graphs. Publish
+personally inspected screenshots and results as private Reports/Test Runs.
+Do not enable schedules or approve/send/archive real mail. M9 production
+acceptance remains open; mark the integration repaired only after installation.
 
 ## Pods infrastructure recovery — issue 1405
 
