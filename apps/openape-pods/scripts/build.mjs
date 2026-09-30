@@ -23,6 +23,7 @@ bundleNpm()
 
 await bundleApes()
 copyFileSync('runtime-sources/pod-http-shapes.toml', 'dist/vendor/pod-http-shapes.toml')
+copyFileSync('runtime-sources/pod-ssh-shapes.toml', 'dist/vendor/pod-ssh-shapes.toml')
 copyFileSync('runtime-sources/pod-runtime-shapes.toml', 'dist/vendor/pod-runtime-shapes.toml')
 await buildRenderer()
 
