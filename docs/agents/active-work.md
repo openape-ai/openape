@@ -1,5 +1,27 @@
 # Active work
 
+## Linde server reporting — issue 1409
+
+[Issue 1409](https://repos.openape.ai/patrick/monorepo/issues/1409) implements the
+[approved first-component plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3QN4YQPBMX31GK4KCN4E5EF).
+Patrick approved implementation on September 30. Own checkout:
+`openape-monorepo.worktrees/desktop-graph-integration`, branch
+`feature/issue-1409-linde-reporting`, starting main `5bb71efe`.
+
+A broker-owned fixed SSH profile, explicit revocable resource assignment and
+single reporting recipe are implemented; installation and activation are pending.
+The profile reached all five hosts through the reviewed weiloner/dev jump chain
+on September 30. Local focused checks cover refusal, revocation, bounds, report
+publication/delivery replay, partial observations and DST scheduling. The full
+verification receipt and reviewed source SHA will be recorded in the native PR.
+No scheduled Linde run or notification has been activated yet.
+
+Use one independent sequence workflow containing only `Linde · Server report`
+for Monday/Thursday 08:00 Europe/Vienna: weekly cron belongs to workflows, while
+standalone Pod schedules support daily/interval only. Keep all six original draft
+Pods and their channel graph paused. No server maintenance is part of the recipe.
+
+
 ## Pods graphs — issue 1407
 
 [Issue 1407](https://repos.openape.ai/patrick/monorepo/issues/1407) tracks the
