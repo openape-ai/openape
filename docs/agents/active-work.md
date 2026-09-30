@@ -904,3 +904,7 @@ are implied by merging this preparation increment.
 - Base: `6b02cfc36508e1fe79dd4c4ffcbe81dc78edc85d`. Frozen install and doctor pass.
 - Implemented generic private documents/categories, parser sanitization, HTTP/iframe sandbox, compatible adapters and the receipt-first PR client. Full lint/typecheck and app builds pass; Reports 57 unit + 16 E2E + nine layout tests, Pods 629 tests and CLI four tests pass. Migration twice preserves all legacy rows; the deployed rollback image safely rejects new private documents. See `docs/operations/generic-reports-migration.md`.
 - Next: native PR/exact-source CI, clean-main deployment, real no-send producer previews, evidence upload, guidance and activation. Production, schedules and guidance are unchanged until acceptance.
+
+## Issue 1409 installed SSH routing follow-up
+
+PR 187 merged at 5bd18872. The signed installed build preserved all 15,281 profile files and runtime identity. The first real Linde run published a private report and confirmed Telegram delivery, but all five SSH observations failed with `Mail tool is not completely assigned`: worker/entry.ts was missing SSH routing before its mail fallback. The weekly workflow remains disabled and paused. Branch bugfix/issue-1409-ssh-worker-routing adds the missing bounded routing and a permanent regression through the real worker entry. Focused tests: 14 passed; full lint/typecheck and Pods build passed. Next: native PR and exact-head CI, signed reinstall, actual successful inventory, report inspection and only then schedule activation.

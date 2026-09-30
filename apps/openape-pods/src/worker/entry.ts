@@ -1,4 +1,5 @@
 import { jevAvailability } from './onboarding/store'
+import { assignedSsh } from '../contracts/ssh'
 import type { JevEvaluation } from '../contracts/jev'
 import { setTimeout as delay } from 'node:timers/promises'
 import { CentralProjection } from './central/projection'
@@ -82,6 +83,10 @@ const runServices: RunServices = { gate: async (body, signal, scope) => mailBrid
   if (typeof value !== 'string') throw new Error('Invalid credential broker response')
   return value
 }, tool: async (body, signal, scope) => {
+  if (body && typeof body === 'object' && 'sshInventory' in body) {
+    assignedSsh(registry.list(scope.podId), scope.podId, scope.capabilities, body)
+    return mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal)
+  }
   if (body && typeof body === 'object' && ('applicationId' in body || 'application' in body)) {
     programRequest(registry.list(scope.podId), scope.podId, scope.capabilities, body)
     return mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal)
