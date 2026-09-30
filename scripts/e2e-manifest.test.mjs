@@ -4,6 +4,11 @@
 // a broken mapping fails loudly instead of shipping a wrong proof link.
 
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 // node:test on purpose (not vitest): the CI step runs this dependency-free
 // via `node --test`, before any workspace tooling is involved.
 // eslint-disable-next-line test/no-import-node-test
@@ -81,10 +86,20 @@ test('throws on a malformed report instead of silently skipping it', () => {
   )
 })
 
-test('--allow-empty: no affected suite is a valid outcome, not a failure', () => {
-  // Since e2e runs --affected, a PR that touches no app runs no suite at all.
-  // Without the flag that must still throw: a suite crashing before vitest
-  // wrote its report looks identical and must not pass silently.
-  const allSkipped = [{ name: 'core', report: null }, { name: 'pr', report: null }]
-  assert.throws(() => buildManifest(allSkipped, { sha: 'abc' }), /nothing to publish/)
+test('the CLI accepts an unaffected suite only with --allow-empty', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'openape-manifest-cli-'))
+  const script = fileURLToPath(new URL('./e2e-manifest.mjs', import.meta.url))
+  const output = join(directory, 'output')
+  try {
+    for (const allowEmpty of [false, true]) {
+      const result = spawnSync(process.execPath, [
+        script, '--out', output, ...(allowEmpty ? ['--allow-empty'] : []),
+        `core=${join(directory, 'missing.json')}`,
+      ], { encoding: 'utf8', timeout: 5000 })
+      assert.equal(result.status, allowEmpty ? 0 : 1, result.stderr)
+      assert.equal(result.stdout, '')
+      assert.equal(existsSync(output), false, 'No report must be published when no suite ran')
+    }
+  }
+  finally { rmSync(directory, { recursive: true, force: true }) }
 })
