@@ -19,7 +19,7 @@ it('creates explicit dependencies without editing pods and prevents cycle submis
   expect(wrapper.get('button[type=submit]').attributes('disabled')).toBeDefined()
   await wrapper.findAll('.workflow-dependencies')[0]!.find('input[type=checkbox]').setValue(false)
   await wrapper.get('form').trigger('submit'); await flushPromises()
-  expect(workflows).toHaveBeenCalledWith({ type: 'save', id, name: view.workflows[0]!.name, revision: 1, nodes: view.workflows[0]!.nodes, schedule: null, enabled: false })
+  expect(workflows).toHaveBeenCalledWith({ type: 'save', id, name: view.workflows[0]!.name, revision: 1, nodes: view.workflows[0]!.nodes, schedule: null, enabled: false, ...sequenceParts })
   expect(workspace).not.toHaveBeenCalled(); expect(scripts).not.toHaveBeenCalled(); expect(scheduling).not.toHaveBeenCalled()
   wrapper.unmount()
 })
