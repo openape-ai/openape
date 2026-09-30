@@ -1,5 +1,24 @@
 # Active work
 
+## Pods networks and workflows presentation — issue 1410
+
+[Issue 1410](https://repos.openape.ai/patrick/monorepo/issues/1410) implements the
+approved N1–N3 follow-up in the [existing graph plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3PF2RKZPA2V0AQ2SJTXD6DX).
+Own checkout: `openape-monorepo.worktrees/pods-network-presentation`, branch
+`feature/issue-1410-pods-network-presentation`, canonical base `6857859b`.
+The shared navigation/overview now distinguishes channel networks and sequence
+workflows, retains mode filters through detail navigation and reuses the existing
+creation editors. Structure/run explanations, unused delivery paths, channel
+titles and separate deduplicated choice/approval counts improve the inspector.
+Runtime guidance and both handbooks explain prompts, bounded local loops and
+validated graph handoffs. No schema, execution, permission or dependency changes.
+Root lint/typecheck and Pods build pass; 843 unit/component tests and 42 real-browser layout tests pass, including six
+graph cases in local, connected and read-only browser shells. Pending: exact-source PR/checks, clean-main delivery
+checks, signed/notarized DMG, relay rollout and installed owner acceptance.
+Preserve profile/identities, credentials, schedules, script hashes and pending
+decisions; inspect live graphs without starting runs or deciding gates. Original
+issue 1407 M9 mail-production acceptance stays open.
+
 ## Linde server reporting — issue 1409
 
 [Issue 1409](https://repos.openape.ai/patrick/monorepo/issues/1409) implements the

@@ -38,7 +38,7 @@ const contracts = {
   [archive]: { takes: ['mail.approved'], gives: [], summary: 'nur freigegebene Mails' },
 }
 const channels = [...new Set(Object.values(contracts).flatMap(contract => [...contract.takes, ...contract.gives]))]
-const definition: WorkflowDefinition = { ...sequenceParts, id: graphId, revision: 1, name: 'E-Mail-Management', nodes: pods.map(pod => ({ podId: pod.id, after: [], handoff: false })), schedule: { kind: 'interval', seconds: 3600 }, enabled: true, paused: false, nextAt: null, mode: 'channels', groupId: group, channels: channels.map(name => ({ name, title: name, fields: [] })), gates, values: [] }
+const definition: WorkflowDefinition = { ...sequenceParts, id: graphId, revision: 1, name: 'E-Mail-Management', nodes: pods.map(pod => ({ podId: pod.id, after: [], handoff: false })), schedule: { kind: 'interval', seconds: 3600 }, enabled: true, paused: false, nextAt: null, mode: 'channels', groupId: group, channels: channels.map(name => ({ name, title: name === 'mail.open' ? 'Neue offene Mails' : name, fields: [] })), gates, values: [] }
 const nodes = [...pods.map(pod => ({ id: pod.id, ...contracts[pod.id]! })), { id: 'gate:newsletter', takes: ['mail.newsletter'], gives: ['mail.approved', 'mail.useful'] }, { id: 'gate:review', takes: ['mail.unsure'], gives: ['mail.useful', 'mail.newsletter'] }]
 const edges = nodes.flatMap(from => nodes.flatMap(to => from.gives.filter(channel => to.takes.includes(channel)).map(channel => ({ from: from.id, to: to.id, channel }))))
 const batch = { id: id(60), workflowId: graphId, gate: 'newsletter', podId: archive, state: 'pending' as const, url: 'https://id.example.test/grant-approval?grant_id=one', expiresAt: 1_790_040_000_000, error: null, items: ['Nur heute: 20 % auf alles · news@shop.example', 'Neu im September: 5 Funktionen · hello@saas-tool.example', 'Frühbucher endet am Freitag · events@konferenz.example'].map((title, index) => ({ itemId: id(70 + index), key: `mail-${index}`, title, excluded: false })) }
@@ -92,10 +92,10 @@ describe.each(['local', 'connected'] as const)('graph pages in the %s desktop', 
     applyLanguage(language)
     wrapper = mount(surface === 'connected' ? DesktopWorkspace : App, { attachTo: document.body }); await flushPromises(); await frame()
   }
-  const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.text().includes(text))!.trigger('click'); await flushPromises(); await frame() }
+  const click = async (text: string) => { await (wrapper!.findAll('button').find(button => button.text() === text) ?? wrapper!.findAll('button').find(button => button.text().includes(text)))!.trigger('click'); await flushPromises(); await frame() }
   const shot = async (name: string) => { expect(document.documentElement.scrollWidth, `${name}: page overflow`).toBeLessThanOrEqual(innerWidth); await page.screenshot({ path: screenshotPath(`graphs-${surface}-${name}.png`) }) }
 
-  it('shows overview, blueprint, last run, item trace, approval and creation without widening the page', async () => {
+  it('shows overview, structure, last run, item trace, approval and creation without widening the page', async () => {
     await page.viewport(1280, 900)
     await open()
     await shot('overview')
@@ -105,6 +105,9 @@ describe.each(['local', 'connected'] as const)('graph pages in the %s desktop', 
     await shot('blueprint')
     await click('Letzte Ausführung')
     expect(rectangles('.graph-count').length).toBe(6)
+    const unused = document.querySelector<SVGPathElement>('.graph-edges path[data-active="false"]')!
+    expect(getComputedStyle(unused).opacity).toBe('0.45')
+    expect(getComputedStyle(unused).strokeDasharray).toBe('4px, 4px')
     await shot('last-run')
     await click('Nur heute: 20 % auf alles')
     expect(document.querySelectorAll('.item-trace li')).toHaveLength(5)
@@ -112,12 +115,21 @@ describe.each(['local', 'connected'] as const)('graph pages in the %s desktop', 
     await click('Freigabe öffnen')
     expect(document.querySelectorAll('.gate-row')).toHaveLength(3)
     await shot('approval')
-    await click('Zurück zum Graphen'); await click('Graphen'); await click('Neu anlegen')
+    await click('Zurück zum Graphen'); await click('Netzwerke & Workflows'); await click('Netzwerk erstellen')
     await shot('create')
+    await click('Abbrechen'); applyLanguage('en'); await frame()
+    expect(wrapper!.get('.graph-overview h1').text()).toBe('Networks & workflows')
+    await shot('overview-en')
   })
   it('keeps graph, trace and approval inside a phone and readable in the dark', async () => {
     await page.viewport(390, 844); document.documentElement.style.colorScheme = 'dark'
     await open()
+    await shot('phone-overview')
+    await click('Workflows')
+    expect(wrapper!.text()).toContain('Keine Ergebnisse für diesen Filter.')
+    await click('Workflow erstellen')
+    await shot('phone-workflow-create')
+    await click('Abbrechen'); await click('Alle anzeigen')
     await click('E-Mail-Management')
     await wrapper!.findAll('.graph-node').find(node => node.text().includes('Archivieren'))!.trigger('click'); await frame()
     await shot('phone-blueprint')
@@ -139,8 +151,12 @@ describe('graph in the browser workspace', () => {
     fixture.host.workflows = { ...view, graphs: { [graphId]: { ...detail, traces: { 'mail-0': trace.events } } } }
     Reflect.deleteProperty(window, 'pods')
     wrapper = mount(BrowserWorkspace, { props: { client: fixture.client }, attachTo: document.body }); await flushPromises(); await frame()
-    const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.isVisible() && button.text().includes(text))!.trigger('click'); await flushPromises(); await frame() }
-    expect(wrapper.findAll('button').map(button => button.text())).not.toContain('Neu anlegen')
+    const click = async (text: string) => { await (wrapper!.findAll('button').find(button => button.isVisible() && button.text() === text) ?? wrapper!.findAll('button').find(button => button.isVisible() && button.text().includes(text)))!.trigger('click'); await flushPromises(); await frame() }
+    expect(wrapper.findAll('button').map(button => button.text())).not.toContain('Netzwerk erstellen')
+    expect(wrapper.findAll('h1').filter(heading => heading.isVisible()).map(heading => heading.text())).toEqual(['Netzwerke & Workflows'])
+    await page.screenshot({ path: screenshotPath('graphs-browser-overview.png') })
+    await click('Netzwerke')
+    expect(wrapper.get('.graph-modes button[aria-pressed="true"]').text()).toBe('Netzwerke')
     await click('E-Mail-Management'); await click('Letzte Ausführung')
     expect(rectangles('.graph-node')).toHaveLength(10)
     expect(rectangles('.graph-count')).toHaveLength(6)
