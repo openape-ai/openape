@@ -48,3 +48,15 @@ it('shows the German mail policy editor when mail filtering is configured', asyn
   expect(wrapper.text()).toContain('Geschützte Kommunikationspartner')
   wrapper.unmount()
 })
+
+it('preserves graph metadata when editing its schedule through the workflow panel', async () => {
+  const { view, pods, id } = await diamond()
+  const metadata = { mode: 'channels' as const, groupId: randomUUID(), channels: [{ name: 'report.ready', title: 'Report', fields: ['url'] }], gates: [{ key: 'review', title: 'Review', kind: 'approve' as const, takes: ['report.ready'], gives: ['report.approved'], excluded: null }], values: [{ name: 'timezone', value: 'Europe/Vienna', revision: 1 }] }
+  Object.assign(view.workflows[0]!, metadata)
+  const wrapper = mount(WorkflowPanel, { props: { view, pods, selectedId: id } })
+  await wrapper.findAll('button').find(button => button.text() === 'Edit workflow')!.trigger('click')
+  await wrapper.findAll('label').find(label => label.text().includes('Enable automatic schedule'))!.get('input').setValue(true)
+  await wrapper.get('form').trigger('submit')
+  expect(window.pods.workflows).toHaveBeenCalledWith(expect.objectContaining({ type: 'save', id, enabled: true, ...metadata }))
+  wrapper.unmount()
+})
