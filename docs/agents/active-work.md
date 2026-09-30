@@ -4,23 +4,25 @@
 
 [Issue 1409](https://repos.openape.ai/patrick/monorepo/issues/1409) implements the
 [approved first-component plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3QN4YQPBMX31GK4KCN4E5EF).
-Patrick approved implementation on September 30. Own checkout:
-`openape-monorepo.worktrees/desktop-graph-integration`, branch
-`feature/issue-1409-linde-reporting`, starting main `5bb71efe`.
+Own checkout: `openape-monorepo.worktrees/desktop-graph-integration`.
+PRs 187–189 delivered bounded SSH, the actual worker route, spaced-path handling
+and reporting completion semantics. Installed e7aa4b5e preserves the profile and
+runtime identity. Its preview reaches all five hosts, but revealed stale legacy
+`cert.pem` files on auth; the renewed certificates are in `fullchain.pem`.
+Branch `bugfix/issue-1409-certificate-source` corrects that fixed observation path
+and preserves group/channel/gate/value metadata when saving the workflow schedule.
+All five hosts pass signed-helper preflight with the corrected profile; auth
+staging expires December 29 and production December 20. Full lint/typecheck,
+Pods build and 15 focused tests pass. Exact-head CI and final installed acceptance
+are still required before enabling the weekly schedule.
 
-A broker-owned fixed SSH profile, explicit revocable resource assignment and
-single reporting recipe are implemented; installation and activation are pending.
-The profile reached all five hosts through the reviewed weiloner/dev jump chain
-on September 30. Local focused checks cover refusal, revocation, bounds, report
-publication/delivery replay, partial observations and DST scheduling. The full
-verification receipt and reviewed source SHA will be recorded in the native PR.
-No scheduled Linde run or notification has been activated yet.
-
-Use one independent sequence workflow containing only `Linde · Server report`
-for Monday/Thursday 08:00 Europe/Vienna: weekly cron belongs to workflows, while
-standalone Pod schedules support daily/interval only. Keep all six original draft
-Pods and their channel graph paused. No server maintenance is part of the recipe.
-
+One independent sequence workflow contains only `Linde · Server report` for
+Monday/Thursday 08:00 Europe/Vienna. Its Pod is paused in preview mode and the
+workflow is disabled. All six original draft Pods remain paused. Private report
+publication and Delta Mind Telegram delivery were verified in the first failed
+inventory run; no later preview sent messages. No server maintenance is part of
+the recipe. Next: reviewed PR, signed install, renew the fixed resource bindings,
+verify the installed report and notification, then activate only this workflow.
 
 ## Pods graphs — issue 1407
 
@@ -904,7 +906,3 @@ are implied by merging this preparation increment.
 - Base: `6b02cfc36508e1fe79dd4c4ffcbe81dc78edc85d`. Frozen install and doctor pass.
 - Implemented generic private documents/categories, parser sanitization, HTTP/iframe sandbox, compatible adapters and the receipt-first PR client. Full lint/typecheck and app builds pass; Reports 57 unit + 16 E2E + nine layout tests, Pods 629 tests and CLI four tests pass. Migration twice preserves all legacy rows; the deployed rollback image safely rejects new private documents. See `docs/operations/generic-reports-migration.md`.
 - Next: native PR/exact-source CI, clean-main deployment, real no-send producer previews, evidence upload, guidance and activation. Production, schedules and guidance are unchanged until acceptance.
-
-## Issue 1409 installed SSH routing follow-up
-
-PR 187 merged at 5bd18872. The signed installed build preserved all 15,281 profile files and runtime identity. The first real Linde run published a private report and confirmed Telegram delivery, but all five SSH observations failed with `Mail tool is not completely assigned`: worker/entry.ts was missing SSH routing before its mail fallback. The weekly workflow remains disabled and paused. Branch bugfix/issue-1409-ssh-worker-routing adds the missing bounded routing and a permanent regression through the real worker entry. Focused tests: 14 passed; full lint/typecheck and Pods build passed. Next: native PR and exact-head CI, signed reinstall, actual successful inventory, report inspection and only then schedule activation.

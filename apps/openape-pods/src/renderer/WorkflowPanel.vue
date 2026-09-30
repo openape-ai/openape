@@ -81,7 +81,9 @@ export default defineComponent({
     },
     async save() {
       try {
-        const command: WorkflowCommand = { type: 'save', id: this.id, revision: this.revision, name: this.name, nodes: parseWorkflowNodes(this.nodes), schedule: this.schedule(), enabled: this.kind !== 'none' && this.enabled, ...(this.mail ? { mail: this.mail } : {}) }
+        const definition = this.view.workflows.find(item => item.id === this.id)
+        const metadata = definition ? { mode: definition.mode, groupId: definition.groupId, channels: definition.channels, gates: definition.gates, values: definition.values } : {}
+        const command: WorkflowCommand = { type: 'save', id: this.id, revision: this.revision, name: this.name, nodes: parseWorkflowNodes(this.nodes), schedule: this.schedule(), enabled: this.kind !== 'none' && this.enabled, ...metadata, ...(this.mail ? { mail: this.mail } : {}) }
         if (await this.apply(command)) { this.editing = false; this.$emit('select', this.id) }
       }
       catch (error) { this.error = error instanceof Error ? error.message : String(error) }
