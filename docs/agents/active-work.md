@@ -4,32 +4,47 @@
 
 [Issue 1407](https://repos.openape.ai/patrick/monorepo/issues/1407) tracks the
 [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3PF2RKZPA2V0AQ2SJTXD6DX).
-M0–M8 merged through PRs 176–184 at `dd1c373d`, but M6 acceptance is reopened:
-the installed connected desktop entered `central/DesktopWorkspace.vue`, which
-still rendered the old workflow panel. Synthetic component/browser evidence did
-not establish that installed entry point.
+M0–M8 are delivered. The missed M6 connected desktop entry is repaired by
+[PR 185](https://repos.openape.ai/patrick/monorepo/pulls/185): reviewed source
+`74b14ddc8f302f25f89f92293b33d01bc64bb9c0`, canonical merge and installed build
+`559622559bf75a55d5fea70804a66b6cf4b20624` (identical Git tree).
+Own checkout: `openape-monorepo.worktrees/desktop-graph-integration`;
+implementation branch `bugfix/issue-1407-connected-desktop-graph`, acceptance
+receipt branch `bugfix/issue-1407-desktop-acceptance`.
 
-Correction checkout: `openape-monorepo.worktrees/desktop-graph-integration`,
-branch `bugfix/issue-1407-connected-desktop-graph`, base `dd1c373d`.
-Connect GraphPanel and organization state, retain sequence editing and exercise
-native gate commands in synthetic fixtures. Verification: root lint/typecheck and Pods build pass; 823 unit/component tests
-and 42 browser tests pass. Three new connected-shell regression tests fail
-against the original shell and pass with the integration. They cover groups,
-edges, counts, traces, choose/approval commands and group creation. The existing
-sequence interaction tests remain active. Connected desktop and narrow dark
-layout screenshots were personally inspected.
+DesktopWorkspace now uses GraphPanel and organization state. Full root lint and
+typecheck, Pods build, 823 unit/component tests and 42 browser tests pass. Three
+connected-shell regression tests fail against the original shell and pass after
+the integration. They cover groups, edges, counts, traces, choose/approval
+commands and group creation; existing sequence interaction tests remain active.
+Exact-source external CI and merge CI pass. The explicit deployment check passed:
+`.openape/check-results/1790764566922-55962255-unit/summary.json`.
+The required audit needed quarantine-compliant undici 8.10.2 and brace-expansion
+1.1.20/2.1.6/5.0.11 patches; zero high findings, no new dependency or exception.
 
-The required production audit initially blocked on new undici/brace-expansion
-advisories. Exact patched versions (undici 8.10.2 and brace-expansion
-1.1.20/2.1.6/5.0.11) exceed the seven-day quarantine; the production audit now
-passes with no high findings. No new dependency or audit exception was added.
+The signed/notarized internal DMG passed mounted startup and deterministic local
+execution. SHA-256:
+`a128fe994ce16c8b28034ac73dcaec1e270556f1b0ca49c884b935e69c5ea26c`.
+Installed at `~/Applications/OpenApe Pods.app`; installed ASAR matches the package.
+Paired rollback backup:
+`~/Library/Application Support/OpenApe Pods Rollback/2026-09-30-124718-desktop-graph/`.
+All 15,276 profile files were byte-identical during replacement. After restart
+and UI acceptance, schema 27, runtime registration, five connections, 37 Pods,
+scripts/resources, groups, workflows/schedules and graph data remain unchanged.
+Never restore this old full profile over later owner work.
 
-Next: required lint/typecheck/build/test and exact-head CI, native PR merge,
-signed internal installation preserving the profile/runtime identity/sign-ins,
-then installed connected UI acceptance using both existing M9 graphs. Publish
-personally inspected screenshots and results as private Reports/Test Runs.
-Do not enable schedules or approve/send/archive real mail. M9 production
-acceptance remains open; mark the integration repaired only after installation.
+[Private Test Runs report with ten inspected screenshots](https://report.openape.ai/r/_MwRqvtRDHslPP5lNc70ZakW)
+verifies the actual installed, centrally connected Delta Mind and IURIO graphs:
+groups, nodes/edges, last-run counts, item traces, three/two held choices, the
+empty approval state and the sequence editor. Published screenshot bytes and
+private Test Runs category were verified. M6 was marked accepted only afterward.
+No graph schedule, real choice, approval, send or archive action was triggered;
+MCP access remains off. Pending-batch actions are covered by synthetic tests.
+The existing 07:00 Morgenbriefing run remains blocked by a prior permission-service
+503; its recovery controls were inspected without retrying it.
+
+Next: M9 production acceptance remains open under its existing owner constraints.
+The connected desktop integration correction is complete.
 
 ## Pods infrastructure recovery — issue 1405
 
