@@ -2,22 +2,52 @@
 
 ## Pods networks and workflows presentation — issue 1410
 
-[Issue 1410](https://repos.openape.ai/patrick/monorepo/issues/1410) implements the
+[Issue 1410](https://repos.openape.ai/patrick/monorepo/issues/1410) delivered the
 approved N1–N3 follow-up in the [existing graph plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3PF2RKZPA2V0AQ2SJTXD6DX).
-Own checkout: `openape-monorepo.worktrees/pods-network-presentation`, branch
-`feature/issue-1410-pods-network-presentation`, canonical base `6857859b`.
-The shared navigation/overview now distinguishes channel networks and sequence
-workflows, retains mode filters through detail navigation and reuses the existing
-creation editors. Structure/run explanations, unused delivery paths, channel
-titles and separate deduplicated choice/approval counts improve the inspector.
-Runtime guidance and both handbooks explain prompts, bounded local loops and
-validated graph handoffs. No schema, execution, permission or dependency changes.
-Root lint/typecheck and Pods build pass; 843 unit/component tests and 42 real-browser layout tests pass, including six
-graph cases in local, connected and read-only browser shells. Pending: exact-source PR/checks, clean-main delivery
-checks, signed/notarized DMG, relay rollout and installed owner acceptance.
-Preserve profile/identities, credentials, schedules, script hashes and pending
-decisions; inspect live graphs without starting runs or deciding gates. Original
-issue 1407 M9 mail-production acceptance stays open.
+[PR 192](https://repos.openape.ai/patrick/monorepo/pulls/192) reviewed source
+`824c33b881c2b90c7e02b6bb2dd612d3beaa71b4`; merged and installed application
+source `c2325494bd0ccc40bed3b75e0553aab47ad313bf`.
+Own checkout: `openape-monorepo.worktrees/pods-network-presentation`;
+implementation branch `feature/issue-1410-pods-network-presentation`, receipt
+branch `feature/issue-1410-pods-network-delivery`.
+
+The shared overview distinguishes channel networks and sequence workflows,
+retains mode filters through detail navigation and reuses existing creation
+editors. Structure/run explanations, subdued unused delivery paths, readable
+channel contracts and separate deduplicated choice/approval counts improve the
+inspector. Runtime guidance and both handbooks explain prompts, bounded local
+loops and validated graph handoffs. No schema, engine, authority or dependency
+change. Original issue 1407 M9 mail-production acceptance remains open.
+
+Root lint/typecheck and Pods build pass; 843 unit/component tests and 42 real
+browser layout tests pass. Exact-source and merge CI pass. Clean merged
+`pnpm check:ci` passed all seven steps; receipt
+`.openape/check-results/1790795526764-c2325494-unit/summary.json`.
+The signed/notarized internal DMG passed mounted distribution acceptance and
+an isolated native profile verified contracts, filters and saving a disabled,
+unscheduled sequence through the existing editor. DMG SHA-256:
+`83b46338c6f37190d0ace5444e641d625eeb976ca4d9373ef66b144f622e7a04`.
+
+Relay image `registry.openape.ai/openape-pods-relay:prod-c2325494` passed the
+production read-only smoke and health gates. Provider discovery/JWKS fingerprints
+remain unchanged. Installed at `~/Applications/OpenApe Pods.app`; ASAR matches
+the signed candidate. Paired app/profile rollback:
+`~/Library/Application Support/OpenApe Pods Rollback/2026-09-30-213318-network-presentation/`.
+All 15,336 profile files were byte-identical during replacement. After online
+acceptance, schema 27, 38 stored Pods (37 current), identity/registration rows,
+connections, scripts/resources, groups, workflow/schedule configurations and
+pending graph data have unchanged fingerprints. The encrypted registration file
+changed after reconnect; preserve current rotating state rather than restoring
+an old full profile. Active runs remain zero; MCP remains off.
+
+[Verified private Test Runs report with ten inspected screenshots](https://report.openape.ai/r/lL6fN5Au5IfSy0sRUr2Y0ahE)
+separates fixtures, signed local candidate and actual installed/deployed evidence.
+Published image bytes, private visibility, Test Runs category and anonymous
+access denial were verified. The owner desktop/browser show online; mode filters
+survive detail navigation, historical item traces and readable contracts remain
+available, and the sequence editor opens/cancels without saving. Browser gate
+choices remain disabled. Three Delta Mind/two IURIO choices remain unchanged.
+No real run, schedule activation, choice, approval, send or archive was triggered.
 
 ## Linde server reporting — issue 1409
 
