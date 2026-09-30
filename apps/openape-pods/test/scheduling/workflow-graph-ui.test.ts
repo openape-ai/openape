@@ -2,7 +2,7 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
 import WorkflowPanel from '../../src/renderer/WorkflowPanel.vue'
 import { applyLanguage } from '../../src/renderer/i18n'
@@ -53,10 +53,13 @@ it('preserves graph metadata when editing its schedule through the workflow pane
   const { view, pods, id } = await diamond()
   const metadata = { mode: 'channels' as const, groupId: randomUUID(), channels: [{ name: 'report.ready', title: 'Report', fields: ['url'] }], gates: [{ key: 'review', title: 'Review', kind: 'approve' as const, takes: ['report.ready'], gives: ['report.approved'], excluded: null }], values: [{ name: 'timezone', value: 'Europe/Vienna', revision: 1 }] }
   Object.assign(view.workflows[0]!, metadata)
+  window.pods.workflows = vi.fn(async (command) => { structuredClone(command); return view })
   const wrapper = mount(WorkflowPanel, { props: { view, pods, selectedId: id } })
   await wrapper.findAll('button').find(button => button.text() === 'Edit workflow')!.trigger('click')
   await wrapper.findAll('label').find(label => label.text().includes('Enable automatic schedule'))!.get('input').setValue(true)
   await wrapper.get('form').trigger('submit')
+  await flushPromises()
   expect(window.pods.workflows).toHaveBeenCalledWith(expect.objectContaining({ type: 'save', id, enabled: true, ...metadata }))
+  expect(wrapper.emitted('select')).toEqual([[id]])
   wrapper.unmount()
 })
