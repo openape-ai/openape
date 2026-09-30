@@ -1,3 +1,4 @@
+import type { SshBinding } from '../../contracts/ssh'
 import { parseJevModel } from '../../contracts/jev'
 import type { ProgramAssignment } from '../../contracts/programs'
 import { parseHttpPermission } from '../../contracts/http'
@@ -84,6 +85,22 @@ export class ResourceRegistry {
       if (current && current.configuration.type !== 'program') throw new Error('Resource is not an application')
       if (!current && this.list(podId).filter(item => item.kind === 'tool' && item.state === 'ready').length >= 16) throw new Error('This pod already has 16 tools')
       this.store.db.prepare('INSERT INTO resources VALUES(?,?,1,\'tool\',\'ready\',?,?) ON CONFLICT(id) DO UPDATE SET revision=revision+1,state=\'ready\',name=excluded.name,configuration=excluded.configuration').run(id, podId, configuration.name, JSON.stringify(configuration))
+      this.advance(podId)
+      this.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(podId)
+    })
+    this.revokeActive(podId)
+  }
+
+  assignSsh(podId: string, binding: SshBinding, authority: ProgramAuthority, expectedEpoch: number): void {
+    this.store.transaction(() => {
+      if (this.store.getPod(podId).lifecycle === 'archived' || this.epoch(podId) !== expectedEpoch || authority.identity.podId !== podId) throw new Error('Pod or SSH permissions changed; reload before assigning access')
+      const current = this.list(podId).filter(item => item.kind === 'tool' && item.state === 'ready')
+      const existing = current.filter(item => item.configuration.type === 'sshInventory' && (item.configuration.target as SshBinding['target']).alias === binding.target.alias)
+      if (!existing.length && current.length >= 16) throw new Error('This pod already has 16 tools')
+      for (const item of existing) this.store.db.prepare('UPDATE resources SET state=\'revoked\',revision=revision+1 WHERE id=?').run(item.id)
+      const id = randomUUID()
+      const configuration = { type: 'sshInventory', ...binding, authority, capability: `tool.ssh_${id.replaceAll('-', '')}.read` }
+      this.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(id, podId, 'tool', 'ready', binding.target.alias, JSON.stringify(configuration))
       this.advance(podId)
       this.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(podId)
     })

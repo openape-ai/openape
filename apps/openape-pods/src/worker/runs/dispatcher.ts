@@ -189,7 +189,7 @@ export class RunDispatcher {
       const scope: RunServiceScope = { podId: pod.id, runId: id, epoch, assignmentRevision: pod.bindingRevision, capabilities: manifest.capabilities, root: directory, assertCurrent, registerDomain: runtime.registerDomain }
       const invokeTool = async (body: unknown, toolSignal: AbortSignal) => {
         assertCurrent()
-        if (!manifest.capabilities.some(capability => capability === 'mail.read' || capability.startsWith('tool.app_')) || !this.services?.tool) throw new Error('No tool capability is assigned to this pod')
+        if (!manifest.capabilities.some(capability => capability === 'mail.read' || capability.startsWith('tool.app_') || capability.startsWith('tool.ssh_')) || !this.services?.tool) throw new Error('No tool capability is assigned to this pod')
         const operation = retryService('tool authorization', async () => { assertCurrent(); return this.services!.tool!(body, toolSignal, scope) }, toolSignal)
         pendingAgents.add(operation)
         try { const reply = await operation; assertCurrent(); return reply }
