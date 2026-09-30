@@ -5,16 +5,18 @@
 [Issue 1409](https://repos.openape.ai/patrick/monorepo/issues/1409) implements the
 [approved first-component plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3QN4YQPBMX31GK4KCN4E5EF).
 Own checkout: `openape-monorepo.worktrees/desktop-graph-integration`.
-PRs 187–189 delivered bounded SSH, the actual worker route, spaced-path handling
-and reporting completion semantics. Installed e7aa4b5e preserves the profile and
-runtime identity. Its preview reaches all five hosts, but revealed stale legacy
-`cert.pem` files on auth; the renewed certificates are in `fullchain.pem`.
-Branch `bugfix/issue-1409-certificate-source` corrects that fixed observation path
-and preserves group/channel/gate/value metadata when saving the workflow schedule.
-All five hosts pass signed-helper preflight with the corrected profile; auth
-staging expires December 29 and production December 20. Full lint/typecheck,
-Pods build and 15 focused tests pass. Exact-head CI and final installed acceptance
-are still required before enabling the weekly schedule.
+PRs 187–190 delivered bounded SSH, the actual worker route, spaced-path handling,
+reporting completion semantics and the renewed fullchain certificate source.
+Installed signed/notarized build 2e3d979f preserved all 15,336 profile files,
+38 Pods, runtime identity and logins. Delta Mind/IURIO graphs, run counts, item
+traces and gate views were visually checked without making gate decisions.
+The real schedule save exposed a Vue proxy crossing Electron IPC. Branch
+`bugfix/issue-1409-workflow-metadata-clone` serializes the preserved metadata and
+extends the component regression with structured-clone enforcement and successful
+save completion. Full lint/typecheck, build and seven focused workflow tests pass.
+Exact-head CI and final installed save acceptance remain pending. Live setup also
+awaits owner confirmation for a new temporary MCP write window after its expiry;
+never extend access or edit the live database to bypass it.
 
 One independent sequence workflow contains only `Linde · Server report` for
 Monday/Thursday 08:00 Europe/Vienna. Its Pod is paused in preview mode and the
