@@ -9,6 +9,8 @@ import GraphCreate from '../../src/renderer/GraphCreate.vue'
 import GraphInspector from '../../src/renderer/GraphInspector.vue'
 import GraphOverview from '../../src/renderer/GraphOverview.vue'
 import GraphPanel from '../../src/renderer/GraphPanel.vue'
+import DesktopWorkspace from '../../src/renderer/central/DesktopWorkspace.vue'
+import { installWorkspace } from '../layout/workspace-fixture'
 import GraphView from '../../src/renderer/GraphView.vue'
 import ItemTrace from '../../src/renderer/ItemTrace.vue'
 import { applyLanguage } from '../../src/renderer/i18n'
@@ -329,5 +331,60 @@ describe('sharing entry points', () => {
     const readOnly = mount(GraphPanel, { props: { view: { ...view, graphs: { [graphId]: detail } }, pods, organization, selectedId: graphId, sharing: true, readOnly: true } }); await flushPromises()
     expect(readOnly.findAll('button').map(item => item.text())).not.toContain('Share')
     expect(mount(GraphOverview, { props: { view, pods, organization, sharing: true, readOnly: true } }).findAll('button').map(item => item.text())).not.toContain('Import')
+  })
+})
+
+describe('connected desktop graphs', () => {
+  let desktop: ReturnType<typeof mount> | undefined
+  afterEach(() => { desktop?.unmount(); desktop = undefined })
+  async function open() {
+    const workflows = vi.fn(async (command: { type: string, key?: string }) => structuredClone({ ...view, ...command.type === 'graph' ? { graph: { ...detail, trace: command.key ? { key: command.key, title: 'Newsletter 1', events: [{ node: 'gate:batch', outcome: 'held', channel: 'mail.newsletter', reason: null, confidence: null, at: 1 }] } : null } } : {} }))
+    let state = structuredClone({ pods, organization })
+    const workspace = vi.fn(async (command: { type: string, name?: string }) => {
+      if (command.type === 'organize') state = { ...state, organization: { revision: state.organization.revision + 1, groups: [...state.organization.groups, { id: id(6), name: command.name!, collapsed: false, podIds: [] }] } }
+      return structuredClone(state)
+    })
+    installWorkspace({ workflows, workspace, central: async command => command.type === 'status' ? { enabled: true, state: 'online', runtimeId: id(5) } : command.type === 'inventory' ? [] : { requestError: { status: 400, message: 'No fixture change feed' } } })
+    desktop = mount(DesktopWorkspace); await flushPromises()
+    return { workflows, workspace }
+  }
+  async function click(text: string) { await button(desktop!, text).trigger('click'); await flushPromises() }
+  it('shows groups, derived edges, run counts, item traces and native approval controls', async () => {
+    const { workflows } = await open()
+    expect(desktop!.get('.graph-group h2').text()).toBe('Delta Mind')
+    expect(desktop!.text()).toContain('Desktop online')
+    await desktop!.get('.graph-card').trigger('click'); await flushPromises()
+    expect(desktop!.findAll('.graph-node')).toHaveLength(5)
+    expect(desktop!.findAll('.graph-edges path')).toHaveLength(4)
+    expect(desktop!.get('.graph-panel-heading').text()).toContain('Delta Mind')
+    await click('Last run')
+    expect(desktop!.findAll('.graph-count').map(item => item.text())).toEqual(['42', '25'])
+    await desktop!.get('.item-trace .inventory-row').trigger('click'); await flushPromises()
+    expect(desktop!.get('.item-trace li').text()).toContain('Newsletter batch')
+    await click('Open approval')
+    expect(desktop!.findAll('.gate-row input')).toHaveLength(3)
+    await click('Approve at the identity provider (3)')
+    expect(workflows).toHaveBeenLastCalledWith({ type: 'gateOpen', batchId })
+    await desktop!.findAll('.gate-row input')[0]!.setValue(false)
+    await click('Exclude (1) and request approval again')
+    expect(workflows).toHaveBeenCalledWith({ type: 'gateExclude', batchId, itemIds: [id(1)] })
+  })
+  it('routes an item choice through the connected desktop owner command', async () => {
+    const { workflows } = await open()
+    await desktop!.get('.graph-card').trigger('click'); await flushPromises()
+    await desktop!.findAll('.graph-node').find(node => node.text().startsWith('Review'))!.trigger('click')
+    await click('Open approval')
+    expect(desktop!.get('.gate-item strong').text()).toBe('Short question about your offer')
+    await click('Useful')
+    expect(workflows).toHaveBeenCalledWith({ type: 'gateChoose', id: graphId, gate: 'review', itemId: id(6), option: 'useful' })
+  })
+  it('updates the group overview after creating a group through the graph surface', async () => {
+    const { workspace } = await open()
+    await click('Create new')
+    await click('Group')
+    await desktop!.get('input').setValue('IURIO')
+    await desktop!.get('form').trigger('submit'); await flushPromises()
+    expect(workspace).toHaveBeenCalledWith({ type: 'organize', revision: 4, action: 'create', name: 'IURIO' })
+    expect(desktop!.findAll('.graph-group h2').map(item => item.text())).toEqual(['Delta Mind', 'IURIO', 'Ungrouped'])
   })
 })
