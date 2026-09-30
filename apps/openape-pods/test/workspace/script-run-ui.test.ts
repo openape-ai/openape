@@ -68,7 +68,7 @@ it('keeps the three workspace destinations accessible while editing a Pod', asyn
   installWorkspace()
   const wrapper = mount(App, { attachTo: document.body, props: { initialPodId: '00000000-0000-4000-8000-000000000001' } }); await flushPromises()
   const navigation = wrapper.get('.workspace-navigation')
-  expect(navigation.findAll('nav button').slice(0, 3).map(button => button.text())).toEqual(['⇢Workflows', '◫Pods1', '⚙App settings'])
+  expect(navigation.findAll('nav button').slice(0, 3).map(button => button.text())).toEqual(['⇢Networks & workflows', '◫Pods1', '⚙App settings'])
   await navigation.findAll('nav button')[1]!.trigger('click'); await flushPromises()
   expect(wrapper.find('.inventory-row').text()).toContain('Mail knowledge')
   expect(wrapper.get('.new-pod').attributes('disabled')).toBeUndefined()

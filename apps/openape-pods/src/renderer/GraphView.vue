@@ -41,6 +41,10 @@ export default defineComponent({
   },
   methods: {
     t, diagnostic,
+    channelLabel(name: string) {
+      const title = this.definition.channels.find(channel => channel.name === name)?.title
+      return title && title !== name ? `${title} (${name})` : name
+    },
     kindLabel(kind: GraphNodeKind) { return t(kindLabels[kind]) },
     runLine(counts: { received: number, given: number, waiting: number }) {
       if (counts.waiting) return t('Waiting: {count}', { count: counts.waiting })
@@ -61,22 +65,25 @@ export default defineComponent({
       </ul>
       <div class="graph-modes" role="group" :aria-label="t('Graph view')">
         <button :aria-pressed="mode === 'plan'" @click="$emit('mode', 'plan')">
-          {{ t('Blueprint') }}
+          {{ t('Structure') }}
         </button><button :aria-pressed="mode === 'run'" :disabled="!detail.lastRun" @click="$emit('mode', 'run')">
           {{ t('Last run') }}
         </button>
       </div>
     </header>
+    <p class="muted graph-view-explanation">
+      {{ t(mode === 'plan' ? 'Structure shows which Pods can exchange work.' : 'Last run shows recorded deliveries, not confirmed external effects. Zero-count paths remain visible.') }}
+    </p>
     <p v-if="!ids.length" class="muted">
       {{ t('This graph has no nodes yet.') }}
     </p>
     <div v-else class="graph-scroll" tabindex="0" role="group" :aria-label="t('Graph')">
       <div class="graph-canvas" :style="size">
-        <svg class="graph-edges" :width="layout.width" :height="layout.height" aria-hidden="true">
+        <svg class="graph-edges" :data-mode="mode" :width="layout.width" :height="layout.height" aria-hidden="true">
           <path v-for="edge in edges" :key="`${edge.from}:${edge.to}:${edge.channel}`" :d="edge.path" :data-active="mode === 'run' && edge.count > 0" />
         </svg>
         <template v-if="mode === 'run'">
-          <span v-for="edge in edges.filter(item => item.count)" :key="`count:${edge.from}:${edge.to}:${edge.channel}`" class="graph-count" :style="{ left: `${edge.x}px`, top: `${edge.y}px` }" :title="edge.channel">{{ edge.count }}</span>
+          <span v-for="edge in edges.filter(item => item.count)" :key="`count:${edge.from}:${edge.to}:${edge.channel}`" class="graph-count" :style="{ left: `${edge.x}px`, top: `${edge.y}px` }" :title="channelLabel(edge.channel)">{{ edge.count }}</span>
         </template>
         <button v-for="node in nodes" :key="node.id" class="graph-node" :data-kind="node.kind" :data-faulty="node.faulty" :aria-pressed="selected === node.id" :style="{ ...box, left: `${node.x}px`, top: `${node.y}px` }" @click="$emit('select', node.id)">
           <strong>{{ node.name }}</strong>
@@ -113,6 +120,8 @@ export default defineComponent({
 .graph-canvas{position:relative}
 .graph-edges{position:absolute;inset:0;pointer-events:none}
 .graph-edges path{fill:none;stroke:var(--muted);stroke-width:1.5}
+.graph-view-explanation{margin:0;font-size:13px;line-height:1.5}
+.graph-edges[data-mode="run"] path[data-active="false"]{opacity:.45;stroke-dasharray:4 4}
 .graph-edges path[data-active="true"]{stroke:var(--accent);stroke-width:2.5}
 .graph-node{position:absolute;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:2px;padding:6px 12px;overflow:hidden;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);font:inherit;text-align:left;cursor:pointer}
 .graph-node strong,.graph-node small{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}

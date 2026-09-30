@@ -12,8 +12,8 @@ import { nextWorkflowDue } from '../contracts/workflow-clock'
 
 export default defineComponent({
   components: { MailWorkflowSettings, MailWorkflowReview },
-  props: { readOnly: Boolean, view: { type: Object as PropType<WorkflowView>, required: true }, pods: { type: Array as PropType<StoredPod[]>, required: true }, selectedId: { type: String, default: '' } },
-  emits: ['changed', 'select', 'openPod'],
+  props: { readOnly: Boolean, view: { type: Object as PropType<WorkflowView>, required: true }, pods: { type: Array as PropType<StoredPod[]>, required: true }, selectedId: { type: String, default: '' }, createOnMount: Boolean },
+  emits: ['changed', 'select', 'openPod', 'cancel'],
   data() { return { mail: null as MailWorkflowConfiguration | null, editing: false, removing: false, id: '', revision: 0, name: '', nodes: [] as WorkflowNode[], kind: 'none', seconds: 900, time: '09:00', timezone: 'Europe/Vienna', at: '', expression: '0 9 * * 1-5', enabled: false, busy: false, error: '' } },
   computed: {
     definition(): WorkflowDefinition | undefined { return this.view.workflows.find(item => item.id === this.selectedId) },
@@ -45,6 +45,7 @@ export default defineComponent({
     },
   },
   watch: { selectedId() { this.removing = false; this.editing = false; this.error = '' } },
+  mounted() { if (this.createOnMount) this.edit(true) },
   methods: {
     t, diagnostic, label, dateTime,
     scheduleLabel(kind?: WorkflowSchedule['kind']) { return kind ? t(({ interval: 'Interval', daily: 'Daily', once: 'One time', cron: 'Cron' } as const)[kind]) : t('Manual only') },
@@ -100,36 +101,36 @@ export default defineComponent({
     <p v-if="error" role="alert" class="error-message">
       {{ diagnostic(error) }}
     </p>
-    <div class="overview-actions">
+    <div v-if="!createOnMount" class="overview-actions">
       <button class="secondary" :disabled="readOnly || busy" @click="edit(true)">
         {{ t('New workflow') }}
       </button>
       <button v-if="definition && !editing" class="secondary" :disabled="readOnly || busy" @click="edit()">
-        {{ t('Edit workflow') }}
+        {{ t(definition?.mode === 'channels' ? 'Edit network' : 'Edit workflow') }}
       </button>
       <button v-if="definition && !editing && !active" class="secondary" :disabled="readOnly || busy" @click="removing = true">
-        {{ t('Remove workflow') }}
+        {{ t(definition?.mode === 'channels' ? 'Remove network' : 'Remove workflow') }}
       </button>
     </div>
     <div v-if="removing && definition" class="card" role="alert">
-      <p>{{ t('Remove this workflow? Its Pods and their data are kept.') }}</p>
+      <p>{{ t(definition.mode === 'channels' ? 'Remove this network? Its Pods and their data are kept.' : 'Remove this workflow? Its Pods and their data are kept.') }}</p>
       <button class="secondary" :disabled="readOnly || busy" @click="apply({ type: 'delete', id: definition.id, revision: definition.revision }); removing = false">
-        {{ t('Remove workflow') }}
+        {{ t(definition?.mode === 'channels' ? 'Remove network' : 'Remove workflow') }}
       </button>
       <button class="secondary" @click="removing = false">
         {{ t('Cancel') }}
       </button>
     </div>
     <button v-if="definition && !editing" class="text-button" @click="$emit('select', '')">
-      ‹ {{ t('All workflows') }}
+      ‹ {{ t('Networks & workflows') }}
     </button>
     <div v-if="!definition && !editing && view.workflows.length" class="workflow-inventory">
       <button v-for="workflow in view.workflows" :key="workflow.id" class="inventory-row" @click="$emit('select', workflow.id)">
         <span><strong>{{ workflow.name }}</strong><small>{{ workflow.nodes.length }} {{ t('Pods') }} · {{ scheduleLabel(workflow.schedule?.kind) }}</small></span><span class="badge">{{ workflow.paused ? label('paused') : workflow.enabled ? label('active') : t('Manual only') }}</span><span aria-hidden="true">›</span>
       </button>
     </div>
-    <form v-if="editing" class="card workflow-editor" :aria-label="t('Edit workflow')" @submit.prevent="save">
-      <label>{{ t('Workflow name') }}<input v-model="name" required maxlength="100"></label>
+    <form v-if="editing" class="card workflow-editor" :aria-label="t(definition?.mode === 'channels' ? 'Edit network' : 'Edit workflow')" @submit.prevent="save">
+      <label>{{ t(definition?.mode === 'channels' ? 'Network name' : 'Workflow name') }}<input v-model="name" required maxlength="100"></label>
       <fieldset>
         <legend>{{ t('Add existing pods') }}</legend>
         <p class="muted">
@@ -154,8 +155,8 @@ export default defineComponent({
         {{ diagnostic(graphError) }}
       </p>
       <fieldset>
-        <legend>{{ t('Workflow schedule') }}</legend>
-        <select v-model="kind" :aria-label="t('Workflow schedule')">
+        <legend>{{ t(definition?.mode === 'channels' ? 'Network schedule' : 'Workflow schedule') }}</legend>
+        <select v-model="kind" :aria-label="t(definition?.mode === 'channels' ? 'Network schedule' : 'Workflow schedule')">
           <option value="none">
             {{ t('No automatic schedule') }}
           </option><option value="interval">
@@ -195,8 +196,8 @@ export default defineComponent({
       <MailWorkflowSettings v-if="mail" :key="id" :configuration="mail" :pods="pods.filter(pod => nodes.some(node => node.podId === pod.id))" @update="mail = $event" />
       <div class="overview-actions">
         <button type="submit" class="primary" :disabled="readOnly || busy || !!graphError || !!preview.error">
-          {{ t('Save workflow') }}
-        </button><button type="button" class="secondary" @click="editing = false">
+          {{ t(definition?.mode === 'channels' ? 'Save network' : 'Save workflow') }}
+        </button><button type="button" class="secondary" @click="editing = false; $emit('cancel')">
           {{ t('Cancel') }}
         </button>
       </div>

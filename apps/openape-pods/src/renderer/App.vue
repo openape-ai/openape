@@ -168,8 +168,8 @@ export default defineComponent({
               <div class="card-heading">
                 <h2>{{ t('Contract') }}</h2><span class="badge">{{ workflows.contracts[pod.id]!.summary }}</span>
               </div>
-              <p><strong>{{ t('Takes') }}</strong> {{ workflows.contracts[pod.id]!.takes.join(', ') || t('Nothing, starts with the graph') }}</p>
-              <p><strong>{{ t('Gives') }}</strong> {{ workflows.contracts[pod.id]!.gives.join(', ') || t('Nothing') }}</p>
+              <p><strong>{{ t('Receives') }}</strong> {{ workflows.contracts[pod.id]!.takes.join(', ') || t('Nothing, starts with the network') }}</p>
+              <p><strong>{{ t('Produces') }}</strong> {{ workflows.contracts[pod.id]!.gives.join(', ') || t('Nothing') }}</p>
             </article>
             <article class="card">
               <div class="card-heading">

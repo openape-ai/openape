@@ -19,8 +19,8 @@ const collapsed = ref(false)
           {{ collapsed ? '⇥' : '⇤' }}
         </button>
         <nav :aria-label="t('Your workspace')">
-          <button class="nav-button" :aria-label="t('Workflows')" :aria-current="page === 'Workflows' ? 'page' : undefined" @click="$emit('navigate', 'Workflows')">
-            <span aria-hidden="true">⇢</span><span class="destination-label">{{ t('Workflows') }}</span>
+          <button class="nav-button" :aria-label="t('Networks & workflows')" :aria-current="page === 'Workflows' ? 'page' : undefined" @click="$emit('navigate', 'Workflows')">
+            <span aria-hidden="true">⇢</span><span class="destination-label">{{ t('Networks & workflows') }}</span>
           </button>
           <button class="nav-button" :aria-label="t('Pods')" :aria-current="page === 'Pods' ? 'page' : undefined" @click="$emit('navigate', 'Pods')">
             <span aria-hidden="true">◫</span><span class="destination-label">{{ t('Pods') }}</span><small v-if="count !== undefined">{{ count }}</small>

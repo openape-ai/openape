@@ -71,10 +71,10 @@ onBeforeUnmount(() => { closed = true })
       </button>
     </p>
     <section v-if="subject" v-show="page === 'Workflows'">
-      <header class="inventory-heading">
+      <header v-if="!runtime?.workflows?.graphs" class="inventory-heading">
         <div>
-          <h1>{{ t('Workflows') }}</h1><p class="muted">
-            {{ t('Connect Pods. Control their order and timing.') }}
+          <h1>{{ t('Networks & workflows') }}</h1><p class="muted">
+            {{ t('Networks connect Pods. Workflows define ordered processes.') }}
           </p>
         </div>
       </header>
