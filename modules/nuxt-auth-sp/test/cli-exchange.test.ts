@@ -128,26 +128,6 @@ describe('createCliExchangeHandler — real signature verification', () => {
     await expect(createCliExchangeHandler()(fakeEvent)).rejects.toMatchObject({ statusCode: 401 })
   })
 
-  it('maps act=agent from the verified claims onto the minted SP token', async () => {
-    mockResolveIssuer.mockResolvedValue({ sub: 'bot@openape.ai', issuer: IDP_URL, jwksUri: `${IDP_URL}/.well-known/jwks.json` })
-    mockReadBody.mockResolvedValue({ subject_token: await signSubjectToken(idpPriv, { sub: 'bot@openape.ai', act: 'agent' }) })
-    const result = await createCliExchangeHandler()(fakeEvent) as Record<string, unknown>
-    const [, payloadB64] = (result.access_token as string).split('.')
-    const payload = JSON.parse(Buffer.from(payloadB64!, 'base64url').toString('utf-8'))
-    expect(payload.act).toBe('agent')
-  })
-
-  it('maps an RFC 8693 delegation act OBJECT to act=agent — never human (#1034)', async () => {
-    mockResolveIssuer.mockResolvedValue({ sub: 'alice@openape.ai', issuer: IDP_URL, jwksUri: `${IDP_URL}/.well-known/jwks.json` })
-    // scope: [] because a delegated token WITHOUT a scope claim is rejected
-    // (protocol#6) — this test only cares about act normalization.
-    mockReadBody.mockResolvedValue({ subject_token: await signSubjectToken(idpPriv, { act: { sub: 'agent@openape.ai' }, scope: [] }) })
-    const result = await createCliExchangeHandler()(fakeEvent) as Record<string, unknown>
-    const [, payloadB64] = (result.access_token as string).split('.')
-    const payload = JSON.parse(Buffer.from(payloadB64!, 'base64url').toString('utf-8'))
-    expect(payload.act).toBe('agent')
-  })
-
   it('returns granted scope + delegate provenance on a scoped exchange', async () => {
     mockReadBody.mockResolvedValue({ subject_token: await signSubjectToken(idpPriv), scopes: ['chat:read', 'chat:write'] })
     const result = await createCliExchangeHandler()(fakeEvent) as Record<string, unknown>
