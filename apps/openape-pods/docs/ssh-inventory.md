@@ -36,6 +36,8 @@ requires noninteractive sudo and Python 3. It never refreshes packages, restarts
 services, renews certificates, deploys or reads application secret configuration.
 Certificate evidence describes stored files, not an external TLS handshake.
 
+The certificate observation reads `fullchain.pem` in the fixed live certificate directory. Linde's lego renewal updates that file; the adjacent legacy `cert.pem` can remain expired. This still does not prove which certificate an external client receives.
+
 ## Reporting recipe
 
 `examples/linde-server-report.mjs` is a single complete Pod script. Assign five
