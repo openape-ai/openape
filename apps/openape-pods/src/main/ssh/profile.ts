@@ -34,7 +34,7 @@ facts = {
     'certificates':[],
     'authHealth':[]
 }
-for certificate in sorted(glob.glob('/etc/letsencrypt/live/*/cert.pem'))[:16]:
+for certificate in sorted(glob.glob('/etc/letsencrypt/live/*/fullchain.pem'))[:16]:
     facts['certificates'].append({'name':certificate.split('/')[-2], 'result':command(['/usr/bin/openssl','x509','-in',certificate,'-noout','-dates','-fingerprint','-sha256'])})
 if os.path.isdir('/home/linde/lindesso_prod'):
     for port in [3000,3001]:
