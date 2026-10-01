@@ -1,3 +1,6 @@
+import type { NetworkGates, NetworkGateService, NetworkGateStep } from '../scheduling/network-gates'
+import type { NetworkAuthority } from '../scheduling/network-events'
+import type { NetworkGateCoverage } from '../../contracts/network-gates'
 import { randomUUID } from 'node:crypto'
 import { gateDigest, gateLimits, gateSummary, itemTitle, payloadHash } from '../../contracts/gates'
 import type { GateBatchItem, GateBatchState, GateBatchView, GateCoverage, GateHeldItem, GateManifest } from '../../contracts/gates'
@@ -76,7 +79,7 @@ function settle(store: PodDatabase, item: Batch, state: 'denied' | 'expired', re
  * One round of every approval gate in front of the running Pod: read decisions, hand approved
  * items on and request approval for one new batch. Nothing is handed on without a consumed grant.
  */
-export async function gateRound(store: PodDatabase, run: GraphRun, service: GateService, now: () => number = Date.now): Promise<void> {
+async function legacyGateRound(store: PodDatabase, run: GraphRun, service: GateService, now: () => number = Date.now): Promise<void> {
   const nodes = graphNodes(store, run.workflowRunId, run.definition)
   const gates = run.definition.gates.filter((gate): gate is ApproveGate => gate.kind === 'approve' && nodes.some(item => item.id === run.node && item.takes.includes(gate.gives)))
   for (const gate of gates) {
@@ -127,9 +130,24 @@ export async function gateRound(store: PodDatabase, run: GraphRun, service: Gate
   }
 }
 
+export type GateExecutionContext = { version: 1, run: GraphRun } | { version: 2, network: NetworkGates, step: NetworkGateStep, signal: AbortSignal }
+
+export function gateRound(store: PodDatabase, run: GraphRun | Extract<GateExecutionContext, { version: 1 }>, service: GateService, now?: () => number): Promise<void>
+export function gateRound(store: PodDatabase, context: Extract<GateExecutionContext, { version: 2 }>, service: NetworkGateService): Promise<void>
+export async function gateRound(store: PodDatabase, context: GraphRun | GateExecutionContext, service: GateService | NetworkGateService, now: () => number = Date.now): Promise<void> {
+  if ('version' in context && context.version === 2) { await context.network.round(context.step, service as NetworkGateService, context.signal); return }
+  await legacyGateRound(store, 'version' in context ? context.run : context, service as GateService, now)
+}
+
 /** The consumed batches behind the items a Pod received in this run. */
-export function gateCoverage(store: PodDatabase, run: GraphRun, delivered: DeliveredItem[]): GateCoverage[] {
+function legacyGateCoverage(store: PodDatabase, run: GraphRun, delivered: DeliveredItem[]): GateCoverage[] {
   return batches(store, 'workflow_id=? AND pod_id=? AND state=\'approved\'', run.workflowId, run.node).map(item => ({ manifest: manifest(item), grantId: item.grantId!, items: delivered.filter(received => item.items.some(entry => entry.emittedId === received.id)).map(({ key, data }) => ({ key, data })) })).filter(coverage => coverage.items.length)
+}
+
+export function gateCoverage(store: PodDatabase, run: GraphRun, delivered: DeliveredItem[]): GateCoverage[]
+export function gateCoverage(store: PodDatabase, context: { version: 2, network: NetworkGates, authority: NetworkAuthority }): NetworkGateCoverage[]
+export function gateCoverage(store: PodDatabase, context: GraphRun | { version: 2, network: NetworkGates, authority: NetworkAuthority }, delivered: DeliveredItem[] = []): GateCoverage[] | NetworkGateCoverage[] {
+  return 'version' in context ? context.network.coverage(context.authority) : legacyGateCoverage(store, context, delivered)
 }
 
 /** Owner decision in the app: the excluded items leave the batch and its pending grant is never consumed. */

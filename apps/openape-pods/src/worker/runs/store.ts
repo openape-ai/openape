@@ -12,7 +12,7 @@ export class RunStore {
   readonly bootId = randomUUID()
   constructor(readonly store: PodDatabase) {}
 
-  list(podId: string): RunRecord[] { this.store.getPod(podId); return this.store.db.prepare('SELECT r.*,v.state AS recovery_state,v.error AS recovery_error FROM runs r LEFT JOIN recovery_reviews v ON v.run_id=r.id WHERE r.pod_id=? ORDER BY r.started_at DESC,r.rowid DESC LIMIT 100').all(podId).map(fromRow) }
+  list(podId: string): RunRecord[] { this.store.getPod(podId); return this.store.db.prepare('SELECT r.*,v.state AS recovery_state,v.error AS recovery_error FROM runs r LEFT JOIN recovery_reviews v ON v.run_id=r.id WHERE r.pod_id=? AND NOT EXISTS(SELECT 1 FROM network_invocations i WHERE i.run_id=r.id AND i.execution_kind=\'gate_maintenance\') ORDER BY r.started_at DESC,r.rowid DESC LIMIT 100').all(podId).map(fromRow) }
 
   get(id: string): RunRecord {
     const row = this.store.db.prepare('SELECT r.*,v.state AS recovery_state,v.error AS recovery_error FROM runs r LEFT JOIN recovery_reviews v ON v.run_id=r.id WHERE r.id=?').get(id)

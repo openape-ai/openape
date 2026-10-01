@@ -25,7 +25,11 @@ export function cleanupAfterEach() {
     for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
   })
 }
-export async function launch(root: string, packaged: boolean) {
+export async function launch(root: string, packaged: boolean, suppliedIdentity?: Awaited<ReturnType<typeof fixtureShellIdentity>>) {
+  if (suppliedIdentity) {
+    if (shellIdentities.has(root)) throw new Error('Crash fixture identity was already registered')
+    shellIdentities.set(root, suppliedIdentity)
+  }
   let identity = shellIdentities.get(root)
   if (!identity) { identity = await fixtureShellIdentity(root); shellIdentities.set(root, identity) }
   const app = await electron.launch({ executablePath: packaged ? resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture') : require('electron'), args: packaged ? [] : ['.'], cwd: resolve('.'), env: { HOME: homedir(), TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })

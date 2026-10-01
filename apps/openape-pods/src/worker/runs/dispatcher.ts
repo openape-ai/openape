@@ -1,3 +1,5 @@
+import { boundedStep } from '../scheduling/tick-step'
+import type { NetworkGates, NetworkGateStep, NetworkGateService } from '../scheduling/network-gates'
 import { InfrastructureError, retryInfrastructure } from '../../contracts/infrastructure'
 import { assignedJev, parseJevRequest, parseJevResult } from '../../contracts/jev'
 import type { JevRequest, JevEvaluation } from '../../contracts/jev'
@@ -152,6 +154,30 @@ export class RunDispatcher {
     this.active.set(member.podId, { controller, work })
   }
 
+  startGate(gates: NetworkGates, step: NetworkGateStep): void {
+    const { manifest } = gates.assertStep(step)
+    if (this.active.has(manifest.podId)) throw new Error('Network gate instance already has an active execution')
+    const controller = new AbortController()
+    const scope: RunServiceScope = { podId: manifest.podId, runId: step.authority.runId, epoch: manifest.resourceEpoch, assignmentRevision: manifest.assignmentRevision, capabilities: [], root: join(this.store.root, 'runs', step.authority.runId), assertCurrent: () => { gates.assertStep(step); controller.signal.throwIfAborted() }, registerDomain: (path, ownerPid) => this.runs.registerDomain(step.authority.runId, path, ownerPid) }
+    const service: NetworkGateService = async (body) => {
+      scope.assertCurrent()
+      if (!this.services?.gate) throw new Error('Network gate service is unavailable')
+      const deadline = Number(this.store.db.prepare('SELECT deadline FROM network_invocation_controls WHERE run_id=?').get(step.authority.runId)!.deadline)
+      const remaining = deadline - Date.now()
+      if (remaining <= 0) throw new InfrastructureError({ phase: 'read', retryAfterMs: 5000 })
+      const reply = await boundedStep(remaining, async () => { const value = await this.services!.gate!(body, controller.signal, scope); if (body.operation === 'create') gates.observeCreation(step, value); scope.assertCurrent(); return value }, () => controller.abort(new InfrastructureError({ phase: 'read', retryAfterMs: 5000 })))
+      if (reply === undefined) { controller.signal.throwIfAborted(); throw new Error('Network gate service returned no result') }
+      return reply
+    }
+    const work = gateRound(this.store, { version: 2, network: gates, step, signal: controller.signal }, service).catch(async (failure: unknown) => {
+      console.error('Network gate maintenance requires inspection', failure instanceof Error ? failure.message : 'Maintenance failed')
+      controller.abort(failure)
+      try { await gates.failStep(step, failure) }
+      catch (cleanupFailure) { console.error('Network gate cleanup requires inspection', cleanupFailure instanceof Error ? cleanupFailure.message : 'Cleanup failed') }
+    }).finally(() => { this.active.delete(manifest.podId) })
+    this.active.set(manifest.podId, { controller, work })
+  }
+
   cancel(podId: string, id: string): void {
     if (this.runs.get(id).podId !== podId) throw new Error('Run belongs to a different pod')
     const lease = this.store.db.prepare('SELECT run_id FROM run_leases WHERE pod_id=?').get(podId)
@@ -234,6 +260,22 @@ export class RunDispatcher {
       const dependencyRoot = dependencyHash ? await dependencies.verify(pod.id, dependencyHash) : undefined
       const runtime = { ...this.runtime, dependencyRoot, registerDomain: (path: string, ownerPid: number) => this.runs.registerDomain(id, path, ownerPid) }
       const scope: RunServiceScope = { podId: pod.id, runId: id, epoch, assignmentRevision: pod.bindingRevision, capabilities: manifest.capabilities, root: directory, assertCurrent, registerDomain: runtime.registerDomain }
+      if (network) {
+        const gates = network.invocations.gates
+        if (!gates) throw new Error('Network gate authority is unavailable')
+        const coverage = gateCoverage(this.store, { version: 2, network: gates, authority: network.authority })
+        for (const approval of coverage) {
+          if (!this.services?.gate) throw new Error('Network approval service is unavailable')
+          const reply = await boundedStep(30000, async () => {
+            const value = await this.services!.gate!({ operation: 'assertActive', manifest: approval.manifest, grantId: approval.grantId }, signal, scope)
+            assertCurrent()
+            gates.coverage(network.authority)
+            return value
+          }, () => this.cancelPod(pod.id, 'Network approval verification exceeded its deadline'))
+          signal.throwIfAborted()
+          if (reply !== true) throw new Error('Network approval is no longer active')
+        }
+      }
       const invokeTool = async (body: unknown, toolSignal: AbortSignal) => {
         assertCurrent()
         if (!manifest.capabilities.some(capability => capability === 'mail.read' || capability.startsWith('tool.app_') || capability.startsWith('tool.ssh_')) || !this.services?.tool) throw new Error('No tool capability is assigned to this pod')
@@ -258,7 +300,8 @@ export class RunDispatcher {
         request: async (operation, payload, operationSignal) => {
           assertCurrent()
           if (network) {
-            if (!['graph.contract', 'graph.emit', 'network.emit', 'progress.commit'].includes(operation)) throw new Error('Network operation requires a declared runtime port')
+            if (!['graph.contract', 'graph.emit', 'network.emit', 'network.gateCoverage', 'progress.commit'].includes(operation)) throw new Error('Network operation requires a declared runtime port')
+            if (operation === 'network.gateCoverage') return network.invocations.gates!.scriptCoverage(network.authority)
             if (operation === 'progress.commit') return network.invocations.stageProgress(network.authority, payload)
             if (operation === 'graph.contract') {
               const pinned = network.invocations.events.authority(network.authority).member.contract

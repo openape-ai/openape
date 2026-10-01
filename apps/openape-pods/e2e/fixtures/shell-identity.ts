@@ -1,16 +1,19 @@
+import { computeCmdHash } from '@openape/core'
 import { generateKeyPairSync, randomBytes, randomUUID, sign } from 'node:crypto'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
 import type { ElectronApplication } from 'playwright'
 import { PodDatabase } from '../../src/worker/storage/database'
 
-export async function fixtureShellIdentity(root: string, ownerPermissions: string[] = []) {
+export async function fixtureShellIdentity(root: string, ownerPermissions: string[] = [], networkGates = false) {
   const fixtureKey = randomBytes(32).toString('hex')
   let origin = ''
   const records: { path: string, value: string }[] = []
   const subjects = new Map<string, string>()
   const keys = generateKeyPairSync('ed25519')
-  const grants = new Map<string, { requester: string, target_host: string, audience: string, grant_type: string, authorization_details: unknown[], execution_context: unknown }>()
+  const heldConsumes = new Map<string, { wait: Promise<void>, release: () => void }>()
+  const consumes = new Map<string, number>()
+  const grants = new Map<string, { requester: string, target_host: string, audience: string, grant_type: string, authorization_details: unknown[], execution_context: unknown, command?: string[], status?: 'pending' | 'approved' | 'denied' | 'used' }>()
   const server = createServer((request, response) => {
     const respond = async () => {
       response.setHeader('Content-Type', 'application/json')
@@ -30,27 +33,36 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
         for await (const chunk of request) chunks.push(Buffer.from(chunk))
         const body = JSON.parse(Buffer.concat(chunks).toString())
         const reviewed = Array.isArray(body.authorization_details) && body.authorization_details.length > 0 && body.authorization_details.every((detail: { cli_id: string }) => ownerPermissions.includes(detail.cli_id))
-        if (!subjects.has(body.requester) || (body.command?.[0] !== 'pod-runtime' && !reviewed)) { response.writeHead(403).end('{}'); return }
-        const id = randomUUID(); grants.set(id, body)
-        response.end(JSON.stringify({ id, status: 'approved' }))
+        const gate = networkGates && body.command?.[0] === 'pods-graph-gate' && body.audience === 'pods-graph-gate' && body.grant_type === 'once'
+        if (!subjects.has(body.requester) || (body.command?.[0] !== 'pod-runtime' && !reviewed && !gate)) { response.writeHead(403).end('{}'); return }
+        const id = randomUUID(); grants.set(id, { ...body, ...(gate ? { status: 'pending' } : {}) })
+        response.end(JSON.stringify({ id, status: gate ? 'pending' : 'approved' }))
       }
       else if (request.url?.startsWith('/api/pods/agents/')) {
         const url = new URL(request.url, origin); const id = url.searchParams.get('grant') ?? ''
         const subject = decodeURIComponent(url.pathname.split('/').at(-1)!)
-        response.end(JSON.stringify({ email: subject, owner: 'fixture-owner@example.test', active: subjects.has(subject), keyIds: ['fixture-key'], grantId: id, grantActive: grants.get(id)?.requester === subject }))
+        response.end(JSON.stringify({ email: subject, owner: 'fixture-owner@example.test', active: subjects.has(subject), keyIds: ['fixture-key'], grantId: id, grantActive: grants.get(id)?.requester === subject && grants.get(id)?.status !== 'denied' }))
       }
       else if (request.url?.startsWith('/api/grants/')) {
         const [, , , id, action] = request.url.split('/')
         const grant = grants.get(id!)
         if (!grant) { response.writeHead(404).end('{}'); return }
+        const gate = grant.command?.[0] === 'pods-graph-gate'
         if (action === 'token') {
+          if (gate && grant.status !== 'approved') { response.writeHead(403).end('{}'); return }
           const now = Math.floor(Date.now() / 1000)
           const head = Buffer.from(JSON.stringify({ alg: 'EdDSA', kid: 'key' })).toString('base64url')
-          const body = Buffer.from(JSON.stringify({ iss: origin, sub: grant.requester, aud: grant.audience, target_host: grant.target_host, grant_id: id, grant_type: grant.grant_type, iat: now, exp: now + 60, jti: randomUUID(), authorization_details: grant.authorization_details, execution_context: grant.execution_context })).toString('base64url')
+          const body = Buffer.from(JSON.stringify({ iss: origin, sub: grant.requester, aud: grant.audience, target_host: grant.target_host, grant_id: id, grant_type: grant.grant_type, iat: now, exp: now + 60, jti: randomUUID(), authorization_details: grant.authorization_details, execution_context: grant.execution_context, ...(gate ? { command: grant.command, cmd_hash: await computeCmdHash(grant.command!.join(' ')), decided_by: 'fixture-owner@example.test' } : {}) })).toString('base64url')
           response.end(JSON.stringify({ authz_jwt: `${head}.${body}.${sign(null, Buffer.from(`${head}.${body}`), keys.privateKey).toString('base64url')}` }))
         }
-        else if (action === 'consume') { response.end(JSON.stringify({ status: 'valid' })) }
-        else { response.end(JSON.stringify({ id, status: 'approved', request: grant })) }
+        else if (action === 'consume') {
+          if (gate) consumes.set(id!, (consumes.get(id!) ?? 0) + 1)
+          if (gate && grant.status !== 'approved') { response.writeHead(409).end(JSON.stringify({ error: 'Once-grant cannot be consumed again' })); return }
+          if (gate) grant.status = 'used'
+          await heldConsumes.get(id!)?.wait
+          response.end(JSON.stringify({ status: gate ? 'consumed' : 'valid' }))
+        }
+        else { response.end(JSON.stringify({ id, status: grant.status ?? 'approved', request: grant, ...(gate ? { decided_by: 'fixture-owner@example.test' } : {}) })) }
       }
       else { response.statusCode = 404; response.end('{}') }
     }
@@ -74,6 +86,25 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
   }
   finally { store.close() }
   return {
+    owner: { issuer: origin, subject: 'fixture-owner@example.test' },
+    gates: () => [...grants.entries()].filter(([, grant]) => grant.command?.[0] === 'pods-graph-gate').map(([id, grant]) => ({ id, status: grant.status, command: grant.command!, consumeAttempts: consumes.get(id) ?? 0 })),
+    holdGateConsume: (id: string) => {
+      const grant = grants.get(id)
+      if (!networkGates || grant?.command?.[0] !== 'pods-graph-gate' || grant.status !== 'pending' || heldConsumes.has(id)) throw new Error('Only a pending synthetic network grant can hold its consume response')
+      let release!: () => void
+      const wait = new Promise<void>((resolve) => { release = resolve })
+      heldConsumes.set(id, { wait, release })
+    },
+    releaseGateConsume: (id: string) => {
+      const held = heldConsumes.get(id)
+      if (!held) throw new Error('Synthetic consume response is not held')
+      held.release(); heldConsumes.delete(id)
+    },
+    decideGate: (id: string, decision: 'approved' | 'denied') => {
+      const grant = grants.get(id)
+      if (!networkGates || !grant || grant.command?.[0] !== 'pods-graph-gate' || grant.status !== 'pending') throw new Error('Synthetic owner can decide only a pending network gate')
+      grant.status = decision
+    },
     encrypt: async (app: ElectronApplication, synthetic = false) => app.evaluate(({ safeStorage }, { records, synthetic, key }) => {
       if (synthetic) {
         const { createCipheriv, createDecipheriv, randomBytes } = process.getBuiltinModule('node:crypto') as typeof import('node:crypto')
@@ -86,6 +117,6 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
       if (!safeStorage.isEncryptionAvailable()) throw new Error('Fixture shell credential cipher is unavailable')
       for (const record of records) { fs.mkdirSync(path.dirname(record.path), { recursive: true, mode: 0o700 }); fs.writeFileSync(record.path, safeStorage.encryptString(record.value), { mode: 0o600 }) }
     }, { records, synthetic, key: fixtureKey }),
-    close: async () => { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())) },
+    close: async () => { for (const held of heldConsumes.values()) held.release(); heldConsumes.clear(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())) },
   }
 }

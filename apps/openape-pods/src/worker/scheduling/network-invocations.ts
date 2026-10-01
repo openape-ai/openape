@@ -1,3 +1,5 @@
+import type { NetworkGates } from './network-gates'
+import type { NetworkGateManifest } from '../../contracts/network-gates'
 import { assertNetworkQuota, NetworkQuotaError } from './network-quota'
 import { randomUUID } from 'node:crypto'
 import { parseNetworkDefinition, networkLimits  } from '../../contracts/networks'
@@ -10,9 +12,26 @@ import { NetworkEvents, NetworkEventConflict, canonicalNetworkJson } from './net
 import type { NetworkAuthority, NetworkEmission } from './network-events'
 
 export class NetworkInvocations {
+  gates?: NetworkGates
   readonly events: NetworkEvents
   constructor(private readonly store: PodDatabase, private readonly runs: RunStore, private readonly helper: string) {
     this.events = new NetworkEvents(store, runs.bootId)
+  }
+
+  reserveGate(manifest: NetworkGateManifest, reason: 'manual' | 'event', processPreviewId: string | null): NetworkAuthority | null {
+    return this.store.transaction(() => {
+      if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=? UNION ALL SELECT 1 FROM program_leases WHERE pod_id=?').get(manifest.podId, manifest.podId)) return null
+      const reservation = this.runs.reserve(manifest.podId, manifest.scriptHash, manifest.resourceEpoch, { reason, eventIds: [] })
+      if (reservation.existing) throw new Error('Network gate instance lease changed during admission')
+      const network = this.store.db.prepare('SELECT restore_nonce,activation_epoch FROM networks WHERE id=?').get(manifest.networkId)!
+      const token = randomUUID()
+      const checkpoint = this.store.db.prepare('SELECT revision FROM network_checkpoints WHERE network_id=? AND pod_id=?').get(manifest.networkId, manifest.podId)!
+      const pins = { resourceEpoch: manifest.resourceEpoch, assignmentRevision: manifest.assignmentRevision, definitionId: manifest.definitionId, definitionVersion: manifest.definitionVersion, bindingRevision: manifest.bindingRevision, reason, checkpointRevision: checkpoint.revision, inputClaims: [], gateTaskId: manifest.id }
+      this.store.db.prepare(`INSERT INTO network_invocations(run_id,network_id,network_revision,pod_id,boot_nonce,restore_nonce,activation_epoch,claim_token,generation,state,manifest,execution_kind)
+        VALUES(?,?,?,?,?,?,?,?,1,'running',?,'gate_maintenance')`).run(reservation.run.id, manifest.networkId, manifest.networkRevision, manifest.podId, this.runs.bootId, network.restore_nonce!, network.activation_epoch!, token, canonicalNetworkJson(pins))
+      this.store.db.prepare('INSERT INTO network_invocation_controls(run_id,deadline,creator_pid,process_preview_id) VALUES(?,?,?,?)').run(reservation.run.id, Date.now() + 30000, process.pid, processPreviewId)
+      return { runId: reservation.run.id, claimToken: token }
+    })
   }
 
   reserve(networkId: string, podId: string, resourceEpoch: number, reason: 'manual' | 'schedule' | 'event', allowPaused: boolean = false, processPreviewId: string | null = null): NetworkAuthority | null {
@@ -39,8 +58,16 @@ export class NetworkInvocations {
       const pin = this.store.db.prepare('SELECT content_hash FROM pod_definition_versions WHERE definition_id=? AND version=?').get(member.definitionId, member.definitionVersion)
       if (!pin || pin.content_hash !== pod.activeScript) throw new Error('Network instance no longer matches its pinned script')
       const sourceRetry = member.source ? this.store.db.prepare('SELECT i.run_id,i.manifest,c.attempt FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.network_id=? AND i.pod_id=? AND i.state=\'blocked\' AND c.retry_at<=? AND (json_extract(i.manifest,\'$.reason\')!=\'manual\' OR ?=1) ORDER BY c.retry_at,i.rowid LIMIT 1').get(networkId, podId, Date.now(), reason === 'manual' ? 1 : 0) : null
-      const ready = member.source ? [] : this.ready(networkId, definition.revision, podId, reason === 'manual')
+      const ready = member.source ? [] : this.ready(networkId, definition.revision, podId, reason === 'manual', definition.gates?.filter(gate => gate.podId === podId).map(gate => gate.channel) ?? [])
       if (!member.source && !ready.length) return null
+      const gateBindings: { taskId: string, grantId: string, manifestHash: string }[] = []
+      const gatedChannels = new Set(definition.gates?.filter(gate => gate.podId === podId).map(gate => gate.channel) ?? [])
+      for (const input of ready) {
+        if (!gatedChannels.has(input.channel as string)) continue
+        const binding = this.gates?.binding(input.id as string)
+        if (!binding) return null
+        if (!gateBindings.some(item => item.taskId === binding.taskId)) gateBindings.push(binding)
+      }
       const originalRunId = sourceRetry?.run_id ?? ready[0]?.run_id ?? null
       const previous = originalRunId ? this.store.db.prepare('SELECT i.manifest,i.network_revision,i.activation_epoch,i.restore_nonce,c.attempt,c.retry_authority,r.script_hash FROM network_invocations i JOIN runs r ON r.id=i.run_id JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.run_id=?').get(originalRunId) : null
       if (previous) {
@@ -63,7 +90,7 @@ export class NetworkInvocations {
       const runId = reservation.run.id; const token = randomUUID()
       const checkpoint = this.store.db.prepare('SELECT revision,body FROM network_checkpoints WHERE pod_id=? AND network_id=?').get(podId, networkId)
       if (!checkpoint) throw new Error('Network instance has no private checkpoint')
-      const manifest = { resourceEpoch, assignmentRevision: pod.bindingRevision, definitionId: member.definitionId, definitionVersion: member.definitionVersion, bindingRevision: member.bindingRevision, reason, checkpointRevision: checkpoint.revision, inputClaims: ready.map(input => ({ id: input.id, generation: Number(input.generation) + 1 })) }
+      const manifest = { resourceEpoch, assignmentRevision: pod.bindingRevision, definitionId: member.definitionId, definitionVersion: member.definitionVersion, bindingRevision: member.bindingRevision, reason, checkpointRevision: checkpoint.revision, gateBindings, inputClaims: ready.map(input => ({ id: input.id, generation: Number(input.generation) + 1 })) }
       this.store.db.prepare(`INSERT INTO network_invocations(run_id,network_id,network_revision,pod_id,boot_nonce,restore_nonce,activation_epoch,claim_token,generation,state,manifest)
         VALUES(?,?,?,?,?,?,?,?,1,'running',?)`).run(runId, networkId, definition.revision, podId, this.runs.bootId, network.restore_nonce!, network.activation_epoch!, token, canonicalNetworkJson(manifest))
       this.store.db.prepare('INSERT INTO network_invocation_controls(run_id,deadline,retry_of,attempt,creator_pid,process_preview_id) VALUES(?,?,?,?,?,?)').run(runId, Date.now() + 360000, originalRunId, attempt, process.pid, processPreviewId)
@@ -133,6 +160,35 @@ export class NetworkInvocations {
     this.settle(authority, state, summary, error, completedInputIds, emissions, transient)
   }
 
+  async finishGate(authority: NetworkAuthority, summary: string, settleTask: () => void, incomplete = false): Promise<void> {
+    const { row } = this.events.authority(authority, true)
+    if (row.execution_kind !== 'gate_maintenance') throw new Error('Gate settlement requires a maintenance invocation')
+    this.store.transaction(() => {
+      this.events.authority(authority, true)
+      this.store.db.prepare('UPDATE network_invocations SET state=\'stopping\' WHERE run_id=?').run(authority.runId)
+    })
+    await confirmDomainsStopped(this.store, authority.runId, this.helper)
+    this.store.transaction(() => {
+      this.events.authority(authority, true)
+      settleTask()
+      this.settle(authority, incomplete ? 'completedWithGaps' : 'completed', summary, incomplete ? summary : null, [], [], false)
+      if (incomplete) this.store.db.prepare('UPDATE network_invocation_controls SET resolved_receipt=? WHERE run_id=?').run(canonicalNetworkJson({ kind: 'gate-maintenance-step', taskId: JSON.parse(row.manifest as string).gateTaskId, summary, at: Date.now(), noScriptLaunched: true }), authority.runId)
+    })
+  }
+
+  async closeGateFailure(authority: NetworkAuthority, failure: unknown): Promise<void> {
+    await this.failClosed(authority, failure)
+    this.store.transaction(() => {
+      const row = this.store.db.prepare('SELECT i.*,c.stopped_receipt FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.run_id=?').get(authority.runId)!
+      if (row.execution_kind !== 'gate_maintenance' || !row.stopped_receipt || JSON.parse(row.stopped_receipt as string).generation !== row.generation) throw new Error('Failed gate step requires verified process cleanup')
+      if (this.store.db.prepare('SELECT 1 FROM network_effect_attempts WHERE run_id=? UNION ALL SELECT 1 FROM effect_ledger WHERE run_id=? LIMIT 1').get(authority.runId, authority.runId)) throw new Error('Gate maintenance cannot release external action evidence')
+      this.store.db.prepare('UPDATE network_invocations SET state=\'blocked\' WHERE run_id=?').run(authority.runId)
+      this.store.db.prepare('UPDATE network_invocation_controls SET resolved_receipt=? WHERE run_id=?').run(canonicalNetworkJson({ kind: 'gate-maintenance-stopped', taskId: JSON.parse(row.manifest as string).gateTaskId, grantOutcome: 'requires-task-review', generation: row.generation, at: Date.now() }), authority.runId)
+      this.store.db.prepare('DELETE FROM run_leases WHERE run_id=? AND pod_id=?').run(authority.runId, row.pod_id!)
+      this.store.db.prepare('UPDATE runs SET finished_at=coalesce(finished_at,?) WHERE id=?').run(Date.now(), authority.runId)
+    })
+  }
+
   async failClosed(authority: NetworkAuthority, failure: unknown): Promise<void> {
     let reason = failure instanceof Error ? failure.message : 'Network settlement failed'
     let processesStopped = false
@@ -172,6 +228,10 @@ export class NetworkInvocations {
       const { row, definition, member } = this.events.authority(authority, true)
       const inputs = this.store.db.prepare('SELECT id,event_id FROM network_deliveries WHERE run_id=? AND state=\'claimed\'').all(authority.runId)
       const completed = state === 'completed'
+      if (completed && row.execution_kind === 'script' && JSON.parse(row.manifest as string).gateBindings?.length) {
+        if (!this.gates) throw new Error('Network approval authority is unavailable at settlement')
+        this.gates.coverage(authority, true)
+      }
       const deadline = this.store.db.prepare('SELECT deadline FROM network_invocation_controls WHERE run_id=?').get(authority.runId)?.deadline
       if (completed && deadline !== null && deadline !== undefined && Number(deadline) <= Date.now()) throw new Error('Network invocation deadline expired before settlement')
       const effects = this.store.db.prepare(`SELECT e.logical_action_key,e.attempt,e.state,
@@ -197,10 +257,11 @@ export class NetworkInvocations {
         this.store.db.prepare('UPDATE network_effect_attempts SET state=\'unknown\' WHERE logical_action_key=? AND attempt=?').run(effect.logical_action_key!, effect.attempt!)
       }
       const control = this.store.db.prepare('SELECT attempt FROM network_invocation_controls WHERE run_id=?').get(authority.runId)!
-      const retry = transient && !unsafe && Number(control.attempt) < 3
+      const requiresFreshGate = Boolean(JSON.parse(row.manifest as string).gateBindings?.length)
+      const retry = transient && !unsafe && !requiresFreshGate && Number(control.attempt) < 3
       const retryAt = retry ? Date.now() + Math.ceil(2000 * 2 ** (Number(control.attempt) - 1) * (0.8 + Math.random() * 0.4)) : null
       const nextState = unsafe ? 'unknown' : completed ? 'done' : retry ? 'retry_wait' : 'blocked'
-      this.store.db.prepare('UPDATE network_invocation_controls SET deadline=NULL,retry_at=?,failure_kind=?,diagnostic=?,stopped_receipt=? WHERE run_id=?').run(retryAt, completed ? null : unsafe ? 'uncertain' : transient ? retry ? 'transient' : 'exhausted' : error?.includes('deadline') || error?.includes('time limit') ? 'timeout' : error?.includes('192 MiB') ? 'quota' : 'invalid', error, canonicalNetworkJson({ processesStopped: true, generation: row.generation, inspectedAt: Date.now() }), authority.runId)
+      this.store.db.prepare('UPDATE network_invocation_controls SET deadline=NULL,retry_at=?,failure_kind=?,diagnostic=?,stopped_receipt=? WHERE run_id=?').run(retryAt, completed ? null : unsafe ? 'uncertain' : requiresFreshGate ? 'recovery' : transient ? retry ? 'transient' : 'exhausted' : error?.includes('deadline') || error?.includes('time limit') ? 'timeout' : error?.includes('192 MiB') ? 'quota' : 'invalid', error, canonicalNetworkJson({ processesStopped: true, generation: row.generation, inspectedAt: Date.now() }), authority.runId)
       if (retryAt !== null) this.store.db.prepare('UPDATE network_deliveries SET ready_at=? WHERE run_id=? AND state=\'claimed\'').run(retryAt, authority.runId)
       this.store.db.prepare('UPDATE network_deliveries SET state=?,claim_token=NULL,reason=? WHERE run_id=? AND state=\'claimed\'').run(nextState, completed ? null : error ?? summary, authority.runId)
       if (inputs.length) { this.count(definition.id, 'claimed', -inputs.length); this.count(definition.id, nextState, inputs.length) }
@@ -214,22 +275,30 @@ export class NetworkInvocations {
     })
   }
 
-  private ready(networkId: string, revision: number, podId: string, manual: boolean) {
-    const first = this.store.db.prepare(`SELECT d.case_id,d.case_revision,d.run_id,d.state FROM network_deliveries d JOIN network_subscriptions s ON s.id=d.subscription_id
+  private ready(networkId: string, revision: number, podId: string, manual: boolean, gatedChannels: string[]) {
+    const first = this.store.db.prepare(`SELECT d.case_id,d.case_revision,d.run_id,d.state,s.channel FROM network_deliveries d JOIN network_subscriptions s ON s.id=d.subscription_id
       WHERE s.network_id=? AND s.network_revision=? AND s.pod_id=? AND d.state IN ('pending','retry_wait') AND d.ready_at<=? AND d.attempt<3
+      AND (s.channel NOT IN (SELECT value FROM json_each(?)) OR (d.state='pending' AND EXISTS(
+        SELECT 1 FROM network_gate_items item JOIN network_gate_tasks task ON task.id=item.task_id
+        WHERE item.delivery_id=d.id AND item.outcome='released' AND task.state='approved')))
       AND (d.state!='retry_wait' OR ?=1 OR json_extract((SELECT manifest FROM network_invocations WHERE run_id=d.run_id),'$.reason')!='manual')
       AND (s.serial_case=0 OR NOT EXISTS(SELECT 1 FROM network_deliveries busy JOIN network_subscriptions bs ON bs.id=busy.subscription_id WHERE busy.network_id=d.network_id AND busy.case_id=d.case_id AND busy.state='claimed' AND bs.pod_id=s.pod_id AND bs.serial_case=1))
-      ORDER BY d.accepted_at,d.id LIMIT 1`).get(networkId, revision, podId, Date.now(), manual ? 1 : 0)
+      ORDER BY d.accepted_at,d.id LIMIT 1`).get(networkId, revision, podId, Date.now(), JSON.stringify(gatedChannels), manual ? 1 : 0)
     if (!first) return []
     if (first.state === 'retry_wait') {
-      const batch = this.store.db.prepare('SELECT d.* FROM network_deliveries d WHERE d.run_id=? ORDER BY d.accepted_at,d.id').all(first.run_id!)
+      const batch = this.store.db.prepare('SELECT d.*,s.channel FROM network_deliveries d JOIN network_subscriptions s ON s.id=d.subscription_id WHERE d.run_id=? ORDER BY d.accepted_at,d.id').all(first.run_id!)
       const original = this.store.db.prepare('SELECT manifest FROM network_invocations WHERE run_id=?').get(first.run_id!)!
       const pins = JSON.parse(original.manifest as string).inputClaims as { id: string }[]
       if (batch.length !== pins.length || batch.some(input => input.state !== 'retry_wait' || Number(input.ready_at) > Date.now() || Number(input.attempt) >= 3 || !pins.some(pin => pin.id === input.id))) throw new Error('Original network retry batch is not ready')
       return batch
     }
-    return this.store.db.prepare(`SELECT d.* FROM network_deliveries d JOIN network_subscriptions s ON s.id=d.subscription_id
-      WHERE s.network_id=? AND s.network_revision=? AND s.pod_id=? AND d.state='pending' AND d.run_id IS NULL AND d.ready_at<=? AND d.case_id=? AND d.case_revision=? ORDER BY d.accepted_at,d.id LIMIT ?`).all(networkId, revision, podId, Date.now(), first.case_id!, first.case_revision!, networkLimits.batch)
+    return this.store.db.prepare(`SELECT d.*,s.channel FROM network_deliveries d JOIN network_subscriptions s ON s.id=d.subscription_id
+      WHERE s.network_id=? AND s.network_revision=? AND s.pod_id=? AND d.state='pending' AND d.run_id IS NULL AND d.ready_at<=? AND d.case_id=? AND d.case_revision=?
+      AND (s.channel NOT IN (SELECT value FROM json_each(?)) OR (d.state='pending' AND EXISTS(
+        SELECT 1 FROM network_gate_items item JOIN network_gate_tasks task ON task.id=item.task_id
+        WHERE item.delivery_id=d.id AND item.outcome='released' AND task.state='approved')))
+      AND ((?=0 AND s.channel NOT IN (SELECT value FROM json_each(?))) OR (?=1 AND s.channel=?))
+      ORDER BY d.accepted_at,d.id LIMIT ?`).all(networkId, revision, podId, Date.now(), first.case_id!, first.case_revision!, JSON.stringify(gatedChannels), gatedChannels.includes(first.channel as string) ? 1 : 0, JSON.stringify(gatedChannels), gatedChannels.includes(first.channel as string) ? 1 : 0, first.channel!, networkLimits.batch)
   }
 
   private count(networkId: string, state: string, delta: number): void {
