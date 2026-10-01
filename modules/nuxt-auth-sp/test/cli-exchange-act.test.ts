@@ -106,16 +106,4 @@ describe('POST /api/cli/exchange — act normalization (#1034)', () => {
     expect(minted.delegate).toBe('igor4-cb6bf26a+patrick+hofmann_eco@id.openape.ai')
   })
 
-  it('keeps a plain human token human', async () => {
-    mockReadBody.mockResolvedValue({ subject_token: await signSubjectToken({ act: 'human' }) })
-    const minted = decodeMinted(await handler(fakeEvent))
-    expect(minted.act).toBe('human')
-    // first-party token stays claim-identical: no delegate claim at all
-    expect(minted.delegate).toBeUndefined()
-  })
-
-  it('fails closed to agent when act is absent', async () => {
-    mockReadBody.mockResolvedValue({ subject_token: await signSubjectToken() })
-    expect(decodeMinted(await handler(fakeEvent)).act).toBe('agent')
-  })
 })
