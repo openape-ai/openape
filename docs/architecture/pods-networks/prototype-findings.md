@@ -25,6 +25,9 @@ https://repos.openape.ai/patrick/monorepo/issues/1417.
   Join comparison here is limited to the frozen design: explicit expected branches
   per case/revision, versus the existing whole-run producer barrier. Join execution
   and mixed-case contention remain unmeasured until M7; do not infer them from CAS.
+  M1 step 4 therefore establishes only a design comparison and logical CAS proof;
+  its concurrent-writer/implemented-join measurements are explicitly deferred
+  to M3/M4/M7, not completed here.
 - Declare each emission's causal input subset. Delivery batching does not become
   a business identity. Mixed-case and immutable workflow-version validation
   belongs to M3/M7; this prototype is not that runtime boundary.
@@ -76,7 +79,7 @@ summary to approximately 0.015 ms p95. Counts are updated in the same SQLite
 transactions as insert, state transition and prune; rollback cannot drift them.
 M2 must preserve this separation between authoritative queues and projections.
 
-The maximum-payload stress run before the final causal-input refinement measured
+An exploratory maximum-payload run before the exact committed rerun measured
 450,375,680 allocated database bytes and a 96,526,336-byte compacted snapshot after
 retention. The existing backup uses VACUUM INTO before its 256 MiB database check;
 raw high-water size is not the archive limit. Final-head measurement and full
@@ -111,6 +114,11 @@ subscription-leading index from the frozen inventory. This is not a scheduler ga
   reference-aware compaction or a reviewed watermark before removing receipts.
   Trace pruning alone never proves that. Intake pauses before saturation; no
   unlimited sustained-volume or shorter source-horizon promise is made.
+  Even source-only receipts at this daily rate would fill the entire 192 MiB
+  budget in about 43 days (at most roughly 7,200 source items/day over 90 days);
+  all-namespace retention reaches it in about 3.3 days. Other retained data lowers
+  those limits. M2 must store causal-reference/watermark metadata before M4
+  can prove safe compaction. No automatic source-horizon reduction is allowed.
 - Local queue overview bytes stay independent of event count. Stable-key detail
   pagination, actual relay publication time and old/new protocol negotiation
   remain explicitly unmeasured until M10. The 32 MiB workspace gate must be
