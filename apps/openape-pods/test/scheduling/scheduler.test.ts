@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { scheduleDomains } from '../../src/worker/scheduling/fair-scheduler'
 import { boundedStep } from '../../src/worker/scheduling/tick-step'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -193,4 +194,32 @@ it.each(['process', 'effect', 'checkpoint'])('never automatically restarts after
   f.runs.finish(id, 'failed', 'Run failed', 'Permission service temporarily unavailable', [], 0)
   expect(f.scheduler.view(pod)).toMatchObject({ blocked: 1, pending: 0 })
   expect(f.scheduler.view(pod).retry).toBeUndefined()
+})
+
+it('rotates standalone, workflow and network domain admission under the same exclusive one-slot limit', () => {
+  const f = fixture(); const pods = [f.pod(), f.pod(), f.pod()]
+  f.store.db.prepare('UPDATE settings SET concurrency=1 WHERE id=1').run()
+  const admitted: number[] = []; let runId = ''
+  const domains = pods.map((podId, domain) => () => {
+    if (f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count) return
+    runId = f.runs.reserve(podId, f.store.getPod(podId).activeScript!, f.resources.epoch(podId), { reason: 'manual', eventIds: [] }).run.id
+    admitted.push(domain)
+  }) as [() => void, () => void, () => void]
+  for (let turn = 0; turn < 9; turn++) {
+    scheduleDomains(f.store, domains)
+    expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(1)
+    f.runs.finish(runId, 'completed', 'Synthetic domain work', null)
+  }
+  expect(admitted).toEqual([0, 1, 2, 0, 1, 2, 0, 1, 2])
+  expect(f.store.db.prepare('SELECT last_progress_at FROM network_scheduler_state').get()!.last_progress_at).toBeGreaterThan(0)
+})
+
+it('records a failed scheduling domain and admits unrelated work in the same rotation', () => {
+  const f = fixture(); const called: number[] = []
+  const failure = new Error('Synthetic workflow configuration failure')
+  scheduleDomains(f.store, [() => { called.push(0) }, () => { throw failure }, () => { called.push(2) }])
+  expect(called).toEqual([0, 2])
+  expect(f.store.db.prepare('SELECT last_error_domain,last_error FROM network_scheduler_state').get()).toEqual({ last_error_domain: 1, last_error: failure.message })
+  scheduleDomains(f.store, [() => {}, () => {}, () => {}])
+  expect(f.store.db.prepare('SELECT last_error FROM network_scheduler_state').get()!.last_error).toBeNull()
 })

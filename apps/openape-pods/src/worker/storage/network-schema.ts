@@ -1,3 +1,4 @@
+import { networkControlSchema, networkControlTables } from './network-control-schema.ts'
 import { createHash } from 'node:crypto'
 import { parseOwner } from '@openape/pods-protocol'
 import { DatabaseSync } from 'node:sqlite'
@@ -457,13 +458,15 @@ CREATE INDEX network_trace_cursor ON network_trace_events(network_id,id);
 
 export const networkTables = Array.from(networkSchema.matchAll(/CREATE TABLE (\w+)\(/g), match => match[1]!)
 
-let expectedSchema: { type: string, name: string, sql: string }[] | undefined
-function schemaObjects(): { type: string, name: string, sql: string }[] {
-  if (expectedSchema) return expectedSchema
+const expectedSchemas = new Map<boolean, { type: string, name: string, sql: string }[]>()
+function schemaObjects(controls: boolean): { type: string, name: string, sql: string }[] {
+  const cached = expectedSchemas.get(controls)
+  if (cached) return cached
   const reference = new DatabaseSync(':memory:')
   try {
-    reference.exec(networkSchema)
-    expectedSchema = reference.prepare('SELECT type,name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE \'sqlite_%\'').all() as { type: string, name: string, sql: string }[]
+    reference.exec(networkSchema + (controls ? networkControlSchema : ''))
+    const expectedSchema = reference.prepare('SELECT type,name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE \'sqlite_%\'').all() as { type: string, name: string, sql: string }[]
+    expectedSchemas.set(controls, expectedSchema)
     return expectedSchema
   }
   finally { reference.close() }
@@ -486,12 +489,13 @@ const networkBoundaryChecks = {
 }
 
 export function assertNetworkStorage(database: DatabaseSync, references = false): void {
-  for (const expected of schemaObjects()) {
+  const controls = Number(database.prepare('PRAGMA user_version').get()!.user_version) >= 29
+  for (const expected of schemaObjects(controls)) {
     const actual = database.prepare('SELECT sql FROM sqlite_schema WHERE type=? AND name=?').get(expected.type, expected.name)
     if (actual?.sql !== expected.sql) throw new Error(`Incomplete or altered network storage: ${expected.name}`)
   }
   if (!references) return
-  for (const table of networkTables) {
+  for (const table of [...networkTables, ...(controls ? networkControlTables : [])]) {
     if (database.prepare(`PRAGMA foreign_key_check(${table})`).get()) throw new Error(`Invalid network references: ${table}`)
   }
   for (const owner of database.prepare('SELECT issuer,subject FROM network_owners').all()) parseOwner(owner)
@@ -499,6 +503,12 @@ export function assertNetworkStorage(database: DatabaseSync, references = false)
     for (const row of database.prepare(`SELECT ${body} AS body,${hash} AS hash FROM ${table}`).iterate()) {
       if (createHash('sha256').update(String(row.body)).digest('hex') !== row.hash) throw new Error(`Invalid network content digest: ${table}`)
     }
+  }
+  if (controls) {
+    const retry = database.prepare('SELECT 1 FROM network_invocation_controls c JOIN network_invocations i ON i.run_id=c.run_id JOIN network_invocations previous ON previous.run_id=c.retry_of JOIN network_invocation_controls p ON p.run_id=previous.run_id WHERE i.network_id!=previous.network_id OR i.pod_id!=previous.pod_id OR c.attempt!=p.attempt+1 LIMIT 1').get()
+    if (retry) throw new Error('Invalid network retry lineage')
+    const preview = database.prepare('SELECT 1 FROM network_invocation_controls c JOIN network_invocations i ON i.run_id=c.run_id JOIN network_process_previews p ON p.id=c.process_preview_id WHERE p.network_id!=i.network_id LIMIT 1').get()
+    if (preview) throw new Error('Invalid network process preview scope')
   }
   for (const [name, query] of Object.entries(networkBoundaryChecks)) {
     if (database.prepare(query).get()) throw new Error(`Invalid network boundary: ${name}`)

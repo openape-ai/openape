@@ -636,13 +636,21 @@ Successful settlement rechecks resource epochs after asynchronous native stop
 proof. Revoked execution discards buffered outputs, retains its uncommitted staged
 checkpoint for inspection, fences its claims and retains the lease.
 
-Until M4 adds durable operational clocks and preview consumption records,
-`network-activated`, `process-now-preview` and `process-now-started` records are
-control records and must not be pruned as diagnostic traces. Definition, input
-claims and execution authority pins remain immutable; source clock metadata,
-private snapshot receipts and the review-required flag are runtime-owned
-operational fields. M4 must move these fields out of the invocation manifest
-before implementing retention. The workspace admits at most 64 networks.
+The working M4 implementation adds schema 29 without altering schema-28 DDL.
+Source clocks, Process-now previews/consumption, retry lineage/deadlines, snapshot
+receipts and review flags use dedicated control storage. Historical manifests stay
+unchanged as evidence; new invocation manifests contain immutable execution pins.
+Only safe completed traces may be pruned after settlement receipts are retained in
+control storage. Unresolved decisions/effects and acceptance markers remain intact.
+The workspace admits at most 64 networks. M4 also bounds retained Process now
+previews to 64 per network and five-minute authority. Expired unused previews are
+removed; a preview referenced by unresolved work stays. A completed invocation
+stores its approved preview in its durable settlement receipt before releasing
+the preview reference. Completed runtime diagnostics can then be pruned without
+removing unresolved, owner, acceptance or effect evidence. Quota remains a whole
+profile admission budget; saturated intake pauses until explicit owner resume.
+M4 acceptance is still pending.
+
 
 
 M3 is an engine vertical slice using explicitly seeded owner/definition bindings
@@ -650,3 +658,49 @@ in isolated fixtures. The productive definition/instance writer arrives in M8;
 it must follow accepted M4 recovery so interrupted leases have an owner inspection
 and release path before any productive network can be created. No owner-facing
 creation or production readiness is claimed by M3.
+
+
+## M4 recovery and scheduling scope
+
+Owner conflict resolution binds the current network revision, invocation generation
+and conflict identity hash. `retainOriginal` requires the original durable event
+marker to match the recorded conflict. When a conflict inside one settlement
+rolled back that tentative acceptance, the owner must explicitly choose
+`discardBatch`; the receipt records that no original acceptance survived.
+Both decisions dispose of the original failed input batch atomically and retain
+truthful owner evidence without marking an unconsumed retry as consumed. The conflicting batch
+cannot be retried. Uncertain external effects must be reconciled first. Owner
+requeue records old and current namespaces and whether they differ; restored baselines remain
+fail-closed until the later migration baseline review is implemented.
+
+Controlled master and existing browser run starts enter the standalone position
+of the same domain rotation. Their explicit within-domain manual priority cannot
+bypass a workflow or network that currently has the first admission position. Startup, suspend,
+maintenance and central lease gates apply. A busy start fails visibly; no new
+offline browser mutation queue is introduced. Remote run reservation and its
+started receipt remain atomic. A failing scheduling domain records its diagnostic
+and permits unrelated domains to continue; last progress denotes run admission.
+
+Automatic retry accepts only trusted pre-launch InfrastructureError failures and
+requires verified process stop, unchanged authority, the original batch and at
+most three attempts. Current capability-free network scripts have no identified
+production pre-launch authorization/read service that emits this classifier;
+backoff/exhaustion are protected behavioral contracts, not evidence that arbitrary
+current IO failures retry. M5 must retain this conservative boundary when adding
+external action ports. Unknown or confirmed external effects never justify a new
+automatic issue. Event/delivery/business compaction beyond safe diagnostic traces
+remains dependent work; unresolved records and duplicate markers are retained.
+
+
+Explicit owner disposal of failed work requires current revision/generation,
+verified process stop, no uncertain effects and unchanged original input IDs.
+It marks deliveries discarded with retained owner evidence, preserves checkpoint,
+events, duplicate markers and effect receipts, and disables retry of that attempt.
+Only then may ordinary diagnostics and the separately captured approved preview
+be compacted. A consumed failed retry also retains its durable settlement proof;
+its owner/effect evidence is never treated as an ordinary diagnostic.
+
+Historical schema-28 rows with neither execution-domain evidence nor creator PID
+remain fail-closed when a retained lease cannot be proven stopped. There is no
+owner boolean that converts missing evidence into a safe automatic retry. Such
+profiles require the later stopped-runtime migration/baseline investigation.

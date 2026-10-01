@@ -24,6 +24,9 @@ UPDATE network_joins SET state='blocked',reason=coalesce(reason,'Restored backup
 DELETE FROM network_queue_counts;
 INSERT INTO network_queue_counts SELECT network_id,state,count(*) FROM network_deliveries GROUP BY network_id,state;
 `)
+  if (Number(database.prepare('PRAGMA user_version').get()!.user_version) >= 29) {
+    database.exec('UPDATE network_process_previews SET consumed_at=coalesce(consumed_at,0),state=\'stopped\'; DELETE FROM network_source_clocks; UPDATE network_invocation_controls SET deadline=NULL,retry_at=NULL,retry_authority=NULL; UPDATE network_scheduler_state SET next_domain=0,last_network=NULL,last_progress_at=NULL,last_error_domain=NULL,last_error=NULL; DELETE FROM network_runtime_status;')
+  }
   for (const invocation of database.prepare('SELECT run_id FROM network_invocations').all()) {
     database.prepare('UPDATE network_invocations SET claim_token=?,boot_nonce=?,restore_nonce=(SELECT restore_nonce FROM networks WHERE id=network_id),generation=generation+1 WHERE run_id=?').run(randomUUID(), randomUUID(), invocation.run_id)
   }

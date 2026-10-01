@@ -35,8 +35,14 @@ export type NetworkCommand
     | { type: 'activate', id: string, revision: number }
     | { type: 'pause', id: string, revision: number }
     | { type: 'preview', id: string, revision: number, podIds: string[], pausedPodIds: string[], budget: number }
+    | { type: 'inspect', id: string, revision: number, runId: string, generation: number }
+    | { type: 'discardFailure', id: string, revision: number, runId: string, generation: number, evidence: string }
+    | { type: 'retry', id: string, revision: number, runId: string, generation: number }
+    | { type: 'resolveConflict', id: string, revision: number, runId: string, generation: number, identityHash: string, decision: 'retainOriginal' | 'discardBatch', evidence: string }
+    | { type: 'reconcileEffect', id: string, revision: number, runId: string, generation: number, key: string, attempt: number, sequence: number, outcome: 'confirmed_applied' | 'confirmed_not_applied', evidence: string }
     | { type: 'process', id: string, revision: number, previewId: string }
-export interface NetworkSummary { id: string, revision: number, groupId: string, name: string, state: 'active' | 'paused' | 'archived', counts: Record<string, number> }
+export interface NetworkHealth { oldestPendingAt: number | null, nextRetryAt: number | null, lastDispatchAt: number | null, lastSchedulerProgressAt: number | null, lastSchedulerError: string | null, intakeError: string | null, lastFailure: { runId: string, generation: number, kind: string, reason: string } | null }
+export interface NetworkSummary { id: string, revision: number, groupId: string, name: string, state: 'active' | 'paused' | 'archived', counts: Record<string, number>, health: NetworkHealth }
 export interface NetworkPreview { id: string, networkId: string, revision: number, podIds: string[], pausedPodIds: string[], budget: number, expiresAt: number, sources: string[], consumers: string[] }
 export interface NetworkView { networks: NetworkSummary[], preview?: NetworkPreview, processId?: string, createdId?: string }
 export const networkLimits = { networks: 64, members: 64, channels: 32, batch: 50, processNow: 100, definitionBytes: 1024 * 1024 } as const
@@ -118,6 +124,22 @@ export function parseNetworkCommand(value: unknown): NetworkCommand {
     return { type: 'create', draft: { name: draft.name, groupId: uuid(draft.groupId), channels: channels(draft.channels), members } }
   }
   if (input.type === 'activate' || input.type === 'pause') { fields(input, ['type', 'id', 'revision']); return { type: input.type, id: uuid(input.id), revision: revision(input.revision) } }
+  if (input.type === 'inspect' || input.type === 'retry') { fields(input, ['type', 'id', 'revision', 'runId', 'generation']); return { type: input.type, id: uuid(input.id), revision: revision(input.revision), runId: uuid(input.runId), generation: revision(input.generation) } }
+  if (input.type === 'discardFailure') {
+    fields(input, ['type', 'id', 'revision', 'runId', 'generation', 'evidence'])
+    if (typeof input.evidence !== 'string' || !input.evidence.trim() || input.evidence.length > 4000) throw new Error('Discarding failed work requires explicit owner evidence')
+    return { type: 'discardFailure', id: uuid(input.id), revision: revision(input.revision), runId: uuid(input.runId), generation: revision(input.generation), evidence: input.evidence }
+  }
+  if (input.type === 'resolveConflict') {
+    fields(input, ['type', 'id', 'revision', 'runId', 'generation', 'identityHash', 'decision', 'evidence'])
+    if (typeof input.identityHash !== 'string' || !/^[a-f0-9]{64}$/.test(input.identityHash) || !['retainOriginal', 'discardBatch'].includes(input.decision as string) || typeof input.evidence !== 'string' || !input.evidence.trim() || input.evidence.length > 4000) throw new Error('Conflict resolution requires explicit owner evidence and a declared batch decision')
+    return { type: 'resolveConflict', id: uuid(input.id), revision: revision(input.revision), runId: uuid(input.runId), generation: revision(input.generation), identityHash: input.identityHash, decision: input.decision as 'retainOriginal' | 'discardBatch', evidence: input.evidence }
+  }
+  if (input.type === 'reconcileEffect') {
+    fields(input, ['type', 'id', 'revision', 'runId', 'generation', 'key', 'attempt', 'sequence', 'outcome', 'evidence'])
+    if (typeof input.key !== 'string' || !/^[a-f0-9]{64}$/.test(input.key) || !['confirmed_applied', 'confirmed_not_applied'].includes(input.outcome as string) || typeof input.evidence !== 'string' || !input.evidence.trim() || input.evidence.length > 4000) throw new Error('Network effect reconciliation requires explicit owner evidence')
+    return { type: 'reconcileEffect', id: uuid(input.id), revision: revision(input.revision), runId: uuid(input.runId), generation: revision(input.generation), key: input.key, attempt: revision(input.attempt), sequence: revision(input.sequence), outcome: input.outcome as 'confirmed_applied' | 'confirmed_not_applied', evidence: input.evidence }
+  }
   if (input.type === 'process') { fields(input, ['type', 'id', 'revision', 'previewId']); return { type: 'process', id: uuid(input.id), revision: revision(input.revision), previewId: uuid(input.previewId) } }
   if (input.type === 'preview') {
     fields(input, ['type', 'id', 'revision', 'podIds', 'pausedPodIds', 'budget'])
@@ -133,11 +155,22 @@ export function parseNetworkView(value: unknown): NetworkView {
   const input = networkDataObject(value)
   if (Object.keys(input).some(key => !['networks', 'preview', 'processId', 'createdId'].includes(key))) throw new Error('Invalid network view fields')
   const networks = list(input.networks, networkLimits.networks).map((value) => {
-    const item = fields(value, ['id', 'revision', 'groupId', 'name', 'state', 'counts'])
+    const item = fields(value, ['id', 'revision', 'groupId', 'name', 'state', 'counts', 'health'])
     if (typeof item.name !== 'string' || item.name.length > 120 || !['active', 'paused', 'archived'].includes(item.state as string)) throw new Error('Invalid network summary')
     const counts = networkDataObject(item.counts)
     if (Object.entries(counts).some(([state, count]) => !['pending', 'claimed', 'done', 'retry_wait', 'blocked', 'unknown', 'discarded'].includes(state) || !Number.isSafeInteger(count) || (count as number) < 0)) throw new Error('Invalid network queue summary')
-    return { id: uuid(item.id), revision: revision(item.revision), groupId: uuid(item.groupId), name: item.name, state: item.state as NetworkSummary['state'], counts: counts as Record<string, number> }
+    const health = fields(item.health, ['oldestPendingAt', 'nextRetryAt', 'lastDispatchAt', 'lastSchedulerProgressAt', 'lastSchedulerError', 'intakeError', 'lastFailure'])
+    for (const key of ['oldestPendingAt', 'nextRetryAt', 'lastDispatchAt', 'lastSchedulerProgressAt']) {
+      if (health[key] !== null && (!Number.isSafeInteger(health[key]) || Number(health[key]) < 0)) throw new Error('Invalid network health timestamp')
+    }
+    if (health.lastSchedulerError !== null && (typeof health.lastSchedulerError !== 'string' || health.lastSchedulerError.length > 10000)) throw new Error('Invalid network scheduler diagnostic')
+    if (health.intakeError !== null && (typeof health.intakeError !== 'string' || health.intakeError.length > 10000)) throw new Error('Invalid network intake diagnostic')
+    if (health.lastFailure !== null) {
+      const failure = fields(health.lastFailure, ['runId', 'generation', 'kind', 'reason'])
+      uuid(failure.runId); revision(failure.generation)
+      if (!['transient', 'invalid', 'uncertain', 'exhausted', 'timeout', 'quota', 'recovery'].includes(failure.kind as string) || typeof failure.reason !== 'string' || failure.reason.length > 10000) throw new Error('Invalid network failure diagnostic')
+    }
+    return { id: uuid(item.id), revision: revision(item.revision), groupId: uuid(item.groupId), name: item.name, state: item.state as NetworkSummary['state'], counts: counts as Record<string, number>, health: health as unknown as NetworkHealth }
   })
   const result: NetworkView = { networks }
   if (input.createdId !== undefined) result.createdId = uuid(input.createdId)

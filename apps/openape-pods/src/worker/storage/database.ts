@@ -1,4 +1,5 @@
 import { assertNetworkStorage, networkSchema } from './network-schema.ts'
+import { migrateNetworkControls, migrateNetworkSettlements, networkControlSchema } from './network-control-schema.ts'
 import { migrateRemote } from '../remote/migration.ts'
 import { migrateChats } from '../master/chat-migration.ts'
 import type { GraphContract } from '../../contracts/graphs.ts'
@@ -40,7 +41,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 28
+export const schemaVersion = 29
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -325,6 +326,7 @@ CREATE INDEX graph_gate_batches_open ON graph_gate_batches(workflow_id, gate, st
 PRAGMA user_version=27;`)
       }
       if (version < 28) this.db.exec(`${networkSchema} PRAGMA user_version=28;`)
+      if (version < 29) this.db.exec(`${networkControlSchema} INSERT INTO network_scheduler_state(id) VALUES(1); ${migrateNetworkControls} ${migrateNetworkSettlements} PRAGMA user_version=29;`)
     })
   }
 

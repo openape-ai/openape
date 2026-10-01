@@ -32,7 +32,7 @@ export type RemoteInternal =
   | { type: 'claim', podId: string, owner: Owner, identity: unknown }
 
 export class RemoteControl {
-  constructor(private readonly store: PodDatabase, private readonly master: MasterService, private readonly runs: RunDispatcher, private readonly resources: ResourceRegistry, private readonly scheduler: Scheduler, private readonly now = Date.now, private readonly programState?: RemoteProgramState) {
+  constructor(private readonly store: PodDatabase, private readonly master: MasterService, private readonly runs: RunDispatcher, private readonly resources: ResourceRegistry, private readonly scheduler: Scheduler, private readonly now = Date.now, private readonly programState?: RemoteProgramState, private readonly startRun: (podId: string, operationId: string, accepted: (runId: string) => void) => string = (podId, operationId, accepted) => runs.start(podId, { reason: 'manual', eventIds: [], operationId }, accepted)) {
     store.db.prepare('UPDATE remote_inbox SET state=\'unknown\' WHERE state=\'received\'').run()
   }
 
@@ -188,7 +188,7 @@ export class RemoteControl {
       if (this.store.getPod(podId).activeScript !== expected.scriptHash || this.resources.epoch(podId) !== expected.resourceEpoch) throw new ProtocolError('revision_conflict', 409)
       if (this.store.db.prepare('SELECT phase FROM remote_pods WHERE pod_id=?').get(podId)?.phase !== 'ready') throw new ProtocolError('desktop_action_required', 409)
       let receipt!: Receipt
-      this.runs.start(podId, { reason: 'manual', eventIds: [], operationId: route.id }, (runId) => { receipt = this.commit(route, 'started', { runId }, { podId, runId }) })
+      this.startRun(podId, route.id, (runId) => { receipt = this.commit(route, 'started', { runId }, { podId, runId }) })
       return receipt
     }
     if (route.kind === 'run.cancel') { this.runs.cancel(podId, body.runId!); return this.commit(route, 'applied', { cancellationRequested: true }, { podId, runId: body.runId }) }
