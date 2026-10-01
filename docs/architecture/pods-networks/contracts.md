@@ -383,8 +383,9 @@ outcome and missing-channel list. Late input goes to review or an explicitly new
 case revision; it cannot reopen the timed-out join. Unrelated cases continue.
 
 Gate tasks are non-script maintenance under the downstream Pod identity. Each
-maintenance step acquires the exclusive instance lease plus its own fenced task
-token/generation, so polling/consumption cannot overlap that Pod's invocation or a
+maintenance step acquires the exclusive instance lease and a fresh step token
+bound to the current task generation. Supersession/cancellation advances that task
+generation; every step checks both generation and token before committing. Therefore, so polling/consumption cannot overlap that Pod's invocation or a
 second gate task. Each bounded poll/consume step creates a maintenance run row
 with the downstream pinned script hash as identity metadata and
 `executionKind: network-gate`, without launching that script. Its task attempt

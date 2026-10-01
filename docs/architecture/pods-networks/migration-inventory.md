@@ -201,7 +201,6 @@ append-only effects and concrete artifact scope records. Timer sources also have
 individual invocation fencing. Follow-up acceptance still requires the final
 review and exact-head check result.
 
-
 Final Opus review found three narrow contradictions: deadline inputs are pending,
 not claimed; duplicate source marker tables; and task/step lease cardinality.
 Corrected the transition source state, folded logical source_deduplication into
