@@ -1,3 +1,6 @@
+import type { NetworkArtifacts } from './network-artifacts'
+import { artifactReferences } from '../../contracts/network-data'
+import type { ArtifactReference } from '../../contracts/network-data'
 import { canonicalNetworkJson } from '../../contracts/network-json'
 import { assertNetworkQuota } from './network-quota'
 import { randomUUID } from 'node:crypto'
@@ -11,6 +14,7 @@ export interface NetworkEmission {
   channel: string
   key: string
   payload: unknown
+  artifacts?: ArtifactReference[]
   sourceItemId?: string
   sourceVersion?: string
 }
@@ -32,15 +36,29 @@ function identifier(value: unknown): string {
 }
 
 export class NetworkEvents {
+  artifacts?: NetworkArtifacts
+
+  references(eventId: string): ArtifactReference[] {
+    return this.store.db.prepare('SELECT a.id,a.scope_id AS scope FROM artifact_references r JOIN artifacts a ON a.id=r.artifact_id WHERE r.reference_kind=\'event\' AND r.reference_id=? ORDER BY a.id').all(eventId) as unknown as ArtifactReference[]
+  }
+
   constructor(private readonly store: PodDatabase, private readonly bootNonce: string) {}
 
   emission(authority: NetworkAuthority, value: unknown, finishing = false): NetworkEmission {
     const { definition, member } = this.authority(authority, finishing)
     const input = networkDataObject(value)
-    if (Object.keys(input).some(key => !['channel', 'key', 'payload', 'sourceItemId', 'sourceVersion'].includes(key))) throw new Error('Unsupported network emission fields')
+    if (Object.keys(input).some(key => !['channel', 'key', 'payload', 'artifacts', 'sourceItemId', 'sourceVersion'].includes(key))) throw new Error('Unsupported network emission fields')
     const channel = definition.channels.find(item => item.name === input.channel)
     if (!channel || !member.contract.gives.includes(channel.name)) throw new Error('Network output channel is not declared')
     const result: NetworkEmission = { channel: channel.name, key: identifier(input.key), payload: validateNetworkPayload(input.payload, channel.schema) }
+    if (input.artifacts !== undefined) {
+      result.artifacts = artifactReferences(input.artifacts)
+      for (const reference of result.artifacts) {
+        if (!Object.values(result.payload as Record<string, unknown>).flat().includes(reference.id)) throw new Error('Event artifact references must be included in the hashed payload')
+        if (!this.artifacts) throw new Error('Managed artifact authority is unavailable')
+        this.artifacts.reference(authority, reference, finishing)
+      }
+    }
     if (member.source) return { ...result, sourceItemId: identifier(input.sourceItemId), sourceVersion: identifier(input.sourceVersion) }
     if (input.sourceItemId !== undefined || input.sourceVersion !== undefined) throw new Error('A consumer cannot declare source identity')
     return result
@@ -86,6 +104,12 @@ export class NetworkEvents {
       const channel = definition.channels.find(item => item.name === emission.channel)
       if (!channel) throw new Error('Network output channel has no pinned schema')
       const payload = canonicalNetworkJson(validateNetworkPayload(emission.payload, channel.schema))
+      const references = artifactReferences(emission.artifacts ?? [])
+      for (const reference of references) {
+        if (!Object.values(JSON.parse(payload)).flat().includes(reference.id)) throw new Error('Event artifact references must be included in the hashed payload')
+        if (!this.artifacts) throw new Error('Managed artifact authority is unavailable')
+        this.artifacts.reference(authority, reference, finishing)
+      }
       const payloadHash = digest(payload)
       const schemaHash = digest(canonicalNetworkJson({ schemaVersion: channel.schemaVersion, schema: channel.schema }))
       const key = identifier(emission.key)
@@ -121,6 +145,7 @@ export class NetworkEvents {
         if (subscription.schema_hash !== schemaHash) throw new Error('Network subscription schema differs from its pinned channel')
         this.store.db.prepare('INSERT INTO network_deliveries(id,network_id,event_id,subscription_id,case_id,case_revision,ready_at,accepted_at) VALUES(?,?,?,?,?,?,?,?)').run(randomUUID(), definition.id, eventId, subscription.id!, caseRef.caseId, caseRef.caseRevision, now, now)
       }
+      for (const reference of references) this.artifacts!.retain(reference, 'event', eventId)
       if (subscriptions.length) this.store.db.prepare('INSERT INTO network_queue_counts VALUES(?,\'pending\',?) ON CONFLICT(network_id,state) DO UPDATE SET count=count+excluded.count').run(definition.id, subscriptions.length)
       return { eventId, duplicate: false, ...caseRef }
     })

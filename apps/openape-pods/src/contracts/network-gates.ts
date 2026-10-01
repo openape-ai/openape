@@ -8,7 +8,8 @@ import { networkDataObject } from './network-payload'
 
 export interface NetworkGateItem { deliveryId: string, eventId: string, generation: number, key: string, hash: string, channel: string, title: string }
 export interface NetworkGateManifest {
-  version: 2
+  version: 2 | 3
+  dataPin?: string
   id: string
   networkId: string
   networkRevision: number
@@ -39,16 +40,16 @@ const sha256 = (value: unknown): string => createHash('sha256').update(canonical
 export const networkGatePayloadHash = (data: Record<string, unknown>): string => sha256(data)
 
 export function networkGateActionHash(manifest: Omit<NetworkGateManifest, 'digest' | 'actionHash'>): string {
-  return sha256({ operation: 'network.consumer', podId: manifest.podId, scriptHash: manifest.scriptHash, definitionId: manifest.definitionId, definitionVersion: manifest.definitionVersion, bindingRevision: manifest.bindingRevision, assignmentRevision: manifest.assignmentRevision, resourceEpoch: manifest.resourceEpoch, inputs: manifest.items.map(({ deliveryId, eventId, generation, hash, channel }) => ({ deliveryId, eventId, generation, hash, channel })) })
+  return sha256({ ...(manifest.version === 3 ? { dataPin: manifest.dataPin } : {}), operation: 'network.consumer', podId: manifest.podId, scriptHash: manifest.scriptHash, definitionId: manifest.definitionId, definitionVersion: manifest.definitionVersion, bindingRevision: manifest.bindingRevision, assignmentRevision: manifest.assignmentRevision, resourceEpoch: manifest.resourceEpoch, inputs: manifest.items.map(({ deliveryId, eventId, generation, hash, channel }) => ({ deliveryId, eventId, generation, hash, channel })) })
 }
 
 export function networkGateDigest(manifest: Omit<NetworkGateManifest, 'digest'>): string { return sha256(manifest) }
 
 export function parseNetworkGateManifest(value: unknown): NetworkGateManifest {
   const input = networkDataObject(value)
-  const names = ['version', 'id', 'networkId', 'networkRevision', 'gate', 'title', 'podId', 'owner', 'restoreNonce', 'activationEpoch', 'definitionId', 'definitionVersion', 'bindingRevision', 'assignmentRevision', 'resourceEpoch', 'scriptHash', 'expiresAt', 'actionHash', 'digest', 'items']
+  const names = ['version', 'id', 'networkId', 'networkRevision', 'gate', 'title', 'podId', 'owner', 'restoreNonce', 'activationEpoch', 'definitionId', 'definitionVersion', 'bindingRevision', 'assignmentRevision', 'resourceEpoch', 'scriptHash', 'expiresAt', 'actionHash', 'digest', 'items', ...(input.version === 3 ? ['dataPin'] : [])]
   if (Object.keys(input).some(key => !names.includes(key)) || names.some(key => !Object.hasOwn(input, key))) throw new Error('Invalid network gate fields')
-  if (input.version !== 2 || ![input.id, input.networkId, input.podId, input.restoreNonce, input.definitionId].every(uuid) || ![input.networkRevision, input.activationEpoch, input.definitionVersion, input.bindingRevision, input.assignmentRevision, input.expiresAt].every(positive) || !Number.isSafeInteger(input.resourceEpoch) || Number(input.resourceEpoch) < 0 || ![input.scriptHash, input.actionHash, input.digest].every(hash)) throw new Error('Invalid network gate authority')
+  if (![2, 3].includes(input.version as number) || (input.version === 3 && !hash(input.dataPin)) || ![input.id, input.networkId, input.podId, input.restoreNonce, input.definitionId].every(uuid) || ![input.networkRevision, input.activationEpoch, input.definitionVersion, input.bindingRevision, input.assignmentRevision, input.expiresAt].every(positive) || !Number.isSafeInteger(input.resourceEpoch) || Number(input.resourceEpoch) < 0 || ![input.scriptHash, input.actionHash, input.digest].every(hash)) throw new Error('Invalid network gate authority')
   if (typeof input.gate !== 'string' || !/^[a-z][a-z0-9-]{0,31}$/.test(input.gate) || typeof input.title !== 'string' || !input.title.trim() || input.title.length > 60 || !Array.isArray(input.items) || !input.items.length || input.items.length > gateLimits.batchItems) throw new Error('Invalid network gate batch')
   const items = input.items.map((value): NetworkGateItem => {
     const item = networkDataObject(value)

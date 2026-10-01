@@ -254,7 +254,7 @@ export class RunDispatcher {
       const directories = await assignedDirectories(this.store.root, pod.id, this.resources.list(pod.id))
       assertCurrent()
       const input: RunInput = { workflow: workflowInput(this.store, id), home: folders.home, directories: directories.map(({ path, access }) => ({ path, access })), variables: { ...Object.fromEntries((graph?.definition.values ?? []).map(value => [value.name, value.value])), ...new PodVariables(this.store).values(pod.id) }, version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.bindingRevision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: folders.workspace, references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: 300000, frameBytes: 256 * 1024 } }
-      if (networkInput) { input.network = networkInput.network; input.eventIds = networkInput.items.map(item => item.eventId) }
+      if (networkInput) { input.config = networkInput.config; input.network = networkInput.network; input.eventIds = networkInput.items.map(item => item.eventId) }
       appendEvent('snapshot', { id: snapshots.id, files: input.references })
       const dependencies = new DependencyStore(this.store); const dependencyHash = dependencies.scriptSet(pod.id, run.scriptHash)
       const dependencyRoot = dependencyHash ? await dependencies.verify(pod.id, dependencyHash) : undefined
@@ -300,7 +300,13 @@ export class RunDispatcher {
         request: async (operation, payload, operationSignal) => {
           assertCurrent()
           if (network) {
-            if (!['graph.contract', 'graph.emit', 'network.emit', 'network.gateCoverage', 'progress.commit'].includes(operation)) throw new Error('Network operation requires a declared runtime port')
+            if (!['graph.contract', 'graph.emit', 'network.emit', 'network.gateCoverage', 'data.get', 'data.put', 'data.delete', 'data.query', 'artifacts.create', 'artifacts.read', 'progress.commit'].includes(operation)) throw new Error('Network operation requires a declared runtime port')
+            if (operation === 'data.get') return network.invocations.data.get(network.authority, payload)
+            if (operation === 'data.put') return network.invocations.data.put(network.authority, payload)
+            if (operation === 'data.delete') return network.invocations.data.put(network.authority, payload, true)
+            if (operation === 'data.query') return network.invocations.data.query(network.authority, payload)
+            if (operation === 'artifacts.create') return network.invocations.data.artifacts.create(network.authority, payload)
+            if (operation === 'artifacts.read') return network.invocations.data.artifacts.read(network.authority, payload)
             if (operation === 'network.gateCoverage') return network.invocations.gates!.scriptCoverage(network.authority)
             if (operation === 'progress.commit') return network.invocations.stageProgress(network.authority, payload)
             if (operation === 'graph.contract') {
