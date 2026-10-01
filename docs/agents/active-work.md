@@ -5,8 +5,8 @@
 [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3VDB1S72E4EQQW58T97C617),
 [native issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417).
 Checkout: `openape-monorepo.worktrees/pods-workflows-networks`; branch
-`feature/issue-1417-pods-networks-m4`; current canonical base
-`ae4504d8483d464e3794f7864299241de8829df6`; original canonical base
+`feature/issue-1417-pods-networks-m5`; current canonical base
+`49dce16e93b7cc4ae07992b84f6eded9c103307c`; original canonical base
 `a99c69bd2b97d8883ce5538894c3f38510407ddf` (Pods 0.1.1, schema 27).
 
 M0 freezes [contracts](../architecture/pods-networks/contracts.md) and the
@@ -22,9 +22,9 @@ blocking/major findings after corrections. The primary agent checked sources and
 remaining token/identity wording. Final tested SHA `3b7363b2622b8394c429fe8833c6df49e87742db` passed exact-head CI;
 M0 merged as `fb80556d8a66843e028da7d13cda97fd5a9f1d50`.
 [Final private Test Runs evidence](https://report.openape.ai/r/3fMyH6tmpepIRy7p8qRhYqzm).
-M0–M3 are accepted and merged. M4 is in progress: durable recovery controls,
-retry deadlines, fair domain admission and bounded backpressure. M4 is unaccepted;
-M5–M14 remain unimplemented.
+M0–M4 are accepted and merged. M5 is in progress and unaccepted; M6–M14
+remain unimplemented. The M5 working tree is based on the canonical M4 merge;
+M5 runtime acceptance is recorded below; final documentation-head CI and protected merge remain required.
 M3 [PR 203](https://repos.openape.ai/patrick/monorepo/pulls/203): tested clean
 runtime `da209ca697d79c0cade36759d9ccb69aa9167f53` passed root lint/typecheck/build,
 133 files / 966 fresh Pods unit tests, four manual native/Electron tests and
@@ -68,12 +68,44 @@ verified against canonical source/target commits. Native
 to issue 1417. Runtime exact-head CI 5315 passed the unit-only contract.
 [Verified private M4 Test Runs receipt](https://report.openape.ai/r/5WUpVPNReI22uBWBuzGVbh0P):
 category Test Runs, owner read 200, anonymous read 401 and the inspected screenshot
-bytes present in the published document. Local runtime acceptance is complete;
-final documentation-head CI and protected native merge remain required before
-marking M4 accepted.
-Next: review this documentation increment, pass its exact-head CI and merge PR 204,
-then continue M5/M6 in dependency order. Preserve original claim batches on
-retry to retain derived event identity; never repeat unknown external effects.
+bytes present in the published document. Final documentation head
+`1cb0d57aa3b9f1fbf192c7832ff5698d4cbc2e34` passed exact-head CI 5316;
+PR 204 merged as `49dce16e93b7cc4ae07992b84f6eded9c103307c`.
+
+M5 adds versioned downstream gate manifests and additive schema 30 without
+changing legacy gate command/summary bytes or historical schema 28/29.
+Gate maintenance reserves the downstream instance and global slot without a
+script/model launch. Held inputs require exact consumed-grant coverage and
+an active-grant check before script launch; unrelated inputs continue.
+Owner exclusion supersedes the old grant and requires a fresh batch. Uncertain
+create/consume stays unknown; explicit disposal preserves that uncertainty.
+Clean tested runtime `c170a7c28e3a8b836ea656018f48284eaee1f708` passes full
+root lint/typecheck, Pods build and 135 files / 1,025 fresh unit tests, including
+26 permanent gate authority/recovery contracts. Seven manual native checks pass;
+two unrelated crash cases are skipped by selection. Actual signed loopback DDISA
+once consumption, worker SIGKILL before its response, desktop restart, unchanged
+maintenance attempt count, unknown retention and owner disposal without a second
+consume are verified. Both clean-source screenshots were personally inspected.
+Existing Standalone Pods labels remain pending M9; outcomes are proved through
+actual IPC/SQL assertions. Definitions and identities are fixture seeded pending M8.
+
+Repeated actual Claude Code 2.1.286 / Opus 5.5 reviews closed safety/recovery
+findings; primary review checked the complete untruncated native diff against its
+source/target commits: 33 files / 2,566 displayed lines. A final primary-reviewed
+maintenance-disposal guard rejects before inspection and preserves receipts.
+Initial clean source `005450dd` hit nine existing five-second timeouts and stopped
+before push. Nine affected suites then passed 161 checks with one worker and
+unchanged timeouts; subsequent complete default-concurrency runs passed. No runner,
+retry, CI or timeout configuration changed. Root Turbo cache reuse is disclosed.
+Runtime exact-head unit-only CI 5318 passed all 1,025 Pods tests.
+Native [PR 205](https://repos.openape.ai/patrick/monorepo/pulls/205) is explicitly
+linked to issue 1417. [Verified private M5 Test Runs](https://report.openape.ai/r/0vlx3rT-L2Q2NdG5kbgYizCT):
+category Test Runs, owner read 200, anonymous read 401 and both inspected screenshot
+bytes present. Local runtime acceptance is complete; final documentation-head CI
+and protected merge remain required before marking M5 accepted.
+Next: review this documentation increment, pass exact-head CI and merge PR 205,
+then continue M6. M9 retains the bounded operational failure-list work; missing
+historical process proof stays fail-closed. Never repeat unknown external effects.
 
 M1 prototype: 24 crash/authority checks pass; selected established scheduling
 suites pass (120 checks before the two final isolation assertions). Maximum-payload
