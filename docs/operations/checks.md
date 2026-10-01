@@ -64,3 +64,9 @@ configuration is preserved at `config.yml.issue-1416-backup`; rollback restores
 that file and removes only the named issue-1416 cache rule. A temporary rule
 for the in-flight job is removed after completion. Do not interrupt another
 run or broaden the public firewall to repair cache transport.
+
+Cache actions use Forgejo v4 at `0057852bfaa89a56745cba8c7296529d2fc39830`.
+The older v3 post-save process can retain unresolved HTTP requests after a
+successful upload. The vendor v4 save entry explicitly exits only after its
+save promise completes. Keep that behavior in the cache action itself; do not
+terminate a running check process to manufacture success.
