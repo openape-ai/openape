@@ -8,6 +8,7 @@ import type { NetworkCommand, NetworkDraft } from '../../src/contracts/networks'
 import type { RunInput } from '../../src/contracts/runs'
 import type { AgentRuntime } from '../../src/worker/agent/executor'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
+import type { RunServices } from '../../src/worker/runs/dispatcher'
 import { RunDispatcher } from '../../src/worker/runs/dispatcher'
 import { installExample } from '../../src/worker/runs/examples'
 import { executeScript } from '../../src/worker/runs/runner'
@@ -22,11 +23,11 @@ export function closeNetworks(): void {
   for (const store of stores.splice(0)) { store.close(); rmSync(store.root, { recursive: true, force: true }) }
 }
 
-export function networkFixture() {
+export function networkFixture(services?: RunServices) {
   const store = new PodDatabase(mkdtempSync(join(tmpdir(), 'pods-network-run-'))); stores.push(store)
   const resources = new ResourceRegistry(store, () => {})
   vi.spyOn(resources, 'capture').mockResolvedValue({ id: randomUUID(), files: [] } as never)
-  const dispatcher = new RunDispatcher(store, resources, { helper: '/unused', environment: {} } as AgentRuntime)
+  const dispatcher = new RunDispatcher(store, resources, { helper: '/unused', environment: {} } as AgentRuntime, services)
   const owner = { issuer: 'https://identity.example.invalid', subject: 'synthetic-network-owner' }
   const engine = new NetworkEngine(store, dispatcher, resources, '/unused', () => owner)
   const groups = new PodGroups(store)
@@ -63,8 +64,8 @@ export function networkFixture() {
     contracts.set(pod.id, contract); behaviours.set(pod.id, behaviour)
     return pod.id
   }
-  function create(members: NetworkDraft['members'], names: string[]): string {
-    return engine.execute({ type: 'create', draft: { name: 'Synthetic persistent network', groupId, members, channels: names.map(name => ({ name, title: name, schemaVersion: 1, schema: { type: 'object', properties: { subject: { type: 'string' } }, required: ['subject'], additionalProperties: false } })) } }).createdId!
+  function create(members: NetworkDraft['members'], names: string[], gates?: NetworkDraft['gates']): string {
+    return engine.execute({ type: 'create', draft: { name: 'Synthetic persistent network', groupId, members, ...(gates === undefined ? {} : { gates }), channels: names.map(name => ({ name, title: name, schemaVersion: 1, schema: { type: 'object', properties: { subject: { type: 'string' } }, required: ['subject'], additionalProperties: false } })) } }).createdId!
   }
   function process(id: string, podIds: string[], pausedPodIds: string[] = [], budget = 10) {
     const preview = engine.execute({ type: 'preview', id, revision: 1, podIds, pausedPodIds, budget } satisfies NetworkCommand).preview!

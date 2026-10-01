@@ -21,7 +21,8 @@ export class NetworkRecovery {
       this.invocation(networkId, runId, generation)
       const receipt = canonicalNetworkJson({ id: randomUUID(), inspectedAt: Date.now(), generation, processesStopped: true })
       this.store.db.prepare('INSERT INTO network_invocation_controls(run_id,stopped_receipt) VALUES(?,?) ON CONFLICT(run_id) DO UPDATE SET stopped_receipt=excluded.stopped_receipt').run(runId, receipt)
-      if (!this.unsafe(runId)) this.store.db.prepare('UPDATE network_invocations SET state=\'blocked\' WHERE run_id=?').run(runId)
+      if (invocation.execution_kind === 'gate_maintenance') this.store.db.prepare(`UPDATE network_invocation_controls SET resolved_receipt=json_object('decision',json(?),'priorResolution',json(resolved_receipt)) WHERE run_id=?`).run(canonicalNetworkJson({ kind: 'gate-maintenance-stopped', taskId: JSON.parse(invocation.manifest as string).gateTaskId, grantOutcome: 'requires-task-review', generation, processesStopped: true, at: Date.now() }), runId)
+      if (!this.unsafe(runId, invocation.execution_kind !== 'gate_maintenance')) this.store.db.prepare('UPDATE network_invocations SET state=\'blocked\' WHERE run_id=?').run(runId)
       this.store.db.prepare('DELETE FROM run_leases WHERE run_id=? AND pod_id=?').run(runId, invocation.pod_id!)
       this.store.db.prepare('UPDATE runs SET finished_at=coalesce(finished_at,?) WHERE id=?').run(Date.now(), runId)
       this.trace(networkId, runId, 'recovery-processes-stopped', { receipt, effectsStillRequireReview: this.unsafe(runId) })
@@ -32,6 +33,8 @@ export class NetworkRecovery {
     this.store.transaction(() => {
       assertCurrent()
       const invocation = this.invocation(networkId, runId, generation)
+      if (invocation.execution_kind === 'gate_maintenance') throw new Error('Grant maintenance cannot be requeued as script work; inspect its gate task')
+      if (JSON.parse(invocation.manifest as string).gateBindings?.length) throw new Error('Approved inputs require a fresh reviewed gate batch before retry')
       const control = this.store.db.prepare('SELECT * FROM network_invocation_controls WHERE run_id=?').get(runId)
       if (!control?.stopped_receipt || JSON.parse(control.stopped_receipt as string).generation !== generation || this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=?').get(invocation.pod_id!)) throw new Error('Inspect the stopped network process before retrying')
       if (this.unsafe(runId)) throw new Error('Unknown external effects require reconciliation before retrying')
@@ -100,6 +103,7 @@ export class NetworkRecovery {
     this.store.transaction(() => {
       assertCurrent()
       const invocation = this.invocation(networkId, runId, generation)
+      if (invocation.execution_kind === 'gate_maintenance') throw new Error('Grant maintenance must be resolved through its gate task')
       const control = this.store.db.prepare('SELECT * FROM network_invocation_controls WHERE run_id=?').get(runId)!
       if (!control.stopped_receipt || JSON.parse(control.stopped_receipt as string).generation !== generation || this.store.db.prepare('SELECT 1 FROM run_leases WHERE run_id=?').get(runId)) throw new Error('Inspect the stopped failed invocation before discarding it')
       if (this.unsafe(runId)) throw new Error('Unknown external effects require reconciliation before discarding work')
@@ -126,8 +130,8 @@ export class NetworkRecovery {
     return row
   }
 
-  private unsafe(runId: string): boolean {
-    return Boolean(this.store.db.prepare('SELECT 1 FROM network_effect_attempts e WHERE e.run_id=? AND (e.state IN (\'intent\',\'unknown\') OR NOT EXISTS(SELECT 1 FROM network_effect_receipts r WHERE r.logical_action_key=e.logical_action_key AND r.attempt=e.attempt AND r.outcome=e.state)) UNION ALL SELECT 1 FROM effect_ledger WHERE run_id=? AND state IN (\'intent\',\'unknown\') UNION ALL SELECT 1 FROM network_gate_task_attempts WHERE run_id=? AND state=\'unknown\' LIMIT 1').get(runId, runId, runId))
+  private unsafe(runId: string, includeGate = true): boolean {
+    return Boolean(this.store.db.prepare('SELECT 1 FROM network_effect_attempts e WHERE e.run_id=? AND (e.state IN (\'intent\',\'unknown\') OR NOT EXISTS(SELECT 1 FROM network_effect_receipts r WHERE r.logical_action_key=e.logical_action_key AND r.attempt=e.attempt AND r.outcome=e.state)) UNION ALL SELECT 1 FROM effect_ledger WHERE run_id=? AND state IN (\'intent\',\'unknown\') UNION ALL SELECT 1 FROM network_gate_task_attempts WHERE run_id=? AND state=\'unknown\' AND ?=1 LIMIT 1').get(runId, runId, runId, includeGate ? 1 : 0))
   }
 
   private trace(networkId: string, runId: string, kind: string, body: unknown): void {

@@ -283,6 +283,12 @@ port.on('message', async (event) => {
       }
       port.postMessage({ id: request.id, state: { name: store.getPod(check.scope.podId).name, reason } }); return
     }
+    if (request.command && typeof request.command === 'object' && 'networkGateCheck' in request.command) {
+      const check = request.command.networkGateCheck as ServiceCheck & { manifest: unknown, operation: string, grantId?: string }
+      authorizeRunService(store, registry, dispatcher.runs, check)
+      networks.gates.authorizeService(check.scope, check.manifest, check.operation, check.grantId)
+      port.postMessage({ id: request.id, state: true }); return
+    }
     if (request.command && typeof request.command === 'object' && 'serviceCheck' in request.command) {
       const check = request.command.serviceCheck as ServiceCheck
       const state = authorizeRunService(store, registry, dispatcher.runs, check)

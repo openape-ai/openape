@@ -1,8 +1,15 @@
+import { networkGateIndexes, networkGateTables } from '../../src/worker/storage/network-gate-schema'
 import { networkControlIndexes, networkControlTables } from '../../src/worker/storage/network-control-schema'
 import { networkTables } from '../../src/worker/storage/network-schema'
 import type { DatabaseSync } from 'node:sqlite'
 
+export function removeNetworkGates(database: DatabaseSync): void {
+  for (const index of networkGateIndexes) database.exec(`DROP INDEX ${index}`)
+  for (const table of [...networkGateTables].reverse()) database.exec(`DROP TABLE ${table}`)
+}
+
 export function removeNetworkControls(database: DatabaseSync): void {
+  removeNetworkGates(database)
   for (const index of networkControlIndexes) database.exec(`DROP INDEX ${index}`)
   for (const table of [...networkControlTables].reverse()) database.exec(`DROP TABLE ${table}`)
 }

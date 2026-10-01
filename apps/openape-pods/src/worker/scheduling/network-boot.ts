@@ -4,8 +4,20 @@ import type { PodDatabase } from '../storage/database'
 export function fenceNetworkBoot(store: PodDatabase): void {
   store.transaction(() => {
     store.db.prepare('UPDATE network_process_previews SET state=\'stopped\' WHERE state=\'running\'').run()
-    const unfinished = store.db.prepare('SELECT run_id,network_id FROM network_invocations WHERE state IN (\'running\',\'stopping\')').all()
+    const unfinished = store.db.prepare('SELECT run_id,network_id,execution_kind FROM network_invocations WHERE state IN (\'running\',\'stopping\')').all()
     for (const invocation of unfinished) {
+      if (invocation.execution_kind === 'gate_maintenance') {
+        const tasks = store.db.prepare(`SELECT task.id,task.state,task.generation,control.operation FROM network_gate_tasks task JOIN network_gate_task_attempts attempt ON attempt.task_id=task.id LEFT JOIN network_gate_attempt_controls control ON control.task_id=attempt.task_id AND control.attempt=attempt.attempt
+          WHERE attempt.run_id=? AND attempt.state='running'`).all(invocation.run_id!)
+        for (const task of tasks) {
+          if ((task.state === 'preparing' || task.state === 'consuming') && task.operation !== 'not_started') {
+            store.db.prepare(`UPDATE network_gate_tasks SET state='unknown' WHERE id=? AND generation=? AND state IN ('preparing','consuming')`).run(task.id!, task.generation!)
+            store.db.prepare(`UPDATE network_gate_items SET outcome='unknown',receipt=? WHERE task_id=? AND outcome='held'`).run(JSON.stringify({ reason: 'Worker stopped before grant operation settlement', priorTaskState: task.state, at: Date.now(), automaticRepeatDenied: true }), task.id!)
+            store.db.prepare('UPDATE network_gate_controls SET error=? WHERE task_id=?').run('Interrupted grant operation; inspect the grant before proceeding', task.id!)
+          }
+          store.db.prepare(`UPDATE network_gate_task_attempts SET state=?,step_token=?,finished_at=? WHERE task_id=? AND run_id=? AND state='running'`).run(task.state === 'pending' || task.operation === 'not_started' ? 'blocked' : 'unknown', randomUUID(), Date.now(), task.id!, invocation.run_id!)
+        }
+      }
       const unsafe = store.db.prepare('SELECT 1 FROM network_effect_attempts WHERE run_id=? AND state IN (\'intent\',\'unknown\') LIMIT 1').get(invocation.run_id!)
       for (const effect of store.db.prepare('SELECT logical_action_key,attempt FROM network_effect_attempts WHERE run_id=? AND state=\'intent\'').all(invocation.run_id!)) {
         const sequence = Number(store.db.prepare('SELECT coalesce(max(sequence),0)+1 AS sequence FROM network_effect_receipts WHERE logical_action_key=? AND attempt=?').get(effect.logical_action_key!, effect.attempt!)!.sequence)

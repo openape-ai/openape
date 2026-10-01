@@ -76,11 +76,14 @@ it('uses the single owner for new pods, only through the Pods provider, without 
   const identity = { connectionId: randomUUID(), podId: existing.id, issuer, owner: account, subject: 'pod@example.invalid', keyId: 'key' }
   control.execute({ type: 'save', connection: { id: owner, provider: 'openape', account, state: 'ready', error: null }, metadata: { issuer, subject: account, pods: { [existing.id]: { connectionId: identity.connectionId, prepared: true, identity } } } })
   expect((await manager.podConnection(existing.id)).identity).toEqual(identity)
+  expect((await manager.podConnection(existing.id, { issuer, subject: account }, true)).identity).toEqual(identity)
   const broker = { issuer: 'https://pods.example.invalid', domain: 'pods.example.invalid', connectionId: randomUUID() }
   const provision = vi.spyOn(PodIdentityManager.prototype, 'provision').mockImplementation(async connectionId => ({ ...identity, connectionId, podId: fresh.id, issuer: 'https://pods.example.invalid', decisionIssuer: issuer, brokerConnectionId: broker.connectionId }))
   await expect(manager.podConnection(fresh.id)).rejects.toThrow('Allow Pods to create agents')
   expect(provision).not.toHaveBeenCalled()
   control.execute({ type: 'save', connection: { id: owner, provider: 'openape', account, state: 'ready', error: null }, metadata: { ...control.connections.metadata(owner), broker } })
+  await expect(manager.podConnection(fresh.id, { issuer, subject: account }, true)).rejects.toThrow('Prepare and approve this Pod identity')
+  expect(provision).not.toHaveBeenCalled()
   const bearer = vi.spyOn(OwnerConnection.prototype, 'bearer').mockResolvedValue('synthetic')
   vi.spyOn(PodIdentityManager.prototype, 'ensurePrepared').mockResolvedValue()
   const before = (await manager.view()).connections
