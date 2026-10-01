@@ -1,8 +1,9 @@
+import { seedNetwork } from '../storage/network-fixture'
 // @vitest-environment node
 import { appendFile, chmod, mkdtemp, mkdir, lstat, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import { PodDatabase, digest, schemaVersion } from '../../src/worker/storage/database'
 import { createBackup, restoreBackup } from '../../src/worker/data/backup'
@@ -13,6 +14,10 @@ import { ChatRegistry } from '../../src/worker/master/chat-registry'
 import { MasterConversations } from '../../src/worker/master/conversations'
 import { ControlChanges } from '../../src/worker/control/changes'
 import { Scheduler } from '../../src/worker/scheduling/scheduler'
+import { DatabaseSync } from 'node:sqlite'
+import { cleanupEncryptedBackupStaging, createEncryptedBackup, encryptedBackupStaging, restoreEncryptedBackup } from '../../src/worker/data/encrypted-backup'
+import { restoreNetworkStorage } from '../../src/worker/storage/network-restore'
+import { RunRetention } from '../../src/worker/data/run-retention'
 import { DataRetention } from '../../src/worker/data/retention'
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -395,4 +400,239 @@ it('refuses Pod deletion during active work or while a workflow references it', 
   await expect(retention.deletePod(pod.id, 2, pod.name)).rejects.toThrow('workflow configuration or history')
   expect(store.getPod(pod.id).name).toBe(pod.name)
   expect(retention.jobs()).toEqual([])
+})
+
+it('round-trips network cases, checkpoints, receipts and definition bytes with a fresh blocked baseline', async () => {
+  const { store, exports } = await fixture(); const f = seedNetwork(store)
+  const before = store.db.prepare('SELECT * FROM network_event_identities').all()
+  const backup = await createBackup(store, exports)
+  const restored = new PodDatabase(await restoreBackup(backup, exports, schemaVersion)); stores.push(restored)
+  expect(restored.db.prepare('SELECT restore_nonce,state,baseline_state FROM networks').get()).toEqual({ restore_nonce: expect.not.stringMatching(f.restoreNonce), state: 'paused', baseline_state: 'review_required' })
+  expect(restored.db.prepare('SELECT * FROM network_event_identities').all()).toEqual(before)
+  expect(restored.db.prepare('SELECT body FROM network_checkpoints').get()?.body).toBe('{"cursor":"retained"}')
+  expect(restored.db.prepare('SELECT state FROM network_deliveries').get()?.state).toBe('unknown')
+  expect(restored.db.prepare('SELECT outcome FROM network_effect_receipts ORDER BY sequence').all()).toEqual([{ outcome: 'intent' }, { outcome: 'unknown' }])
+  expect(restored.db.prepare('SELECT state FROM network_effect_attempts').get()?.state).toBe('unknown')
+  expect(restored.db.prepare('SELECT count FROM network_queue_counts WHERE state=\'unknown\'').get()?.count).toBe(1)
+  expect(restored.readBlob(f.hash).toString()).toBe('export async function run() {}')
+  expect(restored.db.prepare('SELECT pod_id,definition_id FROM instance_definition_bindings').get()).toEqual({ pod_id: f.pod.id, definition_id: f.definitionId })
+})
+
+it('refuses backup while network work is running and retains definition bytes during cleanup', async () => {
+  const { store, exports } = await fixture(); const f = seedNetwork(store)
+  store.db.prepare('UPDATE network_invocations SET state=\'running\' WHERE run_id=?').run(f.runId)
+  await expect(createBackup(store, exports)).rejects.toThrow('network work')
+  expect(await readdir(exports)).toEqual([])
+  store.db.prepare('UPDATE network_invocations SET state=\'interrupted\' WHERE run_id=?').run(f.runId)
+  await new DataRetention(store, 'unused-helper').cleanup()
+  expect(store.readBlob(f.hash).toString()).toBe('export async function run() {}')
+})
+
+it('includes private retained artifacts and rejects a missing artifact instead of publishing a partial backup', async () => {
+  const { store, root, exports } = await fixture(); const f = seedNetwork(store)
+  const content = Buffer.from('retained synthetic artifact'); const hash = digest(content); const id = randomUUID(); const scope = randomUUID()
+  await mkdir(join(root, 'artifacts')); await writeFile(join(root, 'artifacts', hash), content)
+  store.db.prepare('INSERT INTO artifact_scopes VALUES(?,?,?,?,NULL,?)').run(scope, f.owner.issuer, f.owner.subject, f.groupId, f.networkId)
+  store.db.prepare('INSERT INTO artifacts VALUES(?,?,?,?,?,?,1)').run(id, scope, hash, content.length, 'application/octet-stream', `artifacts/${hash}`)
+  store.db.prepare('INSERT INTO artifact_references VALUES(?,\'event\',?)').run(id, f.eventId)
+  const backup = await createBackup(store, exports)
+  const restored = new PodDatabase(await restoreBackup(backup, exports, schemaVersion)); stores.push(restored)
+  expect(await readFile(join(restored.root, 'artifacts', hash))).toEqual(content)
+  expect(restored.db.prepare('SELECT * FROM artifact_references').all()).toEqual(store.db.prepare('SELECT * FROM artifact_references').all())
+  await rm(join(root, 'artifacts', hash))
+  await expect(createBackup(store, exports)).rejects.toMatchObject({ code: 'ENOENT' })
+  expect((await readdir(exports)).filter(name => name.startsWith('.partial'))).toEqual([])
+})
+
+it('encrypts the manifest and all profile bytes and restores into a fresh paused incarnation', async () => {
+  const { store, exports, pod } = await fixture(); const f = seedNetwork(store)
+  const encryption = { keyId: 'synthetic-test-key', key: randomBytes(32) }; const originalKey = Buffer.from(encryption.key)
+  const backup = await createEncryptedBackup(store, exports, encryption)
+  expect(encryption.key).toEqual(originalKey)
+  expect((await lstat(backup)).mode & 0o777).toBe(0o700)
+  expect((await readdir(exports)).filter(name => name.startsWith('.'))).toEqual([])
+  expect((await readdir(backup)).sort()).toEqual(['backup.encrypted.json', 'files', 'manifest.enc'])
+  for (const file of await readdir(join(backup, 'files'))) {
+    const bytes = await readFile(join(backup, 'files', file))
+    expect(bytes.includes(Buffer.from('private-network-business'))).toBe(false)
+    expect(bytes.includes(Buffer.from('SQLite format 3'))).toBe(false)
+    expect((await lstat(join(backup, 'files', file))).mode & 0o777).toBe(0o600)
+  }
+  expect((await readFile(join(backup, 'manifest.enc'))).includes(Buffer.from(store.root))).toBe(false)
+  const restored = new PodDatabase(await restoreEncryptedBackup(backup, exports, schemaVersion, encryption, store.root)); stores.push(restored)
+  expect(restored.getPod(pod.id).lifecycle).toBe('paused')
+  expect(restored.db.prepare('SELECT state,baseline_state,restore_nonce FROM networks').get()).toEqual({ state: 'paused', baseline_state: 'review_required', restore_nonce: expect.not.stringMatching(f.restoreNonce) })
+  expect(restored.db.prepare('SELECT state FROM network_effect_attempts').get()?.state).toBe('unknown')
+  await expect(readFile(join(restored.root, 'credentials/synthetic.encrypted'))).rejects.toMatchObject({ code: 'ENOENT' })
+})
+
+it('rejects wrong keys, unsupported schema and modified ciphertext without publishing restored data', async () => {
+  const { store, exports } = await fixture(); seedNetwork(store)
+  const encryption = { keyId: 'synthetic-test-key', key: randomBytes(32) }
+  const backup = await createEncryptedBackup(store, exports, encryption); const before = await readdir(exports)
+  await expect(restoreEncryptedBackup(backup, exports, schemaVersion, { ...encryption, key: randomBytes(32) }, store.root)).rejects.toThrow()
+  await expect(restoreEncryptedBackup(backup, exports, schemaVersion - 1, encryption, store.root)).rejects.toThrow('newer application')
+  const file = join(backup, 'files', (await readdir(join(backup, 'files')))[0]!); const bytes = await readFile(file); bytes[0] = bytes[0]! ^ 1; await writeFile(file, bytes)
+  await expect(restoreEncryptedBackup(backup, exports, schemaVersion, encryption, store.root)).rejects.toThrow()
+  expect(await readdir(exports)).toEqual(before)
+})
+
+it('revokes interrupted authority, retains decisions and staged evidence, and keeps archives archived', async () => {
+  const { store } = await fixture(); const f = seedNetwork(store)
+  store.db.prepare('UPDATE networks SET state=\'archived\'').run()
+  store.db.prepare('UPDATE network_invocations SET staged_checkpoint=?').run('{"cursor":"uncommitted"}')
+  store.db.prepare('UPDATE network_deliveries SET review_receipt=?').run('{"decision":"previous-review"}')
+  const before = store.db.prepare('SELECT * FROM network_invocations').get()!
+  store.transaction(() => restoreNetworkStorage(store.db))
+  const after = store.db.prepare('SELECT * FROM network_invocations').get()!
+  expect(after).toMatchObject({ state: 'unknown', generation: Number(before.generation) + 1, staged_checkpoint: before.staged_checkpoint })
+  expect(after.claim_token).not.toBe(before.claim_token); expect(after.boot_nonce).not.toBe(before.boot_nonce); expect(after.restore_nonce).not.toBe(before.restore_nonce)
+  expect(store.db.prepare('SELECT state FROM networks').get()?.state).toBe('archived')
+  expect(store.db.prepare('SELECT reason,review_receipt FROM network_deliveries').get()).toEqual({ reason: 'Synthetic uncertain outcome', review_receipt: '{"decision":"previous-review"}' })
+  expect(store.db.prepare('SELECT kind FROM network_trace_events WHERE network_id=?').get(f.networkId)?.kind).toBe('restore_authority_revoked')
+  expect(() => store.db.prepare('UPDATE networks SET state=\'active\'').run()).toThrow('CHECK')
+})
+
+async function alterBackup(backup: string, sql: string) {
+  const database = new DatabaseSync(join(backup, 'control.sqlite'))
+  try { database.exec(sql) }
+  finally { database.close() }
+  const manifest = JSON.parse(await readFile(join(backup, 'backup.json'), 'utf8'))
+  const bytes = await readFile(join(backup, 'control.sqlite'))
+  const file = manifest.files.find((file: { path: string }) => file.path === 'control.sqlite'); file.size = bytes.length; file.hash = digest(bytes)
+  await writeFile(join(backup, 'backup.json'), JSON.stringify(manifest))
+}
+
+it.each([
+  ['DROP INDEX network_effect_execution_guard', 'altered network storage'],
+  ['DROP TABLE network_trace_events', 'altered network storage'],
+  ['CREATE TRIGGER malicious AFTER UPDATE ON networks BEGIN SELECT 1; END', 'unsupported database programs'],
+  ['UPDATE network_events SET payload=\'{}\'', 'content digest'],
+  ['DELETE FROM pod_memberships', 'Invalid network'],
+  ['INSERT INTO network_owners SELECT issuer,\'other-owner\' FROM network_owners LIMIT 1; UPDATE pod_definitions SET owner_subject=\'other-owner\'', 'Invalid network boundary'],
+])('rejects a modified schema or boundary despite updated portable checksums: %s', async (sql, reason) => {
+  const { store, exports } = await fixture(); seedNetwork(store)
+  const backup = await createBackup(store, exports); const before = await readdir(exports)
+  await alterBackup(backup, sql)
+  await expect(restoreBackup(backup, exports, schemaVersion)).rejects.toThrow(reason)
+  expect(await readdir(exports)).toEqual(before)
+})
+
+it('protects network bindings from deletion and network receipts from legacy run pruning', async () => {
+  const { store } = await fixture(); const f = seedNetwork(store)
+  const retention = new DataRetention(store, '/unused/helper')
+  await expect(retention.deletePod(f.pod.id, 1, f.pod.name)).rejects.toThrow('network or data state')
+  for (let i = 0; i < 60; i++) store.db.prepare('INSERT INTO runs VALUES(?,?,?,\'completed\',?,?,\'Finished\',NULL,0,1)').run(randomUUID(), f.pod.id, f.hash, i + 100, i + 101)
+  await new RunRetention(store).prune()
+  expect(store.db.prepare('SELECT id FROM runs WHERE id=?').get(f.runId)?.id).toBe(f.runId)
+  expect(store.db.prepare('SELECT * FROM network_effect_receipts').all()).toHaveLength(1)
+})
+
+it.each(['pending', 'claimed', 'retry_wait', 'blocked', 'unknown'])('fences restored delivery authority and preserves review evidence from %s', async (state) => {
+  const { store } = await fixture(); const f = seedNetwork(store)
+  store.db.prepare('UPDATE network_deliveries SET state=?,claim_token=?,boot_nonce=?,restore_nonce=?,activation_epoch=1,generation=1,review_receipt=?').run(state, 'old-claim', 'old-boot', f.restoreNonce, '{"decision":"retained"}')
+  store.transaction(() => restoreNetworkStorage(store.db))
+  expect(store.db.prepare('SELECT state,claim_token,boot_nonce,generation,review_receipt FROM network_deliveries').get()).toEqual({ state: 'unknown', claim_token: null, boot_nonce: null, generation: 2, review_receipt: '{"decision":"retained"}' })
+})
+
+it('fences gate steps, blocks pending joins and calls, and preserves legacy gate decision evidence', async () => {
+  const { store, exports } = await fixture(); const f = seedNetwork(store); const gateId = randomUUID(); const workflowId = randomUUID()
+  store.db.prepare('UPDATE network_invocations SET execution_kind=\'gate_maintenance\'').run()
+  store.db.prepare('INSERT INTO network_gate_tasks VALUES(?,?,1,?,1,?,?,?,?,?,NULL,1)').run(gateId, f.networkId, f.pod.id, 'consuming', '{}', digest('{}'), f.restoreNonce, 99999999)
+  store.db.prepare('INSERT INTO network_gate_task_attempts VALUES(?,1,?,1,\'old-step\',\'running\',1,NULL,?)').run(gateId, f.runId, f.networkId)
+  store.db.prepare('INSERT INTO network_joins VALUES(?,?,?,1,1,\'{}\',99999,\'pending\',NULL)').run(f.networkId, 'join', f.caseId)
+  store.db.prepare('INSERT INTO workflows(id,revision,name,nodes) VALUES(?,1,\'Separate workflow\',\'[]\')').run(workflowId)
+  store.db.prepare('INSERT INTO workflow_revisions VALUES(?,1,?,?,1)').run(workflowId, '{}', digest('{}'))
+  store.db.prepare('INSERT INTO workflow_call_requests(id,caller_run_id,network_id,network_revision,case_id,case_revision,workflow_id,workflow_revision,request_hash,request,state,created_at) VALUES(?,?,?,1,?,1,?,1,?,\'{}\',\'pending\',1)').run(randomUUID(), f.runId, f.networkId, f.caseId, workflowId, digest('{}'))
+  store.transaction(() => restoreNetworkStorage(store.db))
+  expect(store.db.prepare('SELECT state,generation FROM network_gate_tasks').get()).toEqual({ state: 'unknown', generation: 2 })
+  expect(store.db.prepare('SELECT state,step_token,generation FROM network_gate_task_attempts').get()).toEqual({ state: 'unknown', step_token: expect.not.stringMatching('old-step'), generation: 2 })
+  expect(store.db.prepare('SELECT state FROM network_joins').get()?.state).toBe('blocked')
+  expect(store.db.prepare('SELECT state FROM workflow_call_requests').get()?.state).toBe('blocked')
+  const batchId = randomUUID()
+  store.db.prepare('INSERT INTO graph_gate_batches VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(batchId, workflowId, 'approve', f.pod.id, 'pending', 'retained-grant', null, 'Existing choice', digest('choice'), 999999, '[]', null, 1, 1)
+  const backup = await createBackup(store, exports)
+  const restored = new PodDatabase(await restoreBackup(backup, exports, schemaVersion)); stores.push(restored)
+  expect(restored.db.prepare('SELECT state,grant_id,title,digest,items FROM graph_gate_batches').get()).toEqual({ state: 'unknown', grant_id: 'retained-grant', title: 'Existing choice', digest: digest('choice'), items: '[]' })
+})
+
+it('keeps abandoned plaintext stages local and removes them before the worker resumes', async () => {
+  const { store, exports } = await fixture(); const staging = await encryptedBackupStaging(store.root)
+  const abandoned = join(staging, `.seal-source-${randomUUID()}`); await mkdir(abandoned); await writeFile(join(abandoned, 'private.txt'), 'synthetic private data')
+  expect(staging.startsWith(exports)).toBe(false)
+  await cleanupEncryptedBackupStaging(store.root)
+  expect(await readdir(staging)).toEqual([])
+  expect(await readdir(exports)).toEqual([])
+  expect((await lstat(staging)).mode & 0o777).toBe(0o700)
+})
+
+it('blocks effect-free restored work and supersedes undecided gates without authorizing old grants', async () => {
+  const { store } = await fixture(); const f = seedNetwork(store)
+  store.db.prepare('UPDATE network_effect_attempts SET state=\'confirmed_not_applied\'').run()
+  store.db.prepare('UPDATE network_deliveries SET state=\'pending\'').run()
+  for (const [state, grant] of [['pending', null], ['pending', 'external-grant'], ['approved', 'approved-grant']]) {
+    store.db.prepare('INSERT INTO network_gate_tasks VALUES(?,?,1,?,1,?,?,?,?,?,?,1)').run(randomUUID(), f.networkId, f.pod.id, state, '{}', digest('{}'), f.restoreNonce, 9999999, grant)
+  }
+  store.transaction(() => restoreNetworkStorage(store.db))
+  expect(store.db.prepare('SELECT state FROM network_deliveries').get()?.state).toBe('blocked')
+  expect(store.db.prepare('SELECT state FROM network_invocations').get()?.state).toBe('blocked')
+  const gates = store.db.prepare('SELECT state,restore_nonce FROM network_gate_tasks ORDER BY rowid').all()
+  expect(gates.map(gate => gate.state)).toEqual(['superseded', 'unknown', 'approved'])
+  for (const gate of gates) expect(gate.restore_nonce).not.toBe(store.db.prepare('SELECT restore_nonce FROM networks').get()?.restore_nonce)
+})
+
+it('preserves pinned historical events and record authors after a current definition upgrade', async () => {
+  const { store, exports } = await fixture(); const f = seedNetwork(store); const collection = randomUUID()
+  store.transaction(() => {
+    store.db.prepare('INSERT INTO data_collections VALUES(?,?,?,?,?,1,?)').run(collection, f.owner.issuer, f.owner.subject, f.groupId, 'Historical data', '{}')
+    store.db.prepare('INSERT INTO data_collection_versions VALUES(?,1,?,?,1)').run(collection, '{}', '[]')
+    store.db.prepare('INSERT INTO data_records VALUES(?,?,1,0)').run(collection, 'record')
+    store.db.prepare('INSERT INTO data_record_revisions VALUES(?,?,1,1,?,?,1,?,0,1)').run(collection, 'record', f.runId, f.definitionId, '{"value":"retained"}')
+    store.db.prepare('INSERT INTO pod_definition_versions VALUES(?,2,?,?,?,2)').run(f.definitionId, f.hash, digest('new lock'), '{}')
+    store.db.prepare('UPDATE instance_definition_bindings SET definition_version=2,binding_revision=2').run()
+    store.db.prepare('UPDATE network_members SET definition_version=2,binding_revision=2').run()
+  })
+  const backup = await createBackup(store, exports)
+  const restored = new PodDatabase(await restoreBackup(backup, exports, schemaVersion)); stores.push(restored)
+  expect(restored.db.prepare('SELECT definition_version FROM network_members').get()?.definition_version).toBe(2)
+  expect(restored.db.prepare('SELECT definition_version FROM network_events').get()?.definition_version).toBe(1)
+  expect(restored.db.prepare('SELECT definition_version,body FROM data_record_revisions').get()).toEqual({ definition_version: 1, body: '{"value":"retained"}' })
+})
+
+it.each(['manifest', 'truncated', 'swapped', 'symlink', 'key-reference'])('rejects encrypted archive tampering without published plaintext: %s', async (kind) => {
+  const { store, exports } = await fixture(); const encryption = { keyId: 'synthetic-test-key', key: randomBytes(32) }
+  const backup = await createEncryptedBackup(store, exports, encryption); const before = await readdir(exports)
+  const names = await readdir(join(backup, 'files')); const first = join(backup, 'files', names[0]!); const second = join(backup, 'files', names[1]!)
+  if (kind === 'manifest') {
+    const path = join(backup, 'manifest.enc'); const bytes = await readFile(path); bytes[0] = bytes[0]! ^ 1; await writeFile(path, bytes)
+  }
+  if (kind === 'truncated') { const bytes = await readFile(first); await writeFile(first, bytes.subarray(0, bytes.length - 1)) }
+  if (kind === 'swapped') { const a = await readFile(first); const b = await readFile(second); await writeFile(first, b); await writeFile(second, a) }
+  if (kind === 'symlink') { await rm(first); await symlink(second, first) }
+  if (kind === 'key-reference') {
+    const path = join(backup, 'backup.encrypted.json'); const header = JSON.parse(await readFile(path, 'utf8')); header.keyId = 'another-key'; await writeFile(path, JSON.stringify(header))
+  }
+  await expect(restoreEncryptedBackup(backup, exports, schemaVersion, encryption, store.root)).rejects.toThrow()
+  expect(await readdir(exports)).toEqual(before)
+  expect(await readdir(await encryptedBackupStaging(store.root))).toEqual([])
+})
+
+it('removes all recognized plaintext stages before reporting foreign staging entries', async () => {
+  const { store } = await fixture(); const staging = await encryptedBackupStaging(store.root)
+  await writeFile(join(staging, '.DS_Store'), 'synthetic Finder metadata')
+  await writeFile(join(staging, 'unknown-entry'), 'inspect this unexpected entry')
+  const abandoned = join(staging, `.unseal-${randomUUID()}`); await mkdir(abandoned); await writeFile(join(abandoned, 'private.txt'), 'private')
+  await expect(cleanupEncryptedBackupStaging(store.root)).rejects.toThrow('Unsupported encrypted backup staging entry')
+  expect((await readdir(staging)).sort()).toEqual(['.DS_Store', 'unknown-entry'])
+  await rm(join(staging, 'unknown-entry')); await cleanupEncryptedBackupStaging(store.root)
+})
+
+it('preserves unknown invocation authority even when recorded effects have been resolved negatively', async () => {
+  const { store } = await fixture(); seedNetwork(store)
+  store.db.prepare('UPDATE network_invocations SET state=\'unknown\'').run()
+  store.db.prepare('UPDATE network_effect_attempts SET state=\'confirmed_not_applied\'').run()
+  store.db.prepare('UPDATE network_deliveries SET state=\'pending\'').run()
+  store.transaction(() => restoreNetworkStorage(store.db))
+  expect(store.db.prepare('SELECT state FROM network_invocations').get()?.state).toBe('unknown')
+  expect(store.db.prepare('SELECT state FROM network_deliveries').get()?.state).toBe('unknown')
 })
