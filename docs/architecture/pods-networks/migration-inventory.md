@@ -115,7 +115,8 @@ remain evidence requiring the existing recovery classifier, never lease transfer
 ## Additive relational contract
 
 All new UUIDs are local runtime-generated. Owner keys use the existing serialized
-Owner contract; group IDs reference `pod_groups`, instance IDs reference `pods`,
+Owner contract (`packages/pods-protocol/src/index.ts:23`, `{issuer, subject}`,
+validated with parseOwner and compared with sameOwner); group IDs reference `pod_groups`, instance IDs reference `pods`,
 and invocation IDs reference `runs`. Immutable version rows cannot be edited.
 Foreign keys restrict deletion of live authority/evidence. Do not cascade-delete
 unresolved business/delivery/gate state. Choose migration numbers after M1 against
@@ -126,23 +127,29 @@ refreshed main; M0 does not reserve a schema number.
 | `pod_definitions` | id; owner; no identity or credential binding. |
 | `pod_definition_versions` | (definition_id, version); immutable content/lock/contract hashes; FK definition. |
 | `instance_definition_bindings` | pod_id; FK Pod and definition/version; pinned binding revision. |
-| `networks` | id; owner/group FK; state; epoch; ancestry FK workflows where converted. |
+| `networks` | id; owner/group FK; state; activation epoch; ancestry FK workflows where converted. |
 | `network_revisions` | (network_id, revision); FK network; immutable contract/configuration. |
 | `network_members` | (network_id, pod_id); UNIQUE(pod_id); FK network/Pod; pinned revision. |
 | `network_subscriptions` | id; FK network revision/member; UNIQUE(network, revision, member, channel). |
-| `network_events` | event_id; FK network revision; source/case/schema envelope; immutable payload hash. |
-| `network_deliveries` | id; FK event/subscription/run; UNIQUE(event_id, subscription_id); token/epoch/state. |
-| `source_deduplication` | UNIQUE(owner, network, source, source_item, source_version, channel, schema_version); hash/receipt retained independently of pruned event bytes. |
+| `network_cases` | id; FK owner/network/group; positive current revision; parent case ancestry. |
+| `network_case_sources` | UNIQUE(network, source_binding, source_item, source_version); FK case/revision; validated correlation mapping. |
+| `network_case_revisions` | (case_id, revision); immutable source mapping, supersession and outcome. |
+| `network_invocations` | run_id FK runs; private pinned manifest/input/checkpoint staging; never wholesale UI publication. |
+| `network_effect_receipts` | logical action key; FK case/run; append-only intent/reconciliation evidence outside legacy published payloads. |
+| `network_events` | event_id; FK network revision; discriminated source/derived identity, separate network/Pod versions, case/schema envelope; immutable payload hash. |
+| `network_deliveries` | id; FK event/subscription/run; UNIQUE(event_id, subscription_id); runtime/network epochs, per-delivery generation/token/state. |
+| `source_deduplication` | UNIQUE(owner, network, source, source_item, source_version, channel); hash/receipt retained independently of pruned event bytes. |
 | `network_joins` | UNIQUE(network, join_id, case_id, case_revision); pinned declaration, deadline, outcome; input channel uniqueness. |
 | `workflow_call_requests` | request_id; FK caller revision and workflow revision/execution; immutable request hash and one terminal result. |
 | `workflow_revisions` | (workflow_id, revision); FK workflow; new named ports/completion policies without rewriting legacy runs. |
 | `data_collections` | id; UNIQUE(owner, group, name); immutable schema versions and declared indexes. |
-| `data_permissions` | UNIQUE(network, pod, collection, operation); scoped revision; FKs network/Pod/collection. |
+| `data_permissions` | UNIQUE(network, pod, collection, operation); scoped revision; FKs network/Pod/collection; artifact bindings also check owner/group/read operation. |
 | `data_records` | (collection_id, key); FK collection; current revision/tombstone. |
 | `data_record_revisions` | (collection_id, key, revision); FK record and author run/version; immutable provenance. |
 | `artifacts` | id; owner/group; immutable hash/size/type/storage reference; no public host path. |
+| `artifact_permissions` | UNIQUE(network, pod, artifact_scope, operation); explicit same-owner/company read/create binding. |
 | `artifact_references` | UNIQUE(artifact_id, reference_kind, reference_id); FK artifact; retained live reference. |
-| `network_gate_tasks` | id; FK network revision/consumer Pod; immutable manifest/digest; durable consumed/unknown evidence. |
+| `network_gate_tasks` | id; FK network revision/consumer Pod; exclusive instance lease, task token/generation, immutable manifest/digest; durable consumed/unknown evidence. |
 | `network_trace_events` | id; FK network; case/run/event references and stable detail cursor; bounded completed history. |
 
 Claim-ready indexes start with `(subscription_id, state, ready_at, accepted_at, id)`,
@@ -163,3 +170,19 @@ Sharing has no delivered exporter/importer at baseline; the UI explicitly hides 
 M11 must deliver the approved file slice with fresh recipient identities and zero
 transported credentials/grants/business records. Existing invitation/production mail
 acceptance lifecycles stay separate.
+
+
+## Independent review corrections
+
+Claude Code 2.1.286 with claude-opus-5-5 reviewed M0 read-only. The primary agent
+verified the eight blocking findings and six major findings against current source.
+The contract now specifies runtime-minted case/revision mappings, separate source
+and derived deduplication, action-port-derived network effect keys, three epoch
+scopes and per-delivery generations, atomic run/checkpoint completion, group
+mutation refusal, pre-M3 projection filtering and restored baseline review.
+It also records immutable workflow versions distinct from the legacy counter,
+FIFO distinct workflow calls, exclusive fenced gate tasks, legacy/network membership
+exclusion, current backup ceilings and explicit artifact authority. Generic secret
+detection is not claimed. The reviewer’s missing Owner reference was unconfirmed;
+packages/pods-protocol provides the actual contract. These are clarifications of
+approved single-runtime safety defaults, not new rights or external rollout.
