@@ -1,7 +1,14 @@
+import { networkControlIndexes, networkControlTables } from '../../src/worker/storage/network-control-schema'
 import { networkTables } from '../../src/worker/storage/network-schema'
 import type { DatabaseSync } from 'node:sqlite'
 
+export function removeNetworkControls(database: DatabaseSync): void {
+  for (const index of networkControlIndexes) database.exec(`DROP INDEX ${index}`)
+  for (const table of [...networkControlTables].reverse()) database.exec(`DROP TABLE ${table}`)
+}
+
 export function removeNetworkSchema(database: DatabaseSync): void {
+  removeNetworkControls(database)
   for (const table of [...networkTables].reverse()) database.exec(`DROP TABLE ${table}`)
 }
 

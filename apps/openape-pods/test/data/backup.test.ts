@@ -1,3 +1,4 @@
+import { removeNetworkControls } from '../storage/legacy'
 import { seedNetwork } from '../storage/network-fixture'
 // @vitest-environment node
 import { appendFile, chmod, mkdtemp, mkdir, lstat, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
@@ -635,4 +636,20 @@ it('preserves unknown invocation authority even when recorded effects have been 
   store.transaction(() => restoreNetworkStorage(store.db))
   expect(store.db.prepare('SELECT state FROM network_invocations').get()?.state).toBe('unknown')
   expect(store.db.prepare('SELECT state FROM network_deliveries').get()?.state).toBe('unknown')
+})
+
+it('restores a schema-28 encrypted archive through its historical boundary before adding current controls', async () => {
+  const { store, exports } = await fixture(); const f = seedNetwork(store)
+  removeNetworkControls(store.db)
+  store.db.exec('PRAGMA user_version=28')
+  const encryption = { keyId: 'synthetic-v28', key: randomBytes(32) }
+  const archive = await createEncryptedBackup(store, exports, encryption)
+  const target = await restoreEncryptedBackup(archive, exports, schemaVersion, encryption, store.root)
+  const restored = new PodDatabase(target); stores.push(restored)
+  expect(restored.db.prepare('PRAGMA user_version').get()?.user_version).toBe(schemaVersion)
+  expect(restored.db.prepare('SELECT baseline_state,state FROM networks WHERE id=?').get(f.networkId)).toEqual({ baseline_state: 'review_required', state: 'paused' })
+  expect(restored.db.prepare('SELECT body FROM network_checkpoints WHERE network_id=?').get(f.networkId)?.body).toBe('{"cursor":"retained"}')
+  expect(restored.db.prepare('SELECT event_id FROM network_event_identities WHERE network_id=?').get(f.networkId)?.event_id).toBe(f.eventId)
+  expect(restored.db.prepare('SELECT outcome FROM network_effect_receipts ORDER BY sequence DESC LIMIT 1').get()?.outcome).toBe('unknown')
+  expect(restored.db.prepare('SELECT count(*) AS count FROM network_source_clocks').get()?.count).toBe(0)
 })
