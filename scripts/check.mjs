@@ -24,7 +24,7 @@ export function workspaces() {
 // architecture documents stay root changes because the workspace-docs step
 // verifies them.
 export function contractNeutral(file) {
-  return /^(docs\/(?!architecture\/)|\.claude\/)/.test(file) || /^[^/]+\.md$/.test(file)
+  return /^(?:docs\/(?!architecture\/)|\.claude\/)/.test(file) || /^[^/]+\.md$/.test(file)
 }
 
 export function affectedWorkspaces(packages, files) {
@@ -60,7 +60,19 @@ export function validateScripts(packages, policy = contract) {
 export function checkCommands(packages, selected, suites, policy = contract) {
   const steps = []
   if (selected.length === 0) return steps
-  steps.push({ name: 'prebuild', command: 'pnpm', args: ['turbo', 'run', 'build', '--filter=./packages/*', '--filter=./modules/*', ...policy.consumedApps.map(n => `--filter=${n}`), '--concurrency=1'] })
+  const required = new Set(selected.map(p => p.name))
+  const pending = [...selected]
+  while (pending.length) {
+    const workspace = pending.pop()
+    for (const dependency of packages.filter(p => Object.hasOwn(workspace.deps, p.name))) {
+      if (required.has(dependency.name)) continue
+      required.add(dependency.name)
+      pending.push(dependency)
+    }
+  }
+  const builds = packages.filter(p => required.has(p.name) && p.scripts.build
+    && (/^(?:packages|modules)\//.test(p.path) || policy.consumedApps.includes(p.name)))
+  if (builds.length) steps.push({ name: 'prebuild', command: 'pnpm', args: ['turbo', 'run', 'build', ...builds.map(p => `--filter=${p.name}`), '--concurrency=1'] })
   if (suites.includes('unit')) {
     steps.push({ name: 'audit', command: 'pnpm', args: ['audit', '--prod', '--audit-level=high'] })
     steps.push({ name: 'workspace-docs', command: 'node', args: ['scripts/workspace-map.mjs', '--check'] })
