@@ -1,5 +1,37 @@
 # Active work
 
+## Pods CI acceleration verification — issue 1416
+
+Worktree: `openape-monorepo.worktrees/pods-ci`; branch:
+`feature/issue-1416-pods-ci`; base: `602c365702949b51c3286895d176b20f0a3ace44`.
+Native [PR 199](https://repos.openape.ai/patrick/monorepo/pulls/199) owns the
+exact-source merge state; [issue 1416](https://repos.openape.ai/patrick/monorepo/issues/1416)
+owns closeout. Implementation SHA: `f81ec01c36816a69d9bf8895753f5bad30459dab`.
+
+Serial prebuilds cover only selected libraries/modules, consumed CLI apps and
+their transitive dependencies. A pure Pods selection has 11 build workspaces
+rather than 32; local isolated cold-cache timing is 21.405 s versus 32.627 s.
+The permanent dependency-closure regression protects clean CI from missing
+build outputs. Required unit gates and manual-only E2E/layout routing remain.
+
+Forgejo run 5293 passed the complete cold contract (9m35s), saved both caches
+and finished successfully; its v3 post-job phase took 10m15s. Run 5294 passed
+at the implementation SHA with both caches restored: unit contract 32s, total
+job 2m26s, post-job 11s. Download restore plus installation was 60s, versus
+cold installation alone 54s; this pair does not prove a standalone installation
+speedup. Root lint/typecheck, tooling lint, six contract tests, complete local
+hooks and workflow schema validation pass.
+
+The runner now uses the fixed internal cache endpoint; its restart waited for
+an idle runner and the temporary firewall rule is removed. Both cache actions
+are pinned to Forgejo v4. Configuration backup and rollback are documented in
+`docs/operations/checks.md`.
+
+[Verified private Test Runs evidence](https://report.openape.ai/r/9Zn-8i68bYLyNoqxttXnpXyM).
+This records measured cold/warm behavior, not a guaranteed duration for future
+changes or a claim that cached tests executed again.
+
+
 ## Pods networks and workflows presentation — issue 1410
 
 [Issue 1410](https://repos.openape.ai/patrick/monorepo/issues/1410) delivered the
