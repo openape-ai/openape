@@ -13,7 +13,15 @@ previous full prebuild 32.627 s cold / 2.744 s warm (11 vs 32 build workspaces).
 These are local measurements, not Linux CI speedup claims. Root lint/typecheck,
 explicit tooling lint and six contract tests pass. The permanent regression
 protects dependency closure and avoids dropping required consumed-app builds.
-Next: exact-source external CI, reviewed native PR and published Test Runs evidence.
+Native PR: https://repos.openape.ai/patrick/monorepo/pulls/199; implementation
+SHA: `a9aacd0053502a0f961c8d6da10ab20d57174723`. Full local pre-commit
+and exact-source pre-push unit contracts pass. Forgejo workflow schema validates.
+
+External run 5293 exposed a Docker-to-host UFW cache timeout. The live job can
+now reach the cache proxy. A fixed internal endpoint and bridge-only rule are
+prepared; restart only after the job finishes and remove its temporary rule.
+See `docs/operations/checks.md` for configuration/rollback. Next: finish external
+CI, verify a warm-cache run, review exact PR SHAs and publish Test Runs evidence.
 
 # Active work
 
