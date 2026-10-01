@@ -194,7 +194,7 @@ export class NetworkGates {
       if (task.generation === step.generation && ['preparing', 'pending', 'consuming'].includes(task.state)) {
         if (uncertain) {
           this.store.db.prepare('UPDATE network_gate_tasks SET state=\'unknown\' WHERE id=?').run(task.id)
-          this.store.db.prepare('UPDATE network_gate_items SET outcome=\'unknown\' WHERE task_id=? AND outcome=\'held\'').run(task.id)
+          this.store.db.prepare(`UPDATE network_gate_items SET outcome='unknown',receipt=json_object('decision',json(?),'priorReceipt',json(receipt)) WHERE task_id=? AND outcome='held'`).run(canonicalNetworkJson({ kind: 'gate-step-unknown', taskId: task.id, attempt: step.attempt, generation: step.generation, operation, reason, priorGrantId: task.grant_id, at: Date.now(), automaticRepeatDenied: true }), task.id)
         }
         this.store.db.prepare('UPDATE network_gate_controls SET error=?,next_poll_at=? WHERE task_id=?').run(reason, Date.now() + 5000, task.id)
       }
@@ -231,7 +231,7 @@ export class NetworkGates {
         let resumed = 0
         for (const item of manifest.items) {
           const delivery = this.store.db.prepare('SELECT * FROM network_deliveries WHERE id=?').get(item.deliveryId)!
-          if (!['blocked', 'pending', ...(task.state === 'unknown' ? ['unknown'] : [])].includes(delivery.state as string)) continue
+          if (!['blocked', 'pending', 'unknown'].includes(delivery.state as string)) continue
           if (this.store.db.prepare(`SELECT 1 FROM network_gate_items WHERE delivery_id=? AND task_id!=? AND outcome IN ('held','released','unknown')`).get(item.deliveryId, task.id)) continue
           if (delivery.run_id) {
             const invocation = this.store.db.prepare('SELECT i.state,i.generation,c.stopped_receipt FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.run_id=?').get(delivery.run_id)!

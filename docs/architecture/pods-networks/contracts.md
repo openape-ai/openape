@@ -695,7 +695,9 @@ batches even when they share a source case; separate gated channels also remain
 independently recoverable. Restored maintenance with stale or missing stop proof
 remains visible in lastFailure despite a retained resolution, so explicit inspect
 can establish current stop evidence before owner disposal. Owner decisions nest
-prior item and resolution receipts. Failed sibling cases do not revoke valid approval
+prior item and resolution receipts, including maintenance inspection. Confirmed
+non-application permits explicit fresh gate review; an uncertain or applied action
+still rejects it. Failed sibling cases do not revoke valid approval
 for other pending cases. Unknown disposal retains the uncertain grant/attempt
 receipts. Restored v2 control outcomes are revoked without rewriting legacy
 reserved gate rows; mandatory baseline review still prevents fresh approval.
@@ -761,3 +763,8 @@ Historical schema-28 rows with neither execution-domain evidence nor creator PID
 remain fail-closed when a retained lease cannot be proven stopped. There is no
 owner boolean that converts missing evidence into a safe automatic retry. Such
 profiles require the later stopped-runtime migration/baseline investigation.
+
+M5 preserves the existing single lastFailure projection. Historical missing
+process-domain evidence remains fail-closed and may require manual investigation;
+a blocked inspection can occupy that slot. M9 must provide a bounded operational
+failure list so unrelated failures remain discoverable without weakening stop proof.
