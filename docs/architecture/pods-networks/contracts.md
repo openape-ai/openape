@@ -284,7 +284,7 @@ effects are permitted; replay does not delete markers or confirmed effect eviden
 | claimed -> unknown | Possibly issued external effect or consumed grant without settlement; never automatic redispatch. |
 | blocked -> pending | Owner-reviewed correction of binding/schema/baseline, current authority and safe-effect classifier; retained reason/review receipt. |
 | retry_wait -> blocked | Attempt exhaustion, revoked authority or invalidated input; never spin or silently discard. |
-| claimed join inputs -> blocked | Recorded join deadline/incomplete outcome and review; no late automatic reopening. |
+| pending (held) join inputs -> blocked | Recorded join deadline/incomplete outcome and review; no late automatic reopening. |
 | unknown -> blocked/pending | Owner reconciliation evidence, current authority and explicit reviewed retry. |
 | blocked/pending -> discarded | Owner-only recorded resolution after effect/reference reconciliation; retain tombstone/audit, never automatic quota eviction. |
 
@@ -383,7 +383,7 @@ outcome and missing-channel list. Late input goes to review or an explicitly new
 case revision; it cannot reopen the timed-out join. Unrelated cases continue.
 
 Gate tasks are non-script maintenance under the downstream Pod identity. Each
-maintenance task acquires the exclusive instance lease plus its own fenced task
+maintenance step acquires the exclusive instance lease plus its own fenced task
 token/generation, so polling/consumption cannot overlap that Pod's invocation or a
 second gate task. Each bounded poll/consume step creates a maintenance run row
 with the downstream pinned script hash as identity metadata and
