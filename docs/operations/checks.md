@@ -17,8 +17,10 @@
   require an unlocked Mac; they must never start implicitly on push or merge.
 - `--dry-run` prints resolved SHAs, dirty state, workspace selection and commands.
 
-Consumed libraries/modules and the three consumed CLI applications are built
-serially before checks. Unit checks include production dependency audit,
+Selected libraries/modules and their transitive workspace dependencies are built
+serially before checks. Consumed CLI applications are included only when selected
+or required by that dependency closure. Application builds outside this list
+remain explicit acceptance/release commands. Unit checks include production dependency audit,
 repository tooling tests, lint, typecheck and workspace tests. Missing scripts
 fail before execution; current coverage gaps are explicit reviewed exceptions
 in the contract. An exception does not imply that a test exists or passed.

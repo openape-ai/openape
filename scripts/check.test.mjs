@@ -6,10 +6,10 @@ import { describe, it } from 'node:test'
 import { affectedWorkspaces, checkCommands, root, validateScripts } from './check.mjs'
 
 const packages = [
-  { name: 'core', path: 'packages/core', deps: {}, scripts: { lint: 'x', typecheck: 'x', test: 'x' } },
-  { name: 'auth', path: 'packages/auth', deps: { core: '*' }, scripts: { lint: 'x', typecheck: 'x', test: 'x' } },
-  { name: 'app', path: 'apps/app', deps: { auth: '*' }, scripts: { lint: 'x', typecheck: 'x', test: 'x', 'test:layout': 'x' } },
-  { name: 'other', path: 'packages/other', deps: {}, scripts: { lint: 'x', typecheck: 'x', test: 'x' } },
+  { name: 'core', path: 'packages/core', deps: {}, scripts: { build: 'x', lint: 'x', typecheck: 'x', test: 'x' } },
+  { name: 'auth', path: 'packages/auth', deps: { core: '*' }, scripts: { build: 'x', lint: 'x', typecheck: 'x', test: 'x' } },
+  { name: 'app', path: 'apps/app', deps: { auth: '*' }, scripts: { build: 'x', lint: 'x', typecheck: 'x', test: 'x', 'test:layout': 'x' } },
+  { name: 'other', path: 'packages/other', deps: {}, scripts: { build: 'x', lint: 'x', typecheck: 'x', test: 'x' } },
 ]
 const policy = { consumedApps: [], unitExceptions: {}, e2e: [], layout: ['app'] }
 describe('shared check contract', () => {
@@ -35,6 +35,14 @@ describe('shared check contract', () => {
     assert.deepEqual(affectedWorkspaces(packages, ['docs/agents/active-work.md', 'apps/app/page.vue']).map(p => p.name), ['app'])
     assert.equal(affectedWorkspaces(packages, ['docs/architecture/dependency-graph.md']).length, 4)
     assert.equal(affectedWorkspaces(packages, ['.githooks/pre-push']).length, 4)
+  })
+  it('prebuilds transitive dependencies without unrelated packages or the selected app', () => {
+    const steps = checkCommands(packages, [packages[2]], ['unit'], policy)
+    assert.deepEqual(steps[0].args, ['turbo', 'run', 'build', '--filter=core', '--filter=auth', '--concurrency=1'])
+    const consumed = checkCommands(packages, [packages[2]], ['unit'], { ...policy, consumedApps: ['app'] })
+    assert.ok(consumed[0].args.includes('--filter=app'))
+    const isolated = { name: 'isolated', path: 'apps/isolated', deps: {}, scripts: { lint: 'x', typecheck: 'x', test: 'x' } }
+    assert.equal(checkCommands([...packages, isolated], [isolated], ['unit'], policy)[0].name, 'audit')
   })
   it('fails when a mandatory script disappears', () => {
     assert.throws(() => validateScripts(packages.map(p => ({ ...p, scripts: {} })), policy), /Missing required script/)

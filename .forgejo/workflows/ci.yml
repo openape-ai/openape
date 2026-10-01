@@ -22,8 +22,19 @@ jobs:
           node-version-file: .nvmrc
       - name: Enable pnpm
         run: corepack enable
+      - name: Locate dependency caches
+        id: dependency-cache
+        run: echo "store=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - name: Restore dependency downloads
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ steps.dependency-cache.outputs.store }}
+            ~/.cache/electron
+          key: dependencies-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', '.nvmrc', 'pnpm-workspace.yaml', 'package.json') }}
+          restore-keys: dependencies-${{ runner.os }}-${{ runner.arch }}-
       - name: Install
-        run: pnpm install --frozen-lockfile
+        run: time pnpm install --frozen-lockfile
       - name: Restore check cache
         uses: actions/cache@v3
         with:
