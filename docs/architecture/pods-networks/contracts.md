@@ -649,7 +649,18 @@ stores its approved preview in its durable settlement receipt before releasing
 the preview reference. Completed runtime diagnostics can then be pruned without
 removing unresolved, owner, acceptance or effect evidence. Quota remains a whole
 profile admission budget; saturated intake pauses until explicit owner resume.
-M4 acceptance is still pending.
+M4 clean runtime `0e5eaed96485cee586475727481d6a5c396753f7` passes root
+lint/typecheck, build, 999 fresh unit checks, five selected manual native checks
+and exact-head unit-only CI 5315. Two unrelated native crash cases are skipped
+by selection. [Verified private Test Runs evidence](https://report.openape.ai/r/5WUpVPNReI22uBWBuzGVbh0P)
+includes the personally inspected desktop screenshot and actual Opus 5.5 closure.
+Three-network source transaction volume reaches 16,503 events / 49,503 deliveries;
+50-item settlement p95 is 58.62 ms. Four real SQLite writers retain all 4,000 rows.
+Bindings are fixture seeded; M5 gates, M6 records and the complete dependent
+business fixture remain unverified. Scheduler/lease fairness uses mocked script
+execution at 1/2/4/8 slots, not native-script latency evidence.
+Final documentation-head CI and protected PR 204 merge remain required for
+milestone acceptance.
 
 
 

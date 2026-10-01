@@ -43,7 +43,7 @@ merged as `ae4504d8483d464e3794f7864299241de8829df6`.
 M3 is a seeded engine vertical slice. Productive definition/instance creation
 arrives in M8 after M4 recovery. Central-connected creation is denied before
 mutation pending M10. No live profile/source/provider action or expanded rights.
-M4 working-tree gates passed root lint/typecheck, Pods build and 134 files /
+M4 clean runtime `0e5eaed96485cee586475727481d6a5c396753f7` passed root lint/typecheck, Pods build and 134 files /
 999 unit tests, including owner-journal transaction isolation and rolled-back
 consumer conflict disposal. Five manual native
 checks passed (two unrelated crash cases skipped by selection), including actual
@@ -51,7 +51,7 @@ worker SIGKILL, stopped-process proof, explicit original-batch retry and exactly
 one committed checkpoint. The synthetic screenshot was personally inspected;
 existing network members still show as standalone cards pending M9 UX.
 Three-network source volume measured 16,503 events / 49,503 deliveries, 50-item
-settlement p95 52.02 ms, four real concurrent SQLite writers / 4,000 rows without
+settlement p95 58.62 ms, four real concurrent SQLite writers / 4,000 rows without
 loss, and quota refusal with retained checkpoint/markers. This excludes M5 gates,
 M6 records and the complete dependent five-stage business fixture. Production
 scheduler/lease admission at 1/2/4/8 slots passed with script execution mocked.
@@ -62,10 +62,17 @@ The pre-commit audit exposed three high-severity devalue advisories. The existin
 override now pins quarantined patch 5.9.3 (published September 18), with no new
 dependency or relaxed audit threshold; the production audit reports no high findings.
 Actual Opus targeted closure confirmed conflict disposal and durable owner-run
-journaling. Final clean tested SHA, native PR, exact-head CI and Reports remain
-pending; M4 is not accepted.
-Next: freeze and review M4, publish actual evidence and merge through the native
-PR gate, then continue M5/M6 in dependency order. Preserve original claim batches on
+journaling. The primary review inspected all 37 files / 2,446 native displayed diff lines,
+verified against canonical source/target commits. Native
+[PR 204](https://repos.openape.ai/patrick/monorepo/pulls/204) is explicitly linked
+to issue 1417. Runtime exact-head CI 5315 passed the unit-only contract.
+[Verified private M4 Test Runs receipt](https://report.openape.ai/r/5WUpVPNReI22uBWBuzGVbh0P):
+category Test Runs, owner read 200, anonymous read 401 and the inspected screenshot
+bytes present in the published document. Local runtime acceptance is complete;
+final documentation-head CI and protected native merge remain required before
+marking M4 accepted.
+Next: review this documentation increment, pass its exact-head CI and merge PR 204,
+then continue M5/M6 in dependency order. Preserve original claim batches on
 retry to retain derived event identity; never repeat unknown external effects.
 
 M1 prototype: 24 crash/authority checks pass; selected established scheduling
