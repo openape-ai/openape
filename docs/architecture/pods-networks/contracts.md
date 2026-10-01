@@ -633,8 +633,8 @@ already admitted work to settle. A new explicit preview can process a paused
 network. Paused-instance selection must match the instances actually paused, and
 each subsequent admission rechecks the original configuration fingerprint.
 Successful settlement rechecks resource epochs after asynchronous native stop
-proof. Revoked execution discards staged outputs and checkpoints, fences its
-claims, and retains the lease for inspection.
+proof. Revoked execution discards buffered outputs, retains its uncommitted staged
+checkpoint for inspection, fences its claims and retains the lease.
 
 Until M4 adds durable operational clocks and preview consumption records,
 `network-activated`, `process-now-preview` and `process-now-started` records are
@@ -643,3 +643,10 @@ claims and execution authority pins remain immutable; source clock metadata,
 private snapshot receipts and the review-required flag are runtime-owned
 operational fields. M4 must move these fields out of the invocation manifest
 before implementing retention. The workspace admits at most 64 networks.
+
+
+M3 is an engine vertical slice using explicitly seeded owner/definition bindings
+in isolated fixtures. The productive definition/instance writer arrives in M8;
+it must follow accepted M4 recovery so interrupted leases have an owner inspection
+and release path before any productive network can be created. No owner-facing
+creation or production readiness is claimed by M3.
