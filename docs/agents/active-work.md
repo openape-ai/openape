@@ -5,7 +5,7 @@
 [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3VDB1S72E4EQQW58T97C617),
 [native issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417).
 Checkout: `openape-monorepo.worktrees/pods-workflows-networks`; branch
-`feature/issue-1417-pods-networks-m0`; canonical base
+`feature/issue-1417-pods-networks-m1`; original canonical base
 `a99c69bd2b97d8883ce5538894c3f38510407ddf` (Pods 0.1.1, schema 27).
 
 M0 freezes [contracts](../architecture/pods-networks/contracts.md) and the
@@ -18,8 +18,26 @@ Turbo cache reuse; this is a documentation increment, not new runtime acceptance
 M0 [PR 200](https://repos.openape.ai/patrick/monorepo/pulls/200): independent
 Claude Code 2.1.286 / Opus 5.5 reviewed the contracts and verified closure of all
 blocking/major findings after corrections. The primary agent checked sources and
-remaining token/identity wording. Final exact-head CI and merge are pending. Next: review/merge M0, then M1 synthetic
-crash/fencing/volume prototypes in the existing suites. M1–M14 are unimplemented.
+remaining token/identity wording. Final tested SHA `3b7363b2622b8394c429fe8833c6df49e87742db` passed exact-head CI;
+M0 merged as `fb80556d8a66843e028da7d13cda97fd5a9f1d50`.
+[Final private Test Runs evidence](https://report.openape.ai/r/3fMyH6tmpepIRy7p8qRhYqzm).
+M1 is in progress on `feature/issue-1417-pods-networks-m1`: synthetic
+crash/fencing/volume prototypes in established suites. M2–M14 remain unimplemented.
+M1 prototype: 24 crash/authority checks pass; selected established scheduling
+suites pass (120 checks before the two final isolation assertions). Maximum-payload
+stress has 195,000 receipts/events, 255,000 deliveries and 30,000 record revisions.
+The compacted retained database is 96,526,336 bytes. Transactional queue-count
+projection replaces an observed full-scan bottleneck; see
+[measured limits and dependent gates](../architecture/pods-networks/prototype-findings.md).
+M1 [PR 201](https://repos.openape.ai/patrick/monorepo/pulls/201) is linked to
+issue 1417. Tested temporary-fixture SHA
+`26684ec0986d1e3d119ba54cb0ca6c1b25139065` passed full root lint/typecheck,
+Pods build and six focused suites (123 tests). Independent Opus reviews verified
+code-blocker closure and targeted evidence corrections. The final commit removes
+the temporary volume fixture; final-head CI and merge remain open. M1 step 4 measures logical CAS only; actual writer contention and implemented
+join measurements are explicitly deferred to M3/M4/M7.
+This is test-only SQL design evidence, not product engine or encrypted-restore
+acceptance. Next: finish M1 exact-head gates, then M2 additive storage/backup.
 Patrick requests an additional Claude Code Opus 5.5 UX review when M9 is reached;
 record its actual availability/result without substituting a claimed review.
 Production pilot, live conversion and concrete actions keep their separate gates.
