@@ -108,27 +108,41 @@ Next: M6 scoped shared collections/artifacts on `feature/issue-1417-pods-network
 from that canonical main, in the same isolated checkout. M6 remains unaccepted. M9 retains the bounded operational failure-list work; missing
 historical process proof stays fail-closed. Never repeat unknown external effects.
 
-M6 scoped data is implemented in the unaccepted working tree: schema31 additive
-staging/provenance/index/configuration tables, explicit same-company read/write/delete
-and artifact read/create permissions, pinned data/configuration authority, atomic
-record/checkpoint/event/artifact settlement and conservative owner-reviewed recovery.
-New v3 network gates pin data/configuration authority while historical v1/v2 commands
-retain their bytes. Tombstones retain revisions; undeclared/foreign/secret-valued
-metadata and host paths are refused. Initial artifact frames are bounded to128 KiB.
-Backup covers committed and retained uncertain staged bytes. Safe cleanup commits
-metadata first, checks live references again before unlink, continues past poisoned
-entries, logs bounded failures and rotates orphan pages. Unknown effect drafts are
-retained until explicit verified owner reconciliation/disposal/retry.
+M6 runtime acceptance evidence is complete; protected merge remains pending.
+Native [PR206](https://repos.openape.ai/patrick/monorepo/pulls/206) is explicitly
+linked to issue1417. Clean tested runtime
+`e5050467cfb91f9ba0545ffe503bf370fc819526` passes root lint/typecheck, Pods build,
+136 files/1,058 fresh unit tests and eight selected manual native checks; two
+unrelated crash cases are skipped by selection. Root Turbo cache reuse is disclosed.
+Schema31 adds scoped CAS records, provenance, declared indexes, separate configuration
+origins and managed artifacts. Stale writes or late emission failure roll back records,
+events, checkpoint and metadata. Five production SIGKILL points prove stable-byte,
+staging, record, event and committed boundaries. Referenced and retained uncertain
+artifacts survive encrypted backup/restore and trace pruning; stopped-process proof
+and explicit owner journaling precede abandonment of uncommitted drafts.
 
-Intermediate checks: 59 focused data/gate authority tests, including five actual
-production SIGKILL boundaries. Actual Electron/main/worker/native scripts shared two
-record revisions and one artifact; an unbound consumer blocked. Initial screenshot
-personally inspected; the private settlement receipt proves the explicit binding
-denial, while public run diagnostics correctly retain their privacy redaction. Actual Opus reviews found and corrected success-state confusion,
-metadata/file rollback, maintenance blockage, unbounded diagnostics and alias hazards.
-Primary review also added data/configuration-bound approval and Process-now pins.
-M6 is unaccepted: final clean source, full gates/native checks, review closure,
-native PR/exact-head CI and verified private Test Runs remain. Continue M7 afterward.
+New v3 gates pin data/configuration; historical v1/v2 command bytes remain unchanged.
+Stored v2 grants accept empty authority and supersede added configuration without
+consume. Script settlement checks the pin even without staged writes. Automatic
+infrastructure retries retain original pins; explicit owner retry journals a fresh
+pin and subsequent admission freezes it. UTF-8 byte ordering matches SQLite for
+Unicode cursor/range queries, whose response pages remain within192 KiB. Artifact
+frames are initially limited to128 KiB; historical backup retains256 MiB artifacts.
+Maintenance faults retain one bounded current status/counter per network/operation.
+
+Repeated actual Claude Code Opus5.5 reviews and primary review closed authority,
+cleanup, uncertainty, retention, retry and Unicode findings. One Opus closure denied
+reading the prior `/tmp` review but inspected repository sources/tests; none ran tests.
+Primary native review independently matched all28 files/1,873 displayed lines to
+canonical source/base commits. Exact runtime unit-only CI5322 passed.
+[Verified private M6 Test Runs](https://report.openape.ai/r/EFk69QK5P2sGYg1yKqwwKA9w):
+category Test Runs, owner200, anonymous401, personally inspected actual screenshot
+bytes present. Native sharing/denial is proved by the measured private settlement
+receipt; public run diagnostics remain redacted. Existing Standalone labels are M9
+work, and definitions/configuration/bindings remain fixture seeded until M8/M9.
+No productive owner/provider action, live conversion or expanded rights. Final
+reviewed documentation-head CI and protected merge remain before M6 acceptance;
+continue M7 correlated workflow calls/joins afterward without new plan approval.
 
 M1 prototype: 24 crash/authority checks pass; selected established scheduling
 suites pass (120 checks before the two final isolation assertions). Maximum-payload
