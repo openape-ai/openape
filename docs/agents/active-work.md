@@ -40,7 +40,15 @@ passed external CI and merged as `df832d9d816b97f404eb9f260c834ad8606ed080`.
 [Actual private M1 Test Runs receipt](https://report.openape.ai/r/V1vrDbaXR3kynVJ1ujIBn4Ox). M1 step 4 measures logical CAS only; actual writer contention and implemented
 join measurements are explicitly deferred to M3/M4/M7.
 This is test-only SQL design evidence, not product engine or encrypted-restore
-acceptance. M2 begins from refreshed canonical main `df832d9d816b97f404eb9f260c834ad8606ed080`: additive storage/backup/restore, with activation hidden.
+acceptance. M2 [PR 202](https://repos.openape.ai/patrick/monorepo/pulls/202) adds schema 28,
+paused/revoked restore and encrypted backup support with activation hidden.
+Runtime source `7dc40d6352d0d7cd994d729db89c0b6a115d4c25` passes clean root
+lint/typecheck, build, all 905 Pods tests and exact-source CI run 5307. Isolated
+schema-27 migration preserves 89 legacy tables, 15,334 existing files and all 86
+credential files; original source unchanged, rollback/reopen/encrypted round trip
+and actual older-app refusal verified. Three full-file Opus 5.5 reviews and one
+targeted closure accompany primary review. [M2 storage evidence](../architecture/pods-networks/m2-storage-evidence.md).
+Final documentation-head CI and native exact-SHA merge remain pending; M3 follows.
 Patrick requests an additional Claude Code Opus 5.5 UX review when M9 is reached;
 record its actual availability/result without substituting a claimed review.
 Production pilot, live conversion and concrete actions keep their separate gates.
