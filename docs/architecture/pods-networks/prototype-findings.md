@@ -78,16 +78,27 @@ an 856-byte response. Transactional queue-count projections reduced that local
 summary to approximately 0.015 ms p95. Counts are updated in the same SQLite
 transactions as insert, state transition and prune; rollback cannot drift them.
 M2 must preserve this separation between authoritative queues and projections.
+The isolated prototype uses triggers. The existing production backup validator
+rejects SQLite views/triggers; M2 must maintain production counters in the runtime
+transaction and retain that default rejection. This snapshot is not an encrypted
+archive round-trip and does not claim backup-validator compatibility.
 
-An exploratory maximum-payload run before the exact committed rerun measured
-450,375,680 allocated database bytes and a 96,526,336-byte compacted snapshot after
+The actual maximum-payload rerun at
+`26684ec0986d1e3d119ba54cb0ca6c1b25139065` measured
+450,252,800 allocated database bytes and a 96,526,336-byte compacted snapshot after
 retention. The existing backup uses VACUUM INTO before its 256 MiB database check;
-raw high-water size is not the archive limit. Final-head measurement and full
-commands are recorded in the native PR/Test Runs receipt, not inferred here.
-The 5,000-ready-backlog probe after retention measured about 11.7 ms p95 across
+raw high-water size is not the archive limit. That exact commit passed root lint/typecheck, Pods build and six focused
+suites (123 tests, including the 24 retained contracts and temporary volume).
+[Native PR 201](https://repos.openape.ai/patrick/monorepo/pulls/201) records the
+commands and final-head unit receipt. The final commit removes only the temporary
+volume fixture; its test source and measured results remain in PR history.
+The 5,000-ready-backlog probe after retention measured 11.08 ms p95 across
 100 free-slot claims. Its sorting by event acceptance cannot use the prototype
 ready index directly; M2 should denormalize accepted/ready ordering into the
 subscription-leading index from the frozen inventory. This is not a scheduler gate.
+
+The exact committed run measured local settlement p95 23.91 ms, free-slot
+acquisition p95 2.55 ms, and a 346-byte local overview at p95 0.0177 ms.
 
 ## Numerical defaults and dependent acceptance
 
