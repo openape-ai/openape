@@ -1,3 +1,5 @@
+import { NetworkData } from './network-data'
+import { networkConfiguration, networkDataPin } from './network-config'
 import type { NetworkGates } from './network-gates'
 import type { NetworkGateManifest } from '../../contracts/network-gates'
 import { assertNetworkQuota, NetworkQuotaError } from './network-quota'
@@ -14,8 +16,11 @@ import type { NetworkAuthority, NetworkEmission } from './network-events'
 export class NetworkInvocations {
   gates?: NetworkGates
   readonly events: NetworkEvents
+  readonly data: NetworkData
   constructor(private readonly store: PodDatabase, private readonly runs: RunStore, private readonly helper: string) {
     this.events = new NetworkEvents(store, runs.bootId)
+    this.data = new NetworkData(store, this.events)
+    this.events.artifacts = this.data.artifacts
   }
 
   reserveGate(manifest: NetworkGateManifest, reason: 'manual' | 'event', processPreviewId: string | null): NetworkAuthority | null {
@@ -90,7 +95,7 @@ export class NetworkInvocations {
       const runId = reservation.run.id; const token = randomUUID()
       const checkpoint = this.store.db.prepare('SELECT revision,body FROM network_checkpoints WHERE pod_id=? AND network_id=?').get(podId, networkId)
       if (!checkpoint) throw new Error('Network instance has no private checkpoint')
-      const manifest = { resourceEpoch, assignmentRevision: pod.bindingRevision, definitionId: member.definitionId, definitionVersion: member.definitionVersion, bindingRevision: member.bindingRevision, reason, checkpointRevision: checkpoint.revision, gateBindings, inputClaims: ready.map(input => ({ id: input.id, generation: Number(input.generation) + 1 })) }
+      const manifest = { resourceEpoch, assignmentRevision: pod.bindingRevision, definitionId: member.definitionId, definitionVersion: member.definitionVersion, bindingRevision: member.bindingRevision, reason, checkpointRevision: checkpoint.revision, dataPin: networkDataPin(this.store, networkId, podId), gateBindings, inputClaims: ready.map(input => ({ id: input.id, generation: Number(input.generation) + 1 })) }
       this.store.db.prepare(`INSERT INTO network_invocations(run_id,network_id,network_revision,pod_id,boot_nonce,restore_nonce,activation_epoch,claim_token,generation,state,manifest)
         VALUES(?,?,?,?,?,?,?,?,1,'running',?)`).run(runId, networkId, definition.revision, podId, this.runs.bootId, network.restore_nonce!, network.activation_epoch!, token, canonicalNetworkJson(manifest))
       this.store.db.prepare('INSERT INTO network_invocation_controls(run_id,deadline,retry_of,attempt,creator_pid,process_preview_id) VALUES(?,?,?,?,?,?)').run(runId, Date.now() + 360000, originalRunId, attempt, process.pid, processPreviewId)
@@ -109,11 +114,11 @@ export class NetworkInvocations {
   }
 
   input(authority: NetworkAuthority) {
-    const { row, definition, member } = this.events.authority(authority)
+    const { row, definition, member } = this.data.authority(authority)
     const checkpoint = this.store.db.prepare('SELECT revision,body FROM network_checkpoints WHERE network_id=? AND pod_id=?').get(definition.id, member.podId)!
     const items = this.store.db.prepare(`SELECT e.id,e.item_key,e.channel,e.payload,e.case_id,e.case_revision FROM network_deliveries d JOIN network_events e ON e.id=d.event_id
-      WHERE d.run_id=? AND d.state='claimed' ORDER BY d.accepted_at,d.id`).all(authority.runId).map(item => ({ eventId: item.id as string, key: item.item_key as string, channel: item.channel as string, data: JSON.parse(item.payload as string) as Record<string, unknown>, caseId: item.case_id as string, caseRevision: item.case_revision as number }))
-    return { network: { id: definition.id, revision: definition.revision, source: member.source !== null }, items, checkpoint: { revision: checkpoint.revision as number, body: JSON.parse(checkpoint.body as string) as Record<string, unknown> }, resourceEpoch: (JSON.parse(row.manifest as string) as { resourceEpoch: number }).resourceEpoch }
+      WHERE d.run_id=? AND d.state='claimed' ORDER BY d.accepted_at,d.id`).all(authority.runId).map(item => ({ eventId: item.id as string, key: item.item_key as string, channel: item.channel as string, data: JSON.parse(item.payload as string) as Record<string, unknown>, artifacts: this.events.references(item.id as string), caseId: item.case_id as string, caseRevision: item.case_revision as number }))
+    return { config: networkConfiguration(this.store, definition.id, member.podId), network: { id: definition.id, revision: definition.revision, source: member.source !== null }, items, checkpoint: { revision: checkpoint.revision as number, body: JSON.parse(checkpoint.body as string) as Record<string, unknown> }, resourceEpoch: (JSON.parse(row.manifest as string) as { resourceEpoch: number }).resourceEpoch }
   }
 
   recordConflict(authority: NetworkAuthority, failure: unknown): void {
@@ -135,7 +140,7 @@ export class NetworkInvocations {
 
   stageProgress(authority: NetworkAuthority, payload: unknown): { revision: number } {
     return this.store.transaction(() => {
-      const { row, definition, member } = this.events.authority(authority)
+      const { row, definition, member } = this.data.authority(authority)
       const progress = parseProgress(payload)
       if (progress.sources.length || progress.claims.length) throw new Error('Network knowledge writes require a scoped data port')
       const committed = this.store.db.prepare('SELECT revision FROM network_checkpoints WHERE network_id=? AND pod_id=?').get(definition.id, member.podId)!.revision as number
@@ -228,6 +233,7 @@ export class NetworkInvocations {
       const { row, definition, member } = this.events.authority(authority, true)
       const inputs = this.store.db.prepare('SELECT id,event_id FROM network_deliveries WHERE run_id=? AND state=\'claimed\'').all(authority.runId)
       const completed = state === 'completed'
+      if (completed && row.execution_kind === 'script') this.data.authority(authority, true)
       if (completed && row.execution_kind === 'script' && JSON.parse(row.manifest as string).gateBindings?.length) {
         if (!this.gates) throw new Error('Network approval authority is unavailable at settlement')
         this.gates.coverage(authority, true)
@@ -242,6 +248,7 @@ export class NetworkInvocations {
       if (completed && (new Set(completedInputIds).size !== inputs.length || inputs.some(input => !completedInputIds.includes(input.event_id as string)))) throw new Error('Network completion must acknowledge every claimed input')
       if (emissions.length > 500) throw new Error('Network invocation exceeds 500 emissions')
       if (completed) {
+        this.data.commit(authority)
         for (const emission of emissions) this.events.accept(authority, emission, true)
         if (row.staged_checkpoint !== null) {
           const staged = JSON.parse(row.staged_checkpoint as string) as { revision: number, body: Record<string, unknown> }
@@ -265,6 +272,7 @@ export class NetworkInvocations {
       if (retryAt !== null) this.store.db.prepare('UPDATE network_deliveries SET ready_at=? WHERE run_id=? AND state=\'claimed\'').run(retryAt, authority.runId)
       this.store.db.prepare('UPDATE network_deliveries SET state=?,claim_token=NULL,reason=? WHERE run_id=? AND state=\'claimed\'').run(nextState, completed ? null : error ?? summary, authority.runId)
       if (inputs.length) { this.count(definition.id, 'claimed', -inputs.length); this.count(definition.id, nextState, inputs.length) }
+      if (!unsafe) this.data.clear(authority.runId)
       this.store.db.prepare('UPDATE network_invocations SET state=?,staged_checkpoint=NULL WHERE run_id=?').run(unsafe ? 'unknown' : completed ? 'completed' : 'blocked', authority.runId)
       const effectReceipts = this.store.db.prepare('SELECT r.logical_action_key,r.attempt,max(r.sequence) AS sequence FROM network_effect_receipts r JOIN network_effect_attempts e ON e.logical_action_key=r.logical_action_key AND e.attempt=r.attempt WHERE e.run_id=? GROUP BY r.logical_action_key,r.attempt').all(authority.runId)
       const process = this.store.db.prepare('SELECT p.preview,p.fingerprint,p.consumed_at FROM network_process_previews p JOIN network_invocation_controls c ON c.process_preview_id=p.id WHERE c.run_id=?').get(authority.runId)
