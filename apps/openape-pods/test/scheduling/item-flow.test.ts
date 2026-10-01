@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterEach, expect, it, vi } from 'vitest'
+import { InfrastructureError } from '../../src/contracts/infrastructure'
 import { RunRetention } from '../../src/worker/data/run-retention'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { installExample } from '../../src/worker/runs/examples'
@@ -313,4 +314,46 @@ it('keeps the items of the three most recent runs and every pending item', async
   expect(f.trace('open-5')).toHaveLength(2)
   expect(f.count('graph_deliveries')).toBe(4)
   expect(f.count('graph_gate_batches')).toBe(1)
+})
+
+it('retries the original consumer claim batch without merging a later input for the same case', async () => {
+  const f = networkFixture(); let sourceCall = 0; const received: string[][] = []
+  const source = f.pod('Source', { takes: [], gives: ['test.a', 'test.b'], summary: 'Synthetic facts' }, async (_items, request) => {
+    const channel = sourceCall++ === 0 ? 'test.a' : 'test.b'
+    await request('network.emit', { channel, key: 'same-case', sourceItemId: 'same-case', sourceVersion: 'v1', payload: { subject: channel } })
+  })
+  const consumer = f.pod('Consumer', { takes: ['test.a', 'test.b'], gives: [], summary: 'Synthetic consumer' }, async (items) => { received.push(items.map(item => item.channel)) })
+  const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, { podId: consumer, source: null, serialCase: true }], ['test.a', 'test.b'])
+  f.process(id, [source]); await vi.waitFor(() => expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0))
+  let fail = true
+  vi.mocked(f.resources.capture).mockImplementation(async (podId) => {
+    if (podId === consumer && fail) { fail = false; throw new InfrastructureError({ phase: 'read', retryAfterMs: 0 }) }
+    return { id: 'synthetic-snapshot', files: [] } as never
+  })
+  f.engine.execute({ type: 'activate', id, revision: 1 }); f.engine.tick()
+  await vi.waitFor(() => expect(f.engine.view().networks[0]!.counts.retry_wait).toBe(1))
+  expect(received).toEqual([])
+  const originalRun = f.store.db.prepare('SELECT run_id FROM network_deliveries WHERE state=\'retry_wait\'').get()!.run_id!
+  f.engine.execute({ type: 'pause', id, revision: 1 })
+  f.process(id, [source]); await vi.waitFor(() => expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0))
+  expect(f.store.db.prepare('SELECT count(DISTINCT case_id||case_revision) AS count FROM network_deliveries').get()!.count).toBe(1)
+  f.store.db.prepare('UPDATE network_deliveries SET ready_at=? WHERE run_id=?').run(Date.now() - 1, originalRun)
+  f.store.db.prepare('UPDATE network_invocation_controls SET retry_at=? WHERE run_id=?').run(Date.now() - 1, originalRun)
+  f.process(id, [consumer], [], 1)
+  await vi.waitFor(() => expect(received).toEqual([['test.a']]))
+  await vi.waitFor(() => expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0))
+  expect(f.engine.view().networks[0]!.counts).toMatchObject({ done: 1, pending: 1, retry_wait: 0 })
+  f.process(id, [consumer], [], 1)
+  await vi.waitFor(() => expect(received).toEqual([['test.a'], ['test.b']]))
+  await vi.waitFor(() => expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0))
+})
+
+it('retains Process now consumption after trace removal', async () => {
+  const f = simpleNetwork()
+  const preview = f.engine.execute({ type: 'preview', id: f.id, revision: 1, podIds: [f.source], pausedPodIds: [], budget: 1 }).preview!
+  f.engine.execute({ type: 'process', id: f.id, revision: 1, previewId: preview.id })
+  await vi.waitFor(() => expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0))
+  f.store.db.prepare('DELETE FROM network_trace_events').run()
+  expect(() => f.engine.execute({ type: 'process', id: f.id, revision: 1, previewId: preview.id })).toThrow('already consumed')
+  expect(f.started.filter(podId => podId === f.source)).toHaveLength(1)
 })

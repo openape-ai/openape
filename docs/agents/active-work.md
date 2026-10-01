@@ -5,8 +5,8 @@
 [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3VDB1S72E4EQQW58T97C617),
 [native issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417).
 Checkout: `openape-monorepo.worktrees/pods-workflows-networks`; branch
-`feature/issue-1417-pods-networks-m3`; current canonical base
-`b35620900fce67fe4d4804573df1d7edcb9f3c5e`; original canonical base
+`feature/issue-1417-pods-networks-m4`; current canonical base
+`ae4504d8483d464e3794f7864299241de8829df6`; original canonical base
 `a99c69bd2b97d8883ce5538894c3f38510407ddf` (Pods 0.1.1, schema 27).
 
 M0 freezes [contracts](../architecture/pods-networks/contracts.md) and the
@@ -22,11 +22,9 @@ blocking/major findings after corrections. The primary agent checked sources and
 remaining token/identity wording. Final tested SHA `3b7363b2622b8394c429fe8833c6df49e87742db` passed exact-head CI;
 M0 merged as `fb80556d8a66843e028da7d13cda97fd5a9f1d50`.
 [Final private Test Runs evidence](https://report.openape.ai/r/3fMyH6tmpepIRy7p8qRhYqzm).
-M0–M2 are accepted and merged. M3 is in progress: versioned contracts,
-durable acceptance, independent dispatch, local IPC and atomic settlement. Native
-sandbox scheduling and actual Electron routing passed. M3 PR 203 is in final
-documentation review; its tested runtime gates, exact-head CI and evidence passed.
-M4–M14 remain unimplemented.
+M0–M3 are accepted and merged. M4 is in progress: durable recovery controls,
+retry deadlines, fair domain admission and bounded backpressure. M4 is unaccepted;
+M5–M14 remain unimplemented.
 M3 [PR 203](https://repos.openape.ai/patrick/monorepo/pulls/203): tested clean
 runtime `da209ca697d79c0cade36759d9ccb69aa9167f53` passed root lint/typecheck/build,
 133 files / 966 fresh Pods unit tests, four manual native/Electron tests and
@@ -38,14 +36,36 @@ inspected. Repeated actual Claude Code Opus 5.5 reviews confirmed safety closure
 primary native diff review verified all 3,066 displayed lines against the commits.
 [Verified private Test Runs receipt](https://report.openape.ai/r/Y_XFy5OH08ad4fPoSStGwAFk):
 category Test Runs, owner read 200, anonymous read 401 and inspected screenshot
-bytes retained in the published document. M3 remains open until final
-head CI and canonical merge are recorded.
+bytes retained in the published document. Final documentation head
+`a3e9c7b697575eef5ddf30afb9b96703d6a884e0` passed CI 5313; native PR 203
+merged as `ae4504d8483d464e3794f7864299241de8829df6`.
 
 M3 is a seeded engine vertical slice. Productive definition/instance creation
 arrives in M8 after M4 recovery. Central-connected creation is denied before
 mutation pending M10. No live profile/source/provider action or expanded rights.
-Next: M4 owner inspection/requeue, retry deadlines, fair admission, quota and
-operational control storage before retention. Preserve original claim batches on
+M4 working-tree gates passed root lint/typecheck, Pods build and 134 files /
+999 unit tests, including owner-journal transaction isolation and rolled-back
+consumer conflict disposal. Five manual native
+checks passed (two unrelated crash cases skipped by selection), including actual
+worker SIGKILL, stopped-process proof, explicit original-batch retry and exactly
+one committed checkpoint. The synthetic screenshot was personally inspected;
+existing network members still show as standalone cards pending M9 UX.
+Three-network source volume measured 16,503 events / 49,503 deliveries, 50-item
+settlement p95 52.02 ms, four real concurrent SQLite writers / 4,000 rows without
+loss, and quota refusal with retained checkpoint/markers. This excludes M5 gates,
+M6 records and the complete dependent five-stage business fixture. Production
+scheduler/lease admission at 1/2/4/8 slots passed with script execution mocked.
+Actual Opus 5.5 follow-up findings prompted completed diagnostic retention,
+same-boot stop proof, closed owner identity-conflict resolution, fair guarded
+master/browser starts, domain error isolation and bounded preview retention.
+The pre-commit audit exposed three high-severity devalue advisories. The existing
+override now pins quarantined patch 5.9.3 (published September 18), with no new
+dependency or relaxed audit threshold; the production audit reports no high findings.
+Actual Opus targeted closure confirmed conflict disposal and durable owner-run
+journaling. Final clean tested SHA, native PR, exact-head CI and Reports remain
+pending; M4 is not accepted.
+Next: freeze and review M4, publish actual evidence and merge through the native
+PR gate, then continue M5/M6 in dependency order. Preserve original claim batches on
 retry to retain derived event identity; never repeat unknown external effects.
 
 M1 prototype: 24 crash/authority checks pass; selected established scheduling
@@ -76,7 +96,6 @@ Final documentation head `c8418561b176667a6965d31635173fe123145541` passed
 CI run 5308; native PR 202 merged as
 `b35620900fce67fe4d4804573df1d7edcb9f3c5e`.
 [Corrected private M2 Test Runs receipt](https://report.openape.ai/r/_Y36InfIXpYhK1Bc0ro0kMz2).
-M3 contracts and runtime acceptance are not yet verified.
 Patrick requests an additional Claude Code Opus 5.5 UX review when M9 is reached;
 record its actual availability/result without substituting a claimed review.
 Production pilot, live conversion and concrete actions keep their separate gates.

@@ -2,13 +2,16 @@ import { randomUUID } from 'node:crypto'
 import { parseOwner, sameOwner } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
 import { diagnoseNetwork, networkLimits, parseNetworkCommand, parseNetworkDefinition } from '../../contracts/networks'
-import type { NetworkDefinition, NetworkDraft, NetworkPreview, NetworkView } from '../../contracts/networks'
+import type { NetworkDefinition, NetworkDraft, NetworkHealth, NetworkPreview, NetworkView } from '../../contracts/networks'
 import { parseGraphContract } from '../../contracts/graphs'
 import { nextDue } from '../../contracts/clock'
 import { digest, parseManifest } from '../storage/database'
 import type { PodDatabase } from '../storage/database'
 import type { ResourceRegistry } from '../resources/registry'
 import type { RunDispatcher } from '../runs/dispatcher'
+import { assertNetworkQuota, NetworkQuotaError } from './network-quota'
+import { pruneNetworkTraces } from './network-maintenance'
+import { NetworkRecovery } from './network-recovery'
 import { NetworkInvocations } from './network-invocations'
 import { canonicalNetworkJson } from './network-events'
 import type { NetworkAuthority } from './network-events'
@@ -18,13 +21,15 @@ interface ProcessBatch { preview: NetworkPreview, fingerprint: string, remaining
 export class NetworkEngine {
   readonly invocations: NetworkInvocations
   private batches = new Map<string, ProcessBatch>()
+  private nextMaintenanceAt = 0
   private pendingSettlements = new Map<string, Promise<void>>()
-  constructor(private readonly store: PodDatabase, private readonly dispatcher: RunDispatcher, private readonly resources: ResourceRegistry, helper: string, private readonly currentOwner: () => Owner) {
+  constructor(private readonly store: PodDatabase, private readonly dispatcher: RunDispatcher, private readonly resources: ResourceRegistry, private readonly helper: string, private readonly currentOwner: () => Owner, private readonly immediateDispatch = true) {
     this.invocations = new NetworkInvocations(store, dispatcher.runs, helper)
   }
 
   execute(value: unknown): NetworkView {
     const command = parseNetworkCommand(value)
+    if (command.type === 'inspect' || command.type === 'retry' || command.type === 'reconcileEffect' || command.type === 'resolveConflict' || command.type === 'discardFailure') throw new Error('Network recovery must await process inspection')
     if (command.type === 'list') return this.view()
     if (command.type === 'create') return this.viewAfter(() => this.create(command.draft))
     const definition = this.definition(command.id, command.revision)
@@ -32,10 +37,13 @@ export class NetworkEngine {
       this.store.transaction(() => {
         if (command.type === 'activate') {
           this.validate(definition)
+          assertNetworkQuota(this.store, 16384)
+          this.store.db.prepare('UPDATE network_runtime_status SET intake_error=NULL WHERE network_id=?').run(definition.id)
           const row = this.store.db.prepare('SELECT baseline_state,state FROM networks WHERE id=?').get(definition.id)!
           if (row.baseline_state !== 'ready') throw new Error('Restored network requires a reviewed baseline')
           if (row.state === 'active') return
           const sources = definition.members.flatMap(member => member.source?.schedule ? [{ podId: member.podId, nextAt: nextDue(member.source.schedule, null, Date.now()) }] : [])
+          for (const source of sources) this.store.db.prepare('INSERT INTO network_source_clocks VALUES(?,?,?) ON CONFLICT(network_id,pod_id) DO UPDATE SET next_at=excluded.next_at').run(definition.id, source.podId, source.nextAt)
           this.trace(definition.id, 'network-activated', { sources })
         }
         this.store.db.prepare('UPDATE networks SET state=? WHERE id=? AND revision=? AND state!=\'archived\'').run(command.type === 'activate' ? 'active' : 'paused', definition.id, definition.revision)
@@ -43,7 +51,7 @@ export class NetworkEngine {
           for (const [id, batch] of this.batches) {
             if (batch.preview.networkId !== definition.id) continue
             this.trace(definition.id, 'process-now-stopped', { previewId: id, admitted: batch.preview.budget - batch.remaining, explicitResumeRequired: true })
-            this.batches.delete(id)
+            this.endBatch(id, 'stopped')
           }
           this.trace(definition.id, 'network-paused', { activeInvocationsMaySettle: true })
         }
@@ -61,35 +69,82 @@ export class NetworkEngine {
       const paused = command.podIds.filter(id => this.store.getPod(id).lifecycle === 'paused')
       if (command.pausedPodIds.some(id => !paused.includes(id)) || paused.some(id => !command.pausedPodIds.includes(id))) throw new Error('Process now requires explicit review of paused instances')
       const preview: NetworkPreview = { id: randomUUID(), networkId: definition.id, revision: definition.revision, podIds: command.podIds, pausedPodIds: command.pausedPodIds, budget: command.budget, expiresAt: Date.now() + 300000, sources: definition.members.filter(member => member.source && command.podIds.includes(member.podId)).map(member => member.podId), consumers: definition.members.filter(member => !member.source && command.podIds.includes(member.podId)).map(member => member.podId) }
-      this.trace(definition.id, 'process-now-preview', { preview, fingerprint: this.fingerprint(definition, preview) })
+      const fingerprint = this.fingerprint(definition, preview)
+      this.store.transaction(() => {
+        assertNetworkQuota(this.store, Buffer.byteLength(canonicalNetworkJson(preview)) + 8192)
+        if (Number(this.store.db.prepare('SELECT count(*) AS count FROM network_process_previews WHERE network_id=?').get(definition.id)!.count) >= 64) throw new Error('Network has 64 retained processing previews; wait for expiry or resolve unfinished invocations')
+        this.store.db.prepare('INSERT INTO network_process_previews(id,network_id,preview,fingerprint,expires_at,remaining) VALUES(?,?,?,?,?,?)').run(preview.id, definition.id, canonicalNetworkJson(preview), fingerprint, preview.expiresAt, preview.budget)
+        this.trace(definition.id, 'process-now-preview', { preview, fingerprint })
+      })
       return { ...this.view(), preview }
     }
     const preview = this.store.transaction(() => {
       this.validate(definition)
-      const row = this.store.db.prepare('SELECT body FROM network_trace_events WHERE network_id=? AND kind=\'process-now-preview\' AND json_extract(body,\'$.preview.id\')=? ORDER BY id DESC LIMIT 1').get(definition.id, command.previewId)
+      assertNetworkQuota(this.store, 16384)
+      this.store.db.prepare('UPDATE network_runtime_status SET intake_error=NULL WHERE network_id=?').run(definition.id)
+      const row = this.store.db.prepare('SELECT preview,fingerprint,consumed_at FROM network_process_previews WHERE network_id=? AND id=?').get(definition.id, command.previewId)
       if (!row) throw new Error('Process now preview is missing')
-      const saved = JSON.parse(row.body as string) as { preview: NetworkPreview, fingerprint: string }
+      const saved = { preview: JSON.parse(row.preview as string) as NetworkPreview, fingerprint: row.fingerprint as string }
       if (saved.preview.expiresAt < Date.now() || saved.preview.revision !== definition.revision || saved.fingerprint !== this.fingerprint(definition, saved.preview)) throw new Error('Process now preview expired or its instance configuration changed')
-      if (this.store.db.prepare('SELECT 1 FROM network_trace_events WHERE network_id=? AND kind=\'process-now-started\' AND json_extract(body,\'$.previewId\')=?').get(definition.id, command.previewId)) throw new Error('Process now preview was already consumed')
+      const consumed = this.store.db.prepare('UPDATE network_process_previews SET consumed_at=?,state=\'running\' WHERE id=? AND consumed_at IS NULL').run(Date.now(), command.previewId)
+      if (consumed.changes !== 1) throw new Error('Process now preview was already consumed')
       this.trace(definition.id, 'process-now-started', { previewId: saved.preview.id, budget: saved.preview.budget, expiresAt: saved.preview.expiresAt })
       return saved
     })
     this.batches.set(preview.preview.id, { preview: preview.preview, fingerprint: preview.fingerprint, remaining: preview.preview.budget, startedSources: new Set() })
-    this.tick()
+    if (this.immediateDispatch) this.tick(false)
     return { ...this.view(), processId: preview.preview.id }
   }
 
-  tick(): void {
+  async reconcileStartup(): Promise<void> {
+    let owner: Owner
+    try { owner = parseOwner(this.currentOwner()) }
+    catch (failure) {
+      for (const row of this.store.db.prepare('SELECT id FROM networks LIMIT 64').all()) this.attention(row.id as string, 'startup-recovery-owner-unavailable', {}, failure)
+      return
+    }
+    const pending = this.store.db.prepare(`SELECT i.network_id,i.network_revision,i.run_id,i.generation FROM network_invocations i JOIN networks n ON n.id=i.network_id JOIN run_leases l ON l.run_id=i.run_id
+      WHERE n.owner_issuer=? AND n.owner_subject=? AND i.state IN ('interrupted','blocked','unknown') ORDER BY l.heartbeat`).all(owner.issuer, owner.subject)
+    await Promise.all(pending.map(async (row) => {
+      try { await this.recover({ type: 'inspect', id: row.network_id, revision: row.network_revision, runId: row.run_id, generation: row.generation }) }
+      catch (failure) { this.attention(row.network_id as string, 'startup-recovery-needs-review', { runId: row.run_id }, failure) }
+    }))
+  }
+
+  async recover(value: unknown): Promise<NetworkView> {
+    const command = parseNetworkCommand(value)
+    if (command.type !== 'inspect' && command.type !== 'retry' && command.type !== 'reconcileEffect' && command.type !== 'resolveConflict' && command.type !== 'discardFailure') throw new Error('Unsupported network recovery command')
+    const definition = this.definition(command.id, command.revision)
+    const invocation = this.store.db.prepare('SELECT pod_id,network_revision FROM network_invocations WHERE network_id=? AND run_id=?').get(command.id, command.runId)
+    if (!invocation || invocation.network_revision !== command.revision) throw new Error('Network recovery revision changed')
+    const assertCurrent = () => { this.definition(command.id, command.revision) }
+    const recovery = new NetworkRecovery(this.store, this.helper)
+    await recovery.inspect(command.id, command.runId, command.generation, assertCurrent)
+    if (command.type === 'discardFailure') recovery.discardFailure(command.id, command.runId, command.generation, command.evidence, assertCurrent)
+    if (command.type === 'resolveConflict') recovery.resolveConflict(command.id, command.runId, command.generation, command.identityHash, command.decision, command.evidence, assertCurrent)
+    if (command.type === 'reconcileEffect') recovery.reconcileEffect(command.id, command.runId, command.generation, command, assertCurrent)
+    if (command.type === 'retry') {
+      this.validate(definition)
+      const preview: NetworkPreview = { id: randomUUID(), networkId: definition.id, revision: definition.revision, podIds: [invocation.pod_id as string], pausedPodIds: [], budget: 1, expiresAt: Date.now(), sources: [], consumers: [] }
+      recovery.requeue(command.id, command.runId, command.generation, { fingerprint: this.fingerprint(definition, preview), resourceEpoch: this.resources.epoch(invocation.pod_id as string), assignmentRevision: this.store.getPod(invocation.pod_id as string).bindingRevision, scriptHash: this.store.getPod(invocation.pod_id as string).activeScript! }, assertCurrent)
+    }
+    return this.view()
+  }
+
+  tick(automatic = true): void {
     if (!this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()) return
+    if (Date.now() >= this.nextMaintenanceAt) { pruneNetworkTraces(this.store, Date.now()); this.nextMaintenanceAt = Date.now() + 60000 }
+    for (const run of this.store.db.prepare('SELECT i.pod_id FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.state=\'running\' AND c.deadline<=?').all(Date.now())) this.dispatcher.cancelPod(run.pod_id as string, 'Network invocation deadline expired')
     for (const [id, batch] of this.batches) {
       let definition: NetworkDefinition
       try {
         definition = this.definition(batch.preview.networkId, batch.preview.revision)
+        if (this.store.db.prepare('SELECT intake_error FROM network_runtime_status WHERE network_id=?').get(definition.id)?.intake_error) throw new Error('Process now stopped by network backpressure; explicit resume is required')
         if (batch.fingerprint !== this.fingerprint(definition, batch.preview)) throw new Error('Process now instance configuration changed during processing')
       }
       catch (failure) {
         this.attention(batch.preview.networkId, 'process-now-stopped', { previewId: id, explicitResumeRequired: true }, failure)
-        this.batches.delete(id); continue
+        this.endBatch(id, 'stopped'); continue
       }
       const occupied = Number(this.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count)
       const maximum = Number(this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency)
@@ -97,27 +152,33 @@ export class NetworkEngine {
       for (const member of definition.members.filter(item => batch.preview.podIds.includes(item.podId))) {
         if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=? UNION ALL SELECT 1 FROM program_leases WHERE pod_id=?').get(member.podId, member.podId)) { active = true; continue }
         if (batch.remaining <= 0 || batch.preview.expiresAt < Date.now() || (member.source && batch.startedSources.has(member.podId))) continue
-        const runId = this.begin(definition, member.podId, 'manual', batch.preview.pausedPodIds.includes(member.podId))
+        const runId = this.begin(definition, member.podId, 'manual', batch.preview.pausedPodIds.includes(member.podId), undefined, id)
         if (!runId) continue
         batch.remaining--; started = true; active = true
         if (member.source) batch.startedSources.add(member.podId)
+        this.store.db.prepare('UPDATE network_process_previews SET remaining=?,started_sources=? WHERE id=?').run(batch.remaining, canonicalNetworkJson([...batch.startedSources]), id)
       }
       if ((!active && !started) || batch.preview.expiresAt < Date.now()) {
         this.trace(definition.id, 'process-now-finished', { previewId: id, admitted: batch.preview.budget - batch.remaining, expired: batch.preview.expiresAt < Date.now(), activeInvocationsMaySettle: active })
-        this.batches.delete(id)
+        this.endBatch(id, 'finished')
       }
     }
+    if (!automatic) return
     let owner: Owner
     try { owner = parseOwner(this.currentOwner()) }
     catch (failure) {
       for (const row of this.store.db.prepare('SELECT id FROM networks LIMIT 64').all()) this.attention(row.id as string, 'network-owner-unavailable', {}, failure)
       return
     }
-    for (const row of this.store.db.prepare('SELECT id,revision FROM networks WHERE owner_issuer=? AND owner_subject=? AND state=\'active\' ORDER BY created_at,id LIMIT 64').all(owner.issuer, owner.subject)) {
+    for (const row of this.store.db.prepare('SELECT id,revision FROM networks WHERE owner_issuer=? AND owner_subject=? AND state=\'active\' ORDER BY CASE WHEN id>(SELECT coalesce(last_network,\'\') FROM network_scheduler_state WHERE id=1) THEN 0 ELSE 1 END,id LIMIT 64').all(owner.issuer, owner.subject)) {
       try {
         const definition = this.definition(row.id as string, row.revision as number)
-        for (const member of definition.members) {
+        const lastPod = this.store.db.prepare('SELECT last_pod FROM network_runtime_status WHERE network_id=?').get(definition.id)?.last_pod
+        const after = definition.members.findIndex(member => member.podId === lastPod) + 1
+        for (const member of [...definition.members.slice(after), ...definition.members.slice(0, after)]) {
           if (!member.source) { this.begin(definition, member.podId, 'event', false); continue }
+          const retry = this.store.db.prepare('SELECT 1 FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.network_id=? AND i.pod_id=? AND i.state=\'blocked\' AND c.retry_at<=? AND json_extract(i.manifest,\'$.reason\')!=\'manual\'').get(definition.id, member.podId, Date.now())
+          if (retry) { this.begin(definition, member.podId, 'schedule', false); continue }
           if (!member.source.schedule) continue
           const due = this.sourceDue(definition, member.podId)
           if (due !== null && due <= Date.now()) this.begin(definition, member.podId, 'schedule', false, due)
@@ -130,12 +191,26 @@ export class NetworkEngine {
   view(): NetworkView {
     if (!this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()) return { networks: [] }
     const owner = parseOwner(this.currentOwner())
-    return { networks: this.store.db.prepare('SELECT id,revision,group_id,name,state FROM networks WHERE owner_issuer=? AND owner_subject=? ORDER BY created_at,id LIMIT 64').all(owner.issuer, owner.subject).map(row => ({ id: row.id as string, revision: row.revision as number, groupId: row.group_id as string, name: row.name as string, state: row.state as 'active' | 'paused' | 'archived', counts: Object.fromEntries(this.store.db.prepare('SELECT state,count FROM network_queue_counts WHERE network_id=? ORDER BY state').all(row.id!).map(count => [count.state as string, count.count as number])) })) }
+    return { networks: this.store.db.prepare('SELECT id,revision,group_id,name,state FROM networks WHERE owner_issuer=? AND owner_subject=? ORDER BY created_at,id LIMIT 64').all(owner.issuer, owner.subject).map(row => ({ id: row.id as string, revision: row.revision as number, groupId: row.group_id as string, name: row.name as string, state: row.state as 'active' | 'paused' | 'archived', health: this.health(row.id as string), counts: Object.fromEntries(this.store.db.prepare('SELECT state,count FROM network_queue_counts WHERE network_id=? ORDER BY state').all(row.id!).map(count => [count.state as string, count.count as number])) })) }
+  }
+
+  private health(networkId: string): NetworkHealth {
+    const status = this.store.db.prepare('SELECT last_dispatch_at,intake_error FROM network_runtime_status WHERE network_id=?').get(networkId)
+    const failure = this.store.db.prepare('SELECT i.run_id,i.generation,i.state,c.failure_kind,c.diagnostic,c.settlement_receipt FROM network_invocations i LEFT JOIN network_invocation_controls c ON c.run_id=i.run_id JOIN runs r ON r.id=i.run_id WHERE i.network_id=? AND c.retry_consumed_at IS NULL AND c.resolved_receipt IS NULL AND i.state IN (\'interrupted\',\'blocked\',\'unknown\') ORDER BY r.started_at DESC,r.rowid DESC LIMIT 1').get(networkId)
+    return {
+      lastFailure: failure ? { runId: failure.run_id as string, generation: Number(failure.generation), kind: failure.failure_kind as string ?? 'recovery', reason: failure.diagnostic as string ?? (failure.settlement_receipt ? (JSON.parse(failure.settlement_receipt as string).error ?? 'Network invocation requires inspection') as string : 'Network invocation requires process and effect inspection') } : null,
+      oldestPendingAt: this.store.db.prepare('SELECT min(accepted_at) AS at FROM network_deliveries WHERE network_id=? AND state IN (\'pending\',\'retry_wait\')').get(networkId)!.at as number | null,
+      nextRetryAt: this.store.db.prepare('SELECT min(c.retry_at) AS at FROM network_invocation_controls c JOIN network_invocations i ON i.run_id=c.run_id WHERE i.network_id=?').get(networkId)!.at as number | null,
+      lastDispatchAt: status?.last_dispatch_at as number | null ?? null,
+      lastSchedulerProgressAt: this.store.db.prepare('SELECT last_progress_at FROM network_scheduler_state WHERE id=1').get()!.last_progress_at as number | null,
+      lastSchedulerError: this.store.db.prepare('SELECT last_error FROM network_scheduler_state WHERE id=1').get()!.last_error as string | null,
+      intakeError: status?.intake_error as string | null ?? null,
+    }
   }
 
   async stop(): Promise<void> {
     for (const batch of this.batches.values()) this.trace(batch.preview.networkId, 'process-now-stopped', { previewId: batch.preview.id, admitted: batch.preview.budget - batch.remaining, explicitResumeRequired: true })
-    this.batches.clear()
+    for (const id of this.batches.keys()) this.endBatch(id, 'stopped')
     await Promise.all(this.pendingSettlements.values())
   }
 
@@ -214,27 +289,31 @@ export class NetworkEngine {
     return digest(canonicalNetworkJson({ network, revision: definition.revision, members: preview.podIds.map(id => ({ pod: this.store.getPod(id), resourceEpoch: this.resources.epoch(id), binding: this.store.db.prepare('SELECT * FROM instance_definition_bindings WHERE pod_id=?').get(id) })) }))
   }
 
-  private begin(definition: NetworkDefinition, podId: string, reason: 'manual' | 'schedule' | 'event', allowPaused: boolean, due?: number): string | null {
+  private begin(definition: NetworkDefinition, podId: string, reason: 'manual' | 'schedule' | 'event', allowPaused: boolean, due?: number, processPreviewId: string | null = null): string | null {
     let authority: NetworkAuthority | null = null
     try {
       authority = this.store.transaction(() => {
-        const reserved = this.invocations.reserve(definition.id, podId, this.resources.epoch(podId), reason, allowPaused)
+        const reserved = this.invocations.reserve(definition.id, podId, this.resources.epoch(podId), reason, allowPaused, processPreviewId)
         if (!reserved || due === undefined) return reserved
         const schedule = definition.members.find(member => member.podId === podId)!.source!.schedule!
-        const row = this.store.db.prepare('SELECT manifest FROM network_invocations WHERE run_id=?').get(reserved.runId)!
-        const activationId = this.store.db.prepare('SELECT id FROM network_trace_events WHERE network_id=? AND kind=\'network-activated\' ORDER BY id DESC LIMIT 1').get(definition.id)!.id
-        this.store.db.prepare('UPDATE network_invocations SET manifest=? WHERE run_id=?').run(canonicalNetworkJson({ ...JSON.parse(row.manifest as string), sourceActivationId: activationId, sourceNextAt: nextDue(schedule, due, Date.now()) }), reserved.runId)
+        this.store.db.prepare('UPDATE network_source_clocks SET next_at=? WHERE network_id=? AND pod_id=?').run(nextDue(schedule, due, Date.now()), definition.id, podId)
         return reserved
       })
       if (!authority) return null
+      this.store.db.prepare('INSERT INTO network_runtime_status(network_id,last_pod,last_dispatch_at) VALUES(?,?,?) ON CONFLICT(network_id) DO UPDATE SET last_pod=excluded.last_pod,last_dispatch_at=excluded.last_dispatch_at').run(definition.id, podId, Date.now())
+      this.store.db.prepare('UPDATE network_scheduler_state SET last_network=? WHERE id=1').run(definition.id)
       this.dispatcher.startNetwork(this.invocations, authority)
       return authority.runId
     }
     catch (failure) {
+      if (failure instanceof NetworkQuotaError) {
+        this.store.db.prepare('UPDATE networks SET state=\'paused\' WHERE id=?').run(definition.id)
+        this.store.db.prepare('INSERT INTO network_runtime_status(network_id,intake_error,inspected_at) VALUES(?,?,?) ON CONFLICT(network_id) DO UPDATE SET intake_error=excluded.intake_error,inspected_at=excluded.inspected_at').run(definition.id, failure.message, Date.now())
+      }
       const message = (failure instanceof Error ? failure.message : 'Network admission failed').slice(0, 10000)
       const previous = this.store.db.prepare('SELECT body FROM network_trace_events WHERE network_id=? AND kind=\'instance-attention\' AND json_extract(body,\'$.podId\')=? ORDER BY id DESC LIMIT 1').get(definition.id, podId)
       if (!previous || (JSON.parse(previous.body as string) as { message: string }).message !== message) this.trace(definition.id, 'instance-attention', { podId, message })
-      if (authority) this.pendingSettlements.set(authority.runId, this.closeUnstarted(definition.id, authority, message))
+      if (authority) this.pendingSettlements.set(authority.runId, this.closeUnstarted(definition.id, authority, message).catch((failure) => { console.error('Network admission recovery failed; retained authority requires inspection', failure) }))
       return null
     }
   }
@@ -242,6 +321,8 @@ export class NetworkEngine {
   private async closeUnstarted(networkId: string, authority: NetworkAuthority, message: string): Promise<void> {
     try { await this.invocations.finish(authority, 'failed', 'Network admission failed before process launch', message, [], []) }
     catch (failure) {
+      try { await this.invocations.failClosed(authority, failure) }
+      catch (interruptionFailure) { console.error('Network admission interruption could not be recorded', interruptionFailure) }
       this.trace(networkId, 'admission-cleanup-unverified', { runId: authority.runId, message: (failure instanceof Error ? failure.message : 'Admission cleanup failed').slice(0, 10000), leaseRetained: true })
       console.error('Network admission cleanup failed; its retained lease requires inspection')
     }
@@ -249,11 +330,12 @@ export class NetworkEngine {
   }
 
   private sourceDue(definition: NetworkDefinition, podId: string): number | null {
-    const activation = this.store.db.prepare('SELECT id,created_at,body FROM network_trace_events WHERE network_id=? AND kind=\'network-activated\' ORDER BY id DESC LIMIT 1').get(definition.id)
-    if (!activation) return null
-    const last = this.store.db.prepare('SELECT i.manifest FROM network_invocations i JOIN runs r ON r.id=i.run_id WHERE i.network_id=? AND i.pod_id=? AND json_extract(i.manifest,\'$.sourceActivationId\')=? AND json_extract(i.manifest,\'$.reason\')=\'schedule\' ORDER BY r.started_at DESC,r.rowid DESC LIMIT 1').get(definition.id, podId, activation.id!)
-    if (last) return (JSON.parse(last.manifest as string) as { sourceNextAt: number }).sourceNextAt
-    return (JSON.parse(activation.body as string) as { sources: { podId: string, nextAt: number }[] }).sources.find(source => source.podId === podId)?.nextAt ?? null
+    return this.store.db.prepare('SELECT next_at FROM network_source_clocks WHERE network_id=? AND pod_id=?').get(definition.id, podId)?.next_at as number ?? null
+  }
+
+  private endBatch(id: string, state: 'stopped' | 'finished'): void {
+    this.store.db.prepare('UPDATE network_process_previews SET state=? WHERE id=? AND consumed_at IS NOT NULL').run(state, id)
+    this.batches.delete(id)
   }
 
   private attention(networkId: string, kind: string, context: Record<string, unknown>, failure: unknown): void {
