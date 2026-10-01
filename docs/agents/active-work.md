@@ -25,7 +25,29 @@ M0 merged as `fb80556d8a66843e028da7d13cda97fd5a9f1d50`.
 M0–M2 are accepted and merged. M3 is in progress: versioned contracts,
 durable acceptance, independent dispatch, local IPC and atomic settlement. Native
 sandbox scheduling and actual Electron routing passed. M3 PR 203 is in final
-documentation review; its tested runtime gates, exact-head CI and evidence passed. M4–M14 remain unimplemented.
+documentation review; its tested runtime gates, exact-head CI and evidence passed.
+M4–M14 remain unimplemented.
+M3 [PR 203](https://repos.openape.ai/patrick/monorepo/pulls/203): tested clean
+runtime `da209ca697d79c0cade36759d9ccb69aa9167f53` passed root lint/typecheck/build,
+133 files / 966 fresh Pods unit tests, four manual native/Electron tests and
+exact-head CI 5310. Two unrelated crash cases were skipped by selection.
+Actual sandbox A/B independence, source-version deduplication, empty intake,
+settlement after pause, untouched legacy checkpoints and preload/main/worker
+routing were verified. The final synthetic desktop screenshot was personally
+inspected. Repeated actual Claude Code Opus 5.5 reviews confirmed safety closure;
+primary native diff review verified all 3,066 displayed lines against the commits.
+[Verified private Test Runs receipt](https://report.openape.ai/r/Y_XFy5OH08ad4fPoSStGwAFk):
+category Test Runs, owner read 200, anonymous read 401 and inspected screenshot
+bytes retained in the published document. M3 remains open until final
+head CI and canonical merge are recorded.
+
+M3 is a seeded engine vertical slice. Productive definition/instance creation
+arrives in M8 after M4 recovery. Central-connected creation is denied before
+mutation pending M10. No live profile/source/provider action or expanded rights.
+Next: M4 owner inspection/requeue, retry deadlines, fair admission, quota and
+operational control storage before retention. Preserve original claim batches on
+retry to retain derived event identity; never repeat unknown external effects.
+
 M1 prototype: 24 crash/authority checks pass; selected established scheduling
 suites pass (120 checks before the two final isolation assertions). Maximum-payload
 stress has 195,000 receipts/events, 255,000 deliveries and 30,000 record revisions.
@@ -1048,25 +1070,3 @@ are implied by merging this preparation increment.
 - Base: `6b02cfc36508e1fe79dd4c4ffcbe81dc78edc85d`. Frozen install and doctor pass.
 - Implemented generic private documents/categories, parser sanitization, HTTP/iframe sandbox, compatible adapters and the receipt-first PR client. Full lint/typecheck and app builds pass; Reports 57 unit + 16 E2E + nine layout tests, Pods 629 tests and CLI four tests pass. Migration twice preserves all legacy rows; the deployed rollback image safely rejects new private documents. See `docs/operations/generic-reports-migration.md`.
 - Next: native PR/exact-source CI, clean-main deployment, real no-send producer previews, evidence upload, guidance and activation. Production, schedules and guidance are unchanged until acceptance.
-
-
-M3 [PR 203](https://repos.openape.ai/patrick/monorepo/pulls/203): tested clean
-runtime `da209ca697d79c0cade36759d9ccb69aa9167f53` passed root lint/typecheck/build,
-133 files / 966 fresh Pods unit tests, four manual native/Electron tests and
-exact-head CI 5310. Two unrelated crash cases were skipped by selection.
-Actual sandbox A/B independence, source-version deduplication, empty intake,
-settlement after pause, untouched legacy checkpoints and preload/main/worker
-routing were verified. The final synthetic desktop screenshot was personally
-inspected. Repeated actual Claude Code Opus 5.5 reviews confirmed safety closure;
-primary native diff review verified all 3,066 displayed lines against the commits.
-[Verified private Test Runs receipt](https://report.openape.ai/r/Y_XFy5OH08ad4fPoSStGwAFk):
-category Test Runs, owner read 200, anonymous read 401 and inspected screenshot
-bytes retained in the published document. M3 remains open until final
-head CI and canonical merge are recorded.
-
-M3 is a seeded engine vertical slice. Productive definition/instance creation
-arrives in M8 after M4 recovery. Central-connected creation is denied before
-mutation pending M10. No live profile/source/provider action or expanded rights.
-Next: M4 owner inspection/requeue, retry deadlines, fair admission, quota and
-operational control storage before retention. Preserve original claim batches on
-retry to retain derived event identity; never repeat unknown external effects.
