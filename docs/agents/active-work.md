@@ -29,8 +29,10 @@ stress has 195,000 receipts/events, 255,000 deliveries and 30,000 record revisio
 The compacted retained database is 96,526,336 bytes. Transactional queue-count
 projection replaces an observed full-scan bottleneck; see
 [measured limits and dependent gates](../architecture/pods-networks/prototype-findings.md).
-Independent Opus reviews verified code-blocker closure; final targeted evidence
-review, temporary-fixture tested commit/removal pair and native PR/CI remain open.
+Independent Opus reviews verified code-blocker closure and targeted evidence
+corrections. Temporary-fixture tested commit/removal pair and native PR/CI remain
+open. M1 step 4 measures logical CAS only; actual writer contention and implemented
+join measurements are explicitly deferred to M3/M4/M7.
 This is test-only SQL design evidence, not product engine or encrypted-restore
 acceptance. Next: finish M1 exact-head gates, then M2 additive storage/backup.
 Patrick requests an additional Claude Code Opus 5.5 UX review when M9 is reached;
