@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { deriveEdges, diagnoseGraph } from '../../src/contracts/graphs'
 import type { GraphContract, GraphGate, GraphMemberFacts } from '../../src/contracts/graphs'
+import { diagnoseNetwork, parseNetworkDefinition } from '../../src/contracts/networks'
 import { parseWorkflowCommand, parseWorkflowView, sequenceParts } from '../../src/contracts/workflows'
 import type { WorkflowDefinition } from '../../src/contracts/workflows'
 import { PodVariables } from '../../src/worker/resources/variables'
@@ -25,6 +26,55 @@ function graph(change: Partial<WorkflowDefinition> = {}): WorkflowDefinition {
 }
 const facts: Record<string, GraphMemberFacts> = { [archive]: { archive: true } }
 const codes = (definition: WorkflowDefinition, known = contracts as Record<string, GraphContract | null>, memberFacts = facts) => diagnoseGraph(definition, known, memberFacts).map(({ code, node, channel }) => ({ code, node, channel }))
+
+function persistentNetwork() {
+  const payload = { type: 'object', properties: { subject: { type: 'string' } }, required: ['subject'], additionalProperties: false }
+  return {
+    formatVersion: 1, kind: 'network', semantics: 'persistent-network-v1', id: '00000000-0000-4000-8000-0000000000a0', revision: 1,
+    groupId: '00000000-0000-4000-8000-0000000000b0', name: 'Persistent mail',
+    channels: ['mail.open', 'mail.sorted'].map(name => ({ name, title: name, schemaVersion: 1, schema: payload })),
+    members: [intake, sorter, archive].map((podId, index) => ({
+      podId, definitionId: podId, definitionVersion: 1, bindingRevision: 1, serialCase: true,
+      contract: { takes: index === 0 ? [] : [index === 1 ? 'mail.open' : 'mail.sorted'], gives: index === 2 ? [] : [index === 0 ? 'mail.open' : 'mail.sorted'], summary: 'Processes metadata' },
+      source: index === 0 ? { bindingId: '00000000-0000-4000-8000-0000000000c0', schedule: { kind: 'daily', time: '08:00', timezone: 'Europe/Vienna' } } : null,
+    })),
+  }
+}
+
+describe('persistent network definitions', () => {
+  it('pins schemas, definitions, source bindings and independent source schedules', () => {
+    const definition = parseNetworkDefinition(persistentNetwork())
+    expect(definition).toEqual(persistentNetwork())
+    expect(diagnoseNetwork(definition)).toEqual([])
+    expect(definition.members[0]!.source!.schedule).toEqual({ kind: 'daily', time: '08:00', timezone: 'Europe/Vienna' })
+  })
+
+  it('reports undeclared channels and consumers without producers', () => {
+    const definition = parseNetworkDefinition(persistentNetwork())
+    definition.members[1]!.contract.takes = ['mail.missing']
+    expect(diagnoseNetwork(definition)).toContainEqual({ code: 'channel-undeclared', podId: sorter, channel: 'mail.missing' })
+    expect(diagnoseNetwork(definition)).toContainEqual({ code: 'channel-without-producer', podId: sorter, channel: 'mail.missing' })
+  })
+
+  it('rejects undeclared feedback until the separately bounded feedback milestone', () => {
+    const definition = parseNetworkDefinition(persistentNetwork())
+    definition.members[2]!.contract.gives = ['mail.open']
+    expect(diagnoseNetwork(definition).filter(item => item.code === 'cycle').map(item => item.podId)).toEqual([sorter, archive])
+  })
+
+  it('rejects unversioned schemas, unknown authority fields and duplicated instances', () => {
+    const invalidVersion = persistentNetwork(); invalidVersion.channels[0]!.schemaVersion = 0
+    expect(() => parseNetworkDefinition(invalidVersion)).toThrow('revision')
+    expect(() => parseNetworkDefinition({ ...persistentNetwork(), permissions: ['mail.send'] })).toThrow('fields')
+    const duplicate = persistentNetwork(); duplicate.members.push(duplicate.members[0]!)
+    expect(() => parseNetworkDefinition(duplicate)).toThrow('unique')
+  })
+
+  it('keeps source and consumer activation policies distinct', () => {
+    const input = persistentNetwork(); input.members[1]!.source = input.members[0]!.source
+    expect(() => parseNetworkDefinition(input)).toThrow('source or a subscribed consumer')
+  })
+})
 
 describe('derived edges', () => {
   it('connects every giver of a channel to every taker, including gates', () => {

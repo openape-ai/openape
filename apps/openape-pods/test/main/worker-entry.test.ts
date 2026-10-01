@@ -2,6 +2,7 @@
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
 import { PodDatabase } from '../../src/worker/storage/database'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
@@ -28,6 +29,7 @@ vi.mock('../../src/worker/runs/dispatcher', async (importOriginal) => {
 // fake timers. Formerly the packaged `crash-recovery` suspend case: a suspend
 // signal pauses intake, and resume catches missed slots up exactly once.
 let root = ''; let listener: (event: { data: unknown }) => Promise<void> = async () => {}
+const replies = vi.fn()
 const exit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never)
 function runs(podId: string): number {
   const store = new PodDatabase(root)
@@ -52,7 +54,7 @@ beforeAll(async () => {
   process.env.PODS_TEST_POD_ID = pod.id
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
   vi.spyOn(process, 'cwd').mockReturnValue(root)
-  Object.defineProperty(process, 'parentPort', { configurable: true, value: { postMessage: () => {}, on: (_event: string, callback: typeof listener) => { listener = callback } } })
+  Object.defineProperty(process, 'parentPort', { configurable: true, value: { postMessage: replies, on: (_event: string, callback: typeof listener) => { listener = callback } } })
   vi.stubEnv('PODS_RUNTIME_EXECUTABLE', process.execPath)
   await import('../../src/worker/entry')
   vi.mocked(process.cwd).mockRestore()
@@ -100,4 +102,20 @@ it('routes assigned SSH observations through the real worker entry without requi
     expect(bridge).toHaveBeenCalledTimes(1)
   }
   finally { bridge.mockRestore(); store.close() }
+})
+
+it('validates the local network route and refuses creation on a central-connected runtime before mutation', async () => {
+  await send({ id: 'networks-list', command: { networks: { type: 'list' } } })
+  expect(replies).toHaveBeenCalledWith({ id: 'networks-list', state: { networks: [] } })
+  await send({ id: 'networks-invalid', command: { networks: { type: 'list', owner: 'forged' } } })
+  expect(replies).toHaveBeenCalledWith(expect.objectContaining({ id: 'networks-invalid', error: expect.any(String) }))
+  vi.stubEnv('PODS_CENTRAL_ENABLED', '1')
+  try {
+    await send({ id: 'networks-create', command: { networks: { type: 'create', draft: { name: 'Synthetic network', groupId: randomUUID(), channels: [], members: [{ podId: randomUUID(), source: { schedule: null }, serialCase: false }] } } } })
+    expect(replies).toHaveBeenCalledWith({ id: 'networks-create', error: 'Network creation requires bounded central publication support' })
+    const store = new PodDatabase(root)
+    try { expect(store.db.prepare('SELECT count(*) AS count FROM networks').get()!.count).toBe(0) }
+    finally { store.close() }
+  }
+  finally { vi.stubEnv('PODS_CENTRAL_ENABLED', '') }
 })

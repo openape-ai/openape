@@ -41,6 +41,12 @@ import { graphRun, pendingItems, settleItems } from '../workflows/items'
 import type { DeliveredItem } from '../workflows/items'
 import { gateCoverage, gateRound } from '../workflows/gates'
 import { installExample } from './examples'
+import type { NetworkInvocations } from '../scheduling/network-invocations'
+import type { NetworkAuthority, NetworkEmission } from '../scheduling/network-events'
+import { canonicalNetworkJson } from '../scheduling/network-events'
+import { fenceNetworkBoot } from '../scheduling/network-boot'
+
+interface NetworkExecution { invocations: NetworkInvocations, authority: NetworkAuthority, emissions: NetworkEmission[] }
 
 export interface RunServiceScope {
   podId: string
@@ -78,6 +84,7 @@ export class RunDispatcher {
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly runtime: AgentRuntime, private readonly services?: RunServices) {
     this.runs = new RunStore(store)
     store.transaction(() => {
+      fenceNetworkBoot(store)
       store.db.prepare('UPDATE runs SET state=\'interrupted\',error=\'Previous worker stopped; explicit recovery is required\',checkpoint_revision=(SELECT revision FROM checkpoints WHERE pod_id=runs.pod_id) WHERE state=\'running\' AND id IN (SELECT run_id FROM run_leases)').run()
       store.db.prepare('UPDATE run_leases SET boot_id=?').run(`fenced:${this.runs.bootId}`)
       store.db.prepare('UPDATE effect_ledger SET state=\'unknown\' WHERE state=\'intent\'').run()
@@ -123,6 +130,27 @@ export class RunDispatcher {
 
   cancelPod(podId: string, message = 'Run cancelled by the owner'): void { this.active.get(podId)?.controller.abort(new Error(message)) }
 
+  startNetwork(invocations: NetworkInvocations, authority: NetworkAuthority): void {
+    this.store.assertStorage()
+    const { row, member } = invocations.events.authority(authority)
+    this.runs.assertLease(authority.runId)
+    if (this.active.has(member.podId)) throw new Error('Network instance already has an active process')
+    const manifest = JSON.parse(row.manifest as string) as { reason: RunTrigger['reason'], resourceEpoch: number }
+    const controller = new AbortController()
+    const execution = { invocations, authority, emissions: [] }
+    const work = this.execute(authority.runId, manifest.resourceEpoch, controller.signal, { reason: manifest.reason, eventIds: [] }, execution).catch(async (failure: unknown) => {
+      try { await invocations.failClosed(authority, failure) }
+      catch (cleanupFailure) {
+        try {
+          this.store.db.prepare('INSERT INTO network_trace_events(network_id,run_id,kind,body,created_at) VALUES(?,?,?,?,?)').run(row.network_id!, authority.runId, 'settlement-cleanup-unverified', JSON.stringify({ reason: (cleanupFailure instanceof Error ? cleanupFailure.message : 'Network cleanup failed').slice(0, 10000), explicitInspectionRequired: true }), Date.now())
+        }
+        catch { console.error('Network cleanup diagnostic could not be persisted; its retained state requires inspection') }
+        console.error('Network settlement cleanup failed; explicit inspection is required')
+      }
+    }).finally(() => { this.active.delete(member.podId) })
+    this.active.set(member.podId, { controller, work })
+  }
+
   cancel(podId: string, id: string): void {
     if (this.runs.get(id).podId !== podId) throw new Error('Run belongs to a different pod')
     const lease = this.store.db.prepare('SELECT run_id FROM run_leases WHERE pod_id=?').get(podId)
@@ -136,9 +164,16 @@ export class RunDispatcher {
     await Promise.all(active.map(run => run.work))
   }
 
-  private async execute(id: string, epoch: number, signal: AbortSignal, trigger: RunTrigger): Promise<void> {
+  private async execute(id: string, epoch: number, signal: AbortSignal, trigger: RunTrigger, network?: NetworkExecution): Promise<void> {
     const run = this.runs.get(id); const pod = this.store.getPod(run.podId)
-    const assertCurrent = () => { this.runs.assertLease(id); this.resources.assertCurrent(pod.id, epoch); if (this.store.getPod(pod.id).bindingRevision !== pod.bindingRevision) throw new Error('Script binding changed during the run'); signal.throwIfAborted() }
+    const assertCurrent = () => { this.runs.assertLease(id); network?.invocations.events.authority(network.authority); this.resources.assertCurrent(pod.id, epoch); if (this.store.getPod(pod.id).bindingRevision !== pod.bindingRevision) throw new Error('Script binding changed during the run'); signal.throwIfAborted() }
+    const appendEvent = (type: string, data: unknown) => {
+      if (!network) { this.runs.append(id, type, data); return }
+      const networkId = network.invocations.events.authority(network.authority).definition.id
+      const body = canonicalNetworkJson({ data })
+      if (Buffer.byteLength(body) > 256 * 1024) throw new Error('Network trace exceeds its size limit')
+      this.store.db.prepare('INSERT INTO network_trace_events(network_id,run_id,kind,body,created_at) VALUES(?,?,?,?,?)').run(networkId, id, type, body, Date.now())
+    }
     const directory = join(this.store.root, 'runs', id)
     const pendingAgents = new Set<Promise<unknown>>()
     // Agent calls carry their own bounded timeout, so they pause the script budget,
@@ -162,7 +197,7 @@ export class RunDispatcher {
           return work()
         }, signal, (retry) => {
           if (retry && !waiting) { waiting = true; infrastructureWaiting++ }
-          this.runs.append(id, 'infrastructure', { operation, ...(retry ?? { state: 'restored' }) })
+          appendEvent('infrastructure', { operation, ...(retry ?? { state: 'restored' }) })
         }, budgetMs)
       }
       finally { if (waiting) infrastructureWaiting-- }
@@ -172,18 +207,23 @@ export class RunDispatcher {
       const manifestRow = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(pod.id, run.scriptHash)
       if (!manifestRow) throw new Error('Pinned script is missing')
       const manifest = parseManifest(JSON.parse(manifestRow.manifest as string))
+      if (network && manifest.capabilities.length) throw new Error('Network capabilities require declared runtime ports')
       if (!manifest.triggers.includes(trigger.reason)) throw new Error('Script does not allow this trigger')
       const assigned = this.resources.list(pod.id).filter(resource => resource.kind === 'tool' && resource.state === 'ready').map(resource => resource.configuration.capability)
       if (manifest.capabilities.filter(capability => !capability.startsWith('credential.')).some(capability => !assigned.includes(capability)) || (manifest.capabilities.includes('mail.read') && !this.services?.tool)) throw new Error('No tool assignments are available for this script')
       const artifact = join(directory, 'run.mjs'); await writeFile(artifact, this.store.readBlob(run.scriptHash), { flag: 'wx', mode: 0o400 })
-      const snapshots = await this.resources.capture(pod.id, this.runtime.helper)
+      const snapshots = network
+        ? await this.resources.capture(pod.id, this.runtime.helper, { runId: id, assertCurrent })
+        : await this.resources.capture(pod.id, this.runtime.helper)
       assertCurrent()
-      const checkpoint = this.store.checkpoint(pod.id)
+      const networkInput = network?.invocations.input(network.authority)
+      const checkpoint = networkInput?.checkpoint ?? this.store.checkpoint(pod.id)
       const folders = await podDirectories(this.store.root, pod.id)
       const directories = await assignedDirectories(this.store.root, pod.id, this.resources.list(pod.id))
       assertCurrent()
       const input: RunInput = { workflow: workflowInput(this.store, id), home: folders.home, directories: directories.map(({ path, access }) => ({ path, access })), variables: { ...Object.fromEntries((graph?.definition.values ?? []).map(value => [value.name, value.value])), ...new PodVariables(this.store).values(pod.id) }, version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.bindingRevision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: folders.workspace, references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: 300000, frameBytes: 256 * 1024 } }
-      this.runs.append(id, 'snapshot', { id: snapshots.id, files: input.references })
+      if (networkInput) { input.network = networkInput.network; input.eventIds = networkInput.items.map(item => item.eventId) }
+      appendEvent('snapshot', { id: snapshots.id, files: input.references })
       const dependencies = new DependencyStore(this.store); const dependencyHash = dependencies.scriptSet(pod.id, run.scriptHash)
       const dependencyRoot = dependencyHash ? await dependencies.verify(pod.id, dependencyHash) : undefined
       const runtime = { ...this.runtime, dependencyRoot, registerDomain: (path: string, ownerPid: number) => this.runs.registerDomain(id, path, ownerPid) }
@@ -196,7 +236,7 @@ export class RunDispatcher {
         try { const reply = await operation; assertCurrent(); return reply }
         finally { pendingAgents.delete(operation) }
       }
-      if (this.services?.shell) {
+      if (this.services?.shell && !network) {
         const environment = await retryService('runtime authorization', () => this.services!.shell!(scope, signal), signal, 30000)
         Object.assign(runtime, { home: environment.home, shell: environment.shell, environment: { ...environment.environment, ...runtime.environment } })
         shellScope = scope
@@ -205,12 +245,32 @@ export class RunDispatcher {
       const checkEmit = graphEmitter(contract)
       let mailWorkflow: MailWorkflow | undefined
       let mail: MailRecipeSession | undefined
-      this.runs.append(id, 'environment', { script: artifact, workspace: input.workspace, values: Object.fromEntries(Object.entries(runtime.environment).filter(([key]) => ['HOME', 'TMPDIR', 'PATH', 'SHELL', 'PODS_POD_ID', 'LANG', 'TERM'].includes(key))) })
+      appendEvent('environment', { script: artifact, workspace: input.workspace, values: Object.fromEntries(Object.entries(runtime.environment).filter(([key]) => ['HOME', 'TMPDIR', 'PATH', 'SHELL', 'PODS_POD_ID', 'LANG', 'TERM'].includes(key))) })
       const result = await executeScript(runtime, directory, artifact, input, signal, {
         budgetPaused: () => infrastructureWaiting > 0 || agentBudgetPaused() || this.runs.approvals(pod.id).some(item => item.runId === id),
-        event: (type, data) => { this.runs.assertLease(id); this.runs.append(id, type, data); if (type === 'process') scriptStarted = true; if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
+        event: (type, data) => { assertCurrent(); appendEvent(type, data); if (type === 'process') scriptStarted = true; if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
         request: async (operation, payload, operationSignal) => {
           assertCurrent()
+          if (network) {
+            if (!['graph.contract', 'graph.emit', 'network.emit', 'progress.commit'].includes(operation)) throw new Error('Network operation requires a declared runtime port')
+            if (operation === 'progress.commit') return network.invocations.stageProgress(network.authority, payload)
+            if (operation === 'graph.contract') {
+              const pinned = network.invocations.events.authority(network.authority).member.contract
+              if (!contract || canonicalNetworkJson(parseGraphContract(payload)) !== canonicalNetworkJson(pinned) || canonicalNetworkJson(contract) !== canonicalNetworkJson(pinned)) throw new Error('Network script contract differs from its pinned definition')
+              return network.invocations.input(network.authority).items
+            }
+            if (network.emissions.length >= 500) throw new Error('Network invocation exceeds 500 emissions')
+            if (operation === 'graph.emit') {
+              if (input.network!.source) throw new Error('Network sources must emit explicit source item versions')
+              const emit = checkEmit(payload)
+              network.emissions.push(network.invocations.events.emission(network.authority, { channel: emit.channel, key: emit.key, payload: emit.data }))
+              if (emit.reason !== undefined || emit.confidence !== undefined) appendEvent('emission-explanation', { channel: emit.channel, key: emit.key, reason: emit.reason ?? null, confidence: emit.confidence ?? null })
+              return { staged: true }
+            }
+            network.emissions.push(network.invocations.events.emission(network.authority, payload))
+            return { staged: true }
+          }
+          if (operation === 'network.emit') throw new Error('Network emission requires a network invocation')
           if (operation === 'mail.archive') {
             if (!this.services?.mailArchive) throw new Error('Mail archive service is unavailable')
             // In a graph the script never names what may move; the consumed gate batches do.
@@ -263,7 +323,7 @@ export class RunDispatcher {
             const emit = checkEmit(payload)
             // Emits become items only when the run completes, so a failed run hands nothing on.
             emits.push(emit)
-            this.runs.append(id, 'emit', { channel: emit.channel, key: emit.key }); return { emitted: true }
+            appendEvent('emit', { channel: emit.channel, key: emit.key }); return { emitted: true }
           }
           if (operation === 'workflow.publish') { publishWorkflowOutput(this.store, id, payload); return { published: true } }
           if (operation === 'mail.next' || operation === 'mail.commit') {
@@ -279,11 +339,11 @@ export class RunDispatcher {
             }
             if (operation === 'mail.commit') {
               const result = mail.commit(payload)
-              this.runs.append(id, 'checkpoint', { revision: result.revision, kind: 'mail-knowledge', gaps: result.gapIds.length })
+              appendEvent('checkpoint', { revision: result.revision, kind: 'mail-knowledge', gaps: result.gapIds.length })
               return result
             }
             const result = await mail.next() as { type: string, hash?: string, sources?: number, omissions?: string[], revision?: number, count?: number }
-            this.runs.append(id, 'mail-progress', { type: result.type, contextHash: result.hash, sources: result.sources, omissions: result.omissions, revision: result.revision, retrieved: result.count })
+            appendEvent('mail-progress', { type: result.type, contextHash: result.hash, sources: result.sources, omissions: result.omissions, revision: result.revision, retrieved: result.count })
             return result
           }
           if (operation === 'jev.evaluate') {
@@ -297,7 +357,7 @@ export class RunDispatcher {
               const evaluation = await pending
               assertCurrent(); operationSignal.throwIfAborted()
               const result = parseJevResult(evaluation.result, request, assignment.model)
-              this.runs.append(id, 'jev', { provider: 'typesafe', model: result.model, attempts: evaluation.attempts, durationMs: Date.now() - started, usage: result.usage })
+              appendEvent('jev', { provider: 'typesafe', model: result.model, attempts: evaluation.attempts, durationMs: Date.now() - started, usage: result.usage })
               return result
             }
             finally { pendingAgents.delete(pending) }
@@ -317,7 +377,7 @@ export class RunDispatcher {
           if (operation === 'progress.commit') {
             const progress = parseProgress(payload)
             const revision = this.store.commitProgress({ ...progress, podId: pod.id })
-            this.runs.append(id, 'checkpoint', { revision }); return { revision }
+            appendEvent('checkpoint', { revision }); return { revision }
           }
           if (operation === 'credentials.get') {
             const alias = parseCredentialRead(payload)
@@ -330,7 +390,7 @@ export class RunDispatcher {
           if (operation === 'agent.run') {
             if (!this.services?.provider) throw new Error('Codex is not connected; connect the pod provider before using this script')
             const request = parseAgentRequest(payload)
-            const operation = executeAgent(runtime, directory, request.prompt, input.references.map(file => file.path), { provider: this.services.provider, tool: invokeTool }, operationSignal, (event) => { assertCurrent(); this.runs.append(id, 'agent', event) }, request.tools, request.timeoutSeconds)
+            const operation = executeAgent(runtime, directory, request.prompt, input.references.map(file => file.path), { provider: this.services.provider, tool: invokeTool }, operationSignal, (event) => { assertCurrent(); appendEvent('agent', event) }, request.tools, request.timeoutSeconds)
             pendingAgents.add(operation); if (activeAgentCalls++ === 0) agentSince = Date.now()
             try { return await operation }
             finally { pendingAgents.delete(operation); if (--activeAgentCalls === 0) agentPausedMs += Date.now() - agentSince }
@@ -345,21 +405,23 @@ export class RunDispatcher {
         if (!this.store.db.prepare('SELECT 1 FROM claims WHERE pod_id=? AND id=? AND kind=\'gap\'').get(pod.id, gap)) throw new Error('Result references an uncommitted gap')
       }
       if (shellScope) { await this.services?.closeShell?.(shellScope); shellScope = undefined }
-      await this.finish(id, result.status, result.summary, result.status === 'failed' || result.status === 'blocked' ? result.summary : null, result.completedInputIds, undefined, () => settle(true))
+      await this.finish(id, result.status, result.summary, result.status === 'failed' || result.status === 'blocked' ? result.summary : null, result.completedInputIds, undefined, () => settle(true), network)
     }
     catch (error) {
-      const message = error instanceof Error ? error.message : 'Run failed'
+      if (network) network.invocations.recordConflict(network.authority, error)
+      const message = (error instanceof Error ? error.message : 'Run failed').slice(0, 10000)
       await Promise.allSettled(pendingAgents)
-      await this.finish(id, signal.aborted ? 'cancelled' : 'failed', signal.aborted ? 'Run cancelled' : 'Run failed', message, [], !signal.aborted && !scriptStarted && error instanceof InfrastructureError ? epoch : undefined, () => settle(false))
+      await this.finish(id, signal.aborted ? 'cancelled' : 'failed', signal.aborted ? 'Run cancelled' : 'Run failed', message, [], !signal.aborted && !scriptStarted && error instanceof InfrastructureError ? epoch : undefined, () => settle(false), network)
     }
     finally {
       try { if (shellScope) await this.services?.closeShell?.(shellScope) }
-      catch (error) { this.runs.append(id, 'diagnostic', { text: error instanceof Error ? error.message : 'Pod shell cleanup failed' }) }
-      finally { this.active.delete(pod.id) }
+      catch (error) { appendEvent('diagnostic', { text: error instanceof Error ? error.message : 'Pod shell cleanup failed' }) }
+      finally { if (!network) this.active.delete(pod.id) }
     }
   }
 
-  private async finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = [], retryEpoch?: number, settle: () => void = () => {}): Promise<void> {
+  private async finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = [], retryEpoch?: number, settle: () => void = () => {}, network?: NetworkExecution): Promise<void> {
+    if (network) { await network.invocations.finish(network.authority, state, summary, error, completedInputIds, network.emissions); return }
     try { await confirmDomainsStopped(this.store, id, this.runtime.helper) }
     catch (failure) {
       this.runs.interrupt(id, failure instanceof Error ? failure.message : 'Execution cleanup is unverified')
