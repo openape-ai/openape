@@ -5,7 +5,7 @@
 [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3VDB1S72E4EQQW58T97C617),
 [native issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417).
 Checkout: `openape-monorepo.worktrees/pods-workflows-networks`; branch
-`feature/issue-1417-pods-networks-m1`; original canonical base
+`feature/issue-1417-pods-networks-m2`; original canonical base
 `a99c69bd2b97d8883ce5538894c3f38510407ddf` (Pods 0.1.1, schema 27).
 
 M0 freezes [contracts](../architecture/pods-networks/contracts.md) and the
@@ -21,8 +21,9 @@ blocking/major findings after corrections. The primary agent checked sources and
 remaining token/identity wording. Final tested SHA `3b7363b2622b8394c429fe8833c6df49e87742db` passed exact-head CI;
 M0 merged as `fb80556d8a66843e028da7d13cda97fd5a9f1d50`.
 [Final private Test Runs evidence](https://report.openape.ai/r/3fMyH6tmpepIRy7p8qRhYqzm).
-M1 is in progress on `feature/issue-1417-pods-networks-m1`: synthetic
-crash/fencing/volume prototypes in established suites. M2–M14 remain unimplemented.
+M1 prototype acceptance is merged through native PR 201. M2 is in progress on
+`feature/issue-1417-pods-networks-m2`: additive storage, encrypted backup and
+restore fences. M3–M14 remain unimplemented.
 M1 prototype: 24 crash/authority checks pass; selected established scheduling
 suites pass (120 checks before the two final isolation assertions). Maximum-payload
 stress has 195,000 receipts/events, 255,000 deliveries and 30,000 record revisions.
@@ -34,10 +35,20 @@ issue 1417. Tested temporary-fixture SHA
 `26684ec0986d1e3d119ba54cb0ca6c1b25139065` passed full root lint/typecheck,
 Pods build and six focused suites (123 tests). Independent Opus reviews verified
 code-blocker closure and targeted evidence corrections. The final commit removes
-the temporary volume fixture; final-head CI and merge remain open. M1 step 4 measures logical CAS only; actual writer contention and implemented
+the temporary volume fixture. Final head `d504c40ad3a0cb8e092fc7147311ef6fb31a2d51`
+passed external CI and merged as `df832d9d816b97f404eb9f260c834ad8606ed080`.
+[Actual private M1 Test Runs receipt](https://report.openape.ai/r/V1vrDbaXR3kynVJ1ujIBn4Ox). M1 step 4 measures logical CAS only; actual writer contention and implemented
 join measurements are explicitly deferred to M3/M4/M7.
 This is test-only SQL design evidence, not product engine or encrypted-restore
-acceptance. Next: finish M1 exact-head gates, then M2 additive storage/backup.
+acceptance. M2 [PR 202](https://repos.openape.ai/patrick/monorepo/pulls/202) adds schema 28,
+paused/revoked restore and encrypted backup support with activation hidden.
+Runtime source `7dc40d6352d0d7cd994d729db89c0b6a115d4c25` passes clean root
+lint/typecheck, build, all 905 Pods tests and exact-source CI run 5307. Isolated
+schema-27 migration preserves 89 legacy tables, 15,334 existing files and all 86
+credential files; original source unchanged, rollback/reopen/encrypted round trip
+and actual older-app refusal verified. Three full-file Opus 5.5 reviews and one
+targeted closure accompany primary review. [M2 storage evidence](../architecture/pods-networks/m2-storage-evidence.md).
+Final documentation-head CI and native exact-SHA merge remain pending; M3 follows.
 Patrick requests an additional Claude Code Opus 5.5 UX review when M9 is reached;
 record its actual availability/result without substituting a claimed review.
 Production pilot, live conversion and concrete actions keep their separate gates.

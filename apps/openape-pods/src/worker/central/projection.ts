@@ -17,6 +17,7 @@ export class CentralProjection {
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly scripts: ScriptWorkspace, private readonly runs: RunDispatcher, private readonly scheduler: Scheduler) {}
 
   snapshot(owner: Owner): CentralSnapshot {
+    if (this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()) throw new Error('Persistent networks require bounded publication support before this workspace can connect')
     const result = this.store.transaction(() => {
       const pods = this.store.listPods()
       for (const pod of pods) {

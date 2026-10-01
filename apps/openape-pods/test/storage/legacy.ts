@@ -1,6 +1,12 @@
+import { networkTables } from '../../src/worker/storage/network-schema'
 import type { DatabaseSync } from 'node:sqlite'
 
+export function removeNetworkSchema(database: DatabaseSync): void {
+  for (const table of [...networkTables].reverse()) database.exec(`DROP TABLE ${table}`)
+}
+
 export function removeGraphSchema(database: DatabaseSync): void {
+  removeNetworkSchema(database)
   database.exec('DROP INDEX graph_gate_batches_open; DROP TABLE graph_gate_batches; DROP TABLE graph_item_events; DROP TABLE graph_deliveries; DROP TABLE graph_items; DROP TABLE workflow_values; DROP TABLE workflow_gates; DROP TABLE workflow_channels; ALTER TABLE workflows DROP COLUMN mode; ALTER TABLE workflows DROP COLUMN group_id;')
 }
 
