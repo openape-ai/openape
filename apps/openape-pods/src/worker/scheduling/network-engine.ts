@@ -1,3 +1,5 @@
+import { NetworkGates } from './network-gates'
+import type { NetworkGateStep } from './network-gates'
 import { randomUUID } from 'node:crypto'
 import { parseOwner, sameOwner } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
@@ -20,11 +22,14 @@ interface ProcessBatch { preview: NetworkPreview, fingerprint: string, remaining
 
 export class NetworkEngine {
   readonly invocations: NetworkInvocations
+  readonly gates: NetworkGates
   private batches = new Map<string, ProcessBatch>()
   private nextMaintenanceAt = 0
   private pendingSettlements = new Map<string, Promise<void>>()
   constructor(private readonly store: PodDatabase, private readonly dispatcher: RunDispatcher, private readonly resources: ResourceRegistry, private readonly helper: string, private readonly currentOwner: () => Owner, private readonly immediateDispatch = true) {
     this.invocations = new NetworkInvocations(store, dispatcher.runs, helper)
+    this.gates = new NetworkGates(store, this.invocations, resources)
+    this.invocations.gates = this.gates
   }
 
   execute(value: unknown): NetworkView {
@@ -33,6 +38,11 @@ export class NetworkEngine {
     if (command.type === 'list') return this.view()
     if (command.type === 'create') return this.viewAfter(() => this.create(command.draft))
     const definition = this.definition(command.id, command.revision)
+    if (command.type === 'gateExclude' || command.type === 'gateDiscard' || command.type === 'gateReview') {
+      if (command.type === 'gateReview') this.validate(definition)
+      this.gates.resolve(definition.id, command)
+      return this.view()
+    }
     if (command.type === 'activate' || command.type === 'pause') {
       this.store.transaction(() => {
         if (command.type === 'activate') {
@@ -115,8 +125,9 @@ export class NetworkEngine {
     const command = parseNetworkCommand(value)
     if (command.type !== 'inspect' && command.type !== 'retry' && command.type !== 'reconcileEffect' && command.type !== 'resolveConflict' && command.type !== 'discardFailure') throw new Error('Unsupported network recovery command')
     const definition = this.definition(command.id, command.revision)
-    const invocation = this.store.db.prepare('SELECT pod_id,network_revision FROM network_invocations WHERE network_id=? AND run_id=?').get(command.id, command.runId)
+    const invocation = this.store.db.prepare('SELECT pod_id,network_revision,execution_kind FROM network_invocations WHERE network_id=? AND run_id=?').get(command.id, command.runId)
     if (!invocation || invocation.network_revision !== command.revision) throw new Error('Network recovery revision changed')
+    if (command.type === 'discardFailure' && invocation.execution_kind === 'gate_maintenance') throw new Error('Grant maintenance must be resolved through its gate task')
     const assertCurrent = () => { this.definition(command.id, command.revision) }
     const recovery = new NetworkRecovery(this.store, this.helper)
     await recovery.inspect(command.id, command.runId, command.generation, assertCurrent)
@@ -191,12 +202,20 @@ export class NetworkEngine {
   view(): NetworkView {
     if (!this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()) return { networks: [] }
     const owner = parseOwner(this.currentOwner())
-    return { networks: this.store.db.prepare('SELECT id,revision,group_id,name,state FROM networks WHERE owner_issuer=? AND owner_subject=? ORDER BY created_at,id LIMIT 64').all(owner.issuer, owner.subject).map(row => ({ id: row.id as string, revision: row.revision as number, groupId: row.group_id as string, name: row.name as string, state: row.state as 'active' | 'paused' | 'archived', health: this.health(row.id as string), counts: Object.fromEntries(this.store.db.prepare('SELECT state,count FROM network_queue_counts WHERE network_id=? ORDER BY state').all(row.id!).map(count => [count.state as string, count.count as number])) })) }
+    const gates = this.gates.views(owner)
+    return { ...(gates.length ? { gates } : {}), networks: this.store.db.prepare('SELECT id,revision,group_id,name,state FROM networks WHERE owner_issuer=? AND owner_subject=? ORDER BY created_at,id LIMIT 64').all(owner.issuer, owner.subject).map(row => ({ id: row.id as string, revision: row.revision as number, groupId: row.group_id as string, name: row.name as string, state: row.state as 'active' | 'paused' | 'archived', health: this.health(row.id as string), counts: Object.fromEntries(this.store.db.prepare('SELECT state,count FROM network_queue_counts WHERE network_id=? ORDER BY state').all(row.id!).map(count => [count.state as string, count.count as number])) })) }
   }
 
   private health(networkId: string): NetworkHealth {
     const status = this.store.db.prepare('SELECT last_dispatch_at,intake_error FROM network_runtime_status WHERE network_id=?').get(networkId)
-    const failure = this.store.db.prepare('SELECT i.run_id,i.generation,i.state,c.failure_kind,c.diagnostic,c.settlement_receipt FROM network_invocations i LEFT JOIN network_invocation_controls c ON c.run_id=i.run_id JOIN runs r ON r.id=i.run_id WHERE i.network_id=? AND c.retry_consumed_at IS NULL AND c.resolved_receipt IS NULL AND i.state IN (\'interrupted\',\'blocked\',\'unknown\') ORDER BY r.started_at DESC,r.rowid DESC LIMIT 1').get(networkId)
+    const failure = this.store.db.prepare(`SELECT i.run_id,i.generation,i.state,c.failure_kind,c.diagnostic,c.settlement_receipt
+      FROM network_invocations i LEFT JOIN network_invocation_controls c ON c.run_id=i.run_id JOIN runs r ON r.id=i.run_id
+      WHERE i.network_id=? AND c.retry_consumed_at IS NULL AND i.state IN ('interrupted','blocked','unknown')
+      AND (c.resolved_receipt IS NULL OR (i.execution_kind='gate_maintenance'
+        AND (c.stopped_receipt IS NULL OR json_extract(c.stopped_receipt,'$.generation')!=i.generation)
+        AND EXISTS(SELECT 1 FROM network_gate_task_attempts attempt JOIN network_gate_tasks task ON task.id=attempt.task_id WHERE attempt.run_id=i.run_id AND task.state='unknown')))
+      ORDER BY CASE WHEN i.execution_kind='gate_maintenance' AND (c.stopped_receipt IS NULL OR json_extract(c.stopped_receipt,'$.generation')!=i.generation) THEN 0 ELSE 1 END,
+      r.started_at DESC,r.rowid DESC LIMIT 1`).get(networkId)
     return {
       lastFailure: failure ? { runId: failure.run_id as string, generation: Number(failure.generation), kind: failure.failure_kind as string ?? 'recovery', reason: failure.diagnostic as string ?? (failure.settlement_receipt ? (JSON.parse(failure.settlement_receipt as string).error ?? 'Network invocation requires inspection') as string : 'Network invocation requires process and effect inspection') } : null,
       oldestPendingAt: this.store.db.prepare('SELECT min(accepted_at) AS at FROM network_deliveries WHERE network_id=? AND state IN (\'pending\',\'retry_wait\')').get(networkId)!.at as number | null,
@@ -232,7 +251,7 @@ export class NetworkEngine {
         if (legacy || this.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=?').get(selection.podId) || this.store.checkpoint(selection.podId).revision !== 0 || canonicalNetworkJson(this.store.checkpoint(selection.podId).body) !== '{}') throw new Error('Network creation requires a separate fresh instance; use reviewed conversion for legacy state')
         return { podId: selection.podId, definitionId: binding.definition_id as string, definitionVersion: binding.definition_version as number, bindingRevision: binding.binding_revision as number, contract: parseGraphContract(JSON.parse(binding.contract as string)), source: selection.source ? { bindingId: randomUUID(), schedule: selection.source.schedule } : null, serialCase: selection.serialCase }
       })
-      const definition = parseNetworkDefinition({ formatVersion: 1, kind: 'network', semantics: 'persistent-network-v1', id, revision: 1, ...draft, members })
+      const definition = parseNetworkDefinition({ formatVersion: draft.gates ? 2 : 1, kind: 'network', semantics: 'persistent-network-v1', id, revision: 1, ...draft, members })
       this.validate(definition)
       const body = canonicalNetworkJson(definition); this.store.assertStorage(Buffer.byteLength(body))
       this.store.db.prepare('INSERT INTO networks(id,owner_issuer,owner_subject,group_id,name,revision,restore_nonce,created_at) VALUES(?,?,?,?,?,1,?,?)').run(id, owner.issuer, owner.subject, draft.groupId, draft.name, randomUUID(), now)
@@ -291,9 +310,17 @@ export class NetworkEngine {
 
   private begin(definition: NetworkDefinition, podId: string, reason: 'manual' | 'schedule' | 'event', allowPaused: boolean, due?: number, processPreviewId: string | null = null): string | null {
     let authority: NetworkAuthority | null = null
+    const admission: { step: NetworkGateStep | null } = { step: null }
     try {
       authority = this.store.transaction(() => {
+        if (reason !== 'schedule') {
+          this.gates.prepare(definition, podId)
+          const last = this.store.db.prepare('SELECT execution_kind FROM network_invocations WHERE pod_id=? ORDER BY rowid DESC LIMIT 1').get(podId)
+          if (last?.execution_kind !== 'gate_maintenance') admission.step = this.gates.reserve(definition, podId, reason, allowPaused, processPreviewId)
+          if (admission.step) return admission.step.authority
+        }
         const reserved = this.invocations.reserve(definition.id, podId, this.resources.epoch(podId), reason, allowPaused, processPreviewId)
+        if (!reserved && reason !== 'schedule') { admission.step = this.gates.reserve(definition, podId, reason, allowPaused, processPreviewId); return admission.step?.authority ?? null }
         if (!reserved || due === undefined) return reserved
         const schedule = definition.members.find(member => member.podId === podId)!.source!.schedule!
         this.store.db.prepare('UPDATE network_source_clocks SET next_at=? WHERE network_id=? AND pod_id=?').run(nextDue(schedule, due, Date.now()), definition.id, podId)
@@ -302,7 +329,8 @@ export class NetworkEngine {
       if (!authority) return null
       this.store.db.prepare('INSERT INTO network_runtime_status(network_id,last_pod,last_dispatch_at) VALUES(?,?,?) ON CONFLICT(network_id) DO UPDATE SET last_pod=excluded.last_pod,last_dispatch_at=excluded.last_dispatch_at').run(definition.id, podId, Date.now())
       this.store.db.prepare('UPDATE network_scheduler_state SET last_network=? WHERE id=1').run(definition.id)
-      this.dispatcher.startNetwork(this.invocations, authority)
+      if (admission.step) this.dispatcher.startGate(this.gates, admission.step)
+      else this.dispatcher.startNetwork(this.invocations, authority)
       return authority.runId
     }
     catch (failure) {
@@ -313,7 +341,13 @@ export class NetworkEngine {
       const message = (failure instanceof Error ? failure.message : 'Network admission failed').slice(0, 10000)
       const previous = this.store.db.prepare('SELECT body FROM network_trace_events WHERE network_id=? AND kind=\'instance-attention\' AND json_extract(body,\'$.podId\')=? ORDER BY id DESC LIMIT 1').get(definition.id, podId)
       if (!previous || (JSON.parse(previous.body as string) as { message: string }).message !== message) this.trace(definition.id, 'instance-attention', { podId, message })
-      if (authority) this.pendingSettlements.set(authority.runId, this.closeUnstarted(definition.id, authority, message).catch((failure) => { console.error('Network admission recovery failed; retained authority requires inspection', failure) }))
+      if (admission.step) {
+        const failedStep = admission.step
+        this.pendingSettlements.set(failedStep.authority.runId, this.gates.failStep(failedStep, failure).catch((cleanupFailure) => { console.error('Network gate admission cleanup requires inspection', cleanupFailure) }).finally(() => { this.pendingSettlements.delete(failedStep.authority.runId) }))
+      }
+      else if (authority) {
+        this.pendingSettlements.set(authority.runId, this.closeUnstarted(definition.id, authority, message).catch((failure) => { console.error('Network admission recovery failed; retained authority requires inspection', failure) }))
+      }
       return null
     }
   }
