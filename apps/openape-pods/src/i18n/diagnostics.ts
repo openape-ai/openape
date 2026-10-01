@@ -1,6 +1,7 @@
 import type { MessageKey } from './index'
 
 export const diagnosticPatterns = [
+  'Collection record changed: {p0}/{p1}, current revision {p2}',
   'SSH inventory failed (exit {p0}); check the reviewed route, host key, authentication and noninteractive sudo',
   'Mail {p0} failed; inspect the assigned program',
   'Runtime permission {p0}; automatic approval cannot replace this decision',
