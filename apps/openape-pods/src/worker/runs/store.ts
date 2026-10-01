@@ -120,6 +120,16 @@ export class RunStore {
   }
 
   interrupt(id: string, error: string): void {
+    if (this.store.db.prepare('SELECT 1 FROM network_invocations WHERE run_id=?').get(id)) throw new Error('Network interruption requires network recovery')
+    this.interruptOwned(id, error)
+  }
+
+  interruptNetwork(id: string, claimToken: string): void {
+    if (!this.store.db.prepare('SELECT 1 FROM network_invocations WHERE run_id=? AND claim_token=? AND boot_nonce=? AND state IN (\'running\',\'stopping\')').get(id, claimToken, this.bootId)) throw new Error('Network interruption authority is no longer current')
+    this.interruptOwned(id, 'Network execution cleanup requires inspection')
+  }
+
+  private interruptOwned(id: string, error: string): void {
     this.store.transaction(() => {
       this.assertLease(id)
       this.store.db.prepare('UPDATE runs SET state=\'interrupted\',error=?,summary=\'Execution cleanup needs review\' WHERE id=?').run(error, id)
@@ -157,6 +167,16 @@ export class RunStore {
   }
 
   finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = [], retryEpoch?: number): void {
+    if (this.store.db.prepare('SELECT 1 FROM network_invocations WHERE run_id=?').get(id)) throw new Error('Network completion requires atomic network settlement')
+    this.finishOwned(id, state, summary, error, completedInputIds, retryEpoch)
+  }
+
+  finishNetwork(id: string, claimToken: string, state: RunState, error: string | null): void {
+    if (!this.store.db.prepare('SELECT 1 FROM network_invocations WHERE run_id=? AND claim_token=? AND boot_nonce=? AND state IN (\'completed\',\'failed\',\'blocked\',\'unknown\')').get(id, claimToken, this.bootId)) throw new Error('Network completion authority is no longer current')
+    this.finishOwned(id, state, 'Network invocation finished', error === null ? null : 'Network invocation requires inspection')
+  }
+
+  private finishOwned(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = [], retryEpoch?: number): void {
     this.store.transaction(() => {
       this.assertLease(id)
       const run = this.get(id)
@@ -170,7 +190,12 @@ export class RunStore {
         }
       }
       if (workflow && state === 'completed' && this.store.db.prepare('SELECT 1 FROM effect_ledger WHERE pod_id=? AND state!=\'completed\'').get(run.podId)) { state = 'blocked'; error = 'External effects need review' }
-      const revision = this.store.db.prepare('SELECT revision FROM checkpoints WHERE pod_id=?').get(run.podId)!.revision as number
+      const network = this.store.db.prepare('SELECT network_id FROM network_invocations WHERE run_id=?').get(id)
+      const checkpoint = network
+        ? this.store.db.prepare('SELECT revision FROM network_checkpoints WHERE pod_id=? AND network_id=?').get(run.podId, network.network_id!)
+        : this.store.db.prepare('SELECT revision FROM checkpoints WHERE pod_id=?').get(run.podId)
+      if (!checkpoint) throw new Error('Run checkpoint is missing')
+      const revision = checkpoint.revision as number
       this.store.db.prepare('UPDATE runs SET state=?,summary=?,error=?,finished_at=?,checkpoint_revision=? WHERE id=?').run(state, summary, error, Date.now(), revision, id)
       for (const eventId of completedInputIds) {
         const result = this.store.db.prepare('UPDATE accepted_events SET state=\'processed\' WHERE id=? AND run_id=? AND state=\'claimed\'').run(eventId, id)

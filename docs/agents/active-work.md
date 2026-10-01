@@ -5,7 +5,8 @@
 [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3VDB1S72E4EQQW58T97C617),
 [native issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417).
 Checkout: `openape-monorepo.worktrees/pods-workflows-networks`; branch
-`feature/issue-1417-pods-networks-m2`; original canonical base
+`feature/issue-1417-pods-networks-m3`; current canonical base
+`b35620900fce67fe4d4804573df1d7edcb9f3c5e`; original canonical base
 `a99c69bd2b97d8883ce5538894c3f38510407ddf` (Pods 0.1.1, schema 27).
 
 M0 freezes [contracts](../architecture/pods-networks/contracts.md) and the
@@ -21,9 +22,32 @@ blocking/major findings after corrections. The primary agent checked sources and
 remaining token/identity wording. Final tested SHA `3b7363b2622b8394c429fe8833c6df49e87742db` passed exact-head CI;
 M0 merged as `fb80556d8a66843e028da7d13cda97fd5a9f1d50`.
 [Final private Test Runs evidence](https://report.openape.ai/r/3fMyH6tmpepIRy7p8qRhYqzm).
-M1 prototype acceptance is merged through native PR 201. M2 is in progress on
-`feature/issue-1417-pods-networks-m2`: additive storage, encrypted backup and
-restore fences. M3–M14 remain unimplemented.
+M0–M2 are accepted and merged. M3 is in progress: versioned contracts,
+durable acceptance, independent dispatch, local IPC and atomic settlement. Native
+sandbox scheduling and actual Electron routing passed. M3 PR 203 is in final
+documentation review; its tested runtime gates, exact-head CI and evidence passed.
+M4–M14 remain unimplemented.
+M3 [PR 203](https://repos.openape.ai/patrick/monorepo/pulls/203): tested clean
+runtime `da209ca697d79c0cade36759d9ccb69aa9167f53` passed root lint/typecheck/build,
+133 files / 966 fresh Pods unit tests, four manual native/Electron tests and
+exact-head CI 5310. Two unrelated crash cases were skipped by selection.
+Actual sandbox A/B independence, source-version deduplication, empty intake,
+settlement after pause, untouched legacy checkpoints and preload/main/worker
+routing were verified. The final synthetic desktop screenshot was personally
+inspected. Repeated actual Claude Code Opus 5.5 reviews confirmed safety closure;
+primary native diff review verified all 3,066 displayed lines against the commits.
+[Verified private Test Runs receipt](https://report.openape.ai/r/Y_XFy5OH08ad4fPoSStGwAFk):
+category Test Runs, owner read 200, anonymous read 401 and inspected screenshot
+bytes retained in the published document. M3 remains open until final
+head CI and canonical merge are recorded.
+
+M3 is a seeded engine vertical slice. Productive definition/instance creation
+arrives in M8 after M4 recovery. Central-connected creation is denied before
+mutation pending M10. No live profile/source/provider action or expanded rights.
+Next: M4 owner inspection/requeue, retry deadlines, fair admission, quota and
+operational control storage before retention. Preserve original claim batches on
+retry to retain derived event identity; never repeat unknown external effects.
+
 M1 prototype: 24 crash/authority checks pass; selected established scheduling
 suites pass (120 checks before the two final isolation assertions). Maximum-payload
 stress has 195,000 receipts/events, 255,000 deliveries and 30,000 record revisions.
@@ -48,7 +72,11 @@ schema-27 migration preserves 89 legacy tables, 15,334 existing files and all 86
 credential files; original source unchanged, rollback/reopen/encrypted round trip
 and actual older-app refusal verified. Three full-file Opus 5.5 reviews and one
 targeted closure accompany primary review. [M2 storage evidence](../architecture/pods-networks/m2-storage-evidence.md).
-Final documentation-head CI and native exact-SHA merge remain pending; M3 follows.
+Final documentation head `c8418561b176667a6965d31635173fe123145541` passed
+CI run 5308; native PR 202 merged as
+`b35620900fce67fe4d4804573df1d7edcb9f3c5e`.
+[Corrected private M2 Test Runs receipt](https://report.openape.ai/r/_Y36InfIXpYhK1Bc0ro0kMz2).
+M3 contracts and runtime acceptance are not yet verified.
 Patrick requests an additional Claude Code Opus 5.5 UX review when M9 is reached;
 record its actual availability/result without substituting a claimed review.
 Production pilot, live conversion and concrete actions keep their separate gates.

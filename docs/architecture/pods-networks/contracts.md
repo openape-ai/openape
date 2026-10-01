@@ -104,10 +104,23 @@ validators, remote references or automatic coercion. Limit 32 fields and 32 arra
 entries, depth two; serialized metadata remains at most 1,024 UTF-8 bytes.
 Complex business data belongs in a scoped collection/artifact reference.
 Reject unknown schema keywords instead of silently ignoring them.
+The compiled schema is limited to 16 KiB. Sort property names, required names
+and scalar enum values deterministically before pinning/hashing. Preserve array
+value order. Build accepted metadata from validated plain data properties once;
+reject accessors, sparse arrays and custom serializers. Reject strings over
+1,024 UTF-16 units before counting code points or encoding bytes. Canonical
+event digests sort object keys recursively; producer key order never creates
+a different payload receipt. Values are not Unicode-normalized or coerced.
 
 A channel pins `{name, title, schemaVersion, schema}`. A positive schema version
 is immutable; changes create a new version and an explicit compatibility review.
-Channel names retain the current technical naming rule. Jev/model outputs are
+Channel names retain the current technical naming rule. The initial network
+revision supports 64 members and 32 channels, at most 1 MiB of compiled contract,
+50 inputs from one case/revision per invocation and 100 selected invocations
+per reviewed Process now request. Member/channel display order remains pinned
+and significant for the definition; it is excluded from source/derived identity.
+Private staged checkpoints are limited to 64 KiB and commit only on successful
+settlement. These conservative local bounds grant no authority. Jev/model outputs are
 untrusted: validate both the metadata schema and allowed output channel.
 
 Accepted envelope:
@@ -601,3 +614,39 @@ blocks effect-free unfinished work, marks uncertain effects/steps and running
 calls unknown, supersedes undecided gates and fences approved grants by the new
 restore nonce and mandatory baseline review. Legacy gate batches with a pending
 or consuming decision become unknown while preserving their concrete evidence.
+
+
+### M3 admission and publication boundaries
+
+Network creation is denied before mutation on a central-connected runtime until
+M10 supplies bounded publication. An existing network profile continues to fail
+closed for legacy whole-profile publication; this is not browser parity.
+
+A clean failed or cancelled invocation blocks its own deliveries, but does not
+fence unrelated ready cases for the same instance after its lease is released.
+Identity conflicts, uncertain effects and interrupted invocations remain fenced.
+Only M4 recovery may inspect and release retained leases or requeue blocked work;
+M3 never automatically retries an uncertain external action.
+
+A network pause terminates its outstanding Process-now admissions while allowing
+already admitted work to settle. A new explicit preview can process a paused
+network. Paused-instance selection must match the instances actually paused, and
+each subsequent admission rechecks the original configuration fingerprint.
+Successful settlement rechecks resource epochs after asynchronous native stop
+proof. Revoked execution discards buffered outputs, retains its uncommitted staged
+checkpoint for inspection, fences its claims and retains the lease.
+
+Until M4 adds durable operational clocks and preview consumption records,
+`network-activated`, `process-now-preview` and `process-now-started` records are
+control records and must not be pruned as diagnostic traces. Definition, input
+claims and execution authority pins remain immutable; source clock metadata,
+private snapshot receipts and the review-required flag are runtime-owned
+operational fields. M4 must move these fields out of the invocation manifest
+before implementing retention. The workspace admits at most 64 networks.
+
+
+M3 is an engine vertical slice using explicitly seeded owner/definition bindings
+in isolated fixtures. The productive definition/instance writer arrives in M8;
+it must follow accepted M4 recovery so interrupted leases have an owner inspection
+and release path before any productive network can be created. No owner-facing
+creation or production readiness is claimed by M3.

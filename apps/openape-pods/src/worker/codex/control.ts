@@ -18,6 +18,7 @@ export class CodexControl {
   constructor(private readonly store: PodDatabase, private readonly master: MasterControl) {}
 
   async execute(request: CodexRequest, signal: AbortSignal): Promise<unknown> {
+    if (this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()) throw new Error('Persistent networks require bounded MCP publication support')
     const { action } = request
     if (action.action === 'requestAccess') throw new Error('Use resources, program or importSecret to configure access directly')
     let result: unknown
@@ -57,6 +58,7 @@ export class CodexControl {
   }
 
   administration(command: AdministrationJournal): AdministrationReceipt {
+    if (this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()) throw new Error('Persistent networks require bounded MCP publication support')
     const { request } = command
     const action = parseAdministration(request.action)
     const id = `codex-admin:${request.id}`
