@@ -23,6 +23,7 @@ export class Scheduler {
     const pod = this.store.getPod(podId); const parsed = parseSchedule(spec)
     if (pod.lifecycle === 'archived') throw new Error('Archived pods cannot accept schedules')
     this.store.transaction(() => {
+      if (this.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=?').get(podId)) throw new Error('Network members use network source schedules')
       if (this.view(podId).revision !== revision) throw new Error('Stale schedule revision')
       this.store.db.prepare('INSERT INTO schedules VALUES(?,?,?,?,?,NULL) ON CONFLICT(pod_id) DO UPDATE SET revision=excluded.revision,spec=excluded.spec,enabled=excluded.enabled,next_at=excluded.next_at,error=NULL').run(podId, revision + 1, JSON.stringify(parsed), Number(enabled), nextDue(parsed, null, this.now()))
     })

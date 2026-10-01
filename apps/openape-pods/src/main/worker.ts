@@ -26,6 +26,8 @@ import type { Owner } from '@openape/pods-protocol'
 import { parseChatsView } from '../contracts/chats'
 import type { ChatsCommand, ChatsView } from '../contracts/chats'
 import { parseWorkflowView } from '../contracts/workflows'
+import { parseNetworkCommand, parseNetworkView } from '../contracts/networks'
+import type { NetworkCommand, NetworkView } from '../contracts/networks'
 import type { WorkflowCommand, WorkflowView } from '../contracts/workflows'
 import type { RunContextRequest, ServiceCheck, ServiceRequest  } from '../contracts/services'
 import { loadAdapter, resolveCommand } from '@openape/apes'
@@ -446,6 +448,13 @@ export class FixtureWorker {
     return view
   }
 
+  async networks(command: NetworkCommand): Promise<NetworkView> {
+    const parsed = parseNetworkCommand(command)
+    const central = this.centralAction(parsed.type)
+    if (central) return central.local(() => this.networks(parsed))
+    return parseNetworkView(await this.dispatch({ networks: parsed }))
+  }
+
   async workflows(command: WorkflowCommand): Promise<WorkflowView> {
     if (command.type === 'gateOpen') {
       const view = parseWorkflowView(await this.dispatch({ workflow: { type: 'list' } }))
@@ -515,7 +524,7 @@ export class FixtureWorker {
     throw new Error('Unsupported central execution')
   }
 
-  private dispatch(command: { central: { type: 'snapshot', owner: Owner } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { codex: CodexRequest } | { remote: RemoteInternal } | { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { networks: NetworkCommand } | { central: { type: 'snapshot', owner: Owner } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { codex: CodexRequest } | { remote: RemoteInternal } | { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()

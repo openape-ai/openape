@@ -32,6 +32,7 @@ export class Recovery {
   }
 
   async inspect(podId: string, runId: string): Promise<void> {
+    if (this.store.db.prepare('SELECT 1 FROM network_invocations WHERE run_id=?').get(runId)) throw new Error('Network runs require network recovery and retained effect receipts')
     const run = this.store.db.prepare('SELECT * FROM runs WHERE id=? AND pod_id=?').get(runId, podId)
     if (!run || !['interrupted', 'failed', 'cancelled', 'blocked', 'completedWithGaps'].includes(run.state as string)) throw new Error('Only stopped or interrupted runs can be recovered')
     try {
