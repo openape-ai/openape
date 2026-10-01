@@ -120,7 +120,7 @@ metadata first, checks live references again before unlink, continues past poiso
 entries, logs bounded failures and rotates orphan pages. Unknown effect drafts are
 retained until explicit verified owner reconciliation/disposal/retry.
 
-Intermediate checks: 58 focused data/gate authority tests, including five actual
+Intermediate checks: 59 focused data/gate authority tests, including five actual
 production SIGKILL boundaries. Actual Electron/main/worker/native scripts shared two
 record revisions and one artifact; an unbound consumer blocked. Initial screenshot
 personally inspected; the private settlement receipt proves the explicit binding
