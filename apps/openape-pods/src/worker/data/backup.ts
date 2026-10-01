@@ -1,3 +1,5 @@
+import { assertNetworkStorage } from '../storage/network-schema'
+import { restoreNetworkStorage } from '../storage/network-restore'
 import { DependencyStore, removePackageTree } from '../dependencies/store'
 import { checkLock, packageDigest, packageFiles } from '../dependencies/tree'
 import { parsePackages } from '../../contracts/dependencies'
@@ -10,9 +12,13 @@ import { digest } from '../storage/database'
 import { copyVerified, durableJSON, files, privateTarget, relativePath, syncDirectory, syncTree } from './files'
 import type { FileRecord } from './files'
 
-interface BackupManifest { format: 'openape-pods-backup', version: 1, schema: number, createdAt: string, sourceRoot: string, files: FileRecord[] }
+export interface BackupManifest { format: 'openape-pods-backup', version: 1, schema: number, createdAt: string, sourceRoot: string, files: FileRecord[] }
 const uuid = (value: string) => /^[a-f0-9-]{36}$/.test(value)
+export function networkDataBusy(store: PodDatabase): boolean {
+  return !!store.db.prepare('SELECT 1 FROM network_invocations WHERE state IN (\'running\',\'stopping\') UNION ALL SELECT 1 FROM network_gate_task_attempts WHERE state=\'running\' UNION ALL SELECT 1 FROM network_deliveries WHERE state=\'claimed\' UNION ALL SELECT 1 FROM network_gate_tasks WHERE state=\'consuming\' UNION ALL SELECT 1 FROM workflow_call_requests WHERE state=\'running\' LIMIT 1').get()
+}
 export function assertDataIdle(store: PodDatabase): void {
+  if (networkDataBusy(store)) throw new Error('Finish or recover network work before changing application data')
   if (store.db.prepare('SELECT 1 FROM dependency_domains LIMIT 1').get()) throw new Error('Finish dependency preparation before changing application data')
   if (store.db.prepare('SELECT 1 FROM pod_descriptions WHERE state=\'running\'').get()) throw new Error('Wait for the description update before changing stored data')
   if (store.db.prepare('SELECT 1 FROM program_leases LIMIT 1').get() || store.db.prepare('SELECT 1 FROM run_leases LIMIT 1').get() || store.db.prepare('SELECT 1 FROM master_session WHERE state=\'running\'').get() || store.db.prepare('SELECT 1 FROM master_actions WHERE state=\'running\' LIMIT 1').get()) throw new Error('Finish or recover active work before changing application data')
@@ -21,12 +27,12 @@ function allowed(path: string): boolean {
   relativePath(path)
   if (path === 'control.sqlite') return true
   const parts = path.split('/')
-  if (parts[0] === 'blobs') return parts.length === 2 && /^[a-f0-9]{64}$/.test(parts[1])
+  if (parts[0] === 'blobs' || parts[0] === 'artifacts') return parts.length === 2 && /^[a-f0-9]{64}$/.test(parts[1])
   if (parts[0] === 'dependencies') return uuid(parts[1] ?? '') && /^[a-f0-9]{64}$/.test(parts[2] ?? '') && parts.length > 3
   if (parts[0] === 'pods') return uuid(parts[1] ?? '') && parts[2] === 'workspace' && parts.length > 3
   return parts[0] === 'snapshots' && parts.length === 4 && uuid(parts[1]) && uuid(parts[2]) && (uuid(parts[3]) || parts[3] === 'manifest.json')
 }
-function parseManifest(value: unknown): BackupManifest {
+export function parseBackupManifest(value: unknown): BackupManifest {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid backup manifest')
   const manifest = value as BackupManifest
   if (manifest.format !== 'openape-pods-backup' || manifest.version !== 1 || !Number.isSafeInteger(manifest.schema) || manifest.schema < 9 || typeof manifest.sourceRoot !== 'string' || !manifest.sourceRoot.startsWith('/') || !Array.isArray(manifest.files) || !manifest.files.length || manifest.files.length > 100000) throw new Error('Unsupported backup format')
@@ -42,8 +48,22 @@ function checkDatabase(database: DatabaseSync, schema: number): void {
   database.exec('PRAGMA trusted_schema=OFF;')
   if (database.prepare('PRAGMA quick_check').get()?.quick_check !== 'ok' || database.prepare('PRAGMA user_version').get()?.user_version !== schema) throw new Error('Backup database integrity or schema check failed')
   if (database.prepare('SELECT 1 FROM sqlite_schema WHERE type IN (\'view\',\'trigger\') LIMIT 1').get()) throw new Error('Backup contains unsupported database programs')
+  if (schema >= 28) assertNetworkStorage(database, true)
 }
-function requiredBlobs(database: DatabaseSync): string[] { return database.prepare('SELECT hash FROM sources UNION SELECT hash FROM scripts').all().map(row => row.hash as string) }
+function requiredBlobs(database: DatabaseSync): string[] {
+  const version = Number(database.prepare('PRAGMA user_version').get()?.user_version)
+  const definitions = version >= 28 ? ' UNION SELECT content_hash AS hash FROM pod_definition_versions' : ''
+  return database.prepare(`SELECT hash FROM sources UNION SELECT hash FROM scripts${definitions}`).all().map(row => row.hash as string)
+}
+function retainedArtifacts(database: DatabaseSync): { path: string, hash: string, size: number }[] {
+  if (Number(database.prepare('PRAGMA user_version').get()?.user_version) < 28) return []
+  return database.prepare('SELECT content_hash,storage_ref,size FROM artifacts').all().map((row) => {
+    const hash = String(row.content_hash); const path = String(row.storage_ref); const size = Number(row.size)
+    if (!/^[a-f0-9]{64}$/.test(hash) || path !== `artifacts/${hash}` || !Number.isSafeInteger(size) || size < 0 || size > 256 * 1024 * 1024) throw new Error('Invalid retained artifact storage')
+    return { path, hash, size }
+  })
+}
+
 export async function createBackup(store: PodDatabase, parent: string, observe: (path: string) => void = () => {}): Promise<string> {
   assertDataIdle(store)
   const sourceRoot = await realpath(store.root); const destination = await realpath(parent)
@@ -55,10 +75,14 @@ export async function createBackup(store: PodDatabase, parent: string, observe: 
     const saved = await open(databasePath, 'r'); try { await saved.sync() }
     finally { await saved.close() }
     const database = new DatabaseSync(databasePath, { readOnly: true })
-    const paths = new Map<string, string | undefined>(); let schema: number
+    const paths = new Map<string, string | undefined>(); const artifactSizes = new Map<string, number>(); let schema: number
     try {
       schema = database.prepare('PRAGMA user_version').get()!.user_version as number; checkDatabase(database, schema)
       for (const hash of requiredBlobs(database)) { if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error('Invalid referenced blob'); paths.set(`blobs/${hash}`, hash) }
+      for (const artifact of retainedArtifacts(database)) {
+        if (artifactSizes.has(artifact.path) && artifactSizes.get(artifact.path) !== artifact.size) throw new Error('Invalid retained artifact storage')
+        paths.set(artifact.path, artifact.hash); artifactSizes.set(artifact.path, artifact.size)
+      }
       for (const row of database.prepare('SELECT id FROM pods').all()) {
         if (!uuid(row.id as string)) throw new Error('Invalid pod identity in backup')
         for (const path of await files(sourceRoot, `pods/${row.id}/workspace`)) paths.set(path, undefined)
@@ -79,6 +103,7 @@ export async function createBackup(store: PodDatabase, parent: string, observe: 
     for (const [path, expected] of paths) {
       if (!allowed(path) || paths.size > 100000) throw new Error('Unsupported backup inventory')
       observe(path); const file = await copyVerified(sourceRoot, path, stage)
+      if (artifactSizes.has(path) && artifactSizes.get(path) !== file.size) throw new Error(`Retained artifact size mismatch: ${path}`)
       if (expected && file.hash !== expected) throw new Error(`Referenced evidence is corrupt: ${path}`)
       size += file.size; if (size > 10 * 1024 ** 3) throw new Error('Backup exceeds 10 GiB')
       records.push(file)
@@ -86,7 +111,7 @@ export async function createBackup(store: PodDatabase, parent: string, observe: 
     if ((await lstat(databasePath)).size > 256 * 1024 * 1024) throw new Error('Backup database exceeds 256 MiB')
     const bytes = await readFile(databasePath)
     records.push({ path: 'control.sqlite', size: bytes.length, hash: digest(bytes) })
-    const manifest = parseManifest({ format: 'openape-pods-backup', version: 1, schema, createdAt: new Date().toISOString(), sourceRoot, files: records })
+    const manifest = parseBackupManifest({ format: 'openape-pods-backup', version: 1, schema, createdAt: new Date().toISOString(), sourceRoot, files: records })
     await durableJSON(join(stage, 'backup.json'), manifest)
     await syncTree(stage); observe('publish'); await rename(stage, target); await syncDirectory(destination)
     return target
@@ -98,7 +123,7 @@ export async function restoreBackup(backup: string, parent: string, maximumSchem
   const manifestPath = join(sourceRoot, 'backup.json')
   const info = await lstat(manifestPath)
   if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size > 32 * 1024 * 1024) throw new Error('Backup manifest is not a supported regular file')
-  const manifest = parseManifest(JSON.parse(await readFile(manifestPath, 'utf8')))
+  const manifest = parseBackupManifest(JSON.parse(await readFile(manifestPath, 'utf8')))
   if (manifest.schema > maximumSchema) throw new Error('This backup needs a newer application')
   const id = randomUUID(); const stage = await privateTarget(parent, `.restore-${id}`); const target = join(await realpath(parent), id)
   try {
@@ -106,11 +131,16 @@ export async function restoreBackup(backup: string, parent: string, maximumSchem
     const database = new DatabaseSync(join(stage, 'control.sqlite'))
     try {
       checkDatabase(database, manifest.schema)
-      const names = new Set(manifest.files.map(file => file.path))
+      const records = new Map(manifest.files.map(file => [file.path, file]))
+      const names = new Set(records.keys())
       for (const hash of requiredBlobs(database)) {
-        if (!names.has(`blobs/${hash}`)) throw new Error('Backup omits referenced evidence')
+        if (records.get(`blobs/${hash}`)?.hash !== hash) throw new Error('Backup omits referenced evidence')
       }
-      database.exec('PRAGMA synchronous=FULL; BEGIN IMMEDIATE;')
+      for (const artifact of retainedArtifacts(database)) {
+        const file = manifest.files.find(file => file.path === artifact.path)
+        if (!file || file.hash !== artifact.hash || file.size !== artifact.size) throw new Error('Backup omits retained artifact evidence')
+      }
+      database.exec('PRAGMA foreign_keys=ON; PRAGMA synchronous=FULL; BEGIN IMMEDIATE;')
       database.exec('UPDATE pods SET lifecycle=\'paused\' WHERE lifecycle!=\'archived\'; UPDATE schedules SET enabled=0,error=\'Restored profile: review before enabling\'; DELETE FROM run_leases; DELETE FROM execution_domains; DELETE FROM master_domains; DELETE FROM validations; UPDATE resource_epochs SET epoch=epoch+1; UPDATE resources SET state=\'refreshRequired\',revision=revision+1 WHERE state!=\'revoked\'; UPDATE connections SET state=\'revoked\',error=\'Restored profile: reconnect\',metadata=\'{}\'; UPDATE onboarding SET complete=0; UPDATE master_session SET thread_id=NULL,active_turn=NULL,state=\'interrupted\',error=\'Restored chat history; new model context required\'; UPDATE master_actions SET state=\'interrupted\',error=\'Restored action requires inspection\' WHERE state=\'running\'; UPDATE master_messages SET state=\'interrupted\' WHERE state=\'streaming\'; UPDATE runs SET state=\'interrupted\',error=\'Restored run requires inspection\' WHERE state=\'running\'; UPDATE accepted_events SET state=\'blocked\',error=\'Restored input requires review\' WHERE state IN (\'pending\',\'claimed\');')
       for (const row of database.prepare('SELECT * FROM snapshot_sets').all()) {
         if (!uuid(row.id as string) || !uuid(row.pod_id as string)) throw new Error('Invalid restored snapshot identity')
@@ -129,6 +159,7 @@ export async function restoreBackup(backup: string, parent: string, maximumSchem
       }
       if (manifest.schema >= 24) database.exec('DELETE FROM run_deletion_jobs;')
       if (manifest.schema >= 22) database.exec('UPDATE remote_pods SET phase=\'needs_desktop_action\',error=\'Restored profile: original agent credentials must be recovered on desktop\'; DELETE FROM remote_program_reviews; UPDATE remote_program_catalog SET revoked=1; DELETE FROM remote_registration; DELETE FROM remote_devices; DELETE FROM remote_outbox; UPDATE remote_inbox SET state=\'unknown\' WHERE state=\'received\';')
+      if (manifest.schema >= 27) database.exec('UPDATE graph_gate_batches SET state=\'unknown\',error=\'Restored gate decision requires reconciliation\' WHERE state IN (\'pending\',\'consuming\');')
       if (manifest.schema >= 20) database.exec('UPDATE workflow_mail_scopes SET restored=1; UPDATE workflows SET enabled=0,paused=1; UPDATE workflow_runs SET paused=1,reason=\'Restored workflow requires review\' WHERE finished_at IS NULL;')
       if (manifest.schema >= 18) {
         database.exec('DELETE FROM dependency_domains;')
@@ -145,6 +176,7 @@ export async function restoreBackup(backup: string, parent: string, maximumSchem
       if (manifest.schema >= 13) database.exec('UPDATE master_contexts SET thread_id=NULL,state=\'interrupted\',error=\'Restored chat history; new model context required\';')
       if (manifest.schema >= 12) database.exec('DELETE FROM script_credential_approvals;')
       if (manifest.schema >= 10) database.exec('DELETE FROM deletion_jobs; UPDATE data_settings SET used_bytes=0,error=NULL;')
+      if (manifest.schema >= 28) restoreNetworkStorage(database)
       database.exec('COMMIT;')
     }
     finally { database.close() }

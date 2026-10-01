@@ -1,3 +1,4 @@
+import { assertNetworkStorage, networkSchema } from './network-schema.ts'
 import { migrateRemote } from '../remote/migration.ts'
 import { migrateChats } from '../master/chat-migration.ts'
 import type { GraphContract } from '../../contracts/graphs.ts'
@@ -39,7 +40,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 27
+export const schemaVersion = 28
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -94,6 +95,7 @@ export class PodDatabase {
     try {
       this.db.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;')
       this.migrate()
+      assertNetworkStorage(this.db)
       this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;')
       mkdirSync(this.blobs, { recursive: true, mode: 0o700 })
     }
@@ -322,6 +324,7 @@ CREATE TABLE graph_gate_batches(id TEXT PRIMARY KEY, workflow_id TEXT NOT NULL, 
 CREATE INDEX graph_gate_batches_open ON graph_gate_batches(workflow_id, gate, state);
 PRAGMA user_version=27;`)
       }
+      if (version < 28) this.db.exec(`${networkSchema} PRAGMA user_version=28;`)
     })
   }
 

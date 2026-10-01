@@ -1,0 +1,34 @@
+import { randomUUID } from 'node:crypto'
+import type { DatabaseSync } from 'node:sqlite'
+import { assertNetworkStorage } from './network-schema.ts'
+
+export function restoreNetworkStorage(database: DatabaseSync): void {
+  assertNetworkStorage(database, true)
+  for (const network of database.prepare('SELECT id,state FROM networks').all()) {
+    database.prepare('UPDATE networks SET state=CASE WHEN state=\'archived\' THEN \'archived\' ELSE \'paused\' END,activation_epoch=activation_epoch+1,restore_nonce=?,baseline_state=\'review_required\',baseline_receipt=NULL WHERE id=?').run(randomUUID(), network.id)
+    const counts = database.prepare('SELECT count(*) AS total,sum(staged_checkpoint IS NOT NULL) AS staged FROM network_invocations WHERE network_id=?').get(network.id)!
+    database.prepare('INSERT INTO network_trace_events(network_id,kind,body,created_at) VALUES(?,\'restore_authority_revoked\',?,?)').run(network.id, JSON.stringify({ reason: 'Restored backup: baseline and effect review required', previousState: network.state, invocationsRevoked: counts.total, stagedCheckpointsRetained: counts.staged ?? 0 }), Date.now())
+  }
+  for (const effect of database.prepare('SELECT logical_action_key,attempt FROM network_effect_attempts WHERE state=\'intent\'').all()) {
+    const sequence = Number(database.prepare('SELECT max(sequence) AS sequence FROM network_effect_receipts WHERE logical_action_key=? AND attempt=?').get(effect.logical_action_key, effect.attempt)?.sequence ?? 0) + 1
+    database.prepare('INSERT INTO network_effect_receipts VALUES(?,?,?,\'unknown\',?,?)').run(effect.logical_action_key, effect.attempt, sequence, JSON.stringify({ reason: 'Restored backup: effect requires reconciliation' }), Date.now())
+  }
+  database.exec(`
+UPDATE network_effect_attempts SET state='unknown' WHERE state='intent';
+UPDATE network_gate_task_attempts SET state='unknown' WHERE state='running';
+UPDATE network_deliveries SET state=CASE WHEN state='unknown' OR EXISTS(SELECT 1 FROM network_invocations i WHERE i.run_id=network_deliveries.run_id AND i.state='unknown') OR EXISTS(SELECT 1 FROM network_effect_attempts e WHERE e.run_id=network_deliveries.run_id AND e.state IN ('intent','unknown')) OR EXISTS(SELECT 1 FROM network_gate_task_attempts a WHERE a.run_id=network_deliveries.run_id AND a.state='unknown') THEN 'unknown' ELSE 'blocked' END,generation=generation+1,claim_token=NULL,boot_nonce=NULL,reason=coalesce(reason,'Restored backup: review baseline and effects before retry') WHERE state IN ('pending','claimed','retry_wait','blocked','unknown');
+UPDATE network_invocations SET state=CASE WHEN state='unknown' OR EXISTS(SELECT 1 FROM network_effect_attempts e WHERE e.run_id=network_invocations.run_id AND e.state='unknown') OR EXISTS(SELECT 1 FROM network_gate_task_attempts a WHERE a.run_id=network_invocations.run_id AND a.state='unknown') THEN 'unknown' ELSE 'blocked' END WHERE state IN ('running','stopping','interrupted','blocked','unknown');
+UPDATE network_gate_tasks SET state=CASE WHEN state='consuming' OR grant_id IS NOT NULL OR EXISTS(SELECT 1 FROM network_gate_task_attempts a WHERE a.task_id=network_gate_tasks.id AND a.state='unknown') THEN 'unknown' ELSE 'superseded' END,generation=generation+1 WHERE state IN ('preparing','pending','consuming');
+UPDATE workflow_call_requests SET state=CASE WHEN state='running' THEN 'unknown' ELSE 'blocked' END WHERE state IN ('pending','running');
+UPDATE network_joins SET state='blocked',reason=coalesce(reason,'Restored backup: join requires review') WHERE state='pending';
+DELETE FROM network_queue_counts;
+INSERT INTO network_queue_counts SELECT network_id,state,count(*) FROM network_deliveries GROUP BY network_id,state;
+`)
+  for (const invocation of database.prepare('SELECT run_id FROM network_invocations').all()) {
+    database.prepare('UPDATE network_invocations SET claim_token=?,boot_nonce=?,restore_nonce=(SELECT restore_nonce FROM networks WHERE id=network_id),generation=generation+1 WHERE run_id=?').run(randomUUID(), randomUUID(), invocation.run_id)
+  }
+  for (const attempt of database.prepare('SELECT task_id,attempt FROM network_gate_task_attempts').all()) {
+    database.prepare('UPDATE network_gate_task_attempts SET step_token=?,generation=generation+1 WHERE task_id=? AND attempt=?').run(randomUUID(), attempt.task_id, attempt.attempt)
+  }
+  assertNetworkStorage(database, true)
+}
