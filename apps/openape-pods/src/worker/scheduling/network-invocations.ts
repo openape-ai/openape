@@ -1,5 +1,5 @@
 import { NetworkData } from './network-data'
-import { networkConfiguration, networkDataPin } from './network-config'
+import { emptyNetworkDataPin, networkConfiguration, networkDataPin } from './network-config'
 import type { NetworkGates } from './network-gates'
 import type { NetworkGateManifest } from '../../contracts/network-gates'
 import { assertNetworkQuota, NetworkQuotaError } from './network-quota'
@@ -77,7 +77,7 @@ export class NetworkInvocations {
       const previous = originalRunId ? this.store.db.prepare('SELECT i.manifest,i.network_revision,i.activation_epoch,i.restore_nonce,c.attempt,c.retry_authority,r.script_hash FROM network_invocations i JOIN runs r ON r.id=i.run_id JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.run_id=?').get(originalRunId) : null
       if (previous) {
         const pins = previous.retry_authority ? JSON.parse(previous.retry_authority as string) : { ...JSON.parse(previous.manifest as string), scriptHash: previous.script_hash }
-        if ((pins.networkRevision ?? previous.network_revision) !== definition.revision || (pins.activationEpoch ?? previous.activation_epoch) !== network.activation_epoch || (pins.restoreNonce ?? previous.restore_nonce) !== network.restore_nonce || pins.assignmentRevision !== pod.bindingRevision || pins.resourceEpoch !== resourceEpoch || pins.scriptHash !== pod.activeScript || (pins.expiresAt !== undefined && pins.expiresAt <= Date.now())) {
+        if ((pins.networkRevision ?? previous.network_revision) !== definition.revision || (pins.activationEpoch ?? previous.activation_epoch) !== network.activation_epoch || (pins.restoreNonce ?? previous.restore_nonce) !== network.restore_nonce || pins.assignmentRevision !== pod.bindingRevision || pins.resourceEpoch !== resourceEpoch || pins.scriptHash !== pod.activeScript || (pins.dataPin ?? emptyNetworkDataPin) !== networkDataPin(this.store, networkId, podId) || (pins.expiresAt !== undefined && pins.expiresAt <= Date.now())) {
           const blocked = this.store.db.prepare('SELECT state,count(*) AS count FROM network_deliveries WHERE run_id=? AND state=\'retry_wait\' GROUP BY state').get(originalRunId!)
           this.store.db.prepare('UPDATE network_deliveries SET state=\'blocked\',reason=\'Script or permissions changed during infrastructure retry\' WHERE run_id=? AND state=\'retry_wait\'').run(originalRunId!)
           this.store.db.prepare('UPDATE network_invocation_controls SET retry_at=NULL,failure_kind=\'invalid\',diagnostic=\'Pinned network, script, permissions or owner retry deadline changed\' WHERE run_id=?').run(originalRunId!)

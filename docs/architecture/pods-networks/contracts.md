@@ -804,6 +804,9 @@ Unicode keys/range values in the same SQLite order. Tombstones are null by defau
 `get({collection,key,includeDeleted:true})` returns their revision, `deleted:true`,
 null value and retained provenance for explicit revisioned recreation. A write-only
 CAS operation exposes the current revision on conflict, never the record value.
+Automatic infrastructure retries retain the original data/configuration pin and
+block after changes; explicit owner retry journals a fresh pin and checks that
+reviewed pin again at admission. Historical missing pins mean empty authority.
 Owner-verified provenance cannot be set by scripts. Delete refuses unresolved
 inputs/downstream outputs/author recovery; settled delivery state is `done`.
 Writing then deleting inside one invocation commits both revisions and a tombstone;
@@ -856,7 +859,7 @@ maintenance clears the current fault without growing traces on recurring faults.
 Trace and artifact maintenance run independently while unrelated safe dispatch continues. Database
 and managed-byte admission/settlement quotas remain enforced.
 
-Intermediate evidence: 58 focused data/gate authority checks, including five
+Intermediate evidence: 59 focused data/gate authority checks, including five
 actual production SIGKILL boundaries, and one actual manual Electron/ScriptFrame
 sharing/denial scenario. The screenshot was personally inspected; existing Standalone
 Pods labels remain pending M9. Definitions/rights/configuration are explicitly fixture
