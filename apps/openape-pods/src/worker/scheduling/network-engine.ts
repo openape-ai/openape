@@ -125,8 +125,9 @@ export class NetworkEngine {
     const command = parseNetworkCommand(value)
     if (command.type !== 'inspect' && command.type !== 'retry' && command.type !== 'reconcileEffect' && command.type !== 'resolveConflict' && command.type !== 'discardFailure') throw new Error('Unsupported network recovery command')
     const definition = this.definition(command.id, command.revision)
-    const invocation = this.store.db.prepare('SELECT pod_id,network_revision FROM network_invocations WHERE network_id=? AND run_id=?').get(command.id, command.runId)
+    const invocation = this.store.db.prepare('SELECT pod_id,network_revision,execution_kind FROM network_invocations WHERE network_id=? AND run_id=?').get(command.id, command.runId)
     if (!invocation || invocation.network_revision !== command.revision) throw new Error('Network recovery revision changed')
+    if (command.type === 'discardFailure' && invocation.execution_kind === 'gate_maintenance') throw new Error('Grant maintenance must be resolved through its gate task')
     const assertCurrent = () => { this.definition(command.id, command.revision) }
     const recovery = new NetworkRecovery(this.store, this.helper)
     await recovery.inspect(command.id, command.runId, command.generation, assertCurrent)

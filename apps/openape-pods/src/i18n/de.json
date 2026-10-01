@@ -3035,6 +3035,7 @@
   "Failed gate step requires verified process cleanup": "Der fehlgeschlagene Freigabeschritt benötigt einen Nachweis der beendeten Prozesse",
   "Gate maintenance cannot release external action evidence": "Freigabewartung darf keine Belege externer Aktionen freigeben",
   "Network approval authority is unavailable at settlement": "Die Berechtigung der Netzwerkfreigabe ist beim Abschluss nicht verfügbar",
+  "Grant maintenance must be resolved through its gate task": "Freigabewartung muss über ihre Freigabeaufgabe abgeschlossen werden",
   "Grant maintenance cannot be requeued as script work; inspect its gate task": "Freigabewartung darf nicht als Script erneut eingereiht werden; prüfe die Freigabeaufgabe",
   "Approved inputs require a fresh reviewed gate batch before retry": "Freigegebene Inputs benötigen vor einem neuen Versuch einen frisch geprüften Freigabe-Batch",
   "Invalid network gate item scope": "Ungültiger Berechtigungsbereich eines Freigabe-Inputs",
