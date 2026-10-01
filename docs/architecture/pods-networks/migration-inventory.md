@@ -141,7 +141,6 @@ refreshed main; M0 does not reserve a schema number.
 | `network_event_identities` | UNIQUE(network_id, namespace, identity_hash); non-null canonical hash, durable source/derived/replay receipt independent of pruned event bytes. |
 | `network_events` | event_id; FK network revision; discriminated source/derived identity, separate network/Pod versions, case/schema envelope; immutable payload hash. |
 | `network_deliveries` | id; FK event/subscription/run; UNIQUE(event_id, subscription_id); runtime/network epochs, per-delivery generation/token/state. |
-| `source_deduplication` | UNIQUE(owner, network, source, source_item, source_version, channel); hash/receipt retained independently of pruned event bytes. |
 | `network_joins` | UNIQUE(network, join_id, case_id, case_revision); pinned declaration, deadline, outcome; input channel uniqueness. |
 | `workflow_call_requests` | request_id; FK caller revision and workflow revision/execution; immutable request hash and one terminal result. |
 | `workflow_revisions` | (workflow_id, revision); FK workflow; new named ports/completion policies without rewriting legacy runs. |
@@ -153,7 +152,8 @@ refreshed main; M0 does not reserve a schema number.
 | `artifacts` | id; FK artifact_scope; owner/group; immutable hash/size/type/storage reference; no public host path. |
 | `artifact_permissions` | UNIQUE(network, pod, artifact_scope, operation); explicit same-owner/company read/create binding. |
 | `artifact_references` | UNIQUE(artifact_id, reference_kind, reference_id); FK artifact; retained live reference. |
-| `network_gate_tasks` | id; FK network revision/consumer Pod; maintenance run FK per bounded attempt, exclusive instance lease/slot only during that step, task token/generation, immutable manifest/digest; durable consumed/unknown evidence. |
+| `network_gate_tasks` | id; FK network revision/consumer Pod; exclusive instance lease/slot only during a bounded step, task token/generation, immutable manifest/digest; durable consumed/unknown evidence. |
+| `network_gate_task_attempts` | (task_id, attempt); FK task/maintenance run; pinned step token/generation and retained outcome. |
 | `network_trace_events` | id; FK network; case/run/event references and stable detail cursor; bounded completed history. |
 
 Claim-ready indexes start with `(subscription_id, state, ready_at, accepted_at, id)`,
@@ -200,3 +200,10 @@ explicit replay envelopes, recoverable blocked-state transitions, per-attempt
 append-only effects and concrete artifact scope records. Timer sources also have
 individual invocation fencing. Follow-up acceptance still requires the final
 review and exact-head check result.
+
+
+Final Opus review found three narrow contradictions: deadline inputs are pending,
+not claimed; duplicate source marker tables; and task/step lease cardinality.
+Corrected the transition source state, folded logical source_deduplication into
+the source namespace of network_event_identities as the sole receipt authority,
+and specified maintenance-step leases with retained network_gate_task_attempts.
