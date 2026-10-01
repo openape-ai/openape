@@ -5,7 +5,8 @@
 [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3VDB1S72E4EQQW58T97C617),
 [native issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417).
 Checkout: `openape-monorepo.worktrees/pods-workflows-networks`; branch
-`feature/issue-1417-pods-networks-m2`; original canonical base
+`feature/issue-1417-pods-networks-m3`; current canonical base
+`b35620900fce67fe4d4804573df1d7edcb9f3c5e`; original canonical base
 `a99c69bd2b97d8883ce5538894c3f38510407ddf` (Pods 0.1.1, schema 27).
 
 M0 freezes [contracts](../architecture/pods-networks/contracts.md) and the
@@ -21,9 +22,10 @@ blocking/major findings after corrections. The primary agent checked sources and
 remaining token/identity wording. Final tested SHA `3b7363b2622b8394c429fe8833c6df49e87742db` passed exact-head CI;
 M0 merged as `fb80556d8a66843e028da7d13cda97fd5a9f1d50`.
 [Final private Test Runs evidence](https://report.openape.ai/r/3fMyH6tmpepIRy7p8qRhYqzm).
-M1 prototype acceptance is merged through native PR 201. M2 is in progress on
-`feature/issue-1417-pods-networks-m2`: additive storage, encrypted backup and
-restore fences. M3–M14 remain unimplemented.
+M0–M2 are accepted and merged. M3 is in progress: versioned contracts,
+durable acceptance, independent dispatch, local IPC and atomic settlement. Native
+sandbox scheduling acceptance has passed; final source gates, review closure,
+M3 PR/CI and published evidence remain open. M4–M14 remain unimplemented.
 M1 prototype: 24 crash/authority checks pass; selected established scheduling
 suites pass (120 checks before the two final isolation assertions). Maximum-payload
 stress has 195,000 receipts/events, 255,000 deliveries and 30,000 record revisions.
@@ -48,7 +50,11 @@ schema-27 migration preserves 89 legacy tables, 15,334 existing files and all 86
 credential files; original source unchanged, rollback/reopen/encrypted round trip
 and actual older-app refusal verified. Three full-file Opus 5.5 reviews and one
 targeted closure accompany primary review. [M2 storage evidence](../architecture/pods-networks/m2-storage-evidence.md).
-Final documentation-head CI and native exact-SHA merge remain pending; M3 follows.
+Final documentation head `c8418561b176667a6965d31635173fe123145541` passed
+CI run 5308; native PR 202 merged as
+`b35620900fce67fe4d4804573df1d7edcb9f3c5e`.
+[Corrected private M2 Test Runs receipt](https://report.openape.ai/r/_Y36InfIXpYhK1Bc0ro0kMz2).
+M3 contracts and runtime acceptance are not yet verified.
 Patrick requests an additional Claude Code Opus 5.5 UX review when M9 is reached;
 record its actual availability/result without substituting a claimed review.
 Production pilot, live conversion and concrete actions keep their separate gates.

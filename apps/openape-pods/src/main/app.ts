@@ -8,6 +8,7 @@ import { centralObject } from '../contracts/central'
 import { RemoteController, RemoteServiceError } from './remote/controller'
 import { parseChatsCommand } from '../contracts/chats'
 import { parseWorkflowCommand } from '../contracts/workflows'
+import { parseNetworkCommand } from '../contracts/networks'
 import { searchPackages } from './package-catalog'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -367,6 +368,10 @@ async function start(): Promise<void> {
   ipcMain.handle(channels.workspace, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     return worker.request(parseCommand(command))
+  })
+  ipcMain.handle(channels.networks, (event, command: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    return worker.networks(parseNetworkCommand(command))
   })
   ipcMain.handle(channels.workflows, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)

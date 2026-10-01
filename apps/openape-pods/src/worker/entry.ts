@@ -6,6 +6,8 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { CentralProjection } from './central/projection'
 import { boundedStep } from './scheduling/tick-step'
 import { parseOwner } from '@openape/pods-protocol'
+import { NetworkEngine } from './scheduling/network-engine'
+import { parseNetworkCommand } from '../contracts/networks'
 import type { AdministrationJournal } from '../contracts/codex-admin'
 import { RemoteControl } from './remote/control'
 import type { RemoteInternal } from './remote/control'
@@ -115,6 +117,11 @@ const master = new MasterService(store, runtime, masterControl, fixtureProvider)
 const codex = new CodexControl(store, masterControl)
 
 const remote = new RemoteControl(store, master, dispatcher, registry, scheduler, Date.now, { create: async (podId, applicationId) => String(await mailBridge.remoteProgramState({ operation: 'create', podId, applicationId })), discard: async (podId, stateId) => { await mailBridge.remoteProgramState({ operation: 'discard', podId, stateId }) } })
+const networks = new NetworkEngine(store, dispatcher, registry, runtime.helper, () => {
+  const row = store.db.prepare('SELECT body FROM remote_registration WHERE id=1').get()
+  if (!row) throw new Error('Persistent networks require an initialized owner identity')
+  return parseOwner((JSON.parse(row.body as string) as { owner: unknown }).owner)
+})
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
 let centralUntil = process.env.PODS_CENTRAL_ENABLED === '1' ? 0 : Infinity
 let scanAt = 0
@@ -153,6 +160,7 @@ const timer = setInterval(() => {
       tickPhase = 'scheduling'
       if (!suspended && Date.now() < centralUntil) {
         const before = store.db.prepare('SELECT count(*) AS count FROM runs').get()!.count
+        networks.tick()
         if (preferWorkflow) { workflows.tick(); scheduler.tick() }
         else { scheduler.tick(); workflows.tick() }
         if (store.db.prepare('SELECT count(*) AS count FROM runs').get()!.count !== before) preferWorkflow = !preferWorkflow
@@ -165,7 +173,7 @@ port.on('message', async (event) => {
   if (event.data && typeof event.data === 'object' && 'serviceReply' in event.data) { mailBridge.accept(event.data.serviceReply); return }
   if (event.data === 'suspend') { suspended = true; return }
   if (event.data === 'resume') { suspended = false; scanAt = 0; return }
-  if (event.data === 'stop') { scriptController.abort(); suspended = true; clearInterval(timer); await ticking; await Promise.allSettled(preparing ? [preparing] : []); await master.stop(); await dispatcher.stop(); store.close(); process.exit(0) }
+  if (event.data === 'stop') { scriptController.abort(); suspended = true; clearInterval(timer); await ticking; await Promise.allSettled(preparing ? [preparing] : []); await master.stop(); await networks.stop(); await dispatcher.stop(); store.close(); process.exit(0) }
   const request = event.data as { id?: unknown, command?: unknown }
   if (!request || typeof request.id !== 'string') throw new Error('Invalid worker request')
   try {
@@ -218,6 +226,12 @@ port.on('message', async (event) => {
       new ProgramControl(store, registry).execute({ type: 'recover' })
       await data.retention.cleanDeletedFiles(); await data.retention.view()
       port.postMessage({ id: request.id, state: true }); return
+    }
+    if (request.command && typeof request.command === 'object' && 'networks' in request.command) {
+      const command = parseNetworkCommand(request.command.networks)
+      if (command.type === 'create' && process.env.PODS_CENTRAL_ENABLED === '1') throw new Error('Network creation requires bounded central publication support')
+      if ((command.type === 'activate' || command.type === 'process') && (!startupReady || Date.now() >= centralUntil || suspended)) throw new Error('Network execution requires a ready local runtime')
+      port.postMessage({ id: request.id, state: networks.execute(command) }); return
     }
     if (request.command && typeof request.command === 'object' && 'remote' in request.command) {
       port.postMessage({ id: request.id, state: await remote.execute(request.command.remote as RemoteInternal) }); return

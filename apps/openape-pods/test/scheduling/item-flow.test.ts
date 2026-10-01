@@ -5,9 +5,142 @@ import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { installExample } from '../../src/worker/runs/examples'
 import { executeScript } from '../../src/worker/runs/runner'
 import { closeGraphs, graphFixture as fixture } from './graph-fixture'
+import { closeNetworks, networkFixture } from './network-fixture'
 
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
 afterEach(closeGraphs)
+afterEach(closeNetworks)
+
+it('settles persistent consumer A while B is held, deduplicates source versions and preserves paused work', async () => {
+  const f = networkFixture()
+  let releaseB: (() => void) | undefined
+  const received: string[] = []
+  const source = f.pod('Source', { takes: [], gives: ['test.a', 'test.b'], summary: 'Emits synthetic metadata' }, async (_items, request) => {
+    for (const channel of ['test.a', 'test.b']) await request('network.emit', { channel, key: 'record-1', sourceItemId: 'record-1', sourceVersion: 'v1', payload: { subject: 'Synthetic item' } })
+  })
+  const a = f.pod('Consumer A', { takes: ['test.a'], gives: [], summary: 'Consumes A' }, async (items) => { received.push(...items.map(item => item.channel)) })
+  const b = f.pod('Consumer B', { takes: ['test.b'], gives: [], summary: 'Consumes B' }, async (items, _request, _input, signal) => {
+    received.push(...items.map(item => item.channel))
+    await new Promise<void>((resolve) => { releaseB = resolve; signal.addEventListener('abort', () => resolve(), { once: true }) })
+  })
+  const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, ...[a, b].map(podId => ({ podId, source: null, serialCase: true }))], ['test.a', 'test.b'])
+  expect(f.engine.view().networks[0]!.state).toBe('paused')
+  f.engine.execute({ type: 'activate', id, revision: 1 })
+  f.process(id, [source])
+  await vi.waitFor(() => expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0))
+  f.engine.tick()
+  try {
+    await vi.waitFor(() => expect(releaseB).toBeTypeOf('function'))
+    await vi.waitFor(() => expect(f.store.db.prepare('SELECT state FROM network_deliveries d JOIN network_subscriptions s ON s.id=d.subscription_id WHERE s.pod_id=?').get(a)!.state).toBe('done'))
+    expect(f.store.db.prepare('SELECT d.state FROM network_deliveries d JOIN network_subscriptions s ON s.id=d.subscription_id WHERE s.pod_id=?').get(b)!.state).toBe('claimed')
+    expect(f.store.db.prepare('SELECT count(*) AS count FROM workflow_runs').get()!.count).toBe(0)
+    f.engine.execute({ type: 'pause', id, revision: 1 })
+  }
+  finally { releaseB?.() }
+  await vi.waitFor(() => expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0))
+  expect(f.engine.view().networks[0]).toMatchObject({ state: 'paused', counts: { done: 2, claimed: 0 } })
+  f.process(id, [source])
+  await vi.waitFor(() => expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0))
+  f.engine.tick()
+  expect(f.started.filter(podId => podId === source)).toHaveLength(2)
+  expect(f.started.filter(podId => podId === a)).toHaveLength(1)
+  expect(f.started.filter(podId => podId === b)).toHaveLength(1)
+  expect(received.sort()).toEqual(['test.a', 'test.b'])
+  expect(f.store.db.prepare('SELECT count(*) AS count FROM network_events').get()!.count).toBe(2)
+  expect(f.store.db.prepare('SELECT count(*) AS count FROM network_deliveries').get()!.count).toBe(2)
+})
+
+function simpleNetwork() {
+  const f = networkFixture()
+  const source = f.pod('Source', { takes: [], gives: ['test.a'], summary: 'Emits metadata' }, async (_items, request) => {
+    await request('network.emit', { channel: 'test.a', key: 'record-1', sourceItemId: 'record-1', sourceVersion: 'v1', payload: { subject: 'Synthetic item' } })
+  })
+  const consumer = f.pod('Consumer', { takes: ['test.a'], gives: [], summary: 'Consumes metadata' }, async () => {})
+  const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, { podId: consumer, source: null, serialCase: true }], ['test.a'])
+  return { ...f, source, consumer, id }
+}
+
+it('does not invoke an empty consumer and activation is idempotent', () => {
+  const f = simpleNetwork()
+  f.engine.execute({ type: 'activate', id: f.id, revision: 1 })
+  f.engine.execute({ type: 'activate', id: f.id, revision: 1 })
+  expect(f.store.db.prepare('SELECT count(*) AS count FROM network_trace_events WHERE kind=\'network-activated\'').get()!.count).toBe(1)
+  f.engine.tick()
+  f.process(f.id, [f.consumer])
+  expect(f.started).toEqual([])
+  expect(f.store.db.prepare('SELECT count(*) AS count FROM network_invocations').get()!.count).toBe(0)
+})
+
+it('requires paused-instance review and rejects changed or consumed processing previews', async () => {
+  const f = simpleNetwork()
+  f.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(f.source)
+  const selection = { type: 'preview' as const, id: f.id, revision: 1, podIds: [f.source], pausedPodIds: [], budget: 1 }
+  expect(() => f.engine.execute(selection)).toThrow('explicit review')
+  const preview = f.engine.execute({ ...selection, pausedPodIds: [f.source] }).preview!
+  f.store.db.prepare('UPDATE pods SET name=? WHERE id=?').run('Changed source', f.source)
+  expect(() => f.engine.execute({ type: 'process', id: f.id, revision: 1, previewId: preview.id })).toThrow('configuration changed')
+  const current = f.engine.execute({ ...selection, pausedPodIds: [f.source] }).preview!
+  f.engine.execute({ type: 'process', id: f.id, revision: 1, previewId: current.id })
+  expect(() => f.engine.execute({ type: 'process', id: f.id, revision: 1, previewId: current.id })).toThrow('already consumed')
+  await vi.waitFor(() => expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0))
+  f.engine.tick()
+  expect(f.started).toEqual([f.source])
+  expect(f.store.getPod(f.source).lifecycle).toBe('paused')
+  expect(f.engine.view().networks[0]!.counts.pending).toBe(1)
+})
+
+it('stops further Process-now admissions on pause while allowing the admitted source to settle', async () => {
+  const f = simpleNetwork()
+  let release: (() => void) | undefined
+  f.behaviours.set(f.source, async (_items, request) => {
+    await request('network.emit', { channel: 'test.a', key: 'record-1', sourceItemId: 'record-1', sourceVersion: 'v1', payload: { subject: 'Synthetic item' } })
+    await new Promise<void>((resolve) => { release = resolve })
+  })
+  f.process(f.id, [f.source, f.consumer], [], 2)
+  await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+  f.engine.execute({ type: 'pause', id: f.id, revision: 1 })
+  release!()
+  await vi.waitFor(() => expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0))
+  f.engine.tick()
+  expect(f.started).toEqual([f.source])
+  expect(f.engine.view().networks[0]!.counts.pending).toBe(1)
+  f.process(f.id, [f.consumer])
+  await vi.waitFor(() => expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0))
+  expect(f.started).toEqual([f.source, f.consumer])
+})
+
+it('does not fence unrelated ready cases after a clean consumer failure', async () => {
+  const f = simpleNetwork()
+  f.process(f.id, [f.source])
+  await vi.waitFor(() => expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0))
+  f.behaviours.set(f.consumer, async () => { throw new Error('Synthetic data failure') })
+  f.process(f.id, [f.consumer])
+  await vi.waitFor(() => expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0))
+  expect(f.engine.view().networks[0]!.counts.blocked).toBe(1)
+  f.behaviours.set(f.source, async (_items, request) => { await request('network.emit', { channel: 'test.a', key: 'record-2', sourceItemId: 'record-2', sourceVersion: 'v1', payload: { subject: 'Unrelated item' } }) })
+  f.process(f.id, [f.source])
+  await vi.waitFor(() => expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0))
+  f.behaviours.set(f.consumer, async () => {})
+  f.process(f.id, [f.consumer])
+  await vi.waitFor(() => expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0))
+  expect(f.engine.view().networks[0]!.counts).toMatchObject({ blocked: 1, done: 1 })
+  expect(f.started.filter(id => id === f.consumer)).toHaveLength(2)
+})
+
+it('keeps a revoked invocation fenced without committing its buffered outputs', async () => {
+  const f = simpleNetwork()
+  f.behaviours.set(f.source, async (_items, request) => {
+    await request('network.emit', { channel: 'test.a', key: 'record-1', sourceItemId: 'record-1', sourceVersion: 'v1', payload: { subject: 'Synthetic item' } })
+    f.store.db.prepare('UPDATE pods SET revision=revision+1 WHERE id=?').run(f.source)
+  })
+  f.process(f.id, [f.source])
+  await vi.waitFor(() => expect(f.store.db.prepare('SELECT state FROM network_invocations').get()!.state).toBe('interrupted'))
+  expect(f.store.db.prepare('SELECT count(*) AS count FROM network_events').get()!.count).toBe(0)
+  expect(f.store.db.prepare('SELECT boot_id FROM run_leases').get()!.boot_id).toMatch(/^fenced:/)
+  expect(f.store.db.prepare('SELECT state FROM runs').get()!.state).toBe('interrupted')
+  expect(f.store.checkpoint(f.source)).toMatchObject({ revision: 0, body: {} })
+  await f.dispatcher.stop()
+})
 
 const keys = ['mail-1', 'mail-2', 'mail-3', 'mail-4', 'mail-5']
 function mailGraph(f: ReturnType<typeof fixture>) {

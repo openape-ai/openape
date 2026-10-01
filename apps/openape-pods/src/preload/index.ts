@@ -3,6 +3,7 @@ import { parseRuntimeApprovalCommand, parseRuntimeApprovalPreference } from '../
 import { parseChatsCommand, parseChatsView } from '../contracts/chats'
 import { parseCodexCommand, parseCodexConnection } from '../contracts/codex'
 import { parseWorkflowCommand, parseWorkflowView } from '../contracts/workflows'
+import { parseNetworkCommand, parseNetworkView } from '../contracts/networks'
 import { parsePackageSearch, parsePackageOptions } from '../contracts/package-catalog'
 import { parseProgramCommand, parseTerminalView, parseConsoleView } from '../contracts/programs'
 import { parseLanguage, parseLanguageCommand } from '../contracts/language'
@@ -26,6 +27,7 @@ const bridge: PodsBridge = {
   async central(command) { return ipcRenderer.invoke(channels.central, command) },
   async codex(command) { return parseCodexConnection(await ipcRenderer.invoke(channels.codex, parseCodexCommand(command))) },
   async chats(command) { return parseChatsView(await ipcRenderer.invoke(channels.chats, parseChatsCommand(command))) },
+  async networks(command) { return parseNetworkView(await ipcRenderer.invoke(channels.networks, parseNetworkCommand(command))) },
   async workflows(command) { return parseWorkflowView(await ipcRenderer.invoke(channels.workflows, parseWorkflowCommand(command))) },
   async packages(command) { return parsePackageOptions(await ipcRenderer.invoke(channels.packages, parsePackageSearch(command))) },
   async programs(command) {

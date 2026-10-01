@@ -123,6 +123,7 @@ export class RemoteControl {
     const device = this.store.db.prepare('SELECT * FROM remote_devices WHERE id=? AND revoked=0').get(route.deviceId)
     if (!device || device.epoch !== route.keyEpoch || !sameOwner(JSON.parse(device.owner as string), route.owner) || !sameOwner(registration.owner, route.owner) || registration.id !== route.runtimeId || registration.generation !== route.generation) throw new ProtocolError('remote_authorization_failed', 403)
     if (!['command', 'query'].includes(route.direction)) throw new ProtocolError('invalid_direction')
+    if (this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()) throw new ProtocolError('network_projection_not_ready', 409)
     const prior = this.store.db.prepare('SELECT * FROM remote_inbox WHERE id=?').get(route.id)
     if (prior) {
       if (prior.hash !== command.hash || prior.device_id !== route.deviceId) throw new ProtocolError('operation_conflict', 409)
