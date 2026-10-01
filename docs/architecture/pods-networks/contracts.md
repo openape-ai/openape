@@ -385,8 +385,9 @@ case revision; it cannot reopen the timed-out join. Unrelated cases continue.
 Gate tasks are non-script maintenance under the downstream Pod identity. Each
 maintenance step acquires the exclusive instance lease and a fresh step token
 bound to the current task generation. Supersession/cancellation advances that task
-generation; every step checks both generation and token before committing. Therefore, so polling/consumption cannot overlap that Pod's invocation or a
-second gate task. Each bounded poll/consume step creates a maintenance run row
+generation; every step checks both generation and token before committing.
+The exclusive instance lease prevents polling/consumption from overlapping the
+Pod's invocation or another gate step. Each bounded poll/consume step creates a maintenance run row
 with the downstream pinned script hash as identity metadata and
 `executionKind: network-gate`, without launching that script. Its task attempt
 references that run UUID and reserves the existing run_leases row/global slot
