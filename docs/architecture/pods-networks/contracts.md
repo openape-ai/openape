@@ -859,11 +859,18 @@ maintenance clears the current fault without growing traces on recurring faults.
 Trace and artifact maintenance run independently while unrelated safe dispatch continues. Database
 and managed-byte admission/settlement quotas remain enforced.
 
-Intermediate evidence: 59 focused data/gate authority checks, including five
-actual production SIGKILL boundaries, and one actual manual Electron/ScriptFrame
-sharing/denial scenario. The screenshot was personally inspected; existing Standalone
-Pods labels remain pending M9. Definitions/rights/configuration are explicitly fixture
-seeded pending M8/M9. Final clean-source checks, exact-head CI, primary/native and
-actual Opus closure and verified private Test Runs publication remain required for
-M6 acceptance. Productive browser parity, migration and signed relay-first rollout
-remain the approved later milestones.
+Clean runtime `e5050467cfb91f9ba0545ffe503bf370fc819526` passes root
+lint/typecheck, Pods build,136 files/1,058 fresh units, including59 focused data/gate
+authority contracts and five production SIGKILL boundaries. Eight selected manual
+native checks pass; two unrelated crash cases are skipped. Actual native ScriptFrame
+sharing and private binding-denial receipt are verified, with a personally inspected
+clean-source screenshot. Existing Standalone labels remain M9; productive definition,
+configuration and rights setup remains M8/M9. Repeated actual Opus5.5 reviews and
+primary source/native inspection close the corrected findings, including SQLite
+Unicode ordering and automatic/owner retry authority. All28 native files/1,873 lines
+match canonical source/base commits. Runtime exact-head unit-only CI5322 passed.
+[Verified private M6 Test Runs](https://report.openape.ai/r/EFk69QK5P2sGYg1yKqwwKA9w)
+retains actual results and inspected screenshot bytes: owner200, anonymous401,
+category Test Runs. No provider action or rights expansion. Final documentation-head
+CI and protected merge remain before M6 acceptance. Continue M7; productive browser
+parity, migration, sharing and signed relay-first rollout remain later approved work.
