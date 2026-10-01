@@ -13,6 +13,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { gateCommand, gateDigest, gateSummary, parseGateManifest, payloadHash } from '../../src/contracts/gates'
 import { networkGateActionHash, networkGateCommand, networkGateDigest, networkGatePayloadHash, parseNetworkGateCoverage, parseNetworkGateManifest } from '../../src/contracts/network-gates'
 import type { NetworkGateManifest } from '../../src/contracts/network-gates'
+import { parseNetworkDefinition } from '../../src/contracts/networks'
+import { canonicalNetworkJson } from '../../src/worker/scheduling/network-events'
+import { digest } from '../../src/worker/storage/database'
 import { closeNetworks, networkFixture } from './network-fixture'
 
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
@@ -39,6 +42,19 @@ describe('versioned gate authority', () => {
     const command = JSON.parse(networkGateCommand(frozen)[2]!)
     expect(command).toMatchObject({ version: 2, podId: frozen.podId, networkId: frozen.networkId, definitionId: frozen.definitionId, resourceEpoch: 0, actionHash: frozen.actionHash, digest: frozen.digest, count: 1 })
     for (const change of [{ podId: randomUUID() }, { definitionVersion: 2 }, { bindingRevision: 2 }, { assignmentRevision: 2 }, { resourceEpoch: 1 }, { scriptHash: 'b'.repeat(64) }, { restoreNonce: randomUUID() }, { activationEpoch: 2 }, { networkRevision: 2 }, { expiresAt: frozen.expiresAt + 1 }]) expect(() => parseNetworkGateManifest({ ...frozen, ...change })).toThrow('frozen digest')
+  })
+
+  it('adds explicit v3 data/configuration authority without changing historical v2 fields', () => {
+    const old = manifest()
+    const { digest: _digest, actionHash: _actionHash, ...previous } = old
+    const base = { ...previous, version: 3 as const, dataPin: 'c'.repeat(64) }
+    const action = { ...base, actionHash: networkGateActionHash(base) }
+    const current = { ...action, digest: networkGateDigest(action) }
+    expect(parseNetworkGateManifest(current)).toEqual(current)
+    expect(JSON.parse(networkGateCommand(current)[2]!)).toMatchObject({ version: 3, dataPin: base.dataPin })
+    expect(() => parseNetworkGateManifest({ ...current, dataPin: 'd'.repeat(64) })).toThrow('frozen digest')
+    expect(() => parseNetworkGateManifest({ ...old, dataPin: base.dataPin })).toThrow('fields')
+    expect(parseNetworkGateManifest(old)).toEqual(old)
   })
 
   it('accepts canonical payload order and rejects changed or duplicated coverage', () => {
@@ -78,6 +94,31 @@ function runtimeFixture(status: () => string = () => 'pending', consume: () => P
   }
   return { ...f, source, consumer, independent, id, calls, settle, due, emit }
 }
+
+it.each([false, true])('runs a stored historical v2 grant only while its data/configuration authority remains empty (changed=%s)', async (changed) => {
+  const f = runtimeFixture(() => 'approved')
+  await f.emit('test.input')
+  const definition = parseNetworkDefinition(JSON.parse(f.store.db.prepare('SELECT contract FROM network_revisions WHERE network_id=?').get(f.id)!.contract as string))
+  f.engine.gates.prepare(definition, f.consumer)
+  const current = JSON.parse(f.store.db.prepare('SELECT manifest FROM network_gate_tasks').get()!.manifest as string) as NetworkGateManifest
+  const { dataPin: _dataPin, digest: _digest, actionHash: _actionHash, ...previous } = current
+  const base = { ...previous, version: 2 as const }
+  const action = { ...base, actionHash: networkGateActionHash(base) }
+  const historical = parseNetworkGateManifest({ ...action, digest: networkGateDigest(action) })
+  const body = canonicalNetworkJson(historical)
+  f.store.db.prepare('UPDATE network_gate_tasks SET manifest=?,manifest_hash=? WHERE id=?').run(body, digest(body), historical.id)
+  f.engine.tick(); await f.settle()
+  expect(f.calls).toEqual(['create'])
+  if (changed) {
+    const binding = f.store.db.prepare('SELECT definition_id FROM network_members WHERE pod_id=?').get(f.consumer)!
+    f.store.db.prepare('INSERT INTO definition_config VALUES(?,1,\'region\',\'public\',?)').run(binding.definition_id!, JSON.stringify('new configuration'))
+  }
+  f.due(); f.engine.tick(); await f.settle()
+  f.engine.tick(); await f.settle()
+  expect(f.store.db.prepare('SELECT state FROM network_gate_tasks WHERE id=?').get(historical.id)!.state).toBe(changed ? 'superseded' : 'approved')
+  expect(f.started.includes(f.consumer)).toBe(!changed)
+  expect(f.calls.filter(operation => operation === 'consume')).toHaveLength(changed ? 0 : 1)
+})
 
 it('keeps gated inputs pending while other consumers and ungated inputs of the same Pod continue', async () => {
   const f = runtimeFixture()
@@ -140,6 +181,20 @@ it('invalidates the frozen approval after the consumer permissions change', asyn
   expect(f.calls).toEqual(['create'])
   expect(f.store.db.prepare('SELECT state FROM network_gate_tasks').get()!.state).toBe('superseded')
   expect(f.store.db.prepare('SELECT outcome FROM network_gate_items').get()!.outcome).toBe('obsolete')
+  expect(f.started).not.toContain(f.consumer)
+})
+
+it('invalidates a frozen v3 approval after configuration changes without releasing work', async () => {
+  const f = runtimeFixture(() => 'approved')
+  await f.emit('test.input')
+  f.engine.tick(); await f.settle()
+  const original = JSON.parse(f.store.db.prepare('SELECT manifest FROM network_gate_tasks').get()!.manifest as string)
+  expect(original.version).toBe(3)
+  const binding = f.store.db.prepare('SELECT definition_id FROM network_members WHERE pod_id=?').get(f.consumer)!
+  f.store.db.prepare('INSERT INTO definition_config VALUES(?,1,\'region\',\'public\',?)').run(binding.definition_id!, JSON.stringify('changed region'))
+  f.due(); f.engine.tick(); await f.settle()
+  expect(f.calls).toEqual(['create'])
+  expect(f.store.db.prepare('SELECT state FROM network_gate_tasks').get()!.state).toBe('superseded')
   expect(f.started).not.toContain(f.consumer)
 })
 

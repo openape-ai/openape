@@ -1,3 +1,5 @@
+import { emptyNetworkDataPin, networkDataPin } from './network-config'
+import { abandonNetworkData } from './network-data-recovery'
 import { randomUUID } from 'node:crypto'
 import { sameOwner } from '@openape/pods-protocol'
 import { gateLimits, itemTitle } from '../../contracts/gates'
@@ -43,7 +45,7 @@ export class NetworkGates {
         const pod = this.store.getPod(podId)
         const network = this.store.db.prepare('SELECT * FROM networks WHERE id=?').get(definition.id)!
         const items = rows.map(row => ({ deliveryId: row.id as string, eventId: row.event_id as string, generation: Number(row.generation), key: row.item_key as string, hash: row.payload_hash as string, channel: row.channel as string, title: itemTitle(row.item_key as string, JSON.parse(row.payload as string)) }))
-        const base = { version: 2 as const, id: randomUUID(), networkId: definition.id, networkRevision: definition.revision, gate: gate.key, title: gate.title, podId, owner: { issuer: network.owner_issuer as string, subject: network.owner_subject as string }, restoreNonce: network.restore_nonce as string, activationEpoch: Number(network.activation_epoch), definitionId: member.definitionId, definitionVersion: member.definitionVersion, bindingRevision: member.bindingRevision, assignmentRevision: pod.bindingRevision, resourceEpoch: this.resources.epoch(podId), scriptHash: pod.activeScript!, expiresAt: Date.now() + gateLimits.expiryMs, items }
+        const base = { version: 3 as const, dataPin: networkDataPin(this.store, definition.id, podId), id: randomUUID(), networkId: definition.id, networkRevision: definition.revision, gate: gate.key, title: gate.title, podId, owner: { issuer: network.owner_issuer as string, subject: network.owner_subject as string }, restoreNonce: network.restore_nonce as string, activationEpoch: Number(network.activation_epoch), definitionId: member.definitionId, definitionVersion: member.definitionVersion, bindingRevision: member.bindingRevision, assignmentRevision: pod.bindingRevision, resourceEpoch: this.resources.epoch(podId), scriptHash: pod.activeScript!, expiresAt: Date.now() + gateLimits.expiryMs, items }
         const action = { ...base, actionHash: networkGateActionHash(base) }
         const manifest = parseNetworkGateManifest({ ...action, digest: networkGateDigest(action) })
         this.assertPinned(manifest)
@@ -55,6 +57,7 @@ export class NetworkGates {
           VALUES(?,?,?,?,1,'preparing',?,?,?,?,?)`).run(manifest.id, definition.id, definition.revision, podId, body, digest(body), manifest.restoreNonce, manifest.expiresAt, Date.now())
         this.store.db.prepare('INSERT INTO network_gate_controls(task_id,network_id,gate_key,summary,next_poll_at) VALUES(?,?,?,?,?)').run(manifest.id, definition.id, gate.key, summary, Date.now())
         for (const item of items) this.store.db.prepare(`INSERT INTO network_gate_items(task_id,delivery_id,event_id,delivery_generation,payload_hash,outcome) VALUES(?,?,?,?,?,'held')`).run(manifest.id, item.deliveryId, item.eventId, item.generation, item.hash)
+        for (const item of items) this.store.db.prepare(`INSERT OR IGNORE INTO artifact_references SELECT artifact_id,'gate',? FROM artifact_references WHERE reference_kind='event' AND reference_id=?`).run(manifest.id, item.eventId)
         this.trace(manifest, 'gate-batch-frozen', { taskId: manifest.id, digest: manifest.digest, actionHash: manifest.actionHash, itemCount: items.length })
       })
     }
@@ -237,6 +240,7 @@ export class NetworkGates {
             const invocation = this.store.db.prepare('SELECT i.state,i.generation,c.stopped_receipt FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.run_id=?').get(delivery.run_id)!
             if (!invocation.stopped_receipt || JSON.parse(invocation.stopped_receipt as string).generation !== invocation.generation || this.store.db.prepare('SELECT 1 FROM run_leases WHERE run_id=?').get(delivery.run_id)) throw new Error('Inspect the stopped input attempt before requesting fresh approval')
             if (this.store.db.prepare(`SELECT 1 FROM network_effect_attempts WHERE run_id=? AND state!='confirmed_not_applied' UNION ALL SELECT 1 FROM effect_ledger WHERE run_id=? AND state!='confirmed_not_applied' LIMIT 1`).get(delivery.run_id, delivery.run_id)) throw new Error('Applied or uncertain external actions cannot be repeated through gate review')
+            abandonNetworkData(this.store, delivery.run_id as string, 'owner-gate-review')
             this.store.db.prepare(`UPDATE network_invocation_controls SET retry_at=NULL,resolved_receipt=json_object('decision',json(?),'priorResolution',json(resolved_receipt)) WHERE run_id=?`).run(receipt, delivery.run_id)
           }
           if (delivery.state !== 'pending') {
@@ -363,6 +367,10 @@ export class NetworkGates {
         AND (invocation.state='completed' OR (invocation.state='blocked' AND execution.resolved_receipt IS NOT NULL))
         AND NOT EXISTS(SELECT 1 FROM run_leases WHERE run_id=attempt.run_id)
         AND NOT EXISTS(SELECT 1 FROM execution_domains WHERE run_id=attempt.run_id)
+        AND NOT EXISTS(SELECT 1 FROM network_data_staging WHERE run_id=attempt.run_id)
+        AND NOT EXISTS(SELECT 1 FROM network_artifact_staging WHERE run_id=attempt.run_id)
+        AND NOT EXISTS(SELECT 1 FROM data_record_revisions WHERE author_run_id=attempt.run_id)
+        AND NOT EXISTS(SELECT 1 FROM artifact_references WHERE reference_kind='invocation' AND reference_id=attempt.run_id)
         AND NOT EXISTS(SELECT 1 FROM network_effect_attempts WHERE run_id=attempt.run_id)
         AND NOT EXISTS(SELECT 1 FROM effect_ledger WHERE run_id=attempt.run_id)
         AND NOT EXISTS(SELECT 1 FROM accepted_events WHERE run_id=attempt.run_id)
@@ -426,6 +434,8 @@ export class NetworkGates {
     const binding = this.store.db.prepare('SELECT * FROM instance_definition_bindings WHERE pod_id=?').get(manifest.podId)
     const pod = this.store.getPod(manifest.podId)
     if (!network || network.state === 'archived' || network.baseline_state !== 'ready' || network.revision !== manifest.networkRevision || network.restore_nonce !== manifest.restoreNonce || network.activation_epoch !== manifest.activationEpoch || !sameOwner(manifest.owner, { issuer: network.owner_issuer as string, subject: network.owner_subject as string }) || !binding || binding.definition_id !== manifest.definitionId || binding.definition_version !== manifest.definitionVersion || binding.binding_revision !== manifest.bindingRevision || pod.activeScript !== manifest.scriptHash || pod.bindingRevision !== manifest.assignmentRevision || pod.lifecycle === 'archived' || this.resources.epoch(pod.id) !== manifest.resourceEpoch) throw new Error('Network gate consumer or definition authority changed')
+    const dataPin = networkDataPin(this.store, manifest.networkId, manifest.podId)
+    if ((manifest.version === 3 && manifest.dataPin !== dataPin) || (manifest.version === 2 && dataPin !== emptyNetworkDataPin)) throw new Error('Network gate data authority changed; request a fresh approval')
     const revision = this.store.db.prepare('SELECT contract FROM network_revisions WHERE network_id=? AND revision=?').get(manifest.networkId, manifest.networkRevision)!
     const definition = parseNetworkDefinition(JSON.parse(revision.contract as string))
     if (!definition.gates?.some(gate => gate.key === manifest.gate && gate.podId === manifest.podId && manifest.items.every(item => item.channel === gate.channel))) throw new Error('Network approval gate definition changed')

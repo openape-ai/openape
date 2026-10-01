@@ -1,3 +1,5 @@
+import { networkDataPin } from './network-config'
+import { ArtifactCleanupError } from './network-artifacts'
 import { NetworkGates } from './network-gates'
 import type { NetworkGateStep } from './network-gates'
 import { randomUUID } from 'node:crypto'
@@ -144,7 +146,19 @@ export class NetworkEngine {
 
   tick(automatic = true): void {
     if (!this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()) return
-    if (Date.now() >= this.nextMaintenanceAt) { pruneNetworkTraces(this.store, Date.now()); this.nextMaintenanceAt = Date.now() + 60000 }
+    if (Date.now() >= this.nextMaintenanceAt) {
+      this.nextMaintenanceAt = Date.now() + 60000
+      for (const [operation, perform] of [['traces', () => pruneNetworkTraces(this.store, Date.now())], ['artifacts', () => this.invocations.data.artifacts.prune()]] as const) {
+        try {
+          perform()
+          this.store.db.prepare('UPDATE network_maintenance_status SET body=NULL,last_at=? WHERE operation=? AND body IS NOT NULL').run(Date.now(), operation)
+        }
+        catch (failure) {
+          const details = failure instanceof ArtifactCleanupError ? { files: failure.files } : {}
+          for (const network of this.store.db.prepare('SELECT id FROM networks ORDER BY id LIMIT 64').all()) this.attention(network.id as string, 'network-maintenance-failed', { operation, ...details }, failure)
+        }
+      }
+    }
     for (const run of this.store.db.prepare('SELECT i.pod_id FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.state=\'running\' AND c.deadline<=?').all(Date.now())) this.dispatcher.cancelPod(run.pod_id as string, 'Network invocation deadline expired')
     for (const [id, batch] of this.batches) {
       let definition: NetworkDefinition
@@ -305,7 +319,7 @@ export class NetworkEngine {
 
   private fingerprint(definition: NetworkDefinition, preview: NetworkPreview): string {
     const network = this.store.db.prepare('SELECT restore_nonce,activation_epoch,baseline_state FROM networks WHERE id=?').get(definition.id)!
-    return digest(canonicalNetworkJson({ network, revision: definition.revision, members: preview.podIds.map(id => ({ pod: this.store.getPod(id), resourceEpoch: this.resources.epoch(id), binding: this.store.db.prepare('SELECT * FROM instance_definition_bindings WHERE pod_id=?').get(id) })) }))
+    return digest(canonicalNetworkJson({ network, revision: definition.revision, members: preview.podIds.map(id => ({ pod: this.store.getPod(id), dataPin: networkDataPin(this.store, definition.id, id), resourceEpoch: this.resources.epoch(id), binding: this.store.db.prepare('SELECT * FROM instance_definition_bindings WHERE pod_id=?').get(id) })) }))
   }
 
   private begin(definition: NetworkDefinition, podId: string, reason: 'manual' | 'schedule' | 'event', allowPaused: boolean, due?: number, processPreviewId: string | null = null): string | null {
@@ -374,6 +388,14 @@ export class NetworkEngine {
 
   private attention(networkId: string, kind: string, context: Record<string, unknown>, failure: unknown): void {
     const body = { ...context, message: (failure instanceof Error ? failure.message : 'Network processing failed').slice(0, 10000) }
+    if (kind === 'network-maintenance-failed') {
+      this.store.transaction(() => {
+        const previous = this.store.db.prepare('SELECT 1 FROM network_maintenance_status WHERE network_id=? AND operation=?').get(networkId, context.operation as string)
+        this.store.db.prepare(`INSERT INTO network_maintenance_status VALUES(?,?,?,1,?,?) ON CONFLICT(network_id,operation) DO UPDATE SET body=excluded.body,failure_count=failure_count+1,last_at=excluded.last_at`).run(networkId, context.operation as string, canonicalNetworkJson(body), Date.now(), Date.now())
+        if (!previous) this.trace(networkId, kind, { operation: context.operation, message: body.message, boundedStatusRecorded: true })
+      })
+      return
+    }
     const previous = this.store.db.prepare('SELECT body FROM network_trace_events WHERE network_id=? AND kind=? ORDER BY id DESC LIMIT 1').get(networkId, kind)
     if (!previous || previous.body !== canonicalNetworkJson(body)) this.trace(networkId, kind, body)
   }

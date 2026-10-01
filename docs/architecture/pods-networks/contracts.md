@@ -1,8 +1,8 @@
 # Pods persistent networks: frozen M0 contract
 
-Status: implementation contract approved through the October 1 plan; runtime
-implementation and acceptance are pending. This M0 increment changes documentation
-only. [Development issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417)
+Status: implementation contract approved through the October 1 plan. M0–M5
+are accepted and merged; M6 is in progress and unaccepted. The original M0
+increment froze these contracts; milestone evidence below records actual delivery. [Development issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417)
 tracks delivery. [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3VDB1S72E4EQQW58T97C617).
 
 Baseline: canonical `a99c69bd2b97d8883ce5538894c3f38510407ddf`, Pods 0.1.1,
@@ -719,8 +719,9 @@ the generic maintenance-disposal guard before inspection. Runtime exact-head CI
 category Test Runs, owner read 200, anonymous read 401 and both inspected screenshot
 bytes retained. Initial default-run timeouts stopped before push; nine affected
 suites passed with one worker and unchanged timeouts, then full default runs passed.
-No runner/CI/timeout change. Final documentation-head CI and protected PR 205 merge
-remain required before M5 acceptance.
+No runner/CI/timeout change. Final documentation head `dbbb2f29` passed CI 5319;
+33 files / 2,585 native lines matched canonical commits. Protected PR 205 merge
+`710c7b65af5a8d4c8e6a2753c75caeaf0dd5aa6d` completes M5 acceptance.
 
 
 
@@ -780,3 +781,86 @@ M5 preserves the existing single lastFailure projection. Historical missing
 process-domain evidence remains fail-closed and may require manual investigation;
 a blocked inspection can occupy that slot. M9 must provide a bounded operational
 failure list so unrelated failures remain discoverable without weakening stop proof.
+
+
+## M6 scoped data implementation and acceptance boundary
+
+Schema31 is additive; schema28–30 DDL and existing identity/home/rights/graph state
+retain their original representation. Collection and artifact bindings explicitly
+name the owner/company/network/instance/operation. Reservation pins their revisions,
+collection schemas/indexes, artifact-scope targets and effective configuration.
+Input delivery, each API call and settlement recheck current authority. Process-now
+previews pin this same configuration. A UUID identifier conveys no capability.
+
+`context.data.get/put/delete/query` use the frozen contract above. At most100 staged
+record mutations per invocation each use the preceding staged revision and retain
+all committed revisions/provenance. Query uses a declared scalar index, a stable
+key cursor, limit1–100 and the current invocation overlay; no caller SQL/host path.
+Responses page within192 KiB of record JSON, below the existing256 KiB frame
+limit; byte-limited pages retain the stable cursor without losing records. Get/query
+and artifact reads hold a SQLite transaction across authority and value checks.
+Keys reject unpaired surrogates; bytewise UTF-8 comparison keeps staged and indexed
+Unicode keys/range values in the same SQLite order. Tombstones are null by default;
+`get({collection,key,includeDeleted:true})` returns their revision, `deleted:true`,
+null value and retained provenance for explicit revisioned recreation. A write-only
+CAS operation exposes the current revision on conflict, never the record value.
+Owner-verified provenance cannot be set by scripts. Delete refuses unresolved
+inputs/downstream outputs/author recovery; settled delivery state is `done`.
+Writing then deleting inside one invocation commits both revisions and a tombstone;
+only that invocation's newly committed revisions are exempt from its own stopping
+state, while prior unresolved authors remain guarded.
+
+Records, materialized indexes, provenance, emitted events, checkpoint and artifact
+metadata share one SQLite settlement. A stale writer or late invalid emission
+rolls back every output. A commit-time CAS conflict blocks the original invocation;
+it requires the existing verified owner retry with a fresh run, rather than replaying
+script/external work automatically. Scripts may handle a pre-staging CAS conflict
+inside their existing authorized run. No new automatic retry class is introduced.
+
+Configuration is distinct from legacy variables and business records, with visible
+origin: Pod override > composition > definition. Secret declarations accept only
+protected-store reference objects. No runtime port resolves their values into
+business outputs; closed scalar schemas reject typed secret objects. No generic
+secret-byte heuristic is claimed. Legacy variable conflict handling remains intact.
+
+Initial `context.artifacts.create({scope,bytesBase64,mediaType})` and
+`read({id,scope})` frames are limited to128 KiB decoded bytes (existing256 KiB
+ScriptFrame limit). At most32 artifacts per invocation. Larger artifact creation or
+reads are not implemented by these APIs; backup continues to preserve historical
+retained artifacts up to256 MiB. Create is immutable and scope-specific, not an
+ambient host-path API. Explicit read permission is needed even for a just-created
+artifact reference. Bytes are hashed/size checked, written privately and fsynced,
+renamed and directory-fsynced before SQLite publishes metadata. The read descriptor
+uses no-follow, fstat, link-count/size/hash checks. Record/event/gate/invocation
+references preserve bytes across trace pruning; event UUID refs must also appear
+in hashed payload values. Existing business references remain conservative.
+
+New v3 gate manifests bind data/configuration authority in their action hash and
+command; changed rights/configuration require a fresh grant. Existing v1/v2 manifest,
+command and summary bytes remain valid. Historical v2 network approvals can only
+continue with empty shared-data/configuration authority; adding such authority
+invalidates them before consume/release. The existing gate audience and signed
+once-consumption protocol remain unchanged.
+
+Uncertain/interrupted drafts remain forensic backup evidence until current stopped
+process proof and explicit owner retry/discard/fresh gate review. That decision journals
+body hashes/revisions/artifact IDs before abandoning uncommitted drafts; it never
+rewrites committed records or uncertain effects. Restore revokes old authority and
+retains drafts for review. Safe artifact metadata removal commits before file cleanup;
+a separate writer transaction rechecks all live committed/staged hash references
+before unlink. Successive100-name pages prevent orphan starvation and include stale
+private staging files after one day. A poison entry is reported after other files
+are processed. Each network/operation retains one bounded current maintenance
+status and failure counter, plus one initial immutable diagnostic trace; successful
+maintenance clears the current fault without growing traces on recurring faults.
+Trace and artifact maintenance run independently while unrelated safe dispatch continues. Database
+and managed-byte admission/settlement quotas remain enforced.
+
+Intermediate evidence: 58 focused data/gate authority checks, including five
+actual production SIGKILL boundaries, and one actual manual Electron/ScriptFrame
+sharing/denial scenario. The screenshot was personally inspected; existing Standalone
+Pods labels remain pending M9. Definitions/rights/configuration are explicitly fixture
+seeded pending M8/M9. Final clean-source checks, exact-head CI, primary/native and
+actual Opus closure and verified private Test Runs publication remain required for
+M6 acceptance. Productive browser parity, migration and signed relay-first rollout
+remain the approved later milestones.

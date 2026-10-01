@@ -1,3 +1,4 @@
+import { abandonNetworkData } from './network-data-recovery'
 import { randomUUID } from 'node:crypto'
 import { confirmDomainsStopped, ownerGone } from '../recovery/domains'
 import type { PodDatabase } from '../storage/database'
@@ -55,6 +56,7 @@ export class NetworkRecovery {
       if (inputs.length) this.store.db.prepare('INSERT INTO network_queue_counts VALUES(?,\'retry_wait\',?) ON CONFLICT(network_id,state) DO UPDATE SET count=count+excluded.count').run(networkId, inputs.length)
       this.store.db.prepare('UPDATE network_invocations SET state=\'blocked\',generation=generation+1,claim_token=? WHERE run_id=?').run(randomUUID(), runId)
       this.store.db.prepare('UPDATE network_invocation_controls SET retry_at=?,retry_authority=?,failure_kind=NULL WHERE run_id=?').run(Date.now(), canonicalNetworkJson({ ...authority, ...namespace, expiresAt: Date.now() + 300000 }), runId)
+      abandonNetworkData(this.store, runId, 'owner-retry')
       this.trace(networkId, runId, 'owner-retry-reviewed', { receipt, originalBatchRetained: true })
     })
   }
@@ -120,6 +122,7 @@ export class NetworkRecovery {
       if (inputs.length) this.store.db.prepare('INSERT INTO network_queue_counts VALUES(?,\'discarded\',?) ON CONFLICT(network_id,state) DO UPDATE SET count=count+excluded.count').run(networkId, inputs.length)
       this.store.db.prepare('UPDATE network_invocation_controls SET resolved_receipt=?,deadline=NULL,retry_at=NULL,retry_authority=NULL WHERE run_id=?').run(receipt, runId)
       this.store.db.prepare('UPDATE network_invocations SET state=\'failed\',generation=generation+1,claim_token=? WHERE run_id=?').run(randomUUID(), runId)
+      abandonNetworkData(this.store, runId, 'owner-discard')
       this.trace(networkId, runId, 'owner-failed-invocation-discarded', { receipt, automaticRetryPermitted: false })
     })
   }
