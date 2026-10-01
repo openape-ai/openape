@@ -164,13 +164,22 @@ export class ResourceRegistry {
     if (this.epoch(podId) !== epoch) throw new Error('Resource permissions changed; stop this run')
   }
 
-  async capture(podId: string, helper: string): Promise<SnapshotSet> {
+  async capture(podId: string, helper: string, network?: { runId: string, assertCurrent: () => void }): Promise<SnapshotSet> {
+    network?.assertCurrent()
     const epoch = this.epoch(podId)
     const assigned = this.list(podId).filter(resource => resource.kind === 'reference' && resource.state === 'ready')
     const files: FileAssignment[] = assigned.map(resource => ({ id: resource.id, revision: resource.revision, path: resource.configuration.path as string }))
     const set = await createSnapshotSet(helper, join(this.store.root, 'snapshots', podId), files)
     this.store.transaction(() => {
       this.assertCurrent(podId, epoch)
+      if (network) {
+        network.assertCurrent()
+        const row = this.store.db.prepare('SELECT manifest FROM network_invocations WHERE run_id=? AND pod_id=? AND state=\'running\'').get(network.runId, podId)
+        if (!row) throw new Error('Network snapshot has no current invocation')
+        const manifest = { ...JSON.parse(row.manifest as string), snapshots: set }
+        this.store.db.prepare('UPDATE network_invocations SET manifest=? WHERE run_id=?').run(JSON.stringify(manifest), network.runId)
+        return
+      }
       this.store.db.prepare('INSERT INTO snapshot_sets VALUES(?,?,?,?)').run(set.id, podId, epoch, JSON.stringify(set))
     })
     return set
