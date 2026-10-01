@@ -406,7 +406,8 @@ generation; every step checks both generation and token before committing.
 The exclusive instance lease prevents polling/consumption from overlapping the
 Pod's invocation or another gate step. Each bounded poll/consume step creates a maintenance run row
 with the downstream pinned script hash as identity metadata and
-`executionKind: network-gate`, without launching that script. Its task attempt
+`executionKind: network-gate` as the semantic classification (stored as the
+reserved SQL enum `gate_maintenance`), without launching that script. Its task attempt
 references that run UUID and reserves the existing run_leases row/global slot
 for the bounded step only. Release slot/instance lease after the step; a pending
 task holds no lease while waiting for the next poll or owner. Gate runs have the
@@ -659,8 +660,53 @@ Three-network source transaction volume reaches 16,503 events / 49,503 deliverie
 Bindings are fixture seeded; M5 gates, M6 records and the complete dependent
 business fixture remain unverified. Scheduler/lease fairness uses mocked script
 execution at 1/2/4/8 slots, not native-script latency evidence.
-Final documentation-head CI and protected PR 204 merge remain required for
-milestone acceptance.
+Final documentation head `1cb0d57aa3b9f1fbf192c7832ff5698d4cbc2e34` passed CI 5316;
+PR 204 merged as `49dce16e93b7cc4ae07992b84f6eded9c103307c`. M4 is accepted.
+
+
+### M5 implementation progress (unaccepted)
+
+Schema 30 adds gate controls, issued-operation journals and per-delivery outcomes;
+historical schema-28/29 DDL is byte-identical to canonical M4. Explicit network
+format 2 declares approval gates on downstream subscriptions; format 1 and legacy
+v1 gate command/summary bytes remain unchanged. Maintenance reserves the pinned
+downstream/global lease for at most 30 seconds without launching a script/model.
+Each step counts toward the existing bounded Process-now admission budget.
+
+Held inputs require consumed-grant coverage during ordinary admission, active-grant
+verification through the main DDISA authority before actual script launch and fresh
+local coverage at settlement. Public script coverage contains only the gate key and
+its current approved inputs; owner, grant and restore authority remain private.
+Gates require an existing prepared Pod identity and cannot provision one implicitly.
+
+Persist an issued operation before create/status/consume, and persist consuming
+before sending the once-consume request. Unknown create/consume is never repeated;
+a late observed create ID is retained as evidence without releasing approval.
+Read-only status failures retain pending inputs with backoff. Keep the last four
+safe status-step records and monotonic poll/pruning counters; preserve create,
+consume, unknown and owner receipts. Maintenance does not displace script history.
+
+Owner-only exclusion supersedes the old grant and freezes a fresh batch for the
+remaining inputs. Unknown, obsolete or previously consumed blocked work needs explicit
+`gateReview`, fresh validation, stopped-process evidence for prior executions and
+no applied/uncertain external action before requesting a new grant. Generic gated
+retry rejects before mutation. Gated and ungated channels are claimed in separate
+batches even when they share a source case; separate gated channels also remain
+independently recoverable. Restored maintenance with stale or missing stop proof
+remains visible in lastFailure despite a retained resolution, so explicit inspect
+can establish current stop evidence before owner disposal. Owner decisions nest
+prior item and resolution receipts. Failed sibling cases do not revoke valid approval
+for other pending cases. Unknown disposal retains the uncertain grant/attempt
+receipts. Restored v2 control outcomes are revoked without rewriting legacy
+reserved gate rows; mandatory baseline review still prevents fresh approval.
+
+Intermediate checks and actual isolated Electron/signed loopback DDISA once-grant
+routing passed, including independent consumer progress and one consume before
+script launch. The actual screenshot was personally inspected: Ready, three
+synthetic company cards and existing recovery card visible without clipping.
+Cards remain labelled Standalone Pods until M9. This is development evidence;
+final clean-SHA checks, targeted Opus closure, native diff review, exact-head CI
+and verified private Test Runs publication remain required for M5 acceptance.
 
 
 

@@ -224,7 +224,7 @@ export class ConnectionManager {
     await this.dispatch({ type: 'revoke', id })
   }
 
-  async podConnection(podId: string, requestedOwner?: Owner) {
+  async podConnection(podId: string, requestedOwner?: Owner, requireExistingIdentity = false) {
     const previous = this.identityTurn
     let release!: () => void
     this.identityTurn = new Promise<void>((resolve) => { release = resolve })
@@ -232,13 +232,13 @@ export class ConnectionManager {
     try {
       if (this.assigning) throw new Error('Another permission review is in progress')
       this.assigning = true
-      try { return await this.preparePodConnection(podId, requestedOwner) }
+      try { return await this.preparePodConnection(podId, requestedOwner, requireExistingIdentity) }
       finally { this.assigning = false }
     }
     finally { release() }
   }
 
-  private async preparePodConnection(podId: string, requestedOwner?: Owner) {
+  private async preparePodConnection(podId: string, requestedOwner?: Owner, requireExistingIdentity = false) {
     const selected = await this.ownerAccount()
     if (!selected) throw new Error('Sign in with your DDISA account before setting up a pod')
     const { owner, metadata } = selected
@@ -248,6 +248,7 @@ export class ConnectionManager {
     const identities = new PodIdentityManager(this.credentials)
     const pods = (metadata.pods ?? {}) as Record<string, PodEntry>
     let entry = pods[podId]
+    if (requireExistingIdentity && (!entry?.prepared || !entry.identity)) throw new Error('Prepare and approve this Pod identity before enabling network gates')
     if (!entry) {
       if (!metadata.broker && !this.directAgents) throw new Error('Allow Pods to create agents in this pod’s settings first')
       entry = { connectionId: randomUUID(), prepared: false, ...(metadata.broker ? { broker: metadata.broker as PodBrokerConnection } : {}) }; pods[podId] = entry; metadata.pods = pods; await this.save(owner, metadata)

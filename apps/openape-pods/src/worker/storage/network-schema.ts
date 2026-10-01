@@ -1,3 +1,4 @@
+import { networkGateSchema, networkGateTables } from './network-gate-schema.ts'
 import { networkControlSchema, networkControlTables } from './network-control-schema.ts'
 import { createHash } from 'node:crypto'
 import { parseOwner } from '@openape/pods-protocol'
@@ -458,15 +459,15 @@ CREATE INDEX network_trace_cursor ON network_trace_events(network_id,id);
 
 export const networkTables = Array.from(networkSchema.matchAll(/CREATE TABLE (\w+)\(/g), match => match[1]!)
 
-const expectedSchemas = new Map<boolean, { type: string, name: string, sql: string }[]>()
-function schemaObjects(controls: boolean): { type: string, name: string, sql: string }[] {
-  const cached = expectedSchemas.get(controls)
+const expectedSchemas = new Map<number, { type: string, name: string, sql: string }[]>()
+function schemaObjects(version: number): { type: string, name: string, sql: string }[] {
+  const cached = expectedSchemas.get(version)
   if (cached) return cached
   const reference = new DatabaseSync(':memory:')
   try {
-    reference.exec(networkSchema + (controls ? networkControlSchema : ''))
+    reference.exec(networkSchema + (version >= 29 ? networkControlSchema : '') + (version >= 30 ? networkGateSchema : ''))
     const expectedSchema = reference.prepare('SELECT type,name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE \'sqlite_%\'').all() as { type: string, name: string, sql: string }[]
-    expectedSchemas.set(controls, expectedSchema)
+    expectedSchemas.set(version, expectedSchema)
     return expectedSchema
   }
   finally { reference.close() }
@@ -489,13 +490,14 @@ const networkBoundaryChecks = {
 }
 
 export function assertNetworkStorage(database: DatabaseSync, references = false): void {
-  const controls = Number(database.prepare('PRAGMA user_version').get()!.user_version) >= 29
-  for (const expected of schemaObjects(controls)) {
+  const version = Number(database.prepare('PRAGMA user_version').get()!.user_version)
+  const controls = version >= 29
+  for (const expected of schemaObjects(version)) {
     const actual = database.prepare('SELECT sql FROM sqlite_schema WHERE type=? AND name=?').get(expected.type, expected.name)
     if (actual?.sql !== expected.sql) throw new Error(`Incomplete or altered network storage: ${expected.name}`)
   }
   if (!references) return
-  for (const table of [...networkTables, ...(controls ? networkControlTables : [])]) {
+  for (const table of [...networkTables, ...(controls ? networkControlTables : []), ...(version >= 30 ? networkGateTables : [])]) {
     if (database.prepare(`PRAGMA foreign_key_check(${table})`).get()) throw new Error(`Invalid network references: ${table}`)
   }
   for (const owner of database.prepare('SELECT issuer,subject FROM network_owners').all()) parseOwner(owner)
@@ -509,6 +511,14 @@ export function assertNetworkStorage(database: DatabaseSync, references = false)
     if (retry) throw new Error('Invalid network retry lineage')
     const preview = database.prepare('SELECT 1 FROM network_invocation_controls c JOIN network_invocations i ON i.run_id=c.run_id JOIN network_process_previews p ON p.id=c.process_preview_id WHERE p.network_id!=i.network_id LIMIT 1').get()
     if (preview) throw new Error('Invalid network process preview scope')
+  }
+  if (version >= 30) {
+    const gateItems = database.prepare(`SELECT 1 FROM network_gate_items item JOIN network_gate_tasks task ON task.id=item.task_id
+      JOIN network_deliveries delivery ON delivery.id=item.delivery_id JOIN network_subscriptions subscription ON subscription.id=delivery.subscription_id
+      JOIN network_events event ON event.id=item.event_id
+      WHERE delivery.network_id!=task.network_id OR event.network_id!=task.network_id OR delivery.event_id!=item.event_id
+        OR subscription.pod_id!=task.pod_id OR subscription.network_revision!=task.network_revision LIMIT 1`).get()
+    if (gateItems) throw new Error('Invalid network gate item scope')
   }
   for (const [name, query] of Object.entries(networkBoundaryChecks)) {
     if (database.prepare(query).get()) throw new Error(`Invalid network boundary: ${name}`)
