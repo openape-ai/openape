@@ -78,6 +78,28 @@ describe('scoped shared collection transactions', () => {
     expect(f.store.db.prepare('SELECT revision FROM network_checkpoints WHERE pod_id=?').get(f.first)!.revision).toBe(0)
   })
 
+  it('fences automatic retry data authority and freezes a fresh explicit owner retry', async () => {
+    const f = fixture(); const original = f.reserve()
+    await f.invocations.finish(original, 'failed', 'Synthetic safe infrastructure failure', 'Connection failed before any effect', [], [], true)
+    f.store.db.prepare('UPDATE network_invocation_controls SET retry_at=0 WHERE run_id=?').run(original.runId)
+    f.store.db.prepare('UPDATE data_permissions SET revision=revision+1 WHERE pod_id=?').run(f.first)
+    expect(f.reserve()).toBeNull()
+    expect(f.store.db.prepare('SELECT failure_kind,retry_at FROM network_invocation_controls WHERE run_id=?').get(original.runId)).toMatchObject({ failure_kind: 'invalid', retry_at: null })
+    const generation = Number(f.store.db.prepare('SELECT generation FROM network_invocations WHERE run_id=?').get(original.runId)!.generation)
+    const recovery = new NetworkRecovery(f.store, '/unused')
+    await recovery.inspect(f.networkId, original.runId, generation, () => {})
+    recovery.requeue(f.networkId, original.runId, generation, { fingerprint: 'synthetic-explicit-owner-review', resourceEpoch: 0, assignmentRevision: f.store.getPod(f.first).bindingRevision, scriptHash: f.store.getPod(f.first).activeScript! }, () => {})
+    const reviewed = JSON.parse(f.store.db.prepare('SELECT retry_authority FROM network_invocation_controls WHERE run_id=?').get(original.runId)!.retry_authority as string)
+    expect(reviewed.dataPin).toMatch(/^[a-f0-9]{64}$/)
+    const retry = f.reserve()!
+    expect(retry.runId).not.toBe(original.runId)
+    expect(JSON.parse(f.store.db.prepare('SELECT manifest FROM network_invocations WHERE run_id=?').get(retry.runId)!.manifest as string).dataPin).toBe(reviewed.dataPin)
+    await f.invocations.finish(retry, 'failed', 'Synthetic second safe failure', 'No effect', [], [], true)
+    f.store.db.prepare('UPDATE network_invocation_controls SET retry_at=0 WHERE run_id=?').run(retry.runId)
+    f.store.db.prepare('UPDATE data_permissions SET revision=revision+1 WHERE pod_id=?').run(f.first)
+    expect(f.reserve()).toBeNull()
+  })
+
   it('commits a staged write followed by deletion with both revisions and no visible record', async () => {
     const f = fixture(); const authority = f.reserve()
     f.data.put(authority, { collection: 'cases', key: 'temporary', expectedRevision: 0, value: { status: 'draft' } })

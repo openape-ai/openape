@@ -1,3 +1,4 @@
+import { networkDataPin } from './network-config'
 import { abandonNetworkData } from './network-data-recovery'
 import { randomUUID } from 'node:crypto'
 import { confirmDomainsStopped, ownerGone } from '../recovery/domains'
@@ -47,15 +48,16 @@ export class NetworkRecovery {
       if (inputs.length !== (JSON.parse(invocation.manifest as string).inputClaims?.length ?? 0)) throw new Error('The original claim batch changed; retry requires review')
       const network = this.store.db.prepare('SELECT revision,activation_epoch,restore_nonce FROM networks WHERE id=?').get(networkId)!
       const namespace = { networkRevision: network.revision, activationEpoch: network.activation_epoch, restoreNonce: network.restore_nonce }
+      const dataPin = networkDataPin(this.store, networkId, invocation.pod_id as string)
       const previousNamespace = { networkRevision: invocation.network_revision, activationEpoch: invocation.activation_epoch, restoreNonce: invocation.restore_nonce }
-      const receipt = canonicalNetworkJson({ id: randomUUID(), reviewedAt: Date.now(), generation, ...authority, ...namespace, previousNamespace, namespaceChanged: canonicalNetworkJson(previousNamespace) !== canonicalNetworkJson(namespace), expiresAt: Date.now() + 300000, originalRunId: runId, effectsPermitted: false })
+      const receipt = canonicalNetworkJson({ id: randomUUID(), reviewedAt: Date.now(), generation, ...authority, dataPin, ...namespace, previousNamespace, namespaceChanged: canonicalNetworkJson(previousNamespace) !== canonicalNetworkJson(namespace), expiresAt: Date.now() + 300000, originalRunId: runId, effectsPermitted: false })
       for (const input of inputs) {
         this.store.db.prepare('UPDATE network_deliveries SET state=\'retry_wait\',ready_at=?,generation=generation+1,claim_token=NULL,boot_nonce=NULL,review_receipt=? WHERE id=?').run(Date.now(), receipt, input.id!)
         this.store.db.prepare('UPDATE network_queue_counts SET count=count-1 WHERE network_id=? AND state=?').run(networkId, input.state!)
       }
       if (inputs.length) this.store.db.prepare('INSERT INTO network_queue_counts VALUES(?,\'retry_wait\',?) ON CONFLICT(network_id,state) DO UPDATE SET count=count+excluded.count').run(networkId, inputs.length)
       this.store.db.prepare('UPDATE network_invocations SET state=\'blocked\',generation=generation+1,claim_token=? WHERE run_id=?').run(randomUUID(), runId)
-      this.store.db.prepare('UPDATE network_invocation_controls SET retry_at=?,retry_authority=?,failure_kind=NULL WHERE run_id=?').run(Date.now(), canonicalNetworkJson({ ...authority, ...namespace, expiresAt: Date.now() + 300000 }), runId)
+      this.store.db.prepare('UPDATE network_invocation_controls SET retry_at=?,retry_authority=?,failure_kind=NULL WHERE run_id=?').run(Date.now(), canonicalNetworkJson({ ...authority, dataPin, ...namespace, expiresAt: Date.now() + 300000 }), runId)
       abandonNetworkData(this.store, runId, 'owner-retry')
       this.trace(networkId, runId, 'owner-retry-reviewed', { receipt, originalBatchRetained: true })
     })
