@@ -20,6 +20,8 @@ import { EffectLedger } from '../../src/worker/recovery/effects'
 import { executeHttpEffect } from '../../src/worker/runs/http'
 import { PodVariables } from '../../src/worker/resources/variables'
 
+import { seedNetwork } from '../storage/network-fixture'
+
 const stores: PodDatabase[] = []
 afterEach(() => { for (const store of stores.splice(0)) { store.close(); rmSync(store.root, { recursive: true, force: true }) } })
 async function fixture() {
@@ -41,6 +43,14 @@ async function fixture() {
   const command = { type: 'execute' as const, route, body: { name: 'Remote Pod' }, hash: 'a'.repeat(64), leaseUntil: new Date(now + 25000).toISOString() }
   return { store, remote, registration, device, owner, route, command, control, master, runs, resources, scheduler }
 }
+it('rejects legacy browser reads and writes before inbox persistence for a persistent-network profile', async () => {
+  const { store, remote, command } = await fixture()
+  seedNetwork(store)
+  await expect(remote.execute(command)).rejects.toThrow('network_projection_not_ready')
+  await expect(remote.execute({ ...command, route: { ...command.route, direction: 'query', kind: 'inventory' }, body: {} })).rejects.toThrow('network_projection_not_ready')
+  expect(store.db.prepare('SELECT count(*) AS count FROM remote_inbox').get()!.count).toBe(0)
+})
+
 it('creates one paused Pod with durable ownership and the same local conversation', async () => {
   const { store, remote, command, owner } = await fixture()
   const first = await remote.execute(command)

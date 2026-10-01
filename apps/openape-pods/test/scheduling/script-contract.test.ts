@@ -190,10 +190,10 @@ describe('run', () => {
 
 interface Frame { type: string, id?: string, operation?: string, payload: unknown }
 /** Runs the real script entry in a child process and answers its requests like the runner does. */
-async function runEntry(code: string, reply: (frame: Frame) => unknown): Promise<Frame[]> {
+async function runEntry(code: string, reply: (frame: Frame) => unknown, network?: { id: string, revision: number, source: boolean }): Promise<Frame[]> {
   const root = temporary(); const entry = join(root, 'run.mjs'); const config = join(root, 'input.json'); const runId = randomUUID()
   writeFileSync(entry, code)
-  writeFileSync(config, JSON.stringify({ entry, input: { runId, eventIds: [], limits: { timeMs: 5000, frameBytes: 256 * 1024 }, workspace: root, references: [] } }))
+  writeFileSync(config, JSON.stringify({ entry, input: { ...(network ? { network } : {}), runId, eventIds: [], limits: { timeMs: 5000, frameBytes: 256 * 1024 }, workspace: root, references: [] } }))
   const child = spawn(process.execPath, [resolve('src/worker/runs/script-entry.ts'), config], { stdio: ['ignore', 'inherit', 'inherit', 'pipe'] })
   const channel = child.stdio[3] as Duplex; const frames: Frame[] = []; let buffer = ''
   channel.setEncoding('utf8')
@@ -213,6 +213,17 @@ async function runEntry(code: string, reply: (frame: Frame) => unknown): Promise
 const done = 'return { status: \'completed\', summary: \'done\', completedInputIds: [], gapIds: [] }'
 
 describe('script context', () => {
+  it('provides a frozen network context without exposing the claim token', async () => {
+    const network = { id: randomUUID(), revision: 1, source: true }
+    const frames = await runEntry(`export async function run(context) {
+      if (!Object.isFrozen(context.network) || !Object.isFrozen(context.network.info) || 'claimToken' in context.network.info) throw new Error('Network authority exposed');
+      await context.network.emit({channel:'test.a',key:'item-1',sourceItemId:'item-1',sourceVersion:'v1',payload:{subject:'Synthetic item'}});
+      ${done}
+    }`, () => ({ buffered: true }), network)
+    expect(frames.map(frame => frame.operation ?? frame.type)).toEqual(['network.emit', 'result'])
+    expect(frames[0]!.payload).toMatchObject({ sourceItemId: 'item-1', sourceVersion: 'v1' })
+  })
+
   it('announces the contract, passes the items and sends every emit as graph.emit', async () => {
     const check = graphEmitter(contract)
     const frames = await runEntry(`export const contract = ${JSON.stringify(contract)}
