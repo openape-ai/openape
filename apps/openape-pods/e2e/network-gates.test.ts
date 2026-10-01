@@ -86,7 +86,8 @@ it('network gate boundary: uses the actual Electron main/worker route and signed
   await expect(page.evaluate(({ id, taskId, generation }) => window.pods.networks({ type: 'gateExclude', id, revision: 1, taskId, generation, deliveryIds: [crypto.randomUUID()], evidence: 'Forged foreign input' }), { id, taskId: pending.id, generation: pending.generation })).rejects.toThrow('foreign network gate input')
   const grant = identity.gates()[0]!
   const command = JSON.parse(grant.command[2]!)
-  expect(command).toMatchObject({ version: 2, podId: consumer, networkId: id, count: 1 })
+  expect(command).toMatchObject({ version: 3, podId: consumer, networkId: id, count: 1 })
+  expect(command.dataPin).toMatch(/^[a-f0-9]{64}$/)
   expect(grant.consumeAttempts).toBe(0)
   identity.decideGate(grant.id, 'approved')
   await expect.poll(() => inspect(database => database.db.prepare('SELECT revision FROM network_checkpoints WHERE pod_id=?').get(consumer)!.revision), { timeout: 20000 }).toBe(1).catch(async (failure: unknown) => {

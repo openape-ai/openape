@@ -5,8 +5,8 @@
 [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3VDB1S72E4EQQW58T97C617),
 [native issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417).
 Checkout: `openape-monorepo.worktrees/pods-workflows-networks`; branch
-`feature/issue-1417-pods-networks-m5`; current canonical base
-`49dce16e93b7cc4ae07992b84f6eded9c103307c`; original canonical base
+`feature/issue-1417-pods-networks-m6`; current canonical base
+`710c7b65af5a8d4c8e6a2753c75caeaf0dd5aa6d`; original canonical base
 `a99c69bd2b97d8883ce5538894c3f38510407ddf` (Pods 0.1.1, schema 27).
 
 M0 freezes [contracts](../architecture/pods-networks/contracts.md) and the
@@ -22,9 +22,9 @@ blocking/major findings after corrections. The primary agent checked sources and
 remaining token/identity wording. Final tested SHA `3b7363b2622b8394c429fe8833c6df49e87742db` passed exact-head CI;
 M0 merged as `fb80556d8a66843e028da7d13cda97fd5a9f1d50`.
 [Final private Test Runs evidence](https://report.openape.ai/r/3fMyH6tmpepIRy7p8qRhYqzm).
-M0–M4 are accepted and merged. M5 is in progress and unaccepted; M6–M14
-remain unimplemented. The M5 working tree is based on the canonical M4 merge;
-M5 runtime acceptance is recorded below; final documentation-head CI and protected merge remain required.
+M0–M5 are accepted and merged. M6 is in progress and unaccepted; M7–M14
+remain unimplemented. M6 starts from the canonical M5 merge;
+M5 runtime acceptance, final exact-head CI and protected merge are recorded below.
 M3 [PR 203](https://repos.openape.ai/patrick/monorepo/pulls/203): tested clean
 runtime `da209ca697d79c0cade36759d9ccb69aa9167f53` passed root lint/typecheck/build,
 133 files / 966 fresh Pods unit tests, four manual native/Electron tests and
@@ -101,11 +101,48 @@ Runtime exact-head unit-only CI 5318 passed all 1,025 Pods tests.
 Native [PR 205](https://repos.openape.ai/patrick/monorepo/pulls/205) is explicitly
 linked to issue 1417. [Verified private M5 Test Runs](https://report.openape.ai/r/0vlx3rT-L2Q2NdG5kbgYizCT):
 category Test Runs, owner read 200, anonymous read 401 and both inspected screenshot
-bytes present. Local runtime acceptance is complete; final documentation-head CI
-and protected merge remain required before marking M5 accepted.
-Next: review this documentation increment, pass exact-head CI and merge PR 205,
-then continue M6. M9 retains the bounded operational failure-list work; missing
+bytes present. Final documentation head `dbbb2f2918520c55974d708de4296c6dd6676873`
+passed exact-head CI 5319; final native review verified 33 files / 2,585 displayed
+lines. Protected merge `710c7b65af5a8d4c8e6a2753c75caeaf0dd5aa6d` completes M5.
+Next: M6 scoped shared collections/artifacts on `feature/issue-1417-pods-networks-m6`
+from that canonical main, in the same isolated checkout. M6 remains unaccepted. M9 retains the bounded operational failure-list work; missing
 historical process proof stays fail-closed. Never repeat unknown external effects.
+
+M6 runtime acceptance evidence is complete; protected merge remains pending.
+Native [PR206](https://repos.openape.ai/patrick/monorepo/pulls/206) is explicitly
+linked to issue1417. Clean tested runtime
+`e5050467cfb91f9ba0545ffe503bf370fc819526` passes root lint/typecheck, Pods build,
+136 files/1,058 fresh unit tests and eight selected manual native checks; two
+unrelated crash cases are skipped by selection. Root Turbo cache reuse is disclosed.
+Schema31 adds scoped CAS records, provenance, declared indexes, separate configuration
+origins and managed artifacts. Stale writes or late emission failure roll back records,
+events, checkpoint and metadata. Five production SIGKILL points prove stable-byte,
+staging, record, event and committed boundaries. Referenced and retained uncertain
+artifacts survive encrypted backup/restore and trace pruning; stopped-process proof
+and explicit owner journaling precede abandonment of uncommitted drafts.
+
+New v3 gates pin data/configuration; historical v1/v2 command bytes remain unchanged.
+Stored v2 grants accept empty authority and supersede added configuration without
+consume. Script settlement checks the pin even without staged writes. Automatic
+infrastructure retries retain original pins; explicit owner retry journals a fresh
+pin and subsequent admission freezes it. UTF-8 byte ordering matches SQLite for
+Unicode cursor/range queries, whose response pages remain within192 KiB. Artifact
+frames are initially limited to128 KiB; historical backup retains256 MiB artifacts.
+Maintenance faults retain one bounded current status/counter per network/operation.
+
+Repeated actual Claude Code Opus5.5 reviews and primary review closed authority,
+cleanup, uncertainty, retention, retry and Unicode findings. One Opus closure denied
+reading the prior `/tmp` review but inspected repository sources/tests; none ran tests.
+Primary native review independently matched all28 files/1,873 displayed lines to
+canonical source/base commits. Exact runtime unit-only CI5322 passed.
+[Verified private M6 Test Runs](https://report.openape.ai/r/EFk69QK5P2sGYg1yKqwwKA9w):
+category Test Runs, owner200, anonymous401, personally inspected actual screenshot
+bytes present. Native sharing/denial is proved by the measured private settlement
+receipt; public run diagnostics remain redacted. Existing Standalone labels are M9
+work, and definitions/configuration/bindings remain fixture seeded until M8/M9.
+No productive owner/provider action, live conversion or expanded rights. Final
+reviewed documentation-head CI and protected merge remain before M6 acceptance;
+continue M7 correlated workflow calls/joins afterward without new plan approval.
 
 M1 prototype: 24 crash/authority checks pass; selected established scheduling
 suites pass (120 checks before the two final isolation assertions). Maximum-payload
