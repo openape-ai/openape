@@ -1,3 +1,4 @@
+import { assertNetworkQuota } from './network-quota'
 import { randomUUID } from 'node:crypto'
 import { parseNetworkDefinition } from '../../contracts/networks'
 import type { NetworkMember } from '../../contracts/networks'
@@ -62,6 +63,8 @@ export class NetworkEvents {
         AND n.restore_nonce=i.restore_nonce AND n.activation_epoch=i.activation_epoch
         AND n.baseline_state='ready'`).get(authority.runId, authority.claimToken, this.bootNonce, this.bootNonce, finishing ? 1 : 0)
     if (!row) throw new Error('Network invocation authority is no longer current')
+    const deadline = this.store.db.prepare('SELECT deadline FROM network_invocation_controls WHERE run_id=?').get(authority.runId)?.deadline
+    if (!finishing && deadline !== null && deadline !== undefined && Number(deadline) <= Date.now()) throw new Error('Network invocation deadline expired')
     const revision = this.store.db.prepare('SELECT contract FROM network_revisions WHERE network_id=? AND revision=?').get(row.network_id!, row.network_revision!)!
     const definition = parseNetworkDefinition(JSON.parse(revision.contract as string))
     const member = definition.members.find(item => item.podId === row.pod_id)
@@ -108,6 +111,8 @@ export class NetworkEvents {
         const event = this.store.db.prepare('SELECT case_id,case_revision FROM network_events WHERE id=? AND network_id=?').get(previous.event_id!, definition.id)
         return { eventId: previous.event_id as string, duplicate: true, caseId: event?.case_id as string ?? null, caseRevision: event?.case_revision as number ?? null }
       }
+      const fanout = Number(this.store.db.prepare('SELECT count(*) AS count FROM network_subscriptions WHERE network_id=? AND network_revision=? AND channel=?').get(definition.id, definition.revision, channel.name)!.count)
+      assertNetworkQuota(this.store, Buffer.byteLength(payload) * 3 + fanout * 2048 + 8192)
       const now = Date.now()
       const caseRef = member.source
         ? this.sourceCase(definition.id, row.group_id as string, member, sourceItem!, sourceVersion!, now)

@@ -99,3 +99,41 @@ it('retains the actual run identity when acceptance is interrupted after reserva
   expect(() => control.decide(context, set.id, set.revision, 'applyChanges')).toThrow('automatic retry')
   expect(runs.list(podId)).toHaveLength(1)
 })
+
+it('keeps unrelated scheduler reservations when an owner control start is refused', async () => {
+  const f = fixture(); const other = f.pods[1]!.id
+  installExample(f.store, f.resources, other, 'deterministic', 'a'.repeat(64))
+  const runs = new RunStore(f.store); let calls = 0; let admitted = ''
+  const control = new MasterControl(f.store, f.resources, {} as RunDispatcher, {} as Scheduler, {} as AgentRuntime, undefined, () => {
+    calls++
+    admitted = runs.reserve(other, f.store.getPod(other).activeScript!, f.resources.epoch(other), { reason: 'manual', eventIds: [] }).run.id
+    throw new Error('Synthetic fair slot refusal after another domain reserved work')
+  })
+  const key = randomUUID()
+  const request = { action: 'run', podId: f.pods[0]!.id, revision: f.pods[0]!.revision }
+  await expect(control.execute(key, request, new AbortController().signal, null, null, undefined, 'owner')).rejects.toThrow('fair slot refusal')
+  expect(f.store.db.prepare('SELECT state FROM runs WHERE id=?').get(admitted)!.state).toBe('running')
+  expect(f.store.db.prepare('SELECT run_id FROM run_leases WHERE pod_id=?').get(other)!.run_id).toBe(admitted)
+  expect(f.store.db.prepare('SELECT state FROM master_actions WHERE id=?').get(key)!.state).toBe('failed')
+  await expect(control.execute(key, request, new AbortController().signal, null, null, undefined, 'owner')).rejects.toThrow('fair slot refusal')
+  expect(calls).toBe(1)
+})
+
+it('retains the durable owner run identity when scheduling throws after admission', async () => {
+  const f = fixture(); const podId = f.pods[0]!.id
+  installExample(f.store, f.resources, podId, 'deterministic', 'a'.repeat(64))
+  const runs = new RunStore(f.store); let calls = 0; let admitted = ''
+  const control = new MasterControl(f.store, f.resources, {} as RunDispatcher, {} as Scheduler, {} as AgentRuntime, undefined, (id, operationId) => {
+    calls++
+    admitted = runs.reserve(id, f.store.getPod(id).activeScript!, f.resources.epoch(id), { reason: 'manual', eventIds: [], operationId }).run.id
+    throw new Error('Synthetic scheduler receipt failure after admission')
+  })
+  const key = randomUUID()
+  const request = { action: 'run', podId, revision: f.store.getPod(podId).revision }
+  await expect(control.execute(key, request, new AbortController().signal, null, null, undefined, 'owner')).rejects.toThrow('after admission')
+  expect(f.store.db.prepare('SELECT state,result FROM master_actions WHERE id=?').get(key)).toEqual({ state: 'running', result: JSON.stringify({ runId: admitted }) })
+  expect(f.store.db.prepare('SELECT run_id FROM run_leases WHERE pod_id=?').get(podId)!.run_id).toBe(admitted)
+  await expect(control.execute(key, request, new AbortController().signal, null, null, undefined, 'owner')).rejects.toThrow('after admission')
+  expect(calls).toBe(1)
+  expect(runs.list(podId)).toHaveLength(1)
+})

@@ -12,8 +12,8 @@ import { randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, expect, it } from 'vitest'
 import { PodDatabase, schemaVersion } from '../../src/worker/storage/database'
-import { networkTables } from '../../src/worker/storage/network-schema'
-import { removeNetworkSchema } from './legacy'
+import { assertNetworkStorage, networkTables } from '../../src/worker/storage/network-schema'
+import { removeNetworkControls, removeNetworkSchema } from './legacy'
 import { seedNetwork } from './network-fixture'
 
 const roots: string[] = []; const stores: PodDatabase[] = []
@@ -121,4 +121,40 @@ it('refuses direct legacy dispatch, intake and workflow membership without reser
   expect(store.db.prepare('SELECT * FROM run_leases').all()).toEqual([])
   expect(store.db.prepare('SELECT * FROM accepted_events').all()).toEqual([])
   expect(store.db.prepare('SELECT * FROM workflow_members').all()).toEqual([])
+})
+
+it('migrates schema-28 operational authority without changing legacy pins or replaying consumed previews', () => {
+  let store = fixture(); const f = seedNetwork(store)
+  removeNetworkControls(store.db)
+  store.db.exec('PRAGMA user_version=28')
+  const previewId = randomUUID(); const fingerprint = 'a'.repeat(64)
+  const activation = store.db.prepare('INSERT INTO network_trace_events(network_id,kind,body,created_at) VALUES(?,?,?,1)').run(f.networkId, 'network-activated', JSON.stringify({ sources: [{ podId: f.pod.id, nextAt: 100 }] })).lastInsertRowid
+  store.db.prepare('UPDATE network_invocations SET manifest=? WHERE run_id=?').run(JSON.stringify({ sourceActivationId: Number(activation), sourceNextAt: 200, reason: 'schedule', reviewRequired: true, snapshots: { id: 'retained-snapshot', files: [] } }), f.runId)
+  const preview = { id: previewId, networkId: f.networkId, revision: 1, podIds: [f.pod.id], pausedPodIds: [], sources: [f.pod.id], consumers: [], budget: 2, expiresAt: 9999999999999 }
+  store.db.prepare('INSERT INTO network_trace_events(network_id,kind,body,created_at) VALUES(?,?,?,2)').run(f.networkId, 'process-now-preview', JSON.stringify({ preview, fingerprint }))
+  store.db.prepare('INSERT INTO network_trace_events(network_id,kind,body,created_at) VALUES(?,?,?,3)').run(f.networkId, 'process-now-started', JSON.stringify({ previewId }))
+  const pins = store.db.prepare('SELECT * FROM network_invocations').all()
+  assertNetworkStorage(store.db, true)
+  store = reopen(store)
+  expect(store.db.prepare('SELECT * FROM network_invocations').all()).toEqual(pins)
+  expect(store.db.prepare('SELECT next_at FROM network_source_clocks').get()?.next_at).toBe(200)
+  expect(store.db.prepare('SELECT review_required,snapshots FROM network_invocation_controls').get()).toEqual({ review_required: 1, snapshots: '{"id":"retained-snapshot","files":[]}' })
+  expect(store.db.prepare('SELECT state,consumed_at FROM network_process_previews').get()).toEqual({ state: 'stopped', consumed_at: 3 })
+  store.db.prepare('DELETE FROM network_trace_events').run()
+  store = reopen(store)
+  expect(store.db.prepare('SELECT next_at FROM network_source_clocks').get()?.next_at).toBe(200)
+  expect(store.db.prepare('SELECT consumed_at FROM network_process_previews').get()?.consumed_at).toBe(3)
+})
+
+it('invalidates unconsumed schema-28 previews and clocks after an owner restore', () => {
+  let store = fixture(); const f = seedNetwork(store)
+  removeNetworkControls(store.db); store.db.exec('PRAGMA user_version=28')
+  store.db.prepare('UPDATE networks SET baseline_state=\'review_required\' WHERE id=?').run(f.networkId)
+  const preview = { id: randomUUID(), networkId: f.networkId, budget: 2, expiresAt: 9999999999999 }
+  store.db.prepare('INSERT INTO network_trace_events(network_id,kind,body,created_at) VALUES(?,?,?,1)').run(f.networkId, 'process-now-preview', JSON.stringify({ preview, fingerprint: 'a'.repeat(64) }))
+  store.db.prepare('INSERT INTO network_trace_events(network_id,kind,body,created_at) VALUES(?,?,?,1)').run(f.networkId, 'network-activated', JSON.stringify({ sources: [{ podId: f.pod.id, nextAt: 100 }] }))
+  store = reopen(store)
+  expect(store.db.prepare('SELECT state,consumed_at FROM network_process_previews').get()).toEqual({ state: 'stopped', consumed_at: 0 })
+  expect(store.db.prepare('SELECT * FROM network_source_clocks').all()).toEqual([])
+  expect(store.db.prepare('SELECT count(*) AS count FROM network_trace_events').get()?.count).toBe(2)
 })
