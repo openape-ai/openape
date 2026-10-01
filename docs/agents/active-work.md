@@ -1,3 +1,20 @@
+## Pods CI acceleration (issue 1416)
+
+Worktree: `openape-monorepo.worktrees/pods-ci`; branch:
+`feature/issue-1416-pods-ci`; base: `602c365702949b51c3286895d176b20f0a3ace44`.
+
+The workflow restores pnpm/Electron downloads before frozen installation and
+prints installation timing. Serial prebuilds cover only selected libraries,
+modules, consumed CLI apps and their transitive dependencies. All required
+checks and manual-only E2E/layout routing remain unchanged.
+
+Local isolated-cache benchmark: Pods prebuild 21.405 s cold / 2.651 s warm;
+previous full prebuild 32.627 s cold / 2.744 s warm (11 vs 32 build workspaces).
+These are local measurements, not Linux CI speedup claims. Root lint/typecheck,
+explicit tooling lint and six contract tests pass. The permanent regression
+protects dependency closure and avoids dropping required consumed-app builds.
+Next: exact-source external CI, reviewed native PR and published Test Runs evidence.
+
 # Active work
 
 ## Pods networks and workflows presentation — issue 1410
