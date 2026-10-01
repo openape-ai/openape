@@ -57,7 +57,8 @@ function requiredBlobs(database: DatabaseSync): string[] {
 }
 function retainedArtifacts(database: DatabaseSync): { path: string, hash: string, size: number }[] {
   if (Number(database.prepare('PRAGMA user_version').get()?.user_version) < 28) return []
-  return database.prepare('SELECT content_hash,storage_ref,size FROM artifacts').all().map((row) => {
+  const staged = Number(database.prepare('PRAGMA user_version').get()!.user_version) >= 31 ? ' UNION ALL SELECT content_hash,storage_ref,size FROM network_artifact_staging' : ''
+  return database.prepare(`SELECT content_hash,storage_ref,size FROM artifacts${staged}`).all().map((row) => {
     const hash = String(row.content_hash); const path = String(row.storage_ref); const size = Number(row.size)
     if (!/^[a-f0-9]{64}$/.test(hash) || path !== `artifacts/${hash}` || !Number.isSafeInteger(size) || size < 0 || size > 256 * 1024 * 1024) throw new Error('Invalid retained artifact storage')
     return { path, hash, size }
