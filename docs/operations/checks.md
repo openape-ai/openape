@@ -44,3 +44,23 @@ complete unit contract as the post-merge safety net. Documentation under `docs/`
 (except `docs/architecture/`), `.claude/` and root Markdown files never select
 a workspace; a head that changes only those files passes with zero steps. The native forge's required checks are enabled only after the external
 runner and status adapter have been verified (rollout M4).
+
+## Docker runner cache endpoint
+
+The Docker runner on `chatty.delta-mind.at` needs a reachable cache proxy.
+Issue 1416 found that the default public host IP and random proxy port were
+blocked by UFW, producing 20-second restore timeouts for both dependency and
+Turbo caches. Its configuration at `/var/lib/forgejo-runner/config.yml` now pins
+`cache.proxy_port` to `37431` and `cache.actions_cache_url_override` to
+`http://10.0.0.1:37431`, the existing Docker bridge address. The internal cache
+server port remains automatic. UFW permits that destination/port only from
+Docker bridge interfaces (`br+`) in the configured `10.0.0.0/8` Docker pool.
+No public allow rule is added. A container probe must receive an HTTP response;
+404 at the bare proxy root is expected because cache URLs contain job routes.
+Actual cache save/restore logs establish the functional acceptance.
+
+Restart the runner only when its CI job containers are absent. The original
+configuration is preserved at `config.yml.issue-1416-backup`; rollback restores
+that file and removes only the named issue-1416 cache rule. A temporary rule
+for the in-flight job is removed after completion. Do not interrupt another
+run or broaden the public firewall to repair cache transport.
