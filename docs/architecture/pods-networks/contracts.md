@@ -702,13 +702,25 @@ for other pending cases. Unknown disposal retains the uncertain grant/attempt
 receipts. Restored v2 control outcomes are revoked without rewriting legacy
 reserved gate rows; mandatory baseline review still prevents fresh approval.
 
-Intermediate checks and actual isolated Electron/signed loopback DDISA once-grant
-routing passed, including independent consumer progress and one consume before
-script launch. The actual screenshot was personally inspected: Ready, three
-synthetic company cards and existing recovery card visible without clipping.
-Cards remain labelled Standalone Pods until M9. This is development evidence;
-final clean-SHA checks, targeted Opus closure, native diff review, exact-head CI
-and verified private Test Runs publication remain required for M5 acceptance.
+Clean runtime `c170a7c28e3a8b836ea656018f48284eaee1f708` passed root
+lint/typecheck, Pods build, 135 files / 1,025 fresh unit tests and seven manual
+native checks (two unrelated crash cases skipped). Actual signed loopback once-grant
+consumption followed by worker SIGKILL before its response and desktop restart
+retains unknown state, unchanged maintenance attempts and no gated script; explicit
+owner disposal never consumes again. Both screenshots were personally inspected:
+Ready, signed-in synthetic owner, three company cards and recovery card without
+clipping. Cards remain labelled Standalone Pods until M9; gate outcomes are proved
+through actual IPC/SQL assertions, not an operational gate panel.
+
+Repeated actual Opus 5.5 reviews confirmed safety closure. Primary review verified
+all 33 files / 2,566 displayed native lines against source/target commits, including
+the generic maintenance-disposal guard before inspection. Runtime exact-head CI
+5318 passed the unit-only contract. [Verified private Test Runs receipt](https://report.openape.ai/r/0vlx3rT-L2Q2NdG5kbgYizCT):
+category Test Runs, owner read 200, anonymous read 401 and both inspected screenshot
+bytes retained. Initial default-run timeouts stopped before push; nine affected
+suites passed with one worker and unchanged timeouts, then full default runs passed.
+No runner/CI/timeout change. Final documentation-head CI and protected PR 205 merge
+remain required before M5 acceptance.
 
 
 
