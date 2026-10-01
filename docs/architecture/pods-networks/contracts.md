@@ -1,0 +1,558 @@
+# Pods persistent networks: frozen M0 contract
+
+Status: implementation contract approved through the October 1 plan; runtime
+implementation and acceptance are pending. This M0 increment changes documentation
+only. [Development issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417)
+tracks delivery. [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3VDB1S72E4EQQW58T97C617).
+
+Baseline: canonical `a99c69bd2b97d8883ce5538894c3f38510407ddf`, Pods 0.1.1,
+Pods protocol 0.1.0, database schema 27. The isolated M0 checkout is
+`openape-monorepo.worktrees/pods-workflows-networks`, branch
+`feature/issue-1417-pods-networks-m0`. These are baseline facts, not release evidence.
+
+## Domain and representation
+
+Keep `workflows` and its `mode: sequence | channels` representation unchanged.
+Both are finite legacy compositions. The presentation adapter returns
+`kind: workflow`, `semantics: legacy-sequence-v1 | legacy-channels-v1` with the
+original ID/revision. A bounded channel graph is visibly labelled **Bounded graph**.
+Do not feed it to NetworkEngine or activate it as a side effect of migration.
+
+New composition contracts have `formatVersion: 1`, `kind: workflow | network`
+and immutable positive revisions. New networks use separate `networks` and
+`network_revisions` tables, `semantics: persistent-network-v1`. New workflow
+ports/revisions extend the finite engine; they do not require converting legacy
+workflow records. Historical traces and original IDs remain unchanged. Conversion
+creates a new network UUID and retains `ancestorWorkflowId` plus source revision.
+
+An immutable Pod definition version contains code/content hash, dependency lock
+hash, declared input/output schemas, collection/artifact operations, workflow call
+ports, required configuration and requested capabilities. It has no credentials,
+execution identity, grants or mutable home. A definition owns version IDs; an
+instance pins one version through `instance_definition_bindings`. Existing Pod
+UUIDs, homes, remote identities, scripts and script history remain instance-owned.
+A local, unpublished definition is created for each existing instance in M8.
+
+A Pod invocation uses the existing run UUID and a pinned manifest containing
+execution domain (`standalone | workflow | network`), composition ID/revision,
+definition version, binding revision, resource epoch, trigger, input IDs and hash,
+configuration provenance, runtime boot authority and claim epoch. Its manifest is
+immutable. A case UUID identifies a business subject, not a run, delivery or lease.
+`caseRevision` is a runtime-controlled positive integer with retained supersession.
+Case IDs and revisions cannot be supplied by model output. Event UUIDs
+identify individual accepted facts. Source item/version identifies provider input.
+
+One mutable instance has at most one persistent home network and one active
+invocation by default. Network/group/instance owner and company must match.
+Existing workflow reservations continue to arbitrate workflow instance access.
+A network calls a finite workflow via declared ports; it cannot reserve that
+workflow's instances itself. Before adding network membership, reject any existing
+legacy composition membership except the reviewed atomic M11 cutover; also check
+membership from legacy save/delete and standalone scheduling/dispatch paths.
+A member's automatic intake belongs solely to its home network. Explicit workflow
+calls use distinct workflow instances, preserving the existing instance arbitration.
+Group movement with live bindings is refused in PodGroups.execute and every
+runtime/relay organizing command until an explicit owner-reviewed rebinding.
+Pod deletion and group removal likewise refuse live network/data/artifact bindings.
+New foreign keys restrict deletion of bound groups; membership cascade never
+changes company authority. Ungrouped existing Pods remain standalone until the
+owner selects a company; do not infer one from names or archived profiles.
+
+## Activation and dispatch
+
+Networks are created `paused`. State is `active | paused | archived`; no network
+completion state exists. Activation validates pinned contracts, schemas, company
+membership, required configuration, resources and per-instance rights before
+enabling only declared triggers. Activation grants no new external capability.
+
+Each source schedule fires independently using the existing timezone-aware clock.
+Consumers start on any ready subscribed input, without waiting for producers.
+Consumer schedules define batching windows. An explicit join is the only barrier.
+No empty input launches a script, Jev call or model call. Gate maintenance is a
+separate bounded runtime task with the downstream Pod's identity.
+
+Pause disables automatic intake and new dispatch; active invocations can settle.
+A paused member receives no automatic network dispatch, even if its network is
+active. Manual Process now previews selected sources and ready consumers, uses a
+bounded budget, and can process a paused network without enabling its schedules.
+Invoking a paused member explicitly requires review. Legacy workflow manual-start
+semantics remain unchanged and are explained in conversion preview.
+
+Resume shows pending count, oldest age and catch-up baseline. It does not replay
+historical effects. Stop cancels the real process and fences later callbacks;
+possibly issued external effects become `unknown`. Archive requires all active
+invocations settled and explicit pending-work handling. Never drop unresolved work.
+Closing the app stops execution: the browser shows runtime offline and retained
+work. There is no background service or competing relay execution authority.
+
+Fair rotation covers standalone Pods, finite workflows and networks under the
+existing global concurrency limit (1–8). Initial per-network limit is at most the
+global limit; M1 records scheduler measurements before selecting a lower default.
+Instance leases remain exclusive. Priority cannot bypass fair domain rotation.
+This deliberately changes cross-domain slot admission fairness in M4, while
+preserving finite dependencies, output/retry semantics and existing reservations.
+Optional serial-per-case subscriptions cannot overlap invocations for that case.
+
+## Schemas and event acceptance
+
+Use a small local schema language; no dependency is needed for the initial subset.
+`PayloadSchema` is an object with named properties, a required-property list and
+`additionalProperties: false`. Fields are string, finite number, integer, boolean,
+null or bounded arrays of those scalars. Scalar enums and string/array maximum
+lengths are supported. No recursive objects, regex expressions, executable
+validators, remote references or automatic coercion. Limit 32 fields and 32 array
+entries, depth two; serialized metadata remains at most 1,024 UTF-8 bytes.
+Complex business data belongs in a scoped collection/artifact reference.
+Reject unknown schema keywords instead of silently ignoring them.
+
+A channel pins `{name, title, schemaVersion, schema}`. A positive schema version
+is immutable; changes create a new version and an explicit compatibility review.
+Channel names retain the current technical naming rule. Jev/model outputs are
+untrusted: validate both the metadata schema and allowed output channel.
+
+Accepted envelope:
+
+```ts
+interface NetworkEvent {
+  eventId: string
+  networkId: string
+  channel: string
+  schemaVersion: number
+  caseId: string
+  caseRevision: number
+  origin: SourceOrigin | DerivedOrigin | ReplayOrigin
+  key: string
+  producerPodId: string
+  causationId: string | null
+  networkRevision: number
+  podDefinitionVersion: number
+  invocationId: string
+  occurredAt: number
+  acceptedAt: number
+  payload: Record<string, unknown>
+  feedbackHop: number
+  identityHash: string
+}
+interface ReplayOrigin {
+  kind: 'replay'
+  originalEventId: string
+  replayAttemptId: string
+  effectsPermitted: boolean
+}
+interface SourceOrigin {
+  kind: 'source'
+  sourceBindingId: string
+  sourceItemId: string
+  sourceVersion: string
+}
+interface DerivedOrigin {
+  kind: 'derived'
+  inputEventIds: string[]
+  producerPodId: string
+  emitKey: string
+  feedbackTransitionId: string | null
+}
+```
+
+Runtime generates UUID, acceptance time, producer identity, invocation identity,
+case identity/revision and feedback hop. It obtains sourceBindingId from the pinned
+trigger/binding, never a script string. Provider identifiers/versions are validated
+against that binding's declared adapter and watermark policy.
+
+Source acceptance identity is `[owner, networkId, sourceBindingId, sourceItemId,
+sourceVersion, channel]`. Definition/schema versions are pinned receipt metadata,
+not new acceptance identities: a schema bump cannot fan out the same normal source
+again. Same identity and schema/payload hash returns the original receipt; changed
+schema/content is a visible conflict requiring reviewed migration or explicit replay.
+
+Derived event identity is `[networkId, producerPodId, sortedInputEventIds, channel,
+emitKey, feedbackTransitionId]`. It excludes invocation/attempt and version bumps
+so ordinary retry returns the same receipt. A source producing multiple facts uses
+declared output channels or child entity keys; derived fan-out can emit two invoice
+keys from one email. Duplicate emitKey with different content conflicts. `key`
+preserves the legacy item key in an explicit adapter; it is not case identity.
+FeedbackTransitionId is runtime-issued and unique per delayed transition, not an
+arbitrary model-controlled value. Normal/derived/replay namespaces are distinct. `network_event_identities` retains
+`UNIQUE(network_id, namespace, identity_hash)` independently of event retention.
+Compute identityHash over canonical ordered tuples; sort input IDs, encode null
+feedback transition as a non-null canonical sentinel, and never use nullable
+UNIQUE columns as the deduplication boundary. Same identity retains receipt/schema/
+payload hash after event pruning. ReplayOrigin uses a runtime-generated reviewed
+replayAttemptId; it references the original event receipt without replacing its
+source or derived marker. The replay marker's identity is `[originalEventId,
+replayAttemptId]`. Marker policy also protects derived identities while an input,
+approval, business revision or retry can still refer to them.
+
+Case creation uses `network_cases` and `network_case_sources`: runtime atomically
+maps the validated source binding/item to a generated case UUID and revision. New
+source versions advance a recorded integer revision under the case transaction.
+Derived events inherit case/revision from their claimed inputs; mixed cases are
+refused unless a declared split creates child cases with retained parent ancestry.
+Cross-source joins require an owner-declared deterministic correlation binding
+(e.g. exact validated business key) and revision authority. Runtime looks up its
+mapping; a model cannot choose a foreign case, reopen a superseded revision or
+invent equivalence. Missing/ambiguous correlation enters review. There is no
+implicit fuzzy match. Case revisions retain supersession and completion/deadline
+state; late input cannot attach to a newer revision without the declared rule.
+
+Acceptance atomically persists event, marker and one delivery per subscriber.
+`UNIQUE(event_id, subscription_id)` enforces fan-out; consumer A acknowledging
+never removes B's delivery. Source cursor advancement occurs only with the durable
+acceptance receipt/checkpoint commit. A crash before checkpoint advancement can
+repeat acceptance safely. Oldest accepted event first within each subscription;
+concurrent branches have no global order guarantee. Invalid producer input is
+rejected before acceptance; incompatible already accepted deliveries enter review.
+
+## Delivery authority, settlement and replay
+
+States: `pending -> claimed -> done`, plus `retry_wait`, `blocked`, `unknown`,
+`discarded`. Claim records include delivery ID, subscriber, claimant run UUID,
+pinned revisions, random lease token, expiry, attempt number and authority epoch.
+Every settlement/retry transition compares token, claimant, epoch and current
+binding authority in a short database transaction. Authority has three scopes:
+(1) runtime boot epoch revokes all pre-restart/restore callbacks; (2) network
+activation epoch revokes that network on restore or explicit destructive cutover;
+(3) per-delivery claim generation/token advances only a reassigned delivery.
+Reassigning one delivery does not invalidate healthy claims in another branch.
+Ordinary pause advances no epoch, because active work may settle. Epoch scope
+includes a cryptographically random authority incarnation; restored numeric values
+cannot reuse authority. Startup creates a fresh runtime boot nonce for claims.
+Restore creates a fresh network restore nonce before any read/write authority is
+reissued, using OS randomness outside the backed-up counters. Gate approval
+manifests bind that restore nonce; every pre-restore approval is obsolete even if
+all restored numeric revisions match. Normal restart preserves pending decisions
+under the unchanged restore nonce, revalidates the pinned action and claims with
+fresh boot authority. Existing
+run_leases remain the exclusive per-instance process lease across all domains;
+network claims add delivery authority, not a competing instance lease. Every
+network invocation also has its own random token/generation, including timer
+sources with no delivery claim. Stop invalidates that invocation only; source
+callbacks cannot rely solely on a network-wide epoch or legacy run state. Lease expiry does not prove
+process termination. Stop or prove termination before reassignment, then advance
+the delivery generation. A timed-out async callback cannot commit with its former epoch.
+Existing `boundedStep` uses Promise.race without cancellation: retain it for legacy
+call sites, but do not treat it as authority fencing for new network operations.
+
+Successful settlement atomically acknowledges inputs, applies staged collection
+writes and tombstones, records revisions/provenance, accepts buffered emits and
+creates deliveries/change events. Check all permissions and expected revisions
+before changing anything. A rejected or failed settlement publishes none of those
+outputs. Reads see invocation-local staged writes. No external await occurs while
+holding SQLite's write transaction. Include run completion, network checkpoint
+advancement, local effect receipt references and release of the owning run lease in
+this same settlement transaction. Network invocations stage private checkpoints;
+they cannot use the legacy immediate checkpoint commit. Keep legacy finish/item
+transactions unchanged; the new path must not copy their separate-commit boundary.
+Database remains local WAL, synchronous FULL,
+foreign keys ON; never put the file on a shared network filesystem.
+
+External actions remain outside that transaction. For legacy runs, EffectLedger
+retains its existing caller-supplied key contract. For network runs, the runtime
+requires a declared action port and computes `[owner, podId, caseId, intendedAction,
+businessObjectId, actionRevision]`, binding the validated input digest and original
+grant manifest. IntendedAction/object/revision come from the pinned declared
+operation and authorized case record, not an arbitrary LLM key. Feedback hop,
+invocation and redelivery are excluded. Effect begin checks current runtime,
+network and claim authority plus exclusive run lease immediately before dispatch.
+Late/fenced callbacks cannot issue a new external action. Ordinary retry reuses
+the logical key and input digest.
+Confirmed effects return their receipt without resending. Intent/unknown outcomes
+block automatic retry until explicit reconciliation. Network reconciliation retains
+append-only evidence of `confirmed_applied | confirmed_not_applied` and the owner
+receipt. `network_effect_attempts` identifies `(logicalActionKey, attempt)` and its
+owning run; `network_effect_receipts` appends `(key, attempt, sequence)` transitions
+and results. One active attempt per logical key; retained confirmed-applied state
+suppresses further execution across attempts. Confirmed-not-applied permits an explicit new attempt only with current
+authority; it does not erase the old intent/unknown audit. Legacy reconciliation
+currently deletes a not-applied ledger row; retain that legacy behavior, but do
+not use it as the network evidence policy. A new feedback hop cannot
+change the key for the same intended effect. A locally transactional conflict can
+retry only after the classifier establishes that no external effect is uncertain.
+
+Transient infrastructure failures get at most three total attempts with jittered
+bounded backoff. Permission/invalid-data failures are blocked for review; exhausted
+transient attempts are visible. Retry time and attempt count are durable. Replay
+creates an explicit attempt identity, links its original event and states whether
+effects are permitted; replay does not delete markers or confirmed effect evidence.
+
+| Transition | Authority and evidence |
+| --- | --- |
+| pending/retry_wait -> claimed | Runtime scheduler, due deadline, exclusive instance lease and new claim token. |
+| claimed -> done | Owning fenced successful atomic settlement only. |
+| claimed -> retry_wait | Safe transient classifier, proven process stopped, no uncertain effect; bounded attempt/deadline. |
+| pending/claimed -> blocked | Validation/permission/conflict or exhausted retry; retain concrete reason. |
+| claimed -> unknown | Possibly issued external effect or consumed grant without settlement; never automatic redispatch. |
+| blocked -> pending | Owner-reviewed correction of binding/schema/baseline, current authority and safe-effect classifier; retained reason/review receipt. |
+| retry_wait -> blocked | Attempt exhaustion, revoked authority or invalidated input; never spin or silently discard. |
+| pending (held) join inputs -> blocked | Recorded join deadline/incomplete outcome and review; no late automatic reopening. |
+| unknown -> blocked/pending | Owner reconciliation evidence, current authority and explicit reviewed retry. |
+| blocked/pending -> discarded | Owner-only recorded resolution after effect/reference reconciliation; retain tombstone/audit, never automatic quota eviction. |
+
+Keep source markers at least 90 days and longer than provider replay horizon;
+otherwise require a durable reviewed watermark. Event pruning cannot remove a
+marker. Keep unresolved deliveries, gate manifests and uncertain effect evidence.
+Completed trace retention is seven days or 10,000 events per network within its
+byte budget; compact aggregate history is 90 days. Quotas pause/refuse intake before
+source checkpoint advancement and show the reason; never evict unresolved work.
+M1 measures numeric byte/queue budgets before runtime activation is implemented.
+
+## Shared data and artifacts
+
+Collection identity is `[owner, companyGroupId, collectionId]`. Bindings explicitly
+name network, Pod instance, collection schema/version and `read | write | delete`
+operations. Cross-network sharing requires explicit same-company bindings;
+cross-company access is refused. Configuration is separate from business records.
+Precedence: Pod override, composition value, definition default. Show effective
+value/origin; existing legacy name conflicts continue to fail until reviewed.
+
+```ts
+const record = await context.data.get({ collection: 'invoices', key: item.key })
+await context.data.put({
+  collection: 'invoices', key: item.key,
+  expectedRevision: record?.revision ?? 0,
+  value: { status: 'reviewed', sourceEventId: item.eventId }
+})
+```
+
+`get` returns `{key, revision, value, provenance}` or null. `put` and `delete` stage
+changes; expectedRevision zero is create-only. A stale revision rejects the whole
+settlement, identifying collection/key/current revision. `query` uses a declared
+index and scalar comparison/equality, stable key cursor and limit 1–100; no SQL,
+expressions, unrestricted scans or implicit indexes. A second staged write uses
+its own staged revision. Delete retains a tombstone and provenance. Provenance
+records Pod, definition version, invocation, source references, time and revision.
+Proposed findings and owner-verified records have distinct status; scripts cannot
+set owner verification. Known credential/secret declarations use typed protected-store references only,
+never their values. Reject credential-bearing binding fields and secret-declared
+configuration in events/collections/exports; runtime APIs never resolve a secret
+reference into those outputs. Arbitrary bytes cannot be proven secret-free by a
+heuristic, so do not claim generic secret detection. Preserve existing sandbox and
+review boundaries for scripts with legitimate secret-reading rights.
+
+Artifact scope is a runtime-generated UUID identifying an owner/company collection
+or explicitly private network artifact area. `artifact_scopes` names that target;
+it never defaults to the whole company. `artifacts` references one scope UUID and
+`artifact_permissions` binds specific scopes and operations to concrete instances.
+Cross-network same-company sharing needs an explicit scope binding.
+`context.artifacts.create` stages immutable bytes under that scope, with hash,
+size, media type and artifact UUID. `read` accepts a scoped artifact reference;
+it never returns an ambient host path. Artifact IDs are identifiers, not
+capabilities: every read/create checks an explicit per-instance artifact binding,
+owner/company, permitted operation and current authority, even for an ID found in
+an untrusted event. Stage bytes in a private temporary file, verify size/hash,
+fsync, atomically rename to immutable managed storage and fsync its directory
+before SQLite publishes references. A crash before reference commit leaves an
+unreferenced orphan eligible for safe collection; a commit never references
+unstable bytes. Recheck authority immediately before reference commit. References
+track business, delivery and gate usage. Retention deletes bytes only after all live references expire.
+Quota and backup coverage include retained bytes. Existing Pod checkpoints and
+snapshot APIs retain their private semantics.
+
+## Workflows, joins and human gates
+
+Workflow call contract declares input/output port schema versions, permitted
+caller networks, required terminal branches and required owner gates. Request
+contains request UUID, case ID/revision, caller network revision and pinned
+workflow revision. `workflow_revisions` stores immutable composition content;
+its version is distinct from the existing mutable workflows.revision concurrency
+counter, which also changes on pause. Publish/pin the immutable content before call
+acceptance; preserve existing legacy per-run snapshots and counters. Conversion
+ancestry includes the frozen content/hash, not just a pause-sensitive counter.
+Accept and persist the call receipt before dispatch. Repeated
+request/hash attaches to one execution; conflicting hash is refused. Distinct requests queue FIFO for the called workflow;
+its existing one-active-execution/reservation contract remains. A call never attaches
+a different case to an already active legacy run. A blocked workflow exposes
+head-of-line waiting for its queued callers without holding any network lease;
+other workflows/consumers continue. A terminal
+execution publishes one correlated success/failure/cancelled result via a unique
+request result mapping. The caller holds no Pod lease while waiting. Paused caller
+networks retain results. Cancellation follows recorded parent/call relationships,
+stops actual processes and retains uncertain effects.
+
+Completion waits for required terminal branches and unresolved required gates;
+owner waiting is nonterminal. Missing optional branches are explicitly skipped.
+Retries preserve successful steps and immutable outputs. Named ports adapt UUID
+predecessor handoff through stored mappings; never rewrite arbitrary script strings.
+
+Initial joins require one input from each declared channel/schema for exactly
+`[caseId, caseRevision]`. Declaration names join ID, required channels, deadline
+and review destination. Unique `[joinId, caseId, caseRevision, channel]` accepts
+one input; identical redelivery is idempotent, conflicting second input goes to
+review. Once complete, claim all inputs atomically. Deadline persists an incomplete
+outcome and missing-channel list. Late input goes to review or an explicitly new
+case revision; it cannot reopen the timed-out join. Unrelated cases continue.
+
+Gate tasks are non-script maintenance under the downstream Pod identity. Each
+maintenance step acquires the exclusive instance lease and a fresh step token
+bound to the current task generation. Supersession/cancellation advances that task
+generation; every step checks both generation and token before committing.
+The exclusive instance lease prevents polling/consumption from overlapping the
+Pod's invocation or another gate step. Each bounded poll/consume step creates a maintenance run row
+with the downstream pinned script hash as identity metadata and
+`executionKind: network-gate`, without launching that script. Its task attempt
+references that run UUID and reserves the existing run_leases row/global slot
+for the bounded step only. Release slot/instance lease after the step; a pending
+task holds no lease while waiting for the next poll or owner. Gate runs have the
+same publication filtering and backup-idle checks as network script runs.
+Poll steps are bounded and cancellation invalidates their token.
+Approved release is bound to a specific action manifest/expiry; paused queues do
+not extend grant validity, and dispatch revalidates it before an external effect. Keep
+task states preparing, pending, consuming, approved, denied, expired,
+superseded and unknown distinguishable; excluded is a retained per-item outcome. Freeze item IDs/hashes, consumer identity,
+definition/binding/resource revisions and manifest digest before requesting a
+grant. Exclusion supersedes the batch and requests fresh approval. Changed payload
+or authority invalidates release; old evidence is viewable but cannot authorize
+new work. Persist consuming before one-time grant consumption. An interruption
+between consumption and local settlement becomes unknown, never another consume.
+Owner decisions remain owner-only; scripts/model MCP tools cannot make them.
+
+## Definitions, migration, sharing and feedback
+
+New definition versions are immutable; instance updates preview code, contracts,
+locks, values and requested-rights differences. New rights need explicit owner
+approval. Held work stays pinned to its old version or visibly blocks if authority
+is no longer valid. Never automatically upgrade all instances. Provisioning retries
+reuse the existing pending identity/provisioning record and do not copy grants.
+
+M11 conversion is a dry-run preview until the owner approves the concrete cutover.
+Block active runs, unresolved gates, uncertain effects, unknown provider baselines,
+membership conflicts and unsupported payloads. Create paused with ancestry, preserve
+original instance identities and perform source schedule ownership transfer
+atomically. No simultaneous old/new intake. Old pending deliveries stay in legacy
+storage until reviewed baseline/import; no inferred cursors or historical replay.
+
+Sharing is currently absent (`sharingAvailable = false`). M11 adds the file
+export/import slice under the approved sharing format/lifecycle, not a second
+sharing system. Export definition versions, schemas, schedules, joins, call ports,
+feedback and collection declarations; omit business records, cursors, grants,
+credentials and paths. Imports map company/resources, use fresh identities and
+stay paused. Locks remain validated transitively. Unsupported old importers refuse
+persistent-network packages explicitly. Invitation delivery retains its own plan.
+
+Ordinary edges remain acyclic. M12 adds an explicit feedback transition, minimum
+one-second delay, maximum three hops and 24-hour case age. Runtime controls hop
+and causation; bound exhaustion creates review work. Unique transition/event
+identity prevents double scheduling. Pause stops dispatch; external effect keys
+remain stable. There is no unrestricted LLM-controlled loop.
+
+## Diagnostic changes and UI review
+
+Current GraphOverview/Panel/Inspector, WorkspaceFrame and shared desktop/browser
+components remain the basis. Keep All, Networks and Workflows filters, separate
+Structure and Activity, and avoid a network Last run/completed label. Legacy bounded
+graphs retain their label. New operational states are inactive, waiting for work,
+processing, waiting for owner, degraded and offline. Show backlog/oldest age,
+last intake/next trigger, decisions, quota/retry cause and processing coverage.
+Creation asks finite result or continuing work, company, shared values, per-instance
+resources/rights; validate and create paused. Focus restoration, keyboard navigation,
+narrow layouts and counted DE/EN messages use current i18n/components. The plan's
+static sketches express hierarchy, not proof of implemented UI.
+
+All former graph diagnostics remain unchanged for legacy graphs:
+
+| Code | Persistent-network rule |
+| --- | --- |
+| channel-without-producer | Require declared producer or explicit workflow-result/input port; no implicit external input. |
+| channel-without-consumer | Require subscriber, explicit terminal/review sink or workflow output port. |
+| channel-undeclared | Retain, including channel/schema version. |
+| emit-undeclared | Retain and validate payload schema. |
+| cycle | Retain for immediate edges; only declared bounded feedback is separate. |
+| archive-without-gate | Retain existing concrete action authority; activation is no archive grant. |
+| summary-invalid | Retain current 40-character summary rule. |
+| contract-missing | Require validated immutable definition contract. |
+| member-elsewhere | Enforce one home network, owner/company match and existing reservation arbitration. |
+| value-name-conflict | Legacy refusal unchanged; new versions resolve explicit precedence/origin. |
+| gate-consumer | Retain one downstream requester/executor per approval gate. |
+
+New diagnostics cover unsupported semantics/schema, join cardinality/deadline,
+missing call ports, source identity/watermark, binding scope, stale revision,
+quota/backpressure, feedback bounds and unsupported client version. Each names
+the affected member/channel/case and a concrete recovery action.
+
+## Backup, relay and delivery boundaries
+
+Authoritative data and recoverable backups include every new table plus artifact
+bytes. UI publication is a separate bounded overview and stable-key detail cursor;
+never append full network/business tables to `centralTables`. Store network
+manifests/inputs/checkpoints in `network_invocations`, not legacy accepted_events
+or run_inputs payloads. Existing runs may retain only bounded generic status.
+Committed private network checkpoints live in `network_checkpoints`, separate
+from legacy checkpoints. Before the first network invocation in M3, apply a closed
+default-deny classification across every centralTables entry: any row associated
+with a network member, invocation, gate task, case or their derived records is
+excluded unless an explicit bounded public-summary projection allowlists fields.
+This includes checkpoints, recovery_reviews, schedules, claims, resources and
+indirect run/member foreign-key paths, not just runs/run_events/effect_ledger.
+Unknown/unclassified ownership fails publication rather than leaking a row.
+Approved Pod/name/status/queue aggregates are rendered as explicit summaries,
+not copied full table rows. No network business/checkpoint/effect body may be
+stored in a legacy table used by unfiltered publication. Retain backup coverage
+independently; add no new full-table payload leakage. New network effect evidence remains in `network_effect_receipts`.
+M10 completes negotiated bounded summaries and paginated details; privacy cannot
+wait for M10 while M3 writes network state. Runtime-mediated
+owner-authenticated details fail clearly while offline. M10 negotiates compatible
+versions before new writers ship; relay cannot claim deliveries or settle records.
+Classify network reads as owner-authenticated bounded details. Network activation,
+resume, source Process now, replay with effects, data/rights rebinding, conversion
+and gate decisions remain desktop owner-review actions until the browser's existing
+authority contract explicitly supports them. Do not tunnel them through legacy
+runs:start, scheduling:lifecycle or workspace:organize. Ordinary safe browser
+views/pause/cancel preserve current scoped restrictions and version negotiation.
+Deploy the compatible relay first, then the signed desktop candidate. Restore
+pauses networks/triggers, revokes claim authority, marks possibly issued actions
+unknown and preserves markers/receipts present in the backup. A backup cannot know
+effects issued after it was created. Every restored network therefore requires a
+reviewed source baseline/watermark and effect reconciliation before any resume,
+source Process now or replay. Mark restored claimed deliveries and consuming gates
+unknown/blocked; intent rows cannot become fresh executable work. Preserve legacy
+gate batches/reservations as blocked evidence, never transfer them into new claims. Do not overwrite later owner data or rotating
+registration with an old profile. Keep owner credential/keychain recovery separate
+from the current portable backup, which deliberately excludes credential files.
+
+M13 requires clean merged canonical source, exact-head unit CI, manual real desktop
+and browser routes, inspected screenshots, signed/notarized candidate, mounted DMG
+and owner-state fingerprint comparison. M14 follows explicit low-risk pilot
+activation and seven days of observations. No pilot, live conversion or external
+action approval is implied here. Multiple devices/central service remain separate.
+
+## Predicted acceptance examples
+
+| Trigger | Observable behavior |
+| --- | --- |
+| Timer emits A/B | Accept both durably; A's consumer completes while B is held. |
+| Human gate pending | Only affected deliveries wait; unrelated queues proceed. |
+| Member paused | Automatic subscription dispatch stops; accepted inputs remain. |
+| Same source version repeats | Return original receipt; no second normal fan-out. |
+| Stale data writer emits output | Reject complete transaction; no output event appears. |
+| App stops after uncertain HTTP | Retain unknown effect and work; no automatic resend. |
+| Caller pauses while workflow finishes | One correlated result remains pending until explicit processing/resume. |
+
+## Decision log
+
+- October 1: owner approved M0–M14; no renewed approval required.
+- Separate network storage/semantics and unchanged legacy representation implement
+  the approved additive compatibility default.
+- Explicit sourceItemId and caseRevision freeze previously implicit identity/join
+  fields; they do not expand scope or authority.
+- Local bounded schema subset needs no new dependency; remote/executable schemas
+  remain excluded. M1 must verify the limits before production implementation.
+- Existing WAL/FULL settings are retained; no central database or framework added.
+- Portable backup excludes credentials; existing paired stopped-profile/keychain
+  recovery remains necessary. M2/M13 must prove preservation, not infer it from
+  the portable archive.
+- Sharing file slice is an approved M11 dependency; invitation delivery stays
+  separately tracked. Live mail acceptance is still open under issue 1407.
+
+## Implementation entry points and next acceptance
+
+Existing graph contracts, WorkflowEngine/items/gates, scheduling scheduler/tick-step,
+RunDispatcher/RunStore/script-entry, PodDatabase, backup/retention, central projection,
+master reference/control and current renderer components are the entry points in
+the approved plan. Extend established scheduling/recovery/storage/resources/backup,
+worker-entry, layout, central, relay and protocol suites. No new runner or automatic
+E2E/layout job. M1 budgets include existing backup ceilings: 256 MiB database/per file, 100,000
+files and 10 GiB total. Business revision retention is an explicit collection policy
+with unresolved references protected. M2 extends artifact allowlists, required blob
+inventory, network-idle checks and restore coverage before any activation.
+M1 must prove crash/epoch/transaction and volume boundaries before
+M2 chooses the next available schema number and enables no network activation.
