@@ -401,8 +401,12 @@ it.each(['status', 'consume'])('exposes restored failed %s maintenance for inspe
   expect(() => f.engine.execute({ type: 'gateDiscard', id: f.id, revision: 1, taskId: task.id, generation: task.generation, evidence: 'Premature restored disposal' })).toThrow('verified process cleanup')
   const failure = f.engine.view().networks[0]!.health.lastFailure!
   expect(failure).not.toBeNull()
+  const oldResolution = JSON.parse(f.store.db.prepare('SELECT resolved_receipt FROM network_invocation_controls WHERE run_id=?').get(failure.runId)!.resolved_receipt as string)
   await f.engine.recover({ type: 'inspect', id: f.id, revision: 1, runId: failure.runId, generation: failure.generation })
+  expect(JSON.parse(f.store.db.prepare('SELECT resolved_receipt FROM network_invocation_controls WHERE run_id=?').get(failure.runId)!.resolved_receipt as string).priorResolution).toEqual(oldResolution)
   expect(f.engine.view().networks[0]!.health.lastFailure).toBeNull()
+  await expect(f.engine.recover({ type: 'discardFailure', id: f.id, revision: 1, runId: failure.runId, generation: failure.generation, evidence: 'Synthetic generic maintenance discard is refused' })).rejects.toThrow('resolved through its gate task')
+  expect(JSON.parse(f.store.db.prepare('SELECT resolved_receipt FROM network_invocation_controls WHERE run_id=?').get(failure.runId)!.resolved_receipt as string).priorResolution).toEqual(oldResolution)
   f.engine.execute({ type: 'gateDiscard', id: f.id, revision: 1, taskId: task.id, generation: task.generation, evidence: 'Synthetic owner disposal after inspecting restored maintenance' })
   expect(f.store.db.prepare('SELECT state FROM network_deliveries WHERE id=?').get(task.items[0]!.deliveryId)!.state).toBe('discarded')
   const retained = JSON.parse(f.store.db.prepare('SELECT receipt FROM network_gate_items WHERE task_id=?').get(task.id)!.receipt as string)
@@ -457,4 +461,31 @@ it('prioritizes restored uncertain maintenance inspection over a newer unrelated
   f.engine.execute({ type: 'gateDiscard', id: f.id, revision: 1, taskId: task.id, generation: task.generation, evidence: 'Synthetic independent disposal after current maintenance inspection' })
   expect(f.store.db.prepare('SELECT state FROM network_deliveries WHERE run_id=?').get(unrelated.runId)!.state).toBe('blocked')
   expect(f.calls.filter(call => call === 'consume')).toHaveLength(1)
+})
+
+it('requires confirmed non-application and fresh owner approval before an uncertain gated input resumes', async () => {
+  const f = runtimeFixture(() => 'approved')
+  await f.emit('test.input')
+  f.engine.tick(); await f.settle()
+  f.due(); f.engine.tick(); await f.settle()
+  const authority = f.engine.invocations.reserve(f.id, f.consumer, f.resources.epoch(f.consumer), 'event')!
+  const item = f.engine.invocations.input(authority).items[0]!
+  const key = networkGatePayloadHash({ action: 'synthetic-uncertain-action' })
+  f.store.transaction(() => {
+    f.store.db.prepare(`INSERT INTO network_effect_attempts VALUES(?,1,?,?,1,?,?,'unknown',1,?)`).run(key, authority.runId, item.caseId, 'a'.repeat(64), 'b'.repeat(64), f.id)
+    f.store.db.prepare(`INSERT INTO network_effect_receipts VALUES(?,1,1,'unknown','{"synthetic":true,"noProviderAction":true}',1)`).run(key)
+  })
+  await f.engine.invocations.finish(authority, 'failed', 'Synthetic uncertain effect', 'No real provider action occurred', [], [])
+  const task = f.engine.view().gates![0]!
+  const command = { type: 'gateReview' as const, id: f.id, revision: 1, taskId: task.id, generation: task.generation, evidence: 'Synthetic independent fresh grant review after explicit effect reconciliation' }
+  expect(() => f.engine.execute(command)).toThrow('Applied or uncertain external actions')
+  const generation = Number(f.store.db.prepare('SELECT generation FROM network_invocations WHERE run_id=?').get(authority.runId)!.generation)
+  await f.engine.recover({ type: 'reconcileEffect', id: f.id, revision: 1, runId: authority.runId, generation, key, attempt: 1, sequence: 1, outcome: 'confirmed_not_applied', evidence: 'Synthetic owner verifies no external action occurred; test-only receipt' })
+  f.engine.execute(command)
+  expect(f.store.db.prepare('SELECT state,run_id FROM network_deliveries WHERE id=?').get(task.items[0]!.deliveryId)).toEqual({ state: 'pending', run_id: null })
+  expect(f.store.db.prepare('SELECT count(*) AS count FROM network_effect_receipts WHERE logical_action_key=?').get(key)!.count).toBe(2)
+  f.engine.tick(); await f.settle()
+  expect(f.calls.filter(operation => operation === 'create')).toHaveLength(2)
+  expect(f.calls.filter(operation => operation === 'consume')).toHaveLength(1)
+  expect(f.started).not.toContain(f.consumer)
 })

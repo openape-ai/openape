@@ -80,7 +80,7 @@ an active-grant check before script launch; unrelated inputs continue.
 Owner exclusion supersedes the old grant and requires a fresh batch. Uncertain
 create/consume stays unknown; explicit disposal preserves that uncertainty.
 The final uncommitted tree passes full root lint/typecheck, Pods build and
-135 files / 1,024 fresh unit tests, including 25 retained gate authority/recovery
+135 files / 1,025 fresh unit tests after final evidence corrections, including 26 gate authority/recovery
 contracts. Seven manual native checks pass (two unrelated crash cases skipped).
 Actual signed loopback DDISA once consumption, worker SIGKILL before its response,
 desktop restart, unchanged maintenance attempt count, unknown retention and owner
@@ -89,8 +89,14 @@ inspection takes priority over newer unrelated script failures. Gated/ungated
 channels sharing a case are separately claimed and independently recoverable.
 Prior item/control/invocation receipts remain nested JSON evidence.
 Repeated actual Claude Code Opus 5.5 reviews prompted these corrections; final
-focused closure is running. No clean tested M5 SHA, native PR, exact-head CI or
-private Test Runs acceptance receipt exists yet. Next: runtime commit, clean-SHA
+focused closure is running. Initial runtime commit `005450ddc80b3953024d8675af4c5bccacab7de5` was created;
+its clean default-concurrency run hit nine existing 5-second timeouts and stopped
+before push. The affected nine suites passed 161 checks with one test worker
+and unchanged timeouts after the final evidence correction; the next complete
+default-concurrency run passed all 1,025 tests. The final small generic-disposal
+guard is checked before recording the final clean source. No accepted M5 SHA,
+native PR, exact-head CI or
+private Test Runs acceptance receipt exists yet. Next: final runtime commit and clean-SHA
 checks, primary native diff review, final Opus closure, exact-head CI and verified
 private Test Runs publication, then M6. Never repeat unknown external effects.
 
