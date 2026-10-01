@@ -1,5 +1,26 @@
 # Active work
 
+## Pods persistent networks — issue 1417
+
+[Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3VDB1S72E4EQQW58T97C617),
+[native issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417).
+Checkout: `openape-monorepo.worktrees/pods-workflows-networks`; branch
+`feature/issue-1417-pods-networks-m0`; canonical base
+`a99c69bd2b97d8883ce5538894c3f38510407ddf` (Pods 0.1.1, schema 27).
+
+M0 freezes [contracts](../architecture/pods-networks/contracts.md) and the
+[complete schema-27 migration inventory](../architecture/pods-networks/migration-inventory.md).
+The existing backup API read an existing stopped profile through read-only SQLite
+and exported a private isolated archive: 89 tables, 121 files, 20,703,926 bytes.
+No live owner/profile/provider mutation. Full root lint/typecheck passed with
+Turbo cache reuse; this is a documentation increment, not new runtime acceptance.
+[Verified private Test Runs evidence](https://report.openape.ai/r/4pfGRvsu2cUA1T0VgqnmH16e).
+M0 native PR/exact-source CI is pending. Next: review/merge M0, then M1 synthetic
+crash/fencing/volume prototypes in the existing suites. M1–M14 are unimplemented.
+Patrick requests an additional Claude Code Opus 5.5 UX review when M9 is reached;
+record its actual availability/result without substituting a claimed review.
+Production pilot, live conversion and concrete actions keep their separate gates.
+
 ## Pods CI acceleration verification — issue 1416
 
 Worktree: `openape-monorepo.worktrees/pods-ci`; branch:
