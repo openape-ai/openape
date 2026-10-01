@@ -15,7 +15,9 @@ and exported a private isolated archive: 89 tables, 121 files, 20,703,926 bytes.
 No live owner/profile/provider mutation. Full root lint/typecheck passed with
 Turbo cache reuse; this is a documentation increment, not new runtime acceptance.
 [Verified private Test Runs evidence](https://report.openape.ai/r/4pfGRvsu2cUA1T0VgqnmH16e).
-M0 native PR/exact-source CI is pending. Next: review/merge M0, then M1 synthetic
+M0 [PR 200](https://repos.openape.ai/patrick/monorepo/pulls/200) has green exact-head
+CI at dcc14d44; the subsequent independent Opus review found safety-contract gaps.
+Corrections and a second review/check run are pending. Next: review/merge M0, then M1 synthetic
 crash/fencing/volume prototypes in the existing suites. M1–M14 are unimplemented.
 Patrick requests an additional Claude Code Opus 5.5 UX review when M9 is reached;
 record its actual availability/result without substituting a claimed review.
