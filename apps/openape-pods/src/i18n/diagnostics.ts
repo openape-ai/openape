@@ -38,4 +38,9 @@ export const diagnosticPatterns = [
   'Script failed: {p0}',
   'Script exited with code {p0}',
   'Database schema {p0} needs a newer application',
+  'Retained artifact size mismatch: {p0}',
+  'Incomplete or altered network storage: {p0}',
+  'Invalid network references: {p0}',
+  'Invalid network content digest: {p0}',
+  'Invalid network boundary: {p0}',
 ] as const satisfies readonly MessageKey[]

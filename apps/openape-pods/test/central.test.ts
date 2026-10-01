@@ -1,3 +1,4 @@
+import { seedNetwork } from './storage/network-fixture'
 // @vitest-environment node
 import { DataControl } from '../src/worker/data/control'
 import { parseCentralCommand } from '../src/contracts/central'
@@ -7,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { RunRetention } from '../src/worker/data/run-retention'
-import { PodDatabase } from '../src/worker/storage/database'
+import { PodDatabase, schemaVersion } from '../src/worker/storage/database'
 import { ResourceRegistry } from '../src/worker/resources/registry'
 import { RunDispatcher } from '../src/worker/runs/dispatcher'
 import { Scheduler } from '../src/worker/scheduling/scheduler'
@@ -66,7 +67,7 @@ it('adopts the current schema repeatedly without credentials or local process le
   const { store, projection, actor, pod } = fixture()
   const first = projection.snapshot(actor.owner)
   expect(first.workspace.pods[0]?.id).toBe(pod.id)
-  expect(first.archive.schema).toBe(27)
+  expect(first.archive.schema).toBe(schemaVersion)
   expect(Object.keys(first.archive.tables)).not.toContain('connections')
   expect(Object.keys(first.archive.tables)).not.toContain('run_leases')
   expect(first).toEqual(projection.snapshot(actor.owner))
@@ -330,4 +331,9 @@ it('allows only reviewed deletion through the central data channel', () => {
   for (const command of [{ type: 'restore' }, { type: 'cleanup' }, { type: 'jobs' }, { ...body, name: '' }, { ...body, revision: 0 }, { ...body, force: true }]) {
     expect(() => parseCentralCommand({ channel: 'data', body: command })).toThrow()
   }
+})
+
+it('fails closed before publishing any legacy table or projection from a network workspace', () => {
+  const f = fixture(); seedNetwork(f.store)
+  expect(() => f.projection.snapshot(f.actor.owner)).toThrow('bounded publication support')
 })

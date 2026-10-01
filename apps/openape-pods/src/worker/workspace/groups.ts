@@ -23,10 +23,15 @@ export class PodGroups {
         this.store.db.prepare('INSERT INTO pod_groups(id,name,collapsed) VALUES(?,?,0)').run(randomUUID(), command.name)
       }
       if (command.action === 'rename') this.store.db.prepare('UPDATE pod_groups SET name=? WHERE id=?').run(command.name, command.id)
-      if (command.action === 'remove') this.store.db.prepare('DELETE FROM pod_groups WHERE id=?').run(command.id)
+      if (command.action === 'remove') {
+        if (this.store.db.prepare('SELECT 1 FROM networks WHERE group_id=? UNION ALL SELECT 1 FROM data_collections WHERE group_id=? UNION ALL SELECT 1 FROM artifact_scopes WHERE group_id=? LIMIT 1').get(command.id, command.id, command.id)) throw new Error('Group is bound to network, collection or artifact state; review bindings before removal')
+        this.store.db.prepare('DELETE FROM pod_groups WHERE id=?').run(command.id)
+      }
       if (command.action === 'collapse') this.store.db.prepare('UPDATE pod_groups SET collapsed=? WHERE id=?').run(Number(command.collapsed), command.id)
       if (command.action === 'move') {
         this.store.getPod(command.podId)
+        const current = this.store.db.prepare('SELECT group_id FROM pod_memberships WHERE pod_id=?').get(command.podId)?.group_id ?? null
+        if (current !== command.groupId && this.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=? UNION ALL SELECT 1 FROM data_permissions WHERE pod_id=? UNION ALL SELECT 1 FROM artifact_permissions WHERE pod_id=? LIMIT 1').get(command.podId, command.podId, command.podId)) throw new Error('Pod has live network or data bindings; review rebinding before changing company')
         if (command.groupId !== null && !state.groups.some(group => group.id === command.groupId)) throw new Error('Group no longer exists')
         this.store.db.prepare('DELETE FROM pod_memberships WHERE pod_id=?').run(command.podId)
         if (command.groupId !== null) this.store.db.prepare('INSERT INTO pod_memberships VALUES(?,?)').run(command.podId, command.groupId)

@@ -560,3 +560,44 @@ with unresolved references protected. M2 extends artifact allowlists, required b
 inventory, network-idle checks and restore coverage before any activation.
 M1 must prove crash/epoch/transaction and volume boundaries before
 M2 chooses the next available schema number and enables no network activation.
+
+
+## M2 storage refinements
+
+Schema 28 is additive. Network-owned tables and guard indexes are checked against
+application-owned DDL at opening; backup and restore additionally check foreign
+keys, owner/group boundaries and stored content digests. Immutable JSON digests
+bind the exact stored UTF-8 serialization. Historical events and record provenance
+retain their pinned definition versions; validation compares stable owner
+boundaries rather than the current instance version.
+
+Effect attempts and gate attempts use composite network/run and network/case or
+network/task foreign keys. Logical effect keys remain global because the frozen
+owner/Pod/case/action/business-object/action-revision tuple denotes one logical
+action across retries and network revisions. Confirmed applied receipts must
+continue suppressing execution in the runtime handlers.
+
+Encrypted backup format 1 is additive to the existing portable plaintext format.
+AES-256-GCM authenticates the manifest and each opaque file. HKDF-SHA256 derives
+one archive key from the explicitly supplied protected 256-bit key, random
+256-bit salt and format/key-reference context; random 96-bit nonces distinguish
+files and manifest. File counts and ciphertext lengths remain observable.
+The clear header contains format, version, key reference, salt, nonce and tag.
+The authenticated encrypted manifest binds file paths, opaque IDs, nonces, tags,
+sizes and SHA-256 checksums. The encrypted manifest has an independent 32 MiB
+ceiling; long paths can reach it before the 100,000-file ceiling. Keys are copied and zeroed locally; owner key
+provisioning and the encrypted data-control UI remain M9 acceptance work.
+
+Plaintext export/unseal stages are private local application siblings keyed by
+profile path, outside the chosen export target and profile. Worker initialization
+removes abandoned plaintext stages before normal recovery. Only ciphertext stages
+are written to the export target. A restored profile is plaintext application
+state, intentionally paused; this format does not encrypt the live database.
+
+Restoration records one bounded authority-revocation summary per network, rather
+than a trace row for every historical invocation. Restoration retains archived networks, reasons, review receipts and staged
+checkpoint evidence. It rotates every invocation authority and gate-step token,
+blocks effect-free unfinished work, marks uncertain effects/steps and running
+calls unknown, supersedes undecided gates and fences approved grants by the new
+restore nonce and mandatory baseline review. Legacy gate batches with a pending
+or consuming decision become unknown while preserving their concrete evidence.
