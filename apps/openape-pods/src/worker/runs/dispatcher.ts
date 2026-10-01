@@ -141,10 +141,13 @@ export class RunDispatcher {
     const work = this.execute(authority.runId, manifest.resourceEpoch, controller.signal, { reason: manifest.reason, eventIds: [] }, execution).catch(async (failure: unknown) => {
       try { await invocations.failClosed(authority, failure) }
       catch (cleanupFailure) {
-        this.store.db.prepare('INSERT INTO network_trace_events(network_id,run_id,kind,body,created_at) VALUES(?,?,?,?,?)').run(row.network_id!, authority.runId, 'settlement-cleanup-unverified', JSON.stringify({ reason: (cleanupFailure instanceof Error ? cleanupFailure.message : 'Network cleanup failed').slice(0, 10000), explicitInspectionRequired: true }), Date.now())
+        try {
+          this.store.db.prepare('INSERT INTO network_trace_events(network_id,run_id,kind,body,created_at) VALUES(?,?,?,?,?)').run(row.network_id!, authority.runId, 'settlement-cleanup-unverified', JSON.stringify({ reason: (cleanupFailure instanceof Error ? cleanupFailure.message : 'Network cleanup failed').slice(0, 10000), explicitInspectionRequired: true }), Date.now())
+        }
+        catch { console.error('Network cleanup diagnostic could not be persisted; its retained state requires inspection') }
         console.error('Network settlement cleanup failed; explicit inspection is required')
       }
-    })
+    }).finally(() => { this.active.delete(member.podId) })
     this.active.set(member.podId, { controller, work })
   }
 
@@ -413,7 +416,7 @@ export class RunDispatcher {
     finally {
       try { if (shellScope) await this.services?.closeShell?.(shellScope) }
       catch (error) { appendEvent('diagnostic', { text: error instanceof Error ? error.message : 'Pod shell cleanup failed' }) }
-      finally { this.active.delete(pod.id) }
+      finally { if (!network) this.active.delete(pod.id) }
     }
   }
 

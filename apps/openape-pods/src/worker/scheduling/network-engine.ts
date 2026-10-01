@@ -91,7 +91,9 @@ export class NetworkEngine {
         this.attention(batch.preview.networkId, 'process-now-stopped', { previewId: id, explicitResumeRequired: true }, failure)
         this.batches.delete(id); continue
       }
-      let active = false; let started = false
+      const occupied = Number(this.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count)
+      const maximum = Number(this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency)
+      let active = batch.remaining > 0 && occupied >= maximum; let started = false
       for (const member of definition.members.filter(item => batch.preview.podIds.includes(item.podId))) {
         if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=?').get(member.podId)) { active = true; continue }
         if (batch.remaining <= 0 || batch.preview.expiresAt < Date.now() || (member.source && batch.startedSources.has(member.podId))) continue
@@ -183,6 +185,8 @@ export class NetworkEngine {
 
   private validate(definition: NetworkDefinition): void {
     if (diagnoseNetwork(definition).length) throw new Error('Network channel contracts contain blocking diagnostics')
+    const network = this.store.db.prepare('SELECT baseline_state FROM networks WHERE id=?').get(definition.id)
+    if (network && network.baseline_state !== 'ready') throw new Error('Restored network requires a reviewed baseline')
     const owner = parseOwner(this.currentOwner())
     for (const member of definition.members) {
       const binding = this.binding(member.podId, owner, definition.groupId); const pod = this.store.getPod(member.podId)

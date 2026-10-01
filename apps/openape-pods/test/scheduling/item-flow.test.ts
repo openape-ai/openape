@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { RunRetention } from '../../src/worker/data/run-retention'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { installExample } from '../../src/worker/runs/examples'
+import * as domains from '../../src/worker/recovery/domains'
 import { executeScript } from '../../src/worker/runs/runner'
 import { closeGraphs, graphFixture as fixture } from './graph-fixture'
 import { closeNetworks, networkFixture } from './network-fixture'
@@ -125,6 +126,36 @@ it('does not fence unrelated ready cases after a clean consumer failure', async 
   await vi.waitFor(() => expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0))
   expect(f.engine.view().networks[0]!.counts).toMatchObject({ blocked: 1, done: 1 })
   expect(f.started.filter(id => id === f.consumer)).toHaveLength(2)
+})
+
+it('waits for a global slot without consuming the rest of a Process-now batch', async () => {
+  const f = simpleNetwork()
+  f.store.db.prepare('UPDATE settings SET concurrency=1 WHERE id=1').run()
+  const busy = f.pod('Unrelated work', { takes: [], gives: ['test.a'], summary: 'Unrelated fixture' }, async () => {})
+  const reserved = f.dispatcher.runs.reserve(busy, f.store.getPod(busy).activeScript!, 0, { reason: 'manual', eventIds: [] })
+  f.process(f.id, [f.source])
+  expect(f.started).toEqual([])
+  expect(f.store.db.prepare('SELECT 1 FROM network_trace_events WHERE kind=\'process-now-finished\'').get()).toBeUndefined()
+  f.dispatcher.runs.finish(reserved.run.id, 'completed', 'Unrelated fixture completed', null)
+  f.engine.tick()
+  await vi.waitFor(() => expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0))
+  expect(f.started).toEqual([f.source])
+})
+
+it('waits for revoked-run cleanup before completing dispatcher shutdown', async () => {
+  const f = simpleNetwork()
+  let release: (() => void) | undefined
+  vi.spyOn(domains, 'confirmDomainsStopped').mockImplementation(async () => { await new Promise<void>((resolve) => { release = resolve }) })
+  f.behaviours.set(f.source, async () => { f.store.db.prepare('UPDATE pods SET revision=revision+1 WHERE id=?').run(f.source) })
+  f.process(f.id, [f.source])
+  await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+  let stopped = false
+  const shutdown = (async () => { await f.dispatcher.stop(); stopped = true })()
+  await Promise.resolve()
+  expect(stopped).toBe(false)
+  release!(); await shutdown
+  expect(stopped).toBe(true)
+  expect(f.store.db.prepare('SELECT state FROM network_invocations').get()!.state).toBe('interrupted')
 })
 
 it('keeps a revoked invocation fenced without committing its buffered outputs', async () => {
