@@ -44,6 +44,7 @@ import { installExample } from './examples'
 import type { NetworkInvocations } from '../scheduling/network-invocations'
 import type { NetworkAuthority, NetworkEmission } from '../scheduling/network-events'
 import { canonicalNetworkJson } from '../scheduling/network-events'
+import { assertNetworkQuota } from '../scheduling/network-quota'
 import { fenceNetworkBoot } from '../scheduling/network-boot'
 
 interface NetworkExecution { invocations: NetworkInvocations, authority: NetworkAuthority, emissions: NetworkEmission[] }
@@ -172,7 +173,12 @@ export class RunDispatcher {
       const networkId = network.invocations.events.authority(network.authority).definition.id
       const body = canonicalNetworkJson({ data })
       if (Buffer.byteLength(body) > 256 * 1024) throw new Error('Network trace exceeds its size limit')
-      this.store.db.prepare('INSERT INTO network_trace_events(network_id,run_id,kind,body,created_at) VALUES(?,?,?,?,?)').run(networkId, id, type, body, Date.now())
+      assertNetworkQuota(this.store, Buffer.byteLength(body) + 4096)
+      this.store.transaction(() => {
+        const counted = this.store.db.prepare('UPDATE network_invocation_controls SET trace_bytes=trace_bytes+?,trace_count=trace_count+1 WHERE run_id=? AND trace_bytes+?<=2097152 AND trace_count<1000').run(Buffer.byteLength(body), id, Buffer.byteLength(body))
+        if (counted.changes !== 1) throw new Error('Network invocation trace budget exceeded')
+        this.store.db.prepare('INSERT INTO network_trace_events(network_id,run_id,kind,body,created_at) VALUES(?,?,?,?,?)').run(networkId, id, type, body, Date.now())
+      })
     }
     const directory = join(this.store.root, 'runs', id)
     const pendingAgents = new Set<Promise<unknown>>()
@@ -421,7 +427,7 @@ export class RunDispatcher {
   }
 
   private async finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = [], retryEpoch?: number, settle: () => void = () => {}, network?: NetworkExecution): Promise<void> {
-    if (network) { await network.invocations.finish(network.authority, state, summary, error, completedInputIds, network.emissions); return }
+    if (network) { await network.invocations.finish(network.authority, state, summary, error, completedInputIds, network.emissions, retryEpoch !== undefined); return }
     try { await confirmDomainsStopped(this.store, id, this.runtime.helper) }
     catch (failure) {
       this.runs.interrupt(id, failure instanceof Error ? failure.message : 'Execution cleanup is unverified')

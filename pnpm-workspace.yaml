@@ -86,7 +86,9 @@ overrides:
   'brace-expansion@5': 5.0.11
   'undici@8': 8.10.2
   defu: '>=6.1.5'
-  devalue: '>=5.8.1'
+  # GHSA-j22f-vq7h-c4qm, GHSA-mcm9-63f2-9j32 and GHSA-x5rw-q4pp-hg5g.
+  # 5.9.3 published 2026-09-18 18:45 UTC; seven-day quarantine already passed.
+  devalue: 5.9.3
   drizzle-orm: '>=0.45.2'
   # GHSA-qw65-cvwx-89v3 / GHSA-58mr-gqgx-xq4g; released 2026-09-02.
   fast-uri: 4.1.4

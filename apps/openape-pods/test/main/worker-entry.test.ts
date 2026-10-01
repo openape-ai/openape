@@ -14,7 +14,7 @@ import type { RunServices } from '../../src/worker/runs/dispatcher'
 import type { ProgramAuthority } from '../../src/main/programs/grants'
 import { MailBridge } from '../../src/worker/mail/bridge'
 
-const captured = vi.hoisted(() => ({ services: undefined as RunServices | undefined }))
+const captured = vi.hoisted(() => ({ services: undefined as RunServices | undefined, startControlled: undefined as ((podId: string, operationId: string) => string) | undefined }))
 vi.mock('../../src/worker/runs/dispatcher', async (importOriginal) => {
   const original = await importOriginal<typeof import('../../src/worker/runs/dispatcher')>()
   return { ...original, RunDispatcher: class extends original.RunDispatcher {
@@ -24,7 +24,16 @@ vi.mock('../../src/worker/runs/dispatcher', async (importOriginal) => {
   } }
 })
 
-// Loads the unchanged worker process entry (src/worker/entry.ts) with Electron's
+vi.mock('../../src/worker/master/control', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../src/worker/master/control')>()
+  return { ...original, MasterControl: class extends original.MasterControl {
+    constructor(...args: ConstructorParameters<typeof original.MasterControl>) {
+      super(...args); captured.startControlled = args[6]
+    }
+  } }
+})
+
+// Loads the real worker process entry (src/worker/entry.ts) with Electron's
 // parentPort replaced by an in-memory port and the scheduler interval driven by
 // fake timers. Formerly the packaged `crash-recovery` suspend case: a suspend
 // signal pauses intake, and resume catches missed slots up exactly once.
@@ -59,6 +68,8 @@ beforeAll(async () => {
   await import('../../src/worker/entry')
   vi.mocked(process.cwd).mockRestore()
   await send({ id: 'provider', command: { provider: null } })
+  await send({ id: 'startup-inspection', command: { inspectCredentials: true } })
+  expect(replies).toHaveBeenCalledWith({ id: 'startup-inspection', state: true })
 })
 // Each test file runs in its own process; the loaded worker is discarded with it
 // instead of being stopped (its stop path waits on timers that are faked here).
@@ -118,4 +129,21 @@ it('validates the local network route and refuses creation on a central-connecte
     finally { store.close() }
   }
   finally { vi.stubEnv('PODS_CENTRAL_ENABLED', '') }
+})
+
+it('prevents reviewed master and browser starts from bypassing the suspended production runtime', async () => {
+  const store = new PodDatabase(root)
+  let podId = ''
+  try {
+    const pod = store.createPod({ name: 'Controlled start fixture' }); podId = pod.id
+    installExample(store, new ResourceRegistry(store, () => {}), pod.id, 'deterministic', 'a'.repeat(64))
+  }
+  finally { store.close() }
+  await send('suspend')
+  try {
+    expect(captured.startControlled).toBeTypeOf('function')
+    expect(() => captured.startControlled!(podId, randomUUID())).toThrow('ready local runtime')
+    expect(runs(podId)).toBe(0)
+  }
+  finally { await send('resume') }
 })

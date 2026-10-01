@@ -52,7 +52,7 @@ function podsBefore(graph: GraphNode[], id: string): string[] {
 }
 interface NodeRow { pod_id: string, script_hash: string | null, assignment_revision: number, resource_epoch: number, state: string, run_id: string | null, reason: string | null, output: string | null }
 export class WorkflowEngine {
-  constructor(private readonly store: PodDatabase, private readonly driver: Driver, private readonly recovery: Recovery, private readonly now: () => number = Date.now) {}
+  constructor(private readonly store: PodDatabase, private readonly driver: Driver, private readonly recovery: Recovery, private readonly now: () => number = Date.now, private readonly immediateDispatch = true) {}
 
   view(): WorkflowView {
     const workflows = workflowDefinitions(this.store)
@@ -268,7 +268,7 @@ export class WorkflowEngine {
       this.assertPinned(current)
       this.store.db.prepare('UPDATE workflow_nodes SET state=\'waiting\',run_id=NULL,reason=NULL,output=NULL WHERE workflow_run_id=? AND pod_id=?').run(id, podId)
     })
-    this.tick()
+    if (this.immediateDispatch) this.tick()
   }
 
   async cancel(id: string): Promise<void> {
