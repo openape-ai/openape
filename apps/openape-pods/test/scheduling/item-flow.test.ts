@@ -142,6 +142,28 @@ it('waits for a global slot without consuming the rest of a Process-now batch', 
   expect(f.started).toEqual([f.source])
 })
 
+it('waits for an instance program lease within the original Process-now deadline', async () => {
+  const f = simpleNetwork()
+  f.store.db.prepare('INSERT INTO program_leases VALUES(?,?,?,?,?)').run(f.source, 'synthetic-program-session', 'ape-shell', 0, f.store.getPod(f.source).bindingRevision)
+  f.process(f.id, [f.source])
+  expect(f.started).toEqual([])
+  expect(f.store.db.prepare('SELECT 1 FROM network_trace_events WHERE kind=\'process-now-finished\'').get()).toBeUndefined()
+  f.store.db.prepare('DELETE FROM program_leases WHERE pod_id=?').run(f.source)
+  f.engine.tick()
+  await vi.waitFor(() => expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0))
+  expect(f.started).toEqual([f.source])
+})
+
+it('requires baseline review before activation or manual processing of a restored network', () => {
+  const f = simpleNetwork()
+  const preview = f.engine.execute({ type: 'preview', id: f.id, revision: 1, podIds: [f.source], pausedPodIds: [], budget: 1 }).preview!
+  f.store.db.prepare('UPDATE networks SET baseline_state=\'review_required\' WHERE id=?').run(f.id)
+  expect(() => f.engine.execute({ type: 'activate', id: f.id, revision: 1 })).toThrow('reviewed baseline')
+  expect(() => f.engine.execute({ type: 'preview', id: f.id, revision: 1, podIds: [f.source], pausedPodIds: [], budget: 1 })).toThrow('reviewed baseline')
+  expect(() => f.engine.execute({ type: 'process', id: f.id, revision: 1, previewId: preview.id })).toThrow('reviewed baseline')
+  expect(f.started).toEqual([])
+})
+
 it('waits for revoked-run cleanup before completing dispatcher shutdown', async () => {
   const f = simpleNetwork()
   let release: (() => void) | undefined
@@ -151,7 +173,7 @@ it('waits for revoked-run cleanup before completing dispatcher shutdown', async 
   await vi.waitFor(() => expect(release).toBeTypeOf('function'))
   let stopped = false
   const shutdown = (async () => { await f.dispatcher.stop(); stopped = true })()
-  await Promise.resolve()
+  await new Promise<void>((resolve) => { setImmediate(resolve) })
   expect(stopped).toBe(false)
   release!(); await shutdown
   expect(stopped).toBe(true)

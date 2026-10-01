@@ -95,7 +95,7 @@ export class NetworkEngine {
       const maximum = Number(this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency)
       let active = batch.remaining > 0 && occupied >= maximum; let started = false
       for (const member of definition.members.filter(item => batch.preview.podIds.includes(item.podId))) {
-        if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=?').get(member.podId)) { active = true; continue }
+        if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=? UNION ALL SELECT 1 FROM program_leases WHERE pod_id=?').get(member.podId, member.podId)) { active = true; continue }
         if (batch.remaining <= 0 || batch.preview.expiresAt < Date.now() || (member.source && batch.startedSources.has(member.podId))) continue
         const runId = this.begin(definition, member.podId, 'manual', batch.preview.pausedPodIds.includes(member.podId))
         if (!runId) continue
