@@ -5,8 +5,8 @@
 [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3VDB1S72E4EQQW58T97C617),
 [native issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417).
 Checkout: `openape-monorepo.worktrees/pods-workflows-networks`; branch
-`feature/issue-1417-pods-networks-m4`; current canonical base
-`ae4504d8483d464e3794f7864299241de8829df6`; original canonical base
+`feature/issue-1417-pods-networks-m5`; current canonical base
+`49dce16e93b7cc4ae07992b84f6eded9c103307c`; original canonical base
 `a99c69bd2b97d8883ce5538894c3f38510407ddf` (Pods 0.1.1, schema 27).
 
 M0 freezes [contracts](../architecture/pods-networks/contracts.md) and the
@@ -22,9 +22,9 @@ blocking/major findings after corrections. The primary agent checked sources and
 remaining token/identity wording. Final tested SHA `3b7363b2622b8394c429fe8833c6df49e87742db` passed exact-head CI;
 M0 merged as `fb80556d8a66843e028da7d13cda97fd5a9f1d50`.
 [Final private Test Runs evidence](https://report.openape.ai/r/3fMyH6tmpepIRy7p8qRhYqzm).
-M0–M3 are accepted and merged. M4 is in progress: durable recovery controls,
-retry deadlines, fair domain admission and bounded backpressure. M4 is unaccepted;
-M5–M14 remain unimplemented.
+M0–M4 are accepted and merged. M5 is in progress and unaccepted; M6–M14
+remain unimplemented. The M5 working tree is based on the canonical M4 merge;
+no M5 clean tested SHA, native PR or manual acceptance receipt exists yet.
 M3 [PR 203](https://repos.openape.ai/patrick/monorepo/pulls/203): tested clean
 runtime `da209ca697d79c0cade36759d9ccb69aa9167f53` passed root lint/typecheck/build,
 133 files / 966 fresh Pods unit tests, four manual native/Electron tests and
@@ -68,12 +68,31 @@ verified against canonical source/target commits. Native
 to issue 1417. Runtime exact-head CI 5315 passed the unit-only contract.
 [Verified private M4 Test Runs receipt](https://report.openape.ai/r/5WUpVPNReI22uBWBuzGVbh0P):
 category Test Runs, owner read 200, anonymous read 401 and the inspected screenshot
-bytes present in the published document. Local runtime acceptance is complete;
-final documentation-head CI and protected native merge remain required before
-marking M4 accepted.
-Next: review this documentation increment, pass its exact-head CI and merge PR 204,
-then continue M5/M6 in dependency order. Preserve original claim batches on
-retry to retain derived event identity; never repeat unknown external effects.
+bytes present in the published document. Final documentation head
+`1cb0d57aa3b9f1fbf192c7832ff5698d4cbc2e34` passed exact-head CI 5316;
+PR 204 merged as `49dce16e93b7cc4ae07992b84f6eded9c103307c`.
+
+M5 adds versioned downstream gate manifests and additive schema 30 without
+changing legacy gate command/summary bytes or historical schema 28/29.
+Gate maintenance reserves the downstream instance and global slot without a
+script/model launch. Held inputs require exact consumed-grant coverage and
+an active-grant check before script launch; unrelated inputs continue.
+Owner exclusion supersedes the old grant and requires a fresh batch. Uncertain
+create/consume stays unknown; explicit disposal preserves that uncertainty.
+The final uncommitted tree passes full root lint/typecheck, Pods build and
+135 files / 1,024 fresh unit tests, including 25 retained gate authority/recovery
+contracts. Seven manual native checks pass (two unrelated crash cases skipped).
+Actual signed loopback DDISA once consumption, worker SIGKILL before its response,
+desktop restart, unchanged maintenance attempt count, unknown retention and owner
+disposal without a second consume are verified. Restored uncertain maintenance
+inspection takes priority over newer unrelated script failures. Gated/ungated
+channels sharing a case are separately claimed and independently recoverable.
+Prior item/control/invocation receipts remain nested JSON evidence.
+Repeated actual Claude Code Opus 5.5 reviews prompted these corrections; final
+focused closure is running. No clean tested M5 SHA, native PR, exact-head CI or
+private Test Runs acceptance receipt exists yet. Next: runtime commit, clean-SHA
+checks, primary native diff review, final Opus closure, exact-head CI and verified
+private Test Runs publication, then M6. Never repeat unknown external effects.
 
 M1 prototype: 24 crash/authority checks pass; selected established scheduling
 suites pass (120 checks before the two final isolation assertions). Maximum-payload
