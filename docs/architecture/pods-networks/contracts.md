@@ -294,7 +294,11 @@ marker. Keep unresolved deliveries, gate manifests and uncertain effect evidence
 Completed trace retention is seven days or 10,000 events per network within its
 byte budget; compact aggregate history is 90 days. Quotas pause/refuse intake before
 source checkpoint advancement and show the reason; never evict unresolved work.
-M1 measures numeric byte/queue budgets before runtime activation is implemented.
+M1 measurements select a 192 MiB authoritative database admission target, with
+64 MiB of headroom below the 256 MiB compacted-backup ceiling. Apply retention
+and account for the whole profile, including indexes; refuse intake without
+checkpoint advancement when retained/unresolved state cannot fit. See
+[prototype findings](prototype-findings.md) for limits and later runtime gates.
 
 ## Shared data and artifacts
 
