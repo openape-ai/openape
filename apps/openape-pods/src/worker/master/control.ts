@@ -44,7 +44,7 @@ export class MasterControl {
         return { schedule: this.scheduler.view(current.podId), activation: 'owner-only-in-settings' }
       }
       return this.apply(current, '', null)
-    }, (podId, operationId) => this.dispatcher.start(podId, { reason: 'manual', eventIds: [], operationId }), (command, operationId) => {
+    }, (podId, operationId) => this.startRun(podId, operationId), (command, operationId) => {
       if (!this.workflows) throw new Error('Workflow operation unavailable')
       if (command.type === 'start') return { workflowRunId: this.workflows.start(command.id, command.revision, 'manual', operationId) }
       this.workflows.save(command); return { workflowId: command.id, revision: command.revision + 1 }
@@ -52,7 +52,7 @@ export class MasterControl {
   }
 
   setup(): MasterSetup { return new MasterSetup(this.store, this.resources) }
-  constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly dispatcher: RunDispatcher, private readonly scheduler: Scheduler, private readonly runtime: AgentRuntime, private readonly workflows?: WorkflowEngine) {}
+  constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly dispatcher: RunDispatcher, private readonly scheduler: Scheduler, private readonly runtime: AgentRuntime, private readonly workflows?: WorkflowEngine, private readonly startRun: (podId: string, operationId: string) => string = (podId, operationId) => dispatcher.start(podId, { reason: 'manual', eventIds: [], operationId })) {}
   async execute(key: string, value: unknown, signal: AbortSignal, selectedPod: string | null = null, creationId: string | null = null, context?: Conversation, authority: 'conversation' | 'owner' = 'conversation'): Promise<unknown> {
     if (!key || key.length > 300) throw new Error('Invalid master operation identity')
     const requested = parseMasterAction(value)
@@ -113,6 +113,25 @@ export class MasterControl {
       }
       catch (error) { this.store.db.prepare('UPDATE master_actions SET state=\'failed\',error=? WHERE id=?').run(error instanceof Error ? error.message : 'Validation failed', key); throw error }
     }
+    if (action.action === 'run' && authority === 'owner') {
+      this.store.transaction(() => {
+        this.assertPod(action.podId, action.revision, false)
+        this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'running\',NULL,NULL)').run(key, hash, request)
+      })
+      let startedRunId: string | null = null
+      try {
+        startedRunId = this.startRun(action.podId, key)
+        const result = { runId: startedRunId }
+        this.store.db.prepare('UPDATE master_actions SET state=\'completed\',result=? WHERE id=?').run(JSON.stringify(result), key)
+        return result
+      }
+      catch (failure) {
+        const accepted = this.store.db.prepare('SELECT run_id FROM control_runs WHERE id=? AND kind=\'pod\'').get(key)
+        startedRunId = startedRunId ?? (accepted?.run_id as string | undefined) ?? null
+        this.store.db.prepare('UPDATE master_actions SET state=?,result=?,error=? WHERE id=?').run(startedRunId ? 'running' : 'failed', startedRunId ? JSON.stringify({ runId: startedRunId }) : null, failure instanceof Error ? failure.message : 'Reviewed run could not start', key)
+        throw failure
+      }
+    }
     let dependencyLockHash = ''
     if (action.action === 'installMailRecipe') dependencyLockHash = (JSON.parse(await readFile(this.runtime.manifest, 'utf8')) as { dependencyLockHash: string }).dependencyLockHash
     signal.throwIfAborted()
@@ -120,7 +139,6 @@ export class MasterControl {
       if ('podId' in action) this.assertPod(action.podId, action.revision, action.action === 'inspect')
       let result: unknown
       if (context && authority !== 'owner' && ['activate', 'rollback', 'setVariable', 'prepareSchedule', 'setGroup', 'revise', 'pause', 'run'].includes(action.action)) result = { status: 'pending-owner-review', changeSet: this.receipt(this.changes().prepare(context, action)) }
-      else if (action.action === 'run' && authority === 'owner') result = { runId: this.dispatcher.start(action.podId, { reason: 'manual', eventIds: [], operationId: key }) }
       else result = this.apply(action, dependencyLockHash, effectivePod, context)
       if (action.action === 'create' && creationId) conversations.bind(creationId, (result as { id: string }).id)
       this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'completed\',?,NULL)').run(key, hash, request, JSON.stringify(result))

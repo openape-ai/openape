@@ -176,8 +176,7 @@ export class ResourceRegistry {
         network.assertCurrent()
         const row = this.store.db.prepare('SELECT manifest FROM network_invocations WHERE run_id=? AND pod_id=? AND state=\'running\'').get(network.runId, podId)
         if (!row) throw new Error('Network snapshot has no current invocation')
-        const manifest = { ...JSON.parse(row.manifest as string), snapshots: set }
-        this.store.db.prepare('UPDATE network_invocations SET manifest=? WHERE run_id=?').run(JSON.stringify(manifest), network.runId)
+        this.store.db.prepare('UPDATE network_invocation_controls SET snapshots=? WHERE run_id=?').run(JSON.stringify(set), network.runId)
         return
       }
       this.store.db.prepare('INSERT INTO snapshot_sets VALUES(?,?,?,?)').run(set.id, podId, epoch, JSON.stringify(set))

@@ -5,9 +5,13 @@ import { join, sep } from 'node:path'
 import type { PodDatabase } from '../storage/database'
 
 const execute = promisify(execFile)
-function ownerGone(pid: number): boolean {
+export function ownerGone(pid: number): boolean {
   try { process.kill(pid, 0); return false }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === 'ESRCH') return true; throw error }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ESRCH') return true
+    if ((error as NodeJS.ErrnoException).code === 'EPERM') return false
+    throw error
+  }
 }
 export async function confirmDomainsStopped(store: PodDatabase, runId: string, helper: string): Promise<void> {
   const domains = store.db.prepare('SELECT * FROM execution_domains WHERE run_id=?').all(runId)

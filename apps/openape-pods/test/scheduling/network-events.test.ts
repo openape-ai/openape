@@ -12,6 +12,7 @@ import { RunStore } from '../../src/worker/runs/store'
 import { installExample } from '../../src/worker/runs/examples'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import * as domains from '../../src/worker/recovery/domains'
+import { NetworkRecovery } from '../../src/worker/scheduling/network-recovery'
 import { fenceNetworkBoot } from '../../src/worker/scheduling/network-boot'
 import { seedNetwork } from '../storage/network-fixture'
 
@@ -215,4 +216,65 @@ describe('durable network event acceptance', () => {
     store.db.prepare('UPDATE networks SET activation_epoch=activation_epoch+1 WHERE id=?').run(seed.networkId)
     expect(() => events.accept(authority, emission)).toThrow('authority')
   })
+})
+
+it('persists jittered infrastructure deadlines and stops at three total source attempts', async () => {
+  const { store, invocations, reserve } = invocationFixture()
+  let previous: string | null = null
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const authority = reserve()
+    expect(store.db.prepare('SELECT attempt,retry_of FROM network_invocation_controls WHERE run_id=?').get(authority.runId)).toEqual({ attempt, retry_of: previous })
+    const before = Date.now()
+    await invocations.finish(authority, 'failed', 'Infrastructure unavailable', 'Synthetic transient failure', [], [], true)
+    const control = store.db.prepare('SELECT retry_at,failure_kind FROM network_invocation_controls WHERE run_id=?').get(authority.runId)!
+    if (attempt < 3) {
+      expect(Number(control.retry_at)).toBeGreaterThanOrEqual(before + 1600 * 2 ** (attempt - 1))
+      expect(Number(control.retry_at)).toBeLessThan(Date.now() + 2401 * 2 ** (attempt - 1))
+      expect(control.failure_kind).toBe('transient')
+      store.db.prepare('UPDATE network_invocation_controls SET retry_at=? WHERE run_id=?').run(Date.now() - 1, authority.runId)
+    }
+    else {
+      expect(control).toEqual({ retry_at: null, failure_kind: 'exhausted' })
+    }
+    expect(() => invocations.events.accept(authority, emission)).toThrow('authority')
+    previous = authority.runId
+  }
+})
+
+it('fences an expired source callback and refuses late successful settlement', async () => {
+  const { store, invocations, reserve } = invocationFixture(); const authority = reserve()
+  store.db.prepare('UPDATE network_invocation_controls SET deadline=? WHERE run_id=?').run(Date.now() - 1, authority.runId)
+  expect(() => invocations.events.accept(authority, emission)).toThrow('deadline')
+  await expect(invocations.finish(authority, 'completed', 'Late output', null, [], [emission])).rejects.toThrow('deadline')
+  expect(store.db.prepare('SELECT 1 FROM network_case_sources WHERE source_item=?').get('item-1')).toBeUndefined()
+  await invocations.finish(authority, 'cancelled', 'Deadline exceeded', 'Deadline exceeded', [], [])
+})
+
+it('releases only a proven stopped network process while retaining unknown effects and staged progress', async () => {
+  const { store, seed, invocations, reserve } = invocationFixture(); const authority = reserve()
+  invocations.stageProgress(authority, { expectedRevision: 1, checkpoint: { cursor: 'uncommitted' }, sources: [], claims: [] })
+  const key = digest('uncertain-recovery-effect')
+  store.db.prepare('INSERT INTO network_effect_attempts VALUES(?,1,?,?,1,?,?,\'intent\',1,?)').run(key, authority.runId, seed.caseId, digest('input'), digest('grant'), seed.networkId)
+  store.db.prepare('INSERT INTO network_effect_receipts VALUES(?,1,1,\'intent\',\'{}\',1)').run(key)
+  fenceNetworkBoot(store)
+  const generation = Number(store.db.prepare('SELECT generation FROM network_invocations WHERE run_id=?').get(authority.runId)!.generation)
+  const recovery = new NetworkRecovery(store, '/unused')
+  await expect(recovery.inspect(seed.networkId, authority.runId, generation, () => {})).rejects.toThrow('evidence is missing')
+  store.db.prepare('INSERT INTO execution_domains VALUES(?,?,?)').run(join(store.root, 'runs', authority.runId, 'domain'), authority.runId, process.pid)
+  vi.spyOn(domains, 'confirmDomainsStopped').mockRejectedValueOnce(new Error('Synthetic process still present'))
+  await expect(recovery.inspect(seed.networkId, authority.runId, generation, () => {})).rejects.toThrow('still present')
+  expect(store.db.prepare('SELECT 1 FROM run_leases WHERE run_id=?').get(authority.runId)).toBeDefined()
+  vi.mocked(domains.confirmDomainsStopped).mockResolvedValue(undefined)
+  await recovery.inspect(seed.networkId, authority.runId, generation, () => {})
+  expect(store.db.prepare('SELECT 1 FROM run_leases WHERE run_id=?').get(authority.runId)).toBeUndefined()
+  expect(store.db.prepare('SELECT staged_checkpoint,state FROM network_invocations WHERE run_id=?').get(authority.runId)).toMatchObject({ state: 'unknown', staged_checkpoint: '{"body":{"cursor":"uncommitted"},"revision":2}' })
+  expect(() => recovery.requeue(seed.networkId, authority.runId, generation, { fingerprint: digest('current'), resourceEpoch: 0, assignmentRevision: 1, scriptHash: seed.hash }, () => {})).toThrow('Unknown external effects')
+  expect(store.db.prepare('SELECT outcome FROM network_effect_receipts WHERE logical_action_key=? ORDER BY sequence DESC LIMIT 1').get(key)!.outcome).toBe('unknown')
+  const effect = { key, attempt: 1, sequence: 2, outcome: 'confirmed_applied' as const, evidence: 'Synthetic owner verified that the isolated action was applied once' }
+  expect(() => recovery.reconcileEffect(seed.networkId, authority.runId, generation, { ...effect, sequence: 1 }, () => {})).toThrow('state changed')
+  recovery.reconcileEffect(seed.networkId, authority.runId, generation, effect, () => {})
+  expect(store.db.prepare('SELECT outcome FROM network_effect_receipts WHERE logical_action_key=? ORDER BY sequence').all(key).map(row => row.outcome)).toEqual(['intent', 'unknown', 'confirmed_applied'])
+  recovery.requeue(seed.networkId, authority.runId, generation, { fingerprint: digest('current'), resourceEpoch: 0, assignmentRevision: store.getPod(seed.pod.id).bindingRevision, scriptHash: store.getPod(seed.pod.id).activeScript! }, () => {})
+  expect(store.db.prepare('SELECT state FROM network_effect_attempts WHERE logical_action_key=?').get(key)!.state).toBe('confirmed_applied')
+  expect(store.db.prepare('SELECT count(*) AS count FROM network_effect_attempts WHERE logical_action_key=?').get(key)!.count).toBe(1)
 })
