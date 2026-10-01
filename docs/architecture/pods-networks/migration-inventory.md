@@ -134,8 +134,11 @@ refreshed main; M0 does not reserve a schema number.
 | `network_cases` | id; FK owner/network/group; positive current revision; parent case ancestry. |
 | `network_case_sources` | UNIQUE(network, source_binding, source_item, source_version); FK case/revision; validated correlation mapping. |
 | `network_case_revisions` | (case_id, revision); immutable source mapping, supersession and outcome. |
-| `network_invocations` | run_id FK runs; private pinned manifest/input/checkpoint staging; never wholesale UI publication. |
-| `network_effect_receipts` | logical action key; FK case/run; append-only intent/reconciliation evidence outside legacy published payloads. |
+| `network_invocations` | run_id FK runs; random invocation token/generation, private pinned manifest/input/checkpoint staging; never wholesale UI publication. |
+| `network_checkpoints` | pod_id FK network member; committed private body/revision; never legacy checkpoint projection. |
+| `network_effect_attempts` | (logical_action_key, attempt); FK case/owning run; one active attempt per key. |
+| `network_effect_receipts` | (logical_action_key, attempt, sequence); FK effect attempt; append-only intent/reconciliation evidence outside legacy published payloads. |
+| `network_event_identities` | UNIQUE(network_id, namespace, identity_hash); non-null canonical hash, durable source/derived/replay receipt independent of pruned event bytes. |
 | `network_events` | event_id; FK network revision; discriminated source/derived identity, separate network/Pod versions, case/schema envelope; immutable payload hash. |
 | `network_deliveries` | id; FK event/subscription/run; UNIQUE(event_id, subscription_id); runtime/network epochs, per-delivery generation/token/state. |
 | `source_deduplication` | UNIQUE(owner, network, source, source_item, source_version, channel); hash/receipt retained independently of pruned event bytes. |
@@ -143,13 +146,14 @@ refreshed main; M0 does not reserve a schema number.
 | `workflow_call_requests` | request_id; FK caller revision and workflow revision/execution; immutable request hash and one terminal result. |
 | `workflow_revisions` | (workflow_id, revision); FK workflow; new named ports/completion policies without rewriting legacy runs. |
 | `data_collections` | id; UNIQUE(owner, group, name); immutable schema versions and declared indexes. |
-| `data_permissions` | UNIQUE(network, pod, collection, operation); scoped revision; FKs network/Pod/collection; artifact bindings also check owner/group/read operation. |
+| `data_permissions` | UNIQUE(network, pod, collection, operation); scoped revision; FKs network/Pod/collection; collection operations only; artifacts have separate explicit bindings. |
 | `data_records` | (collection_id, key); FK collection; current revision/tombstone. |
 | `data_record_revisions` | (collection_id, key, revision); FK record and author run/version; immutable provenance. |
-| `artifacts` | id; owner/group; immutable hash/size/type/storage reference; no public host path. |
+| `artifact_scopes` | id; owner/group; explicit collection or private network target, no whole-company default. |
+| `artifacts` | id; FK artifact_scope; owner/group; immutable hash/size/type/storage reference; no public host path. |
 | `artifact_permissions` | UNIQUE(network, pod, artifact_scope, operation); explicit same-owner/company read/create binding. |
 | `artifact_references` | UNIQUE(artifact_id, reference_kind, reference_id); FK artifact; retained live reference. |
-| `network_gate_tasks` | id; FK network revision/consumer Pod; exclusive instance lease, task token/generation, immutable manifest/digest; durable consumed/unknown evidence. |
+| `network_gate_tasks` | id; FK network revision/consumer Pod; maintenance run FK per bounded attempt, exclusive instance lease/slot only during that step, task token/generation, immutable manifest/digest; durable consumed/unknown evidence. |
 | `network_trace_events` | id; FK network; case/run/event references and stable detail cursor; bounded completed history. |
 
 Claim-ready indexes start with `(subscription_id, state, ready_at, accepted_at, id)`,
@@ -186,3 +190,13 @@ exclusion, current backup ceilings and explicit artifact authority. Generic secr
 detection is not claimed. The reviewer’s missing Owner reference was unconfirmed;
 packages/pods-protocol provides the actual contract. These are clarifications of
 approved single-runtime safety defaults, not new rights or external rollout.
+
+
+Follow-up Opus review removed all initial blockers and identified seven additional
+major representation gaps. Corrections add closed projection classification/private
+committed checkpoints, bounded gate maintenance run/slot leases, random restored
+authority incarnations, canonical retained source/derived/replay identity markers,
+explicit replay envelopes, recoverable blocked-state transitions, per-attempt
+append-only effects and concrete artifact scope records. Timer sources also have
+individual invocation fencing. Follow-up acceptance still requires the final
+review and exact-head check result.
