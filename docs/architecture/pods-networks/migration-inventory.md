@@ -152,7 +152,7 @@ refreshed main; M0 does not reserve a schema number.
 | `artifacts` | id; FK artifact_scope; owner/group; immutable hash/size/type/storage reference; no public host path. |
 | `artifact_permissions` | UNIQUE(network, pod, artifact_scope, operation); explicit same-owner/company read/create binding. |
 | `artifact_references` | UNIQUE(artifact_id, reference_kind, reference_id); FK artifact; retained live reference. |
-| `network_gate_tasks` | id; FK network revision/consumer Pod; exclusive instance lease/slot only during a bounded step, task token/generation, immutable manifest/digest; durable consumed/unknown evidence. |
+| `network_gate_tasks` | id; FK network revision/consumer Pod; exclusive instance lease/slot only during a bounded step, task generation with fresh per-attempt step token, immutable manifest/digest; durable consumed/unknown evidence. |
 | `network_gate_task_attempts` | (task_id, attempt); FK task/maintenance run; pinned step token/generation and retained outcome. |
 | `network_trace_events` | id; FK network; case/run/event references and stable detail cursor; bounded completed history. |
 
