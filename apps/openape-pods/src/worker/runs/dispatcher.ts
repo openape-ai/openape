@@ -103,6 +103,7 @@ export class RunDispatcher {
   }
 
   start(podId: string, trigger: RunTrigger = { reason: 'manual', eventIds: [] }, accepted?: (runId: string) => void): string {
+    if (this.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=?').get(podId)) throw new Error('Network instances require network intake and dispatch')
     this.store.assertStorage()
     if (this.store.db.prepare('SELECT 1 FROM effect_ledger WHERE pod_id=? AND state IN (\'intent\',\'unknown\')').get(podId)) throw new Error('An HTTP delivery needs review before this pod can run again')
     const pod = this.store.getPod(podId)

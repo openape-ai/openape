@@ -87,6 +87,7 @@ export class WorkflowEngine {
       if ((row?.revision ?? 0) !== parsed.revision) throw new Error('Workflow changed; reload before saving')
       if (!row && (this.store.db.prepare('SELECT count(*) AS count FROM workflows').get()!.count as number) >= 1000) throw new Error('Workflow limit reached')
       for (const node of parsed.nodes) {
+        if (this.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=?').get(node.podId)) throw new Error('Network instances cannot join legacy workflows; create a separate instance')
         if (this.store.getPod(node.podId).lifecycle === 'archived') throw new Error('Archived pods cannot join workflows')
       }
       const schedule = parsed.schedule ? JSON.stringify(parsed.schedule) : null

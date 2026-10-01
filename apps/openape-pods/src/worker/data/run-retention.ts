@@ -39,6 +39,7 @@ export class RunRetention {
         )
         SELECT r.id FROM ranked r
         WHERE position > ? AND finished_at IS NOT NULL AND state != 'running'
+          AND NOT EXISTS (SELECT 1 FROM network_invocations WHERE run_id=r.id)
           AND NOT EXISTS (SELECT 1 FROM run_leases WHERE run_id=r.id)
           AND NOT EXISTS (SELECT 1 FROM effect_ledger WHERE run_id=r.id AND state!='completed')
           AND NOT EXISTS (

@@ -4,7 +4,7 @@ import { lstat, readdir, rm, statfs } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { PodDatabase } from '../storage/database'
 import type { DataView } from '../../contracts/data'
-import { assertDataIdle } from './backup'
+import { assertDataIdle, networkDataBusy } from './backup'
 import { confirmDomainsStopped } from '../recovery/domains'
 import { storageBytes } from './files'
 
@@ -16,7 +16,7 @@ export class DataRetention {
   constructor(private readonly store: PodDatabase, private readonly helper: string) { this.runs = new RunRetention(store) }
   async view(): Promise<DataView> {
     let usedBytes = await this.runBytes()
-    for (const directory of ['blobs', 'pods', 'snapshots', 'dependencies', 'dependency-staging']) {
+    for (const directory of ['blobs', 'artifacts', 'pods', 'snapshots', 'dependencies', 'dependency-staging']) {
       usedBytes += await storageBytes(join(this.store.root, directory))
     }
     for (const name of ['control.sqlite', 'control.sqlite-wal']) {
@@ -24,7 +24,7 @@ export class DataRetention {
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
     }
     const disk = await statfs(this.store.root); const limitBytes = this.store.db.prepare('SELECT limit_bytes FROM data_settings WHERE id=1').get()!.limit_bytes as number
-    const view: DataView = { usedBytes, freeBytes: disk.bavail * disk.bsize, limitBytes, pendingDeletion: this.jobs().length + Number(this.store.db.prepare('SELECT count(*) AS count FROM run_deletion_jobs').get()!.count), busy: !!this.store.db.prepare('SELECT 1 FROM program_leases UNION ALL SELECT 1 FROM run_leases UNION ALL SELECT 1 FROM master_session WHERE state=\'running\' UNION ALL SELECT 1 FROM master_actions WHERE state=\'running\' LIMIT 1').get(), error: usedBytes >= limitBytes ? 'Storage limit reached. Export a backup and remove unused data before continuing.' : disk.bavail * disk.bsize < 256 * 1024 * 1024 ? 'Less than 256 MiB free disk space remains. Free space before continuing.' : this.store.db.prepare('SELECT error FROM deletion_jobs WHERE error IS NOT NULL UNION ALL SELECT error FROM run_deletion_jobs WHERE error IS NOT NULL LIMIT 1').get()?.error as string | null ?? null }
+    const view: DataView = { usedBytes, freeBytes: disk.bavail * disk.bsize, limitBytes, pendingDeletion: this.jobs().length + Number(this.store.db.prepare('SELECT count(*) AS count FROM run_deletion_jobs').get()!.count), busy: networkDataBusy(this.store) || !!this.store.db.prepare('SELECT 1 FROM program_leases UNION ALL SELECT 1 FROM run_leases UNION ALL SELECT 1 FROM master_session WHERE state=\'running\' UNION ALL SELECT 1 FROM master_actions WHERE state=\'running\' LIMIT 1').get(), error: usedBytes >= limitBytes ? 'Storage limit reached. Export a backup and remove unused data before continuing.' : disk.bavail * disk.bsize < 256 * 1024 * 1024 ? 'Less than 256 MiB free disk space remains. Free space before continuing.' : this.store.db.prepare('SELECT error FROM deletion_jobs WHERE error IS NOT NULL UNION ALL SELECT error FROM run_deletion_jobs WHERE error IS NOT NULL LIMIT 1').get()?.error as string | null ?? null }
     const error = usedBytes >= limitBytes || view.freeBytes < 256 * 1024 * 1024 ? view.error : null
     // Every write grows the WAL by a page, which this measurement includes; a byte-exact rewrite would change the database every five seconds forever.
     this.store.db.prepare('UPDATE data_settings SET used_bytes=?,error=? WHERE id=1 AND (abs(used_bytes-?)>=1048576 OR error IS NOT ?)').run(usedBytes, error, usedBytes, error)
@@ -71,6 +71,7 @@ export class DataRetention {
 
   async deletePod(podId: string, revision: number, name: string): Promise<void> {
     assertDataIdle(this.store)
+    if (this.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=? UNION ALL SELECT 1 FROM network_invocations WHERE pod_id=? UNION ALL SELECT 1 FROM data_permissions WHERE pod_id=? UNION ALL SELECT 1 FROM artifact_permissions WHERE pod_id=? LIMIT 1').get(podId, podId, podId, podId)) throw new Error('Pod is referenced by network or data state; review bindings before deletion')
     if (this.store.db.prepare('SELECT 1 FROM workflow_members WHERE pod_id=? UNION ALL SELECT 1 FROM workflow_nodes WHERE pod_id=? LIMIT 1').get(podId, podId)) throw new Error('Pod is referenced by workflow configuration or history')
     const pod = this.store.getPod(podId)
     if (pod.lifecycle !== 'archived' || pod.revision !== revision || pod.name !== name) throw new Error('Archive and review the current pod before deleting it')
@@ -95,6 +96,7 @@ export class DataRetention {
       for (const table of ['run_events', 'run_inputs', 'execution_domains', 'recovery_reviews']) this.store.db.prepare(`DELETE FROM ${table} WHERE run_id IN (SELECT id FROM runs WHERE pod_id=?)`).run(podId)
       for (const table of ['remote_program_reviews', 'remote_pods', 'script_dependencies', 'dependency_sets', 'program_leases', 'run_leases', 'effect_ledger', 'runs', 'validations', 'scripts', 'assignments', 'checkpoints', 'claims', 'sources', 'mail_inventory', 'mail_items', 'mail_receipts', 'mail_extractions', 'mail_contexts', 'source_derivations', 'resources', 'resource_epochs', 'snapshot_sets', 'schedules', 'accepted_events', 'reference_observations', 'script_drafts', 'access_proposals']) this.store.db.prepare(`DELETE FROM ${table} WHERE pod_id=?`).run(podId)
       this.store.db.prepare('UPDATE master_contexts SET thread_id=NULL,state=\'interrupted\',error=\'Referenced Pod was deleted\' WHERE scope=?').run(podId)
+      this.store.db.prepare('DELETE FROM instance_definition_bindings WHERE pod_id=?').run(podId)
       this.store.db.prepare('DELETE FROM pods WHERE id=?').run(podId)
     })
     await this.cleanup()
@@ -118,7 +120,7 @@ export class DataRetention {
   finishDeletion(podId: string): void { this.store.db.prepare('DELETE FROM deletion_jobs WHERE pod_id=? AND error IS NULL').run(podId) }
   async cleanup(): Promise<void> {
     assertDataIdle(this.store); await this.cleanDeletedFiles()
-    const retained = new Set(this.store.db.prepare('SELECT hash FROM sources UNION SELECT hash FROM scripts').all().map(row => row.hash as string))
+    const retained = new Set(this.store.db.prepare('SELECT hash FROM sources UNION SELECT hash FROM scripts UNION SELECT content_hash AS hash FROM pod_definition_versions').all().map(row => row.hash as string))
     for (const name of await readdir(this.store.blobs)) {
       if ((/^[a-f0-9]{64}$/.test(name) && !retained.has(name)) || /^\.stage-[a-f0-9-]{36}$/.test(name)) await rm(join(this.store.blobs, name), { force: true })
     }

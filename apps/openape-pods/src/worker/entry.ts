@@ -1,3 +1,4 @@
+import { cleanupEncryptedBackupStaging } from './data/encrypted-backup'
 import { jevAvailability } from './onboarding/store'
 import { assignedSsh } from '../contracts/ssh'
 import type { JevEvaluation } from '../contracts/jev'
@@ -211,6 +212,7 @@ port.on('message', async (event) => {
       port.postMessage({ id: request.id, state: assignments }); return
     }
     if (request.command && typeof request.command === 'object' && 'inspectCredentials' in request.command) {
+      await cleanupEncryptedBackupStaging(store.root)
       await inspectDomainRecords(store.db.prepare('SELECT * FROM execution_domains').all(), join(store.root, 'runs'), runtime.helper)
       await new DependencyStore(store).recover(runtime.helper)
       new ProgramControl(store, registry).execute({ type: 'recover' })
