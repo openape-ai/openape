@@ -120,7 +120,7 @@ interface NetworkEvent {
   schemaVersion: number
   caseId: string
   caseRevision: number
-  origin: SourceOrigin | DerivedOrigin
+  origin: SourceOrigin | DerivedOrigin | ReplayOrigin
   key: string
   producerPodId: string
   causationId: string | null
@@ -131,6 +131,13 @@ interface NetworkEvent {
   acceptedAt: number
   payload: Record<string, unknown>
   feedbackHop: number
+  identityHash: string
+}
+interface ReplayOrigin {
+  kind: 'replay'
+  originalEventId: string
+  replayAttemptId: string
+  effectsPermitted: boolean
 }
 interface SourceOrigin {
   kind: 'source'
@@ -165,7 +172,16 @@ declared output channels or child entity keys; derived fan-out can emit two invo
 keys from one email. Duplicate emitKey with different content conflicts. `key`
 preserves the legacy item key in an explicit adapter; it is not case identity.
 FeedbackTransitionId is runtime-issued and unique per delayed transition, not an
-arbitrary model-controlled value. Normal/derived/replay namespaces are distinct.
+arbitrary model-controlled value. Normal/derived/replay namespaces are distinct. `network_event_identities` retains
+`UNIQUE(network_id, namespace, identity_hash)` independently of event retention.
+Compute identityHash over canonical ordered tuples; sort input IDs, encode null
+feedback transition as a non-null canonical sentinel, and never use nullable
+UNIQUE columns as the deduplication boundary. Same identity retains receipt/schema/
+payload hash after event pruning. ReplayOrigin uses a runtime-generated reviewed
+replayAttemptId; it references the original event receipt without replacing its
+source or derived marker. The replay marker's identity is `[originalEventId,
+replayAttemptId]`. Marker policy also protects derived identities while an input,
+approval, business revision or retry can still refer to them.
 
 Case creation uses `network_cases` and `network_case_sources`: runtime atomically
 maps the validated source binding/item to a generated case UUID and revision. New
@@ -198,9 +214,20 @@ binding authority in a short database transaction. Authority has three scopes:
 activation epoch revokes that network on restore or explicit destructive cutover;
 (3) per-delivery claim generation/token advances only a reassigned delivery.
 Reassigning one delivery does not invalidate healthy claims in another branch.
-Ordinary pause advances no epoch, because active work may settle. Existing
+Ordinary pause advances no epoch, because active work may settle. Epoch scope
+includes a cryptographically random authority incarnation; restored numeric values
+cannot reuse authority. Startup creates a fresh runtime boot nonce for claims.
+Restore creates a fresh network restore nonce before any read/write authority is
+reissued, using OS randomness outside the backed-up counters. Gate approval
+manifests bind that restore nonce; every pre-restore approval is obsolete even if
+all restored numeric revisions match. Normal restart preserves pending decisions
+under the unchanged restore nonce, revalidates the pinned action and claims with
+fresh boot authority. Existing
 run_leases remain the exclusive per-instance process lease across all domains;
-network claims add delivery authority, not a competing instance lease. Lease expiry does not prove
+network claims add delivery authority, not a competing instance lease. Every
+network invocation also has its own random token/generation, including timer
+sources with no delivery claim. Stop invalidates that invocation only; source
+callbacks cannot rely solely on a network-wide epoch or legacy run state. Lease expiry does not prove
 process termination. Stop or prove termination before reassignment, then advance
 the delivery generation. A timed-out async callback cannot commit with its former epoch.
 Existing `boundedStep` uses Promise.race without cancellation: retain it for legacy
@@ -232,7 +259,10 @@ the logical key and input digest.
 Confirmed effects return their receipt without resending. Intent/unknown outcomes
 block automatic retry until explicit reconciliation. Network reconciliation retains
 append-only evidence of `confirmed_applied | confirmed_not_applied` and the owner
-receipt. Confirmed-not-applied permits an explicit new attempt only with current
+receipt. `network_effect_attempts` identifies `(logicalActionKey, attempt)` and its
+owning run; `network_effect_receipts` appends `(key, attempt, sequence)` transitions
+and results. One active attempt per logical key; retained confirmed-applied state
+suppresses further execution across attempts. Confirmed-not-applied permits an explicit new attempt only with current
 authority; it does not erase the old intent/unknown audit. Legacy reconciliation
 currently deletes a not-applied ledger row; retain that legacy behavior, but do
 not use it as the network evidence policy. A new feedback hop cannot
@@ -252,6 +282,9 @@ effects are permitted; replay does not delete markers or confirmed effect eviden
 | claimed -> retry_wait | Safe transient classifier, proven process stopped, no uncertain effect; bounded attempt/deadline. |
 | pending/claimed -> blocked | Validation/permission/conflict or exhausted retry; retain concrete reason. |
 | claimed -> unknown | Possibly issued external effect or consumed grant without settlement; never automatic redispatch. |
+| blocked -> pending | Owner-reviewed correction of binding/schema/baseline, current authority and safe-effect classifier; retained reason/review receipt. |
+| retry_wait -> blocked | Attempt exhaustion, revoked authority or invalidated input; never spin or silently discard. |
+| claimed join inputs -> blocked | Recorded join deadline/incomplete outcome and review; no late automatic reopening. |
 | unknown -> blocked/pending | Owner reconciliation evidence, current authority and explicit reviewed retry. |
 | blocked/pending -> discarded | Owner-only recorded resolution after effect/reference reconciliation; retain tombstone/audit, never automatic quota eviction. |
 
@@ -296,7 +329,12 @@ reference into those outputs. Arbitrary bytes cannot be proven secret-free by a
 heuristic, so do not claim generic secret detection. Preserve existing sandbox and
 review boundaries for scripts with legitimate secret-reading rights.
 
-`context.artifacts.create` stages immutable bytes under owning scope, with hash,
+Artifact scope is a runtime-generated UUID identifying an owner/company collection
+or explicitly private network artifact area. `artifact_scopes` names that target;
+it never defaults to the whole company. `artifacts` references one scope UUID and
+`artifact_permissions` binds specific scopes and operations to concrete instances.
+Cross-network same-company sharing needs an explicit scope binding.
+`context.artifacts.create` stages immutable bytes under that scope, with hash,
 size, media type and artifact UUID. `read` accepts a scoped artifact reference;
 it never returns an ambient host path. Artifact IDs are identifiers, not
 capabilities: every read/create checks an explicit per-instance artifact binding,
@@ -347,7 +385,14 @@ case revision; it cannot reopen the timed-out join. Unrelated cases continue.
 Gate tasks are non-script maintenance under the downstream Pod identity. Each
 maintenance task acquires the exclusive instance lease plus its own fenced task
 token/generation, so polling/consumption cannot overlap that Pod's invocation or a
-second gate task. Poll steps are bounded and cancellation invalidates their token.
+second gate task. Each bounded poll/consume step creates a maintenance run row
+with the downstream pinned script hash as identity metadata and
+`executionKind: network-gate`, without launching that script. Its task attempt
+references that run UUID and reserves the existing run_leases row/global slot
+for the bounded step only. Release slot/instance lease after the step; a pending
+task holds no lease while waiting for the next poll or owner. Gate runs have the
+same publication filtering and backup-idle checks as network script runs.
+Poll steps are bounded and cancellation invalidates their token.
 Approved release is bound to a specific action manifest/expiry; paused queues do
 not extend grant validity, and dispatch revalidates it before an external effect. Keep
 task states preparing, pending, consuming, approved, denied, expired,
@@ -429,9 +474,18 @@ bytes. UI publication is a separate bounded overview and stable-key detail curso
 never append full network/business tables to `centralTables`. Store network
 manifests/inputs/checkpoints in `network_invocations`, not legacy accepted_events
 or run_inputs payloads. Existing runs may retain only bounded generic status.
-Before the first network invocation in M3, filter network-derived rows/payloads
-from published runs, run_events and effect_ledger results; add no new full-table
-payload leakage. New network effect evidence remains in `network_effect_receipts`.
+Committed private network checkpoints live in `network_checkpoints`, separate
+from legacy checkpoints. Before the first network invocation in M3, apply a closed
+default-deny classification across every centralTables entry: any row associated
+with a network member, invocation, gate task, case or their derived records is
+excluded unless an explicit bounded public-summary projection allowlists fields.
+This includes checkpoints, recovery_reviews, schedules, claims, resources and
+indirect run/member foreign-key paths, not just runs/run_events/effect_ledger.
+Unknown/unclassified ownership fails publication rather than leaking a row.
+Approved Pod/name/status/queue aggregates are rendered as explicit summaries,
+not copied full table rows. No network business/checkpoint/effect body may be
+stored in a legacy table used by unfiltered publication. Retain backup coverage
+independently; add no new full-table payload leakage. New network effect evidence remains in `network_effect_receipts`.
 M10 completes negotiated bounded summaries and paginated details; privacy cannot
 wait for M10 while M3 writes network state. Runtime-mediated
 owner-authenticated details fail clearly while offline. M10 negotiates compatible
