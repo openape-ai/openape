@@ -13,7 +13,7 @@ import { WorkspaceRequestError } from './client'
 import { connected, connectionAfter, connectionLevel } from './status'
 
 const props = defineProps<{ client: CentralClient, desktop?: boolean, desktopStatus?: CentralStatus | null, embedded?: boolean, workflows?: WorkflowView, sharedEditor?: boolean }>()
-const emit = defineEmits<{ settings: [], login: [], logout: [], inventory: [value: CentralRuntime[]], connection: [error: string] }>()
+const emit = defineEmits<{ network: [runtimeId: string, networkId: string], settings: [], login: [], logout: [], inventory: [value: CentralRuntime[]], connection: [error: string] }>()
 const runtimes = ref<CentralRuntime[]>([])
 const selected = ref<{ runtimeId: string, podId: string } | null>(null)
 const current = shallowRef<CentralSummary | null>(null)
@@ -62,7 +62,11 @@ const runList = computed(() => [...current.value?.pod.runs.runs ?? [], ...olderR
 const activeRuntime = computed(() => runtimes.value.find(item => item.id === props.desktopStatus?.runtimeId && item.online) ?? (runtime.value?.online ? runtime.value : runtimes.value.find(item => item.online)))
 const localEditor = computed(() => props.desktop && !!props.desktopStatus?.runtimeId && selected.value?.runtimeId === props.desktopStatus.runtimeId)
 function visiblePods(host: CentralRuntime) { return host.workspace.pods.filter(pod => (pod.lifecycle === 'archived') === archived.value && pod.name.toLowerCase().includes(search.value.toLowerCase())) }
-function memberships(runtimeId: string, id: string) { const view = runtimeId === props.desktopStatus?.runtimeId ? props.workflows : runtimes.value.find(item => item.id === runtimeId)?.workflows; return view?.workflows.filter(item => item.nodes.some(node => node.podId === id)).map(item => item.name).join(' · ') }
+function memberships(runtimeId: string, id: string) {
+  const host = runtimes.value.find(item => item.id === runtimeId)
+  const view = runtimeId === props.desktopStatus?.runtimeId ? props.workflows : host?.workflows
+  return [...view?.workflows.filter(item => item.nodes.some(node => node.podId === id)).map(item => item.name) ?? [], ...host?.networks?.networks.filter(network => network.podIds?.includes(id)).map(network => network.name) ?? []].join(' · ')
+}
 async function createPod() {
   const target = activeRuntime.value
   if (!target) return
@@ -354,6 +358,15 @@ onBeforeUnmount(() => { generation++; abort.abort() })
           </button>
         </div>
         <slot v-else-if="localEditor && current && $slots['local-editor']" name="local-editor" :pod-id="current.pod.id" />
+        <section v-else-if="current?.pod.networkId" class="central-card">
+          <h1>{{ current.pod.scripts.pod.name }}</h1>
+          <p role="status">
+            {{ t('This Pod belongs to network work. Read its network details; review changes on the desktop.') }}
+          </p>
+          <button v-if="sharedEditor && runtime" class="text-button" @click="emit('network', runtime.id, current.pod.networkId)">
+            {{ t('Networks & workflows') }}
+          </button>
+        </section>
         <RemotePodEditor v-else-if="sharedEditor && current && runtime" :key="`${runtime.id}:${current.pod.id}`" :client="client" :runtime="runtime" :summary="current" :online="available" @dirty="remoteDirty = $event" @busy="remoteBusy = $event" @settings="emit('settings')" />
         <template v-else-if="current && baseline">
           <div class="central-title">

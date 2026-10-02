@@ -55,7 +55,7 @@ export type NetworkCommand
     | { type: 'gateDiscard', id: string, revision: number, taskId: string, generation: number, evidence: string }
     | { type: 'process', id: string, revision: number, previewId: string }
 export interface NetworkHealth { oldestPendingAt: number | null, nextRetryAt: number | null, lastDispatchAt: number | null, lastSchedulerProgressAt: number | null, lastSchedulerError: string | null, intakeError: string | null, lastFailure: { runId: string, generation: number, kind: string, reason: string } | null }
-export interface NetworkSummary { podIds?: string[], id: string, revision: number, groupId: string, name: string, state: 'active' | 'paused' | 'archived', counts: Record<string, number>, health: NetworkHealth }
+export interface NetworkSummary { decisions?: number, podIds?: string[], id: string, revision: number, groupId: string, name: string, state: 'active' | 'paused' | 'archived', counts: Record<string, number>, health: NetworkHealth }
 export interface NetworkPreview { id: string, networkId: string, revision: number, podIds: string[], pausedPodIds: string[], budget: number, expiresAt: number, sources: string[], consumers: string[] }
 export interface NetworkView { unavailableReason?: string, details?: NetworkDetails, setup?: NetworkSetup, trace?: NetworkTracePage, records?: NetworkDataPage, networks: NetworkSummary[], gates?: NetworkGateView[], preview?: NetworkPreview, processId?: string, createdId?: string }
 export const networkLimits = { networks: 64, members: 64, channels: 32, batch: 50, processNow: 100, definitionBytes: 1024 * 1024 } as const
@@ -219,7 +219,7 @@ export function parseNetworkView(value: unknown): NetworkView {
   const input = networkDataObject(value)
   if (Object.keys(input).some(key => !['networks', 'gates', 'preview', 'processId', 'createdId', 'details', 'setup', 'trace', 'records', 'unavailableReason'].includes(key))) throw new Error('Invalid network view fields')
   const networks = list(input.networks, networkLimits.networks).map((value) => {
-    const item = fields(value, ['id', 'revision', 'groupId', 'name', 'state', 'counts', 'health', ...(Object.hasOwn(networkDataObject(value), 'podIds') ? ['podIds'] : [])])
+    const item = fields(value, ['id', 'revision', 'groupId', 'name', 'state', 'counts', 'health', ...(Object.hasOwn(networkDataObject(value), 'decisions') ? ['decisions'] : []), ...(Object.hasOwn(networkDataObject(value), 'podIds') ? ['podIds'] : [])])
     if (typeof item.name !== 'string' || item.name.length > 120 || !['active', 'paused', 'archived'].includes(item.state as string)) throw new Error('Invalid network summary')
     const counts = networkDataObject(item.counts)
     if (Object.entries(counts).some(([state, count]) => !['pending', 'claimed', 'done', 'retry_wait', 'blocked', 'unknown', 'discarded'].includes(state) || !Number.isSafeInteger(count) || (count as number) < 0)) throw new Error('Invalid network queue summary')
@@ -234,8 +234,9 @@ export function parseNetworkView(value: unknown): NetworkView {
       uuid(failure.runId); revision(failure.generation)
       if (!['transient', 'invalid', 'uncertain', 'exhausted', 'timeout', 'quota', 'recovery'].includes(failure.kind as string) || typeof failure.reason !== 'string' || failure.reason.length > 10000) throw new Error('Invalid network failure diagnostic')
     }
+    if (item.decisions !== undefined && (!Number.isSafeInteger(item.decisions) || Number(item.decisions) < 0)) throw new Error('Invalid network decision count')
     if (item.podIds !== undefined) list(item.podIds, 64).forEach(uuid)
-    return { ...(item.podIds === undefined ? {} : { podIds: item.podIds as string[] }), id: uuid(item.id), revision: revision(item.revision), groupId: uuid(item.groupId), name: item.name, state: item.state as NetworkSummary['state'], counts: counts as Record<string, number>, health: health as unknown as NetworkHealth }
+    return { ...(item.decisions === undefined ? {} : { decisions: item.decisions as number }), ...(item.podIds === undefined ? {} : { podIds: item.podIds as string[] }), id: uuid(item.id), revision: revision(item.revision), groupId: uuid(item.groupId), name: item.name, state: item.state as NetworkSummary['state'], counts: counts as Record<string, number>, health: health as unknown as NetworkHealth }
   })
   const result: NetworkView = { networks }
   if (input.unavailableReason !== undefined) {

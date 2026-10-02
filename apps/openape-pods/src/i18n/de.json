@@ -1,4 +1,12 @@
 {
+  "Unsupported network action: requires the local desktop": "Diese Netzwerkaktion erfordert den lokalen Desktop.",
+  "Network response exceeds its read limit": "Die Netzwerkantwort überschreitet die Lesegrenze.",
+  "Invalid read-only network response": "Ungültige schreibgeschützte Netzwerkantwort",
+  "Invalid network decision count": "Ungültige Anzahl der Netzwerkentscheidungen",
+  "Network reads require a newer desktop": "Netzwerkansichten erfordern eine neuere Desktop-Version.",
+  "Unclassified publication table: {p0}": "Nicht klassifizierte Veröffentlichungstabelle: {p0}",
+  "Showing the last synchronized networks and workflows.": "Die zuletzt synchronisierten Netzwerke und Workflows werden angezeigt.",
+  "Read-only here. Resolve decisions and failures in the desktop app.": "Hier nur lesbar. Entscheidungen und Fehler in der Desktop-App bearbeiten.",
   "Help": "Hilfe",
   "Report a problem": "Problem melden",
   "Could not open issue reporting": "Die Problemmeldung konnte nicht geöffnet werden",
@@ -3407,5 +3415,18 @@
   "Each source runs independently. Use zero for manual only, or at least 60 seconds.": "Jede Quelle arbeitet unabhängig. Verwende null für ausschließlich manuelle Starts oder mindestens 60 Sekunden.",
   "Prepared definition list is incomplete. Refresh before creating a network.": "Die Liste vorbereiteter Definitionen ist unvollständig. Aktualisiere sie vor dem Erstellen eines Netzwerks.",
   "Selection or rights changed. Review shared values and channels again.": "Auswahl oder Rechte haben sich geändert. Prüfe gemeinsame Werte und Kanäle erneut.",
-  "Failures requiring review: {count}": "Fehler zur Prüfung: {count}"
+  "Failures requiring review: {count}": "Fehler zur Prüfung: {count}",
+  "Desktop offline: network details require the connected runtime": "Desktop offline: Netzwerkdetails benötigen den verbundenen Desktop.",
+  "Network details require a connected desktop": "Netzwerkdetails benötigen einen verbundenen Desktop.",
+  "Network details require a newer relay": "Netzwerkdetails benötigen eine neuere Relay-Version.",
+  "Network actions require bounded relay publication support": "Netzwerkaktionen benötigen die begrenzte Veröffentlichung einer neueren Relay-Version.",
+  "workspace_runtime_offline": "Der Desktop ist offline. Netzwerkdetails sind momentan nicht verfügbar.",
+  "workspace_runtime_read_timed_out": "Der Desktop hat nicht rechtzeitig geantwortet. Bitte erneut laden.",
+  "workspace_read_expired": "Die Leseabfrage ist abgelaufen. Bitte erneut laden.",
+  "workspace_read_busy": "Zu viele gleichzeitige Leseabfragen. Bitte kurz warten.",
+  "workspace_network_reads_unavailable": "Dieser Desktop stellt noch keine Netzwerkdetails bereit.",
+  "Network details are temporarily unavailable; desktop execution remains connected.": "Netzwerkdetails sind vorübergehend nicht verfügbar; der Desktop bleibt für die Ausführung verbunden.",
+  "This Pod belongs to network work. Read its network details; review changes on the desktop.": "Dieser Pod gehört zu Netzwerkarbeit. Details findest du im Netzwerk; Änderungen prüfst du auf dem Desktop.",
+  "network_member_requires_desktop_review": "Änderungen an diesem Netzwerk-Pod müssen auf dem Desktop geprüft werden.",
+  "Network member changes require desktop review": "Änderungen an diesem Netzwerk-Pod müssen auf dem Desktop geprüft werden."
 }

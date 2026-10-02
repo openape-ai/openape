@@ -1,35 +1,44 @@
 # Active work
 
-## Current M9 — issue1417
+## Current M10 — issue1417
 
-M0–M8 are accepted. Isolated checkout
+M0–M9 are accepted. Isolated checkout
 `openape-monorepo.worktrees/pods-workflows-networks`; branch
-`feature/issue-1417-pods-networks-m9`; canonical base
-`9eaf5e4e70ae22ebebdf2f2c19c83376f7923b56` (PR209, main CI5334).
-Doctor passes. M9 remains unaccepted. Candidate `b7435c0824538260ea4bf1882fb87e67f7753044`
-is pushed in [native PR210](https://repos.openape.ai/patrick/monorepo/pulls/210), explicitly
-linked to issue1417. Bounded owner reads, reviewed paused creation, independent timers,
-configuration origins and recovery controls are implemented. Earlier full checks passed
-140 suites/1123 units, six manual native tests and 18 browser layout tests. The subsequent
-clean-source unit run failed the eight-slot fairness fixture's existing five-second limit
-and exposed late teardown access to a closed database; this failed receipt is retained.
-The follow-up drains the engine/dispatcher before closing fixture storage and seeds the
-fairness fixture atomically without changing its timeout or admission assertion.
+`feature/issue-1417-pods-networks-m10`; canonical base
+`afbcb7aad45ad16ffccc51077b4b2968806d6c74` (PR210, full main CI5337).
+Doctor passes. M10 is in progress and unaccepted: bounded negotiated network
+publication, owner-scoped runtime reads and shared read-only browser components.
+Actual Opus5.5 foundation review identified the old-relay unknown-part-key trap;
+network summaries use an additive separate publication instead of new part keys.
+Legacy format2 negotiation remains unchanged. Full backup stays separate.
+Next finish compatibility and scope guards, focused volume/owner/offline/rollback
+and encrypted-backup tests, actual browser/native acceptance, reviews and gates.
+M10 review corrections now include a closed legacy-table classification, private
+Pod/artifact exclusion, a second worker mutation guard, redacted persistent health,
+removed browser approval URLs and independent scoped browser detail state. Latest
+uncommitted checks pass root lint/typecheck, both builds,140 Pods suites/1133 tests
+and four relay suites/34 tests. Before the last privacy correction, four actual
+Electron tests,18 browser layout checks and authenticated relay/browser E2E passed;
+final-source manual checks still need repetition. Earlier failed test fixtures,
+translation coverage and activity-error placement were corrected, not waived.
+No M10 tested SHA, PR or report yet. No production activation, conversion or
+expanded external rights. Evidence: `/tmp/openape-pods-networks-m10/`.
 
-Actual Opus5.5 reviews corrected authority/read/control and retention findings. Actual
-Fable (`claude-fable-5-1`) reviews drove nested pause consent, visible timers, scoped
-recovery evidence, a clickable failures count and desktop/phone recovery coverage.
-The follow-up passes 70 focused tests and nine graph layout tests; final full gates are
-running. Screenshots were personally inspected. M11 owns the required explicit reviewed
-replacement/archive path for mistaken immutable compositions, before M13 delivery.
-The connected Electron route refuses offline creation; bounded online publication is M10.
+## M9 acceptance evidence — issue1417
 
-Evidence: `/tmp/openape-pods-networks-m9/`. Next: commit the follow-up, verify its clean
-SHA, inspect exact native PR/CI, publish private Test Runs and verify protected merge
-and main CI, then continue M10–M14. No verified M9 report or acceptance yet. No live
-external action, production activation, conversion or expanded rights.
-
-
+Clean tested source `4e3c5d9fc3f4baf0acaa5f2e8e066807017afce1` passed full
+lint/typecheck, Pods build, 140 suites/1124 unit tests, six native tests and 19
+manual layout checks. Exact-source unit CI5336 passed. All 43 native diff files
+and 2410 displayed lines match source/base; primary review and actual Claude Code
+Opus5.5/Fable reviews informed the fixes. Protected
+[PR210](https://repos.openape.ai/patrick/monorepo/pulls/210) merged as
+`afbcb7aad45ad16ffccc51077b4b2968806d6c74`; full main CI5337 passed.
+[Verified private Test Runs](https://report.openape.ai/r/38IJwxPQM0gwKEsj6JgwZGQY)
+retains actual results, earlier failed fixture teardown/fairness gate and eight
+personally inspected screenshots. Owner200, anonymous401, rendered screenshot
+bytes and authenticated browser display verified. M11 must deliver the reviewed
+paused replacement/archive path preserving identities, pending work and effect
+receipts before M13. M9 connected-online publication remained explicitly fenced.
 
 ## M8 acceptance evidence — issue1417
 

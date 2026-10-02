@@ -1,5 +1,7 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
+import { parseCentralNetworkRead } from '../contracts/central-networks'
+import type { CentralNetworkRead } from '../contracts/central-networks'
 import type { PropType } from 'vue'
 import type { StoredPod } from '../contracts/control'
 import type { GraphDetail } from '../contracts/graphs'
@@ -17,12 +19,13 @@ export default defineComponent({
     view: { type: Object as PropType<NetworkView>, required: true },
     pods: { type: Array as PropType<StoredPod[]>, required: true },
     readOnly: Boolean,
+    readNetwork: Function as PropType<(command: CentralNetworkRead) => Promise<NetworkView>>,
     active: { type: Boolean, default: true },
   },
   emits: ['changed', 'back', 'openPod'],
-  data() { return { details: null as NetworkDetails | null, trace: null as NetworkTracePage | null, records: null as NetworkDataPage | null, tab: 'structure', caseId: null as string | null, selected: '', loadRequest: 0, error: '', actionError: '', activityError: '', recordsError: '', activityRequest: 0, recordsRequest: 0, now: Date.now(), busy: false, processing: false, processPods: [] as string[], reviewedPaused: [] as string[], budget: 10, preview: null as NetworkPreview | null, evidence: {} as Record<string, string>, timer: null as ReturnType<typeof setTimeout> | null, closed: false } },
+  data() { return { remoteGates: [] as NonNullable<NetworkView['gates']>, loading: false, activityLoading: false, recordsLoading: false, details: null as NetworkDetails | null, trace: null as NetworkTracePage | null, records: null as NetworkDataPage | null, tab: 'structure', caseId: null as string | null, selected: '', loadRequest: 0, error: '', actionError: '', activityError: '', recordsError: '', activityRequest: 0, recordsRequest: 0, now: Date.now(), busy: false, processing: false, processPods: [] as string[], reviewedPaused: [] as string[], budget: 10, preview: null as NetworkPreview | null, evidence: {} as Record<string, string>, timer: null as ReturnType<typeof setTimeout> | null, closed: false } },
   computed: {
-    gates() { return (this.view.gates ?? []).filter(gate => gate.networkId === this.network.id) },
+    gates() { return (this.readNetwork ? this.remoteGates : this.view.gates ?? []).filter(gate => gate.networkId === this.network.id) },
     structure(): WorkflowDefinition | null {
       const definition = this.details?.definition
       if (!definition) return null
@@ -74,28 +77,43 @@ export default defineComponent({
       return [receipt.message, receipt.error, receipt.reason, receipt.summary].filter(value => typeof value === 'string' && value).map(value => diagnostic(value as string)).join(' · ')
     },
     poll() { if (this.closed) return; this.timer = setTimeout(async () => { this.now = Date.now(); if (this.active && !document.hidden && !this.busy) await this.load(false); this.poll() }, 5000) },
+    async read(command: CentralNetworkRead): Promise<NetworkView> {
+      if (this.readNetwork) return this.readNetwork(parseCentralNetworkRead(command))
+      if (this.readOnly) throw new Error('Network details require a connected desktop')
+      return window.pods.networks(command)
+    },
     async load(includeTrace = true) {
       const request = ++this.loadRequest
+      this.loading = true
       try {
-        const response = await window.pods.networks({ type: 'detail', id: this.network.id, revision: this.network.revision })
+        const response = await this.read({ type: 'detail', id: this.network.id, revision: this.network.revision })
         if (request !== this.loadRequest || this.closed) return
-        this.details = response.details!; this.$emit('changed', response); this.error = ''
-        if (includeTrace) await this.activity(null)
+        this.details = response.details!
+        if (this.readNetwork) this.remoteGates = response.gates ?? []
+        else this.$emit('changed', response)
+        this.error = ''
+        if (includeTrace || !this.trace) await this.activity(null)
       }
       catch (error) { if (request === this.loadRequest && !this.closed) this.error = error instanceof Error ? error.message : String(error) }
+      finally { if (request === this.loadRequest) this.loading = false }
     },
     async activity(before: number | null, selectedCase?: string | null) {
       const request = ++this.activityRequest
+      this.activityLoading = true
       const caseId = selectedCase === undefined ? this.caseId : selectedCase
-      try { const response = await window.pods.networks({ type: 'trace', id: this.network.id, revision: this.network.revision, before, caseId }); if (request !== this.activityRequest || this.closed) return; this.trace = response.trace!; this.caseId = caseId; this.activityError = '' }
+      try { const response = await this.read({ type: 'trace', id: this.network.id, revision: this.network.revision, before, caseId }); if (request !== this.activityRequest || this.closed) return; this.trace = response.trace!; this.caseId = caseId; this.activityError = '' }
       catch (error) { if (request !== this.activityRequest || this.closed) return; this.activityError = error instanceof Error ? error.message : String(error) }
+      finally { if (request === this.activityRequest) this.activityLoading = false }
     },
     async dataPage(collectionId: string, after: string | null = null) {
       const request = ++this.recordsRequest
-      try { const response = await window.pods.networks({ type: 'records', id: this.network.id, revision: this.network.revision, collectionId, after }); if (request !== this.recordsRequest || this.closed) return; this.records = response.records!; this.recordsError = '' }
+      this.recordsLoading = true
+      try { const response = await this.read({ type: 'records', id: this.network.id, revision: this.network.revision, collectionId, after }); if (request !== this.recordsRequest || this.closed) return; this.records = response.records!; this.recordsError = '' }
       catch (error) { if (request !== this.recordsRequest || this.closed) return; this.recordsError = error instanceof Error ? error.message : String(error) }
+      finally { if (request === this.recordsRequest) this.recordsLoading = false }
     },
     async send(command: NetworkCommand) {
+      if (this.readOnly) return
       this.loadRequest++; this.busy = true; this.actionError = ''
       try {
         const response = await window.pods.networks(command); this.$emit('changed', response)
@@ -123,12 +141,12 @@ export default defineComponent({
       </button><h1>{{ network.name }}</h1><p>{{ t('Persistent network') }} · {{ t(network.state) }}</p>
     </header>
     <p v-if="error" role="alert" class="error-message">
-      {{ t('Runtime access failed. Refresh before issuing another action.') }} {{ diagnostic(error) }} <button class="secondary" @click="load()">
+      <span v-if="!readOnly">{{ t('Runtime access failed. Refresh before issuing another action.') }}</span> {{ diagnostic(error) }} <button v-if="!readOnly" class="secondary" @click="load()">
         {{ t('Refresh') }}
       </button>
     </p>
-    <p v-if="activityError || recordsError" role="alert" class="error-message">
-      {{ diagnostic(activityError || recordsError) }}
+    <p v-if="loading && !details" role="status">
+      {{ t('Loading workspace…') }}
     </p>
     <p v-if="actionError" ref="actionError" tabindex="-1" role="alert" class="error-message">
       {{ diagnostic(actionError) }}
@@ -142,7 +160,7 @@ export default defineComponent({
       </button>
     </div>
     <p>
-      {{ t('Waiting: {count}', { count: (network.counts.pending ?? 0) + (network.counts.retry_wait ?? 0) }) }} · {{ t('Processing: {count}', { count: network.counts.claimed ?? 0 }) }} · {{ t('Decisions: {count}', { count: gates.filter(gate => ['pending', 'unknown', 'preparing', 'consuming', 'superseded'].includes(gate.state)).length }) }}
+      {{ t('Waiting: {count}', { count: (network.counts.pending ?? 0) + (network.counts.retry_wait ?? 0) }) }} · {{ t('Processing: {count}', { count: network.counts.claimed ?? 0 }) }} · {{ t('Decisions: {count}', { count: !details && network.decisions !== undefined ? network.decisions : gates.filter(gate => ['pending', 'unknown', 'preparing', 'consuming', 'superseded'].includes(gate.state)).length }) }}
     </p>
     <button v-if="details?.failures.length" class="text-button network-failure-count" @click="tab = 'decisions'">
       {{ t('Failures requiring review: {count}', { count: details.failures.length }) }}
@@ -219,15 +237,23 @@ export default defineComponent({
       </p>
     </template>
     <section v-else-if="tab === 'activity'">
-      <h2>{{ t('Recent recorded activity') }}</h2><p>{{ t('Recorded receipts describe what happened. They do not imply that an external effect succeeded.') }}</p><button class="text-button" @click="activity(null, null)">
+      <p v-if="activityError" role="alert" class="error-message">
+        {{ diagnostic(activityError) }} <button class="secondary" :disabled="activityLoading" @click="activity(null)">
+          {{ t('Retry') }}
+        </button>
+      </p>
+      <p v-if="activityLoading" role="status">
+        {{ t('Loading workspace…') }}
+      </p>
+      <h2>{{ t('Recent recorded activity') }}</h2><p>{{ t('Recorded receipts describe what happened. They do not imply that an external effect succeeded.') }}</p><button v-if="caseId" class="text-button" :disabled="activityLoading" @click="activity(null, null)">
         {{ t('All recent cases') }}
       </button><p v-if="caseId">
         {{ t('Selected case') }}: {{ caseId }}
-      </p><p v-if="!trace?.events.length">
+      </p><p v-if="trace && !trace.events.length && !activityLoading">
         {{ t('No recorded activity in this page.') }}
       </p><article v-for="event in trace?.events ?? []" :key="event.id">
         <p>
-          {{ dateTime(event.at) }} · {{ eventLabel(event.kind) }} <button v-if="event.caseId" class="text-button" @click="activity(null, event.caseId)">
+          {{ dateTime(event.at) }} · {{ eventLabel(event.kind) }} <button v-if="event.caseId" class="text-button" :disabled="activityLoading" @click="activity(null, event.caseId)">
             {{ t('Open case') }}
           </button>
         </p><p v-if="eventSummary(event)">
@@ -237,11 +263,14 @@ export default defineComponent({
         </button><details><summary>{{ t('Receipt details') }}</summary><p>{{ event.kind }}</p><pre>{{ event.body }}</pre></details><p v-if="event.truncated">
           {{ t('Preview shortened. The original receipt is retained.') }}
         </p>
-      </article><button v-if="trace?.before" class="secondary" @click="activity(trace.before)">
+      </article><button v-if="trace?.before" class="secondary" :disabled="activityLoading" @click="activity(trace.before)">
         {{ t('Older activity') }}
       </button>
     </section>
     <section v-else-if="tab === 'decisions' && details">
+      <p v-if="readOnly">
+        {{ t('Read-only here. Resolve decisions and failures in the desktop app.') }}
+      </p>
       <h2>{{ t('Decisions and failures') }}</h2><p v-if="!details.failures.length && !gates.length">
         {{ t('No decisions or failures need attention.') }}
       </p><p>{{ t('Unknown external actions are never repeated automatically. Inspect and reconcile their outcome first.') }}</p>
@@ -301,9 +330,15 @@ export default defineComponent({
       </article>
     </section>
     <section v-else-if="tab === 'data' && details">
+      <p v-if="recordsError" role="alert" class="error-message">
+        {{ diagnostic(recordsError) }}
+      </p>
+      <p v-if="recordsLoading" role="status">
+        {{ t('Loading workspace…') }}
+      </p>
       <h2>{{ t('Shared data') }}</h2><p v-if="!details.collections.length || (records && !records.records.length)">
         {{ t('No shared records in this view.') }}
-      </p><button v-for="collection in details.collections" :key="collection.id" class="secondary" @click="dataPage(collection.id)">
+      </p><button v-for="collection in details.collections" :key="collection.id" class="secondary network-collection" :disabled="recordsLoading" :aria-pressed="records?.collectionId === collection.id" @click="dataPage(collection.id)">
         {{ collection.name }} · {{ collection.version }}
       </button><p v-if="details.collectionsMore">
         {{ t('This view shows the first {count} entries.', { count: 64 }) }}
@@ -311,7 +346,7 @@ export default defineComponent({
         <h3>{{ record.key }} · {{ record.revision }}</h3><pre>{{ record.deleted ? t('Deleted record') : record.body }}</pre><p v-if="record.truncated">
           {{ t('Preview shortened. The original receipt is retained.') }}
         </p>
-      </article><button v-if="records?.after" class="secondary" @click="dataPage(records.collectionId, records.after)">
+      </article><button v-if="records?.after" class="secondary" :disabled="recordsLoading" @click="dataPage(records.collectionId, records.after)">
         {{ t('Next records') }}
       </button>
     </section>
@@ -319,5 +354,5 @@ export default defineComponent({
 </template>
 
 <style>
-.network-detail{display:flex;flex-direction:column;gap:16px;min-width:0}.network-detail h1{margin:10px 0}.network-detail p{overflow-wrap:anywhere;margin:4px 0}.network-detail label,.network-detail li{overflow-wrap:anywhere}.network-timers ul{padding-left:20px}.network-process .paused-consent{margin-left:28px;padding:10px;border-left:3px solid var(--border)}.network-detail .text-button{min-height:36px}.network-detail pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto;font-size:12px}.network-detail article,.network-process{padding:16px;border:1px solid var(--border);border-radius:12px;margin:10px 0}.network-detail textarea{display:block;width:100%;min-height:72px;box-sizing:border-box}.network-detail .graph-modes{flex-wrap:wrap}.network-process label{display:flex;gap:8px;align-items:center;margin:10px 0}.network-process input[type=checkbox]{width:auto}.network-process input[type=number]{max-width:90px}.network-actions>label{flex:1 0 100%}.network-failure-count{align-self:flex-start}.network-actions{display:flex;flex-wrap:wrap;gap:10px}
+.network-collection[aria-pressed=true]{background:var(--tint);border-color:var(--accent);font-weight:700}.network-detail{display:flex;flex-direction:column;gap:16px;min-width:0}.network-detail h1{margin:10px 0}.network-detail p{overflow-wrap:anywhere;margin:4px 0}.network-detail label,.network-detail li{overflow-wrap:anywhere}.network-timers ul{padding-left:20px}.network-process .paused-consent{margin-left:28px;padding:10px;border-left:3px solid var(--border)}.network-detail .text-button{min-height:36px}.network-detail pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto;font-size:12px}.network-detail article,.network-process{padding:16px;border:1px solid var(--border);border-radius:12px;margin:10px 0}.network-detail textarea{display:block;width:100%;min-height:72px;box-sizing:border-box}.network-detail .graph-modes{flex-wrap:wrap}.network-process label{display:flex;gap:8px;align-items:center;margin:10px 0}.network-process input[type=checkbox]{width:auto}.network-process input[type=number]{max-width:90px}.network-actions>label{flex:1 0 100%}.network-failure-count{align-self:flex-start}.network-actions{display:flex;flex-wrap:wrap;gap:10px}
 </style>

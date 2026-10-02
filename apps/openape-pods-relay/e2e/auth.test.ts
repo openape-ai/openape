@@ -1,3 +1,5 @@
+import { setTimeout as delay } from 'node:timers/promises'
+import { operationalFixture } from '../../openape-pods/test/layout/network-fixture'
 import { verifyBrowserWorkspace } from '../../openape-pods/test/workspace/browser-acceptance'
 import { centralFixture } from '../../openape-pods/test/workspace/central-fixture'
 import { capabilities } from '@openape/pods-protocol'
@@ -100,7 +102,33 @@ it('registers a desktop and mobile through real DDISA callbacks and rejects repl
   expect(workspaceInventory.status, await workspaceInventory.clone().text()).toBe(200)
   expect(await workspaceInventory.json()).toMatchObject([{ id: desktop.registration.id, online: true }])
   expect(workspaceInventory.headers.get('cache-control')).toContain('no-store')
-  await verifyBrowserWorkspace(relay.url, email, loginToken)
+  const network = operationalFixture()
+  network.view.networks[0]!.podIds = [fixture.view.id]
+  network.view.details!.definition.members = [{ ...network.definition.members[0]!, podId: fixture.view.id }]
+  network.view.details!.members = [{ ...network.setup.members[0]!, podId: fixture.view.id }]
+  await central({ type: 'networks', lease: session.lease, view: { networks: network.view.networks } })
+  const queryBody = { runtimeId: desktop.registration.id, command: { type: 'list' } }
+  const anonymousRead = await fetch(`${relay.url}/api/workspace/v1/networks`, { method: 'POST', headers: { origin: relay.url, 'content-type': 'application/json' }, body: JSON.stringify(queryBody) })
+  expect(anonymousRead.status).toBe(401)
+  const crossSiteRead = await fetch(`${relay.url}/api/workspace/v1/networks`, { method: 'POST', headers: { cookie: webCookie, origin: 'https://other.example', 'content-type': 'application/json' }, body: JSON.stringify(queryBody) })
+  expect(crossSiteRead.status).toBe(403)
+  const deniedMutation = await fetch(`${relay.url}/api/workspace/v1/networks`, { method: 'POST', headers: { cookie: webCookie, origin: relay.url, 'content-type': 'application/json' }, body: JSON.stringify({ ...queryBody, command: { type: 'activate', id: network.networkId, revision: 1 } }) })
+  expect(deniedMutation.status).toBe(400)
+  const serving = new AbortController()
+  const responder = (async () => {
+    while (!serving.signal.aborted) {
+      await central({ type: 'heartbeat', lease: session.lease, hash: published.hash })
+      const query = await central({ type: 'readClaim', lease: session.lease }) as { id: string } | null
+      if (query) await central({ type: 'readComplete', lease: session.lease, id: query.id, value: network.view, error: null })
+      await delay(1000)
+    }
+  })()
+  const browserCheck = (async () => {
+    try { await verifyBrowserWorkspace(relay.url, email, loginToken, network.definition.name) }
+    finally { serving.abort() }
+  })()
+  const results = await Promise.allSettled([browserCheck, responder])
+  for (const result of results) { if (result.status === 'rejected') throw result.reason }
   const download = await fetch(`${relay.url}/api/workspace/v1/artifact?runtimeId=${desktop.registration.id}&podId=${fixture.view.id}&path=workspace/example.bin`, { headers: { cookie: webCookie } })
   expect(download.status).toBe(200)
   expect(sha256(new Uint8Array(await download.arrayBuffer()))).toBe(artifactHash)
@@ -113,6 +141,9 @@ it('registers a desktop and mobile through real DDISA callbacks and rejects repl
   await central({ type: 'disconnect', lease: session.lease })
   const unavailable = await fetch(`${relay.url}/api/workspace/v1/pod?runtimeId=${desktop.registration.id}&podId=${fixture.view.id}`, { headers: { cookie: webCookie } })
   expect(unavailable.status).toBe(409)
+  const offlineRead = await fetch(`${relay.url}/api/workspace/v1/networks`, { method: 'POST', headers: { cookie: webCookie, origin: relay.url, 'content-type': 'application/json' }, body: JSON.stringify(queryBody) })
+  expect(offlineRead.status).toBe(409)
+  expect(await offlineRead.text()).toContain('workspace_runtime_offline')
   const signOut = await fetch(`${relay.url}/workspace-auth/logout`, { method: 'POST', headers: { cookie: webCookie, origin: relay.url } })
   expect(signOut.status).toBe(200)
   const path = '/api/mobile/v1/runtimes'

@@ -1,5 +1,6 @@
 <script lang="ts">
 import NetworkCreate from './NetworkCreate.vue'
+import type { CentralNetworkRead } from '../contracts/central-networks'
 import NetworkDetail from './NetworkDetail.vue'
 import type { NetworkView } from '../contracts/networks'
 import { defineComponent } from 'vue'
@@ -33,6 +34,7 @@ export default defineComponent({
     organization: { type: Object as PropType<Organization>, required: true },
     selectedId: { type: String, default: '' },
     readOnly: Boolean,
+    readNetwork: Function as PropType<(command: CentralNetworkRead) => Promise<NetworkView>>,
     active: { type: Boolean, default: true },
     sharing: { type: Boolean, default: sharingAvailable },
   },
@@ -73,9 +75,9 @@ export default defineComponent({
   methods: {
     t, diagnostic, arrangementLabel,
     async loadNetworks() {
-      if (this.readOnly || !this.active || document.hidden || this.networkLoading) return
+      if ((this.readOnly && !this.readNetwork) || !this.active || document.hidden || this.networkLoading) return
       this.networkLoading = true; const request = ++this.networkRequest
-      try { const view = await window.pods.networks({ type: 'list' }); if (request === this.networkRequest) { this.networks = view; this.networkError = '' } }
+      try { const view = await (this.readNetwork ? this.readNetwork({ type: 'list' }) : window.pods.networks({ type: 'list' })); if (request === this.networkRequest) { this.networks = view; this.networkError = '' } }
       catch (error) { this.networkError = error instanceof Error ? error.message : String(error) }
       finally { this.networkLoading = false }
     },
@@ -103,6 +105,7 @@ export default defineComponent({
         this.detail = published ? { ...published, trace: key !== undefined && events ? { key, title: published.items.find(item => item.key === key)?.title ?? key, events } : null } : null
         return
       }
+      if (this.readOnly) { this.detail = null; return }
       await this.send({ type: 'graph', id: this.selectedId, ...(key === undefined ? {} : { key }) })
     },
     async decide(command: WorkflowCommand) { if (await this.send(command)) await this.load() },
@@ -146,7 +149,7 @@ export default defineComponent({
   <NetworkCreate v-if="page === 'create' && !readOnly" :pods="pods" :organization="organization" :workflows="view" :networks="networkError ? { ...networks, unavailableReason: networkError } : networks" :group-id="createIn" @cancel="page = 'graph'" @workflow="page = 'workflow-create'" @created="networkCreated" @other="page = 'legacy-create'" @open-pod="$emit('openPod', $event)" />
   <GraphCreate v-else-if="page === 'legacy-create'" :view="view" :pods="pods" :organization="organization" :group-id="createIn" :busy="busy" :error="error" @create="create" @cancel="page = 'graph'" />
   <WorkflowPanel v-else-if="page === 'workflow-create' && !readOnly" create-on-mount :view="view" :pods="pods" @changed="$emit('changed', $event)" @select="$emit('select', $event); page = 'graph'" @cancel="page = 'graph'" />
-  <NetworkDetail v-else-if="network" :key="network.id" :network="network" :view="networks" :pods="pods" :read-only="readOnly" :active="active" @changed="networkChanged" @back="$emit('select', '')" @open-pod="$emit('openPod', $event)" />
+  <NetworkDetail v-else-if="network" :key="network.id" :network="network" :view="networks" :read-network="readNetwork" :pods="pods" :read-only="readOnly" :active="active" @changed="networkChanged" @back="$emit('select', '')" @open-pod="$emit('openPod', $event)" />
   <GraphOverview v-else-if="!definition" v-model:filter="overviewFilter" :networks="networks" :network-error="networkError" :view="view" :pods="pods" :organization="organization" :read-only="readOnly" :sharing="sharing" @select="$emit('select', $event)" @open-pod="$emit('openPod', $event)" @create="startCreate" @create-workflow="page = 'workflow-create'" @import="$emit('import')" />
   <section v-else class="graph-panel">
     <header class="graph-panel-heading">
