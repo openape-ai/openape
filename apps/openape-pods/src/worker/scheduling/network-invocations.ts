@@ -285,7 +285,9 @@ export class NetworkInvocations {
       const process = this.store.db.prepare('SELECT p.preview,p.fingerprint,p.consumed_at FROM network_process_previews p JOIN network_invocation_controls c ON c.process_preview_id=p.id WHERE c.run_id=?').get(authority.runId)
       const receipt = canonicalNetworkJson({ state: unsafe ? 'unknown' : state, summary, error, effectReceipts, processPreview: process ? { ...JSON.parse(process.preview as string), fingerprint: process.fingerprint, consumedAt: process.consumed_at } : null, settledAt: Date.now() })
       this.store.db.prepare('UPDATE network_invocation_controls SET settlement_receipt=? WHERE run_id=?').run(receipt, authority.runId)
-      this.store.db.prepare('INSERT INTO network_trace_events(network_id,case_id,run_id,event_id,kind,body,created_at) VALUES(?,NULL,?,NULL,?,?,?)').run(definition.id, authority.runId, 'invocation-settled', receipt, Date.now())
+      const cases = this.store.db.prepare(`SELECT DISTINCT case_id FROM network_deliveries WHERE network_id=? AND run_id=?
+        UNION SELECT case_id FROM network_events WHERE network_id=? AND json_extract(origin,'$.invocationId')=?`).all(definition.id, authority.runId, definition.id, authority.runId)
+      for (const caseId of cases.length ? cases.map(row => row.case_id!) : [null]) this.store.db.prepare('INSERT INTO network_trace_events(network_id,case_id,run_id,event_id,kind,body,created_at) VALUES(?,?,?,NULL,?,?,?)').run(definition.id, caseId, authority.runId, 'invocation-settled', receipt, Date.now())
       this.runs.finishNetwork(authority.runId, authority.claimToken, unsafe ? 'blocked' : state, unsafe ? 'Network effect outcome is unknown' : error)
     })
   }

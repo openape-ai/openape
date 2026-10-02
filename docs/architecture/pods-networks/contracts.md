@@ -1,7 +1,7 @@
 # Pods persistent networks: frozen M0 contract
 
-Status: implementation contract approved through the October 1 plan. M0–M7
-are accepted and merged; M8 awaits final documentation CI and merge acceptance. The original M0
+Status: implementation contract approved through the October 1 plan. M0–M8
+are accepted and merged; M9 implementation and acceptance are in progress. The original M0
 increment froze these contracts; milestone evidence below records actual delivery. [Development issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417)
 tracks delivery. [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3VDB1S72E4EQQW58T97C617).
 
@@ -962,5 +962,49 @@ review cover38 files/1935 displayed lines; exact-head unit-only CI5332 passed.
 [Private M8 Test Runs](https://report.openape.ai/r/11BVW8loYVf-rTWxSC5SMJAf)
 contains actual results and four personally inspected desktop/narrow EN/DE screenshots;
 owner200, anonymous401 and rendered bytes verified. Native PR209 links issue1417.
-Final documentation-head CI, protected merge and green main remain acceptance gates.
+Final documentation head `8b2ba1ec280f6e95d645026b18ee39dabcc631d5` passed CI5333;
+protected merge `9eaf5e4e70ae22ebebdf2f2c19c83376f7923b56` passed full main CI5334.
+M8 is accepted.
 No live provider action, production activation or rights expansion is included.
+
+## M9 operational desktop UI — acceptance in progress
+
+The owner chooses a finite workflow or persistent network, then selects prepared
+instances in one company. A setup fingerprint binds the reviewed instance versions,
+resource epochs and effective values. The public creation route requires that review;
+creation is atomic and paused. Shared public values are opt-in, apply only to declaring
+members, must match their declared scalar types, and never replace a Pod override or
+expose a secret reference. Changing the reviewed selection resets dependent choices;
+reviewing an unchanged fingerprint preserves the draft. Existing bounded graphs are
+explicitly labelled and never converted by creation.
+
+Structure displays independent source timers separately from recorded activity.
+Process now requires explicit inclusion of each paused Pod, a bounded budget and a
+fresh preview; completion neither activates timers nor resumes Pods. Read failures
+cannot disable the network pause action. Member configuration failures remain visible
+without hiding unrelated recovery records. Recovery evidence belongs to the selected
+invocation, effect or gate input, and the stopped-process check precedes reconciliation.
+Unknown external actions remain blocked until their outcome is explicitly reconciled.
+
+Owner reads are bounded: 50 trace receipts, 50 unresolved invocation failures,
+64 collection summaries, five record previews, and256 resource summaries per member.
+Trace fields use an explicit allowlist; grant tokens and raw authority objects never
+leave the worker through these views. Activity follows actual case-linked acceptance
+and settlement receipts. Data reads preserve version/tombstone information and enforce
+same-owner/company collection bindings. Read commands do not mutate retained state.
+
+Only already-assigned `mail.read` is permitted on source instances. Consumers cannot
+request it, and other undeclared external ports remain refused. The existing exact
+account/folder/attachment/history checks and provider authorization still apply.
+Each invocation allows at most100 mail reads and records operation/count metadata,
+without mailbox content or credentials. No mail, accounting or notification right is
+created or broadened. Connected creation remains fenced until M10 bounded publication;
+the actual connected Electron entry has an explicit offline refusal path.
+
+Manual acceptance uses the existing browser layout and native Electron suites.
+Permanent tests protect scoped reads, stale review refusal, value origin/type rules,
+paused consent, recovery availability and mail non-mutation; no CI job or runner was
+added. Actual Claude Code Opus5.5 reviews supplement primary review; Patrick additionally
+permitted Fable for UI/design, verified here as `claude-fable-5-1`. Their findings drive
+corrections and fresh screenshot capture. M9 is not accepted until final clean-SHA
+checks, native PR review, private Test Runs evidence and protected merge are verified.
