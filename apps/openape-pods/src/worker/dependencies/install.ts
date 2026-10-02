@@ -4,6 +4,7 @@ import type { ScriptRuntime } from '../runs/runner'
 import type { PackageManifest } from '../../contracts/dependencies'
 import { startMailProxy } from '../../main/mail/proxy'
 import { launchSandbox } from '../runtime/sandbox'
+import { parseImportedLock, validateImportedLock, verifyImportedTree } from './imported-lock'
 import { checkLock, dependencyLimit } from './tree'
 
 async function checkStaging(root: string): Promise<void> {
@@ -28,15 +29,17 @@ async function checkStaging(root: string): Promise<void> {
   const disk = await statfs(root)
   if (disk.bavail * disk.bsize < 256 * 1024 * 1024) throw new Error('Less than 256 MiB free disk space remains. Free space before continuing.')
 }
-export async function installPackages(runtime: ScriptRuntime, stage: string, manifest: PackageManifest, signal: AbortSignal, register: (path: string, pid: number) => void): Promise<string> {
+export async function installPackages(runtime: ScriptRuntime, stage: string, manifest: PackageManifest, signal: AbortSignal, register: (path: string, pid: number) => void, importedLock?: string): Promise<string> {
+  const npm = join(dirname(runtime.entry), '../vendor/npm')
+  const validatedLock = importedLock === undefined ? undefined : parseImportedLock(importedLock, manifest, npm)
   const project = join(stage, 'project'); const home = join(stage, 'home')
   await Promise.all([mkdir(project), mkdir(home)])
   await Promise.all([writeFile(join(project, 'package.json'), JSON.stringify(manifest)), writeFile(join(stage, 'user.npmrc'), ''), writeFile(join(stage, 'global.npmrc'), '')])
-  const npm = join(dirname(runtime.entry), '../vendor/npm')
+  if (validatedLock !== undefined) await writeFile(join(project, 'package-lock.json'), validatedLock, { flag: 'wx', mode: 0o600 })
   const proxy = await startMailProxy(signal, undefined, ['registry.npmjs.org'])
   const deadline = AbortSignal.any([signal, AbortSignal.timeout(180000)])
   try {
-    for (const command of [['install', '--package-lock-only'], ['ci']]) {
+    for (const command of validatedLock === undefined ? [['install', '--package-lock-only'], ['ci']] : [['ci']]) {
       deadline.throwIfAborted()
       const args = [join(npm, 'bin/npm-cli.js'), ...command, '--ignore-scripts', '--bin-links=false', '--audit=false', '--fund=false', '--update-notifier=false', '--fetch-retries=0', '--fetch-timeout=30000', '--registry=https://registry.npmjs.org/', `--https-proxy=${proxy.environment.HTTPS_PROXY}`, `--cache=${join(home, 'cache')}`, `--userconfig=${join(stage, 'user.npmrc')}`, `--globalconfig=${join(stage, 'global.npmrc')}`]
       const domain = await launchSandbox(runtime.helper, stage, { executable: runtime.executable, workspace: project, readFiles: [join(stage, 'user.npmrc'), join(stage, 'global.npmrc')], runtimeDirectories: runtime.runtimeDirectories, readDirectories: [npm], writeDirectories: [home], networkPorts: [proxy.port] }, args, { ELECTRON_RUN_AS_NODE: '1', HOME: home, TMPDIR: home }, register)
@@ -56,9 +59,12 @@ export async function installPackages(runtime: ScriptRuntime, stage: string, man
         if (overflow || code !== 0) throw new Error(`Dependency preparation failed: ${output.replaceAll(proxy.environment.HTTPS_PROXY, '[registry proxy]').replaceAll(new URL(proxy.environment.HTTPS_PROXY).password, '[redacted]').slice(-4000)}`)
       }
       finally { clearInterval(monitor); deadline.removeEventListener('abort', stop); domain.cancel(); await domain.completed; await inspection }
-      checkLock(JSON.parse(await readFile(join(project, 'package-lock.json'), 'utf8')), manifest)
+      const preparedLock = JSON.parse(await readFile(join(project, 'package-lock.json'), 'utf8'))
+      checkLock(preparedLock, manifest)
+      if (validatedLock !== undefined && validateImportedLock(preparedLock, manifest, npm) !== validatedLock) throw new Error('Imported dependency lock changed during preparation')
     }
     await checkStaging(stage)
+    if (validatedLock !== undefined) await verifyImportedTree(project, validatedLock, manifest, npm, deadline)
     return project
   }
   finally { await proxy.close() }

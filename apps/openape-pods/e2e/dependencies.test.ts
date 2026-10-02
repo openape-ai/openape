@@ -70,3 +70,31 @@ it('managed dependencies: changing a library requires a new validated script and
   }
   finally { store.close(); await removePackageTree(root) }
 })
+
+it('managed dependencies: imports an exact registry lock and rejects altered integrity in the real sandbox', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-imported-registry-')))
+  const store = new PodDatabase(root)
+  try {
+    const dependencies = new DependencyStore(store)
+    const packages = { dependencies: { 'is-odd': '3.0.1' } }
+    const source = store.createPod({ name: 'Registry lock source' }); const recipient = store.createPod({ name: 'Registry lock recipient' }); const tampered = store.createPod({ name: 'Altered integrity refusal' })
+    const runtime = { helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, binary: '', catalog: '', sdkHost: '', manifest: resolve('dist/vendor/manifest.json') }
+    const signal = new AbortController().signal
+    const original = await dependencies.prepare(runtime, source.id, packages, signal, () => {})
+    const row = store.db.prepare('SELECT lockfile FROM dependency_sets WHERE pod_id=? AND hash=?').get(source.id, original!)!
+    const lock = row.lockfile as string
+    const imported = await dependencies.prepare(runtime, recipient.id, packages, signal, () => {}, lock)
+    const importedRow = store.db.prepare('SELECT lockfile,files FROM dependency_sets WHERE pod_id=? AND hash=?').get(recipient.id, imported!)!
+    expect(JSON.parse(importedRow.lockfile as string)).toEqual(JSON.parse(lock))
+    const sourceFiles = store.db.prepare('SELECT files FROM dependency_sets WHERE pod_id=? AND hash=?').get(source.id, original!)!
+    const packageEntries = (value: unknown) => JSON.parse(value as string).filter((file: { path: string }) => file.path.startsWith('node_modules/') && file.path !== 'node_modules/.package-lock.json')
+    expect(packageEntries(importedRow.files)).toEqual(packageEntries(sourceFiles.files))
+    expect(await dependencies.verify(recipient.id, imported!)).not.toBe(await dependencies.verify(source.id, original!))
+    const changed = JSON.parse(lock); changed.packages['node_modules/is-odd'].integrity = `sha512-${Buffer.alloc(64).toString('base64')}`
+    await expect(dependencies.prepare(runtime, tampered.id, packages, signal, () => {}, JSON.stringify(changed))).rejects.toThrow('Dependency preparation failed')
+    expect(dependencies.prepared(tampered.id, packages)).toBeNull()
+    expect(store.getPod(recipient.id).lifecycle).toBe('paused')
+    expect(store.db.prepare('SELECT count(*) AS count FROM dependency_domains').get()?.count).toBe(0)
+  }
+  finally { store.close(); await removePackageTree(root) }
+})
