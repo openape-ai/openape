@@ -1,3 +1,6 @@
+import { applicationBundle, applicationDefinition } from './programs/application'
+import { parsePortableImportCommand } from '../contracts/sharing'
+import type { PortableImportCommand, PortableImportState } from '../contracts/sharing'
 import { parseCentralNetworkRead } from '../contracts/central-networks'
 import { parseDefinitionCommand, parseDefinitionsView } from '../contracts/definitions'
 import type { DefinitionCommand, DefinitionsView } from '../contracts/definitions'
@@ -21,7 +24,6 @@ import { administrationActions, parseAdministration } from '../contracts/codex-a
 import type { AdministrationJournal, AdministrationReceipt } from '../contracts/codex-admin'
 import { importPrivateSecret } from './codex/secret-import'
 import { programDefinition } from './programs/definition'
-import { applicationDefinition } from './programs/application'
 import { modelResources } from '../worker/master/resources'
 import { object as remoteObject, uuid as remoteUuid, sameOwner } from '@openape/pods-protocol'
 import { ProgramState } from './programs/state'
@@ -452,6 +454,34 @@ export class FixtureWorker {
     return view
   }
 
+  // Imported Pods are ordinary local Pods: a connected workspace gives each its own identity as soon as the paused copy exists.
+  async portableImport(value: PortableImportCommand): Promise<PortableImportState> {
+    const command = parsePortableImportCommand(value)
+    const central = this.centralAction(['list', 'show', 'inspect'].includes(command.type) ? 'list' : command.type)
+    if (central) return central.local(() => this.portableImport(command))
+    const state = await this.dispatch({ portableImport: command.type === 'bind' ? { ...command, bundle: await this.importedBundle(command) } : command }) as PortableImportState
+    if (command.type === 'commit' && this.central && state.current) {
+      const { owner } = await this.remoteOwner()
+      // Every created Pod gets its pending-identity record even when an earlier one fails; the copy already exists.
+      const results = await Promise.allSettled(state.current.pods.map(pod => this.centralProvision(pod.podId, owner)))
+      const failed = results.find(result => result.status === 'rejected')
+      if (failed) throw failed.reason
+    }
+    return state
+  }
+
+  // The worker cannot read bundle metadata. Identity and executable hash come from the assigned bundle itself, never from the caller;
+  // the worker compares the hash with the assignment it binds and keeps it, so a later change of the assignment reopens setup.
+  private async importedBundle(command: Extract<PortableImportCommand, { type: 'bind' }>): Promise<{ identity: string, executableHash: string } | null> {
+    const current = (await this.dispatch({ portableImport: { type: 'show', id: command.id } }) as PortableImportState).current
+    const podId = current?.pods.find(item => item.key === command.pod)?.podId
+    if (!podId) return null
+    const configuration = parseResourceState(await this.dispatch({ resource: { type: 'list', podId } })).resources.find(item => item.id === command.resourceId)?.configuration
+    if (typeof configuration?.bundlePath !== 'string') return null
+    const bundle = await applicationBundle(configuration.bundlePath)
+    return bundle.identity ? { identity: bundle.identity, executableHash: bundle.executableHash } : null
+  }
+
   async definitions(value: DefinitionCommand): Promise<DefinitionsView> {
     const command = parseDefinitionCommand(value)
     const central = this.centralAction(command.type)
@@ -562,7 +592,7 @@ export class FixtureWorker {
     throw new Error('Unsupported central execution')
   }
 
-  private dispatch(command: { definitions: DefinitionCommand } | { definitionProvision: { requestId: string, error: string | null } } | { networkGateCheck: { scope: ServiceScope, manifest: NetworkGateManifest, operation: string, grantId?: string } } | { networks: NetworkCommand, ownerOperation?: boolean } | { central: { type: 'snapshot', owner: Owner, networkReads?: boolean } | { type: 'networkRead', owner: Owner, command: NetworkCommand } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { codex: CodexRequest } | { remote: RemoteInternal } | { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { definitions: DefinitionCommand } | { portableImport: PortableImportCommand } | { definitionProvision: { requestId: string, error: string | null } } | { networkGateCheck: { scope: ServiceScope, manifest: NetworkGateManifest, operation: string, grantId?: string } } | { networks: NetworkCommand, ownerOperation?: boolean } | { central: { type: 'snapshot', owner: Owner, networkReads?: boolean } | { type: 'networkRead', owner: Owner, command: NetworkCommand } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { codex: CodexRequest } | { remote: RemoteInternal } | { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()
