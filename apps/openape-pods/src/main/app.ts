@@ -77,7 +77,7 @@ const fixtureRemoteOrigin = fixture && process.env.NODE_ENV === 'test' ? process
 if (fixtureRemoteOrigin && new URL(fixtureRemoteOrigin).hostname !== '127.0.0.1') throw new Error('Remote acceptance requires an isolated loopback relay')
 remote = new RemoteController(root, worker, fixtureRemoteOrigin)
 if (process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1') {
-  central = new CentralController(root, body => remote.workspaceRequest(body), { snapshot: () => worker.centralSnapshot(), version: () => worker.centralVersion(), execute: (command, id) => worker.centralExecute(command, id), gate: until => worker.centralGate(until) }, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/'))
+  central = new CentralController(root, body => remote.workspaceRequest(body), { snapshot: format => worker.centralSnapshot(format), networkRead: command => worker.centralNetworkRead(command), version: () => worker.centralVersion(), execute: (command, id) => worker.centralExecute(command, id), gate: until => worker.centralGate(until) }, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/'))
   worker.central = central
 }
 const codexDirectory = join(profileBase, 'codex')

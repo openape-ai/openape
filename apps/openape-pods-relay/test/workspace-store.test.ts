@@ -1,3 +1,4 @@
+import { recoveryFixture } from '../../openape-pods/test/layout/network-fixture'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -328,4 +329,78 @@ it('distinguishes unavailable workflow data from an empty synchronized inventory
   state.archive.tables.workflows = [{ id: randomUUID(), archived: 0, nodes: 'not-json' }]
   store.publish(actor, lease, randomUUID(), 2, state)
   expect(() => store.inventory(actor.owner)).toThrow()
+})
+
+it('keeps network reads owner scoped, ephemeral, bounded and separate from owner operations', () => {
+  const f = setup()
+  f.store.publishNetworks(f.actor, f.lease, { networks: [] })
+  const revision = f.store.inventory(f.actor.owner)[0]!.revision
+  expect(() => f.store.requestNetworkRead(f.other, f.actor.id, { type: 'list' })).toThrow('workspace_not_found')
+  expect(() => f.store.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'activate', id: randomUUID(), revision: 1 })).toThrow('local desktop')
+  const id = f.store.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'list' })
+  expect(() => f.store.networkReadResult(f.other, f.actor.id, id)).toThrow('workspace_not_found')
+  expect(f.store.claimNetworkRead(f.actor, f.lease)).toEqual({ id, command: { type: 'list' } })
+  expect(f.store.claimNetworkRead(f.actor, f.lease)).toBeNull()
+  expect(() => f.store.completeNetworkRead({ ...f.actor, owner: f.other }, f.lease, id, { networks: [] }, null)).toThrow()
+  f.store.completeNetworkRead(f.actor, f.lease, id, { networks: [] }, null)
+  expect(f.store.networkReadResult(f.actor.owner, f.actor.id, id)).toEqual({ value: { networks: [] }, error: null })
+  expect(() => f.store.networkReadResult(f.actor.owner, f.actor.id, id)).toThrow('workspace_read_expired')
+  expect(f.store.inventory(f.actor.owner)[0]!.revision).toBe(revision)
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM operations').get()!.n).toBe(0)
+  for (let i = 0; i < 16; i++) f.store.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'list' })
+  expect(() => f.store.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'list' })).toThrow('workspace_read_busy')
+  f.advance(21000)
+  expect(f.store.claimNetworkRead(f.actor, f.lease)).toBeNull()
+  f.store.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'list' })
+  f.store.disconnect(f.actor, f.lease)
+  expect(() => f.store.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'list' })).toThrow('workspace_runtime_offline')
+})
+
+it('retains legacy format negotiation and rejects detailed network publication', () => {
+  const f = setup()
+  expect(f.store.inventory(f.actor.owner)[0]!.networks).toBeUndefined()
+  expect(() => f.store.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'list' })).toThrow('workspace_network_reads_unavailable')
+  expect(() => f.store.publishNetworks(f.actor, f.lease, { networks: [], trace: { events: [], before: null } })).toThrow('invalid_network_publication')
+  f.store.publishNetworks(f.actor, f.lease, { networks: [] })
+  f.store.disconnect(f.actor, f.lease)
+  expect(f.store.begin(f.actor)).toMatchObject({ format: 2, networkReads: 1 })
+})
+
+it('fences expired leases and cancelled reads, rejects oversized results and clears old summaries', () => {
+  const f = setup(); f.store.publishNetworks(f.actor, f.lease, { networks: [] })
+  const cancelled = f.store.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'list' })
+  f.store.cancelNetworkRead(f.actor.owner, f.actor.id, cancelled)
+  expect(f.store.claimNetworkRead(f.actor, f.lease)).toBeNull()
+  const id = f.store.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'list' })
+  f.store.claimNetworkRead(f.actor, f.lease)
+  expect(() => f.store.completeNetworkRead(f.actor, f.lease, id, { networks: [], payload: 'x'.repeat(2 * 1024 * 1024) }, null)).toThrow('read limit')
+  f.advance(31000)
+  expect(() => f.store.networkReadResult(f.actor.owner, f.actor.id, id)).toThrow('workspace_runtime_offline')
+  const next = f.store.begin(f.actor)
+  expect(f.store.inventory(f.actor.owner)[0]!.networks).toBeUndefined()
+  expect(() => f.store.completeNetworkRead(f.actor, f.lease, id, { networks: [] }, null)).toThrow()
+  expect(f.store.claimNetworkRead(f.actor, next.lease)).toBeNull()
+})
+
+it('persists only redacted network health, bounds change history and strips approval links from ephemeral reads', () => {
+  const f = setup(); const network = recoveryFixture()
+  network.view.networks[0]!.podIds = [f.state.pods[0]!.id]
+  network.view.networks[0]!.health.intakeError = 'private-business-diagnostic'
+  network.view.networks[0]!.health.lastSchedulerError = 'private-business-diagnostic'
+  network.view.networks[0]!.health.lastFailure = { runId: randomUUID(), generation: 1, kind: 'invalid', reason: 'private-business-diagnostic' }
+  for (let index = 0; index < 1010; index++) {
+    network.view.networks[0]!.counts.pending = index
+    f.store.publishNetworks(f.actor, f.lease, { networks: network.view.networks })
+  }
+  const saved = f.store.db.prepare('SELECT networks FROM runtimes WHERE id=?').get(f.actor.id)!.networks as string
+  expect(saved).not.toContain('private-business-diagnostic')
+  expect(saved).toContain('Runtime needs attention')
+  expect(f.store.db.prepare('SELECT count(*) AS count FROM changes').get()!.count).toBeLessThanOrEqual(1001)
+  expect(f.store.cursor(f.actor.owner)).toBeGreaterThan(1000)
+  const id = f.store.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'detail', id: network.networkId, revision: 1 })
+  f.store.claimNetworkRead(f.actor, f.lease)
+  f.store.completeNetworkRead(f.actor, f.lease, id, network.view, null)
+  const result = f.store.networkReadResult(f.actor.owner, f.actor.id, id)!.value!
+  expect(result.gates!.every(gate => gate.url === null)).toBe(true)
+  expect(result.networks[0]!.health.intakeError).toBe('private-business-diagnostic')
 })
