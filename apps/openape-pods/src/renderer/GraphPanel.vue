@@ -163,7 +163,14 @@ export default defineComponent({
   <NetworkCreate v-else-if="page === 'create' && !readOnly" :pods="pods" :organization="organization" :workflows="view" :networks="networkError ? { ...networks, unavailableReason: networkError } : networks" :group-id="createIn" @cancel="page = 'graph'" @workflow="page = 'workflow-create'" @created="networkCreated" @other="page = 'legacy-create'" @open-pod="$emit('openPod', $event)" />
   <GraphCreate v-else-if="page === 'legacy-create'" :view="view" :pods="pods" :organization="organization" :group-id="createIn" :busy="busy" :error="error" @create="create" @cancel="page = 'graph'" />
   <WorkflowPanel v-else-if="page === 'workflow-create' && !readOnly" create-on-mount :view="view" :pods="pods" @changed="$emit('changed', $event)" @select="$emit('select', $event); page = 'graph'" @cancel="page = 'graph'" />
-  <NetworkDetail v-else-if="network" :key="network.id" :network="network" :view="networks" :read-network="readNetwork" :pods="pods" :read-only="readOnly" :active="active" @changed="networkChanged" @replace="page = 'replace'" @back="$emit('select', '')" @open-pod="$emit('openPod', $event)" />
+  <div v-else-if="network" :key="network.id" class="graph-network">
+    <p v-if="sharing && !readOnly && !readNetwork" class="graph-overview-actions">
+      <button class="secondary" @click="$emit('share', { kind: 'network', id: network.id })">
+        {{ t('Share') }}
+      </button>
+    </p>
+    <NetworkDetail :network="network" :view="networks" :read-network="readNetwork" :pods="pods" :read-only="readOnly" :active="active" @changed="networkChanged" @replace="page = 'replace'" @back="$emit('select', '')" @open-pod="$emit('openPod', $event)" />
+  </div>
   <GraphOverview v-else-if="!definition" v-model:filter="overviewFilter" :networks="networks" :network-error="networkError" :view="view" :pods="pods" :organization="organization" :read-only="readOnly" :sharing="sharing" @select="$emit('select', $event)" @open-pod="$emit('openPod', $event)" @create="startCreate" @create-workflow="page = 'workflow-create'" @import="$emit('import')" />
   <section v-else class="graph-panel">
     <header class="graph-panel-heading">
@@ -177,7 +184,7 @@ export default defineComponent({
         <button v-if="definition.mode === 'channels' && !readOnly && !readNetwork" class="secondary" aria-describedby="conversion-unavailable" :disabled="busy || !!conversionUnavailable" @click="page = 'convert'">
           {{ t('Review graph conversion') }}
         </button>
-        <button v-if="sharing && !readOnly" class="secondary" @click="$emit('share', definition.id)">
+        <button v-if="sharing && !readOnly" class="secondary" @click="$emit('share', { kind: 'workflow', id: definition.id })">
           {{ t('Share') }}
         </button>
       </div>
