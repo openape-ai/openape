@@ -162,3 +162,13 @@ it('rejects unlisted nested packages that could shadow a pinned dependency', asy
   const lock = { lockfileVersion: 3, packages: { '': manifest, 'node_modules/fixture': packageEntry('fixture', '1.0.0') } }
   await expect(verifyImportedTree(root, validateImportedLock(lock, manifest, npmRoot), manifest, npmRoot, new AbortController().signal)).rejects.toThrow('unlisted package')
 })
+it('requires mandatory children when an optional parent is actually installed', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-imported-optional-parent-'))); roots.push(root)
+  const fixtureEdges = { optionalDependencies: { child: '^2.0.0' } }; const childEdges = { dependencies: { grandchild: '^1.0.0' } }
+  const lock = { lockfileVersion: 3, packages: { '': manifest, 'node_modules/fixture': { ...packageEntry('fixture', '1.0.0'), ...fixtureEdges }, 'node_modules/child': { ...packageEntry('child', '2.1.0'), ...childEdges, optional: true }, 'node_modules/grandchild': { ...packageEntry('grandchild', '1.0.0'), optional: true } } }
+  for (const [name, version, edges] of [['fixture', '1.0.0', fixtureEdges], ['child', '2.1.0', childEdges]] as const) {
+    const directory = join(root, 'node_modules', name); await mkdir(directory, { recursive: true })
+    await writeFile(join(directory, 'package.json'), JSON.stringify({ name, version, ...edges }))
+  }
+  await expect(verifyImportedTree(root, validateImportedLock(lock, manifest, npmRoot), manifest, npmRoot, new AbortController().signal)).rejects.toThrow('missing a required package')
+})
