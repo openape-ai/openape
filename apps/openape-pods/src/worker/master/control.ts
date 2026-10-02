@@ -245,6 +245,7 @@ export class MasterControl {
       else if (action.draftRevision !== 0) throw new Error('A new draft starts at revision zero')
       const id = action.draftId ?? randomUUID(); const revision = action.draftRevision + 1
       this.store.db.prepare('INSERT INTO script_drafts VALUES(?,?,?,?,?,?,NULL,NULL) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,assignment_revision=excluded.assignment_revision,code=excluded.code,capabilities=excluded.capabilities,validation=NULL,script_hash=NULL').run(id, pod.id, revision, pod.bindingRevision, action.code, JSON.stringify(action.capabilities))
+      this.store.db.prepare('DELETE FROM definition_update_drafts WHERE draft_id=?').run(id)
       const previous = this.store.db.prepare('SELECT manifest FROM draft_packages WHERE draft_id=?').get(id)
       const packages = action.packages ?? (previous ? JSON.parse(previous.manifest as string) : pod.activeScript ? new DependencyStore(this.store).scriptManifest(pod.id, pod.activeScript) : emptyPackages())
       this.store.db.prepare('INSERT INTO draft_packages VALUES(?,?) ON CONFLICT(draft_id) DO UPDATE SET manifest=excluded.manifest').run(id, JSON.stringify(packages))

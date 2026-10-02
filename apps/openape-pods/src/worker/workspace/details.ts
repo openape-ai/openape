@@ -5,7 +5,7 @@ import type { ResourceRegistry } from '../resources/registry'
 
 export class WorkspaceDetails {
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry) {}
-  execute(command: DetailsCommand): PodDetails {
+  execute(command: DetailsCommand, definitionUpdate = false): PodDetails {
     const pod = this.store.getPod(command.podId)
     if (command.type === 'describe') {
       this.store.transaction(() => {
@@ -17,6 +17,7 @@ export class WorkspaceDetails {
     }
     if (command.type === 'activate') {
       this.store.transaction(() => {
+        if (!definitionUpdate && this.store.db.prepare('SELECT 1 FROM definition_update_drafts d JOIN script_drafts s ON s.id=d.draft_id WHERE d.pod_id=? AND s.script_hash=?').get(pod.id, command.hash)) throw new Error('Use the definition update review to select this version for the instance')
         const row = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(pod.id, command.hash)
         if (!row) throw new Error('Script version not found')
         const manifest = parseManifest(JSON.parse(row.manifest as string))

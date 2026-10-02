@@ -1,3 +1,5 @@
+import { DefinitionWorkspace } from './workspace/definitions'
+import { parseDefinitionCommand, parseDefinitionProvision } from '../contracts/definitions'
 import { cleanupEncryptedBackupStaging } from './data/encrypted-backup'
 import { jevAvailability } from './onboarding/store'
 import { assignedSsh } from '../contracts/ssh'
@@ -247,6 +249,32 @@ port.on('message', async (event) => {
       await data.retention.cleanDeletedFiles(); await data.retention.view()
       processesReady = true; startupReady = providerReady
       port.postMessage({ id: request.id, state: true }); return
+    }
+    if (request.command && typeof request.command === 'object' && 'definitions' in request.command) {
+      const command = parseDefinitionCommand(request.command.definitions)
+      const registered = store.db.prepare('SELECT 1 FROM remote_registration WHERE id=1').get()
+      const unavailableReason = !registered ? 'Finish desktop identity setup before using reusable definitions.' : process.env.PODS_CENTRAL_ENABLED === '1' ? 'Definition editing is not available for this connected workspace yet.' : undefined
+      if (command.type === 'list') {
+        const state = registered ? new DefinitionWorkspace(store, registry, networkOwner()).view() : { definitions: [], instances: [], provisioning: [] }
+        port.postMessage({ id: request.id, state: { ...state, ...(unavailableReason ? { unavailableReason } : {}) } }); return
+      }
+      if (command.type === 'previewUpdate' && registered) {
+        port.postMessage({ id: request.id, state: await new DefinitionWorkspace(store, registry, networkOwner()).execute(command, scriptController.signal) }); return
+      }
+      if (unavailableReason) throw new Error(unavailableReason)
+      maintenance = true
+      try {
+        await ticking
+        preparing = new DefinitionWorkspace(store, registry, networkOwner(), (podId, update) => networks.updateInstance(podId, update)).execute(command, scriptController.signal)
+        port.postMessage({ id: request.id, state: await preparing })
+      }
+      finally { preparing = null; maintenance = false }
+      return
+    }
+    if (request.command && typeof request.command === 'object' && 'definitionProvision' in request.command) {
+      const receipt = parseDefinitionProvision(request.command.definitionProvision)
+      const result = new DefinitionWorkspace(store, registry, networkOwner(), (podId, update) => networks.updateInstance(podId, update)).provisioned(receipt.requestId, receipt.error)
+      port.postMessage({ id: request.id, state: result }); return
     }
     if (request.command && typeof request.command === 'object' && 'networks' in request.command) {
       const command = parseNetworkCommand(request.command.networks)

@@ -1,3 +1,5 @@
+import { parseDefinitionCommand, parseDefinitionsView } from '../contracts/definitions'
+import type { DefinitionCommand, DefinitionsView } from '../contracts/definitions'
 import type { NetworkGateManifest } from '../contracts/network-gates'
 import { resolveSshTarget, sshGrantArgv } from './ssh/configuration'
 import { invokeSsh } from './ssh/invoke'
@@ -449,6 +451,27 @@ export class FixtureWorker {
     return view
   }
 
+  async definitions(value: DefinitionCommand): Promise<DefinitionsView> {
+    const command = parseDefinitionCommand(value)
+    const central = this.centralAction(command.type)
+    if (central) return central.local(() => this.definitions(command))
+    const view = parseDefinitionsView(await this.dispatch({ definitions: command }))
+    if ((command.type !== 'instantiate' && command.type !== 'retryProvision') || !view.createdPodId) return view
+    const pending = view.provisioning.find(item => item.requestId === command.requestId)
+    if (pending?.state === 'ready') return view
+    try {
+      const { owner } = await this.remoteOwner()
+      const identity = await this.provisionRemotePod(view.createdPodId, owner)
+      await this.remote({ type: 'claim', podId: view.createdPodId, owner, identity })
+      await this.remote({ type: 'provision', podId: view.createdPodId, identity, error: null })
+      return { ...parseDefinitionsView(await this.dispatch({ definitionProvision: { requestId: command.requestId, error: null } })), createdPodId: view.createdPodId }
+    }
+    catch (error) {
+      await this.dispatch({ definitionProvision: { requestId: command.requestId, error: (error instanceof Error ? error.message : String(error)).slice(0, 2000) } })
+      throw new Error(`Instance ${view.createdPodId} is retained for provisioning retry. ${String(error)}`)
+    }
+  }
+
   async networks(command: NetworkCommand): Promise<NetworkView> {
     const parsed = parseNetworkCommand(command)
     const central = this.centralAction(parsed.type)
@@ -525,7 +548,7 @@ export class FixtureWorker {
     throw new Error('Unsupported central execution')
   }
 
-  private dispatch(command: { networkGateCheck: { scope: ServiceScope, manifest: NetworkGateManifest, operation: string, grantId?: string } } | { networks: NetworkCommand } | { central: { type: 'snapshot', owner: Owner } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { codex: CodexRequest } | { remote: RemoteInternal } | { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { definitions: DefinitionCommand } | { definitionProvision: { requestId: string, error: string | null } } | { networkGateCheck: { scope: ServiceScope, manifest: NetworkGateManifest, operation: string, grantId?: string } } | { networks: NetworkCommand } | { central: { type: 'snapshot', owner: Owner } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { codex: CodexRequest } | { remote: RemoteInternal } | { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()
