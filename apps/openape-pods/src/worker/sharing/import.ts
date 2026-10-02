@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, open, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { parseOwner } from '@openape/pods-protocol'
-import type { Owner, PortableInput, PortableManifest, PortablePod } from '@openape/pods-protocol'
+import type { Owner, PortableComposition, PortableInput, PortableManifest, PortablePod } from '@openape/pods-protocol'
 import { parsePackages } from '../../contracts/dependencies'
 import type { PackageManifest } from '../../contracts/dependencies'
 import type { PortableImportCommand, PortableImportRequirement, PortableImportState, PortableImportValues, PortableImportView, PortableValue } from '../../contracts/sharing'
@@ -13,6 +13,9 @@ import { DependencyStore } from '../dependencies/store'
 import type { ResourceRegistry } from '../resources/registry'
 import { PodVariables } from '../resources/variables'
 import type { ScriptRuntime } from '../runs/runner'
+import { parseWorkflowCommand } from '../../contracts/workflows'
+import type { GraphParts, WorkflowCommand, WorkflowSchedule } from '../../contracts/workflows'
+import type { WorkflowEngine } from '../workflows/engine'
 import type { CommitPoint, PodDatabase } from '../storage/database'
 import { readPortableArchive } from './archive'
 
@@ -20,7 +23,7 @@ import { readPortableArchive } from './archive'
 export const importFormatFeatures = ['portable_aliases_v1'] as const
 // bundles holds, per alias, the executable hash of the application bundle whose identity the main process verified at binding.
 interface PodSetup { resources: PodResource[], aliases: Map<string, PodResource>, variables: Record<string, string>, dependencies: boolean, bundles: Record<string, string> }
-interface ImportSetup { values: PortableImportValues, drafts?: Record<string, string>, packages?: Record<string, PackageManifest>, bundles?: Record<string, Record<string, string>> }
+interface ImportSetup { values: PortableImportValues, drafts?: Record<string, string>, packages?: Record<string, PackageManifest>, bundles?: Record<string, Record<string, string>>, compositions?: Record<string, string> }
 type VerifiedBundle = { executableHash: string, identity?: string } | null | undefined
 
 const scalarKinds = ['string', 'number', 'boolean', 'enum']
@@ -81,12 +84,13 @@ function satisfies(manifest: PortableManifest, pod: PortablePod, alias: string, 
   return expected ? !!actual && Object.entries(expected).every(([name, item]) => actual[name] === item) : actual === undefined
 }
 
-function unresolved(manifest: PortableManifest, values: PortableImportValues, setup: (podKey: string) => PodSetup | undefined): PortableImportRequirement[] {
+function unresolved(manifest: PortableManifest, values: PortableImportValues, setup: (podKey: string) => PodSetup | undefined, composed: (key: string) => boolean): PortableImportRequirement[] {
   const result: PortableImportRequirement[] = []
   for (const item of scopes(manifest)) {
     const pod = manifest.pods.find(pod => item.scope === 'pods' && pod.key === item.key); const variables = pod && setup(pod.key)?.variables
     for (const input of item.inputs) {
-      if (!input.required || !scalarKinds.includes(input.kind)) continue
+      // Every composition input is referenced by its document, so it is needed regardless of its required flag.
+      if ((!input.required && item.scope === 'pods') || !scalarKinds.includes(input.kind)) continue
       // Once the copy exists a variable input lives on the Pod, where the owner sets or changes it.
       const aliases = variables ? pod.bindings.filter(binding => binding.input === input.key).map(binding => binding.alias) : []
       const open = aliases.length ? aliases.some(alias => !variableMatches(input, variables![alias])) : resolved(values, item.scope, item.key, input) === undefined
@@ -110,8 +114,30 @@ function unresolved(manifest: PortableManifest, values: PortableImportValues, se
     }
     if (pod.packages && !local?.dependencies) result.push({ scope: 'pod', key: pod.key, requirement: 'dependencies', name: null })
   }
-  for (const composition of manifest.compositions) result.push({ scope: 'composition', key: composition.key, requirement: 'composition', name: null })
+  for (const composition of manifest.compositions) {
+    if (!composed(composition.key)) result.push({ scope: 'composition', key: composition.key, requirement: 'composition', name: null })
+  }
   return result
+}
+
+// Native names allow 100 UTF-16 units; never cut a surrogate pair in half.
+const clip = (title: string): string => title.slice(0, 100).replace(/[\uD800-\uDBFF]$/, '')
+
+interface CompositionDocument { schedule: WorkflowSchedule | null, ports?: unknown, mail?: unknown, channels?: GraphParts['channels'], gates?: GraphParts['gates'], values?: { name: string, input: string }[] }
+
+// The native definition of an importable composition: a sequence or channel graph without ports or mail policy.
+function workflowCommand(composition: PortableComposition, document: CompositionDocument, id: string, podId: (key: string) => string, value: (input: string) => string, groupId: string | null) {
+  // Networks, called workflows and mail policies need approved member scripts, published definitions or owner permission operations first.
+  if (composition.kind === 'network' || document.ports !== null || document.mail != null) throw new Error('This package contains a network, called workflow or mail policy, which cannot be imported yet')
+  return parseWorkflowCommand({ type: 'save', id, revision: 0, name: clip(composition.title), nodes: composition.nodes.map(node => ({ podId: podId(node.pod), after: node.after.map(podId), handoff: node.handoff })), schedule: document.schedule, enabled: false,
+    ...(composition.kind === 'channels' ? { mode: 'channels', groupId, channels: document.channels, gates: document.gates, values: (document.values ?? []).map(binding => ({ name: binding.name, value: value(binding.input), revision: 0 })) } : {}) }) as Extract<WorkflowCommand, { type: 'save' }>
+}
+
+// Refuses at staging what setup could never finish, so no paused copy is created that must stay inert.
+function assertImportable(manifest: PortableManifest, files: ReadonlyMap<string, Uint8Array>): void {
+  if (manifest.pods.some(pod => pod.access.some(access => access.kind === 'mail'))) throw new Error('This package requests mail access, which cannot be imported yet')
+  const ids = new Map(manifest.pods.map((pod, index) => [pod.key, `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`]))
+  for (const composition of manifest.compositions) workflowCommand(composition, JSON.parse(decoder.decode(files.get(composition.document)!)) as CompositionDocument, '00000000-0000-4000-8000-000000000100', key => ids.get(key)!, () => '', composition.kind === 'channels' ? '00000000-0000-4000-8000-000000000100' : null)
 }
 
 async function writePrivate(path: string, content: Uint8Array): Promise<void> {
@@ -158,11 +184,15 @@ export class PortableImporter {
     const setup = JSON.parse(row.setup as string) as ImportSetup; const values = setup.values
     // Once the copy exists, a Pod the owner deleted no longer needs setup.
     const pods = this.pods(id).filter(pod => row.state === 'staged' || this.store.db.prepare('SELECT 1 FROM pods WHERE id=?').get(pod.podId))
+    const usable = (key: string) => pods.some(pod => pod.key === key && (row.state === 'staged' || this.store.getPod(pod.podId).lifecycle !== 'archived'))
+    const compositions = Object.entries(setup.compositions ?? {}).filter(([, workflowId]) => this.store.db.prepare('SELECT 1 FROM workflows WHERE id=? AND archived=0').get(workflowId)).map(([key, workflowId]) => ({ key, workflowId }))
     const open = unresolved(manifest, values, (key) => {
       const pod = row.state === 'staged' ? undefined : pods.find(item => item.key === key)
       return pod && this.podSetup(pod.podId, manifest.pods.find(item => item.key === key)!, setup)
-    }).filter(item => item.scope !== 'pod' || pods.some(pod => pod.key === item.key))
-    return { id, state: row.state as PortableImportView['state'], revision: row.revision as number, transferSha256: row.transfer_hash as string, manifest, pods, values, unresolved: open, error: row.error as string | null }
+    }, key => compositions.some(item => item.key === key))
+      // A deleted or archived Pod needs no setup, and a composition that lost a member can no longer be created.
+      .filter(item => item.scope === 'pod' ? usable(item.key) : row.state === 'staged' || (row.state === 'committed' && manifest.compositions.find(composition => composition.key === item.key)!.nodes.every(node => usable(node.pod))))
+    return { id, state: row.state as PortableImportView['state'], revision: row.revision as number, transferSha256: row.transfer_hash as string, manifest, pods, compositions, values, unresolved: open, error: row.error as string | null }
   }
 
   list(): PortableImportView[] {
@@ -178,7 +208,8 @@ export class PortableImporter {
   async stage(id: string, archive: Uint8Array, observe: (point: CommitPoint) => void = () => {}): Promise<PortableImportView> {
     this.row(id)
     const bytes = Buffer.from(archive)
-    const { manifest, transferSha256 } = await readPortableArchive(bytes, this.npmRoot, importFormatFeatures)
+    const { manifest, files, transferSha256 } = await readPortableArchive(bytes, this.npmRoot, importFormatFeatures)
+    assertImportable(manifest, files)
     return this.store.transaction(() => {
       const existing = this.row(id)
       if (existing) {
@@ -255,7 +286,7 @@ export class PortableImporter {
         this.required(id, expectedRevision)
         if (this.store.listPods().length + manifest.pods.length > 100) throw new Error('Local pod limit reached')
         for (const pod of manifest.pods) {
-          const created = this.store.createPod({ name: [...pod.title].slice(0, 100).join('') }, ids.get(pod.key)!)
+          const created = this.store.createPod({ name: clip(pod.title) }, ids.get(pod.key)!)
           const draftId = drafts[pod.key] = randomUUID()
           // Tool capabilities name local resources and are added when the recipient binds them.
           const capabilities = pod.requestedCapabilities.filter(capability => !capability.startsWith('tool.'))
@@ -328,23 +359,62 @@ export class PortableImporter {
     return this.view(id)
   }
 
-  async execute(command: PortableImportCommand, runtime: ScriptRuntime, signal: AbortSignal): Promise<PortableImportState> {
-    const current = command.type === 'list' || command.type === 'inspect'
-      ? undefined
-      : command.type === 'show'
-        ? this.view(command.id)
-        : command.type === 'stage'
-          ? await this.stage(command.id, command.archive)
-          : command.type === 'configure'
-            ? this.configure(command.id, command.revision, command.values)
-            : command.type === 'commit'
-              ? await this.commit(command.id, command.revision)
-              : command.type === 'bind'
-                ? this.bind(command.id, command.revision, command.pod, command.alias, command.resourceId, command.bundle)
-                : command.type === 'prepareDependencies'
-                  ? await this.prepareDependencies(command.id, command.pod, runtime, signal)
-                  : this[command.type](command.id, command.revision)
+  private async apply(command: PortableImportCommand, runtime: ScriptRuntime, signal: AbortSignal, workflows: Pick<WorkflowEngine, 'save'>): Promise<PortableImportView | undefined> {
+    if (command.type === 'list' || command.type === 'inspect') return undefined
+    if (command.type === 'show') return this.view(command.id)
+    if (command.type === 'stage') return this.stage(command.id, command.archive)
+    if (command.type === 'configure') return this.configure(command.id, command.revision, command.values)
+    if (command.type === 'commit') return this.commit(command.id, command.revision)
+    if (command.type === 'bind') return this.bind(command.id, command.revision, command.pod, command.alias, command.resourceId, command.bundle)
+    if (command.type === 'prepareDependencies') return this.prepareDependencies(command.id, command.pod, runtime, signal)
+    if (command.type === 'finalize') return this.finalize(command.id, command.revision, command.composition, command.groupId, workflows)
+    return this[command.type](command.id, command.revision)
+  }
+
+  async execute(command: PortableImportCommand, runtime: ScriptRuntime, signal: AbortSignal, workflows: Pick<WorkflowEngine, 'save'>): Promise<PortableImportState> {
+    const current = await this.apply(command, runtime, signal, workflows)
     return { imports: this.list(), ...(current ? { current } : {}), ...(command.type === 'inspect' ? { inspected: await this.inspect(command.archive) } : {}) }
+  }
+
+  // Creates an imported sequence or channel graph disabled from its package document. Its members cannot run without their own
+  // approved scripts, so this needs no approval yet.
+  async finalize(id: string, expectedRevision: number, key: string, groupId: string | null, workflows: Pick<WorkflowEngine, 'save'>): Promise<PortableImportView> {
+    const row = this.required(id)
+    if (this.view(id).compositions.some(item => item.key === key)) return this.view(id)
+    if (row.state !== 'committed' || row.revision !== expectedRevision) throw new Error('Import changed; reload before continuing')
+    if (!row.archive_hash) throw new Error(String(row.error ?? 'Import the package again'))
+    const { manifest, files } = await readPortableArchive(this.store.readBlob(row.archive_hash as string), this.npmRoot, importFormatFeatures)
+    const composition = manifest.compositions.find(item => item.key === key)
+    if (!composition) throw new Error('Unknown package composition')
+    const document = JSON.parse(decoder.decode(files.get(composition.document)!)) as CompositionDocument
+    return this.store.transaction(() => {
+      const setup = JSON.parse(this.required(id, expectedRevision).setup as string) as ImportSetup
+      const ids = new Map(this.pods(id).map(item => [item.key, item.podId]))
+      const member = (podKey: string): string => {
+        const podId = ids.get(podKey)
+        if (!podId || !this.store.db.prepare('SELECT 1 FROM pods WHERE id=?').get(podId)) throw new Error('A member Pod of this composition no longer exists')
+        return podId
+      }
+      const value = (input: string): string => {
+        const item = resolved(setup.values, 'compositions', key, composition.inputs.find(declaration => declaration.key === input)!)
+        if (item === undefined) throw new Error('Import setup is incomplete')
+        return String(item)
+      }
+      if (composition.kind === 'sequence' ? groupId !== null : !groupId || !this.store.db.prepare('SELECT 1 FROM pod_groups WHERE id=?').get(groupId)) throw new Error('A channel graph needs an existing group; a sequence has none')
+      const workflowId = randomUUID()
+      // The suggested schedule is kept for review; the workflow stays disabled until the owner enables it.
+      const command = workflowCommand(composition, document, workflowId, member, value, groupId)
+      let joined = false
+      for (const node of composition.kind === 'channels' ? command.nodes : []) {
+        const current = this.store.db.prepare('SELECT group_id FROM pod_memberships WHERE pod_id=?').get(node.podId)
+        if (current && current.group_id !== groupId) throw new Error('A member Pod already belongs to another group')
+        if (!current) { this.store.db.prepare('INSERT INTO pod_memberships VALUES(?,?)').run(node.podId, groupId); joined = true }
+      }
+      if (joined) this.store.db.prepare('UPDATE pod_organization SET revision=revision+1 WHERE id=1').run()
+      workflows.save(command)
+      this.advance(id, 'setup=?', JSON.stringify({ ...setup, compositions: { ...setup.compositions, [key]: workflowId } }))
+      return this.view(id)
+    })
   }
 
   complete(id: string, expectedRevision: number): PortableImportView {

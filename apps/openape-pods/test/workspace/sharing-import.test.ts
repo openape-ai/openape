@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { canonicalPortableJson } from '@openape/pods-protocol'
 import { afterEach, expect, it } from 'vitest'
 import { createBackup, restoreBackup } from '../../src/worker/data/backup'
 import type { AgentRuntime } from '../../src/worker/agent/executor'
@@ -15,7 +16,11 @@ import { parsePortableImportCommand } from '../../src/contracts/sharing'
 import { PortableImporter, recoverPortableImports } from '../../src/worker/sharing/import'
 import { createPortablePackage } from '../../src/worker/sharing/package'
 import type { PortableDescription, PortablePayload } from '../../src/worker/sharing/package'
+import { RunStore } from '../../src/worker/runs/store'
 import { PodDatabase, schemaVersion } from '../../src/worker/storage/database'
+import { WorkflowEngine } from '../../src/worker/workflows/engine'
+import { publishWorkflowOutput, workflowInput } from '../../src/worker/workflows/handoff'
+import { PodGroups } from '../../src/worker/workspace/groups'
 import { aliasTables, sharingTables } from '../../src/worker/storage/sharing-schema'
 import { WorkspaceDetails } from '../../src/worker/workspace/details'
 
@@ -190,6 +195,90 @@ it('binds declared aliases to matching local assignments and exposes them to scr
   expect(runAliases(resources.aliases(podId), []).http).toEqual({})
   bind('api', tool('https://api.example.test', ['GET']).resource)
   expect(runAliases(resources.aliases(podId), []).http).toEqual({ api: 'https://api.example.test' })
+})
+
+async function workflowFixture(kind: 'sequence' | 'channels', ports: unknown = null) {
+  const script = { kind: 'script' as const, mediaType: 'text/javascript', content: bytes('export async function run() { return { status: "completed" } }') }
+  const pod = (key: string, contract: { takes: string[], gives: string[], summary: string } | null) => ({ key, title: `Imported ${key}`, description: '', script: `pods/${key}/run.mjs`, packages: null, contract, requestedCapabilities: [], access: [], inputs: [], bindings: [], applications: [], assets: [] })
+  const document = kind === 'sequence'
+    ? { version: 1, kind, schedule: { kind: 'daily', time: '07:00', timezone: 'Europe/Vienna' }, ports, mail: null }
+    : { version: 1, kind, schedule: null, channels: [{ name: 'report.ready', title: 'Report ready', fields: ['id'] }], gates: [], values: [{ name: 'region', input: 'input_1' }], ports: null }
+  return createPortablePackage({
+    format: 'openape-package', version: 1, package: { key: 'flow', revision: 1, title: 'Portable flow', description: '' }, requiredFeatures: ['portable_aliases_v1'], entry: { kind, key: 'flow' }, applications: [],
+    pods: [pod('first', kind === 'channels' ? { takes: [], gives: ['report.ready'], summary: 'Creates reports' } : null), pod('second', kind === 'channels' ? { takes: ['report.ready'], gives: [], summary: 'Files reports' } : null)],
+    compositions: [{ key: 'flow', kind, title: 'Imported flow', document: 'compositions/flow.json', documentVersion: 1, nodes: [{ pod: 'first', after: [], handoff: false }, { pod: 'second', after: kind === 'sequence' ? ['first'] : [], handoff: kind === 'sequence' }], calls: [], dataSchemas: [],
+      inputs: kind === 'channels' ? [{ key: 'input_1', label: 'region', description: '', kind: 'string', required: true, sharingGroup: null }] : [] }],
+  }, [{ ...script, path: 'pods/first/run.mjs' }, { ...script, path: 'pods/second/run.mjs' }, { path: 'compositions/flow.json', kind: 'composition', mediaType: 'application/json', content: bytes(canonicalPortableJson(document)) }], '')
+}
+
+it('creates an imported sequence disabled and hands outputs over under package keys once members are approved', async () => {
+  const { store, resources, importer } = workspace(); const id = randomUUID(); await importer.stage(id, (await workflowFixture('sequence')).archive)
+  const runs = new RunStore(store); const started: { podId: string, id: string }[] = []
+  const engine = new WorkflowEngine(store, { start: (podId, trigger) => { const run = runs.reserve(podId, store.getPod(podId).activeScript!, resources.epoch(podId), trigger).run; started.push({ podId, id: run.id }); return run.id }, cancelPod: () => {} }, { inspect: async () => {} })
+  let view = await importer.commit(id, 1); const [first, second] = view.pods.map(pod => pod.podId) as [string, string]
+  expect(view.unresolved).toEqual([{ scope: 'composition', key: 'flow', requirement: 'composition', name: null }])
+  expect(() => importer.complete(id, view.revision)).toThrow('setup is incomplete')
+  await expect(importer.finalize(id, view.revision, 'flow', randomUUID(), engine)).rejects.toThrow('a sequence has none')
+  await expect(importer.finalize(id, view.revision, 'other', null, engine)).rejects.toThrow('Unknown package composition')
+  view = await importer.finalize(id, view.revision, 'flow', null, engine); const workflowId = view.compositions[0]!.workflowId
+  expect(view).toMatchObject({ unresolved: [], compositions: [{ key: 'flow' }] })
+  expect(engine.view().workflows.find(item => item.id === workflowId)).toMatchObject({ name: 'Imported flow', enabled: false, schedule: { kind: 'daily', time: '07:00' }, nodes: [{ podId: first, after: [], handoff: false }, { podId: second, after: [first], handoff: true }] })
+  for (const revision of [view.revision - 1, view.revision]) expect((await importer.finalize(id, revision, 'flow', null, engine)).compositions).toEqual(view.compositions)
+  expect(engine.view().workflows).toHaveLength(1)
+  engine.start(workflowId, 1); engine.tick()
+  const refused = store.db.prepare('SELECT id FROM workflow_runs WHERE finished_at IS NULL').get()!.id as string
+  expect(started).toEqual([]); expect(engine.run(refused).state).toBe('blocked')
+  await engine.cancel(refused)
+  importer.complete(id, view.revision)
+  for (const podId of [first, second]) { installExample(store, resources, podId, 'deterministic', 'a'.repeat(64)); store.db.prepare('UPDATE pods SET lifecycle=\'active\' WHERE id=?').run(podId) }
+  engine.start(workflowId, 1); engine.tick()
+  const result = { schema: 'synthetic-result/v1', data: { batchId: 'fixed' } }
+  publishWorkflowOutput(store, started[0]!.id, result); runs.finish(started[0]!.id, 'completed', 'Synthetic result', null, []); engine.tick()
+  expect(workflowInput(store, started[1]!.id)).toMatchObject({ outputs: { [first]: result }, outputsByKey: { first: result } })
+  runs.finish(started[1]!.id, 'completed', 'Synthetic result', null, []); engine.tick()
+  const local = store.createPod({ name: 'Local consumer' }); installExample(store, resources, local.id, 'deterministic', 'a'.repeat(64)); store.db.prepare('UPDATE pods SET lifecycle=\'active\' WHERE id=?').run(local.id)
+  const mixed = randomUUID(); engine.save({ type: 'save', id: mixed, revision: 0, name: 'Mixed', nodes: [{ podId: first, after: [], handoff: false }, { podId: local.id, after: [first], handoff: true }], schedule: null, enabled: false })
+  engine.start(mixed, 1); engine.tick()
+  publishWorkflowOutput(store, started[2]!.id, result); runs.finish(started[2]!.id, 'completed', 'Synthetic result', null, []); engine.tick()
+  expect(workflowInput(store, started[3]!.id)).toEqual({ runId: expect.any(String), outputs: { [first]: result } })
+})
+
+it('refuses packages setup could never finish and drops a composition that lost a member', async () => {
+  const { store, importer } = workspace(); const schema = { type: 'object', properties: { invoice: { type: 'string' } }, required: ['invoice'], additionalProperties: false }
+  const ported = await workflowFixture('sequence', { version: 1, inputs: [{ name: 'invoice', version: 1, schema, pod: 'first' }], outputs: [{ name: 'result', version: 1, schema, pod: 'second' }], requiredTerminals: ['second'], requiredGates: [] })
+  await expect(importer.stage(randomUUID(), ported.archive)).rejects.toThrow('cannot be imported yet')
+  expect(store.db.prepare('SELECT count(*) AS count FROM portable_imports').get()!.count).toBe(0)
+  const id = randomUUID(); await importer.stage(id, (await workflowFixture('sequence')).archive)
+  const view = await importer.commit(id, 1)
+  store.updatePod(view.pods[0]!.podId, store.getPod(view.pods[0]!.podId).revision, { name: 'Imported first', lifecycle: 'archived' })
+  expect(importer.view(id).unresolved).toEqual([])
+  deletePod(store, view.pods[0]!.podId)
+  expect(importer.view(id)).toMatchObject({ pods: [{ key: 'second' }], unresolved: [] })
+  expect(readdirSync(store.blobs)).toHaveLength(1)
+  expect(importer.complete(id, view.revision).state).toBe('completed')
+})
+
+it('creates an imported channel graph in a chosen group with its declared shared values', async () => {
+  const { store, importer } = workspace(); const id = randomUUID(); await importer.stage(id, (await workflowFixture('channels')).archive)
+  const engine = new WorkflowEngine(store, { start: () => { throw new Error('Import must not execute') }, cancelPod: () => {} }, { inspect: async () => {} })
+  const groups = new PodGroups(store); groups.execute({ type: 'organize', action: 'create', name: 'Delta', revision: groups.view().revision })
+  const groupId = groups.view().groups.find(group => group.name === 'Delta')!.id
+  let view = await importer.commit(id, 1)
+  await expect(importer.finalize(id, view.revision, 'flow', groupId, engine)).rejects.toThrow('setup is incomplete')
+  view = importer.configure(id, view.revision, { pods: {}, compositions: { flow: { input_1: 'eu' } } })
+  await expect(importer.finalize(id, view.revision, 'flow', null, engine)).rejects.toThrow('needs an existing group')
+  await expect(importer.finalize(id, view.revision, 'flow', randomUUID(), engine)).rejects.toThrow('needs an existing group')
+  groups.execute({ type: 'organize', action: 'create', name: 'Other', revision: groups.view().revision })
+  const other = groups.view().groups.find(group => group.name === 'Other')!.id
+  store.db.prepare('INSERT INTO pod_memberships VALUES(?,?)').run(view.pods[0]!.podId, other)
+  await expect(importer.finalize(id, view.revision, 'flow', groupId, engine)).rejects.toThrow('already belongs to another group')
+  expect(store.db.prepare('SELECT count(*) AS count FROM pod_memberships WHERE group_id=?').get(groupId)!.count).toBe(0)
+  store.db.prepare('DELETE FROM pod_memberships WHERE group_id=?').run(other)
+  view = await importer.finalize(id, view.revision, 'flow', groupId, engine)
+  expect(view.unresolved).toEqual([])
+  expect(engine.view().workflows[0]).toMatchObject({ mode: 'channels', groupId, enabled: false, channels: [{ name: 'report.ready' }], values: [{ name: 'region', value: 'eu' }] })
+  expect(store.db.prepare('SELECT count(*) AS count FROM pod_memberships WHERE group_id=?').get(groupId)!.count).toBe(2)
+  expect(importer.complete(id, view.revision).state).toBe('completed')
 })
 
 it('recovers interrupted staging and commit as a pending import or one complete copy', async () => {
