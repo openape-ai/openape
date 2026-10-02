@@ -1086,7 +1086,7 @@ contains the actual results and eight personally inspected screenshots. Its immu
 publication-time pending CI was subsequently resolved by those CI receipts.
 
 
-## M11 reviewed conversion — implementation under verification
+## M11a reviewed conversion — accepted increment
 
 Desktop conversion starts from the selected bounded channel graph. Its dry run
 reads existing definitions, owner bindings, script hashes, local rights, values,
@@ -1116,9 +1116,8 @@ frequent authority fingerprints. Restore retains the protected receipt but revok
 the baseline, so an identical conversion retry is idempotent without reactivating
 or bypassing restore review. Ancestor rows stay private in browser publication, including item/event rows whose
 workflow-run row is absent. The privacy filter follows both workflow and run identity.
-Only a bounded activity summary is shown in the network trace; retained legacy item
-inspection and reviewed paused replacement/archive remain part of the next M11
-increment. Historical memberships and effect evidence may never be deleted to make
+Only a bounded activity summary is shown in the network trace; detailed retained legacy
+inspection is described below. Reviewed paused replacement remains a later M11 increment. Historical memberships and effect evidence may never be deleted to make
 a replacement fit.
 
 Source scripts must already support persistent execution using
@@ -1134,7 +1133,46 @@ tests cover pure previews, original identities/checkpoints, atomic rollback,
 restoration, pending retention without replay, unresolved authority and UI review
 invalidation. Current source passes141 suites /1157 units, three native cases and
 13 manual layout checks, root lint/typecheck and the Pods build. Six native and
-wide/narrow EN/DE screenshots were personally inspected. Native PR/CI and private
-Test Runs evidence remain pending. This increment does not complete M11: reviewed
+wide/narrow EN/DE screenshots were personally inspected. [PR212](https://repos.openape.ai/patrick/monorepo/pulls/212) passed exact-source
+CI5340 and full-main CI5341; merge `4984a2a31a1b463bf4fe248ece65d52772c50864`.
+[Verified private Test Runs](https://report.openape.ai/r/m3ufyiHjZQKDMqlJqLVJ-ZTE)
+contains the actual results and inspected screenshots. This increment does not complete M11: reviewed
 replacement/archive and the approved portable file-sharing slice remain required.
 No productive conversion, schedule activation or external action is implied.
+
+
+## M11b reviewed archival and retained legacy inspection
+
+A paused, settled network can be terminally archived after a pure fingerprinted
+preview and explicit desktop confirmation. The transaction repeats the preview,
+refuses stale authority or unsettled work, records a protected receipt and revokes
+execution authority. Identical retries return the existing result. Archival never
+releases historical Pod membership for reuse or deletes identities, scripts, rights,
+homes, checkpoints, retained ancestor data or effect receipts. Existing diagnostic
+trace retention still applies; protected conversion and archive receipts remain.
+
+Pending deliveries, native/program leases, bounded processing, unresolved executions,
+approvals, joins, calls and uncertain effects block archival. Completed workflow
+results must also be delivered first. Definition updates share these checks so a
+new revision cannot strand an old result. Completed gate task states, item receipts
+and controls survive an archived backup restore. Archived summaries have no actionable
+decisions, and processing, activation, updates and recovery refuse terminal networks.
+Standalone Pod scheduling continues to exclude all historical network members.
+
+Retained legacy inspection pages only the exact delivery identities in the protected
+conversion receipt. It compares the original payload digest with the current original
+row, labels missing or changed rows and renders a bounded text preview. Paging never
+imports, executes or replays a delivery. Ownership and ancestor identity scope every
+read; browser publication and browser command allowlists continue to exclude this
+private desktop-only history. The UI names the affected Pods, displays digests and
+truncation explicitly, invalidates stale reviews and places focus at new results.
+Desktop previews use the existing read route, with no relay mutation operation;
+central availability checks continue to apply.
+
+Opus5.5 and Fable5.1 reviews supplement primary review and actual manual verification.
+Permanent tests extend the existing suites for consequential settlement refusals,
+preservation through restore, idempotency, ownership and terminal execution refusal.
+Paused composition replacement and portable file sharing remain required for M11;
+this increment does not activate production or convert any live graph. Case closure
+is not currently written by the runtime. M12 must account explicitly for undelivered
+workflow results before introducing closure; archival never silently discards them.

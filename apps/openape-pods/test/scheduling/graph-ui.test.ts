@@ -1,3 +1,4 @@
+import NetworkRetirement from '../../src/renderer/NetworkRetirement.vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GateBatchView } from '../../src/contracts/gates'
@@ -675,4 +676,63 @@ describe('reviewed legacy conversion', () => {
     finally { f.wrapper.unmount() }
   })
 
+})
+
+describe('reviewed network archival', () => {
+  it('requires a current review and explicit confirmation, then shows terminal state', async () => {
+    const f = operationalFixture(); const network = { ...f.view.networks[0]!, state: 'paused' as const }
+    const networks = vi.fn(async (command: Parameters<typeof window.pods.networks>[0]) => ({ networks: [{ ...network, state: command.type === 'archiveNetwork' ? 'archived' as const : 'paused' as const }], ...(command.type === 'archivePreview' ? { archiveReview: { fingerprint: 'e'.repeat(64), issues: [], members: 3, retainedDeliveries: 2 } } : {}) }))
+    installWorkspace({ networks })
+    const wrapper = mount(NetworkRetirement, { props: { network } })
+    try {
+      await button(wrapper, 'Review archival').trigger('click'); await flushPromises()
+      expect(button(wrapper, 'Archive network').attributes('disabled')).toBeDefined()
+      await wrapper.get('input[type=checkbox]').setValue(true)
+      await button(wrapper, 'Archive network').trigger('click'); await flushPromises()
+      expect(networks).toHaveBeenLastCalledWith({ type: 'archiveNetwork', id: network.id, revision: network.revision, expectedFingerprint: 'e'.repeat(64) })
+      expect(wrapper.emitted('changed')).toEqual([
+        [expect.objectContaining({ networks: [expect.objectContaining({ state: 'paused' })] })],
+        [expect.objectContaining({ networks: [expect.objectContaining({ state: 'archived' })] })],
+      ])
+      await wrapper.setProps({ network: { ...network, state: 'archived' } })
+      expect(wrapper.text()).toContain('execution cannot resume')
+      expect(button(wrapper, 'Review archival')).toBeUndefined()
+      expect(button(wrapper, 'Inspect retained legacy items')).toBeDefined()
+    }
+    finally { wrapper.unmount() }
+  })
+
+  it('invalidates confirmation when revision or lifecycle changes and refuses unresolved work', async () => {
+    const f = operationalFixture(); const network = { ...f.view.networks[0]!, state: 'paused' as const }
+    const networks = vi.fn(async () => ({ networks: [network], archiveReview: { fingerprint: 'e'.repeat(64), issues: ['Resolve pending network deliveries before changing the composition'], members: 3, retainedDeliveries: 0 } }))
+    installWorkspace({ networks })
+    const wrapper = mount(NetworkRetirement, { props: { network } })
+    try {
+      await button(wrapper, 'Review archival').trigger('click'); await flushPromises()
+      expect(wrapper.text()).toContain('Resolve pending network deliveries')
+      expect(button(wrapper, 'Archive network')).toBeUndefined()
+      await wrapper.setProps({ network: { ...network, revision: network.revision + 1 } })
+      expect(wrapper.text()).not.toContain('Resolve pending network deliveries')
+      await wrapper.setProps({ network: { ...network, state: 'active' } })
+      expect(button(wrapper, 'Review archival').attributes('disabled')).toBeDefined()
+      expect(networks).toHaveBeenCalledTimes(1)
+    }
+    finally { wrapper.unmount() }
+  })
+
+  it('hides execution and archival controls in archived or browser detail routes', async () => {
+    const f = operationalFixture(); const network = { ...f.view.networks[0]!, state: 'archived' as const }
+    const networks = vi.fn(async () => f.view)
+    installWorkspace({ networks })
+    const wrapper = mount(NetworkDetail, { props: { network, view: f.view, pods: f.pods } })
+    try {
+      await flushPromises()
+      expect(button(wrapper, 'Activate network')).toBeUndefined()
+      expect(button(wrapper, 'Process now')).toBeUndefined()
+      expect(wrapper.findComponent(NetworkRetirement).exists()).toBe(true)
+      await wrapper.setProps({ readOnly: true })
+      expect(wrapper.findComponent(NetworkRetirement).exists()).toBe(false)
+    }
+    finally { wrapper.unmount() }
+  })
 })
