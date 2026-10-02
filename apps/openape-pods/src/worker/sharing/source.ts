@@ -1,3 +1,4 @@
+import type { PortableSourceSelection } from '../../contracts/sharing'
 import { parseOwner, sharingLimits } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
 import { homedir } from 'node:os'
@@ -15,7 +16,7 @@ import { workflowDefinitions } from '../workflows/engine'
 import { loadWorkflowRevision } from '../workflows/revisions'
 import { networkConfiguration, networkLegacyVariables } from '../scheduling/network-config'
 
-export interface PortableSourceSelection { kind: 'pod' | 'workflow' | 'network', id: string }
+export type { PortableSourceSelection } from '../../contracts/sharing'
 
 function podSource(store: PodDatabase, resources: ResourceRegistry, catalog: DefinitionCatalog, id: string) {
   catalog.assertPod(id)

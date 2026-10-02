@@ -183,8 +183,8 @@ export class PortableImporter {
       return pod && this.podSetup(pod.podId, manifest.pods.find(item => item.key === key)!, setup)
     }, key => compositions.some(item => item.key === key))
       // A deleted or archived Pod needs no setup, a composition that lost a member can no longer be created, and only deferred compositions outlive completion.
-      .filter(item => item.scope === 'pod' ? usable(item.key) : row.state === 'staged' || ((row.state === 'committed' || (row.state === 'completed' && (setup.deferred ?? []).includes(item.key))) && manifest.compositions.find(composition => composition.key === item.key)!.nodes.every(node => usable(node.pod))))
-    return { id, state: row.state as PortableImportView['state'], revision: row.revision as number, transferSha256: row.transfer_hash as string, manifest, pods, compositions, values, unresolved: open, error: row.error as string | null }
+      .filter(item => item.scope === 'pod' ? row.state !== 'completed' && usable(item.key) : row.state === 'staged' || ((row.state === 'committed' || (row.state === 'completed' && (setup.deferred ?? []).includes(item.key))) && manifest.compositions.find(composition => composition.key === item.key)!.nodes.every(node => usable(node.pod))))
+    return { id, state: row.state as PortableImportView['state'], revision: row.revision as number, transferSha256: row.transfer_hash as string, manifest, pods, compositions, deferred: setup.deferred ?? [], values, unresolved: open, error: row.error as string | null }
   }
 
   list(): PortableImportView[] {
@@ -439,7 +439,8 @@ export class PortableImporter {
       // Compositions that need approved member scripts are created after completion.
       const deferred = (JSON.parse(row.setup as string) as ImportSetup).deferred ?? []
       const view = this.view(id)
-      if (view.unresolved.some(item => item.scope !== 'composition' || !deferred.includes(item.key))) throw new Error('Import setup is incomplete')
+      // Values of deferred compositions are entered during setup; only their creation waits for approved members.
+      if (view.unresolved.some(item => item.scope !== 'composition' || item.requirement !== 'composition' || !deferred.includes(item.key))) throw new Error('Import setup is incomplete')
       // The archive still holds the documents of compositions created after completion.
       this.advance(id, view.unresolved.length ? 'state=\'completed\',error=NULL' : 'state=\'completed\',archive_hash=NULL,error=NULL')
       return this.view(id)

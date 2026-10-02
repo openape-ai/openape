@@ -28,8 +28,9 @@ import { chooseGateItem, discardGateBatch, excludeGateItems } from './workflows/
 import { graphDetail } from './workflows/detail'
 import type { RunContextRequest, ServiceCheck  } from '../contracts/services'
 import { DefinitionCatalog } from './workspace/definition-catalog'
-import { PortableImporter, recoverPortableImports } from './sharing/import'
-import { parsePortableImportCommand } from '../contracts/sharing'
+import { recoverPortableImports } from './sharing/import'
+import { SharingService } from './sharing/service'
+import { parseSharingCommand } from '../contracts/sharing'
 import { DependencyStore } from './dependencies/store'
 import { programRequest } from '../main/programs/invoke'
 import { podDirectories } from '../runtime/environment'
@@ -140,6 +141,7 @@ let centralUntil = process.env.PODS_CENTRAL_ENABLED === '1' ? 0 : Infinity
 let scanAt = 0
 let storageAt = 0
 let maintenance = false
+let sharing: SharingService | null = null
 let preparing: Promise<unknown> | null = null
 let suspended = false
 let startupReady = false
@@ -293,17 +295,18 @@ port.on('message', async (event) => {
       finally { preparing = null; maintenance = false }
       return
     }
-    if (request.command && typeof request.command === 'object' && 'portableImport' in request.command) {
-      const command = parsePortableImportCommand(request.command.portableImport)
-      if (!store.db.prepare('SELECT 1 FROM remote_registration WHERE id=1').get()) throw new Error('Finish desktop identity setup before importing packages')
+    if (request.command && typeof request.command === 'object' && 'sharing' in request.command) {
+      const command = parseSharingCommand(request.command.sharing)
+      if (!store.db.prepare('SELECT 1 FROM remote_registration WHERE id=1').get()) throw new Error('Finish desktop identity setup before sharing packages')
       // Imported compositions follow the native network creation guard for connected workspaces.
-      if (command.type === 'finalize' && process.env.PODS_CENTRAL_ENABLED === '1' && !centralNetworkReads) throw new Error('Network creation requires bounded central publication support')
-      const importer = new PortableImporter(store, registry, networkOwner(), join(dirname(runtime.entry), '../vendor/npm'))
-      if (command.type !== 'prepareDependencies') { port.postMessage({ id: request.id, state: await importer.execute(command, runtime, scriptController.signal, { workflows, networks, catalog: new DefinitionCatalog(store, registry, networkOwner()) }) }); return }
+      if (command.scope === 'import' && command.type === 'finalize' && process.env.PODS_CENTRAL_ENABLED === '1' && !centralNetworkReads) throw new Error('Network creation requires bounded central publication support')
+      sharing ??= new SharingService(store, registry, networkOwner(), join(dirname(runtime.entry), '../vendor/npm'), { workflows, networks, catalog: new DefinitionCatalog(store, registry, networkOwner()) })
+      const slow = (command.scope === 'export' && (command.type === 'review' || command.type === 'download')) || (command.scope === 'import' && command.type === 'prepareDependencies')
+      if (!slow) { port.postMessage({ id: request.id, state: await sharing.execute(command, runtime, scriptController.signal) }); return }
       maintenance = true
       try {
         await ticking
-        preparing = importer.execute(command, runtime, scriptController.signal, { workflows, networks, catalog: new DefinitionCatalog(store, registry, networkOwner()) })
+        preparing = sharing.execute(command, runtime, scriptController.signal)
         port.postMessage({ id: request.id, state: await preparing })
       }
       finally { preparing = null; maintenance = false }

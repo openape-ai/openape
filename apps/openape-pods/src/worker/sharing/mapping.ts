@@ -1,15 +1,14 @@
+import type { PortableExportChoices } from '../../contracts/sharing'
 import { canonicalPortableJson, portableKey } from '@openape/pods-protocol'
-import type { PortableComposition, PortableManifest } from '@openape/pods-protocol'
+import type { PortableComposition } from '@openape/pods-protocol'
 import type { WorkflowDefinition } from '../../contracts/workflows'
 import type { WorkflowPorts } from '../../contracts/workflow-ports'
 import type { PortableSource } from './source'
 import { mapPortablePod, PortableInputs } from './pod'
-import type { PortablePodChoices } from './pod'
 import type { PortableExportContent } from './export'
 import type { PortablePayload } from './package'
 
-export interface PortableCompositionChoices { id: string, key: string, title?: string, defaults: string[] }
-export interface PortableExportChoices { package: PortableManifest['package'], pods: PortablePodChoices[], compositions: PortableCompositionChoices[] }
+export type { PortableCompositionChoices, PortableExportChoices } from '../../contracts/sharing'
 
 function jsonPayload(path: string, kind: 'composition' | 'data-schema', value: unknown): PortablePayload {
   return { path, kind, mediaType: 'application/json', content: Buffer.from(canonicalPortableJson(value)) }
