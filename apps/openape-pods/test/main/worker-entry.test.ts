@@ -14,6 +14,7 @@ import type { AgentRuntime } from '../../src/worker/agent/executor'
 import type { RunServices } from '../../src/worker/runs/dispatcher'
 import type { ProgramAuthority } from '../../src/main/programs/grants'
 import { MailBridge } from '../../src/worker/mail/bridge'
+import { createPortablePackage } from '../../src/worker/sharing/package'
 
 const captured = vi.hoisted(() => ({ services: undefined as RunServices | undefined, startControlled: undefined as ((podId: string, operationId: string) => string) | undefined }))
 vi.mock('../../src/worker/runs/dispatcher', async (importOriginal) => {
@@ -159,4 +160,28 @@ it('rechecks network browser mutation authority in the real worker when an older
   expect(replies).toHaveBeenCalledWith({ id: 'network-legacy-start', error: expect.stringContaining('desktop review') })
   await send({ id: 'network-safe-pause', command: { central: { type: 'assertCommand', command: { channel: 'scheduling', body: { type: 'lifecycle', podId: network.pod.id, revision: 1, lifecycle: 'paused' } } } } })
   expect(replies).toHaveBeenCalledWith({ id: 'network-safe-pause', state: true })
+})
+it('routes validated portable import commands through the real worker only after identity setup', async () => {
+  const exported = await createPortablePackage({
+    format: 'openape-package', version: 1, package: { key: 'fixture', revision: 1, title: 'Portable fixture', description: '' }, requiredFeatures: ['portable_aliases_v1'],
+    entry: { kind: 'pod', key: 'fixture' }, applications: [], compositions: [],
+    pods: [{ key: 'fixture', title: 'Imported through entry', description: '', script: 'pods/fixture/run.mjs', packages: null, contract: null, requestedCapabilities: [], access: [], inputs: [], bindings: [], applications: [], assets: [] }],
+  }, [{ path: 'pods/fixture/run.mjs', kind: 'script', mediaType: 'text/javascript', content: new TextEncoder().encode('export async function run() { return { status: "completed" } }') }], '')
+  const id = randomUUID()
+  await send({ id: 'import-forged', command: { portableImport: { type: 'list', owner: 'forged' } } })
+  expect(replies).toHaveBeenCalledWith({ id: 'import-forged', error: 'Invalid import command' })
+  await send({ id: 'import-early', command: { portableImport: { type: 'stage', id, archive: exported.archive } } })
+  expect(replies).toHaveBeenCalledWith({ id: 'import-early', error: 'Finish desktop identity setup before importing packages' })
+  const store = new PodDatabase(root)
+  try {
+    store.db.prepare('INSERT INTO remote_registration VALUES(1,?,0)').run(JSON.stringify({ owner: { issuer: 'https://id.example.test', subject: 'recipient' } }))
+    const before = store.listPods().length
+    await send({ id: 'import-stage', command: { portableImport: { type: 'stage', id, archive: exported.archive } } })
+    await send({ id: 'import-commit', command: { portableImport: { type: 'commit', id, revision: 1 } } })
+    expect(replies).toHaveBeenCalledWith({ id: 'import-commit', state: expect.objectContaining({ current: expect.objectContaining({ state: 'committed', unresolved: [] }) }) })
+    await send({ id: 'import-complete', command: { portableImport: { type: 'complete', id, revision: 2 } } })
+    expect(replies).toHaveBeenCalledWith({ id: 'import-complete', state: expect.objectContaining({ imports: [], current: expect.objectContaining({ state: 'completed' }) }) })
+    expect(store.listPods().slice(before)).toMatchObject([{ name: 'Imported through entry', lifecycle: 'paused', activeScript: null }])
+  }
+  finally { store.db.exec('DELETE FROM remote_registration'); store.close() }
 })

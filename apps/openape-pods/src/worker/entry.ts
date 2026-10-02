@@ -27,7 +27,8 @@ import { WorkflowCalls } from './workflows/calls'
 import { chooseGateItem, discardGateBatch, excludeGateItems } from './workflows/gates'
 import { graphDetail } from './workflows/detail'
 import type { RunContextRequest, ServiceCheck  } from '../contracts/services'
-import { recoverPortableImports } from './sharing/import'
+import { PortableImporter, recoverPortableImports } from './sharing/import'
+import { parsePortableImportCommand } from '../contracts/sharing'
 import { DependencyStore } from './dependencies/store'
 import { programRequest } from '../main/programs/invoke'
 import { podDirectories } from '../runtime/environment'
@@ -286,6 +287,20 @@ port.on('message', async (event) => {
       try {
         await ticking
         preparing = new DefinitionWorkspace(store, registry, networkOwner(), (podId, update) => networks.updateInstance(podId, update)).execute(command, scriptController.signal)
+        port.postMessage({ id: request.id, state: await preparing })
+      }
+      finally { preparing = null; maintenance = false }
+      return
+    }
+    if (request.command && typeof request.command === 'object' && 'portableImport' in request.command) {
+      const command = parsePortableImportCommand(request.command.portableImport)
+      if (!store.db.prepare('SELECT 1 FROM remote_registration WHERE id=1').get()) throw new Error('Finish desktop identity setup before importing packages')
+      const importer = new PortableImporter(store, registry, networkOwner(), join(dirname(runtime.entry), '../vendor/npm'))
+      if (command.type !== 'prepareDependencies') { port.postMessage({ id: request.id, state: await importer.execute(command, runtime, scriptController.signal) }); return }
+      maintenance = true
+      try {
+        await ticking
+        preparing = importer.execute(command, runtime, scriptController.signal)
         port.postMessage({ id: request.id, state: await preparing })
       }
       finally { preparing = null; maintenance = false }

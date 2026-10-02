@@ -45,7 +45,22 @@ export function parseRunView(value: unknown): RunView {
   }
   return view
 }
+export interface RunAliases { applications: Record<string, string>, http: Record<string, string>, directories: Record<string, string>, references: Record<string, { id: string, hash: string, path: string }> }
+// Script-facing names for ready local resources, so shared source needs no local identity, path or origin.
+export function runAliases(aliases: { alias: string, resource: import('./resources').PodResource }[], references: RunInput['references']): RunAliases {
+  const result: RunAliases = { applications: {}, http: {}, directories: {}, references: {} }
+  for (const { alias, resource } of aliases) {
+    if (resource.state !== 'ready') continue
+    const reference = references.find(item => item.id === resource.id)
+    if (resource.kind === 'reference' && reference) result.references[alias] = reference
+    else if (resource.kind === 'directory') result.directories[alias] = String(resource.configuration.path)
+    else if (resource.configuration.type === 'http') result.http[alias] = String(resource.configuration.origin)
+    else if (resource.configuration.type === 'program') result.applications[alias] = resource.name
+  }
+  return result
+}
 export interface RunInput {
+  aliases?: RunAliases
   config?: Record<string, { value: unknown, origin: string, kind: unknown }>
   network?: { id: string, revision: number, source: boolean }
   workflow?: { runId: string, outputs: Record<string, import('./workflows').WorkflowOutput>, call?: { requestId: string, caseId: string, caseRevision: number }, inputs?: Record<string, import('./workflow-ports').WorkflowPortValue> }

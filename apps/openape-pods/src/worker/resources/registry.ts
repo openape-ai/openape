@@ -1,3 +1,4 @@
+import { portableKey, portablePath } from '@openape/pods-protocol'
 import type { SshBinding } from '../../contracts/ssh'
 import { parseJevModel } from '../../contracts/jev'
 import type { ProgramAssignment } from '../../contracts/programs'
@@ -158,6 +159,24 @@ export class ResourceRegistry {
       this.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(podId)
     })
     this.revokeActive(podId)
+  }
+
+  // A portable alias is a stable script-facing name for one local resource; changing it changes what a script addresses.
+  // One assignment may serve several aliases, for example two declared folders the recipient keeps in one place.
+  alias(podId: string, alias: string, resourceId: string): void {
+    const resource = this.list(podId).find(item => item.id === resourceId)
+    if (!resource || resource.state === 'revoked' || !['reference', 'directory', 'tool'].includes(resource.kind)) throw new Error('Portable aliases require a current file, directory or tool assignment')
+    if (resource.kind === 'reference' ? !portablePath(alias).startsWith('assets/') : portableKey(alias) !== alias) throw new Error('Invalid portable alias')
+    this.store.transaction(() => {
+      this.store.db.prepare('INSERT INTO resource_aliases VALUES(?,?,?) ON CONFLICT(pod_id,alias) DO UPDATE SET resource_id=excluded.resource_id').run(podId, alias, resourceId)
+      this.advance(podId)
+    })
+    this.revokeActive(podId)
+  }
+
+  aliases(podId: string): { alias: string, resource: PodResource }[] {
+    const resources = this.list(podId)
+    return this.store.db.prepare('SELECT alias,resource_id FROM resource_aliases WHERE pod_id=? ORDER BY alias').all(podId).map(row => ({ alias: row.alias as string, resource: resources.find(item => item.id === row.resource_id)! }))
   }
 
   assertCurrent(podId: string, epoch: number): void {

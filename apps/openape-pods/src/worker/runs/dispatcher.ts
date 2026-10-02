@@ -25,6 +25,7 @@ import { parseMailRequest } from '../../main/mail/contract'
 import { assignedMail } from '../../main/mail/assigned'
 import type { MailPage } from '../mail/ingestion'
 import { confirmDomainsStopped } from '../recovery/domains'
+import { runAliases } from '../../contracts/runs'
 import type { RunState, RunInput, RunView  } from '../../contracts/runs'
 import type { RunTrigger } from './store'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -256,6 +257,8 @@ export class RunDispatcher {
       const directories = await assignedDirectories(this.store.root, pod.id, this.resources.list(pod.id))
       assertCurrent()
       const input: RunInput = { workflow: workflowInput(this.store, id), home: folders.home, directories: directories.map(({ path, access }) => ({ path, access })), variables: { ...Object.fromEntries((graph?.definition.values ?? []).map(value => [value.name, value.value])), ...networkInput?.variables, ...new PodVariables(this.store).values(pod.id) }, version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.bindingRevision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: folders.workspace, references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: 300000, frameBytes: 256 * 1024 } }
+      const aliases = this.resources.aliases(pod.id)
+      if (aliases.length) input.aliases = runAliases(aliases, input.references)
       if (networkInput) { input.config = networkInput.config; input.network = networkInput.network; input.eventIds = networkInput.items.map(item => item.eventId) }
       appendEvent('snapshot', { id: snapshots.id, files: input.references })
       const dependencies = new DependencyStore(this.store); const dependencyHash = dependencies.scriptSet(pod.id, run.scriptHash)
