@@ -4,9 +4,10 @@ import type { GateBatchView } from '../../src/contracts/gates'
 import type { GraphDetail, GraphGate } from '../../src/contracts/graphs'
 import type { WorkflowDefinition, WorkflowView } from '../../src/contracts/workflows'
 import { sequenceParts, parseWorkflowCommand  } from '../../src/contracts/workflows'
+import NetworkConversion from '../../src/renderer/NetworkConversion.vue'
 import NetworkCreate from '../../src/renderer/NetworkCreate.vue'
 import NetworkDetail from '../../src/renderer/NetworkDetail.vue'
-import { operationalFixture, recoveryFixture } from '../layout/network-fixture'
+import { operationalFixture, recoveryFixture, conversionFixture } from '../layout/network-fixture'
 import GateReview from '../../src/renderer/GateReview.vue'
 import GraphCreate from '../../src/renderer/GraphCreate.vue'
 import GraphInspector from '../../src/renderer/GraphInspector.vue'
@@ -566,4 +567,112 @@ describe('persistent network owner controls', () => {
     expect(wrapper.findAll('button').find(item => item.text().startsWith('Persistent network'))!.attributes('disabled')).toBeDefined()
     expect(networks).not.toHaveBeenCalled(); wrapper.unmount()
   })
+})
+
+describe('reviewed legacy conversion', () => {
+  function conversionPage(pending = 2) {
+    const f = conversionFixture(); f.conversion.pending = pending
+    const networks = vi.fn(async (value: Parameters<typeof window.pods.networks>[0]) => {
+      const command = structuredClone(value)
+      if (command.type === 'setup') return { networks: [], setup: f.setup }
+      if (command.type === 'conversionPreview') return { networks: [], conversion: { ...f.conversion, issues: command.selection.checkpoints.length !== 3 ? ['Review each checkpoint'] : pending && command.selection.pending !== 'retainLegacy' ? ['Retain pending deliveries explicitly'] : [] } }
+      return { ...f.view, createdId: f.networkId }
+    })
+    installWorkspace({ networks, definitions: async () => f.definitions })
+    const wrapper = mount(NetworkConversion, { props: { legacy: f.legacy, pods: f.pods, organization: f.organization, workflows: { workflows: [f.legacy], runs: [] }, networks: { networks: [] } } })
+    return { ...f, wrapper, networks }
+  }
+
+  it('cancels a read-only preview without sending a cutover or activation', async () => {
+    const f = conversionPage()
+    try {
+      await flushPromises(); f.wrapper.getComponent(NetworkCreate).vm.$emit('conversionDraft', f.draft); await flushPromises()
+      expect(f.wrapper.text()).toContain('owner-reviewed-synthetic-baseline')
+      expect(button(f.wrapper, 'Validate reviewed conversion').attributes('disabled')).toBeDefined()
+      await button(f.wrapper, 'Cancel conversion').trigger('click')
+      expect(f.wrapper.emitted('cancel')).toHaveLength(1)
+      expect(f.networks.mock.calls.map(([command]) => command.type)).toEqual(['conversionPreview'])
+    }
+    finally { f.wrapper.unmount() }
+  })
+
+  it('requires every exact checkpoint, source versioning and pending disposition before confirmation', async () => {
+    const f = conversionPage()
+    try {
+      await flushPromises(); f.wrapper.getComponent(NetworkCreate).vm.$emit('conversionDraft', f.draft); await flushPromises()
+      for (const input of f.wrapper.findAll('.conversion-member input[type=checkbox]')) await input.setValue(true)
+      await button(f.wrapper, 'Validate reviewed conversion').trigger('click'); await flushPromises()
+      expect(f.wrapper.text()).toContain('Retain pending deliveries explicitly')
+      expect(button(f.wrapper, 'Convert to paused network')).toBeUndefined()
+      await f.wrapper.findAll('label').find(label => label.text().startsWith('Keep pending items'))!.get('input').setValue(true)
+      await button(f.wrapper, 'Validate reviewed conversion').trigger('click'); await flushPromises()
+      const reviewed = f.networks.mock.calls.at(-1)![0]
+      expect(reviewed).toMatchObject({ type: 'conversionPreview', selection: { pending: 'retainLegacy', checkpoints: f.pods.map((pod, index) => ({ podId: pod.id, revision: 3, hash: 'd'.repeat(64), scriptHash: 'a'.repeat(64), explicitSourceVersions: index < 2 })) } })
+      expect(button(f.wrapper, 'Convert to paused network').attributes('disabled')).toBeDefined()
+      await f.wrapper.findAll('label').find(label => label.text().startsWith('Disable the old graph'))!.get('input').setValue(true)
+      await button(f.wrapper, 'Convert to paused network').trigger('click'); await flushPromises()
+      expect(f.networks).toHaveBeenLastCalledWith({ type: 'convert', selection: 'selection' in reviewed ? reviewed.selection : null, expectedFingerprint: f.conversion.fingerprint })
+      expect(f.wrapper.emitted('created')).toHaveLength(1)
+      expect(f.networks.mock.calls.some(([command]) => command.type === 'activate')).toBe(false)
+    }
+    finally { f.wrapper.unmount() }
+  })
+
+  it('invalidates a confirmed review when the legacy revision changes', async () => {
+    const f = conversionPage(0)
+    try {
+      await flushPromises(); f.wrapper.getComponent(NetworkCreate).vm.$emit('conversionDraft', f.draft); await flushPromises()
+      for (const input of f.wrapper.findAll('.conversion-member input[type=checkbox]')) await input.setValue(true)
+      await button(f.wrapper, 'Validate reviewed conversion').trigger('click'); await flushPromises()
+      expect(button(f.wrapper, 'Convert to paused network')).toBeDefined()
+      await f.wrapper.setProps({ legacy: { ...f.legacy, revision: 2 } })
+      expect(button(f.wrapper, 'Convert to paused network')).toBeUndefined()
+      expect(f.networks.mock.calls.every(([command]) => command.type === 'conversionPreview')).toBe(true)
+    }
+    finally { f.wrapper.unmount() }
+  })
+
+  it('requires explicit field types without importing legacy names or schedules', async () => {
+    const f = conversionFixture(); const networks = vi.fn(async () => ({ networks: [], setup: f.setup }))
+    installWorkspace({ networks, definitions: async () => f.definitions })
+    const wrapper = mount(NetworkCreate, { props: { pods: f.pods, organization: f.organization, workflows: { workflows: [f.legacy], runs: [] }, networks: { networks: [] }, conversion: f.legacy } })
+    try {
+      await flushPromises(); await wrapper.get('form').trigger('submit'); await flushPromises()
+      expect(wrapper.text()).toContain('Legacy field names: subject')
+      expect(wrapper.findAll('input[pattern]')).toHaveLength(0)
+      await button(wrapper, 'Add field').trigger('click')
+      await wrapper.get('input[pattern]').setValue('subject')
+      const type = wrapper.findAll('select').find(select => select.text().includes('Choose a type'))!
+      expect((type.element as HTMLSelectElement).value).toBe('')
+      await type.setValue('string')
+      await wrapper.findAll('label').find(label => label.text().startsWith('I reviewed each channel schema'))!.get('input').setValue(true)
+      await wrapper.get('form').trigger('submit'); await flushPromises()
+      expect(wrapper.emitted('conversionDraft')![0]![0]).toMatchObject({ members: f.draft.members, channels: f.draft.channels.map(channel => ({ name: channel.name, schema: channel.schema })) })
+      expect(networks.mock.calls).toHaveLength(1)
+    }
+    finally { wrapper.unmount() }
+  })
+
+  it('inspects the pinned script inline and keeps schemas when returning to editing', async () => {
+    const f = conversionPage(0)
+    const scripts = vi.fn(async () => ({ pod: f.pods[0]!, source: { hash: 'a'.repeat(64), code: 'export const reviewed = true' } } as never))
+    window.pods.scripts = scripts
+    try {
+      await flushPromises(); await f.wrapper.getComponent(NetworkCreate).get('form').trigger('submit'); await flushPromises()
+      await button(f.wrapper, 'Add field').trigger('click'); await f.wrapper.get('input[pattern]').setValue('subject')
+      await f.wrapper.findAll('select').find(select => select.attributes('aria-label') === 'Type')!.setValue('string')
+      await f.wrapper.findAll('label').find(label => label.text().startsWith('I reviewed each channel schema'))!.get('input').setValue(true)
+      await f.wrapper.getComponent(NetworkCreate).get('form').trigger('submit'); await flushPromises()
+      await f.wrapper.findAll('button').find(item => item.text() === 'Inspect active script')!.trigger('click'); await flushPromises()
+      expect(f.wrapper.text()).toContain('export const reviewed = true')
+      expect(scripts).toHaveBeenCalledWith({ type: 'list', podId: f.pods[0]!.id, selection: { kind: 'version', id: 'a'.repeat(64) } })
+      expect(f.wrapper.emitted('openPod')).toBeUndefined()
+      await button(f.wrapper, 'Edit schemas and values').trigger('click')
+      expect((f.wrapper.get('input[pattern]').element as HTMLInputElement).value).toBe('subject')
+      expect((f.wrapper.findAll('select').find(select => select.attributes('aria-label') === 'Type')!.element as HTMLSelectElement).value).toBe('string')
+      expect(f.networks.mock.calls.some(([command]) => command.type === 'convert')).toBe(false)
+    }
+    finally { f.wrapper.unmount() }
+  })
+
 })

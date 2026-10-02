@@ -36,3 +36,11 @@ export function recoveryFixture() {
   ]
   return f
 }
+
+export function conversionFixture() {
+  const f = operationalFixture()
+  const legacy = { id: f.id(80), revision: 1, name: 'Synthetic bounded graph', groupId: f.groupId, mode: 'channels' as const, schedule: { kind: 'interval' as const, seconds: 3600 }, enabled: false, paused: false, nextAt: null, nodes: f.pods.map(pod => ({ podId: pod.id, after: [], handoff: false })), channels: f.definition.channels.map(channel => ({ name: channel.name, title: channel.title, fields: Object.keys(channel.schema.properties) })), gates: [], values: [] }
+  const draft = { groupId: f.groupId, name: legacy.name, channels: f.definition.channels, members: f.definition.members.map(member => ({ podId: member.podId, source: member.source ? { schedule: null } : null, serialCase: false })) }
+  const conversion = { fingerprint: 'e'.repeat(64), legacy, draft, candidate: f.definition, issues: [] as string[], pending: 2, differences: ['The new network remains paused until separate activation.'], members: f.setup.members.map(member => ({ ...member, checkpoint: { revision: 3, hash: 'd'.repeat(64), scriptHash: 'a'.repeat(64), body: '{"watermark":"owner-reviewed-synthetic-baseline"}', truncated: false }, schedule: { spec: { kind: 'interval' as const, seconds: 600 }, revision: 1, enabled: true, nextAt: 1000 } })) }
+  return { ...f, legacy, draft, conversion }
+}

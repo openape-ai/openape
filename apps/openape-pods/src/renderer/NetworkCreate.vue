@@ -9,24 +9,25 @@ import { diagnoseNetwork } from '../contracts/networks'
 import { graphDiagnosticMessages } from '../contracts/graphs'
 import type { NetworkDraft, NetworkView } from '../contracts/networks'
 import type { ScalarSchema } from '../contracts/network-payload'
-import type { WorkflowView } from '../contracts/workflows'
+import type { WorkflowView, WorkflowDefinition } from '../contracts/workflows'
 import { diagnostic, t } from './i18n'
 
-interface ChannelField { name: string, type: ScalarSchema['type'], required: boolean }
+interface ChannelField { name: string, type: ScalarSchema['type'] | '', required: boolean }
 export default defineComponent({
   props: {
     pods: { type: Array as PropType<StoredPod[]>, required: true },
     organization: { type: Object as PropType<Organization>, required: true },
     workflows: { type: Object as PropType<WorkflowView>, required: true },
     networks: { type: Object as PropType<NetworkView>, required: true },
+    conversion: { type: Object as PropType<WorkflowDefinition | null>, default: null },
     groupId: { type: String as PropType<string | null>, default: null },
   },
-  emits: ['cancel', 'workflow', 'created', 'openPod', 'other'],
-  data() { return { step: 0, group: this.groupId ?? '', name: '', selected: [] as string[], definitions: null as DefinitionsView | null, setup: null as NetworkSetup | null, values: {} as Record<string, string>, sharedEnabled: {} as Record<string, boolean>, schedules: {} as Record<string, number>, fields: {} as Record<string, ChannelField[]>, gatedInputs: [] as string[], joinedPods: [] as string[], joinDeadline: 300000, busy: false, error: '', reviewNotice: '' } },
+  emits: ['cancel', 'workflow', 'created', 'conversionDraft', 'openPod', 'other'],
+  data() { return { step: this.conversion ? 1 : 0, group: this.conversion?.groupId ?? this.groupId ?? '', name: this.conversion?.name ?? '', selected: this.conversion?.nodes.map(node => node.podId) ?? [] as string[], definitions: null as DefinitionsView | null, setup: null as NetworkSetup | null, values: {} as Record<string, string>, sharedEnabled: {} as Record<string, boolean>, schedules: {} as Record<string, number>, fields: {} as Record<string, ChannelField[]>, gatedInputs: [] as string[], joinedPods: [] as string[], joinDeadline: 300000, schemasReviewed: false, busy: false, error: '', reviewNotice: '' } },
   computed: {
     unavailable(): string { if (this.definitions?.instances.some(instance => !this.definitions!.definitions.some(definition => definition.id === instance.definitionId && definition.versions.some(version => version.version === instance.version)))) return t('Prepared definition list is incomplete. Refresh before creating a network.'); return this.networks.unavailableReason ?? this.definitions?.unavailableReason ?? '' },
     candidates() {
-      const reserved = new Set([...this.workflows.workflows.flatMap(item => item.nodes.map(node => node.podId)), ...this.networks.networks.flatMap(item => item.podIds ?? [])])
+      const reserved = new Set([...this.workflows.workflows.filter(item => item.id !== this.conversion?.id).flatMap(item => item.nodes.map(node => node.podId)), ...this.networks.networks.flatMap(item => item.podIds ?? [])])
       return (this.definitions?.instances ?? []).filter(item => item.groupId === this.group && !item.diverged && !reserved.has(item.podId) && this.pods.some(pod => pod.id === item.podId && pod.lifecycle !== 'archived')).flatMap((instance) => { const pod = this.pods.find(pod => pod.id === instance.podId)!; const version = this.definitions!.definitions.find(item => item.id === instance.definitionId)?.versions.find(item => item.version === instance.version); return version?.contract && pod.activeScript ? [{ instance, pod, version }] : [] })
     },
     selectedMembers() { return this.candidates.filter(item => this.selected.includes(item.pod.id)) },
@@ -53,7 +54,7 @@ export default defineComponent({
       return ''
     },
   },
-  watch: { group() { this.selected = []; this.setup = null } },
+  watch: { 'conversion.revision': function () { this.schemasReviewed = false; this.setup = null; this.step = 1 }, group() { this.selected = []; this.setup = null } },
   async mounted() {
     try { this.definitions = await window.pods.definitions({ type: 'list' }) }
     catch (error) { this.error = error instanceof Error ? error.message : String(error); await this.$nextTick(); (this.$refs.error as HTMLElement)?.focus() }
@@ -68,10 +69,14 @@ export default defineComponent({
         this.reviewNotice = ''
         if (this.setup?.fingerprint !== next.fingerprint) {
           if (this.setup) this.reviewNotice = t('Selection or rights changed. Review shared values and channels again.')
-          this.values = {}; this.sharedEnabled = {}; this.fields = {}; this.gatedInputs = []; this.joinedPods = []
+          this.values = {}; this.sharedEnabled = {}; this.fields = {}; this.schemasReviewed = false; this.gatedInputs = []; this.joinedPods = []
         }
         this.setup = next
-        for (const field of this.shared) this.values[field.name] ??= field.conflict ? '' : typeof field.value === 'string' ? field.value : JSON.stringify(field.value)
+        for (const field of this.shared) {
+          const legacy = this.conversion?.values.find(value => value.name === field.name)
+          this.values[field.name] ??= legacy ? legacy.value : field.conflict ? '' : typeof field.value === 'string' ? field.value : JSON.stringify(field.value)
+          if (legacy) this.sharedEnabled[field.name] = true
+        }
         for (const channel of this.channels) this.fields[channel] ??= []
         this.step = 2
         await this.$nextTick(); (this.$refs.heading as HTMLElement).focus()
@@ -81,7 +86,7 @@ export default defineComponent({
     },
     async focusStep(step: number) { this.step = step; await this.$nextTick(); (this.$refs.heading as HTMLElement).focus() },
     async create() {
-      if (!this.setup || this.problem || this.unavailable || this.busy) return
+      if (!this.setup || this.problem || this.unavailable || this.busy || (this.conversion && !this.schemasReviewed)) return
       this.busy = true; this.error = ''
       try {
         const sharedValues = Object.fromEntries(this.shared.filter(field => this.sharedEnabled[field.name]).map((field) => {
@@ -93,6 +98,7 @@ export default defineComponent({
         }))
         for (const channel of this.channels) {
           const names = this.fields[channel]!.map(field => field.name)
+          if (this.fields[channel]!.some(field => !field.type)) throw new Error('Choose an explicit type for every channel field')
           if (names.some(name => !name.trim()) || new Set(names).size !== names.length) throw new Error('Channel fields must have unique nonempty names')
         }
         const draft: NetworkDraft = {
@@ -100,9 +106,10 @@ export default defineComponent({
           joins: this.selectedMembers.filter(item => this.joinedPods.includes(item.pod.id) && item.version.contract!.takes.length > 1).map((item, index) => ({ id: `join-${index}`, podId: item.pod.id, channels: [...item.version.contract!.takes], deadlineMs: this.joinDeadline, reviewDestination: 'owner' as const })),
           name: this.name.trim(), groupId: this.group, expectedSetup: this.setup.fingerprint, sharedValues,
           members: this.selectedMembers.map(item => ({ podId: item.pod.id, serialCase: false, source: item.version.contract!.takes.length ? null : { schedule: this.schedules[item.pod.id] ? { kind: 'interval', seconds: this.schedules[item.pod.id]! } : null } })),
-          channels: this.channels.map(name => ({ name, title: name, schemaVersion: 1, schema: { type: 'object', properties: Object.fromEntries(this.fields[name]!.map(field => [field.name, { type: field.type }])), required: this.fields[name]!.filter(field => field.required).map(field => field.name), additionalProperties: false } })),
+          channels: this.channels.map(name => ({ name, title: name, schemaVersion: 1, schema: { type: 'object', properties: Object.fromEntries(this.fields[name]!.map(field => [field.name, { type: field.type as ScalarSchema['type'] }])), required: this.fields[name]!.filter(field => field.required).map(field => field.name), additionalProperties: false } })),
         }
-        this.$emit('created', await window.pods.networks({ type: 'create', draft }))
+        if (this.conversion) this.$emit('conversionDraft', draft)
+        else this.$emit('created', await window.pods.networks({ type: 'create', draft }))
       }
       catch (error) { this.error = error instanceof Error ? error.message : String(error); await this.$nextTick(); (this.$refs.error as HTMLElement)?.focus() }
       finally { this.busy = false }
@@ -117,7 +124,7 @@ export default defineComponent({
       <button class="text-button" @click="$emit('cancel')">
         {{ t('Back') }}
       </button><h1 ref="heading" tabindex="-1">
-        {{ t('Create a composition') }}
+        {{ t(conversion ? 'Review graph conversion' : 'Create a composition') }}
       </h1>
     </header>
     <p v-if="error" ref="error" tabindex="-1" role="alert" class="error-message">
@@ -141,13 +148,13 @@ export default defineComponent({
     </template>
     <form v-else-if="step === 1" @submit.prevent="review">
       <label>{{ t('Name') }}<input v-model="name" required maxlength="120"></label>
-      <label>{{ t('Company') }}<select v-model="group" :aria-label="t('Company')" required><option value="">{{ t('Choose a company.') }}</option><option v-for="company in organization.groups" :key="company.id" :value="company.id">{{ company.name }}</option></select></label>
+      <label>{{ t('Company') }}<select v-model="group" :disabled="!!conversion" :aria-label="t('Company')" required><option value="">{{ t('Choose a company.') }}</option><option v-for="company in organization.groups" :key="company.id" :value="company.id">{{ company.name }}</option></select></label>
       <fieldset>
         <legend>{{ t('Prepared Pod instances') }}</legend>
-        <p>{{ t('Each instance keeps its own identity and rights. Existing workflows stay unchanged.') }}</p>
-        <label v-for="item in candidates" :key="item.pod.id" class="network-check"><input v-model="selected" type="checkbox" :value="item.pod.id">{{ item.pod.name }}</label>
+        <p>{{ t(conversion ? 'Conversion retains every original Pod. Review schemas and values before inspecting the baseline.' : 'Each instance keeps its own identity and rights. Existing workflows stay unchanged.') }}</p>
+        <label v-for="item in candidates" :key="item.pod.id" class="network-check"><input v-model="selected" type="checkbox" :disabled="!!conversion" :value="item.pod.id">{{ item.pod.name }}</label>
         <p v-if="!candidates.length">
-          {{ t('Publish a definition and prepare a separate instance in this company first.') }}
+          {{ t(conversion ? 'Publish the existing Pod definitions first. Return here with their active scripts and rights validated.' : 'Publish a definition and prepare a separate instance in this company first.') }}
         </p>
       </fieldset>
       <p id="network-setup-problem" role="status">
@@ -158,6 +165,9 @@ export default defineComponent({
       </button>
     </form>
     <form v-else @submit.prevent="create">
+      <p v-for="value in conversion?.values ?? []" :key="value.name">
+        {{ t('Legacy value to preserve: {name} = {value}', { name: value.name, value: String(value.value) }) }}
+      </p>
       <p v-if="reviewNotice" role="status">
         {{ reviewNotice }}
       </p><p>{{ t('Created paused. Activation is a separate action.') }}</p><p>{{ t('Each source runs independently. Use zero for manual only, or at least 60 seconds.') }}</p>
@@ -195,25 +205,28 @@ export default defineComponent({
         <legend>{{ t('Fields for {channel}', { channel }) }}</legend><p v-if="!fields[channel]?.length">
           {{ t('No fields: only an empty payload is accepted. Add the fields emitted by the scripts.') }}
         </p>
-        <p>{{ t('Only declared fields can pass between Pods.') }}</p>
+        <p>{{ t('Only declared fields can pass between Pods.') }}</p><p v-if="conversion">
+          {{ t('Legacy field names: {names}', { names: conversion.channels.find(item => item.name === channel)?.fields.join(', ') || t('None') }) }}
+        </p>
         <div v-for="(field, index) in fields[channel]" :key="index" class="network-field">
           <label>{{ t('Field name') }}<input v-model="field.name" required maxlength="64" pattern="[a-zA-Z][a-zA-Z0-9_]*"></label>
-          <label>{{ t('Type') }}<select v-model="field.type"><option v-for="type in (['string', 'number', 'integer', 'boolean', 'null'] as const)" :key="type" :value="type">{{ type }}</option></select></label>
+          <label>{{ t('Type') }}<select v-model="field.type" :aria-label="t('Type')" required><option v-if="conversion" disabled value="">{{ t('Choose a type') }}</option><option v-for="type in (['string', 'number', 'integer', 'boolean', 'null'] as const)" :key="type" :value="type">{{ type }}</option></select></label>
           <label class="network-check"><input v-model="field.required" type="checkbox">{{ t('Required') }}</label>
           <button type="button" class="text-button" @click="fields[channel]!.splice(index, 1)">
             {{ t('Remove') }}
           </button>
         </div>
-        <button type="button" class="secondary" :disabled="fields[channel]!.length >= 32" @click="fields[channel]!.push({ name: '', type: 'string', required: true })">
+        <button type="button" class="secondary" :disabled="fields[channel]!.length >= 32" @click="fields[channel]!.push({ name: '', type: conversion ? '' : 'string', required: true })">
           {{ t('Add field') }}
         </button>
       </fieldset>
       <label v-if="joinedPods.length">{{ t('Join deadline in milliseconds') }}<input v-model.number="joinDeadline" type="number" min="1000" max="86400000"></label>
+      <label v-if="conversion" class="network-check"><input v-model="schemasReviewed" type="checkbox">{{ t('I reviewed each channel schema against the existing scripts and payloads.') }}</label>
       <div class="network-actions">
         <button type="button" class="secondary" :disabled="busy" @click="focusStep(1)">
           {{ t('Edit selection') }}
-        </button><button class="primary" :disabled="busy || !!unavailable">
-          {{ t('Create paused network') }}
+        </button><button class="primary" :disabled="busy || !!unavailable || (!!conversion && !schemasReviewed)">
+          {{ t(conversion ? 'Preview conversion' : 'Create paused network') }}
         </button>
       </div>
     </form>
