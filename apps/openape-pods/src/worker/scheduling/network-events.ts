@@ -9,6 +9,7 @@ import type { NetworkMember } from '../../contracts/networks'
 import { networkDataObject, validateNetworkPayload } from '../../contracts/network-payload'
 import { digest } from '../storage/database'
 import type { PodDatabase } from '../storage/database'
+import { NetworkJoins } from './network-joins'
 
 export interface NetworkEmission {
   channel: string
@@ -37,12 +38,13 @@ function identifier(value: unknown): string {
 
 export class NetworkEvents {
   artifacts?: NetworkArtifacts
+  readonly joins: NetworkJoins
 
   references(eventId: string): ArtifactReference[] {
     return this.store.db.prepare('SELECT a.id,a.scope_id AS scope FROM artifact_references r JOIN artifacts a ON a.id=r.artifact_id WHERE r.reference_kind=\'event\' AND r.reference_id=? ORDER BY a.id').all(eventId) as unknown as ArtifactReference[]
   }
 
-  constructor(private readonly store: PodDatabase, private readonly bootNonce: string) {}
+  constructor(private readonly store: PodDatabase, private readonly bootNonce: string) { this.joins = new NetworkJoins(store) }
 
   emission(authority: NetworkAuthority, value: unknown, finishing = false): NetworkEmission {
     const { definition, member } = this.authority(authority, finishing)
@@ -147,6 +149,7 @@ export class NetworkEvents {
       }
       for (const reference of references) this.artifacts!.retain(reference, 'event', eventId)
       if (subscriptions.length) this.store.db.prepare('INSERT INTO network_queue_counts VALUES(?,\'pending\',?) ON CONFLICT(network_id,state) DO UPDATE SET count=count+excluded.count').run(definition.id, subscriptions.length)
+      this.joins.record(eventId)
       return { eventId, duplicate: false, ...caseRef }
     })
   }

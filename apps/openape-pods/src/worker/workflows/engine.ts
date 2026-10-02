@@ -6,10 +6,13 @@ import { graphDiagnosticMessages } from '../../contracts/graphs'
 import type { GraphMode } from '../../contracts/graphs'
 import { graphNodes, hasPendingItems, inspectGraph, podContracts } from './items'
 import type { GraphNode } from './items'
-import { gateNeedsRound, gateView } from './gates'
+import { closeCalledGates, gateNeedsRound, gateView } from './gates'
 import type { PodDatabase } from '../storage/database'
 import type { RunTrigger } from '../runs/store'
 import { nextWorkflowDue } from './clock'
+import { loadWorkflowRevision, publishWorkflowRevision } from './revisions'
+import type { WorkflowRevision } from './revisions'
+import { assertNetworkQuota } from '../scheduling/network-quota'
 
 interface Driver { start: (podId: string, trigger: RunTrigger) => string, cancelPod: (podId: string) => void }
 interface Recovery { inspect: (podId: string, runId: string) => Promise<void> }
@@ -52,6 +55,7 @@ function podsBefore(graph: GraphNode[], id: string): string[] {
 }
 interface NodeRow { pod_id: string, script_hash: string | null, assignment_revision: number, resource_epoch: number, state: string, run_id: string | null, reason: string | null, output: string | null }
 export class WorkflowEngine {
+  callAuthority: ((requestId: string) => void) | null = null
   constructor(private readonly store: PodDatabase, private readonly driver: Driver, private readonly recovery: Recovery, private readonly now: () => number = Date.now, private readonly immediateDispatch = true) {}
 
   view(): WorkflowView {
@@ -76,7 +80,7 @@ export class WorkflowEngine {
 
   run(id: string): WorkflowRunView {
     const row = this.row(id); const definition = JSON.parse(row.definition as string) as WorkflowDefinition
-    return { id, paused: row.paused === 1, workflowId: row.workflow_id as string, revision: row.revision as number, state: row.state as WorkflowRunView['state'], reason: row.reason as string | null, startedAt: row.started_at as number, finishedAt: row.finished_at as number | null, nodes: this.nodes(id).map(node => ({ ...definition.nodes.find(item => item.podId === node.pod_id)!, state: node.state as WorkflowRunView['nodes'][number]['state'], runId: node.run_id, reason: node.reason, scriptHash: node.script_hash })) }
+    return { id, revisionKind: row.trigger === 'network-call' ? 'published' : 'composition', paused: row.paused === 1, workflowId: row.workflow_id as string, revision: row.revision as number, state: row.state as WorkflowRunView['state'], reason: row.reason as string | null, startedAt: row.started_at as number, finishedAt: row.finished_at as number | null, nodes: this.nodes(id).map(node => ({ ...definition.nodes.find(item => item.podId === node.pod_id)!, state: node.state as WorkflowRunView['nodes'][number]['state'], runId: node.run_id, reason: node.reason, scriptHash: node.script_hash })) }
   }
 
   save(command: Extract<WorkflowCommand, { type: 'save' }>): void {
@@ -137,8 +141,9 @@ export class WorkflowEngine {
       const definition = this.definition(id)
       if (definition.revision !== revision) throw new Error('Workflow changed; reload before running')
       this.assertRunnable(definition)
-      const active = this.store.db.prepare('SELECT id FROM workflow_runs WHERE workflow_id=? AND finished_at IS NULL').get(id)
+      const active = this.store.db.prepare('SELECT id,trigger FROM workflow_runs WHERE workflow_id=? AND finished_at IS NULL').get(id)
       if (active) {
+        if (active.trigger === 'network-call') throw new Error('An accepted workflow call owns the active execution')
         if (operationId) this.store.db.prepare('INSERT INTO control_runs VALUES(?,?,\'workflow\')').run(operationId, active.id)
         return active.id as string
       }
@@ -154,6 +159,29 @@ export class WorkflowEngine {
     })
   }
 
+  publishRevision(id: string, revision: number, ports: unknown): WorkflowRevision {
+    const definition = this.definition(id)
+    if (definition.revision !== revision) throw new Error('Workflow changed; reload before publishing')
+    this.assertRunnable(definition)
+    return publishWorkflowRevision(this.store, definition, ports, this.now())
+  }
+
+  startRevision(id: string, revision: number): string {
+    return this.store.transaction(() => {
+      const current = this.definition(id)
+      if (current.paused) throw new Error('Called workflow is paused by the owner')
+      if (this.store.db.prepare('SELECT 1 FROM workflow_runs WHERE workflow_id=? AND finished_at IS NULL').get(id)) throw new Error('Called workflow is waiting for its active execution')
+      const { published } = loadWorkflowRevision(this.store, id, revision)
+      assertNetworkQuota(this.store, 16384 + published.pins.length * 4096)
+      this.assertRunnable(published.definition)
+      for (const pin of published.pins) this.assertPinned({ pod_id: pin.podId, script_hash: pin.scriptHash, assignment_revision: pin.bindingRevision, resource_epoch: pin.resourceEpoch, state: 'waiting', run_id: null, reason: null, output: null })
+      const runId = randomUUID()
+      this.store.db.prepare('INSERT INTO workflow_runs(id,workflow_id,revision,definition,trigger,state,reason,started_at,finished_at) VALUES(?,?,?,?,?,\'waiting\',NULL,?,NULL)').run(runId, id, revision, JSON.stringify(published.definition), 'network-call', this.now())
+      for (const pin of published.pins) this.store.db.prepare('INSERT INTO workflow_nodes VALUES(?,?,?,?,?,\'waiting\',NULL,NULL,NULL)').run(runId, pin.podId, pin.scriptHash, pin.bindingRevision, pin.resourceEpoch)
+      return runId
+    })
+  }
+
   private assertPinned(node: NodeRow): void {
     const pod = this.store.getPod(node.pod_id)
     const epoch = this.store.db.prepare('SELECT epoch FROM resource_epochs WHERE pod_id=?').get(pod.id)?.epoch ?? 0
@@ -163,6 +191,12 @@ export class WorkflowEngine {
   }
 
   private reserve(id: string): boolean {
+    const call = this.store.db.prepare('SELECT c.id,c.state,control.cancellation_receipt FROM workflow_call_requests c JOIN workflow_call_controls control ON control.request_id=c.id WHERE c.workflow_run_id=?').get(id)
+    if (call && (call.state !== 'running' || call.cancellation_receipt)) return false
+    if (call && this.nodes(id).some(node => node.state !== 'completed')) {
+      if (!this.callAuthority) throw new Error('Called workflow authority coordinator is unavailable')
+      this.callAuthority(call.id as string)
+    }
     if (this.store.db.prepare('SELECT 1 FROM workflow_reservations WHERE workflow_run_id=?').get(id)) return true
     return this.store.transaction(() => {
       if (this.row(id).finished_at !== null || this.row(id).paused === 1) return false
@@ -183,6 +217,7 @@ export class WorkflowEngine {
   tick(): void {
     for (const definition of this.view().workflows) {
       if (definition.paused || !definition.enabled || !definition.schedule || definition.nextAt === null || definition.nextAt > this.now()) continue
+      if (this.store.db.prepare('SELECT 1 FROM workflow_runs WHERE workflow_id=? AND trigger=\'network-call\' AND finished_at IS NULL').get(definition.id)) continue
       this.store.transaction(() => {
         this.start(definition.id, definition.revision, 'schedule')
         this.store.db.prepare('UPDATE workflows SET next_at=? WHERE id=?').run(nextWorkflowDue(definition.schedule!, definition.nextAt, this.now()), definition.id)
@@ -217,6 +252,8 @@ export class WorkflowEngine {
     }
     // Run snapshots written before graphs existed carry no mode.
     const graph = definition.mode === 'channels' ? graphNodes(this.store, id, definition) : null
+    const called = this.store.db.prepare('SELECT id,workflow_id,workflow_revision FROM workflow_call_requests WHERE workflow_run_id=?').get(id)
+    const requiredGates = called ? loadWorkflowRevision(this.store, called.workflow_id as string, Number(called.workflow_revision)).published.ports.requiredGates : []
     for (const node of this.nodes(id)) {
       if (node.state !== 'waiting') continue
       const spec = definition.nodes.find(item => item.podId === node.pod_id)!
@@ -232,8 +269,15 @@ export class WorkflowEngine {
         continue
       }
       // The Pod behind an approval gate asks for the decision, so it also runs while the gate holds items.
-      const waiting = definition.gates?.some(gate => gate.kind === 'approve' && takes.includes(gate.gives) && gateNeedsRound(this.store, row.workflow_id as string, gate.key))
-      if (takes.length && !waiting && !hasPendingItems(this.store, row.workflow_id as string, node.pod_id)) {
+      const waiting = definition.gates?.some(gate => gate.kind === 'approve' && takes.includes(gate.gives) && gateNeedsRound(this.store, row.workflow_id as string, gate.key, id))
+      const required = (definition.gates ?? []).filter(gate => requiredGates.includes(gate.key) && (gate.kind === 'approve' ? takes.includes(gate.gives) : gate.options.some(option => takes.includes(option.channel))) && gateNeedsRound(this.store, row.workflow_id as string, gate.key, id))
+      const waitingExcluded = called && (definition.gates ?? []).some(gate => gate.kind === 'approve' && gate.excluded !== null && takes.includes(gate.excluded) && !takes.includes(gate.gives) && gateNeedsRound(this.store, row.workflow_id as string, gate.key, id))
+      if (waitingExcluded || required.some(gate => gate.kind === 'choose')) {
+        this.store.db.prepare('UPDATE workflow_nodes SET reason=\'Waiting for required owner decisions\' WHERE workflow_run_id=? AND pod_id=?').run(id, node.pod_id)
+        continue
+      }
+      if (required.length && Number(this.store.db.prepare('SELECT next_poll_at FROM workflow_gate_poll_clocks WHERE request_id=? AND pod_id=?').get(called!.id!, node.pod_id)?.next_poll_at ?? 0) > this.now()) continue
+      if (takes.length && !waiting && !hasPendingItems(this.store, row.workflow_id as string, node.pod_id, id)) {
         this.store.db.prepare('UPDATE workflow_nodes SET state=\'completed\',reason=\'No items to process\' WHERE workflow_run_id=? AND pod_id=? AND state=\'waiting\'').run(id, node.pod_id)
         continue
       }
@@ -243,16 +287,37 @@ export class WorkflowEngine {
       try {
         this.assertPinned(node)
         if (!retryReady(this.store, node.pod_id, node.run_id, this.now(), false)) continue
-        this.driver.start(node.pod_id, { reason: row.trigger === 'schedule' ? 'schedule' : 'manual', eventIds: [], workflowRunId: id })
+        this.driver.start(node.pod_id, { reason: row.trigger === 'schedule' ? 'schedule' : 'manual', eventIds: [], workflowRunId: id, ...(required.length ? { workflowGateOnly: required.map(gate => gate.key) } : {}) })
       }
       catch (error) { this.store.db.prepare('UPDATE workflow_nodes SET state=\'blocked\',reason=? WHERE workflow_run_id=? AND pod_id=? AND state=\'waiting\'').run(error instanceof Error ? error.message : 'Workflow node could not start', id, node.pod_id) }
     }
     const nodes = this.nodes(id)
-    const completed = nodes.every(node => node.state === 'completed')
+    let completed = nodes.every(node => node.state === 'completed')
+    let requiredReason: string | null = null
+    let failed = false
+    const call = this.store.db.prepare('SELECT workflow_id,workflow_revision FROM workflow_call_requests WHERE workflow_run_id=?').get(id)
+    if (completed && call) {
+      const { published } = loadWorkflowRevision(this.store, call.workflow_id as string, Number(call.workflow_revision))
+      const missing = published.ports.requiredTerminals.filter((podId) => {
+        const node = nodes.find(node => node.pod_id === podId)
+        return !node?.run_id || !!this.store.db.prepare('SELECT 1 FROM workflow_gate_attempts WHERE run_id=?').get(node.run_id)
+      })
+      const held = published.ports.requiredGates.filter(key => gateNeedsRound(this.store, row.workflow_id as string, key, id))
+      const remaining = nodes.some(node => hasPendingItems(this.store, row.workflow_id as string, node.pod_id, id))
+      if (missing.length || held.length || remaining) {
+        completed = false
+        failed = missing.length > 0 && held.length === 0 && !remaining && missing.every(podId => published.definition.gates.some((gate) => {
+          const takes = graph?.find(node => node.id === podId)?.takes ?? []
+          const channels = gate.kind === 'approve' ? [gate.gives] : gate.options.map(option => option.channel)
+          return channels.some(channel => takes.includes(channel)) && !!this.store.db.prepare('SELECT 1 FROM graph_item_events WHERE workflow_run_id=? AND node=? AND outcome IN (\'refused\',\'expired\',\'excluded\',\'chosen\') LIMIT 1').get(id, `gate:${gate.key}`)
+        }))
+        requiredReason = failed ? 'A required terminal branch was prevented by an owner decision' : remaining ? 'Completed workflow steps retain unprocessed inputs; owner review is required' : missing.length ? 'A required terminal branch did not execute; owner review is required' : 'Waiting for required owner decisions'
+      }
+    }
     const blocked = nodes.some(node => node.state === 'blocked')
     this.store.transaction(() => {
-      this.store.db.prepare('UPDATE workflow_runs SET state=?,reason=?,finished_at=? WHERE id=?').run(completed ? 'completed' : blocked ? 'blocked' : 'running', blocked ? 'Review blocked nodes before continuing' : null, completed ? this.now() : null, id)
-      if (completed) this.store.db.prepare('DELETE FROM workflow_reservations WHERE workflow_run_id=?').run(id)
+      this.store.db.prepare('UPDATE workflow_runs SET state=?,reason=?,finished_at=? WHERE id=?').run(completed ? 'completed' : failed ? 'failed' : blocked || requiredReason?.includes('review') ? 'blocked' : 'running', requiredReason ?? (blocked ? 'Review blocked nodes before continuing' : null), completed || failed ? this.now() : null, id)
+      if (completed || failed) this.store.db.prepare('DELETE FROM workflow_reservations WHERE workflow_run_id=?').run(id)
     })
   }
 
@@ -271,8 +336,21 @@ export class WorkflowEngine {
     if (this.immediateDispatch) this.tick()
   }
 
+  async inspectCall(id: string): Promise<void> {
+    for (const node of this.nodes(id)) {
+      if (node.run_id) {
+        const run = this.store.db.prepare('SELECT state FROM runs WHERE id=?').get(node.run_id)!
+        if (run.state === 'running') throw new Error('Stop called workflow processes before owner recovery')
+        if (run.state !== 'completed') await this.recovery.inspect(node.pod_id, node.run_id)
+      }
+      if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=? UNION ALL SELECT 1 FROM effect_ledger WHERE pod_id=? AND state!=\'completed\' LIMIT 1').get(node.pod_id, node.pod_id)) throw new Error('Called workflow processes or effects still need review')
+      if (this.row(id).finished_at === null) this.assertPinned(node)
+    }
+  }
+
   async cancel(id: string): Promise<void> {
     if (this.row(id).finished_at !== null) return
+    if (this.store.db.prepare('SELECT 1 FROM workflow_call_requests c JOIN workflow_call_controls control ON control.request_id=c.id WHERE c.workflow_run_id=? AND control.cancellation_receipt IS NULL').get(id)) throw new Error('Cancel called workflows through their request with owner evidence')
     this.store.db.prepare('UPDATE workflow_runs SET state=\'blocked\',reason=\'Workflow cancellation requested\' WHERE id=?').run(id)
     for (const node of this.nodes(id)) {
       if (!node.run_id) continue
@@ -283,6 +361,7 @@ export class WorkflowEngine {
     if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id IN (SELECT pod_id FROM workflow_reservations WHERE workflow_run_id=?)').get(id)) return
     if (this.store.db.prepare('SELECT 1 FROM effect_ledger WHERE state!=\'completed\' AND pod_id IN (SELECT pod_id FROM workflow_nodes WHERE workflow_run_id=?)').get(id)) throw new Error('External effects need review')
     this.store.transaction(() => {
+      if (this.store.db.prepare('SELECT 1 FROM workflow_call_requests WHERE workflow_run_id=?').get(id)) closeCalledGates(this.store, id, this.now())
       this.store.db.prepare('UPDATE workflow_runs SET state=\'cancelled\',finished_at=?,reason=NULL WHERE id=?').run(this.now(), id)
       this.store.db.prepare('DELETE FROM workflow_reservations WHERE workflow_run_id=?').run(id)
     })

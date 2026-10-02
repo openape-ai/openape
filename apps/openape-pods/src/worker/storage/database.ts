@@ -1,4 +1,5 @@
 import { networkDataSchema } from './network-data-schema.ts'
+import { networkWorkflowSchema } from './network-workflow-schema.ts'
 import { networkGateSchema } from './network-gate-schema.ts'
 import { assertNetworkStorage, networkSchema } from './network-schema.ts'
 import { migrateNetworkControls, migrateNetworkSettlements, networkControlSchema } from './network-control-schema.ts'
@@ -43,7 +44,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 31
+export const schemaVersion = 32
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -331,6 +332,7 @@ PRAGMA user_version=27;`)
       if (version < 29) this.db.exec(`${networkControlSchema} INSERT INTO network_scheduler_state(id) VALUES(1); ${migrateNetworkControls} ${migrateNetworkSettlements} PRAGMA user_version=29;`)
       if (version < 30) this.db.exec(`${networkGateSchema} PRAGMA user_version=30;`)
       if (version < 31) this.db.exec(`${networkDataSchema} PRAGMA user_version=31;`)
+      if (version < 32) this.db.exec(`${networkWorkflowSchema} PRAGMA user_version=32;`)
     })
   }
 
