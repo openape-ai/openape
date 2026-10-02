@@ -16,6 +16,8 @@ import { parseWorkflowCommand, parseWorkflowView } from '../../src/contracts/wor
 import { nextWorkflowDue } from '../../src/worker/workflows/clock'
 import { publishWorkflowOutput, workflowInput } from '../../src/worker/workflows/handoff'
 import { ProgramControl } from '../../src/worker/resources/programs'
+import { loadWorkflowRevision } from '../../src/worker/workflows/revisions'
+import { parseWorkflowPorts, parseWorkflowPortValues } from '../../src/contracts/workflow-ports'
 
 const stores: PodDatabase[] = []; const roots: string[] = []
 afterEach(() => { for (const store of stores.splice(0)) store.close(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
@@ -36,6 +38,59 @@ function fixture() {
   const complete = (podId: string, state: 'completed' | 'failed' | 'completedWithGaps' = 'completed') => { const run = [...started].reverse().find(run => run.podId === podId)!; runs.finish(run.id, state, 'Synthetic result', null, run.trigger.eventIds) }
   return { store, resources, runs, engine, scheduler, started, driver, recovery, pod, workflow, complete, time: (instant: number) => { now = instant } }
 }
+const invoiceSchema = { type: 'object' as const, properties: { invoice: { type: 'string' as const } }, required: ['invoice'], additionalProperties: false as const }
+function invoicePorts(podId: string) {
+  return { version: 1, inputs: [{ name: 'invoice', version: 1, schema: invoiceSchema, podId }], outputs: [{ name: 'result', version: 1, schema: invoiceSchema, podId }], requiredTerminals: [podId], requiredGates: [] }
+}
+it('pins published workflow revisions independently from owner pause counters', () => {
+  const f = fixture(); const a = f.pod(); const id = f.workflow([a])
+  const first = f.engine.publishRevision(id, 1, invoicePorts(a))
+  expect(first.revision).toBe(1)
+  f.engine.pause(id, 1, true)
+  expect(() => f.engine.startRevision(id, first.revision)).toThrow('paused')
+  f.engine.pause(id, 2, false)
+  expect(loadWorkflowRevision(f.store, id, 1)).toEqual(first)
+  const run = f.engine.startRevision(id, 1)
+  expect(f.engine.run(run)).toMatchObject({ workflowId: id, revision: 1, state: 'waiting' })
+  expect(() => f.engine.startRevision(id, 1)).toThrow('active execution')
+  f.engine.tick(); f.complete(a); f.engine.tick()
+  expect(f.engine.run(run).state).toBe('completed')
+  expect(f.engine.startRevision(id, 1)).not.toBe(run)
+})
+it('refuses attaching a published call to an active legacy workflow execution', () => {
+  const f = fixture(); const a = f.pod(); const id = f.workflow([a])
+  f.engine.publishRevision(id, 1, invoicePorts(a))
+  f.engine.pause(id, 1, false)
+  const legacy = f.engine.start(id, 2)
+  expect(() => f.engine.startRevision(id, 1)).toThrow('active execution')
+  expect(f.store.db.prepare('SELECT id FROM workflow_runs').all()).toEqual([{ id: legacy }])
+})
+it('retains published members after edits and refuses changed script or permission pins', () => {
+  const f = fixture(); const a = f.pod(); const b = f.pod(); const id = f.workflow([a])
+  const first = f.engine.publishRevision(id, 1, invoicePorts(a))
+  f.engine.pause(id, 1, false)
+  f.engine.save({ type: 'save', id, revision: 2, name: 'Edited composition', nodes: [{ podId: b, after: [], handoff: false }], schedule: null, enabled: false })
+  const second = f.engine.publishRevision(id, 3, invoicePorts(b))
+  expect(second.revision).toBe(2)
+  expect(loadWorkflowRevision(f.store, id, 1)).toEqual(first)
+  const run = f.engine.startRevision(id, 1)
+  expect(f.engine.run(run).nodes.map(node => node.podId)).toEqual([a])
+  f.engine.tick(); f.complete(a); f.engine.tick()
+  f.store.db.prepare('INSERT INTO resource_epochs(pod_id,epoch) VALUES(?,1) ON CONFLICT(pod_id) DO UPDATE SET epoch=epoch+1').run(a)
+  expect(() => f.engine.startRevision(id, 1)).toThrow('permissions or script changed')
+  expect(f.store.db.prepare('SELECT count(*) AS count FROM workflow_runs').get()!.count).toBe(1)
+})
+it('validates named versioned port values and rejects undeclared required branches', () => {
+  const f = fixture(); const a = f.pod(); const b = f.pod(); const id = f.workflow([a])
+  const ports = parseWorkflowPorts(invoicePorts(a))
+  expect(parseWorkflowPortValues({ invoice: { version: 1, data: { invoice: 'INV-1' } } }, ports.inputs)).toEqual({ invoice: { version: 1, data: { invoice: 'INV-1' } } })
+  expect(() => parseWorkflowPortValues({ invoice: { version: 2, data: { invoice: 'INV-1' } } }, ports.inputs)).toThrow('schema version')
+  expect(() => parseWorkflowPortValues({ invoice: { version: 1, data: { invoice: 'INV-1', secret: 'outside' } } }, ports.inputs)).toThrow()
+  expect(() => parseWorkflowPortValues({}, ports.inputs)).toThrow('published revision')
+  expect(() => f.engine.publishRevision(id, 1, { ...invoicePorts(a), requiredTerminals: [b] })).toThrow('belong')
+  expect(() => f.engine.publishRevision(id, 1, { ...invoicePorts(a), requiredGates: ['approval'] })).toThrow('not declared')
+  expect(() => parseWorkflowPorts({ ...invoicePorts(a), extra: true })).toThrow('fields')
+})
 it('runs an unchanged diamond graph with ALL joins and durable completion receipts', () => {
   const f = fixture(); const [a, b, c, d] = [f.pod(), f.pod(), f.pod(), f.pod()]
   const before = f.store.listPods(); const id = f.workflow([a!, b!, c!, d!], [[], [a!], [a!], [b!, c!]])

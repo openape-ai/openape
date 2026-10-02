@@ -1,13 +1,17 @@
 import type { WorkflowDefinition, WorkflowOutput } from '../../contracts/workflows'
 import { parseWorkflowOutput } from '../../contracts/workflows'
 import type { PodDatabase } from '../storage/database'
+import type { RunInput } from '../../contracts/runs'
+import type { WorkflowCallRequest } from './calls'
+import { loadWorkflowRevision } from './revisions'
 
-export function workflowInput(store: PodDatabase, runId: string): { runId: string, outputs: Record<string, WorkflowOutput> } | undefined {
+export function workflowInput(store: PodDatabase, runId: string): RunInput['workflow'] {
   const attempt = store.db.prepare('SELECT a.*,w.definition FROM workflow_attempts a JOIN workflow_runs w ON w.id=a.workflow_run_id WHERE a.run_id=?').get(runId)
   if (!attempt) return undefined
   const definition = JSON.parse(attempt.definition as string) as WorkflowDefinition
   const node = definition.nodes.find(node => node.podId === attempt.pod_id)!
-  if (!node.handoff) return undefined
+  const call = store.db.prepare('SELECT id,request,workflow_id,workflow_revision FROM workflow_call_requests WHERE workflow_run_id=?').get(attempt.workflow_run_id!)
+  if (!node.handoff && !call) return undefined
   const outputs: Record<string, WorkflowOutput> = {}
   if (node.handoff) {
     for (const predecessor of node.after) {
@@ -16,7 +20,11 @@ export function workflowInput(store: PodDatabase, runId: string): { runId: strin
       outputs[predecessor] = parseWorkflowOutput(JSON.parse(output.output as string))
     }
   }
-  return { runId: attempt.workflow_run_id as string, outputs }
+  if (!call) return { runId: attempt.workflow_run_id as string, outputs }
+  const request = JSON.parse(call.request as string) as WorkflowCallRequest
+  const { published } = loadWorkflowRevision(store, call.workflow_id as string, Number(call.workflow_revision))
+  const inputs = Object.fromEntries(published.ports.inputs.filter(port => port.podId === node.podId).map(port => [port.name, request.inputs[port.name]!]))
+  return { runId: attempt.workflow_run_id as string, outputs, call: { requestId: call.id as string, caseId: request.caseId, caseRevision: request.caseRevision }, inputs }
 }
 
 export function publishWorkflowOutput(store: PodDatabase, runId: string, value: unknown): void {
