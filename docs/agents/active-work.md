@@ -1,28 +1,53 @@
 # Active work
 
-## Current M10 — issue1417
+## Current M11 — issue1417
 
-M0–M9 are accepted. Isolated checkout
+M0–M10 are accepted. Isolated checkout
 `openape-monorepo.worktrees/pods-workflows-networks`; branch
-`feature/issue-1417-pods-networks-m10`; canonical base
-`afbcb7aad45ad16ffccc51077b4b2968806d6c74` (PR210, full main CI5337).
-Doctor passes. M10 is in progress and unaccepted: bounded negotiated network
-publication, owner-scoped runtime reads and shared read-only browser components.
-Actual Opus5.5 foundation review identified the old-relay unknown-part-key trap;
-network summaries use an additive separate publication instead of new part keys.
-Legacy format2 negotiation remains unchanged. Full backup stays separate.
-Next finish compatibility and scope guards, focused volume/owner/offline/rollback
-and encrypted-backup tests, actual browser/native acceptance, reviews and gates.
-M10 review corrections now include a closed legacy-table classification, private
-Pod/artifact exclusion, a second worker mutation guard, redacted persistent health,
-removed browser approval URLs and independent scoped browser detail state. Latest
-uncommitted checks pass root lint/typecheck, both builds,140 Pods suites/1133 tests
-and four relay suites/34 tests. Before the last privacy correction, four actual
-Electron tests,18 browser layout checks and authenticated relay/browser E2E passed;
-final-source manual checks still need repetition. Earlier failed test fixtures,
-translation coverage and activity-error placement were corrected, not waived.
-No M10 tested SHA, PR or report yet. No production activation, conversion or
-expanded external rights. Evidence: `/tmp/openape-pods-networks-m10/`.
+`feature/issue-1417-pods-networks-m11`; canonical base
+`ad16a8f2cf4fa85864472c8cb8750d4feaed33cc` (PR211, full main CI5339).
+Doctor passes. M11 is in progress and unaccepted. The full approved sharing plan
+01M3NA5X47W7HAV5SE10D0EN1G was read; no sharing implementation exists yet.
+Uncommitted conversion implementation now has a pure dry run, explicit review of
+all checkpoints and source versioning, unresolved-work refusal, atomic cutover,
+disabled legacy schedules, original identities/scripts/bindings and protected ancestry.
+Actual Opus5.5 findings led to retained consumer checkpoints, durable restore-safe
+receipts, stronger source-history/recovery checks and shared preview/create validation.
+Actual Fable5.1 UI review informs the desktop-only wizard, explicit schema types,
+checkpoint body inspection, schedule comparison and separate activation.
+Current-source checks pass: full root lint/typecheck, Pods build,141 unit suites /
+1157 tests, two native suites / three tests and13 manual layout checks. The native
+route preserves original Pods/scripts/resources/checkpoints, creates paused state
+without execution, then explicitly processes a source using its retained legacy value.
+Six final native/EN/DE wide/narrow screenshots were personally inspected.
+Actual Opus5.5 final review found no conversion blocker and disclosed its read limits.
+Earlier typing, diagnostic coverage, native accessible-label and unrelated-seed-Pod
+fixture failures were corrected and retained in the evidence logs, not waived.
+Native PR/exact-head CI, protected merge/main and private Test Runs publication
+remain pending. M11–M14 are unaccepted. No productive conversion, production activation
+or expanded external rights. Evidence: `/tmp/openape-pods-networks-m11/`.
+Next finish this reviewable conversion increment, then paused replacement/archive,
+retained-item inspection and the approved portable file-transfer slice.
+
+## M10 acceptance evidence — issue1417
+
+Clean tested runtime `0bcad342d2d96a4645c687358ba964b04c2b254c` passed root
+lint/typecheck, both app builds,1136 Pods tests,34 relay tests,six protocol tests,
+seven native checks,18 layout checks and authenticated browser E2E. Primary review
+inspected all39 native diff files/1839 displayed lines against canonical source/base;
+actual Claude Code Opus5.5/Fable5.1 reviews informed the fixes. Protected
+[PR211](https://repos.openape.ai/patrick/monorepo/pulls/211) merged as
+`ad16a8f2cf4fa85864472c8cb8750d4feaed33cc`; exact-head CI5338 and full main CI5339 passed.
+Main reused67/68 Turbo test tasks; fresh local source tests are separately retained.
+[Verified private Test Runs](https://report.openape.ai/r/TIPZLLUeJrGCKBf0UE7ituvS)
+contains actual logs, earlier failed gates and eight personally inspected screenshots.
+Owner200, anonymous401, exact screenshot bytes and authenticated browser display
+verified. The immutable report records pending CI at publication time; the final PR
+review and this receipt record subsequent success. Browser E2E uses a real Nuxt/IdP
+route with signed synthetic runtime responses; native tests separately exercise
+Electron/preload/main/worker. Production desktop/relay acceptance remains M13.
+Relay-first rollout is required; a network-bearing profile refuses an older relay
+and pauses workspace scheduling. No deployment or live conversion was performed.
 
 ## M9 acceptance evidence — issue1417
 
