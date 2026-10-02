@@ -25,7 +25,7 @@ contains six personally inspected screenshots; privacy/category/bytes/browser ve
 Own checkout `openape-monorepo.worktrees/pods-workflows-networks`, branch
 `feature/issue-1417-pods-networks-m11-composition`, base the canonical merge above.
 Doctor passes. Paused composition replacement is implemented but unaccepted,
-followed by approved portable sharing. The uncommitted backend preserves historical
+followed by approved portable sharing. The implemented backend preserves historical
 members, source identities, checkpoints, rights and receipts; requires settled work
 and fresh added instances; refuses changed retained authority and old approval reuse.
 The editor preserves schedules, schemas, gates, joins and values, freezes a reviewed
@@ -43,7 +43,13 @@ default runner or CI change.
 Positive public-run selection uses the existing index, verified by SQLite's query
 plan and focused actual Opus review. One native route and17 manual layout cases
 pass; six screenshots were personally inspected. Final source review found no
-blocking issue in its stated scope. Mandatory hook, report and PR/CI remain pending. M11–M14 are unaccepted.
+blocking issue in its stated scope. Source `57ddbecc2a09b41b638ac8073b691afc50505aba` is in native PR214.
+Post-push verification found the earlier Git-environment incident had also changed
+the shared hook path to a removed test directory. The documented `.githooks` path
+is restored. The original commit/push therefore do not prove hook success. The
+complete affected unit contract was then run directly at that exact source and
+passed, including1177 Pods tests; external CI5344 also passed. Final documentation
+commit, native review, report and protected merge remain pending. M11–M14 are unaccepted.
 No live conversion, production activation or expanded external rights.
 Evidence: `/tmp/openape-pods-networks-m11-replacement/` and current
 `/tmp/openape-pods-networks-m11-composition/`. Next complete real desktop/layout
