@@ -987,7 +987,7 @@ invocation, effect or gate input, and the stopped-process check precedes reconci
 Unknown external actions remain blocked until their outcome is explicitly reconciled.
 
 Owner reads are bounded: 50 trace receipts, 50 unresolved invocation failures,
-64 collection summaries, five record previews, and256 resource summaries per member.
+64 collection summaries, five record previews, and 256 resource summaries per member.
 Trace fields use an explicit allowlist; grant tokens and raw authority objects never
 leave the worker through these views. Activity follows actual case-linked acceptance
 and settlement receipts. Data reads preserve version/tombstone information and enforce
@@ -996,7 +996,7 @@ same-owner/company collection bindings. Read commands do not mutate retained sta
 Only already-assigned `mail.read` is permitted on source instances. Consumers cannot
 request it, and other undeclared external ports remain refused. The existing exact
 account/folder/attachment/history checks and provider authorization still apply.
-Each invocation allows at most100 mail reads and records operation/count metadata,
+Each invocation allows at most 100 mail reads and records operation/count metadata,
 without mailbox content or credentials. No mail, accounting or notification right is
 created or broadened. Connected creation remains fenced until M10 bounded publication;
 the actual connected Electron entry has an explicit offline refusal path.
@@ -1008,3 +1008,14 @@ added. Actual Claude Code Opus5.5 reviews supplement primary review; Patrick add
 permitted Fable for UI/design, verified here as `claude-fable-5-1`. Their findings drive
 corrections and fresh screenshot capture. M9 is not accepted until final clean-SHA
 checks, native PR review, private Test Runs evidence and protected merge are verified.
+
+
+### Reviewed composition correction boundary
+
+M9 creates immutable compositions and permits pausing them; it does not offer in-place
+editing or archival. The Fable review identified that a mistaken composition otherwise
+has no owner-facing replacement path. M11 must include an explicit, reviewed paused
+replacement/archive path alongside membership cutover and sharing. It must retain
+history, identities, pending decisions and effect evidence, and refuse unresolved
+work rather than deleting it. This is a required pre-release follow-up, not a claim
+that M9 provides editing or that an existing network can be silently converted.

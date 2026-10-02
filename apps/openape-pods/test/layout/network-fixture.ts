@@ -26,3 +26,13 @@ export function operationalFixture() {
   }
   return { id, pods, organization, definitions, setup, definition, view, groupId, networkId }
 }
+
+export function recoveryFixture() {
+  const f = operationalFixture()
+  f.view.details!.failures = [{ runId: f.id(60), generation: 2, podId: f.pods[2]!.id, kind: 'uncertain', reason: 'Synthetic external action needs reconciliation before retry.', inspectedAt: null, conflict: 'b'.repeat(64), effectsMore: false, effects: [{ key: 'd'.repeat(64), attempt: 1, sequence: 2, state: 'unknown' }] }]
+  f.view.gates = [
+    { id: f.id(61), networkId: f.networkId, gate: 'review-mail', podId: f.pods[2]!.id, generation: 1, state: 'pending', expiresAt: Date.now() + 600000, url: 'https://id.example.invalid/approval', error: null, items: [{ deliveryId: f.id(63), title: 'Synthetic pending invoice', outcome: 'held' }] },
+    { id: f.id(62), networkId: f.networkId, gate: 'uncertain-approval', podId: f.pods[2]!.id, generation: 3, state: 'unknown', expiresAt: Date.now() + 600000, url: null, error: 'Synthetic approval outcome is unknown. Inspect before requesting fresh approval.', items: [{ deliveryId: f.id(64), title: 'Synthetic uncertain invoice', outcome: 'unknown' }] },
+  ]
+  return f
+}

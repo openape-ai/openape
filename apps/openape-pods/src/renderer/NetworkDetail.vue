@@ -142,8 +142,11 @@ export default defineComponent({
       </button>
     </div>
     <p>
-      {{ t('Waiting: {count}', { count: (network.counts.pending ?? 0) + (network.counts.retry_wait ?? 0) }) }} · {{ t('Processing: {count}', { count: network.counts.claimed ?? 0 }) }} · {{ t('Decisions: {count}', { count: gates.filter(gate => ['pending', 'unknown', 'preparing', 'consuming'].includes(gate.state)).length }) }}
+      {{ t('Waiting: {count}', { count: (network.counts.pending ?? 0) + (network.counts.retry_wait ?? 0) }) }} · {{ t('Processing: {count}', { count: network.counts.claimed ?? 0 }) }} · {{ t('Decisions: {count}', { count: gates.filter(gate => ['pending', 'unknown', 'preparing', 'consuming', 'superseded'].includes(gate.state)).length }) }}
     </p>
+    <button v-if="details?.failures.length" class="text-button network-failure-count" @click="tab = 'decisions'">
+      {{ t('Failures requiring review: {count}', { count: details.failures.length }) }}
+    </button>
     <p v-if="network.health.oldestPendingAt">
       {{ t('Oldest waiting item: {time}', { time: dateTime(network.health.oldestPendingAt) }) }}
     </p>
@@ -316,5 +319,5 @@ export default defineComponent({
 </template>
 
 <style>
-.network-detail{display:flex;flex-direction:column;gap:16px;min-width:0}.network-detail h1{margin:10px 0}.network-detail p{overflow-wrap:anywhere;margin:4px 0}.network-detail label,.network-detail li{overflow-wrap:anywhere}.network-timers ul{padding-left:20px}.network-process .paused-consent{margin-left:28px;padding:10px;border-left:3px solid var(--border)}.network-detail .text-button{min-height:36px}.network-detail pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto;font-size:12px}.network-detail article,.network-process{padding:16px;border:1px solid var(--border);border-radius:12px;margin:10px 0}.network-detail textarea{display:block;width:100%;min-height:72px;box-sizing:border-box}.network-detail .graph-modes{flex-wrap:wrap}.network-process label{display:flex;gap:8px;align-items:center;margin:10px 0}.network-process input[type=checkbox]{width:auto}.network-process input[type=number]{max-width:90px}.network-actions{display:flex;flex-wrap:wrap;gap:10px}
+.network-detail{display:flex;flex-direction:column;gap:16px;min-width:0}.network-detail h1{margin:10px 0}.network-detail p{overflow-wrap:anywhere;margin:4px 0}.network-detail label,.network-detail li{overflow-wrap:anywhere}.network-timers ul{padding-left:20px}.network-process .paused-consent{margin-left:28px;padding:10px;border-left:3px solid var(--border)}.network-detail .text-button{min-height:36px}.network-detail pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto;font-size:12px}.network-detail article,.network-process{padding:16px;border:1px solid var(--border);border-radius:12px;margin:10px 0}.network-detail textarea{display:block;width:100%;min-height:72px;box-sizing:border-box}.network-detail .graph-modes{flex-wrap:wrap}.network-process label{display:flex;gap:8px;align-items:center;margin:10px 0}.network-process input[type=checkbox]{width:auto}.network-process input[type=number]{max-width:90px}.network-actions>label{flex:1 0 100%}.network-failure-count{align-self:flex-start}.network-actions{display:flex;flex-wrap:wrap;gap:10px}
 </style>

@@ -3406,5 +3406,6 @@
   "This preview expired. Change the selection and review again.": "Diese Vorschau ist abgelaufen. Ändere die Auswahl und prüfe erneut.",
   "Each source runs independently. Use zero for manual only, or at least 60 seconds.": "Jede Quelle arbeitet unabhängig. Verwende null für ausschließlich manuelle Starts oder mindestens 60 Sekunden.",
   "Prepared definition list is incomplete. Refresh before creating a network.": "Die Liste vorbereiteter Definitionen ist unvollständig. Aktualisiere sie vor dem Erstellen eines Netzwerks.",
-  "Selection or rights changed. Review shared values and channels again.": "Auswahl oder Rechte haben sich geändert. Prüfe gemeinsame Werte und Kanäle erneut."
+  "Selection or rights changed. Review shared values and channels again.": "Auswahl oder Rechte haben sich geändert. Prüfe gemeinsame Werte und Kanäle erneut.",
+  "Failures requiring review: {count}": "Fehler zur Prüfung: {count}"
 }

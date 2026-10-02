@@ -6,7 +6,7 @@ import { NetworkEngine } from '../../src/worker/scheduling/network-engine'
 import { closeNetworks, networkFixture } from './network-fixture'
 
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
-afterEach(() => { vi.restoreAllMocks(); closeNetworks() })
+afterEach(async () => { await closeNetworks(); vi.restoreAllMocks() })
 
 function fixture() {
   const f = networkFixture()
