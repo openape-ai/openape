@@ -27,6 +27,7 @@ import { WorkflowCalls } from './workflows/calls'
 import { chooseGateItem, discardGateBatch, excludeGateItems } from './workflows/gates'
 import { graphDetail } from './workflows/detail'
 import type { RunContextRequest, ServiceCheck  } from '../contracts/services'
+import { recoverPortableImports } from './sharing/import'
 import { DependencyStore } from './dependencies/store'
 import { programRequest } from '../main/programs/invoke'
 import { podDirectories } from '../runtime/environment'
@@ -264,6 +265,7 @@ port.on('message', async (event) => {
       await networks.reconcileStartup()
       await new DependencyStore(store).recover(runtime.helper)
       new ProgramControl(store, registry).execute({ type: 'recover' })
+      await recoverPortableImports(store)
       await data.retention.cleanDeletedFiles(); await data.retention.view()
       processesReady = true; startupReady = providerReady
       port.postMessage({ id: request.id, state: true }); return

@@ -1,5 +1,19 @@
 # Active work
 
+## Sharing M3 — issue 1419
+
+M2 is accepted: PR217 merge `eb53ed76433280ac20d286f3669d9bb23184debe` passed
+full-main CI5354 (source CI5353). Patrick authorized resuming after the handoff.
+Branch `feature/issue-1419-sharing-import` in
+`openape-monorepo.worktrees/pods-portable-sharing` holds the first M3 increment:
+bounded archive reader, schema-34 local import journal and
+`PortableImporter` (inspect, stage, configure, commit, complete, cancel, startup
+recovery), described in
+[the sharing inventory](../architecture/pods-portable-sharing.md). It is worker-only;
+no route or UI calls it. Next: main-side binding/provisioning/dependency setup,
+alias runtime views, composition finalization and permission operations, then the
+M4 desktop/browser wizard. Evidence directory: `/tmp/openape-pods-sharing-m3/`.
+
 ## Sharing M2 — issue 1419
 
 Owned snapshots, explicit assets, freshness-bound privacy review and complete
