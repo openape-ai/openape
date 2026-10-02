@@ -17,13 +17,13 @@ const policies = {
 } as const satisfies Record<typeof centralTables[number], Policy>
 
 export const privatePods = `SELECT pod_id FROM network_members UNION SELECT pod_id FROM network_invocations UNION SELECT m.pod_id FROM workflow_members m JOIN workflow_call_requests c ON c.workflow_id=m.workflow_id`
-const privateRuns = `SELECT id FROM runs WHERE pod_id IN (${privatePods})`
+const publicRuns = `SELECT id FROM runs WHERE pod_id NOT IN (${privatePods})`
 const privateWorkflows = `SELECT workflow_id FROM workflow_members WHERE pod_id IN (${privatePods}) UNION SELECT ancestor_workflow_id FROM networks WHERE ancestor_workflow_id IS NOT NULL`
 const privateWorkflowRuns = `SELECT workflow_run_id FROM workflow_call_requests WHERE workflow_run_id IS NOT NULL UNION SELECT id FROM workflow_runs WHERE workflow_id IN (${privateWorkflows})`
 
 export function networkPublicationTables(store: PodDatabase): Record<string, Record<string, unknown>[]> {
   const where: Record<Exclude<Policy, 'omit'>, string> = {
-    pod: `pod_id NOT IN (${privatePods})`, podId: `id NOT IN (${privatePods})`, run: `run_id NOT IN (${privateRuns})`,
+    pod: `pod_id NOT IN (${privatePods})`, podId: `id NOT IN (${privatePods})`, run: `run_id IN (${publicRuns})`,
     workflow: `workflow_id NOT IN (${privateWorkflows})`, workflowId: `id NOT IN (${privateWorkflows})`,
     workflowRun: `workflow_run_id NOT IN (${privateWorkflowRuns})`, workflowRunId: `id NOT IN (${privateWorkflowRuns})`,
     workflowHistory: `workflow_id NOT IN (${privateWorkflows}) AND workflow_run_id NOT IN (${privateWorkflowRuns})`,

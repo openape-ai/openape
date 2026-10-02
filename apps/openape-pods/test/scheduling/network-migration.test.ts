@@ -357,3 +357,143 @@ it('refuses archival while native leases, bounded batches, invocations, deliveri
   expect(() => f.engine.execute({ type: 'process', id, revision: 1, previewId: preview.id })).toThrow('unavailable')
   expect(f.store.db.prepare('SELECT count(*) AS n FROM network_effect_receipts').get()!.n).toBe(1)
 })
+
+it('replaces a settled paused composition with fresh additions and preserves historical members and checkpoints', () => {
+  const f = fixture(); const id = f.engine.convert(f.selection, f.preview().fingerprint).createdId!
+  const nextConsumer = f.pod('Fresh reviewer', { takes: ['cases'], gives: [], summary: 'Replacement reviewer' }, async () => {})
+  const setup = parseNetworkView(f.engine.execute({ type: 'replacementSetup', id, revision: 1 })).replacement!
+  expect(setup.issues).toEqual([])
+  const draft = { ...setup.draft, name: 'Reviewed replacement', members: setup.draft.members.map(member => member.podId === f.consumer ? { ...member, podId: nextConsumer } : member) }
+  const changes = f.store.db.prepare('SELECT total_changes() AS n').get()!.n
+  const review = parseNetworkView(f.engine.execute({ type: 'replacementPreview', id, revision: 1, draft })).replacement!
+  expect(review.issues).toEqual([])
+  expect(review.added).toEqual([nextConsumer]); expect(review.retired).toEqual([f.consumer])
+  expect(f.store.db.prepare('SELECT total_changes() AS n').get()!.n).toBe(changes)
+  const preserved = ['pods', 'scripts', 'resources', 'checkpoints', 'network_checkpoints', 'network_members', 'network_subscriptions'].map(table => ({ table, rows: f.store.db.prepare(`SELECT * FROM ${table}`).all() }))
+  const command = { type: 'replaceComposition' as const, id, revision: 1, draft, expectedFingerprint: review.fingerprint }
+  expect(f.engine.execute(command).networks[0]).toMatchObject({ id, revision: 2, state: 'paused', name: 'Reviewed replacement' })
+  expect(f.engine.execute(command).networks[0]!.revision).toBe(2)
+  for (const { table, rows } of preserved) expect(f.store.db.prepare(`SELECT * FROM ${table}`).all()).toEqual(expect.arrayContaining(rows))
+  const next = f.engine.execute({ type: 'detail', id, revision: 2 }).details!.definition
+  expect(next.members.map(member => member.podId)).toEqual(draft.members.map(member => member.podId))
+  expect(next.members.find(member => member.podId === f.source)!.source!.bindingId).toBe(setup.current.members.find(member => member.podId === f.source)!.source!.bindingId)
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM network_revisions WHERE network_id=?').get(id)!.n).toBe(2)
+  expect(() => f.engine.updateInstance(f.consumer, () => { throw new Error('Must not update retired history') })).toThrow('Retired')
+  expect(f.started).toEqual([])
+  f.store.assertStorage()
+})
+
+it('refuses stale, active, historical-member and incompatible-schema replacements without mutation', () => {
+  const f = fixture(); const id = f.engine.convert(f.selection, f.preview().fingerprint).createdId!
+  const setup = f.engine.execute({ type: 'replacementSetup', id, revision: 1 }).replacement!
+  const draft = { ...setup.draft, name: 'Reviewed name' }
+  const review = f.engine.execute({ type: 'replacementPreview', id, revision: 1, draft }).replacement!
+  f.engine.execute({ type: 'activate', id, revision: 1 })
+  expect(() => f.engine.execute({ type: 'replaceComposition', id, revision: 1, draft, expectedFingerprint: review.fingerprint })).toThrow('review changed')
+  expect(f.engine.execute({ type: 'replacementPreview', id, revision: 1, draft }).replacement!.issues).toContain('Pause the network before replacing its composition')
+  f.engine.execute({ type: 'pause', id, revision: 1 })
+  const changedSchema = { ...draft, channels: draft.channels.map(channel => ({ ...channel, schema: { ...channel.schema, properties: { subject: { type: 'number' as const } } } })) }
+  expect(f.engine.execute({ type: 'replacementPreview', id, revision: 1, draft: changedSchema }).replacement!.issues).toContain('Changed channel schemas require a new version; historical versions cannot be reused')
+  const fresh = f.pod('Used instance', { takes: ['cases'], gives: [], summary: 'Used member' }, async () => {})
+  f.store.db.prepare('UPDATE checkpoints SET revision=1 WHERE pod_id=?').run(fresh)
+  const usedDraft = { ...draft, members: [...draft.members, { podId: fresh, source: null, serialCase: false }] }
+  expect(f.engine.execute({ type: 'replacementPreview', id, revision: 1, draft: usedDraft }).replacement!.issues).toContain('Added members must be separate fresh instances; historical members remain reserved')
+  expect(f.engine.view().networks[0]!.revision).toBe(1)
+  expect(() => parseCentralNetworkRead({ type: 'replacementSetup', id, revision: 1 })).toThrow('local desktop')
+  expect(() => parseCentralNetworkResult({ networks: [], replacement: setup })).toThrow('read-only')
+})
+
+it('retains source deduplication across replacement and routes only new versions to fresh subscriptions', async () => {
+  const f = fixture(); const id = f.engine.convert(f.selection, f.preview().fingerprint).createdId!
+  f.engine.execute({ type: 'activate', id, revision: 1 })
+  const source = f.engine.invocations.reserve(id, f.source, f.resources.epoch(f.source), 'manual')!
+  const emission = { channel: 'cases', key: 'case', sourceItemId: 'case', sourceVersion: '1', payload: { subject: 'Preserved case' } }
+  await f.engine.invocations.finish(source, 'completed', 'Initial source', null, [], [emission])
+  const event = f.store.db.prepare('SELECT id FROM network_events').get()!.id as string
+  const consumer = f.engine.invocations.reserve(id, f.consumer, f.resources.epoch(f.consumer), 'manual')!
+  await f.engine.invocations.finish(consumer, 'completed', 'Initial consumer', null, [event], [])
+  f.engine.execute({ type: 'pause', id, revision: 1 })
+  const fresh = f.pod('New reviewer', { takes: ['cases'], gives: [], summary: 'New reviewer' }, async () => {})
+  const setup = f.engine.execute({ type: 'replacementSetup', id, revision: 1 }).replacement!
+  const draft = { ...setup.draft, members: setup.draft.members.map(member => member.podId === f.consumer ? { ...member, podId: fresh } : member) }
+  const review = f.engine.execute({ type: 'replacementPreview', id, revision: 1, draft }).replacement!
+  expect(review.issues).toEqual([])
+  f.engine.execute({ type: 'replaceComposition', id, revision: 1, draft, expectedFingerprint: review.fingerprint })
+  f.engine.execute({ type: 'activate', id, revision: 2 })
+  const repeated = f.engine.invocations.reserve(id, f.source, f.resources.epoch(f.source), 'manual')!
+  await f.engine.invocations.finish(repeated, 'completed', 'Same source version', null, [], [emission])
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM network_events').get()!.n).toBe(1)
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM network_deliveries').get()!.n).toBe(1)
+  const newer = f.engine.invocations.reserve(id, f.source, f.resources.epoch(f.source), 'manual')!
+  await f.engine.invocations.finish(newer, 'completed', 'New explicit source version', null, [], [{ ...emission, sourceVersion: '2' }])
+  expect(f.store.db.prepare('SELECT s.pod_id FROM network_deliveries d JOIN network_subscriptions s ON s.id=d.subscription_id WHERE d.state=\'pending\'').all()).toEqual([{ pod_id: fresh }])
+  expect(() => f.engine.invocations.reserve(id, f.consumer, f.resources.epoch(f.consumer), 'manual')).toThrow('Pod is not a member of this network revision')
+  f.store.assertStorage()
+})
+
+it('retires a broken member without weakening validation of members that remain', () => {
+  const f = fixture(); const id = f.engine.convert(f.selection, f.preview().fingerprint).createdId!
+  const fresh = f.pod('Fresh reviewer', { takes: ['cases'], gives: [], summary: 'Replacement reviewer' }, async () => {})
+  f.store.db.prepare('DELETE FROM validations WHERE pod_id=?').run(f.consumer)
+  const setup = f.engine.execute({ type: 'replacementSetup', id, revision: 1 }).replacement!
+  expect(setup.issues.length).toBeGreaterThan(0)
+  const draft = { ...setup.draft, members: setup.draft.members.map(member => member.podId === f.consumer ? { ...member, podId: fresh } : member) }
+  const review = f.engine.execute({ type: 'replacementPreview', id, revision: 1, draft }).replacement!
+  expect(review.issues).toEqual([])
+  f.engine.execute({ type: 'replaceComposition', id, revision: 1, draft, expectedFingerprint: review.fingerprint })
+  expect(f.engine.execute({ type: 'detail', id, revision: 2 }).details!.definition.members.map(member => member.podId)).toEqual([f.source, fresh])
+  f.store.assertStorage()
+  f.store.transaction(() => restoreNetworkStorage(f.store.db))
+  expect(f.engine.view().networks[0]!.state).toBe('paused')
+})
+
+it('rolls back every replacement write on receipt failure and keeps retries valid after retention and restore', () => {
+  const f = fixture(); const id = f.engine.convert(f.selection, f.preview().fingerprint).createdId!
+  const setup = f.engine.execute({ type: 'replacementSetup', id, revision: 1 }).replacement!
+  const draft = { ...setup.draft, name: 'Reviewed name' }
+  const review = f.engine.execute({ type: 'replacementPreview', id, revision: 1, draft }).replacement!
+  const command = { type: 'replaceComposition' as const, id, revision: 1, draft, expectedFingerprint: review.fingerprint }
+  const tables = ['networks', 'network_revisions', 'network_members', 'network_checkpoints', 'network_subscriptions', 'composition_config', 'network_trace_events']
+  const before = tables.map(table => f.store.db.prepare(`SELECT * FROM ${table}`).all())
+  f.store.db.exec('CREATE TEMP TRIGGER reject_replacement BEFORE INSERT ON network_trace_events WHEN NEW.kind=\'composition-replaced-reviewed\' BEGIN SELECT RAISE(ABORT,\'Synthetic receipt failure\'); END')
+  expect(() => f.engine.execute(command)).toThrow('Synthetic receipt failure')
+  expect(tables.map(table => f.store.db.prepare(`SELECT * FROM ${table}`).all())).toEqual(before)
+  f.store.db.exec('DROP TRIGGER reject_replacement')
+  f.engine.execute(command)
+  const receipt = f.store.db.prepare('SELECT body FROM network_trace_events WHERE kind=\'composition-replaced-reviewed\'').get()!.body
+  pruneNetworkTraces(f.store, Date.now() + 100 * 86400000)
+  f.store.transaction(() => restoreNetworkStorage(f.store.db))
+  expect(f.store.db.prepare('SELECT body FROM network_trace_events WHERE kind=\'composition-replaced-reviewed\'').get()!.body).toBe(receipt)
+  expect(f.engine.execute(command).networks[0]).toMatchObject({ revision: 2, state: 'paused' })
+  expect(() => f.engine.execute({ ...command, draft: { ...draft, name: 'Unreviewed retry' } })).toThrow()
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM network_revisions').get()!.n).toBe(2)
+})
+
+it('requires a fresh instance for role changes and refuses reusing retired member identities', () => {
+  const f = fixture(); const id = f.engine.convert(f.selection, f.preview().fingerprint).createdId!
+  const setup = f.engine.execute({ type: 'replacementSetup', id, revision: 1 }).replacement!
+  const changed = { ...setup.draft, members: setup.draft.members.map(member => ({ ...member, source: member.source ? null : { schedule: null } })) }
+  const roleReview = f.engine.execute({ type: 'replacementPreview', id, revision: 1, draft: changed }).replacement!
+  expect(roleReview.issues).toContain('Changing a source or consumer role requires a fresh instance')
+  expect(() => f.engine.execute({ type: 'replaceComposition', id, revision: 1, draft: changed, expectedFingerprint: roleReview.fingerprint })).toThrow('fresh instance')
+  const fresh = f.pod('Fresh reviewer', { takes: ['cases'], gives: [], summary: 'Replacement reviewer' }, async () => {})
+  const draft = { ...setup.draft, members: setup.draft.members.map(member => member.podId === f.consumer ? { ...member, podId: fresh } : member) }
+  const review = f.engine.execute({ type: 'replacementPreview', id, revision: 1, draft }).replacement!
+  f.engine.execute({ type: 'replaceComposition', id, revision: 1, draft, expectedFingerprint: review.fingerprint })
+  const historical = f.engine.execute({ type: 'replacementPreview', id, revision: 2, draft: setup.draft }).replacement!
+  expect(historical.issues).toContain('Added members must be separate fresh instances; historical members remain reserved')
+  expect(() => f.engine.execute({ type: 'replaceComposition', id, revision: 2, draft: setup.draft, expectedFingerprint: historical.fingerprint })).toThrow('historical members remain reserved')
+  expect(f.engine.view().networks[0]!.revision).toBe(2)
+})
+
+it('refuses fresh-looking instances with retained external effects even when run history is gone', () => {
+  const f = fixture(); const id = f.engine.convert(f.selection, f.preview().fingerprint).createdId!
+  const fresh = f.pod('Historical effect owner', { takes: ['cases'], gives: [], summary: 'Not fresh' }, async () => {})
+  f.store.db.prepare('INSERT INTO effect_ledger VALUES(?,?,?,?,NULL,?,?)').run(fresh, 'historical-item', 'http.request', digest('input'), 'completed', '{}')
+  const setup = f.engine.execute({ type: 'replacementSetup', id, revision: 1 }).replacement!
+  const draft = { ...setup.draft, members: setup.draft.members.map(member => member.podId === f.consumer ? { ...member, podId: fresh } : member) }
+  const review = f.engine.execute({ type: 'replacementPreview', id, revision: 1, draft }).replacement!
+  expect(review.issues).toContain('Added members must be separate fresh instances; historical members remain reserved')
+  expect(() => f.engine.execute({ type: 'replaceComposition', id, revision: 1, draft, expectedFingerprint: review.fingerprint })).toThrow('fresh instances')
+  expect(f.engine.view().networks[0]!.revision).toBe(1)
+})
