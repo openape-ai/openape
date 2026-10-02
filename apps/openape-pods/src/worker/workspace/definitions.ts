@@ -85,7 +85,9 @@ export class DefinitionWorkspace {
     try {
       this.catalog.assertPod(podId)
       signal.throwIfAborted()
-      if (this.store.db.prepare('SELECT phase FROM remote_pods WHERE pod_id=?').get(podId)?.phase === 'needs_desktop_action') throw new Error('Recover this existing identity on desktop before retrying. A restored identity must never be provisioned again.')
+      const identity = this.store.db.prepare('SELECT phase,identity FROM remote_pods WHERE pod_id=?').get(podId)
+      if (identity?.phase === 'needs_desktop_action') throw new Error('Recover this existing identity on desktop before retrying. A restored identity must never be provisioned again.')
+      if (identity?.phase === 'ready' && identity.identity) { this.provisioned(requestId, null); return }
       await podDirectories(this.store.root, podId)
       const binding = this.binding(podId)
       const existing = this.store.db.prepare('SELECT 1 FROM definition_update_drafts WHERE pod_id=? AND definition_id=? AND definition_version=?').get(podId, binding.definition_id!, binding.definition_version!)
