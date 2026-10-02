@@ -14,7 +14,7 @@ import GraphView from '../../src/renderer/GraphView.vue'
 import { applyLanguage } from '../../src/renderer/i18n'
 import { screenshotPath } from './evidence'
 import { installWorkspace } from './workspace-fixture'
-import { operationalFixture } from './network-fixture'
+import { operationalFixture, recoveryFixture } from './network-fixture'
 
 // Geometry of the graph view with the production stylesheet and the component's own rules.
 // Text, states and events are asserted in test/scheduling/graph-ui.test.ts.
@@ -213,5 +213,24 @@ describe.each(['local', 'connected'] as const)('persistent network operations in
     expect(wrapper.text()).toContain('event-accepted')
     wrapper.get('.network-detail > section').element.scrollIntoView(); await frame()
     await shot('phone-activity-en')
+  })
+})
+
+describe('network recovery with production desktop layout', () => {
+  it('shows uncertain effects, pending exclusions and unknown approvals on desktop and phone', async () => {
+    const f = recoveryFixture(); applyLanguage('en'); await page.viewport(1280, 1000)
+    installWorkspace({ language: async () => 'en', workspace: async () => ({ organization: f.organization, pods: f.pods }), networks: async () => structuredClone(f.view), definitions: async () => f.definitions })
+    wrapper = mount(App, { attachTo: document.body }); await flushPromises(); await frame()
+    const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.isVisible() && button.text().includes(text))!.trigger('click'); await flushPromises(); await frame() }
+    await click(f.definition.name); await click('Failures requiring review: 1')
+    expect(wrapper.text()).toContain('First inspect the stopped process.')
+    const shot = async (name: string) => { expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth); await page.screenshot({ path: screenshotPath(`networks-recovery-${name}.png`) }) }
+    wrapper.get('.network-detail article').element.scrollIntoView(); await frame(); await shot('desktop-effect')
+    await page.viewport(390, 1000); await frame()
+    wrapper.get('.network-detail article').element.scrollIntoView(); await frame(); await shot('phone-effect')
+    for (const [index, name] of [[1, 'pending'], [2, 'unknown']] as const) {
+      wrapper.findAll('.network-detail article')[index]!.element.scrollIntoView(); await frame(); await shot(`phone-${name}`)
+      for (const box of rectangles('.network-detail textarea')) expect(box.right).toBeLessThanOrEqual(390)
+    }
   })
 })

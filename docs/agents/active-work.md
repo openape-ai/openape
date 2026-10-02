@@ -6,27 +6,28 @@ M0–M8 are accepted. Isolated checkout
 `openape-monorepo.worktrees/pods-workflows-networks`; branch
 `feature/issue-1417-pods-networks-m9`; canonical base
 `9eaf5e4e70ae22ebebdf2f2c19c83376f7923b56` (PR209, main CI5334).
-Doctor passes. M9 work is uncommitted and unaccepted: bounded owner reads,
-configuration provenance, setup fingerprints, guided creation and operational
-views are being connected to the local and connected desktop routes. No M9 PR yet.
-Root lint/typecheck and Pods build pass. Latest full application check passed140
-suites/1122 units before the final retention/pause rollback regression; that targeted
-follow-up passed29 checks. Four native suites/six tests and three browser layout
-suites/18 tests pass. Actual native creation retains one mailbox binding, configures
-two independent timers, creates paused, activates/pauses and explicitly processes a
-paused source successfully. Shared-data/failure/case controls use real worker reads.
-The actual connected Electron entry visibly refuses creation while offline; online
-bounded publication remains M10. Screenshots were personally inspected.
-Claude Code Opus5.5 reviews closed the major authority/read/control findings; its last
-material retention issue was fixed, with a regression. A failed pause transaction
-now retains the in-memory processing batch as well as database state. Fable is verified
-as `claude-fable-5-1`; its UI findings led to nested consent, visible timers, recovery
-ordering, per-entry evidence and focus fixes. Both reviews supplement primary review;
-final Fable closure is pending. Evidence: `/tmp/openape-pods-networks-m9/`.
-No clean M9 tested SHA, PR, verified report or acceptance yet. Next: commit the candidate,
-run clean-source acceptance, review the exact native PR, publish private Test Runs,
-verify unit-only CI/protected merge/main CI, then continue M10–M14. No live external
-action, production activation, conversion or expanded rights.
+Doctor passes. M9 remains unaccepted. Candidate `b7435c0824538260ea4bf1882fb87e67f7753044`
+is pushed in [native PR210](https://repos.openape.ai/patrick/monorepo/pulls/210), explicitly
+linked to issue1417. Bounded owner reads, reviewed paused creation, independent timers,
+configuration origins and recovery controls are implemented. Earlier full checks passed
+140 suites/1123 units, six manual native tests and 18 browser layout tests. The subsequent
+clean-source unit run failed the eight-slot fairness fixture's existing five-second limit
+and exposed late teardown access to a closed database; this failed receipt is retained.
+The follow-up drains the engine/dispatcher before closing fixture storage and seeds the
+fairness fixture atomically without changing its timeout or admission assertion.
+
+Actual Opus5.5 reviews corrected authority/read/control and retention findings. Actual
+Fable (`claude-fable-5-1`) reviews drove nested pause consent, visible timers, scoped
+recovery evidence, a clickable failures count and desktop/phone recovery coverage.
+The follow-up passes 70 focused tests and nine graph layout tests; final full gates are
+running. Screenshots were personally inspected. M11 owns the required explicit reviewed
+replacement/archive path for mistaken immutable compositions, before M13 delivery.
+The connected Electron route refuses offline creation; bounded online publication is M10.
+
+Evidence: `/tmp/openape-pods-networks-m9/`. Next: commit the follow-up, verify its clean
+SHA, inspect exact native PR/CI, publish private Test Runs and verify protected merge
+and main CI, then continue M10–M14. No verified M9 report or acceptance yet. No live
+external action, production activation, conversion or expanded rights.
 
 
 

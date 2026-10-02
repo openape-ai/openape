@@ -18,18 +18,21 @@ import { PodGroups } from '../../src/worker/workspace/groups'
 
 export interface NetworkItem { eventId: string, key: string, channel: string, data: Record<string, unknown>, caseId: string, caseRevision: number }
 export type NetworkBehaviour = (items: NetworkItem[], request: (operation: string, payload: unknown) => Promise<unknown>, input: RunInput, signal: AbortSignal) => Promise<void>
-const stores: PodDatabase[] = []
-export function closeNetworks(): void {
-  for (const store of stores.splice(0)) { store.close(); rmSync(store.root, { recursive: true, force: true }) }
+const fixtures: { store: PodDatabase, engine: NetworkEngine, dispatcher: RunDispatcher }[] = []
+export async function closeNetworks(): Promise<void> {
+  for (const { store, engine, dispatcher } of fixtures.splice(0)) {
+    await engine.stop(); await dispatcher.stop(); store.close(); rmSync(store.root, { recursive: true, force: true })
+  }
 }
 
 export function networkFixture(services?: RunServices) {
-  const store = new PodDatabase(mkdtempSync(join(tmpdir(), 'pods-network-run-'))); stores.push(store)
+  const store = new PodDatabase(mkdtempSync(join(tmpdir(), 'pods-network-run-')))
   const resources = new ResourceRegistry(store, () => {})
   vi.spyOn(resources, 'capture').mockResolvedValue({ id: randomUUID(), files: [] } as never)
   const dispatcher = new RunDispatcher(store, resources, { helper: '/unused', environment: {} } as AgentRuntime, services)
   const owner = { issuer: 'https://identity.example.invalid', subject: 'synthetic-network-owner' }
   const engine = new NetworkEngine(store, dispatcher, resources, '/unused', () => owner)
+  fixtures.push({ store, engine, dispatcher })
   const groups = new PodGroups(store)
   groups.execute({ type: 'organize', action: 'create', name: 'Synthetic network company', revision: groups.view().revision })
   const groupId = groups.view().groups.at(-1)!.id
