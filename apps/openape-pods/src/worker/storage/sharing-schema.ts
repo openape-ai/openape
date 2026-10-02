@@ -23,3 +23,13 @@ CREATE TABLE portable_import_pods(
 );`
 
 export const sharingTables = ['portable_imports', 'portable_import_pods']
+
+export const aliasSchema = `
+CREATE TABLE resource_aliases(
+  pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE,
+  alias TEXT NOT NULL,
+  resource_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+  PRIMARY KEY(pod_id,alias)
+);`
+
+export const aliasTables = ['resource_aliases']

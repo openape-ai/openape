@@ -14,8 +14,10 @@ by the manifest code. M0 was accepted in PR215, merged as
 M1 was accepted in PR216, merged as `6133326303b9d1cf46fd843451f00b918849c6e1`
 with source CI5351/main CI5352 green. M2 was accepted in PR217, merged as
 `eb53ed76433280ac20d286f3669d9bb23184debe` with source CI5353/main CI5354 green.
-M3 continues from that merge on `feature/issue-1419-sharing-import`; schema 34 adds
-the local import journal.
+The first M3 increment was merged in PR218 as
+`d564a51212091564aa90d8fa96f19bdb438b0294` with source CI5355/main CI5356 green.
+M3 continues on `feature/issue-1419-sharing-setup`; schema 34 adds the local import
+journal and schema 35 persisted resource aliases.
 
 ## Manifest v1
 
@@ -177,7 +179,7 @@ and immutable call revisions while retaining legacy UUID behavior. M2 proves ine
 package structure, not recipient execution or UI delivery. Real desktop/browser
 routes, encrypted transfer and independent approvals are M4 acceptance work.
 
-## Journaled paused import (M3, first increment)
+## Journaled paused import (M3)
 
 `worker/sharing/archive.ts` decodes an untrusted archive completely in memory before
 anything is stored. It accepts exactly the exporter's ZIP subset: one volume, no
@@ -228,12 +230,57 @@ private storage, which the exporter refuses as an asset source; re-sharing them
 requires an owner-selected copy outside it. Blob retention now reads references and
 removes unreferenced blobs without yielding in between.
 
-Still open for M3: main-side resource, secret and application binding with recorded
-import-owned keys, imported dependency-lock preparation, identity provisioning,
-versioned alias runtime views, composition finalization after member approval and
-the owner data/artifact/call permission operations. Packages needing any of these
-stay in visible setup and cannot be completed yet. No route or UI exposes the
-importer; that is M4.
+### Aliases, binding and setup state
+
+Scripts never address tools by capability identifier: HTTP requests match an approved
+origin, application calls use the assigned application name, and folders and files
+are paths. Schema 35 therefore stores portable aliases for current file, directory
+and tool assignments in the local-only `resource_aliases` table (one assignment may
+serve several aliases), and a run receives `context.aliases` with `applications`,
+`http`, `directories` and `references` maps for its ready aliased assignments. The
+maps are empty without aliases, grant no access and leave existing scripts unchanged.
+Setting an alias advances the resource epoch like any assignment change. Imported
+assets are aliased by their package path.
+
+After the paused copy exists the recipient assigns folders, HTTP tools, applications
+and secrets through the existing owner-approved resource operations of each Pod.
+`bind` then records which assignment serves a declared directory, HTTP or application
+alias after checking it against the declaration: access mode; origin, at least the
+declared methods and the exact agent identity; application identity and declared
+environment values. A bundle's identity and executable hash are read from the
+assigned bundle by the main process, never taken from the caller; the worker compares
+the hash with the assignment it binds and keeps it, so a later change of that
+assignment reopens setup. Only a tool capability the package requested
+for that alias is named in the imported draft; a draft the owner replaced is left
+alone. Secrets match by credential alias and Jev by its single native assignment
+with the declared model and at most the declared attempts. No recipient mail
+assignment is comparable with a declared mail scope yet, so imported mail access
+stays in setup. Because a reassignment creates a new local resource, `bind` remains
+available after setup.
+
+Setup state is derived from actual local state: a revoked or changed assignment
+reopens its requirement, and a variable input counts as resolved when the Pod has
+a variable that is a valid value of its declaration, wherever the owner set it.
+Declared access and environment values use that Pod variable when the same input is
+also a variable. Access inputs such as an origin or agent
+identity stay editable in the journal during setup; variable inputs become Pod
+variables at commit and are edited there. `prepareDependencies` installs exactly the
+imported lock recorded at commit; without the archive (after a restore) the package
+must be imported again. `complete` requires every requirement. Packages with
+compositions therefore cannot be completed until composition finalization exists,
+and their Pods stay inert.
+
+The worker entry accepts the closed `portableImport` command set only after desktop
+identity setup; dependency preparation runs under the maintenance gate. The main
+process routes commands and, in a connected workspace, records a pending identity
+for every created Pod through the existing provisioning path, so one failure does
+not leave later Pods without a retry. No renderer, preload
+or relay route exists yet.
+
+Still open for M3: workflow output and call alias views with composition
+finalization after member approval, the owner data/artifact/call permission
+operations and exporter defaults from stored aliases. The complete desktop and
+browser flow is M4.
 
 ## Verified source inventory and required handling
 
