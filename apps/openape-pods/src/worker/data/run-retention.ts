@@ -36,6 +36,13 @@ export class RunRetention {
         WITH ranked AS (
           SELECT id, state, finished_at, row_number() OVER (PARTITION BY pod_id ORDER BY started_at DESC, rowid DESC) AS position
           FROM runs WHERE NOT EXISTS(SELECT 1 FROM network_invocations i WHERE i.run_id=runs.id AND i.execution_kind='gate_maintenance')
+          AND NOT EXISTS(SELECT 1 FROM workflow_gate_attempts attempt JOIN workflow_call_requests call ON call.id=attempt.request_id WHERE attempt.run_id=runs.id AND call.finished_at IS NULL)
+          UNION ALL
+          SELECT r.id,r.state,r.finished_at,row_number() OVER (PARTITION BY a.request_id ORDER BY r.started_at DESC,r.rowid DESC) AS position
+          FROM runs r JOIN workflow_gate_attempts a ON a.run_id=r.id JOIN workflow_call_requests call ON call.id=a.request_id
+          WHERE r.finished_at IS NOT NULL AND r.state!='running' AND call.finished_at IS NULL
+            AND NOT EXISTS(SELECT 1 FROM workflow_nodes node WHERE node.run_id=r.id)
+            AND a.rowid!=(SELECT min(first.rowid) FROM workflow_gate_attempts first WHERE first.request_id=a.request_id)
         )
         SELECT r.id FROM ranked r
         WHERE position > ? AND finished_at IS NOT NULL AND state != 'running'
@@ -59,11 +66,11 @@ export class RunRetention {
           )
           AND NOT EXISTS (
             SELECT 1 FROM workflow_attempts a JOIN workflow_runs w ON w.id=a.workflow_run_id
-            WHERE a.run_id=r.id AND w.finished_at IS NULL
+            WHERE a.run_id=r.id AND (w.finished_at IS NULL OR EXISTS(SELECT 1 FROM workflow_call_requests call WHERE call.workflow_run_id=w.id AND call.finished_at IS NULL)) AND NOT EXISTS(SELECT 1 FROM workflow_gate_attempts maintenance WHERE maintenance.run_id=r.id)
           )
           AND NOT EXISTS (
             SELECT 1 FROM workflow_nodes n JOIN workflow_runs w ON w.id=n.workflow_run_id
-            WHERE n.run_id=r.id AND w.finished_at IS NULL
+            WHERE n.run_id=r.id AND (w.finished_at IS NULL OR EXISTS(SELECT 1 FROM workflow_call_requests call WHERE call.workflow_run_id=w.id AND call.finished_at IS NULL))
           )
         LIMIT ?
       `).all(retainedRunCount, runRetentionBatch)
@@ -76,7 +83,7 @@ export class RunRetention {
         this.store.db.prepare('UPDATE control_changes SET body=json_remove(body,\'$.results[0].result.runId\',\'$.execution\') WHERE id IN (SELECT id FROM control_runs WHERE kind=\'pod\' AND run_id=?)').run(id)
         this.store.db.prepare('DELETE FROM control_runs WHERE kind=\'pod\' AND run_id=?').run(id)
         this.store.db.prepare('UPDATE workflow_nodes SET run_id=NULL,output=NULL WHERE run_id=?').run(id)
-        for (const table of ['workflow_attempts', 'run_events', 'run_inputs', 'execution_domains', 'recovery_reviews']) {
+        for (const table of ['workflow_gate_attempts', 'workflow_attempts', 'run_events', 'run_inputs', 'execution_domains', 'recovery_reviews']) {
           this.store.db.prepare(`DELETE FROM ${table} WHERE run_id=?`).run(id)
         }
         this.store.db.prepare('DELETE FROM runs WHERE id=?').run(id)

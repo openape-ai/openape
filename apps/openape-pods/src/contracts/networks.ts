@@ -18,8 +18,9 @@ export interface NetworkMember {
   serialCase: boolean
 }
 export interface NetworkGate { key: string, title: string, kind: 'approve', podId: string, channel: string }
+export interface NetworkJoin { id: string, podId: string, channels: string[], deadlineMs: number, reviewDestination: 'owner' }
 export interface NetworkDefinition {
-  formatVersion: 1 | 2
+  formatVersion: 1 | 2 | 3
   kind: 'network'
   semantics: 'persistent-network-v1'
   id: string
@@ -29,10 +30,11 @@ export interface NetworkDefinition {
   channels: NetworkChannel[]
   members: NetworkMember[]
   gates?: NetworkGate[]
+  joins?: NetworkJoin[]
 }
 export interface NetworkDiagnostic { code: 'channel-undeclared' | 'channel-without-producer' | 'channel-without-consumer' | 'cycle', podId: string | null, channel: string | null }
 export interface NetworkSelection { podId: string, source: { schedule: ScheduleSpec | null } | null, serialCase: boolean }
-export interface NetworkDraft { name: string, groupId: string, channels: NetworkChannel[], members: NetworkSelection[], gates?: NetworkGate[] }
+export interface NetworkDraft { name: string, groupId: string, channels: NetworkChannel[], members: NetworkSelection[], gates?: NetworkGate[], joins?: NetworkJoin[] }
 export type NetworkCommand
   = | { type: 'list' }
     | { type: 'create', draft: NetworkDraft }
@@ -113,19 +115,38 @@ function gates(value: unknown): NetworkGate[] {
   return parsed
 }
 
+function joins(value: unknown): NetworkJoin[] {
+  const result = list(value, 32).map((value) => {
+    const input = fields(value, ['id', 'podId', 'channels', 'deadlineMs', 'reviewDestination'])
+    const names = list(input.channels, 16).map(name => parseGraphChannels([{ name, title: name, fields: [] }])[0]!.name)
+    unique(names)
+    if (typeof input.id !== 'string' || !/^[a-z][a-z0-9-]{0,31}$/.test(input.id) || names.length < 2 || !Number.isSafeInteger(input.deadlineMs) || Number(input.deadlineMs) < 1000 || Number(input.deadlineMs) > 86400000 || input.reviewDestination !== 'owner') throw new Error('Invalid explicit network join')
+    return { id: input.id, podId: uuid(input.podId), channels: names.sort(), deadlineMs: Number(input.deadlineMs), reviewDestination: 'owner' as const }
+  })
+  unique(result.map(join => join.id)); unique(result.map(join => join.podId))
+  return result
+}
+
 export function parseNetworkDefinition(value: unknown): NetworkDefinition {
   const data = networkDataObject(value)
-  const input = fields(data, ['formatVersion', 'kind', 'semantics', 'id', 'revision', 'groupId', 'name', 'channels', 'members', ...(data.formatVersion === 2 ? ['gates'] : [])])
-  if (![1, 2].includes(input.formatVersion as number) || input.kind !== 'network' || input.semantics !== 'persistent-network-v1' || typeof input.name !== 'string' || !input.name.trim() || input.name.length > 120 || input.name.includes('\0')) throw new Error('Invalid network definition version or name')
+  const input = fields(data, ['formatVersion', 'kind', 'semantics', 'id', 'revision', 'groupId', 'name', 'channels', 'members', ...([2, 3].includes(Number(data.formatVersion)) ? ['gates'] : []), ...(data.formatVersion === 3 ? ['joins'] : [])])
+  if (![1, 2, 3].includes(input.formatVersion as number) || input.kind !== 'network' || input.semantics !== 'persistent-network-v1' || typeof input.name !== 'string' || !input.name.trim() || input.name.length > 120 || input.name.includes('\0')) throw new Error('Invalid network definition version or name')
   const parsedChannels = channels(input.channels)
   const members = list(input.members, networkLimits.members).map(member)
   if (!members.length) throw new Error('Network requires at least one member')
   unique(members.map(item => item.podId))
   unique(members.flatMap(item => item.source ? [item.source.bindingId] : []))
-  const result: NetworkDefinition = { formatVersion: input.formatVersion as 1 | 2, kind: 'network', semantics: 'persistent-network-v1', id: uuid(input.id), revision: revision(input.revision), groupId: uuid(input.groupId), name: input.name, channels: parsedChannels, members }
-  if (result.formatVersion === 2) {
+  const result: NetworkDefinition = { formatVersion: input.formatVersion as 1 | 2 | 3, kind: 'network', semantics: 'persistent-network-v1', id: uuid(input.id), revision: revision(input.revision), groupId: uuid(input.groupId), name: input.name, channels: parsedChannels, members }
+  if (result.formatVersion >= 2) {
     result.gates = gates(input.gates)
     if (result.gates.some(gate => !members.some(member => member.podId === gate.podId && !member.source && member.contract.takes.includes(gate.channel)))) throw new Error('Network gate requires a declared downstream subscription')
+  }
+  if (result.formatVersion === 3) {
+    result.joins = joins(input.joins)
+    for (const join of result.joins) {
+      const target = members.find(member => member.podId === join.podId && !member.source)
+      if (!target || target.contract.takes.length !== join.channels.length || join.channels.some(name => !target.contract.takes.includes(name) || !parsedChannels.some(channel => channel.name === name))) throw new Error('Explicit joins must cover every declared input of one consumer')
+    }
   }
   if (new TextEncoder().encode(JSON.stringify(result)).length > networkLimits.definitionBytes) throw new Error('Network definition exceeds its size limit')
   return result
@@ -137,7 +158,7 @@ export function parseNetworkCommand(value: unknown): NetworkCommand {
   if (input.type === 'create') {
     fields(input, ['type', 'draft'])
     const data = networkDataObject(input.draft)
-    const draft = fields(data, ['name', 'groupId', 'channels', 'members', ...(Object.hasOwn(data, 'gates') ? ['gates'] : [])])
+    const draft = fields(data, ['name', 'groupId', 'channels', 'members', ...(Object.hasOwn(data, 'gates') ? ['gates'] : []), ...(Object.hasOwn(data, 'joins') ? ['joins'] : [])])
     const members = list(draft.members, networkLimits.members).map((value) => {
       const item = fields(value, ['podId', 'source', 'serialCase'])
       if (typeof item.serialCase !== 'boolean') throw new Error('Invalid network case serialization policy')
@@ -146,7 +167,7 @@ export function parseNetworkCommand(value: unknown): NetworkCommand {
     })
     if (typeof draft.name !== 'string' || !draft.name.trim() || draft.name.length > 120 || draft.name.includes('\0') || !members.length) throw new Error('Invalid network draft name or members')
     unique(members.map(item => item.podId))
-    return { type: 'create', draft: { name: draft.name, groupId: uuid(draft.groupId), channels: channels(draft.channels), members, ...(Object.hasOwn(draft, 'gates') ? { gates: gates(draft.gates) } : {}) } }
+    return { type: 'create', draft: { name: draft.name, groupId: uuid(draft.groupId), channels: channels(draft.channels), members, ...(Object.hasOwn(draft, 'gates') ? { gates: gates(draft.gates) } : {}), ...(Object.hasOwn(draft, 'joins') ? { joins: joins(draft.joins) } : {}) } }
   }
   if (input.type === 'gateExclude' || input.type === 'gateDiscard' || input.type === 'gateReview') {
     fields(input, ['type', 'id', 'revision', 'taskId', 'generation', 'evidence', ...(input.type === 'gateExclude' ? ['deliveryIds'] : [])])

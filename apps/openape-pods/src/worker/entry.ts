@@ -18,6 +18,7 @@ import { reviewMailBatch, reconcileMailEffect } from './mail/workflow'
 import { confirmDomainsStopped, inspectDomainRecords  } from './recovery/domains'
 import { parseWorkflowCommand } from '../contracts/workflows'
 import { WorkflowEngine } from './workflows/engine'
+import { WorkflowCalls } from './workflows/calls'
 import { chooseGateItem, discardGateBatch, excludeGateItems } from './workflows/gates'
 import { graphDetail } from './workflows/detail'
 import type { RunContextRequest, ServiceCheck  } from '../contracts/services'
@@ -118,11 +119,13 @@ const master = new MasterService(store, runtime, masterControl, fixtureProvider)
 const codex = new CodexControl(store, masterControl)
 
 const remote = new RemoteControl(store, master, dispatcher, registry, scheduler, Date.now, { create: async (podId, applicationId) => String(await mailBridge.remoteProgramState({ operation: 'create', podId, applicationId })), discard: async (podId, stateId) => { await mailBridge.remoteProgramState({ operation: 'discard', podId, stateId }) } }, startControlledRun)
-const networks = new NetworkEngine(store, dispatcher, registry, runtime.helper, () => {
+function networkOwner() {
   const row = store.db.prepare('SELECT body FROM remote_registration WHERE id=1').get()
   if (!row) throw new Error('Persistent networks require an initialized owner identity')
   return parseOwner((JSON.parse(row.body as string) as { owner: unknown }).owner)
-}, false)
+}
+const networks = new NetworkEngine(store, dispatcher, registry, runtime.helper, networkOwner, false)
+networks.invocations.calls = new WorkflowCalls(store, networks.invocations.events, workflows)
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
 let centralUntil = process.env.PODS_CENTRAL_ENABLED === '1' ? 0 : Infinity
 let scanAt = 0
@@ -153,7 +156,7 @@ function startControlledRun(podId: string, operationId: string, accepted?: (runI
     try { runId = dispatcher.start(podId, { reason: 'manual', eventIds: [], operationId }, accepted) }
     catch (error) { failure = error }
     scheduler.tick()
-  }, () => workflows.tick(), () => networks.tick()])
+  }, () => workflows.tick(), () => { networks.invocations.calls!.tick(); networks.tick() }])
   if (failure) throw failure
   if (!runId) throw new Error('No fair execution slot available; retry after pending work progresses')
   return runId
@@ -165,6 +168,7 @@ const timer = setInterval(() => {
   ticking = (async () => {
     try {
       try {
+        await tickStep('workflow cancellations', 20000, () => networks.invocations.calls!.reconcileCancellations())
         await tickStep('run retention', 1000, () => data.retention.runs.prune())
         // The full inventory lstats every profile entry (~1 s on a real profile), so it runs every minute unless a limit is already near.
         if (Date.now() >= storageAt || await data.retention.inspectionDue()) {
@@ -178,7 +182,7 @@ const timer = setInterval(() => {
       if (Date.now() >= scanAt) { await tickStep('reference scan', 120000, () => watcher.scan()); scanAt = Date.now() + 15000 }
       tickPhase = 'scheduling'
       if (!suspended && Date.now() < centralUntil) {
-        scheduleDomains(store, [() => scheduler.tick(), () => workflows.tick(), () => networks.tick()])
+        scheduleDomains(store, [() => scheduler.tick(), () => workflows.tick(), () => { networks.invocations.calls!.tick(); networks.tick() }])
       }
     }
     catch (error) { console.error('Scheduler stopped', error); process.exit(1) }
@@ -249,7 +253,7 @@ port.on('message', async (event) => {
       if (command.type === 'create' && process.env.PODS_CENTRAL_ENABLED === '1') throw new Error('Network creation requires bounded central publication support')
       if ((command.type === 'activate' || command.type === 'process') && (!startupReady || Date.now() >= centralUntil || suspended)) throw new Error('Network execution requires a ready local runtime')
       const result = command.type === 'inspect' || command.type === 'retry' || command.type === 'reconcileEffect' || command.type === 'resolveConflict' || command.type === 'discardFailure' ? await networks.recover(command) : networks.execute(command)
-      if (command.type === 'process') scheduleDomains(store, [() => scheduler.tick(), () => workflows.tick(), () => networks.tick()])
+      if (command.type === 'process') scheduleDomains(store, [() => scheduler.tick(), () => workflows.tick(), () => { networks.invocations.calls!.tick(); networks.tick() }])
       port.postMessage({ id: request.id, state: result }); return
     }
     if (request.command && typeof request.command === 'object' && 'remote' in request.command) {
@@ -325,6 +329,10 @@ port.on('message', async (event) => {
         reconcileMailEffect(store, command.resolution)
         port.postMessage({ id: request.id, state: { ...workflows.view(), mailReview: reviewMailBatch(store, command.resolution.batchId) } }); return
       }
+      if (command.type === 'publishRevision') workflows.publishRevision(command.id, command.revision, command.ports)
+      if (command.type === 'cancelCall') await networks.invocations.calls!.cancel(command.requestId, networkOwner(), command.evidence)
+      if (command.type === 'resumeCall') await networks.invocations.calls!.resume(command.requestId, networkOwner(), command.evidence)
+      if (command.type === 'resolveCall') await networks.invocations.calls!.resolveIncompleteResult(command.requestId, networkOwner(), command.evidence)
       if (command.type === 'save') workflows.save(command)
       if (command.type === 'delete') workflows.delete(command.id, command.revision)
       if (command.type === 'start') workflows.start(command.id, command.revision)
@@ -334,7 +342,7 @@ port.on('message', async (event) => {
       if (command.type === 'gateExclude') excludeGateItems(store, command.batchId, command.itemIds, Date.now())
       if (command.type === 'gateChoose') chooseGateItem(store, command.id, command.gate, command.itemId, command.option, Date.now())
       if (command.type === 'gateDiscard') discardGateBatch(store, command.batchId, Date.now())
-      if (command.type !== 'list' && command.type !== 'gateOpen' && startupReady && !suspended && Date.now() < centralUntil) scheduleDomains(store, [() => scheduler.tick(), () => workflows.tick(), () => networks.tick()])
+      if (command.type !== 'list' && command.type !== 'gateOpen' && startupReady && !suspended && Date.now() < centralUntil) scheduleDomains(store, [() => scheduler.tick(), () => workflows.tick(), () => { networks.invocations.calls!.tick(); networks.tick() }])
       port.postMessage({ id: request.id, state: workflows.view() })
       return
     }
@@ -354,7 +362,7 @@ port.on('message', async (event) => {
       if (command.type === 'recover') { if (command.action === 'inspect') await recovery.inspect(command.podId, command.runId); else await recovery.retry(command.podId, command.runId) }
       if (command.type === 'retryQueue') recovery.retryQueue(command.podId)
       if (command.type === 'start') scheduler.requestManual(command.podId, command.expectedScript)
-      if (['start', 'recover', 'retryQueue'].includes(command.type) && startupReady && !suspended && Date.now() < centralUntil) scheduleDomains(store, [() => scheduler.tick(), () => workflows.tick(), () => networks.tick()])
+      if (['start', 'recover', 'retryQueue'].includes(command.type) && startupReady && !suspended && Date.now() < centralUntil) scheduleDomains(store, [() => scheduler.tick(), () => workflows.tick(), () => { networks.invocations.calls!.tick(); networks.tick() }])
       const id = 'runId' in command ? command.runId : undefined
       if (command.type === 'cancel') dispatcher.cancel(command.podId, command.runId)
       port.postMessage({ id: request.id, state: dispatcher.view(command.podId, id, command.type === 'list' ? command.after : undefined) })

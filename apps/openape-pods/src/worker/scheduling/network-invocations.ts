@@ -12,9 +12,11 @@ import { confirmDomainsStopped } from '../recovery/domains'
 import type { PodDatabase } from '../storage/database'
 import { NetworkEvents, NetworkEventConflict, canonicalNetworkJson } from './network-events'
 import type { NetworkAuthority, NetworkEmission } from './network-events'
+import type { WorkflowCalls } from '../workflows/calls'
 
 export class NetworkInvocations {
   gates?: NetworkGates
+  calls?: WorkflowCalls
   readonly events: NetworkEvents
   readonly data: NetworkData
   constructor(private readonly store: PodDatabase, private readonly runs: RunStore, private readonly helper: string) {
@@ -63,7 +65,9 @@ export class NetworkInvocations {
       const pin = this.store.db.prepare('SELECT content_hash FROM pod_definition_versions WHERE definition_id=? AND version=?').get(member.definitionId, member.definitionVersion)
       if (!pin || pin.content_hash !== pod.activeScript) throw new Error('Network instance no longer matches its pinned script')
       const sourceRetry = member.source ? this.store.db.prepare('SELECT i.run_id,i.manifest,c.attempt FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.network_id=? AND i.pod_id=? AND i.state=\'blocked\' AND c.retry_at<=? AND (json_extract(i.manifest,\'$.reason\')!=\'manual\' OR ?=1) ORDER BY c.retry_at,i.rowid LIMIT 1').get(networkId, podId, Date.now(), reason === 'manual' ? 1 : 0) : null
-      const ready = member.source ? [] : this.ready(networkId, definition.revision, podId, reason === 'manual', definition.gates?.filter(gate => gate.podId === podId).map(gate => gate.channel) ?? [])
+      const join = definition.joins?.find(join => join.podId === podId)
+      const gatedInputs = definition.gates?.filter(gate => gate.podId === podId).map(gate => gate.channel) ?? []
+      const ready = member.source ? [] : join ? this.events.joins.ready(networkId, definition.revision, join, reason === 'manual', gatedInputs) : this.ready(networkId, definition.revision, podId, reason === 'manual', gatedInputs)
       if (!member.source && !ready.length) return null
       const gateBindings: { taskId: string, grantId: string, manifestHash: string }[] = []
       const gatedChannels = new Set(definition.gates?.filter(gate => gate.podId === podId).map(gate => gate.channel) ?? [])
@@ -93,6 +97,7 @@ export class NetworkInvocations {
       const reservation = this.runs.reserve(podId, pod.activeScript!, resourceEpoch, { reason, eventIds: [] })
       if (reservation.existing) throw new Error('Network instance lease changed during admission')
       const runId = reservation.run.id; const token = randomUUID()
+      if (join) this.events.joins.claim(networkId, join, ready[0]!.case_id as string, Number(ready[0]!.case_revision))
       const checkpoint = this.store.db.prepare('SELECT revision,body FROM network_checkpoints WHERE pod_id=? AND network_id=?').get(podId, networkId)
       if (!checkpoint) throw new Error('Network instance has no private checkpoint')
       const manifest = { resourceEpoch, assignmentRevision: pod.bindingRevision, definitionId: member.definitionId, definitionVersion: member.definitionVersion, bindingRevision: member.bindingRevision, reason, checkpointRevision: checkpoint.revision, dataPin: networkDataPin(this.store, networkId, podId), gateBindings, inputClaims: ready.map(input => ({ id: input.id, generation: Number(input.generation) + 1 })) }
@@ -249,6 +254,7 @@ export class NetworkInvocations {
       if (emissions.length > 500) throw new Error('Network invocation exceeds 500 emissions')
       if (completed) {
         this.data.commit(authority)
+        this.calls?.commit(authority)
         for (const emission of emissions) this.events.accept(authority, emission, true)
         if (row.staged_checkpoint !== null) {
           const staged = JSON.parse(row.staged_checkpoint as string) as { revision: number, body: Record<string, unknown> }
@@ -266,6 +272,7 @@ export class NetworkInvocations {
       const control = this.store.db.prepare('SELECT attempt FROM network_invocation_controls WHERE run_id=?').get(authority.runId)!
       const requiresFreshGate = Boolean(JSON.parse(row.manifest as string).gateBindings?.length)
       const retry = transient && !unsafe && !requiresFreshGate && Number(control.attempt) < 3
+      if (retry) this.calls?.abandonUnacceptedRetry(authority.runId)
       const retryAt = retry ? Date.now() + Math.ceil(2000 * 2 ** (Number(control.attempt) - 1) * (0.8 + Math.random() * 0.4)) : null
       const nextState = unsafe ? 'unknown' : completed ? 'done' : retry ? 'retry_wait' : 'blocked'
       this.store.db.prepare('UPDATE network_invocation_controls SET deadline=NULL,retry_at=?,failure_kind=?,diagnostic=?,stopped_receipt=? WHERE run_id=?').run(retryAt, completed ? null : unsafe ? 'uncertain' : requiresFreshGate ? 'recovery' : transient ? retry ? 'transient' : 'exhausted' : error?.includes('deadline') || error?.includes('time limit') ? 'timeout' : error?.includes('192 MiB') ? 'quota' : 'invalid', error, canonicalNetworkJson({ processesStopped: true, generation: row.generation, inspectedAt: Date.now() }), authority.runId)

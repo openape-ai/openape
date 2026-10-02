@@ -265,7 +265,7 @@ export class NetworkEngine {
         if (legacy || this.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=?').get(selection.podId) || this.store.checkpoint(selection.podId).revision !== 0 || canonicalNetworkJson(this.store.checkpoint(selection.podId).body) !== '{}') throw new Error('Network creation requires a separate fresh instance; use reviewed conversion for legacy state')
         return { podId: selection.podId, definitionId: binding.definition_id as string, definitionVersion: binding.definition_version as number, bindingRevision: binding.binding_revision as number, contract: parseGraphContract(JSON.parse(binding.contract as string)), source: selection.source ? { bindingId: randomUUID(), schedule: selection.source.schedule } : null, serialCase: selection.serialCase }
       })
-      const definition = parseNetworkDefinition({ formatVersion: draft.gates ? 2 : 1, kind: 'network', semantics: 'persistent-network-v1', id, revision: 1, ...draft, members })
+      const definition = parseNetworkDefinition({ formatVersion: draft.joins ? 3 : draft.gates ? 2 : 1, kind: 'network', semantics: 'persistent-network-v1', id, revision: 1, ...draft, ...(draft.joins ? { gates: draft.gates ?? [] } : {}), members })
       this.validate(definition)
       const body = canonicalNetworkJson(definition); this.store.assertStorage(Buffer.byteLength(body))
       this.store.db.prepare('INSERT INTO networks(id,owner_issuer,owner_subject,group_id,name,revision,restore_nonce,created_at) VALUES(?,?,?,?,?,1,?,?)').run(id, owner.issuer, owner.subject, draft.groupId, draft.name, randomUUID(), now)

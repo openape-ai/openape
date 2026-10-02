@@ -3,11 +3,12 @@ import { basename, join, sep, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { RunEvent, RunRecord, RunState } from '../../contracts/runs'
 import type { PodDatabase } from '../storage/database'
+import { assertNetworkQuota } from '../scheduling/network-quota'
 
 function fromRow(row: Record<string, unknown>): RunRecord {
   return { id: row.id as string, podId: row.pod_id as string, scriptHash: row.script_hash as string, state: row.state as RunState, startedAt: row.started_at as number, finishedAt: row.finished_at as number | null, summary: row.summary as string, error: row.error as string | null, checkpointRevision: row.checkpoint_revision as number, recovery: row.recovery_state ? { state: row.recovery_state as 'ready' | 'needsReview' | 'retryQueued', error: row.recovery_error as string | null } : null }
 }
-export interface RunTrigger { reason: 'manual' | 'schedule' | 'event', eventIds: string[], workflowRunId?: string, operationId?: string }
+export interface RunTrigger { reason: 'manual' | 'schedule' | 'event', eventIds: string[], workflowRunId?: string, operationId?: string, workflowGateOnly?: string[] }
 export class RunStore {
   readonly bootId = randomUUID()
   constructor(readonly store: PodDatabase) {}
@@ -23,6 +24,7 @@ export class RunStore {
   reserve(podId: string, scriptHash: string, epoch: number, trigger: RunTrigger = { reason: 'manual', eventIds: [] }): { run: RunRecord, existing: boolean } {
     return this.store.transaction(() => {
       this.assertWorkflowReservation(podId, scriptHash, epoch, trigger)
+      if (trigger.workflowGateOnly) assertNetworkQuota(this.store, 32768)
       if (this.store.db.prepare('SELECT 1 FROM program_leases WHERE pod_id=?').get(podId)) throw new Error('Finish or recover the current pod run or terminal first')
       const active = this.store.db.prepare('SELECT run_id FROM run_leases WHERE pod_id=?').get(podId)
       if (active) return { run: this.get(active.run_id as string), existing: true }
@@ -39,6 +41,11 @@ export class RunStore {
       if (trigger.workflowRunId) {
         this.store.db.prepare('INSERT INTO workflow_attempts VALUES(?,?,?)').run(id, trigger.workflowRunId, podId)
         this.store.db.prepare('UPDATE workflow_nodes SET state=\'running\',run_id=?,reason=NULL WHERE workflow_run_id=? AND pod_id=?').run(id, trigger.workflowRunId, podId)
+        if (trigger.workflowGateOnly) {
+          const call = this.store.db.prepare('SELECT id,workflow_id,workflow_revision FROM workflow_call_requests WHERE workflow_run_id=? AND state=\'running\'').get(trigger.workflowRunId)
+          if (!call || !trigger.workflowGateOnly.length || trigger.workflowGateOnly.length > 32) throw new Error('Workflow decision maintenance requires an accepted active call')
+          this.store.db.prepare('INSERT INTO workflow_gate_attempts VALUES(?,?,?,?)').run(id, call.id!, JSON.stringify(trigger.workflowGateOnly), now)
+        }
       }
       if (trigger.operationId) this.store.db.prepare('INSERT INTO control_runs VALUES(?,?,\'pod\')').run(trigger.operationId, id)
       const previousAttempts = trigger.eventIds.map(eventId => Number(this.store.db.prepare('SELECT i.retry_attempt FROM accepted_events e JOIN run_inputs i ON i.run_id=e.run_id WHERE e.id=?').get(eventId)?.retry_attempt ?? 0))
