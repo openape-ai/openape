@@ -1,5 +1,23 @@
 # Active work
 
+## Sharing M1 — issue 1419
+
+Sharing M0 PR215 merged source `a80d22a17e8ffeb9ae9c5db1692ae10fade91a2d` as
+`04c20aa8df50bd6e85bca99aa520e355d727c3f4`; source CI5347/main CI5348 pass.
+[Verified private Test Runs](https://report.openape.ai/r/KfhzCgbfvZ69e3uGHx5p7k_d)
+records 1190 Pods tests, 33 protocol tests, seven tooling tests, actual Opus reviews
+and native source verification. M0 is accepted; M11 remains open.
+Own checkout `openape-monorepo.worktrees/pods-portable-sharing`, branch
+`feature/issue-1419-sharing-dependencies`, starts from that merge. Doctor passes.
+M1 imported-lock validation/preparation and read-only application compatibility
+resolution are implemented. Root lint/typecheck, Pods build, 1210 unit tests and
+three real native dependency checks pass. Actual Opus reviews prompted installed
+manifest-edge checks, unlisted-package refusal, candidate isolation and read-only
+bundle preview. Final native PR/CI/report acceptance remains pending; evidence
+`/tmp/openape-pods-sharing-m1/`. The full unit suite uses one local worker after an
+existing central-volume test exceeded five seconds under unrestricted concurrency;
+no timeout, assertion or automatic CI change. M2 reviewed export is next.
+
 ## Portable sharing — issue1419 / network M11
 
 M11c PR214 merged source `feb5390f7c085b8cfd1de2074853855a889c17a4` as
