@@ -18,7 +18,7 @@ export default defineComponent({
     error: { type: String, default: '' },
   },
   emits: ['create', 'cancel'],
-  data() { return { kind: 'graph' as CreateRequest['kind'], name: '', summary: '', group: this.groupId ?? '', graph: '', schedule: 'manual' as GraphSchedule, time: '07:00', members: [] as string[], takes: '', gives: '' } },
+  data() { return { kind: 'pod' as CreateRequest['kind'], name: '', summary: '', group: this.groupId ?? '', graph: '', schedule: 'manual' as GraphSchedule, time: '07:00', members: [] as string[], takes: '', gives: '' } },
   computed: {
     graphs() { return this.view.workflows.filter(item => item.mode === 'channels' && (item.groupId ?? '') === this.group) },
     candidates(): StoredPod[] {
@@ -61,7 +61,7 @@ export default defineComponent({
     </header>
     <div class="graph-modes" role="group" :aria-label="t('What to create')">
       <button type="button" :aria-pressed="kind === 'graph'" @click="kind = 'graph'">
-        {{ t('Network') }}
+        {{ t('Bounded graph') }}
       </button><button type="button" :aria-pressed="kind === 'pod'" @click="kind = 'pod'">
         {{ t('Pod') }}
       </button><button type="button" :aria-pressed="kind === 'group'" @click="kind = 'group'">
@@ -70,14 +70,14 @@ export default defineComponent({
     </div>
     <div class="graph-create-fields">
       <fieldset>
-        <legend>{{ kind === 'graph' ? t('Network') : kind === 'pod' ? t('Pod') : t('Group') }}</legend>
+        <legend>{{ kind === 'graph' ? t('Bounded graph') : kind === 'pod' ? t('Pod') : t('Group') }}</legend>
         <label>{{ t('Name') }}<input v-model="name" type="text" maxlength="100" required></label>
         <label v-if="kind === 'pod'">{{ t('Subtitle, at most 40 characters') }}<input v-model="summary" type="text" maxlength="40"></label>
         <label v-if="kind !== 'group'">{{ t('Group') }}<select v-model="group">
           <option value="">{{ t('Ungrouped') }}</option>
           <option v-for="item in organization.groups" :key="item.id" :value="item.id">{{ item.name }}</option>
         </select></label>
-        <label v-if="kind === 'pod'">{{ t('Network') }}<select v-model="graph">
+        <label v-if="kind === 'pod'">{{ t('Bounded graph') }}<select v-model="graph">
           <option value="">{{ t('None, single pod') }}</option>
           <option v-for="item in graphs" :key="item.id" :value="item.id">{{ item.name }}</option>
         </select></label>

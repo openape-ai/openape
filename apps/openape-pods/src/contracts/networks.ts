@@ -1,5 +1,7 @@
-import { parseNetworkGateView } from './network-gates'
-import type { NetworkGateView } from './network-gates'
+import { parseNetworkRead, networkSharedValues, parseNetworkMemberView } from './network-operations'
+import type { NetworkReadCommand, NetworkFailure, NetworkDetails, NetworkSetup, NetworkTracePage, NetworkDataPage } from './network-operations'
+import { parseNetworkGateView } from './network-gate-view'
+import type { NetworkGateView } from './network-gate-view'
 import { parseGraphChannels, parseGraphContract } from './graphs'
 import type { GraphContract } from './graphs'
 import { networkDataObject, parsePayloadSchema } from './network-payload'
@@ -34,10 +36,12 @@ export interface NetworkDefinition {
 }
 export interface NetworkDiagnostic { code: 'channel-undeclared' | 'channel-without-producer' | 'channel-without-consumer' | 'cycle', podId: string | null, channel: string | null }
 export interface NetworkSelection { podId: string, source: { schedule: ScheduleSpec | null } | null, serialCase: boolean }
-export interface NetworkDraft { name: string, groupId: string, channels: NetworkChannel[], members: NetworkSelection[], gates?: NetworkGate[], joins?: NetworkJoin[] }
+export interface NetworkDraft { name: string, groupId: string, channels: NetworkChannel[], members: NetworkSelection[], sharedValues?: Record<string, unknown>, expectedSetup?: string, gates?: NetworkGate[], joins?: NetworkJoin[] }
 export type NetworkCommand
-  = | { type: 'list' }
+  = | NetworkReadCommand
+    | { type: 'list' }
     | { type: 'create', draft: NetworkDraft }
+    | { type: 'gateOpen', id: string, revision: number, taskId: string, generation: number }
     | { type: 'activate', id: string, revision: number }
     | { type: 'pause', id: string, revision: number }
     | { type: 'preview', id: string, revision: number, podIds: string[], pausedPodIds: string[], budget: number }
@@ -51,9 +55,9 @@ export type NetworkCommand
     | { type: 'gateDiscard', id: string, revision: number, taskId: string, generation: number, evidence: string }
     | { type: 'process', id: string, revision: number, previewId: string }
 export interface NetworkHealth { oldestPendingAt: number | null, nextRetryAt: number | null, lastDispatchAt: number | null, lastSchedulerProgressAt: number | null, lastSchedulerError: string | null, intakeError: string | null, lastFailure: { runId: string, generation: number, kind: string, reason: string } | null }
-export interface NetworkSummary { id: string, revision: number, groupId: string, name: string, state: 'active' | 'paused' | 'archived', counts: Record<string, number>, health: NetworkHealth }
+export interface NetworkSummary { podIds?: string[], id: string, revision: number, groupId: string, name: string, state: 'active' | 'paused' | 'archived', counts: Record<string, number>, health: NetworkHealth }
 export interface NetworkPreview { id: string, networkId: string, revision: number, podIds: string[], pausedPodIds: string[], budget: number, expiresAt: number, sources: string[], consumers: string[] }
-export interface NetworkView { networks: NetworkSummary[], gates?: NetworkGateView[], preview?: NetworkPreview, processId?: string, createdId?: string }
+export interface NetworkView { unavailableReason?: string, details?: NetworkDetails, setup?: NetworkSetup, trace?: NetworkTracePage, records?: NetworkDataPage, networks: NetworkSummary[], gates?: NetworkGateView[], preview?: NetworkPreview, processId?: string, createdId?: string }
 export const networkLimits = { networks: 64, members: 64, channels: 32, batch: 50, processNow: 100, definitionBytes: 1024 * 1024 } as const
 
 function fields(value: unknown, names: string[]): Record<string, unknown> {
@@ -154,11 +158,14 @@ export function parseNetworkDefinition(value: unknown): NetworkDefinition {
 
 export function parseNetworkCommand(value: unknown): NetworkCommand {
   const input = networkDataObject(value)
+  if (['setup', 'detail', 'trace', 'records'].includes(String(input.type))) return parseNetworkRead(input)!
   if (input.type === 'list') { fields(input, ['type']); return { type: 'list' } }
   if (input.type === 'create') {
     fields(input, ['type', 'draft'])
     const data = networkDataObject(input.draft)
-    const draft = fields(data, ['name', 'groupId', 'channels', 'members', ...(Object.hasOwn(data, 'gates') ? ['gates'] : []), ...(Object.hasOwn(data, 'joins') ? ['joins'] : [])])
+    const draft = fields(data, ['name', 'groupId', 'channels', 'members', ...(Object.hasOwn(data, 'expectedSetup') ? ['expectedSetup'] : []), ...(Object.hasOwn(data, 'sharedValues') ? ['sharedValues'] : []), ...(Object.hasOwn(data, 'gates') ? ['gates'] : []), ...(Object.hasOwn(data, 'joins') ? ['joins'] : [])])
+    if (Object.hasOwn(draft, 'expectedSetup') && (typeof draft.expectedSetup !== 'string' || !/^[a-f0-9]{64}$/.test(draft.expectedSetup))) throw new Error('Invalid network setup fingerprint')
+    if (Object.hasOwn(draft, 'sharedValues')) draft.sharedValues = networkSharedValues(draft.sharedValues)
     const members = list(draft.members, networkLimits.members).map((value) => {
       const item = fields(value, ['podId', 'source', 'serialCase'])
       if (typeof item.serialCase !== 'boolean') throw new Error('Invalid network case serialization policy')
@@ -167,8 +174,9 @@ export function parseNetworkCommand(value: unknown): NetworkCommand {
     })
     if (typeof draft.name !== 'string' || !draft.name.trim() || draft.name.length > 120 || draft.name.includes('\0') || !members.length) throw new Error('Invalid network draft name or members')
     unique(members.map(item => item.podId))
-    return { type: 'create', draft: { name: draft.name, groupId: uuid(draft.groupId), channels: channels(draft.channels), members, ...(Object.hasOwn(draft, 'gates') ? { gates: gates(draft.gates) } : {}), ...(Object.hasOwn(draft, 'joins') ? { joins: joins(draft.joins) } : {}) } }
+    return { type: 'create', draft: { name: draft.name, groupId: uuid(draft.groupId), channels: channels(draft.channels), members, ...(Object.hasOwn(draft, 'expectedSetup') ? { expectedSetup: draft.expectedSetup as string } : {}), ...(Object.hasOwn(draft, 'sharedValues') ? { sharedValues: draft.sharedValues as Record<string, unknown> } : {}), ...(Object.hasOwn(draft, 'gates') ? { gates: gates(draft.gates) } : {}), ...(Object.hasOwn(draft, 'joins') ? { joins: joins(draft.joins) } : {}) } }
   }
+  if (input.type === 'gateOpen') { fields(input, ['type', 'id', 'revision', 'taskId', 'generation']); return { type: 'gateOpen', id: uuid(input.id), revision: revision(input.revision), taskId: uuid(input.taskId), generation: revision(input.generation) } }
   if (input.type === 'gateExclude' || input.type === 'gateDiscard' || input.type === 'gateReview') {
     fields(input, ['type', 'id', 'revision', 'taskId', 'generation', 'evidence', ...(input.type === 'gateExclude' ? ['deliveryIds'] : [])])
     if (typeof input.evidence !== 'string' || !input.evidence.trim() || input.evidence.length > 4000) throw new Error('Network gate resolution requires explicit owner evidence')
@@ -209,9 +217,9 @@ export function parseNetworkCommand(value: unknown): NetworkCommand {
 
 export function parseNetworkView(value: unknown): NetworkView {
   const input = networkDataObject(value)
-  if (Object.keys(input).some(key => !['networks', 'gates', 'preview', 'processId', 'createdId'].includes(key))) throw new Error('Invalid network view fields')
+  if (Object.keys(input).some(key => !['networks', 'gates', 'preview', 'processId', 'createdId', 'details', 'setup', 'trace', 'records', 'unavailableReason'].includes(key))) throw new Error('Invalid network view fields')
   const networks = list(input.networks, networkLimits.networks).map((value) => {
-    const item = fields(value, ['id', 'revision', 'groupId', 'name', 'state', 'counts', 'health'])
+    const item = fields(value, ['id', 'revision', 'groupId', 'name', 'state', 'counts', 'health', ...(Object.hasOwn(networkDataObject(value), 'podIds') ? ['podIds'] : [])])
     if (typeof item.name !== 'string' || item.name.length > 120 || !['active', 'paused', 'archived'].includes(item.state as string)) throw new Error('Invalid network summary')
     const counts = networkDataObject(item.counts)
     if (Object.entries(counts).some(([state, count]) => !['pending', 'claimed', 'done', 'retry_wait', 'blocked', 'unknown', 'discarded'].includes(state) || !Number.isSafeInteger(count) || (count as number) < 0)) throw new Error('Invalid network queue summary')
@@ -226,9 +234,64 @@ export function parseNetworkView(value: unknown): NetworkView {
       uuid(failure.runId); revision(failure.generation)
       if (!['transient', 'invalid', 'uncertain', 'exhausted', 'timeout', 'quota', 'recovery'].includes(failure.kind as string) || typeof failure.reason !== 'string' || failure.reason.length > 10000) throw new Error('Invalid network failure diagnostic')
     }
-    return { id: uuid(item.id), revision: revision(item.revision), groupId: uuid(item.groupId), name: item.name, state: item.state as NetworkSummary['state'], counts: counts as Record<string, number>, health: health as unknown as NetworkHealth }
+    if (item.podIds !== undefined) list(item.podIds, 64).forEach(uuid)
+    return { ...(item.podIds === undefined ? {} : { podIds: item.podIds as string[] }), id: uuid(item.id), revision: revision(item.revision), groupId: uuid(item.groupId), name: item.name, state: item.state as NetworkSummary['state'], counts: counts as Record<string, number>, health: health as unknown as NetworkHealth }
   })
   const result: NetworkView = { networks }
+  if (input.unavailableReason !== undefined) {
+    if (typeof input.unavailableReason !== 'string' || input.unavailableReason.length > 2000) throw new Error('Invalid network availability')
+    result.unavailableReason = input.unavailableReason
+  }
+  if (input.setup !== undefined) {
+    const setup = fields(input.setup, ['groupId', 'members', 'fingerprint'])
+    if (typeof setup.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(setup.fingerprint)) throw new Error('Invalid network setup fingerprint')
+    result.setup = { fingerprint: setup.fingerprint, groupId: uuid(setup.groupId), members: list(setup.members, 64).map(parseNetworkMemberView) }
+  }
+  if (input.details !== undefined) {
+    const detail = fields(input.details, ['definition', 'members', 'failures', 'collections', 'collectionsMore'])
+    const definition = parseNetworkDefinition(detail.definition)
+    if (!networks.some(network => network.id === definition.id && network.revision === definition.revision)) throw new Error('Invalid network detail ownership')
+    const members = list(detail.members, 64).map(parseNetworkMemberView)
+    if (members.length !== definition.members.length || members.some(member => !definition.members.some(item => item.podId === member.podId))) throw new Error('Invalid network member view')
+    const failures = list(detail.failures, 50).map((value) => {
+      const failure = fields(value, ['runId', 'generation', 'podId', 'kind', 'reason', 'inspectedAt', 'conflict', 'effects', 'effectsMore'])
+      if (!['transient', 'invalid', 'uncertain', 'exhausted', 'timeout', 'quota', 'recovery'].includes(String(failure.kind)) || typeof failure.reason !== 'string' || failure.reason.length > 10000) throw new Error('Invalid network failure diagnostic')
+      if (failure.inspectedAt !== null && (!Number.isSafeInteger(failure.inspectedAt) || Number(failure.inspectedAt) < 0)) throw new Error('Invalid network failure diagnostic')
+      if ((failure.conflict !== null && (typeof failure.conflict !== 'string' || !/^[a-f0-9]{64}$/.test(failure.conflict))) || typeof failure.effectsMore !== 'boolean') throw new Error('Invalid network failure diagnostic')
+      const effects = list(failure.effects, 50).map((value) => {
+        const effect = fields(value, ['key', 'attempt', 'sequence', 'state'])
+        if (typeof effect.key !== 'string' || !/^[a-f0-9]{64}$/.test(effect.key) || !Number.isSafeInteger(effect.sequence) || Number(effect.sequence) < 0 || !['intent', 'unknown', 'confirmed_applied', 'confirmed_not_applied'].includes(String(effect.state))) throw new Error('Invalid network effect summary')
+        return { key: effect.key, attempt: revision(effect.attempt), sequence: Number(effect.sequence), state: effect.state as string }
+      })
+      return { runId: uuid(failure.runId), generation: revision(failure.generation), podId: uuid(failure.podId), kind: failure.kind as NetworkFailure['kind'], reason: failure.reason, inspectedAt: failure.inspectedAt as number | null, conflict: failure.conflict as string | null, effects, effectsMore: failure.effectsMore }
+    })
+    const collections = list(detail.collections, 64).map((value) => {
+      const collection = fields(value, ['id', 'name', 'version'])
+      if (typeof collection.name !== 'string' || collection.name.length > 200) throw new Error('Invalid network collection view')
+      return { id: uuid(collection.id), name: collection.name, version: revision(collection.version) }
+    })
+    if (typeof detail.collectionsMore !== 'boolean') throw new Error('Invalid network collection view')
+    result.details = { definition, members, failures, collections, collectionsMore: detail.collectionsMore }
+  }
+  if (input.trace !== undefined) {
+    const page = fields(input.trace, ['events', 'before'])
+    const events = list(page.events, 50).map((value) => {
+      const row = fields(value, ['id', 'caseId', 'runId', 'kind', 'body', 'truncated', 'at'])
+      if (typeof row.kind !== 'string' || row.kind.length > 200 || typeof row.body !== 'string' || row.body.length > 8192 || typeof row.truncated !== 'boolean') throw new Error('Invalid network trace page')
+      return { id: revision(row.id), caseId: row.caseId === null ? null : uuid(row.caseId), runId: row.runId === null ? null : uuid(row.runId), kind: row.kind, body: row.body, truncated: row.truncated, at: revision(row.at) }
+    })
+    result.trace = { events, before: page.before === null ? null : revision(page.before) }
+  }
+  if (input.records !== undefined) {
+    const page = fields(input.records, ['collectionId', 'records', 'after'])
+    const records = list(page.records, 5).map((value) => {
+      const row = fields(value, ['key', 'revision', 'schemaVersion', 'body', 'truncated', 'deleted', 'at'])
+      if (typeof row.key !== 'string' || row.key.length > 200 || (row.body !== null && (typeof row.body !== 'string' || row.body.length > 196608)) || typeof row.deleted !== 'boolean' || typeof row.truncated !== 'boolean') throw new Error('Invalid network records page')
+      return { key: row.key, revision: revision(row.revision), schemaVersion: revision(row.schemaVersion), body: row.body as string | null, truncated: row.truncated, deleted: row.deleted, at: revision(row.at) }
+    })
+    if (page.after !== null && (typeof page.after !== 'string' || page.after.length > 200)) throw new Error('Invalid network records page')
+    result.records = { collectionId: uuid(page.collectionId), records, after: page.after as string | null }
+  }
   if (input.gates !== undefined) {
     result.gates = list(input.gates, 256).map(parseNetworkGateView)
     if (result.gates.some(gate => !networks.some(network => network.id === gate.networkId))) throw new Error('Network gate view contains foreign owner work')

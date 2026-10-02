@@ -278,9 +278,11 @@ port.on('message', async (event) => {
     }
     if (request.command && typeof request.command === 'object' && 'networks' in request.command) {
       const command = parseNetworkCommand(request.command.networks)
+      if (command.type === 'create' && !command.draft.expectedSetup) throw new Error('Network creation requires a reviewed setup fingerprint')
       if (command.type === 'create' && process.env.PODS_CENTRAL_ENABLED === '1') throw new Error('Network creation requires bounded central publication support')
       if ((command.type === 'activate' || command.type === 'process') && (!startupReady || Date.now() >= centralUntil || suspended)) throw new Error('Network execution requires a ready local runtime')
       const result = command.type === 'inspect' || command.type === 'retry' || command.type === 'reconcileEffect' || command.type === 'resolveConflict' || command.type === 'discardFailure' ? await networks.recover(command) : networks.execute(command)
+      if (process.env.PODS_CENTRAL_ENABLED === '1') result.unavailableReason = 'Network creation requires bounded central publication support'
       if (command.type === 'process') scheduleDomains(store, [() => scheduler.tick(), () => workflows.tick(), () => { networks.invocations.calls!.tick(); networks.tick() }])
       port.postMessage({ id: request.id, state: result }); return
     }

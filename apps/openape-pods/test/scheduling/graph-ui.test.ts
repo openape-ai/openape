@@ -4,6 +4,9 @@ import type { GateBatchView } from '../../src/contracts/gates'
 import type { GraphDetail, GraphGate } from '../../src/contracts/graphs'
 import type { WorkflowDefinition, WorkflowView } from '../../src/contracts/workflows'
 import { sequenceParts, parseWorkflowCommand  } from '../../src/contracts/workflows'
+import NetworkCreate from '../../src/renderer/NetworkCreate.vue'
+import NetworkDetail from '../../src/renderer/NetworkDetail.vue'
+import { operationalFixture, recoveryFixture } from '../layout/network-fixture'
 import GateReview from '../../src/renderer/GateReview.vue'
 import GraphCreate from '../../src/renderer/GraphCreate.vue'
 import GraphInspector from '../../src/renderer/GraphInspector.vue'
@@ -176,7 +179,7 @@ describe('overview', () => {
     const wrapper = mount(GraphOverview, { props: { view, pods, organization } })
     expect(wrapper.find('.graph-overview-heading p').text()).toBe('Networks connect Pods. Workflows define ordered processes.')
     expect(wrapper.findAll('.graph-group').map(section => section.find('h2').text())).toEqual(['Delta Mind', 'Ungrouped'])
-    expect(wrapper.findAll('.graph-card').map(card => card.text())).toEqual(['Network · Pods: 3 · hourlyEmail managementChoices waiting: 1Approvals waiting: 3', 'PodPR monitor'])
+    expect(wrapper.findAll('.graph-card').map(card => card.text())).toEqual(['Bounded graph · Pods: 3 · hourlyEmail managementChoices waiting: 1Approvals waiting: 3', 'PodPR monitor'])
     await wrapper.findAll('.graph-card')[0]!.trigger('click'); await wrapper.findAll('.graph-card')[1]!.trigger('click')
     await button(wrapper, 'Create network').trigger('click'); await button(wrapper, '+ Create network in Delta Mind').trigger('click')
     expect(wrapper.emitted('select')).toEqual([[graphId]])
@@ -195,6 +198,7 @@ describe('overview', () => {
 describe('create by hand', () => {
   it('creates a graph from the free Pods of the chosen group', async () => {
     const wrapper = mount(GraphCreate, { props: { view: { workflows: [], runs: [] }, pods, organization, groupId: group } })
+    await button(wrapper, 'Bounded graph').trigger('click')
     expect(button(wrapper, 'Create').attributes('disabled')).toBeDefined()
     await wrapper.find('input[type="text"]').setValue('Email management')
     expect(wrapper.findAll('.graph-create-check').map(item => item.text())).toEqual(['Intake', 'Triage', 'Archive'])
@@ -247,7 +251,7 @@ describe('create by hand', () => {
 
 function bridge(reply: (command: { type: string, id?: string }) => WorkflowView) {
   const workflows = vi.fn(async (command: { type: string, id?: string }) => structuredClone(reply(command)))
-  window.pods = { workflows, workspace: vi.fn(), scripts: vi.fn() } as unknown as typeof window.pods
+  window.pods = { networks: vi.fn(async () => ({ networks: [] })), workflows, workspace: vi.fn(), scripts: vi.fn() } as unknown as typeof window.pods
   return workflows
 }
 
@@ -312,7 +316,7 @@ describe('graph panel', () => {
 
 describe('sharing entry points', () => {
   it('are absent until the sharing flow exists', async () => {
-    window.pods = { workflows: vi.fn(async () => structuredClone({ ...view, graph: detail })) } as unknown as typeof window.pods
+    window.pods = { networks: vi.fn(async () => ({ networks: [] })), workflows: vi.fn(async () => structuredClone({ ...view, graph: detail })) } as unknown as typeof window.pods
     const overview = mount(GraphOverview, { props: { view, pods, organization } })
     const panel = mount(GraphPanel, { props: { view, pods, organization, selectedId: graphId } }); await flushPromises()
     for (const wrapper of [overview, panel]) {
@@ -322,7 +326,7 @@ describe('sharing entry points', () => {
     }
   })
   it('lead to the flow once it is switched on, and never from a read-only view', async () => {
-    window.pods = { workflows: vi.fn(async () => structuredClone({ ...view, graph: detail })) } as unknown as typeof window.pods
+    window.pods = { networks: vi.fn(async () => ({ networks: [] })), workflows: vi.fn(async () => structuredClone({ ...view, graph: detail })) } as unknown as typeof window.pods
     const overview = mount(GraphOverview, { props: { view, pods, organization, sharing: true } })
     await button(overview, 'Import').trigger('click')
     expect(overview.emitted('import')).toHaveLength(1)
@@ -382,6 +386,7 @@ describe('connected desktop graphs', () => {
   it('updates the group overview after creating a group through the graph surface', async () => {
     const { workspace } = await open()
     await click('Create network')
+    await click('Create a Pod or company')
     await click('Group')
     await desktop!.get('input').setValue('IURIO')
     await desktop!.get('form').trigger('submit'); await flushPromises()
@@ -445,5 +450,119 @@ describe('networks and workflows presentation', () => {
     expect(wrapper.findAll('.graph-edges path[data-active="true"]')).toHaveLength(2)
     expect(wrapper.findAll('.graph-edges path[data-active="false"]')).toHaveLength(2)
     expect(wrapper.text()).toContain('not confirmed external effects')
+  })
+})
+
+describe('persistent network owner controls', () => {
+  it('keeps explicit Pod pause review separate from selection and retains an action refusal across polling', async () => {
+    vi.useFakeTimers()
+    const f = operationalFixture()
+    const networks = vi.fn(async (command: Parameters<typeof window.pods.networks>[0]) => {
+      structuredClone(command)
+      if (command.type === 'process') throw new Error('Process now preview expired or its instance configuration changed')
+      if (command.type === 'preview') return { ...f.view, preview: { id: f.id(90), networkId: f.networkId, revision: 1, podIds: command.podIds, pausedPodIds: command.pausedPodIds, budget: command.budget, expiresAt: Date.now() + 300000, sources: command.podIds, consumers: [] } }
+      return structuredClone(f.view)
+    })
+    installWorkspace({ networks })
+    const wrapper = mount(NetworkDetail, { attachTo: document.body, props: { network: f.view.networks[0]!, view: f.view, pods: f.pods } })
+    try {
+      await flushPromises(); await button(wrapper, 'Process now').trigger('click')
+      await wrapper.get('.network-process input[type=checkbox]').setValue(true)
+      expect(button(wrapper, 'Preview processing').attributes('disabled')).toBeDefined()
+      await wrapper.findAll('label').find(label => label.text() === 'Include paused Pod Mailbox source')!.get('input').setValue(true)
+      await wrapper.get('.network-process').trigger('submit'); await flushPromises()
+      expect(networks).toHaveBeenCalledWith(expect.objectContaining({ type: 'preview', podIds: [f.pods[0]!.id], pausedPodIds: [f.pods[0]!.id] }))
+      expect(wrapper.get('.network-process').text()).toContain('Mailbox source · Source')
+      expect(wrapper.get('.network-process').text()).toContain('Explicitly included paused Pod')
+      await button(wrapper, 'Process up to 10').trigger('click'); await flushPromises()
+      expect(wrapper.get('[role=alert]').text()).toContain('preview expired')
+      await vi.advanceTimersByTimeAsync(5000); await flushPromises()
+      expect(wrapper.get('[role=alert]').text()).toContain('preview expired')
+      expect(networks.mock.calls.filter(([command]) => command.type === 'process')).toHaveLength(1)
+    }
+    finally { wrapper.unmount(); vi.useRealTimers() }
+  })
+
+  it.each(['detail', 'trace'])('allows pause after a failed %s read and retains the diagnostic', async (failedRead) => {
+    const f = operationalFixture(); f.view.networks[0]!.state = 'active'
+    const networks = vi.fn(async (command: Parameters<typeof window.pods.networks>[0]) => {
+      if (command.type === failedRead) throw new Error('Synthetic read unavailable')
+      return structuredClone(f.view)
+    })
+    installWorkspace({ networks })
+    const wrapper = mount(NetworkDetail, { props: { network: f.view.networks[0]!, view: f.view, pods: f.pods } })
+    try {
+      await flushPromises()
+      expect(wrapper.get('[role=alert]').text()).toContain('Synthetic read unavailable')
+      expect(button(wrapper, 'Pause network').attributes('disabled')).toBeUndefined()
+      await button(wrapper, 'Pause network').trigger('click'); await flushPromises()
+      expect(networks).toHaveBeenCalledWith({ type: 'pause', id: f.networkId, revision: 1 })
+    }
+    finally { wrapper.unmount() }
+  })
+
+  it('scopes recovery evidence to each effect and gate item and retains unrelated drafts', async () => {
+    const f = recoveryFixture()
+    const networks = vi.fn(async (command: Parameters<typeof window.pods.networks>[0]) => {
+      structuredClone(command)
+      if (command.type === 'inspect') f.view.details!.failures[0]!.inspectedAt = Date.now()
+      return structuredClone(f.view)
+    })
+    installWorkspace({ networks })
+    const wrapper = mount(NetworkDetail, { props: { network: f.view.networks[0]!, view: f.view, pods: f.pods } })
+    const evidence = (name: string) => wrapper.findAll('label').find(label => label.text() === name)!.get('textarea')
+    try {
+      await flushPromises(); await button(wrapper, 'Failures requiring review: 1').trigger('click')
+      await evidence(`Evidence for ${'d'.repeat(64)}`).setValue('Confirmed using the synthetic provider receipt')
+      await evidence('Evidence to exclude Synthetic pending invoice').setValue('This invoice must stay out of approval')
+      await evidence('Evidence for uncertain-approval').setValue('Retained unknown approval evidence')
+      expect(button(wrapper, 'Confirm action happened').attributes('disabled')).toBeDefined()
+      await button(wrapper, 'Inspect stopped process').trigger('click'); await flushPromises()
+      expect((evidence(`Evidence for ${'d'.repeat(64)}`).element as HTMLTextAreaElement).value).toContain('provider receipt')
+      await button(wrapper, 'Confirm action happened').trigger('click'); await flushPromises()
+      expect(networks).toHaveBeenCalledWith(expect.objectContaining({ type: 'reconcileEffect', key: 'd'.repeat(64), attempt: 1, sequence: 2, evidence: 'Confirmed using the synthetic provider receipt' }))
+      expect((evidence(`Evidence for ${'d'.repeat(64)}`).element as HTMLTextAreaElement).value).toBe('')
+      expect((evidence('Evidence for uncertain-approval').element as HTMLTextAreaElement).value).toBe('Retained unknown approval evidence')
+      await button(wrapper, 'Exclude Synthetic pending invoice with evidence').trigger('click'); await flushPromises()
+      expect(networks).toHaveBeenCalledWith(expect.objectContaining({ type: 'gateExclude', taskId: f.id(61), deliveryIds: [f.id(63)], evidence: 'This invoice must stay out of approval' }))
+      expect((evidence('Evidence for uncertain-approval').element as HTMLTextAreaElement).value).toBe('Retained unknown approval evidence')
+    }
+    finally { wrapper.unmount() }
+  })
+
+  it('requires an explicit shared value and sends a reviewed paused composition', async () => {
+    const f = operationalFixture()
+    const networks = vi.fn(async (command: Parameters<typeof window.pods.networks>[0]) => structuredClone(command).type === 'setup' ? { networks: [], setup: f.setup } : { ...f.view, createdId: f.networkId })
+    installWorkspace({ networks, definitions: async () => f.definitions })
+    const wrapper = mount(NetworkCreate, { props: { pods: f.pods, organization: f.organization, workflows: { workflows: [], runs: [] }, networks: { networks: [] }, groupId: f.groupId } })
+    try {
+      await flushPromises()
+      await wrapper.findAll('button').find(item => item.text().startsWith('Persistent network'))!.trigger('click')
+      await wrapper.get('input[maxlength="120"]').setValue('Owner reviewed network')
+      for (const input of wrapper.findAll('input[type=checkbox]').reverse()) await input.setValue(true)
+      await wrapper.get('form').trigger('submit'); await flushPromises()
+      expect(wrapper.text()).toContain('Created paused. Activation is a separate action.')
+      expect(wrapper.text()).toContain('Synthetic mailbox · read only')
+      const shared = wrapper.findAll('fieldset').find(item => item.get('legend').text() === 'Shared values')!
+      expect(shared.findAll('input[type=checkbox]')).toHaveLength(1)
+      await shared.get('input[type=checkbox]').setValue(true)
+      await shared.get('input[maxlength="1024"]').setValue('one-shared@example.invalid')
+      await button(wrapper, 'Add field').trigger('click')
+      await wrapper.get('input[pattern]').setValue('subject')
+      await wrapper.get('form').trigger('submit'); await flushPromises()
+      expect(networks).toHaveBeenCalledWith(expect.objectContaining({ type: 'create', draft: expect.objectContaining({ expectedSetup: f.setup.fingerprint, sharedValues: { mailbox: 'one-shared@example.invalid' } }) }))
+      expect(wrapper.emitted('created')).toHaveLength(1)
+    }
+    finally { wrapper.unmount() }
+  })
+
+  it('shows the connected-runtime creation fence before a request can be made', async () => {
+    const f = operationalFixture(); const networks = vi.fn()
+    installWorkspace({ networks, definitions: async () => f.definitions })
+    const wrapper = mount(NetworkCreate, { props: { pods: f.pods, organization: f.organization, workflows: { workflows: [], runs: [] }, networks: { networks: [], unavailableReason: 'Network creation requires bounded central publication support' } } })
+    await flushPromises()
+    expect(wrapper.get('[role=status]').text()).toContain('bounded central publication')
+    expect(wrapper.findAll('button').find(item => item.text().startsWith('Persistent network'))!.attributes('disabled')).toBeDefined()
+    expect(networks).not.toHaveBeenCalled(); wrapper.unmount()
   })
 })

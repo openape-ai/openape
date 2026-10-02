@@ -80,7 +80,7 @@ describe('network invocation transactions', () => {
     expect(store.checkpoint(seed.pod.id).body).toEqual({})
     expect(runs.get(authority.runId)).toMatchObject({ state: 'completed', checkpointRevision: 2, summary: 'Network invocation finished' })
     expect(store.db.prepare('SELECT 1 FROM run_leases WHERE run_id=?').get(authority.runId)).toBeUndefined()
-    expect(store.db.prepare('SELECT body FROM network_trace_events WHERE run_id=?').get(authority.runId)!.body).toContain('Private business summary')
+    expect(store.db.prepare('SELECT body FROM network_trace_events WHERE run_id=? AND kind=\'invocation-settled\'').get(authority.runId)!.body).toContain('Private business summary')
     expect(() => invocations.events.accept(authority, emission)).toThrow('authority')
   })
 
