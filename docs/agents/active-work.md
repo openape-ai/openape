@@ -1,5 +1,22 @@
 # Active work
 
+## Approved audit exception — issue 1418
+
+Patrick approved ignoring CVE-2026-85393 on October 2, 2026 and continuing Pods
+M7–M14. The exact exception and Nuxt/proxy reachability assessment are in
+[dependency audit exceptions](../operations/dependency-audit-exceptions.md).
+Checkout: `openape-monorepo.worktrees/proxy-forge-audit`; branch
+`bugfix/issue-1418-proxy-forge-audit`; canonical base
+`e815dad04ecf0985a7a1bd0f6269604f5b55f46a`.
+The original alternative proxy rewrite is preserved in stash
+`f82acfcb06d9fab0c0f75b4e6bdd0d9b78c92dec` and is not part of this change.
+The audit now succeeds with exactly one ignored high finding. Actual read-only
+Claude Code Opus 5.5 review found no blocking issue; documentation was clarified
+for the direct proxy path, downstream consumers and exception removal.
+Root/affected unit gates, native PR and exact-source CI remain in progress.
+M0–M6 are accepted; staged M7 remains unaccepted in its separate checkout and
+its recovery review fixes are continuing. No production activation is included.
+
 ## Pods persistent networks — issue 1417
 
 [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3VDB1S72E4EQQW58T97C617),
