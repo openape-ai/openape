@@ -1,4 +1,5 @@
 import { definitionSchema } from './definition-schema.ts'
+import { sharingSchema } from './sharing-schema.ts'
 import { networkDataSchema } from './network-data-schema.ts'
 import { networkWorkflowSchema } from './network-workflow-schema.ts'
 import { networkGateSchema } from './network-gate-schema.ts'
@@ -8,7 +9,7 @@ import { migrateRemote } from '../remote/migration.ts'
 import { migrateChats } from '../master/chat-migration.ts'
 import type { GraphContract } from '../../contracts/graphs.ts'
 import { createHash, randomUUID } from 'node:crypto'
-import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, statfsSync, writeFileSync } from 'node:fs'
+import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, statfsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
@@ -45,7 +46,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 33
+export const schemaVersion = 34
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -110,7 +111,15 @@ export class PodDatabase {
   private migrate(): void {
     const version = this.db.prepare('PRAGMA user_version').get()?.user_version as number
     if (version === schemaVersion) return
-    if (version > 0) this.db.prepare('VACUUM INTO ?').run(join(this.root, `before-v${version}-${randomUUID()}.sqlite`))
+    if (version > 0) {
+      const backup = join(this.root, `before-v${version}-${randomUUID()}.sqlite`)
+      this.db.prepare('VACUUM INTO ?').run(backup); chmodSync(backup, 0o600)
+      const saved = new DatabaseSync(backup, { readOnly: true })
+      try {
+        if (saved.prepare('PRAGMA quick_check').get()?.quick_check !== 'ok' || saved.prepare('PRAGMA user_version').get()?.user_version !== version) throw new Error('Pre-upgrade database backup failed verification')
+      }
+      finally { saved.close() }
+    }
     this.transaction(() => {
       if (version < 1) {
         this.db.exec(`
@@ -335,6 +344,7 @@ PRAGMA user_version=27;`)
       if (version < 31) this.db.exec(`${networkDataSchema} PRAGMA user_version=31;`)
       if (version < 32) this.db.exec(`${networkWorkflowSchema} PRAGMA user_version=32;`)
       if (version < 33) this.db.exec(`${definitionSchema} PRAGMA user_version=33;`)
+      if (version < 34) this.db.exec(`${sharingSchema} PRAGMA user_version=34;`)
     })
   }
 
@@ -363,10 +373,9 @@ PRAGMA user_version=27;`)
     return podFromRow(row)
   }
 
-  createPod(input: unknown): Pod {
+  createPod(input: unknown, id: string = randomUUID()): Pod {
     record(input, ['name']); text(input.name, 'name', 100)
     const { name } = input
-    const id = randomUUID()
     this.transaction(() => {
       this.db.prepare('INSERT INTO pods(id,name,assignment) VALUES(?,?,?)').run(id, name, '')
       this.db.prepare('INSERT INTO checkpoints VALUES(?,?,?)').run(id, 0, '{}')
