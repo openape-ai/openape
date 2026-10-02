@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { chmod, lstat, readdir, readFile, realpath, rename, rm } from 'node:fs/promises'
-import { join } from 'node:path'
+import { chmod, lstat, mkdir, readdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { emptyPackages, parsePackages } from '../../contracts/dependencies'
 import type { PackageManifest } from '../../contracts/dependencies'
 import type { ScriptRuntime } from '../runs/runner'
@@ -51,6 +51,51 @@ export class DependencyStore {
     if (packageDigest(files) !== hash || JSON.stringify(files) !== row.files) throw new Error('Prepared dependency contents changed; execution was blocked')
     checkLock(JSON.parse(await readFile(join(path, 'package-lock.json'), 'utf8')), parsePackages(JSON.parse(row.manifest as string)))
     return path
+  }
+
+  async copyPinned(sourcePodId: string, targetPodId: string, hash: string, current: () => void): Promise<void> {
+    current()
+    this.store.getPod(targetPodId)
+    const source = await this.verify(sourcePodId, hash)
+    if (this.store.db.prepare('SELECT 1 FROM dependency_sets WHERE pod_id=? AND hash=?').get(targetPodId, hash)) {
+      await this.verify(targetPodId, hash); current(); return
+    }
+    const row = this.store.db.prepare('SELECT manifest,lockfile,files FROM dependency_sets WHERE pod_id=? AND hash=?').get(sourcePodId, hash)!
+    const prepared = this.prepared(targetPodId, parsePackages(JSON.parse(row.manifest as string)))
+    if (prepared && prepared !== hash) throw new Error('The instance has a different dependency lock for these packages')
+    const files = JSON.parse(row.files as string) as PackageFile[]
+    this.store.assertStorage(files.reduce((size, file) => size + file.size, 0))
+    const root = await realpath(this.store.root)
+    const stage = await podDirectory(await podDirectory(root, 'dependency-staging'), randomUUID())
+    const parent = await podDirectory(await podDirectory(root, 'dependencies'), targetPodId)
+    let published: string | undefined
+    try {
+      for (const file of files) {
+        current()
+        const content = await readFile(join(source, file.path))
+        const target = join(stage, file.path)
+        await mkdir(dirname(target), { recursive: true, mode: 0o700 })
+        await writeFile(target, content, { flag: 'wx', mode: 0o600 })
+      }
+      const copied = await packageFiles(stage, true)
+      if (JSON.stringify(copied) !== row.files || packageDigest(copied) !== hash) throw new Error('Pinned dependencies changed while copying')
+      current()
+      if (this.store.db.prepare('SELECT 1 FROM dependency_sets WHERE pod_id=? AND hash=?').get(targetPodId, hash)) {
+        await this.verify(targetPodId, hash); current(); return
+      }
+      const target = join(parent, hash)
+      await chmod(stage, 0o700)
+      await rename(stage, target)
+      published = target
+      await chmod(published, 0o500)
+      this.store.transaction(() => {
+        current()
+        this.store.db.prepare('INSERT INTO dependency_sets VALUES(?,?,?,?,?)').run(targetPodId, hash, row.manifest!, row.lockfile!, row.files!)
+      })
+      published = undefined
+    }
+    catch (error) { if (published) await removePackageTree(published); throw error }
+    finally { await removePackageTree(stage) }
   }
 
   async prepare(runtime: ScriptRuntime, podId: string, packages: PackageManifest, signal: AbortSignal, current: () => void): Promise<string | null> {
