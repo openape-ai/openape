@@ -2,7 +2,7 @@ import type { GraphMode } from '../../contracts/graphs'
 import type { WorkflowDefinition, WorkflowView } from '../../contracts/workflows'
 
 export type ArrangementFilter = 'all' | 'channels' | 'sequence'
-export const arrangementLabel = (mode: GraphMode): 'Network' | 'Workflow' => mode === 'channels' ? 'Network' : 'Workflow'
+export const arrangementLabel = (mode: GraphMode): 'Bounded graph' | 'Workflow' => mode === 'channels' ? 'Bounded graph' : 'Workflow'
 
 export function waitingDecisions(definition: WorkflowDefinition, gates: WorkflowView['gates']): { choices: number, approvals: number } {
   if (!gates) return { choices: 0, approvals: 0 }

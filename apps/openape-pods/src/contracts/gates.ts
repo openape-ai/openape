@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto'
+import { gateLimits } from './gate-limits'
 
 export { itemTitle } from './graph-projection'
 
 export const gateAudience = 'pods-graph-gate'
-export const gateLimits = { batchItems: 30, expiryMs: 12 * 60 * 60 * 1000, pendingBatches: 4, summaryLength: 4096 } as const
+export { gateLimits } from './gate-limits'
 export type GateBatchState = 'preparing' | 'pending' | 'consuming' | 'approved' | 'denied' | 'expired' | 'superseded' | 'unknown'
 export interface GateBatchItem { itemId: string, key: string, hash: string, title: string, excluded: boolean, emittedId: string | null }
 export interface GateBatchView { id: string, workflowId: string, gate: string, podId: string, state: GateBatchState, url: string | null, expiresAt: number, error: string | null, items: { itemId: string, key: string, title: string, excluded: boolean }[] }

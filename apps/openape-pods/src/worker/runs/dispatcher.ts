@@ -21,6 +21,7 @@ import { parseCredentialRead } from '../../contracts/credentials'
 import { ScriptCredentials } from '../resources/script-credentials'
 import { MailRecipeSession, mailToolRequest } from '../mail/recipe'
 import { extractSource } from '../mail/extraction'
+import { parseMailRequest } from '../../main/mail/contract'
 import { assignedMail } from '../../main/mail/assigned'
 import type { MailPage } from '../mail/ingestion'
 import { confirmDomainsStopped } from '../recovery/domains'
@@ -214,6 +215,7 @@ export class RunDispatcher {
     const agentBudgetPaused = () => activeAgentCalls > 0 && agentPausedMs + (Date.now() - agentSince) < maxAgentPauseMs
     let shellScope: RunServiceScope | undefined
     let infrastructureWaiting = 0
+    let networkMailReads = 0
     let scriptStarted = false
     const graph = graphRun(this.store, id); let delivered: DeliveredItem[] = []; const emits: (GraphEmit & { channel: string })[] = []
     const settle = (completed: boolean) => { if (graph) settleItems(this.store, graph, completed && this.runs.get(id).state === 'completed', delivered, emits, Date.now()) }
@@ -239,7 +241,7 @@ export class RunDispatcher {
       const manifestRow = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(pod.id, run.scriptHash)
       if (!manifestRow) throw new Error('Pinned script is missing')
       const manifest = parseManifest(JSON.parse(manifestRow.manifest as string))
-      if (network && manifest.capabilities.length) throw new Error('Network capabilities require declared runtime ports')
+      if (network && manifest.capabilities.some(capability => capability !== 'mail.read')) throw new Error('Network capabilities require declared runtime ports')
       if (!manifest.triggers.includes(trigger.reason)) throw new Error('Script does not allow this trigger')
       const assigned = this.resources.list(pod.id).filter(resource => resource.kind === 'tool' && resource.state === 'ready').map(resource => resource.configuration.capability)
       if (manifest.capabilities.filter(capability => !capability.startsWith('credential.')).some(capability => !assigned.includes(capability)) || (manifest.capabilities.includes('mail.read') && !this.services?.tool)) throw new Error('No tool assignments are available for this script')
@@ -321,6 +323,14 @@ export class RunDispatcher {
         request: async (operation, payload, operationSignal) => {
           assertCurrent()
           if (network) {
+            if (operation === 'tools.invoke' && manifest.capabilities.includes('mail.read')) {
+              if (!input.network!.source) throw new Error('Network mail reads require a declared source')
+              const request = parseMailRequest(payload, assignedMail(this.resources.list(pod.id)).mail)
+              if (networkMailReads >= 100) throw new Error('Network mail read budget exceeded')
+              networkMailReads++
+              appendEvent('network-mail-read', { operation: request.read.operation, count: networkMailReads })
+              return invokeTool(payload, operationSignal)
+            }
             if (!['graph.contract', 'graph.emit', 'network.emit', 'network.gateCoverage', 'data.get', 'data.put', 'data.delete', 'data.query', 'artifacts.create', 'artifacts.read', 'workflow.call', 'workflow.result', 'progress.commit'].includes(operation)) throw new Error('Network operation requires a declared runtime port')
             if (operation === 'data.get') return network.invocations.data.get(network.authority, payload)
             if (operation === 'data.put') return network.invocations.data.put(network.authority, payload)
