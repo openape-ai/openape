@@ -1,5 +1,34 @@
 # Active work
 
+## Sharing M2 — issue 1419
+
+Owned snapshots, explicit assets, freshness-bound privacy review and complete
+Pod/workflow/network export mapping are implemented. Root lint (54 tasks),
+typecheck (77 tasks), Pods build, 1232 Pods units, 37 protocol tests and three
+manual native dependency checks pass. The native test exports a validated script
+with its actually prepared npm lock. Actual Opus reviews prompted and verified
+boundary corrections; original findings and dispositions are retained. The closure
+review identified excessive repeated common-value findings; the corrected scanner
+uses one word-aware finding per file/value and excludes generated metadata only
+from known-value checks. Scope inputs are independent of other roles. A synthetic
+32 MiB scan took49 ms locally, with2.5 ms maximum timer delay; UI responsiveness
+still belongs to M4. Final
+native PR/CI/report acceptance remains pending. No M2 UI or import acceptance.
+
+Own checkout `openape-monorepo.worktrees/pods-portable-sharing`, branch
+`feature/issue-1419-sharing-export`, canonical base
+`6133326303b9d1cf46fd843451f00b918849c6e1` (PR216). Doctor passes; shared Git config
+is `core.bare=false`, hooks `.githooks`. Evidence:
+`/tmp/openape-pods-sharing-m2/`. Full hooks use one local Vitest worker through
+strict Turbo passthrough only; automatic CI remains unit-only.
+
+M1 is accepted: tested source `30c9e83896e2be507c2a673c9a3acb40ea4f43da`, PR216
+merge above, source CI5351 and main CI5352 green.
+[Verified private Test Runs](https://report.openape.ai/r/OZbajHTMYIjvzknMK4s8V5Hu)
+retains 1211 units, three native checks and actual Opus/primary reviews.
+Next finish M2 exact-source native review/report/merge acceptance, then M3
+journaled import and runtime aliases without renewed plan approval.
+
 ## Sharing M1 — issue 1419
 
 Sharing M0 PR215 merged source `a80d22a17e8ffeb9ae9c5db1692ae10fade91a2d` as
