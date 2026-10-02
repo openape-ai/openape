@@ -1,5 +1,5 @@
 import { NetworkData } from './network-data'
-import { emptyNetworkDataPin, networkConfiguration, networkDataPin } from './network-config'
+import { emptyNetworkDataPin, networkConfiguration, networkDataPin, networkLegacyVariables } from './network-config'
 import type { NetworkGates } from './network-gates'
 import type { NetworkGateManifest } from '../../contracts/network-gates'
 import { assertNetworkQuota, NetworkQuotaError } from './network-quota'
@@ -123,7 +123,7 @@ export class NetworkInvocations {
     const checkpoint = this.store.db.prepare('SELECT revision,body FROM network_checkpoints WHERE network_id=? AND pod_id=?').get(definition.id, member.podId)!
     const items = this.store.db.prepare(`SELECT e.id,e.item_key,e.channel,e.payload,e.case_id,e.case_revision FROM network_deliveries d JOIN network_events e ON e.id=d.event_id
       WHERE d.run_id=? AND d.state='claimed' ORDER BY d.accepted_at,d.id`).all(authority.runId).map(item => ({ eventId: item.id as string, key: item.item_key as string, channel: item.channel as string, data: JSON.parse(item.payload as string) as Record<string, unknown>, artifacts: this.events.references(item.id as string), caseId: item.case_id as string, caseRevision: item.case_revision as number }))
-    return { config: networkConfiguration(this.store, definition.id, member.podId), network: { id: definition.id, revision: definition.revision, source: member.source !== null }, items, checkpoint: { revision: checkpoint.revision as number, body: JSON.parse(checkpoint.body as string) as Record<string, unknown> }, resourceEpoch: (JSON.parse(row.manifest as string) as { resourceEpoch: number }).resourceEpoch }
+    return { variables: networkLegacyVariables(this.store, definition.id), config: networkConfiguration(this.store, definition.id, member.podId), network: { id: definition.id, revision: definition.revision, source: member.source !== null }, items, checkpoint: { revision: checkpoint.revision as number, body: JSON.parse(checkpoint.body as string) as Record<string, unknown> }, resourceEpoch: (JSON.parse(row.manifest as string) as { resourceEpoch: number }).resourceEpoch }
   }
 
   recordConflict(authority: NetworkAuthority, failure: unknown): void {
