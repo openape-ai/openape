@@ -1020,7 +1020,7 @@ history, identities, pending decisions and effect evidence, and refuse unresolve
 work rather than deleting it. This is a required pre-release follow-up, not a claim
 that M9 provides editing or that an existing network can be silently converted.
 
-## M10 bounded browser publication — implementation under verification
+## M10 bounded browser publication — accepted
 
 Central format 2 and its existing part keys remain unchanged. A relay advertises
 `networkReads: 1` before the desktop can publish a network profile or create network
@@ -1077,5 +1077,64 @@ The authenticated browser acceptance uses a real local identity provider, signed
 runtime requests and the actual Nuxt route, with synthetic runtime responses. Native
 Electron tests separately exercise the actual desktop/preload/main/worker routes.
 These are distinct evidence; they do not claim an installed production desktop has
-connected to a deployed relay. Final clean-SHA checks, native PR/CI and verified
-private Test Runs publication remain required before M10 acceptance.
+connected to a deployed relay. Clean runtime `0bcad342d2d96a4645c687358ba964b04c2b254c`
+passed native/layout/browser checks, root gates and1136 Pods/34 relay/6 protocol tests.
+[PR211](https://repos.openape.ai/patrick/monorepo/pulls/211) passed exact-head CI5338,
+merged as `ad16a8f2cf4fa85864472c8cb8750d4feaed33cc` and passed full main CI5339.
+[Verified private Test Runs](https://report.openape.ai/r/TIPZLLUeJrGCKBf0UE7ituvS)
+contains the actual results and eight personally inspected screenshots. Its immutable
+publication-time pending CI was subsequently resolved by those CI receipts.
+
+
+## M11 reviewed conversion — implementation under verification
+
+Desktop conversion starts from the selected bounded channel graph. Its dry run
+reads existing definitions, owner bindings, script hashes, local rights, values,
+schedules and every member checkpoint. It writes neither database rows nor blobs.
+Explicit typed schemas, source versioning and exact checkpoints are reviewed; no
+source cursor or payload type is inferred. Unsupported gates or rights, published
+callable workflows, conflicting membership, unresolved executions/inputs/recovery,
+uncertain effects and pending decisions refuse conversion with settlement guidance.
+Pending deliveries block by default. Explicit `retainLegacy` preserves them in the
+disabled ancestor without importing or replaying them.
+
+The current fingerprint is recomputed inside the cutover transaction. The old graph
+is archived, its live memberships removed and individual schedules disabled; their
+original definitions remain. The same Pods, identities, scripts, homes and resources
+join a newly paused network. All member checkpoints are copied exactly. Original
+checkpoint rows remain untouched. Activation is separate and starts no replay.
+Shared values, setup authority and storage limits use the same validation in preview
+and creation. Legacy graph values retain their string type and remain available to
+unchanged scripts through `context.variables`; matching public composition values
+also feed declared `context.config` fields. Conflicting Pod overrides refuse conversion.
+The resolved legacy variables participate in the runtime data pin. Failed writes roll the complete cutover back, including schedules.
+
+A protected `legacy-conversion-reviewed` trace stores the frozen ancestor and exact
+checkpoint receipt and bounded exact retained-delivery IDs, keys and payload hashes.
+A compact baseline pin avoids copying full checkpoints into
+frequent authority fingerprints. Restore retains the protected receipt but revokes
+the baseline, so an identical conversion retry is idempotent without reactivating
+or bypassing restore review. Ancestor rows stay private in browser publication, including item/event rows whose
+workflow-run row is absent. The privacy filter follows both workflow and run identity.
+Only a bounded activity summary is shown in the network trace; retained legacy item
+inspection and reviewed paused replacement/archive remain part of the next M11
+increment. Historical memberships and effect evidence may never be deleted to make
+a replacement fit.
+
+Source scripts must already support persistent execution using
+`context.network.emit({channel,key,sourceItemId,sourceVersion,payload})`. A script
+that also runs as a bounded graph or in ordinary validation must handle the absence
+of `context.network` explicitly. Its bounded path may use `context.emit`; a persistent
+source using that legacy API is refused at runtime. The conversion review pins the
+unchanged script hash; it neither rewrites code nor treats the owner assertion as a
+static proof of API use. Schema mismatches are refused at runtime as well.
+
+Actual Opus5.5 and Fable5.1 reviews supplement primary review. Permanent behavioral
+tests cover pure previews, original identities/checkpoints, atomic rollback,
+restoration, pending retention without replay, unresolved authority and UI review
+invalidation. Current source passes141 suites /1157 units, three native cases and
+13 manual layout checks, root lint/typecheck and the Pods build. Six native and
+wide/narrow EN/DE screenshots were personally inspected. Native PR/CI and private
+Test Runs evidence remain pending. This increment does not complete M11: reviewed
+replacement/archive and the approved portable file-sharing slice remain required.
+No productive conversion, schedule activation or external action is implied.

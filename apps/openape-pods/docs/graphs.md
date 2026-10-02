@@ -427,3 +427,38 @@ export async function run(context) {
   }
 }
 ```
+
+
+## Explicit conversion to a persistent network
+
+Existing bounded graphs keep this contract. Desktop **Review graph conversion**
+previews typed channel schemas, current rights/values, old and new schedules and
+retained checkpoints. Review each exact checkpoint and the source baseline. Pending
+items block conversion unless explicitly retained in the disabled ancestor without
+import or replay. Unsupported gates/rights and unresolved work require reconciliation.
+Cancellation does not change the graph. A successful atomic conversion preserves
+Pod identities, scripts and local resources and creates a paused network; activation
+is a separate action.
+
+Persistent sources require `context.network.emit` with explicit `sourceItemId` and
+`sourceVersion`. Conversion never rewrites scripts. A source that must also validate
+or run in the bounded runtime needs an explicit non-network path, for example:
+
+```ts
+if (context.network) {
+  await context.network.emit({
+    channel: 'cases', key: item.id,
+    sourceItemId: item.id, sourceVersion: item.version,
+    payload: { subject: item.subject },
+  })
+} else {
+  await context.emit('cases', { key: item.id, data: { subject: item.subject } })
+}
+```
+
+Use provider-stable IDs and versions and the reviewed checkpoint; never synthesize
+a version from the run time or infer a cursor from historical effects. Source
+versioning assertions in the review do not prove script correctness. Unsupported
+source calls and payloads fail visibly at runtime. See the
+[network contract](../../../docs/architecture/pods-networks/contracts.md) for
+migration limits, restore and retained ancestry.

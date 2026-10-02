@@ -1,5 +1,6 @@
 <script lang="ts">
 import NetworkCreate from './NetworkCreate.vue'
+import NetworkConversion from './NetworkConversion.vue'
 import type { CentralNetworkRead } from '../contracts/central-networks'
 import NetworkDetail from './NetworkDetail.vue'
 import type { NetworkView } from '../contracts/networks'
@@ -27,7 +28,7 @@ import type { ArrangementFilter } from './utils/graph-presentation'
 import { sharingAvailable } from './utils/sharing'
 
 export default defineComponent({
-  components: { NetworkCreate, NetworkDetail, GateReview, GraphCreate, GraphInspector, GraphOverview, GraphView, ItemTrace, WorkflowPanel },
+  components: { NetworkConversion, NetworkCreate, NetworkDetail, GateReview, GraphCreate, GraphInspector, GraphOverview, GraphView, ItemTrace, WorkflowPanel },
   props: {
     view: { type: Object as PropType<WorkflowView>, required: true },
     pods: { type: Array as PropType<StoredPod[]>, required: true },
@@ -39,8 +40,13 @@ export default defineComponent({
     sharing: { type: Boolean, default: sharingAvailable },
   },
   emits: ['changed', 'select', 'openPod', 'workspace', 'share', 'import'],
-  data() { return { networks: { networks: [] } as NetworkView, networkError: '', networkLoading: false, networkRequest: 0, networkTimer: null as ReturnType<typeof setTimeout> | null, closed: false, detail: null as GraphDetail | null, node: '', mode: 'plan' as 'plan' | 'run', overviewFilter: 'all' as ArrangementFilter, page: 'graph' as 'graph' | 'trace' | 'gate' | 'create' | 'legacy-create' | 'workflow-create', gate: '', createIn: null as string | null, busy: false, error: '' } },
+  data() { return { networks: { networks: [] } as NetworkView, networkError: '', networkLoading: false, networkRequest: 0, networkTimer: null as ReturnType<typeof setTimeout> | null, closed: false, detail: null as GraphDetail | null, node: '', mode: 'plan' as 'plan' | 'run', overviewFilter: 'all' as ArrangementFilter, page: 'graph' as 'graph' | 'trace' | 'gate' | 'create' | 'legacy-create' | 'workflow-create' | 'convert', gate: '', createIn: null as string | null, busy: false, error: '' } },
   computed: {
+    conversionUnavailable(): string {
+      if (!this.definition?.groupId) return t('Choose a company.')
+      if (this.networks.networks.some(item => item.groupId === this.definition?.groupId && item.state !== 'archived')) return t('This company already has a persistent network.')
+      return this.networkError || this.networks.unavailableReason || ''
+    },
     network() { return this.networks.networks.find(item => item.id === this.selectedId) },
     definition(): WorkflowDefinition | undefined { return this.view.workflows.find(item => item.id === this.selectedId) },
     groupName(): string { return this.organization.groups.find(group => group.id === this.definition?.groupId)?.name ?? t('Ungrouped') },
@@ -84,6 +90,11 @@ export default defineComponent({
     pollNetworks() { if (this.closed) return; this.networkTimer = setTimeout(async () => { await this.loadNetworks(); this.pollNetworks() }, 5000) },
     networkChanged(view: NetworkView) { this.networkRequest++; this.networks = view },
     networkCreated(view: NetworkView) { this.networkRequest++; this.networks = view; this.page = 'graph'; this.$emit('select', view.createdId) },
+    async converted(view: NetworkView) {
+      this.networkCreated(view)
+      try { this.$emit('changed', await window.pods.workflows({ type: 'list' })) }
+      catch (error) { this.error = error instanceof Error ? error.message : String(error) }
+    },
     async send(command: WorkflowCommand): Promise<WorkflowView | null> {
       this.busy = true; this.error = ''
       try {
@@ -146,7 +157,8 @@ export default defineComponent({
 </script>
 
 <template>
-  <NetworkCreate v-if="page === 'create' && !readOnly" :pods="pods" :organization="organization" :workflows="view" :networks="networkError ? { ...networks, unavailableReason: networkError } : networks" :group-id="createIn" @cancel="page = 'graph'" @workflow="page = 'workflow-create'" @created="networkCreated" @other="page = 'legacy-create'" @open-pod="$emit('openPod', $event)" />
+  <NetworkConversion v-if="page === 'convert' && definition && !readOnly && !readNetwork" :key="definition.id" :legacy="definition" :pods="pods" :organization="organization" :workflows="view" :networks="networkError ? { ...networks, unavailableReason: networkError } : networks" @cancel="page = 'graph'" @created="converted" @open-pod="$emit('openPod', $event)" />
+  <NetworkCreate v-else-if="page === 'create' && !readOnly" :pods="pods" :organization="organization" :workflows="view" :networks="networkError ? { ...networks, unavailableReason: networkError } : networks" :group-id="createIn" @cancel="page = 'graph'" @workflow="page = 'workflow-create'" @created="networkCreated" @other="page = 'legacy-create'" @open-pod="$emit('openPod', $event)" />
   <GraphCreate v-else-if="page === 'legacy-create'" :view="view" :pods="pods" :organization="organization" :group-id="createIn" :busy="busy" :error="error" @create="create" @cancel="page = 'graph'" />
   <WorkflowPanel v-else-if="page === 'workflow-create' && !readOnly" create-on-mount :view="view" :pods="pods" @changed="$emit('changed', $event)" @select="$emit('select', $event); page = 'graph'" @cancel="page = 'graph'" />
   <NetworkDetail v-else-if="network" :key="network.id" :network="network" :view="networks" :read-network="readNetwork" :pods="pods" :read-only="readOnly" :active="active" @changed="networkChanged" @back="$emit('select', '')" @open-pod="$emit('openPod', $event)" />
@@ -160,10 +172,16 @@ export default defineComponent({
       </p>
       <div class="graph-panel-title">
         <h1>{{ definition.name }}</h1>
+        <button v-if="definition.mode === 'channels' && !readOnly && !readNetwork" class="secondary" aria-describedby="conversion-unavailable" :disabled="busy || !!conversionUnavailable" @click="page = 'convert'">
+          {{ t('Review graph conversion') }}
+        </button>
         <button v-if="sharing && !readOnly" class="secondary" @click="$emit('share', definition.id)">
           {{ t('Share') }}
         </button>
       </div>
+      <p v-if="!readOnly && !readNetwork && definition.mode === 'channels' && conversionUnavailable" id="conversion-unavailable" role="status">
+        {{ diagnostic(conversionUnavailable) }}
+      </p>
       <p class="muted">
         {{ t(arrangementLabel(definition.mode)) }} · {{ headline }}
       </p>

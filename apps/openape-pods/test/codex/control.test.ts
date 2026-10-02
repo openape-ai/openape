@@ -259,6 +259,6 @@ it('keeps managing a sequence workflow exactly as under contract version 2', asy
   expect(workflows.view().workflows[0]).toMatchObject({ mode: 'sequence', channels: [], gates: [], values: [] })
   const reference = await send({ action: 'runtime' }) as { contractVersion: number, graphs: Record<string, string>, actions: Record<string, unknown> }
   expect(reference.contractVersion).toBe(3)
-  expect(Object.keys(reference.graphs)).toEqual(['purpose', 'engineering', 'presentation', 'order', 'definition', 'contract', 'items', 'emit', 'gates', 'archive', 'values', 'diagnostics', 'example'])
+  expect(Object.keys(reference.graphs)).toEqual(['conversion', 'purpose', 'engineering', 'presentation', 'order', 'definition', 'contract', 'items', 'emit', 'gates', 'archive', 'values', 'diagnostics', 'example'])
   expect(Object.keys(reference.actions).filter(action => /gate|approve/i.test(action))).toEqual([])
 })
