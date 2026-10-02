@@ -9,10 +9,11 @@ Baseline: canonical `667745cbcbb751349c4f83714f4847966e5c04c9`, full-main CI 534
 Dedicated checkout `openape-monorepo.worktrees/pods-portable-sharing`, branch
 `feature/issue-1419-pod-workflow-sharing`. Schema 33 is current. Frozen install and
 prescribed prebuild completed; Doctor passes. No user database is opened or migrated
-by the manifest code. M0 remains in progress until final review, root gates and native acceptance.
-Manifest and composition checks are implemented and focused tests pass.
+by the manifest code. M0 was accepted in PR215, merged as
+`04c20aa8df50bd6e85bca99aa520e355d727c3f4` with source CI5347/main CI5348 green.
+M1 continues from that merge on `feature/issue-1419-sharing-dependencies`.
 
-## Manifest v1 candidate
+## Manifest v1
 
 `packages/pods-protocol/src/sharing.ts` is Node-free. The closed manifest describes
 package identity/revision, an entry, required runtime features, Pods, compositions,
@@ -169,3 +170,52 @@ checks those declarations; applying the graph shadowing rule would reject valid
 network configuration. Mail configuration uses distinct input roles and a bound
 recipient credential alias. These differences were checked against native source
 following the final Opus review rather than applying every suggestion verbatim.
+
+## M1 dependency resolution
+
+Imported npm locks use a deliberately restricted v3 subset: exact direct versions,
+public-registry package tarballs matching package name/version, canonical SHA512,
+closed metadata and reachable semver-compatible transitive edges. Registry aliases,
+links, workspace/file/git sources, lifecycle hooks, development dependencies and
+native payloads are unsupported. Export must call the same strict validator before
+creating a package, so unsupported source locks fail visibly at the sender.
+Existing local generated-lock preparation is unchanged.
+
+Imported preparation invokes only `npm ci`, retaining the registry proxy, isolated
+home, sandbox, output/storage/time limits, disabled lifecycle scripts and bin links.
+The lock is checked for unexpected modification afterward. npm enforces tarball
+integrity; installed package identities and all
+normal/optional/peer dependency declarations must agree with the lock. Unlisted and bundled packages are refused. Mandatory
+reachability is derived from edges instead of trusting optional flags. Actual
+package files retain the existing immutable content hash and link/native checks.
+Canonical JSON formatting can change the whole local dependency-set hash; original
+package bytes and parsed lock metadata must remain equal. Existing manifest-only
+lookup never silently reuses a different imported lock.
+
+Application resolution uses owner-selected paths, known owner-assigned candidates
+and the established CLI PATH lookup. It never scans arbitrary application folders,
+fetches distribution URLs, executes an imported probe or installs software. Bundle
+identity/version comes from static plist declarations, not verified publisher
+signatures. Callers must retain that provenance and restrict candidates to existing
+owner choices. The built-in launcher contract is `ai.openape.pods.launch`, version 1.
+CLI identity and adapter version must exactly match a selected local adapter.
+A declared CLI tested version stays `setupRequired` because there is no approved
+static source for that version. An empty tested-version list explicitly yields
+`testedVersion: false`, never a verified version claim.
+
+Resolution hashes actual local executable/adapter bytes and returns software only.
+Bundle preview is read-only; the binding commit materializes its local launcher with
+`bundleDefinition` inside the import-owned directory and rechecks executable bytes.
+Runtime descriptors are owner-local selections, loaded through the existing native
+validator; portable packages cannot supply executable paths or runtime settings.
+M3 must repeat resolution at commit to refresh static metadata and local selections.
+The importer must call `ProgramManager.add`, never `replace`: each account binding
+gets fresh private state and empty grants. `available` means software can be bound,
+not permission to execute. Missing, malformed, ambiguous, untested and incompatible
+candidates remain actionable setup states. No M3 importer/UI wiring is claimed by M1.
+
+Retained tests protect authority/state isolation, lock tampering, installed-manifest
+consistency and exact-lock reuse. The manual dependency E2E performs real sandboxed
+public-registry preparation, imports the original lock into a second paused Pod and
+rejects altered SHA512 without publishing a dependency set. This manual test does
+not run in automatic unit-only CI. No UI changed in M1; screenshots are not claimed.

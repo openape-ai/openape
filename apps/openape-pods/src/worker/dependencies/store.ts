@@ -1,3 +1,4 @@
+import { canonicalPortableJson } from '@openape/pods-protocol'
 import { randomUUID } from 'node:crypto'
 import { chmod, lstat, mkdir, readdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -9,6 +10,7 @@ import { podDirectory } from '../../runtime/environment'
 import { inspectDomainRecords } from '../recovery/domains'
 import { checkLock, dependencyLimit, packageDigest, packageFiles } from './tree'
 import type { PackageFile } from './tree'
+import { parseImportedLock } from './imported-lock'
 import { installPackages } from './install'
 
 export async function removePackageTree(path: string): Promise<void> {
@@ -98,11 +100,19 @@ export class DependencyStore {
     finally { await removePackageTree(stage) }
   }
 
-  async prepare(runtime: ScriptRuntime, podId: string, packages: PackageManifest, signal: AbortSignal, current: () => void): Promise<string | null> {
+  async prepare(runtime: ScriptRuntime, podId: string, packages: PackageManifest, signal: AbortSignal, current: () => void, importedLock?: string): Promise<string | null> {
     current()
+    const npm = join(dirname(runtime.entry), '../vendor/npm')
+    const requestedLock = importedLock === undefined ? undefined : parseImportedLock(importedLock, packages, npm)
     if (!Object.keys(packages.dependencies).length) return null
     const existing = this.prepared(podId, packages)
-    if (existing) { await this.verify(podId, existing); current(); return existing }
+    if (existing) {
+      if (requestedLock !== undefined) {
+        const stored = this.store.db.prepare('SELECT lockfile FROM dependency_sets WHERE pod_id=? AND hash=?').get(podId, existing)!
+        if (canonicalPortableJson(JSON.parse(stored.lockfile as string)) !== requestedLock) throw new Error('The instance has a different dependency lock for these packages')
+      }
+      await this.verify(podId, existing); current(); return existing
+    }
     this.store.assertStorage(dependencyLimit * 3)
     const root = await realpath(this.store.root)
     const stages = await podDirectory(root, 'dependency-staging')
@@ -110,13 +120,14 @@ export class DependencyStore {
     const parent = await podDirectory(await podDirectory(root, 'dependencies'), podId)
     let published: string | undefined
     try {
-      const project = await installPackages(runtime, stage, packages, signal, (path, pid) => this.store.db.prepare('INSERT INTO dependency_domains VALUES(?,?)').run(path, pid))
+      const project = await installPackages(runtime, stage, packages, signal, (path, pid) => this.store.db.prepare('INSERT INTO dependency_domains VALUES(?,?)').run(path, pid), requestedLock)
       const lock = await readFile(join(project, 'package-lock.json'), 'utf8')
       const files = await packageFiles(project, true); const hash = packageDigest(files)
       signal.throwIfAborted(); current()
-      published = join(parent, hash)
+      const destination = join(parent, hash)
       await chmod(project, 0o700)
-      await rename(project, published)
+      await rename(project, destination)
+      published = destination
       await chmod(published, 0o500)
       this.store.transaction(() => {
         current()
