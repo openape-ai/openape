@@ -63,7 +63,8 @@ export interface RunInput {
   aliases?: RunAliases
   config?: Record<string, { value: unknown, origin: string, kind: unknown }>
   network?: { id: string, revision: number, source: boolean }
-  workflow?: { runId: string, outputs: Record<string, import('./workflows').WorkflowOutput>, call?: { requestId: string, caseId: string, caseRevision: number }, inputs?: Record<string, import('./workflow-ports').WorkflowPortValue> }
+  // outputsByKey repeats predecessor outputs under their package Pod keys when every predecessor came from one portable package.
+  workflow?: { runId: string, outputs: Record<string, import('./workflows').WorkflowOutput>, outputsByKey?: Record<string, import('./workflows').WorkflowOutput>, call?: { requestId: string, caseId: string, caseRevision: number }, inputs?: Record<string, import('./workflow-ports').WorkflowPortValue> }
   home?: string
   directories?: { path: string, access: 'read' | 'readWrite' }[]
   variables?: Record<string, string>

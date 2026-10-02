@@ -16,8 +16,10 @@ with source CI5351/main CI5352 green. M2 was accepted in PR217, merged as
 `eb53ed76433280ac20d286f3669d9bb23184debe` with source CI5353/main CI5354 green.
 The first M3 increment was merged in PR218 as
 `d564a51212091564aa90d8fa96f19bdb438b0294` with source CI5355/main CI5356 green.
-M3 continues on `feature/issue-1419-sharing-setup`; schema 34 adds the local import
-journal and schema 35 persisted resource aliases.
+The second increment was merged in PR219 as
+`1bb1cccaef753b2c4f212897762283bb60fcb0ab` with source CI5357/main CI5358 green. M3 continues on
+`feature/issue-1419-sharing-compositions`; schema 34 adds the local import journal
+and schema 35 persisted resource aliases.
 
 ## Manifest v1
 
@@ -253,9 +255,7 @@ the hash with the assignment it binds and keeps it, so a later change of that
 assignment reopens setup. Only a tool capability the package requested
 for that alias is named in the imported draft; a draft the owner replaced is left
 alone. Secrets match by credential alias and Jev by its single native assignment
-with the declared model and at most the declared attempts. No recipient mail
-assignment is comparable with a declared mail scope yet, so imported mail access
-stays in setup. Because a reassignment creates a new local resource, `bind` remains
+with the declared model and at most the declared attempts. Because a reassignment creates a new local resource, `bind` remains
 available after setup.
 
 Setup state is derived from actual local state: a revoked or changed assignment
@@ -266,9 +266,32 @@ also a variable. Access inputs such as an origin or agent
 identity stay editable in the journal during setup; variable inputs become Pod
 variables at commit and are edited there. `prepareDependencies` installs exactly the
 imported lock recorded at commit; without the archive (after a restore) the package
-must be imported again. `complete` requires every requirement. Packages with
-compositions therefore cannot be completed until composition finalization exists,
-and their Pods stay inert.
+must be imported again, which also applies to an unfinished composition.
+`complete` requires every requirement.
+
+### Composition finalization
+
+`finalize` creates an imported sequence or channel graph from its package document
+during setup: member keys become the fresh local Pods, declared graph values take the
+recipient's composition inputs, a channel graph joins a group the recipient chooses
+(its member Pods are placed in that group; a Pod of another group is refused), and
+the suggested schedule is stored while the workflow stays disabled. This needs no
+script approval because a member without its own approved script cannot be started
+by a workflow run. A repeated request returns the existing workflow; an archived one
+reopens the requirement during setup, and a composition that lost a member Pod
+(deleted or archived) is no longer required. When a Pod and all its handoff predecessors came from the same import, its
+script additionally receives `context.input.workflow.outputsByKey`, the predecessor
+outputs under their package Pod keys; the UUID-keyed view is unchanged.
+
+Staging refuses what setup could never finish, so no paused copy is created that
+must stay inert: persistent networks, called workflows with ports, mail policies and mail
+access. Their native writers require approved member scripts, published definitions,
+comparable recipient mail assignments or owner permission operations that do not
+exist yet. Staging also runs the native workflow parser over each composition;
+local conditions such as a later variable of the same name as a graph value are
+reported by `finalize` and can be corrected.
+`inspect` still shows such a package. A Pod that already took part in a workflow run
+follows the existing retention rule for workflow history when the owner deletes it.
 
 The worker entry accepts the closed `portableImport` command set only after desktop
 identity setup; dependency preparation runs under the maintenance gate. The main
@@ -277,9 +300,9 @@ for every created Pod through the existing provisioning path, so one failure doe
 not leave later Pods without a retry. No renderer, preload
 or relay route exists yet.
 
-Still open for M3: workflow output and call alias views with composition
-finalization after member approval, the owner data/artifact/call permission
-operations and exporter defaults from stored aliases. The complete desktop and
+Still open for M3: networks, called workflows and mail policies (finalization
+after member approval, call alias views and the owner data/artifact/call permission
+operations) and exporter defaults from stored aliases and keys. The complete desktop and
 browser flow is M4.
 
 ## Verified source inventory and required handling
