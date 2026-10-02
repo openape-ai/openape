@@ -1,6 +1,7 @@
 import { canonicalPortableJson, portableKey } from '@openape/pods-protocol'
 import type { PortableComposition, PortableManifest, PortableNode, PortablePod } from '@openape/pods-protocol'
-import { collectionContract, dataFields } from './network-data'
+import { collectionContract, dataFields, dataKey } from './network-data'
+import { networkDataObject } from './network-payload'
 import { diagnoseGraph, parseGraphChannels, parseGraphGates, parseGraphValues } from './graphs'
 import { diagnoseNetwork, parseNetworkDefinition } from './networks'
 import type { NetworkDefinition } from './networks'
@@ -14,8 +15,8 @@ import { parseSince } from './onboarding'
 
 export interface PortableValueBinding { name: string, input: string }
 export interface PortableDataAccess { pod: string, operations: string[] }
-export interface PortableCollection { key: string, schema: string, access: PortableDataAccess[] }
-export interface PortableArtifactScope { key: string, access: PortableDataAccess[] }
+export interface PortableCollection { key: string, name: string, schema: string, retention: Record<string, unknown>, access: PortableDataAccess[] }
+export interface PortableArtifactScope { key: string, collection: string | null, access: PortableDataAccess[] }
 
 function bounded(value: unknown, maximum: number): unknown[] {
   if (!Array.isArray(value) || value.length > maximum) throw new Error('Portable composition list exceeds its limit')
@@ -71,27 +72,30 @@ function mail(value: unknown, composition: PortableComposition, manifest: Portab
   const binding = notify.bindings.find(binding => binding.alias === item.telegramCredential)
   if (typeof item.telegramCredential !== 'string' || !/^[a-z][a-z0-9_]{0,63}$/.test(item.telegramCredential) || !binding || !notify.inputs.some(input => input.key === binding.input && input.kind === 'secret')) throw new Error('Portable notification requires a recipient secret input')
 }
-function requestedData(value: unknown, composition: PortableComposition, ids: Map<string, string>, operations: string[]): PortableDataAccess[] {
+function requestedData(value: unknown, composition: PortableComposition, ids: Map<string, string>, operations: string[], allowEmpty = false): PortableDataAccess[] {
   const access = bounded(value, 32).map((value) => {
     const item = dataFields(value, ['pod', 'operations']); memberReference(item.pod, composition, ids)
     const requested = bounded(item.operations, operations.length).map(localKey)
     if (!requested.length || requested.some(operation => !operations.includes(operation))) throw new Error('Unsupported portable data operation')
     unique(requested); return { pod: item.pod as string, operations: requested }
   })
-  if (!access.length) throw new Error('Portable data declaration requires requested access')
+  if (!access.length && !allowEmpty) throw new Error('Portable data declaration requires requested access')
   unique(access.map(item => item.pod)); return access
 }
 function dataDeclarations(document: Record<string, unknown>, composition: PortableComposition, ids: Map<string, string>): void {
   const collections = bounded(document.collections, 32).map((value) => {
-    const item = dataFields(value, ['key', 'schema', 'access']); localKey(item.key)
+    const item = dataFields(value, ['key', 'name', 'schema', 'retention', 'access']); localKey(item.key); dataKey(item.name); networkDataObject(item.retention)
     if (typeof item.schema !== 'string' || !composition.dataSchemas.includes(item.schema)) throw new Error('Portable collection requires a declared schema file')
-    requestedData(item.access, composition, ids, ['read', 'write', 'delete'])
+    requestedData(item.access, composition, ids, ['read', 'write', 'delete'], true)
     return item
   })
   unique(collections.map(item => String(item.key)))
+  unique(collections.map(item => String(item.name)))
   if (composition.dataSchemas.some(path => !collections.some(collection => collection.schema === path))) throw new Error('Unreferenced portable collection schema')
   const artifacts = bounded(document.artifacts, 32).map((value) => {
-    const item = dataFields(value, ['key', 'access']); localKey(item.key); requestedData(item.access, composition, ids, ['read', 'create']); return item
+    const item = dataFields(value, ['key', 'collection', 'access']); localKey(item.key)
+    if (item.collection !== null && !collections.some(collection => collection.key === item.collection)) throw new Error('Portable artifact scope refers to an undeclared collection')
+    requestedData(item.access, composition, ids, ['read', 'create']); return item
   })
   unique(artifacts.map(item => String(item.key)))
   const calls = bounded(document.calls, 32).map((value) => {
@@ -124,9 +128,11 @@ function inputUsage(document: Record<string, unknown>, composition: PortableComp
 }
 
 export function validatePortableAccessDefaults(pod: PortablePod): void {
+  if (pod.schedule) parseSchedule(pod.schedule)
   const value = (key: string) => pod.inputs.find(input => input.key === key)!.default
   for (const request of pod.access) {
     if (request.kind === 'http' && value(request.origin) !== undefined) parseHttpPermission({ origin: value(request.origin), methods: request.methods })
+    if (request.kind === 'http' && request.authentication && value(request.authentication.issuer) !== undefined) parseHttpPermission({ origin: value(request.authentication.issuer), methods: ['POST'] })
     if (request.kind === 'jev' && value(request.model) !== undefined) parseJevModel(value(request.model))
     if (request.kind === 'mail' && value(request.since) !== undefined) parseSince(value(request.since) === '' ? null : value(request.since))
   }
@@ -135,7 +141,7 @@ export function validatePortableAccessDefaults(pod: PortablePod): void {
 export function validatePortableCompositionDocument(value: unknown, composition: PortableComposition, manifest: PortableManifest): Record<string, unknown> {
   const source = JSON.parse(canonicalPortableJson(value))
   const document = dataFields(source, composition.kind === 'network'
-    ? ['version', 'kind', 'formatVersion', 'channels', 'members', 'gates', 'joins', 'values', 'collections', 'artifacts', 'calls']
+    ? ['version', 'kind', 'formatVersion', 'channels', 'members', 'gates', 'joins', 'values', 'legacyVariables', 'collections', 'artifacts', 'calls']
     : composition.kind === 'channels' ? ['version', 'kind', 'schedule', 'channels', 'gates', 'values', 'ports'] : ['version', 'kind', 'schedule', 'ports', 'mail'])
   if (document.version !== 1 || document.kind !== composition.kind) throw new Error('Unsupported portable composition document version')
   for (const pod of manifest.pods) validatePortableAccessDefaults(pod)
@@ -158,6 +164,10 @@ export function validatePortableCompositionDocument(value: unknown, composition:
     const diagnostics = diagnoseNetwork(definition)
     if (diagnostics.length) throw new Error(`Portable network diagnostics: ${diagnostics.map(item => item.code).join(', ')}`)
     networkValues(document.values, composition, manifest); dataDeclarations(document, composition, ids)
+    const legacyVariables = bounded(document.legacyVariables, 32).map(localKey)
+    unique(legacyVariables)
+    const shared = values(document.values, composition)
+    if (legacyVariables.some(name => !shared.some(binding => binding.name === name && composition.inputs.some(input => input.key === binding.input && input.kind === 'string')))) throw new Error('Portable legacy variables require declared shared string inputs')
     inputUsage(document, composition)
     return document
   }
