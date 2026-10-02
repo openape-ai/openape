@@ -65,6 +65,9 @@ async function openPod(id: string) {
     <template #status>
       <span class="muted">{{ status?.state === 'online' ? t('Desktop online') : t('Desktop offline') }}</span>
     </template>
+    <p v-if="status?.networkReadError" role="status" class="error-message">
+      {{ t('Network details are temporarily unavailable; desktop execution remains connected.') }} {{ diagnostic(status.networkReadError) }}
+    </p>
     <p v-if="error" role="alert" class="error-message">
       {{ diagnostic(error) }}
     </p>

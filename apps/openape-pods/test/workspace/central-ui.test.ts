@@ -1,3 +1,6 @@
+import BrowserWorkspace from '../../src/renderer/central/BrowserWorkspace.vue'
+import { browserFixture } from './browser-fixture'
+import { operationalFixture, recoveryFixture } from '../layout/network-fixture'
 import { flushPromises, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -12,7 +15,7 @@ import type { WorkflowCommand, WorkflowView } from '../../src/contracts/workflow
 import { sequenceParts } from '../../src/contracts/workflows'
 
 let wrapper: VueWrapper | undefined
-afterEach(() => { wrapper?.unmount(); wrapper = undefined })
+afterEach(() => { wrapper?.unmount(); wrapper = undefined; vi.useRealTimers() })
 it('opens local workflows from the desktop landing page and resumes the selected workflow', async () => {
   const id = '00000000-0000-4000-8000-000000000003'
   const view: WorkflowView = { workflows: [{ ...sequenceParts, id, revision: 1, name: 'Morning review', nodes: [{ podId, after: [], handoff: true }], schedule: null, enabled: false, paused: true, nextAt: null }], runs: [] }
@@ -294,4 +297,94 @@ it('shows the automatic retry time instead of a blocked queue for a temporary se
   await wrapper.findAll('.central-tabs button').find(button => button.text() === 'Settings')!.trigger('click'); await flushPromises()
   expect(wrapper.text()).toContain('Waiting for service recovery. Next attempt:')
   expect(wrapper.find('.central-blocked').exists()).toBe(false)
+})
+
+it('reads persistent network traces and data in the browser without a desktop bridge or owner actions', async () => {
+  const f = await browserFixture(); const network = operationalFixture()
+  f.host.networks = { networks: network.view.networks }
+  f.host.workspace.pods = network.pods.map(pod => ({ ...pod, online: true }))
+  f.host.workspace.organization = network.organization
+  network.view.details!.collections = [{ id: network.id(70), name: 'Reviewed cases', version: 1 }]
+  const read = vi.fn(async (_runtime, command) => ({ ...network.view, ...(command.type === 'records' ? { records: { collectionId: network.id(70), records: [{ key: 'case-one', revision: 1, schemaVersion: 1, body: '{"status":"reviewed"}', truncated: false, deleted: false, at: 1 }], after: null } } : {}) }))
+  f.client.network = read
+  f.client.command = vi.fn(f.client.command)
+  Reflect.deleteProperty(window, 'pods')
+  wrapper = mount(BrowserWorkspace, { props: { client: f.client } }); await flushPromises()
+  const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.text().includes(text))!.trigger('click'); await flushPromises() }
+  await click(network.definition.name)
+  expect(wrapper.text()).toContain('Independent timer')
+  await click('Recent recorded activity')
+  expect(wrapper.text()).toContain('Item accepted')
+  await click('Shared data'); await click('Reviewed cases')
+  expect(wrapper.text()).toContain('case-one')
+  expect(read).toHaveBeenCalledWith(f.host.id, expect.objectContaining({ type: 'records', collectionId: network.id(70) }))
+  for (const label of ['Activate network', 'Pause network', 'Process now', 'Create network']) expect(wrapper.findAll('button').map(button => button.text())).not.toContain(label)
+  expect(f.client.command).not.toHaveBeenCalled()
+  f.host.online = false; f.wake(); await flushPromises()
+  await click('Reviewed cases')
+  expect(wrapper.text()).toContain('Desktop offline: network details require the connected runtime')
+})
+
+it('retains the network inventory and scoped decisions across browser summary refreshes', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  const f = await browserFixture(); const network = recoveryFixture()
+  const second = { ...network.view.networks[0]!, id: network.id(90), name: 'Second independent network', podIds: [] }
+  f.host.networks = { networks: [{ ...network.view.networks[0]!, decisions: 2 }, second] }
+  f.host.workspace.pods = network.pods.map(pod => ({ ...pod, online: true }))
+  f.host.workspace.organization = network.organization
+  f.client.network = vi.fn(async (_runtime, command) => command.type === 'detail'
+    ? { networks: network.view.networks, details: network.view.details, gates: network.view.gates }
+    : { networks: network.view.networks, trace: network.view.trace })
+  Reflect.deleteProperty(window, 'pods')
+  wrapper = mount(BrowserWorkspace, { props: { client: f.client } }); await flushPromises()
+  const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.text().includes(text))!.trigger('click'); await flushPromises() }
+  expect(wrapper.text()).toContain('Second independent network')
+  await click(network.definition.name); await click('Decisions and failures')
+  expect(wrapper.text()).toContain('Synthetic pending invoice')
+  f.wake(); await flushPromises()
+  vi.mocked(f.client.network!).mockRejectedValueOnce(new Error('Synthetic transient detail outage'))
+  await vi.advanceTimersByTimeAsync(5000); await flushPromises()
+  expect(wrapper.text()).toContain('Synthetic pending invoice')
+  await click('Networks & workflows')
+  expect(wrapper.text()).toContain('Second independent network')
+  expect(wrapper.text()).toContain('Decisions: 2')
+})
+
+it('shows a network member summary instead of mounting the legacy browser editor', async () => {
+  const f = await browserFixture()
+  f.view.networkId = '00000000-0000-4000-8000-000000000021'
+  wrapper = mount(CentralWorkspace, { props: { client: f.client, sharedEditor: true } }); await flushPromises()
+  await wrapper.get('.central-pod').trigger('click'); await flushPromises()
+  expect(wrapper.text()).toContain('review changes on the desktop')
+  expect(wrapper.find('.remote-editor').exists()).toBe(false)
+  expect(wrapper.find('textarea').exists()).toBe(false)
+})
+
+it('recovers the browser activity after the initial network detail request fails', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  const f = await browserFixture(); const network = operationalFixture()
+  f.host.networks = { networks: [{ ...network.view.networks[0]!, decisions: 2 }] }
+  f.client.network = vi.fn(async (_runtime, command) => command.type === 'detail' ? { networks: network.view.networks, details: network.view.details } : { networks: network.view.networks, trace: network.view.trace })
+  vi.mocked(f.client.network).mockRejectedValueOnce(new Error('Synthetic initial network outage'))
+  Reflect.deleteProperty(window, 'pods')
+  wrapper = mount(BrowserWorkspace, { props: { client: f.client } }); await flushPromises()
+  const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.text() === text)!.trigger('click'); await flushPromises() }
+  await wrapper.findAll('button').find(button => button.text().includes(network.definition.name))!.trigger('click'); await flushPromises()
+  expect(wrapper.text()).toContain('Decisions: 2')
+  expect(wrapper.text()).toContain('Synthetic initial network outage')
+  await vi.advanceTimersByTimeAsync(5000); await flushPromises()
+  await click('Recent recorded activity')
+  expect(wrapper.text()).toContain('Item accepted')
+  expect(f.client.network).toHaveBeenCalledWith(f.host.id, expect.objectContaining({ type: 'trace' }))
+})
+
+it('shows the selected runtime status instead of another online runtime status', async () => {
+  const f = await browserFixture()
+  const offline = { ...structuredClone(f.host), id: '00000000-0000-4000-8000-000000000088', online: false }
+  f.client.inventory = async () => structuredClone([f.host, offline])
+  wrapper = mount(BrowserWorkspace, { props: { client: f.client } }); await flushPromises()
+  expect(wrapper.get('.runtime-picker select').element).toHaveProperty('value', f.host.id)
+  await wrapper.get('.runtime-picker select').setValue(offline.id); await flushPromises()
+  expect(wrapper.findAll('[role=status]').map(item => item.text())).toContain('Desktop offline')
+  expect(wrapper.text()).toContain('Showing the last synchronized networks and workflows.')
 })

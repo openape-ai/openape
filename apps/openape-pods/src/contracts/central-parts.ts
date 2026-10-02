@@ -105,6 +105,7 @@ export function validatePart(key: string, value: unknown): void {
   }
   if (kind === 'pod') {
     const pod = centralObject(value) as PodPart
+    if (pod.networkId !== undefined) centralId(pod.networkId)
     if (pod.id !== podId || typeof pod.ready !== 'boolean') throw new Error('Invalid Pod snapshot binding')
     parsePodDetails(pod.details); parseScriptView(pod.scripts); parseScheduleView(pod.scheduling)
     if (parseResourceState(pod.resources).resources.some(resource => resource.podId !== podId)) throw new Error('Invalid resource Pod binding')

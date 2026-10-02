@@ -1,3 +1,4 @@
+import { networkPublicationTables, podNetwork } from './network-projection'
 import { jevAvailability } from '../onboarding/store'
 import type { Owner } from '@openape/pods-protocol'
 import { sameOwner } from '@openape/pods-protocol'
@@ -16,19 +17,35 @@ import { PodVariables } from '../resources/variables'
 export class CentralProjection {
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly scripts: ScriptWorkspace, private readonly runs: RunDispatcher, private readonly scheduler: Scheduler) {}
 
-  snapshot(owner: Owner): CentralSnapshot {
-    if (this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()) throw new Error('Persistent networks require bounded publication support before this workspace can connect')
+  assertOwner(owner: Owner): void {
+    for (const pod of this.store.listPods()) {
+      const binding = this.store.db.prepare('SELECT owner FROM remote_pods WHERE pod_id=?').get(pod.id)
+      if (!binding || !sameOwner(JSON.parse(String(binding.owner)), owner)) throw new Error('Every Pod must belong to the connected owner before adopting this workspace')
+    }
+  }
+
+  snapshot(owner: Owner, networkReads = false): CentralSnapshot {
+    if (!networkReads && this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()) throw new Error('Persistent networks require bounded publication support before this workspace can connect')
     const result = this.store.transaction(() => {
       const pods = this.store.listPods()
-      for (const pod of pods) {
-        const binding = this.store.db.prepare('SELECT owner FROM remote_pods WHERE pod_id=?').get(pod.id)
-        if (!binding || !sameOwner(JSON.parse(String(binding.owner)), owner)) throw new Error('Every Pod must belong to the connected owner before adopting this workspace')
-      }
-      const tables = Object.fromEntries(centralTables.map(table => [table, this.store.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()]))
+      this.assertOwner(owner)
+      const hasNetworks = networkReads && !!this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()
+      const tables = hasNetworks ? networkPublicationTables(this.store) : Object.fromEntries(centralTables.map(table => [table, this.store.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()]))
       const details = new WorkspaceDetails(this.store, this.resources)
       return {
         version: 1 as const, workspace: { jev: jevAvailability(this.store), pods, organization: new PodGroups(this.store).view() }, archive: { schema: schemaVersion, tables }, artifacts: [],
         pods: pods.map((pod) => {
+          const networkId = hasNetworks ? podNetwork(this.store, pod.id) : null
+          if (networkId) {
+            return {
+              id: pod.id, networkId, ready: true,
+              details: { claims: [], counts: { finding: 0, question: 0, gap: 0 }, total: 0, versions: [], checkpointRevision: 0, source: null },
+              scripts: { pod, resourceEpoch: this.resources.epoch(pod.id), credentialAliases: [], versions: [], drafts: [], source: null },
+              resources: { resources: [], variables: [], epoch: this.resources.epoch(pod.id) },
+              scheduling: { spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: this.scheduler.view(pod.id).concurrency },
+              runs: { runs: [], events: [] }, versions: {}, history: {},
+            }
+          }
           const scripts = this.scripts.view(pod.id)
           const { timing: _timing, ...runs } = this.runs.view(pod.id)
           return {

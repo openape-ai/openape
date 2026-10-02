@@ -1,3 +1,4 @@
+import { parseCentralNetworkRead } from '../contracts/central-networks'
 import { parseDefinitionCommand, parseDefinitionsView } from '../contracts/definitions'
 import type { DefinitionCommand, DefinitionsView } from '../contracts/definitions'
 import type { NetworkGateManifest } from '../contracts/network-gates'
@@ -474,9 +475,10 @@ export class FixtureWorker {
 
   async networks(command: NetworkCommand): Promise<NetworkView> {
     const parsed = parseNetworkCommand(command)
+    if (this.central && !this.central.networkReads && !['list', 'detail', 'trace', 'records'].includes(parsed.type)) throw new Error('Network actions require bounded relay publication support')
     const central = this.centralAction(['detail', 'setup', 'trace', 'records'].includes(parsed.type) ? 'list' : parsed.type)
     if (central) return central.local(() => this.networks(parsed))
-    const view = parseNetworkView(await this.dispatch({ networks: parsed }))
+    const view = parseNetworkView(await this.dispatch({ networks: parsed, ownerOperation: this.central?.executing === true }))
     if (parsed.type === 'gateOpen') {
       const url = view.gates?.find(gate => gate.networkId === parsed.id && gate.id === parsed.taskId && gate.generation === parsed.generation && gate.state === 'pending')?.url
       if (!url || new URL(url).protocol !== 'https:') throw new Error('No approval is waiting for this batch')
@@ -514,7 +516,7 @@ export class FixtureWorker {
     catch (error) { throw new Error(`Pod ${podId} exists and is awaiting its identity. Do not create it again. ${String(error)}`) }
   }
 
-  async centralSnapshot(): Promise<CentralSnapshot> {
+  async centralSnapshot(networkReads = false): Promise<CentralSnapshot> {
     const { owner } = await this.remoteOwner()
     await mkdir(join(this.root, 'central'), { recursive: true, mode: 0o700 })
     for (const name of await readdir(join(this.root, 'central'))) {
@@ -522,7 +524,12 @@ export class FixtureWorker {
       if (match) await this.centralProvision(match[1]!, owner)
     }
     await this.indexRemotePods(owner)
-    return await this.dispatch({ central: { type: 'snapshot', owner } }) as CentralSnapshot
+    return await this.dispatch({ central: { type: 'snapshot', owner, networkReads } }) as CentralSnapshot
+  }
+
+  async centralNetworkRead(command: unknown): Promise<NetworkView> {
+    const { owner } = await this.remoteOwner()
+    return parseNetworkView(await this.dispatch({ central: { type: 'networkRead', owner, command: parseCentralNetworkRead(command) } }))
   }
 
   async centralGate(until: number): Promise<CentralGate> { return await this.dispatch({ central: { type: 'gate', until } }) as CentralGate }
@@ -530,6 +537,7 @@ export class FixtureWorker {
 
   async centralExecute(value: CentralCommand, operationId?: string): Promise<unknown> {
     const parsed = parseCentralCommand(value)
+    await this.dispatch({ central: { type: 'assertCommand', command: parsed } })
     const { channel, body } = parsed
     const command = body as never
     if (channel === 'workspace') {
@@ -554,7 +562,7 @@ export class FixtureWorker {
     throw new Error('Unsupported central execution')
   }
 
-  private dispatch(command: { definitions: DefinitionCommand } | { definitionProvision: { requestId: string, error: string | null } } | { networkGateCheck: { scope: ServiceScope, manifest: NetworkGateManifest, operation: string, grantId?: string } } | { networks: NetworkCommand } | { central: { type: 'snapshot', owner: Owner } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { codex: CodexRequest } | { remote: RemoteInternal } | { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { definitions: DefinitionCommand } | { definitionProvision: { requestId: string, error: string | null } } | { networkGateCheck: { scope: ServiceScope, manifest: NetworkGateManifest, operation: string, grantId?: string } } | { networks: NetworkCommand, ownerOperation?: boolean } | { central: { type: 'snapshot', owner: Owner, networkReads?: boolean } | { type: 'networkRead', owner: Owner, command: NetworkCommand } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { codex: CodexRequest } | { remote: RemoteInternal } | { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()

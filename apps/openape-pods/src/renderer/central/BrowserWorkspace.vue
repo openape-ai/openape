@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import type { CentralNetworkRead } from '../../contracts/central-networks'
+import type { NetworkView } from '../../contracts/networks'
 import type { CentralRuntime } from '../../contracts/central'
 import type { BrowserWorkspaceClient } from './client'
 import { WorkspaceRequestError } from './client'
@@ -37,9 +39,20 @@ async function signIn() {
     else error.value = cause instanceof Error ? cause.message : String(cause)
   }
 }
-function inventory(value: CentralRuntime[]) { runtimes.value = value; loaded.value = true }
+function inventory(value: CentralRuntime[]) {
+  runtimes.value = value; loaded.value = true
+  if (!value.some(host => host.id === runtimeId.value)) { runtimeId.value = value[0]?.id ?? ''; workflowId.value = '' }
+}
 function navigate(destination: string) {
   workspace.value?.requestNavigation(() => { workspace.value?.showInventory(true); workflowId.value = ''; page.value = destination })
+}
+async function readNetwork(command: CentralNetworkRead): Promise<NetworkView> {
+  const host = runtime.value
+  if (!host) throw new Error('Desktop is unavailable')
+  if (command.type === 'list') return host.networks ?? { networks: [] }
+  if (!host.online) throw new Error('Desktop offline: network details require the connected runtime')
+  if (!props.client.network) throw new Error('Network details require a newer relay')
+  return props.client.network(host.id, command)
 }
 async function openPod(id: string) {
   if (!runtime.value) return
@@ -58,7 +71,7 @@ onBeforeUnmount(() => { closed = true })
       <AccountStatus v-if="subject" :subject="subject" @open="navigate('App settings')" />
     </template>
     <template #status>
-      <span class="muted" role="status">{{ !loaded ? t('Loading workspace…') : runtimes.some(host => host.online) ? t('Desktop online') : t('Desktop offline') }}</span>
+      <span class="muted" role="status">{{ !loaded ? t('Loading workspace…') : runtime?.online ? t('Desktop online') : t('Desktop offline') }}</span>
     </template>
     <p v-if="error" class="error-message" role="alert">
       {{ diagnostic(error) }} <button class="secondary" @click="signIn">
@@ -71,7 +84,7 @@ onBeforeUnmount(() => { closed = true })
       </button>
     </p>
     <section v-if="subject" v-show="page === 'Workflows'">
-      <header v-if="!runtime?.workflows?.graphs" class="inventory-heading">
+      <header v-if="!(runtime?.workflows?.graphs || runtime?.networks)" class="inventory-heading">
         <div>
           <h1>{{ t('Networks & workflows') }}</h1><p class="muted">
             {{ t('Networks connect Pods. Workflows define ordered processes.') }}
@@ -87,9 +100,9 @@ onBeforeUnmount(() => { closed = true })
       </p>
       <template v-else>
         <p v-if="!runtime.online" class="muted">
-          {{ t('Desktop offline') }} · {{ t('Showing the last synchronized workflows.') }}
+          {{ t('Desktop offline') }} · {{ t('Showing the last synchronized networks and workflows.') }}
         </p>
-        <GraphPanel v-if="runtime.workflows?.graphs" :key="`graphs:${runtime.id}`" :view="runtime.workflows" :pods="runtime.workspace.pods" :organization="runtime.workspace.organization" :selected-id="workflowId" read-only @select="workflowId = $event" @open-pod="openPod" />
+        <GraphPanel v-if="runtime.workflows?.graphs || runtime.networks" :key="`graphs:${runtime.id}`" :view="runtime.workflows ?? { workflows: [], runs: [] }" :read-network="readNetwork" :pods="runtime.workspace.pods" :organization="runtime.workspace.organization" :selected-id="workflowId" read-only @select="workflowId = $event" @open-pod="openPod" />
         <WorkflowPanel v-else-if="runtime.workflows" :key="runtime.id" :view="runtime.workflows" :pods="runtime.workspace.pods" :selected-id="workflowId" read-only @select="workflowId = $event" @open-pod="openPod" />
         <p v-else class="muted" role="status">
           {{ t('Workflow data is not available yet. Reconnect the desktop to synchronize it.') }}
@@ -97,7 +110,7 @@ onBeforeUnmount(() => { closed = true })
       </template>
     </section>
     <AppSettings v-if="subject && page === 'App settings'" browser :subject="subject" @logout="logout" />
-    <CentralWorkspace v-if="subject" v-show="page === 'Pods'" ref="workspace" :client="client" embedded shared-editor @settings="navigate('App settings')" @inventory="inventory" @connection="connectionError = $event" @login="expired" />
+    <CentralWorkspace v-if="subject" v-show="page === 'Pods'" ref="workspace" :client="client" embedded shared-editor @settings="navigate('App settings')" @inventory="inventory" @network="(host, id) => { runtimeId = host; workflowId = id; page = 'Workflows' }" @connection="connectionError = $event" @login="expired" />
   </WorkspaceFrame>
 </template>
 

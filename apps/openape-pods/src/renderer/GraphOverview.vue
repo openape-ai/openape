@@ -97,7 +97,7 @@ export default defineComponent({
       </header>
       <div class="graph-cards">
         <button v-for="network in section.networks" :key="network.id" class="graph-card" @click="$emit('select', network.id)">
-          <small>{{ t('Persistent network') }} · {{ t(network.state) }}</small><strong>{{ network.name }}</strong><span>{{ t('Decisions: {count}', { count: (networks.gates ?? []).filter(gate => gate.networkId === network.id && ['preparing', 'pending', 'consuming', 'unknown'].includes(gate.state)).length }) }}</span>
+          <small>{{ t('Persistent network') }} · {{ t(network.state) }}</small><strong>{{ network.name }}</strong><span>{{ t('Decisions: {count}', { count: network.decisions ?? (networks.gates ?? []).filter(gate => gate.networkId === network.id && ['preparing', 'pending', 'consuming', 'unknown', 'superseded'].includes(gate.state)).length }) }}</span>
           <span>{{ t('Waiting: {count}', { count: (network.counts.pending ?? 0) + (network.counts.retry_wait ?? 0) }) }}</span>
           <span v-if="network.health.oldestPendingAt">{{ t('Oldest waiting item: {time}', { time: dateTime(network.health.oldestPendingAt) }) }}</span>
           <span v-if="network.health.lastFailure || network.health.intakeError || network.health.lastSchedulerError" class="graph-waiting">{{ t('Runtime needs attention') }}</span>

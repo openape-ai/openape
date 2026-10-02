@@ -47,6 +47,7 @@ export async function managedArtifacts(root: string, snapshot: CentralSnapshot, 
     for (const name of (await readdir(join(canonical, relative))).sort()) await walk(podId, `${relative}/${name}`, `${publicPath}/${name}`)
   }
   for (const pod of snapshot.pods) {
+    if (pod.networkId) continue
     const hashes = new Set<string>()
     for (const table of ['scripts', 'sources']) {
       for (const row of snapshot.archive.tables[table] ?? []) {

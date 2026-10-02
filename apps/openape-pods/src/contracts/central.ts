@@ -1,3 +1,4 @@
+import type { NetworkView } from './networks'
 import type { WorkflowView } from './workflows'
 import { parseDataCommand } from './data'
 import { parseCommand, parseWorkspace } from './control'
@@ -31,6 +32,7 @@ export const centralMaxBytes = 32 * 1024 * 1024
 export type CentralChannel = 'workspace' | 'details' | 'scripts' | 'scheduling' | 'runs' | 'resources' | 'data' | 'local'
 export interface CentralCommand { channel: CentralChannel, body: Record<string, unknown> }
 export interface CentralPod {
+  networkId?: string
   id: string
   ready: boolean
   details: PodDetails
@@ -50,6 +52,7 @@ export interface CentralSnapshot {
 }
 export type CentralState = 'connecting' | 'online' | 'reconnecting' | 'offline'
 export interface CentralStatus {
+  networkReadError?: string | null
   state: CentralState
   error: string | null
   since: number
@@ -64,7 +67,7 @@ export interface CentralStatus {
   lastPublication: { at: number, bytes: number } | null
 }
 export interface CentralQueue { blocked: number, since: number | null, error: string | null }
-export interface CentralRuntime { workflows?: WorkflowView, id: string, revision: number, online: boolean, lastSeenAt?: number | null, workspace: Omit<WorkspaceState, 'pods'> & { pods: (WorkspaceState['pods'][number] & { online: boolean, queue?: CentralQueue })[] } }
+export interface CentralRuntime { networks?: NetworkView, workflows?: WorkflowView, id: string, revision: number, online: boolean, lastSeenAt?: number | null, workspace: Omit<WorkspaceState, 'pods'> & { pods: (WorkspaceState['pods'][number] & { online: boolean, queue?: CentralQueue })[] } }
 export interface CentralSummary { revision: number, total: number, pod: CentralPod }
 export interface CentralRunDetail { revision: number, run: RunRecord, events: RunEvent[] }
 export interface CentralOperation {
@@ -127,7 +130,7 @@ export function parseRuntimeCentralCommand(value: unknown): CentralCommand {
   return { channel: 'local', body: { type: 'ownerAction' } }
 }
 
-export function commandPodIds(command: CentralCommand, snapshot: CentralSnapshot): string[] {
+export function commandPodIds(command: CentralCommand, snapshot: { workspace: { pods: { id: string }[] } }): string[] {
   const body = command.body
   if (typeof body.podId === 'string') return [centralId(body.podId)]
   if (command.channel === 'workspace' && body.type === 'update') return [centralId(body.id)]
@@ -143,6 +146,7 @@ export function parseCentralSnapshot(value: unknown): CentralSnapshot {
   for (const value of item.pods) {
     const pod = centralObject(value)
     const id = centralId(pod.id)
+    if (pod.networkId !== undefined) centralId(pod.networkId)
     if (seen.has(id) || !workspace.pods.some(item => item.id === id) || typeof pod.ready !== 'boolean') throw new Error('Invalid Pod snapshot binding')
     seen.add(id)
     parsePodDetails(pod.details); parseScriptView(pod.scripts); parseScheduleView(pod.scheduling)

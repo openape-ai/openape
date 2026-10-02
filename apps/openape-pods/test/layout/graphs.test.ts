@@ -234,3 +234,38 @@ describe('network recovery with production desktop layout', () => {
     }
   })
 })
+
+it.each([1280, 390])('shows read-only persistent network data in the actual browser layout at %s pixels', async (width) => {
+  const f = await browserFixture(); const network = recoveryFixture()
+  network.view.networks[0]!.decisions = 2
+  network.view.details!.collections = [{ id: network.id(70), name: 'Reviewed cases', version: 1 }]
+  network.view.records = { collectionId: network.id(70), records: [{ key: 'case-one', revision: 1, schemaVersion: 1, body: '{"status":"reviewed"}', truncated: false, deleted: false, at: 1 }], after: null }
+  f.host.networks = { networks: network.view.networks }
+  f.host.workspace.pods = network.pods.map(pod => ({ ...pod, online: true }))
+  f.host.workspace.organization = network.organization
+  f.client.network = async () => structuredClone(network.view)
+  Reflect.deleteProperty(window, 'pods')
+  await page.viewport(width, 950)
+  wrapper = mount(BrowserWorkspace, { attachTo: document.body, props: { client: f.client } }); await flushPromises(); await frame()
+  await wrapper.findAll('button').find(button => button.text().includes(network.definition.name))!.trigger('click'); await flushPromises(); await frame()
+  expect(wrapper.text()).toContain('Independent timer')
+  expect(wrapper.findAll('button').map(button => button.text())).not.toContain('Process now')
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
+  await page.screenshot({ path: screenshotPath(`networks-browser-structure-${width}.png`) })
+  await wrapper.findAll('button').find(button => button.text() === 'Recent recorded activity')!.trigger('click'); await flushPromises(); await frame()
+  expect(wrapper.text()).toContain('Item accepted')
+  await page.screenshot({ path: screenshotPath(`networks-browser-activity-${width}.png`) })
+  const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.text() === text)!.trigger('click'); await flushPromises(); await frame() }
+  await click('Decisions and failures')
+  expect(wrapper.text()).toContain('Synthetic pending invoice')
+  await page.screenshot({ path: screenshotPath(`networks-browser-decisions-${width}.png`) })
+  await click('Shared data'); await click('Reviewed cases · 1')
+  expect(wrapper.get('.network-collection').attributes('aria-pressed')).toBe('true')
+  expect(wrapper.text()).toContain('case-one')
+  await page.screenshot({ path: screenshotPath(`networks-browser-data-${width}.png`) })
+  f.host.online = false; f.wake(); await flushPromises()
+  await click('Reviewed cases · 1')
+  expect(wrapper.text()).toContain('Desktop offline: network details require the connected runtime')
+  await page.screenshot({ path: screenshotPath(`networks-browser-offline-${width}.png`) })
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
+})

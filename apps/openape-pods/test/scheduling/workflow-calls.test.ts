@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { networkPublicationTables } from '../../src/worker/central/network-projection'
 import { randomUUID } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import { closeNetworks, networkFixture } from './network-fixture'
@@ -412,4 +413,19 @@ it('retains completed workflow output until its call has settled despite later P
   f.calls.tick()
   expect(JSON.parse(f.store.db.prepare('SELECT result FROM workflow_call_requests').get()!.result as string).outputs.result.data.subject).toBe('INV-retained-output')
   expect(f.started).toHaveLength(1)
+})
+
+it('keeps called workflow definitions, members and derived runs out of legacy publication without removing them', async () => {
+  const f = await fixture(); const first = await f.invoice('PRIVATE-CALL')
+  f.calls.stage(first.authority, first.request); await f.finishCaller(first.authority)
+  f.calls.tick(); f.workflows.tick(); f.complete()
+  const retained = f.store.db.prepare('SELECT * FROM workflow_runs').all()
+  expect(retained.length).toBeGreaterThan(0)
+  const tables = networkPublicationTables(f.store)
+  expect(tables.workflows).toEqual([])
+  expect(tables.workflow_members).toEqual([])
+  expect(tables.workflow_runs).toEqual([])
+  expect(tables.workflow_nodes).toEqual([])
+  expect(JSON.stringify(tables)).not.toContain('PRIVATE-CALL')
+  expect(f.store.db.prepare('SELECT * FROM workflow_runs').all()).toEqual(retained)
 })

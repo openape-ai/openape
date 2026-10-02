@@ -1,3 +1,6 @@
+import { parseCentralNetworkRead, parseCentralNetworkResult } from '../../contracts/central-networks'
+import type { CentralNetworkRead } from '../../contracts/central-networks'
+import type { NetworkView } from '../../contracts/networks'
 import type { CentralClient, CentralOperation, CentralPod, CentralRunDetail, CentralRuntime, CentralSummary } from '../../contracts/central'
 import type { RunRecord } from '../../contracts/runs'
 import type { ScriptView } from '../../contracts/scripts'
@@ -5,7 +8,7 @@ import type { ScriptView } from '../../contracts/scripts'
 export class WorkspaceRequestError extends Error {
   constructor(readonly status: number, message: string) { super(message) }
 }
-export interface BrowserWorkspaceClient extends CentralClient { session: () => Promise<{ subject: string }> }
+export interface BrowserWorkspaceClient extends CentralClient { network?: (runtimeId: string, command: CentralNetworkRead) => Promise<NetworkView>, session: () => Promise<{ subject: string }> }
 export function browserWorkspaceClient(): BrowserWorkspaceClient {
   async function request<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
     const response = await fetch(`/api/workspace/v1/${path}`, { credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal, ...(body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}) })
@@ -18,6 +21,7 @@ export function browserWorkspaceClient(): BrowserWorkspaceClient {
   const pod = <T>(runtimeId: string, podId: string, view: Record<string, string>) => request<T>(`pod?${new URLSearchParams({ runtimeId, podId, ...view })}`)
   return {
     session: () => request('session'),
+    network: async (runtimeId, command) => parseCentralNetworkResult(await request('networks', { runtimeId, command: parseCentralNetworkRead(command) })),
     inventory: () => request('inventory'),
     read: (runtimeId, podId) => pod(runtimeId, podId, { view: 'summary' }),
     runs: (runtimeId, podId, offset) => pod(runtimeId, podId, { view: 'runs', offset: String(offset) }),
