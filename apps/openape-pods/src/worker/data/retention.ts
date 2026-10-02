@@ -1,6 +1,7 @@
 import { RunRetention } from './run-retention'
 import { removePackageTree } from '../dependencies/store'
 import { lstat, readdir, rm, statfs } from 'node:fs/promises'
+import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { PodDatabase } from '../storage/database'
 import type { DataView } from '../../contracts/data'
@@ -128,9 +129,11 @@ export class DataRetention {
   finishDeletion(podId: string): void { this.store.db.prepare('DELETE FROM deletion_jobs WHERE pod_id=? AND error IS NULL').run(podId) }
   async cleanup(): Promise<void> {
     assertDataIdle(this.store); await this.cleanDeletedFiles()
-    const retained = new Set(this.store.db.prepare('SELECT hash FROM sources UNION SELECT hash FROM scripts UNION SELECT content_hash AS hash FROM pod_definition_versions').all().map(row => row.hash as string))
-    for (const name of await readdir(this.store.blobs)) {
-      if ((/^[a-f0-9]{64}$/.test(name) && !retained.has(name)) || /^\.stage-[a-f0-9-]{36}$/.test(name)) await rm(join(this.store.blobs, name), { force: true })
+    const names = await readdir(this.store.blobs)
+    // References are read and unreferenced blobs removed without yielding, so a blob stored meanwhile cannot be lost.
+    const retained = new Set(this.store.db.prepare('SELECT hash FROM sources UNION SELECT hash FROM scripts UNION SELECT content_hash AS hash FROM pod_definition_versions UNION SELECT archive_hash AS hash FROM portable_imports WHERE archive_hash IS NOT NULL').all().map(row => row.hash as string))
+    for (const name of names) {
+      if ((/^[a-f0-9]{64}$/.test(name) && !retained.has(name)) || /^\.stage-[a-f0-9-]{36}$/.test(name)) rmSync(join(this.store.blobs, name), { force: true })
     }
     const snapshots = new Set(this.store.db.prepare('SELECT pod_id,id FROM snapshot_sets').all().map(row => `${row.pod_id}/${row.id}`))
     let pods: string[] = []
