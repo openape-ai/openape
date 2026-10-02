@@ -103,6 +103,7 @@ it('network workflow boundary: native correlated calls deduplicate, retain pause
     expect(database.db.prepare('SELECT count(*) AS count FROM network_invocations WHERE pod_id=?').get(incomplete)!.count).toBe(0)
     return { route: 'Actual Electron preload/main/worker/native ScriptFrame', calls, joins, retainedWhilePaused, finiteExecutions: 2, terminalResults: 2, joinedInvoiceCheckpointRevision: 2, incompleteInvocations: 0 }
   })
+  await page.getByRole('button', { name: 'Synthetic native invoice network', exact: false }).click()
   await page.getByText('Joined invoice result', { exact: true }).waitFor()
   await page.getByText('Signed in', { exact: true }).waitFor()
   await mkdir(resolve('.artifacts'), { recursive: true })

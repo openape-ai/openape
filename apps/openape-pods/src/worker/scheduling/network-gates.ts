@@ -496,6 +496,7 @@ export class NetworkGates {
   }
 
   private trace(manifest: NetworkGateManifest, kind: string, body: unknown): void {
-    this.store.db.prepare('INSERT INTO network_trace_events(network_id,kind,body,created_at) VALUES(?,?,?,?)').run(manifest.networkId, kind, canonicalNetworkJson(body), Date.now())
+    const cases = new Set(manifest.items.map(item => this.store.db.prepare('SELECT case_id FROM network_events WHERE network_id=? AND id=?').get(manifest.networkId, item.eventId)?.case_id as string | undefined).filter(Boolean))
+    for (const caseId of cases.size ? cases : [null]) this.store.db.prepare('INSERT INTO network_trace_events(network_id,case_id,kind,body,created_at) VALUES(?,?,?,?,?)').run(manifest.networkId, caseId ?? null, kind, canonicalNetworkJson(body), Date.now())
   }
 }

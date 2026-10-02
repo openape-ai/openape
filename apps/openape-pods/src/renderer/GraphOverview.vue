@@ -4,15 +4,18 @@ import type { PropType } from 'vue'
 import type { StoredPod } from '../contracts/control'
 import type { Organization } from '../contracts/groups'
 import type { WorkflowDefinition, WorkflowView } from '../contracts/workflows'
-import { t } from './i18n'
+import type { NetworkSummary, NetworkView } from '../contracts/networks'
+import { dateTime, diagnostic, t } from './i18n'
 import { arrangementLabel, waitingDecisions } from './utils/graph-presentation'
 import type { ArrangementFilter } from './utils/graph-presentation'
 import { sharingAvailable } from './utils/sharing'
 
-interface Section { id: string | null, name: string, graphs: WorkflowDefinition[], pods: StoredPod[] }
+interface Section { id: string | null, name: string, graphs: WorkflowDefinition[], networks: NetworkSummary[], pods: StoredPod[] }
 
 export default defineComponent({
   props: {
+    networks: { type: Object as PropType<NetworkView>, default: () => ({ networks: [] }) },
+    networkError: { type: String, default: '' },
     view: { type: Object as PropType<WorkflowView>, required: true },
     pods: { type: Array as PropType<StoredPod[]>, required: true },
     organization: { type: Object as PropType<Organization>, required: true },
@@ -24,20 +27,20 @@ export default defineComponent({
   computed: {
     sections(): Section[] {
       const definitions = this.view.workflows.filter(item => this.filter === 'all' || item.mode === this.filter)
-      const members = new Set(this.view.workflows.flatMap(graph => graph.nodes.map(node => node.podId)))
+      const members = new Set([...this.view.workflows.flatMap(graph => graph.nodes.map(node => node.podId)), ...this.networks.networks.flatMap(network => network.podIds ?? [])])
       const current = this.pods.filter(pod => this.filter === 'all' && pod.lifecycle !== 'archived' && !members.has(pod.id))
       const grouped = new Set(this.organization.groups.flatMap(group => group.podIds))
-      const groups = this.organization.groups.map(group => ({ id: group.id as string | null, name: group.name, graphs: definitions.filter(graph => graph.groupId === group.id), pods: current.filter(pod => group.podIds.includes(pod.id)) }))
+      const groups = this.organization.groups.map(group => ({ id: group.id as string | null, name: group.name, graphs: definitions.filter(graph => graph.groupId === group.id), networks: this.networks.networks.filter(network => network.groupId === group.id && this.filter !== 'sequence'), pods: current.filter(pod => group.podIds.includes(pod.id)) }))
       const known = new Set(this.organization.groups.map(group => group.id))
-      const loose = { id: null, name: t('Ungrouped'), graphs: definitions.filter(graph => !graph.groupId || !known.has(graph.groupId)), pods: current.filter(pod => !grouped.has(pod.id)) }
-      return [...groups, ...loose.graphs.length || loose.pods.length ? [loose] : []].filter(section => this.filter === 'all' || section.graphs.length || section.pods.length)
+      const loose = { id: null, name: t('Ungrouped'), networks: this.networks.networks.filter(network => !known.has(network.groupId) && this.filter !== 'sequence'), graphs: definitions.filter(graph => !graph.groupId || !known.has(graph.groupId)), pods: current.filter(pod => !grouped.has(pod.id)) }
+      return [...groups, ...loose.graphs.length || loose.networks.length || loose.pods.length ? [loose] : []].filter(section => this.filter === 'all' || section.graphs.length || section.networks.length || section.pods.length)
     },
     summary(): string {
       return t('Networks connect Pods. Workflows define ordered processes.')
     },
   },
   methods: {
-    t,
+    t, dateTime, diagnostic,
     waiting(graph: WorkflowDefinition) { return waitingDecisions(graph, this.view.gates) },
     meta(graph: WorkflowDefinition): string {
       const schedule = graph.paused && graph.enabled ? t('paused') : !graph.schedule || !graph.enabled ? t('Manual only') : graph.schedule.kind === 'interval' && graph.schedule.seconds === 3600 ? t('hourly') : graph.schedule.kind === 'daily' ? t('daily at {time}', { time: graph.schedule.time }) : t('scheduled')
@@ -68,6 +71,12 @@ export default defineComponent({
         </button>
       </div>
     </header>
+    <p v-if="networkError" role="alert">
+      {{ diagnostic(networkError) }}
+    </p>
+    <p v-if="readOnly" class="muted">
+      {{ t('Persistent network details require a connected desktop runtime.') }}
+    </p>
     <div class="graph-modes" role="group" :aria-label="t('Filter networks and workflows')">
       <button v-for="option in ([['all', 'All'], ['channels', 'Networks'], ['sequence', 'Workflows']] as const)" :key="option[0]" :aria-pressed="filter === option[0]" @click="$emit('update:filter', option[0])">
         {{ t(option[1]) }}
@@ -87,6 +96,12 @@ export default defineComponent({
         </button>
       </header>
       <div class="graph-cards">
+        <button v-for="network in section.networks" :key="network.id" class="graph-card" @click="$emit('select', network.id)">
+          <small>{{ t('Persistent network') }} · {{ t(network.state) }}</small><strong>{{ network.name }}</strong><span>{{ t('Decisions: {count}', { count: (networks.gates ?? []).filter(gate => gate.networkId === network.id && ['preparing', 'pending', 'consuming', 'unknown'].includes(gate.state)).length }) }}</span>
+          <span>{{ t('Waiting: {count}', { count: (network.counts.pending ?? 0) + (network.counts.retry_wait ?? 0) }) }}</span>
+          <span v-if="network.health.oldestPendingAt">{{ t('Oldest waiting item: {time}', { time: dateTime(network.health.oldestPendingAt) }) }}</span>
+          <span v-if="network.health.lastFailure || network.health.intakeError || network.health.lastSchedulerError" class="graph-waiting">{{ t('Runtime needs attention') }}</span>
+        </button>
         <button v-for="graph in section.graphs" :key="graph.id" class="graph-card" @click="$emit('select', graph.id)">
           <small>{{ meta(graph) }}</small>
           <strong>{{ graph.name }}</strong>

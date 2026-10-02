@@ -102,7 +102,7 @@ it('prunes completed traces while retaining control state, acceptance markers an
   const f = fixture()
   const authority = f.engine.invocations.reserve(f.id, f.source, 0, 'manual')!
   await f.engine.invocations.finish(authority, 'completed', 'Synthetic completed source', null, [], [{ channel: 'test.input', key: 'item', sourceItemId: 'item', sourceVersion: 'v1', payload: { subject: 'Synthetic' } }])
-  for (const kind of ['environment', 'log', 'operation', 'emission-explanation', 'infrastructure']) f.store.db.prepare('INSERT INTO network_trace_events(network_id,run_id,kind,body,created_at) VALUES(?,?,?,?,?)').run(f.id, authority.runId, kind, '{}', Date.now() - 8 * 86400000)
+  for (const kind of ['network-mail-read', 'environment', 'log', 'operation', 'emission-explanation', 'infrastructure']) f.store.db.prepare('INSERT INTO network_trace_events(network_id,run_id,kind,body,created_at) VALUES(?,?,?,?,?)').run(f.id, authority.runId, kind, '{}', Date.now() - 8 * 86400000)
   f.store.db.prepare('UPDATE network_trace_events SET created_at=?').run(Date.now() - 8 * 86400000)
   f.store.db.prepare('INSERT INTO network_trace_events(network_id,kind,body,created_at) VALUES(?,?,?,1)').run(f.id, 'owner-effect-reconciled', '{"retain":"owner evidence"}')
   expect(pruneNetworkTraces(f.store, Date.now())).toBeGreaterThan(0)
@@ -324,4 +324,17 @@ it('refuses disposal of an uncertain effect until owner reconciliation and retai
   expect(f.store.db.prepare('SELECT state FROM network_deliveries').get()!.state).toBe('discarded')
   expect(f.store.db.prepare('SELECT outcome FROM network_effect_receipts ORDER BY sequence').all()).toEqual([{ outcome: 'unknown' }, { outcome: 'confirmed_not_applied' }])
   expect(f.store.db.prepare('SELECT count(*) AS count FROM network_effect_attempts').get()!.count).toBe(1)
+})
+
+it('keeps an in-memory processing batch when the pause transaction rolls back', async () => {
+  const f = fixture()
+  f.process(f.id, [f.source], [], 1)
+  f.store.db.exec('CREATE TRIGGER reject_pause_receipt BEFORE INSERT ON network_trace_events WHEN NEW.kind=\'network-paused\' BEGIN SELECT RAISE(ABORT,\'synthetic pause receipt failure\'); END')
+  expect(() => f.engine.execute({ type: 'pause', id: f.id, revision: 1 })).toThrow('synthetic pause receipt failure')
+  expect(f.store.db.prepare('SELECT state FROM network_process_previews').get()!.state).toBe('running')
+  expect(f.engine.view().networks[0]!.state).toBe('active')
+  f.store.db.exec('DROP TRIGGER reject_pause_receipt')
+  f.engine.tick()
+  await expect.poll(() => f.started).toContain(f.source)
+  await f.engine.stop(); await f.dispatcher.stop()
 })
