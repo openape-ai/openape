@@ -1,3 +1,4 @@
+import { parseDefinitionCommand, parseDefinitionsView } from '../contracts/definitions'
 import { parseMcpAccess, parseMcpAccessCommand } from '../contracts/mcp-access'
 import { parseRuntimeApprovalCommand, parseRuntimeApprovalPreference } from '../contracts/runtime-approval'
 import { parseChatsCommand, parseChatsView } from '../contracts/chats'
@@ -27,6 +28,7 @@ const bridge: PodsBridge = {
   async central(command) { return ipcRenderer.invoke(channels.central, command) },
   async codex(command) { return parseCodexConnection(await ipcRenderer.invoke(channels.codex, parseCodexCommand(command))) },
   async chats(command) { return parseChatsView(await ipcRenderer.invoke(channels.chats, parseChatsCommand(command))) },
+  async definitions(command) { return parseDefinitionsView(await ipcRenderer.invoke(channels.definitions, parseDefinitionCommand(command))) },
   async networks(command) { return parseNetworkView(await ipcRenderer.invoke(channels.networks, parseNetworkCommand(command))) },
   async workflows(command) { return parseWorkflowView(await ipcRenderer.invoke(channels.workflows, parseWorkflowCommand(command))) },
   async packages(command) { return parsePackageOptions(await ipcRenderer.invoke(channels.packages, parsePackageSearch(command))) },

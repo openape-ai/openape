@@ -1,15 +1,19 @@
 import { computeCmdHash } from '@openape/core'
-import { generateKeyPairSync, randomBytes, randomUUID, sign } from 'node:crypto'
+import { createHash, generateKeyPairSync, randomBytes, randomUUID, sign } from 'node:crypto'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
 import type { ElectronApplication } from 'playwright'
 import { PodDatabase } from '../../src/worker/storage/database'
 
-export async function fixtureShellIdentity(root: string, ownerPermissions: string[] = [], networkGates = false) {
+export async function fixtureShellIdentity(root: string, ownerPermissions: string[] = [], networkGates = false, provisioning = false) {
   const fixtureKey = randomBytes(32).toString('hex')
   let origin = ''
   const records: { path: string, value: string }[] = []
   const subjects = new Map<string, string>()
+  const enrollmentKeys = new Map<string, string>()
+  const enrollmentAttempts: { podId: string, keyId: string }[] = []
+  let failEnrollment = false
+  const brokerId = randomUUID()
   const keys = generateKeyPairSync('ed25519')
   const heldConsumes = new Map<string, { wait: Promise<void>, release: () => void }>()
   const consumes = new Map<string, number>()
@@ -18,7 +22,22 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
     const respond = async () => {
       response.setHeader('Content-Type', 'application/json')
       if (request.url === '/.well-known/openid-configuration') {
-        response.end(JSON.stringify({ grants_endpoint: `${origin}/api/grants` }))
+        response.end(JSON.stringify({ grants_endpoint: `${origin}/api/grants`, ...(provisioning ? { issuer: origin, openape_grant_brokering_version: '1.0', openape_broker_connections_endpoint: `${origin}/api/fixture-connections`, openape_broker_enrollment_endpoint: `${origin}/api/fixture-enrollment` } : {}) }))
+      }
+      else if (provisioning && request.url === `/api/fixture-connections/${brokerId}/receipt`) {
+        if (request.headers.authorization !== 'Bearer SYNTHETIC_OWNER_TOKEN') { response.writeHead(403).end('{}'); return }
+        response.end(JSON.stringify({ connection_receipt: 'SYNTHETIC_LOCAL_CONSENT' }))
+      }
+      else if (provisioning && request.url === '/api/fixture-enrollment') {
+        const chunks: Buffer[] = []; for await (const chunk of request) chunks.push(Buffer.from(chunk))
+        const body = JSON.parse(Buffer.concat(chunks).toString())
+        if (body.connection_receipt !== 'SYNTHETIC_LOCAL_CONSENT' || typeof body.podId !== 'string' || typeof body.publicKey !== 'string') { response.writeHead(403).end('{}'); return }
+        const keyId = createHash('sha256').update(Buffer.from(body.publicKey.split(' ')[1], 'base64')).digest('hex')
+        const subject = `enrolled-${body.podId}@example.test`
+        if (enrollmentKeys.has(subject) && enrollmentKeys.get(subject) !== keyId) { response.writeHead(409).end('{}'); return }
+        subjects.set(subject, body.podId); enrollmentKeys.set(subject, keyId); enrollmentAttempts.push({ podId: body.podId, keyId })
+        if (failEnrollment) { failEnrollment = false; response.writeHead(503).end('{}'); return }
+        response.end(JSON.stringify({ owner: 'fixture-owner@example.test', email: subject, keyId, permissions: 'none', decisionIssuer: origin, brokerConnectionId: brokerId }))
       }
       else if (request.url?.startsWith('/api/grants?')) {
         const requester = new URL(request.url, origin).searchParams.get('requester')
@@ -41,7 +60,7 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
       else if (request.url?.startsWith('/api/pods/agents/')) {
         const url = new URL(request.url, origin); const id = url.searchParams.get('grant') ?? ''
         const subject = decodeURIComponent(url.pathname.split('/').at(-1)!)
-        response.end(JSON.stringify({ email: subject, owner: 'fixture-owner@example.test', active: subjects.has(subject), keyIds: ['fixture-key'], grantId: id, grantActive: grants.get(id)?.requester === subject && grants.get(id)?.status !== 'denied' }))
+        response.end(JSON.stringify({ email: subject, owner: 'fixture-owner@example.test', active: subjects.has(subject), keyIds: [enrollmentKeys.get(subject) ?? 'fixture-key'], grantId: id, grantActive: grants.get(id)?.requester === subject && grants.get(id)?.status !== 'denied' }))
       }
       else if (request.url?.startsWith('/api/grants/')) {
         const [, , , id, action] = request.url.split('/')
@@ -85,17 +104,19 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
   const store = new PodDatabase(root)
   try {
     registerPods(store)
-    if (ownerPermissions.length) records.push({ path: join(root, 'credentials', `${ownerId}.encrypted`), value: JSON.stringify({ issuer: origin, account: 'fixture-owner@example.test', subject: 'fixture-owner', accessToken: 'SYNTHETIC_OWNER_TOKEN', refreshToken: 'SYNTHETIC_REFRESH_TOKEN', expiresAt: Date.now() / 1000 + 3600 }) })
-    store.db.prepare('INSERT INTO connections VALUES(?,?,?,?,?,?)').run(ownerId, 'openape', 'fixture-owner@example.test', 'ready', null, JSON.stringify({ issuer: origin, pods }))
+    if (ownerPermissions.length || provisioning) records.push({ path: join(root, 'credentials', `${ownerId}.encrypted`), value: JSON.stringify({ issuer: origin, account: 'fixture-owner@example.test', subject: 'fixture-owner', accessToken: 'SYNTHETIC_OWNER_TOKEN', refreshToken: 'SYNTHETIC_REFRESH_TOKEN', expiresAt: Date.now() / 1000 + 3600 }) })
+    store.db.prepare('INSERT INTO connections VALUES(?,?,?,?,?,?)').run(ownerId, 'openape', 'fixture-owner@example.test', 'ready', null, JSON.stringify({ issuer: origin, subject: 'fixture-owner@example.test', pods, ...(provisioning ? { broker: { issuer: origin, domain: 'example.test', connectionId: brokerId } } : {}) }))
   }
   finally { store.close() }
   return {
+    failNextEnrollment: () => { if (!provisioning) throw new Error('Provisioning fixture is disabled'); failEnrollment = true },
+    enrollmentAttempts: () => structuredClone(enrollmentAttempts),
     owner: { issuer: origin, subject: 'fixture-owner@example.test' },
     attachPods: () => {
       const database = new PodDatabase(root)
       try {
         registerPods(database)
-        database.db.prepare('UPDATE connections SET metadata=? WHERE id=?').run(JSON.stringify({ issuer: origin, pods }), ownerId)
+        database.db.prepare('UPDATE connections SET metadata=? WHERE id=?').run(JSON.stringify({ issuer: origin, subject: 'fixture-owner@example.test', pods, ...(provisioning ? { broker: { issuer: origin, domain: 'example.test', connectionId: brokerId } } : {}) }), ownerId)
       }
       finally { database.close() }
     },

@@ -92,11 +92,19 @@ export class DataRetention {
     this.store.transaction(() => {
       const current = this.store.getPod(podId)
       if (current.revision !== revision || current.lifecycle !== 'archived' || current.name !== name) throw new Error('Pod changed during deletion review')
+      if (this.store.db.prepare('SELECT 1 FROM pod_definition_sources WHERE source_pod_id=? AND state=\'published\'').get(podId)) throw new Error('Pod retains a published definition source; archive it to preserve reusable code and pinned dependencies')
+      this.store.db.prepare('DELETE FROM definition_update_drafts WHERE pod_id=?').run(podId)
+      this.store.db.prepare('DELETE FROM definition_instance_requests WHERE pod_id=?').run(podId)
+      this.store.db.prepare('UPDATE pod_definition_sources SET source_pod_id=NULL,dependency_hash=NULL WHERE source_pod_id=?').run(podId)
       this.store.db.prepare('INSERT INTO deletion_jobs VALUES(?,?,NULL)').run(podId, JSON.stringify({ podId, runIds, keyIds: [...new Set(keyIds)] }))
       for (const table of ['run_events', 'run_inputs', 'execution_domains', 'recovery_reviews']) this.store.db.prepare(`DELETE FROM ${table} WHERE run_id IN (SELECT id FROM runs WHERE pod_id=?)`).run(podId)
       for (const table of ['remote_program_reviews', 'remote_pods', 'script_dependencies', 'dependency_sets', 'program_leases', 'run_leases', 'effect_ledger', 'runs', 'validations', 'scripts', 'assignments', 'checkpoints', 'claims', 'sources', 'mail_inventory', 'mail_items', 'mail_receipts', 'mail_extractions', 'mail_contexts', 'source_derivations', 'resources', 'resource_epochs', 'snapshot_sets', 'schedules', 'accepted_events', 'reference_observations', 'script_drafts', 'access_proposals']) this.store.db.prepare(`DELETE FROM ${table} WHERE pod_id=?`).run(podId)
       this.store.db.prepare('UPDATE master_contexts SET thread_id=NULL,state=\'interrupted\',error=\'Referenced Pod was deleted\' WHERE scope=?').run(podId)
+      const binding = this.store.db.prepare('SELECT definition_id FROM instance_definition_bindings WHERE pod_id=?').get(podId)
       this.store.db.prepare('DELETE FROM instance_definition_bindings WHERE pod_id=?').run(podId)
+      if (binding && !this.store.db.prepare('SELECT 1 FROM instance_definition_bindings WHERE definition_id=? UNION ALL SELECT 1 FROM pod_definition_sources WHERE definition_id=? AND state=\'published\' LIMIT 1').get(binding.definition_id!, binding.definition_id!)) {
+        for (const table of ['definition_config', 'pod_definition_sources', 'pod_definition_versions', 'pod_definitions']) this.store.db.prepare(`DELETE FROM ${table} WHERE ${table === 'pod_definitions' ? 'id' : 'definition_id'}=?`).run(binding.definition_id!)
+      }
       this.store.db.prepare('DELETE FROM pods WHERE id=?').run(podId)
     })
     await this.cleanup()

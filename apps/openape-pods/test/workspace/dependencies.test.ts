@@ -73,3 +73,41 @@ it('backs up exact packages, restores them read-only and includes their bytes an
   expect(new DependencyStore(restored).inventory()).toEqual([])
   await expect(readFile(join(path, 'package.json'))).rejects.toThrow('ENOENT')
 })
+
+it('copies the exact pinned lock into an independent instance without sharing writable files', async () => {
+  const f = await fixture(); const set = await prepare(f)
+  const target = f.store.createPod({ name: 'Independent instance' })
+  await set.dependencies.copyPinned(f.pod.id, target.id, set.hash, () => {})
+  const targetPath = await set.dependencies.verify(target.id, set.hash)
+  expect(targetPath).not.toBe(set.path)
+  await set.dependencies.copyPinned(f.pod.id, target.id, set.hash, () => {})
+  const file = join(set.path, 'node_modules/sample-package/index.js')
+  await chmod(file, 0o600); await writeFile(file, 'module.exports = 43')
+  expect(await readFile(join(targetPath, 'node_modules/sample-package/index.js'), 'utf8')).toBe('module.exports = 42')
+  await expect(set.dependencies.verify(f.pod.id, set.hash)).rejects.toThrow('changed')
+  expect(await set.dependencies.verify(target.id, set.hash)).toBe(targetPath)
+})
+it('refuses corrupt sources and interrupted copies without assigning a dependency set', async () => {
+  const f = await fixture(); const set = await prepare(f)
+  const target = f.store.createPod({ name: 'Interrupted instance' })
+  let checks = 0
+  await expect(set.dependencies.copyPinned(f.pod.id, target.id, set.hash, () => {
+    if (++checks === 3) throw new Error('Instance changed')
+  })).rejects.toThrow('Instance changed')
+  expect(set.dependencies.prepared(target.id, manifest)).toBeNull()
+  const file = join(set.path, 'node_modules/sample-package/index.js')
+  await chmod(file, 0o600); await writeFile(file, 'corrupt')
+  await expect(set.dependencies.copyPinned(f.pod.id, target.id, set.hash, () => {})).rejects.toThrow('changed')
+  expect(set.dependencies.prepared(target.id, manifest)).toBeNull()
+})
+it('does not remove a committed dependency tree when concurrent copies race', async () => {
+  const f = await fixture(); const set = await prepare(f)
+  const target = f.store.createPod({ name: 'Concurrent instance' })
+  const results = await Promise.allSettled([
+    set.dependencies.copyPinned(f.pod.id, target.id, set.hash, () => {}),
+    set.dependencies.copyPinned(f.pod.id, target.id, set.hash, () => {}),
+  ])
+  expect(results.some(result => result.status === 'fulfilled')).toBe(true)
+  expect(await set.dependencies.verify(target.id, set.hash)).toContain(target.id)
+  expect(set.dependencies.prepared(target.id, manifest)).toBe(set.hash)
+})
