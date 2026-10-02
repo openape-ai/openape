@@ -1,5 +1,8 @@
+import { previewNetworkConversion, retainedLegacyDeliveries } from './network-migration'
+import { parseConversionSelection } from '../../contracts/network-migration'
+import type { ConversionSelection } from '../../contracts/network-migration'
 import { NetworkViews } from './network-views'
-import { networkSharedValues } from '../../contracts/network-operations'
+import { validateNetworkComposition } from './network-composition'
 import { networkDataPin, networkConfiguration } from './network-config'
 import { ArtifactCleanupError } from './network-artifacts'
 import { NetworkGates } from './network-gates'
@@ -7,7 +10,7 @@ import type { NetworkGateStep } from './network-gates'
 import { randomUUID } from 'node:crypto'
 import { parseOwner, sameOwner } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
-import { diagnoseNetwork, networkLimits, parseNetworkCommand, parseNetworkDefinition } from '../../contracts/networks'
+import { diagnoseNetwork, parseNetworkCommand, parseNetworkDefinition } from '../../contracts/networks'
 import type { NetworkDefinition, NetworkDraft, NetworkHealth, NetworkPreview, NetworkView } from '../../contracts/networks'
 import { parseGraphContract } from '../../contracts/graphs'
 import { nextDue } from '../../contracts/clock'
@@ -40,9 +43,11 @@ export class NetworkEngine {
     const command = parseNetworkCommand(value)
     if (command.type === 'inspect' || command.type === 'retry' || command.type === 'reconcileEffect' || command.type === 'resolveConflict' || command.type === 'discardFailure') throw new Error('Network recovery must await process inspection')
     if (command.type === 'list') return this.view()
+    if (command.type === 'conversionPreview') return { ...this.view(), conversion: previewNetworkConversion(this.store, this.resources, this.currentOwner(), command.selection) }
+    if (command.type === 'convert') return this.convert(command.selection, command.expectedFingerprint)
     if (command.type === 'setup') return { ...this.view(), setup: new NetworkViews(this.store, this.resources).setup(parseOwner(this.currentOwner()), command.groupId, command.podIds) }
     if (command.type === 'create') return this.viewAfter(() => this.create(command.draft))
-    const definition = this.definition(command.id, command.revision)
+    const definition = this.definition(command.id, command.revision, ['detail', 'trace', 'records'].includes(command.type))
     if (command.type === 'gateOpen') return this.view()
     const views = new NetworkViews(this.store, this.resources)
     if (command.type === 'detail') return { ...this.view(), details: views.detail(definition) }
@@ -299,24 +304,55 @@ export class NetworkEngine {
     return { ...this.view(), createdId }
   }
 
-  private create(draft: NetworkDraft): string {
+  convert(input: ConversionSelection, expectedFingerprint: string): NetworkView {
+    const selection = parseConversionSelection(input)
+    const owner = parseOwner(this.currentOwner())
+    const selectionHash = digest(canonicalNetworkJson(selection))
+    const createdId = this.store.transaction(() => {
+      const previous = this.store.db.prepare('SELECT id,baseline_receipt FROM networks WHERE ancestor_workflow_id=? AND owner_issuer=? AND owner_subject=?').get(selection.workflowId, owner.issuer, owner.subject)
+      if (previous) {
+        const retained = this.store.db.prepare('SELECT body FROM network_trace_events WHERE network_id=? AND kind=\'legacy-conversion-reviewed\' ORDER BY id LIMIT 1').get(previous.id!)
+        const receipt = retained ? JSON.parse(retained.body as string) : null
+        if (receipt?.kind !== 'conversion' || receipt.fingerprint !== expectedFingerprint || receipt.selectionHash !== selectionHash) throw new Error('This graph already has a different reviewed conversion')
+        return previous.id as string
+      }
+      const preview = previewNetworkConversion(this.store, this.resources, owner, selection)
+      if (preview.fingerprint !== expectedFingerprint) throw new Error('Conversion review changed; inspect the current graph again')
+      if (preview.issues.length) throw new Error(preview.issues.join('; '))
+      const podIds = new Set(preview.legacy.nodes.map(node => node.podId))
+      const checkpoints = preview.draft.members.map(member => ({ podId: member.podId, ...this.store.checkpoint(member.podId) }))
+      this.store.db.prepare('UPDATE workflows SET archived=1,enabled=0,paused=1,next_at=NULL,revision=revision+1 WHERE id=?').run(preview.legacy.id)
+      this.store.db.prepare('DELETE FROM workflow_members WHERE workflow_id=?').run(preview.legacy.id)
+      for (const podId of podIds) this.store.db.prepare('UPDATE schedules SET enabled=0,next_at=NULL,revision=revision+1 WHERE pod_id=?').run(podId)
+      const id = this.create(preview.draft, podIds)
+      const receipt = { kind: 'conversion', fingerprint: expectedFingerprint, selectionHash, legacy: preview.legacy, legacyHash: digest(canonicalNetworkJson(preview.legacy)), checkpoints, pending: { disposition: selection.pending, count: preview.pending, items: retainedLegacyDeliveries(this.store, preview.legacy.id) }, reviewedAt: Date.now() }
+      const baseline = { kind: 'conversion', fingerprint: expectedFingerprint, selectionHash, legacyHash: receipt.legacyHash, checkpoints: checkpoints.map(checkpoint => ({ podId: checkpoint.podId, revision: checkpoint.revision, hash: digest(canonicalNetworkJson(checkpoint.body)) })), pending: { disposition: receipt.pending.disposition, count: receipt.pending.count, hash: digest(canonicalNetworkJson(receipt.pending.items)) } }
+      assertNetworkQuota(this.store, Buffer.byteLength(canonicalNetworkJson(receipt)) + Buffer.byteLength(canonicalNetworkJson(baseline)) + 16384)
+      this.store.db.prepare('UPDATE networks SET ancestor_workflow_id=?,ancestor_revision=?,baseline_receipt=? WHERE id=?').run(preview.legacy.id, preview.legacy.revision, canonicalNetworkJson(baseline), id)
+      for (const checkpoint of checkpoints) this.store.db.prepare('UPDATE network_checkpoints SET revision=?,body=? WHERE network_id=? AND pod_id=?').run(checkpoint.revision, canonicalNetworkJson(checkpoint.body), id, checkpoint.podId)
+      this.trace(id, 'legacy-conversion-reviewed', { ...receipt, message: `Converted from ${preview.legacy.name}; ${preview.pending} pending legacy deliveries retained without replay. Activation remains separate.`, explicitActivationRequired: true })
+      return id
+    })
+    return { ...this.view(), createdId }
+  }
+
+  private create(draft: NetworkDraft, convertedPods?: ReadonlySet<string>): string {
     return this.store.transaction(() => {
       const owner = parseOwner(this.currentOwner()); const id = randomUUID(); const now = Date.now()
-      if ((this.store.db.prepare('SELECT count(*) AS count FROM networks').get()!.count as number) >= networkLimits.networks) throw new Error('Workspace supports at most 64 persistent networks')
       if (this.store.db.prepare('SELECT 1 FROM networks WHERE group_id=? AND state!=\'archived\'').get(draft.groupId)) throw new Error('Group already has a persistent network')
       const members = draft.members.map((selection) => {
         const binding = this.binding(selection.podId, owner, draft.groupId)
         const legacy = this.store.db.prepare(`SELECT 1 FROM workflow_members WHERE pod_id=? UNION ALL SELECT 1 FROM schedules WHERE pod_id=?
           UNION ALL SELECT 1 FROM runs WHERE pod_id=? UNION ALL SELECT 1 FROM accepted_events WHERE pod_id=?
           UNION ALL SELECT 1 FROM control_changes c,json_each(c.body,'$.targets') t WHERE json_extract(c.body,'$.state') IN ('pending','running') AND json_extract(t.value,'$.podId')=? LIMIT 1`).get(selection.podId, selection.podId, selection.podId, selection.podId, selection.podId)
-        if (legacy || this.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=?').get(selection.podId) || this.store.checkpoint(selection.podId).revision !== 0 || canonicalNetworkJson(this.store.checkpoint(selection.podId).body) !== '{}') throw new Error('Network creation requires a separate fresh instance; use reviewed conversion for legacy state')
+        if (this.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=?').get(selection.podId) || (!convertedPods?.has(selection.podId) && (legacy || this.store.checkpoint(selection.podId).revision !== 0 || canonicalNetworkJson(this.store.checkpoint(selection.podId).body) !== '{}'))) throw new Error('Network creation requires a separate fresh instance; use reviewed conversion for legacy state')
         return { podId: selection.podId, definitionId: binding.definition_id as string, definitionVersion: binding.definition_version as number, bindingRevision: binding.binding_revision as number, contract: parseGraphContract(JSON.parse(binding.contract as string)), source: selection.source ? { bindingId: randomUUID(), schedule: selection.source.schedule } : null, serialCase: selection.serialCase }
       })
-      const { sharedValues = {}, expectedSetup, ...composition } = draft
-      if (expectedSetup && expectedSetup !== new NetworkViews(this.store, this.resources).setup(owner, draft.groupId, draft.members.map(member => member.podId)).fingerprint) throw new Error('Network setup changed; review current values and rights again')
+      const { sharedValues: _sharedValues, expectedSetup: _expectedSetup, ...composition } = draft
       const definition = parseNetworkDefinition({ formatVersion: draft.joins ? 3 : draft.gates ? 2 : 1, kind: 'network', semantics: 'persistent-network-v1', id, revision: 1, ...composition, ...(draft.joins ? { gates: draft.gates ?? [] } : {}), members })
+      const sharedValues = validateNetworkComposition(this.store, this.resources, owner, draft, definition)
       this.validate(definition)
-      const body = canonicalNetworkJson(definition); this.store.assertStorage(Buffer.byteLength(body))
+      const body = canonicalNetworkJson(definition)
       this.store.db.prepare('INSERT INTO networks(id,owner_issuer,owner_subject,group_id,name,revision,restore_nonce,created_at) VALUES(?,?,?,?,?,1,?,?)').run(id, owner.issuer, owner.subject, draft.groupId, draft.name, randomUUID(), now)
       this.store.db.prepare('INSERT INTO network_revisions VALUES(?,1,?,?,?)').run(id, body, digest(body), now)
       for (const member of members) {
@@ -328,10 +364,7 @@ export class NetworkEngine {
           this.store.db.prepare('INSERT INTO network_subscriptions VALUES(?,?,1,?,?,?,?)').run(randomUUID(), id, member.podId, channel, hash, member.serialCase ? 1 : 0)
         }
       }
-      for (const [name, value] of Object.entries(networkSharedValues(sharedValues))) {
-        const declarations = this.store.db.prepare(`SELECT c.kind,c.value FROM network_members m JOIN definition_config c ON c.definition_id=m.definition_id AND c.definition_version=m.definition_version WHERE m.network_id=? AND c.name=?`).all(id, name)
-        if (!declarations.length || declarations.some(row => row.kind !== 'public')) throw new Error('Shared network values require a declared public field')
-        if (declarations.some((row) => { const declared = JSON.parse(row.value as string); return (declared === null) !== (value === null) || typeof declared !== typeof value })) throw new Error('Shared value types must match every declaring definition')
+      for (const [name, value] of Object.entries(sharedValues)) {
         this.store.db.prepare('INSERT INTO composition_config VALUES(?,?,?)').run(id, name, JSON.stringify(value))
       }
       for (const member of members) networkConfiguration(this.store, id, member.podId)
@@ -367,9 +400,9 @@ export class NetworkEngine {
     }
   }
 
-  private definition(id: string, revision: number): NetworkDefinition {
+  private definition(id: string, revision: number, includeArchived = false): NetworkDefinition {
     const owner = parseOwner(this.currentOwner())
-    const row = this.store.db.prepare('SELECT r.contract FROM networks n JOIN network_revisions r ON r.network_id=n.id AND r.revision=n.revision WHERE n.id=? AND n.revision=? AND n.owner_issuer=? AND n.owner_subject=? AND n.state!=\'archived\'').get(id, revision, owner.issuer, owner.subject)
+    const row = this.store.db.prepare('SELECT r.contract FROM networks n JOIN network_revisions r ON r.network_id=n.id AND r.revision=n.revision WHERE n.id=? AND n.revision=? AND n.owner_issuer=? AND n.owner_subject=? AND (n.state!=\'archived\' OR ?=1)').get(id, revision, owner.issuer, owner.subject, includeArchived ? 1 : 0)
     if (!row) throw new Error('Network revision changed or is unavailable to this owner')
     return parseNetworkDefinition(JSON.parse(row.contract as string))
   }

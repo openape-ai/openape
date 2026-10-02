@@ -11,10 +11,10 @@ import DesktopWorkspace from '../../src/renderer/central/DesktopWorkspace.vue'
 import BrowserWorkspace from '../../src/renderer/central/BrowserWorkspace.vue'
 import { browserFixture } from '../workspace/browser-fixture'
 import GraphView from '../../src/renderer/GraphView.vue'
-import { applyLanguage } from '../../src/renderer/i18n'
+import { applyLanguage, t } from '../../src/renderer/i18n'
 import { screenshotPath } from './evidence'
 import { installWorkspace } from './workspace-fixture'
-import { operationalFixture, recoveryFixture } from './network-fixture'
+import { operationalFixture, recoveryFixture, conversionFixture } from './network-fixture'
 
 // Geometry of the graph view with the production stylesheet and the component's own rules.
 // Text, states and events are asserted in test/scheduling/graph-ui.test.ts.
@@ -273,4 +273,35 @@ it.each([1280, 390])('shows read-only persistent network data in the actual brow
   expect(wrapper.text()).toContain('Desktop offline: network details require the connected runtime')
   await page.screenshot({ path: screenshotPath(`networks-browser-offline-${width}.png`) })
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
+})
+
+it.each([[1280, 'en'], [390, 'de']] as const)('shows conversion refusal and confirmation in the desktop route at %s pixels (%s)', async (width, language) => {
+  const f = conversionFixture(); applyLanguage(language); await page.viewport(width, 1000)
+  const workflows: WorkflowView = { workflows: [f.legacy], runs: [] }
+  installWorkspace({ language: async () => language, workspace: async () => ({ organization: f.organization, pods: f.pods }), workflows: async () => workflows, definitions: async () => f.definitions, networks: async (command) => {
+    if (command.type === 'setup') return { networks: [], setup: f.setup }
+    if (command.type === 'conversionPreview') return { networks: [], conversion: { ...f.conversion, issues: command.selection.checkpoints.length !== 3 ? ['Review each exact checkpoint before conversion'] : command.selection.pending === 'block' ? ['Review retaining pending deliveries in the disabled legacy graph without replay'] : [] } }
+    return { networks: [] }
+  } })
+  wrapper = mount(App, { attachTo: document.body }); await flushPromises(); await frame()
+  const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.isVisible() && button.text().includes(text))!.trigger('click'); await flushPromises(); await frame() }
+  await click(f.legacy.name); await click(t('Review graph conversion')); await click(t('Review values and rights'))
+  await click(t('Add field')); await wrapper.get('input[pattern]').setValue('subject')
+  await wrapper.findAll('select').find(select => select.text().includes(t('Choose a type')))!.setValue('string')
+  await wrapper.findAll('label').find(label => label.text().includes(t('I reviewed each channel schema against the existing scripts and payloads.')))!.get('input').setValue(true)
+  await click(t('Preview conversion'))
+  expect(wrapper.get('.network-conversion').text()).toContain('owner-reviewed-synthetic-baseline')
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
+  wrapper.get('.network-conversion').element.scrollIntoView(); await frame()
+  await page.screenshot({ path: screenshotPath(`network-conversion-review-${width}-${language}.png`) })
+  for (const input of wrapper.findAll('.network-conversion .conversion-member input[type=checkbox]')) await input.setValue(true)
+  await click(t('Validate reviewed conversion'))
+  expect(wrapper.findAll('button').map(button => button.text())).not.toContain(t('Convert to paused network'))
+  await wrapper.findAll('label').find(label => label.text().includes(t('Keep pending items in the disabled legacy graph without importing or replaying them.')))!.get('input').setValue(true)
+  await click(t('Validate reviewed conversion'))
+  const action = wrapper.findAll('button').find(button => button.text() === t('Convert to paused network'))!
+  expect(action.attributes('disabled')).toBeDefined()
+  action.element.scrollIntoView(); await frame()
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
+  await page.screenshot({ path: screenshotPath(`network-conversion-confirm-${width}-${language}.png`) })
 })
