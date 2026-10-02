@@ -6,7 +6,7 @@ import type { WorkflowDefinition, WorkflowView } from '../../src/contracts/workf
 import { sequenceParts, parseWorkflowCommand  } from '../../src/contracts/workflows'
 import NetworkCreate from '../../src/renderer/NetworkCreate.vue'
 import NetworkDetail from '../../src/renderer/NetworkDetail.vue'
-import { operationalFixture } from '../layout/network-fixture'
+import { operationalFixture, recoveryFixture } from '../layout/network-fixture'
 import GateReview from '../../src/renderer/GateReview.vue'
 import GraphCreate from '../../src/renderer/GraphCreate.vue'
 import GraphInspector from '../../src/renderer/GraphInspector.vue'
@@ -497,6 +497,35 @@ describe('persistent network owner controls', () => {
       expect(button(wrapper, 'Pause network').attributes('disabled')).toBeUndefined()
       await button(wrapper, 'Pause network').trigger('click'); await flushPromises()
       expect(networks).toHaveBeenCalledWith({ type: 'pause', id: f.networkId, revision: 1 })
+    }
+    finally { wrapper.unmount() }
+  })
+
+  it('scopes recovery evidence to each effect and gate item and retains unrelated drafts', async () => {
+    const f = recoveryFixture()
+    const networks = vi.fn(async (command: Parameters<typeof window.pods.networks>[0]) => {
+      structuredClone(command)
+      if (command.type === 'inspect') f.view.details!.failures[0]!.inspectedAt = Date.now()
+      return structuredClone(f.view)
+    })
+    installWorkspace({ networks })
+    const wrapper = mount(NetworkDetail, { props: { network: f.view.networks[0]!, view: f.view, pods: f.pods } })
+    const evidence = (name: string) => wrapper.findAll('label').find(label => label.text() === name)!.get('textarea')
+    try {
+      await flushPromises(); await button(wrapper, 'Failures requiring review: 1').trigger('click')
+      await evidence(`Evidence for ${'d'.repeat(64)}`).setValue('Confirmed using the synthetic provider receipt')
+      await evidence('Evidence to exclude Synthetic pending invoice').setValue('This invoice must stay out of approval')
+      await evidence('Evidence for uncertain-approval').setValue('Retained unknown approval evidence')
+      expect(button(wrapper, 'Confirm action happened').attributes('disabled')).toBeDefined()
+      await button(wrapper, 'Inspect stopped process').trigger('click'); await flushPromises()
+      expect((evidence(`Evidence for ${'d'.repeat(64)}`).element as HTMLTextAreaElement).value).toContain('provider receipt')
+      await button(wrapper, 'Confirm action happened').trigger('click'); await flushPromises()
+      expect(networks).toHaveBeenCalledWith(expect.objectContaining({ type: 'reconcileEffect', key: 'd'.repeat(64), attempt: 1, sequence: 2, evidence: 'Confirmed using the synthetic provider receipt' }))
+      expect((evidence(`Evidence for ${'d'.repeat(64)}`).element as HTMLTextAreaElement).value).toBe('')
+      expect((evidence('Evidence for uncertain-approval').element as HTMLTextAreaElement).value).toBe('Retained unknown approval evidence')
+      await button(wrapper, 'Exclude Synthetic pending invoice with evidence').trigger('click'); await flushPromises()
+      expect(networks).toHaveBeenCalledWith(expect.objectContaining({ type: 'gateExclude', taskId: f.id(61), deliveryIds: [f.id(63)], evidence: 'This invoice must stay out of approval' }))
+      expect((evidence('Evidence for uncertain-approval').element as HTMLTextAreaElement).value).toBe('Retained unknown approval evidence')
     }
     finally { wrapper.unmount() }
   })

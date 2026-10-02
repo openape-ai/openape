@@ -18,7 +18,7 @@ import { NetworkRecovery } from '../../src/worker/scheduling/network-recovery'
 import { closeNetworks, networkFixture } from './network-fixture'
 
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
-afterEach(() => { vi.restoreAllMocks(); closeNetworks() })
+afterEach(async () => { await closeNetworks(); vi.restoreAllMocks() })
 const loader = createRequire(import.meta.url).resolve('tsx')
 
 function fixture() {
@@ -130,12 +130,15 @@ it('does not replay a consumed source retry from its original failed invocation'
 
 it.each([1, 2, 4, 8])('admits every backlogged production domain with %i global slots', async (concurrency) => {
   const f = networkFixture()
-  const standalone = Array.from({ length: 8 }, () => f.pod('Standalone', { takes: [], gives: [], summary: 'Synthetic standalone' }, async () => {}))
-  const workflow = Array.from({ length: 8 }, () => f.pod('Workflow', { takes: [], gives: [], summary: 'Synthetic workflow' }, async () => {}))
-  const channels = Array.from({ length: 8 }, (_, index) => `test.input${index}`)
-  const sources = channels.map(channel => f.pod('Network', { takes: [], gives: [channel], summary: 'Synthetic source' }, async () => {}))
-  const consumer = f.pod('Network consumer', { takes: channels, gives: [], summary: 'Synthetic consumer' }, async () => {})
-  const id = f.create([...sources.map(podId => ({ podId, source: { schedule: { kind: 'interval' as const, seconds: 60 } }, serialCase: false })), { podId: consumer, source: null, serialCase: false }], channels)
+  const { standalone, workflow, id } = f.store.transaction(() => {
+    const standalone = Array.from({ length: 8 }, () => f.pod('Standalone', { takes: [], gives: [], summary: 'Synthetic standalone' }, async () => {}))
+    const workflow = Array.from({ length: 8 }, () => f.pod('Workflow', { takes: [], gives: [], summary: 'Synthetic workflow' }, async () => {}))
+    const channels = Array.from({ length: 8 }, (_, index) => `test.input${index}`)
+    const sources = channels.map(channel => f.pod('Network', { takes: [], gives: [channel], summary: 'Synthetic source' }, async () => {}))
+    const consumer = f.pod('Network consumer', { takes: channels, gives: [], summary: 'Synthetic consumer' }, async () => {})
+    const id = f.create([...sources.map(podId => ({ podId, source: { schedule: { kind: 'interval' as const, seconds: 60 } }, serialCase: false })), { podId: consumer, source: null, serialCase: false }], channels)
+    return { standalone, workflow, id }
+  })
   f.engine.execute({ type: 'activate', id, revision: 1 })
   f.store.db.prepare('UPDATE network_source_clocks SET next_at=0').run()
   f.store.db.prepare('UPDATE settings SET concurrency=? WHERE id=1').run(concurrency)

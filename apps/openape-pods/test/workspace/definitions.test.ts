@@ -21,7 +21,7 @@ import { podDirectories } from '../../src/runtime/environment'
 
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
 const stores: PodDatabase[] = []; const roots: string[] = []
-afterEach(() => { closeNetworks(); vi.restoreAllMocks(); const opened = stores.splice(0); for (const store of opened) store.close(); for (const root of [...opened.map(store => store.root), ...roots.splice(0)]) rmSync(root, { recursive: true, force: true }) })
+afterEach(async () => { await closeNetworks(); vi.restoreAllMocks(); const opened = stores.splice(0); for (const store of opened) store.close(); for (const root of [...opened.map(store => store.root), ...roots.splice(0)]) rmSync(root, { recursive: true, force: true }) })
 const owner = { issuer: 'https://id.example.test', subject: 'owner' }
 function fixture() {
   const store = new PodDatabase(mkdtempSync(join(tmpdir(), 'pods-definitions-'))); stores.push(store)

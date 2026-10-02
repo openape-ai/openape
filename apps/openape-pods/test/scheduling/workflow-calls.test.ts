@@ -12,7 +12,7 @@ import { PodGroups } from '../../src/worker/workspace/groups'
 import type { RunTrigger } from '../../src/worker/runs/store'
 
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
-afterEach(() => { vi.restoreAllMocks(); closeNetworks() })
+afterEach(async () => { await closeNetworks(); vi.restoreAllMocks() })
 const schema = { type: 'object' as const, properties: { subject: { type: 'string' as const } }, required: ['subject'], additionalProperties: false as const }
 
 async function fixture() {

@@ -19,7 +19,7 @@ import { digest } from '../../src/worker/storage/database'
 import { closeNetworks, networkFixture } from './network-fixture'
 
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
-afterEach(() => { vi.restoreAllMocks(); closeNetworks() })
+afterEach(async () => { await closeNetworks(); vi.restoreAllMocks() })
 
 function manifest(): NetworkGateManifest {
   const base = { version: 2 as const, id: randomUUID(), networkId: randomUUID(), networkRevision: 1, gate: 'review', title: 'Review input', podId: randomUUID(), owner: { issuer: 'https://identity.example.invalid', subject: 'synthetic-owner' }, restoreNonce: randomUUID(), activationEpoch: 1, definitionId: randomUUID(), definitionVersion: 1, bindingRevision: 1, assignmentRevision: 1, resourceEpoch: 0, scriptHash: 'a'.repeat(64), expiresAt: Date.now() + 60000, items: [{ deliveryId: randomUUID(), eventId: randomUUID(), generation: 0, key: 'one', hash: networkGatePayloadHash({ subject: 'One', revision: 1 }), channel: 'input.ready', title: 'One' }] }

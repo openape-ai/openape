@@ -16,7 +16,7 @@ import { NetworkRecovery } from '../../src/worker/scheduling/network-recovery'
 import { fenceNetworkBoot } from '../../src/worker/scheduling/network-boot'
 
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
-afterEach(() => { vi.restoreAllMocks(); closeNetworks() })
+afterEach(async () => { await closeNetworks(); vi.restoreAllMocks() })
 
 function fixture() {
   const f = networkFixture()
