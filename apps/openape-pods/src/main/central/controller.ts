@@ -1,3 +1,5 @@
+import { parseCentralNetworkRead, parseCentralNetworkResult } from '../../contracts/central-networks'
+import type { CentralNetworkRead } from '../../contracts/central-networks'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, rm } from 'node:fs/promises'
@@ -14,10 +16,11 @@ import { managedArtifacts } from './artifacts'
 interface State { revision: number, hash: string }
 interface Completion { id: string, result: unknown, error: string | null }
 type Pending = { id: string, revision: number, completion?: Completion } & ({ format?: 1, snapshot: CentralSnapshot } | { format: 2, hash: string, changes: Record<string, string | null>, parts: Record<string, unknown> })
-interface Session extends State { lease: string, pending: CentralOperation[], format?: number, runtimeId?: string, manifest?: CentralManifest }
+interface Session extends State { networkReads?: number, lease: string, pending: CentralOperation[], format?: number, runtimeId?: string, manifest?: CentralManifest }
 export interface CentralGate { lastTickAt: number, tickingSince: number | null, tickPhase?: string | null, tickTimeout?: { phase: string, at: number } | null }
 export interface CentralExecutor {
-  snapshot: () => Promise<CentralSnapshot>
+  snapshot: (networkReads?: boolean) => Promise<CentralSnapshot>
+  networkRead?: (command: CentralNetworkRead) => Promise<unknown>
   version?: () => Promise<number>
   execute: (command: CentralCommand, operationId: string) => Promise<unknown>
   gate: (until: number) => Promise<CentralGate | void>
@@ -53,6 +56,10 @@ class ConnectionLost extends Error {}
 
 export class CentralController {
   private lease = ''
+  private supportsNetworks = false
+  private networkSummary = ''
+  private networkPublishedAt = 0
+  private networkReadError: string | null = null
   private state: State = { revision: 0, hash: '' }
   private online = false
   private operating = false
@@ -78,11 +85,12 @@ export class CentralController {
   constructor(private readonly root: string, private readonly request: WorkspaceRequest, private readonly executor: CentralExecutor, private readonly helper: string, private readonly timing = { heartbeatMs: centralHeartbeatMs, publishIntervalMs: 5000 }) {}
 
   get executing(): boolean { return this.context.getStore() === true }
+  get networkReads(): boolean { return this.supportsNetworks }
   get available(): boolean { return this.online }
   offlineMessage(): string { return `Central workspace offline: ${this.error ?? 'connecting'}` }
 
   status(): CentralStatus {
-    return { state: centralState(this.online, this.lastOnlineAt, this.since, Date.now()), error: this.error, since: this.since, lastOnlineAt: this.lastOnlineAt, gateUntil: this.gateUntil, lastTickAt: this.worker?.lastTickAt || null, tickingSince: this.worker?.tickingSince ?? null, tickPhase: this.worker?.tickPhase ?? null, tickTimeout: this.worker?.tickTimeout ?? null, format: this.format, runtimeId: this.runtimeId, lastPublication: this.lastPublication }
+    return { networkReadError: this.networkReadError, state: centralState(this.online, this.lastOnlineAt, this.since, Date.now()), error: this.error, since: this.since, lastOnlineAt: this.lastOnlineAt, gateUntil: this.gateUntil, lastTickAt: this.worker?.lastTickAt || null, tickingSince: this.worker?.tickingSince ?? null, tickPhase: this.worker?.tickPhase ?? null, tickTimeout: this.worker?.tickTimeout ?? null, format: this.format, runtimeId: this.runtimeId, lastPublication: this.lastPublication }
   }
 
   start(): void {
@@ -122,6 +130,8 @@ export class CentralController {
     this.phase = 'begin'
     const session = await this.request({ type: 'begin' }) as Session
     this.lease = session.lease
+    this.supportsNetworks = session.networkReads === 1 && !!this.executor.networkRead
+    this.networkSummary = ''; this.networkPublishedAt = 0; this.cached = null; this.publishedAt = 0
     this.format = session.format === 2 ? 2 : 1
     this.manifest = session.manifest ?? {}
     this.runtimeId = session.runtimeId ?? null
@@ -153,6 +163,7 @@ export class CentralController {
     if (completion) await rm(join(this.root, 'central/completion.json'))
     if (session.pending.some(item => item.id !== (pending?.completion?.id ?? completion?.id))) throw new Error('A previous command has an uncertain outcome. Inspect its actual run and reconcile it before reconnecting')
     await this.synchronize()
+    await this.serviceNetworks(false)
     this.phase = 'heartbeat'
     await this.heartbeat()
   }
@@ -171,7 +182,7 @@ export class CentralController {
     this.phase = 'worker snapshot'
     const version = await this.executor.version?.()
     const reuse = !completion && version !== undefined && this.cached?.version === version
-    const base = reuse ? this.cached!.snapshot : parseCentralSnapshot(await this.executor.snapshot())
+    const base = reuse ? this.cached!.snapshot : parseCentralSnapshot(await this.executor.snapshot(this.supportsNetworks))
     this.phase = 'artifacts'
     const files = await managedArtifacts(this.root, base, this.helper, this.artifactCache)
     const snapshot = { ...base, artifacts: files.map(({ content: _content, ...file }) => file) }
@@ -234,6 +245,45 @@ export class CentralController {
     finally { this.publishing = null }
   }
 
+  private async serviceNetworks(read: boolean): Promise<void> {
+    try {
+      if (read) await this.readNetwork()
+      if (await this.publishNetworks()) this.networkReadError = null
+    }
+    catch (cause) {
+      const error = cause instanceof Error ? cause.message : String(cause)
+      if (this.networkReadError !== error) console.error('Network read service unavailable', cause)
+      this.networkReadError = error
+    }
+  }
+
+  private async publishNetworks(): Promise<boolean> {
+    if (!this.supportsNetworks || !this.executor.networkRead || Date.now() - this.networkPublishedAt < this.timing.publishIntervalMs) return false
+    this.networkPublishedAt = Date.now()
+    const result = parseCentralNetworkResult(await this.executor.networkRead({ type: 'list' }))
+    const view = { networks: result.networks }
+    const encoded = JSON.stringify({ networks: view.networks.map(network => ({ ...network, health: { ...network.health, lastSchedulerProgressAt: network.health.lastSchedulerProgressAt === null ? null : Math.floor(network.health.lastSchedulerProgressAt / 60000) } })) })
+    if (encoded === this.networkSummary) return true
+    await this.call({ type: 'networks', view })
+    this.networkSummary = encoded
+    return true
+  }
+
+  private async readNetwork(): Promise<void> {
+    const query = await this.call({ type: 'readClaim' }) as { id: string, command: unknown } | null
+    if (!query) return
+    let value: unknown = null; let error: string | null = null
+    try {
+      if (!this.executor.networkRead) throw new Error('Network reads require a newer desktop')
+      value = parseCentralNetworkResult(await this.executor.networkRead(parseCentralNetworkRead(query.command)))
+    }
+    catch (cause) { error = (cause instanceof Error ? cause.message : 'Network read failed').slice(0, 2000) }
+    try { await this.call({ type: 'readComplete', id: query.id, value, error }) }
+    catch (cause) {
+      if ((cause as { status?: number, message?: string }).status !== 409 || !(cause as Error).message.includes('workspace_read_expired')) throw cause
+    }
+  }
+
   private async operate(operation: CentralOperation): Promise<void> {
     this.operating = true
     this.phase = 'worker gate'; await this.gate(0)
@@ -283,6 +333,7 @@ export class CentralController {
         })()
         while (!this.abort.signal.aborted) {
           if (!this.online) throw new ConnectionLost()
+          if (this.supportsNetworks) await this.serviceNetworks(true)
           this.phase = 'claim'
           const operation = await this.call({ type: 'claim' }) as CentralOperation | null
           if (operation) await this.operate(operation)

@@ -1,3 +1,6 @@
+import { publicNetworkOverview, networkBrowserMutationAllowed } from '../../../openape-pods/src/contracts/central-networks'
+import { parseNetworkView } from '../../../openape-pods/src/contracts/networks'
+import { WorkspaceNetworkReads } from './workspace-network-reads'
 import { workspaceWorkflows } from './workspace-workflows'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
@@ -15,7 +18,7 @@ import type { ScheduleView } from '../../../openape-pods/src/contracts/schedulin
 import type { ScriptView } from '../../../openape-pods/src/contracts/scripts'
 
 export interface WorkspaceActor { id: string, generation: string, owner: Owner }
-interface RuntimeRow { id: string, owner: string, generation: string, lease: string, heartbeat: number, revision: number, hash: string, snapshot: string | null, previous_hash: string, seen_at: number, parts_hash: string }
+interface RuntimeRow { id: string, owner: string, generation: string, lease: string, heartbeat: number, revision: number, hash: string, snapshot: string | null, previous_hash: string, seen_at: number, parts_hash: string, networks: string | null }
 interface Completion { id: string, result: unknown, error: string | null }
 interface PodView { id: string, ready: boolean, scheduling: ScheduleView, runs: { runIds: string[] } }
 export type WorkspaceView = { view: 'summary' } | { view: 'runs', offset: number } | { view: 'run', runId: string } | { view: 'version', selection: string }
@@ -26,7 +29,9 @@ export const runPage = 20
 
 export class WorkspaceStore {
   readonly db: DatabaseSync
+  private readonly networkReads: WorkspaceNetworkReads
   constructor(path: string, readonly now = Date.now) {
+    this.networkReads = new WorkspaceNetworkReads(now)
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
     this.db = new DatabaseSync(path)
     const version = Number(this.db.prepare('PRAGMA user_version').get()?.user_version)
@@ -43,7 +48,7 @@ export class WorkspaceStore {
       CREATE INDEX IF NOT EXISTS owner_changes ON changes(owner,sequence);
       PRAGMA user_version=1;`)
     const columns = new Set(this.db.prepare('PRAGMA table_info(runtimes)').all().map(column => String(column.name)))
-    for (const [name, definition] of [['previous_hash', 'TEXT NOT NULL DEFAULT \'\''], ['seen_at', 'INTEGER NOT NULL DEFAULT 0'], ['parts_hash', 'TEXT NOT NULL DEFAULT \'\'']]) {
+    for (const [name, definition] of [['networks', 'TEXT'], ['previous_hash', 'TEXT NOT NULL DEFAULT \'\''], ['seen_at', 'INTEGER NOT NULL DEFAULT 0'], ['parts_hash', 'TEXT NOT NULL DEFAULT \'\'']]) {
       if (!columns.has(name!)) this.db.exec(`ALTER TABLE runtimes ADD COLUMN ${name} ${definition}`)
     }
     // Snapshots written by an older server (or before this upgrade) are split once.
@@ -62,6 +67,7 @@ export class WorkspaceStore {
 
   private changed(row: Pick<RuntimeRow, 'id' | 'owner'>): void {
     this.db.prepare('INSERT INTO changes(owner,runtime_id,at) VALUES(?,?,?)').run(row.owner, row.id, this.now())
+    this.db.prepare('DELETE FROM changes WHERE owner=? AND sequence < (SELECT coalesce(max(sequence),0)-1000 FROM changes WHERE owner=?)').run(row.owner, row.owner)
   }
 
   private row(owner: Owner, id: string): RuntimeRow {
@@ -121,19 +127,19 @@ export class WorkspaceStore {
 
   assertLease(actor: WorkspaceActor, lease: string): void { this.runtime(actor, lease) }
 
-  begin(actor: WorkspaceActor): { lease: string, revision: number, hash: string, pending: CentralOperation[], format: number, runtimeId: string, manifest: CentralManifest } {
+  begin(actor: WorkspaceActor): { lease: string, revision: number, hash: string, pending: CentralOperation[], format: number, runtimeId: string, manifest: CentralManifest, networkReads: 1 } {
     return this.transaction(() => {
       const previous = this.db.prepare('SELECT * FROM runtimes WHERE id=?').get(actor.id) as unknown as RuntimeRow | undefined
       if (previous && (previous.owner !== ownerKey(actor.owner) || previous.generation !== actor.generation)) throw new ProtocolError('workspace_binding_changed', 409)
       if (previous && this.online(previous)) throw new ProtocolError('workspace_already_connected', 409)
       const lease = randomUUID()
-      this.db.prepare('INSERT INTO runtimes(id,owner,generation,lease) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET lease=excluded.lease,heartbeat=0').run(actor.id, ownerKey(actor.owner), actor.generation, lease)
+      this.db.prepare('INSERT INTO runtimes(id,owner,generation,lease) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET lease=excluded.lease,heartbeat=0,networks=NULL').run(actor.id, ownerKey(actor.owner), actor.generation, lease)
       this.db.prepare('UPDATE operations SET state=\'unknown\',error=\'Runtime disconnected; reconcile before retrying\' WHERE runtime_id=? AND state=\'started\'').run(actor.id)
       this.db.prepare('UPDATE operations SET state=\'failed\',error=\'Pod went offline before execution\' WHERE runtime_id=? AND state=\'accepted\'').run(actor.id)
       this.db.prepare('DELETE FROM staged_parts WHERE runtime_id=?').run(actor.id)
       const row = this.row(actor.owner, actor.id); this.changed(row)
       const pending = this.db.prepare('SELECT id FROM operations WHERE runtime_id=? AND state=\'unknown\'').all(actor.id).map(item => this.operation(actor.owner, String(item.id)))
-      return { lease, revision: row.revision, hash: row.hash, pending, format: centralFormat, runtimeId: row.id, manifest: this.hasData(row) ? this.manifest(row.id) : {} }
+      return { lease, revision: row.revision, hash: row.hash, pending, format: centralFormat, networkReads: 1, runtimeId: row.id, manifest: this.hasData(row) ? this.manifest(row.id) : {} }
     })
   }
 
@@ -254,6 +260,53 @@ export class WorkspaceStore {
     })
   }
 
+  publishNetworks(actor: WorkspaceActor, lease: string, value: unknown): void {
+    const row = this.runtime(actor, lease)
+    const view = parseNetworkView(value)
+    if (Object.keys(view).some(key => key !== 'networks')) throw new ProtocolError('invalid_network_publication')
+    const encoded = JSON.stringify(publicNetworkOverview(view))
+    if (Buffer.byteLength(encoded) > 2 * 1024 * 1024) throw new ProtocolError('workspace_too_large', 413)
+    const podIds = new Set(this.scope(row).workspace.pods.map(pod => pod.id))
+    if (view.networks.some(network => !network.podIds || network.podIds.some(id => !podIds.has(id)))) throw new ProtocolError('invalid_network_pod_binding')
+    if (row.networks === encoded) return
+    this.transaction(() => {
+      this.db.prepare('UPDATE runtimes SET networks=? WHERE id=?').run(encoded, row.id)
+      this.changed(row)
+    })
+  }
+
+  private readableNetworkRuntime(owner: Owner, runtimeId: string): RuntimeRow {
+    const row = this.row(owner, runtimeId)
+    if (!this.online(row)) throw new ProtocolError('workspace_runtime_offline', 409)
+    if (!row.networks) throw new ProtocolError('workspace_network_reads_unavailable', 409)
+    return row
+  }
+
+  requestNetworkRead(owner: Owner, runtimeId: string, command: unknown): string {
+    const row = this.readableNetworkRuntime(owner, runtimeId)
+    return this.networkReads.submit(row.owner, row.id, row.lease, command)
+  }
+
+  networkReadResult(owner: Owner, runtimeId: string, id: string) {
+    const row = this.readableNetworkRuntime(owner, runtimeId)
+    return this.networkReads.result(row.id, row.lease, centralId(id))
+  }
+
+  cancelNetworkRead(owner: Owner, runtimeId: string, id: string): void {
+    const row = this.row(owner, runtimeId)
+    this.networkReads.cancel(row.owner, row.id, centralId(id))
+  }
+
+  claimNetworkRead(actor: WorkspaceActor, lease: string) {
+    const row = this.runtime(actor, lease)
+    return this.networkReads.claim(row.id, row.lease)
+  }
+
+  completeNetworkRead(actor: WorkspaceActor, lease: string, id: string, value: unknown, error: string | null): void {
+    const row = this.runtime(actor, lease)
+    this.networkReads.complete(row.id, row.lease, centralId(id), value, error)
+  }
+
   inventory(owner: Owner): CentralRuntime[] {
     return this.db.prepare('SELECT * FROM runtimes WHERE owner=? ORDER BY id').all(ownerKey(owner)).map((raw) => {
       const row = raw as unknown as RuntimeRow
@@ -262,7 +315,7 @@ export class WorkspaceStore {
       if (!this.hasData(row)) return { id: row.id, revision: row.revision, online, lastSeenAt, workspace: { pods: [], organization: { revision: 1, groups: [] } } }
       const read = this.reader(row.id)
       const workspace = read('workspace') as WorkspaceState
-      return { id: row.id, revision: row.revision, online, lastSeenAt, workflows: workspaceWorkflows(read, Object.keys(this.manifest(row.id))), workspace: { ...workspace, pods: workspace.pods.map((pod) => {
+      return { id: row.id, revision: row.revision, online, lastSeenAt, workflows: workspaceWorkflows(read, Object.keys(this.manifest(row.id))), ...(row.networks ? { networks: parseNetworkView(JSON.parse(row.networks)) } : {}), workspace: { ...workspace, pods: workspace.pods.map((pod) => {
         const view = read(`pod/${pod.id}`) as PodView
         if (!online || !view.ready) return { id: pod.id, name: pod.name, online: false, revision: 1, lifecycle: pod.lifecycle === 'archived' ? 'archived' as const : 'paused' as const, activeScript: null }
         const { blocked, blockedSince = null, error } = view.scheduling
@@ -314,6 +367,9 @@ export class WorkspaceStore {
       }
       const row = this.ready(owner, runtimeId)
       this.ready(owner, runtimeId, commandPodIds(command, this.scope(row)))
+      const targets = commandPodIds(command, this.scope(row))
+      const member = targets.some(id => (this.reader(row.id)(`pod/${id}`) as CentralPod).networkId)
+      if (!trustedRuntime && member && !networkBrowserMutationAllowed(command)) throw new ProtocolError('network_member_requires_desktop_review', 403)
       if (row.revision !== revision) throw new ProtocolError('workspace_revision_conflict', 409)
       if (this.db.prepare('SELECT 1 FROM operations WHERE runtime_id=? AND state IN (\'accepted\',\'started\',\'unknown\')').get(runtimeId)) throw new ProtocolError('workspace_busy', 409)
       this.db.prepare('INSERT INTO operations VALUES(?,?,?,?,?,\'accepted\',NULL,NULL,?,?)').run(id, ownerKey(owner), runtimeId, requestHash, JSON.stringify(command), revision, this.now() + centralLeaseMs)

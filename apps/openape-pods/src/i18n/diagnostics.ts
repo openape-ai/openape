@@ -1,6 +1,7 @@
 import type { MessageKey } from './index'
 
 export const diagnosticPatterns = [
+  'Unclassified publication table: {p0}',
   'Instance {p0} is retained for provisioning retry. {p1}',
   'Collection record changed: {p0}/{p1}, current revision {p2}',
   'SSH inventory failed (exit {p0}); check the reviewed route, host key, authentication and noninteractive sudo',

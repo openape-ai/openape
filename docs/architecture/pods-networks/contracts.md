@@ -967,7 +967,7 @@ protected merge `9eaf5e4e70ae22ebebdf2f2c19c83376f7923b56` passed full main CI53
 M8 is accepted.
 No live provider action, production activation or rights expansion is included.
 
-## M9 operational desktop UI — acceptance in progress
+## M9 operational desktop UI — accepted in PR210
 
 The owner chooses a finite workflow or persistent network, then selects prepared
 instances in one company. A setup fingerprint binds the reviewed instance versions,
@@ -1006,8 +1006,8 @@ Permanent tests protect scoped reads, stale review refusal, value origin/type ru
 paused consent, recovery availability and mail non-mutation; no CI job or runner was
 added. Actual Claude Code Opus5.5 reviews supplement primary review; Patrick additionally
 permitted Fable for UI/design, verified here as `claude-fable-5-1`. Their findings drive
-corrections and fresh screenshot capture. M9 is not accepted until final clean-SHA
-checks, native PR review, private Test Runs evidence and protected merge are verified.
+corrections and fresh screenshot capture. M9 clean source, native review, exact-head
+CI, private Test Runs and protected PR210/main CI acceptance are recorded in active work.
 
 
 ### Reviewed composition correction boundary
@@ -1019,3 +1019,63 @@ replacement/archive path alongside membership cutover and sharing. It must retai
 history, identities, pending decisions and effect evidence, and refuse unresolved
 work rather than deleting it. This is a required pre-release follow-up, not a claim
 that M9 provides editing or that an existing network can be silently converted.
+
+## M10 bounded browser publication — implementation under verification
+
+Central format 2 and its existing part keys remain unchanged. A relay advertises
+`networkReads: 1` before the desktop can publish a network profile or create network
+work while connected. Network summaries use a separate additive `runtimes.networks`
+column and do not increment the workspace operation revision. Publication runs at
+most every five seconds; scheduler progress alone changes its signature at minute
+resolution. The relay retains a bounded change cursor history.
+
+Every legacy publication table has an exhaustive ownership policy. Network members,
+retained invocations, called-workflow instances and their run-derived rows remain
+local. Ambiguous global control/chat/mail state is excluded. Nullable creation rows
+without a classified Pod are intentionally excluded, not presumed public. Explicit
+Pod/name/status summaries replace private Pod details; managed workspace and script
+artifacts are excluded too. Complete encrypted backup coverage remains independent.
+Persistent health summaries replace free-text diagnostics with generic attention
+indicators. Full diagnostic text is available only through an authenticated live read.
+
+Browser reads use the existing private owner session, origin checks and runtime
+registration signatures. The separate read lane accepts only list/detail/trace/records,
+has a 20-second lifetime, a 2 MiB response limit and bounded global/owner/runtime
+queues, and is never persisted or replayed as an owner operation. Disconnect, lease
+replacement, expiry and abandoned HTTP requests invalidate reads. Optional read-lane
+failure is diagnosed without closing an otherwise healthy runtime lease. Detail gates
+have no approval URL. Legacy mutation guards run both at relay submission and again
+inside the worker, including when an older relay lacks the guard. Individual pause
+and cancel remain allowed; activation, replay, configuration and membership changes
+require desktop review. Workspace-wide browser commands that affect network members
+remain refused; this does not extend the existing browser command allowlist.
+
+The shared browser UI keeps summary inventory separate from scoped details, retains
+per-network decisions across summary polling, shows read loading/errors in their
+respective views, and displays explicit offline failures. Network Pod entries show a
+summary instead of mounting the legacy mutable editor. Existing unrelated legacy Pod
+editors remain available. Five UTF-8 record previews are individually limited to
+32 KiB; trace and record cursors use stable keys, not shifting offsets.
+
+### Relay-first compatibility and rollback
+
+Deploy and verify the compatible relay before distributing the new signed desktop.
+An old desktop continues to use unchanged format-2 parts on the new relay. A new
+desktop without network state can still use an old relay. A network-bearing profile
+fails closed when the capability is absent: it cannot publish private full tables,
+and its workspace gate pauses scheduling, including legacy schedules. This is an
+explicit rollback availability cost, not successful online compatibility. Stop new
+network writing before rolling back the relay; preserve the database and all effect
+receipts, then restore the compatible relay to reconnect. Do not downgrade or convert
+a network-bearing profile to the legacy runtime. The additive column leaves the old
+relay database reader compatible. A future change to the read-view schema requires
+new capability negotiation before its writer ships; unknown data must not be silently
+reinterpreted. M13 owns actual signed relay-first deployment/health/rollback receipts.
+
+Primary review and actual Claude Code Opus 5.5/Fable reviews informed this change.
+The authenticated browser acceptance uses a real local identity provider, signed
+runtime requests and the actual Nuxt route, with synthetic runtime responses. Native
+Electron tests separately exercise the actual desktop/preload/main/worker routes.
+These are distinct evidence; they do not claim an installed production desktop has
+connected to a deployed relay. Final clean-SHA checks, native PR/CI and verified
+private Test Runs publication remain required before M10 acceptance.

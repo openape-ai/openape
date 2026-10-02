@@ -1,3 +1,6 @@
+import { assertNetworkBrowserCommand } from './central/network-projection'
+import { parseCentralCommand } from '../contracts/central'
+import { publicNetworkOverview, parseCentralNetworkRead } from '../contracts/central-networks'
 import { DefinitionWorkspace } from './workspace/definitions'
 import { parseDefinitionCommand, parseDefinitionProvision } from '../contracts/definitions'
 import { cleanupEncryptedBackupStaging } from './data/encrypted-backup'
@@ -129,6 +132,7 @@ function networkOwner() {
 const networks = new NetworkEngine(store, dispatcher, registry, runtime.helper, networkOwner, false)
 networks.invocations.calls = new WorkflowCalls(store, networks.invocations.events, workflows)
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
+let centralNetworkReads = false
 let centralUntil = process.env.PODS_CENTRAL_ENABLED === '1' ? 0 : Infinity
 let scanAt = 0
 let storageAt = 0
@@ -199,7 +203,7 @@ port.on('message', async (event) => {
   if (!request || typeof request.id !== 'string') throw new Error('Invalid worker request')
   try {
     if (request.command && typeof request.command === 'object' && 'central' in request.command) {
-      const command = request.command.central as { type: string, until?: number, owner?: unknown }
+      const command = request.command.central as { type: string, until?: number, owner?: unknown, networkReads?: boolean, command?: unknown }
       if (command.type === 'gate') {
         if (typeof command.until !== 'number' || !Number.isFinite(command.until) || command.until < 0 || command.until > Date.now() + 30000) throw new Error('Invalid central lease')
         centralUntil = command.until
@@ -207,9 +211,23 @@ port.on('message', async (event) => {
         if (!centralUntil && ticking) await Promise.race([ticking, delay(5000)])
         port.postMessage({ id: request.id, state: { lastTickAt, tickingSince: ticking ? tickStartedAt : null, tickPhase: ticking ? tickPhase : null, tickTimeout } }); return
       }
+      if (command.type === 'assertCommand') { assertNetworkBrowserCommand(store, parseCentralCommand(command.command)); port.postMessage({ id: request.id, state: true }); return }
       if (command.type === 'version') { port.postMessage({ id: request.id, state: Number(store.db.prepare('SELECT total_changes() AS changes').get()!.changes) }); return }
+      if (command.type === 'networkRead') {
+        if (maintenance) throw new Error('Application data is being maintained; retry when it finishes')
+        const owner = parseOwner(command.owner)
+        new CentralProjection(store, registry, scripts, dispatcher, scheduler).assertOwner(owner)
+        const query = parseCentralNetworkRead(command.command)
+        const result = networks.execute(query)
+        if (query.type === 'list') { port.postMessage({ id: request.id, state: publicNetworkOverview(result) }); return }
+        result.networks = result.networks.filter(network => network.id === query.id)
+        if (query.type === 'detail') result.gates = result.gates?.filter(gate => gate.networkId === query.id).map(gate => ({ ...gate, url: null }))
+        else delete result.gates
+        port.postMessage({ id: request.id, state: result }); return
+      }
       if (command.type !== 'snapshot') throw new Error('Unsupported central worker command')
-      port.postMessage({ id: request.id, state: new CentralProjection(store, registry, scripts, dispatcher, scheduler).snapshot(parseOwner(command.owner)) }); return
+      centralNetworkReads = command.networkReads === true
+      port.postMessage({ id: request.id, state: new CentralProjection(store, registry, scripts, dispatcher, scheduler).snapshot(parseOwner(command.owner), command.networkReads === true) }); return
     }
     if (request.command && typeof request.command === 'object' && 'data' in request.command) {
       const command = request.command.data as DataInternal
@@ -253,7 +271,7 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'definitions' in request.command) {
       const command = parseDefinitionCommand(request.command.definitions)
       const registered = store.db.prepare('SELECT 1 FROM remote_registration WHERE id=1').get()
-      const unavailableReason = !registered ? 'Finish desktop identity setup before using reusable definitions.' : process.env.PODS_CENTRAL_ENABLED === '1' ? 'Definition editing is not available for this connected workspace yet.' : undefined
+      const unavailableReason = !registered ? 'Finish desktop identity setup before using reusable definitions.' : process.env.PODS_CENTRAL_ENABLED === '1' && !centralNetworkReads ? 'Definition editing is not available for this connected workspace yet.' : undefined
       if (command.type === 'list') {
         const state = registered ? new DefinitionWorkspace(store, registry, networkOwner()).view() : { definitions: [], instances: [], provisioning: [] }
         port.postMessage({ id: request.id, state: { ...state, ...(unavailableReason ? { unavailableReason } : {}) } }); return
@@ -279,11 +297,12 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'networks' in request.command) {
       const command = parseNetworkCommand(request.command.networks)
       if (command.type === 'create' && !command.draft.expectedSetup) throw new Error('Network creation requires a reviewed setup fingerprint')
-      if (command.type === 'create' && process.env.PODS_CENTRAL_ENABLED === '1') throw new Error('Network creation requires bounded central publication support')
-      if ((command.type === 'activate' || command.type === 'process') && (!startupReady || Date.now() >= centralUntil || suspended)) throw new Error('Network execution requires a ready local runtime')
+      if (command.type === 'create' && process.env.PODS_CENTRAL_ENABLED === '1' && !centralNetworkReads) throw new Error('Network creation requires bounded central publication support')
+      const ownerOperation = 'ownerOperation' in request.command && request.command.ownerOperation === true
+      if ((command.type === 'activate' || command.type === 'process') && (!startupReady || (Date.now() >= centralUntil && !ownerOperation) || suspended)) throw new Error('Network execution requires a ready local runtime')
       const result = command.type === 'inspect' || command.type === 'retry' || command.type === 'reconcileEffect' || command.type === 'resolveConflict' || command.type === 'discardFailure' ? await networks.recover(command) : networks.execute(command)
-      if (process.env.PODS_CENTRAL_ENABLED === '1') result.unavailableReason = 'Network creation requires bounded central publication support'
-      if (command.type === 'process') scheduleDomains(store, [() => scheduler.tick(), () => workflows.tick(), () => { networks.invocations.calls!.tick(); networks.tick() }])
+      if (process.env.PODS_CENTRAL_ENABLED === '1' && !centralNetworkReads) result.unavailableReason = 'Network creation requires bounded central publication support'
+      if (command.type === 'process' && Date.now() < centralUntil) scheduleDomains(store, [() => scheduler.tick(), () => workflows.tick(), () => { networks.invocations.calls!.tick(); networks.tick() }])
       port.postMessage({ id: request.id, state: result }); return
     }
     if (request.command && typeof request.command === 'object' && 'remote' in request.command) {
