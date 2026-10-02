@@ -493,6 +493,7 @@ describe('persistent network owner controls', () => {
     const wrapper = mount(NetworkDetail, { props: { network: f.view.networks[0]!, view: f.view, pods: f.pods } })
     try {
       await flushPromises()
+      if (failedRead === 'trace') await button(wrapper, 'Recent recorded activity').trigger('click')
       expect(wrapper.get('[role=alert]').text()).toContain('Synthetic read unavailable')
       expect(button(wrapper, 'Pause network').attributes('disabled')).toBeUndefined()
       await button(wrapper, 'Pause network').trigger('click'); await flushPromises()

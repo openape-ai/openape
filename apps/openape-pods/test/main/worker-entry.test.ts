@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
+import { seedNetwork } from '../storage/network-fixture'
 import { PodDatabase } from '../../src/worker/storage/database'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { installExample } from '../../src/worker/runs/examples'
@@ -148,4 +149,14 @@ it('prevents reviewed master and browser starts from bypassing the suspended pro
     expect(runs(podId)).toBe(0)
   }
   finally { await send('resume') }
+})
+
+it('rechecks network browser mutation authority in the real worker when an older relay lacks the guard', async () => {
+  const store = new PodDatabase(root)
+  const network = seedNetwork(store)
+  store.close()
+  await send({ id: 'network-legacy-start', command: { central: { type: 'assertCommand', command: { channel: 'runs', body: { type: 'start', podId: network.pod.id } } } } })
+  expect(replies).toHaveBeenCalledWith({ id: 'network-legacy-start', error: expect.stringContaining('desktop review') })
+  await send({ id: 'network-safe-pause', command: { central: { type: 'assertCommand', command: { channel: 'scheduling', body: { type: 'lifecycle', podId: network.pod.id, revision: 1, lifecycle: 'paused' } } } } })
+  expect(replies).toHaveBeenCalledWith({ id: 'network-safe-pause', state: true })
 })

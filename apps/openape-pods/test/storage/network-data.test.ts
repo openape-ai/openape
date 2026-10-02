@@ -468,3 +468,22 @@ it('pages owner-visible committed records with stable keys and retained tombston
   const rest = parseNetworkView(f.engine.execute({ type: 'records', id: f.networkId, revision: 1, collectionId: f.collectionId, after: page.after })).records!
   expect(rest.records.map(record => record.key)).toEqual(['f', 'g']); expect(rest.after).toBeNull()
 })
+
+it('bounds Unicode record previews in bytes and keeps their cursor stable after earlier records disappear', async () => {
+  const f = fixture(); const authority = f.reserve()
+  for (let index = 0; index < 6; index++) f.data.put(authority, { collection: 'cases', key: `case-${index}`, expectedRevision: 0, value: { status: 'reviewed' } })
+  await f.invocations.finish(authority, 'completed', 'Stored records', null, [], [])
+  // Imported legacy rows may exceed the current write boundary; reads remain bounded.
+  f.store.db.prepare('UPDATE data_record_revisions SET body=? WHERE collection_id=?').run(JSON.stringify({ status: '🦍界'.repeat(20000) }), f.collectionId)
+  const command = { type: 'records' as const, id: f.networkId, revision: 1, collectionId: f.collectionId, after: null }
+  const first = f.engine.execute(command).records!
+  expect(first.records).toHaveLength(5)
+  expect(first.records.every(row => row.truncated && Buffer.byteLength(row.body!) <= 32768 && !row.body!.includes('�'))).toBe(true)
+  expect(Buffer.byteLength(JSON.stringify(first))).toBeLessThan(200000)
+  const next = f.engine.execute({ ...command, after: first.after }).records!
+  f.store.transaction(() => {
+    for (const table of ['data_record_provenance', 'data_index_values', 'data_record_revisions', 'data_records']) f.store.db.prepare(`DELETE FROM ${table} WHERE collection_id=? AND record_key<?`).run(f.collectionId, first.after!)
+  })
+  expect(f.engine.execute({ ...command, after: first.after }).records).toEqual(next)
+  expect(next.records.map(row => row.key)).toEqual(['case-5'])
+})

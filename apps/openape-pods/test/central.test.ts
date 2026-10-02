@@ -49,6 +49,9 @@ type Completion = Parameters<WorkspaceStore['publish']>[5]
 function relay(server: WorkspaceStore, actor: WorkspaceActor) {
   return async (body: Record<string, unknown>): Promise<unknown> => {
     const lease = String(body.lease)
+    if (body.type === 'networks') return server.publishNetworks(actor, lease, body.view)
+    if (body.type === 'readClaim') return server.claimNetworkRead(actor, lease)
+    if (body.type === 'readComplete') return server.completeNetworkRead(actor, lease, String(body.id), body.value, body.error as string | null)
     if (body.type === 'inventory') return server.inventory(actor.owner)
     if (body.type === 'read') return body.view ? server.view(actor.owner, String(body.runtimeId), String(body.podId), body as never) : server.read(actor.owner, String(body.runtimeId), String(body.podId))
     if (body.type === 'operation') return server.visibleOperation(actor.owner, String(body.id))
@@ -301,7 +304,7 @@ it('deletes through MCP with coordinated cleanup and keeps an owner-scoped recei
   const { FixtureWorker } = await import('../src/main/worker')
   const worker = new FixtureWorker(() => {})
   const purgePodKeys = vi.fn(async () => {})
-  Object.assign(worker, { connections: { busy: () => false, purgePodKeys }, dispatch: async ({ data: command }: { data: Parameters<DataControl['execute']>[0] }) => data.execute(command) })
+  Object.assign(worker, { connections: { busy: () => false, purgePodKeys }, dispatch: async (request: { central?: unknown, data: Parameters<DataControl['execute']>[0] }) => request.central ? true : data.execute(request.data) })
   const execute = vi.fn((command: import('../src/contracts/central').CentralCommand) => worker.centralExecute(command))
   const controller = new CentralController(root, relay(server, actor), { snapshot: async () => projection.snapshot(actor.owner), execute, gate: async () => {} }, '/unused-no-artifacts')
   worker.central = controller
@@ -336,4 +339,74 @@ it('allows only reviewed deletion through the central data channel', () => {
 it('fails closed before publishing any legacy table or projection from a network workspace', () => {
   const f = fixture(); seedNetwork(f.store)
   expect(() => f.projection.snapshot(f.actor.owner)).toThrow('bounded publication support')
+})
+
+it('connects network volume with stable legacy parts and leaves complete data local', () => {
+  const f = fixture(); const network = seedNetwork(f.store)
+  f.store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,?,?,NULL)').run(network.pod.id, JSON.stringify(f.actor.owner), f.actor.id, f.actor.generation, 'ready', '{}')
+  f.store.transaction(() => {
+    f.store.db.prepare(`WITH RECURSIVE sequence(value) AS (SELECT 0 UNION ALL SELECT value+1 FROM sequence WHERE value<11999)
+      INSERT INTO run_events SELECT ?,value,'log',?,1 FROM sequence`).run(network.runId, JSON.stringify({ message: 'x'.repeat(4096) }))
+  })
+  const snapshot = f.projection.snapshot(f.actor.owner, true)
+  expect(Buffer.byteLength(JSON.stringify(snapshot))).toBeLessThan(1024 * 1024)
+  expect(snapshot.archive.tables.run_events).toEqual([])
+  expect(snapshot.pods.find(pod => pod.id === network.pod.id)!.runs.runs).toEqual([])
+  expect(f.store.db.prepare('SELECT count(*) AS count FROM run_events').get()!.count).toBe(12000)
+  const before = splitSnapshot(snapshot)
+  f.store.db.prepare('DELETE FROM run_events WHERE sequence<1000').run()
+  expect(splitSnapshot(f.projection.snapshot(f.actor.owner, true))).toEqual(before)
+  const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
+  const { lease } = server.begin(f.actor)
+  const published = server.publish(f.actor, lease, randomUUID(), 0, snapshot)
+  server.heartbeat(f.actor, lease, published.hash)
+  expect(server.inventory(f.actor.owner)[0]!.online).toBe(true)
+  expect(() => f.projection.snapshot(f.actor.owner)).toThrow('bounded publication support')
+})
+
+it('serves runtime reads without executing owner commands or changing the publication revision', async () => {
+  const f = fixture(); const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
+  const execute = vi.fn(); const networkRead = vi.fn(async () => ({ networks: [] }))
+  const controller = new CentralController(f.root, relay(server, f.actor), { snapshot: async enabled => f.projection.snapshot(f.actor.owner, enabled), networkRead, execute, gate: async () => {} }, '/unused-no-artifacts')
+  cleanup.push(() => controller.stop()); controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+  expect(controller.networkReads).toBe(true)
+  const revision = server.inventory(f.actor.owner)[0]!.revision
+  const id = server.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'list' })
+  let result: unknown
+  await vi.waitFor(() => { result = server.networkReadResult(f.actor.owner, f.actor.id, id); expect(result).toBeDefined() }, { timeout: 4000 })
+  expect(result).toEqual({ value: { networks: [] }, error: null })
+  expect(server.inventory(f.actor.owner)[0]!.revision).toBe(revision)
+  expect(execute).not.toHaveBeenCalled()
+})
+
+it('keeps the runtime online when the optional network read service fails', async () => {
+  const f = fixture(); const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const networkRead = vi.fn(async () => { throw new Error('Synthetic network read is too large') })
+  const controller = new CentralController(f.root, relay(server, f.actor), { snapshot: async enabled => f.projection.snapshot(f.actor.owner, enabled), networkRead, execute: vi.fn(), gate: async () => {} }, '/unused-no-artifacts')
+  cleanup.push(() => log.mockRestore()); cleanup.push(() => controller.stop()); controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+  expect(controller.status().networkReadError).toContain('too large')
+  expect(server.inventory(f.actor.owner)[0]!.online).toBe(true)
+  expect(log).toHaveBeenCalledWith('Network read service unavailable', expect.any(Error))
+})
+
+it('keeps private network configuration local and rejects legacy mutation bypasses', () => {
+  const f = fixture(); const network = seedNetwork(f.store)
+  f.store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,?,?,NULL)').run(network.pod.id, JSON.stringify(f.actor.owner), f.actor.id, f.actor.generation, 'ready', '{}')
+  f.store.db.prepare('INSERT INTO pod_variables VALUES(?,?,?,1)').run(network.pod.id, 'business', 'private-network-variable')
+  f.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), network.pod.id, 'reference', 'ready', 'private-network-resource', '{}')
+  f.store.db.prepare('INSERT INTO pod_variables VALUES(?,?,?,1)').run(f.pod.id, 'legacy', 'retained-legacy-variable')
+  const snapshot = f.projection.snapshot(f.actor.owner, true)
+  expect(JSON.stringify(snapshot)).not.toContain('private-network-')
+  expect(JSON.stringify(snapshot)).toContain('retained-legacy-variable')
+  expect(snapshot.pods.find(pod => pod.id === network.pod.id)).toMatchObject({ networkId: network.networkId, resources: { resources: [], variables: [] } })
+  const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
+  const { lease } = server.begin(f.actor)
+  const published = server.publish(f.actor, lease, randomUUID(), 0, snapshot)
+  server.heartbeat(f.actor, lease, published.hash)
+  expect(() => server.submit(f.actor.owner, f.actor.id, published.revision, { channel: 'runs', body: { type: 'start', podId: network.pod.id } }, randomUUID())).toThrow('network_member_requires_desktop_review')
+  expect(() => server.submit(f.actor.owner, f.actor.id, published.revision, { channel: 'runs', body: { type: 'start', podId: f.pod.id } }, randomUUID())).not.toThrow()
+  expect(f.store.db.prepare('SELECT value FROM pod_variables WHERE pod_id=?').get(network.pod.id)!.value).toBe('private-network-variable')
 })

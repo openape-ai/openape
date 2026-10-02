@@ -87,7 +87,17 @@ export class NetworkViews {
     const rows = this.store.db.prepare(`SELECT r.record_key,r.revision,v.schema_version,substr(v.body,1,196609) AS body,length(v.body)>196608 AS truncated,r.tombstone,v.created_at FROM data_records r
       JOIN data_record_revisions v ON v.collection_id=r.collection_id AND v.record_key=r.record_key AND v.revision=r.revision
       WHERE r.collection_id=? AND r.record_key>? ORDER BY r.record_key LIMIT 6`).all(collectionId, after ?? '')
-    const records = rows.slice(0, 5).map(row => ({ key: row.record_key as string, revision: Number(row.revision), schemaVersion: Number(row.schema_version), body: row.body === null ? null : (row.body as string).slice(0, 196608), truncated: Boolean(row.truncated) || (typeof row.body === 'string' && row.body.length > 196608), deleted: Boolean(row.tombstone), at: Number(row.created_at) }))
+    const records = rows.slice(0, 5).map(row => ({ key: row.record_key as string, revision: Number(row.revision), schemaVersion: Number(row.schema_version), body: row.body === null ? null : recordPreview(row.body as string), truncated: Boolean(row.truncated) || (typeof row.body === 'string' && Buffer.byteLength(row.body) > 32768), deleted: Boolean(row.tombstone), at: Number(row.created_at) }))
     return { collectionId, records, after: rows.length > 5 ? records.at(-1)!.key : null }
   }
+}
+
+function recordPreview(value: string): string {
+  let bytes = 0; let end = 0
+  for (const character of value) {
+    const size = Buffer.byteLength(character)
+    if (bytes + size > 32768) break
+    bytes += size; end += character.length
+  }
+  return value.slice(0, end)
 }
