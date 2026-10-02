@@ -433,3 +433,19 @@ Disconnect under App settings → Work from Codex. If you edited the registered 
 2. Restart Codex once.
 3. Ask Codex to configure or run the selected Pods.
 4. Check the applied settings and actual run status in Pods; no second approval click is required.
+
+## Share and import portable packages
+
+Share packs one Pod or a complete workflow or network into an .openape file: the selected scripts, their dependency locks, declared inputs and access, and the files you explicitly include. Credentials, run history, private folders, account state and local identities never leave your device, and the review shows the exact files before anything is written.
+
+Every file reference needs an include or omit decision, every assigned folder, HTTP destination or application gets a portable alias, and your values stay private unless you include one as a public default. A privacy scan flags local identities, paths and likely credentials; blocking findings must be parameterized, review findings must be acknowledged. The scan is a heuristic, so read your source before sharing it.
+
+Import creates paused copies with fresh identities. Nothing runs until you assign your own folders, destinations, applications and secrets on each Pod, finish setup, and validate and activate the scripts yourself. Workflows are created disabled; networks, called workflows and mail policies are created only after their member scripts are approved.
+
+In the browser you can review and configure an import on the connected desktop; opening the package file and saving an exported one happen on the desktop. Cancelling before the paused copy exists discards everything; afterwards the Pods are yours to delete individually.
+
+1. Open a Pod, workflow or network and choose Share; set the package title, keys, aliases, included files and public defaults.
+2. Review the exact package and its privacy findings, acknowledge what you checked, then save the .openape file.
+3. On the receiving device choose Import under Networks & workflows and open the package file.
+4. Enter the required values, create the paused copy, then bind folders, destinations and applications on each Pod and add secrets.
+5. Finish setup, validate and activate each Pod, create the compositions and enable schedules only when you are ready.
