@@ -544,3 +544,32 @@ it('requires confirmed non-application and fresh owner approval before an uncert
   expect(f.calls.filter(operation => operation === 'consume')).toHaveLength(1)
   expect(f.started).not.toContain(f.consumer)
 })
+
+it('blocks archival for pending approvals and preserves completed approval history through archive restore', async () => {
+  const f = runtimeFixture(() => 'approved')
+  await f.emit('test.input')
+  const definition = parseNetworkDefinition(JSON.parse(f.store.db.prepare('SELECT contract FROM network_revisions WHERE network_id=?').get(f.id)!.contract as string))
+  f.engine.gates.prepare(definition, f.consumer)
+  f.engine.execute({ type: 'pause', id: f.id, revision: 1 })
+  const review = f.engine.execute({ type: 'archivePreview', id: f.id, revision: 1 }).archiveReview!
+  expect(review.issues).toContain('Resolve pending or uncertain approvals before changing the composition')
+  expect(() => f.engine.execute({ type: 'archiveNetwork', id: f.id, revision: 1, expectedFingerprint: review.fingerprint })).toThrow('Resolve pending')
+  f.engine.execute({ type: 'activate', id: f.id, revision: 1 })
+  await vi.waitFor(async () => {
+    f.due(); await f.engine.tick(); await f.settle()
+    expect(f.store.db.prepare('SELECT count(*) AS n FROM network_deliveries WHERE state!=\'done\'').get()!.n).toBe(0)
+  })
+  f.engine.execute({ type: 'pause', id: f.id, revision: 1 })
+  const settled = f.engine.execute({ type: 'archivePreview', id: f.id, revision: 1 }).archiveReview!
+  expect(settled.issues).toEqual([])
+  f.engine.execute({ type: 'archiveNetwork', id: f.id, revision: 1, expectedFingerprint: settled.fingerprint })
+  const before = f.store.db.prepare('SELECT id,state FROM network_gate_tasks').all()
+  const itemsBefore = f.store.db.prepare('SELECT * FROM network_gate_items').all()
+  const controlsBefore = f.store.db.prepare('SELECT * FROM network_gate_controls').all()
+  const { restoreNetworkStorage } = await import('../../src/worker/storage/network-restore')
+  f.store.transaction(() => restoreNetworkStorage(f.store.db))
+  expect(f.store.db.prepare('SELECT id,state FROM network_gate_tasks').all()).toEqual(before)
+  expect(f.store.db.prepare('SELECT * FROM network_gate_items').all()).toEqual(itemsBefore)
+  expect(f.store.db.prepare('SELECT * FROM network_gate_controls').all()).toEqual(controlsBefore)
+  expect(f.engine.view().networks[0]!.decisions).toBe(0)
+})

@@ -103,5 +103,43 @@ it('converts a legacy graph through the desktop with preserved identities and ch
     try { return result.db.prepare('SELECT payload FROM network_events').all().map(row => JSON.parse(row.payload as string)) }
     finally { result.close() }
   }).toEqual([{ subject: 'AT' }])
+  await page.getByRole('button', { name: 'Review archival', exact: true }).click()
+  await page.getByText('Resolve pending network deliveries before changing the composition', { exact: true }).waitFor()
+  expect(await page.getByRole('button', { name: 'Archive network', exact: true }).count()).toBe(0)
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await page.getByRole('button', { name: 'Process now', exact: true }).click()
+  await page.getByRole('checkbox', { name: 'Legacy source paused', exact: true }).uncheck()
+  await page.getByRole('checkbox', { name: 'Legacy consumer paused', exact: true }).check()
+  await page.getByLabel('Include paused Pod Legacy consumer', { exact: true }).check()
+  await page.getByRole('button', { name: 'Preview processing', exact: true }).click()
+  await page.getByRole('button', { name: 'Process up to 1', exact: true }).click()
+  await expect.poll(async () => {
+    const result = new PodDatabase(root)
+    try { return result.db.prepare('SELECT count(*) AS n FROM network_deliveries WHERE state!=\'done\'').get()!.n }
+    finally { result.close() }
+  }).toBe(0)
+  await expect.poll(() => page.evaluate(async () => {
+    const network = (await window.pods.networks({ type: 'list' })).networks[0]!
+    return (await window.pods.networks({ type: 'archivePreview', id: network.id, revision: network.revision })).archiveReview!.issues
+  })).toEqual([])
+  await page.getByRole('button', { name: 'Review archival', exact: true }).click()
+  await expect.poll(() => page.getByText('Waiting: 0 · Processing: 0 · Decisions: 0', { exact: true }).count()).toBe(1)
+  await page.getByLabel('Permanently archive this settled network without replay. This cannot be undone.', { exact: true }).check()
+  await page.screenshot({ path: resolve('.artifacts/network-archive-native-review.png'), fullPage: true })
+  await page.getByRole('button', { name: 'Archive network', exact: true }).click()
+  await page.getByText('This network is archived. History and Pod identities remain available; execution cannot resume.', { exact: true }).waitFor()
+  expect(await page.getByRole('button', { name: 'Activate network', exact: true }).count()).toBe(0)
+  expect(await page.getByRole('button', { name: 'Process now', exact: true }).count()).toBe(0)
+  await page.getByRole('button', { name: 'Inspect retained legacy items', exact: true }).click()
+  await page.getByText('No retained legacy deliveries on this page.', { exact: true }).waitFor()
+  const archived = new PodDatabase(root)
+  try {
+    expect(archived.db.prepare('SELECT state FROM networks').get()!.state).toBe('archived')
+    expect(archived.db.prepare('SELECT * FROM pods ORDER BY id').all()).toEqual(before.pods)
+    expect(archived.db.prepare('SELECT count(*) AS n FROM network_events').get()!.n).toBe(1)
+    expect(archived.db.prepare('SELECT count(*) AS n FROM network_invocations').get()!.n).toBe(2)
+  }
+  finally { archived.close() }
+  await page.screenshot({ path: resolve('.artifacts/network-archive-native-retained.png'), fullPage: true })
   await app.close()
 })
