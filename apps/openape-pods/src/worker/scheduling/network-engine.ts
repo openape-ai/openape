@@ -247,6 +247,42 @@ export class NetworkEngine {
     await Promise.all(this.pendingSettlements.values())
   }
 
+  updateInstance(podId: string, update: () => void): void {
+    const membership = this.store.db.prepare('SELECT network_id FROM network_members WHERE pod_id=?').get(podId)
+    if (!membership) { update(); return }
+    const networkId = membership.network_id as string
+    this.store.transaction(() => {
+      const network = this.store.db.prepare('SELECT revision,state,baseline_state FROM networks WHERE id=?').get(networkId)!
+      if (network.state === 'archived' || network.baseline_state !== 'ready') throw new Error('Archived or restored networks require review before definition updates')
+      const definition = this.definition(networkId, network.revision as number)
+      const pending = this.store.db.prepare(`SELECT 1 FROM network_deliveries WHERE network_id=? AND state NOT IN ('done','discarded')
+        UNION ALL SELECT 1 FROM network_invocations WHERE network_id=? AND state IN ('running','stopping','interrupted','blocked','unknown')
+        UNION ALL SELECT 1 FROM network_gate_tasks WHERE network_id=? AND state IN ('preparing','pending','consuming','unknown')
+        UNION ALL SELECT 1 FROM workflow_call_requests WHERE network_id=? AND state NOT IN ('completed','failed','cancelled')
+        UNION ALL SELECT 1 FROM network_joins WHERE network_id=? AND state IN ('pending','blocked')
+        UNION ALL SELECT 1 FROM network_effect_attempts WHERE network_id=? AND state IN ('intent','unknown') LIMIT 1`).get(networkId, networkId, networkId, networkId, networkId, networkId)
+      if (pending) throw new Error('Definition update blocked: settle or explicitly resolve pending network deliveries, decisions, calls and uncertain effects first. The current version remains pinned.')
+      update()
+      const binding = this.binding(podId, parseOwner(this.currentOwner()), definition.groupId)
+      this.store.db.prepare('UPDATE network_members SET definition_version=?,binding_revision=? WHERE pod_id=?').run(binding.definition_version!, binding.binding_revision!, podId)
+      const next = parseNetworkDefinition({ ...definition, revision: definition.revision + 1, members: definition.members.map(member => member.podId === podId ? { ...member, definitionVersion: binding.definition_version, bindingRevision: binding.binding_revision, contract: parseGraphContract(JSON.parse(binding.contract as string)) } : member) })
+      this.validate(next)
+      const body = canonicalNetworkJson(next)
+      assertNetworkQuota(this.store, Buffer.byteLength(body) + 16384)
+      this.store.db.prepare('INSERT INTO network_revisions VALUES(?,?,?,?,?)').run(networkId, next.revision, body, digest(body), Date.now())
+      this.store.db.prepare('UPDATE networks SET revision=?,activation_epoch=activation_epoch+1 WHERE id=?').run(next.revision, networkId)
+      for (const member of next.members) {
+        for (const channel of member.contract.takes) {
+          const spec = next.channels.find(item => item.name === channel)!
+          const hash = digest(canonicalNetworkJson({ schemaVersion: spec.schemaVersion, schema: spec.schema }))
+          this.store.db.prepare('INSERT INTO network_subscriptions VALUES(?,?,?,?,?,?,?)').run(randomUUID(), networkId, next.revision, member.podId, channel, hash, member.serialCase ? 1 : 0)
+        }
+      }
+      this.execute({ type: 'pause', id: networkId, revision: next.revision })
+      this.trace(networkId, 'definition-updated-paused', { podId, previousRevision: definition.revision, revision: next.revision, version: binding.definition_version, explicitActivationRequired: true })
+    })
+  }
+
   private viewAfter(create: () => string): NetworkView {
     const createdId = create()
     return { ...this.view(), createdId }

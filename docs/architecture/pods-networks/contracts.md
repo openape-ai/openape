@@ -1,7 +1,7 @@
 # Pods persistent networks: frozen M0 contract
 
-Status: implementation contract approved through the October 1 plan. M0–M6
-are accepted and merged; M7 is in progress and unaccepted. The original M0
+Status: implementation contract approved through the October 1 plan. M0–M7
+are accepted and merged; M8 awaits final documentation CI and merge acceptance. The original M0
 increment froze these contracts; milestone evidence below records actual delivery. [Development issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417)
 tracks delivery. [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3VDB1S72E4EQQW58T97C617).
 
@@ -877,7 +877,7 @@ protected merge `e815dad04ecf0985a7a1bd0f6269604f5b55f46a` passed full main
 unit CI5324. M6 is accepted. Continue M7; productive browser
 parity, migration, sharing and signed relay-first rollout remain later approved work.
 
-## M7 correlated finite calls and explicit joins — implementation in progress
+## M7 correlated finite calls and explicit joins — accepted
 
 Schema32 adds call proposals, explicit company-bound call permissions, delivery
 controls, per-Pod decision polling and immutable result-event relations; historical
@@ -929,6 +929,38 @@ closure reports no blocker; primary native diff review reconciles33 files/2659 l
 Native PR208 is linked to issue1417 and runtime unit-only CI5327 passes.
 [Verified private Test Runs](https://report.openape.ai/r/GeG_5EXS3PQGRtT0PJmGCcMS)
 contains actual correlated invoices, paused-result retention, join outcomes and the
-personally inspected authenticated screenshot. Protected merge/main remain required
-before M7 acceptance. Productive authoring, operational views, browser parity and
+personally inspected authenticated screenshot. Final documentation `4b07e3ee67ea13d2b5c94da09cc47d03295cf444` passed CI5328;
+protected merge `a836a97d192e1eeff9f440427806c6de5b35264c` passed full main CI5329.
+M7 is accepted. Productive authoring, operational views, browser parity and
 rollout remain their later milestones.
+
+## M8 reusable definitions and isolated instances — runtime verified
+
+Schema33 retains immutable published code, exact dependency artifacts, declared
+contracts and public defaults separately from instance identities, homes and rights.
+Adoption adds metadata without changing existing scripts, schedules or bindings.
+Publication never repins an existing instance. Durable request IDs create at most
+one paused instance; retries retain the same key and identity. Restored identities
+require owner recovery before provisioning resumes. A recovered ready identity
+reconciles its receipt without a new provider request. Grants and validation are
+never copied; every selected version requires the instance's current validation.
+
+Version review shows actual before/after code, contracts, dependency locks, defaults
+and requested capabilities. Activation checks current binding/resource authority,
+refuses retained work and uncertain effects, and atomically updates a paused network
+revision. Generic activation cannot bypass selection by editing/removing a draft.
+Published sources remain retained while reusable artifacts reference them.
+Instance-specific HTTP/SSH/application capability UUIDs cannot be published before
+M11 portable binding review. Connected workspace editing remains visibly fenced
+until M10 parity; the local Script route supports English and German layouts.
+
+Clean runtime `5cf5c7004b0c4fee850d3fb05a356421f3446370` passes root lint,
+typecheck, Pods build,139 suites/1108 fresh unit/component tests and four manual
+Electron suites/five tests. Tests retain important identity, restore, version-selection
+and activation authority contracts. Actual Opus5.5 review closure and primary native
+review cover38 files/1935 displayed lines; exact-head unit-only CI5332 passed.
+[Private M8 Test Runs](https://report.openape.ai/r/11BVW8loYVf-rTWxSC5SMJAf)
+contains actual results and four personally inspected desktop/narrow EN/DE screenshots;
+owner200, anonymous401 and rendered bytes verified. Native PR209 links issue1417.
+Final documentation-head CI, protected merge and green main remain acceptance gates.
+No live provider action, production activation or rights expansion is included.

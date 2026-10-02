@@ -1,3 +1,4 @@
+import type { DefinitionCommand, DefinitionsView } from './definitions'
 import type { McpAccess, McpAccessCommand } from './mcp-access'
 import type { RuntimeApprovalCommand, RuntimeApprovalPreference } from './runtime-approval'
 import type { CodexCommand, CodexConnection } from './codex'
@@ -17,7 +18,7 @@ import type { RunCommand, RunView } from './runs'
 import type { ResourceCommand, ResourceState } from './resources'
 import type { WorkspaceCommand, WorkspaceState } from './control'
 
-export const channels = { mcpAccess: 'pods:mcp-access', runtimeApproval: 'pods:runtime-approval', central: 'pods:central', codex: 'pods:codex', chats: 'pods:chats', workflows: 'pods:workflows', networks: 'pods:networks', packages: 'pods:packages', programs: 'pods:programs', language: 'pods:language', scripts: 'pods:scripts', data: 'pods:data', onboarding: 'pods:onboarding', master: 'pods:master', details: 'pods:details', status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs', scheduling: 'pods:scheduling' } as const
+export const channels = { mcpAccess: 'pods:mcp-access', runtimeApproval: 'pods:runtime-approval', central: 'pods:central', codex: 'pods:codex', chats: 'pods:chats', workflows: 'pods:workflows', networks: 'pods:networks', definitions: 'pods:definitions', packages: 'pods:packages', programs: 'pods:programs', language: 'pods:language', scripts: 'pods:scripts', data: 'pods:data', onboarding: 'pods:onboarding', master: 'pods:master', details: 'pods:details', status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs', scheduling: 'pods:scheduling' } as const
 export type WorkerState = 'starting' | 'ready' | 'error' | 'stopped'
 export interface WorkerStatus { state: WorkerState, pid: number | null, error: string | null }
 export interface PodStatus {
@@ -34,6 +35,7 @@ export interface PodsBridge {
   codex: (command: CodexCommand) => Promise<CodexConnection>
   chats: (command: ChatsCommand) => Promise<ChatsView>
   workflows: (command: WorkflowCommand) => Promise<WorkflowView>
+  definitions: (command: DefinitionCommand) => Promise<DefinitionsView>
   networks: (command: NetworkCommand) => Promise<NetworkView>
   packages: (command: PackageSearch) => Promise<PackageOption[]>
   programs: (command: ProgramCommand) => Promise<ResourceState | TerminalView | ConsoleView | null>

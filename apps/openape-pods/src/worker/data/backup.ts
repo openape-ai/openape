@@ -158,6 +158,7 @@ export async function restoreBackup(backup: string, parent: string, maximumSchem
         const directory = join(stage, 'snapshots', row.pod_id as string, row.id as string); await mkdir(directory, { recursive: true, mode: 0o700 })
         await rm(join(directory, 'manifest.json'), { force: true }); await durableJSON(join(directory, 'manifest.json'), snapshot, 0o400)
       }
+      if (manifest.schema >= 33) database.exec('UPDATE definition_instance_requests SET state=\'failed\',error=\'Restored instance: recover its existing identity on desktop before retrying\';')
       if (manifest.schema >= 24) database.exec('DELETE FROM run_deletion_jobs;')
       if (manifest.schema >= 22) database.exec('UPDATE remote_pods SET phase=\'needs_desktop_action\',error=\'Restored profile: original agent credentials must be recovered on desktop\'; DELETE FROM remote_program_reviews; UPDATE remote_program_catalog SET revoked=1; DELETE FROM remote_registration; DELETE FROM remote_devices; DELETE FROM remote_outbox; UPDATE remote_inbox SET state=\'unknown\' WHERE state=\'received\';')
       if (manifest.schema >= 27) database.exec('UPDATE graph_gate_batches SET state=\'unknown\',error=\'Restored gate decision requires reconciliation\' WHERE state IN (\'pending\',\'consuming\');')
