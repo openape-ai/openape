@@ -92,11 +92,20 @@ export function checkCommands(packages, selected, suites, policy = contract) {
   return steps
 }
 
+export function checkEnvironment(environment = process.env) {
+  const clean = { ...environment }
+  const local = git(['rev-parse', '--local-env-vars']).split('\n')
+  for (const name of Object.keys(clean)) {
+    if (local.includes(name) || /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/.test(name)) delete clean[name]
+  }
+  return clean
+}
+
 async function runStep(step, logPath) {
   const stream = createWriteStream(logPath)
   const code = await new Promise((resolveCode, reject) => {
     const runArgs = [...step.args, ...(step.report ? ['--reporter=default', '--reporter=json', `--outputFile.json=${join(dirname(logPath), step.report)}`] : [])]
-    const child = spawn(step.command, runArgs, { cwd: root, env: { ...process.env }, stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(step.command, runArgs, { cwd: root, env: checkEnvironment(), stdio: ['ignore', 'pipe', 'pipe'] })
     const output = (chunk) => { stream.write(chunk); process.stdout.write(chunk) }
     child.stdout.on('data', output); child.stderr.on('data', output)
     child.on('error', reject)
