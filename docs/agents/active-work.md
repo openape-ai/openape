@@ -14,18 +14,41 @@ contains actual logs and six inspected screenshots; category, owner200/anonymous
 embedded bytes and authenticated browser display verified. Publication-time pending
 CI is superseded by the PR review and these CI receipts.
 
+M11b reviewed archival is merged in [PR213](https://repos.openape.ai/patrick/monorepo/pulls/213).
+Tested source `0c4a5ec60e173cd9e3a84bd78c355d71f26fc4a3`, merge
+`d0a9eb924657cf91ebba32a8ca3a46b66cab51e9`; exact-source CI5342 and full-main CI5343
+passed. Root lint/typecheck, Pods build,1165 units, one native route and15 layout
+checks pass. All19 native files/994 lines reviewed; actual Opus5.5/Fable5.1 corrections
+included. [Verified private Test Runs](https://report.openape.ai/r/JbfTaigfMGAGbUmVb7erkLzj)
+contains six personally inspected screenshots; privacy/category/bytes/browser verified.
+
 Own checkout `openape-monorepo.worktrees/pods-workflows-networks`, branch
-`feature/issue-1417-pods-networks-m11-replacement`, base the canonical merge above.
-Doctor passes. Reviewed archive and retained-item inspection pass root lint/typecheck,
-Pods build, 1165 units, one actual native route and 15 manual layout checks. Six
-final screenshots were personally inspected; Opus5.5/Fable5.1 corrections are included.
-Native PR, exact-head CI and verified private Reports evidence are next;
-paused composition replacement and approved portable sharing remain required.
-M11–M14 are unaccepted. No live conversion, production activation or expanded
-external rights. M11a evidence: `/tmp/openape-pods-networks-m11/`; current evidence:
-`/tmp/openape-pods-networks-m11-replacement/`. Next complete lifecycle controls,
-actual Opus/Fable review, root gates, focused tests and native/layout acceptance,
-publish verified Reports evidence and use a native PR before continuing sharing.
+`feature/issue-1417-pods-networks-m11-composition`, base the canonical merge above.
+Doctor passes. Paused composition replacement is implemented but unaccepted,
+followed by approved portable sharing. The uncommitted backend preserves historical
+members, source identities, checkpoints, rights and receipts; requires settled work
+and fresh added instances; refuses changed retained authority and old approval reuse.
+The editor preserves schedules, schemas, gates, joins and values, freezes a reviewed
+diff, requires explicit continued pause and warns about fresh-source cursor behavior.
+Actual Opus5.5 and Fable5.1 reviews prompted corrections to binding pins, IDs, stale
+review handling and unchanged values. Root lint/typecheck and Pods build pass. A standard1177-test run passed, but
+mandatory reruns reproduced host-load timeouts in existing volume and other suites.
+Temporary fixture experiments were reverted completely. The full local hook is
+being rerun with supported `VITEST_MAX_WORKERS=4` and a temporary root-Turbo
+configuration that passes only this variable through strict mode. Never use loose
+mode inside Git hooks: it leaked Git-local variables into synthetic Git tests.
+The own branch/index were restored to the recorded base; all20 implementation
+files remain byte-identical, and other refs are unchanged. No test, timeout,
+default runner or CI change.
+Positive public-run selection uses the existing index, verified by SQLite's query
+plan and focused actual Opus review. One native route and17 manual layout cases
+pass; six screenshots were personally inspected. Final source review found no
+blocking issue in its stated scope. Mandatory hook, report and PR/CI remain pending. M11–M14 are unaccepted.
+No live conversion, production activation or expanded external rights.
+Evidence: `/tmp/openape-pods-networks-m11-replacement/` and current
+`/tmp/openape-pods-networks-m11-composition/`. Next complete real desktop/layout
+checks, inspect screenshots, final review and private Reports/native PR acceptance,
+then portable sharing.
 
 ## M10 acceptance evidence — issue1417
 

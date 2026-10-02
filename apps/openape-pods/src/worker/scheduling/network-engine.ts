@@ -1,3 +1,4 @@
+import { currentCompositionDraft, NetworkReplacement } from './network-replacement'
 import { networkSettlementIssues, previewNetworkArchive, retainedLegacyItems } from './network-retirement'
 import { previewNetworkConversion, retainedLegacyDeliveries } from './network-migration'
 import { parseConversionSelection } from '../../contracts/network-migration'
@@ -48,7 +49,19 @@ export class NetworkEngine {
     if (command.type === 'convert') return this.convert(command.selection, command.expectedFingerprint)
     if (command.type === 'setup') return { ...this.view(), setup: new NetworkViews(this.store, this.resources).setup(parseOwner(this.currentOwner()), command.groupId, command.podIds) }
     if (command.type === 'create') return this.viewAfter(() => this.create(command.draft))
+    if (command.type === 'replaceComposition') {
+      const owner = parseOwner(this.currentOwner())
+      const prior = this.store.db.prepare(`SELECT t.body FROM network_trace_events t JOIN networks n ON n.id=t.network_id WHERE n.id=? AND n.owner_issuer=? AND n.owner_subject=? AND t.kind='composition-replaced-reviewed' AND json_extract(t.body,'$.previousRevision')=? AND json_extract(t.body,'$.fingerprint')=?`).get(command.id, owner.issuer, owner.subject, command.revision, command.expectedFingerprint)
+      if (prior && JSON.parse(prior.body as string).draftHash === digest(canonicalNetworkJson(command.draft))) return this.view()
+    }
     const definition = this.definition(command.id, command.revision, ['detail', 'trace', 'records', 'legacyItems', 'archiveNetwork'].includes(command.type))
+    if (command.type === 'replacementSetup' || command.type === 'replacementPreview' || command.type === 'replaceComposition') {
+      const replacement = new NetworkReplacement(this.store, this.resources, parseOwner(this.currentOwner()), candidate => this.validate(candidate))
+      const draft = command.type === 'replacementSetup' ? currentCompositionDraft(this.store, definition) : command.draft
+      if (command.type !== 'replaceComposition') return { ...this.view(), replacement: replacement.preview(definition, draft) }
+      replacement.replace(definition, draft, command.expectedFingerprint)
+      return this.view()
+    }
     if (command.type === 'archivePreview') return { ...this.view(), archiveReview: previewNetworkArchive(this.store, definition) }
     if (command.type === 'archiveNetwork') return this.archive(definition, command.expectedFingerprint)
     if (command.type === 'legacyItems') return { ...this.view(), legacyItems: retainedLegacyItems(this.store, definition.id, command.after) }
@@ -237,7 +250,7 @@ export class NetworkEngine {
     if (!this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()) return { networks: [] }
     const owner = parseOwner(this.currentOwner())
     const gates = this.gates.views(owner)
-    return { ...(gates.length ? { gates } : {}), networks: this.store.db.prepare('SELECT id,revision,group_id,name,state FROM networks WHERE owner_issuer=? AND owner_subject=? ORDER BY created_at,id LIMIT 64').all(owner.issuer, owner.subject).map(row => ({ decisions: row.state === 'archived' ? 0 : Number(this.store.db.prepare('SELECT count(*) AS count FROM network_gate_tasks WHERE network_id=? AND state IN (\'preparing\',\'pending\',\'consuming\',\'unknown\',\'superseded\')').get(row.id!)!.count), podIds: this.store.db.prepare('SELECT pod_id FROM network_members WHERE network_id=? ORDER BY pod_id').all(row.id!).map(member => member.pod_id as string), id: row.id as string, revision: row.revision as number, groupId: row.group_id as string, name: row.name as string, state: row.state as 'active' | 'paused' | 'archived', health: this.health(row.id as string), counts: Object.fromEntries(this.store.db.prepare('SELECT state,count FROM network_queue_counts WHERE network_id=? ORDER BY state').all(row.id!).map(count => [count.state as string, count.count as number])) })) }
+    return { ...(gates.length ? { gates } : {}), networks: this.store.db.prepare('SELECT id,revision,group_id,name,state FROM networks WHERE owner_issuer=? AND owner_subject=? ORDER BY created_at,id LIMIT 64').all(owner.issuer, owner.subject).map(row => ({ decisions: row.state === 'archived' ? 0 : Number(this.store.db.prepare('SELECT count(*) AS count FROM network_gate_tasks WHERE network_id=? AND json_extract(manifest,\'$.networkRevision\')=(SELECT revision FROM networks WHERE id=network_id) AND state IN (\'preparing\',\'pending\',\'consuming\',\'unknown\',\'superseded\')').get(row.id!)!.count), podIds: this.store.db.prepare('SELECT pod_id FROM network_members WHERE network_id=? ORDER BY pod_id').all(row.id!).map(member => member.pod_id as string), id: row.id as string, revision: row.revision as number, groupId: row.group_id as string, name: row.name as string, state: row.state as 'active' | 'paused' | 'archived', health: this.health(row.id as string), counts: Object.fromEntries(this.store.db.prepare('SELECT state,count FROM network_queue_counts WHERE network_id=? ORDER BY state').all(row.id!).map(count => [count.state as string, count.count as number])) })) }
   }
 
   private health(networkId: string): NetworkHealth {
@@ -275,6 +288,7 @@ export class NetworkEngine {
       const network = this.store.db.prepare('SELECT revision,state,baseline_state FROM networks WHERE id=?').get(networkId)!
       if (network.state === 'archived' || network.baseline_state !== 'ready') throw new Error('Archived or restored networks require review before definition updates')
       const definition = this.definition(networkId, network.revision as number)
+      if (!definition.members.some(member => member.podId === podId)) throw new Error('Retired network instances retain their historical definition')
       const issues = networkSettlementIssues(this.store, networkId)
       if (issues.length) throw new Error(`Definition update blocked: ${issues.join('; ')}. The current version remains pinned.`)
       update()

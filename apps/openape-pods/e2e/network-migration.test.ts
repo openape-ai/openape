@@ -92,6 +92,29 @@ it('converts a legacy graph through the desktop with preserved identities and ch
   }
   finally { verified.close() }
   await page.screenshot({ path: resolve('.artifacts/network-migration-native-paused.png'), fullPage: true })
+  await page.getByRole('button', { name: 'Edit paused composition', exact: true }).click()
+  await page.getByLabel('Name', { exact: true }).fill('Reviewed synthetic composition')
+  await page.getByRole('button', { name: 'Review values and rights', exact: true }).click()
+  await page.getByRole('button', { name: 'Review composition changes', exact: true }).click()
+  await page.getByRole('heading', { name: 'Review composition changes', exact: true }).waitFor()
+  expect(await page.getByRole('button', { name: 'Save paused composition', exact: true }).isDisabled()).toBe(true)
+  await page.screenshot({ path: resolve('.artifacts/network-replacement-native-review.png'), fullPage: true })
+  await page.getByLabel('Save these reviewed changes and keep the network paused.', { exact: true }).check()
+  await page.getByRole('button', { name: 'Save paused composition', exact: true }).click()
+  await page.getByRole('heading', { name: 'Reviewed synthetic composition', exact: true }).waitFor()
+  const replaced = new PodDatabase(root)
+  try {
+    expect(replaced.db.prepare('SELECT name,revision,state FROM networks').get()).toMatchObject({ name: 'Reviewed synthetic composition', revision: 2, state: 'paused' })
+    expect(replaced.db.prepare('SELECT * FROM pods ORDER BY id').all()).toEqual(before.pods)
+    expect(replaced.db.prepare('SELECT * FROM scripts ORDER BY pod_id,hash').all()).toEqual(before.scripts)
+    expect(replaced.db.prepare('SELECT * FROM resources ORDER BY id').all()).toEqual(before.resources)
+    expect(replaced.db.prepare('SELECT * FROM checkpoints ORDER BY pod_id').all()).toEqual(before.checkpoints)
+    expect(replaced.db.prepare('SELECT count(*) AS n FROM network_invocations').get()!.n).toBe(0)
+    expect(replaced.db.prepare('SELECT count(*) AS n FROM network_revisions').get()!.n).toBe(2)
+    expect(replaced.db.prepare('SELECT count(*) AS n FROM network_trace_events WHERE kind=\'composition-replaced-reviewed\'').get()!.n).toBe(1)
+  }
+  finally { replaced.close() }
+  await page.screenshot({ path: resolve('.artifacts/network-replacement-native-paused.png'), fullPage: true })
   await page.getByRole('button', { name: 'Process now', exact: true }).click()
   await page.getByRole('checkbox', { name: 'Legacy source paused', exact: true }).check()
   await page.getByLabel('Include paused Pod Legacy source', { exact: true }).check()
