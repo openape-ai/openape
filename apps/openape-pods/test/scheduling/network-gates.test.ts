@@ -573,3 +573,26 @@ it('blocks archival for pending approvals and preserves completed approval histo
   expect(f.store.db.prepare('SELECT * FROM network_gate_controls').all()).toEqual(controlsBefore)
   expect(f.engine.view().networks[0]!.decisions).toBe(0)
 })
+
+it('retains completed approval evidence without offering historical decisions after composition replacement', async () => {
+  const f = runtimeFixture(() => 'approved')
+  await f.emit('test.input')
+  await vi.waitFor(async () => {
+    f.due(); await f.engine.tick(); await f.settle()
+    expect(f.store.db.prepare('SELECT count(*) AS n FROM network_deliveries WHERE state!=\'done\'').get()!.n).toBe(0)
+  })
+  f.engine.execute({ type: 'pause', id: f.id, revision: 1 })
+  const tasks = f.store.db.prepare('SELECT * FROM network_gate_tasks').all()
+  expect(tasks).toHaveLength(1)
+  const items = f.store.db.prepare('SELECT * FROM network_gate_items').all()
+  const setup = f.engine.execute({ type: 'replacementSetup', id: f.id, revision: 1 }).replacement!
+  const draft = { ...setup.draft, name: 'Reviewed next revision' }
+  const review = f.engine.execute({ type: 'replacementPreview', id: f.id, revision: 1, draft }).replacement!
+  expect(review.issues).toEqual([])
+  f.engine.execute({ type: 'replaceComposition', id: f.id, revision: 1, draft, expectedFingerprint: review.fingerprint })
+  expect(f.store.db.prepare('SELECT * FROM network_gate_tasks').all()).toEqual(tasks)
+  expect(f.store.db.prepare('SELECT * FROM network_gate_items').all()).toEqual(items)
+  expect(f.engine.gates.views(f.owner)).toEqual([])
+  expect(f.engine.view().networks[0]!.decisions).toBe(0)
+  expect(() => f.engine.execute({ type: 'gateReview', id: f.id, revision: 2, taskId: tasks[0]!.id as string, generation: Number(tasks[0]!.generation), evidence: 'Cannot reuse old grant' })).toThrow('Historical approval evidence')
+})

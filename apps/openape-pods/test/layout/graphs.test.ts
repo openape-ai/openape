@@ -327,3 +327,33 @@ it.each([[1280, 'en'], [390, 'de']] as const)('shows archive review and retained
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
   await page.screenshot({ path: screenshotPath(`network-retained-items-${width}-${language}.png`) })
 })
+
+it.each([[1280, 'en'], [390, 'de']] as const)('reviews paused composition changes in the desktop route at %s (%s)', async (width, language) => {
+  const f = operationalFixture(); applyLanguage(language); await page.viewport(width, 1000)
+  if (width === 390) document.documentElement.style.colorScheme = 'dark'
+  f.definition.members[0]!.source!.schedule = { kind: 'daily', time: '09:30', timezone: 'Europe/Vienna' }
+  const draft = { name: f.definition.name, groupId: f.groupId, channels: f.definition.channels, gates: [], joins: [], sharedValues: {}, members: f.definition.members.map(member => ({ podId: member.podId, serialCase: member.serialCase, source: member.source ? { schedule: member.source.schedule } : null })) }
+  const replacement = { fingerprint: 'e'.repeat(64), current: f.definition, candidate: f.definition, draft, issues: [], added: [], retired: [] }
+  installWorkspace({ language: async () => language, workspace: async () => ({ organization: f.organization, pods: f.pods }), definitions: async () => f.definitions, networks: async (command) => {
+    if (command.type === 'setup') return { ...f.view, setup: f.setup }
+    if (command.type === 'replacementSetup') return { ...f.view, replacement }
+    if (command.type === 'replacementPreview') return { ...f.view, replacement: { ...replacement, draft: command.draft } }
+    return f.view
+  } })
+  wrapper = mount(App, { attachTo: document.body }); await flushPromises(); await frame()
+  const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.isVisible() && button.text() === text)!.trigger('click'); await flushPromises(); await frame() }
+  await wrapper.findAll('button').find(button => button.text().includes(f.definition.name))!.trigger('click'); await flushPromises()
+  await click(t('Edit paused composition'))
+  await wrapper.get('input[maxlength="120"]').setValue('Reviewed synthetic composition')
+  await click(t('Review values and rights'))
+  expect(wrapper.text()).toContain(t('Daily at {time} ({timezone})', { time: '09:30', timezone: 'Europe/Vienna' }))
+  wrapper.get('.network-create').element.scrollIntoView(); await frame()
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
+  await page.screenshot({ path: screenshotPath(`network-replacement-editor-${width}-${language}.png`) })
+  await click(t('Review composition changes'))
+  expect(wrapper.get('.network-replacement').text()).toContain('Reviewed synthetic composition')
+  expect(wrapper.findAll('button').find(button => button.text() === t('Save paused composition'))!.attributes('disabled')).toBeDefined()
+  wrapper.get('.network-replacement').element.scrollIntoView(); await frame()
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
+  await page.screenshot({ path: screenshotPath(`network-replacement-review-${width}-${language}.png`) })
+})
