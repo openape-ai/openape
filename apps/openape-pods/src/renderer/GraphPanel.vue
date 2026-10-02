@@ -1,5 +1,6 @@
 <script lang="ts">
 import NetworkCreate from './NetworkCreate.vue'
+import NetworkReplacement from './NetworkReplacement.vue'
 import NetworkConversion from './NetworkConversion.vue'
 import type { CentralNetworkRead } from '../contracts/central-networks'
 import NetworkDetail from './NetworkDetail.vue'
@@ -28,7 +29,7 @@ import type { ArrangementFilter } from './utils/graph-presentation'
 import { sharingAvailable } from './utils/sharing'
 
 export default defineComponent({
-  components: { NetworkConversion, NetworkCreate, NetworkDetail, GateReview, GraphCreate, GraphInspector, GraphOverview, GraphView, ItemTrace, WorkflowPanel },
+  components: { NetworkReplacement, NetworkConversion, NetworkCreate, NetworkDetail, GateReview, GraphCreate, GraphInspector, GraphOverview, GraphView, ItemTrace, WorkflowPanel },
   props: {
     view: { type: Object as PropType<WorkflowView>, required: true },
     pods: { type: Array as PropType<StoredPod[]>, required: true },
@@ -40,7 +41,7 @@ export default defineComponent({
     sharing: { type: Boolean, default: sharingAvailable },
   },
   emits: ['changed', 'select', 'openPod', 'workspace', 'share', 'import'],
-  data() { return { networks: { networks: [] } as NetworkView, networkError: '', networkLoading: false, networkRequest: 0, networkTimer: null as ReturnType<typeof setTimeout> | null, closed: false, detail: null as GraphDetail | null, node: '', mode: 'plan' as 'plan' | 'run', overviewFilter: 'all' as ArrangementFilter, page: 'graph' as 'graph' | 'trace' | 'gate' | 'create' | 'legacy-create' | 'workflow-create' | 'convert', gate: '', createIn: null as string | null, busy: false, error: '' } },
+  data() { return { networks: { networks: [] } as NetworkView, networkError: '', networkLoading: false, networkRequest: 0, networkTimer: null as ReturnType<typeof setTimeout> | null, closed: false, detail: null as GraphDetail | null, node: '', mode: 'plan' as 'plan' | 'run', overviewFilter: 'all' as ArrangementFilter, page: 'graph' as 'graph' | 'trace' | 'gate' | 'create' | 'legacy-create' | 'workflow-create' | 'convert' | 'replace', gate: '', createIn: null as string | null, busy: false, error: '' } },
   computed: {
     conversionUnavailable(): string {
       if (!this.definition?.groupId) return t('Choose a company.')
@@ -157,11 +158,12 @@ export default defineComponent({
 </script>
 
 <template>
-  <NetworkConversion v-if="page === 'convert' && definition && !readOnly && !readNetwork" :key="definition.id" :legacy="definition" :pods="pods" :organization="organization" :workflows="view" :networks="networkError ? { ...networks, unavailableReason: networkError } : networks" @cancel="page = 'graph'" @created="converted" @open-pod="$emit('openPod', $event)" />
+  <NetworkReplacement v-if="page === 'replace' && network && !readOnly && !readNetwork" :key="network.id" :network="network" :pods="pods" :organization="organization" :workflows="view" :networks="networkError ? { ...networks, unavailableReason: networkError } : networks" @cancel="page = 'graph'" @changed="networkChanged($event); page = 'graph'" @open-pod="$emit('openPod', $event)" />
+  <NetworkConversion v-else-if="page === 'convert' && definition && !readOnly && !readNetwork" :key="definition.id" :legacy="definition" :pods="pods" :organization="organization" :workflows="view" :networks="networkError ? { ...networks, unavailableReason: networkError } : networks" @cancel="page = 'graph'" @created="converted" @open-pod="$emit('openPod', $event)" />
   <NetworkCreate v-else-if="page === 'create' && !readOnly" :pods="pods" :organization="organization" :workflows="view" :networks="networkError ? { ...networks, unavailableReason: networkError } : networks" :group-id="createIn" @cancel="page = 'graph'" @workflow="page = 'workflow-create'" @created="networkCreated" @other="page = 'legacy-create'" @open-pod="$emit('openPod', $event)" />
   <GraphCreate v-else-if="page === 'legacy-create'" :view="view" :pods="pods" :organization="organization" :group-id="createIn" :busy="busy" :error="error" @create="create" @cancel="page = 'graph'" />
   <WorkflowPanel v-else-if="page === 'workflow-create' && !readOnly" create-on-mount :view="view" :pods="pods" @changed="$emit('changed', $event)" @select="$emit('select', $event); page = 'graph'" @cancel="page = 'graph'" />
-  <NetworkDetail v-else-if="network" :key="network.id" :network="network" :view="networks" :read-network="readNetwork" :pods="pods" :read-only="readOnly" :active="active" @changed="networkChanged" @back="$emit('select', '')" @open-pod="$emit('openPod', $event)" />
+  <NetworkDetail v-else-if="network" :key="network.id" :network="network" :view="networks" :read-network="readNetwork" :pods="pods" :read-only="readOnly" :active="active" @changed="networkChanged" @replace="page = 'replace'" @back="$emit('select', '')" @open-pod="$emit('openPod', $event)" />
   <GraphOverview v-else-if="!definition" v-model:filter="overviewFilter" :networks="networks" :network-error="networkError" :view="view" :pods="pods" :organization="organization" :read-only="readOnly" :sharing="sharing" @select="$emit('select', $event)" @open-pod="$emit('openPod', $event)" @create="startCreate" @create-workflow="page = 'workflow-create'" @import="$emit('import')" />
   <section v-else class="graph-panel">
     <header class="graph-panel-heading">

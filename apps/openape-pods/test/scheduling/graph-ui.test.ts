@@ -1,3 +1,8 @@
+import { patchNetworkDraft, compositionChanged } from '../../src/renderer/utils/network-replacement'
+import { parseNetworkCommand } from '../../src/contracts/networks'
+import type { NetworkDraft } from '../../src/contracts/networks'
+import NetworkReplacement from '../../src/renderer/NetworkReplacement.vue'
+import type { ReplacementPreview } from '../../src/contracts/network-replacement'
 import NetworkRetirement from '../../src/renderer/NetworkRetirement.vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -735,4 +740,97 @@ describe('reviewed network archival', () => {
     }
     finally { wrapper.unmount() }
   })
+})
+
+describe('reviewed composition replacement', () => {
+  function replacementPage() {
+    const f = operationalFixture()
+    f.definition.members[0]!.source!.schedule = { kind: 'daily', time: '09:30', timezone: 'Europe/Vienna' }
+    f.definition.members[2]!.serialCase = true
+    f.definition.channels[0]!.schema.properties.subject = { type: 'string', maxLength: 100 }
+    f.definition.gates = [{ key: 'original-review', title: 'Retained title', kind: 'approve', podId: f.pods[2]!.id, channel: 'mail.input' }]
+    const draft = { name: f.definition.name, groupId: f.groupId, channels: f.definition.channels, gates: f.definition.gates, joins: f.definition.joins, sharedValues: { mailbox: 'owner@example.invalid' }, members: f.definition.members.map(member => ({ podId: member.podId, serialCase: member.serialCase, source: member.source ? { schedule: member.source.schedule } : null })) }
+    const replacement: ReplacementPreview = { fingerprint: 'e'.repeat(64), current: f.definition, candidate: f.definition, draft, issues: [], added: [], retired: [] }
+    const networks = vi.fn(async (value: Parameters<typeof window.pods.networks>[0]) => {
+      const command = structuredClone(value)
+      if (command.type === 'setup') return { ...f.view, setup: f.setup }
+      if (command.type === 'replacementSetup') return { ...f.view, replacement }
+      if (command.type === 'replacementPreview') return { ...f.view, replacement: { ...replacement, draft: command.draft } }
+      return { ...f.view, networks: f.view.networks.map(network => ({ ...network, revision: 2 })) }
+    })
+    installWorkspace({ networks, definitions: async () => structuredClone(f.definitions) })
+    const wrapper = mount(NetworkReplacement, { props: { network: f.view.networks[0]!, pods: f.pods, organization: f.organization, workflows: { workflows: [], runs: [] }, networks: f.view } })
+    return { ...f, draft, replacement, networks, wrapper }
+  }
+
+  it('preserves reviewed schedules, schema constraints, gate identity and serial cases when renaming', async () => {
+    const f = replacementPage()
+    try {
+      await flushPromises()
+      const editor = f.wrapper.getComponent(NetworkCreate)
+      await editor.get('input[maxlength="120"]').setValue('Reviewed new name')
+      await editor.get('form').trigger('submit'); await flushPromises()
+      expect(editor.text()).toContain('Daily at 09:30 (Europe/Vienna)')
+      expect(editor.text()).toContain('This advanced schema is retained unchanged.')
+      await editor.get('form').trigger('submit'); await flushPromises()
+      const preview = f.networks.mock.calls.map(([command]) => command).find(command => command.type === 'replacementPreview')!
+      expect(preview).toMatchObject({ type: 'replacementPreview', draft: { ...f.draft, name: 'Reviewed new name' } })
+      expect(button(f.wrapper, 'Save paused composition').attributes('disabled')).toBeDefined()
+      const confirmation = f.wrapper.findAll('label').find(label => label.text() === 'Save these reviewed changes and keep the network paused.')!
+      await confirmation.get('input').setValue(true)
+      await button(f.wrapper, 'Save paused composition').trigger('click'); await flushPromises()
+      expect(f.networks).toHaveBeenLastCalledWith({ type: 'replaceComposition', id: f.networkId, revision: 1, draft: { ...f.draft, name: 'Reviewed new name', expectedSetup: f.setup.fingerprint }, expectedFingerprint: f.replacement.fingerprint })
+      expect(f.wrapper.emitted('changed')).toHaveLength(1)
+      expect(f.networks.mock.calls.some(([command]) => command.type === 'activate')).toBe(false)
+    }
+    finally { f.wrapper.unmount() }
+  })
+
+  it('invalidates confirmed review when authority changes and requires a reload', async () => {
+    const f = replacementPage()
+    try {
+      await flushPromises(); f.wrapper.getComponent(NetworkCreate).vm.$emit('replacementDraft', { ...f.draft, name: 'Changed' }); await flushPromises()
+      await f.wrapper.findAll('label').find(label => label.text() === 'Save these reviewed changes and keep the network paused.')!.get('input').setValue(true)
+      await f.wrapper.setProps({ pods: f.pods.map(pod => ({ ...pod, revision: pod.revision + 1 })) })
+      expect(button(f.wrapper, 'Save paused composition').attributes('disabled')).toBeDefined()
+      expect(f.wrapper.text()).toContain('Reload before reviewing again.')
+      await button(f.wrapper, 'Save paused composition').trigger('click')
+      expect(f.networks.mock.calls.some(([command]) => command.type === 'replaceComposition')).toBe(false)
+      await button(f.wrapper, 'Reload composition').trigger('click'); await flushPromises()
+      expect(f.wrapper.findComponent(NetworkCreate).exists()).toBe(true)
+    }
+    finally { f.wrapper.unmount() }
+  })
+
+  it('requires a separate initial-cursor review for every newly added source', async () => {
+    const f = replacementPage()
+    try {
+      await flushPromises()
+      const fresh = f.id(99)
+      const draft = { ...f.draft, members: f.draft.members.map(member => member.podId === f.pods[0]!.id ? { ...member, podId: fresh } : member) }
+      const candidate = { ...f.definition, members: f.definition.members.map(member => member.podId === f.pods[0]!.id ? { ...member, podId: fresh } : member) }
+      f.networks.mockResolvedValueOnce({ ...f.view, replacement: { ...f.replacement, draft, candidate, added: [fresh], retired: [f.pods[0]!.id] } })
+      f.wrapper.getComponent(NetworkCreate).vm.$emit('replacementDraft', draft); await flushPromises()
+      expect(f.wrapper.text()).toContain('After activation, they may read historical inputs.')
+      await f.wrapper.findAll('label').find(label => label.text() === 'Save these reviewed changes and keep the network paused.')!.get('input').setValue(true)
+      expect(button(f.wrapper, 'Save paused composition').attributes('disabled')).toBeDefined()
+      await f.wrapper.findAll('label').find(label => label.text() === 'I reviewed the initial cursor behavior of every new source.')!.get('input').setValue(true)
+      expect(button(f.wrapper, 'Save paused composition').attributes('disabled')).toBeUndefined()
+    }
+    finally { f.wrapper.unmount() }
+  })
+
+})
+
+it('creates valid fresh gate and join identifiers while preserving unchanged draft semantics', () => {
+  const f = operationalFixture()
+  const base: NetworkDraft = { name: f.definition.name, groupId: f.groupId, channels: f.definition.channels, members: f.definition.members.map(member => ({ podId: member.podId, source: member.source ? { schedule: member.source.schedule } : null, serialCase: member.serialCase })) }
+  const unchanged = patchNetworkDraft(base, { ...base, members: [...base.members].reverse(), gates: [], joins: [], expectedSetup: 'a'.repeat(64) }, ['mail.input'], [])
+  expect(compositionChanged(base, unchanged)).toBe(false)
+  expect(unchanged.channels[0]!.schemaVersion).toBe(1)
+  const draft = patchNetworkDraft(base, { ...base, gates: [{ key: 'review', title: 'Explicit review', kind: 'approve', podId: f.pods[2]!.id, channel: 'mail.input' }], joins: [{ id: 'join', podId: f.pods[2]!.id, channels: ['mail.input', 'other.input'], deadlineMs: 12345, reviewDestination: 'owner' }] }, [], [])
+  expect(() => parseNetworkCommand({ type: 'create', draft })).not.toThrow()
+  expect(draft.gates![0]!.key.length).toBeLessThanOrEqual(32)
+  expect(draft.joins![0]!.id.length).toBeLessThanOrEqual(32)
+  expect(patchNetworkDraft(draft, { ...draft, joins: draft.joins!.map(join => ({ ...join, deadlineMs: 99999 })) }, [], []).joins).toEqual(draft.joins)
 })

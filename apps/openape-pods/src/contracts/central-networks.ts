@@ -15,7 +15,7 @@ export function parseCentralNetworkRead(value: unknown): CentralNetworkRead {
 export function parseCentralNetworkResult(value: unknown): NetworkView {
   if (new TextEncoder().encode(JSON.stringify(value)).length > centralReadLimit) throw new Error('Network response exceeds its read limit')
   const view = parseNetworkView(value)
-  if (view.archiveReview || view.legacyItems || view.conversion || view.setup || view.preview || view.createdId || view.processId) throw new Error('Invalid read-only network response')
+  if (view.replacement || view.archiveReview || view.legacyItems || view.conversion || view.setup || view.preview || view.createdId || view.processId) throw new Error('Invalid read-only network response')
   if (view.gates) view.gates = view.gates.map(gate => ({ ...gate, url: null }))
   return view
 }

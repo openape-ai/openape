@@ -1,3 +1,5 @@
+import { parseReplacementCommand, parseReplacementPreview } from './network-replacement'
+import type { ReplacementCommand, ReplacementPreview } from './network-replacement'
 import { parseRetirementCommand, parseArchivePreview, parseLegacyItemsPage } from './network-retirement'
 import type { RetirementCommand, ArchivePreview, LegacyItemsPage } from './network-retirement'
 import { parseConversionCommand, parseConversionPreview } from './network-migration'
@@ -42,7 +44,8 @@ export interface NetworkDiagnostic { code: 'channel-undeclared' | 'channel-witho
 export interface NetworkSelection { podId: string, source: { schedule: ScheduleSpec | null } | null, serialCase: boolean }
 export interface NetworkDraft { name: string, groupId: string, channels: NetworkChannel[], members: NetworkSelection[], sharedValues?: Record<string, unknown>, expectedSetup?: string, gates?: NetworkGate[], joins?: NetworkJoin[] }
 export type NetworkCommand
-  = | RetirementCommand
+  = | ReplacementCommand
+    | RetirementCommand
     | ConversionCommand
     | NetworkReadCommand
     | { type: 'list' }
@@ -63,7 +66,7 @@ export type NetworkCommand
 export interface NetworkHealth { oldestPendingAt: number | null, nextRetryAt: number | null, lastDispatchAt: number | null, lastSchedulerProgressAt: number | null, lastSchedulerError: string | null, intakeError: string | null, lastFailure: { runId: string, generation: number, kind: string, reason: string } | null }
 export interface NetworkSummary { decisions?: number, podIds?: string[], id: string, revision: number, groupId: string, name: string, state: 'active' | 'paused' | 'archived', counts: Record<string, number>, health: NetworkHealth }
 export interface NetworkPreview { id: string, networkId: string, revision: number, podIds: string[], pausedPodIds: string[], budget: number, expiresAt: number, sources: string[], consumers: string[] }
-export interface NetworkView { archiveReview?: ArchivePreview, legacyItems?: LegacyItemsPage, conversion?: ConversionPreview, unavailableReason?: string, details?: NetworkDetails, setup?: NetworkSetup, trace?: NetworkTracePage, records?: NetworkDataPage, networks: NetworkSummary[], gates?: NetworkGateView[], preview?: NetworkPreview, processId?: string, createdId?: string }
+export interface NetworkView { replacement?: ReplacementPreview, archiveReview?: ArchivePreview, legacyItems?: LegacyItemsPage, conversion?: ConversionPreview, unavailableReason?: string, details?: NetworkDetails, setup?: NetworkSetup, trace?: NetworkTracePage, records?: NetworkDataPage, networks: NetworkSummary[], gates?: NetworkGateView[], preview?: NetworkPreview, processId?: string, createdId?: string }
 export const networkLimits = { networks: 64, members: 64, channels: 32, batch: 50, processNow: 100, definitionBytes: 1024 * 1024 } as const
 
 function fields(value: unknown, names: string[]): Record<string, unknown> {
@@ -164,6 +167,7 @@ export function parseNetworkDefinition(value: unknown): NetworkDefinition {
 
 export function parseNetworkCommand(value: unknown): NetworkCommand {
   const input = networkDataObject(value)
+  if (['replacementSetup', 'replacementPreview', 'replaceComposition'].includes(String(input.type))) return parseReplacementCommand(input)
   if (['archivePreview', 'archiveNetwork', 'legacyItems'].includes(String(input.type))) return parseRetirementCommand(input)
   if (input.type === 'conversionPreview' || input.type === 'convert') return parseConversionCommand(input)
   if (['setup', 'detail', 'trace', 'records'].includes(String(input.type))) return parseNetworkRead(input)!
@@ -225,7 +229,7 @@ export function parseNetworkCommand(value: unknown): NetworkCommand {
 
 export function parseNetworkView(value: unknown): NetworkView {
   const input = networkDataObject(value)
-  if (Object.keys(input).some(key => !['networks', 'gates', 'preview', 'processId', 'createdId', 'details', 'setup', 'trace', 'records', 'unavailableReason', 'conversion', 'archiveReview', 'legacyItems'].includes(key))) throw new Error('Invalid network view fields')
+  if (Object.keys(input).some(key => !['networks', 'gates', 'preview', 'processId', 'createdId', 'details', 'setup', 'trace', 'records', 'unavailableReason', 'conversion', 'archiveReview', 'legacyItems', 'replacement'].includes(key))) throw new Error('Invalid network view fields')
   const networks = list(input.networks, networkLimits.networks).map((value) => {
     const item = fields(value, ['id', 'revision', 'groupId', 'name', 'state', 'counts', 'health', ...(Object.hasOwn(networkDataObject(value), 'decisions') ? ['decisions'] : []), ...(Object.hasOwn(networkDataObject(value), 'podIds') ? ['podIds'] : [])])
     if (typeof item.name !== 'string' || item.name.length > 120 || !['active', 'paused', 'archived'].includes(item.state as string)) throw new Error('Invalid network summary')
@@ -247,6 +251,7 @@ export function parseNetworkView(value: unknown): NetworkView {
     return { ...(item.decisions === undefined ? {} : { decisions: item.decisions as number }), ...(item.podIds === undefined ? {} : { podIds: item.podIds as string[] }), id: uuid(item.id), revision: revision(item.revision), groupId: uuid(item.groupId), name: item.name, state: item.state as NetworkSummary['state'], counts: counts as Record<string, number>, health: health as unknown as NetworkHealth }
   })
   const result: NetworkView = { networks }
+  if (input.replacement !== undefined) result.replacement = parseReplacementPreview(input.replacement)
   if (input.archiveReview !== undefined) result.archiveReview = parseArchivePreview(input.archiveReview)
   if (input.legacyItems !== undefined) result.legacyItems = parseLegacyItemsPage(input.legacyItems)
   if (input.conversion !== undefined) result.conversion = parseConversionPreview(input.conversion)
