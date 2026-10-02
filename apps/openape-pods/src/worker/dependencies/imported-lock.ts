@@ -130,6 +130,7 @@ function inspectImportedLock(value: unknown, manifest: PackageManifest, npmRoot:
     }
   }
   const visited = new Set<string>(); const required = new Set<string>()
+  const requiredChildren = new Map<string, Set<string>>()
   const pending: [string, LockEntry, boolean][] = [['', { dependencies: manifest.dependencies }, true]]
   while (pending.length) {
     const [path, item, mandatory] = pending.pop()!
@@ -143,6 +144,10 @@ function inspectImportedLock(value: unknown, manifest: PackageManifest, npmRoot:
       }
       const dependency = entries.get(target)!
       if (!semver.satisfies(dependency.version!, range)) throw new Error('Imported dependency version does not satisfy its parent')
+      if (!optional) {
+        const children = requiredChildren.get(path) ?? new Set<string>()
+        children.add(target); requiredChildren.set(path, children)
+      }
       const needed = mandatory && !optional
       if (visited.has(target) && (!needed || required.has(target))) continue
       visited.add(target); if (needed) required.add(target)
@@ -150,7 +155,7 @@ function inspectImportedLock(value: unknown, manifest: PackageManifest, npmRoot:
     }
   }
   if (visited.size !== entries.size) throw new Error('Imported dependency lock contains unreachable packages')
-  return { canonical: canonicalPortableJson(clean), entries, required }
+  return { canonical: canonicalPortableJson(clean), entries, required, requiredChildren }
 }
 
 export function parseImportedLock(source: string, manifest: PackageManifest, npmRoot: string): string {
@@ -191,6 +196,7 @@ async function verifyListedPackages(root: string, parent: string, entries: Map<s
 export async function verifyImportedTree(project: string, lock: string, manifest: PackageManifest, npmRoot: string, signal: AbortSignal): Promise<void> {
   const inspected = inspectImportedLock(JSON.parse(lock), manifest, npmRoot)
   const root = await realpath(project)
+  const present = new Set<string>([''])
   await verifyListedPackages(root, '', inspected.entries)
   for (const [path, entry] of inspected.entries) {
     signal.throwIfAborted()
@@ -203,6 +209,7 @@ export async function verifyImportedTree(project: string, lock: string, manifest
       continue
     }
     if (resolved !== directory) throw new Error('Imported dependency directory was redirected')
+    present.add(path)
     const file = await open(join(directory, 'package.json'), constants.O_RDONLY | constants.O_NOFOLLOW)
     try {
       const stat = await file.stat()
@@ -216,5 +223,8 @@ export async function verifyImportedTree(project: string, lock: string, manifest
     }
     finally { await file.close() }
     await verifyListedPackages(root, path, inspected.entries)
+  }
+  for (const [parent, children] of inspected.requiredChildren) {
+    if (present.has(parent) && [...children].some(child => !present.has(child))) throw new Error('Imported dependency tree is missing a required package')
   }
 }
