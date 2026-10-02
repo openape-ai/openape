@@ -27,6 +27,7 @@ import { WorkflowCalls } from './workflows/calls'
 import { chooseGateItem, discardGateBatch, excludeGateItems } from './workflows/gates'
 import { graphDetail } from './workflows/detail'
 import type { RunContextRequest, ServiceCheck  } from '../contracts/services'
+import { DefinitionCatalog } from './workspace/definition-catalog'
 import { PortableImporter, recoverPortableImports } from './sharing/import'
 import { parsePortableImportCommand } from '../contracts/sharing'
 import { DependencyStore } from './dependencies/store'
@@ -295,12 +296,14 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'portableImport' in request.command) {
       const command = parsePortableImportCommand(request.command.portableImport)
       if (!store.db.prepare('SELECT 1 FROM remote_registration WHERE id=1').get()) throw new Error('Finish desktop identity setup before importing packages')
+      // Imported compositions follow the native network creation guard for connected workspaces.
+      if (command.type === 'finalize' && process.env.PODS_CENTRAL_ENABLED === '1' && !centralNetworkReads) throw new Error('Network creation requires bounded central publication support')
       const importer = new PortableImporter(store, registry, networkOwner(), join(dirname(runtime.entry), '../vendor/npm'))
-      if (command.type !== 'prepareDependencies') { port.postMessage({ id: request.id, state: await importer.execute(command, runtime, scriptController.signal, workflows) }); return }
+      if (command.type !== 'prepareDependencies') { port.postMessage({ id: request.id, state: await importer.execute(command, runtime, scriptController.signal, { workflows, networks, catalog: new DefinitionCatalog(store, registry, networkOwner()) }) }); return }
       maintenance = true
       try {
         await ticking
-        preparing = importer.execute(command, runtime, scriptController.signal, workflows)
+        preparing = importer.execute(command, runtime, scriptController.signal, { workflows, networks, catalog: new DefinitionCatalog(store, registry, networkOwner()) })
         port.postMessage({ id: request.id, state: await preparing })
       }
       finally { preparing = null; maintenance = false }
