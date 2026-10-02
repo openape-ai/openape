@@ -39,9 +39,15 @@ Recovery fixes preserve queued accepted work, allow owner reauthorization of can
 results, retain uncertain gate items, bound finished polling history and settle
 conclusively denied/expired required branches without replay. Actual Opus5.5 closure found no remaining blocker. Its low-priority multi-hop
 diagnostic observation was tightened to directly prevented terminal branches;
-the final full/native checks passed after that correction. No clean tested M7 commit, native PR or acceptance report yet.
-Next finish independent review, commit the reviewed source, verify exact-source CI,
-publish actual Test Runs evidence, merge and continue M8–M14.
+the final full/native checks passed after that correction. Clean tested runtime `e7ae6e1cec20149ec31f12363930312e6c2226c5` passed
+exact-source unit CI5327. Native [PR208](https://repos.openape.ai/patrick/monorepo/pulls/208)
+is explicitly linked to issue1417; all33 files/2659 native diff lines match canonical
+source/base. [Verified private Test Runs](https://report.openape.ai/r/GeG_5EXS3PQGRtT0PJmGCcMS)
+retains actual clean-source results and the personally inspected screenshot;
+category Test Runs, owner200, anonymous401 and rendered screenshot bytes verified.
+Native attachment is unsupported by the app helper; canonical links remain authoritative.
+Next verify this documentation head, protected merge and green main before accepting
+M7 and continuing M8–M14. No production activation is included.
 
 ## Pods persistent networks — issue 1417
 
