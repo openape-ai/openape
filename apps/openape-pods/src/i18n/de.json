@@ -3798,5 +3798,11 @@
   "This assignment does not match the declared package access": "Diese Zuweisung passt nicht zum deklarierten Paketzugriff",
   "Dependencies are prepared for the paused copy of a declared package Pod": "Abhängigkeiten werden für die pausierte Kopie eines deklarierten Paket-Pods vorbereitet",
   "Import changed while preparing dependencies": "Der Import wurde während der Vorbereitung der Abhängigkeiten geändert",
-  "Import the package again": "Importiere das Paket erneut"
+  "Import the package again": "Importiere das Paket erneut",
+  "Unknown package composition": "Unbekannte Paket-Komposition",
+  "This package contains a network, called workflow or mail policy, which cannot be imported yet": "Dieses Paket enthält ein Netzwerk, einen aufgerufenen Workflow oder eine Mail-Richtlinie und kann noch nicht importiert werden",
+  "This package requests mail access, which cannot be imported yet": "Dieses Paket fordert Mail-Zugriff an und kann noch nicht importiert werden",
+  "A member Pod of this composition no longer exists": "Ein Mitglieds-Pod dieser Komposition existiert nicht mehr",
+  "A channel graph needs an existing group; a sequence has none": "Ein Kanal-Graph benötigt eine bestehende Gruppe; eine Sequenz hat keine",
+  "A member Pod already belongs to another group": "Ein Mitglieds-Pod gehört bereits zu einer anderen Gruppe"
 }
