@@ -188,7 +188,7 @@ it('binds declared aliases to matching local assignments and exposes them to scr
   const reference = resources.list(podId).find(item => item.kind === 'reference')!
   expect(runAliases(resources.aliases(podId), [{ id: reference.id, hash: 'a'.repeat(64), path: '/snapshot/template.txt' }])).toEqual({ applications: { cli: 'Tool CLI' }, http: { api: 'https://api.example.test' }, directories: { archive: inbox, inbox }, references: { 'assets/template.txt': { id: reference.id, hash: 'a'.repeat(64), path: '/snapshot/template.txt' } } })
   expect(() => resources.alias(podId, 'Not a key', api.resource)).toThrow('invalid local key')
-  expect(() => resources.alias(podId, 'api', other.resource.replace(/.$/, '0'))).toThrow('current file, directory or tool')
+  expect(() => resources.alias(podId, 'api', randomUUID())).toThrow('current file, directory or tool')
   expect(() => importer.configure(id, view.revision, { pods: { fixture: { input_2: 6 } }, compositions: {} })).toThrow('now a Pod variable')
   view = importer.configure(id, view.revision, { pods: { fixture: { input_4: 'https://moved.example.test' } }, compositions: {} })
   expect(open()).toEqual(['access:api'])
