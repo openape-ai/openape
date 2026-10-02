@@ -7,14 +7,19 @@ CI5354). The first M3 increment is merged: PR218, tested source
 `065a319529413f8c5467a5a863c111c34917e310`, merge
 `d564a51212091564aa90d8fa96f19bdb438b0294`, source CI5355 and main CI5356 green,
 [verified private Test Runs](https://report.openape.ai/r/FmyYudXSf0Lar7_HNQCdQ0cW).
-Branch `feature/issue-1419-sharing-setup` in
-`openape-monorepo.worktrees/pods-portable-sharing` adds schema-35 resource aliases,
-the `context.aliases` run view, alias binding, derived setup state, exact-lock
-dependency preparation and the validated `portableImport` worker/main route with
-identity provisioning; see
-[the sharing inventory](../architecture/pods-portable-sharing.md). Next: workflow
-output/call aliases with composition finalization, owner permission operations,
-then the M4 desktop/browser wizard. Evidence directory: `/tmp/openape-pods-sharing-m3/`.
+The second increment is merged too: PR219, tested source
+`3e113d0e87656a69f7f6bf1d6324afc2d9e3218c`, merge
+`1bb1cccaef753b2c4f212897762283bb60fcb0ab`, source CI5357 and main CI5358 green,
+[verified private Test Runs](https://report.openape.ai/r/lAyf2v1IAFx4XZTLzZTHCNjB)
+(resource aliases, `context.aliases`, alias binding, derived setup state, exact-lock
+dependencies, validated `portableImport` route). Branch
+`feature/issue-1419-sharing-compositions` in
+`openape-monorepo.worktrees/pods-portable-sharing` adds finalization of imported
+sequences and channel graphs and package-keyed handoff outputs; see
+[the sharing inventory](../architecture/pods-portable-sharing.md). Next: networks,
+called workflows and mail policies after member approval with the owner permission
+operations, then the M4 desktop/browser wizard. Evidence:
+`/tmp/openape-pods-sharing-m3/`, `-m3b/`, `-m3c/`.
 
 ## Sharing M2 — issue 1419
 

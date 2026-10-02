@@ -20,11 +20,15 @@ export function workflowInput(store: PodDatabase, runId: string): RunInput['work
       outputs[predecessor] = parseWorkflowOutput(JSON.parse(output.output as string))
     }
   }
-  if (!call) return { runId: attempt.workflow_run_id as string, outputs }
+  // Package keys are only unambiguous when this Pod and all its predecessors came from the same import.
+  const origin = (podId: string) => store.db.prepare('SELECT import_id,key FROM portable_import_pods WHERE pod_id=?').get(podId)
+  const own = origin(node.podId); const origins = Object.keys(outputs).map(origin)
+  const outputsByKey = own && origins.length && origins.every(item => item?.import_id === own.import_id) ? Object.fromEntries(Object.values(outputs).map((output, index) => [origins[index]!.key as string, output])) : undefined
+  if (!call) return { runId: attempt.workflow_run_id as string, outputs, ...(outputsByKey ? { outputsByKey } : {}) }
   const request = JSON.parse(call.request as string) as WorkflowCallRequest
   const { published } = loadWorkflowRevision(store, call.workflow_id as string, Number(call.workflow_revision))
   const inputs = Object.fromEntries(published.ports.inputs.filter(port => port.podId === node.podId).map(port => [port.name, request.inputs[port.name]!]))
-  return { runId: attempt.workflow_run_id as string, outputs, call: { requestId: call.id as string, caseId: request.caseId, caseRevision: request.caseRevision }, inputs }
+  return { runId: attempt.workflow_run_id as string, outputs, ...(outputsByKey ? { outputsByKey } : {}), call: { requestId: call.id as string, caseId: request.caseId, caseRevision: request.caseRevision }, inputs }
 }
 
 export function publishWorkflowOutput(store: PodDatabase, runId: string, value: unknown): void {
