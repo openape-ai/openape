@@ -17,9 +17,10 @@ with source CI5351/main CI5352 green. M2 was accepted in PR217, merged as
 The first M3 increment was merged in PR218 as
 `d564a51212091564aa90d8fa96f19bdb438b0294` with source CI5355/main CI5356 green.
 The second increment was merged in PR219 as
-`1bb1cccaef753b2c4f212897762283bb60fcb0ab` with source CI5357/main CI5358 green. M3 continues on
-`feature/issue-1419-sharing-compositions`; schema 34 adds the local import journal
-and schema 35 persisted resource aliases.
+`1bb1cccaef753b2c4f212897762283bb60fcb0ab` with source CI5357/main CI5358 green. The third increment was merged in PR220 as
+`1317b2d75bfa492f76f106069d90363812e51fa8` with source CI5359/main CI5360 green. M3
+continues on `feature/issue-1419-sharing-networks`; schema 34 adds the local import
+journal and schema 35 persisted resource aliases.
 
 ## Manifest v1
 
@@ -254,8 +255,10 @@ assigned bundle by the main process, never taken from the caller; the worker com
 the hash with the assignment it binds and keeps it, so a later change of that
 assignment reopens setup. Only a tool capability the package requested
 for that alias is named in the imported draft; a draft the owner replaced is left
-alone. Secrets match by credential alias and Jev by its single native assignment
-with the declared model and at most the declared attempts. Because a reassignment creates a new local resource, `bind` remains
+alone. Secrets match by credential alias, Jev by its single native assignment
+with the declared model and at most the declared attempts, and mail by the single
+`mail.read` assignment with the declared attachment choice, start date and the
+recipient's folder selection. Because a reassignment creates a new local resource, `bind` remains
 available after setup.
 
 Setup state is derived from actual local state: a revoked or changed assignment
@@ -271,27 +274,60 @@ must be imported again, which also applies to an unfinished composition.
 
 ### Composition finalization
 
-`finalize` creates an imported sequence or channel graph from its package document
-during setup: member keys become the fresh local Pods, declared graph values take the
-recipient's composition inputs, a channel graph joins a group the recipient chooses
-(its member Pods are placed in that group; a Pod of another group is refused), and
-the suggested schedule is stored while the workflow stays disabled. This needs no
-script approval because a member without its own approved script cannot be started
-by a workflow run. A repeated request returns the existing workflow; an archived one
-reopens the requirement during setup, and a composition that lost a member Pod
-(deleted or archived) is no longer required. When a Pod and all its handoff predecessors came from the same import, its
-script additionally receives `context.input.workflow.outputsByKey`, the predecessor
-outputs under their package Pod keys; the UUID-keyed view is unchanged.
+`finalize` creates imported compositions from their package documents. Sequences
+and channel graphs without ports or mail policy are created disabled during setup:
+member keys become the fresh local Pods, declared graph values take the recipient's
+composition inputs, a channel graph joins a group the recipient chooses (its member
+Pods are placed in that group; a Pod of another group is refused), and the suggested
+schedule is stored while the workflow stays disabled. This needs no script approval
+because a member without its own approved script cannot be started by a workflow
+run. A repeated request returns the existing workflow; an archived one reopens the
+requirement during setup, and a composition that lost a member Pod (deleted or
+archived) is no longer required. When a Pod and all its handoff predecessors came
+from the same import, its script additionally receives
+`context.input.workflow.outputsByKey`, the predecessor outputs under their package
+Pod keys; the UUID-keyed view is unchanged.
 
-Staging refuses what setup could never finish, so no paused copy is created that
-must stay inert: persistent networks, called workflows with ports, mail policies and mail
-access. Their native writers require approved member scripts, published definitions,
-comparable recipient mail assignments or owner permission operations that do not
-exist yet. Staging also runs the native workflow parser over each composition;
-local conditions such as a later variable of the same name as a graph value are
-reported by `finalize` and can be corrected.
-`inspect` still shows such a package. A Pod that already took part in a workflow run
-follows the existing retention rule for workflow history when the owner deletes it.
+Persistent networks, called workflows with ports and mail policies are deferred:
+staging records them, `complete` does not wait for them and keeps the archive, and
+they are created after Pod setup once every member script is validated and active
+(`worker/sharing/compositions.ts`):
+
+- Each network member is published as its own definition with typed defaults from
+  its scalar bindings and bound to that published version, so shared network values
+  resolve against declared public fields. Pod variables created at commit stay as
+  the separate `context.variables` namespace; the exporter keeps both alias sets
+  distinct.
+- Members must still be fresh instances (no network or workflow membership, run or
+  schedule history); group membership, binding moves, network creation, data access,
+  calls and the journal record happen in one transaction after publication. The
+  network is created paused through `NetworkEngine` with the recipient's group, the
+  document channels, gates and joins and shared values from composition inputs. The
+  native setup fingerprint cannot exist for fresh Pods that join their group and
+  binding only here; the import review of the declared members, channels, values and
+  access is the owner's reviewed setup. The connected-workspace creation guard
+  applies unchanged. Activation stays a separate owner step.
+- Declared collections are new owner records in the recipient's group with their
+  schema version, retention and per-member data permissions. A collection whose name
+  already exists in that group is refused unless the recipient explicitly reuses it
+  and its current schema and indexes are identical. Artifact scopes and their
+  permissions are created likewise; a scope without a collection is private to the
+  new network. No records, artifact bytes or grants are transported.
+- Called workflows are created first in the caller's group with approved members
+  (disabled, no ports), then published as an immutable revision from the document
+  ports, and the calling network members receive enabled call permissions. A call is
+  only granted to a workflow of the network's group whose members belong to it,
+  because the runtime refuses any other call.
+- A mail policy maps to the native configuration from the bound filter application
+  alias, the fresh member Pods and the recipient's string inputs.
+
+Staging still runs the native workflow parser over each plain composition. A
+completed import with pending deferred compositions stays listed and holds its
+archive; it is released once the last one exists or became impossible, or when the
+owner cancels the import, which then only abandons what was not created. A restored
+profile requires a fresh import for unfinished compositions. A
+Pod that already took part in a workflow run follows the existing retention rule
+for workflow history when the owner deletes it.
 
 The worker entry accepts the closed `portableImport` command set only after desktop
 identity setup; dependency preparation runs under the maintenance gate. The main
@@ -300,9 +336,9 @@ for every created Pod through the existing provisioning path, so one failure doe
 not leave later Pods without a retry. No renderer, preload
 or relay route exists yet.
 
-Still open for M3: networks, called workflows and mail policies (finalization
-after member approval, call alias views and the owner data/artifact/call permission
-operations) and exporter defaults from stored aliases and keys. The complete desktop and
+Still open for M3: workflow call alias views for network scripts, exporter defaults
+from stored aliases and keys, and native acceptance of the deferred paths (mail
+policies, Jev and mail assignments, real dependency installation). The complete desktop and
 browser flow is M4.
 
 ## Verified source inventory and required handling

@@ -12,7 +12,7 @@ export interface PortableImportView {
   transferSha256: string
   manifest: PortableManifest
   pods: { key: string, podId: string }[]
-  compositions: { key: string, workflowId: string }[]
+  compositions: { key: string, workflowId: string | null, networkId: string | null }[]
   values: PortableImportValues
   unresolved: PortableImportRequirement[]
   error: string | null
@@ -28,9 +28,10 @@ export type PortableImportCommand =
   // bundle is what the main process read from the assigned application bundle itself, or null for other assignments.
   | { type: 'bind', id: string, revision: number, pod: string, alias: string, resourceId: string, bundle: { identity: string, executableHash: string } | null }
   | { type: 'prepareDependencies', id: string, pod: string }
-  | { type: 'finalize', id: string, revision: number, composition: string, groupId: string | null }
+  // reuse maps a package collection key to an existing collection the recipient explicitly attaches instead of creating a new one.
+  | { type: 'finalize', id: string, revision: number, composition: string, groupId: string | null, reuse: Record<string, string> }
 
-const shapes: Record<PortableImportCommand['type'], string[]> = { list: [], show: ['id'], inspect: ['archive'], stage: ['id', 'archive'], configure: ['id', 'revision', 'values'], commit: ['id', 'revision'], complete: ['id', 'revision'], cancel: ['id', 'revision'], bind: ['id', 'revision', 'pod', 'alias', 'resourceId', 'bundle'], prepareDependencies: ['id', 'pod'], finalize: ['id', 'revision', 'composition', 'groupId'] }
+const shapes: Record<PortableImportCommand['type'], string[]> = { list: [], show: ['id'], inspect: ['archive'], stage: ['id', 'archive'], configure: ['id', 'revision', 'values'], commit: ['id', 'revision'], complete: ['id', 'revision'], cancel: ['id', 'revision'], bind: ['id', 'revision', 'pod', 'alias', 'resourceId', 'bundle'], prepareDependencies: ['id', 'pod'], finalize: ['id', 'revision', 'composition', 'groupId', 'reuse'] }
 const identity = (value: unknown): boolean => typeof value === 'string' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value)
 const name = (value: unknown): boolean => typeof value === 'string' && value.length > 0 && value.length <= 64
 const plain = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
@@ -49,6 +50,7 @@ export function parsePortableImportCommand(value: unknown): PortableImportComman
     const item = value[field]
     if (field === 'id' || field === 'resourceId') return identity(item)
     if (field === 'groupId') return item === null || identity(item)
+    if (field === 'reuse') return plain(item) && Object.keys(item).length <= 32 && Object.entries(item).every(([key, value]) => name(key) && identity(value))
     if (field === 'revision') return Number.isSafeInteger(item) && Number(item) > 0
     if (field === 'bundle') return item === null || (plain(item) && Object.keys(item).length === 2 && typeof item.identity === 'string' && item.identity.length > 0 && item.identity.length <= 255 && typeof item.executableHash === 'string' && /^[a-f0-9]{64}$/.test(item.executableHash))
     if (field === 'archive') return item instanceof Uint8Array && item.byteLength > 0 && item.byteLength <= sharingLimits.transferBytes
