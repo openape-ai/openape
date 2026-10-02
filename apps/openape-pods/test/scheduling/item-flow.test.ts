@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterEach, expect, it, vi } from 'vitest'
+import { discardGateBatch } from '../../src/worker/workflows/gates'
 import { InfrastructureError } from '../../src/contracts/infrastructure'
 import { RunRetention } from '../../src/worker/data/run-retention'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
@@ -12,6 +13,43 @@ import { closeNetworks, networkFixture } from './network-fixture'
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
 afterEach(closeGraphs)
 afterEach(closeNetworks)
+
+it('joins only one explicit case revision, lets complete invoices pass and retains timeout review for late inputs', async () => {
+  const f = networkFixture()
+  const source = f.pod('Invoice branches', { takes: [], gives: ['left', 'right'], summary: 'Explicit same-source invoice correlation' }, async () => {})
+  const consumer = f.pod('Joined invoice', { takes: ['left', 'right'], gives: [], summary: 'Requires both invoice branches' }, async () => {})
+  const schema = { type: 'object' as const, properties: { subject: { type: 'string' as const } }, required: ['subject'], additionalProperties: false as const }
+  const id = f.engine.execute({ type: 'create', draft: { name: 'Explicit invoice joins', groupId: f.groupId, channels: ['left', 'right'].map(name => ({ name, title: name, schemaVersion: 1, schema })), members: [{ podId: source, source: { schedule: null }, serialCase: false }, { podId: consumer, source: null, serialCase: true }], joins: [{ id: 'invoice', podId: consumer, channels: ['left', 'right'], deadlineMs: 1000, reviewDestination: 'owner' }] } }).createdId!
+  const invocations = f.engine.invocations
+  async function emit(invoice: string, channels: string[], version = '1') {
+    const authority = invocations.reserve(id, source, f.resources.epoch(source), 'manual')!
+    await invocations.finish(authority, 'completed', 'Synthetic invoice branch', null, [], channels.map(channel => ({ channel, key: invoice, sourceItemId: invoice, sourceVersion: version, payload: { subject: invoice } })))
+  }
+  await emit('INV-1', ['left'])
+  expect(invocations.reserve(id, consumer, f.resources.epoch(consumer), 'manual')).toBeNull()
+  await emit('INV-2', ['left', 'right'])
+  f.store.db.prepare('UPDATE network_joins SET deadline=0 WHERE case_id!=?').run(f.store.db.prepare('SELECT case_id FROM network_joins ORDER BY rowid LIMIT 1').get()!.case_id!)
+  const joined = invocations.reserve(id, consumer, f.resources.epoch(consumer), 'manual')!
+  const batch = invocations.input(joined).items
+  expect(batch.map(item => item.data.subject)).toEqual(['INV-2', 'INV-2'])
+  expect(new Set(batch.map(item => `${item.caseId}:${item.caseRevision}`)).size).toBe(1)
+  await invocations.finish(joined, 'completed', 'One complete invoice', null, batch.map(item => item.eventId), [])
+  const incomplete = f.store.db.prepare('SELECT case_id FROM network_joins WHERE state=\'pending\'').get()!.case_id
+  f.store.db.prepare('UPDATE network_joins SET deadline=0 WHERE case_id=?').run(incomplete!)
+  expect(invocations.reserve(id, consumer, f.resources.epoch(consumer), 'manual')).toBeNull()
+  const receipt = f.store.db.prepare('SELECT state,reason FROM network_joins WHERE case_id=?').get(incomplete!)!
+  expect(receipt.state).toBe('blocked')
+  expect(JSON.parse(receipt.reason as string)).toEqual({ reason: 'Join deadline expired', missing: ['right'], reviewDestination: 'owner' })
+  await emit('INV-1', ['right'])
+  expect(invocations.reserve(id, consumer, f.resources.epoch(consumer), 'manual')).toBeNull()
+  expect(f.store.db.prepare('SELECT count(*) AS count FROM network_join_inputs WHERE case_id=?').get(incomplete!)!.count).toBe(1)
+  expect(f.store.db.prepare('SELECT count(*) AS count FROM network_deliveries WHERE case_id=? AND state=\'blocked\'').get(incomplete!)!.count).toBe(2)
+  await emit('INV-1', ['left', 'right'], '2')
+  const next = invocations.reserve(id, consumer, f.resources.epoch(consumer), 'manual')!
+  expect(invocations.input(next).items.map(item => item.caseRevision)).toEqual([2, 2])
+  expect(f.store.db.prepare('SELECT state FROM network_joins WHERE case_id=? AND case_revision=1').get(incomplete!)!.state).toBe('blocked')
+  f.store.assertStorage()
+})
 
 it('settles persistent consumer A while B is held, deduplicates source versions and preserves paused work', async () => {
   const f = networkFixture()
@@ -295,7 +333,7 @@ it('reads a run snapshot without a mode as a sequence', async () => {
   expect(f.engine.run(runId).state).toBe('completed')
 })
 
-it('keeps the items of the three most recent runs and every pending item', async () => {
+it.each(['pending', 'unknown'] as const)('keeps recent runs and %s gate receipts available for owner review', async (gateState) => {
   const f = fixture([{ key: 'batch', title: 'Batch', kind: 'approve', takes: 'mail.held', gives: 'mail.approved', excluded: null }])
   let round = 0
   const source = f.pod('Source', { takes: [], gives: ['mail.open', 'mail.held'], summary: 'Reads mail' }, async (_items, emit) => {
@@ -307,6 +345,10 @@ it('keeps the items of the three most recent runs and every pending item', async
   const archive = f.pod('Archive', { takes: ['mail.approved'], gives: [], summary: 'Archives mail' }, async () => {})
   f.save([source, sink, archive], ['mail.open', 'mail.held', 'mail.approved'])
   for (let index = 0; index < 5; index++) expect((await f.run()).state).toBe('completed')
+  if (gateState === 'unknown') {
+    f.store.db.prepare('UPDATE graph_gate_batches SET state=\'unknown\'').run()
+    f.store.db.prepare('UPDATE graph_deliveries SET state=\'done\' WHERE node=\'gate:batch\'').run()
+  }
   await new RunRetention(f.store).prune()
   expect(f.store.db.prepare('SELECT key FROM graph_items ORDER BY key').all().map(row => row.key)).toEqual(['held-1', 'open-3', 'open-4', 'open-5'])
   expect(f.trace('open-1')).toEqual([])
@@ -314,6 +356,10 @@ it('keeps the items of the three most recent runs and every pending item', async
   expect(f.trace('open-5')).toHaveLength(2)
   expect(f.count('graph_deliveries')).toBe(4)
   expect(f.count('graph_gate_batches')).toBe(1)
+  if (gateState === 'unknown') {
+    discardGateBatch(f.store, f.store.db.prepare('SELECT id FROM graph_gate_batches').get()!.id as string, Date.now())
+    expect(f.store.db.prepare('SELECT state FROM graph_gate_batches').get()!.state).toBe('denied')
+  }
 })
 
 it('retries the original consumer claim batch without merging a later input for the same case', async () => {

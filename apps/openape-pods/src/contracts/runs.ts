@@ -48,7 +48,7 @@ export function parseRunView(value: unknown): RunView {
 export interface RunInput {
   config?: Record<string, { value: unknown, origin: string, kind: unknown }>
   network?: { id: string, revision: number, source: boolean }
-  workflow?: { runId: string, outputs: Record<string, import('./workflows').WorkflowOutput> }
+  workflow?: { runId: string, outputs: Record<string, import('./workflows').WorkflowOutput>, call?: { requestId: string, caseId: string, caseRevision: number }, inputs?: Record<string, import('./workflow-ports').WorkflowPortValue> }
   home?: string
   directories?: { path: string, access: 'read' | 'readWrite' }[]
   variables?: Record<string, string>
@@ -74,11 +74,11 @@ export function parseResult(value: unknown, input: RunInput): ScriptResult {
   if (!Array.isArray(result.completedInputIds) || result.completedInputIds.some(id => !input.eventIds.includes(id)) || !Array.isArray(result.gapIds) || result.gapIds.length > 1000 || result.gapIds.some(id => typeof id !== 'string')) throw new Error('Uncommitted result references')
   return result as unknown as ScriptResult
 }
-export interface ScriptFrame { version: 1, runId: string, sequence: number, type: 'request' | 'result' | 'error' | 'log', id?: string, operation?: 'data.get' | 'data.put' | 'data.delete' | 'data.query' | 'artifacts.create' | 'artifacts.read' | 'network.gateCoverage' | 'network.emit' | 'jev.evaluate' | 'http.request' | 'credentials.get' | 'agent.run' | 'tools.invoke' | 'progress.commit' | 'mail.archive' | 'mail.next' | 'mail.commit' | 'workflow.publish' | 'mail.workflow.filter' | 'mail.workflow.remaining' | 'mail.workflow.notify' | 'graph.contract' | 'graph.emit', payload: unknown }
+export interface ScriptFrame { version: 1, runId: string, sequence: number, type: 'request' | 'result' | 'error' | 'log', id?: string, operation?: 'data.get' | 'data.put' | 'data.delete' | 'data.query' | 'artifacts.create' | 'artifacts.read' | 'network.gateCoverage' | 'network.emit' | 'jev.evaluate' | 'http.request' | 'credentials.get' | 'agent.run' | 'tools.invoke' | 'progress.commit' | 'mail.archive' | 'mail.next' | 'mail.commit' | 'workflow.call' | 'workflow.result' | 'workflow.publish' | 'mail.workflow.filter' | 'mail.workflow.remaining' | 'mail.workflow.notify' | 'graph.contract' | 'graph.emit', payload: unknown }
 export function parseFrame(value: unknown, runId: string, sequence: number): ScriptFrame {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid script frame')
   const frame = value as Record<string, unknown>
   if (Object.keys(frame).some(key => !['version', 'runId', 'sequence', 'type', 'id', 'operation', 'payload'].includes(key)) || frame.version !== 1 || frame.runId !== runId || frame.sequence !== sequence || !['request', 'result', 'error', 'log'].includes(frame.type as string)) throw new Error('Invalid script frame binding or sequence')
-  if (frame.type === 'request' && (typeof frame.id !== 'string' || !/^[a-z0-9-]{1,100}$/i.test(frame.id) || !['data.get', 'data.put', 'data.delete', 'data.query', 'artifacts.create', 'artifacts.read', 'network.gateCoverage', 'network.emit', 'jev.evaluate', 'http.request', 'credentials.get', 'agent.run', 'tools.invoke', 'progress.commit', 'mail.archive', 'mail.next', 'mail.commit', 'workflow.publish', 'mail.workflow.filter', 'mail.workflow.remaining', 'mail.workflow.notify', 'graph.contract', 'graph.emit'].includes(frame.operation as string))) throw new Error('Unsupported script request')
+  if (frame.type === 'request' && (typeof frame.id !== 'string' || !/^[a-z0-9-]{1,100}$/i.test(frame.id) || !['data.get', 'data.put', 'data.delete', 'data.query', 'artifacts.create', 'artifacts.read', 'network.gateCoverage', 'network.emit', 'jev.evaluate', 'http.request', 'credentials.get', 'agent.run', 'tools.invoke', 'progress.commit', 'mail.archive', 'mail.next', 'mail.commit', 'workflow.call', 'workflow.result', 'workflow.publish', 'mail.workflow.filter', 'mail.workflow.remaining', 'mail.workflow.notify', 'graph.contract', 'graph.emit'].includes(frame.operation as string))) throw new Error('Unsupported script request')
   return frame as unknown as ScriptFrame
 }
