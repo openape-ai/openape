@@ -10,10 +10,11 @@ import type { NetworkDataPage, NetworkDetails, NetworkTracePage } from '../contr
 import type { NetworkCommand, NetworkPreview, NetworkSummary, NetworkView } from '../contracts/networks'
 import type { WorkflowDefinition } from '../contracts/workflows'
 import GraphView from './GraphView.vue'
+import NetworkRetirement from './NetworkRetirement.vue'
 import { dateTime, diagnostic, t } from './i18n'
 
 export default defineComponent({
-  components: { GraphView },
+  components: { GraphView, NetworkRetirement },
   props: {
     network: { type: Object as PropType<NetworkSummary>, required: true },
     view: { type: Object as PropType<NetworkView>, required: true },
@@ -141,6 +142,9 @@ export default defineComponent({
         {{ t('Networks & workflows') }}
       </button><h1>{{ network.name }}</h1><p>{{ t('Persistent network') }} · {{ t(network.state) }}</p>
     </header>
+    <p v-if="network.state === 'archived' && (readOnly || readNetwork)" role="status">
+      {{ t('This network is archived. History and Pod identities remain available; execution cannot resume.') }}
+    </p>
     <p v-if="error" role="alert" class="error-message">
       <span v-if="!readOnly">{{ t('Runtime access failed. Refresh before issuing another action.') }}</span> {{ diagnostic(error) }} <button v-if="!readOnly" class="secondary" @click="load()">
         {{ t('Refresh') }}
@@ -152,7 +156,7 @@ export default defineComponent({
     <p v-if="actionError" ref="actionError" tabindex="-1" role="alert" class="error-message">
       {{ diagnostic(actionError) }}
     </p>
-    <div v-if="!readOnly" class="network-actions">
+    <div v-if="!readOnly && !readNetwork && network.state !== 'archived'" class="network-actions">
       <button class="primary" :disabled="busy || (network.state !== 'active' && !!error)" @click="send({ type: network.state === 'active' ? 'pause' : 'activate', id: network.id, revision: network.revision })">
         {{ t(network.state === 'active' ? 'Pause network' : 'Activate network') }}
       </button>
@@ -161,7 +165,7 @@ export default defineComponent({
       </button>
     </div>
     <p>
-      {{ t('Waiting: {count}', { count: (network.counts.pending ?? 0) + (network.counts.retry_wait ?? 0) }) }} · {{ t('Processing: {count}', { count: network.counts.claimed ?? 0 }) }} · {{ t('Decisions: {count}', { count: !details && network.decisions !== undefined ? network.decisions : gates.filter(gate => ['pending', 'unknown', 'preparing', 'consuming', 'superseded'].includes(gate.state)).length }) }}
+      {{ t('Waiting: {count}', { count: (network.counts.pending ?? 0) + (network.counts.retry_wait ?? 0) }) }} · {{ t('Processing: {count}', { count: network.counts.claimed ?? 0 }) }} · {{ t('Decisions: {count}', { count: network.state === 'archived' ? 0 : !details && network.decisions !== undefined ? network.decisions : gates.filter(gate => ['pending', 'unknown', 'preparing', 'consuming', 'superseded'].includes(gate.state)).length }) }}
     </p>
     <button v-if="details?.failures.length" class="text-button network-failure-count" @click="tab = 'decisions'">
       {{ t('Failures requiring review: {count}', { count: details.failures.length }) }}
@@ -172,7 +176,7 @@ export default defineComponent({
     <details v-if="network.health.intakeError || network.health.lastSchedulerError">
       <summary>{{ t('Runtime needs attention') }}</summary><pre>{{ diagnostic(network.health.intakeError ?? network.health.lastSchedulerError!) }}</pre>
     </details>
-    <form v-if="processing && details" class="network-process" @submit.prevent="previewProcess">
+    <form v-if="processing && details && network.state !== 'archived'" class="network-process" @submit.prevent="previewProcess">
       <h2>{{ t('Bounded processing') }}</h2><p>{{ t('This does not enable timers. Only ready work and selected sources can run.') }}</p>
       <template v-if="!preview">
         <fieldset>
@@ -204,6 +208,7 @@ export default defineComponent({
         </button>
       </template>
     </form>
+    <NetworkRetirement v-if="!readOnly && !readNetwork" :network="network" :pods="pods" @changed="$emit('changed', $event); load()" />
     <div class="graph-modes" role="group" :aria-label="t('Network views')">
       <button v-for="option in ([['structure', 'Structure'], ['activity', 'Recent recorded activity'], ['decisions', 'Decisions and failures'], ['data', 'Shared data']] as const)" :key="option[0]" :aria-pressed="tab === option[0]" @click="tab = option[0]">
         {{ t(option[1]) }}
@@ -280,7 +285,7 @@ export default defineComponent({
         <p v-if="failure.inspectedAt === null">
           {{ t('First inspect the stopped process. Then reconcile uncertain actions before retrying or disposing of work.') }}
         </p>
-        <button v-if="!readOnly" class="secondary" :disabled="busy" @click="send({ type: 'inspect', id: network.id, revision: network.revision, runId: failure.runId, generation: failure.generation })">
+        <button v-if="!readOnly && !readNetwork && network.state !== 'archived'" class="secondary" :disabled="busy" @click="send({ type: 'inspect', id: network.id, revision: network.revision, runId: failure.runId, generation: failure.generation })">
           {{ t('Inspect stopped process') }}
         </button>
         <p v-if="failure.inspectedAt !== null">
@@ -288,7 +293,7 @@ export default defineComponent({
         </p>
         <div v-for="effect in failure.effects" :key="`${effect.key}:${effect.attempt}`">
           <p>{{ effect.key }} · {{ effect.state }}</p>
-          <template v-if="!readOnly && ['intent', 'unknown'].includes(effect.state)">
+          <template v-if="!readOnly && !readNetwork && network.state !== 'archived' && ['intent', 'unknown'].includes(effect.state)">
             <label>{{ t('Evidence for {name}', { name: effect.key }) }}<textarea v-model="evidence[`${failure.runId}:${effect.key}:${effect.attempt}`]" maxlength="4000" /></label>
             <button v-for="outcome in (['confirmed_applied', 'confirmed_not_applied'] as const)" :key="outcome" class="secondary" :disabled="busy || !evidence[`${failure.runId}:${effect.key}:${effect.attempt}`]?.trim() || failure.inspectedAt === null" @click="send({ type: 'reconcileEffect', id: network.id, revision: network.revision, runId: failure.runId, generation: failure.generation, key: effect.key, attempt: effect.attempt, sequence: effect.sequence, outcome, evidence: evidence[`${failure.runId}:${effect.key}:${effect.attempt}`] ?? '' })">
               {{ t(outcome === 'confirmed_applied' ? 'Confirm action happened' : 'Confirm action did not happen') }}
@@ -297,11 +302,11 @@ export default defineComponent({
         </div><p v-if="failure.effectsMore">
           {{ t('This view shows the first {count} entries.', { count: 50 }) }}
         </p>
-        <label v-if="!readOnly">{{ t('Evidence for {name}', { name: failure.runId }) }}<textarea v-model="evidence[failure.runId]" maxlength="4000" /></label><div v-if="failure.conflict && !readOnly">
+        <label v-if="!readOnly && !readNetwork && network.state !== 'archived'">{{ t('Evidence for {name}', { name: failure.runId }) }}<textarea v-model="evidence[failure.runId]" maxlength="4000" /></label><div v-if="failure.conflict && !readOnly && !readNetwork && network.state !== 'archived'">
           <button v-for="decision in (['retainOriginal', 'discardBatch'] as const)" :key="decision" class="secondary" :disabled="busy || !evidence[failure.runId]?.trim() || failure.inspectedAt === null" @click="send({ type: 'resolveConflict', id: network.id, revision: network.revision, runId: failure.runId, generation: failure.generation, identityHash: failure.conflict, decision, evidence: evidence[failure.runId] ?? '' })">
             {{ t(decision === 'retainOriginal' ? 'Retain original acceptance' : 'Discard conflicting batch') }}
           </button>
-        </div><div v-if="!readOnly" class="network-actions">
+        </div><div v-if="!readOnly && !readNetwork && network.state !== 'archived'" class="network-actions">
           <button class="secondary" :disabled="busy || failure.kind === 'uncertain'" @click="send({ type: 'retry', id: network.id, revision: network.revision, runId: failure.runId, generation: failure.generation })">
             {{ t('Retry retained work') }}
           </button><button class="secondary" :disabled="busy || !evidence[failure.runId]?.trim()" @click="send({ type: 'discardFailure', id: network.id, revision: network.revision, runId: failure.runId, generation: failure.generation, evidence: evidence[failure.runId] ?? '' })">
@@ -315,14 +320,14 @@ export default defineComponent({
         </p><ul>
           <li v-for="item in gate.items" :key="item.deliveryId">
             {{ item.title }} · {{ item.outcome }}
-            <label v-if="!readOnly && gate.state === 'pending' && item.outcome === 'held'">{{ t('Evidence to exclude {name}', { name: item.title }) }}<textarea v-model="evidence[`${gate.id}:${item.deliveryId}`]" maxlength="4000" /></label><button v-if="!readOnly && gate.state === 'pending' && item.outcome === 'held'" class="secondary" :disabled="busy || !evidence[`${gate.id}:${item.deliveryId}`]?.trim()" @click="send({ type: 'gateExclude', id: network.id, revision: network.revision, taskId: gate.id, generation: gate.generation, deliveryIds: [item.deliveryId], evidence: evidence[`${gate.id}:${item.deliveryId}`] ?? '' })">
+            <label v-if="!readOnly && !readNetwork && network.state !== 'archived' && gate.state === 'pending' && item.outcome === 'held'">{{ t('Evidence to exclude {name}', { name: item.title }) }}<textarea v-model="evidence[`${gate.id}:${item.deliveryId}`]" maxlength="4000" /></label><button v-if="!readOnly && !readNetwork && network.state !== 'archived' && gate.state === 'pending' && item.outcome === 'held'" class="secondary" :disabled="busy || !evidence[`${gate.id}:${item.deliveryId}`]?.trim()" @click="send({ type: 'gateExclude', id: network.id, revision: network.revision, taskId: gate.id, generation: gate.generation, deliveryIds: [item.deliveryId], evidence: evidence[`${gate.id}:${item.deliveryId}`] ?? '' })">
               {{ t('Exclude {name} with evidence', { name: item.title }) }}
             </button>
           </li>
-        </ul><div v-if="!readOnly" class="network-actions">
+        </ul><div v-if="!readOnly && !readNetwork && network.state !== 'archived'" class="network-actions">
           <button v-if="gate.state === 'pending'" class="primary" :disabled="busy || !gate.url" @click="send({ type: 'gateOpen', id: network.id, revision: network.revision, taskId: gate.id, generation: gate.generation })">
             {{ t('Open approval') }}
-          </button><label v-if="!readOnly && ['superseded', 'approved', 'unknown'].includes(gate.state)">{{ t('Evidence for {name}', { name: gate.gate }) }}<textarea v-model="evidence[gate.id]" maxlength="4000" /></label><button v-if="['superseded', 'approved', 'unknown'].includes(gate.state)" class="secondary" :disabled="busy || !evidence[gate.id]?.trim()" @click="send({ type: 'gateReview', id: network.id, revision: network.revision, taskId: gate.id, generation: gate.generation, evidence: evidence[gate.id] ?? '' })">
+          </button><label v-if="['superseded', 'approved', 'unknown'].includes(gate.state)">{{ t('Evidence for {name}', { name: gate.gate }) }}<textarea v-model="evidence[gate.id]" maxlength="4000" /></label><button v-if="['superseded', 'approved', 'unknown'].includes(gate.state)" class="secondary" :disabled="busy || !evidence[gate.id]?.trim()" @click="send({ type: 'gateReview', id: network.id, revision: network.revision, taskId: gate.id, generation: gate.generation, evidence: evidence[gate.id] ?? '' })">
             {{ t('Request fresh approval') }}
           </button><button v-if="gate.state === 'unknown'" class="secondary" :disabled="busy || !evidence[gate.id]?.trim()" @click="send({ type: 'gateDiscard', id: network.id, revision: network.revision, taskId: gate.id, generation: gate.generation, evidence: evidence[gate.id] ?? '' })">
             {{ t('Dispose with evidence') }}
