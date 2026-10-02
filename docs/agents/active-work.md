@@ -20,7 +20,9 @@ See [reference inventory and package boundary](../architecture/pods-portable-sha
 Native composition validation is implemented; 32 protocol tests and 33 focused
 composition/workflow-call tests pass. Actual Opus reviews prompted environment,
 capability-reference, mail-ancestry and variable-conflict corrections. Full root
-gates and final review are running. M0 sharing remains unaccepted. No importer, application probing, user-data migration or execution is wired.
+lint/typecheck, Pods build, 1190 Pods units and 33 protocol tests pass. Actual Opus
+contract review reports no remaining M0 blockers in its stated scope. M0 sharing
+remains unaccepted pending native PR/review/CI/report. No importer, application probing, user-data migration or execution is wired.
 Next finish that boundary, review/test it, then M1 imported-lock/application resolution.
 M11–M14 remain open; existing production/live-action boundaries stay in force.
 Evidence: `/tmp/openape-pods-sharing-m0/`.
@@ -29,9 +31,11 @@ A pre-commit rerun exposed a check-runner defect: its direct tooling subprocesse
 inherit Git-hook repository/config variables before Turbo filtering. Shared
 `core.bare` changed to true; restored false, with own ref/index/files preserved.
 The runner now strips Git-local variables for child steps; a real two-repository
-regression passes. This repair still needs full hook/CI acceptance. The same hook
-also failed an existing IdP fixture during concurrent Nuxt builds; a supported
-single-worker rerun is in progress. No default suite, timeout or CI change.
+regression passes. The complete repaired hook passed at commit
+`b8dd93565ebb62ebd4bdd618830b18621f5deea9`; shared config stayed intact. Opus
+review prompted a stronger real subprocess regression, which also passes. The
+initial hook additionally failed an existing IdP fixture during concurrent Nuxt
+builds; the supported single-worker rerun passed 632 tests (8 existing skips). No default suite, timeout or CI change.
 
 ## Current M11 — issue1417
 
