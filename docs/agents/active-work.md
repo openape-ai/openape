@@ -2,32 +2,30 @@
 
 ## Current M11 — issue1417
 
-M0–M10 are accepted. Isolated checkout
-`openape-monorepo.worktrees/pods-workflows-networks`; branch
-`feature/issue-1417-pods-networks-m11`; canonical base
-`ad16a8f2cf4fa85864472c8cb8750d4feaed33cc` (PR211, full main CI5339).
-Doctor passes. M11 is in progress and unaccepted. The full approved sharing plan
-01M3NA5X47W7HAV5SE10D0EN1G was read; no sharing implementation exists yet.
-Uncommitted conversion implementation now has a pure dry run, explicit review of
-all checkpoints and source versioning, unresolved-work refusal, atomic cutover,
-disabled legacy schedules, original identities/scripts/bindings and protected ancestry.
-Actual Opus5.5 findings led to retained consumer checkpoints, durable restore-safe
-receipts, stronger source-history/recovery checks and shared preview/create validation.
-Actual Fable5.1 UI review informs the desktop-only wizard, explicit schema types,
-checkpoint body inspection, schedule comparison and separate activation.
-Current-source checks pass: full root lint/typecheck, Pods build,141 unit suites /
-1157 tests, two native suites / three tests and13 manual layout checks. The native
-route preserves original Pods/scripts/resources/checkpoints, creates paused state
-without execution, then explicitly processes a source using its retained legacy value.
-Six final native/EN/DE wide/narrow screenshots were personally inspected.
-Actual Opus5.5 final review found no conversion blocker and disclosed its read limits.
-Earlier typing, diagnostic coverage, native accessible-label and unrelated-seed-Pod
-fixture failures were corrected and retained in the evidence logs, not waived.
-Native PR/exact-head CI, protected merge/main and private Test Runs publication
-remain pending. M11–M14 are unaccepted. No productive conversion, production activation
-or expanded external rights. Evidence: `/tmp/openape-pods-networks-m11/`.
-Next finish this reviewable conversion increment, then paused replacement/archive,
-retained-item inspection and the approved portable file-transfer slice.
+M0–M10 are accepted. M11a reviewed conversion is merged in
+[PR212](https://repos.openape.ai/patrick/monorepo/pulls/212). Tested source
+`5a57c5ad765f4588c9a13cda3db1a782be49f689` passed root lint/typecheck, Pods build,
+1157 units, three native Electron tests and13 manual layout checks. All27 native
+files/1829 displayed lines were reviewed. Actual Opus5.5/Fable5.1 corrections are
+included. Exact-source CI5340 and full-main CI5341 passed; merge
+`4984a2a31a1b463bf4fe248ece65d52772c50864`.
+[Verified private Test Runs](https://report.openape.ai/r/m3ufyiHjZQKDMqlJqLVJ-ZTE)
+contains actual logs and six inspected screenshots; category, owner200/anonymous401,
+embedded bytes and authenticated browser display verified. Publication-time pending
+CI is superseded by the PR review and these CI receipts.
+
+Own checkout `openape-monorepo.worktrees/pods-workflows-networks`, branch
+`feature/issue-1417-pods-networks-m11-replacement`, base the canonical merge above.
+Doctor passes. Reviewed archive and retained-item inspection pass root lint/typecheck,
+Pods build, 1165 units, one actual native route and 15 manual layout checks. Six
+final screenshots were personally inspected; Opus5.5/Fable5.1 corrections are included.
+Native PR, exact-head CI and verified private Reports evidence are next;
+paused composition replacement and approved portable sharing remain required.
+M11–M14 are unaccepted. No live conversion, production activation or expanded
+external rights. M11a evidence: `/tmp/openape-pods-networks-m11/`; current evidence:
+`/tmp/openape-pods-networks-m11-replacement/`. Next complete lifecycle controls,
+actual Opus/Fable review, root gates, focused tests and native/layout acceptance,
+publish verified Reports evidence and use a native PR before continuing sharing.
 
 ## M10 acceptance evidence — issue1417
 

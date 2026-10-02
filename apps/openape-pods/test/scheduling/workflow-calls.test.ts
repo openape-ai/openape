@@ -73,6 +73,12 @@ it('accepts repeated invoice requests once, releases the caller lease and retain
   f.complete(); f.calls.tick()
   expect(f.store.db.prepare('SELECT state,result FROM workflow_call_requests WHERE id=?').get(request.requestId)).toMatchObject({ state: 'completed', result: expect.any(String) })
   expect(f.store.db.prepare('SELECT 1 FROM workflow_call_result_events').get()).toBeUndefined()
+  const archive = f.engine.execute({ type: 'archivePreview', id: f.networkId, revision: 1 }).archiveReview!
+  expect(archive.issues).toContain('Deliver completed workflow results before changing the composition')
+  expect(() => f.engine.execute({ type: 'archiveNetwork', id: f.networkId, revision: 1, expectedFingerprint: archive.fingerprint })).toThrow('Deliver completed workflow results')
+  const update = vi.fn()
+  expect(() => f.engine.updateInstance(f.caller, update)).toThrow('Deliver completed workflow results')
+  expect(update).not.toHaveBeenCalled()
   f.engine.execute({ type: 'activate', id: f.networkId, revision: 1 }); f.calls.tick(); f.calls.tick()
   expect(f.store.db.prepare('SELECT count(*) AS count FROM workflow_runs').get()!.count).toBe(1)
   expect(f.store.db.prepare('SELECT count(*) AS count FROM workflow_call_result_events WHERE request_id=?').get(request.requestId)!.count).toBe(2)
