@@ -1,3 +1,4 @@
+import { assertImportSetupFinished } from '../sharing/setup'
 import { digest } from '../storage/database'
 import type { PodDatabase } from '../storage/database'
 import type { ResourceRegistry } from '../resources/registry'
@@ -5,6 +6,7 @@ import type { ResourceRegistry } from '../resources/registry'
 export const inputSchema = { type: 'object', additionalProperties: false, required: ['version', 'runId', 'podId', 'scriptHash', 'assignmentRevision', 'reason', 'eventIds', 'checkpointRevision', 'checkpoint', 'resourceEpoch', 'workspace', 'references', 'limits'], properties: { version: { const: 1 }, runId: { type: 'string' }, podId: { type: 'string' }, scriptHash: { type: 'string' }, assignmentRevision: { type: 'integer' }, reason: { enum: ['manual', 'schedule', 'event'] }, eventIds: { type: 'array', items: { type: 'string' } }, checkpointRevision: { type: 'integer' }, checkpoint: { type: 'object' }, resourceEpoch: { type: 'integer' }, workspace: { type: 'string' }, home: { type: 'string' }, directories: { type: 'array' }, references: { type: 'array' }, limits: { type: 'object' } } }
 export const resultSchema = { type: 'object', additionalProperties: false, required: ['status', 'summary', 'completedInputIds', 'gapIds'], properties: { status: { enum: ['completed', 'completedWithGaps', 'failed', 'cancelled', 'blocked'] }, summary: { type: 'string', maxLength: 10000 }, completedInputIds: { type: 'array', items: { type: 'string' } }, gapIds: { type: 'array', items: { type: 'string' } } } }
 export function installExample(store: PodDatabase, resources: ResourceRegistry, podId: string, variant: 'deterministic' | 'agent', dependencyLockHash: string): void {
+  assertImportSetupFinished(store, podId)
   const pod = store.getPod(podId)
   if (store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=?').get(podId)) throw new Error('Wait for the current run or recover it before changing versions')
   const artifact = `export const contractVersion=2; export const assignmentRevision=${pod.bindingRevision};

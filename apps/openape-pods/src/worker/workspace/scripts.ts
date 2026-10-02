@@ -1,3 +1,4 @@
+import { assertImportSetupFinished } from '../sharing/setup'
 import { DependencyStore } from '../dependencies/store'
 import type { ScriptRuntime } from '../runs/runner'
 import { assertDataIdle } from '../data/backup'
@@ -25,6 +26,8 @@ export class ScriptWorkspace {
     }
     if (command.type === 'prepareDependencies') {
       if (!this.runtime) throw new Error('Dependency preparation runtime is unavailable')
+      // An imported draft is prepared from its exact imported lock during setup, never by a fresh resolution.
+      assertImportSetupFinished(this.store, command.podId)
       assertDataIdle(this.store)
       const current = () => {
         signal.throwIfAborted()
