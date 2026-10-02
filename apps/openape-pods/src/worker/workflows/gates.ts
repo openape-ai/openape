@@ -8,7 +8,7 @@ import type { GraphGate } from '../../contracts/graphs'
 import { InfrastructureError } from '../../contracts/infrastructure'
 import type { WorkflowDefinition } from '../../contracts/workflows'
 import type { PodDatabase } from '../storage/database'
-import { graphNodes, inspectGraph } from './items'
+import { calledItemScope, graphNodes, hasPendingItems, inspectGraph, workflowItemScope } from './items'
 import type { DeliveredItem, GraphRun } from './items'
 
 export type GateService = (body: { operation: 'create' | 'status' | 'consume', manifest: GateManifest, grantId?: string }) => Promise<unknown>
@@ -30,6 +30,14 @@ function update(store: PodDatabase, id: string, state: GateBatchState, now: numb
   store.db.prepare('UPDATE graph_gate_batches SET state=?,grant_id=coalesce(?,grant_id),url=coalesce(?,url),error=?,items=coalesce(?,items),updated_at=? WHERE id=?').run(state, change.grantId ?? null, change.url ?? null, change.error ?? null, change.items ? JSON.stringify(change.items) : null, now, id)
 }
 const manifest = (item: Batch): GateManifest => ({ version: 1, id: item.id, workflowId: item.workflowId, gate: item.gate, title: item.title, podId: item.podId, expiresAt: item.expiresAt, digest: item.digest, items: item.items.map(({ key, hash, title }) => ({ key, hash, title })) })
+function runBatches(store: PodDatabase, run: GraphRun, where: string, ...values: (string | number)[]): Batch[] {
+  const scope = calledItemScope(store, run.workflowRunId)
+  return batches(store, where, ...values).filter(item => !!store.db.prepare(`SELECT 1 FROM json_each(?) entry JOIN graph_items i ON i.id=json_extract(entry.value,'$.itemId') WHERE ${workflowItemScope} LIMIT 1`).get(JSON.stringify(item.items), scope, scope))
+}
+
+export function gateDecisionUnknown(store: PodDatabase, run: GraphRun): boolean {
+  return runBatches(store, run, 'workflow_id=? AND state=\'unknown\'', run.workflowId).some(batch => batch.podId === run.node)
+}
 function held(store: PodDatabase, itemId: string): Held {
   const row = store.db.prepare('SELECT id,key,payload,workflow_run_id FROM graph_items WHERE id=?').get(itemId)
   if (!row) throw new Error('Gate item not found')
@@ -53,19 +61,26 @@ function definitionOf(store: PodDatabase, workflowId: string): WorkflowDefinitio
   if (!row) throw new Error('Workflow not found')
   return { id: workflowId, revision: row.revision as number, name: row.name as string, nodes: JSON.parse(row.nodes as string), schedule: null, enabled: row.enabled === 1, paused: row.paused === 1, nextAt: null, mode: row.mode as WorkflowDefinition['mode'], groupId: row.group_id as string | null, channels: [], values: [], gates: store.db.prepare('SELECT definition FROM workflow_gates WHERE workflow_id=? ORDER BY rowid').all(workflowId).map(gate => JSON.parse(gate.definition as string)) }
 }
+function decisionDefinition(store: PodDatabase, workflowId: string, item: Held): WorkflowDefinition {
+  const called = store.db.prepare('SELECT w.definition,w.finished_at,control.cancellation_receipt FROM workflow_runs w JOIN workflow_call_requests c ON c.workflow_run_id=w.id JOIN workflow_call_controls control ON control.request_id=c.id WHERE w.id=? AND w.workflow_id=?').get(item.workflowRunId, workflowId)
+  if (called && (called.finished_at !== null || called.cancellation_receipt)) throw new Error('Called workflow no longer accepts owner gate decisions')
+  return called ? JSON.parse(called.definition as string) as WorkflowDefinition : definitionOf(store, workflowId)
+}
 /** Nodes that take a channel, by the scripts that are active now. Used for decisions outside a run. */
-function consumersNow(store: PodDatabase, definition: WorkflowDefinition, channel: string): string[] {
+function consumersNow(store: PodDatabase, definition: WorkflowDefinition, channel: string, workflowRunId: string): string[] {
+  if (calledItemScope(store, workflowRunId)) return graphNodes(store, workflowRunId, definition).filter(node => node.takes.includes(channel)).map(node => node.id)
   const { contracts } = inspectGraph(store, definition)
   return [...definition.nodes.filter(member => contracts[member.podId]?.takes.includes(channel)).map(member => member.podId), ...definition.gates.filter(gate => gate.takes === channel).map(gate => node(gate.key))]
 }
-function pool(store: PodDatabase, workflowId: string, gate: string): Held[] {
+function pool(store: PodDatabase, workflowId: string, gate: string, workflowRunId?: string): Held[] {
   const taken = new Set(batches(store, `workflow_id=? AND gate=? AND state IN (${open.map(() => '?').join(',')})`, workflowId, gate, ...open).flatMap(item => item.items.map(entry => entry.itemId)))
-  return store.db.prepare('SELECT i.id,i.key,i.payload,i.workflow_run_id FROM graph_deliveries d JOIN graph_items i ON i.id=d.item_id WHERE i.workflow_id=? AND d.node=? AND d.state=\'pending\' ORDER BY i.created_at,i.rowid').all(workflowId, node(gate)).map(row => ({ id: row.id as string, key: row.key as string, payload: row.payload as string, workflowRunId: row.workflow_run_id as string })).filter(item => !taken.has(item.id))
+  const scope = calledItemScope(store, workflowRunId)
+  return store.db.prepare(`SELECT i.id,i.key,i.payload,i.workflow_run_id FROM graph_deliveries d JOIN graph_items i ON i.id=d.item_id WHERE i.workflow_id=? AND d.node=? AND d.state='pending' AND ${workflowItemScope} ORDER BY i.created_at,i.rowid`).all(workflowId, node(gate), scope, scope).map(row => ({ id: row.id as string, key: row.key as string, payload: row.payload as string, workflowRunId: row.workflow_run_id as string })).filter(item => !taken.has(item.id))
 }
 
 /** True while a gate holds items or waits for a decision, so its consumer has a reason to run. */
-export function gateNeedsRound(store: PodDatabase, workflowId: string, gate: string): boolean {
-  return !!store.db.prepare('SELECT 1 FROM graph_deliveries d JOIN graph_items i ON i.id=d.item_id WHERE i.workflow_id=? AND d.node=? AND d.state=\'pending\' LIMIT 1').get(workflowId, node(gate))
+export function gateNeedsRound(store: PodDatabase, workflowId: string, gate: string, workflowRunId?: string): boolean {
+  return hasPendingItems(store, workflowId, node(gate), workflowRunId)
 }
 
 function settle(store: PodDatabase, item: Batch, state: 'denied' | 'expired', reason: string | null, now: number): void {
@@ -83,9 +98,9 @@ async function legacyGateRound(store: PodDatabase, run: GraphRun, service: GateS
   const nodes = graphNodes(store, run.workflowRunId, run.definition)
   const gates = run.definition.gates.filter((gate): gate is ApproveGate => gate.kind === 'approve' && nodes.some(item => item.id === run.node && item.takes.includes(gate.gives)))
   for (const gate of gates) {
-    for (const interrupted of batches(store, 'workflow_id=? AND gate=? AND state IN (\'preparing\',\'consuming\')', run.workflowId, gate.key)) update(store, interrupted.id, 'unknown', now(), { error: 'Interrupted approval; inspect the grant before proceeding' })
-    if (batches(store, 'workflow_id=? AND gate=? AND state=\'unknown\'', run.workflowId, gate.key).length) continue
-    for (const pending of batches(store, 'workflow_id=? AND gate=? AND state=\'pending\'', run.workflowId, gate.key)) {
+    for (const interrupted of runBatches(store, run, 'workflow_id=? AND gate=? AND state IN (\'preparing\',\'consuming\')', run.workflowId, gate.key)) update(store, interrupted.id, 'unknown', now(), { error: 'Interrupted approval; inspect the grant before proceeding' })
+    if (runBatches(store, run, 'workflow_id=? AND gate=? AND state=\'unknown\'', run.workflowId, gate.key).length) continue
+    for (const pending of runBatches(store, run, 'workflow_id=? AND gate=? AND state=\'pending\'', run.workflowId, gate.key)) {
       if (pending.expiresAt <= now()) { settle(store, pending, 'expired', null, now()); continue }
       try {
         const status = await service({ operation: 'status', manifest: manifest(pending), grantId: pending.grantId! })
@@ -105,9 +120,9 @@ async function legacyGateRound(store: PodDatabase, run: GraphRun, service: GateS
         break
       }
     }
-    if (batches(store, 'workflow_id=? AND gate=? AND state=\'unknown\'', run.workflowId, gate.key).length) continue
-    if (batches(store, 'workflow_id=? AND gate=? AND state=\'pending\'', run.workflowId, gate.key).length >= gateLimits.pendingBatches) continue
-    const items = pool(store, run.workflowId, gate.key).slice(0, gateLimits.batchItems).map((item): GateBatchItem => {
+    if (runBatches(store, run, 'workflow_id=? AND gate=? AND state=\'unknown\'', run.workflowId, gate.key).length) continue
+    if (runBatches(store, run, 'workflow_id=? AND gate=? AND state=\'pending\'', run.workflowId, gate.key).length >= gateLimits.pendingBatches) continue
+    const items = pool(store, run.workflowId, gate.key, run.workflowRunId).slice(0, gateLimits.batchItems).map((item): GateBatchItem => {
       const data = JSON.parse(item.payload) as Record<string, unknown>
       return { itemId: item.id, key: item.key, hash: payloadHash(data), title: itemTitle(item.key, data), excluded: false, emittedId: null }
     })
@@ -156,10 +171,10 @@ export function excludeGateItems(store: PodDatabase, batchId: string, itemIds: s
     const item = batch(store, batchId)
     if (item.state !== 'pending') throw new Error('Only a batch that awaits approval can be changed')
     if (!itemIds.length || itemIds.some(id => !item.items.some(entry => entry.itemId === id))) throw new Error('Item is not part of this batch')
-    const definition = definitionOf(store, item.workflowId)
+    const definition = decisionDefinition(store, item.workflowId, held(store, item.items[0]!.itemId))
     const gate = definition.gates.find((candidate): candidate is ApproveGate => candidate.kind === 'approve' && candidate.key === item.gate)
     if (!gate) throw new Error('Gate not found')
-    const consumers = gate.excluded ? consumersNow(store, definition, gate.excluded) : []
+    const consumers = gate.excluded ? consumersNow(store, definition, gate.excluded, held(store, item.items[0]!.itemId).workflowRunId) : []
     for (const id of itemIds) release(store, item.workflowId, item.gate, held(store, id), 'excluded', gate.excluded, null, consumers, now)
     update(store, batchId, 'superseded', now, { items: item.items.map(entry => ({ ...entry, excluded: itemIds.includes(entry.itemId) })) })
   })
@@ -168,12 +183,12 @@ export function excludeGateItems(store: PodDatabase, batchId: string, itemIds: s
 /** Owner decision in the app: one held item goes to the channel of the chosen option. */
 export function chooseGateItem(store: PodDatabase, workflowId: string, gateKey: string, itemId: string, option: string, now: number): void {
   store.transaction(() => {
-    const definition = definitionOf(store, workflowId)
+    const definition = decisionDefinition(store, workflowId, held(store, itemId))
     const gate = definition.gates.find(candidate => candidate.kind === 'choose' && candidate.key === gateKey)
     const chosen = gate?.kind === 'choose' ? gate.options.find(candidate => candidate.key === option) : undefined
     if (!gate || !chosen) throw new Error('Gate option not found')
     if (!store.db.prepare('SELECT 1 FROM graph_deliveries d JOIN graph_items i ON i.id=d.item_id WHERE d.item_id=? AND d.node=? AND d.state=\'pending\' AND i.workflow_id=?').get(itemId, node(gateKey), workflowId)) throw new Error('Item is not held by this gate')
-    release(store, workflowId, gateKey, held(store, itemId), 'chosen', chosen.channel, chosen.title, consumersNow(store, definition, chosen.channel), now)
+    release(store, workflowId, gateKey, held(store, itemId), 'chosen', chosen.channel, chosen.title, consumersNow(store, definition, chosen.channel, held(store, itemId).workflowRunId), now)
   })
 }
 
@@ -184,11 +199,34 @@ export function discardGateBatch(store: PodDatabase, batchId: string, now: numbe
   settle(store, item, 'denied', 'Discarded after review', now)
 }
 
+export function closeCalledGates(store: PodDatabase, workflowRunId: string, now: number): void {
+  for (const item of batches(store, 'state IN (\'pending\',\'preparing\')').filter(item => item.items.some(entry => held(store, entry.itemId).workflowRunId === workflowRunId))) {
+    update(store, item.id, 'superseded', now, { error: 'Called workflow cancelled; grant cannot authorize execution' })
+    store.db.prepare('UPDATE graph_gate_batches SET url=NULL WHERE id=?').run(item.id)
+  }
+  const waiting = store.db.prepare('SELECT i.id,i.workflow_id,d.node FROM graph_items i JOIN graph_deliveries d ON d.item_id=i.id WHERE i.workflow_run_id=? AND d.state=\'pending\' AND d.node LIKE \'gate:%\'').all(workflowRunId)
+  for (const input of waiting) release(store, input.workflow_id as string, (input.node as string).slice(5), held(store, input.id as string), 'cancelled', null, 'Finite workflow cancellation retained original decisions', [], now)
+}
+
+function approvalUrl(store: PodDatabase, item: Batch): string | null {
+  const closed = store.db.prepare(`SELECT 1 FROM json_each(?) entry
+    JOIN graph_items i ON i.id=json_extract(entry.value,'$.itemId')
+    JOIN workflow_call_requests c ON c.workflow_run_id=i.workflow_run_id
+    JOIN workflow_runs w ON w.id=c.workflow_run_id
+    JOIN workflow_call_controls control ON control.request_id=c.id
+    WHERE w.finished_at IS NOT NULL OR control.cancellation_receipt IS NOT NULL LIMIT 1`).get(JSON.stringify(item.items))
+  return closed ? null : item.url
+}
+
 export function gateView(store: PodDatabase): { batches: GateBatchView[], held: GateHeldItem[] } {
   const recent = batches(store, 'state IN (\'pending\',\'unknown\',\'preparing\',\'consuming\') OR id IN (SELECT id FROM graph_gate_batches ORDER BY updated_at DESC LIMIT 20)')
   const choose = store.db.prepare('SELECT w.id,g.definition FROM workflow_gates g JOIN workflows w ON w.id=g.workflow_id WHERE w.archived=0').all().map(row => ({ workflowId: row.id as string, gate: JSON.parse(row.definition as string) as GraphGate })).filter(item => item.gate.kind === 'choose')
+  const called = store.db.prepare('SELECT w.id,w.workflow_id,w.definition FROM workflow_runs w JOIN workflow_call_requests c ON c.workflow_run_id=w.id WHERE c.finished_at IS NULL ORDER BY c.rowid LIMIT 100').all().flatMap((row) => {
+    const definition = JSON.parse(row.definition as string) as WorkflowDefinition
+    return definition.gates.filter(gate => gate.kind === 'choose').map(gate => ({ workflowId: row.workflow_id as string, workflowRunId: row.id as string, gate }))
+  })
   return {
-    batches: recent.map(item => ({ id: item.id, workflowId: item.workflowId, gate: item.gate, podId: item.podId, state: item.state, url: item.url, expiresAt: item.expiresAt, error: item.error, items: item.items.map(({ itemId, key, title, excluded }) => ({ itemId, key, title, excluded })) })),
-    held: choose.flatMap(({ workflowId, gate }) => pool(store, workflowId, gate.key).slice(0, 100).map(item => ({ itemId: item.id, workflowId, gate: gate.key, key: item.key, title: itemTitle(item.key, JSON.parse(item.payload)) }))),
+    batches: recent.map(item => ({ id: item.id, workflowId: item.workflowId, gate: item.gate, podId: item.podId, state: item.state, url: approvalUrl(store, item), expiresAt: item.expiresAt, error: item.error, items: item.items.map(({ itemId, key, title, excluded }) => ({ itemId, key, title, excluded })) })),
+    held: [...choose.flatMap(({ workflowId, gate }) => pool(store, workflowId, gate.key).slice(0, 100).map(item => ({ itemId: item.id, workflowId, gate: gate.key, key: item.key, title: itemTitle(item.key, JSON.parse(item.payload)) }))), ...called.flatMap(({ workflowId, workflowRunId, gate }) => pool(store, workflowId, gate.key, workflowRunId).slice(0, 100).map(item => ({ itemId: item.id, workflowId, gate: gate.key, key: item.key, title: itemTitle(item.key, JSON.parse(item.payload)) })))],
   }
 }

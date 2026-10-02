@@ -1,7 +1,7 @@
 # Pods persistent networks: frozen M0 contract
 
-Status: implementation contract approved through the October 1 plan. M0–M5
-are accepted and merged; M6 is in progress and unaccepted. The original M0
+Status: implementation contract approved through the October 1 plan. M0–M6
+are accepted and merged; M7 is in progress and unaccepted. The original M0
 increment froze these contracts; milestone evidence below records actual delivery. [Development issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417)
 tracks delivery. [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3VDB1S72E4EQQW58T97C617).
 
@@ -872,5 +872,63 @@ match canonical source/base commits. Runtime exact-head unit-only CI5322 passed.
 [Verified private M6 Test Runs](https://report.openape.ai/r/EFk69QK5P2sGYg1yKqwwKA9w)
 retains actual results and inspected screenshot bytes: owner200, anonymous401,
 category Test Runs. No provider action or rights expansion. Final documentation-head
-CI and protected merge remain before M6 acceptance. Continue M7; productive browser
+CI5323 passed at documentation head `360b4f07f4d49ca3b72f78afc9c3088573d16bfb`;
+protected merge `e815dad04ecf0985a7a1bd0f6269604f5b55f46a` passed full main
+unit CI5324. M6 is accepted. Continue M7; productive browser
 parity, migration, sharing and signed relay-first rollout remain later approved work.
+
+## M7 correlated finite calls and explicit joins — implementation in progress
+
+Schema32 adds call proposals, explicit company-bound call permissions, delivery
+controls, per-Pod decision polling and immutable result-event relations; historical
+schema28–31 SQL and format1/2 definitions remain unchanged. Format3 adds explicit
+case-revision joins. A join accepts exactly one input per declared channel; missing,
+conflicting and late inputs require owner review instead of mixing cases or reopening
+completed work. Inputs received before the deadline remain eligible after a delayed
+dispatch. Retry lineage problems isolate the affected join.
+
+Named, versioned workflow ports bind an immutable published composition and validated
+script/resource/member pins. Mutable owner pause counters remain a separate revision
+kind. Legacy UUID-keyed handoffs remain supported through an explicit port adapter.
+`workflow.call` stages a correlated request; only successful caller settlement accepts
+it atomically. A retained logical receipt deduplicates repeated requests for the same
+case/revision and inputs/routes, even when the caller supplies a different UUID.
+Uncertain caller settlement accepts no child execution and retains proposals/effects.
+Known safe infrastructure retries journal discarded unaccepted proposals.
+
+Accepted calls release the caller lease, dispatch one finite execution per eligible
+workflow and retain one terminal result. Paused callers retain completed results;
+paused and busy entries do not occupy bounded dispatch/delivery windows. Current call
+permission is rechecked before unfinished steps. Completed steps and external effect
+receipts survive retries, cancellation, restoration and materialisation errors.
+Required human decisions keep a call nonterminal; decision-only maintenance never
+executes the consumer script, uses per-Pod backoff and retains bounded finished
+history. Published approval gates require exactly one approved-channel Pod consumer
+because consumed grants bind that Pod; use separate gates for independent approvals.
+Conclusive denial, expiry, exclusion or a choice away from a required terminal settles
+as failed once all branches finish and no pending input or held decision remains. Known pending gates become unusable after cancellation; unknown evidence
+remains available for review, including after item retention and cancellation.
+Call cancellation requires the original owner-evidence route; repeated requests retain
+the first receipt and append a separate trace. Finished child outputs remain retained
+until their call result settles.
+
+A finite step receives its complete bounded scoped batch or fails before processing.
+Unprocessed inputs cannot produce a successful terminal receipt. Oversized cases need
+an explicitly reviewed definition; completed work never automatically replays to drain
+leftover inputs. Restored calls stay fenced until `resumeCall` records owner evidence
+and verifies stopped processes, retained effects, current baseline and permissions.
+`resolveCall` explicitly acknowledges an incomplete result of already completed work
+as failed, with a retained-work receipt; it never changes the completed child or
+repeats its effects. Recorded cancellation intent finishes after process cleanup and
+stops for owner review on uncertainty.
+
+M7 runtime source `e7ae6e1cec20149ec31f12363930312e6c2226c5` passes root
+lint/typecheck, Pods build,137 suites/1085 fresh unit tests and four manual native
+checks through actual Electron preload/main/worker/ScriptFrame routes. Actual Opus5.5
+closure reports no blocker; primary native diff review reconciles33 files/2659 lines.
+Native PR208 is linked to issue1417 and runtime unit-only CI5327 passes.
+[Verified private Test Runs](https://report.openape.ai/r/GeG_5EXS3PQGRtT0PJmGCcMS)
+contains actual correlated invoices, paused-result retention, join outcomes and the
+personally inspected authenticated screenshot. Protected merge/main remain required
+before M7 acceptance. Productive authoring, operational views, browser parity and
+rollout remain their later milestones.

@@ -13,17 +13,49 @@ The original alternative proxy rewrite is preserved in stash
 The audit now succeeds with exactly one ignored high finding. Actual read-only
 Claude Code Opus 5.5 review found no blocking issue; documentation was clarified
 for the direct proxy path, downstream consumers and exception removal.
-Root/affected unit gates, native PR and exact-source CI remain in progress.
+Tested source `dbb500b235832d4342727924e438e19f45c397f2` passed root/affected
+unit gates and CI5325. Native PR207 merged as `d7119e533c0a3ec123ef04b98b813dc7fe8c5e8f`;
+full main CI5326 passed and issue1418 is closed.
+[Verified private Test Runs](https://report.openape.ai/r/PM_juju3H8CVz-vl4QcMKznd).
 M0–M6 are accepted; staged M7 remains unaccepted in its separate checkout and
 its recovery review fixes are continuing. No production activation is included.
+
+## Current M7 verification — October 2, 2026
+
+M0–M6 are accepted; M7 remains unaccepted. Patrick approved the exact
+CVE-2026-85393 audit exception in native PR207/issue1418. The previous upstream-only
+blocker assessment is superseded; the optional proxy rewrite is separately preserved.
+PR207 passed CI/merge/main and was incorporated with the complete owned M7
+implementation preserved. No runtime cryptographic replacement is needed.
+
+Current M7 working-tree verification: full root lint/typecheck, Pods build,
+137 files / 1,085 unit tests and three manual native suites / four tests passed.
+The actual authenticated Electron screenshot was personally inspected: Ready,
+synthetic company, finite workflow and distinct caller/source/result/review Pods.
+Current labels remain legacy presentation; operational network UX is M9.
+Actual native receipts prove two isolated invoice calls/results, paused-result
+retention, completed joins and missing-input review without consumer execution.
+Recovery fixes preserve queued accepted work, allow owner reauthorization of cancelled
+results, retain uncertain gate items, bound finished polling history and settle
+conclusively denied/expired required branches without replay. Actual Opus5.5 closure found no remaining blocker. Its low-priority multi-hop
+diagnostic observation was tightened to directly prevented terminal branches;
+the final full/native checks passed after that correction. Clean tested runtime `e7ae6e1cec20149ec31f12363930312e6c2226c5` passed
+exact-source unit CI5327. Native [PR208](https://repos.openape.ai/patrick/monorepo/pulls/208)
+is explicitly linked to issue1417; all33 files/2659 native diff lines match canonical
+source/base. [Verified private Test Runs](https://report.openape.ai/r/GeG_5EXS3PQGRtT0PJmGCcMS)
+retains actual clean-source results and the personally inspected screenshot;
+category Test Runs, owner200, anonymous401 and rendered screenshot bytes verified.
+Native attachment is unsupported by the app helper; canonical links remain authoritative.
+Next verify this documentation head, protected merge and green main before accepting
+M7 and continuing M8–M14. No production activation is included.
 
 ## Pods persistent networks — issue 1417
 
 [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3VDB1S72E4EQQW58T97C617),
 [native issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417).
 Checkout: `openape-monorepo.worktrees/pods-workflows-networks`; branch
-`feature/issue-1417-pods-networks-m6`; current canonical base
-`710c7b65af5a8d4c8e6a2753c75caeaf0dd5aa6d`; original canonical base
+`feature/issue-1417-pods-networks-m7`; current canonical base
+`d7119e533c0a3ec123ef04b98b813dc7fe8c5e8f`; original canonical base
 `a99c69bd2b97d8883ce5538894c3f38510407ddf` (Pods 0.1.1, schema 27).
 
 M0 freezes [contracts](../architecture/pods-networks/contracts.md) and the
@@ -39,9 +71,9 @@ blocking/major findings after corrections. The primary agent checked sources and
 remaining token/identity wording. Final tested SHA `3b7363b2622b8394c429fe8833c6df49e87742db` passed exact-head CI;
 M0 merged as `fb80556d8a66843e028da7d13cda97fd5a9f1d50`.
 [Final private Test Runs evidence](https://report.openape.ai/r/3fMyH6tmpepIRy7p8qRhYqzm).
-M0–M5 are accepted and merged. M6 is in progress and unaccepted; M7–M14
-remain unimplemented. M6 starts from the canonical M5 merge;
-M5 runtime acceptance, final exact-head CI and protected merge are recorded below.
+M0–M6 are accepted and merged. M7 is in progress and unaccepted; M8–M14
+remain unimplemented. M7 starts from the canonical M6 merge;
+M5/M6 runtime acceptance, final exact-head CI and protected merges are recorded below.
 M3 [PR 203](https://repos.openape.ai/patrick/monorepo/pulls/203): tested clean
 runtime `da209ca697d79c0cade36759d9ccb69aa9167f53` passed root lint/typecheck/build,
 133 files / 966 fresh Pods unit tests, four manual native/Electron tests and
@@ -121,11 +153,11 @@ category Test Runs, owner read 200, anonymous read 401 and both inspected screen
 bytes present. Final documentation head `dbbb2f2918520c55974d708de4296c6dd6676873`
 passed exact-head CI 5319; final native review verified 33 files / 2,585 displayed
 lines. Protected merge `710c7b65af5a8d4c8e6a2753c75caeaf0dd5aa6d` completes M5.
-Next: M6 scoped shared collections/artifacts on `feature/issue-1417-pods-networks-m6`
-from that canonical main, in the same isolated checkout. M6 remains unaccepted. M9 retains the bounded operational failure-list work; missing
+M6 scoped shared collections/artifacts started from that canonical main in the
+same isolated checkout and is now accepted, as recorded below. M9 retains the bounded operational failure-list work; missing
 historical process proof stays fail-closed. Never repeat unknown external effects.
 
-M6 runtime acceptance evidence is complete; protected merge remains pending.
+M6 is accepted and merged through native PR206.
 Native [PR206](https://repos.openape.ai/patrick/monorepo/pulls/206) is explicitly
 linked to issue1417. Clean tested runtime
 `e5050467cfb91f9ba0545ffe503bf370fc819526` passes root lint/typecheck, Pods build,
@@ -158,8 +190,35 @@ bytes present. Native sharing/denial is proved by the measured private settlemen
 receipt; public run diagnostics remain redacted. Existing Standalone labels are M9
 work, and definitions/configuration/bindings remain fixture seeded until M8/M9.
 No productive owner/provider action, live conversion or expanded rights. Final
-reviewed documentation-head CI and protected merge remain before M6 acceptance;
-continue M7 correlated workflow calls/joins afterward without new plan approval.
+documentation head `360b4f07f4d49ca3b72f78afc9c3088573d16bfb` passed CI5323;
+protected merge `e815dad04ecf0985a7a1bd0f6269604f5b55f46a` passed canonical
+main full unit CI5324. Final28-file/1,894-line native diff matches reviewed commits.
+M7 begins on the separate milestone branch from that main. Doctor and61 existing
+workflow/item-flow/mail-workflow baseline checks pass. Implement named workflow
+ports, immutable call snapshots, idempotent correlated results and explicit joins;
+M7 remains unaccepted.
+
+M7 working tree adds immutable versioned workflow ports and frozen member pins,
+atomic caller-settlement proposals, scoped durable calls/results, per-workflow FIFO,
+explicit case-revision joins, required owner decisions and decision-only maintenance.
+The latest working-tree full Pods unit run passed 137 files / 1,076 tests;
+root lint/typecheck and Pods build passed. Historical schema-28 migration fixtures
+now explicitly remove M7 indexes before replaying the unchanged historical boundary.
+Actual Electron/preload/main/worker/native workflow-call acceptance passed with two
+distinct invoice/child/terminal results, paused-network result retention and missing
+join review. The combined four-test native regression passed before the latest
+review fixes; the current repeat and final clean-commit evidence are pending.
+The personally inspected authenticated existing route is readable; future M9
+operational network/result UI is not claimed.
+Actual Claude Code Opus 5.5 reviews led to restored-call fencing, audited owner
+resume, an explicit retained-effects incomplete-result resolution, permission checks
+before unfinished steps, per-Pod decision polling, eligible queue/delivery scans,
+cancellation reconciliation and bounded maintenance retention. Oversized finite
+inputs are rejected before script processing; completed work never automatically
+replays. Actual Opus final review is running; findings remain subject to verification.
+M7 remains unaccepted. Native PR, final clean tested SHA, verified report and exact-head
+CI are pending. Next: close final review findings, test final committed source,
+publish verified evidence, review/merge the milestone PR and continue M8–M14.
 
 M1 prototype: 24 crash/authority checks pass; selected established scheduling
 suites pass (120 checks before the two final isolation assertions). Maximum-payload

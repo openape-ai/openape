@@ -30,5 +30,7 @@ export function networkDataPin(store: PodDatabase, networkId: string, podId: str
     JOIN data_collections c ON c.id=p.collection_id JOIN data_collection_versions v ON v.collection_id=c.id AND v.version=c.current_version
     WHERE p.network_id=? AND p.pod_id=? ORDER BY p.collection_id,p.operation`).all(networkId, podId)
   const artifacts = store.db.prepare('SELECT p.scope_id,p.operation,p.revision,s.owner_issuer,s.owner_subject,s.group_id,s.collection_id,s.private_network_id FROM artifact_permissions p JOIN artifact_scopes s ON s.id=p.scope_id WHERE p.network_id=? AND p.pod_id=? ORDER BY p.scope_id,p.operation').all(networkId, podId)
-  return digest(canonicalNetworkJson({ data, artifacts, config: networkConfiguration(store, networkId, podId) }))
+  const workflowCalls = store.db.prepare(`SELECT p.workflow_id,p.workflow_revision,p.revision,p.owner_issuer,p.owner_subject,p.group_id,r.content_hash FROM workflow_call_permissions p
+    JOIN workflow_revisions r ON r.workflow_id=p.workflow_id AND r.revision=p.workflow_revision WHERE p.network_id=? AND p.pod_id=? AND p.enabled=1 ORDER BY p.workflow_id,p.workflow_revision`).all(networkId, podId)
+  return digest(canonicalNetworkJson({ data, artifacts, config: networkConfiguration(store, networkId, podId), ...(workflowCalls.length ? { workflowCalls } : {}) }))
 }

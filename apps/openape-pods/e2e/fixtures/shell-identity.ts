@@ -70,23 +70,35 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`
-  const store = new PodDatabase(root)
-  try {
-    const pods: Record<string, unknown> = {}
+  const ownerId = randomUUID()
+  const pods: Record<string, unknown> = {}
+  function registerPods(store: PodDatabase) {
     for (const pod of store.listPods()) {
+      if (Object.hasOwn(pods, pod.id)) continue
       const id = randomUUID(); const subject = `fixture-${pod.id}@example.test`; const owner = 'fixture-owner@example.test'
       const identity = { connectionId: id, podId: pod.id, issuer: origin, owner, subject, keyId: 'fixture-key' }
       subjects.set(subject, pod.id)
       pods[pod.id] = { connectionId: id, prepared: true, identity }
       records.push({ path: join(root, 'credentials', `${id}.encrypted`), value: JSON.stringify({ ...identity, privateKey: 'SYNTHETIC_NOT_A_REAL_KEY', accessToken: 'LOCAL_SYNTHETIC_TOKEN', expiresAt: Date.now() / 1000 + 3600 }) })
     }
-    const ownerId = randomUUID()
+  }
+  const store = new PodDatabase(root)
+  try {
+    registerPods(store)
     if (ownerPermissions.length) records.push({ path: join(root, 'credentials', `${ownerId}.encrypted`), value: JSON.stringify({ issuer: origin, account: 'fixture-owner@example.test', subject: 'fixture-owner', accessToken: 'SYNTHETIC_OWNER_TOKEN', refreshToken: 'SYNTHETIC_REFRESH_TOKEN', expiresAt: Date.now() / 1000 + 3600 }) })
     store.db.prepare('INSERT INTO connections VALUES(?,?,?,?,?,?)').run(ownerId, 'openape', 'fixture-owner@example.test', 'ready', null, JSON.stringify({ issuer: origin, pods }))
   }
   finally { store.close() }
   return {
     owner: { issuer: origin, subject: 'fixture-owner@example.test' },
+    attachPods: () => {
+      const database = new PodDatabase(root)
+      try {
+        registerPods(database)
+        database.db.prepare('UPDATE connections SET metadata=? WHERE id=?').run(JSON.stringify({ issuer: origin, pods }), ownerId)
+      }
+      finally { database.close() }
+    },
     gates: () => [...grants.entries()].filter(([, grant]) => grant.command?.[0] === 'pods-graph-gate').map(([id, grant]) => ({ id, status: grant.status, command: grant.command!, consumeAttempts: consumes.get(id) ?? 0 })),
     holdGateConsume: (id: string) => {
       const grant = grants.get(id)

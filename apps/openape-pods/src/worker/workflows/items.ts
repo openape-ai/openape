@@ -50,13 +50,21 @@ export function graphRun(store: PodDatabase, runId: string): GraphRun | undefine
   return { workflowId: attempt.workflow_id as string, workflowRunId: attempt.id as string, node: attempt.pod_id as string, definition }
 }
 
-export function hasPendingItems(store: PodDatabase, workflowId: string, node: string): boolean {
-  return !!store.db.prepare('SELECT 1 FROM graph_deliveries d JOIN graph_items i ON i.id=d.item_id WHERE i.workflow_id=? AND d.node=? AND d.state=\'pending\' LIMIT 1').get(workflowId, node)
+export function calledItemScope(store: PodDatabase, workflowRunId?: string): string {
+  return workflowRunId && store.db.prepare('SELECT 1 FROM workflow_call_requests WHERE workflow_run_id=?').get(workflowRunId) ? workflowRunId : ''
+}
+
+export const workflowItemScope = `((?='' AND NOT EXISTS(SELECT 1 FROM workflow_call_requests call WHERE call.workflow_run_id=i.workflow_run_id)) OR i.workflow_run_id=?)`
+
+export function hasPendingItems(store: PodDatabase, workflowId: string, node: string, workflowRunId?: string): boolean {
+  const scope = calledItemScope(store, workflowRunId)
+  return !!store.db.prepare(`SELECT 1 FROM graph_deliveries d JOIN graph_items i ON i.id=d.item_id WHERE i.workflow_id=? AND d.node=? AND d.state='pending' AND ${workflowItemScope} LIMIT 1`).get(workflowId, node, scope, scope)
 }
 
 /** The oldest pending items of a node, bounded by count and by the size of one runner reply. */
-export function pendingItems(store: PodDatabase, workflowId: string, node: string): DeliveredItem[] {
-  const rows = store.db.prepare('SELECT i.id,i.key,i.channel,i.payload FROM graph_deliveries d JOIN graph_items i ON i.id=d.item_id WHERE i.workflow_id=? AND d.node=? AND d.state=\'pending\' ORDER BY i.created_at,i.rowid LIMIT ?').all(workflowId, node, graphLimits.emits)
+export function pendingItems(store: PodDatabase, workflowId: string, node: string, workflowRunId?: string): DeliveredItem[] {
+  const scope = calledItemScope(store, workflowRunId)
+  const rows = store.db.prepare(`SELECT i.id,i.key,i.channel,i.payload FROM graph_deliveries d JOIN graph_items i ON i.id=d.item_id WHERE i.workflow_id=? AND d.node=? AND d.state='pending' AND ${workflowItemScope} ORDER BY i.created_at,i.rowid LIMIT ?`).all(workflowId, node, scope, scope, graphLimits.emits)
   const items: DeliveredItem[] = []; let bytes = 0
   for (const row of rows) {
     const item = { id: row.id as string, key: row.key as string, channel: row.channel as string, data: JSON.parse(row.payload as string) as Record<string, unknown> }
@@ -99,7 +107,9 @@ export function pruneItems(store: PodDatabase): void {
         SELECT i.id,i.workflow_id,i.key FROM graph_items i
         WHERE i.workflow_run_id IN (
           SELECT id FROM (SELECT id, row_number() OVER (PARTITION BY workflow_id ORDER BY started_at DESC, rowid DESC) AS position FROM workflow_runs) WHERE position <= ${retainedItemRuns}
-        ) OR EXISTS (SELECT 1 FROM graph_deliveries d WHERE d.item_id=i.id AND d.state='pending');
+        ) OR EXISTS (SELECT 1 FROM graph_deliveries d WHERE d.item_id=i.id AND d.state='pending')
+        OR EXISTS (SELECT 1 FROM graph_gate_batches batch, json_each(batch.items) entry
+          WHERE batch.state IN ('unknown','consuming') AND i.id IN (json_extract(entry.value,'$.itemId'),json_extract(entry.value,'$.emittedId')));
       DELETE FROM graph_item_events WHERE NOT EXISTS (SELECT 1 FROM retained_items r WHERE r.workflow_id=graph_item_events.workflow_id AND r.key=graph_item_events.key);
       DELETE FROM graph_deliveries WHERE item_id NOT IN (SELECT id FROM retained_items);
       DELETE FROM graph_items WHERE id NOT IN (SELECT id FROM retained_items);
