@@ -1,5 +1,5 @@
 import { definitionTables } from '../../src/worker/storage/definition-schema'
-import { sharingTables } from '../../src/worker/storage/sharing-schema'
+import { aliasTables, sharingTables } from '../../src/worker/storage/sharing-schema'
 import { networkDataTables } from '../../src/worker/storage/network-data-schema'
 import { networkWorkflowIndexes, networkWorkflowTables } from '../../src/worker/storage/network-workflow-schema'
 import { networkGateIndexes, networkGateTables } from '../../src/worker/storage/network-gate-schema'
@@ -8,7 +8,7 @@ import { networkTables } from '../../src/worker/storage/network-schema'
 import type { DatabaseSync } from 'node:sqlite'
 
 export function removeNetworkGates(database: DatabaseSync): void {
-  for (const table of [...sharingTables].reverse()) database.exec(`DROP TABLE ${table}`)
+  for (const table of [...aliasTables, ...sharingTables].reverse()) database.exec(`DROP TABLE ${table}`)
   for (const table of [...definitionTables].reverse()) database.exec(`DROP TABLE ${table}`)
   for (const index of networkWorkflowIndexes) database.exec(`DROP INDEX ${index}`)
   for (const table of [...networkWorkflowTables].reverse()) database.exec(`DROP TABLE ${table}`)

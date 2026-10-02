@@ -3786,7 +3786,17 @@
   "Resource and secret inputs are bound through setup, not entered as values": "Ressourcen- und Geheimniseingaben werden in der Einrichtung gebunden und nicht als Werte eingegeben",
   "Value targets an undeclared input": "Der Wert bezieht sich auf eine nicht deklarierte Eingabe",
   "Value targets an undeclared package member": "Der Wert bezieht sich auf ein nicht deklariertes Paketmitglied",
-  "Values can only change before the paused copy is created": "Werte können nur geändert werden, bevor die pausierte Kopie erstellt wird",
   "Restored profile: import the package again": "Wiederhergestelltes Profil: Importiere das Paket erneut",
-  "Value does not match the declared input {p0}": "Der Wert passt nicht zur deklarierten Eingabe {p0}"
+  "Value does not match the declared input {p0}": "Der Wert passt nicht zur deklarierten Eingabe {p0}",
+  "Invalid import command": "Ungültiger Importbefehl",
+  "Finish desktop identity setup before importing packages": "Schließe die Identitätseinrichtung auf dem Desktop ab, bevor du Pakete importierst",
+  "Portable aliases require a current file, directory or tool assignment": "Portable Aliase benötigen eine aktuelle Datei-, Ordner- oder Werkzeugzuweisung",
+  "Invalid portable alias": "Ungültiger portabler Alias",
+  "Values can only change during import setup": "Werte können nur während der Import-Einrichtung geändert werden",
+  "This value is now a Pod variable; change it on the Pod": "Dieser Wert ist jetzt eine Pod-Variable; ändere ihn am Pod",
+  "Bindings require the paused copy of a declared package Pod": "Bindungen benötigen die pausierte Kopie eines deklarierten Paket-Pods",
+  "This assignment does not match the declared package access": "Diese Zuweisung passt nicht zum deklarierten Paketzugriff",
+  "Dependencies are prepared for the paused copy of a declared package Pod": "Abhängigkeiten werden für die pausierte Kopie eines deklarierten Paket-Pods vorbereitet",
+  "Import changed while preparing dependencies": "Der Import wurde während der Vorbereitung der Abhängigkeiten geändert",
+  "Import the package again": "Importiere das Paket erneut"
 }
