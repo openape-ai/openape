@@ -345,8 +345,8 @@ it('connects network volume with stable legacy parts and leaves complete data lo
   const f = fixture(); const network = seedNetwork(f.store)
   f.store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,?,?,NULL)').run(network.pod.id, JSON.stringify(f.actor.owner), f.actor.id, f.actor.generation, 'ready', '{}')
   f.store.transaction(() => {
-    const insert = f.store.db.prepare('INSERT INTO run_events VALUES(?,?,?,?,?)')
-    for (let sequence = 0; sequence < 12000; sequence++) insert.run(network.runId, sequence, 'log', JSON.stringify({ message: 'x'.repeat(4096) }), 1)
+    f.store.db.prepare(`WITH RECURSIVE sequence(value) AS (SELECT 0 UNION ALL SELECT value+1 FROM sequence WHERE value<11999)
+      INSERT INTO run_events SELECT ?,value,'log',?,1 FROM sequence`).run(network.runId, JSON.stringify({ message: 'x'.repeat(4096) }))
   })
   const snapshot = f.projection.snapshot(f.actor.owner, true)
   expect(Buffer.byteLength(JSON.stringify(snapshot))).toBeLessThan(1024 * 1024)
