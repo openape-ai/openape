@@ -14,6 +14,7 @@ export default defineComponent({
     definition: { type: Object as PropType<WorkflowDefinition>, required: true },
     detail: { type: Object as PropType<GraphDetail>, required: true },
     pods: { type: Array as PropType<StoredPod[]>, required: true },
+    structureOnly: Boolean,
     selected: { type: String, default: '' },
     mode: { type: String as PropType<'plan' | 'run'>, default: 'plan' },
   },
@@ -58,12 +59,12 @@ export default defineComponent({
 <template>
   <section class="graph-view">
     <header class="graph-toolbar">
-      <ul class="graph-legend" :aria-label="t('Kinds of nodes')">
+      <ul v-if="!structureOnly" class="graph-legend" :aria-label="t('Kinds of nodes')">
         <li v-for="kind in (['code', 'decision', 'effect', 'gate'] as const)" :key="kind">
           <span class="graph-swatch" :data-kind="kind" aria-hidden="true" />{{ kindLabel(kind) }}
         </li>
       </ul>
-      <div class="graph-modes" role="group" :aria-label="t('Graph view')">
+      <div v-if="!structureOnly" class="graph-modes" role="group" :aria-label="t('Graph view')">
         <button :aria-pressed="mode === 'plan'" @click="$emit('mode', 'plan')">
           {{ t('Structure') }}
         </button><button :aria-pressed="mode === 'run'" :disabled="!detail.lastRun" @click="$emit('mode', 'run')">

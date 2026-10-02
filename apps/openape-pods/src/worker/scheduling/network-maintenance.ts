@@ -1,6 +1,6 @@
 import type { PodDatabase } from '../storage/database'
 
-const completedTrace = `((t.kind IN ('diagnostic','snapshot','process','invocation-settled','environment','log','operation','emission-explanation','infrastructure') AND EXISTS(
+const completedTrace = `((t.kind IN ('network-mail-read','event-accepted','diagnostic','snapshot','process','invocation-settled','environment','log','operation','emission-explanation','infrastructure') AND EXISTS(
   SELECT 1 FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id
   WHERE i.run_id=t.run_id AND (i.state='completed' OR (i.state IN ('blocked','failed') AND (c.resolved_receipt IS NOT NULL OR c.retry_consumed_at IS NOT NULL)))
   AND (c.settlement_receipt IS NOT NULL OR c.resolved_receipt IS NOT NULL)

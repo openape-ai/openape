@@ -69,7 +69,7 @@ async function openPod(id: string) {
       {{ diagnostic(error) }}
     </p>
     <section v-show="page === 'Workflows'">
-      <GraphPanel :view="workflows" :pods="pods" :organization="organization" :selected-id="workflowId" @changed="workflows = $event" @workspace="workspaceChanged" @select="workflowId = $event" @open-pod="openPod" />
+      <GraphPanel :active="page === 'Workflows'" :view="workflows" :pods="pods" :organization="organization" :selected-id="workflowId" @changed="workflows = $event" @workspace="workspaceChanged" @select="workflowId = $event" @open-pod="openPod" />
     </section>
     <AppSettings v-if="page === 'App settings'">
       <template #connection>

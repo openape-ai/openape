@@ -149,6 +149,7 @@ export class NetworkEvents {
       }
       for (const reference of references) this.artifacts!.retain(reference, 'event', eventId)
       if (subscriptions.length) this.store.db.prepare('INSERT INTO network_queue_counts VALUES(?,\'pending\',?) ON CONFLICT(network_id,state) DO UPDATE SET count=count+excluded.count').run(definition.id, subscriptions.length)
+      this.store.db.prepare('INSERT INTO network_trace_events(network_id,case_id,run_id,event_id,kind,body,created_at) VALUES(?,?,?,?,?,?,?)').run(definition.id, caseRef.caseId, authority.runId, null, 'event-accepted', canonicalNetworkJson({ channel: channel.name, caseRevision: caseRef.caseRevision }), now)
       this.joins.record(eventId)
       return { eventId, duplicate: false, ...caseRef }
     })

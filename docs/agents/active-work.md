@@ -1,6 +1,37 @@
 # Active work
 
-## Current M8 — issue1417
+## Current M9 — issue1417
+
+M0–M8 are accepted. Isolated checkout
+`openape-monorepo.worktrees/pods-workflows-networks`; branch
+`feature/issue-1417-pods-networks-m9`; canonical base
+`9eaf5e4e70ae22ebebdf2f2c19c83376f7923b56` (PR209, main CI5334).
+Doctor passes. M9 remains unaccepted. Candidate `b7435c0824538260ea4bf1882fb87e67f7753044`
+is pushed in [native PR210](https://repos.openape.ai/patrick/monorepo/pulls/210), explicitly
+linked to issue1417. Bounded owner reads, reviewed paused creation, independent timers,
+configuration origins and recovery controls are implemented. Earlier full checks passed
+140 suites/1123 units, six manual native tests and 18 browser layout tests. The subsequent
+clean-source unit run failed the eight-slot fairness fixture's existing five-second limit
+and exposed late teardown access to a closed database; this failed receipt is retained.
+The follow-up drains the engine/dispatcher before closing fixture storage and seeds the
+fairness fixture atomically without changing its timeout or admission assertion.
+
+Actual Opus5.5 reviews corrected authority/read/control and retention findings. Actual
+Fable (`claude-fable-5-1`) reviews drove nested pause consent, visible timers, scoped
+recovery evidence, a clickable failures count and desktop/phone recovery coverage.
+The follow-up passes 70 focused tests and nine graph layout tests; final full gates are
+running. Screenshots were personally inspected. M11 owns the required explicit reviewed
+replacement/archive path for mistaken immutable compositions, before M13 delivery.
+The connected Electron route refuses offline creation; bounded online publication is M10.
+
+Evidence: `/tmp/openape-pods-networks-m9/`. Next: commit the follow-up, verify its clean
+SHA, inspect exact native PR/CI, publish private Test Runs and verify protected merge
+and main CI, then continue M10–M14. No verified M9 report or acceptance yet. No live
+external action, production activation, conversion or expanded rights.
+
+
+
+## M8 acceptance evidence — issue1417
 
 M0–M7 are accepted. Native PR208 merged as
 `a836a97d192e1eeff9f440427806c6de5b35264c`; full main CI5329 passed.
@@ -30,11 +61,10 @@ recovery; an already recovered identity completes its receipt without reprovisio
 Published source Pods can be archived but cannot be deleted while referenced.
 UUID-bound HTTP/SSH/application capabilities are refused until portable binding
 review in M11. Connected workspace mutations remain visibly unavailable until M10.
-M8 acceptance still requires final documentation-head CI, protected merge and green
-main. M9–M14 remain unaccepted. Evidence: `/tmp/openape-pods-networks-m8/`.
-Next: complete those gates, synchronize acceptance and continue M9 operational UX.
-Production activation and live conversion remain separately approved; no
-mail/accounting/notification rights are extended.
+Final documentation head `8b2ba1ec280f6e95d645026b18ee39dabcc631d5` passed
+CI5333; all39 files/1997 native lines match reviewed source/base. Protected merge
+`9eaf5e4e70ae22ebebdf2f2c19c83376f7923b56` passed full main CI5334. M8 is accepted.
+M9–M14 remain unaccepted. No production activation, live conversion or rights expansion.
 
 ## Approved audit exception — issue 1418
 
