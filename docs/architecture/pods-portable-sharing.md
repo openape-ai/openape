@@ -11,7 +11,9 @@ Dedicated checkout `openape-monorepo.worktrees/pods-portable-sharing`, branch
 prescribed prebuild completed; Doctor passes. No user database is opened or migrated
 by the manifest code. M0 was accepted in PR215, merged as
 `04c20aa8df50bd6e85bca99aa520e355d727c3f4` with source CI5347/main CI5348 green.
-M1 continues from that merge on `feature/issue-1419-sharing-dependencies`.
+M1 was accepted in PR216, merged as `6133326303b9d1cf46fd843451f00b918849c6e1`
+with source CI5351/main CI5352 green. M2 continues from that merge on
+`feature/issue-1419-sharing-export`; final acceptance remains pending.
 
 ## Manifest v1
 
@@ -73,17 +75,100 @@ Recipient resource-dependent diagnostics (including archive gates) still run aft
 actual binding; requested capabilities alone cannot establish those facts.
 
 Requested access is explicit: directory input plus `read`/`readWrite`, HTTP origin
-input plus methods and an optional recipient authentication connection, Jev
+input plus methods and an optional DDISA agent declaration referencing a secret
+alias, recipient agent identity and issuer inputs, Jev
 connection/model inputs plus a bounded attempt count, or read-only mail scope with
 a recipient connection, selected folders, start-date input and attachment choice.
 Mail folder IDs have no sender default; their input encodes recipient-selected
 folder objects as JSON. Empty start-date text means all history. Mail setup remains
 unresolved wherever the current runtime has no supported recipient assignment path. These are declarations, not
-resource assignments. HTTP authentication metadata and credentials stay local;
+resource assignments. The sender's agent identity and credential values stay local;
 resolved origins, pinned Jev models and actual permissions must pass their native
 validators before setup can complete. SSH inventory profiles are currently local
 and unsupported for portable export; refuse them explicitly instead of omitting
 or broadening their restrictions. Assets remain separately selected files.
+
+## Reviewed source export (M2)
+
+The worker captures selected current scripts, validations, resource epochs, public
+configuration and complete composition membership in one database transaction.
+Immutable call revisions must still match their owned, same-company members.
+Unadopted local Pods follow the existing authenticated owner-profile rule from
+`DefinitionCatalog`; known remote/definition ownership is checked without adopting
+or changing the source. Data ownership also follows the existing composite foreign
+keys. No execution history, private home, account state, credential value, record,
+artifact content, decision or effect receipt is read into an export.
+
+`PortableExporter` keeps at most eight owner-scoped, ten-minute review sessions
+and permits one preparation at a time per instance. Routes must bind that instance
+to the authenticated owner. Privacy scanning yields between checks.
+It freezes the choices, validates the complete package and returns its exact
+manifest plus redacted findings. Commit recaptures the source, rechecks installed
+dependency bytes and stored lock agreement, rereads selected static references and
+compares the fingerprint, archive digest and findings. Expiry, cancellation, source
+changes and changed file bytes refuse the download. Repeated unchanged downloads
+are intentionally idempotent. Runtime cursors and pause state do not invalidate a
+review, while relevant source revisions do. Export reviews are ephemeral; durable
+import recovery belongs to M3.
+
+The generated validation trailer is special metadata: the exporter reconstructs
+the exact terminal `Pods binding` comment from the verified stored manifest and
+removes only that matching suffix. It otherwise preserves script bytes, including
+user comments and hard-coded IDs. This avoids exporting local capability IDs added
+by the validator itself. Original stored scripts are never changed. Recipient
+validation must generate fresh binding metadata. A definition-pinned script can
+retain a publisher trailer whose revision differs; that unmatched suffix is
+preserved. Definition publication already refuses instance-specific tool identities.
+
+Source inventory exposed gaps in the preliminary, not-yet-shipped v1 contract.
+M2 corrects them before the first exporter is released: collections carry their
+script-facing names and retention declarations; artifact scopes retain explicit
+collection relationships; converted-network variable projection is declared;
+HTTP authentication uses the actual secret/subject/issuer model; standalone Pods
+can carry a suggested schedule. These changes transfer no runtime authority.
+Member Pod schedules are omitted and refused for composition entries to avoid
+competing schedule declarations. Schedules and mail policy mode describe requested behavior only. M3/M4 must leave
+schedules disabled and require independent access, script, schedule and first-run
+approval, including a review of timezone and any one-time date. Archive mode never
+authorizes a mail action merely through import.
+
+Shared configuration is grouped only from explicit source composition bindings.
+Its default is selected once on the composition and reused by those members;
+instance overrides remain separate recipient inputs. Same-named fields or accounts
+do not create a sharing group. Directory, connection, secret and HTTP subject
+inputs cannot be shared. Explicit application-account groups remain supported
+under the existing matching-application contract. CLI version constraints remain empty without a
+verified test; a bundle's static version declaration is not evidence of a tested
+application version. Custom runtimes, entry files, cache arguments, application
+network hosts and SSH profiles currently refuse export with an explanation rather
+than dropping their requirements.
+
+Every reference requires an explicit include or omission choice. Included files
+use package-local `assets/…` paths, which are their portable reference aliases in
+the M3 runtime view. Capture rejects symbolic/hard links, private workspace storage,
+changed files, executable source names/magic and role-size violations. UTF-8 and
+recognizable UTF-16 text are scanned for known source identities/paths and likely
+credentials; known unselected private values require review. Opaque containers and
+binary files explicitly require acknowledgement of the scan limitation. A heuristic
+scan cannot guarantee that arbitrary source or assets contain no private data.
+Selected public defaults suppress known-value findings only in the manifest,
+never in scripts or assets. Paths and owner subjects are matched case-sensitively;
+UUIDs are case-insensitive. Null/object public configuration refuses export.
+HTML/SVG assets are inert documents: import and preview must never dispatch
+execution based on their filename or sender-supplied media type. Retention is an
+opaque declaration; no importer may interpret it without a native policy parser.
+Known machine bindings/private keys block export; findings never contain the
+matched value or its hash. Asynchronous fflate compression creates deterministic
+archives with bounded content and transfer sizes.
+
+`portable_aliases_v1` remains a required importer feature, not an advertised
+runtime capability. File validation requires the caller
+to supply its actual supported features; the exporter set is named separately.
+Package Pod keys, asset paths and composition keys define the
+future handoff/reference/call aliases; M3 must map them to fresh local identities
+and immutable call revisions while retaining legacy UUID behavior. M2 proves inert
+package structure, not recipient execution or UI delivery. Real desktop/browser
+routes, encrypted transfer and independent approvals are M4 acceptance work.
 
 ## Verified source inventory and required handling
 

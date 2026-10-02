@@ -16,9 +16,11 @@ export interface PortableApplication {
 }
 export interface PortableBinding { alias: string, input: string }
 export interface PortableApplicationBinding { alias: string, requirement: string, account: string, environment: PortableBinding[] }
+export interface PortableHttpAuthentication { type: 'ddisaAgent', credential: string, subject: string, issuer: string }
+export type PortableSchedule = { kind: 'interval', seconds: number } | { kind: 'daily', time: string, timezone: string }
 export type PortableAccess =
   | { kind: 'directory', alias: string, input: string, access: 'read' | 'readWrite' }
-  | { kind: 'http', alias: string, origin: string, methods: string[], authentication: string | null }
+  | { kind: 'http', alias: string, origin: string, methods: string[], authentication: PortableHttpAuthentication | null }
   | { kind: 'mail', alias: string, connection: string, folders: string, since: string, attachments: boolean }
   | { kind: 'jev', alias: string, connection: string, model: string, maxAttempts: number }
 export interface PortablePod {
@@ -34,6 +36,7 @@ export interface PortablePod {
   bindings: PortableBinding[]
   applications: PortableApplicationBinding[]
   assets: string[]
+  schedule?: PortableSchedule | null
 }
 export interface PortableNode { pod: string, after: string[], handoff: boolean }
 export interface PortableComposition {
@@ -103,7 +106,7 @@ export function portablePath(value: unknown): string {
   const path = text(value, 240)
   if (!/^[\w.-]+(?:\/[\w.-]+)*$/.test(path)) fail('file path must be relative and normalized')
   for (const part of path.split('/')) {
-    if (/^[.-]/.test(part) || part.toLowerCase() === 'node_modules' || /[. ]$/.test(part) || /^(?:con|prn|aux|nul|com\d|lpt\d)(?:\.|$)/i.test(part)) fail('unsupported file path')
+    if (/^[.-]/.test(part) || ['node_modules', '__proto__', 'constructor', 'prototype'].includes(part.toLowerCase()) || /[. ]$/.test(part) || /^(?:con|prn|aux|nul|com\d|lpt\d)(?:\.|$)/i.test(part)) fail('unsupported file path')
   }
   return path
 }
@@ -147,6 +150,7 @@ function input(value: unknown, valueLimit: number): PortableInput {
   key(item.key); lineText(item.label, 120); text(item.description, 2000, true); boolean(item.required)
   if (item.sharingGroup !== null) key(item.sharingGroup)
   oneOf(item.kind, ['string', 'number', 'boolean', 'enum', 'directory', 'account', 'connection', 'secret'])
+  if (item.sharingGroup !== null && !['string', 'number', 'boolean', 'enum', 'account'].includes(String(item.kind))) fail('resource and secret inputs cannot be shared')
   if (item.kind === 'enum') { const choices = list(item.choices, 64, value => text(value, valueLimit)); if (!choices.length) fail('enum needs choices'); unique(choices) }
   else if (item.choices !== undefined) {
     fail('only enum inputs have choices')
@@ -187,14 +191,18 @@ function access(value: unknown): PortableAccess {
     const methods = list(item.methods, 6, value => oneOf(value, ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']))
     if (!methods.length) fail('HTTP access requires methods')
     unique(methods)
-    if (item.authentication !== null) key(item.authentication)
+    if (item.authentication !== null) {
+      const authentication = fields(item.authentication, ['type', 'credential', 'subject', 'issuer'])
+      if (authentication.type !== 'ddisaAgent') fail('unsupported HTTP authentication')
+      key(authentication.credential); key(authentication.subject); key(authentication.issuer)
+    }
   }
   else if (kind === 'mail') { key(item.connection); key(item.folders); key(item.since); boolean(item.attachments) }
   else { key(item.connection); key(item.model); integer(item.maxAttempts, 1, 100) }
   return item as unknown as PortableAccess
 }
 function pod(value: unknown): PortablePod {
-  const item = fields(value, ['key', 'title', 'description', 'script', 'packages', 'contract', 'requestedCapabilities', 'access', 'inputs', 'bindings', 'applications', 'assets'])
+  const item = fields(value, ['key', 'title', 'description', 'script', 'packages', 'contract', 'requestedCapabilities', 'access', 'inputs', 'bindings', 'applications', 'assets'], ['schedule'])
   key(item.key); lineText(item.title, 100); text(item.description, 4000, true); portablePath(item.script)
   if (item.packages !== null) { const packages = fields(item.packages, ['manifest', 'lock']); portablePath(packages.manifest); portablePath(packages.lock) }
   if (item.contract !== null) {
@@ -220,6 +228,20 @@ function pod(value: unknown): PortablePod {
   unique((item.applications as PortableApplicationBinding[]).map(binding => binding.alias))
   unique((item.applications as PortableApplicationBinding[]).map(binding => binding.account))
   unique(list(item.assets, sharingLimits.files, portablePath))
+  if (item.schedule !== undefined && item.schedule !== null) {
+    const schedule = fields(item.schedule, ['kind'], ['seconds', 'time', 'timezone'])
+    if (schedule.kind === 'interval') { fields(schedule, ['kind', 'seconds']); integer(schedule.seconds, 60, 2592000) }
+    else if (schedule.kind === 'daily') {
+      fields(schedule, ['kind', 'time', 'timezone'])
+      if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(lineText(schedule.time, 5))) fail('invalid suggested schedule time')
+      const timezone = lineText(schedule.timezone, 100)
+      try { new Intl.DateTimeFormat('en', { timeZone: timezone }).format(0) }
+      catch { fail('invalid suggested schedule timezone') }
+    }
+    else {
+      fail('unsupported suggested schedule')
+    }
+  }
   return item as unknown as PortablePod
 }
 function composition(value: unknown): PortableComposition {
@@ -309,6 +331,7 @@ export function parsePortableManifest(value: unknown, supportedFeatures: readonl
     groups.set(declaration.sharingGroup, signature)
   }
   for (const pod of pods) {
+    if (entry.kind !== 'pod' && pod.schedule != null) fail('composition members cannot carry standalone schedules')
     if (pod.inputs.some(input => input.kind === 'account' && !pod.applications.some(binding => binding.account === input.key))) fail('unbound account input')
     fileReference(pod.script, 'script')
     if (pod.packages) { fileReference(pod.packages.manifest, 'package-manifest'); fileReference(pod.packages.lock, 'package-lock') }
@@ -319,7 +342,16 @@ export function parsePortableManifest(value: unknown, supportedFeatures: readonl
       if (request.kind === 'directory') {
         inputReference(request.input, 'directory')
       }
-      else if (request.kind === 'http') { inputReference(request.origin, 'string'); if (request.authentication !== null) inputReference(request.authentication, 'connection') }
+      else if (request.kind === 'http') {
+        inputReference(request.origin, 'string')
+        if (request.authentication !== null) {
+          inputReference(request.authentication.subject, 'string'); inputReference(request.authentication.issuer, 'string')
+          unique([request.origin, request.authentication.subject, request.authentication.issuer])
+          const subject = pod.inputs.find(input => input.key === request.authentication!.subject)!
+          if (subject.sharingGroup !== null || Object.hasOwn(subject, 'default')) fail('HTTP agent identity requires recipient selection')
+          if (!pod.bindings.some(binding => binding.alias === request.authentication!.credential && pod.inputs.some(input => input.key === binding.input && input.kind === 'secret'))) fail('HTTP authentication requires a declared recipient secret')
+        }
+      }
       else if (request.kind === 'mail') {
         inputReference(request.connection, 'connection'); inputReference(request.folders, 'string'); inputReference(request.since, 'string')
         if (Object.hasOwn(pod.inputs.find(input => input.key === request.folders)!, 'default')) fail('mail folder identities require recipient selection')
@@ -357,7 +389,7 @@ export function parsePortableManifest(value: unknown, supportedFeatures: readonl
     const usedInputs = new Set([
       ...pod.bindings.map(binding => binding.input),
       ...pod.applications.flatMap(binding => [binding.account, ...binding.environment.map(item => item.input)]),
-      ...pod.access.flatMap(item => item.kind === 'directory' ? [item.input] : item.kind === 'http' ? [item.origin, ...(item.authentication === null ? [] : [item.authentication])] : item.kind === 'mail' ? [item.connection, item.folders, item.since] : [item.connection, item.model]),
+      ...pod.access.flatMap(item => item.kind === 'directory' ? [item.input] : item.kind === 'http' ? [item.origin, ...(item.authentication === null ? [] : [item.authentication.subject, item.authentication.issuer])] : item.kind === 'mail' ? [item.connection, item.folders, item.since] : [item.connection, item.model]),
     ])
     if (pod.inputs.some(input => !usedInputs.has(input.key))) fail('unreferenced Pod input')
   }
