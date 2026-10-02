@@ -232,6 +232,10 @@ it('backs up adopted empty scripts and restores the same instance identity as re
   expect(restored.getPod(empty.id).activeScript).toBeNull()
   expect(restored.db.prepare('SELECT pod_id,state,error FROM definition_instance_requests WHERE id=?').get(requestId)).toMatchObject({ pod_id: podId, state: 'failed', error: expect.stringContaining('existing identity') })
   expect(restored.db.prepare('SELECT phase,identity FROM remote_pods WHERE pod_id=?').get(podId)).toMatchObject({ phase: 'needs_desktop_action', identity: JSON.stringify({ podId, subject: 'synthetic' }) })
+  restored.db.prepare('UPDATE remote_pods SET phase=\'ready\' WHERE pod_id=?').run(podId)
+  const recovered = await recovery.execute({ type: 'retryProvision', requestId }, new AbortController().signal)
+  expect(recovered.provisioning.find(item => item.requestId === requestId)!.state).toBe('ready')
+  expect(restored.db.prepare('SELECT * FROM script_drafts WHERE pod_id=?').all(podId)).toEqual(priorDrafts)
 })
 
 it('validates and activates a network definition through the workspace and rejects stale permissions', async () => {
