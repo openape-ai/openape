@@ -96,12 +96,12 @@ export function checkEnvironment(environment = process.env) {
   const clean = { ...environment }
   const local = git(['rev-parse', '--local-env-vars']).split('\n')
   for (const name of Object.keys(clean)) {
-    if (local.includes(name) || /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/.test(name)) delete clean[name]
+    if (local.includes(name) || /^GIT_CONFIG_(?:COUNT|(?:KEY|VALUE)_\d+)$/.test(name)) delete clean[name]
   }
   return clean
 }
 
-async function runStep(step, logPath) {
+export async function runStep(step, logPath) {
   const stream = createWriteStream(logPath)
   const code = await new Promise((resolveCode, reject) => {
     const runArgs = [...step.args, ...(step.report ? ['--reporter=default', '--reporter=json', `--outputFile.json=${join(dirname(logPath), step.report)}`] : [])]
