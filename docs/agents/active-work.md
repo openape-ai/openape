@@ -10,7 +10,7 @@ and native source verification. M0 is accepted; M11 remains open.
 Own checkout `openape-monorepo.worktrees/pods-portable-sharing`, branch
 `feature/issue-1419-sharing-dependencies`, starts from that merge. Doctor passes.
 M1 imported-lock validation/preparation and read-only application compatibility
-resolution are implemented. Root lint/typecheck, Pods build, 1210 unit tests and
+resolution are implemented. Root lint/typecheck, Pods build, 1211 unit tests and
 three real native dependency checks pass. Actual Opus reviews prompted installed
 manifest-edge checks, unlisted-package refusal, candidate isolation and read-only
 bundle preview. Final native PR/CI/report acceptance remains pending; evidence
