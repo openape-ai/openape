@@ -12,8 +12,10 @@ prescribed prebuild completed; Doctor passes. No user database is opened or migr
 by the manifest code. M0 was accepted in PR215, merged as
 `04c20aa8df50bd6e85bca99aa520e355d727c3f4` with source CI5347/main CI5348 green.
 M1 was accepted in PR216, merged as `6133326303b9d1cf46fd843451f00b918849c6e1`
-with source CI5351/main CI5352 green. M2 continues from that merge on
-`feature/issue-1419-sharing-export`; final acceptance remains pending.
+with source CI5351/main CI5352 green. M2 was accepted in PR217, merged as
+`eb53ed76433280ac20d286f3669d9bb23184debe` with source CI5353/main CI5354 green.
+M3 continues from that merge on `feature/issue-1419-sharing-import`; schema 34 adds
+the local import journal.
 
 ## Manifest v1
 
@@ -174,6 +176,64 @@ future handoff/reference/call aliases; M3 must map them to fresh local identitie
 and immutable call revisions while retaining legacy UUID behavior. M2 proves inert
 package structure, not recipient execution or UI delivery. Real desktop/browser
 routes, encrypted transfer and independent approvals are M4 acceptance work.
+
+## Journaled paused import (M3, first increment)
+
+`worker/sharing/archive.ts` decodes an untrusted archive completely in memory before
+anything is stored. It accepts exactly the exporter's ZIP subset: one volume, no
+comment, no leading, trailing or unlisted bytes, contiguous local entries that agree
+with the central directory, stored or deflated regular files and no flags, extension
+fields, comments, data descriptors, ZIP64, encryption, links or directories. Declared sizes bound inflation, consumed
+input must equal the compressed length, CRC and manifest hashes must match, and
+`manifest.json` must be the canonical serialization. A hand-repacked archive is
+refused; the reviewed export is the only supported producer.
+
+Schema 34 adds `portable_imports` and `portable_import_pods`. Both are local-only:
+they are not central tables and never enter relay publication or operation logs.
+`PortableImporter` is bound to one owner; at most eight imports may hold an archive
+at once:
+
+- `inspect` validates and returns the manifest without storing anything.
+- `stage` is idempotent per request key. It stores the exact archive as a blob that
+  retention keeps while the journal references it, and records one fresh Pod ID per
+  package Pod. A reused key with different bytes or another owner is refused.
+- `configure` accepts declared public scalar inputs at the current journal revision.
+  A value entered for one member of an explicit sharing group applies to that group.
+  Directory, account, connection and secret inputs are never values; they are bound
+  through later setup steps and secrets go to the credential service.
+- `commit` rereads the stored archive, writes import-owned asset copies into each
+  fresh Pod workspace and then, in one transaction, creates the paused Pods with an
+  inactive draft, native string variables and asset references named by their
+  package path. It writes no script version, validation, schedule, identity, grant or
+  composition. Tool capabilities are added only when the recipient binds resources.
+  A repeated commit returns the existing copy.
+- `complete` requires that nothing is unresolved, then releases the archive. Until
+  then ordinary dependency preparation, draft validation, example installation and
+  script activation are refused for these Pods, so imported source cannot run and its
+  dependencies cannot be resolved afresh during setup. A deleted Pod no longer blocks
+  the setup of its siblings.
+- `cancel` discards a pending import only. Once the paused copy exists its Pods are
+  ordinary owner Pods: the owner archives and deletes them individually through the
+  existing reviewed path, and the journal is forgotten when none remain. Import
+  never deletes a Pod, account or credential.
+
+A refused or raced commit removes the files it wrote; startup recovery removes those
+of an interrupted one. An interruption therefore leaves either a pending import or
+one complete paused copy. A cancelled request key may be reused after its journal is
+forgotten. The pre-upgrade database copy is private, reopened and checked before
+migrating. Backups do not contain package archives: restore cancels staged imports,
+marks committed ones for a fresh import of the file and moves references into the
+profile's own Pod storage to the restored location. Imported assets live in that
+private storage, which the exporter refuses as an asset source; re-sharing them
+requires an owner-selected copy outside it. Blob retention now reads references and
+removes unreferenced blobs without yielding in between.
+
+Still open for M3: main-side resource, secret and application binding with recorded
+import-owned keys, imported dependency-lock preparation, identity provisioning,
+versioned alias runtime views, composition finalization after member approval and
+the owner data/artifact/call permission operations. Packages needing any of these
+stay in visible setup and cannot be completed yet. No route or UI exposes the
+importer; that is M4.
 
 ## Verified source inventory and required handling
 

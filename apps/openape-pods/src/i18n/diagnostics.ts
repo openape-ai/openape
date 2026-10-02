@@ -1,6 +1,7 @@
 import type { MessageKey } from './index'
 
 export const diagnosticPatterns = [
+  'Value does not match the declared input {p0}',
   'Portable network diagnostics: {p0}',
   'Portable graph diagnostics: {p0}',
   'Definition update blocked: {p0}. The current version remains pinned.',
