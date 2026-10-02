@@ -85,7 +85,7 @@ export class DefinitionCatalog {
       const row = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(podId, expectedScript)
       if (!row) throw new Error('Script version is missing')
       const manifest = parseManifest(JSON.parse(row.manifest as string))
-      if (manifest.capabilities.some(capability => /^tool\.(?:http|ssh)_[a-f0-9]{32}\./.test(capability))) throw new Error('This script uses instance-specific HTTP or SSH rights. Keep it local until its resource bindings can be reviewed for reuse.')
+      if (manifest.capabilities.some(capability => /^tool\.(?:http|ssh|app)_[a-f0-9]{32}\./.test(capability))) throw new Error('This script uses instance-specific HTTP, SSH or program rights. Keep it local until its resource bindings can be reviewed for reuse.')
       if (manifest.assignmentRevision !== pod.bindingRevision) throw new Error('Script binding changed')
       if (this.store.readBlob(expectedScript).length > 200000) throw new Error('Definition source exceeds the publication limit')
       return manifest

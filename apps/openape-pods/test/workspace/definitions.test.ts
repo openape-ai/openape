@@ -78,6 +78,8 @@ it('reuses a failed pending instance and rejects changed request IDs and foreign
   expect(retry.createdPodId).toBe(first.createdPodId)
   expect((await f.execute(command)).createdPodId).toBe(first.createdPodId)
   expect(f.store.listPods()).toHaveLength(2)
+  const prepared = await f.execute({ type: 'prepareUpdate', podId: first.createdPodId, definitionId: definition.id, version: 2, expectedBinding: 1 })
+  expect(prepared.update!.draftId).toBe(f.store.db.prepare('SELECT id FROM script_drafts WHERE pod_id=?').get(first.createdPodId!)!.id)
   expect(f.store.db.prepare('SELECT * FROM script_drafts WHERE pod_id=?').all(first.createdPodId!)).toHaveLength(1)
   await expect(f.execute({ ...command, name: 'Changed' })).rejects.toThrow('reused')
   const other = new DefinitionWorkspace(f.store, f.resources, { ...owner, subject: 'another' })
@@ -131,6 +133,8 @@ it('validates each exact artifact separately and changes only the explicitly sel
   expect(f.store.getPod(instances[1]!).activeScript).toBe(definition.versions[1]!.contentHash)
   expect(f.store.db.prepare('SELECT * FROM scripts WHERE pod_id=?').all(instances[0]!)).toHaveLength(2)
   expect(f.store.db.prepare('SELECT * FROM validations WHERE pod_id=?').all(instances[1]!)).toHaveLength(1)
+  f.store.db.prepare('DELETE FROM definition_update_drafts WHERE draft_id=?').run(draftId)
+  expect(() => new WorkspaceDetails(f.store, f.resources).execute({ type: 'activate', podId: instances[0]!, hash: f.store.getPod(instances[0]!).activeScript!, expectedActive: f.store.getPod(instances[0]!).activeScript, assignmentRevision: 1 })).toThrow('definition update review')
   const preserved = f.store.getPod(instances[1]!)
   f.resources.assignReference(instances[1]!, 'Independent reference', join(f.store.root, 'reference.txt'))
   expect(f.store.getPod(instances[1]!).bindingRevision).toBe(preserved.bindingRevision)
@@ -221,6 +225,10 @@ it('backs up adopted empty scripts and restores the same instance identity as re
   const backup = await createBackup(f.store, exports)
   const restoredRoot = await restoreBackup(backup, exports, schemaVersion)
   const restored = new PodDatabase(restoredRoot); stores.push(restored)
+  const recovery = new DefinitionWorkspace(restored, new ResourceRegistry(restored, () => {}), owner)
+  const priorDrafts = restored.db.prepare('SELECT * FROM script_drafts WHERE pod_id=?').all(podId)
+  await expect(recovery.execute({ type: 'retryProvision', requestId }, new AbortController().signal)).rejects.toThrow('must never be provisioned again')
+  expect(restored.db.prepare('SELECT * FROM script_drafts WHERE pod_id=?').all(podId)).toEqual(priorDrafts)
   expect(restored.getPod(empty.id).activeScript).toBeNull()
   expect(restored.db.prepare('SELECT pod_id,state,error FROM definition_instance_requests WHERE id=?').get(requestId)).toMatchObject({ pod_id: podId, state: 'failed', error: expect.stringContaining('existing identity') })
   expect(restored.db.prepare('SELECT phase,identity FROM remote_pods WHERE pod_id=?').get(podId)).toMatchObject({ phase: 'needs_desktop_action', identity: JSON.stringify({ podId, subject: 'synthetic' }) })
@@ -249,4 +257,22 @@ it('validates and activates a network definition through the workspace and rejec
   expect(workspace.view().instances.find(instance => instance.podId === sink)).toMatchObject({ version: 2, bindingRevision: 2, diverged: false })
   expect(f.store.db.prepare('SELECT state,revision FROM networks WHERE id=?').get(id)).toEqual({ state: 'paused', revision: 2 })
   expect(f.store.db.prepare('SELECT network_revision FROM network_subscriptions WHERE pod_id=? ORDER BY network_revision').all(sink)).toEqual([{ network_revision: 1 }, { network_revision: 2 }])
+})
+
+it.each(['http', 'ssh', 'app'])('refuses publication of instance-specific %s capabilities before creating a definition', async (kind) => {
+  const f = fixture(); const hash = f.store.getPod(f.pod.id).activeScript!
+  const row = f.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(f.pod.id, hash)!
+  const manifest = JSON.parse(row.manifest as string); manifest.capabilities = [`tool.${kind}_${'a'.repeat(32)}.invoke`]
+  f.store.db.prepare('UPDATE scripts SET manifest=? WHERE pod_id=? AND hash=?').run(JSON.stringify(manifest), f.pod.id, hash)
+  await expect(published(f)).rejects.toThrow('instance-specific HTTP, SSH or program rights')
+  expect(f.workspace.view().definitions).toEqual([])
+})
+it('enforces the existing instance limit without duplicating a retry at capacity', async () => {
+  const f = fixture(); const definition = await published(f)
+  const command = { type: 'instantiate', requestId: randomUUID(), definitionId: definition.id, version: 2, name: 'Last accepted', groupId: f.groups[0] }
+  const first = await f.execute(command)
+  while (f.store.listPods().length < 100) f.store.createPod({ name: 'Existing fixture' })
+  expect((await f.execute(command)).createdPodId).toBe(first.createdPodId)
+  await expect(f.execute({ ...command, requestId: randomUUID() })).rejects.toThrow('Local pod limit')
+  expect(f.store.listPods()).toHaveLength(100)
 })
