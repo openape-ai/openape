@@ -474,9 +474,15 @@ export class FixtureWorker {
 
   async networks(command: NetworkCommand): Promise<NetworkView> {
     const parsed = parseNetworkCommand(command)
-    const central = this.centralAction(parsed.type)
+    const central = this.centralAction(['detail', 'setup', 'trace', 'records'].includes(parsed.type) ? 'list' : parsed.type)
     if (central) return central.local(() => this.networks(parsed))
-    return parseNetworkView(await this.dispatch({ networks: parsed }))
+    const view = parseNetworkView(await this.dispatch({ networks: parsed }))
+    if (parsed.type === 'gateOpen') {
+      const url = view.gates?.find(gate => gate.networkId === parsed.id && gate.id === parsed.taskId && gate.generation === parsed.generation && gate.state === 'pending')?.url
+      if (!url || new URL(url).protocol !== 'https:') throw new Error('No approval is waiting for this batch')
+      await shell.openExternal(url)
+    }
+    return view
   }
 
   async workflows(command: WorkflowCommand): Promise<WorkflowView> {

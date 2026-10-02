@@ -80,6 +80,8 @@ export function installWorkspace(overrides: Partial<PodsBridge> = {}): PodsBridg
     mcpAccess: async () => ({ mode: 'off', duration: 'hour', expiresAt: null }),
     runtimeApproval: async () => ({ enabled: false }),
     codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }), chats: async () => ({ conversations: [], activeConversationId: null }),
+    networks: async () => ({ networks: [] }),
+    definitions: async () => ({ definitions: [], instances: [], provisioning: [] }),
     workflows: async () => ({ workflows: [], runs: [] }),
     onboarding: async () => ({ connections: [], complete: true, owner: null, runtime: { ready: true, error: null } }),
     data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }),

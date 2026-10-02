@@ -1,3 +1,4 @@
+import { parseNetworkView } from '../../src/contracts/networks'
 // @vitest-environment node
 import { randomUUID } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
@@ -452,4 +453,18 @@ describe('managed scoped artifacts', () => {
     expect(existsSync(join(directory, second.hash))).toBe(false)
     expect(existsSync(poison)).toBe(true)
   })
+})
+
+it('pages owner-visible committed records with stable keys and retained tombstones', async () => {
+  const f = fixture(); const first = f.reserve()
+  for (const key of ['a', 'b', 'c', 'd', 'e', 'f', 'g']) f.data.put(first, { collection: 'cases', key, expectedRevision: 0, value: { status: key } })
+  await f.invocations.finish(first, 'completed', 'Seven records', null, [], [])
+  const second = f.reserve()
+  f.data.put(second, { collection: 'cases', key: 'c', expectedRevision: 1 }, true)
+  await f.invocations.finish(second, 'completed', 'Retained tombstone', null, [], [])
+  const page = parseNetworkView(f.engine.execute({ type: 'records', id: f.networkId, revision: 1, collectionId: f.collectionId, after: null })).records!
+  expect(page.records.map(record => record.key)).toEqual(['a', 'b', 'c', 'd', 'e'])
+  expect(page.records[2]).toMatchObject({ key: 'c', deleted: true, body: null, revision: 2 })
+  const rest = parseNetworkView(f.engine.execute({ type: 'records', id: f.networkId, revision: 1, collectionId: f.collectionId, after: page.after })).records!
+  expect(rest.records.map(record => record.key)).toEqual(['f', 'g']); expect(rest.after).toBeNull()
 })
