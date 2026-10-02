@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { randomUUID } from 'node:crypto'
-import { mkdtemp, readFile, writeFile, rm, symlink, mkdir } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, writeFile, rm, symlink, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
@@ -48,6 +48,12 @@ it('imports a selected application file without changing its source or exposing 
     expect(network.configuration.stateId).toBe(stateId)
     expect(network.configuration.grants).toEqual(replaced.configuration.grants)
     expect(resources.epoch(pod.id)).toBe(epoch + 1)
+    await manager.add(pod.id, resources.epoch(pod.id), { name: 'Independent account', executable: '/fixture', executableHash: 'a'.repeat(64), cliId: 'fixture', adapterPath: '/fixture.toml', adapterHash: 'b'.repeat(64), networkHosts: [], entryFiles: [], environment: {} })
+    const independent = resources.list(pod.id).find(item => item.id !== resource.id)!
+    expect(independent.configuration.stateId).not.toBe(stateId)
+    expect(independent.configuration.grants).toEqual([])
+    await new ProgramState(credentials).use(independent.configuration.stateId as string, { podId: pod.id, applicationId: independent.id }, async directory => expect(await readdir(directory)).toEqual([]))
+    await new ProgramState(credentials).use(stateId, { podId: pod.id, applicationId: resource.id }, async directory => expect(await readFile(join(directory, 'token.json'), 'utf8')).toBe(value))
     expect(store.getPod(pod.id).lifecycle).toBe('paused')
     await expect(manager.network(pod.id, resource.id, epoch, [])).rejects.toThrow('changed')
     await expect(manager.network(randomUUID(), resource.id, 0, [])).rejects.toThrow()
