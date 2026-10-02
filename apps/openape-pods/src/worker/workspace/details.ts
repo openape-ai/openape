@@ -17,7 +17,7 @@ export class WorkspaceDetails {
     }
     if (command.type === 'activate') {
       this.store.transaction(() => {
-        if (!definitionUpdate && this.store.db.prepare('SELECT 1 FROM definition_update_drafts d JOIN script_drafts s ON s.id=d.draft_id WHERE d.pod_id=? AND s.script_hash=?').get(pod.id, command.hash)) throw new Error('Use the definition update review to select this version for the instance')
+        if (!definitionUpdate && this.store.db.prepare('SELECT 1 FROM instance_definition_bindings b JOIN pod_definition_versions v ON v.definition_id=b.definition_id JOIN pod_definition_sources s ON s.definition_id=v.definition_id AND s.version=v.version WHERE b.pod_id=? AND v.content_hash=? AND s.state=\'published\'').get(pod.id, command.hash)) throw new Error('Use the definition update review to select this version for the instance')
         const row = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(pod.id, command.hash)
         if (!row) throw new Error('Script version not found')
         const manifest = parseManifest(JSON.parse(row.manifest as string))

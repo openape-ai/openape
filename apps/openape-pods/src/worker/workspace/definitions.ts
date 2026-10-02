@@ -33,6 +33,7 @@ export class DefinitionWorkspace {
         const source = this.catalog.source(command.definitionId, command.version)
         if (source.view.state !== 'published') throw new Error('Publish this definition before creating an instance')
         if (!this.store.db.prepare('SELECT 1 FROM pod_groups WHERE id=?').get(command.groupId)) throw new Error('Company group no longer exists')
+        if (this.store.listPods().length >= 100) throw new Error('Local pod limit reached')
         const pod = this.store.createPod({ name: command.name })
         this.store.db.prepare('INSERT INTO pod_memberships VALUES(?,?)').run(pod.id, command.groupId)
         this.store.db.prepare('UPDATE pod_organization SET revision=revision+1 WHERE id=1').run()
@@ -84,10 +85,11 @@ export class DefinitionWorkspace {
     try {
       this.catalog.assertPod(podId)
       signal.throwIfAborted()
+      if (this.store.db.prepare('SELECT phase FROM remote_pods WHERE pod_id=?').get(podId)?.phase === 'needs_desktop_action') throw new Error('Recover this existing identity on desktop before retrying. A restored identity must never be provisioned again.')
       await podDirectories(this.store.root, podId)
       const binding = this.binding(podId)
-      const existing = this.store.db.prepare('SELECT 1 FROM definition_update_drafts WHERE pod_id=? AND definition_id=? AND definition_version=?').get(podId, request.definition_id!, request.definition_version!)
-      if (!existing) await this.prepare(podId, request.definition_id as string, request.definition_version as number, binding.binding_revision as number, signal)
+      const existing = this.store.db.prepare('SELECT 1 FROM definition_update_drafts WHERE pod_id=? AND definition_id=? AND definition_version=?').get(podId, binding.definition_id!, binding.definition_version!)
+      if (!existing && !this.store.getPod(podId).activeScript) await this.prepare(podId, binding.definition_id as string, binding.definition_version as number, binding.binding_revision as number, signal)
       this.store.db.prepare('UPDATE definition_instance_requests SET state=\'pending\',error=NULL WHERE id=?').run(requestId)
     }
     catch (error) { this.provisioned(requestId, error instanceof Error ? error.message : String(error)); throw error }
@@ -131,6 +133,8 @@ export class DefinitionWorkspace {
       if (now.lifecycle === 'archived' || now.activeScript !== pod.activeScript || now.bindingRevision !== pod.bindingRevision) throw new Error('Instance changed while preparing its definition')
     }
     current()
+    const existing = this.store.db.prepare('SELECT draft_id FROM definition_update_drafts WHERE pod_id=? AND definition_id=? AND definition_version=? AND expected_binding=? AND expected_active IS ?').get(podId, id, version, revision, pod.activeScript)
+    if (existing) return existing.draft_id as string
     const source = this.catalog.source(id, version)
     if (!source.manifest || !source.sourcePodId) throw new Error('Published definition source is missing')
     const dependencies = new DependencyStore(this.store)
@@ -176,7 +180,7 @@ export class DefinitionWorkspace {
 
   view(): DefinitionsView {
     const owner = this.catalog.owner
-    const instances = this.store.db.prepare(`SELECT b.*,p.group_id FROM instance_definition_bindings b JOIN pod_definitions d ON d.id=b.definition_id LEFT JOIN pod_memberships p ON p.pod_id=b.pod_id WHERE d.owner_issuer=? AND d.owner_subject=?`).all(owner.issuer, owner.subject).map(row => ({ podId: row.pod_id as string, definitionId: row.definition_id as string, version: row.definition_version as number, bindingRevision: row.binding_revision as number, diverged: this.store.getPod(row.pod_id as string).activeScript !== this.catalog.source(row.definition_id as string, row.definition_version as number).view.contentHash, groupId: row.group_id as string | null }))
+    const instances = this.store.db.prepare(`SELECT b.*,p.group_id FROM instance_definition_bindings b JOIN pod_definitions d ON d.id=b.definition_id LEFT JOIN pod_memberships p ON p.pod_id=b.pod_id WHERE d.owner_issuer=? AND d.owner_subject=?`).all(owner.issuer, owner.subject).map(row => ({ podId: row.pod_id as string, definitionId: row.definition_id as string, version: row.definition_version as number, bindingRevision: row.binding_revision as number, diverged: (this.store.getPod(row.pod_id as string).activeScript ?? digest('')) !== this.catalog.source(row.definition_id as string, row.definition_version as number).view.contentHash, groupId: row.group_id as string | null }))
     const provisioning = this.store.db.prepare('SELECT * FROM definition_instance_requests WHERE owner_issuer=? AND owner_subject=? ORDER BY created_at,id').all(owner.issuer, owner.subject).map(row => ({ requestId: row.id as string, podId: row.pod_id as string, state: row.state as 'pending' | 'ready' | 'failed', error: row.error as string | null }))
     return { definitions: this.catalog.list(), instances, provisioning }
   }
