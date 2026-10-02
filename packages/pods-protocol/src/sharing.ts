@@ -337,6 +337,9 @@ export function parsePortableManifest(value: unknown, supportedFeatures: readonl
     if (pod.packages) { fileReference(pod.packages.manifest, 'package-manifest'); fileReference(pod.packages.lock, 'package-lock') }
     for (const asset of pod.assets) fileReference(asset, 'asset')
     unique([...pod.applications.map(binding => binding.alias), ...pod.access.map(item => item.alias)])
+    const scopeInputs = pod.access.flatMap(item => item.kind === 'directory' ? [item.input] : item.kind === 'http' ? [item.origin, ...(item.authentication ? [item.authentication.subject, item.authentication.issuer] : [])] : item.kind === 'mail' ? [item.connection, item.folders, item.since] : [item.connection, item.model])
+    unique(scopeInputs)
+    if (pod.inputs.some(input => scopeInputs.includes(input.key) && input.sharingGroup !== null) || pod.bindings.some(binding => scopeInputs.includes(binding.input)) || pod.applications.some(binding => scopeInputs.includes(binding.account) || binding.environment.some(item => scopeInputs.includes(item.input)))) fail('access inputs require independent recipient choices')
     const inputReference = (key: string, kind: PortableInputKind) => { if (!pod.inputs.some(input => input.key === key && input.kind === kind)) fail('dangling or mistyped access input') }
     for (const request of pod.access) {
       if (request.kind === 'directory') {

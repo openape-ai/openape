@@ -172,10 +172,10 @@ it('carries requested file, HTTP and AI scope through typed recipient inputs onl
     { kind: 'jev', alias: 'decision', connection: 'ai', model: 'model', maxAttempts: 2 },
   ]
   expect(parsePortableManifest(manifest).pods[0]!.access).toEqual(pod.access)
-  for (const key of ['folder', 'identity', 'ai', 'subject']) {
+  for (const key of ['folder', 'identity', 'ai', 'subject', 'origin', 'issuer', 'model']) {
     const input = pod.inputs.find(input => input.key === key)!
     input.sharingGroup = 'shared'
-    expect(() => parsePortableManifest(manifest)).toThrow(key === 'subject' ? 'recipient selection' : 'cannot be shared')
+    expect(() => parsePortableManifest(manifest)).toThrow(['subject', 'origin', 'issuer', 'model'].includes(key) ? 'independent recipient choices' : 'cannot be shared')
     input.sharingGroup = null
   }
   const http = pod.access[1]!
@@ -183,7 +183,8 @@ it('carries requested file, HTTP and AI scope through typed recipient inputs onl
   http.authentication.issuer = 'origin'
   expect(() => parsePortableManifest(manifest)).toThrow('duplicate')
   http.authentication.issuer = 'issuer'
-  pod.access[0] = { kind: 'directory', alias: 'files', input: 'origin', access: 'read' }
+  pod.inputs.push({ key: 'wrong_folder', kind: 'string', label: 'Wrong folder', description: '', required: true, sharingGroup: null })
+  pod.access[0] = { kind: 'directory', alias: 'files', input: 'wrong_folder', access: 'read' }
   expect(() => parsePortableManifest(manifest)).toThrow('mistyped access input')
   pod.access[0] = { kind: 'http', alias: 'api', origin: 'origin', methods: ['GET'], authentication: null }
   expect(() => parsePortableManifest(manifest)).toThrow('duplicate')

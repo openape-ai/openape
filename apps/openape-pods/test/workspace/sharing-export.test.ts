@@ -340,6 +340,7 @@ it('retains collection names, retention, artifact association and explicit share
     f.store.db.prepare('INSERT INTO artifacts VALUES(?,?,?,?,?,?,0)').run(randomUUID(), scopeId, 'b'.repeat(64), 0, 'text/plain', 'PRIVATE_ARTIFACT_CANARY')
   })
   const source = capturePortableSource(f.store, f.owner, { kind: 'network', id }); const choices = mappingChoices(source)
+  expect(source.privateValues).toEqual(expect.arrayContaining(['Base label', 'Shared label', 'PRIVATE_INSTANCE_VALUE']))
   choices.compositions[0]!.defaults = ['value:label']
   const content = await mapPortableSource(f.store.root, source, choices)
   const exported = await createPortablePackage(content.description, content.payloads, '')
@@ -399,4 +400,11 @@ it('serializes preparation and still scans selected defaults inside payloads', a
   expect(review.findings.map(finding => [finding.path, finding.kind])).toEqual([['assets/template.txt', 'private-value']])
   await expect(exporter.commit(review.id, [])).rejects.toThrow('Acknowledge each')
   await expect(exporter.commit(review.id, review.findings.map(finding => finding.id))).resolves.toHaveProperty('archive')
+})
+
+it('bounds repeated private-value findings without flagging substrings or generated metadata', () => {
+  const content = bytes('node '.repeat(1000))
+  expect(scanPortableFiles([{ path: 'pods/run.mjs', content, text: true }], [], ['node'])).toHaveLength(1)
+  expect(scanPortableFiles([{ path: 'pods/run.mjs', content: bytes('nodes node_modules mynode'), text: true }], [], ['node'])).toEqual([])
+  expect(scanPortableFiles([{ path: 'pods/package-lock.json', content, text: true, privateValues: false }], [], ['node'])).toEqual([])
 })

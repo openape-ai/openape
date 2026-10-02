@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 
 export interface PortableScanFinding { id: string, path: string, line: number | null, kind: 'local-reference' | 'local-path' | 'private-key' | 'private-value' | 'possible-credential' | 'opaque-asset', severity: 'block' | 'review' }
-export interface PortableScanFile { path: string, content: Uint8Array, text: boolean }
+export interface PortableScanFile { path: string, content: Uint8Array, text: boolean, privateValues?: boolean }
 const patterns: { kind: PortableScanFinding['kind'], severity: PortableScanFinding['severity'], pattern: RegExp }[] = [
   { kind: 'local-path', severity: 'block', pattern: /(?<![\w./-])(?:\/(?:Users|home|private|Volumes|tmp|var\/folders|Applications|opt|etc|usr\/local)\/[^\s"'<>]+|~\/[^\s"'<>]+|[A-Za-z]:\\[^\r\n"'<>]+)|file:\/\/\/[^\s"'<>]+/g },
   { kind: 'private-key', severity: 'block', pattern: /-----BEGIN (?:(?:RSA|DSA|EC|OPENSSH|ENCRYPTED) PRIVATE KEY|PRIVATE KEY|PGP PRIVATE KEY BLOCK)-----/g },
@@ -64,10 +64,16 @@ function* portableScanSteps(files: readonly PortableScanFile[], privateReference
       for (const match of source.matchAll(pattern)) add(kind, severity, match.index)
       yield
     }
+    if (file.privateValues === false) continue
+    const word = /[\p{L}\p{N}_]/u
     for (const value of values) {
       let index = source.indexOf(value)
       while (index !== -1) {
-        add('private-value', 'review', index)
+        const before = source[index - 1] ?? ''; const after = source[index + value.length] ?? ''
+        if ((!word.test(value[0]!) || !word.test(before)) && (!word.test(value.at(-1)!) || !word.test(after))) {
+          add('private-value', 'review', index)
+          break
+        }
         index = source.indexOf(value, index + value.length)
       }
       yield
