@@ -305,3 +305,25 @@ it.each([[1280, 'en'], [390, 'de']] as const)('shows conversion refusal and conf
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
   await page.screenshot({ path: screenshotPath(`network-conversion-confirm-${width}-${language}.png`) })
 })
+
+it.each([[1280, 'en'], [390, 'de']] as const)('shows archive review and retained history in the actual desktop route at %s (%s)', async (width, language) => {
+  const f = operationalFixture(); applyLanguage(language); await page.viewport(width, 1000)
+  if (width === 390) document.documentElement.style.colorScheme = 'dark'
+  installWorkspace({ language: async () => language, workspace: async () => ({ organization: f.organization, pods: f.pods }), networks: async (command) => {
+    if (command.type === 'archivePreview') return { ...f.view, archiveReview: { fingerprint: 'e'.repeat(64), issues: [], members: 3, retainedDeliveries: 1 } }
+    if (command.type === 'legacyItems') return { ...f.view, legacyItems: { workflowId: f.id(80), items: [{ itemId: f.id(81), podId: f.pods[2]!.id, key: 'Synthetic retained case', payload: '{"subject":"Retained synthetic payload; no replay"}', truncated: false, originalHash: 'a'.repeat(64), currentHash: 'a'.repeat(64), state: 'pending' }], after: null } }
+    return f.view
+  } })
+  wrapper = mount(App, { attachTo: document.body }); await flushPromises(); await frame()
+  const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.isVisible() && button.text().includes(text))!.trigger('click'); await flushPromises(); await frame() }
+  await click(f.definition.name); await click(t('Review archival'))
+  expect(wrapper.findAll('button').find(button => button.text() === t('Archive network'))!.attributes('disabled')).toBeDefined()
+  wrapper.get('.network-retirement').element.scrollIntoView(); await frame()
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
+  await page.screenshot({ path: screenshotPath(`network-archive-review-${width}-${language}.png`) })
+  await click(t('Inspect retained legacy items'))
+  wrapper.get('.legacy-items').element.scrollIntoView(); await frame()
+  expect(wrapper.get('.legacy-items').text()).toContain('Retained synthetic payload; no replay')
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
+  await page.screenshot({ path: screenshotPath(`network-retained-items-${width}-${language}.png`) })
+})
