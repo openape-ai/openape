@@ -1,5 +1,5 @@
 import { definitionSchema } from './definition-schema.ts'
-import { sharingSchema } from './sharing-schema.ts'
+import { aliasSchema, sharingSchema } from './sharing-schema.ts'
 import { networkDataSchema } from './network-data-schema.ts'
 import { networkWorkflowSchema } from './network-workflow-schema.ts'
 import { networkGateSchema } from './network-gate-schema.ts'
@@ -46,7 +46,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 34
+export const schemaVersion = 35
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -345,6 +345,7 @@ PRAGMA user_version=27;`)
       if (version < 32) this.db.exec(`${networkWorkflowSchema} PRAGMA user_version=32;`)
       if (version < 33) this.db.exec(`${definitionSchema} PRAGMA user_version=33;`)
       if (version < 34) this.db.exec(`${sharingSchema} PRAGMA user_version=34;`)
+      if (version < 35) this.db.exec(`${aliasSchema} PRAGMA user_version=35;`)
     })
   }
 

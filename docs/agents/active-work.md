@@ -2,17 +2,19 @@
 
 ## Sharing M3 — issue 1419
 
-M2 is accepted: PR217 merge `eb53ed76433280ac20d286f3669d9bb23184debe` passed
-full-main CI5354 (source CI5353). Patrick authorized resuming after the handoff.
-Branch `feature/issue-1419-sharing-import` in
-`openape-monorepo.worktrees/pods-portable-sharing` holds the first M3 increment:
-bounded archive reader, schema-34 local import journal and
-`PortableImporter` (inspect, stage, configure, commit, complete, cancel, startup
-recovery), described in
-[the sharing inventory](../architecture/pods-portable-sharing.md). It is worker-only;
-no route or UI calls it. Next: main-side binding/provisioning/dependency setup,
-alias runtime views, composition finalization and permission operations, then the
-M4 desktop/browser wizard. Evidence directory: `/tmp/openape-pods-sharing-m3/`.
+M2 is accepted (PR217 merge `eb53ed76433280ac20d286f3669d9bb23184debe`, main
+CI5354). The first M3 increment is merged: PR218, tested source
+`065a319529413f8c5467a5a863c111c34917e310`, merge
+`d564a51212091564aa90d8fa96f19bdb438b0294`, source CI5355 and main CI5356 green,
+[verified private Test Runs](https://report.openape.ai/r/FmyYudXSf0Lar7_HNQCdQ0cW).
+Branch `feature/issue-1419-sharing-setup` in
+`openape-monorepo.worktrees/pods-portable-sharing` adds schema-35 resource aliases,
+the `context.aliases` run view, alias binding, derived setup state, exact-lock
+dependency preparation and the validated `portableImport` worker/main route with
+identity provisioning; see
+[the sharing inventory](../architecture/pods-portable-sharing.md). Next: workflow
+output/call aliases with composition finalization, owner permission operations,
+then the M4 desktop/browser wizard. Evidence directory: `/tmp/openape-pods-sharing-m3/`.
 
 ## Sharing M2 — issue 1419
 
