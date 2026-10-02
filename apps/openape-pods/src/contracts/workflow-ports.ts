@@ -1,3 +1,5 @@
+import type { GraphContract } from './graphs'
+import type { WorkflowDefinition } from './workflows'
 import { dataFields } from './network-data'
 import { networkDataObject, parsePayloadSchema, validateNetworkPayload } from './network-payload'
 import type { PayloadSchema } from './network-payload'
@@ -49,4 +51,23 @@ export function parseWorkflowPortValues(value: unknown, declarations: WorkflowPo
     if (item.version !== port.version) throw new Error('Workflow port schema version changed')
     return [port.name, { version: port.version, data: validateNetworkPayload(item.data, port.schema) }]
   }))
+}
+
+export function validateWorkflowPorts(definition: WorkflowDefinition, ports: WorkflowPorts): void {
+  if (!ports.requiredTerminals.length) throw new Error('A called workflow requires an explicit terminal branch')
+  const members = new Set(definition.nodes.map(node => node.podId))
+  if ([...ports.inputs, ...ports.outputs].some(port => !members.has(port.podId)) || ports.requiredTerminals.some(id => !members.has(id))) throw new Error('Workflow ports and required branches must belong to the published workflow')
+  if (ports.inputs.some(port => definition.nodes.find(node => node.podId === port.podId)!.after.length)) throw new Error('Workflow input ports must target entry nodes')
+  if (ports.outputs.some(port => !ports.requiredTerminals.includes(port.podId))) throw new Error('Workflow output ports require a terminal branch')
+  if (new Set(ports.outputs.map(port => port.podId)).size !== ports.outputs.length) throw new Error('Each workflow member publishes one immutable output')
+  if (ports.requiredTerminals.some(id => definition.nodes.some(node => node.after.includes(id)))) throw new Error('Required workflow terminals cannot have successors')
+  if (ports.requiredGates.some(key => !definition.gates.some(gate => gate.key === key))) throw new Error('Required workflow gate is not declared')
+  if (definition.gates.some(gate => !ports.requiredGates.includes(gate.key))) throw new Error('Every called workflow decision must be explicitly required')
+}
+
+export function validateWorkflowGraphPorts(definition: WorkflowDefinition, ports: WorkflowPorts, nodes: (GraphContract & { id: string })[]): void {
+  if (ports.inputs.some(port => nodes.find(node => node.id === port.podId)!.takes.length)) throw new Error('Workflow input ports must target entry nodes')
+  if (definition.gates.some(gate => gate.kind === 'approve' && nodes.filter(node => node.takes.includes(gate.gives)).length !== 1)) throw new Error('Published approval gates require exactly one approval-channel consumer')
+  const gates = definition.gates.map(gate => ({ id: `gate:${gate.key}`, takes: [gate.takes], gives: gate.kind === 'approve' ? [gate.gives, ...(gate.excluded ? [gate.excluded] : [])] : gate.options.map(option => option.channel) }))
+  if (ports.requiredTerminals.some(id => nodes.find(node => node.id === id)!.gives.some(channel => [...nodes, ...gates].some(consumer => consumer.id !== id && consumer.takes.includes(channel))))) throw new Error('Required workflow terminals cannot have successors')
 }

@@ -1,3 +1,5 @@
+export * from './sharing'
+
 export const protocol = { name: 'pods-mobile', major: 1, minor: 0 } as const
 export const limits = { frameBytes: 65536, pending: 100, dispatchLeaseMs: 30000, clockSkewMs: 30000, replayMs: 86400000, receiptMs: 2592000000 } as const
 export const commandKinds = ['pod.create', 'pod.rename', 'pod.pause', 'pod.resume', 'chat.send', 'chat.cancel', 'changes.apply', 'changes.discard', 'setup.respond', 'review.prepare', 'review.decide', 'run.start', 'run.cancel'] as const
