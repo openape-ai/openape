@@ -119,7 +119,17 @@ export function capturePortableSource(store: PodDatabase, ownerValue: Owner, sel
     const source = { owner, selection: { ...selection }, pods, workflow: workflow ?? null, network, calls: [...calls.values()] }
     const privateReferences = new Set([store.root, homedir(), owner.subject])
     const privateValues = new Set<string>()
-    const remember = (value: unknown) => { if (typeof value === 'string' && value.length >= 4) privateValues.add(value) }
+    const remember = (value: unknown): void => {
+      if (typeof value === 'string' && value.length >= 4) {
+        privateValues.add(value)
+      }
+      else if (Array.isArray(value)) {
+        for (const item of value) remember(item)
+      }
+      else if (value && typeof value === 'object') {
+        for (const item of Object.values(value)) remember(item)
+      }
+    }
     localReferences({ pods: pods.map(({ content: _content, lock: _lock, ...pod }) => pod), network, workflow, calls: [...calls.values()] }, privateReferences)
     for (const pod of pods) {
       for (const variable of pod.variables) remember(variable.value)
@@ -141,13 +151,13 @@ export function capturePortableSource(store: PodDatabase, ownerValue: Owner, sel
           for (const value of Object.values(resource.configuration.environment)) remember(value)
         }
         const authentication = resource.configuration.authentication
-        if (authentication && typeof authentication === 'object') remember((authentication as Record<string, unknown>).subject)
+        if (authentication && typeof authentication === 'object') remember(authentication)
       }
     }
     for (const definition of [workflow, ...Array.from(calls.values(), call => call.published.definition)]) {
       remember(definition?.mail?.mailbox); remember(definition?.mail?.telegramChatId)
       if (definition?.mail) {
-        remember(canonicalNetworkJson(definition.mail.protectedPartners)); remember(canonicalNetworkJson(definition.mail.rules))
+        remember(definition.mail.protectedPartners); remember(definition.mail.rules)
       }
       for (const field of definition?.values ?? []) remember(field.value)
     }

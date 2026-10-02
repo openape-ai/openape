@@ -46,7 +46,7 @@ export class PortableExporter<Choices> {
     const findings = await scanPortableFilesAsync([
       { path: 'manifest.json', content: new TextEncoder().encode(canonicalPortableJson(result.manifest)), text: true },
     ], source.privateReferences, source.privateValues.filter(value => !publicDefaults.has(value)))
-    findings.push(...await scanPortableFilesAsync(content.payloads.map(file => ({ path: file.path, content: file.content, text: file.kind !== 'asset' })), source.privateReferences, source.privateValues))
+    findings.push(...await scanPortableFilesAsync(content.payloads.map(file => ({ path: file.path, content: file.content, text: file.kind !== 'asset', privateValues: file.kind === 'script' || file.kind === 'asset' })), source.privateReferences, source.privateValues))
     if (findings.length > 200) throw new Error('Portable privacy scan has too many findings; reduce or parameterize the selected content')
     if (capturePortableSource(this.store, this.owner, selection).fingerprint !== source.fingerprint) throw new Error('Portable source changed; review the export again')
     return { result, findings, fingerprint: source.fingerprint }
