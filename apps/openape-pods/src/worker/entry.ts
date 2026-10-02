@@ -296,11 +296,11 @@ port.on('message', async (event) => {
       const command = parsePortableImportCommand(request.command.portableImport)
       if (!store.db.prepare('SELECT 1 FROM remote_registration WHERE id=1').get()) throw new Error('Finish desktop identity setup before importing packages')
       const importer = new PortableImporter(store, registry, networkOwner(), join(dirname(runtime.entry), '../vendor/npm'))
-      if (command.type !== 'prepareDependencies') { port.postMessage({ id: request.id, state: await importer.execute(command, runtime, scriptController.signal) }); return }
+      if (command.type !== 'prepareDependencies') { port.postMessage({ id: request.id, state: await importer.execute(command, runtime, scriptController.signal, workflows) }); return }
       maintenance = true
       try {
         await ticking
-        preparing = importer.execute(command, runtime, scriptController.signal)
+        preparing = importer.execute(command, runtime, scriptController.signal, workflows)
         port.postMessage({ id: request.id, state: await preparing })
       }
       finally { preparing = null; maintenance = false }
