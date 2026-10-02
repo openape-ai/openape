@@ -3,23 +3,84 @@
 ## Sharing M3 — issue 1419
 
 M2 is accepted (PR217 merge `eb53ed76433280ac20d286f3669d9bb23184debe`, main
-CI5354). The first M3 increment is merged: PR218, tested source
-`065a319529413f8c5467a5a863c111c34917e310`, merge
-`d564a51212091564aa90d8fa96f19bdb438b0294`, source CI5355 and main CI5356 green,
-[verified private Test Runs](https://report.openape.ai/r/FmyYudXSf0Lar7_HNQCdQ0cW).
-The second increment is merged too: PR219, tested source
-`3e113d0e87656a69f7f6bf1d6324afc2d9e3218c`, merge
-`1bb1cccaef753b2c4f212897762283bb60fcb0ab`, source CI5357 and main CI5358 green,
-[verified private Test Runs](https://report.openape.ai/r/lAyf2v1IAFx4XZTLzZTHCNjB)
-(resource aliases, `context.aliases`, alias binding, derived setup state, exact-lock
-dependencies, validated `portableImport` route). Branch
-`feature/issue-1419-sharing-compositions` in
-`openape-monorepo.worktrees/pods-portable-sharing` adds finalization of imported
-sequences and channel graphs and package-keyed handoff outputs; see
-[the sharing inventory](../architecture/pods-portable-sharing.md). Next: networks,
-called workflows and mail policies after member approval with the owner permission
-operations, then the M4 desktop/browser wizard. Evidence:
-`/tmp/openape-pods-sharing-m3/`, `-m3b/`, `-m3c/`.
+CI5354). Three M3 increments are merged, each with source and full-main CI green
+and a verified private Test Runs report:
+
+- PR218 `d564a51212091564aa90d8fa96f19bdb438b0294` (CI5355/5356): bounded archive
+  reader, schema-34 import journal, worker importer (inspect, stage, configure,
+  commit, complete, cancel, recovery), inert-setup guards, backup/restore handling.
+  [Report](https://report.openape.ai/r/FmyYudXSf0Lar7_HNQCdQ0cW)
+- PR219 `1bb1cccaef753b2c4f212897762283bb60fcb0ab` (CI5357/5358): schema-35
+  resource aliases, `context.aliases`, alias binding with declaration checks,
+  derived setup state, exact-lock dependencies, validated `portableImport`
+  worker/main route with identity provisioning.
+  [Report](https://report.openape.ai/r/lAyf2v1IAFx4XZTLzZTHCNjB)
+- PR220 `1317b2d75bfa492f76f106069d90363812e51fa8` (CI5359/5360): imported
+  sequences and channel graphs created disabled, package-keyed handoff outputs,
+  stage-time refusal of networks, called workflows and mail.
+  [Report](https://report.openape.ai/r/bpthqdy5WjopPCQPeoFlOGP5)
+
+Contract and limitations: [sharing inventory](../architecture/pods-portable-sharing.md).
+Branch `feature/issue-1419-sharing-networks` in
+`openape-monorepo.worktrees/pods-portable-sharing` starts from PR220's merge; it has
+no implementation yet. Evidence directories: `/tmp/openape-pods-sharing-m3/`,
+`-m3b/`, `-m3c/`.
+
+### Next: persistent networks, called workflows, mail (M3 remainder)
+
+Verified native constraints for the network finalization step:
+
+- `NetworkEngine.create` (`worker/scheduling/network-engine.ts`) needs every member
+  bound through `instance_definition_bindings` to a definition version whose
+  `content_hash` equals the member's active validated script, the member in the
+  network's group, no runs/schedules/workflow membership, checkpoint revision 0,
+  capabilities limited to `mail.read`, and `validations` for the current epoch.
+  `expectedSetup` is optional; computing it through `NetworkViews.setup` and passing
+  it records that the created setup equals the reviewed one.
+- `DefinitionCatalog.publish(podId, activeScript, name, defaults)` adopts the Pod
+  (legacy version 1 bound) and inserts a published version with `definition_config`
+  public fields from `defaults`; it does not move the binding. The definitions
+  update path moves it with `UPDATE instance_definition_bindings SET
+  definition_version=?,binding_revision=binding_revision+1` after a reviewed draft.
+  Shared network values (`validateNetworkCompositionValues`) require declared public
+  fields on each member's bound version, so imported members must be bound to a
+  published version whose defaults come from the package Pod bindings.
+- Configuration versus variables: `resolveConfiguration`
+  (`worker/scheduling/network-config.ts`) reads `definition_config` fields,
+  `composition_config` overrides and `instance_config` Pod overrides into
+  `context.config`; Pod variables are a separate namespace (`context.variables`).
+  The manifest does not distinguish a variable binding from a configuration binding
+  (both are `bindings` with scalar inputs), and the exporter guarantees the two alias
+  sets are distinct. The workable approach is to publish each imported member with
+  typed definition defaults for all its scalar bindings while keeping the string
+  variables commit created, so both namespaces resolve; shared network values then
+  land in `composition_config` through the draft's `sharedValues`.
+- Tests for this step need members with validated active scripts whose manifest
+  contract equals the package contract; `installExample` scripts export no contract,
+  so the fixture must seed `scripts`/`validations` rows as `test/scheduling/network-fixture.ts`
+  does, or validate a contract-bearing draft through the real runtime (manual).
+- No production writer exists for `data_collections`/`data_collection_versions`,
+  `data_permissions`, `artifact_scopes`/`artifact_permissions` or
+  `workflow_call_permissions`; their DDL (`storage/network-schema.ts`,
+  `network-workflow-schema.ts`) carries owner/group composite keys, unique collection
+  names per owner and group, private artifact scopes needing the network row and
+  call permissions needing a published `workflow_revisions` row. These are owner
+  operations on a paused network, to be added as validated commands and reused by
+  the import step (collection reuse must be an explicit decision).
+- Called workflows: finalize the sequence/graph first (PR220 path), then
+  `publishWorkflowRevision` with the document ports once members are approved, then
+  call permissions for the calling network members.
+- Mail policies need the local filter application resource (bound alias), member
+  Pod ids and the mail inputs through `parseMailWorkflowConfiguration`; mail access
+  on Pods has no comparable recipient assignment path yet.
+- Sequencing: Pod setup `complete` first (members need activation), so network and
+  call finalization run in state `completed` and keep the archive until done;
+  `complete` must stop requiring those compositions and `stage` must stop refusing
+  them once the step exists.
+
+Then M4 (shared desktop/browser wizard, encrypted bounded transport, export review
+with stored aliases and keys), network M12 bounded feedback, M13 signed relay-first
+rollout and M14 observation remain.
 
 ## Sharing M2 — issue 1419
 
