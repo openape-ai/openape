@@ -3264,8 +3264,9 @@
   "Public defaults must be a valid JSON object": "Öffentliche Standardwerte müssen ein gültiges JSON-Objekt sein",
   "Use the definition update review to select this version for the instance": "Wähle diese Version für die Instanz über die Definitionsupdate-Prüfung aus",
   "Resolve pending instance inputs, decisions and uncertain effects before selecting a new definition version": "Kläre offene Instanzeingaben, Entscheidungen und unklare Auswirkungen, bevor du eine neue Definitionsversion wählst",
-  "This script uses instance-specific HTTP or SSH rights. Keep it local until its resource bindings can be reviewed for reuse.": "Dieses Script verwendet instanzspezifische HTTP- oder SSH-Rechte. Behalte es lokal, bis seine Ressourcenbindungen für die Wiederverwendung geprüft werden können.",
   "Invalid definition availability": "Ungültiger Verfügbarkeitsstatus der Definition",
   "Finish desktop identity setup before using reusable definitions.": "Schließe die Identitätseinrichtung am Desktop ab, bevor du wiederverwendbare Definitionen verwendest.",
-  "Definition editing is not available for this connected workspace yet.": "Definitionsbearbeitung ist für diesen verbundenen Arbeitsbereich noch nicht verfügbar."
+  "Definition editing is not available for this connected workspace yet.": "Definitionsbearbeitung ist für diesen verbundenen Arbeitsbereich noch nicht verfügbar.",
+  "This script uses instance-specific HTTP, SSH or program rights. Keep it local until its resource bindings can be reviewed for reuse.": "Dieses Script verwendet instanzspezifische HTTP-, SSH- oder Programmrechte. Behalte es lokal, bis seine Ressourcenbindungen für die Wiederverwendung geprüft werden können.",
+  "Recover this existing identity on desktop before retrying. A restored identity must never be provisioned again.": "Stelle diese bestehende Identität zuerst am Desktop wieder her. Eine wiederhergestellte Identität darf nicht neu provisioniert werden."
 }
