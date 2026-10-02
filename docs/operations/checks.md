@@ -17,6 +17,14 @@
   require an unlocked Mac; they must never start implicitly on push or merge.
 - `--dry-run` prints resolved SHAs, dirty state, workspace selection and commands.
 
+The runner preserves its own Git hook context when selecting revisions, but removes
+Git-local repository and command-config environment variables from child steps.
+This includes the direct tooling step before Turbo: synthetic Git repositories
+must discover their own state from their working directory. Child checks must not
+rely on inherited command-line `safe.directory` or authentication overrides; use
+explicit repository/system configuration where required. Direct fixture invocations
+outside this runner remain responsible for their own Git environment isolation.
+
 Selected libraries/modules and their transitive workspace dependencies are built
 serially before checks. Consumed CLI applications are included only when selected
 or required by that dependency closure. Application builds outside this list

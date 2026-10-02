@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import process from 'node:process'
 // eslint-disable-next-line test/no-import-node-test
 import { describe, it } from 'node:test'
-import { affectedWorkspaces, checkCommands, root, validateScripts } from './check.mjs'
+import { affectedWorkspaces, checkCommands, checkEnvironment, root, runStep, validateScripts } from './check.mjs'
 
 const packages = [
   { name: 'core', path: 'packages/core', deps: {}, scripts: { build: 'x', lint: 'x', typecheck: 'x', test: 'x' } },
@@ -55,4 +58,32 @@ describe('shared check contract', () => {
     assert.deepEqual(steps.at(-1).args, ['--filter', 'app', 'test:layout'])
     assert.equal(checkCommands(packages, [], ['unit'], policy).length, 0)
   })
+})
+
+it('isolates the actual check subprocess from hook repository and config overrides', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'openape-check-environment-'))
+  const parent = join(directory, 'parent'); const fixture = join(directory, 'fixture.git')
+  const environment = checkEnvironment()
+  const git = (args, cwd = directory, env = environment) => execFileSync('git', args, { cwd, env, encoding: 'utf8' }).trim()
+  const overrides = { GIT_DIR: join(parent, '.git'), GIT_INDEX_FILE: join(parent, '.git/index'), GIT_CONFIG_PARAMETERS: '\'core.hooksPath\'=\'/synthetic-hook-override\'', GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.hooksPath', GIT_CONFIG_VALUE_0: '/synthetic-hook-override' }
+  const previous = Object.fromEntries(Object.keys(overrides).map(name => [name, process.env[name]]))
+  try {
+    git(['init', parent]); mkdirSync(fixture)
+    git(['init', '--bare'], fixture, { ...environment, ...overrides })
+    assert.equal(git(['config', '--get', 'core.bare'], parent), 'true')
+    git(['config', 'core.bare', 'false'], parent)
+    Object.assign(process.env, overrides)
+    assert.equal(await runStep({ command: 'git', args: ['-C', fixture, 'init', '--bare'] }, join(directory, 'probe.log')), 0)
+    assert.equal(git(['config', '--get', 'core.bare'], parent), 'false')
+    assert.equal(git(['rev-parse', '--is-bare-repository'], fixture), 'true')
+    const contaminated = { ...environment, ...overrides, GIT_WORK_TREE: parent, VITEST_MAX_WORKERS: '4' }
+    const isolated = checkEnvironment(contaminated)
+    for (const name of [...Object.keys(overrides), 'GIT_WORK_TREE']) assert.equal(isolated[name], undefined)
+    assert.equal(isolated.VITEST_MAX_WORKERS, '4')
+    assert.equal(contaminated.GIT_DIR, join(parent, '.git'))
+  }
+  finally {
+    for (const [name, value] of Object.entries(previous)) { if (value === undefined) delete process.env[name]; else process.env[name] = value }
+    rmSync(directory, { recursive: true, force: true })
+  }
 })
