@@ -1,5 +1,38 @@
 # Active work
 
+## Portable sharing — issue1419 / network M11
+
+M11c PR214 merged source `feb5390f7c085b8cfd1de2074853855a889c17a4` as
+`667745cbcbb751349c4f83714f4847966e5c04c9`; CI5345/source and CI5346/main passed.
+[Verified private Test Runs](https://report.openape.ai/r/j5MqJwC7wapbZtzDrfozh6Bi)
+contains1177 units, one native case,17 layout cases, six inspected screenshots,
+all20-file native review and actual Opus/Fable reviews. Prior hook-environment
+incident and recovery are documented; the final restored pre-push gate passed.
+Shared Git config is restored to core.hooksPath=.githooks/core.bare=false, matching
+the documented working-checkout topology. Other branches and working files remain.
+
+[Issue1419](https://repos.openape.ai/patrick/monorepo/issues/1419) tracks required
+portable file sharing. Dedicated checkout `openape-monorepo.worktrees/pods-portable-sharing`,
+branch `feature/issue-1419-pod-workflow-sharing`, canonical base the merge above.
+Frozen install, prescribed prebuild and Doctor pass. Manifest contract implementation
+and synthetic fixtures are in progress, with actual Opus5.5 architecture review.
+See [reference inventory and package boundary](../architecture/pods-portable-sharing.md).
+Native composition validation is implemented; 32 protocol tests and 33 focused
+composition/workflow-call tests pass. Actual Opus reviews prompted environment,
+capability-reference, mail-ancestry and variable-conflict corrections. Full root
+gates and final review are running. M0 sharing remains unaccepted. No importer, application probing, user-data migration or execution is wired.
+Next finish that boundary, review/test it, then M1 imported-lock/application resolution.
+M11–M14 remain open; existing production/live-action boundaries stay in force.
+Evidence: `/tmp/openape-pods-sharing-m0/`.
+
+A pre-commit rerun exposed a check-runner defect: its direct tooling subprocesses
+inherit Git-hook repository/config variables before Turbo filtering. Shared
+`core.bare` changed to true; restored false, with own ref/index/files preserved.
+The runner now strips Git-local variables for child steps; a real two-repository
+regression passes. This repair still needs full hook/CI acceptance. The same hook
+also failed an existing IdP fixture during concurrent Nuxt builds; a supported
+single-worker rerun is in progress. No default suite, timeout or CI change.
+
 ## Current M11 — issue1417
 
 M0–M10 are accepted. M11a reviewed conversion is merged in

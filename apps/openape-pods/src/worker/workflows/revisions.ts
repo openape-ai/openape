@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { dataFields } from '../../contracts/network-data'
-import { parseWorkflowPorts, workflowIdentity } from '../../contracts/workflow-ports'
+import { parseWorkflowPorts, validateWorkflowGraphPorts, validateWorkflowPorts, workflowIdentity } from '../../contracts/workflow-ports'
 import type { WorkflowPorts } from '../../contracts/workflow-ports'
 import { parseWorkflowCommand } from '../../contracts/workflows'
 import { parseGraphContract } from '../../contracts/graphs'
@@ -21,18 +21,6 @@ function pinNodes(store: PodDatabase, definition: WorkflowDefinition): WorkflowN
   })
 }
 
-function validatePorts(definition: WorkflowDefinition, ports: WorkflowPorts): void {
-  if (!ports.requiredTerminals.length) throw new Error('A called workflow requires an explicit terminal branch')
-  const members = new Set(definition.nodes.map(node => node.podId))
-  if ([...ports.inputs, ...ports.outputs].some(port => !members.has(port.podId)) || ports.requiredTerminals.some(id => !members.has(id))) throw new Error('Workflow ports and required branches must belong to the published workflow')
-  if (ports.inputs.some(port => definition.nodes.find(node => node.podId === port.podId)!.after.length)) throw new Error('Workflow input ports must target entry nodes')
-  if (ports.outputs.some(port => !ports.requiredTerminals.includes(port.podId))) throw new Error('Workflow output ports require a terminal branch')
-  if (new Set(ports.outputs.map(port => port.podId)).size !== ports.outputs.length) throw new Error('Each workflow member publishes one immutable output')
-  if (ports.requiredTerminals.some(id => definition.nodes.some(node => node.after.includes(id)))) throw new Error('Required workflow terminals cannot have successors')
-  if (ports.requiredGates.some(key => !definition.gates.some(gate => gate.key === key))) throw new Error('Required workflow gate is not declared')
-  if (definition.gates.some(gate => !ports.requiredGates.includes(gate.key))) throw new Error('Every called workflow decision must be explicitly required')
-}
-
 function validateGraphPorts(store: PodDatabase, published: PublishedWorkflow): void {
   if (published.definition.mode !== 'channels') return
   const nodes = published.pins.map((pin) => {
@@ -40,15 +28,12 @@ function validateGraphPorts(store: PodDatabase, published: PublishedWorkflow): v
     if (!script) throw new Error('Published workflow member script is unavailable')
     return { id: pin.podId, ...parseGraphContract(JSON.parse(script.manifest as string).contract) }
   })
-  if (published.ports.inputs.some(port => nodes.find(node => node.id === port.podId)!.takes.length)) throw new Error('Workflow input ports must target entry nodes')
-  if (published.definition.gates.some(gate => gate.kind === 'approve' && nodes.filter(node => node.takes.includes(gate.gives)).length !== 1)) throw new Error('Published approval gates require exactly one approval-channel consumer')
-  const gates = published.definition.gates.map(gate => ({ id: `gate:${gate.key}`, takes: [gate.takes], gives: gate.kind === 'approve' ? [gate.gives, ...(gate.excluded ? [gate.excluded] : [])] : gate.options.map(option => option.channel) }))
-  if (published.ports.requiredTerminals.some(id => nodes.find(node => node.id === id)!.gives.some(channel => [...nodes, ...gates].some(consumer => consumer.id !== id && consumer.takes.includes(channel))))) throw new Error('Required workflow terminals cannot have successors')
+  validateWorkflowGraphPorts(published.definition, published.ports, nodes)
 }
 
 export function publishWorkflowRevision(store: PodDatabase, definition: WorkflowDefinition, value: unknown, now: number): WorkflowRevision {
   const ports = parseWorkflowPorts(value)
-  validatePorts(definition, ports)
+  validateWorkflowPorts(definition, ports)
   return store.transaction(() => {
     const current = store.db.prepare('SELECT revision,archived FROM workflows WHERE id=?').get(definition.id)
     if (!current || current.archived === 1 || current.revision !== definition.revision) throw new Error('Workflow changed; reload before publishing')
@@ -82,7 +67,7 @@ export function loadWorkflowRevision(store: PodDatabase, workflowId: string, rev
   if (command.type !== 'save' || command.id !== workflowId) throw new Error('Published workflow identity changed')
   const definition = saved as unknown as WorkflowDefinition
   const ports = parseWorkflowPorts(input.ports)
-  validatePorts(definition, ports)
+  validateWorkflowPorts(definition, ports)
   if (!Array.isArray(input.pins) || input.pins.length !== definition.nodes.length) throw new Error('Published workflow pins do not match its members')
   const pins = input.pins.map((value) => {
     const pin = dataFields(value, ['podId', 'scriptHash', 'bindingRevision', 'resourceEpoch'])
