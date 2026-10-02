@@ -1,3 +1,4 @@
+import { parseDefinitionCommand } from '../contracts/definitions'
 import { resolveSshTarget } from './ssh/configuration'
 import { McpAccessPolicy } from './codex/access'
 import { parseMcpAccessCommand } from '../contracts/mcp-access'
@@ -368,6 +369,10 @@ async function start(): Promise<void> {
   ipcMain.handle(channels.workspace, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     return worker.request(parseCommand(command))
+  })
+  ipcMain.handle(channels.definitions, (event, command: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    return worker.definitions(parseDefinitionCommand(command))
   })
   ipcMain.handle(channels.networks, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)

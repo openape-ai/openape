@@ -13,7 +13,9 @@ import { ScriptCredentials } from '../resources/script-credentials'
 import { mkdir, writeFile, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { PodDatabase, digest } from '../storage/database'
+import { PodDatabase, digest, parseManifest } from '../storage/database'
+import type { ScriptManifest } from '../storage/database'
+import { canonicalNetworkJson } from '../../contracts/network-json'
 import { executeScript } from '../runs/runner'
 import { parseProgress } from '../runs/progress'
 import { inputSchema, resultSchema } from '../runs/examples'
@@ -42,7 +44,14 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
   if (Object.keys(packages.dependencies).length && !dependencyHash) throw new Error('Prepare dependencies in Script before validation')
   const dependencyRoot = dependencyHash ? await dependencies.verify(pod.id, dependencyHash) : undefined
   const dependencyLockHash = dependencyHash ? digest(`${manifest.dependencyLockHash}:${dependencyHash}`) : manifest.dependencyLockHash
-  const code = `${draft.code as string}\n/* Pods binding: assignment ${pod.bindingRevision}; dependencies ${dependencyLockHash}; capabilities ${capabilities.join(',')} */\n`
+  const definition = store.db.prepare(`SELECT v.content_hash,v.lock_hash,s.manifest FROM definition_update_drafts d
+    JOIN pod_definition_versions v ON v.definition_id=d.definition_id AND v.version=d.definition_version
+    JOIN pod_definition_sources s ON s.definition_id=v.definition_id AND s.version=v.version
+    WHERE d.draft_id=? AND d.pod_id=? AND s.state='published'`).get(draftId, pod.id)
+  const pinned = definition ? parseManifest(JSON.parse(definition.manifest as string)) : undefined
+  if (pinned && (digest(draft.code as string) !== definition!.content_hash || canonicalNetworkJson(capabilities) !== canonicalNetworkJson(pinned.capabilities))) throw new Error('Definition code or requested rights changed; prepare its immutable version again')
+  if (pinned && dependencyLockHash !== definition!.lock_hash) throw new Error('Definition requires a different runtime or dependency lock. Validate and publish a new version for this runtime before updating instances.')
+  const code = pinned ? draft.code as string : `${draft.code as string}\n/* Pods binding: assignment ${pod.bindingRevision}; dependencies ${dependencyLockHash}; capabilities ${capabilities.join(',')} */\n`
   const hash = digest(code)
   const root = join(store.root, 'validation', randomUUID())
   await mkdir(root, { recursive: true, mode: 0o700 }); const artifact = join(root, 'run.mjs'); await writeFile(artifact, code, { mode: 0o400, flag: 'wx' })
@@ -116,7 +125,10 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
     store.transaction(() => {
       if (JSON.stringify(new PodVariables(store).list(pod.id)) !== variableState) throw new Error('Variables changed during validation; validate again')
       if (store.getPod(pod.id).lifecycle === 'archived' || store.getPod(pod.id).bindingRevision !== pod.bindingRevision || resources.epoch(pod.id) !== epoch || store.db.prepare('SELECT revision FROM script_drafts WHERE id=?').get(draftId)?.revision !== revision) throw new Error('Draft, script binding or permissions changed during validation')
-      store.storeScript(pod.id, { schemaVersion: 1, contentHash: hash, entrypoint: 'run.mjs', dependencyLockHash, runtimeVersion: 'electron-40.9.3/codex-0.153.4/contract-1', capabilities, triggers: ['manual', 'schedule', 'event'], inputSchemaHash: digest(JSON.stringify(inputSchema)), outputSchemaHash: digest(JSON.stringify(resultSchema)), checkpointSchemaVersion: 1, assignmentRevision: pod.bindingRevision, ...contract ? { contract } : {}, effects: resources.list(pod.id).some(resource => resource.state === 'ready' && resource.configuration.type === 'http' && capabilities.includes(String(resource.configuration.capability)) && (resource.configuration.methods as string[]).some(isHttpEffect)) ? 'reconciledEffects' : 'readOnly' }, code)
+      const checkedManifest: ScriptManifest = { schemaVersion: 1, contentHash: hash, entrypoint: 'run.mjs', dependencyLockHash, runtimeVersion: 'electron-40.9.3/codex-0.153.4/contract-1', capabilities, triggers: ['manual', 'schedule', 'event'], inputSchemaHash: digest(JSON.stringify(inputSchema)), outputSchemaHash: digest(JSON.stringify(resultSchema)), checkpointSchemaVersion: 1, assignmentRevision: pod.bindingRevision, ...contract ? { contract } : {}, effects: resources.list(pod.id).some(resource => resource.state === 'ready' && resource.configuration.type === 'http' && capabilities.includes(String(resource.configuration.capability)) && (resource.configuration.methods as string[]).some(isHttpEffect)) ? 'reconciledEffects' : 'readOnly' }
+      if (pinned && pinned.effects !== checkedManifest.effects) throw new Error('Instance HTTP effect permissions differ from the definition. Review this instance’s permissions before validating again.')
+      if (pinned && canonicalNetworkJson({ ...pinned, assignmentRevision: pod.bindingRevision }) !== canonicalNetworkJson(checkedManifest)) throw new Error('Definition contract or runtime requirements changed; publish a new version')
+      store.storeScript(pod.id, pinned ? { ...pinned, assignmentRevision: pod.bindingRevision } : checkedManifest, code)
       if (dependencyHash) store.db.prepare('INSERT OR IGNORE INTO script_dependencies VALUES(?,?,?)').run(pod.id, hash, dependencyHash)
       store.db.prepare('INSERT OR REPLACE INTO validations VALUES(?,?,?,?,?)').run(pod.id, hash, pod.bindingRevision, epoch, evidence)
       store.db.prepare('UPDATE script_drafts SET script_hash=?,validation=? WHERE id=? AND revision=?').run(hash, evidence, draftId, revision)

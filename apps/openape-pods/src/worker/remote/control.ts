@@ -36,8 +36,8 @@ export class RemoteControl {
     store.db.prepare('UPDATE remote_inbox SET state=\'unknown\' WHERE state=\'received\'').run()
   }
 
-  private registration(): RemoteRegistration {
-    const row = this.store.db.prepare('SELECT body FROM remote_registration WHERE id=1 AND enabled=1').get()
+  private registration(requireEnabled = true): RemoteRegistration {
+    const row = this.store.db.prepare('SELECT body FROM remote_registration WHERE id=1 AND (?=0 OR enabled=1)').get(Number(requireEnabled))
     if (!row) throw new ProtocolError('remote_access_disabled', 403)
     return JSON.parse(row.body as string)
   }
@@ -76,7 +76,7 @@ export class RemoteControl {
       })
       return { enabled: true }
     }
-    const registration = this.registration()
+    const registration = this.registration(command.type !== 'claim' && command.type !== 'provision')
     if (command.type === 'programs') return new RemotePrograms(this.store, this.resources, this.now).list(registration.owner)
     if (command.type === 'offerProgram') return { id: new RemotePrograms(this.store, this.resources, this.now).offer(registration.owner, command.definition) }
     if (command.type === 'revokeProgram') { new RemotePrograms(this.store, this.resources, this.now).revoke(registration.owner, command.id); return { revoked: true } }

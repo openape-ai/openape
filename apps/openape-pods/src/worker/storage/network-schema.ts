@@ -1,3 +1,4 @@
+import { definitionSchema, definitionTables } from './definition-schema.ts'
 import { networkDataSchema, networkDataTables } from './network-data-schema.ts'
 import { networkWorkflowSchema, networkWorkflowTables } from './network-workflow-schema.ts'
 import { networkGateSchema, networkGateTables } from './network-gate-schema.ts'
@@ -467,7 +468,7 @@ function schemaObjects(version: number): { type: string, name: string, sql: stri
   if (cached) return cached
   const reference = new DatabaseSync(':memory:')
   try {
-    reference.exec(networkSchema + (version >= 29 ? networkControlSchema : '') + (version >= 30 ? networkGateSchema : '') + (version >= 31 ? networkDataSchema : '') + (version >= 32 ? networkWorkflowSchema : ''))
+    reference.exec(networkSchema + (version >= 29 ? networkControlSchema : '') + (version >= 30 ? networkGateSchema : '') + (version >= 31 ? networkDataSchema : '') + (version >= 32 ? networkWorkflowSchema : '') + (version >= 33 ? definitionSchema : ''))
     const expectedSchema = reference.prepare('SELECT type,name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE \'sqlite_%\'').all() as { type: string, name: string, sql: string }[]
     expectedSchemas.set(version, expectedSchema)
     return expectedSchema
@@ -499,7 +500,7 @@ export function assertNetworkStorage(database: DatabaseSync, references = false)
     if (actual?.sql !== expected.sql) throw new Error(`Incomplete or altered network storage: ${expected.name}`)
   }
   if (!references) return
-  for (const table of [...networkTables, ...(controls ? networkControlTables : []), ...(version >= 30 ? networkGateTables : []), ...(version >= 31 ? networkDataTables : []), ...(version >= 32 ? networkWorkflowTables : [])]) {
+  for (const table of [...networkTables, ...(controls ? networkControlTables : []), ...(version >= 30 ? networkGateTables : []), ...(version >= 31 ? networkDataTables : []), ...(version >= 32 ? networkWorkflowTables : []), ...(version >= 33 ? definitionTables : [])]) {
     if (database.prepare(`PRAGMA foreign_key_check(${table})`).get()) throw new Error(`Invalid network references: ${table}`)
   }
   for (const owner of database.prepare('SELECT issuer,subject FROM network_owners').all()) parseOwner(owner)

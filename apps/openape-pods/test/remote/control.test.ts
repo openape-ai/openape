@@ -227,3 +227,14 @@ it('turns desktop edits during a mobile approval into a review conflict instead 
   expect(new PodVariables(store).values(pod.id)).toEqual({ other: 'edited on desktop' })
   expect(changes.list(chat.id).every(item => item.state === 'pending')).toBe(true)
 })
+it('prepares local instance identity without enabling disabled remote access', async () => {
+  const f = await fixture(); const pod = f.store.createPod({ name: 'Local definition instance' })
+  await f.remote.execute({ type: 'disable' })
+  const identity = { podId: pod.id, subject: 'synthetic-instance@example.test' }
+  await f.remote.execute({ type: 'claim', podId: pod.id, owner: f.owner, identity })
+  await f.remote.execute({ type: 'provision', podId: pod.id, identity, error: null })
+  expect(f.store.db.prepare('SELECT enabled FROM remote_registration').get()!.enabled).toBe(0)
+  expect(f.store.db.prepare('SELECT phase FROM remote_pods WHERE pod_id=?').get(pod.id)!.phase).toBe('ready')
+  await expect(f.remote.execute(f.command)).rejects.toThrow('remote_access_disabled')
+  await expect(f.remote.execute({ type: 'claim', podId: pod.id, owner: { ...f.owner, subject: 'foreign' }, identity })).rejects.toThrow('wrong_owner')
+})
