@@ -10,7 +10,7 @@ import { podDirectory } from '../../runtime/environment'
 import { inspectDomainRecords } from '../recovery/domains'
 import { checkLock, dependencyLimit, packageDigest, packageFiles } from './tree'
 import type { PackageFile } from './tree'
-import { parseImportedLock } from './imported-lock'
+import { parseImportedLock, verifyImportedTree } from './imported-lock'
 import { installPackages } from './install'
 
 export async function removePackageTree(path: string): Promise<void> {
@@ -111,7 +111,9 @@ export class DependencyStore {
         const stored = this.store.db.prepare('SELECT lockfile FROM dependency_sets WHERE pod_id=? AND hash=?').get(podId, existing)!
         if (canonicalPortableJson(JSON.parse(stored.lockfile as string)) !== requestedLock) throw new Error('The instance has a different dependency lock for these packages')
       }
-      await this.verify(podId, existing); current(); return existing
+      const path = await this.verify(podId, existing)
+      if (requestedLock !== undefined) await verifyImportedTree(path, requestedLock, packages, npm, signal)
+      current(); return existing
     }
     this.store.assertStorage(dependencyLimit * 3)
     const root = await realpath(this.store.root)
