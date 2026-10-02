@@ -136,7 +136,8 @@ Shared configuration is grouped only from explicit source composition bindings.
 Its default is selected once on the composition and reused by those members;
 instance overrides remain separate recipient inputs. Same-named fields or accounts
 do not create a sharing group. Directory, connection, secret and HTTP subject
-inputs cannot be shared. Explicit application-account groups remain supported
+inputs cannot be shared. Access inputs are independent of script variables,
+application environment inputs and other access roles. Explicit application-account groups remain supported
 under the existing matching-application contract. CLI version constraints remain empty without a
 verified test; a bundle's static version declaration is not evidence of a tested
 application version. Custom runtimes, entry files, cache arguments, application
@@ -148,7 +149,11 @@ use package-local `assets/…` paths, which are their portable reference aliases
 the M3 runtime view. Capture rejects symbolic/hard links, private workspace storage,
 changed files, executable source names/magic and role-size violations. UTF-8 and
 recognizable UTF-16 text are scanned for known source identities/paths and likely
-credentials; known unselected private values require review. Opaque containers and
+credentials; known unselected private values in scripts/assets require review.
+Nested mail/configuration strings are included. Known-value checks use word
+boundaries and one finding per file/value; generated locks/composition documents
+are excluded from that heuristic to avoid common words exhausting the limit.
+Machine-reference and credential-pattern scans still cover every payload. Opaque containers and
 binary files explicitly require acknowledgement of the scan limitation. A heuristic
 scan cannot guarantee that arbitrary source or assets contain no private data.
 Selected public defaults suppress known-value findings only in the manifest,

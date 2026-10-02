@@ -4,10 +4,15 @@
 
 Owned snapshots, explicit assets, freshness-bound privacy review and complete
 Pod/workflow/network export mapping are implemented. Root lint (54 tasks),
-typecheck (77 tasks), Pods build, 1231 Pods units, 37 protocol tests and three
+typecheck (77 tasks), Pods build, 1232 Pods units, 37 protocol tests and three
 manual native dependency checks pass. The native test exports a validated script
 with its actually prepared npm lock. Actual Opus reviews prompted and verified
-boundary corrections; original findings and dispositions are retained. Final
+boundary corrections; original findings and dispositions are retained. The closure
+review identified excessive repeated common-value findings; the corrected scanner
+uses one word-aware finding per file/value and excludes generated metadata only
+from known-value checks. Scope inputs are independent of other roles. A synthetic
+32 MiB scan took49 ms locally, with2.5 ms maximum timer delay; UI responsiveness
+still belongs to M4. Final
 native PR/CI/report acceptance remains pending. No M2 UI or import acceptance.
 
 Own checkout `openape-monorepo.worktrees/pods-portable-sharing`, branch
