@@ -1,3 +1,5 @@
+import { parseWorkflowPorts, workflowIdentity } from './workflow-ports'
+import type { WorkflowPorts } from './workflow-ports'
 import { parseMailWorkflowConfiguration, parseMailEffectResolution, parseMailBatchReview } from './mail-workflow'
 import type { MailWorkflowConfiguration, MailBatchReview, MailEffectResolution } from './mail-workflow'
 import { Cron } from 'croner'
@@ -14,9 +16,9 @@ export const sequenceParts: GraphParts = { mode: 'sequence', groupId: null, chan
 export interface WorkflowDefinition extends GraphParts { mail?: MailWorkflowConfiguration | null, id: string, revision: number, name: string, nodes: WorkflowNode[], schedule: WorkflowSchedule | null, enabled: boolean, paused: boolean, nextAt: number | null }
 export type WorkflowNodeState = 'waiting' | 'running' | 'completed' | 'blocked'
 export interface WorkflowNodeView extends WorkflowNode { state: WorkflowNodeState, runId: string | null, reason: string | null, scriptHash: string | null }
-export interface WorkflowRunView { paused: boolean, id: string, workflowId: string, revision: number, state: 'waiting' | 'running' | 'blocked' | 'completed' | 'cancelled', reason: string | null, startedAt: number, finishedAt: number | null, nodes: WorkflowNodeView[] }
+export interface WorkflowRunView { revisionKind?: 'composition' | 'published', paused: boolean, id: string, workflowId: string, revision: number, state: 'waiting' | 'running' | 'blocked' | 'completed' | 'failed' | 'cancelled', reason: string | null, startedAt: number, finishedAt: number | null, nodes: WorkflowNodeView[] }
 export interface WorkflowView { mailReview?: MailBatchReview | null, workflows: WorkflowDefinition[], runs: WorkflowRunView[], gates?: { batches: GateBatchView[], held: GateHeldItem[] }, graph?: GraphDetail | null, contracts?: Record<string, GraphContract | null>, graphs?: Record<string, GraphDetail> }
-export type WorkflowCommand = { type: 'mailReview', batchId: string } | { type: 'mailResolve', resolution: MailEffectResolution } | { type: 'list' } | ({ type: 'save', mail?: MailWorkflowConfiguration | null, id: string, revision: number, name: string, nodes: WorkflowNode[], schedule: WorkflowSchedule | null, enabled: boolean } & Partial<GraphParts>) | { type: 'delete', id: string, revision: number } | { type: 'start', id: string, revision: number } | { type: 'retry', runId: string, podId: string } | { type: 'cancel', runId: string } | { type: 'pause', id: string, revision: number, paused: boolean } | { type: 'gateExclude', batchId: string, itemIds: string[] } | { type: 'gateChoose', id: string, gate: string, itemId: string, option: string } | { type: 'gateDiscard', batchId: string } | { type: 'graph', id: string, key?: string } | { type: 'gateOpen', batchId: string }
+export type WorkflowCommand = { type: 'publishRevision', id: string, revision: number, ports: WorkflowPorts } | { type: 'cancelCall' | 'resumeCall' | 'resolveCall', requestId: string, evidence: string } | { type: 'mailReview', batchId: string } | { type: 'mailResolve', resolution: MailEffectResolution } | { type: 'list' } | ({ type: 'save', mail?: MailWorkflowConfiguration | null, id: string, revision: number, name: string, nodes: WorkflowNode[], schedule: WorkflowSchedule | null, enabled: boolean } & Partial<GraphParts>) | { type: 'delete', id: string, revision: number } | { type: 'start', id: string, revision: number } | { type: 'retry', runId: string, podId: string } | { type: 'cancel', runId: string } | { type: 'pause', id: string, revision: number, paused: boolean } | { type: 'gateExclude', batchId: string, itemIds: string[] } | { type: 'gateChoose', id: string, gate: string, itemId: string, option: string } | { type: 'gateDiscard', batchId: string } | { type: 'graph', id: string, key?: string } | { type: 'gateOpen', batchId: string }
 
 const uuid = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value)
 function object(value: unknown): Record<string, unknown> {
@@ -59,9 +61,17 @@ export function parseWorkflowNodes(value: unknown): WorkflowNode[] {
 }
 export function parseWorkflowCommand(value: unknown): WorkflowCommand {
   const item = object(value)
-  const allowed = item.type === 'mailReview' ? ['type', 'batchId'] : item.type === 'mailResolve' ? ['type', 'resolution'] : item.type === 'list' ? ['type'] : item.type === 'save' ? ['type', 'id', 'revision', 'name', 'nodes', 'schedule', 'enabled', 'mail', 'mode', 'groupId', 'channels', 'gates', 'values'] : item.type === 'pause' ? ['type', 'id', 'revision', 'paused'] : item.type === 'start' || item.type === 'delete' ? ['type', 'id', 'revision'] : item.type === 'retry' ? ['type', 'runId', 'podId'] : item.type === 'cancel' ? ['type', 'runId'] : item.type === 'gateExclude' ? ['type', 'batchId', 'itemIds'] : item.type === 'gateChoose' ? ['type', 'id', 'gate', 'itemId', 'option'] : item.type === 'gateDiscard' || item.type === 'gateOpen' ? ['type', 'batchId'] : item.type === 'graph' ? ['type', 'id', 'key'] : []
+  const allowed = item.type === 'publishRevision' ? ['type', 'id', 'revision', 'ports'] : item.type === 'cancelCall' || item.type === 'resumeCall' || item.type === 'resolveCall' ? ['type', 'requestId', 'evidence'] : item.type === 'mailReview' ? ['type', 'batchId'] : item.type === 'mailResolve' ? ['type', 'resolution'] : item.type === 'list' ? ['type'] : item.type === 'save' ? ['type', 'id', 'revision', 'name', 'nodes', 'schedule', 'enabled', 'mail', 'mode', 'groupId', 'channels', 'gates', 'values'] : item.type === 'pause' ? ['type', 'id', 'revision', 'paused'] : item.type === 'start' || item.type === 'delete' ? ['type', 'id', 'revision'] : item.type === 'retry' ? ['type', 'runId', 'podId'] : item.type === 'cancel' ? ['type', 'runId'] : item.type === 'gateExclude' ? ['type', 'batchId', 'itemIds'] : item.type === 'gateChoose' ? ['type', 'id', 'gate', 'itemId', 'option'] : item.type === 'gateDiscard' || item.type === 'gateOpen' ? ['type', 'batchId'] : item.type === 'graph' ? ['type', 'id', 'key'] : []
   if (!allowed.length) throw new Error('Unsupported workflow command')
   keys(item, allowed)
+  if (item.type === 'cancelCall' || item.type === 'resumeCall' || item.type === 'resolveCall') {
+    if (typeof item.evidence !== 'string' || !item.evidence.trim() || item.evidence.length > 4000) throw new Error('Workflow call cancellation requires owner evidence')
+    return { type: item.type, requestId: workflowIdentity(item.requestId), evidence: item.evidence }
+  }
+  if (item.type === 'publishRevision') {
+    if (!Number.isSafeInteger(item.revision) || Number(item.revision) < 1) throw new Error('Invalid workflow revision')
+    return { type: 'publishRevision', id: workflowIdentity(item.id), revision: Number(item.revision), ports: parseWorkflowPorts(item.ports) }
+  }
   if (item.type === 'mailReview') {
     if (!uuid(item.batchId)) throw new Error('Invalid workflow run identity')
     return { type: 'mailReview', batchId: item.batchId }
@@ -123,7 +133,8 @@ export function parseWorkflowView(value: unknown): WorkflowView {
   }
   for (const value of item.runs) {
     const run = object(value)
-    if (typeof run.paused !== 'boolean' || !uuid(run.id) || !uuid(run.workflowId) || !Number.isSafeInteger(run.revision) || !['waiting', 'running', 'blocked', 'completed', 'cancelled'].includes(run.state as string) || !Number.isSafeInteger(run.startedAt) || (run.finishedAt !== null && !Number.isSafeInteger(run.finishedAt)) || (run.reason !== null && typeof run.reason !== 'string') || !Array.isArray(run.nodes)) throw new Error('Invalid workflow run')
+    if (run.revisionKind !== undefined && !['composition', 'published'].includes(run.revisionKind as string)) throw new Error('Invalid workflow revision kind')
+    if (typeof run.paused !== 'boolean' || !uuid(run.id) || !uuid(run.workflowId) || !Number.isSafeInteger(run.revision) || !['waiting', 'running', 'blocked', 'completed', 'failed', 'cancelled'].includes(run.state as string) || !Number.isSafeInteger(run.startedAt) || (run.finishedAt !== null && !Number.isSafeInteger(run.finishedAt)) || (run.reason !== null && typeof run.reason !== 'string') || !Array.isArray(run.nodes)) throw new Error('Invalid workflow run')
     parseWorkflowNodes(run.nodes.map((value) => {
       const node = object(value)
       if (!['waiting', 'running', 'completed', 'blocked'].includes(node.state as string) || (node.runId !== null && !uuid(node.runId)) || (node.reason !== null && typeof node.reason !== 'string') || (node.scriptHash !== null && (typeof node.scriptHash !== 'string' || !/^[a-f0-9]{64}$/.test(node.scriptHash)))) throw new Error('Invalid workflow node state')

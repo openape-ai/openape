@@ -41,7 +41,7 @@ import { graphEmitter, parseGraphContract } from '../../contracts/graphs'
 import type { GraphEmit } from '../../contracts/graphs'
 import { graphRun, pendingItems, settleItems } from '../workflows/items'
 import type { DeliveredItem } from '../workflows/items'
-import { gateCoverage, gateRound } from '../workflows/gates'
+import { gateCoverage, gateDecisionUnknown, gateNeedsRound, gateRound } from '../workflows/gates'
 import { installExample } from './examples'
 import type { NetworkInvocations } from '../scheduling/network-invocations'
 import type { NetworkAuthority, NetworkEmission } from '../scheduling/network-events'
@@ -260,6 +260,27 @@ export class RunDispatcher {
       const dependencyRoot = dependencyHash ? await dependencies.verify(pod.id, dependencyHash) : undefined
       const runtime = { ...this.runtime, dependencyRoot, registerDomain: (path: string, ownerPid: number) => this.runs.registerDomain(id, path, ownerPid) }
       const scope: RunServiceScope = { podId: pod.id, runId: id, epoch, assignmentRevision: pod.bindingRevision, capabilities: manifest.capabilities, root: directory, assertCurrent, registerDomain: runtime.registerDomain }
+      const decision = this.store.db.prepare('SELECT request_id,gates FROM workflow_gate_attempts WHERE run_id=?').get(id)
+      if (decision) {
+        if (network || !graph || !this.services?.gate) throw new Error('Workflow decision maintenance authority is unavailable')
+        const keys = JSON.parse(decision.gates as string) as string[]
+        const call = this.store.db.prepare('SELECT workflow_id,workflow_revision FROM workflow_call_requests WHERE id=? AND workflow_run_id=? AND state=\'running\'').get(decision.request_id!, graph.workflowRunId)
+        if (!call) throw new Error('Workflow decision maintenance call changed')
+        await boundedStep(30000, async () => {
+          await gateRound(this.store, graph, async body => this.services!.gate!(body, signal, scope))
+          assertCurrent()
+        }, () => this.cancelPod(pod.id, 'Workflow decision maintenance exceeded its deadline'))
+        signal.throwIfAborted()
+        if (gateDecisionUnknown(this.store, graph)) throw new Error('Workflow decision outcome requires owner reconciliation')
+        const pending = keys.some(key => gateNeedsRound(this.store, graph.workflowId, key, graph.workflowRunId))
+        await this.finish(id, 'completed', 'Workflow decision maintenance completed without executing the script', null, [], undefined, () => {
+          if (this.runs.get(id).state !== 'completed') return
+          this.store.db.prepare('UPDATE workflow_nodes SET state=\'waiting\',reason=? WHERE workflow_run_id=? AND pod_id=? AND run_id=? AND state=\'completed\'').run(pending ? 'Waiting for required owner decisions' : null, graph.workflowRunId, pod.id, id)
+          this.store.db.prepare('INSERT INTO workflow_gate_poll_clocks VALUES(?,?,?) ON CONFLICT(request_id,pod_id) DO UPDATE SET next_poll_at=excluded.next_poll_at').run(decision.request_id!, pod.id, pending ? Date.now() + 5000 : 0)
+          appendEvent('workflow-decision-maintenance', { requestId: decision.request_id, gates: keys, pending, scriptExecuted: false })
+        })
+        return
+      }
       if (network) {
         const gates = network.invocations.gates
         if (!gates) throw new Error('Network gate authority is unavailable')
@@ -300,13 +321,17 @@ export class RunDispatcher {
         request: async (operation, payload, operationSignal) => {
           assertCurrent()
           if (network) {
-            if (!['graph.contract', 'graph.emit', 'network.emit', 'network.gateCoverage', 'data.get', 'data.put', 'data.delete', 'data.query', 'artifacts.create', 'artifacts.read', 'progress.commit'].includes(operation)) throw new Error('Network operation requires a declared runtime port')
+            if (!['graph.contract', 'graph.emit', 'network.emit', 'network.gateCoverage', 'data.get', 'data.put', 'data.delete', 'data.query', 'artifacts.create', 'artifacts.read', 'workflow.call', 'workflow.result', 'progress.commit'].includes(operation)) throw new Error('Network operation requires a declared runtime port')
             if (operation === 'data.get') return network.invocations.data.get(network.authority, payload)
             if (operation === 'data.put') return network.invocations.data.put(network.authority, payload)
             if (operation === 'data.delete') return network.invocations.data.put(network.authority, payload, true)
             if (operation === 'data.query') return network.invocations.data.query(network.authority, payload)
             if (operation === 'artifacts.create') return network.invocations.data.artifacts.create(network.authority, payload)
             if (operation === 'artifacts.read') return network.invocations.data.artifacts.read(network.authority, payload)
+            if (operation === 'workflow.call' || operation === 'workflow.result') {
+              if (!network.invocations.calls) throw new Error('Workflow call coordinator is unavailable')
+              return operation === 'workflow.call' ? network.invocations.calls.stage(network.authority, payload) : network.invocations.calls.result(network.authority, payload)
+            }
             if (operation === 'network.gateCoverage') return network.invocations.gates!.scriptCoverage(network.authority)
             if (operation === 'progress.commit') return network.invocations.stageProgress(network.authority, payload)
             if (operation === 'graph.contract') {
@@ -371,7 +396,11 @@ export class RunDispatcher {
               return retryService('approval', async () => { assertCurrent(); return this.services!.gate!(body, operationSignal, scope) }, operationSignal)
             })
             assertCurrent()
-            delivered = pendingItems(this.store, graph.workflowId, graph.node)
+            delivered = pendingItems(this.store, graph.workflowId, graph.node, graph.workflowRunId)
+            if (this.store.db.prepare('SELECT 1 FROM workflow_call_requests WHERE workflow_run_id=?').get(graph.workflowRunId)) {
+              const remaining = Number(this.store.db.prepare('SELECT count(*) AS count FROM graph_deliveries d JOIN graph_items i ON i.id=d.item_id WHERE i.workflow_run_id=? AND d.node=? AND d.state=\'pending\'').get(graph.workflowRunId, graph.node)!.count)
+              if (remaining !== delivered.length) throw new Error('Called workflow input exceeds one finite step; review its definition before execution')
+            }
             return delivered.map(({ key, channel, data }) => ({ key, channel, data }))
           }
           if (operation === 'graph.emit') {
