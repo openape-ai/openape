@@ -263,6 +263,11 @@ it.each([1280, 390])('shows read-only persistent network data in the actual brow
   expect(wrapper.get('.network-collection').attributes('aria-pressed')).toBe('true')
   expect(wrapper.text()).toContain('case-one')
   await page.screenshot({ path: screenshotPath(`networks-browser-data-${width}.png`) })
+  if (width === 390) {
+    document.documentElement.style.colorScheme = 'dark'; await frame()
+    await page.screenshot({ path: screenshotPath('networks-browser-data-dark-390.png') })
+    document.documentElement.style.colorScheme = ''; await frame()
+  }
   f.host.online = false; f.wake(); await flushPromises()
   await click('Reviewed cases · 1')
   expect(wrapper.text()).toContain('Desktop offline: network details require the connected runtime')
