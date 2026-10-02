@@ -475,8 +475,8 @@ export class FixtureWorker {
 
   async networks(command: NetworkCommand): Promise<NetworkView> {
     const parsed = parseNetworkCommand(command)
-    if (this.central && !this.central.networkReads && !['list', 'detail', 'trace', 'records', 'archivePreview', 'legacyItems', 'conversionPreview'].includes(parsed.type)) throw new Error('Network actions require bounded relay publication support')
-    const central = this.centralAction(['detail', 'setup', 'trace', 'records', 'archivePreview', 'legacyItems', 'conversionPreview'].includes(parsed.type) ? 'list' : parsed.type)
+    if (this.central && !this.central.networkReads && !['list', 'detail', 'trace', 'records', 'archivePreview', 'legacyItems', 'conversionPreview', 'replacementSetup', 'replacementPreview'].includes(parsed.type)) throw new Error('Network actions require bounded relay publication support')
+    const central = this.centralAction(['detail', 'setup', 'trace', 'records', 'archivePreview', 'legacyItems', 'conversionPreview', 'replacementSetup', 'replacementPreview'].includes(parsed.type) ? 'list' : parsed.type)
     if (central) return central.local(() => this.networks(parsed))
     const view = parseNetworkView(await this.dispatch({ networks: parsed, ownerOperation: this.central?.executing === true }))
     if (parsed.type === 'gateOpen') {

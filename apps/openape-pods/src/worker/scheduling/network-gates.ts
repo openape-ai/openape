@@ -211,7 +211,7 @@ export class NetworkGates {
 
   views(owner: { issuer: string, subject: string }): NetworkGateView[] {
     return this.store.db.prepare(`SELECT task.*,control.url,control.error FROM network_gate_tasks task JOIN network_gate_controls control ON control.task_id=task.id
-      JOIN networks network ON network.id=task.network_id WHERE network.owner_issuer=? AND network.owner_subject=?
+      JOIN networks network ON network.id=task.network_id WHERE network.owner_issuer=? AND network.owner_subject=? AND (network.state='archived' OR json_extract(task.manifest,'$.networkRevision')=network.revision)
       ORDER BY CASE WHEN task.state IN ('preparing','pending','consuming','unknown') THEN 0 ELSE 1 END,task.created_at DESC,task.id LIMIT 256`).all(owner.issuer, owner.subject).map((task) => {
       const manifest = parseNetworkGateManifest(JSON.parse(task.manifest as string))
       const outcomes = this.store.db.prepare('SELECT delivery_id,outcome FROM network_gate_items WHERE task_id=?').all(task.id!)
@@ -225,6 +225,7 @@ export class NetworkGates {
       const task = this.task(command.taskId)
       if (task.network_id !== networkId || task.generation !== command.generation) throw new Error('Network gate owner decision is obsolete')
       const manifest = parseNetworkGateManifest(JSON.parse(task.manifest))
+      if (manifest.networkRevision !== this.store.db.prepare('SELECT revision FROM networks WHERE id=?').get(networkId)?.revision) throw new Error('Historical approval evidence cannot authorize a new composition')
       if (command.type === 'gateReview') {
         if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=?').get(task.pod_id)) throw new Error('Finish or inspect the active Pod execution before requesting fresh gate approval')
         if (this.store.db.prepare('SELECT baseline_state FROM networks WHERE id=?').get(networkId)?.baseline_state !== 'ready') throw new Error('Review the restored network baseline before requesting fresh gate approval')
