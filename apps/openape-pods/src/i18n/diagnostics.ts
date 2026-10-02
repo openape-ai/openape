@@ -1,6 +1,10 @@
 import type { MessageKey } from './index'
 
 export const diagnosticPatterns = [
+  'Variable {p0} is not a valid value of its declared input',
+  'Validate and activate the script of {p0} before creating this composition',
+  'Collection {p0} already exists in this group; choose to reuse it explicitly',
+  'Collection {p0} has a different schema; a reused collection must match exactly',
   'Value does not match the declared input {p0}',
   'Portable network diagnostics: {p0}',
   'Portable graph diagnostics: {p0}',

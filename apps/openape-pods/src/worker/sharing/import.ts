@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, open, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { parseOwner } from '@openape/pods-protocol'
-import type { Owner, PortableComposition, PortableInput, PortableManifest, PortablePod } from '@openape/pods-protocol'
+import { parseOwner, canonicalPortableJson  } from '@openape/pods-protocol'
+import type { Owner, PortableInput, PortableManifest, PortablePod } from '@openape/pods-protocol'
 import { parsePackages } from '../../contracts/dependencies'
 import type { PackageManifest } from '../../contracts/dependencies'
 import type { PortableImportCommand, PortableImportRequirement, PortableImportState, PortableImportValues, PortableImportView, PortableValue } from '../../contracts/sharing'
@@ -13,9 +13,11 @@ import { DependencyStore } from '../dependencies/store'
 import type { ResourceRegistry } from '../resources/registry'
 import { PodVariables } from '../resources/variables'
 import type { ScriptRuntime } from '../runs/runner'
-import { parseWorkflowCommand } from '../../contracts/workflows'
-import type { GraphParts, WorkflowCommand, WorkflowSchedule } from '../../contracts/workflows'
 import type { WorkflowEngine } from '../workflows/engine'
+import type { NetworkEngine } from '../scheduling/network-engine'
+import type { DefinitionCatalog } from '../workspace/definition-catalog'
+import { assertApproved, assertFreshMembers, clip, finalizeNetwork, joinGroup, needsApprovedMembers, variableMatches, workflowCommand } from './compositions'
+import type { CompositionContext, CompositionDocument } from './compositions'
 import type { CommitPoint, PodDatabase } from '../storage/database'
 import { readPortableArchive } from './archive'
 
@@ -23,7 +25,8 @@ import { readPortableArchive } from './archive'
 export const importFormatFeatures = ['portable_aliases_v1'] as const
 // bundles holds, per alias, the executable hash of the application bundle whose identity the main process verified at binding.
 interface PodSetup { resources: PodResource[], aliases: Map<string, PodResource>, variables: Record<string, string>, dependencies: boolean, bundles: Record<string, string> }
-interface ImportSetup { values: PortableImportValues, drafts?: Record<string, string>, packages?: Record<string, PackageManifest>, bundles?: Record<string, Record<string, string>>, compositions?: Record<string, string> }
+interface ImportSetup { values: PortableImportValues, drafts?: Record<string, string>, packages?: Record<string, PackageManifest>, bundles?: Record<string, Record<string, string>>, compositions?: Record<string, { workflowId?: string, networkId?: string }>, deferred?: string[] }
+export interface ImportEngines { workflows: WorkflowEngine, networks: NetworkEngine, catalog: DefinitionCatalog }
 type VerifiedBundle = { executableHash: string, identity?: string } | null | undefined
 
 const scalarKinds = ['string', 'number', 'boolean', 'enum']
@@ -56,13 +59,6 @@ function inputValue(pod: PortablePod, values: PortableImportValues, variables: R
   return alias ? variables[alias] : resolved(values, 'pods', pod.key, pod.inputs.find(input => input.key === key)!)
 }
 
-// Whether a Pod variable, always a string, is a valid value of its declared input.
-function variableMatches(input: PortableInput, text: string | undefined): boolean {
-  if (text === undefined) return false
-  if (input.kind === 'number') return text.trim() !== '' && Number.isFinite(Number(text)) && (input.minimum === undefined || Number(text) >= input.minimum) && (input.maximum === undefined || Number(text) <= input.maximum)
-  return input.kind === 'boolean' ? text === 'true' || text === 'false' : input.kind !== 'enum' || input.choices!.includes(text)
-}
-
 // Whether one ready local assignment matches what the package declared for an alias.
 function satisfies(manifest: PortableManifest, pod: PortablePod, alias: string, resource: PodResource | undefined, value: (key: string) => PortableValue | undefined, bundle: VerifiedBundle): boolean {
   if (resource?.state !== 'ready') return false
@@ -77,7 +73,10 @@ function satisfies(manifest: PortableManifest, pod: PortablePod, alias: string, 
   const access = pod.access.find(item => item.alias === alias)
   if (access?.kind === 'directory') return resource.kind === 'directory' && configuration.access === access.access
   if (access?.kind === 'jev') return configuration.type === 'jev' && configuration.model === value(access.model) && Number(configuration.maxAttempts) <= access.maxAttempts
-  // No recipient mail assignment path is comparable with a declared scope yet, so imported mail access stays in setup.
+  if (access?.kind === 'mail') {
+    const folders = value(access.folders)
+    return configuration.capability === 'mail.read' && configuration.attachments === access.attachments && (configuration.since ?? '') === value(access.since) && typeof folders === 'string' && canonicalPortableJson(configuration.folders) === canonicalPortableJson(JSON.parse(folders))
+  }
   if (access?.kind !== 'http' || configuration.type !== 'http' || configuration.origin !== value(access.origin) || access.methods.some(method => !(configuration.methods as string[]).includes(method))) return false
   const expected = access.authentication ? { type: 'ddisaAgent', credential: access.authentication.credential, subject: value(access.authentication.subject), issuer: value(access.authentication.issuer) } : undefined
   const actual = configuration.authentication as Record<string, unknown> | undefined
@@ -105,8 +104,8 @@ function unresolved(manifest: PortableManifest, values: PortableImportValues, se
       if (input.kind === 'secret' && input.required && !local?.resources.some(resource => resource.kind === 'credential' && resource.state === 'ready' && resource.configuration.alias === binding.alias)) result.push({ scope: 'pod', key: pod.key, requirement: 'secret', name: binding.alias })
     }
     for (const access of pod.access) {
-      // Jev is a single unaliased scope of a Pod; directories and HTTP tools are bound by alias.
-      const resource = access.kind === 'jev' ? local?.resources.find(item => matches(access.alias, item)) : local?.aliases.get(access.alias)
+      // Jev and mail are single unaliased scopes of a Pod; directories and HTTP tools are bound by alias.
+      const resource = access.kind === 'jev' || access.kind === 'mail' ? local?.resources.find(item => matches(access.alias, item)) : local?.aliases.get(access.alias)
       if (!matches(access.alias, resource)) result.push({ scope: 'pod', key: pod.key, requirement: 'access', name: access.alias })
     }
     for (const application of pod.applications) {
@@ -120,24 +119,17 @@ function unresolved(manifest: PortableManifest, values: PortableImportValues, se
   return result
 }
 
-// Native names allow 100 UTF-16 units; never cut a surrogate pair in half.
-const clip = (title: string): string => title.slice(0, 100).replace(/[\uD800-\uDBFF]$/, '')
-
-interface CompositionDocument { schedule: WorkflowSchedule | null, ports?: unknown, mail?: unknown, channels?: GraphParts['channels'], gates?: GraphParts['gates'], values?: { name: string, input: string }[] }
-
-// The native definition of an importable composition: a sequence or channel graph without ports or mail policy.
-function workflowCommand(composition: PortableComposition, document: CompositionDocument, id: string, podId: (key: string) => string, value: (input: string) => string, groupId: string | null) {
-  // Networks, called workflows and mail policies need approved member scripts, published definitions or owner permission operations first.
-  if (composition.kind === 'network' || document.ports !== null || document.mail != null) throw new Error('This package contains a network, called workflow or mail policy, which cannot be imported yet')
-  return parseWorkflowCommand({ type: 'save', id, revision: 0, name: clip(composition.title), nodes: composition.nodes.map(node => ({ podId: podId(node.pod), after: node.after.map(podId), handoff: node.handoff })), schedule: document.schedule, enabled: false,
-    ...(composition.kind === 'channels' ? { mode: 'channels', groupId, channels: document.channels, gates: document.gates, values: (document.values ?? []).map(binding => ({ name: binding.name, value: value(binding.input), revision: 0 })) } : {}) }) as Extract<WorkflowCommand, { type: 'save' }>
-}
-
-// Refuses at staging what setup could never finish, so no paused copy is created that must stay inert.
-function assertImportable(manifest: PortableManifest, files: ReadonlyMap<string, Uint8Array>): void {
-  if (manifest.pods.some(pod => pod.access.some(access => access.kind === 'mail'))) throw new Error('This package requests mail access, which cannot be imported yet')
+// A stage-time check of what the native workflow parser would refuse later; mail policies are checked at finalization against bound resources.
+function assertImportable(manifest: PortableManifest, files: ReadonlyMap<string, Uint8Array>): string[] {
   const ids = new Map(manifest.pods.map((pod, index) => [pod.key, `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`]))
-  for (const composition of manifest.compositions) workflowCommand(composition, JSON.parse(decoder.decode(files.get(composition.document)!)) as CompositionDocument, '00000000-0000-4000-8000-000000000100', key => ids.get(key)!, () => '', composition.kind === 'channels' ? '00000000-0000-4000-8000-000000000100' : null)
+  const synthetic: CompositionContext = { store: undefined as never, resources: undefined as never, owner: { issuer: 'https://synthetic.invalid', subject: 'synthetic' }, manifest, podId: key => ids.get(key)!, value: () => '', workflowId: () => undefined }
+  const deferred: string[] = []
+  for (const composition of manifest.compositions) {
+    const document = JSON.parse(decoder.decode(files.get(composition.document)!)) as CompositionDocument
+    if (needsApprovedMembers(manifest, composition, document)) deferred.push(composition.key)
+    if (composition.kind !== 'network' && document.mail == null) workflowCommand(synthetic, composition, document, '00000000-0000-4000-8000-000000000100', composition.kind === 'channels' ? '00000000-0000-4000-8000-000000000100' : null)
+  }
+  return deferred
 }
 
 async function writePrivate(path: string, content: Uint8Array): Promise<void> {
@@ -185,19 +177,22 @@ export class PortableImporter {
     // Once the copy exists, a Pod the owner deleted no longer needs setup.
     const pods = this.pods(id).filter(pod => row.state === 'staged' || this.store.db.prepare('SELECT 1 FROM pods WHERE id=?').get(pod.podId))
     const usable = (key: string) => pods.some(pod => pod.key === key && (row.state === 'staged' || this.store.getPod(pod.podId).lifecycle !== 'archived'))
-    const compositions = Object.entries(setup.compositions ?? {}).filter(([, workflowId]) => this.store.db.prepare('SELECT 1 FROM workflows WHERE id=? AND archived=0').get(workflowId)).map(([key, workflowId]) => ({ key, workflowId }))
+    const compositions = Object.entries(setup.compositions ?? {}).map(([key, created]) => ({ key, workflowId: created.workflowId && this.store.db.prepare('SELECT 1 FROM workflows WHERE id=? AND archived=0').get(created.workflowId) ? created.workflowId : null, networkId: created.networkId && this.store.db.prepare('SELECT 1 FROM networks WHERE id=? AND state!=\'archived\'').get(created.networkId) ? created.networkId : null })).filter(item => item.workflowId || item.networkId)
     const open = unresolved(manifest, values, (key) => {
       const pod = row.state === 'staged' ? undefined : pods.find(item => item.key === key)
       return pod && this.podSetup(pod.podId, manifest.pods.find(item => item.key === key)!, setup)
     }, key => compositions.some(item => item.key === key))
-      // A deleted or archived Pod needs no setup, and a composition that lost a member can no longer be created.
-      .filter(item => item.scope === 'pod' ? usable(item.key) : row.state === 'staged' || (row.state === 'committed' && manifest.compositions.find(composition => composition.key === item.key)!.nodes.every(node => usable(node.pod))))
+      // A deleted or archived Pod needs no setup, a composition that lost a member can no longer be created, and only deferred compositions outlive completion.
+      .filter(item => item.scope === 'pod' ? usable(item.key) : row.state === 'staged' || ((row.state === 'committed' || (row.state === 'completed' && (setup.deferred ?? []).includes(item.key))) && manifest.compositions.find(composition => composition.key === item.key)!.nodes.every(node => usable(node.pod))))
     return { id, state: row.state as PortableImportView['state'], revision: row.revision as number, transferSha256: row.transfer_hash as string, manifest, pods, compositions, values, unresolved: open, error: row.error as string | null }
   }
 
   list(): PortableImportView[] {
     this.store.transaction(() => forgetFinishedImports(this.store))
-    return this.store.db.prepare('SELECT id FROM portable_imports WHERE owner_issuer=? AND owner_subject=? AND state IN (\'staged\',\'committed\') ORDER BY created_at').all(this.owner.issuer, this.owner.subject).map(row => this.view(row.id as string))
+    const views = this.store.db.prepare('SELECT id FROM portable_imports WHERE owner_issuer=? AND owner_subject=? AND (state IN (\'staged\',\'committed\') OR (state=\'completed\' AND archive_hash IS NOT NULL)) ORDER BY created_at').all(this.owner.issuer, this.owner.subject).map(row => this.view(row.id as string))
+    // A completed import whose deferred compositions are all created or impossible no longer needs its archive.
+    for (const view of views.filter(view => view.state === 'completed' && !view.unresolved.length)) this.store.db.prepare('UPDATE portable_imports SET archive_hash=NULL WHERE id=?').run(view.id)
+    return views.filter(view => view.state !== 'completed' || view.unresolved.length)
   }
 
   async inspect(archive: Uint8Array): Promise<{ manifest: PortableManifest, transferSha256: string }> {
@@ -209,7 +204,7 @@ export class PortableImporter {
     this.row(id)
     const bytes = Buffer.from(archive)
     const { manifest, files, transferSha256 } = await readPortableArchive(bytes, this.npmRoot, importFormatFeatures)
-    assertImportable(manifest, files)
+    const deferred = assertImportable(manifest, files)
     return this.store.transaction(() => {
       const existing = this.row(id)
       if (existing) {
@@ -221,7 +216,7 @@ export class PortableImporter {
       if (this.store.putBlob(bytes, observe) !== transferSha256) throw new Error('Portable archive changed during staging')
       const now = Date.now()
       this.store.db.prepare('INSERT OR IGNORE INTO network_owners VALUES(?,?)').run(this.owner.issuer, this.owner.subject)
-      this.store.db.prepare('INSERT INTO portable_imports VALUES(?,?,?,?,?,?,\'staged\',1,?,?,NULL,?,?)').run(id, this.owner.issuer, this.owner.subject, transferSha256, manifest.contentSha256, transferSha256, JSON.stringify(manifest), JSON.stringify({ values: { pods: {}, compositions: {} } }), now, now)
+      this.store.db.prepare('INSERT INTO portable_imports VALUES(?,?,?,?,?,?,\'staged\',1,?,?,NULL,?,?)').run(id, this.owner.issuer, this.owner.subject, transferSha256, manifest.contentSha256, transferSha256, JSON.stringify(manifest), JSON.stringify({ values: { pods: {}, compositions: {} }, deferred }), now, now)
       for (const pod of manifest.pods) this.store.db.prepare('INSERT INTO portable_import_pods VALUES(?,?,?)').run(id, pod.key, randomUUID())
       observe('beforeCommit')
       return this.view(id)
@@ -359,7 +354,7 @@ export class PortableImporter {
     return this.view(id)
   }
 
-  private async apply(command: PortableImportCommand, runtime: ScriptRuntime, signal: AbortSignal, workflows: Pick<WorkflowEngine, 'save'>): Promise<PortableImportView | undefined> {
+  private async apply(command: PortableImportCommand, runtime: ScriptRuntime, signal: AbortSignal, engines: ImportEngines): Promise<PortableImportView | undefined> {
     if (command.type === 'list' || command.type === 'inspect') return undefined
     if (command.type === 'show') return this.view(command.id)
     if (command.type === 'stage') return this.stage(command.id, command.archive)
@@ -367,54 +362,73 @@ export class PortableImporter {
     if (command.type === 'commit') return this.commit(command.id, command.revision)
     if (command.type === 'bind') return this.bind(command.id, command.revision, command.pod, command.alias, command.resourceId, command.bundle)
     if (command.type === 'prepareDependencies') return this.prepareDependencies(command.id, command.pod, runtime, signal)
-    if (command.type === 'finalize') return this.finalize(command.id, command.revision, command.composition, command.groupId, workflows)
+    if (command.type === 'finalize') return this.finalize(command.id, command.revision, command.composition, command.groupId, command.reuse, engines)
     return this[command.type](command.id, command.revision)
   }
 
-  async execute(command: PortableImportCommand, runtime: ScriptRuntime, signal: AbortSignal, workflows: Pick<WorkflowEngine, 'save'>): Promise<PortableImportState> {
-    const current = await this.apply(command, runtime, signal, workflows)
+  async execute(command: PortableImportCommand, runtime: ScriptRuntime, signal: AbortSignal, engines: ImportEngines): Promise<PortableImportState> {
+    const current = await this.apply(command, runtime, signal, engines)
     return { imports: this.list(), ...(current ? { current } : {}), ...(command.type === 'inspect' ? { inspected: await this.inspect(command.archive) } : {}) }
   }
 
-  // Creates an imported sequence or channel graph disabled from its package document. Its members cannot run without their own
-  // approved scripts, so this needs no approval yet.
-  async finalize(id: string, expectedRevision: number, key: string, groupId: string | null, workflows: Pick<WorkflowEngine, 'save'>): Promise<PortableImportView> {
+  // Creates an imported composition from its package document. Sequences and channel graphs are created disabled during setup;
+  // networks, called workflows and mail policies need approved member scripts and follow completed Pod setup.
+  async finalize(id: string, expectedRevision: number, key: string, groupId: string | null, reuse: Record<string, string>, engines: ImportEngines): Promise<PortableImportView> {
     const row = this.required(id)
     if (this.view(id).compositions.some(item => item.key === key)) return this.view(id)
-    if (row.state !== 'committed' || row.revision !== expectedRevision) throw new Error('Import changed; reload before continuing')
+    const setup = JSON.parse(row.setup as string) as ImportSetup
+    if (!['committed', 'completed'].includes(String(row.state)) || row.revision !== expectedRevision) throw new Error('Import changed; reload before continuing')
+    if (setup.deferred?.includes(key) && row.state !== 'completed') throw new Error('Finish Pod setup and approve the member scripts before creating this composition')
     if (!row.archive_hash) throw new Error(String(row.error ?? 'Import the package again'))
     const { manifest, files } = await readPortableArchive(this.store.readBlob(row.archive_hash as string), this.npmRoot, importFormatFeatures)
     const composition = manifest.compositions.find(item => item.key === key)
     if (!composition) throw new Error('Unknown package composition')
     const document = JSON.parse(decoder.decode(files.get(composition.document)!)) as CompositionDocument
-    return this.store.transaction(() => {
-      const setup = JSON.parse(this.required(id, expectedRevision).setup as string) as ImportSetup
-      const ids = new Map(this.pods(id).map(item => [item.key, item.podId]))
-      const member = (podKey: string): string => {
+    const ids = new Map(this.pods(id).map(item => [item.key, item.podId]))
+    const context: CompositionContext = {
+      store: this.store, resources: this.resources, owner: this.owner, manifest,
+      podId: (podKey) => {
         const podId = ids.get(podKey)
         if (!podId || !this.store.db.prepare('SELECT 1 FROM pods WHERE id=?').get(podId)) throw new Error('A member Pod of this composition no longer exists')
         return podId
-      }
-      const value = (input: string): string => {
-        const item = resolved(setup.values, 'compositions', key, composition.inputs.find(declaration => declaration.key === input)!)
+      },
+      value: (compositionKey, input) => {
+        const declaration = manifest.compositions.find(item => item.key === compositionKey)!.inputs.find(item => item.key === input)!
+        const item = resolved(setup.values, 'compositions', compositionKey, declaration)
         if (item === undefined) throw new Error('Import setup is incomplete')
-        return String(item)
-      }
-      if (composition.kind === 'sequence' ? groupId !== null : !groupId || !this.store.db.prepare('SELECT 1 FROM pod_groups WHERE id=?').get(groupId)) throw new Error('A channel graph needs an existing group; a sequence has none')
+        return item
+      },
+      workflowId: compositionKey => setup.compositions?.[compositionKey]?.workflowId,
+    }
+    const deferred = setup.deferred?.includes(key) ?? false
+    if (composition.kind === 'network') {
+      if (!groupId) throw new Error('A persistent network needs an existing group')
+      await finalizeNetwork(context, engines, composition, document, files, groupId, reuse, (networkId) => { this.required(id, expectedRevision); this.record(id, key, { networkId }) })
+      return this.view(id)
+    }
+    // Deferred workflows (ports, mail policy, call targets) need approved members; a called workflow lives in the group of its caller.
+    if (deferred) {
+      for (const node of composition.nodes) assertApproved(context, manifest.pods.find(item => item.key === node.pod)!)
+    }
+    const called = manifest.compositions.some(item => item.calls.includes(key))
+    return this.store.transaction(() => {
+      this.required(id, expectedRevision)
+      if (composition.kind === 'channels' || called ? !groupId || !this.store.db.prepare('SELECT 1 FROM pod_groups WHERE id=?').get(groupId) : groupId !== null) throw new Error('A channel graph or called workflow needs an existing group; a plain sequence has none')
       const workflowId = randomUUID()
       // The suggested schedule is kept for review; the workflow stays disabled until the owner enables it.
-      const command = workflowCommand(composition, document, workflowId, member, value, groupId)
-      let joined = false
-      for (const node of composition.kind === 'channels' ? command.nodes : []) {
-        const current = this.store.db.prepare('SELECT group_id FROM pod_memberships WHERE pod_id=?').get(node.podId)
-        if (current && current.group_id !== groupId) throw new Error('A member Pod already belongs to another group')
-        if (!current) { this.store.db.prepare('INSERT INTO pod_memberships VALUES(?,?)').run(node.podId, groupId); joined = true }
-      }
-      if (joined) this.store.db.prepare('UPDATE pod_organization SET revision=revision+1 WHERE id=1').run()
-      workflows.save(command)
-      this.advance(id, 'setup=?', JSON.stringify({ ...setup, compositions: { ...setup.compositions, [key]: workflowId } }))
-      return this.view(id)
+      const command = workflowCommand(context, composition, document, workflowId, groupId)
+      if (groupId) { if (deferred) assertFreshMembers(context, composition); joinGroup(this.store, command.nodes.map(node => node.podId), groupId) }
+      engines.workflows.save({ ...command, ...(composition.kind === 'sequence' && groupId ? { groupId } : {}) })
+      return this.record(id, key, { workflowId })
     })
+  }
+
+  // Records a created composition; once a completed import has nothing left to create, its archive is released.
+  private record(id: string, key: string, created: { workflowId?: string, networkId?: string }): PortableImportView {
+    const row = this.required(id); const setup = JSON.parse(row.setup as string) as ImportSetup
+    this.advance(id, 'setup=?', JSON.stringify({ ...setup, compositions: { ...setup.compositions, [key]: created } }))
+    if (row.state === 'completed' && !this.view(id).unresolved.length) this.advance(id, 'archive_hash=NULL')
+    return this.view(id)
   }
 
   complete(id: string, expectedRevision: number): PortableImportView {
@@ -422,8 +436,12 @@ export class PortableImporter {
       const row = this.required(id)
       if (row.state === 'completed') return this.view(id)
       if (row.state !== 'committed' || row.revision !== expectedRevision) throw new Error('Import changed; reload before finishing setup')
-      if (this.view(id).unresolved.length) throw new Error('Import setup is incomplete')
-      this.advance(id, 'state=\'completed\',archive_hash=NULL,error=NULL')
+      // Compositions that need approved member scripts are created after completion.
+      const deferred = (JSON.parse(row.setup as string) as ImportSetup).deferred ?? []
+      const view = this.view(id)
+      if (view.unresolved.some(item => item.scope !== 'composition' || !deferred.includes(item.key))) throw new Error('Import setup is incomplete')
+      // The archive still holds the documents of compositions created after completion.
+      this.advance(id, view.unresolved.length ? 'state=\'completed\',error=NULL' : 'state=\'completed\',archive_hash=NULL,error=NULL')
       return this.view(id)
     })
   }
@@ -433,8 +451,14 @@ export class PortableImporter {
     return this.store.transaction(() => {
       const row = this.required(id)
       if (row.state === 'cancelled') return this.view(id)
-      if (row.state !== 'staged') throw new Error('The paused copy already exists; archive and delete its Pods individually')
       if (row.revision !== expectedRevision || committing.has(id)) throw new Error('Import changed; reload before continuing')
+      // After completion, cancel only abandons compositions not created yet and releases the archive; Pods and created compositions stay.
+      if (row.state === 'completed') {
+        const setup = JSON.parse(row.setup as string) as ImportSetup
+        this.advance(id, 'setup=?,archive_hash=NULL', JSON.stringify({ ...setup, deferred: [] }))
+        return this.view(id)
+      }
+      if (row.state !== 'staged') throw new Error('The paused copy already exists; archive and delete its Pods individually')
       this.store.db.prepare('DELETE FROM portable_import_pods WHERE import_id=?').run(id)
       this.advance(id, 'state=\'cancelled\',archive_hash=NULL')
       return this.view(id)
