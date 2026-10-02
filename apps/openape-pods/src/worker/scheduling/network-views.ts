@@ -68,7 +68,7 @@ export class NetworkViews {
   }
 
   trace(networkId: string, before: number | null, caseId: string | null): NetworkTracePage {
-    const rows = this.store.db.prepare(`SELECT id,case_id,run_id,kind,body,created_at FROM network_trace_events
+    const rows = this.store.db.prepare(`SELECT id,case_id,run_id,kind,CASE WHEN kind='legacy-conversion-reviewed' THEN json_object('message',json_extract(body,'$.message')) ELSE body END AS body,created_at FROM network_trace_events
       WHERE network_id=? AND kind NOT IN ('environment','operation','log','snapshot','process','infrastructure') AND id<? AND (? IS NULL OR case_id=?) ORDER BY id DESC LIMIT 51`).all(networkId, before ?? Number.MAX_SAFE_INTEGER, caseId, caseId)
     const events = rows.slice(0, 50).map((row) => {
       const receipt = JSON.parse(row.body as string) as Record<string, unknown>

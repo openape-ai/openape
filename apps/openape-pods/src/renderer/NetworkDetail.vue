@@ -63,6 +63,7 @@ export default defineComponent({
   methods: {
     t, diagnostic, dateTime,
     eventLabel(kind: string): string {
+      if (kind === 'legacy-conversion-reviewed') return t('Legacy conversion reviewed')
       if (kind === 'event-accepted') return t('Item accepted')
       if (kind === 'invocation-settled') return t('Processing outcome')
       if (kind === 'instance-attention' || kind === 'network-maintenance-failed') return t('Runtime needs attention')
