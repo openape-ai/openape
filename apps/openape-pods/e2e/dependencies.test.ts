@@ -9,6 +9,10 @@ import { ResourceRegistry } from '../src/worker/resources/registry'
 import { ScriptCredentials } from '../src/worker/resources/script-credentials'
 import { validateDraft } from '../src/worker/master/validation'
 import { DependencyStore, removePackageTree } from '../src/worker/dependencies/store'
+import { PortableExporter } from '../src/worker/sharing/export'
+import { mapPortableSource } from '../src/worker/sharing/mapping'
+import type { PortableExportChoices } from '../src/worker/sharing/mapping'
+import { unzipSync } from 'fflate'
 
 // The packaged editor flow is covered below the app: dependency search and
 // selection in test/workspace/script-ui.test.ts, the preparation dialog in
@@ -83,6 +87,16 @@ it('managed dependencies: imports an exact registry lock and rejects altered int
     const original = await dependencies.prepare(runtime, source.id, packages, signal, () => {})
     const row = store.db.prepare('SELECT lockfile FROM dependency_sets WHERE pod_id=? AND hash=?').get(source.id, original!)!
     const lock = row.lockfile as string
+    const draftId = randomUUID()
+    store.db.prepare('INSERT INTO script_drafts VALUES(?,?,?,?,?,?,NULL,NULL)').run(draftId, source.id, 1, source.bindingRevision, 'import isOdd from "is-odd"; export async function run(){return {status:"completed",summary:String(isOdd(3)),completedInputIds:[],gapIds:[]}}', '[]')
+    store.db.prepare('INSERT INTO draft_packages VALUES(?,?)').run(draftId, JSON.stringify(packages))
+    const validated = await validateDraft(store, new ResourceRegistry(store, () => {}), runtime, draftId, 1, signal)
+    store.db.prepare('UPDATE pods SET active_script=? WHERE id=?').run(validated.hash, source.id)
+    const exporter = new PortableExporter(store, { issuer: 'https://identity.example.invalid', subject: 'synthetic-export-owner' }, resolve('dist/vendor/npm'), (snapshot, choices: PortableExportChoices) => mapPortableSource(root, snapshot, choices))
+    const review = await exporter.review({ kind: 'pod', id: source.id }, { package: { key: 'dependency-fixture', revision: 1, title: 'Dependency fixture', description: '' }, pods: [{ podId: source.id, key: 'source', description: '', defaults: [], aliases: [], assets: [] }], compositions: [] })
+    expect(review.findings).toEqual([])
+    const exported = await exporter.commit(review.id, [])
+    expect(JSON.parse(Buffer.from(unzipSync(exported.archive)['pods/source/package-lock.json']!).toString())).toEqual(JSON.parse(lock))
     const imported = await dependencies.prepare(runtime, recipient.id, packages, signal, () => {}, lock)
     const importedRow = store.db.prepare('SELECT lockfile,files FROM dependency_sets WHERE pod_id=? AND hash=?').get(recipient.id, imported!)!
     expect(JSON.parse(importedRow.lockfile as string)).toEqual(JSON.parse(lock))

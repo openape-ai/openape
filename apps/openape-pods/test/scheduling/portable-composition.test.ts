@@ -22,7 +22,7 @@ function document(kind: PortableComposition['kind']) {
   if (kind === 'sequence') return { version: 1, kind, schedule: null, ports: null, mail: null }
   const channels = [1, 2].map(index => ({ name: `step.${index === 1 ? 'one' : 'two'}`, title: `Step ${index}`, ...(kind === 'network' ? { schemaVersion: 1, schema } : { fields: ['subject'] }) }))
   if (kind === 'channels') return { version: 1, kind, schedule: null, channels, gates: [], values: [], ports: null }
-  return { version: 1, kind, formatVersion: 3, channels, members: ['read', 'summarize', 'send'].map((pod, index) => ({ pod, source: index ? null : { schedule: null }, serialCase: true })), gates: [], joins: [], values: [], collections: [], artifacts: [], calls: [] }
+  return { version: 1, kind, formatVersion: 3, channels, members: ['read', 'summarize', 'send'].map((pod, index) => ({ pod, source: index ? null : { schedule: null }, serialCase: true })), gates: [], joins: [], values: [], legacyVariables: [], collections: [], artifacts: [], calls: [] }
 }
 function validate(value: unknown, fixture: { manifest: PortableManifest, composition: PortableComposition }) {
   return validatePortableCompositionDocument(value, fixture.composition, fixture.manifest)
@@ -72,7 +72,7 @@ describe('portable composition documents', () => {
     expect(() => validate({ ...document('network'), values: [{ name: 'token', input: 'token' }] }, value)).toThrow('public input')
     value.composition.inputs = []
     value.composition.dataSchemas = ['schemas/items.json']
-    const collection = { key: 'items', schema: 'schemas/items.json', access: [{ pod: 'read', operations: ['read', 'write'] }] }
+    const collection = { key: 'items', name: 'Items', retention: {}, schema: 'schemas/items.json', access: [{ pod: 'read', operations: ['read', 'write'] }] }
     expect(() => validate({ ...document('network'), collections: [collection] }, value)).not.toThrow()
     collection.access[0]!.operations = ['admin']
     expect(() => validate({ ...document('network'), collections: [collection] }, value)).toThrow('data operation')

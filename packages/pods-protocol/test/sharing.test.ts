@@ -51,7 +51,7 @@ describe('portable package boundary', () => {
     expect(() => parsePortableManifest({ ...manifest, version: 2 })).toThrow('version')
   })
 
-  it.each(['../escape', '/absolute', 'a/../b', 'a//b', 'a\\b', 'C:/path', 'a/%2e%2e/b', 'con.txt', 'folder/nul', 'a/.', 'a/b.'])('rejects nonportable file path %s', (path) => {
+  it.each(['__proto__', 'assets/constructor', 'Prototype', '../escape', '/absolute', 'a/../b', 'a//b', 'a\\b', 'C:/path', 'a/%2e%2e/b', 'con.txt', 'folder/nul', 'a/.', 'a/b.'])('rejects nonportable file path %s', (path) => {
     expect(() => portablePath(path)).toThrow()
   })
 
@@ -162,15 +162,27 @@ it('bounds aggregate expansion and canonical traversal and rejects file-director
 
 it('carries requested file, HTTP and AI scope through typed recipient inputs only', () => {
   const manifest = fixture(); const pod = manifest.pods[0]!
-  for (const [key, kind] of [['folder', 'directory'], ['origin', 'string'], ['identity', 'connection'], ['ai', 'connection'], ['model', 'string']] as const) {
+  for (const [key, kind] of [['folder', 'directory'], ['origin', 'string'], ['subject', 'string'], ['issuer', 'string'], ['identity', 'secret'], ['ai', 'connection'], ['model', 'string']] as const) {
     pod.inputs.push({ key, kind, label: key, description: '', required: true, sharingGroup: null })
   }
+  pod.bindings.push({ alias: 'api_identity', input: 'identity' })
   pod.access = [
     { kind: 'directory', alias: 'files', input: 'folder', access: 'readWrite' },
-    { kind: 'http', alias: 'api', origin: 'origin', methods: ['GET', 'POST'], authentication: 'identity' },
+    { kind: 'http', alias: 'api', origin: 'origin', methods: ['GET', 'POST'], authentication: { type: 'ddisaAgent', credential: 'api_identity', subject: 'subject', issuer: 'issuer' } },
     { kind: 'jev', alias: 'decision', connection: 'ai', model: 'model', maxAttempts: 2 },
   ]
   expect(parsePortableManifest(manifest).pods[0]!.access).toEqual(pod.access)
+  for (const key of ['folder', 'identity', 'ai', 'subject']) {
+    const input = pod.inputs.find(input => input.key === key)!
+    input.sharingGroup = 'shared'
+    expect(() => parsePortableManifest(manifest)).toThrow(key === 'subject' ? 'recipient selection' : 'cannot be shared')
+    input.sharingGroup = null
+  }
+  const http = pod.access[1]!
+  if (http.kind !== 'http' || !http.authentication) throw new Error('Missing fixture authentication')
+  http.authentication.issuer = 'origin'
+  expect(() => parsePortableManifest(manifest)).toThrow('duplicate')
+  http.authentication.issuer = 'issuer'
   pod.access[0] = { kind: 'directory', alias: 'files', input: 'origin', access: 'read' }
   expect(() => parsePortableManifest(manifest)).toThrow('mistyped access input')
   pod.access[0] = { kind: 'http', alias: 'api', origin: 'origin', methods: ['GET'], authentication: null }
@@ -217,4 +229,10 @@ it('refuses scope-free resource bindings and declares recipient mail scope expli
   expect(() => parsePortableManifest(manifest)).not.toThrow()
   pod.inputs.find(input => input.key === 'folders')!.default = '["sender-folder-id"]'
   expect(() => parsePortableManifest(manifest)).toThrow('recipient selection')
+})
+
+it('refuses competing standalone schedules on composition members', () => {
+  const manifest = fixture()
+  manifest.pods[0]!.schedule = { kind: 'interval', seconds: 60 }
+  expect(() => parsePortableManifest(manifest)).toThrow('standalone schedules')
 })
