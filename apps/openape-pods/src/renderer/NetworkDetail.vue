@@ -23,7 +23,7 @@ export default defineComponent({
     readNetwork: Function as PropType<(command: CentralNetworkRead) => Promise<NetworkView>>,
     active: { type: Boolean, default: true },
   },
-  emits: ['changed', 'back', 'openPod'],
+  emits: ['changed', 'back', 'openPod', 'replace'],
   data() { return { remoteGates: [] as NonNullable<NetworkView['gates']>, loading: false, activityLoading: false, recordsLoading: false, details: null as NetworkDetails | null, trace: null as NetworkTracePage | null, records: null as NetworkDataPage | null, tab: 'structure', caseId: null as string | null, selected: '', loadRequest: 0, error: '', actionError: '', activityError: '', recordsError: '', activityRequest: 0, recordsRequest: 0, now: Date.now(), busy: false, processing: false, processPods: [] as string[], reviewedPaused: [] as string[], budget: 10, preview: null as NetworkPreview | null, evidence: {} as Record<string, string>, timer: null as ReturnType<typeof setTimeout> | null, closed: false } },
   computed: {
     gates() { return (this.readNetwork ? this.remoteGates : this.view.gates ?? []).filter(gate => gate.networkId === this.network.id) },
@@ -64,6 +64,7 @@ export default defineComponent({
   methods: {
     t, diagnostic, dateTime,
     eventLabel(kind: string): string {
+      if (kind === 'composition-replaced-reviewed') return t('Composition replacement reviewed')
       if (kind === 'legacy-conversion-reviewed') return t('Legacy conversion reviewed')
       if (kind === 'event-accepted') return t('Item accepted')
       if (kind === 'invocation-settled') return t('Processing outcome')
@@ -157,6 +158,9 @@ export default defineComponent({
       {{ diagnostic(actionError) }}
     </p>
     <div v-if="!readOnly && !readNetwork && network.state !== 'archived'" class="network-actions">
+      <button v-if="network.state === 'paused'" class="secondary" :disabled="busy || !!view.unavailableReason" @click="$emit('replace')">
+        {{ t('Edit paused composition') }}
+      </button>
       <button class="primary" :disabled="busy || (network.state !== 'active' && !!error)" @click="send({ type: network.state === 'active' ? 'pause' : 'activate', id: network.id, revision: network.revision })">
         {{ t(network.state === 'active' ? 'Pause network' : 'Activate network') }}
       </button>
