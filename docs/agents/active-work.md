@@ -1,5 +1,39 @@
 # Active work
 
+## Current M8 — issue1417
+
+M0–M7 are accepted. Native PR208 merged as
+`a836a97d192e1eeff9f440427806c6de5b35264c`; full main CI5329 passed.
+M7 runtime `e7ae6e1cec20149ec31f12363930312e6c2226c5` passed1085 units/four
+native tests; final docs `4b07e3ee67ea13d2b5c94da09cc47d03295cf444` passedCI5328.
+[Verified private M7 Test Runs](https://report.openape.ai/r/GeG_5EXS3PQGRtT0PJmGCcMS).
+Checkout `openape-monorepo.worktrees/pods-workflows-networks`; branch
+`feature/issue-1417-pods-networks-m8`; canonical base is the PR208 merge above.
+Doctor and23 existing workspace/script/dependency/onboarding baseline tests pass.
+The M8 candidate adds schema33, immutable definition publication and exact-artifact
+validation, isolated instances with idempotent identity provisioning, pinned dependency
+copies and explicit per-instance update review in the local Script UI. Root lint,
+root typecheck, Pods build and139 suites/1104 unit/component tests passed. Native
+acceptance on the earlier candidate proved separate subjects/keys/homes, same-key
+provisioning retry, no copied grants and independent version selection; its four
+EN/DE desktop/narrow screenshots were personally inspected. Final clean-source
+native rerun and exact-source CI are still required; no M8 acceptance is claimed.
+Actual Claude Code Opus5.5 reviews drove fixes for source retention, copy races,
+archived networks, pending-work fences, generic activation bypass and restore
+recovery. A final read-only review is running. Regression coverage now includes
+workspace-to-network activation, stale permission refusal and incompatible update
+rollback. Immutable validation preserves the published manifest serialization.
+Publication leaves existing instances pinned; active-script divergence is explicit.
+Restored identities require owner recovery. Published source Pods can be archived,
+but not deleted while retaining reusable code/dependencies. UUID-bound HTTP/SSH
+rights are refused for publication until portable binding review in M11. Connected
+workspace mutation remains unavailable with an explicit explanation until M10.
+M8–M14 remain unaccepted. Evidence: `/tmp/openape-pods-networks-m8/`.
+Next: close review, commit a clean candidate, rerun manual native acceptance,
+publish private Test Runs evidence, review native PR and merge only after exact-head
+unit CI; then verify main and proceed to M9. Production activation and live conversion
+remain separately approved; no mail/accounting/notification rights are extended.
+
 ## Approved audit exception — issue 1418
 
 Patrick approved ignoring CVE-2026-85393 on October 2, 2026 and continuing Pods

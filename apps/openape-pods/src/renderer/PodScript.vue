@@ -8,10 +8,11 @@ import type { StoredPod } from '../contracts/control'
 import type { ScriptCommand, ScriptSelection, ScriptView } from '../contracts/scripts'
 import { isDirty, scriptBuffer } from './script-buffer'
 import ScriptCode from './ScriptCode.vue'
+import PodDefinition from './PodDefinition.vue'
 import ScriptPackages from './ScriptPackages.vue'
 
 export default defineComponent({
-  components: { ScriptCode, ScriptPackages },
+  components: { ScriptCode, ScriptPackages, PodDefinition },
   props: { pod: { type: Object as PropType<StoredPod>, required: true } },
   emits: ['changed', 'values', 'ran'],
   setup(props) { const access = usePodAccess(); return { access, remoteRevision: access.revision, buffer: scriptBuffer(access.key(props.pod.id)) } },
@@ -194,6 +195,7 @@ export default defineComponent({
         {{ t('Manage variables and secrets') }}
       </button>
     </details>
+    <PodDefinition v-if="!access.remote" :pod="pod" @changed="$emit('changed')" />
   </article>
 </template>
 
