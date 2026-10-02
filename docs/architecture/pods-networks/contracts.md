@@ -922,7 +922,13 @@ as failed, with a retained-work receipt; it never changes the completed child or
 repeats its effects. Recorded cancellation intent finishes after process cleanup and
 stops for owner review on uncertainty.
 
-M7 is not accepted yet. The existing authenticated desktop route and actual native
-call/join receipts have been exercised, but final clean SHA, native PR, Opus closure,
-exact-head CI and verified Reports/Test Runs evidence are still required. Productive
-authoring, operational views, browser parity and rollout remain their later milestones.
+M7 runtime source `e7ae6e1cec20149ec31f12363930312e6c2226c5` passes root
+lint/typecheck, Pods build,137 suites/1085 fresh unit tests and four manual native
+checks through actual Electron preload/main/worker/ScriptFrame routes. Actual Opus5.5
+closure reports no blocker; primary native diff review reconciles33 files/2659 lines.
+Native PR208 is linked to issue1417 and runtime unit-only CI5327 passes.
+[Verified private Test Runs](https://report.openape.ai/r/GeG_5EXS3PQGRtT0PJmGCcMS)
+contains actual correlated invoices, paused-result retention, join outcomes and the
+personally inspected authenticated screenshot. Protected merge/main remain required
+before M7 acceptance. Productive authoring, operational views, browser parity and
+rollout remain their later milestones.
