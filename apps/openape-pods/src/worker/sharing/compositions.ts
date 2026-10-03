@@ -21,9 +21,10 @@ export interface CompositionDocument {
   channels?: unknown
   gates?: unknown[]
   joins?: unknown[]
+  feedback?: unknown[]
   values?: { name: string, input: string }[]
   members?: { pod: string, source: { schedule: unknown } | null, serialCase: boolean }[]
-  formatVersion?: 1 | 2 | 3
+  formatVersion?: 1 | 2 | 3 | 4
   collections?: { key: string, name: string, schema: string, retention: Record<string, unknown>, access: { pod: string, operations: string[] }[] }[]
   artifacts?: { key: string, collection: string | null, access: { pod: string, operations: string[] }[] }[]
   calls?: { pod: string, workflow: string }[]
@@ -200,7 +201,7 @@ export async function finalizeNetwork(context: CompositionContext, engines: { ne
     const draft: NetworkDraft = {
       name: clip(composition.title), groupId, channels: document.channels as NetworkDraft['channels'], sharedValues,
       members: members.map(member => ({ podId: context.podId(member.pod), source: member.source ? { schedule: member.source.schedule as ScheduleSpec | null } : null, serialCase: member.serialCase })),
-      ...(Number(document.formatVersion) >= 2 ? { gates: remap(document.gates) as NetworkDraft['gates'] } : {}), ...(document.formatVersion === 3 ? { joins: remap(document.joins) as NetworkDraft['joins'] } : {}),
+      ...(Number(document.formatVersion) >= 2 ? { gates: remap(document.gates) as NetworkDraft['gates'] } : {}), ...(Number(document.formatVersion) >= 3 ? { joins: remap(document.joins) as NetworkDraft['joins'] } : {}), ...(document.formatVersion === 4 ? { feedback: remap(document.feedback) as NetworkDraft['feedback'] } : {}),
     }
     const networkId = engines.networks.execute({ type: 'create', draft }).createdId
     if (!networkId) throw new Error('Network creation returned no identity')
