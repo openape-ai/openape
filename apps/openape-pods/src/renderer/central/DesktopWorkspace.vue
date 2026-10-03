@@ -9,6 +9,9 @@ import WorkspaceFrame from '../WorkspaceFrame.vue'
 import AppSettings from '../AppSettings.vue'
 import AccountStatus from '../AccountStatus.vue'
 import GraphPanel from '../GraphPanel.vue'
+import SharingImport from '../SharingImport.vue'
+import SharingExport from '../SharingExport.vue'
+import type { PortableSourceSelection, SharingCommand } from '../../contracts/sharing'
 import type { WorkflowView } from '../../contracts/workflows'
 import type { StoredPod, WorkspaceState } from '../../contracts/control'
 import type { Organization } from '../../contracts/groups'
@@ -21,6 +24,9 @@ const workflows = ref<WorkflowView>({ workflows: [], runs: [] })
 const pods = ref<StoredPod[]>([])
 const organization = ref<Organization>({ revision: 1, groups: [] })
 const workflowId = ref('')
+const sharing = ref<{ mode: 'import' } | { mode: 'export', selection: PortableSourceSelection } | null>(null)
+const sharingApi = (command: SharingCommand) => window.pods.sharing!(command)
+const podResources = (podId: string) => window.pods.resources({ type: 'list', podId })
 const error = ref('')
 const registering = ref(false)
 const status = ref<CentralStatus | null>(null)
@@ -72,7 +78,14 @@ async function openPod(id: string) {
       {{ diagnostic(error) }}
     </p>
     <section v-show="page === 'Workflows'">
-      <GraphPanel :active="page === 'Workflows'" :view="workflows" :pods="pods" :organization="organization" :selected-id="workflowId" @changed="workflows = $event" @workspace="workspaceChanged" @select="workflowId = $event" @open-pod="openPod" />
+      <template v-if="sharing">
+        <button class="text-button" @click="sharing = null">
+          ‹ {{ t('Networks & workflows') }}
+        </button>
+        <SharingImport v-if="sharing.mode === 'import'" :api="sharingApi" :organization="organization" desktop :resources="podResources" @open-pod="openPod" />
+        <SharingExport v-else :key="sharing.selection.id" :selection="sharing.selection" :api="sharingApi" @done="sharing = null" />
+      </template>
+      <GraphPanel v-else :active="page === 'Workflows'" :view="workflows" :pods="pods" :organization="organization" :selected-id="workflowId" @changed="workflows = $event" @workspace="workspaceChanged" @select="workflowId = $event" @open-pod="openPod" @share="sharing = { mode: 'export', selection: $event }" @import="sharing = { mode: 'import' }" />
     </section>
     <AppSettings v-if="page === 'App settings'">
       <template #connection>

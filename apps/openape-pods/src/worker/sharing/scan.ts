@@ -1,6 +1,8 @@
+import type { PortableScanFinding } from '../../contracts/sharing'
 import { createHash } from 'node:crypto'
 
-export interface PortableScanFinding { id: string, path: string, line: number | null, kind: 'local-reference' | 'local-path' | 'private-key' | 'private-value' | 'possible-credential' | 'opaque-asset', severity: 'block' | 'review' }
+export type { PortableScanFinding } from '../../contracts/sharing'
+
 export interface PortableScanFile { path: string, content: Uint8Array, text: boolean, privateValues?: boolean }
 const patterns: { kind: PortableScanFinding['kind'], severity: PortableScanFinding['severity'], pattern: RegExp }[] = [
   { kind: 'local-path', severity: 'block', pattern: /(?<![\w./-])(?:\/(?:Users|home|private|Volumes|tmp|var\/folders|Applications|opt|etc|usr\/local)\/[^\s"'<>]+|~\/[^\s"'<>]+|[A-Za-z]:\\[^\r\n"'<>]+)|file:\/\/\/[^\s"'<>]+/g },

@@ -322,10 +322,10 @@ describe('graph panel', () => {
 })
 
 describe('sharing entry points', () => {
-  it('are absent until the sharing flow exists', async () => {
+  it('are absent when sharing is switched off', async () => {
     window.pods = { networks: vi.fn(async () => ({ networks: [] })), workflows: vi.fn(async () => structuredClone({ ...view, graph: detail })) } as unknown as typeof window.pods
-    const overview = mount(GraphOverview, { props: { view, pods, organization } })
-    const panel = mount(GraphPanel, { props: { view, pods, organization, selectedId: graphId } }); await flushPromises()
+    const overview = mount(GraphOverview, { props: { view, pods, organization, sharing: false } })
+    const panel = mount(GraphPanel, { props: { view, pods, organization, selectedId: graphId, sharing: false } }); await flushPromises()
     for (const wrapper of [overview, panel]) {
       expect(wrapper.text()).not.toContain('Share')
       expect(wrapper.text()).not.toContain('Import')
@@ -339,7 +339,7 @@ describe('sharing entry points', () => {
     expect(overview.emitted('import')).toHaveLength(1)
     const panel = mount(GraphPanel, { props: { view, pods, organization, selectedId: graphId, sharing: true } }); await flushPromises()
     await button(panel, 'Share').trigger('click')
-    expect(panel.emitted('share')).toEqual([[graphId]])
+    expect(panel.emitted('share')).toEqual([[{ kind: 'workflow', id: graphId }]])
     const readOnly = mount(GraphPanel, { props: { view: { ...view, graphs: { [graphId]: detail } }, pods, organization, selectedId: graphId, sharing: true, readOnly: true } }); await flushPromises()
     expect(readOnly.findAll('button').map(item => item.text())).not.toContain('Share')
     expect(mount(GraphOverview, { props: { view, pods, organization, sharing: true, readOnly: true } }).findAll('button').map(item => item.text())).not.toContain('Import')

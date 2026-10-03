@@ -135,6 +135,18 @@ async function select(runtimeId: string, podId: string, discard = false) {
   code.value = ''; description.value = ''; runId.value = ''; error.value = ''; notice.value = ''
   await refreshing; await refresh()
 }
+// Runs one workspace command on the connected desktop and returns its result; the caller renders the outcome itself.
+async function command(channel: CentralCommand['channel'], body: Record<string, unknown>, target: CentralRuntime | undefined = runtime.value): Promise<unknown> {
+  if (!target?.online) throw new Error('Desktop offline')
+  const id = crypto.randomUUID()
+  let operation = await props.client.command(target.id, target.revision, { channel, body }, id)
+  while (['accepted', 'started'].includes(operation.state) && !abort.signal.aborted) {
+    await wait(500)
+    operation = await props.client.operation(id)
+  }
+  if (operation.state !== 'applied') throw new Error(operation.error ?? 'The command could not be confirmed. Inspect its outcome before retrying.')
+  return operation.result
+}
 async function send(channel: CentralCommand['channel'], body: Record<string, unknown>, target = runtime.value) {
   if (!target?.online || busy.value) return
   busy.value = true; error.value = ''; notice.value = ''
@@ -260,7 +272,7 @@ function requestNavigation(next: () => void) {
   next()
 }
 watch(connectionError, value => emit('connection', value ?? ''))
-defineExpose({ select, showInventory, requestNavigation, refresh })
+defineExpose({ select, showInventory, requestNavigation, refresh, command })
 onMounted(async () => { await refresh(); await watchChanges() })
 onBeforeUnmount(() => { generation++; abort.abort() })
 </script>
