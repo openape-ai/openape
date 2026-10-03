@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SharingImport from '../SharingImport.vue'
+import type { SharingCommand, SharingState } from '../../contracts/sharing'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { CentralNetworkRead } from '../../contracts/central-networks'
 import type { NetworkView } from '../../contracts/networks'
@@ -23,8 +25,10 @@ const runtimes = ref<CentralRuntime[]>([])
 const runtimeId = ref('')
 const workflowId = ref('')
 const loaded = ref(false)
+const importing = ref(false)
 const workspace = ref<InstanceType<typeof CentralWorkspace> | null>(null)
 const runtime = computed(() => runtimes.value.find(item => item.id === runtimeId.value) ?? runtimes.value[0])
+const sharingApi = (command: SharingCommand) => workspace.value!.command('sharing', command as unknown as Record<string, unknown>, runtime.value) as Promise<SharingState>
 const count = computed(() => runtimes.value.reduce((sum, host) => sum + host.workspace.pods.filter(pod => pod.lifecycle !== 'archived').length, 0))
 let closed = false
 async function signIn() {
@@ -84,21 +88,32 @@ onBeforeUnmount(() => { closed = true })
       </button>
     </p>
     <section v-if="subject" v-show="page === 'Workflows'">
-      <header v-if="!(runtime?.workflows?.graphs || runtime?.networks)" class="inventory-heading">
+      <template v-if="importing && runtime">
+        <button class="text-button" @click="importing = false">
+          ‹ {{ t('Networks & workflows') }}
+        </button>
+        <SharingImport :api="sharingApi" :organization="runtime.workspace.organization" :desktop="false" @open-pod="openPod" />
+      </template>
+      <p v-else-if="runtime?.online" class="graph-overview-actions">
+        <button class="secondary" @click="importing = true">
+          {{ t('Import') }}
+        </button>
+      </p>
+      <header v-if="!importing && !(runtime?.workflows?.graphs || runtime?.networks)" class="inventory-heading">
         <div>
           <h1>{{ t('Networks & workflows') }}</h1><p class="muted">
             {{ t('Networks connect Pods. Workflows define ordered processes.') }}
           </p>
         </div>
       </header>
-      <label v-if="runtimes.length > 1" class="runtime-picker">{{ t('Desktop') }}<select v-model="runtimeId" @change="workflowId = ''"><option v-for="host in runtimes" :key="host.id" :value="host.id">{{ host.id }} · {{ host.online ? t('Online') : t('Offline') }}</option></select></label>
+      <label v-if="runtimes.length > 1 && !importing" class="runtime-picker">{{ t('Desktop') }}<select v-model="runtimeId" @change="workflowId = ''"><option v-for="host in runtimes" :key="host.id" :value="host.id">{{ host.id }} · {{ host.online ? t('Online') : t('Offline') }}</option></select></label>
       <p v-if="!loaded" class="muted" role="status">
         {{ t('Loading workspace…') }}
       </p>
       <p v-else-if="!runtime" class="muted">
         {{ t('Connect your desktop to bring your Pods online.') }}
       </p>
-      <template v-else>
+      <template v-else-if="!importing">
         <p v-if="!runtime.online" class="muted">
           {{ t('Desktop offline') }} · {{ t('Showing the last synchronized networks and workflows.') }}
         </p>

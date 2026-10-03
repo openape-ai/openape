@@ -1,3 +1,4 @@
+import type { PortablePodChoices } from '../../contracts/sharing'
 import { loadAdapter } from '@openape/apes'
 import { canonicalPortableJson, portableKey } from '@openape/pods-protocol'
 import type { PortableApplication, PortableInput, PortableInputKind, PortablePod } from '@openape/pods-protocol'
@@ -6,11 +7,10 @@ import { parseHttpAuthentication } from '../../contracts/http'
 import { applicationBundle } from '../../main/programs/application'
 import { portableLauncher } from '../../main/programs/requirements'
 import { readPortableAssets } from './assets'
-import type { PortableAssetSelection } from './assets'
 import type { PortablePodSource } from './source'
 import type { PortablePayload } from './package'
 
-export interface PortablePodChoices { podId: string, key: string, title?: string, description: string, defaults: string[], aliases: { resourceId: string, alias: string }[], assets: PortableAssetSelection[], omittedReferences?: string[] }
+export type { PortablePodChoices } from '../../contracts/sharing'
 
 export class PortableInputs {
   readonly declarations: PortableInput[] = []
