@@ -447,11 +447,33 @@ credentials and paths. Imports map company/resources, use fresh identities and
 stay paused. Locks remain validated transitively. Unsupported old importers refuse
 persistent-network packages explicitly. Invitation delivery retains its own plan.
 
-Ordinary edges remain acyclic. M12 adds an explicit feedback transition, minimum
-one-second delay, maximum three hops and 24-hour case age. Runtime controls hop
-and causation; bound exhaustion creates review work. Unique transition/event
-identity prevents double scheduling. Pause stops dispatch; external effect keys
-remain stable. There is no unrestricted LLM-controlled loop.
+Ordinary edges remain acyclic. M12 (implemented) adds `feedback` declarations in
+definition format version 4: `{ id, podId, channel, delayMs ≥ 1000, maxHops ≤ 3,
+maxCaseAgeMs ≤ 86400000 }` on a consumer's declared output channel. Only the
+declared edge is excluded from the cycle diagnostic; `feedback-bounds` reports a
+declaration without a consumer. The runtime computes `feedbackHop` from the input
+events (unchanged through ordinary derived events, plus one through the declared
+transition) and `feedbackTransitionId` as the digest of the declaration id and the
+sorted input event ids, which enters the derived identity so a re-emitted transition
+returns its receipt instead of a second delivery; a second emit key for the same
+transition is refused. Workflow-call results inherit the highest hop of their case
+revision and pass through the same rules, so a call inside a loop cannot reset the
+count. Deliveries of a transition carry `ready_at = accepted_at + delayMs`; a hop
+beyond `maxHops`, or a case revision whose age plus the delay exceeds
+`maxCaseAgeMs` (`delayMs ≤ maxCaseAgeMs` is enforced), stores the event but creates
+blocked deliveries and a `feedback-review` trace event carrying the event id and
+reason. The owner resolves held feedback with `discardFeedback` (event id plus
+evidence): the deliveries become `discarded` with a review receipt and a
+`feedback-review-resolved` trace event, which unblocks replacement and archival.
+A feedback channel cannot be part of an explicit join. Pause stops dispatch through
+the existing reservation rule; no production network effect writer exists, and the
+effect-key contract above excludes the hop. Known limits: the delay and the hold
+apply to every subscriber of the feedback channel; a fresh gate approval resets
+`ready_at`; a workflow-call result inherits the highest hop of its whole case
+revision rather than of its causal chain, which can hold a parallel branch early;
+Structure lists declarations as text without marking graph edges.
+Portable network documents carry `feedback` only at format version 4. There is no
+unrestricted LLM-controlled loop.
 
 ## Diagnostic changes and UI review
 

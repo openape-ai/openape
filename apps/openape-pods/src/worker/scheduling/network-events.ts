@@ -5,7 +5,7 @@ import { canonicalNetworkJson } from '../../contracts/network-json'
 import { assertNetworkQuota } from './network-quota'
 import { randomUUID } from 'node:crypto'
 import { parseNetworkDefinition } from '../../contracts/networks'
-import type { NetworkMember } from '../../contracts/networks'
+import type { NetworkChannel, NetworkDefinition, NetworkFeedback, NetworkMember } from '../../contracts/networks'
 import { networkDataObject, validateNetworkPayload } from '../../contracts/network-payload'
 import { digest } from '../storage/database'
 import type { PodDatabase } from '../storage/database'
@@ -20,6 +20,7 @@ export interface NetworkEmission {
   sourceVersion?: string
 }
 export interface NetworkEventReceipt { eventId: string, duplicate: boolean, caseId: string | null, caseRevision: number | null }
+export interface FeedbackPlan { transition: NetworkFeedback | null, transitionId: string | null, hop: number }
 export interface NetworkAuthority { runId: string, claimToken: string }
 
 export class NetworkEventConflict extends Error {
@@ -120,9 +121,11 @@ export class NetworkEvents {
       const sourceItem = member.source ? identifier(emission.sourceItemId) : null
       const sourceVersion = member.source ? identifier(emission.sourceVersion) : null
       const namespace = member.source ? 'source' : 'derived'
+      const inputIds = causal.map(input => input.eventId).sort()
+      const plan = member.source ? null : this.feedbackPlan(definition, member.podId, channel.name, inputIds, key, this.inputHop(inputIds))
       const identity = member.source
         ? [{ issuer: row.owner_issuer, subject: row.owner_subject }, definition.id, member.source.bindingId, sourceItem, sourceVersion, channel.name]
-        : [definition.id, member.podId, causal.map(input => input.eventId).sort(), channel.name, key, 'no-feedback-transition']
+        : [definition.id, member.podId, inputIds, channel.name, key, plan?.transitionId ?? 'no-feedback-transition']
       const identityHash = digest(canonicalNetworkJson(identity))
       const previous = this.store.db.prepare('SELECT * FROM network_event_identities WHERE network_id=? AND namespace=? AND identity_hash=?').get(definition.id, namespace, identityHash)
       if (previous) {
@@ -139,19 +142,74 @@ export class NetworkEvents {
       const eventId = randomUUID()
       const origin = member.source
         ? { kind: 'source', sourceBindingId: member.source.bindingId, sourceItemId: sourceItem, sourceVersion }
-        : { kind: 'derived', inputEventIds: causal.map(input => input.eventId).sort(), producerPodId: member.podId, emitKey: key, feedbackTransitionId: null }
-      this.store.db.prepare('INSERT INTO network_events VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(eventId, definition.id, definition.revision, member.podId, member.definitionId, member.definitionVersion, caseRef.caseId, caseRef.caseRevision, channel.name, key, canonicalNetworkJson({ ...origin, invocationId: authority.runId, schemaVersion: channel.schemaVersion, occurredAt: now, feedbackHop: 0 }), schemaHash, payload, payloadHash, now)
-      this.store.db.prepare('INSERT INTO network_event_identities VALUES(?,?,?,?,?,?,?,?,?,NULL)').run(definition.id, namespace, identityHash, eventId, payloadHash, schemaHash, now, now + 90 * 86400000, canonicalNetworkJson(causal.map(input => input.eventId).sort()))
-      const subscriptions = this.store.db.prepare('SELECT id,schema_hash FROM network_subscriptions WHERE network_id=? AND network_revision=? AND channel=? ORDER BY id').all(definition.id, definition.revision, channel.name)
-      for (const subscription of subscriptions) {
-        if (subscription.schema_hash !== schemaHash) throw new Error('Network subscription schema differs from its pinned channel')
-        this.store.db.prepare('INSERT INTO network_deliveries(id,network_id,event_id,subscription_id,case_id,case_revision,ready_at,accepted_at) VALUES(?,?,?,?,?,?,?,?)').run(randomUUID(), definition.id, eventId, subscription.id!, caseRef.caseId, caseRef.caseRevision, now, now)
-      }
+        : { kind: 'derived', inputEventIds: inputIds, producerPodId: member.podId, emitKey: key, feedbackTransitionId: plan!.transitionId }
+      this.store.db.prepare('INSERT INTO network_events VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(eventId, definition.id, definition.revision, member.podId, member.definitionId, member.definitionVersion, caseRef.caseId, caseRef.caseRevision, channel.name, key, canonicalNetworkJson({ ...origin, invocationId: authority.runId, schemaVersion: channel.schemaVersion, occurredAt: now, feedbackHop: plan?.hop ?? 0 }), schemaHash, payload, payloadHash, now)
+      this.store.db.prepare('INSERT INTO network_event_identities VALUES(?,?,?,?,?,?,?,?,?,NULL)').run(definition.id, namespace, identityHash, eventId, payloadHash, schemaHash, now, now + 90 * 86400000, canonicalNetworkJson(inputIds))
       for (const reference of references) this.artifacts!.retain(reference, 'event', eventId)
-      if (subscriptions.length) this.store.db.prepare('INSERT INTO network_queue_counts VALUES(?,\'pending\',?) ON CONFLICT(network_id,state) DO UPDATE SET count=count+excluded.count').run(definition.id, subscriptions.length)
-      this.store.db.prepare('INSERT INTO network_trace_events(network_id,case_id,run_id,event_id,kind,body,created_at) VALUES(?,?,?,?,?,?,?)').run(definition.id, caseRef.caseId, authority.runId, null, 'event-accepted', canonicalNetworkJson({ channel: channel.name, caseRevision: caseRef.caseRevision }), now)
-      this.joins.record(eventId)
+      this.deliver(definition, eventId, channel, schemaHash, caseRef, now, plan, authority.runId)
       return { eventId, duplicate: false, ...caseRef }
+    })
+  }
+
+  // The highest hop among the consumed input events; ordinary derived events carry it unchanged.
+  inputHop(inputIds: string[]): number {
+    if (!inputIds.length) return 0
+    return Number(this.store.db.prepare(`SELECT coalesce(max(json_extract(origin,'$.feedbackHop')),0) AS hop FROM network_events WHERE id IN (SELECT value FROM json_each(?))`).get(JSON.stringify(inputIds))!.hop)
+  }
+
+  // Workflow results have no claimed inputs; they inherit the highest hop their case has reached so a call inside a loop cannot reset the count.
+  caseHop(networkId: string, caseId: string, caseRevision: number): number {
+    return Number(this.store.db.prepare(`SELECT coalesce(max(json_extract(origin,'$.feedbackHop')),0) AS hop FROM network_events WHERE network_id=? AND case_id=? AND case_revision=?`).get(networkId, caseId, caseRevision)!.hop)
+  }
+
+  // The runtime, not the script, decides whether an emission is a declared feedback transition, how it is identified and how many hops it has.
+  feedbackPlan(definition: NetworkDefinition, podId: string, channel: string, inputIds: string[], key: string, inputHop: number): FeedbackPlan {
+    const transition = definition.feedback?.find(item => item.podId === podId && item.channel === channel) ?? null
+    const transitionId = transition ? digest(canonicalNetworkJson([transition.id, inputIds])) : null
+    if (transitionId) {
+      // One transition per declaration and input set: a second emission with another key is refused instead of scheduled again.
+      const scheduled = this.store.db.prepare('SELECT item_key FROM network_events WHERE network_id=? AND json_extract(origin,\'$.feedbackTransitionId\')=?').get(definition.id, transitionId)
+      if (scheduled && scheduled.item_key !== key) throw new Error('Feedback transition is already scheduled for these inputs')
+    }
+    return { transition, transitionId, hop: transition ? inputHop + 1 : inputHop }
+  }
+
+  // Writes the deliveries of a stored event: a transition waits for its delay, and one beyond its hop or case-age bound is held for owner review.
+  deliver(definition: NetworkDefinition, eventId: string, channel: NetworkChannel, schemaHash: string, caseRef: { caseId: string, caseRevision: number }, now: number, plan: FeedbackPlan | null, runId: string | null): void {
+    const transition = plan?.transition ?? null
+    let review: string | null = null
+    if (transition && plan) {
+      const revision = this.store.db.prepare('SELECT created_at FROM network_case_revisions WHERE case_id=? AND revision=?').get(caseRef.caseId, caseRef.caseRevision)!
+      const age = now - Number(revision.created_at)
+      review = plan.hop > transition.maxHops ? `Feedback exceeded ${transition.maxHops} hops` : age + transition.delayMs > transition.maxCaseAgeMs ? `Feedback case is older than ${transition.maxCaseAgeMs} ms` : null
+    }
+    const subscriptions = this.store.db.prepare('SELECT id,schema_hash FROM network_subscriptions WHERE network_id=? AND network_revision=? AND channel=? ORDER BY id').all(definition.id, definition.revision, channel.name)
+    for (const subscription of subscriptions) {
+      if (subscription.schema_hash !== schemaHash) throw new Error('Network subscription schema differs from its pinned channel')
+      this.store.db.prepare('INSERT INTO network_deliveries(id,network_id,event_id,subscription_id,case_id,case_revision,state,reason,ready_at,accepted_at) VALUES(?,?,?,?,?,?,?,?,?,?)').run(randomUUID(), definition.id, eventId, subscription.id!, caseRef.caseId, caseRef.caseRevision, review ? 'blocked' : 'pending', review, now + (transition?.delayMs ?? 0), now)
+    }
+    if (subscriptions.length) this.store.db.prepare('INSERT INTO network_queue_counts VALUES(?,?,?) ON CONFLICT(network_id,state) DO UPDATE SET count=count+excluded.count').run(definition.id, review ? 'blocked' : 'pending', subscriptions.length)
+    const feedbackTrace = transition && plan ? { feedback: transition.id, hop: plan.hop, delayMs: transition.delayMs } : {}
+    this.store.db.prepare('INSERT INTO network_trace_events(network_id,case_id,run_id,event_id,kind,body,created_at) VALUES(?,?,?,?,?,?,?)').run(definition.id, caseRef.caseId, runId, review ? eventId : null, review ? 'feedback-review' : 'event-accepted', canonicalNetworkJson({ channel: channel.name, caseRevision: caseRef.caseRevision, ...feedbackTrace, ...(review ? { reason: review, eventId } : {}) }), now)
+    if (!review) this.joins.record(eventId)
+  }
+
+  // The owner resolves feedback held at its bounds by discarding the held deliveries with retained evidence; the event and its trace stay.
+  discardHeldFeedback(networkId: string, eventId: string, evidence: string): void {
+    this.store.transaction(() => {
+      const held = this.store.db.prepare('SELECT id FROM network_deliveries WHERE network_id=? AND event_id=? AND state=\'blocked\' AND run_id IS NULL AND reason LIKE \'Feedback %\'').all(networkId, eventId)
+      // A resent command with the same evidence already applied is answered with the retained outcome.
+      if (!held.length && this.store.db.prepare('SELECT 1 FROM network_trace_events WHERE network_id=? AND event_id=? AND kind=\'feedback-review-resolved\' AND json_extract(body,\'$.reason\')=?').get(networkId, eventId, evidence.slice(0, 4000))) return
+      if (!held.length) throw new Error('No held feedback delivery to discard')
+      const event = this.store.db.prepare('SELECT case_id FROM network_events WHERE id=? AND network_id=?').get(eventId, networkId)!
+      const receipt = canonicalNetworkJson({ eventId, evidence, reviewedAt: Date.now() })
+      for (const row of held) {
+        this.store.db.prepare('UPDATE network_deliveries SET state=\'discarded\',generation=generation+1,review_receipt=?,reason=? WHERE id=?').run(receipt, 'Held feedback discarded by owner with retained evidence', row.id!)
+        const changed = this.store.db.prepare('UPDATE network_queue_counts SET count=count-1 WHERE network_id=? AND state=\'blocked\' AND count>0').run(networkId)
+        if (changed.changes !== 1) throw new Error('Network queue projection is inconsistent')
+      }
+      this.store.db.prepare('INSERT INTO network_queue_counts VALUES(?,\'discarded\',?) ON CONFLICT(network_id,state) DO UPDATE SET count=count+excluded.count').run(networkId, held.length)
+      this.store.db.prepare('INSERT INTO network_trace_events(network_id,case_id,run_id,event_id,kind,body,created_at) VALUES(?,?,NULL,?,?,?,?)').run(networkId, event.case_id!, eventId, 'feedback-review-resolved', canonicalNetworkJson({ eventId, reason: evidence.slice(0, 4000) }), Date.now())
     })
   }
 

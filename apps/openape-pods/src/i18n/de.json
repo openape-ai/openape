@@ -3912,5 +3912,21 @@
   "Private key": "Privater Schlüssel",
   "Private value": "Privater Wert",
   "Possible credential": "Mögliche Zugangsdaten",
-  "Unscannable file": "Nicht prüfbare Datei"
+  "Unscannable file": "Nicht prüfbare Datei",
+  "Feedback stopped for review": "Rückkopplung zur Prüfung angehalten",
+  "Feedback hop {hop}": "Rückkopplungsschritt {hop}",
+  "Bounded feedback: {channel} from {pod}, after {seconds} s, at most {hops} hops within {hours} h": "Begrenzte Rückkopplung: {channel} von {pod}, nach {seconds} s, höchstens {hops} Schritte innerhalb von {hours} h",
+  "Invalid bounded feedback transition": "Ungültiger begrenzter Rückkopplungsübergang",
+  "Bounded feedback requires a declared consumer output channel": "Begrenzte Rückkopplung braucht einen deklarierten Ausgabekanal eines Verbrauchers",
+  "A declared feedback transition has no consumer": "Ein deklarierter Rückkopplungsübergang hat keinen Verbraucher",
+  "Feedback exceeded {p0} hops": "Rückkopplung hat {p0} Schritte überschritten",
+  "Feedback case is older than {p0} ms": "Der Rückkopplungsfall ist älter als {p0} ms",
+  "Feedback transition is already scheduled for these inputs": "Der Rückkopplungsübergang ist für diese Eingaben bereits geplant",
+  "No held feedback delivery to discard": "Keine angehaltene Rückkopplungszustellung zum Verwerfen",
+  "Discarding held feedback requires explicit owner evidence": "Das Verwerfen angehaltener Rückkopplung braucht einen ausdrücklichen Nachweis des Owners",
+  "Bounded feedback cannot target an explicitly joined channel": "Begrenzte Rückkopplung kann keinen explizit zusammengeführten Kanal ansteuern",
+  "Held feedback discarded": "Angehaltene Rückkopplung verworfen",
+  "Discard held feedback with evidence": "Angehaltene Rückkopplung mit Nachweis verwerfen",
+  "Evidence for held feedback": "Nachweis für angehaltene Rückkopplung",
+  "Feedback": "Rückkopplung"
 }
