@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto'
+import { sharingLimits } from '@openape/pods-protocol'
+import { parseSharingCommand } from '../contracts/sharing'
 import { parseDefinitionCommand } from '../contracts/definitions'
 import { resolveSshTarget } from './ssh/configuration'
 import { McpAccessPolicy } from './codex/access'
@@ -33,7 +36,7 @@ import { parseScheduleCommand } from '../contracts/scheduling'
 import { parseRunCommand } from '../contracts/runs'
 import { parseResourceCommand } from '../contracts/resources'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, powerMonitor, protocol, session, shell, Tray } from 'electron'
-import { mkdir, readFile, realpath } from 'node:fs/promises'
+import { mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, join } from 'node:path'
 import { parseCommand } from '../contracts/control'
 import { channels } from '../contracts/ipc'
@@ -395,6 +398,37 @@ async function start(): Promise<void> {
       if (answer.response !== 1) return worker.runs({ type: 'list', podId: command.podId, runId: command.runId })
     }
     return worker.runs(command)
+  })
+  ipcMain.handle(channels.sharing, async (event, value: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    const command = parseSharingCommand(value)
+    // Package bytes enter only through the dialog below, never from the renderer.
+    if (command.scope === 'import' && (command.type === 'stage' || command.type === 'inspect')) throw new Error('File selection requires the owner window')
+    if (command.scope === 'import' && command.type === 'pickFile') {
+      if (!window) throw new Error('Owner window is unavailable')
+      const selection = await dialog.showOpenDialog(window, { title: t('Open portable package'), properties: ['openFile'], filters: [{ name: t('OpenApe package'), extensions: ['openape'] }] })
+      if (selection.canceled || selection.filePaths.length !== 1) return worker.sharing({ scope: 'import', type: 'list' })
+      const path = await realpath(selection.filePaths[0])
+      const info = await stat(path)
+      if (!info.isFile()) throw new Error('Choose a regular package file')
+      if (info.size > sharingLimits.transferBytes) throw new Error('Portable archive exceeds the 25 MiB transfer limit')
+      // The file is read once here; the worker validates every byte before anything is stored.
+      return worker.sharing({ scope: 'import', type: 'stage', id: randomUUID(), archive: new Uint8Array(await readFile(path)) })
+    }
+    if (command.scope === 'export' && command.type === 'download') {
+      if (!window) throw new Error('Owner window is unavailable')
+      const state = await worker.sharing(command)
+      if (!state.archive) throw new Error('Portable export returned no archive')
+      const target = await dialog.showSaveDialog(window, { title: t('Save portable package'), defaultPath: `pods-package-${new Date().toISOString().slice(0, 10)}.openape`, filters: [{ name: t('OpenApe package'), extensions: ['openape'] }] })
+      if (target.canceled || !target.filePath) return { imports: state.imports, saved: null }
+      // Written privately next to the target and moved into place, so a partial file never looks like a package.
+      const partial = join(dirname(target.filePath), `.${basename(target.filePath)}.${randomUUID()}.partial`)
+      await writeFile(partial, state.archive, { mode: 0o600, flag: 'wx' })
+      try { await rename(partial, target.filePath) }
+      catch (failure) { await rm(partial, { force: true }); throw failure }
+      return { imports: state.imports, saved: target.filePath }
+    }
+    return worker.sharing(command)
   })
   ipcMain.handle(channels.resources, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)

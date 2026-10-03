@@ -1,3 +1,4 @@
+import type { PortableAssetSelection } from '../../contracts/sharing'
 import { constants } from 'node:fs'
 import { open, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, resolve, sep } from 'node:path'
@@ -6,7 +7,7 @@ import type { PortablePodSource } from './source'
 import type { PortablePayload } from './package'
 import { assertPortableAsset } from './package'
 
-export interface PortableAssetSelection { resourceId: string, path: string, mediaType: string }
+export type { PortableAssetSelection } from '../../contracts/sharing'
 
 export async function readPortableAssets(root: string, source: PortablePodSource, selected: readonly PortableAssetSelection[]): Promise<PortablePayload[]> {
   if (selected.length >= sharingLimits.files || new Set(selected.map(item => item.resourceId)).size !== selected.length) throw new Error('Invalid portable asset selection')

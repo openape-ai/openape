@@ -1,3 +1,4 @@
+import { parseSharingCommand } from './sharing'
 import type { NetworkView } from './networks'
 import type { WorkflowView } from './workflows'
 import { parseDataCommand } from './data'
@@ -29,7 +30,7 @@ export const centralTables = [
 export const centralHeartbeatMs = 10000
 export const centralLeaseMs = 30000
 export const centralMaxBytes = 32 * 1024 * 1024
-export type CentralChannel = 'workspace' | 'details' | 'scripts' | 'scheduling' | 'runs' | 'resources' | 'data' | 'local'
+export type CentralChannel = 'workspace' | 'details' | 'scripts' | 'scheduling' | 'runs' | 'resources' | 'data' | 'sharing' | 'local'
 export interface CentralCommand { channel: CentralChannel, body: Record<string, unknown> }
 export interface CentralPod {
   networkId?: string
@@ -109,11 +110,13 @@ export function parseCentralCommand(value: unknown): CentralCommand {
   const item = centralObject(value)
   if (Object.keys(item).some(key => !['channel', 'body'].includes(key))) throw new Error('Invalid workspace command fields')
   const body = centralObject(item.body)
-  const parsers = { workspace: parseCommand, details: parseDetailsCommand, scripts: parseScriptCommand, scheduling: parseScheduleCommand, runs: parseRunCommand, resources: parseResourceCommand, data: parseDataCommand }
+  const parsers = { workspace: parseCommand, details: parseDetailsCommand, scripts: parseScriptCommand, scheduling: parseScheduleCommand, runs: parseRunCommand, resources: parseResourceCommand, data: parseDataCommand, sharing: parseSharingCommand }
   const allowed: Record<Exclude<CentralChannel, 'local'>, string[]> = {
     data: ['deletePod'], workspace: ['create', 'update', 'organize'], details: ['describe', 'activate'],
     scripts: ['save', 'validate', 'activate', 'prepareDependencies'], scheduling: ['save', 'lifecycle'],
     runs: ['start', 'cancel', 'recover', 'retryQueue', 'resolveHttp'], resources: ['saveVariable', 'removeVariable', 'revoke'],
+    // Package files travel only through the desktop; a browser reviews and configures an import. Export stays on the desktop.
+    sharing: ['list', 'show', 'configure', 'commit', 'complete', 'cancel', 'bind', 'prepareDependencies', 'finalize'],
   }
   if (typeof item.channel !== 'string' || !Object.hasOwn(parsers, item.channel)) throw new Error('Unsupported workspace channel')
   const channel = item.channel as Exclude<CentralChannel, 'local'>

@@ -168,18 +168,18 @@ it('routes validated portable import commands through the real worker only after
     pods: [{ key: 'fixture', title: 'Imported through entry', description: '', script: 'pods/fixture/run.mjs', packages: null, contract: null, requestedCapabilities: [], access: [], inputs: [], bindings: [], applications: [], assets: [] }],
   }, [{ path: 'pods/fixture/run.mjs', kind: 'script', mediaType: 'text/javascript', content: new TextEncoder().encode('export async function run() { return { status: "completed" } }') }], '')
   const id = randomUUID()
-  await send({ id: 'import-forged', command: { portableImport: { type: 'list', owner: 'forged' } } })
+  await send({ id: 'import-forged', command: { sharing: { scope: 'import', type: 'list', owner: 'forged' } } })
   expect(replies).toHaveBeenCalledWith({ id: 'import-forged', error: 'Invalid import command' })
-  await send({ id: 'import-early', command: { portableImport: { type: 'stage', id, archive: exported.archive } } })
-  expect(replies).toHaveBeenCalledWith({ id: 'import-early', error: 'Finish desktop identity setup before importing packages' })
+  await send({ id: 'import-early', command: { sharing: { scope: 'import', type: 'stage', id, archive: exported.archive } } })
+  expect(replies).toHaveBeenCalledWith({ id: 'import-early', error: 'Finish desktop identity setup before sharing packages' })
   const store = new PodDatabase(root)
   try {
     store.db.prepare('INSERT INTO remote_registration VALUES(1,?,0)').run(JSON.stringify({ owner: { issuer: 'https://id.example.test', subject: 'recipient' } }))
     const before = store.listPods().length
-    await send({ id: 'import-stage', command: { portableImport: { type: 'stage', id, archive: exported.archive } } })
-    await send({ id: 'import-commit', command: { portableImport: { type: 'commit', id, revision: 1 } } })
+    await send({ id: 'import-stage', command: { sharing: { scope: 'import', type: 'stage', id, archive: exported.archive } } })
+    await send({ id: 'import-commit', command: { sharing: { scope: 'import', type: 'commit', id, revision: 1 } } })
     expect(replies).toHaveBeenCalledWith({ id: 'import-commit', state: expect.objectContaining({ current: expect.objectContaining({ state: 'committed', unresolved: [] }) }) })
-    await send({ id: 'import-complete', command: { portableImport: { type: 'complete', id, revision: 2 } } })
+    await send({ id: 'import-complete', command: { sharing: { scope: 'import', type: 'complete', id, revision: 2 } } })
     expect(replies).toHaveBeenCalledWith({ id: 'import-complete', state: expect.objectContaining({ imports: [], current: expect.objectContaining({ state: 'completed' }) }) })
     expect(store.listPods().slice(before)).toMatchObject([{ name: 'Imported through entry', lifecycle: 'paused', activeScript: null }])
   }

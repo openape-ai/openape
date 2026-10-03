@@ -433,3 +433,19 @@ Trenne die Verbindung unter App-Einstellungen → Work from Codex. Selbst bearbe
 2. Starte Codex einmal neu.
 3. Bitte Codex, die ausgewählten Pods einzurichten oder auszuführen.
 4. Prüfe angewendete Einstellungen und tatsächlichen Laufstatus in Pods; ein zweiter Freigabeklick ist nicht nötig.
+
+## Portable Pakete teilen und importieren
+
+Teilen packt einen Pod oder einen vollständigen Workflow bzw. ein Netzwerk in eine .openape-Datei: die gewählten Skripte, ihre Abhängigkeits-Locks, deklarierte Eingaben und Zugriffe sowie die Dateien, die du ausdrücklich aufnimmst. Zugangsdaten, Lauf-Historie, private Ordner, Kontozustände und lokale Identitäten verlassen dein Gerät nie, und die Prüfung zeigt die exakten Dateien, bevor etwas geschrieben wird.
+
+Jede Dateireferenz braucht eine Entscheidung (aufnehmen oder weglassen), jeder zugewiesene Ordner, jedes HTTP-Ziel und jede Anwendung bekommt einen portablen Alias, und deine Werte bleiben privat, sofern du einen nicht als öffentliche Vorgabe aufnimmst. Eine Datenschutzprüfung markiert lokale Identitäten, Pfade und wahrscheinliche Zugangsdaten; blockierende Funde müssen parametrisiert, Prüffunde bestätigt werden. Die Prüfung ist eine Heuristik, lies deinen Quelltext vor dem Teilen.
+
+Importieren erzeugt pausierte Kopien mit neuen Identitäten. Nichts läuft, bevor du auf jedem Pod eigene Ordner, Ziele, Anwendungen und Geheimnisse zuweist, die Einrichtung abschließt und die Skripte selbst validierst und aktivierst. Workflows werden deaktiviert angelegt; Netzwerke, aufgerufene Workflows und Mail-Richtlinien erst, nachdem ihre Mitglieds-Skripte freigegeben sind.
+
+Im Browser kannst du einen Import auf dem verbundenen Desktop prüfen und einrichten; das Öffnen der Paketdatei und das Speichern eines Exports passieren auf dem Desktop. Ein Abbruch vor der pausierten Kopie verwirft alles; danach gehören die Pods dir und werden einzeln gelöscht.
+
+1. Öffne einen Pod, Workflow oder ein Netzwerk und wähle Teilen; lege Pakettitel, Schlüssel, Aliase, aufgenommene Dateien und öffentliche Vorgaben fest.
+2. Prüfe das exakte Paket und seine Datenschutzfunde, bestätige, was du geprüft hast, und speichere die .openape-Datei.
+3. Wähle auf dem empfangenden Gerät unter Netzwerke & Workflows den Import und öffne die Paketdatei.
+4. Gib die erforderlichen Werte ein, erstelle die pausierte Kopie, binde dann auf jedem Pod Ordner, Ziele und Anwendungen und lege Geheimnisse an.
+5. Schließe die Einrichtung ab, validiere und aktiviere jeden Pod, erstelle die Kompositionen und aktiviere Zeitpläne erst, wenn du bereit bist.

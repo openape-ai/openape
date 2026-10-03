@@ -341,6 +341,35 @@ from stored aliases and keys, and native acceptance of the deferred paths (mail
 policies, Jev and mail assignments, real dependency installation). The complete desktop and
 browser flow is M4.
 
+## Desktop and browser flow (M4)
+
+One validated `sharing` command set serves both surfaces. The renderer bridge, the
+IPC handler and the worker entry each parse it; the renderer never supplies package
+bytes. On the desktop, `Open package…` runs a native open dialog in the main process,
+which checks for a regular file within the transfer limit, reads it once and stages
+it under a fresh request key; `Save package…` writes the reviewed archive privately
+next to the chosen target and moves it into place. Sharing is available from a Pod,
+from a workflow and from a network; the export review shows the exact files, lets
+the owner include or omit each reference, name aliases, choose public defaults and
+acknowledge every privacy finding, and releases the review when it is saved or left.
+
+The import page lists imports with their state, lets the owner enter declared values
+(variable inputs only until the paused copy exists, afterwards they live on the Pod),
+bind declared folders, destinations and applications to the Pod's own assignments,
+prepare dependencies, create compositions in a chosen company and finish setup. The
+view's `deferred` keys tell both surfaces which compositions wait for approved
+members, so the UI never guesses. Abandoning remaining compositions requires a second
+explicit step. After an error the page reloads the journal so a copy created before a
+failed provisioning is shown as it is.
+
+A browser imports through the connected desktop over the `sharing` central channel
+(list, show, configure, commit, complete, cancel, bind, prepareDependencies, finalize)
+and sees that file transfer stays on the desktop; export is desktop-only. Component
+tests cover both surfaces with a fake command API; the real-browser layout test
+renders the import setup and the export review at 1280 and 390 px in both languages
+and captures screenshots. Handbook sections exist in DE and EN. Native acceptance of
+the complete flow on an installed app and a deployed relay is M13 work.
+
 ## Verified source inventory and required handling
 
 | Source | Local references / behavior | Portable handling |
