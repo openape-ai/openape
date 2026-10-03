@@ -343,15 +343,13 @@ export class WorkflowCalls {
         const subscriptions = this.store.db.prepare('SELECT id,schema_hash FROM network_subscriptions WHERE network_id=? AND network_revision=? AND channel=?').all(request.networkId, request.networkRevision, channel.name)
         assertNetworkQuota(this.store, Buffer.byteLength(payload) * 3 + subscriptions.length * 2048 + 8192)
         const eventId = randomUUID(); const now = this.now()
-        const origin = canonicalNetworkJson({ kind: 'workflow-result', requestId: id, workflowRunId: (this.store.db.prepare('SELECT workflow_run_id FROM workflow_call_requests WHERE id=?').get(id)!).workflow_run_id, port: value.port, producerPodId: member.podId, schemaVersion: channel.schemaVersion, occurredAt: now, feedbackHop: 0 })
+        // A result inside a declared feedback loop keeps the case's hop count and goes through the same transition rules as a script emission.
+        const plan = this.events.feedbackPlan(definition, member.podId, channel.name, [id], id, this.events.caseHop(request.networkId, request.caseId, request.caseRevision))
+        const origin = canonicalNetworkJson({ kind: 'workflow-result', requestId: id, workflowRunId: (this.store.db.prepare('SELECT workflow_run_id FROM workflow_call_requests WHERE id=?').get(id)!).workflow_run_id, port: value.port, producerPodId: member.podId, schemaVersion: channel.schemaVersion, occurredAt: now, feedbackHop: plan.hop, feedbackTransitionId: plan.transitionId })
         this.store.db.prepare('INSERT INTO network_events VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(eventId, request.networkId, request.networkRevision, member.podId, member.definitionId, member.definitionVersion, request.caseId, request.caseRevision, channel.name, id, origin, schemaHash, payload, digest(payload), now)
         this.store.db.prepare('INSERT INTO network_event_identities VALUES(?,\'derived\',?,?,?,?,?,?,?,NULL)').run(request.networkId, digest(canonicalNetworkJson(['workflow-call-result', id, value.port])), eventId, digest(payload), schemaHash, now, now + 90 * 86400000, canonicalNetworkJson([id]))
-        for (const subscription of subscriptions) {
-          if (subscription.schema_hash !== schemaHash) throw new Error('Workflow result subscription schema changed')
-          this.store.db.prepare('INSERT INTO network_deliveries(id,network_id,event_id,subscription_id,case_id,case_revision,ready_at,accepted_at) VALUES(?,?,?,?,?,?,?,?)').run(randomUUID(), request.networkId, eventId, subscription.id!, request.caseId, request.caseRevision, now, now)
-        }
-        if (subscriptions.length) this.store.db.prepare('INSERT INTO network_queue_counts VALUES(?,\'pending\',?) ON CONFLICT(network_id,state) DO UPDATE SET count=count+excluded.count').run(request.networkId, subscriptions.length)
-        this.events.joins.record(eventId)
+        if (subscriptions.some(subscription => subscription.schema_hash !== schemaHash)) throw new Error('Workflow result subscription schema changed')
+        this.events.deliver(definition, eventId, channel, schemaHash, { caseId: request.caseId, caseRevision: request.caseRevision }, now, plan, null)
         this.store.db.prepare('INSERT INTO workflow_call_result_events VALUES(?,?,?)').run(id, value.port, eventId)
         if (value.port === '$terminal') this.store.db.prepare('UPDATE workflow_call_controls SET terminal_event_id=? WHERE request_id=?').run(eventId, id)
       }

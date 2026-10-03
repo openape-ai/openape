@@ -142,7 +142,7 @@ export function validatePortableCompositionDocument(value: unknown, composition:
   const source = JSON.parse(canonicalPortableJson(value))
   const document = dataFields(source, composition.kind === 'network'
     ? ['version', 'kind', 'formatVersion', 'channels', 'members', 'gates', 'joins', 'values', 'legacyVariables', 'collections', 'artifacts', 'calls']
-    : composition.kind === 'channels' ? ['version', 'kind', 'schedule', 'channels', 'gates', 'values', 'ports'] : ['version', 'kind', 'schedule', 'ports', 'mail'])
+    : composition.kind === 'channels' ? ['version', 'kind', 'schedule', 'channels', 'gates', 'values', 'ports'] : ['version', 'kind', 'schedule', 'ports', 'mail'], composition.kind === 'network' ? ['feedback'] : [])
   if (document.version !== 1 || document.kind !== composition.kind) throw new Error('Unsupported portable composition document version')
   for (const pod of manifest.pods) validatePortableAccessDefaults(pod)
   const ids = aliasMap(manifest)
@@ -159,8 +159,9 @@ export function validatePortableCompositionDocument(value: unknown, composition:
     if (members.length !== composition.nodes.length) throw new Error('Portable document membership differs from its index')
     const gates = bounded(document.gates, 32).map((value) => { const item = dataFields(value, ['key', 'title', 'kind', 'pod', 'channel']); const { pod, ...fields } = item; return { ...fields, podId: memberReference(pod, composition, ids) } })
     const joins = bounded(document.joins, 32).map((value) => { const item = dataFields(value, ['id', 'pod', 'channels', 'deadlineMs', 'reviewDestination']); const { pod, ...fields } = item; return { ...fields, podId: memberReference(pod, composition, ids) } })
-    if ((document.formatVersion === 1 && gates.length) || (document.formatVersion !== 3 && joins.length)) throw new Error('Portable network controls require their native format version')
-    const definition: NetworkDefinition = parseNetworkDefinition({ formatVersion: document.formatVersion, kind: 'network', semantics: 'persistent-network-v1', id: definitionId, revision: 1, groupId: definitionId, name: composition.title, members, channels: document.channels, ...(Number(document.formatVersion) >= 2 ? { gates } : {}), ...(document.formatVersion === 3 ? { joins } : {}) })
+    const feedback = bounded(document.feedback ?? [], 32).map((value) => { const item = dataFields(value, ['id', 'pod', 'channel', 'delayMs', 'maxHops', 'maxCaseAgeMs']); const { pod, ...fields } = item; return { ...fields, podId: memberReference(pod, composition, ids) } })
+    if ((document.formatVersion === 1 && gates.length) || (Number(document.formatVersion) < 3 && joins.length) || (document.formatVersion !== 4) !== !Object.hasOwn(document, 'feedback')) throw new Error('Portable network controls require their native format version')
+    const definition: NetworkDefinition = parseNetworkDefinition({ formatVersion: document.formatVersion, kind: 'network', semantics: 'persistent-network-v1', id: definitionId, revision: 1, groupId: definitionId, name: composition.title, members, channels: document.channels, ...(Number(document.formatVersion) >= 2 ? { gates } : {}), ...(Number(document.formatVersion) >= 3 ? { joins } : {}), ...(document.formatVersion === 4 ? { feedback } : {}) })
     const diagnostics = diagnoseNetwork(definition)
     if (diagnostics.length) throw new Error(`Portable network diagnostics: ${diagnostics.map(item => item.code).join(', ')}`)
     networkValues(document.values, composition, manifest); dataDeclarations(document, composition, ids)

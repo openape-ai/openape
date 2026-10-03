@@ -13,7 +13,7 @@ export interface GraphItem { key: string, channel: string, data: Record<string, 
 export interface GraphEmit { key: string, data: Record<string, unknown>, reason?: string, confidence?: number }
 export type GraphNodeKind = 'gate' | 'effect' | 'decision' | 'code'
 export interface GraphEdge { from: string, to: string, channel: string }
-export type GraphDiagnosticCode = 'channel-without-producer' | 'channel-without-consumer' | 'channel-undeclared' | 'emit-undeclared' | 'cycle' | 'archive-without-gate' | 'summary-invalid' | 'contract-missing' | 'member-elsewhere' | 'value-name-conflict' | 'gate-consumer'
+export type GraphDiagnosticCode = 'channel-without-producer' | 'channel-without-consumer' | 'channel-undeclared' | 'emit-undeclared' | 'cycle' | 'archive-without-gate' | 'summary-invalid' | 'contract-missing' | 'member-elsewhere' | 'value-name-conflict' | 'gate-consumer' | 'feedback-bounds'
 /** A right of a Pod as the inspector shows it: a fixed label and the name, path or origin it applies to. */
 export interface GraphRight { label: string, target: string }
 /** One step of one item through the graph, as the owner reads it. */
@@ -45,6 +45,7 @@ export const graphDiagnosticMessages: Record<GraphDiagnosticCode, string> = {
   'channel-undeclared': 'The channel is missing from the channel list of the graph',
   'emit-undeclared': 'The script emits a channel missing from its contract',
   'cycle': 'The derived connections contain a cycle',
+  'feedback-bounds': 'A declared feedback transition has no consumer',
   'archive-without-gate': 'A pod with an archive right needs an approval gate before it',
   'summary-invalid': 'The contract needs a summary of at most 40 characters',
   'contract-missing': 'The validated script exports no contract',
