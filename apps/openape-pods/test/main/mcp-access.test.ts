@@ -45,3 +45,12 @@ it('rejects malformed settings and corrupted persisted grants', () => {
   writeFileSync(join(root, 'mcp-access.json'), JSON.stringify({ mode: 'write', duration: 'hour', expiresAt: null }))
   expect(() => new McpAccessPolicy(root)).toThrow('expiry')
 })
+
+it('permits bounded network reads but requires write access for preview, pause and processing', () => {
+  const { policy } = fixture(); policy.set('read', 'hour')
+  const id = '00000000-0000-4000-8000-000000000001'
+  for (const command of [{ type: 'list' }, { type: 'detail', id, revision: 1 }, { type: 'legacyItems', id, revision: 1, after: null }]) expect(() => policy.assert(request({ action: 'networks', command }))).not.toThrow()
+  for (const command of [{ type: 'pause', id, revision: 1 }, { type: 'preview', id, revision: 1, podIds: [id], pausedPodIds: [id], budget: 1 }, { type: 'process', id, revision: 1, previewId: id }]) expect(() => policy.assert(request({ action: 'networks', command }))).toThrow('read-only')
+  expect(() => policy.assert(request({ action: 'networks', command: { type: 'list' }, ownerOperation: true }))).toThrow('fields')
+  expect(() => policy.assert(request({ action: 'networks', command: { type: 'activate', id, revision: 1 } }))).toThrow('desktop')
+})
