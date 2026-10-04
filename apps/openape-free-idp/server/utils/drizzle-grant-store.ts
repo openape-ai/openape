@@ -15,6 +15,7 @@ interface ExtendedGrantStore extends GrantStore {
 type GrantRow = typeof grants.$inferSelect
 
 const PENDING_REQUEST_TTL_SECONDS = 48 * 3600
+const pendingExpirations = new WeakMap<ReturnType<typeof useDb>, Promise<void>>()
 
 export function grantToRow(grant: OpenApeGrant) {
   return {
@@ -66,11 +67,23 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
   const db = useDb()
 
   async function expirePendingRequests() {
+    const pending = pendingExpirations.get(db)
+    if (pending) return pending
+    const expiration = expireRequests()
+    pendingExpirations.set(db, expiration)
+    try { await expiration }
+    finally { pendingExpirations.delete(db) }
+  }
+
+  async function expireRequests() {
     const cutoff = Math.floor(Date.now() / 1000) - PENDING_REQUEST_TTL_SECONDS
+    const condition = and(eq(grants.status, 'pending'), lt(grants.createdAt, cutoff))
+    const expiredRequest = await db.select({ id: grants.id }).from(grants).where(condition).limit(1).get()
+    if (!expiredRequest) return
     await db.transaction(async (tx) => {
       const expired = await tx.update(grants)
         .set({ status: 'expired' })
-        .where(and(eq(grants.status, 'pending'), lt(grants.createdAt, cutoff)))
+        .where(condition)
         .returning()
       for (const row of expired) {
         if (row.brokered) await tx.insert(brokerAudit).values(brokerAuditRow(rowToGrant(row), 'expired'))

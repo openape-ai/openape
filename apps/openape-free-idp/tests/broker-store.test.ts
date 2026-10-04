@@ -56,6 +56,22 @@ beforeEach(async () => {
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.restoreAllMocks(); client.close(); rmSync(directory, { recursive: true, force: true }) })
 
 describe('durable grant brokering', () => {
+  it.each([false, true])('serves concurrent pending-grant readers across request stores (expired: %s)', async (expired) => {
+    await client.execute('PRAGMA journal_mode = WAL')
+    const value = { ...grant(), status: 'pending' as const }
+    await grantStore.save(value)
+    const stale = { ...grant(), status: 'pending' as const, created_at: Math.floor(Date.now() / 1000) - 49 * 3600 }
+    if (expired) await database.insert(schema.grants).values(grantToRow(stale))
+    const stores = Array.from({ length: 3 }, () => createDrizzleGrantStore())
+    const results = await Promise.allSettled(stores.map(current => current.findPending()))
+    for (const result of results) expect(result).toMatchObject({ status: 'fulfilled', value: [{ id: value.id, status: 'pending' }] })
+    if (expired) {
+      expect((await grantStore.findById(stale.id))?.status).toBe('expired')
+      const audit = await database.select().from(schema.brokerAudit).where(eq(schema.brokerAudit.grantId, stale.id))
+      expect(audit.map(row => row.event)).toEqual(['expired'])
+    }
+  })
+
   it('accepts the authorized broker once and rejects replay, substituted owners and other domains', async () => {
     const assertion = request()
     await expect(store.acceptRequest(assertion)).resolves.toEqual(connection)
