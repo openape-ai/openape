@@ -46,7 +46,7 @@ async function load() {
   podNames.value = Object.fromEntries(workspace.pods.map(pod => [pod.id, pod.name]))
   if (!initialized) {
     definitionName.value = definition.value?.name ?? props.pod.name
-    defaults.value = JSON.stringify(versions.value.at(-1)?.defaults ?? {}, null, 2)
+    defaults.value = JSON.stringify(definition.value?.versions.find(item => item.version === binding.value?.version)?.defaults ?? versions.value.at(-1)?.defaults ?? {}, null, 2)
     initialized = true
   }
   if (!versions.value.some(item => item.version === version.value)) version.value = versions.value.at(-1)?.version ?? 0
@@ -60,16 +60,16 @@ async function command(command: DefinitionCommand) {
     throw failure
   }
 }
-async function publish() {
+async function publish(local = false) {
   await perform(async () => {
     const scripts = await window.pods.scripts({ type: 'list', podId: props.pod.id })
     if (!scripts.pod.activeScript) throw new Error('Activate a validated script before publishing its definition')
     let values: Record<string, unknown>
     try { values = JSON.parse(defaults.value) }
     catch { throw new Error('Public defaults must be a valid JSON object') }
-    await command({ type: 'publish', podId: props.pod.id, expectedScript: scripts.pod.activeScript, name: definitionName.value, defaults: values })
-    version.value = versions.value.at(-1)!.version
-    message.value = 'Definition published. Existing instances keep their selected version.'
+    await command({ type: local ? 'prepareLocal' : 'publish', podId: props.pod.id, expectedScript: scripts.pod.activeScript, name: definitionName.value, defaults: values })
+    version.value = versions.value.at(-1)?.version ?? 0
+    message.value = local ? 'Existing instance prepared with its own identity and permissions. Reuse is not enabled.' : 'Definition published. Existing instances keep their selected version.'
   })
 }
 async function create() {
@@ -133,7 +133,10 @@ async function activate() {
       <p class="muted">
         {{ t('Enter public JSON values only. Secrets and existing permission grants are never copied.') }}
       </p>
-      <button @click="publish">
+      <button :disabled="pod.lifecycle !== 'paused'" @click="publish(true)">
+        {{ t('Prepare this existing instance') }}
+      </button>
+      <button @click="publish(false)">
         {{ t('Publish definition') }}
       </button>
     </fieldset>

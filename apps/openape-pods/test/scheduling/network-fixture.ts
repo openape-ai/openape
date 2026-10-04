@@ -67,8 +67,8 @@ export function networkFixture(services?: RunServices) {
     contracts.set(pod.id, contract); behaviours.set(pod.id, behaviour)
     return pod.id
   }
-  function create(members: NetworkDraft['members'], names: string[], gates?: NetworkDraft['gates']): string {
-    return engine.execute({ type: 'create', draft: { name: 'Synthetic persistent network', groupId, members, ...(gates === undefined ? {} : { gates }), channels: names.map(name => ({ name, title: name, schemaVersion: 1, schema: { type: 'object', properties: { subject: { type: 'string' } }, required: ['subject'], additionalProperties: false } })) } }).createdId!
+  function create(members: NetworkDraft['members'], names: string[], gates?: NetworkDraft['gates'], routes?: NetworkDraft['routes']): string {
+    return engine.execute({ type: 'create', draft: { name: 'Synthetic persistent network', groupId, members, ...(routes === undefined ? {} : { routes }), ...(gates === undefined ? {} : { gates }), channels: names.map(name => ({ name, title: name, schemaVersion: 1, schema: { type: 'object', properties: { subject: { type: 'string' } }, required: ['subject'], additionalProperties: false } })) } }).createdId!
   }
   function process(id: string, podIds: string[], pausedPodIds: string[] = [], budget = 10) {
     const preview = engine.execute({ type: 'preview', id, revision: 1, podIds, pausedPodIds, budget } satisfies NetworkCommand).preview!

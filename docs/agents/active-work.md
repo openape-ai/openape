@@ -1,5 +1,20 @@
 # Active work
 
+## Delta Mind persistent network correction — issue 1417
+
+Implementation in `bugfix/issue-1417-delta-mind-network`, based on `c57b3a6b`.
+Adds bounded source CLI/Jev/text-generation ports, retained owner routing gates
+(schema 36, definition format 5), local preparation of the eleven existing
+instances, conversion of inspected cancelled history and an explicit bounded
+provider baseline. Opus 5.5 review findings are resolved; closure found no blocker.
+Root lint/typecheck, Pods build and 1,280 unit/component checks passed. Relevant
+browser/native checks continue through release acceptance. Permanent tests cover
+identity/authority preservation, gate settlement, deduplication and recovery.
+The existing production Pods remain paused; signed rollout and actual conversion
+are still required. Keep the final private Test Runs receipt, paired backup,
+source/merge SHAs and production state in issue 1417 and the approved plan.
+
+
 ## Sharing M3/M4 — issue 1419
 
 M2 is accepted (PR217 merge `eb53ed76433280ac20d286f3669d9bb23184debe`, main
