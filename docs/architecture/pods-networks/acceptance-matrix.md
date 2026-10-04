@@ -23,3 +23,25 @@ Source: canonical main after the M12 merge (`a5a1c702e17552d69af3aa889b9dc4a5a29
 | Migration/export/import | Reviewed baseline, preserved owner state, paused imports, no copied credentials/grants | `scheduling/item-flow.test.ts` "requires baseline review before activation or manual processing of a restored network"; `workspace/sharing-import.test.ts`, `workspace/sharing-ui.test.ts`; `scheduling/portable-composition.test.ts` | synthetic |
 
 Native checks on the installed candidate that no retained case covers: a real `.openape` package exported and imported through the installed app, Jev/LLM Pods under the network model, two independent source timers, two companies sharing one definition, offline browser and old-client messages, mail finalization of an imported policy, called channel graphs and runtime calls of imported compositions, feedback through a workflow call end to end, and the relay-first rollout with owner-state fingerprints.
+
+### Delta Mind correction: additional retained cases
+
+- `network-runtime-ports.test.ts`: assigned CLI dispatch and read budget, foreign
+  assignment refusal, unavailable ports, Jev failure/cancellation/revocation,
+  paused processing, consumer intake refusal and empty-input behavior.
+- `network-routing.test.ts`: owner choice identity, duplicate decision, original
+  case and independent delivery preservation, unresolved retirement guards,
+  restart/restore fencing and incompatible gate schema rejection.
+- `network-gates.test.ts`: original frozen grant channel versus approved consumer
+  channel, explicit exclusion output without duplicate delivery.
+- `network-migration.test.ts`: inspected interrupted run with cancelled parent
+  converts without rewriting the run or recovery record; pending legacy choices
+  prevent conversion while their original UI remains available.
+- `network-mail-intake.test.ts`: real-shaped provider IDs/versions, explicit
+  bounded baseline without emissions, unchanged version suppression and refusal
+  of absent provider versions or standalone baseline replacement.
+
+These are synthetic behavioral checks. They do not establish installed Pod
+credentials, native CLI execution, live Jev behavior, production conversion,
+release acceptance or browser/desktop presentation. Those require separate
+recorded real acceptance before claiming completion.

@@ -13,7 +13,7 @@ import { WorkflowEngine } from '../src/worker/workflows/engine'
 
 cleanupAfterEach()
 
-it('converts a legacy graph through the desktop with preserved identities and checkpoints and no implicit execution', async () => {
+it.each([false, true])('converts a legacy graph through the desktop with preserved identities and checkpoints (routed=%s)', async (routed) => {
   const { root } = await seed(); const identity = await fixtureShellIdentity(root)
   const store = new PodDatabase(root); const resources = new ResourceRegistry(store, () => {})
   const runtime = JSON.parse(await readFile(resolve('dist/vendor/manifest.json'), 'utf8'))
@@ -21,12 +21,13 @@ it('converts a legacy graph through the desktop with preserved identities and ch
   groups.execute({ type: 'organize', action: 'create', name: 'Synthetic migration company', revision: groups.view().revision })
   const groupId = groups.view().groups.at(-1)!.id
   const catalog = new DefinitionCatalog(store, resources, identity.owner)
+  const channels = routed ? ['cases', 'reviewed', 'approved'] : ['cases']
   const members: string[] = []
   for (const [index, name] of ['Legacy source', 'Legacy consumer'].entries()) {
     const pod = store.createPod({ name }); members.push(pod.id)
     groups.execute({ type: 'organize', action: 'move', podId: pod.id, groupId, revision: groups.view().revision })
     installExample(store, resources, pod.id, 'deterministic', runtime.dependencyLockHash)
-    const contract = { takes: index ? ['cases'] : [], gives: index ? [] : ['cases'], summary: 'Synthetic portable case intake' }
+    const contract = { takes: index ? [routed ? 'approved' : 'cases'] : [], gives: index ? [] : ['cases'], summary: 'Synthetic portable case intake' }
     const previous = JSON.parse(store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=?').get(pod.id)!.manifest as string)
     const code = `export const contract=${JSON.stringify(contract)}; export async function run(context) { if(context.variables.region!=='AT') throw new Error('Legacy variable was lost'); ${index ? '' : `if(context.network) await context.network.emit({channel:'cases',key:'new-case',sourceItemId:'after-baseline',sourceVersion:'1',payload:{subject:context.variables.region}});`} return {status:'completed',summary:'Synthetic migration settled',completedInputIds:context.input.eventIds,gapIds:[]}; }`
     const hash = digest(code)
@@ -40,7 +41,7 @@ it('converts a legacy graph through the desktop with preserved identities and ch
   }
   const workflowId = randomUUID()
   const workflows = new WorkflowEngine(store, { start: vi.fn(), cancelPod: vi.fn() }, { inspect: vi.fn() })
-  workflows.save({ type: 'save', id: workflowId, revision: 0, name: 'Synthetic legacy cases', nodes: members.map(podId => ({ podId, after: [], handoff: false })), schedule: null, enabled: false, mode: 'channels', groupId, channels: [{ name: 'cases', title: 'Cases', fields: ['subject'] }], gates: [], values: [{ name: 'region', value: 'AT', revision: 1 }] })
+  workflows.save({ type: 'save', id: workflowId, revision: 0, name: 'Synthetic legacy cases', nodes: members.map(podId => ({ podId, after: [], handoff: false })), schedule: null, enabled: false, mode: 'channels', groupId, channels: channels.map(name => ({ name, title: name, fields: ['subject'] })), gates: routed ? [{ key: 'choose-route', title: 'Choose synthetic route', kind: 'choose', takes: 'cases', options: [{ key: 'keep', title: 'Keep for preview', channel: 'reviewed' }, { key: 'alternative', title: 'Alternative preview', channel: 'reviewed' }] }, { key: 'approve-route', title: 'Approve synthetic preview', kind: 'approve', takes: 'reviewed', gives: 'approved', excluded: null }] : [], values: [{ name: 'region', value: 'AT', revision: 1 }] })
   store.db.prepare('INSERT INTO schedules VALUES(?,1,?,1,?,NULL)').run(members[0]!, '{"kind":"interval","seconds":3600}', Date.now() + 86400000)
   store.db.prepare('INSERT INTO remote_registration VALUES(1,?,0)').run(JSON.stringify({ owner: identity.owner }))
   const before = { pods: store.db.prepare('SELECT * FROM pods ORDER BY id').all(), scripts: store.db.prepare('SELECT * FROM scripts ORDER BY pod_id,hash').all(), resources: store.db.prepare('SELECT * FROM resources ORDER BY id').all(), checkpoints: store.db.prepare('SELECT * FROM checkpoints ORDER BY pod_id').all() }
@@ -49,9 +50,11 @@ it('converts a legacy graph through the desktop with preserved identities and ch
   await page.getByText('Synthetic legacy cases', { exact: true }).first().click()
   await page.getByRole('button', { name: 'Review graph conversion', exact: true }).click()
   await page.getByRole('button', { name: 'Review values and rights', exact: true }).click()
-  await page.getByRole('button', { name: 'Add field', exact: true }).click()
-  await page.getByLabel('Field name', { exact: true }).fill('subject')
-  await page.getByLabel('Type', { exact: true }).selectOption('string')
+  for (let index = 0; index < channels.length; index++) {
+    await page.getByRole('button', { name: 'Add field', exact: true }).nth(index).click()
+    await page.getByLabel('Field name', { exact: true }).nth(index).fill('subject')
+    await page.getByLabel('Type', { exact: true }).nth(index).selectOption('string')
+  }
   await page.getByLabel('I reviewed each channel schema against the existing scripts and payloads.', { exact: true }).check()
   await page.getByRole('button', { name: 'Preview conversion', exact: true }).click()
   await page.getByRole('button', { name: 'Validate reviewed conversion', exact: true }).waitFor()
@@ -126,6 +129,24 @@ it('converts a legacy graph through the desktop with preserved identities and ch
     try { return result.db.prepare('SELECT payload FROM network_events').all().map(row => JSON.parse(row.payload as string)) }
     finally { result.close() }
   }).toEqual([{ subject: 'AT' }])
+  if (routed) {
+    await page.getByRole('button', { name: 'Decisions and failures', exact: true }).click()
+    await page.getByRole('button', { name: 'Keep for preview', exact: true }).waitFor()
+    await page.screenshot({ path: resolve('.artifacts/network-routing-native-choice.png'), fullPage: true })
+    await page.getByRole('button', { name: 'Keep for preview', exact: true }).click()
+    await expect.poll(() => page.getByRole('button', { name: 'Keep for preview', exact: true }).count()).toBe(0)
+    const routedStore = new PodDatabase(root)
+    try {
+      expect(routedStore.db.prepare('SELECT state,revision FROM networks').get()).toMatchObject({ state: 'paused', revision: 2 })
+      expect(routedStore.db.prepare('SELECT option_key FROM network_choices').get()!.option_key).toBe('keep')
+      expect(routedStore.db.prepare('SELECT channel FROM network_events ORDER BY accepted_at,rowid').all().map(row => row.channel)).toEqual(['cases', 'reviewed'])
+      expect(routedStore.db.prepare('SELECT channel FROM network_subscriptions WHERE network_revision=2').get()!.channel).toBe('reviewed')
+      expect(routedStore.db.prepare('SELECT count(*) AS n FROM network_invocations').get()!.n).toBe(1)
+    }
+    finally { routedStore.close() }
+    await app.close()
+    return
+  }
   await page.getByRole('button', { name: 'Review archival', exact: true }).click()
   await page.getByText('Resolve pending network deliveries before changing the composition', { exact: true }).waitFor()
   expect(await page.getByRole('button', { name: 'Archive network', exact: true }).count()).toBe(0)

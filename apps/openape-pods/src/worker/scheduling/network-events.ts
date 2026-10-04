@@ -191,7 +191,57 @@ export class NetworkEvents {
     if (subscriptions.length) this.store.db.prepare('INSERT INTO network_queue_counts VALUES(?,?,?) ON CONFLICT(network_id,state) DO UPDATE SET count=count+excluded.count').run(definition.id, review ? 'blocked' : 'pending', subscriptions.length)
     const feedbackTrace = transition && plan ? { feedback: transition.id, hop: plan.hop, delayMs: transition.delayMs } : {}
     this.store.db.prepare('INSERT INTO network_trace_events(network_id,case_id,run_id,event_id,kind,body,created_at) VALUES(?,?,?,?,?,?,?)').run(definition.id, caseRef.caseId, runId, review ? eventId : null, review ? 'feedback-review' : 'event-accepted', canonicalNetworkJson({ channel: channel.name, caseRevision: caseRef.caseRevision, ...feedbackTrace, ...(review ? { reason: review, eventId } : {}) }), now)
-    if (!review) this.joins.record(eventId)
+    if (!review) {
+      this.joins.record(eventId)
+      for (const gate of definition.routes ?? []) {
+        if (gate.kind !== 'choose' || gate.takes !== channel.name) continue
+        this.store.db.prepare('INSERT INTO network_choices(network_id,network_revision,event_id,gate_key) VALUES(?,?,?,?)').run(definition.id, definition.revision, eventId, gate.key)
+      }
+    }
+  }
+
+  routeGate(definition: NetworkDefinition, gateKey: string, eventId: string, channelName: string, decision: string): string {
+    const gate = definition.routes?.find(gate => gate.key === gateKey)
+    const permitted = gate?.kind === 'choose' ? gate.options.some(option => option.key === decision && option.channel === channelName) : gate?.kind === 'approve' && decision === 'excluded' && gate.excluded === channelName
+    if (!permitted || !gate) throw new Error('Gate route is not declared')
+    const input = this.store.db.prepare('SELECT * FROM network_events WHERE network_id=? AND id=? AND network_revision=? AND channel=?').get(definition.id, eventId, definition.revision, gate.takes)
+    if (!input) throw new Error('Gate input differs from its pinned network revision')
+    const channel = definition.channels.find(channel => channel.name === channelName)!
+    const payload = canonicalNetworkJson(validateNetworkPayload(JSON.parse(input.payload as string), channel.schema))
+    const schemaHash = digest(canonicalNetworkJson({ schemaVersion: channel.schemaVersion, schema: channel.schema }))
+    const identityHash = digest(canonicalNetworkJson(['gate', definition.id, gate.key, eventId, decision]))
+    const previous = this.store.db.prepare('SELECT * FROM network_event_identities WHERE network_id=? AND namespace=\'derived\' AND identity_hash=?').get(definition.id, identityHash)
+    if (previous) {
+      if (previous.payload_hash !== digest(payload) || previous.schema_hash !== schemaHash) throw new Error('Retained gate route differs from its original input')
+      return previous.event_id as string
+    }
+    const fanout = Number(this.store.db.prepare('SELECT count(*) AS count FROM network_subscriptions WHERE network_id=? AND network_revision=? AND channel=?').get(definition.id, definition.revision, channel.name)!.count)
+    assertNetworkQuota(this.store, Buffer.byteLength(payload) * 3 + fanout * 2048 + 8192)
+    const id = randomUUID(); const now = Date.now()
+    const priorOrigin = JSON.parse(input.origin as string)
+    const origin = { kind: 'derived', inputEventIds: [eventId], producerPodId: input.producer_pod_id, emitKey: `gate:${gate.key}:${decision}`, feedbackTransitionId: null, schemaVersion: channel.schemaVersion, occurredAt: now, feedbackHop: priorOrigin.feedbackHop ?? 0, gate: gate.key, decision }
+    this.store.db.prepare('INSERT INTO network_events VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id, definition.id, definition.revision, input.producer_pod_id!, input.definition_id!, input.definition_version!, input.case_id!, input.case_revision!, channel.name, input.item_key!, canonicalNetworkJson(origin), schemaHash, payload, digest(payload), now)
+    this.store.db.prepare('INSERT INTO network_event_identities VALUES(?,\'derived\',?,?,?,?,?,?,?,NULL)').run(definition.id, identityHash, id, digest(payload), schemaHash, now, now + 90 * 86400000, canonicalNetworkJson([eventId]))
+    for (const reference of this.references(eventId)) this.artifacts!.retain(reference, 'event', id)
+    this.deliver(definition, id, channel, schemaHash, { caseId: input.case_id as string, caseRevision: Number(input.case_revision) }, now, null, null)
+    this.store.db.prepare('INSERT INTO network_trace_events(network_id,case_id,event_id,kind,body,created_at) VALUES(?,?,?,\'gate-routed\',?,?)').run(definition.id, input.case_id!, id, canonicalNetworkJson({ gate: gate.key, decision, inputEventId: eventId, channel: channel.name }), now)
+    return id
+  }
+
+  choose(definition: NetworkDefinition, eventId: string, gateKey: string, optionKey: string): void {
+    this.store.transaction(() => {
+      const gate = definition.routes?.find(gate => gate.key === gateKey)
+      const option = gate?.kind === 'choose' ? gate.options.find(option => option.key === optionKey) : undefined
+      if (!option) throw new Error('Choice is not declared')
+      const choice = this.store.db.prepare('SELECT * FROM network_choices WHERE network_id=? AND network_revision=? AND event_id=? AND gate_key=?').get(definition.id, definition.revision, eventId, gateKey)
+      if (!choice) throw new Error('Choice input is unavailable')
+      if (choice.option_key !== null) {
+        if (choice.option_key !== optionKey) throw new Error('This input already has a different owner decision')
+        return
+      }
+      const id = this.routeGate(definition, gateKey, eventId, option.channel, optionKey)
+      this.store.db.prepare('UPDATE network_choices SET option_key=?,result_event_id=?,decided_at=? WHERE network_id=? AND event_id=? AND gate_key=? AND option_key IS NULL').run(optionKey, id, Date.now(), definition.id, eventId, gateKey)
+    })
   }
 
   // The owner resolves feedback held at its bounds by discarding the held deliveries with retained evidence; the event and its trace stay.

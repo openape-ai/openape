@@ -13,6 +13,8 @@ import { RunDispatcher } from '../../src/worker/runs/dispatcher'
 import type { AgentRuntime } from '../../src/worker/agent/executor'
 import type { RunServices } from '../../src/worker/runs/dispatcher'
 import type { ProgramAuthority } from '../../src/main/programs/grants'
+import { NetworkEngine } from '../../src/worker/scheduling/network-engine'
+import { CentralProjection } from '../../src/worker/central/projection'
 import { MailBridge } from '../../src/worker/mail/bridge'
 import { createPortablePackage } from '../../src/worker/sharing/package'
 
@@ -184,4 +186,19 @@ it('routes validated portable import commands through the real worker only after
     expect(store.listPods().slice(before)).toMatchObject([{ name: 'Imported through entry', lifecycle: 'paused', activeScript: null }])
   }
   finally { store.db.exec('DELETE FROM remote_registration'); store.close() }
+})
+
+it('keeps browser decision reads scoped to the requested network and omits choices from traces', async () => {
+  const first = randomUUID(); const second = randomUUID()
+  const choices = [first, second].map(networkId => ({ networkId, revision: 1, eventId: randomUUID(), caseId: randomUUID(), gate: 'review', title: 'Review', payload: 'private choice', truncated: false, options: [{ key: 'keep', title: 'Keep' }, { key: 'other', title: 'Other' }] }))
+  const ownerCheck = vi.spyOn(CentralProjection.prototype, 'assertOwner').mockImplementation(() => {})
+  const execute = vi.spyOn(NetworkEngine.prototype, 'execute').mockImplementation(() => ({ networks: [], choices: structuredClone(choices) }))
+  try {
+    const owner = { issuer: 'https://identity.example.invalid', subject: 'owner' }
+    await send({ id: 'scoped-choice-detail', command: { central: { type: 'networkRead', owner, command: { type: 'detail', id: first, revision: 1 } } } })
+    expect(replies).toHaveBeenCalledWith({ id: 'scoped-choice-detail', state: { networks: [], choices: [choices[0]], gates: undefined } })
+    await send({ id: 'scoped-choice-trace', command: { central: { type: 'networkRead', owner, command: { type: 'trace', id: first, revision: 1, before: null, caseId: null } } } })
+    expect(replies).toHaveBeenCalledWith({ id: 'scoped-choice-trace', state: { networks: [] } })
+  }
+  finally { execute.mockRestore(); ownerCheck.mockRestore() }
 })

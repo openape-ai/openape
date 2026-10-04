@@ -76,16 +76,18 @@ export class DefinitionCatalog {
     })
   }
 
-  async publish(podId: string, expectedScript: string, name: string, defaults: Record<string, unknown>): Promise<void> {
+  async publish(podId: string, expectedScript: string, name: string, defaults: Record<string, unknown>, localUpdate?: (apply: () => void) => void): Promise<void> {
+    const state = localUpdate ? 'legacy' : 'published'
     const current = () => {
       this.assertPod(podId)
       const pod = this.store.getPod(podId)
+      if (localUpdate && pod.lifecycle !== 'paused') throw new Error('Pause this instance before preparing its local definition')
       if (pod.lifecycle === 'archived' || pod.activeScript !== expectedScript) throw new Error('Active script changed; review publication again')
       if (!this.store.db.prepare('SELECT 1 FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(podId, expectedScript, pod.bindingRevision, this.resources.epoch(podId))) throw new Error('Validate the current instance before publishing its definition')
       const row = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(podId, expectedScript)
       if (!row) throw new Error('Script version is missing')
       const manifest = parseManifest(JSON.parse(row.manifest as string))
-      if (manifest.capabilities.some(capability => /^tool\.(?:http|ssh|app)_[a-f0-9]{32}\./.test(capability))) throw new Error('This script uses instance-specific HTTP, SSH or program rights. Keep it local until its resource bindings can be reviewed for reuse.')
+      if (!localUpdate && manifest.capabilities.some(capability => /^tool\.(?:http|ssh|app)_[a-f0-9]{32}\./.test(capability))) throw new Error('This script uses instance-specific HTTP, SSH or program rights. Keep it local until its resource bindings can be reviewed for reuse.')
       if (manifest.assignmentRevision !== pod.bindingRevision) throw new Error('Script binding changed')
       if (this.store.readBlob(expectedScript).length > 200000) throw new Error('Definition source exceeds the publication limit')
       return manifest
@@ -94,18 +96,33 @@ export class DefinitionCatalog {
     const dependencies = new DependencyStore(this.store)
     const dependencyHash = dependencies.scriptSet(podId, expectedScript)
     if (dependencyHash) await dependencies.verify(podId, dependencyHash)
-    this.store.transaction(() => {
+    const apply = () => this.store.transaction(() => {
       const manifest = current()
       this.adopt(podId)
-      const binding = this.store.db.prepare('SELECT definition_id FROM instance_definition_bindings WHERE pod_id=?').get(podId)!
+      const binding = this.store.db.prepare('SELECT definition_id,definition_version FROM instance_definition_bindings WHERE pod_id=?').get(podId)!
       const id = binding.definition_id as string
+      if (localUpdate && (this.source(id, Number(binding.definition_version)).sourcePodId !== podId || this.store.db.prepare('SELECT 1 FROM instance_definition_bindings WHERE definition_id=? AND pod_id!=?').get(id, podId))) {
+        const localId = randomUUID()
+        this.store.db.prepare('INSERT INTO pod_definitions VALUES(?,?,?,?,?)').run(localId, this.owner.issuer, this.owner.subject, name, Date.now())
+        this.insertVersion(localId, 1, podId, manifest, 'legacy', defaults)
+        this.store.db.prepare('UPDATE instance_definition_bindings SET definition_id=?,definition_version=1,binding_revision=binding_revision+1 WHERE pod_id=?').run(localId, podId)
+        return
+      }
       const version = Number(this.store.db.prepare('SELECT max(version) AS version FROM pod_definition_versions WHERE definition_id=?').get(id)!.version) + 1
       const previous = this.source(id, version - 1)
-      if (previous.view.state === 'published' && previous.view.contentHash === expectedScript && previous.view.lockHash === manifest.dependencyLockHash && canonicalNetworkJson(previous.view.defaults) === canonicalNetworkJson(definitionDefaults(defaults)) && this.store.db.prepare('SELECT name FROM pod_definitions WHERE id=?').get(id)!.name === name) return
-      if (version > 1000) throw new Error('Definition version limit reached')
-      this.insertVersion(id, version, podId, manifest, 'published', defaults)
-      this.store.db.prepare('UPDATE pod_definitions SET name=? WHERE id=?').run(name, id)
+      const unchanged = previous.view.state === state && previous.view.contentHash === expectedScript && previous.view.lockHash === manifest.dependencyLockHash && canonicalNetworkJson(previous.view.defaults) === canonicalNetworkJson(definitionDefaults(defaults)) && this.store.db.prepare('SELECT name FROM pod_definitions WHERE id=?').get(id)!.name === name
+      if (!unchanged) {
+        if (version > 1000) throw new Error('Definition version limit reached')
+        this.insertVersion(id, version, podId, manifest, state, defaults)
+        this.store.db.prepare('UPDATE pod_definitions SET name=? WHERE id=?').run(name, id)
+      }
+      if (localUpdate) {
+        const selectedVersion = unchanged ? version - 1 : version
+        this.store.db.prepare('UPDATE instance_definition_bindings SET definition_version=?,binding_revision=binding_revision+1 WHERE pod_id=? AND definition_version<>?').run(selectedVersion, podId, selectedVersion)
+      }
     })
+    if (localUpdate) localUpdate(apply)
+    else apply()
   }
 
   private insertVersion(id: string, version: number, podId: string, manifest: ScriptManifest | null, state: 'legacy' | 'published', defaults: Record<string, unknown>): void {
