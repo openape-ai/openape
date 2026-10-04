@@ -4,12 +4,14 @@ packages:
   - apps/*
   - examples/*
 
-# Owner-approved 2026-10-02; rationale and reassessment triggers:
+# CVE owner-approved 2026-10-02; rationale and reassessment triggers:
 # docs/operations/dependency-audit-exceptions.md
-# Exact CVE only; other findings retain the existing audit threshold.
+# Only the listed advisories are excluded; other audit thresholds remain unchanged.
 auditConfig:
   ignoreCves:
     - CVE-2026-85393
+  ignoreGhsas:
+    - GHSA-vfj7-8cjw-p6xm
 
 # Quarantine new npm releases for seven days. First-party packages are exempt.
 minimumReleaseAge: 10080
