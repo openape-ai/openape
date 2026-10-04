@@ -2,17 +2,25 @@
 
 ## Bounded network MCP and local start correction — issue 1417
 
-Follow-up branch `bugfix/issue-1417-pods-network-mcp`, base `87020ce8`, in the
-existing `pods-delta-mind-network` checkout. Patrick approved fixing global MCP
-refusal and the local controlled-start readiness error. Adds owner-scoped bounded
-network reads and pause/preview/process receipts; retains member bypass denial.
-Trusted central-operation context permits only the requested local run while the
-automatic scheduler gate is closed. Root lint/typecheck and the Pods build passed;
-1,288 unit/component checks passed with four workers. Opus 5.5 closure found no
-blocker after health redaction and completed-receipt handling were tightened.
-Production Delta Mind remains paused; M14 activation and mail writes stay separate.
-Final checks, signed delivery and actual MCP evidence belong in issue1417 and the
-existing approved plan before acceptance.
+[PR229](https://repos.openape.ai/patrick/monorepo/pulls/229) merged as
+`efc7f0a47aa0504451c145c19a7f1ef410842f1b`; source/main CI5377/5378 passed.
+Signed-local 0.1.2+efc7f0a4 is installed with a verified paired rollback. The actual
+owner MCP now serves runtime, ordinary inventory and bounded network reads. Native
+acceptance verified controlled local starts and idempotent bounded processing.
+The real source preview admitted one run and exposed an Intake example bug:
+network configuration fields carry value/origin/kind descriptors, not raw strings.
+Run `159e4c4d-c44a-4961-95c6-12c96c1a2f28` stopped before provider access, with no
+input deliveries or external effects. Its retained evidence must remain intact.
+
+Follow-up branch `bugfix/issue-1417-mail-network-config` from `efc7f0a4` corrects
+that example and extends the existing baseline/change/deduplication regression to
+use actual configuration descriptors and composition precedence. Root lint,
+typecheck, Pods build and all 1,288 unit/component checks pass. After native PR
+acceptance, update only the paused Intake instance through the desktop definition
+flow and repeat the bounded source preview. The installed runtime needs no change
+for this script correction. M14 activation, schedules and mail writes stay separate.
+Final installed evidence belongs in the existing issue, approved plan and private
+Test Runs report.
 
 ## Delta Mind persistent network correction — issue 1417
 
