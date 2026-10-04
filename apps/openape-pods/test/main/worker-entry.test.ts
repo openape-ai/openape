@@ -154,6 +154,43 @@ it('prevents reviewed master and browser starts from bypassing the suspended pro
   finally { await send('resume') }
 })
 
+it('starts only the requested local owner run while the central scheduler gate is closed', async () => {
+  const store = new PodDatabase(root)
+  const pod = store.createPod({ name: 'Serialized MCP run' })
+  store.close()
+  const runId = randomUUID()
+  const start = vi.spyOn(RunDispatcher.prototype, 'start').mockReturnValue(runId)
+  const scheduled = vi.spyOn(Scheduler.prototype, 'tick')
+  const networkTick = vi.spyOn(NetworkEngine.prototype, 'tick')
+  const action = { action: 'run', podId: pod.id, revision: pod.revision }
+  const request = { id: randomUUID(), action }
+  try {
+    await send({ id: 'close-owner-gate', command: { central: { type: 'gate', until: 0 } } })
+    await send({ id: 'select-owner-pod', command: { codex: { id: randomUUID(), action: { action: 'select', podIds: [pod.id] } } } })
+    await send({ id: 'untrusted-start', command: { codex: { id: randomUUID(), action } } })
+    expect(replies).toHaveBeenCalledWith({ id: 'untrusted-start', error: expect.stringContaining('ready local runtime') })
+    await send({ id: 'forged-start', command: { codex: { id: randomUUID(), action: { ...action, ownerOperation: true } } } })
+    expect(replies).toHaveBeenCalledWith({ id: 'forged-start', error: expect.any(String) })
+    expect(start).not.toHaveBeenCalled()
+    await send({ id: 'owner-start', command: { codex: request, ownerOperation: true } })
+    expect(replies).toHaveBeenCalledWith({ id: 'owner-start', state: { runId } })
+    await send({ id: 'owner-replay', command: { codex: request, ownerOperation: true } })
+    expect(replies).toHaveBeenCalledWith({ id: 'owner-replay', state: { runId } })
+    expect(start).toHaveBeenCalledExactlyOnceWith(pod.id, { reason: 'manual', eventIds: [], operationId: `codex:${request.id}` }, undefined)
+    expect(scheduled).not.toHaveBeenCalled()
+    expect(networkTick).not.toHaveBeenCalled()
+    await send('suspend')
+    await send({ id: 'suspended-owner-start', command: { codex: { id: randomUUID(), action }, ownerOperation: true } })
+    expect(replies).toHaveBeenCalledWith({ id: 'suspended-owner-start', error: expect.stringContaining('ready local runtime') })
+    expect(start).toHaveBeenCalledTimes(1)
+  }
+  finally {
+    start.mockRestore(); scheduled.mockRestore(); networkTick.mockRestore()
+    await send('resume')
+    await send({ id: 'restore-owner-gate', command: { central: { type: 'gate', until: Date.now() + 3600000 } } })
+  }
+})
+
 it('rechecks network browser mutation authority in the real worker when an older relay lacks the guard', async () => {
   const store = new PodDatabase(root)
   const network = seedNetwork(store)
