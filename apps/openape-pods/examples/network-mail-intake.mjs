@@ -39,7 +39,7 @@ function baseline(checkpoint, account) {
 }
 
 export async function run(context) {
-  const values = context.network ? { ...context.variables, ...context.config } : { ...baselineConfiguration, ...context.variables }
+  const values = context.network ? { ...context.variables, ...Object.fromEntries(Object.entries(context.config).map(([name, field]) => [name, field.value])) } : { ...baselineConfiguration, ...context.variables }
   const account = values.mailbox
   const root = values['preview-root']
   if (typeof account !== 'string' || !/^[^\s@]+@[^\s.@]+\.[^\s@]+$/.test(account) || typeof root !== 'string' || !root.startsWith('/') || values['delivery-mode'] !== 'preview' || values['max-messages'] !== '3') throw new Error('Configure the exact mailbox, evidence directory and three-message preview boundary')

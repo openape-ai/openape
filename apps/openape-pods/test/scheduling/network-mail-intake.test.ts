@@ -18,7 +18,7 @@ async function fixture() {
     return { exitCode: 0, stdout: JSON.stringify(output) }
   })
   const context = {
-    variables: { mailbox: 'owner@example.invalid', 'preview-root': root, 'delivery-mode': 'preview', 'max-messages': '3' }, config: {},
+    variables: { mailbox: 'owner@example.invalid', 'preview-root': root, 'delivery-mode': 'preview', 'max-messages': '3' }, config: {} as Record<string, { value: string, origin: string, kind: string }>,
     input: { checkpointRevision: 0, checkpoint: {} as Record<string, unknown>, eventIds: [] },
     network: undefined as undefined | { emit: ReturnType<typeof vi.fn> }, tools: { invoke },
     progress: { commit: vi.fn(async (value: { checkpoint: Record<string, unknown> }) => { context.input.checkpoint = value.checkpoint; context.input.checkpointRevision++ }) },
@@ -34,6 +34,8 @@ it('records only observed provider versions as a bounded baseline, then emits ch
   expect(f.context.input.checkpoint).toMatchObject({ scope: 'latest-three-inbox-and-sent', initial: [{ channel: 'mail.open', id: 'immutable-inbox', version: 'provider-v1' }, { channel: 'mail.sent-raw', id: 'immutable-sent', version: 'provider-v1' }] })
   const emit = vi.fn()
   f.context.network = { emit }
+  f.context.config = Object.fromEntries(Object.entries(f.context.variables).map(([name, value]) => [name, { value, origin: 'composition', kind: 'public' }]))
+  f.context.variables.mailbox = 'overridden@example.invalid'
   await f.script.run(f.context)
   expect(emit).not.toHaveBeenCalled()
   f.messages.inbox.changeKey = 'provider-v2'
