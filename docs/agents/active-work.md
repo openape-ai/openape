@@ -1,18 +1,32 @@
 # Active work
 
+## Bounded network MCP and local start correction — issue 1417
+
+Follow-up branch `bugfix/issue-1417-pods-network-mcp`, base `87020ce8`, in the
+existing `pods-delta-mind-network` checkout. Patrick approved fixing global MCP
+refusal and the local controlled-start readiness error. Adds owner-scoped bounded
+network reads and pause/preview/process receipts; retains member bypass denial.
+Trusted central-operation context permits only the requested local run while the
+automatic scheduler gate is closed. Root lint/typecheck and the Pods build passed;
+1,288 unit/component checks passed with four workers. Opus 5.5 closure found no
+blocker after health redaction and completed-receipt handling were tightened.
+Production Delta Mind remains paused; M14 activation and mail writes stay separate.
+Final checks, signed delivery and actual MCP evidence belong in issue1417 and the
+existing approved plan before acceptance.
+
 ## Delta Mind persistent network correction — issue 1417
 
-Implementation in `bugfix/issue-1417-delta-mind-network`, based on `c57b3a6b`.
-Adds bounded source CLI/Jev/text-generation ports, retained owner routing gates
-(schema 36, definition format 5), local preparation of the eleven existing
-instances, conversion of inspected cancelled history and an explicit bounded
-provider baseline. Opus 5.5 review findings are resolved; closure found no blocker.
-Root lint/typecheck, Pods build and 1,280 unit/component checks passed. Relevant
-browser/native checks continue through release acceptance. Permanent tests cover
-identity/authority preservation, gate settlement, deduplication and recovery.
-The existing production Pods remain paused; signed rollout and actual conversion
-are still required. Keep the final private Test Runs receipt, paired backup,
-source/merge SHAs and production state in issue 1417 and the approved plan.
+Accepted through [PR228](https://repos.openape.ai/patrick/monorepo/pulls/228),
+merge `87020ce82604fe0d4dc9076fb3f3db32484dd5ee`; source/main CI5375/5376 green.
+The signed-local desktop and compatible relay were deployed. The real provider
+baseline completed without emissions, then the existing eleven instances were
+converted atomically into paused network `b95f1f8a-5dc0-4e5a-973f-cb660509d75d`.
+All prior identities, 347 historical runs, three old owner choices and three
+pending legacy deliveries were retained; the baseline added one run. Restart
+preserved the entire semantic snapshot. Intake has no schedule; M14 remains a
+separate decision. [Private Test Runs evidence](https://report.openape.ai/r/K8H2FDUTYYlx_uWsrLUUCwac).
+The bounded MCP follow-up above resolves the two access limitations found during
+that real acceptance.
 
 
 ## Sharing M3/M4 — issue 1419

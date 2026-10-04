@@ -35,13 +35,20 @@ function fixture() {
 }
 const count = (store: PodDatabase, sql: string) => Number(store.db.prepare(sql).get()!.count)
 
-it('fails closed before any legacy MCP publication when a persistent network exists', async () => {
+it('keeps unrelated Pod access available while refusing legacy network member bypasses', async () => {
   const { store, send, codex, pod } = fixture()
-  seedNetwork(store)
-  await expect(send({ action: 'list' })).rejects.toThrow('bounded MCP publication')
-  await expect(send({ action: 'select', podIds: [pod.id] })).rejects.toThrow('bounded MCP publication')
-  expect(() => codex.administration({ type: 'begin', request: { id: randomUUID(), action: { action: 'resources', revision: 1, command: { type: 'list', podId: pod.id } } } })).toThrow('bounded MCP publication')
-  expect(count(store, 'SELECT count(*) AS count FROM master_actions')).toBe(0)
+  const network = seedNetwork(store)
+  await expect(send({ action: 'runtime' })).resolves.toHaveProperty('networks')
+  expect(await send({ action: 'list' })).toMatchObject({ pods: expect.arrayContaining([expect.objectContaining({ id: pod.id }), expect.objectContaining({ id: network.pod.id })]) })
+  await send({ action: 'select', podIds: [pod.id, network.pod.id] })
+  await expect(send({ action: 'inspect', podId: pod.id, revision: 1 })).resolves.toHaveProperty('pod.id', pod.id)
+  await expect(send({ action: 'setVariable', podId: pod.id, revision: 1, name: 'mode', value: 'preview', variableRevision: 0 })).resolves.toHaveProperty('variables')
+  const request = { id: randomUUID(), action: { action: 'resources', revision: 1, command: { type: 'list', podId: pod.id } } }
+  expect(codex.administration({ type: 'begin', request })).toEqual({ completed: false })
+  for (const action of ['inspect', 'run', 'pause', 'resume', 'draft', 'setVariable']) await expect(send({ action, podId: network.pod.id, revision: 1 })).rejects.toThrow('bounded network MCP')
+  expect(() => codex.administration({ type: 'begin', request: { ...request, id: randomUUID(), action: { ...request.action, command: { type: 'list', podId: network.pod.id } } } })).toThrow('bounded network MCP')
+  await expect(send({ action: 'saveWorkflow', definition: { type: 'save', id: randomUUID(), revision: 0, name: 'Bypass', nodes: [{ podId: network.pod.id, after: [], handoff: false }], schedule: null, enabled: false } })).rejects.toThrow('bounded network MCP')
+  expect(store.db.prepare('SELECT count(*) AS count FROM runs WHERE pod_id=?').get(network.pod.id)?.count).toBe(1)
 })
 
 it('applies variables directly, preserves scope and validation checks, and creates no reviews', async () => {

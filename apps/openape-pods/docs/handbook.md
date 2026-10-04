@@ -59,6 +59,8 @@ For assisted setup, connect Codex under App settings → Work from Codex, restar
 
 Connected Codex can configure access, save and validate a script, activate it and enable a schedule when requested. Its confirmation policy belongs to Codex. A response saying ready is not evidence of a completed run.
 
+Persistent networks remain accessible through the connected MCP client. Use the runtime reference for bounded network inventory, details, activity, data and retained history. With MCP write access, request a processing preview containing the exact members, paused-member acknowledgements and invocation budget, then explicitly process that preview. The network stays paused and its schedules stay disabled. Reuse the same request identity after a lost response. Network activation, composition changes, owner decisions and recovery remain in the desktop workspace. Ordinary Pods remain manageable alongside networks; direct legacy edits or runs of network members are refused.
+
 In desktop App settings, you can enable “Automatically approve script execution for Pods created through local MCP”. It is off by default and applies to Pods created through local MCP after this version is installed, including local MCP submissions to this Mac’s central workspace. Manual and scheduled runs obtain the usual reusable execution grant from the Pod’s original owner. Folder, program, network and secret permissions remain separate. Denied or revoked grants are never replaced automatically. Turning the setting off stops new automatic approvals; revoke existing grants separately. MCP and the central web interface cannot change this setting.
 
 1. Create the Pod or ask connected Codex to create it.

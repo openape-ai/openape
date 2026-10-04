@@ -1,3 +1,7 @@
+import { parseMasterAction } from '../../contracts/master'
+import { podNetwork } from '../central/network-projection'
+import { codexNetworkHelp } from '../../contracts/codex-networks'
+import type { CodexNetworks } from './networks'
 import { jevAvailability } from '../onboarding/store'
 import { programHelp } from './program-help'
 import { runtimeReference } from '../master/reference'
@@ -15,11 +19,15 @@ import { ChatRegistry } from '../master/chat-registry'
 import type { MasterControl } from '../master/control'
 
 export class CodexControl {
-  constructor(private readonly store: PodDatabase, private readonly master: MasterControl) {}
+  constructor(private readonly store: PodDatabase, private readonly master: MasterControl, private readonly networks?: CodexNetworks) {}
 
   async execute(request: CodexRequest, signal: AbortSignal): Promise<unknown> {
-    if (this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()) throw new Error('Persistent networks require bounded MCP publication support')
     const { action } = request
+    if (action.action === 'networks') {
+      if (!this.networks) throw new Error('Network MCP is unavailable in this runtime')
+      return this.networks.request(request)
+    }
+    this.assertLegacyAccess(action)
     if (action.action === 'requestAccess') throw new Error('Use resources, program or importSecret to configure access directly')
     let result: unknown
     switch (action.action) {
@@ -31,6 +39,16 @@ export class CodexControl {
     }
     if (Buffer.byteLength(JSON.stringify(result)) > 256 * 1024) throw new Error('Action completed but its result is too large; inspect a smaller portion')
     return result
+  }
+
+  private assertLegacyAccess(action: Record<string, unknown>): void {
+    if (typeof action.podId === 'string' && podNetwork(this.store, action.podId)) throw new Error('Network members require bounded network MCP operations or desktop review')
+    if (!['inspectWorkflow', 'saveWorkflow', 'runWorkflow', 'setGraphValue'].includes(String(action.action))) return
+    const parsed = parseMasterAction(action)
+    if (parsed.action === 'saveWorkflow' && parsed.definition.nodes.some(node => podNetwork(this.store, node.podId))) throw new Error('Network members require bounded network MCP operations or desktop review')
+    const selected = this.conversation().context.workflow
+    if (!selected) return
+    if (selected.nodes.some(node => podNetwork(this.store, node.podId)) || this.store.db.prepare('SELECT 1 FROM networks WHERE ancestor_workflow_id=?').get(selected.id)) throw new Error('Retained network workflows require bounded network MCP operations or desktop review')
   }
 
   private retire(action: Record<string, unknown>) {
@@ -45,6 +63,7 @@ export class CodexControl {
       ...runtimeReference,
       jevConnection: jevAvailability(this.store),
       programHelp,
+      networks: codexNetworkHelp,
       workflow: [
         'Connected local Codex administers Pods directly. Codex governs any confirmation. Call list, then select with exact podIds and optionally workflowId/workflowRevision. Reinspect current revisions after changes.',
         'Save drafts and ordinary variables directly. Configure resources before validation. Import secrets by a private owner file path, never by their values. Do not copy owner login stores into Pods.',
@@ -58,9 +77,9 @@ export class CodexControl {
   }
 
   administration(command: AdministrationJournal): AdministrationReceipt {
-    if (this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()) throw new Error('Persistent networks require bounded MCP publication support')
     const { request } = command
     const action = parseAdministration(request.action)
+    if (command.type === 'begin') this.assertLegacyAccess({ podId: action.command.podId })
     const id = `codex-admin:${request.id}`
     const requestHash = digest(JSON.stringify(request.action))
     return this.store.transaction(() => {
