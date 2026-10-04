@@ -157,3 +157,26 @@ it('imports an initial Jev connection from a private file and refuses replacemen
   }
   finally { rmSync(root, { recursive: true, force: true }) }
 })
+
+it('keeps bounded local reads outside central mutation serialization and attests only held owner operations', async () => {
+  const { FixtureWorker } = await import('../../src/main/worker')
+  const worker = new FixtureWorker(() => {})
+  const id = '00000000-0000-4000-8000-000000000001'
+  const dispatch = vi.fn(async () => ({}))
+  const central = { executing: false, networkReads: true, local: vi.fn(async (action: () => Promise<unknown>) => {
+    central.executing = true
+    try { return await action() }
+    finally { central.executing = false }
+  }) }
+  Object.assign(worker, { dispatch, central })
+  await worker.codex({ id, action: { action: 'list' } })
+  await worker.codex({ id, action: { action: 'networks', command: { type: 'list' } } })
+  expect(central.local).not.toHaveBeenCalled()
+  expect(dispatch).toHaveBeenLastCalledWith({ codex: { id, action: { action: 'networks', command: { type: 'list' } } }, ownerOperation: false })
+  const request = { id, action: { action: 'run', podId: id, revision: 1 } }
+  await worker.codex(request)
+  expect(central.local).toHaveBeenCalledTimes(1)
+  expect(dispatch).toHaveBeenLastCalledWith({ codex: request, ownerOperation: true })
+  central.networkReads = false
+  await expect(worker.codex({ id, action: { action: 'networks', command: { type: 'pause', id, revision: 1 } } })).rejects.toThrow('bounded relay')
+})

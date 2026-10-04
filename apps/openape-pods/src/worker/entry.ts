@@ -1,3 +1,6 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { CodexNetworks } from './codex/networks'
+import type { NetworkCommand, NetworkView } from '../contracts/networks'
 import { assertNetworkBrowserCommand } from './central/network-projection'
 import { parseCentralCommand } from '../contracts/central'
 import { publicNetworkOverview, parseCentralNetworkRead } from '../contracts/central-networks'
@@ -125,7 +128,8 @@ const masterControl = new MasterControl(store, registry, dispatcher, scheduler, 
 const scripts = new ScriptWorkspace(store, registry, masterControl, runtime)
 const scriptController = new AbortController()
 const master = new MasterService(store, runtime, masterControl, fixtureProvider)
-const codex = new CodexControl(store, masterControl)
+const ownerOperations = new AsyncLocalStorage<boolean>()
+const codex = new CodexControl(store, masterControl, new CodexNetworks(store, networkOwner, command => executeNetwork(command, ownerOperations.getStore() === true)))
 
 const remote = new RemoteControl(store, master, dispatcher, registry, scheduler, Date.now, { create: async (podId, applicationId) => String(await mailBridge.remoteProgramState({ operation: 'create', podId, applicationId })), discard: async (podId, stateId) => { await mailBridge.remoteProgramState({ operation: 'discard', podId, stateId }) } }, startControlledRun)
 function networkOwner() {
@@ -156,8 +160,19 @@ function tickStep<T>(phase: string, limitMs: number, work: () => Promise<T>): Pr
   tickPhase = phase
   return boundedStep(limitMs, work, () => { tickTimeout = { phase, at: Date.now() }; console.error(`Scheduler step ${phase} did not finish within ${limitMs} ms; continuing`) })
 }
+async function executeNetwork(command: NetworkCommand, ownerOperation: boolean): Promise<NetworkView> {
+  if (command.type === 'create' && !command.draft.expectedSetup) throw new Error('Network creation requires a reviewed setup fingerprint')
+  if ((command.type === 'create' || command.type === 'convert') && process.env.PODS_CENTRAL_ENABLED === '1' && !centralNetworkReads) throw new Error('Network creation requires bounded central publication support')
+  if ((command.type === 'activate' || command.type === 'process') && (!startupReady || (Date.now() >= centralUntil && !ownerOperation) || suspended || maintenance)) throw new Error('Network execution requires a ready local runtime')
+  const result = command.type === 'inspect' || command.type === 'retry' || command.type === 'reconcileEffect' || command.type === 'resolveConflict' || command.type === 'discardFailure' ? await networks.recover(command) : networks.execute(command)
+  if (process.env.PODS_CENTRAL_ENABLED === '1' && !centralNetworkReads) result.unavailableReason = 'Network creation requires bounded central publication support'
+  if (command.type === 'process' && Date.now() < centralUntil) scheduleDomains(store, [() => scheduler.tick(), () => workflows.tick(), () => { networks.invocations.calls!.tick(); networks.tick() }])
+  return result
+}
+
 function startControlledRun(podId: string, operationId: string, accepted?: (runId: string) => void): string {
-  if (!startupReady || suspended || maintenance || Date.now() >= centralUntil) throw new Error('Controlled execution requires a ready local runtime')
+  const schedulingAllowed = Date.now() < centralUntil
+  if (!startupReady || suspended || maintenance || (!schedulingAllowed && ownerOperations.getStore() !== true)) throw new Error('Controlled execution requires a ready local runtime')
   let runId: string | null = null
   let failure: unknown
   scheduleDomains(store, [() => {
@@ -166,8 +181,8 @@ function startControlledRun(podId: string, operationId: string, accepted?: (runI
     if (occupied >= maximum) return
     try { runId = dispatcher.start(podId, { reason: 'manual', eventIds: [], operationId }, accepted) }
     catch (error) { failure = error }
-    scheduler.tick()
-  }, () => workflows.tick(), () => { networks.invocations.calls!.tick(); networks.tick() }])
+    if (schedulingAllowed) scheduler.tick()
+  }, () => { if (schedulingAllowed) workflows.tick() }, () => { if (schedulingAllowed) { networks.invocations.calls!.tick(); networks.tick() } }])
   if (failure) throw failure
   if (!runId) throw new Error('No fair execution slot available; retry after pending work progresses')
   return runId
@@ -320,14 +335,7 @@ port.on('message', async (event) => {
       port.postMessage({ id: request.id, state: result }); return
     }
     if (request.command && typeof request.command === 'object' && 'networks' in request.command) {
-      const command = parseNetworkCommand(request.command.networks)
-      if (command.type === 'create' && !command.draft.expectedSetup) throw new Error('Network creation requires a reviewed setup fingerprint')
-      if ((command.type === 'create' || command.type === 'convert') && process.env.PODS_CENTRAL_ENABLED === '1' && !centralNetworkReads) throw new Error('Network creation requires bounded central publication support')
-      const ownerOperation = 'ownerOperation' in request.command && request.command.ownerOperation === true
-      if ((command.type === 'activate' || command.type === 'process') && (!startupReady || (Date.now() >= centralUntil && !ownerOperation) || suspended)) throw new Error('Network execution requires a ready local runtime')
-      const result = command.type === 'inspect' || command.type === 'retry' || command.type === 'reconcileEffect' || command.type === 'resolveConflict' || command.type === 'discardFailure' ? await networks.recover(command) : networks.execute(command)
-      if (process.env.PODS_CENTRAL_ENABLED === '1' && !centralNetworkReads) result.unavailableReason = 'Network creation requires bounded central publication support'
-      if (command.type === 'process' && Date.now() < centralUntil) scheduleDomains(store, [() => scheduler.tick(), () => workflows.tick(), () => { networks.invocations.calls!.tick(); networks.tick() }])
+      const result = await executeNetwork(parseNetworkCommand(request.command.networks), 'ownerOperation' in request.command && request.command.ownerOperation === true)
       port.postMessage({ id: request.id, state: result }); return
     }
     if (request.command && typeof request.command === 'object' && 'remote' in request.command) {
@@ -340,7 +348,10 @@ port.on('message', async (event) => {
       port.postMessage({ id: request.id, state: codex.administration(request.command.codexAdministration as AdministrationJournal) }); return
     }
     if (request.command && typeof request.command === 'object' && 'codex' in request.command) {
-      port.postMessage({ id: request.id, state: await codex.execute(parseCodexRequest(request.command.codex), AbortSignal.timeout(170000)) }); return
+      const ownerOperation = 'ownerOperation' in request.command && request.command.ownerOperation === true
+      const command = parseCodexRequest(request.command.codex)
+      const result = await ownerOperations.run(ownerOperation, () => codex.execute(command, AbortSignal.timeout(170000)))
+      port.postMessage({ id: request.id, state: result }); return
     }
     if (request.command && typeof request.command === 'object' && 'master' in request.command) {
       port.postMessage({ id: request.id, state: await master.execute(parseMasterCommand(request.command.master)) }); return
