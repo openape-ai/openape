@@ -490,6 +490,30 @@ describe('persistent network owner controls', () => {
     finally { wrapper.unmount(); vi.useRealTimers() }
   })
 
+  it('shows declared bounded feedback in Structure and stopped feedback in the case trace', async () => {
+    const f = operationalFixture()
+    const reviewer = f.pods[2]!
+    f.view.details!.definition.members[2]!.contract.gives = ['mail.input']
+    Object.assign(f.view.details!.definition, { formatVersion: 4, feedback: [{ id: 'again', podId: reviewer.id, channel: 'mail.input', delayMs: 5000, maxHops: 3, maxCaseAgeMs: 43200000 }] })
+    f.view.trace!.events.push({ id: 2, caseId: f.id(50), runId: f.id(51), kind: 'feedback-review', body: `{"channel":"mail.input","feedback":"again","hop":4,"delayMs":5000,"reason":"Feedback exceeded 3 hops","eventId":"${f.id(60)}"}`, truncated: false, at: Date.now() })
+    const networks = vi.fn(async () => structuredClone(f.view))
+    installWorkspace({ networks })
+    const wrapper = mount(NetworkDetail, { props: { network: f.view.networks[0]!, view: f.view, pods: f.pods } })
+    try {
+      await flushPromises()
+      expect(wrapper.get('.network-feedback').text()).toBe('Bounded feedback: mail.input from Case reviewer, after 5 s, at most 3 hops within 12 h')
+      await button(wrapper, 'Recent recorded activity').trigger('click'); await flushPromises()
+      expect(wrapper.text()).toContain('Feedback stopped for review')
+      expect(wrapper.text()).toContain('Feedback hop 4 · Feedback exceeded 3 hops')
+      // Held feedback is resolved from the trace line with explicit evidence.
+      expect(button(wrapper, 'Discard held feedback with evidence').attributes('disabled')).toBeDefined()
+      await wrapper.get('textarea').setValue('Reviewed: cannot be classified')
+      await button(wrapper, 'Discard held feedback with evidence').trigger('click'); await flushPromises()
+      expect(networks).toHaveBeenCalledWith({ type: 'discardFeedback', id: f.networkId, revision: 1, eventId: f.id(60), evidence: 'Reviewed: cannot be classified' })
+    }
+    finally { wrapper.unmount() }
+  })
+
   it.each(['detail', 'trace'])('allows pause after a failed %s read and retains the diagnostic', async (failedRead) => {
     const f = operationalFixture(); f.view.networks[0]!.state = 'active'
     const networks = vi.fn(async (command: Parameters<typeof window.pods.networks>[0]) => {

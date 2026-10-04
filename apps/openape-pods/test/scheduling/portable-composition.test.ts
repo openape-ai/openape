@@ -56,6 +56,18 @@ describe('portable composition documents', () => {
     expect(() => validate(document('channels'), value)).toThrow('contract-missing')
   })
 
+  it('carries bounded feedback only in format version 4 and keeps undeclared loops invalid', () => {
+    const value = fixture('network'); value.manifest.pods[2]!.contract!.gives = ['step.one']
+    expect(() => validate(document('network'), value)).toThrow('cycle')
+    const feedback = [{ id: 'again', pod: 'send', channel: 'step.one', delayMs: 1000, maxHops: 2, maxCaseAgeMs: 3600000 }]
+    const source = { ...document('network'), formatVersion: 4, feedback }
+    expect(validate(source, value)).toEqual(source)
+    expect(() => validate({ ...document('network'), feedback }, value)).toThrow('native format version')
+    expect(() => validate({ ...document('network'), formatVersion: 4 }, value)).toThrow('native format version')
+    expect(() => validate({ ...source, feedback: [{ ...feedback[0]!, pod: 'read' }] }, value)).toThrow('consumer output channel')
+    expect(() => validate({ ...source, feedback: [{ ...feedback[0]!, maxHops: 4 }] }, value)).toThrow('Invalid bounded feedback')
+  })
+
   it('refuses source state, unsupported capabilities and missing network members', () => {
     const source = document('network') as ReturnType<typeof document> & { members: { pod: string, source: unknown }[] }
     Object.assign(source.members[0]!.source!, { cursor: 'sender-checkpoint' })
