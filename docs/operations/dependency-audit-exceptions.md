@@ -39,6 +39,27 @@ Sources:
 - https://nuxt.com/docs/4.x/api/commands/dev
 - https://nuxt.com/docs/4.x/getting-started/deployment
 
-The owner-approved exception changes audit classification only. CI remains
+## GHSA-vfj7-8cjw-p6xm (braces)
+
+Patrick explicitly approved ignoring this advisory on October 4, 2026 and entered
+the `auditConfig.ignoreGhsas` entry himself so pushes and CI can continue. The
+advisory reports stack exhaustion in `braces <= 3.0.3` when expanding deeply
+nested brace patterns; 3.0.3 (May 2024) is the latest release and the advisory
+lists no patched version, so no lockfile update can resolve it. The only path in
+this monorepo is `apps/docs > @nuxt/content > micromatch > braces`: build-time
+globbing of the repository's own documentation sources, never patterns supplied
+by users or network peers. No production runtime package resolves `braces`.
+
+The entry suppresses this exact advisory monorepo-wide; it does not lower the
+high-severity threshold or ignore other `braces` or `micromatch` advisories.
+Reassess if any production package starts depending on `braces` with untrusted
+patterns, and remove the exception when a patched release exists and the
+lockfile resolves it for the affected path.
+
+Sources:
+
+- https://github.com/advisories/GHSA-vfj7-8cjw-p6xm
+
+The owner-approved exceptions change audit classification only. CI remains
 unit-only; E2E/layout stays manual. Production activation, live conversion and
 concrete external actions retain their separate approvals.
