@@ -31,6 +31,18 @@ lint/typecheck, IdP build and all 345 IdP tests pass. Remote database and owner
 approval semantics are unchanged. Exact-source CI and a tested owner-IdP-only
 deployment remain required; the Pods provider and paused mail network stay as-is.
 
+PR233 merged at `b1283ad5` (CI5385/5386) and the tested owner IdP image was
+deployed. Three actual grant status requests succeeded while a read transaction
+remained open; all 48,477 pre-rollout grants were unchanged. Live notification
+hooks nevertheless exposed a separate concurrent-writer failure: every pending
+read started an expiry transaction, including empty sweeps. A real three-reader
+regression reproduces this with WAL enabled. The follow-up shares an in-flight
+expiry sweep across request stores using the same database and avoids a write
+transaction when nothing expired. It retains atomic expiry/audit and owner
+decisions. Signed desktop `6e1bebf2` is installed, with 15,510 backup files
+verified and unchanged network/permissions/schedules. zaz has no blocked inputs;
+the current script still requires its owner runtime grant.
+
 
 ## Bounded network MCP and local start correction — issue 1417
 
