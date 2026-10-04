@@ -46,13 +46,40 @@ compositions. These belong to M13 together with the signed relay-first rollout.
 
 ## Network M12 — bounded feedback (issue 1417)
 
-Branch `feature/issue-1417-pods-networks-m12` in the same checkout. Definition
-format version 4 adds `feedback` declarations (`contracts/networks.ts`); the
-runtime derives hop and transition identity in `network-events.ts` without a
-schema change (origin JSON, `ready_at` delay, blocked deliveries plus a
-`feedback-review` trace event at the bounds). Portable network documents carry
-`feedback` at format 4. Contract: [network contracts](../architecture/pods-networks/contracts.md).
-Evidence: `/tmp/openape-pods-networks-m12/`. Then M13 and M14 remain.
+Accepted: PR224 merged reviewed source `5b56999960051f4a30d56afdddebdd1422e95742`
+(final head `f94883c39f51dc8c1858a651cbd9a2b053393e30`) as
+`a5a1c702e17552d69af3aa889b9dc4a5a295bd7b`; source run 5370 and main run 5372
+green. Definition format version 4 `feedback` declarations, runtime hop and
+transition identity (workflow-call results included), delayed deliveries, held
+feedback with `feedback-review` trace and `discardFeedback` owner resolution,
+portable documents at format 4; no schema change. Contract:
+[network contracts](../architecture/pods-networks/contracts.md). The owner-approved
+braces audit exception PR226 (`e41ac5ae…`) is recorded in
+[dependency audit exceptions](../operations/dependency-audit-exceptions.md).
+Evidence: `/tmp/openape-pods-networks-m12/` (temporary; the M12 Test Runs report is
+not published yet).
+
+CI incident (October 3–4): the Forgejo runner cache filled the runner host's root
+volume (every job failed three seconds after start without a log) and Forgejo kept a
+sticky queue write error after the volume was freed; the cache now lives on the data
+volume, Forgejo was restarted by the owner, stale runs were re-triggered.
+
+## Network M13 — acceptance and signed internal candidate (issue 1417)
+
+Source: clean canonical main `a5a1c702`. The synthetic acceptance matrix is mapped to
+retained cases in [acceptance matrix](../architecture/pods-networks/acceptance-matrix.md).
+Relay-first rollout: the relay image carries the browser workspace (network views since
+`93087f5f`, portable import since PR223), so `pnpm run deploy:image pods-relay` from
+this source precedes the desktop installation; both are separately gated owner actions,
+as are live conversion, schedule activation and external actions. The mounted-DMG
+acceptance (`pnpm test:distribution --signed-local`) failed on every run in this
+session (five of five) because `page.waitForFunction` does not await its async
+predicate and reported the worker ready after ~24 ms while it was still starting
+(ready after ~420 ms); it is a race that earlier releases won. The script now polls
+the actual state. A signed-local candidate built from `a5a1c702` (version 0.1.1,
+DMG SHA-256 `7a580643727d7dbd8f83546f9e1cb04997050cc1ca0262b50663ae98a0c30ee2`) passed
+the corrected acceptance with the working-tree script. The delivered 0.1.2 candidate is
+rebuilt from the merged M13 source and its acceptance is still pending.
 
 ## Sharing M2 — issue 1419
 

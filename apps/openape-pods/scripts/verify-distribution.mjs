@@ -34,7 +34,13 @@ try {
   const bom = JSON.parse(await readFile(join(bundle, 'Contents/Resources/bom.json'), 'utf8')); assert.ok(bom.packages.length > 5); assert.ok(bom.blockers.length)
   app = await electron.launch({ executablePath: join(bundle, 'Contents/MacOS/OpenApe Pods'), env: { HOME: profile, TMPDIR: root, PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: profile, NODE_ENV: 'test' } })
   const page = await app.firstWindow()
-  await page.waitForFunction(async () => (await window.pods.getStatus()).worker.state === 'ready')
+  // waitForFunction does not await an async predicate (a pending promise is truthy), so poll the actual worker state.
+  const deadline = Date.now() + 60000
+  for (let state = ''; state !== 'ready'; await new Promise(resolve => setTimeout(resolve, 250))) {
+    state = await page.evaluate(async () => (await window.pods.getStatus()).worker.state)
+    if (!['starting', 'ready'].includes(state)) throw new Error(`Worker state ${state} during startup`)
+    if (Date.now() > deadline) throw new Error(`Worker still ${state} after 60 s`)
+  }
   await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'DMG acceptance' }))
   await build({ entry: { identity: resolve('e2e/fixtures/shell-identity.ts') }, outDir: root, format: ['esm'], platform: 'node', target: 'node24', silent: true, removeNodeProtocol: false, outExtension: () => ({ js: '.mjs' }) })
   const { fixtureShellIdentity } = await import(pathToFileURL(join(root, 'identity.mjs')).href)
