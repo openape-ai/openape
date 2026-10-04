@@ -40,10 +40,8 @@ export class AgentAuthority {
     let response: Response
     try { response = await fetch(new URL(path, this.connection.issuer), { method, redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]), headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }) }
     catch (error) { if (safe) transientNetwork(error, 'authorization', signal); throw error }
-    if (safe) {
-      try { transientResponse(response, 'authorization') }
-      catch (error) { await response.body?.cancel(); throw error }
-    }
+    try { transientResponse(response, 'authorization') }
+    catch (error) { await response.body?.cancel(); throw error }
     if (!response.body) throw new Error('Identity service returned no response')
     const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let size = 0
     try {
