@@ -1,12 +1,17 @@
 import { sql } from 'drizzle-orm'
+import { useRuntimeConfig } from 'nitropack/runtime'
 import { useDb } from '../database/drizzle'
 
 export default defineNitroPlugin(async () => {
   if (process.env.OPENAPE_E2E === '1') return
 
-  try {
-    const db = useDb()
+  const db = useDb()
+  if ((useRuntimeConfig().tursoUrl as string).startsWith('file:')) {
+    const mode = await db.get<{ journal_mode: string }>(sql`PRAGMA journal_mode = WAL`)
+    if (mode?.journal_mode !== 'wal') throw new Error('Local identity database requires WAL journal mode')
+  }
 
+  try {
     await db.run(sql`CREATE TABLE IF NOT EXISTS grants (
       id TEXT PRIMARY KEY, status TEXT NOT NULL, type TEXT,
       requester TEXT NOT NULL, target_host TEXT NOT NULL, audience TEXT NOT NULL,
