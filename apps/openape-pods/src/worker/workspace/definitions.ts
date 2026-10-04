@@ -22,6 +22,17 @@ export class DefinitionWorkspace {
     assertDataIdle(this.store); signal.throwIfAborted()
     if (command.type === 'adopt') this.catalog.adopt()
     if (command.type === 'publish') await this.catalog.publish(command.podId, command.expectedScript, command.name, command.defaults)
+    if (command.type === 'prepareLocal') {
+      await this.catalog.publish(command.podId, command.expectedScript, command.name, command.defaults, (apply) => {
+        if (this.updateNetworkInstance) {
+          this.updateNetworkInstance(command.podId, apply)
+        }
+        else {
+          if (this.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=?').get(command.podId)) throw new Error('Network compatibility review is unavailable; current version remains pinned')
+          apply()
+        }
+      })
+    }
     if (command.type === 'instantiate') {
       const requestHash = digest(canonicalNetworkJson(command))
       const podId = this.store.transaction(() => {

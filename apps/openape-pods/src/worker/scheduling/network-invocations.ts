@@ -4,7 +4,7 @@ import type { NetworkGates } from './network-gates'
 import type { NetworkGateManifest } from '../../contracts/network-gates'
 import { assertNetworkQuota, NetworkQuotaError } from './network-quota'
 import { randomUUID } from 'node:crypto'
-import { parseNetworkDefinition, networkLimits  } from '../../contracts/networks'
+import { networkGateOutput, parseNetworkDefinition, networkLimits  } from '../../contracts/networks'
 import type { RunState } from '../../contracts/runs'
 import type { RunStore } from '../runs/store'
 import { parseProgress } from '../runs/progress'
@@ -122,7 +122,7 @@ export class NetworkInvocations {
     const { row, definition, member } = this.data.authority(authority)
     const checkpoint = this.store.db.prepare('SELECT revision,body FROM network_checkpoints WHERE network_id=? AND pod_id=?').get(definition.id, member.podId)!
     const items = this.store.db.prepare(`SELECT e.id,e.item_key,e.channel,e.payload,e.case_id,e.case_revision FROM network_deliveries d JOIN network_events e ON e.id=d.event_id
-      WHERE d.run_id=? AND d.state='claimed' ORDER BY d.accepted_at,d.id`).all(authority.runId).map(item => ({ eventId: item.id as string, key: item.item_key as string, channel: item.channel as string, data: JSON.parse(item.payload as string) as Record<string, unknown>, artifacts: this.events.references(item.id as string), caseId: item.case_id as string, caseRevision: item.case_revision as number }))
+      WHERE d.run_id=? AND d.state='claimed' ORDER BY d.accepted_at,d.id`).all(authority.runId).map(item => ({ eventId: item.id as string, key: item.item_key as string, channel: networkGateOutput(definition, definition.gates?.find(gate => gate.podId === member.podId && gate.channel === item.channel)?.key ?? '', item.channel as string), data: JSON.parse(item.payload as string) as Record<string, unknown>, artifacts: this.events.references(item.id as string), caseId: item.case_id as string, caseRevision: item.case_revision as number }))
     return { variables: networkLegacyVariables(this.store, definition.id), config: networkConfiguration(this.store, definition.id, member.podId), network: { id: definition.id, revision: definition.revision, source: member.source !== null }, items, checkpoint: { revision: checkpoint.revision as number, body: JSON.parse(checkpoint.body as string) as Record<string, unknown> }, resourceEpoch: (JSON.parse(row.manifest as string) as { resourceEpoch: number }).resourceEpoch }
   }
 

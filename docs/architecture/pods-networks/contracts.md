@@ -1198,3 +1198,54 @@ Paused composition replacement and portable file sharing remain required for M11
 this increment does not activate production or convert any live graph. Case closure
 is not currently written by the runtime. M12 must account explicitly for undelivered
 workflow results before introducing closure; archival never silently discards them.
+
+### Delta Mind compatibility correction (October 4, 2026)
+
+Network definition format 5 adds `routes` using the existing explicit graph
+choice and approval declarations. Choice inputs retain their original event and
+case; the owner decision creates one deterministic derived event, preserves
+independent subscriptions and is stored in schema 36 `network_choices`.
+Every gate output, including exclusions, must match the input schema and version
+before work can be admitted. Pending choices block composition replacement and archival. Restored baselines
+cannot accept new choices. Browser access remains read-only.
+
+A routed approval binds the existing exact consumer grant to the original input
+channel. Only the approved consumer sees the declared output channel; event IDs,
+payload hashes, generations and grant manifests retain the original input. The
+output requires exactly one consumer, the identical schema and no alternative
+producer. An explicit owner exclusion creates a retained derived event on the
+excluded channel. Routed gates cannot combine with joins on their inputs or
+outputs, or bounded feedback. Portable export of routed networks is refused until
+its document format supports routes.
+
+Persistent source scripts may invoke their assigned CLI program read/list/get operations.
+Sources and consumers may invoke assigned Jev evaluations through the existing native services. Program and
+Jev identity/grant checks, executable/adapter integrity, resource epochs,
+cancellation and timeouts remain in force. Program reads share the existing
+100-call network read budget. Text generation reuses the assigned provider with no tools, at most 50
+calls per invocation and at most 120 seconds per call. No shell, HTTP or mail
+mutation port is added.
+
+Conversion preserves every legacy route exactly. A terminal unsuccessful member
+run is acceptable only after a successful recovery inspection and a terminal
+cancelled parent workflow; its original run and inspection remain unchanged.
+Unknown effects, live leases, unfinished runs and unresolved approvals still
+block conversion. Pending legacy owner choices must be decided in the original
+graph before conversion; they cannot become inaccessible archived choices. Pending legacy deliveries remain retained history and are
+never replayed into the network.
+
+The bounded mail intake example records an explicit initial sample of up to
+three Inbox and three Sent Items messages. Each item is re-read with the
+account-scoped upstream O365 workflow transport to obtain its immutable ID and
+provider `changeKey`. A standalone baseline emits no items. Network runs require
+that exact baseline and emit only observed changed versions. This sample is not
+a full mailbox cursor, complete contact inventory or archive authority. Mail
+with attachments remains incomplete until attachment evidence is available.
+
+Existing instances can prepare a local immutable definition with public defaults
+from their currently validated active script. This pins only that paused instance,
+retains its identity, home, assignments and grants, and leaves the version
+unpublished. Preparing an instance from a shared definition creates a separate
+local definition and leaves the shared definition unchanged. Instance-specific program rights remain forbidden for reusable
+publication and instantiation. A network member preparation must pass the same
+paused, settled compatibility transaction as other definition updates.
