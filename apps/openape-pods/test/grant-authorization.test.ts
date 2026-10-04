@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import { AgentAuthority } from '../src/main/broker/authorization'
-import { InfrastructureError } from '../src/contracts/infrastructure'
+import { InfrastructureError, retryInfrastructure } from '../src/contracts/infrastructure'
 import type { RunApproval } from '../src/contracts/activity'
 
 const cleanup: (() => Promise<void>)[] = []
@@ -23,7 +23,7 @@ async function fixture(initial = 'used', decision = 'approved') {
   const server = createServer(async (request, response) => {
     response.setHeader('Content-Type', 'application/json')
     const reply = (body: unknown) => response.end(JSON.stringify(body))
-    if (state.unavailablePath && request.url?.endsWith(state.unavailablePath)) { response.statusCode = 503; reply({ title: 'Temporary failure' }); return }
+    if (state.unavailablePath && request.url?.endsWith(state.unavailablePath)) { response.statusCode = state.unavailable || 503; reply({ title: 'Temporary failure' }); return }
     if (request.url === '/.well-known/jwks.json') { reply({ keys: [{ ...keys.publicKey.export({ format: 'jwk' }), kid: 'key', alg: 'EdDSA', use: 'sig' }] }); return }
     if (state.unavailable && request.method === 'GET' && request.url?.startsWith('/api/grants/')) { response.statusCode = state.unavailable; reply({ title: 'Temporary failure' }); return }
     const id = request.url?.split('/')[3] ?? ''
@@ -177,4 +177,42 @@ it.each(['/.well-known/jwks.json', '/consume'])('recovers a permission outage at
   f.state.unavailablePath = ''
   await f.authority.authorize(assignment, new AbortController().signal)
   expect(f.state.consumes).toEqual(['old'])
+})
+
+it.each([408, 429, 500, 502, 503, 504])('retries grant creation after HTTP %s without approving or executing during the outage', async (status) => {
+  const f = await fixture('used', 'pending')
+  f.state.grantType = 'always'
+  f.state.unavailablePath = '/api/grants'; f.state.unavailable = status
+  const assignment = { grantId: '', command: f.command }
+  await expect(f.authority.authorize(assignment, new AbortController().signal)).rejects.toBeInstanceOf(InfrastructureError)
+  expect(f.state.creates).toBe(0); expect(f.state.tokens).toEqual([]); expect(f.state.consumes).toEqual([])
+  f.state.unavailablePath = ''; f.state.unavailable = 0
+  const work = f.authority.authorize(assignment, new AbortController().signal)
+  await expect.poll(() => f.state.progress[0]?.state).toBe('pending')
+  expect(f.state.consumes).toEqual([])
+  f.state.grants.set('fresh-1', 'approved')
+  await work
+  expect(f.state.creates).toBe(1); expect(f.state.consumes).toEqual(['fresh-1'])
+})
+
+it.each([400, 401, 403, 409])('does not retry grant creation refused with HTTP %s', async (status) => {
+  const f = await fixture()
+  f.state.unavailablePath = '/api/grants'; f.state.unavailable = status
+  await expect(f.authority.authorize({ grantId: '', command: f.command }, new AbortController().signal)).rejects.not.toBeInstanceOf(InfrastructureError)
+  expect(f.state.creates).toBe(0); expect(f.state.consumes).toEqual([])
+})
+
+it('automatically resumes runtime authorization after grant creation recovers', async () => {
+  const f = await fixture('used', 'pending'); f.state.grantType = 'always'
+  f.state.unavailablePath = '/api/grants'
+  const notice = vi.fn(async () => { f.state.unavailablePath = '' })
+  const controller = new AbortController()
+  const work = retryInfrastructure(() => f.authority.authorize({ grantId: '', command: f.command }, controller.signal), controller.signal, notice)
+  await expect.poll(() => f.state.progress[0]?.state, { timeout: 4000 }).toBe('pending')
+  expect(notice).toHaveBeenCalledWith({ attempt: 1, nextAt: expect.any(Number), error: 'Permission service temporarily unavailable' })
+  expect(f.state.consumes).toEqual([])
+  f.state.grants.set('fresh-1', 'approved')
+  await work
+  expect(notice).toHaveBeenLastCalledWith(null)
+  expect(f.state.creates).toBe(1); expect(f.state.consumes).toEqual(['fresh-1'])
 })
