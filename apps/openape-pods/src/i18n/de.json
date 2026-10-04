@@ -3955,5 +3955,13 @@
   "Existing instance prepared with its own identity and permissions. Reuse is not enabled.": "Bestehende Instanz mit eigener Identität und eigenen Berechtigungen vorbereitet. Wiederverwendung ist nicht aktiviert.",
   "Invalid network choice scope": "Ungültige Zuordnung einer Netzwerkentscheidung",
   "Routing gates require identical input and output schemas": "Entscheidungsknoten benötigen identische Eingangs- und Ausgangsschemas.",
-  "Resolve pending legacy owner choices before conversion": "Entscheide offene Auswahlen im bisherigen Graphen vor der Umstellung."
+  "Resolve pending legacy owner choices before conversion": "Entscheide offene Auswahlen im bisherigen Graphen vor der Umstellung.",
+  "Invalid network MCP action fields": "Ungültige Felder für die Netzwerk-MCP-Aktion",
+  "This network operation requires the desktop workspace": "Diese Netzwerkaktion benötigt den Desktop-Arbeitsbereich",
+  "Network MCP response exceeds its read limit; inspect a smaller page": "Die Netzwerk-MCP-Antwort überschreitet das Leselimit; prüfe eine kleinere Seite",
+  "Network MCP is unavailable in this runtime": "Netzwerk-MCP ist in dieser Laufzeit nicht verfügbar",
+  "Network members require bounded network MCP operations or desktop review": "Netzwerkmitglieder benötigen begrenzte Netzwerk-MCP-Aktionen oder eine Prüfung am Desktop",
+  "Retained network workflows require bounded network MCP operations or desktop review": "Erhaltene Netzwerk-Workflows benötigen begrenzte Netzwerk-MCP-Aktionen oder eine Prüfung am Desktop",
+  "Network MCP request identity was reused with different arguments or owner": "Die Netzwerk-MCP-Auftragskennung wurde mit anderen Argumenten oder einem anderen Eigentümer wiederverwendet",
+  "Network MCP operation failed or was interrupted; inspect network state before another action": "Die Netzwerk-MCP-Aktion ist fehlgeschlagen oder wurde unterbrochen; prüfe den Netzwerkzustand vor einer weiteren Aktion"
 }
