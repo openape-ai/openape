@@ -8,6 +8,8 @@ export const diagnosticPatterns = [
   'Value does not match the declared input {p0}',
   'Portable network diagnostics: {p0}',
   'Portable graph diagnostics: {p0}',
+  'Feedback exceeded {p0} hops',
+  'Feedback case is older than {p0} ms',
   'Definition update blocked: {p0}. The current version remains pinned.',
   'Unclassified publication table: {p0}',
   'Instance {p0} is retained for provisioning retry. {p1}',

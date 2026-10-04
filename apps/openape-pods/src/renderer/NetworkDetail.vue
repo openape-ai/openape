@@ -67,6 +67,8 @@ export default defineComponent({
       if (kind === 'composition-replaced-reviewed') return t('Composition replacement reviewed')
       if (kind === 'legacy-conversion-reviewed') return t('Legacy conversion reviewed')
       if (kind === 'event-accepted') return t('Item accepted')
+      if (kind === 'feedback-review') return t('Feedback stopped for review')
+      if (kind === 'feedback-review-resolved') return t('Held feedback discarded')
       if (kind === 'invocation-settled') return t('Processing outcome')
       if (kind === 'instance-attention' || kind === 'network-maintenance-failed') return t('Runtime needs attention')
       if (kind.startsWith('gate-')) return t('Approval activity')
@@ -74,10 +76,19 @@ export default defineComponent({
       if (kind === 'network-mail-read') return t('Assigned mailbox read')
       return t('Network activity')
     },
+    heldFeedback(event: NetworkTracePage['events'][number]): string {
+      if (event.kind !== 'feedback-review' || event.truncated) return ''
+      const receipt = JSON.parse(event.body) as Record<string, unknown>
+      if (typeof receipt.eventId !== 'string') return ''
+      // Once a resolution line for the same event is on the page, the hold is over.
+      const resolved = (this.trace?.events ?? []).some(item => item.kind === 'feedback-review-resolved' && !item.truncated && (JSON.parse(item.body) as Record<string, unknown>).eventId === receipt.eventId)
+      return resolved ? '' : receipt.eventId
+    },
     eventSummary(event: NetworkTracePage['events'][number]): string {
       if (event.truncated) return ''
       const receipt = JSON.parse(event.body) as Record<string, unknown>
-      return [receipt.message, receipt.error, receipt.reason, receipt.summary].filter(value => typeof value === 'string' && value).map(value => diagnostic(value as string)).join(' · ')
+      const hop = typeof receipt.hop === 'number' && receipt.hop > 0 ? [t('Feedback hop {hop}', { hop: receipt.hop })] : []
+      return [...hop, receipt.message, receipt.error, receipt.reason, receipt.summary].filter(value => typeof value === 'string' && value).map(value => diagnostic(value as string)).join(' · ')
     },
     poll() { if (this.closed) return; this.timer = setTimeout(async () => { this.now = Date.now(); if (this.active && !document.hidden && !this.busy) await this.load(false); this.poll() }, 5000) },
     async read(command: CentralNetworkRead): Promise<NetworkView> {
@@ -123,7 +134,7 @@ export default defineComponent({
         if (response.preview) {
           this.preview = response.preview
         }
-        else { this.preview = null; this.processing = false; if ('evidence' in command) { const key = command.type === 'reconcileEffect' ? `${command.runId}:${command.key}:${command.attempt}` : command.type === 'gateExclude' ? `${command.taskId}:${command.deliveryIds[0]}` : 'runId' in command ? command.runId : command.taskId; delete this.evidence[key] }; await this.load() }
+        else { this.preview = null; this.processing = false; if ('evidence' in command) { const key = command.type === 'reconcileEffect' ? `${command.runId}:${command.key}:${command.attempt}` : command.type === 'gateExclude' ? `${command.taskId}:${command.deliveryIds[0]}` : command.type === 'discardFeedback' ? command.eventId : 'runId' in command ? command.runId : command.taskId; delete this.evidence[key] }; await this.load() }
       }
       catch (error) { this.preview = null; this.actionError = error instanceof Error ? error.message : String(error); await this.$nextTick(); (this.$refs.actionError as HTMLElement)?.focus() }
       finally { this.busy = false; if (this.preview) { await this.$nextTick(); (this.$refs.confirmProcess as HTMLElement)?.focus() } }
@@ -245,6 +256,9 @@ export default defineComponent({
       <p v-for="join in details.definition.joins ?? []" :key="join.id">
         {{ t('Explicit join: {channels}', { channels: join.channels.join(', ') }) }}
       </p>
+      <p v-for="item in details.definition.feedback ?? []" :key="item.id" class="network-feedback">
+        {{ t('Bounded feedback: {channel} from {pod}, after {seconds} s, at most {hops} hops within {hours} h', { channel: item.channel, pod: pods.find(pod => pod.id === item.podId)?.name ?? item.podId, seconds: Math.round(item.delayMs / 1000), hops: item.maxHops, hours: Math.round(item.maxCaseAgeMs / 360000) / 10 }) }}
+      </p>
     </template>
     <section v-else-if="tab === 'activity'">
       <p v-if="activityError" role="alert" class="error-message">
@@ -270,7 +284,11 @@ export default defineComponent({
           {{ eventSummary(event) }}
         </p><button v-if="event.kind === 'instance-attention' || event.kind === 'invocation-settled'" class="text-button" @click="tab = 'decisions'">
           {{ t('Review decisions and failures') }}
-        </button><details><summary>{{ t('Receipt details') }}</summary><p>{{ event.kind }}</p><pre>{{ event.body }}</pre></details><p v-if="event.truncated">
+        </button><template v-if="heldFeedback(event) && !readOnly && !readNetwork && network.state !== 'archived'">
+          <label>{{ t('Evidence for held feedback') }}<textarea v-model="evidence[heldFeedback(event)]" maxlength="4000" /></label><button class="secondary" :disabled="busy || !evidence[heldFeedback(event)]?.trim()" @click="send({ type: 'discardFeedback', id: network.id, revision: network.revision, eventId: heldFeedback(event), evidence: evidence[heldFeedback(event)] ?? '' })">
+            {{ t('Discard held feedback with evidence') }}
+          </button>
+        </template><details><summary>{{ t('Receipt details') }}</summary><p>{{ event.kind }}</p><pre>{{ event.body }}</pre></details><p v-if="event.truncated">
           {{ t('Preview shortened. The original receipt is retained.') }}
         </p>
       </article><button v-if="trace?.before" class="secondary" :disabled="activityLoading" @click="activity(trace.before)">

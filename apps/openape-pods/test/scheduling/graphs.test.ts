@@ -56,10 +56,29 @@ describe('persistent network definitions', () => {
     expect(diagnoseNetwork(definition)).toContainEqual({ code: 'channel-without-producer', podId: sorter, channel: 'mail.missing' })
   })
 
-  it('rejects undeclared feedback until the separately bounded feedback milestone', () => {
+  it('rejects undeclared feedback and accepts one declared bounded transition', () => {
     const definition = parseNetworkDefinition(persistentNetwork())
     definition.members[2]!.contract.gives = ['mail.open']
     expect(diagnoseNetwork(definition).filter(item => item.code === 'cycle').map(item => item.podId)).toEqual([sorter, archive])
+    const looped = { ...persistentNetwork(), formatVersion: 4, gates: [], joins: [], feedback: [{ id: 'recheck', podId: archive, channel: 'mail.open', delayMs: 1000, maxHops: 3, maxCaseAgeMs: 86400000 }] }
+    looped.members[2]!.contract = { ...looped.members[2]!.contract, gives: ['mail.open'] }
+    const bounded = parseNetworkDefinition(looped)
+    expect(bounded.feedback).toEqual(looped.feedback)
+    expect(diagnoseNetwork(bounded)).toEqual([])
+    // The declaration removes only its own edge: another immediate cycle stays invalid.
+    bounded.members[1]!.contract.gives = ['mail.sorted', 'mail.open']
+    expect(diagnoseNetwork(bounded).filter(item => item.code === 'cycle').map(item => item.podId)).toEqual([sorter])
+    // Feedback bounds and targets are validated: sources, undeclared outputs, short delays and more than three hops are refused.
+    for (const change of [{ podId: intake }, { channel: 'mail.sorted' }, { delayMs: 999 }, { maxHops: 4 }, { maxHops: 0 }, { maxCaseAgeMs: 86400001 }, { delayMs: 5000, maxCaseAgeMs: 4999 }]) {
+      expect(() => parseNetworkDefinition({ ...looped, feedback: [{ ...looped.feedback[0]!, ...change }] })).toThrow(/feedback/)
+    }
+    expect(() => parseNetworkDefinition({ ...persistentNetwork(), feedback: looped.feedback })).toThrow('Invalid network definition fields')
+    // A join waits for every input of one case revision, so a joined channel cannot be fed back.
+    const joinedSorter = looped.members.map((member, index) => index === 1 ? { ...member, contract: { ...member.contract, takes: ['mail.open', 'mail.sorted'] } } : member)
+    expect(() => parseNetworkDefinition({ ...looped, members: joinedSorter, joins: [{ id: 'both', podId: sorter, channels: ['mail.open', 'mail.sorted'], deadlineMs: 60000, reviewDestination: 'owner' }] })).toThrow('explicitly joined channel')
+    const extra = { name: 'mail.extra', title: 'mail.extra', schemaVersion: 1, schema: looped.channels[0]!.schema }
+    const orphan = parseNetworkDefinition({ ...looped, channels: [...looped.channels, extra], feedback: [{ ...looped.feedback[0]!, channel: 'mail.extra' }], members: looped.members.map((member, index) => index === 2 ? { ...member, contract: { ...member.contract, gives: ['mail.extra'] } } : member) })
+    expect(diagnoseNetwork(orphan)).toContainEqual({ code: 'feedback-bounds', podId: archive, channel: 'mail.extra' })
   })
 
   it('rejects unversioned schemas, unknown authority fields and duplicated instances', () => {

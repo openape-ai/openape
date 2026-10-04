@@ -32,11 +32,27 @@ renderer-supplied bytes. Evidence directories: `/tmp/openape-pods-sharing-m3/`,
 `-m3b/`, `-m3c/`, `-m3d/`, `-m4/`. Contract and limitations:
 [sharing inventory](../architecture/pods-portable-sharing.md).
 
+M4 merged through PR223 (tested source `1bb146bb610d10fc93dd167151655fa4995c1526`,
+merge `76078194f749c7d16fa9f025ffd4587de31a0495`, source CI5366 green;
+[Report](https://report.openape.ai/r/9fWEcp_TgnI41mWEF8VJtYot)). Full-main CI5367
+failed three seconds after start without a step log; the Forgejo API exposes no job
+log or rerun for it, so the rerun is an owner web-UI action. Evidence:
+`/tmp/openape-pods-sharing-m4/`.
+
 Native acceptance items not covered by unit tests: an end-to-end run through the
 installed app with a real package file, mail finalization, gates/joins format
 versions, called channel graphs and actual runtime calls of imported
 compositions. These belong to M13 together with the signed relay-first rollout.
-Then network M12 bounded feedback and M14 observation remain.
+
+## Network M12 — bounded feedback (issue 1417)
+
+Branch `feature/issue-1417-pods-networks-m12` in the same checkout. Definition
+format version 4 adds `feedback` declarations (`contracts/networks.ts`); the
+runtime derives hop and transition identity in `network-events.ts` without a
+schema change (origin JSON, `ready_at` delay, blocked deliveries plus a
+`feedback-review` trace event at the bounds). Portable network documents carry
+`feedback` at format 4. Contract: [network contracts](../architecture/pods-networks/contracts.md).
+Evidence: `/tmp/openape-pods-networks-m12/`. Then M13 and M14 remain.
 
 ## Sharing M2 — issue 1419
 

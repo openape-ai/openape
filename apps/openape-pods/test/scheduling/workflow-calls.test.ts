@@ -269,6 +269,17 @@ it('fences restored calls until owner recovery and retains completed steps witho
   expect(f.store.db.prepare('SELECT count(*) AS count FROM network_trace_events WHERE kind=\'workflow-call-owner-recovery\'').get()!.count).toBe(1)
 })
 
+it('delivers workflow results with the feedback hop their case has reached', async () => {
+  const f = await fixture(); const invoice = await f.invoice('INV-hop')
+  // Another branch of this case already reached hop 2; a call result must not reset the count.
+  f.store.db.prepare('UPDATE network_events SET origin=json_set(origin,\'$.feedbackHop\',2) WHERE item_key=\'INV-hop\'').run()
+  f.calls.stage(invoice.authority, invoice.request); await f.finishCaller(invoice.authority)
+  f.calls.tick(); f.workflows.tick(); f.complete()
+  const results = f.store.db.prepare('SELECT json_extract(e.origin,\'$.feedbackHop\') AS hop,json_extract(e.origin,\'$.feedbackTransitionId\') AS transition FROM network_events e JOIN workflow_call_result_events r ON r.event_id=e.id').all()
+  expect(results.map(row => [Number(row.hop), row.transition])).toEqual([[2, null], [2, null]])
+  expect(f.store.db.prepare('SELECT count(*) AS count FROM network_deliveries WHERE state=\'pending\'').get()!.count).toBe(2)
+})
+
 it('recovers retained result delivery with explicit owner evidence after permission drift', async () => {
   const f = await fixture(); const invoice = await f.invoice('INV-delivery')
   f.calls.stage(invoice.authority, invoice.request); await f.finishCaller(invoice.authority)
