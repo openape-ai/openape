@@ -4,7 +4,7 @@ import type { ConversionSelection, ConversionPreview } from '../../contracts/net
 import { parseOwner, sameOwner } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
 import { canonicalNetworkJson } from '../../contracts/network-json'
-import { diagnoseNetwork, parseNetworkCommand, parseNetworkDefinition } from '../../contracts/networks'
+import { diagnoseNetwork, draftControls, draftFormatVersion, parseNetworkCommand, parseNetworkDefinition } from '../../contracts/networks'
 import type { WorkflowDefinition } from '../../contracts/workflows'
 import type { NetworkDefinition } from '../../contracts/networks'
 import { parseGraphContract } from '../../contracts/graphs'
@@ -79,7 +79,7 @@ export function previewNetworkConversion(store: PodDatabase, resources: Resource
   if (selection.checkpoints.some(item => !podIds.includes(item.podId))) throw new Error('Checkpoint review contains a foreign Pod')
   let candidate: NetworkDefinition | null = null
   try {
-    candidate = parseNetworkDefinition({ formatVersion: draft.joins ? 3 : draft.gates ? 2 : 1, kind: 'network', semantics: 'persistent-network-v1', id: legacy.id, revision: 1, name: draft.name, groupId: draft.groupId, channels: draft.channels, ...(draft.gates || draft.joins ? { gates: draft.gates ?? [] } : {}), ...(draft.joins ? { joins: draft.joins } : {}), members: draft.members.map((chosen) => {
+    candidate = parseNetworkDefinition({ formatVersion: draftFormatVersion(draft), kind: 'network', semantics: 'persistent-network-v1', id: legacy.id, revision: 1, name: draft.name, groupId: draft.groupId, channels: draft.channels, ...(draft.gates ? { gates: draft.gates } : {}), ...draftControls(draft), ...(draft.joins ? { joins: draft.joins } : {}), ...(draft.feedback ? { feedback: draft.feedback } : {}), members: draft.members.map((chosen) => {
       const member = authority.find(item => item.pod.id === chosen.podId)!
       return { podId: chosen.podId, definitionId: member.binding.definition_id, definitionVersion: member.binding.definition_version, bindingRevision: member.binding.binding_revision, contract: member.contract, source: chosen.source ? { bindingId: chosen.podId, schedule: chosen.source.schedule } : null, serialCase: chosen.serialCase }
     }) })

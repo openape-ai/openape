@@ -27,8 +27,11 @@ export interface NetworkMember {
 }
 export interface NetworkGate { key: string, title: string, kind: 'approve', podId: string, channel: string }
 export interface NetworkJoin { id: string, podId: string, channels: string[], deadlineMs: number, reviewDestination: 'owner' }
+// A declared bounded feedback transition: the producer's emissions on the channel are delivered after a delay, counted per hop and stopped for review at the bounds.
+export interface NetworkFeedback { id: string, podId: string, channel: string, delayMs: number, maxHops: number, maxCaseAgeMs: number }
+export const feedbackLimits = { minimumDelayMs: 1000, maximumHops: 3, maximumCaseAgeMs: 86400000 } as const
 export interface NetworkDefinition {
-  formatVersion: 1 | 2 | 3
+  formatVersion: 1 | 2 | 3 | 4
   kind: 'network'
   semantics: 'persistent-network-v1'
   id: string
@@ -39,10 +42,15 @@ export interface NetworkDefinition {
   members: NetworkMember[]
   gates?: NetworkGate[]
   joins?: NetworkJoin[]
+  feedback?: NetworkFeedback[]
 }
-export interface NetworkDiagnostic { code: 'channel-undeclared' | 'channel-without-producer' | 'channel-without-consumer' | 'cycle', podId: string | null, channel: string | null }
+export interface NetworkDiagnostic { code: 'channel-undeclared' | 'channel-without-producer' | 'channel-without-consumer' | 'cycle' | 'feedback-bounds', podId: string | null, channel: string | null }
 export interface NetworkSelection { podId: string, source: { schedule: ScheduleSpec | null } | null, serialCase: boolean }
-export interface NetworkDraft { name: string, groupId: string, channels: NetworkChannel[], members: NetworkSelection[], sharedValues?: Record<string, unknown>, expectedSetup?: string, gates?: NetworkGate[], joins?: NetworkJoin[] }
+export interface NetworkDraft { name: string, groupId: string, channels: NetworkChannel[], members: NetworkSelection[], sharedValues?: Record<string, unknown>, expectedSetup?: string, gates?: NetworkGate[], joins?: NetworkJoin[], feedback?: NetworkFeedback[] }
+// The definition format a draft needs: feedback needs 4, joins 3, gates 2.
+export const draftFormatVersion = (draft: { gates?: unknown, joins?: unknown, feedback?: unknown }): 1 | 2 | 3 | 4 => draft.feedback ? 4 : draft.joins ? 3 : draft.gates ? 2 : 1
+// Definition fields a draft's format version requires, with absent lower-level controls filled in as empty.
+export const draftControls = (draft: { gates?: NetworkGate[], joins?: NetworkJoin[], feedback?: NetworkFeedback[] }) => ({ ...(draft.joins || draft.feedback ? { gates: draft.gates ?? [] } : {}), ...(draft.feedback ? { joins: draft.joins ?? [] } : {}) })
 export type NetworkCommand
   = | ReplacementCommand
     | RetirementCommand
@@ -62,6 +70,7 @@ export type NetworkCommand
     | { type: 'gateExclude', id: string, revision: number, taskId: string, generation: number, deliveryIds: string[], evidence: string }
     | { type: 'gateReview', id: string, revision: number, taskId: string, generation: number, evidence: string }
     | { type: 'gateDiscard', id: string, revision: number, taskId: string, generation: number, evidence: string }
+    | { type: 'discardFeedback', id: string, revision: number, eventId: string, evidence: string }
     | { type: 'process', id: string, revision: number, previewId: string }
 export interface NetworkHealth { oldestPendingAt: number | null, nextRetryAt: number | null, lastDispatchAt: number | null, lastSchedulerProgressAt: number | null, lastSchedulerError: string | null, intakeError: string | null, lastFailure: { runId: string, generation: number, kind: string, reason: string } | null }
 export interface NetworkSummary { decisions?: number, podIds?: string[], id: string, revision: number, groupId: string, name: string, state: 'active' | 'paused' | 'archived', counts: Record<string, number>, health: NetworkHealth }
@@ -140,26 +149,45 @@ function joins(value: unknown): NetworkJoin[] {
   return result
 }
 
+function feedback(value: unknown): NetworkFeedback[] {
+  const result = list(value, 32).map((value) => {
+    const input = fields(value, ['id', 'podId', 'channel', 'delayMs', 'maxHops', 'maxCaseAgeMs'])
+    const channel = parseGraphChannels([{ name: input.channel, title: input.channel, fields: [] }])[0]!.name
+    if (typeof input.id !== 'string' || !/^[a-z][a-z0-9-]{0,31}$/.test(input.id) || !Number.isSafeInteger(input.delayMs) || Number(input.delayMs) < feedbackLimits.minimumDelayMs || Number(input.delayMs) > feedbackLimits.maximumCaseAgeMs || !Number.isSafeInteger(input.maxHops) || Number(input.maxHops) < 1 || Number(input.maxHops) > feedbackLimits.maximumHops || !Number.isSafeInteger(input.maxCaseAgeMs) || Number(input.maxCaseAgeMs) < Number(input.delayMs) || Number(input.maxCaseAgeMs) > feedbackLimits.maximumCaseAgeMs) throw new Error('Invalid bounded feedback transition')
+    return { id: input.id, podId: uuid(input.podId), channel, delayMs: Number(input.delayMs), maxHops: Number(input.maxHops), maxCaseAgeMs: Number(input.maxCaseAgeMs) }
+  })
+  unique(result.map(item => item.id)); unique(result.map(item => `${item.podId}:${item.channel}`))
+  return result
+}
+
 export function parseNetworkDefinition(value: unknown): NetworkDefinition {
   const data = networkDataObject(value)
-  const input = fields(data, ['formatVersion', 'kind', 'semantics', 'id', 'revision', 'groupId', 'name', 'channels', 'members', ...([2, 3].includes(Number(data.formatVersion)) ? ['gates'] : []), ...(data.formatVersion === 3 ? ['joins'] : [])])
-  if (![1, 2, 3].includes(input.formatVersion as number) || input.kind !== 'network' || input.semantics !== 'persistent-network-v1' || typeof input.name !== 'string' || !input.name.trim() || input.name.length > 120 || input.name.includes('\0')) throw new Error('Invalid network definition version or name')
+  const version = Number(data.formatVersion)
+  const input = fields(data, ['formatVersion', 'kind', 'semantics', 'id', 'revision', 'groupId', 'name', 'channels', 'members', ...(version >= 2 && version <= 4 ? ['gates'] : []), ...(version >= 3 && version <= 4 ? ['joins'] : []), ...(version === 4 ? ['feedback'] : [])])
+  if (![1, 2, 3, 4].includes(input.formatVersion as number) || input.kind !== 'network' || input.semantics !== 'persistent-network-v1' || typeof input.name !== 'string' || !input.name.trim() || input.name.length > 120 || input.name.includes('\0')) throw new Error('Invalid network definition version or name')
   const parsedChannels = channels(input.channels)
   const members = list(input.members, networkLimits.members).map(member)
   if (!members.length) throw new Error('Network requires at least one member')
   unique(members.map(item => item.podId))
   unique(members.flatMap(item => item.source ? [item.source.bindingId] : []))
-  const result: NetworkDefinition = { formatVersion: input.formatVersion as 1 | 2 | 3, kind: 'network', semantics: 'persistent-network-v1', id: uuid(input.id), revision: revision(input.revision), groupId: uuid(input.groupId), name: input.name, channels: parsedChannels, members }
+  const result: NetworkDefinition = { formatVersion: input.formatVersion as NetworkDefinition['formatVersion'], kind: 'network', semantics: 'persistent-network-v1', id: uuid(input.id), revision: revision(input.revision), groupId: uuid(input.groupId), name: input.name, channels: parsedChannels, members }
   if (result.formatVersion >= 2) {
     result.gates = gates(input.gates)
     if (result.gates.some(gate => !members.some(member => member.podId === gate.podId && !member.source && member.contract.takes.includes(gate.channel)))) throw new Error('Network gate requires a declared downstream subscription')
   }
-  if (result.formatVersion === 3) {
+  if (result.formatVersion >= 3) {
     result.joins = joins(input.joins)
     for (const join of result.joins) {
       const target = members.find(member => member.podId === join.podId && !member.source)
       if (!target || target.contract.takes.length !== join.channels.length || join.channels.some(name => !target.contract.takes.includes(name) || !parsedChannels.some(channel => channel.name === name))) throw new Error('Explicit joins must cover every declared input of one consumer')
     }
+  }
+  if (result.formatVersion === 4) {
+    result.feedback = feedback(input.feedback)
+    // Feedback is a consumer's declared output that flows back upstream; sources and undeclared outputs cannot feed back.
+    if (result.feedback.some(item => !members.some(member => member.podId === item.podId && !member.source && member.contract.gives.includes(item.channel)) || !parsedChannels.some(channel => channel.name === item.channel))) throw new Error('Bounded feedback requires a declared consumer output channel')
+    // A join waits for every input of one case revision, which a later hop can never satisfy.
+    if (result.feedback.some(item => result.joins!.some(join => join.channels.includes(item.channel)))) throw new Error('Bounded feedback cannot target an explicitly joined channel')
   }
   if (new TextEncoder().encode(JSON.stringify(result)).length > networkLimits.definitionBytes) throw new Error('Network definition exceeds its size limit')
   return result
@@ -175,7 +203,7 @@ export function parseNetworkCommand(value: unknown): NetworkCommand {
   if (input.type === 'create') {
     fields(input, ['type', 'draft'])
     const data = networkDataObject(input.draft)
-    const draft = fields(data, ['name', 'groupId', 'channels', 'members', ...(Object.hasOwn(data, 'expectedSetup') ? ['expectedSetup'] : []), ...(Object.hasOwn(data, 'sharedValues') ? ['sharedValues'] : []), ...(Object.hasOwn(data, 'gates') ? ['gates'] : []), ...(Object.hasOwn(data, 'joins') ? ['joins'] : [])])
+    const draft = fields(data, ['name', 'groupId', 'channels', 'members', ...(Object.hasOwn(data, 'expectedSetup') ? ['expectedSetup'] : []), ...(Object.hasOwn(data, 'sharedValues') ? ['sharedValues'] : []), ...(Object.hasOwn(data, 'gates') ? ['gates'] : []), ...(Object.hasOwn(data, 'joins') ? ['joins'] : []), ...(Object.hasOwn(data, 'feedback') ? ['feedback'] : [])])
     if (Object.hasOwn(draft, 'expectedSetup') && (typeof draft.expectedSetup !== 'string' || !/^[a-f0-9]{64}$/.test(draft.expectedSetup))) throw new Error('Invalid network setup fingerprint')
     if (Object.hasOwn(draft, 'sharedValues')) draft.sharedValues = networkSharedValues(draft.sharedValues)
     const members = list(draft.members, networkLimits.members).map((value) => {
@@ -186,7 +214,7 @@ export function parseNetworkCommand(value: unknown): NetworkCommand {
     })
     if (typeof draft.name !== 'string' || !draft.name.trim() || draft.name.length > 120 || draft.name.includes('\0') || !members.length) throw new Error('Invalid network draft name or members')
     unique(members.map(item => item.podId))
-    return { type: 'create', draft: { name: draft.name, groupId: uuid(draft.groupId), channels: channels(draft.channels), members, ...(Object.hasOwn(draft, 'expectedSetup') ? { expectedSetup: draft.expectedSetup as string } : {}), ...(Object.hasOwn(draft, 'sharedValues') ? { sharedValues: draft.sharedValues as Record<string, unknown> } : {}), ...(Object.hasOwn(draft, 'gates') ? { gates: gates(draft.gates) } : {}), ...(Object.hasOwn(draft, 'joins') ? { joins: joins(draft.joins) } : {}) } }
+    return { type: 'create', draft: { name: draft.name, groupId: uuid(draft.groupId), channels: channels(draft.channels), members, ...(Object.hasOwn(draft, 'expectedSetup') ? { expectedSetup: draft.expectedSetup as string } : {}), ...(Object.hasOwn(draft, 'sharedValues') ? { sharedValues: draft.sharedValues as Record<string, unknown> } : {}), ...(Object.hasOwn(draft, 'gates') ? { gates: gates(draft.gates) } : {}), ...(Object.hasOwn(draft, 'joins') ? { joins: joins(draft.joins) } : {}), ...(Object.hasOwn(draft, 'feedback') ? { feedback: feedback(draft.feedback) } : {}) } }
   }
   if (input.type === 'gateOpen') { fields(input, ['type', 'id', 'revision', 'taskId', 'generation']); return { type: 'gateOpen', id: uuid(input.id), revision: revision(input.revision), taskId: uuid(input.taskId), generation: revision(input.generation) } }
   if (input.type === 'gateExclude' || input.type === 'gateDiscard' || input.type === 'gateReview') {
@@ -200,6 +228,11 @@ export function parseNetworkCommand(value: unknown): NetworkCommand {
     return { type: 'gateExclude', ...authority, deliveryIds }
   }
   if (input.type === 'activate' || input.type === 'pause') { fields(input, ['type', 'id', 'revision']); return { type: input.type, id: uuid(input.id), revision: revision(input.revision) } }
+  if (input.type === 'discardFeedback') {
+    fields(input, ['type', 'id', 'revision', 'eventId', 'evidence'])
+    if (typeof input.evidence !== 'string' || !input.evidence.trim() || input.evidence.length > 4000) throw new Error('Discarding held feedback requires explicit owner evidence')
+    return { type: 'discardFeedback', id: uuid(input.id), revision: revision(input.revision), eventId: uuid(input.eventId), evidence: input.evidence }
+  }
   if (input.type === 'inspect' || input.type === 'retry') { fields(input, ['type', 'id', 'revision', 'runId', 'generation']); return { type: input.type, id: uuid(input.id), revision: revision(input.revision), runId: uuid(input.runId), generation: revision(input.generation) } }
   if (input.type === 'discardFailure') {
     fields(input, ['type', 'id', 'revision', 'runId', 'generation', 'evidence'])
@@ -342,9 +375,15 @@ export function diagnoseNetwork(definition: NetworkDefinition): NetworkDiagnosti
     if (!producers.has(channel.name) && !consumed) diagnostics.push({ code: 'channel-without-producer', podId: null, channel: channel.name })
     if (!consumed) diagnostics.push({ code: 'channel-without-consumer', podId: null, channel: channel.name })
   }
+  // Declared feedback edges are excluded from the cycle check; every other edge must stay acyclic.
+  const feedback = definition.feedback ?? []
+  const immediate = (producer: string, channel: string) => !feedback.some(item => item.podId === producer && item.channel === channel)
+  for (const item of feedback) {
+    if (!definition.members.some(member => member.contract.takes.includes(item.channel))) diagnostics.push({ code: 'feedback-bounds', podId: item.podId, channel: item.channel })
+  }
   const predecessors = new Map<string, string[]>()
   for (const member of definition.members) {
-    predecessors.set(member.podId, member.contract.takes.flatMap(channel => producers.get(channel) ?? []))
+    predecessors.set(member.podId, member.contract.takes.flatMap(channel => (producers.get(channel) ?? []).filter(producer => immediate(producer, channel))))
     for (const channel of member.contract.takes) {
       if (!producers.has(channel)) diagnostics.push({ code: 'channel-without-producer', podId: member.podId, channel })
     }

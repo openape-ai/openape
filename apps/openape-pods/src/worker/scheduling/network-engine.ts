@@ -12,7 +12,7 @@ import type { NetworkGateStep } from './network-gates'
 import { randomUUID } from 'node:crypto'
 import { parseOwner, sameOwner } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
-import { diagnoseNetwork, parseNetworkCommand, parseNetworkDefinition } from '../../contracts/networks'
+import { diagnoseNetwork, draftControls, draftFormatVersion, parseNetworkCommand, parseNetworkDefinition } from '../../contracts/networks'
 import type { NetworkDefinition, NetworkDraft, NetworkHealth, NetworkPreview, NetworkView } from '../../contracts/networks'
 import { parseGraphContract } from '../../contracts/graphs'
 import { nextDue } from '../../contracts/clock'
@@ -70,6 +70,10 @@ export class NetworkEngine {
     if (command.type === 'detail') return { ...this.view(), details: views.detail(definition) }
     if (command.type === 'trace') return { ...this.view(), trace: views.trace(definition.id, command.before, command.caseId) }
     if (command.type === 'records') return { ...this.view(), records: views.records(definition, command.collectionId, command.after) }
+    if (command.type === 'discardFeedback') {
+      this.invocations.events.discardHeldFeedback(definition.id, command.eventId, command.evidence)
+      return this.view()
+    }
     if (command.type === 'gateExclude' || command.type === 'gateDiscard' || command.type === 'gateReview') {
       if (command.type === 'gateReview') this.validate(definition)
       this.gates.resolve(definition.id, command)
@@ -381,7 +385,7 @@ export class NetworkEngine {
         return { podId: selection.podId, definitionId: binding.definition_id as string, definitionVersion: binding.definition_version as number, bindingRevision: binding.binding_revision as number, contract: parseGraphContract(JSON.parse(binding.contract as string)), source: selection.source ? { bindingId: randomUUID(), schedule: selection.source.schedule } : null, serialCase: selection.serialCase }
       })
       const { sharedValues: _sharedValues, expectedSetup: _expectedSetup, ...composition } = draft
-      const definition = parseNetworkDefinition({ formatVersion: draft.joins ? 3 : draft.gates ? 2 : 1, kind: 'network', semantics: 'persistent-network-v1', id, revision: 1, ...composition, ...(draft.joins ? { gates: draft.gates ?? [] } : {}), members })
+      const definition = parseNetworkDefinition({ formatVersion: draftFormatVersion(draft), kind: 'network', semantics: 'persistent-network-v1', id, revision: 1, ...composition, ...draftControls(draft), members })
       const sharedValues = validateNetworkComposition(this.store, this.resources, owner, draft, definition)
       this.validate(definition)
       const body = canonicalNetworkJson(definition)

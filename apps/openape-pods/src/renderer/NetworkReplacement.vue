@@ -33,6 +33,7 @@ export default defineComponent({
       for (const name of new Set([...before.channels, ...after.channels].map(channel => channel.name))) add(`${t('Channel schemas')}: ${name}`, before.channels.find(channel => channel.name === name), after.channels.find(channel => channel.name === name))
       for (const key of new Set([...(before.gates ?? []), ...(after.gates ?? [])].map(gate => gate.key))) add(t('Approvals'), before.gates?.find(gate => gate.key === key), after.gates?.find(gate => gate.key === key), gate => `${gate.title} · ${this.name(gate.podId)} · ${gate.channel}`)
       for (const id of new Set([...(before.joins ?? []), ...(after.joins ?? [])].map(join => join.id))) add(t('Joins'), before.joins?.find(join => join.id === id), after.joins?.find(join => join.id === id), join => `${this.name(join.podId)} · ${join.channels.join(', ')} · ${join.deadlineMs} ms`)
+      for (const id of new Set([...(before.feedback ?? []), ...(after.feedback ?? [])].map(item => item.id))) add(t('Feedback'), before.feedback?.find(item => item.id === id), after.feedback?.find(item => item.id === id), item => `${this.name(item.podId)} · ${item.channel} · ${item.delayMs} ms · ${item.maxHops} · ${item.maxCaseAgeMs} ms`)
       for (const name of new Set([...Object.keys(before.sharedValues ?? {}), ...Object.keys(after.sharedValues ?? {})])) add(`${t('Shared values')}: ${name}`, before.sharedValues?.[name], after.sharedValues?.[name])
       return changes
     },
