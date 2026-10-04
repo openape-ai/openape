@@ -20,6 +20,17 @@ released; completed effect history and the paused Delta Mind network remain.
 Source base: `01fa0886fd3171ca55f44ce6187c38dd68835af5`. Checks and signed rollout
 are recorded in the issue/PR and private Test Runs receipt before closure.
 
+PR232 merged at `6e1bebf2` with source/main CI5383/5384 passing. During live
+recovery the owner IdP independently returned `SQLITE_BUSY`; its local database
+used DELETE journaling. A consistent backup and targeted restart restored real
+grant requests and zaz queue reads. The follow-up in
+`bugfix/issue-1421-idp-read-lock` enables WAL for local file databases at startup.
+A retained real SQLite regression reproduces the old reader/writer lock and
+verifies commits while another connection holds an older read snapshot. Root
+lint/typecheck, IdP build and all 345 IdP tests pass. Remote database and owner
+approval semantics are unchanged. Exact-source CI and a tested owner-IdP-only
+deployment remain required; the Pods provider and paused mail network stay as-is.
+
 
 ## Bounded network MCP and local start correction — issue 1417
 
