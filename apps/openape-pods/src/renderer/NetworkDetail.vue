@@ -24,19 +24,20 @@ export default defineComponent({
     active: { type: Boolean, default: true },
   },
   emits: ['changed', 'back', 'openPod', 'replace'],
-  data() { return { remoteGates: [] as NonNullable<NetworkView['gates']>, loading: false, activityLoading: false, recordsLoading: false, details: null as NetworkDetails | null, trace: null as NetworkTracePage | null, records: null as NetworkDataPage | null, tab: 'structure', caseId: null as string | null, selected: '', loadRequest: 0, error: '', actionError: '', activityError: '', recordsError: '', activityRequest: 0, recordsRequest: 0, now: Date.now(), busy: false, processing: false, processPods: [] as string[], reviewedPaused: [] as string[], budget: 10, preview: null as NetworkPreview | null, evidence: {} as Record<string, string>, timer: null as ReturnType<typeof setTimeout> | null, closed: false } },
+  data() { return { remoteChoices: [] as NonNullable<NetworkView['choices']>, remoteGates: [] as NonNullable<NetworkView['gates']>, loading: false, activityLoading: false, recordsLoading: false, details: null as NetworkDetails | null, trace: null as NetworkTracePage | null, records: null as NetworkDataPage | null, tab: 'structure', caseId: null as string | null, selected: '', loadRequest: 0, error: '', actionError: '', activityError: '', recordsError: '', activityRequest: 0, recordsRequest: 0, now: Date.now(), busy: false, processing: false, processPods: [] as string[], reviewedPaused: [] as string[], budget: 10, preview: null as NetworkPreview | null, evidence: {} as Record<string, string>, timer: null as ReturnType<typeof setTimeout> | null, closed: false } },
   computed: {
+    choices() { return (this.readNetwork ? this.remoteChoices : this.view.choices ?? []).filter(choice => choice.networkId === this.network.id) },
     gates() { return (this.readNetwork ? this.remoteGates : this.view.gates ?? []).filter(gate => gate.networkId === this.network.id) },
     structure(): WorkflowDefinition | null {
       const definition = this.details?.definition
       if (!definition) return null
-      return { id: definition.id, revision: definition.revision, name: definition.name, groupId: definition.groupId, mode: 'channels', schedule: null, enabled: false, paused: true, nextAt: null, values: [], nodes: definition.members.map(member => ({ podId: member.podId, after: [], handoff: false })), channels: definition.channels.map(channel => ({ name: channel.name, title: channel.title, fields: Object.keys(channel.schema.properties) })), gates: (definition.gates ?? []).map(gate => ({ key: gate.key, title: gate.title, kind: 'approve', takes: gate.channel, gives: gate.channel, excluded: null })) }
+      return { id: definition.id, revision: definition.revision, name: definition.name, groupId: definition.groupId, mode: 'channels', schedule: null, enabled: false, paused: true, nextAt: null, values: [], nodes: definition.members.map(member => ({ podId: member.podId, after: [], handoff: false })), channels: definition.channels.map(channel => ({ name: channel.name, title: channel.title, fields: Object.keys(channel.schema.properties) })), gates: [...(definition.routes ?? []), ...(definition.gates ?? []).filter(gate => !definition.routes?.some(route => route.key === gate.key)).map(gate => ({ key: gate.key, title: gate.title, kind: 'approve' as const, takes: gate.channel, gives: gate.channel, excluded: null }))] }
     },
     graph(): GraphDetail | null {
       if (!this.details || !this.structure) return null
       const definition = this.details.definition
-      const edges = deriveEdges(definition.members, [])
-      for (const gate of definition.gates ?? []) {
+      const edges = deriveEdges(definition.members, definition.routes ?? [])
+      for (const gate of (definition.gates ?? []).filter(gate => !definition.routes?.some(route => route.key === gate.key))) {
         for (const edge of edges.filter(edge => edge.to === gate.podId && edge.channel === gate.channel)) edge.to = `gate:${gate.key}`
         edges.push({ from: `gate:${gate.key}`, to: gate.podId, channel: gate.channel })
       }
@@ -103,8 +104,10 @@ export default defineComponent({
         const response = await this.read({ type: 'detail', id: this.network.id, revision: this.network.revision })
         if (request !== this.loadRequest || this.closed) return
         this.details = response.details!
-        if (this.readNetwork) this.remoteGates = response.gates ?? []
-        else this.$emit('changed', response)
+        if (this.readNetwork) { this.remoteGates = response.gates ?? []; this.remoteChoices = response.choices ?? [] }
+        else {
+          this.$emit('changed', response)
+        }
         this.error = ''
         if (includeTrace || !this.trace) await this.activity(null)
       }
@@ -180,7 +183,7 @@ export default defineComponent({
       </button>
     </div>
     <p>
-      {{ t('Waiting: {count}', { count: (network.counts.pending ?? 0) + (network.counts.retry_wait ?? 0) }) }} · {{ t('Processing: {count}', { count: network.counts.claimed ?? 0 }) }} · {{ t('Decisions: {count}', { count: network.state === 'archived' ? 0 : !details && network.decisions !== undefined ? network.decisions : gates.filter(gate => ['pending', 'unknown', 'preparing', 'consuming', 'superseded'].includes(gate.state)).length }) }}
+      {{ t('Waiting: {count}', { count: (network.counts.pending ?? 0) + (network.counts.retry_wait ?? 0) }) }} · {{ t('Processing: {count}', { count: network.counts.claimed ?? 0 }) }} · {{ t('Decisions: {count}', { count: network.state === 'archived' ? 0 : !details && network.decisions !== undefined ? network.decisions : choices.length + gates.filter(gate => ['pending', 'unknown', 'preparing', 'consuming', 'superseded'].includes(gate.state)).length }) }}
     </p>
     <button v-if="details?.failures.length" class="text-button network-failure-count" @click="tab = 'decisions'">
       {{ t('Failures requiring review: {count}', { count: details.failures.length }) }}
@@ -299,7 +302,7 @@ export default defineComponent({
       <p v-if="readOnly">
         {{ t('Read-only here. Resolve decisions and failures in the desktop app.') }}
       </p>
-      <h2>{{ t('Decisions and failures') }}</h2><p v-if="!details.failures.length && !gates.length">
+      <h2>{{ t('Decisions and failures') }}</h2><p v-if="!details.failures.length && !gates.length && !choices.length">
         {{ t('No decisions or failures need attention.') }}
       </p><p>{{ t('Unknown external actions are never repeated automatically. Inspect and reconcile their outcome first.') }}</p>
       <article v-for="failure in details.failures" :key="failure.runId">
@@ -335,6 +338,16 @@ export default defineComponent({
             {{ t('Dispose with evidence') }}
           </button>
         </div>
+      </article>
+      <article v-for="choice in choices" :key="`${choice.eventId}:${choice.gate}`">
+        <h3>{{ choice.title }}</h3>
+        <pre>{{ choice.payload }}</pre>
+        <p v-if="choice.truncated">
+          {{ t('Payload preview is truncated; the original remains stored locally.') }}
+        </p>
+        <button v-for="option in choice.options" :key="option.key" class="secondary" :disabled="readOnly || busy" @click="send({ type: 'choose', id: network.id, revision: network.revision, eventId: choice.eventId, gate: choice.gate, option: option.key })">
+          {{ option.title }}
+        </button>
       </article>
       <article v-for="gate in gates" :key="gate.id">
         <h3>{{ gate.gate }} · {{ t(gate.state) }}</h3><p v-if="gate.error">

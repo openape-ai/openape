@@ -1,3 +1,4 @@
+import { supportedNetworkCapability, networkSourceCapability } from '../../contracts/network-capabilities'
 import { parseSchedule } from '../../contracts/scheduling'
 import { parseConversionSelection } from '../../contracts/network-migration'
 import type { ConversionSelection, ConversionPreview } from '../../contracts/network-migration'
@@ -29,6 +30,7 @@ export function previewNetworkConversion(store: PodDatabase, resources: Resource
   if (canonicalNetworkJson(podIds) !== canonicalNetworkJson(draft.members.map(member => member.podId).sort())) throw new Error('Conversion must preserve every legacy Pod instance')
   if (!['block', 'retainLegacy'].includes(selection.pending)) throw new Error('Choose how pending legacy items will be retained')
   const issues: string[] = []
+  if (canonicalNetworkJson(legacy.gates) !== canonicalNetworkJson(draft.routes ?? [])) issues.push('Preserve every legacy choice, approval and exclusion route exactly')
   const ids = JSON.stringify(podIds)
   const has = (sql: string, ...values: (string | number)[]) => !!store.db.prepare(sql).get(...values)
   issues.push(...unsettledConversionIssues(store, legacy, ids, draft.groupId))
@@ -55,13 +57,20 @@ export function previewNetworkConversion(store: PodDatabase, resources: Resource
     const contract = parseGraphContract(manifest.contract)
     const chosen = draft.members.find(member => member.podId === podId)!
     if (pod.lifecycle === 'archived' || pod.activeScript !== binding.content_hash || manifest.dependencyLockHash !== binding.lock_hash || canonicalNetworkJson(contract) !== canonicalNetworkJson(JSON.parse(binding.contract as string))) issues.push(`${pod.name}: active script differs from its adopted definition`)
-    if (manifest.capabilities.some(capability => capability !== 'mail.read')) issues.push(`${pod.name}: rights need a supported persistent runtime port`)
-    if (!chosen.source && (!manifest.triggers.includes('event') || manifest.capabilities.includes('mail.read'))) issues.push(`${pod.name}: consumer requires an event trigger and cannot perform source mail intake`)
+    if (manifest.capabilities.some(capability => !supportedNetworkCapability(capability))) issues.push(`${pod.name}: rights need a supported persistent runtime port`)
+    if (!chosen.source && (!manifest.triggers.includes('event') || manifest.capabilities.some(networkSourceCapability))) issues.push(`${pod.name}: consumer requires an event trigger and cannot perform source mail intake`)
     if (chosen.source?.schedule && !manifest.triggers.includes('schedule')) issues.push(`${pod.name}: source script does not allow scheduled execution`)
     if (!has('SELECT 1 FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?', podId, pod.activeScript!, pod.bindingRevision, resources.epoch(podId))) issues.push(`${pod.name}: validate the current script and local rights first`)
     for (const value of legacy.values) {
       const override = store.db.prepare('SELECT value FROM instance_config WHERE pod_id=? AND name=?').get(podId, value.name)
       if (override && JSON.parse(override.value as string) !== value.value) issues.push('A Pod override conflicts with a retained legacy value; reconcile the configuration before conversion')
+    }
+    const latestRun = store.db.prepare('SELECT id,state FROM runs WHERE pod_id=? ORDER BY started_at DESC,rowid DESC LIMIT 1').get(podId)
+    if (latestRun && latestRun.state !== 'completed' && !has(`SELECT 1 FROM recovery_reviews v
+      JOIN workflow_attempts a ON a.run_id=v.run_id JOIN workflow_runs w ON w.id=a.workflow_run_id
+      WHERE v.run_id=? AND v.state='ready' AND v.error IS NULL AND v.request_event_id IS NULL
+      AND w.state='cancelled' AND w.finished_at IS NOT NULL`, latestRun.id as string)) {
+      issues.push('Resolve the latest unsuccessful member run before conversion')
     }
     const checkpoint = store.checkpoint(podId)
     const checkpointBody = canonicalNetworkJson(checkpoint.body)
@@ -79,7 +88,7 @@ export function previewNetworkConversion(store: PodDatabase, resources: Resource
   if (selection.checkpoints.some(item => !podIds.includes(item.podId))) throw new Error('Checkpoint review contains a foreign Pod')
   let candidate: NetworkDefinition | null = null
   try {
-    candidate = parseNetworkDefinition({ formatVersion: draftFormatVersion(draft), kind: 'network', semantics: 'persistent-network-v1', id: legacy.id, revision: 1, name: draft.name, groupId: draft.groupId, channels: draft.channels, ...(draft.gates ? { gates: draft.gates } : {}), ...draftControls(draft), ...(draft.joins ? { joins: draft.joins } : {}), ...(draft.feedback ? { feedback: draft.feedback } : {}), members: draft.members.map((chosen) => {
+    candidate = parseNetworkDefinition({ formatVersion: draftFormatVersion(draft), kind: 'network', semantics: 'persistent-network-v1', id: legacy.id, revision: 1, name: draft.name, groupId: draft.groupId, channels: draft.channels, ...(draft.gates ? { gates: draft.gates } : {}), ...(draft.routes ? { routes: draft.routes } : {}), ...draftControls(draft), ...(draft.joins ? { joins: draft.joins } : {}), ...(draft.feedback ? { feedback: draft.feedback } : {}), members: draft.members.map((chosen) => {
       const member = authority.find(item => item.pod.id === chosen.podId)!
       return { podId: chosen.podId, definitionId: member.binding.definition_id, definitionVersion: member.binding.definition_version, bindingRevision: member.binding.binding_revision, contract: member.contract, source: chosen.source ? { bindingId: chosen.podId, schedule: chosen.source.schedule } : null, serialCase: chosen.serialCase }
     }) })
@@ -103,7 +112,7 @@ function unsettledConversionIssues(store: PodDatabase, legacy: WorkflowDefinitio
   const issues: string[] = []
   const has = (sql: string, ...values: (string | number)[]) => !!store.db.prepare(sql).get(...values)
   if (legacy.mail) issues.push('Mail workflow configuration requires a separately reviewed adapter')
-  if (legacy.gates.length) issues.push('Legacy gate channels cannot be rewritten without changing scripts; retain this graph until a supported adapter is available')
+
   if (has('SELECT 1 FROM workflow_runs WHERE workflow_id=? AND finished_at IS NULL', legacy.id)) issues.push('Settle the active workflow run before conversion')
   if (has('SELECT 1 FROM workflow_revisions WHERE workflow_id=?', legacy.id)) issues.push('Published callable workflows cannot transfer their instances to a network')
   if (has('SELECT 1 FROM network_members WHERE pod_id IN (SELECT value FROM json_each(?))', ids)) issues.push('A selected Pod already belongs to network work')
@@ -114,10 +123,21 @@ function unsettledConversionIssues(store: PodDatabase, legacy: WorkflowDefinitio
   }
   if (has('SELECT 1 FROM accepted_events WHERE pod_id IN (SELECT value FROM json_each(?)) AND state IN (\'pending\',\'claimed\',\'blocked\')', ids)) issues.push('Resolve pending standalone inputs before conversion')
   if (has('SELECT 1 FROM runs WHERE pod_id IN (SELECT value FROM json_each(?)) AND finished_at IS NULL', ids)) issues.push('Settle every unfinished member run before conversion')
-  if (has(`SELECT 1 FROM runs r WHERE r.pod_id IN (SELECT value FROM json_each(?)) AND r.state!='completed' AND NOT EXISTS(SELECT 1 FROM runs newer WHERE newer.pod_id=r.pod_id AND (newer.started_at>r.started_at OR (newer.started_at=r.started_at AND newer.rowid>r.rowid)))`, ids)) issues.push('Resolve the latest unsuccessful member run before conversion')
   if (has('SELECT 1 FROM effect_ledger WHERE pod_id IN (SELECT value FROM json_each(?)) AND state!=\'completed\'', ids)) issues.push('Reconcile uncertain external effects before conversion')
+  if (has(`SELECT 1 FROM graph_deliveries d JOIN graph_items i ON i.id=d.item_id
+    JOIN workflow_gates g ON g.workflow_id=i.workflow_id AND d.node='gate:'||g.key
+    WHERE i.workflow_id=? AND d.state='pending' AND json_extract(g.definition,'$.kind')='choose'`, legacy.id)) {
+    issues.push('Resolve pending legacy owner choices before conversion')
+  }
   if (has('SELECT 1 FROM graph_gate_batches WHERE workflow_id=? AND state IN (\'preparing\',\'pending\',\'consuming\',\'unknown\')', legacy.id)) issues.push('Resolve every pending or uncertain legacy approval before conversion')
-  if (has(`SELECT 1 FROM recovery_reviews v JOIN runs r ON r.id=v.run_id WHERE r.pod_id IN (SELECT value FROM json_each(?)) AND (v.state!='retryQueued' OR NOT EXISTS(SELECT 1 FROM accepted_events a WHERE a.id=v.request_event_id AND a.state='processed'))`, ids)) issues.push('Complete the member recovery review before conversion')
+  if (has(`SELECT 1 FROM recovery_reviews v JOIN runs r ON r.id=v.run_id WHERE r.pod_id IN (SELECT value FROM json_each(?)) AND NOT (
+    (v.state='retryQueued' AND EXISTS(SELECT 1 FROM accepted_events a WHERE a.id=v.request_event_id AND a.state='processed'))
+    OR (v.state='ready' AND v.error IS NULL AND v.request_event_id IS NULL AND r.finished_at IS NOT NULL
+      AND EXISTS(SELECT 1 FROM workflow_attempts a JOIN workflow_runs w ON w.id=a.workflow_run_id WHERE a.run_id=r.id AND w.state='cancelled' AND w.finished_at IS NOT NULL)
+      AND NOT EXISTS(SELECT 1 FROM workflow_attempts a JOIN workflow_runs w ON w.id=a.workflow_run_id WHERE a.run_id=r.id AND (w.state!='cancelled' OR w.finished_at IS NULL)))
+  )`, ids)) {
+    issues.push('Complete the member recovery review before conversion')
+  }
   if (has(`SELECT 1 FROM control_changes c,json_each(c.body,'$.targets') t WHERE json_extract(c.body,'$.state') IN ('pending','running') AND json_extract(t.value,'$.podId') IN (SELECT value FROM json_each(?))`, ids)) issues.push('Resolve pending control changes before conversion')
   return issues
 }

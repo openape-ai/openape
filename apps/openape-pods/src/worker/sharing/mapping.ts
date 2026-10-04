@@ -97,6 +97,7 @@ export async function mapPortableSource(root: string, source: PortableSource, ch
       }
       return { name: value.name, input }
     })
+    if (definition.routes?.length) throw new Error('Portable export of routed networks requires routing format support')
     const document = { version: 1, kind: 'network', formatVersion: definition.formatVersion, channels: definition.channels,
       members: definition.members.map(member => ({ pod: podKey(member.podId), source: member.source ? { schedule: member.source.schedule } : null, serialCase: member.serialCase })),
       gates: (definition.gates ?? []).map(({ podId, ...gate }) => ({ ...gate, pod: podKey(podId) })), joins: (definition.joins ?? []).map(({ podId, ...join }) => ({ ...join, pod: podKey(podId) })),
