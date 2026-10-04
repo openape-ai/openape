@@ -272,6 +272,9 @@ export class NetworkGates {
           if (excluded) {
             const changed = this.store.db.prepare(`UPDATE network_deliveries SET state='discarded',generation=generation+1,reason='Excluded by owner',review_receipt=? WHERE id=? AND state='pending' AND generation=?`).run(receipt, item.deliveryId, item.generation)
             if (changed.changes !== 1) throw new Error('Network excluded input changed')
+            const definition = parseNetworkDefinition(JSON.parse(this.store.db.prepare('SELECT contract FROM network_revisions WHERE network_id=? AND revision=?').get(networkId, manifest.networkRevision)!.contract as string))
+            const route = definition.routes?.find(route => route.key === manifest.gate)
+            if (route?.kind === 'approve' && route.excluded) this.invocations.events.routeGate(definition, route.key, item.eventId, route.excluded, 'excluded')
             const counted = this.store.db.prepare(`UPDATE network_queue_counts SET count=count-1 WHERE network_id=? AND state='pending' AND count>0`).run(networkId)
             if (counted.changes !== 1) throw new Error('Network gate queue projection is inconsistent')
             this.store.db.prepare(`INSERT INTO network_queue_counts VALUES(?,'discarded',1) ON CONFLICT(network_id,state) DO UPDATE SET count=count+1`).run(networkId)

@@ -1,3 +1,4 @@
+import { supportedNetworkCapability, networkSourceCapability } from '../../contracts/network-capabilities'
 import { currentCompositionDraft, NetworkReplacement } from './network-replacement'
 import { networkSettlementIssues, previewNetworkArchive, retainedLegacyItems } from './network-retirement'
 import { previewNetworkConversion, retainedLegacyDeliveries } from './network-migration'
@@ -12,7 +13,7 @@ import type { NetworkGateStep } from './network-gates'
 import { randomUUID } from 'node:crypto'
 import { parseOwner, sameOwner } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
-import { diagnoseNetwork, draftControls, draftFormatVersion, parseNetworkCommand, parseNetworkDefinition } from '../../contracts/networks'
+import { networkSubscriptionChannel, diagnoseNetwork, draftControls, draftFormatVersion, parseNetworkCommand, parseNetworkDefinition } from '../../contracts/networks'
 import type { NetworkDefinition, NetworkDraft, NetworkHealth, NetworkPreview, NetworkView } from '../../contracts/networks'
 import { parseGraphContract } from '../../contracts/graphs'
 import { nextDue } from '../../contracts/clock'
@@ -70,6 +71,11 @@ export class NetworkEngine {
     if (command.type === 'detail') return { ...this.view(), details: views.detail(definition) }
     if (command.type === 'trace') return { ...this.view(), trace: views.trace(definition.id, command.before, command.caseId) }
     if (command.type === 'records') return { ...this.view(), records: views.records(definition, command.collectionId, command.after) }
+    if (command.type === 'choose') {
+      if (this.store.db.prepare('SELECT baseline_state FROM networks WHERE id=?').get(definition.id)!.baseline_state !== 'ready') throw new Error('Restored network requires a reviewed baseline')
+      this.invocations.events.choose(definition, command.eventId, command.gate, command.option)
+      return this.view()
+    }
     if (command.type === 'discardFeedback') {
       this.invocations.events.discardHeldFeedback(definition.id, command.eventId, command.evidence)
       return this.view()
@@ -254,7 +260,19 @@ export class NetworkEngine {
     if (!this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()) return { networks: [] }
     const owner = parseOwner(this.currentOwner())
     const gates = this.gates.views(owner)
-    return { ...(gates.length ? { gates } : {}), networks: this.store.db.prepare('SELECT id,revision,group_id,name,state FROM networks WHERE owner_issuer=? AND owner_subject=? ORDER BY created_at,id LIMIT 64').all(owner.issuer, owner.subject).map(row => ({ decisions: row.state === 'archived' ? 0 : Number(this.store.db.prepare('SELECT count(*) AS count FROM network_gate_tasks WHERE network_id=? AND json_extract(manifest,\'$.networkRevision\')=(SELECT revision FROM networks WHERE id=network_id) AND state IN (\'preparing\',\'pending\',\'consuming\',\'unknown\',\'superseded\')').get(row.id!)!.count), podIds: this.store.db.prepare('SELECT pod_id FROM network_members WHERE network_id=? ORDER BY pod_id').all(row.id!).map(member => member.pod_id as string), id: row.id as string, revision: row.revision as number, groupId: row.group_id as string, name: row.name as string, state: row.state as 'active' | 'paused' | 'archived', health: this.health(row.id as string), counts: Object.fromEntries(this.store.db.prepare('SELECT state,count FROM network_queue_counts WHERE network_id=? ORDER BY state').all(row.id!).map(count => [count.state as string, count.count as number])) })) }
+    const choices = this.store.db.prepare(`SELECT c.*,e.case_id,e.payload,r.contract FROM network_choices c
+      JOIN networks n ON n.id=c.network_id AND n.revision=c.network_revision
+      JOIN network_revisions r ON r.network_id=c.network_id AND r.revision=c.network_revision
+      JOIN network_events e ON e.network_id=c.network_id AND e.id=c.event_id
+      WHERE n.owner_issuer=? AND n.owner_subject=? AND n.state!='archived' AND c.decided_at IS NULL
+      ORDER BY e.accepted_at,c.event_id,c.gate_key LIMIT 256`).all(owner.issuer, owner.subject).map((row) => {
+      const definition = parseNetworkDefinition(JSON.parse(row.contract as string))
+      const gate = definition.routes!.find(gate => gate.key === row.gate_key)!
+      if (gate.kind !== 'choose') throw new Error('Stored choice has no declared routing gate')
+      const payload = row.payload as string
+      return { networkId: definition.id, revision: definition.revision, eventId: row.event_id as string, caseId: row.case_id as string, gate: gate.key, title: gate.title, payload: payload.slice(0, 4096), truncated: payload.length > 4096, options: gate.options.map(({ key, title }) => ({ key, title })) }
+    })
+    return { ...(choices.length ? { choices } : {}), ...(gates.length ? { gates } : {}), networks: this.store.db.prepare('SELECT id,revision,group_id,name,state FROM networks WHERE owner_issuer=? AND owner_subject=? ORDER BY created_at,id LIMIT 64').all(owner.issuer, owner.subject).map(row => ({ decisions: row.state === 'archived' ? 0 : Number(this.store.db.prepare('SELECT count(*) AS count FROM network_gate_tasks WHERE network_id=? AND json_extract(manifest,\'$.networkRevision\')=(SELECT revision FROM networks WHERE id=network_id) AND state IN (\'preparing\',\'pending\',\'consuming\',\'unknown\',\'superseded\')').get(row.id!)!.count) + Number(this.store.db.prepare('SELECT count(*) AS count FROM network_choices WHERE network_id=? AND network_revision=? AND decided_at IS NULL').get(row.id!, row.revision!)!.count), podIds: this.store.db.prepare('SELECT pod_id FROM network_members WHERE network_id=? ORDER BY pod_id').all(row.id!).map(member => member.pod_id as string), id: row.id as string, revision: row.revision as number, groupId: row.group_id as string, name: row.name as string, state: row.state as 'active' | 'paused' | 'archived', health: this.health(row.id as string), counts: Object.fromEntries(this.store.db.prepare('SELECT state,count FROM network_queue_counts WHERE network_id=? ORDER BY state').all(row.id!).map(count => [count.state as string, count.count as number])) })) }
   }
 
   private health(networkId: string): NetworkHealth {
@@ -297,15 +315,16 @@ export class NetworkEngine {
       if (issues.length) throw new Error(`Definition update blocked: ${issues.join('; ')}. The current version remains pinned.`)
       update()
       const binding = this.binding(podId, parseOwner(this.currentOwner()), definition.groupId)
-      this.store.db.prepare('UPDATE network_members SET definition_version=?,binding_revision=? WHERE pod_id=?').run(binding.definition_version!, binding.binding_revision!, podId)
-      const next = parseNetworkDefinition({ ...definition, revision: definition.revision + 1, members: definition.members.map(member => member.podId === podId ? { ...member, definitionVersion: binding.definition_version, bindingRevision: binding.binding_revision, contract: parseGraphContract(JSON.parse(binding.contract as string)) } : member) })
+      this.store.db.prepare('UPDATE network_members SET definition_id=?,definition_version=?,binding_revision=? WHERE pod_id=?').run(binding.definition_id!, binding.definition_version!, binding.binding_revision!, podId)
+      const next = parseNetworkDefinition({ ...definition, revision: definition.revision + 1, members: definition.members.map(member => member.podId === podId ? { ...member, definitionId: binding.definition_id, definitionVersion: binding.definition_version, bindingRevision: binding.binding_revision, contract: parseGraphContract(JSON.parse(binding.contract as string)) } : member) })
       this.validate(next)
       const body = canonicalNetworkJson(next)
       assertNetworkQuota(this.store, Buffer.byteLength(body) + 16384)
       this.store.db.prepare('INSERT INTO network_revisions VALUES(?,?,?,?,?)').run(networkId, next.revision, body, digest(body), Date.now())
       this.store.db.prepare('UPDATE networks SET revision=?,activation_epoch=activation_epoch+1 WHERE id=?').run(next.revision, networkId)
       for (const member of next.members) {
-        for (const channel of member.contract.takes) {
+        for (const declared of member.contract.takes) {
+          const channel = networkSubscriptionChannel(next, member.podId, declared)
           const spec = next.channels.find(item => item.name === channel)!
           const hash = digest(canonicalNetworkJson({ schemaVersion: spec.schemaVersion, schema: spec.schema }))
           this.store.db.prepare('INSERT INTO network_subscriptions VALUES(?,?,?,?,?,?,?)').run(randomUUID(), networkId, next.revision, member.podId, channel, hash, member.serialCase ? 1 : 0)
@@ -394,7 +413,8 @@ export class NetworkEngine {
       for (const member of members) {
         this.store.db.prepare('INSERT INTO network_members VALUES(?,?,?,?,?,?)').run(id, member.podId, member.bindingRevision, member.definitionId, member.definitionVersion, member.source?.bindingId ?? null)
         this.store.db.prepare('INSERT INTO network_checkpoints VALUES(?,?,0,\'{}\')').run(id, member.podId)
-        for (const channel of member.contract.takes) {
+        for (const declaredChannel of member.contract.takes) {
+          const channel = networkSubscriptionChannel(definition, member.podId, declaredChannel)
           const spec = definition.channels.find(item => item.name === channel)!
           const hash = digest(canonicalNetworkJson({ schemaVersion: spec.schemaVersion, schema: spec.schema }))
           this.store.db.prepare('INSERT INTO network_subscriptions VALUES(?,?,1,?,?,?,?)').run(randomUUID(), id, member.podId, channel, hash, member.serialCase ? 1 : 0)
@@ -428,8 +448,8 @@ export class NetworkEngine {
       if (!script) throw new Error('Network pinned script is missing')
       const manifest = parseManifest(JSON.parse(script.manifest as string))
       if (manifest.contract === undefined || canonicalNetworkJson(parseGraphContract(manifest.contract)) !== canonicalNetworkJson(member.contract) || manifest.dependencyLockHash !== binding.lock_hash) throw new Error('Network script contract or dependency lock differs from its definition')
-      if (manifest.capabilities.some(capability => capability !== 'mail.read')) throw new Error('Network capabilities require declared runtime ports')
-      if (!member.source && manifest.capabilities.includes('mail.read')) throw new Error('Network mail reads require a declared source')
+      if (manifest.capabilities.some(capability => !supportedNetworkCapability(capability))) throw new Error('Network capabilities require declared runtime ports')
+      if (!member.source && manifest.capabilities.some(networkSourceCapability)) throw new Error('Network mail reads require a declared source')
       if (!member.source && !manifest.triggers.includes('event')) throw new Error('Network consumer script must allow event triggers')
       if (member.source?.schedule && !manifest.triggers.includes('schedule')) throw new Error('Scheduled network source script must allow schedule triggers')
       if (!this.store.db.prepare('SELECT 1 FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(member.podId, pod.activeScript!, pod.bindingRevision, this.resources.epoch(member.podId))) throw new Error('Network instance needs validation for its current resources')

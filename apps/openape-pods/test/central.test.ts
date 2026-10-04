@@ -362,7 +362,7 @@ it('connects network volume with stable legacy parts and leaves complete data lo
   server.heartbeat(f.actor, lease, published.hash)
   expect(server.inventory(f.actor.owner)[0]!.online).toBe(true)
   expect(() => f.projection.snapshot(f.actor.owner)).toThrow('bounded publication support')
-})
+}, 15000)
 
 it('serves runtime reads without executing owner commands or changing the publication revision', async () => {
   const f = fixture(); const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())

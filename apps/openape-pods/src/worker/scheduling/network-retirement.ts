@@ -7,6 +7,7 @@ import type { PodDatabase } from '../storage/database'
 export function networkSettlementIssues(store: PodDatabase, id: string): string[] {
   const issues: string[] = []
   const checks = [
+    [`SELECT 1 FROM network_choices WHERE network_id=? AND decided_at IS NULL`, 'Resolve pending owner choices before changing the composition'],
     [`SELECT 1 FROM network_deliveries WHERE network_id=? AND state NOT IN ('done','discarded')`, 'Resolve pending network deliveries before changing the composition'],
     [`SELECT 1 FROM network_invocations i LEFT JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.network_id=? AND (i.state IN ('running','stopping','interrupted','unknown') OR (i.state='blocked' AND c.resolved_receipt IS NULL AND c.retry_consumed_at IS NULL))`, 'Settle network executions before changing the composition'],
     [`SELECT 1 FROM network_gate_tasks WHERE network_id=? AND state IN ('preparing','pending','consuming','unknown')`, 'Resolve pending or uncertain approvals before changing the composition'],

@@ -1,3 +1,4 @@
+import { networkRoutingSchema, networkRoutingTables } from './network-routing-schema.ts'
 import { definitionSchema, definitionTables } from './definition-schema.ts'
 import { aliasSchema, aliasTables, sharingSchema, sharingTables } from './sharing-schema.ts'
 import { networkDataSchema, networkDataTables } from './network-data-schema.ts'
@@ -469,7 +470,7 @@ function schemaObjects(version: number): { type: string, name: string, sql: stri
   if (cached) return cached
   const reference = new DatabaseSync(':memory:')
   try {
-    reference.exec(networkSchema + (version >= 29 ? networkControlSchema : '') + (version >= 30 ? networkGateSchema : '') + (version >= 31 ? networkDataSchema : '') + (version >= 32 ? networkWorkflowSchema : '') + (version >= 33 ? definitionSchema : '') + (version >= 34 ? sharingSchema : '') + (version >= 35 ? aliasSchema : ''))
+    reference.exec(networkSchema + (version >= 29 ? networkControlSchema : '') + (version >= 30 ? networkGateSchema : '') + (version >= 31 ? networkDataSchema : '') + (version >= 32 ? networkWorkflowSchema : '') + (version >= 33 ? definitionSchema : '') + (version >= 34 ? sharingSchema : '') + (version >= 35 ? aliasSchema : '') + (version >= 36 ? networkRoutingSchema : ''))
     const expectedSchema = reference.prepare('SELECT type,name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE \'sqlite_%\'').all() as { type: string, name: string, sql: string }[]
     expectedSchemas.set(version, expectedSchema)
     return expectedSchema
@@ -501,7 +502,7 @@ export function assertNetworkStorage(database: DatabaseSync, references = false)
     if (actual?.sql !== expected.sql) throw new Error(`Incomplete or altered network storage: ${expected.name}`)
   }
   if (!references) return
-  for (const table of [...networkTables, ...(controls ? networkControlTables : []), ...(version >= 30 ? networkGateTables : []), ...(version >= 31 ? networkDataTables : []), ...(version >= 32 ? networkWorkflowTables : []), ...(version >= 33 ? definitionTables : []), ...(version >= 34 ? sharingTables : []), ...(version >= 35 ? aliasTables : [])]) {
+  for (const table of [...networkTables, ...(controls ? networkControlTables : []), ...(version >= 30 ? networkGateTables : []), ...(version >= 31 ? networkDataTables : []), ...(version >= 32 ? networkWorkflowTables : []), ...(version >= 33 ? definitionTables : []), ...(version >= 34 ? sharingTables : []), ...(version >= 35 ? aliasTables : []), ...(version >= 36 ? networkRoutingTables : [])]) {
     if (database.prepare(`PRAGMA foreign_key_check(${table})`).get()) throw new Error(`Invalid network references: ${table}`)
   }
   for (const owner of database.prepare('SELECT issuer,subject FROM network_owners').all()) parseOwner(owner)
@@ -530,6 +531,18 @@ export function assertNetworkStorage(database: DatabaseSync, references = false)
     }
     const permission = database.prepare('SELECT 1 FROM workflow_call_permissions p JOIN networks n ON n.id=p.network_id WHERE p.owner_issuer!=n.owner_issuer OR p.owner_subject!=n.owner_subject OR p.group_id!=n.group_id LIMIT 1').get()
     if (permission) throw new Error('Invalid workflow call permission scope')
+  }
+  if (version >= 36) {
+    const choice = database.prepare(`SELECT 1 FROM network_choices c
+      JOIN network_revisions r ON r.network_id=c.network_id AND r.revision=c.network_revision
+      JOIN network_events e ON e.id=c.event_id LEFT JOIN network_events d ON d.id=c.result_event_id
+      WHERE e.network_revision!=c.network_revision OR NOT EXISTS(
+        SELECT 1 FROM json_each(r.contract,'$.routes') g WHERE json_extract(g.value,'$.key')=c.gate_key
+          AND json_extract(g.value,'$.kind')='choose' AND json_extract(g.value,'$.takes')=e.channel
+          AND (c.option_key IS NULL OR (d.network_revision=c.network_revision AND d.case_id=e.case_id AND d.case_revision=e.case_revision
+            AND d.payload_hash=e.payload_hash AND EXISTS(SELECT 1 FROM json_each(g.value,'$.options') o
+              WHERE json_extract(o.value,'$.key')=c.option_key AND json_extract(o.value,'$.channel')=d.channel)))) LIMIT 1`).get()
+    if (choice) throw new Error('Invalid network choice scope')
   }
   for (const [name, query] of Object.entries(networkBoundaryChecks)) {
     if (database.prepare(query).get()) throw new Error(`Invalid network boundary: ${name}`)

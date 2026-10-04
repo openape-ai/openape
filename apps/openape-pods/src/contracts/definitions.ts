@@ -8,7 +8,7 @@ import type { PackageManifest } from './dependencies'
 export type DefinitionCommand =
   | { type: 'list' }
   | { type: 'adopt' }
-  | { type: 'publish', podId: string, expectedScript: string, name: string, defaults: Record<string, unknown> }
+  | { type: 'publish' | 'prepareLocal', podId: string, expectedScript: string, name: string, defaults: Record<string, unknown> }
   | { type: 'instantiate', requestId: string, definitionId: string, version: number, name: string, groupId: string }
   | { type: 'retryProvision', requestId: string }
   | { type: 'previewUpdate' | 'prepareUpdate', podId: string, definitionId: string, version: number, expectedBinding: number }
@@ -36,7 +36,7 @@ export function definitionDefaults(value: unknown): Record<string, unknown> {
 export function parseDefinitionCommand(value: unknown): DefinitionCommand {
   const kind = value && typeof value === 'object' ? (value as { type?: unknown }).type : undefined
   if (kind === 'list' || kind === 'adopt') { dataFields(value, ['type']); return { type: kind } }
-  if (kind === 'publish') {
+  if (kind === 'publish' || kind === 'prepareLocal') {
     const input = dataFields(value, ['type', 'podId', 'expectedScript', 'name', 'defaults'])
     if (typeof input.expectedScript !== 'string' || !/^[a-f0-9]{64}$/.test(input.expectedScript)) throw new Error('Invalid published script hash')
     return { type: kind, podId: workflowIdentity(input.podId), expectedScript: input.expectedScript, name: name(input.name), defaults: definitionDefaults(input.defaults) }

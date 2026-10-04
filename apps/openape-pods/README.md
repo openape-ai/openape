@@ -502,7 +502,11 @@ public CA bundle. Folder traversal is bounded to 200 pages and 1,000 folders;
 at most 100 can be assigned. The default history selection is 90 days, rounded to
 a UTC calendar day; all history and attachments require explicit choices.
 The reviewed upstream history change is ac04293166dda43ca35cc67bd77108d2fe6911c9,
-merged through https://git.openape.ai/delta-mind/o365-cli/pulls/6. Message pagination
+merged through https://git.openape.ai/delta-mind/o365-cli/pulls/6.
+The bundled source now pins `f3c2f71d6ce70f1c1bce028e2668ad66597e5d60`,
+which also includes the account-scoped workflow transport from upstream PR 8.
+The network preview example uses only its `workflow read` operation; its Shapes
+adapter declares no mutation command. Message pagination
 preserves the exact receivedDateTime boundary. An attachment parent must already
 be recorded within that boundary. Existing durable knowledge is retained when
 read permissions narrow.
