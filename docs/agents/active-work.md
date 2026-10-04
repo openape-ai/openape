@@ -1,5 +1,26 @@
 # Active work
 
+## Service authorization recovery — issue 1421
+
+A temporary HTTP failure while creating a runtime grant must use the existing
+infrastructure backoff instead of permanently blocking accepted inputs. The
+fix in `bugfix/issue-1421-service-recovery` classifies transient HTTP responses
+for grant creation as well as reads/token requests. Transport ambiguity on
+non-idempotent creation remains distinct. Denied/revoked decisions, unknown
+delivery receipts, binding checks, and paused networks retain their guards.
+Permanent regressions cover transient/refused creation responses and automatic
+recovery that still waits for owner approval. Existing scheduling/recovery tests
+cover durable retry, restart, pause, binding changes and effects.
+
+The installed zaz Pod was recovered through the supported run recovery command
+(receipt `a7a78d5e-3ed8-42fb-a32a-c9f62d50db17`, applied). Run
+`4746910d-f80b-4eb3-8ea3-e3cde42b5ec2` completed a real queue read after its runtime
+grant became approved: queue empty, no model call. Twelve blocked inputs were
+released; completed effect history and the paused Delta Mind network remain.
+Source base: `01fa0886fd3171ca55f44ce6187c38dd68835af5`. Checks and signed rollout
+are recorded in the issue/PR and private Test Runs receipt before closure.
+
+
 ## Bounded network MCP and local start correction — issue 1417
 
 Accepted through [PR229](https://repos.openape.ai/patrick/monorepo/pulls/229),
