@@ -70,3 +70,16 @@ it('explains unavailable definition editing without offering actions that will f
   expect(wrapper.find('fieldset').exists()).toBe(false)
   wrapper.unmount()
 })
+
+it('prepares the existing paused instance with explicit defaults without publishing reuse', async () => {
+  const f = fixture()
+  f.view.definitions[0]!.versions = [{ ...f.view.definitions[0]!.versions[0]!, state: 'legacy', defaults: { mode: 'preview' } }]
+  const wrapper = await opened()
+  expect(wrapper.get('textarea').element.value).toContain('preview')
+  const button = wrapper.findAll('button').find(item => item.text() === 'Prepare this existing instance')!
+  await button.trigger('click'); await flushPromises()
+  expect(f.definitions).toHaveBeenCalledWith({ type: 'prepareLocal', podId, expectedScript: props.pod.activeScript, name: 'Reusable', defaults: { mode: 'preview' } })
+  expect(wrapper.get('[role="status"]').text()).toContain('own identity and permissions')
+  expect(wrapper.text()).not.toContain('Create separate instance')
+  wrapper.unmount()
+})

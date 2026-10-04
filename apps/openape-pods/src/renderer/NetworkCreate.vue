@@ -1,4 +1,5 @@
 <script lang="ts">
+import { supportedNetworkCapability, networkSourceCapability } from '../contracts/network-capabilities'
 import { defineComponent } from 'vue'
 import type { PropType } from 'vue'
 import type { StoredPod } from '../contracts/control'
@@ -35,7 +36,8 @@ export default defineComponent({
       return (this.definitions?.instances ?? []).filter(item => item.groupId === this.group && !item.diverged && !reserved.has(item.podId) && this.pods.some(pod => pod.id === item.podId && pod.lifecycle !== 'archived')).flatMap((instance) => { const pod = this.pods.find(pod => pod.id === instance.podId)!; const version = this.definitions!.definitions.find(item => item.id === instance.definitionId)?.versions.find(item => item.version === instance.version); return version?.contract && pod.activeScript ? [{ instance, pod, version }] : [] })
     },
     selectedMembers() { return this.candidates.filter(item => this.selected.includes(item.pod.id)) },
-    channels(): string[] { return [...new Set(this.selectedMembers.flatMap(item => [...item.version.contract?.takes ?? [], ...item.version.contract?.gives ?? []]))].sort() },
+    routes() { return this.replacement?.draft.routes ?? this.conversion?.gates ?? [] },
+    channels(): string[] { return [...new Set([...this.selectedMembers.flatMap(item => [...item.version.contract?.takes ?? [], ...item.version.contract?.gives ?? []]), ...this.routes.flatMap(route => [route.takes, ...(route.kind === 'choose' ? route.options.map(option => option.channel) : [route.gives, ...(route.excluded ? [route.excluded] : [])])])])].sort() },
     shared(): { name: string, value: unknown, conflict: boolean, consumers: string[], overrides: string[] }[] {
       const names = [...new Set(this.selectedMembers.flatMap(item => Object.keys(item.version.defaults)))].sort()
       return names.map((name) => {
@@ -50,11 +52,11 @@ export default defineComponent({
       if (this.networks.networks.some(item => item.id !== this.replacement?.current.id && item.groupId === this.group && item.state !== 'archived')) return t('This company already has a persistent network.')
       if (this.selectedMembers.length !== this.selected.length) return t('Prepared selection changed. Review the instances again.')
       if (!this.selected.length) return t('Select at least one prepared Pod instance.')
-      const unsupported = this.selectedMembers.find(item => item.version.capabilities.some(right => right !== 'mail.read'))
-      if (unsupported) return t('Pod {name} requests unsupported network rights: {rights}', { name: unsupported.pod.name, rights: unsupported.version.capabilities.filter(right => right !== 'mail.read').join(', ') })
-      if (this.selectedMembers.some(item => item.version.capabilities.includes('mail.read') && item.version.contract!.takes.length)) return t('Network mail reads require a declared source')
+      const unsupported = this.selectedMembers.find(item => item.version.capabilities.some(right => !supportedNetworkCapability(right)))
+      if (unsupported) return t('Pod {name} requests unsupported network rights: {rights}', { name: unsupported.pod.name, rights: unsupported.version.capabilities.filter(right => !supportedNetworkCapability(right)).join(', ') })
+      if (this.selectedMembers.some(item => item.version.capabilities.some(networkSourceCapability) && item.version.contract!.takes.length)) return t('Network mail reads require a declared source')
       // Declared feedback of a replaced network stays declared; only its edges may close a loop here.
-      const diagnostics = diagnoseNetwork({ formatVersion: 1, kind: 'network', semantics: 'persistent-network-v1', id: this.group, revision: 1, groupId: this.group, name: this.name, ...(this.replacement?.draft.feedback ? { feedback: this.replacement.draft.feedback } : {}), channels: this.channels.map(name => ({ name, title: name, schemaVersion: 1, schema: { type: 'object', properties: {}, required: [], additionalProperties: false } })), members: this.selectedMembers.map(item => ({ podId: item.pod.id, definitionId: item.instance.definitionId, definitionVersion: item.instance.version, bindingRevision: item.instance.bindingRevision, contract: item.version.contract!, source: item.version.contract!.takes.length ? null : { bindingId: item.pod.id, schedule: null }, serialCase: false })) })
+      const diagnostics = diagnoseNetwork({ formatVersion: 1, kind: 'network', semantics: 'persistent-network-v1', id: this.group, revision: 1, groupId: this.group, name: this.name, routes: this.routes, ...(this.replacement?.draft.feedback ? { feedback: this.replacement.draft.feedback } : {}), channels: this.channels.map(name => ({ name, title: name, schemaVersion: 1, schema: { type: 'object', properties: {}, required: [], additionalProperties: false } })), members: this.selectedMembers.map(item => ({ podId: item.pod.id, definitionId: item.instance.definitionId, definitionVersion: item.instance.version, bindingRevision: item.instance.bindingRevision, contract: item.version.contract!, source: item.version.contract!.takes.length ? null : { bindingId: item.pod.id, schedule: null }, serialCase: false })) })
       if (diagnostics[0]) return `${diagnostic(graphDiagnosticMessages[diagnostics[0].code])}: ${diagnostics[0].channel ?? this.pods.find(pod => pod.id === diagnostics[0]!.podId)?.name ?? ''}`
       return ''
     },
@@ -119,6 +121,15 @@ export default defineComponent({
           name: this.name.trim(), groupId: this.group, expectedSetup: this.setup.fingerprint, sharedValues,
           members: this.selectedMembers.map(item => ({ podId: item.pod.id, serialCase: false, source: item.version.contract!.takes.length ? null : { schedule: this.schedules[item.pod.id] ? { kind: 'interval', seconds: this.schedules[item.pod.id]! } : null } })),
           channels: this.channels.map(name => ({ name, title: name, schemaVersion: 1, schema: { type: 'object', properties: Object.fromEntries(this.fields[name]!.map(field => [field.name, { type: field.type as ScalarSchema['type'] }])), required: this.fields[name]!.filter(field => field.required).map(field => field.name), additionalProperties: false } })),
+        }
+        if (this.routes.length) {
+          draft.routes = this.routes
+          const routed = this.routes.filter(route => route.kind === 'approve').map((route) => {
+            const consumers = this.selectedMembers.filter(item => item.version.contract!.takes.includes(route.gives))
+            if (consumers.length !== 1) throw new Error('Routed approval requires exactly one downstream Pod')
+            return { key: route.key, title: route.title, kind: 'approve' as const, podId: consumers[0]!.pod.id, channel: route.takes }
+          })
+          draft.gates = [...draft.gates!.filter(gate => !routed.some(item => item.podId === gate.podId && (item.channel === gate.channel || this.routes.some(route => route.kind === 'approve' && route.key === item.key && route.gives === gate.channel)))), ...routed]
         }
         if (this.replacement) {
           draft = patchNetworkDraft(this.replacement.draft, draft, this.changedSchemas, this.changedSchedules)

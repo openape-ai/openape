@@ -68,7 +68,7 @@ describe('versioned gate authority', () => {
   })
 })
 
-function runtimeFixture(status: () => string = () => 'pending', consume: () => Promise<unknown> = async () => true) {
+function runtimeFixture(status: () => string = () => 'pending', consume: () => Promise<unknown> = async () => true, routed = false) {
   const calls: string[] = []
   const f = networkFixture({ gate: async (value, _signal, scope) => {
     scope.assertCurrent()
@@ -82,9 +82,9 @@ function runtimeFixture(status: () => string = () => 'pending', consume: () => P
     throw new Error('Unexpected synthetic gate operation')
   } })
   const source = f.pod('Source', { takes: [], gives: ['test.input', 'test.other'], summary: 'Source' }, async () => {})
-  const consumer = f.pod('Gated consumer', { takes: ['test.input', 'test.other'], gives: [], summary: 'Consumer' }, async () => {})
+  const consumer = f.pod('Gated consumer', { takes: [routed ? 'test.approved' : 'test.input', 'test.other'], gives: [], summary: 'Consumer' }, async () => {})
   const independent = f.pod('Independent consumer', { takes: ['test.input'], gives: [], summary: 'Independent' }, async () => {})
-  const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, ...[consumer, independent].map(podId => ({ podId, source: null, serialCase: false }))], ['test.input', 'test.other'], [{ key: 'review', kind: 'approve', title: 'Review exact input', podId: consumer, channel: 'test.input' }])
+  const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, ...[consumer, independent].map(podId => ({ podId, source: null, serialCase: false }))], ['test.input', 'test.other', ...(routed ? ['test.approved'] : [])], [{ key: 'review', kind: 'approve', title: 'Review exact input', podId: consumer, channel: 'test.input' }], routed ? [{ key: 'review', kind: 'approve', title: 'Review exact input', takes: 'test.input', gives: 'test.approved', excluded: 'test.other' }] : undefined)
   f.engine.execute({ type: 'activate', id, revision: 1 })
   const settle = async () => { await expect.poll(() => f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0) }
   const due = () => f.store.db.prepare('UPDATE network_gate_controls SET next_poll_at=0').run()
@@ -595,4 +595,32 @@ it('retains completed approval evidence without offering historical decisions af
   expect(f.engine.gates.views(f.owner)).toEqual([])
   expect(f.engine.view().networks[0]!.decisions).toBe(0)
   expect(() => f.engine.execute({ type: 'gateReview', id: f.id, revision: 2, taskId: tasks[0]!.id as string, generation: Number(tasks[0]!.generation), evidence: 'Cannot reuse old grant' })).toThrow('Historical approval evidence')
+})
+
+it('maps the approved channel only after the exact retained input receives approval', async () => {
+  const f = runtimeFixture(() => 'approved', async () => true, true)
+  await f.emit('test.input')
+  expect(f.engine.invocations.reserve(f.id, f.consumer, f.resources.epoch(f.consumer), 'event')).toBeNull()
+  f.engine.tick(); await f.settle()
+  const task = f.engine.view().gates![0]!
+  const manifest = JSON.parse(f.store.db.prepare('SELECT manifest FROM network_gate_tasks WHERE id=?').get(task.id)!.manifest as string) as NetworkGateManifest
+  expect(manifest.items[0]!.channel).toBe('test.input')
+  f.due(); f.engine.tick(); await f.settle()
+  const authority = f.engine.invocations.reserve(f.id, f.consumer, f.resources.epoch(f.consumer), 'event')!
+  expect(authority).not.toBeNull()
+  expect(f.engine.invocations.input(authority).items[0]).toMatchObject({ eventId: manifest.items[0]!.eventId, channel: 'test.approved' })
+  await f.engine.invocations.finish(authority, 'completed', 'Synthetic reviewed preview only', null, [manifest.items[0]!.eventId], [])
+  expect(f.store.db.prepare('SELECT channel FROM network_events WHERE id=?').get(manifest.items[0]!.eventId)!.channel).toBe('test.input')
+})
+
+it('routes an explicit approval exclusion once and retains its input receipt', async () => {
+  const f = runtimeFixture(() => 'pending', async () => true, true)
+  await f.emit('test.input')
+  f.engine.tick(); await f.settle()
+  const task = f.engine.view().gates![0]!
+  const command = { type: 'gateExclude', id: f.id, revision: 1, taskId: task.id, generation: task.generation, deliveryIds: [task.items[0]!.deliveryId], evidence: 'Synthetic explicit owner exclusion' }
+  f.engine.execute(command)
+  expect(() => f.engine.execute(command)).toThrow('obsolete')
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM network_events WHERE channel=\'test.other\'').get()!.n).toBe(1)
+  expect(f.store.db.prepare('SELECT outcome,receipt FROM network_gate_items WHERE task_id=?').get(task.id)).toMatchObject({ outcome: 'excluded', receipt: expect.stringContaining('Synthetic explicit owner exclusion') })
 })

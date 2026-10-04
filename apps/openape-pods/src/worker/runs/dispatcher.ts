@@ -1,3 +1,5 @@
+import { programRequest } from '../../main/programs/invoke'
+import { supportedNetworkCapability } from '../../contracts/network-capabilities'
 import { boundedStep } from '../scheduling/tick-step'
 import type { NetworkGates, NetworkGateStep, NetworkGateService } from '../scheduling/network-gates'
 import { InfrastructureError, retryInfrastructure } from '../../contracts/infrastructure'
@@ -217,6 +219,7 @@ export class RunDispatcher {
     let shellScope: RunServiceScope | undefined
     let infrastructureWaiting = 0
     let networkMailReads = 0
+    let networkAgentCalls = 0
     let scriptStarted = false
     const graph = graphRun(this.store, id); let delivered: DeliveredItem[] = []; const emits: (GraphEmit & { channel: string })[] = []
     const settle = (completed: boolean) => { if (graph) settleItems(this.store, graph, completed && this.runs.get(id).state === 'completed', delivered, emits, Date.now()) }
@@ -242,7 +245,7 @@ export class RunDispatcher {
       const manifestRow = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(pod.id, run.scriptHash)
       if (!manifestRow) throw new Error('Pinned script is missing')
       const manifest = parseManifest(JSON.parse(manifestRow.manifest as string))
-      if (network && manifest.capabilities.some(capability => capability !== 'mail.read')) throw new Error('Network capabilities require declared runtime ports')
+      if (network && manifest.capabilities.some(capability => !supportedNetworkCapability(capability))) throw new Error('Network capabilities require declared runtime ports')
       if (!manifest.triggers.includes(trigger.reason)) throw new Error('Script does not allow this trigger')
       const assigned = this.resources.list(pod.id).filter(resource => resource.kind === 'tool' && resource.state === 'ready').map(resource => resource.configuration.capability)
       if (manifest.capabilities.filter(capability => !capability.startsWith('credential.')).some(capability => !assigned.includes(capability)) || (manifest.capabilities.includes('mail.read') && !this.services?.tool)) throw new Error('No tool assignments are available for this script')
@@ -325,7 +328,41 @@ export class RunDispatcher {
         event: (type, data) => { assertCurrent(); appendEvent(type, data); if (type === 'process') scriptStarted = true; if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
         request: async (operation, payload, operationSignal) => {
           assertCurrent()
+          if (operation === 'jev.evaluate') {
+            const assignment = assignedJev(this.resources.list(pod.id), pod.id, scope.capabilities)
+            if (!this.services?.jev) throw new Error('Jev service is unavailable')
+            const request = parseJevRequest(payload)
+            const started = Date.now()
+            const pending = this.services.jev(request, operationSignal, scope)
+            pendingAgents.add(pending)
+            try {
+              const evaluation = await pending
+              assertCurrent(); operationSignal.throwIfAborted()
+              const result = parseJevResult(evaluation.result, request, assignment.model)
+              appendEvent('jev', { provider: 'typesafe', model: result.model, attempts: evaluation.attempts, durationMs: Date.now() - started, usage: result.usage })
+              return result
+            }
+            finally { pendingAgents.delete(pending) }
+          }
+          if (operation === 'agent.run') {
+            if (!this.services?.provider) throw new Error('Codex is not connected; connect the pod provider before using this script')
+            const request = parseAgentRequest(payload)
+            if (network && (request.tools.length || request.timeoutSeconds > 120)) throw new Error('Network text generation requires no tools and a timeout of at most 120 seconds')
+            if (network && networkAgentCalls++ >= 50) throw new Error('Network text generation budget exceeded')
+            const operation = executeAgent(runtime, directory, request.prompt, input.references.map(file => file.path), { provider: this.services.provider, tool: invokeTool }, operationSignal, (event) => { assertCurrent(); appendEvent('agent', event) }, request.tools, request.timeoutSeconds)
+            pendingAgents.add(operation); if (activeAgentCalls++ === 0) agentSince = Date.now()
+            try { const reply = await operation; assertCurrent(); operationSignal.throwIfAborted(); return reply }
+            finally { pendingAgents.delete(operation); if (--activeAgentCalls === 0) agentPausedMs += Date.now() - agentSince }
+          }
           if (network) {
+            if (operation === 'tools.invoke' && payload !== null && typeof payload === 'object' && ('application' in payload || 'applicationId' in payload) && manifest.capabilities.some(capability => capability.startsWith('tool.app_'))) {
+              if (!input.network!.source) throw new Error('Network mail reads require a declared source')
+              programRequest(this.resources.list(pod.id), pod.id, manifest.capabilities, payload)
+              if (networkMailReads >= 100) throw new Error('Network read budget exceeded')
+              networkMailReads++
+              appendEvent('network-program-read', { count: networkMailReads })
+              return invokeTool(payload, operationSignal)
+            }
             if (operation === 'tools.invoke' && manifest.capabilities.includes('mail.read')) {
               if (!input.network!.source) throw new Error('Network mail reads require a declared source')
               const request = parseMailRequest(payload, assignedMail(this.resources.list(pod.id)).mail)
@@ -443,22 +480,6 @@ export class RunDispatcher {
             appendEvent('mail-progress', { type: result.type, contextHash: result.hash, sources: result.sources, omissions: result.omissions, revision: result.revision, retrieved: result.count })
             return result
           }
-          if (operation === 'jev.evaluate') {
-            const assignment = assignedJev(this.resources.list(pod.id), pod.id, scope.capabilities)
-            if (!this.services?.jev) throw new Error('Jev service is unavailable')
-            const request = parseJevRequest(payload)
-            const started = Date.now()
-            const pending = this.services.jev(request, operationSignal, scope)
-            pendingAgents.add(pending)
-            try {
-              const evaluation = await pending
-              assertCurrent(); operationSignal.throwIfAborted()
-              const result = parseJevResult(evaluation.result, request, assignment.model)
-              appendEvent('jev', { provider: 'typesafe', model: result.model, attempts: evaluation.attempts, durationMs: Date.now() - started, usage: result.usage })
-              return result
-            }
-            finally { pendingAgents.delete(pending) }
-          }
           if (operation === 'http.request') {
             if (!this.services?.http) throw new Error('HTTP service is unavailable')
             const request = parseHttpRequest(payload)
@@ -483,14 +504,6 @@ export class RunDispatcher {
             const request = this.services.credential(alias, operationSignal, scope); pendingAgents.add(request)
             try { const value = await request; assertCurrent(); operationSignal.throwIfAborted(); return value }
             finally { pendingAgents.delete(request) }
-          }
-          if (operation === 'agent.run') {
-            if (!this.services?.provider) throw new Error('Codex is not connected; connect the pod provider before using this script')
-            const request = parseAgentRequest(payload)
-            const operation = executeAgent(runtime, directory, request.prompt, input.references.map(file => file.path), { provider: this.services.provider, tool: invokeTool }, operationSignal, (event) => { assertCurrent(); appendEvent('agent', event) }, request.tools, request.timeoutSeconds)
-            pendingAgents.add(operation); if (activeAgentCalls++ === 0) agentSince = Date.now()
-            try { return await operation }
-            finally { pendingAgents.delete(operation); if (--activeAgentCalls === 0) agentPausedMs += Date.now() - agentSince }
           }
           if (operation === 'tools.invoke') return invokeTool(payload, operationSignal)
           throw new Error('Unsupported script operation')

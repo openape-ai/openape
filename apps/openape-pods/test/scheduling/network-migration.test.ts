@@ -497,3 +497,31 @@ it('refuses fresh-looking instances with retained external effects even when run
   expect(() => f.engine.execute({ type: 'replaceComposition', id, revision: 1, draft, expectedFingerprint: review.fingerprint })).toThrow('fresh instances')
   expect(f.engine.view().networks[0]!.revision).toBe(1)
 })
+
+it('preserves an inspected interrupted run after explicit workflow cancellation without inventing success', () => {
+  const f = fixture(); const runId = randomUUID(); const workflowRun = randomUUID()
+  f.store.db.prepare('INSERT INTO runs VALUES(?,?,?,?,0,1,?,NULL,0,1)').run(runId, f.consumer, f.store.getPod(f.consumer).activeScript!, 'interrupted', 'Synthetic inspected interruption')
+  f.store.db.prepare('INSERT INTO workflow_runs VALUES(?,?,1,?,?,?,?,0,1,1)').run(workflowRun, f.selection.workflowId, JSON.stringify(f.preview().legacy), 'manual', 'cancelled', null)
+  f.store.db.prepare('INSERT INTO workflow_attempts VALUES(?,?,?)').run(runId, workflowRun, f.consumer)
+  f.store.db.prepare('INSERT INTO recovery_reviews VALUES(?,\'ready\',NULL,1,NULL)').run(runId)
+  const before = f.store.db.prepare('SELECT * FROM runs WHERE id=?').get(runId)
+  const review = f.store.db.prepare('SELECT * FROM recovery_reviews WHERE run_id=?').get(runId)
+  const preview = f.preview()
+  expect(preview.issues).toEqual([])
+  f.engine.convert(f.selection, preview.fingerprint)
+  expect(f.store.db.prepare('SELECT * FROM runs WHERE id=?').get(runId)).toEqual(before)
+  expect(f.store.db.prepare('SELECT * FROM recovery_reviews WHERE run_id=?').get(runId)).toEqual(review)
+  expect(f.started).toEqual([])
+})
+
+it('keeps pending legacy choices accessible by refusing conversion before the owner decides', () => {
+  const f = fixture(); const itemId = randomUUID()
+  const gate = { key: 'review', kind: 'choose', title: 'Review', takes: 'cases', options: [{ key: 'keep', title: 'Keep', channel: 'cases' }, { key: 'other', title: 'Other', channel: 'cases' }] }
+  f.store.db.prepare('INSERT INTO workflow_gates VALUES(?,?,?)').run(f.selection.workflowId, gate.key, JSON.stringify(gate))
+  f.store.db.prepare('INSERT INTO graph_items VALUES(?,?,?,?,?,?,?,1)').run(itemId, f.selection.workflowId, randomUUID(), 'held', 'cases', f.source, '{"subject":"Held"}')
+  f.store.db.prepare('INSERT INTO graph_deliveries VALUES(?,?,?,NULL,1)').run(itemId, 'gate:review', 'pending')
+  f.selection.pending = 'retainLegacy'
+  expect(f.preview().issues).toContain('Resolve pending legacy owner choices before conversion')
+  expect(f.store.db.prepare('SELECT archived FROM workflows WHERE id=?').get(f.selection.workflowId)!.archived).toBe(0)
+  expect(f.store.db.prepare('SELECT state FROM graph_deliveries WHERE item_id=?').get(itemId)!.state).toBe('pending')
+})

@@ -174,6 +174,8 @@ it('packaged program UI: exposes the external terminal and reuses application se
     const page = await app.firstWindow(); page.setDefaultTimeout(7000)
     await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
     console.info('Program UI: worker ready')
+    await page.getByRole('button', { name: 'Pods', exact: true }).click()
+    await page.getByRole('button', { name: /^Application setup/ }).click()
     await page.getByRole('tab', { name: 'Permissions', exact: true }).click()
     await page.getByRole('button', { name: 'Open Terminal.app', exact: true }).waitFor()
     expect(await page.getByRole('button', { name: 'Open Terminal.app', exact: true }).count()).toBe(1)

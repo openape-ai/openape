@@ -1,7 +1,7 @@
 import type { Owner } from '@openape/pods-protocol'
 import { randomUUID } from 'node:crypto'
 import type { NetworkDefinition, NetworkDraft } from '../../contracts/networks'
-import { draftControls, draftFormatVersion, parseNetworkDefinition } from '../../contracts/networks'
+import { networkSubscriptionChannel, draftControls, draftFormatVersion, parseNetworkDefinition } from '../../contracts/networks'
 import type { ReplacementPreview } from '../../contracts/network-replacement'
 import { parseGraphContract } from '../../contracts/graphs'
 import { canonicalNetworkJson } from '../../contracts/network-json'
@@ -16,7 +16,7 @@ import { NetworkViews } from './network-views'
 export function currentCompositionDraft(store: PodDatabase, definition: NetworkDefinition): NetworkDraft {
   return {
     name: definition.name, groupId: definition.groupId,
-    channels: definition.channels, ...(definition.gates ? { gates: definition.gates } : {}), ...(definition.joins ? { joins: definition.joins } : {}), ...(definition.feedback ? { feedback: definition.feedback } : {}),
+    channels: definition.channels, ...(definition.routes ? { routes: definition.routes } : {}), ...(definition.gates ? { gates: definition.gates } : {}), ...(definition.joins ? { joins: definition.joins } : {}), ...(definition.feedback ? { feedback: definition.feedback } : {}),
     members: definition.members.map(member => ({ podId: member.podId, serialCase: member.serialCase, source: member.source ? { schedule: member.source.schedule } : null })),
     sharedValues: Object.fromEntries(store.db.prepare('SELECT name,value FROM composition_config WHERE network_id=? ORDER BY name').all(definition.id).map(row => [row.name as string, JSON.parse(row.value as string)])),
   }
@@ -108,7 +108,8 @@ export class NetworkReplacement {
         else if (member.source) {
           this.store.db.prepare('UPDATE network_members SET source_binding_id=coalesce(source_binding_id,?) WHERE network_id=? AND pod_id=?').run(member.source.bindingId, current.id, member.podId)
         }
-        for (const channel of member.contract.takes) {
+        for (const declaredChannel of member.contract.takes) {
+          const channel = networkSubscriptionChannel(next, member.podId, declaredChannel)
           const spec = next.channels.find(item => item.name === channel)!
           this.store.db.prepare('INSERT INTO network_subscriptions VALUES(?,?,?,?,?,?,?)').run(randomUUID(), current.id, next.revision, member.podId, channel, digest(canonicalNetworkJson({ schemaVersion: spec.schemaVersion, schema: spec.schema })), member.serialCase ? 1 : 0)
         }

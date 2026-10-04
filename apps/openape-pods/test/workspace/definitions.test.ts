@@ -261,6 +261,13 @@ it('validates and activates a network definition through the workspace and rejec
   expect(workspace.view().instances.find(instance => instance.podId === sink)).toMatchObject({ version: 2, bindingRevision: 2, diverged: false })
   expect(f.store.db.prepare('SELECT state,revision FROM networks WHERE id=?').get(id)).toEqual({ state: 'paused', revision: 2 })
   expect(f.store.db.prepare('SELECT network_revision FROM network_subscriptions WHERE pod_id=? ORDER BY network_revision').all(sink)).toEqual([{ network_revision: 1 }, { network_revision: 2 }])
+  const shared = await execute({ type: 'instantiate', requestId: randomUUID(), definitionId, version: 2, name: 'Shared copy', groupId: f.groupId })
+  const local = await execute({ type: 'prepareLocal', podId: sink, expectedScript: f.store.getPod(sink).activeScript, name: 'Local network sink', defaults: { label: 'Local' } })
+  const binding = local.instances.find(instance => instance.podId === sink)!
+  expect(binding.definitionId).not.toBe(definitionId)
+  expect(f.store.db.prepare('SELECT definition_id,definition_version,binding_revision FROM network_members WHERE pod_id=?').get(sink)).toEqual({ definition_id: binding.definitionId, definition_version: 1, binding_revision: 3 })
+  expect(f.store.db.prepare('SELECT state,revision FROM networks WHERE id=?').get(id)).toEqual({ state: 'paused', revision: 3 })
+  expect(local.instances.find(instance => instance.podId === shared.createdPodId)).toMatchObject({ definitionId, version: 2 })
 })
 
 it.each(['http', 'ssh', 'app'])('refuses publication of instance-specific %s capabilities before creating a definition', async (kind) => {
@@ -270,6 +277,22 @@ it.each(['http', 'ssh', 'app'])('refuses publication of instance-specific %s cap
   f.store.db.prepare('UPDATE scripts SET manifest=? WHERE pod_id=? AND hash=?').run(JSON.stringify(manifest), f.pod.id, hash)
   await expect(published(f)).rejects.toThrow('instance-specific HTTP, SSH or program rights')
   expect(f.workspace.view().definitions).toEqual([])
+  const before = f.store.getPod(f.pod.id)
+  const checkpoint = f.store.checkpoint(f.pod.id)
+  const rights = f.resources.list(f.pod.id)
+  const command = { type: 'prepareLocal', podId: f.pod.id, expectedScript: hash, name: 'Local source', defaults: { mode: 'preview' } }
+  const prepared = await f.execute(command)
+  expect(await f.execute(command)).toEqual(prepared)
+  expect(prepared.instances).toHaveLength(1)
+  const instance = prepared.instances[0]!
+  const definition = prepared.definitions[0]!
+  expect(instance).toMatchObject({ podId: f.pod.id, diverged: false })
+  expect(definition.versions.find(version => version.version === instance.version)).toMatchObject({ state: 'legacy', capabilities: manifest.capabilities, defaults: command.defaults })
+  expect(f.store.getPod(f.pod.id)).toEqual(before)
+  expect(f.store.checkpoint(f.pod.id)).toEqual(checkpoint)
+  expect(f.resources.list(f.pod.id)).toEqual(rights)
+  await expect(f.execute({ type: 'instantiate', requestId: randomUUID(), definitionId: definition.id, version: instance.version, name: 'Forbidden copy', groupId: f.groups[0] })).rejects.toThrow('Publish')
+  await expect(published(f)).rejects.toThrow('instance-specific')
 })
 it('enforces the existing instance limit without duplicating a retry at capacity', async () => {
   const f = fixture(); const definition = await published(f)
@@ -279,4 +302,15 @@ it('enforces the existing instance limit without duplicating a retry at capacity
   expect((await f.execute(command)).createdPodId).toBe(first.createdPodId)
   await expect(f.execute({ ...command, requestId: randomUUID() })).rejects.toThrow('Local pod limit')
   expect(f.store.listPods()).toHaveLength(100)
+})
+
+it('prepares a local definition without renaming or changing the shared published definition', async () => {
+  const f = fixture(); const publishedDefinition = await published(f)
+  await f.execute({ type: 'instantiate', requestId: randomUUID(), definitionId: publishedDefinition.id, version: 2, name: 'Independent copy', groupId: f.groups[0] })
+  const prepared = await f.execute({ type: 'prepareLocal', podId: f.pod.id, expectedScript: f.store.getPod(f.pod.id).activeScript, name: 'Local only', defaults: { label: 'Private instance configuration' } })
+  expect(prepared.definitions.find(item => item.id === publishedDefinition.id)).toEqual(publishedDefinition)
+  const local = prepared.instances.find(item => item.podId === f.pod.id)!
+  expect(local.definitionId).not.toBe(publishedDefinition.id)
+  expect(prepared.definitions.find(item => item.id === local.definitionId)).toMatchObject({ name: 'Local only', versions: [{ version: 1, state: 'legacy' }] })
+  expect(prepared.instances.find(item => item.podId !== f.pod.id)).toMatchObject({ definitionId: publishedDefinition.id, version: 2 })
 })

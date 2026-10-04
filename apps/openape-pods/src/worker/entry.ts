@@ -228,6 +228,8 @@ port.on('message', async (event) => {
         result.networks = result.networks.filter(network => network.id === query.id)
         if (query.type === 'detail') result.gates = result.gates?.filter(gate => gate.networkId === query.id).map(gate => ({ ...gate, url: null }))
         else delete result.gates
+        if (query.type === 'detail') result.choices = result.choices?.filter(choice => choice.networkId === query.id)
+        else delete result.choices
         port.postMessage({ id: request.id, state: result }); return
       }
       if (command.type !== 'snapshot') throw new Error('Unsupported central worker command')
