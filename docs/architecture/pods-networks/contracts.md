@@ -1249,3 +1249,26 @@ unpublished. Preparing an instance from a shared definition creates a separate
 local definition and leaves the shared definition unchanged. Instance-specific program rights remain forbidden for reusable
 publication and instantiation. A network member preparation must pass the same
 paused, settled compatibility transaction as other definition updates.
+
+## Local owner MCP access
+
+Local MCP uses the desktop access policy and current network owner. The `networks`
+action accepts only list/detail/trace/records/legacyItems and pause/preview/process.
+Reads reuse existing bounded views (2 MiB total); explicit network reads filter
+other network summaries, gates and choices. Secret values and approval URLs are
+not returned. Read-only MCP cannot create processing previews or start work.
+
+Network mutation receipts bind a stable request UUID to canonical arguments and
+owner identity in the existing action journal. An exact retry returns the original
+receipt; an interrupted/failed request requires inspection. Preview expiry,
+paused-member acknowledgement, resource/definition fingerprints, process budget,
+execution grants and restart recovery still apply. Activation, composition and
+owner gate/recovery decisions remain desktop operations. Legacy inspection and
+administration cannot bypass network ownership, including retained invocations,
+called workflows and archived ancestor workflows. Unrelated Pods remain available.
+
+A centrally serialized local owner start carries trusted operation context from
+the main process. The closed automatic scheduler gate does not reject that one
+explicit run, and no unrelated scheduler domain advances under its authority.
+Startup, suspend, maintenance, global concurrency, membership and grant checks
+remain required. Client-supplied authority fields are rejected.

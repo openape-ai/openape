@@ -1,3 +1,12 @@
+import { randomUUID } from 'node:crypto'
+import { ResourceRegistry } from '../src/worker/resources/registry'
+import { RunDispatcher } from '../src/worker/runs/dispatcher'
+import type { AgentRuntime } from '../src/worker/agent/executor'
+import { installExample } from '../src/worker/runs/examples'
+import { DefinitionCatalog } from '../src/worker/workspace/definition-catalog'
+import { PodGroups } from '../src/worker/workspace/groups'
+import { NetworkEngine } from '../src/worker/scheduling/network-engine'
+import type { Owner } from '@openape/pods-protocol'
 import { spawn } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -6,7 +15,7 @@ import { createInterface } from 'node:readline'
 import { _electron as electron } from 'playwright'
 import type { ElectronApplication } from 'playwright'
 import { afterEach, expect, it } from 'vitest'
-import { PodDatabase } from '../src/worker/storage/database'
+import { PodDatabase, digest } from '../src/worker/storage/database'
 import { fixtureDirectory } from '../src/main/fixture'
 import { fixtureShellIdentity } from './fixtures/shell-identity'
 
@@ -31,12 +40,48 @@ function appServer(home: string) {
   return { request, statuses, notify: (method: string) => child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method })}\n`), close: () => child.kill() }
 }
 
-it('lets connected Codex configure, activate and run a Pod without app approvals (packaged)', async () => {
+async function seedPausedNetwork(root: string, owner: Owner) {
+  const store = new PodDatabase(root)
+  const resources = new ResourceRegistry(store, () => {})
+  const runtime = JSON.parse(await readFile(resolve('dist/vendor/manifest.json'), 'utf8'))
+  const helper = resolve('dist/native/pods-helper')
+  const dispatcher = new RunDispatcher(store, resources, { helper, environment: {} } as AgentRuntime)
+  const engine = new NetworkEngine(store, dispatcher, resources, helper, () => owner)
+  try {
+    const groups = new PodGroups(store)
+    groups.execute({ type: 'organize', action: 'create', name: 'MCP company', revision: groups.view().revision })
+    const groupId = groups.view().groups.at(-1)!.id
+    const catalog = new DefinitionCatalog(store, resources, owner)
+    const members: string[] = []
+    for (const name of ['MCP source', 'MCP consumer']) {
+      const pod = store.createPod({ name }); members.push(pod.id)
+      groups.execute({ type: 'organize', action: 'move', podId: pod.id, groupId, revision: groups.view().revision })
+      installExample(store, resources, pod.id, 'deterministic', runtime.dependencyLockHash)
+      const original = JSON.parse(store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=?').get(pod.id)!.manifest as string)
+      const source = members.length === 1
+      const contract = { takes: source ? [] : ['input'], gives: source ? ['input'] : [], summary: name }
+      const code = `export const contract=${JSON.stringify(contract)}; export async function run(context) { ${source ? 'await context.network.emit({channel:\'input\',key:\'once\',sourceItemId:\'once\',sourceVersion:\'1\',payload:{subject:\'Synthetic MCP input\'}});' : ''} return {status:'completed',summary:'Synthetic MCP network',completedInputIds:context.input.eventIds,gapIds:[]}; }`
+      const hash = digest(code)
+      store.storeScript(pod.id, { ...original, contentHash: hash, contract }, code)
+      store.db.prepare('UPDATE pods SET active_script=? WHERE id=?').run(hash, pod.id)
+      store.db.prepare('INSERT OR REPLACE INTO validations VALUES(?,?,?,?,?)').run(pod.id, hash, pod.bindingRevision, 0, '{"synthetic":true,"nativeMcp":true}')
+      await catalog.publish(pod.id, hash, name, {}, apply => apply())
+    }
+    store.db.prepare('INSERT INTO remote_registration VALUES(1,?,0)').run(JSON.stringify({ owner }))
+    const id = engine.execute({ type: 'create', draft: { name: 'MCP paused network', groupId, members: members.map((podId, index) => ({ podId, source: index ? null : { schedule: null }, serialCase: false })), channels: [{ name: 'input', title: 'Input', schemaVersion: 1, schema: { type: 'object', properties: { subject: { type: 'string' } }, required: ['subject'], additionalProperties: false } }] } }).createdId!
+    return { id, source: members[0]!, members }
+  }
+  finally { await engine.stop(); await dispatcher.stop(); store.close() }
+}
+
+it.each([false, true])('lets connected Codex configure and run an unrelated Pod beside a paused network (packaged, network=%s)', async (withNetwork) => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-codex-'))); fixtureDirectory(root)
   cleanups.push(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }))
   const store = new PodDatabase(root); store.createPod({ name: 'Invoices' }); store.close()
   const home = join(root, 'owner-codex'); await mkdir(home, { mode: 0o700 }); await writeFile(join(home, 'config.toml'), ownerConfig)
   const identity = await fixtureShellIdentity(root, ['fixture.read']); cleanups.push(() => identity.close())
+  const network = withNetwork ? await seedPausedNetwork(root, identity.owner) : null
+  if (network) identity.attachPods()
   const app: ElectronApplication = await electron.launch({ executablePath: join(bundle, 'MacOS/OpenApe Pods Fixture'), cwd: resolve('.'), env: { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, OPENAPE_PODS_FIXTURE_CODEX_HOME: home, NODE_ENV: 'test' }, timeout: 20000 })
   cleanups.push(() => app.close())
   await identity.encrypt(app, true)
@@ -44,7 +89,8 @@ it('lets connected Codex configure, activate and run a Pod without app approvals
   await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state, { timeout: 20000 }).toBe('ready')
   await page.evaluate(() => window.pods.onboarding({ type: 'finish' }))
 
-  // Owner connects in App settings; only one marked block is appended.
+  // Owner enables MCP and connects in App settings; only one marked block is appended.
+  await page.evaluate(() => window.pods.mcpAccess({ type: 'set', mode: 'write', duration: 'hour' }))
   expect(await page.evaluate(() => window.pods.codex({ type: 'connect' }))).toMatchObject({ state: 'connected', home })
   expect((await readFile(join(home, 'config.toml'), 'utf8')).startsWith(ownerConfig)).toBe(true)
 
@@ -59,7 +105,9 @@ it('lets connected Codex configure, activate and run a Pod without app approvals
     return { error: reply.result.isError === true, value: reply.result.isError ? text : JSON.parse(text) }
   }
 
-  const [pod] = (await call({ action: 'list' })).value.pods as { id: string, name: string, revision: number }[]
+  const listed = await call({ action: 'list' })
+  expect(listed, JSON.stringify(listed)).toMatchObject({ error: false })
+  const pod = (listed.value.pods as { id: string, name: string, revision: number }[]).find(pod => pod.name === 'Invoices')
   expect(pod!.name).toBe('Invoices')
   await call({ action: 'select', podIds: [pod!.id] })
   expect((await call({ action: 'revise', podId: pod!.id, revision: pod!.revision, name: 'Invoices 2026' })).value).toMatchObject({ name: 'Invoices 2026' })
@@ -84,10 +132,46 @@ it('lets connected Codex configure, activate and run a Pod without app approvals
   expect(started.error).toBe(false); expect(started.value.runId).toMatch(/^[a-f0-9-]{36}$/)
   await expect.poll(async () => (await call({ action: 'inspect', ...scoped })).value.runs.find((run: { id: string }) => run.id === started.value.runId)?.state, { timeout: 20000 }).toBe('completed')
   expect((await call({ action: 'changes' })).value.changes).toEqual([])
+  if (network) {
+    expect((await call({ action: 'runtime' })).value.networks).toHaveProperty('reads')
+    expect((await call({ action: 'networks', command: { type: 'list' } })).value.networks).toMatchObject([{ id: network.id, state: 'paused' }])
+    const detail = await call({ action: 'networks', command: { type: 'detail', id: network.id, revision: 1 } })
+    expect(detail.error).toBe(false); expect(detail.value.details.members).toHaveLength(2)
+    expect((await call({ action: 'run', podId: network.source, revision: 1 })).value).toContain('bounded network MCP')
+    await page.evaluate(() => window.pods.mcpAccess({ type: 'set', mode: 'read', duration: 'hour' }))
+    expect((await call({ action: 'networks', command: { type: 'list' } })).error).toBe(false)
+    expect((await call({ action: 'networks', command: { type: 'pause', id: network.id, revision: 1 } })).value).toContain('read-only')
+    await page.evaluate(() => window.pods.mcpAccess({ type: 'set', mode: 'write', duration: 'hour' }))
+    const previewRequest = { action: 'networks', requestId: randomUUID(), command: { type: 'preview', id: network.id, revision: 1, podIds: [network.source], pausedPodIds: [network.source], budget: 1 } }
+    const preview = await call(previewRequest)
+    expect(preview.error).toBe(false); expect(await call(previewRequest)).toEqual(preview)
+    const processing = { action: 'networks', requestId: randomUUID(), command: { type: 'process', id: network.id, revision: 1, previewId: preview.value.preview.id } }
+    const processed = await call(processing)
+    expect(processed.error).toBe(false); expect(await call(processing)).toEqual(processed)
+    await expect.poll(async () => {
+      const result = await call({ action: 'networks', command: { type: 'trace', id: network.id, revision: 1, before: null, caseId: null } })
+      return result.value.trace.events.some((event: { kind: string }) => event.kind === 'invocation-settled')
+    }).toBe(true)
+    const verified = new PodDatabase(root)
+    try {
+      expect(verified.db.prepare('SELECT state FROM networks WHERE id=?').get(network.id)!.state).toBe('paused')
+      expect(verified.db.prepare('SELECT count(*) AS n FROM network_invocations').get()!.n).toBe(1)
+      expect(verified.db.prepare('SELECT count(*) AS n FROM network_events').get()!.n).toBe(1)
+      expect(verified.db.prepare('SELECT lifecycle FROM pods WHERE id=?').get(network.source)!.lifecycle).toBe('paused')
+    }
+    finally { verified.close() }
+  }
   await page.reload()
   expect(await page.getByRole('tab', { name: 'Chat', exact: true }).count()).toBe(0)
   expect(await page.getByRole('button', { name: /Prepared by Codex/ }).count()).toBe(0)
 
+  if (network) {
+    await page.getByRole('button', { name: 'Networks & workflows', exact: true }).first().click()
+    await page.getByRole('button', { name: /MCP paused network/ }).click()
+    await page.getByRole('heading', { name: 'MCP paused network', exact: true }).waitFor()
+    await mkdir(resolve('.artifacts'), { recursive: true })
+    await page.screenshot({ path: resolve('.artifacts/network-mcp-native-paused.png'), fullPage: true })
+  }
   for (const secret of secrets) expect(outputs.join('\n')).not.toContain(secret)
   expect(await page.evaluate(() => window.pods.codex({ type: 'disconnect' }))).toMatchObject({ state: 'disconnected' })
   expect(await readFile(join(home, 'config.toml'), 'utf8')).toBe(ownerConfig)
