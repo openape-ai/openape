@@ -2,25 +2,32 @@
 
 ## Bounded network MCP and local start correction — issue 1417
 
-[PR229](https://repos.openape.ai/patrick/monorepo/pulls/229) merged as
-`efc7f0a47aa0504451c145c19a7f1ef410842f1b`; source/main CI5377/5378 passed.
-Signed-local 0.1.2+efc7f0a4 is installed with a verified paired rollback. The actual
-owner MCP now serves runtime, ordinary inventory and bounded network reads. Native
-acceptance verified controlled local starts and idempotent bounded processing.
-The real source preview admitted one run and exposed an Intake example bug:
-network configuration fields carry value/origin/kind descriptors, not raw strings.
-Run `159e4c4d-c44a-4961-95c6-12c96c1a2f28` stopped before provider access, with no
-input deliveries or external effects. Its retained evidence must remain intact.
+Accepted through [PR229](https://repos.openape.ai/patrick/monorepo/pulls/229),
+merge `efc7f0a47aa0504451c145c19a7f1ef410842f1b` (CI5377/5378), and
+[PR230](https://repos.openape.ai/patrick/monorepo/pulls/230), merge
+`7ebbc8fb49fbb9b515cec21de37c558c5c9c1b10` (CI5379/5380). The signed-local
+0.1.2+efc7f0a4 desktop is installed and verified with a paired rollback; the
+unchanged prod-87020ce8 relay is compatible and healthy. Actual connected MCP
+runtime/inventory/network commands work. Root lint/typecheck/build, 1,288 Pods
+unit/component tests, five focused native checks, independent Opus 5.5 reviews,
+clean merged-source checks and signed mounted acceptance passed.
 
-Follow-up branch `bugfix/issue-1417-mail-network-config` from `efc7f0a4` corrects
-that example and extends the existing baseline/change/deduplication regression to
-use actual configuration descriptors and composition precedence. Root lint,
-typecheck, Pods build and all 1,288 unit/component checks pass. After native PR
-acceptance, update only the paused Intake instance through the desktop definition
-flow and repeat the bounded source preview. The installed runtime needs no change
-for this script correction. M14 activation, schedules and mail writes stay separate.
-Final installed evidence belongs in the existing issue, approved plan and private
-Test Runs report.
+Actual source acceptance exposed an Intake example configuration-descriptor bug.
+The failed run had no provider calls, inputs or effects and remains retained after
+desktop review. PR230 corrected value unwrapping and the established regression;
+the existing paused Intake now uses definition3 in network revision2. Run
+`abaf747d-a781-4c3c-921f-26bbdf0da223` completed eight assigned read-only calls,
+read six sampled messages, emitted zero changed versions and advanced checkpoint2
+with its initial baseline intact. Exact process-request replay admitted no duplicate.
+All348 prior runs, eleven members, seven schedules and historical choices,
+deliveries, rights/effects and registration are retained;350 runs include both tests.
+
+[Verified private Test Runs](https://report.openape.ai/r/2ugGi6qLKLqsTxsxHmePhOOF)
+contains actual installed receipts and four personally inspected screenshots.
+The approved plan and issue1417 hold the current acceptance record. M14 activation,
+new schedules/mail writes and full consumer/Jev quality acceptance remain separate;
+a source sample with no new versions does not prove downstream processing quality.
+Next review the pilot scope and intended schedule without replaying old history.
 
 ## Delta Mind persistent network correction — issue 1417
 
