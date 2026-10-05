@@ -1,5 +1,13 @@
 # Active work
 
+## Descriptions through the central workspace — issue 1426
+
+[Issue1426](https://repos.openape.ai/patrick/monorepo/issues/1426), closed. [PR246](https://repos.openape.ai/patrick/monorepo/pulls/246) merged as `42541063df04c2977e8b0f94e2861531b5b54c67`; exact-source and full-main checks passed; 1,358 Pods tests and 35 relay tests passed.
+
+`details describe` is accepted for network member Pods and the workspace command `describeCollection` for networks and workflows, through MCP and the central workspace. Every other change to a network member still requires desktop review. The MCP reference in `apps/openape-pods/src/contracts/codex.ts` documents both.
+
+Relay `prod-42541063` was deployed first on October 5 (previous `prod-f452c0ae`), then the signed-local desktop 0.1.2 from clean `42541063`, schema 38 unchanged, installed at 21:23 CEST. Notarization, stapling, Gatekeeper and mounted synthetic acceptance passed (DMG SHA256 `fc11484e70e842920a1e67f64f81f17e38f93e38e211a45528771ad913dd50e2`); the installed archive equals the built one and all counts are unchanged. The round trip was verified on the installed desktop: 22 network member descriptions and 5 network and workflow descriptions were applied and equal the prepared texts; all 38 Pods are described and the Delta Mind network stays at revision 3. Paired byte-verified rollback: `/Users/patrickhofmann/Library/Application Support/OpenApe Pods Rollback/20261005-describe-central-1426`. The section below describes the two releases before this one.
+
 ## Pods visibility — issues 1424 and 1425
 
 [Issue1424](https://repos.openape.ai/patrick/monorepo/issues/1424) and [issue1425](https://repos.openape.ai/patrick/monorepo/issues/1425), both closed; plans [A](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M4631YCZMYKBKW7F3AQ96D2Z) and [B](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M46759EEZEZA4A9ZQNEDG0JD). Checkout: `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-visibility`.
