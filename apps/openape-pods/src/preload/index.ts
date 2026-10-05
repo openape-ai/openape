@@ -2,7 +2,7 @@ import { parseSharingCommand } from '../contracts/sharing'
 import type { SharingState } from '../contracts/sharing'
 import { parseDefinitionCommand, parseDefinitionsView } from '../contracts/definitions'
 import { parseMcpAccess, parseMcpAccessCommand } from '../contracts/mcp-access'
-import { parseRuntimeApprovalCommand, parseRuntimeApprovalPreference } from '../contracts/runtime-approval'
+import { parseRuntimeApprovalCommand, parseRuntimeApprovalView } from '../contracts/runtime-approval'
 import { parseChatsCommand, parseChatsView } from '../contracts/chats'
 import { parseCodexCommand, parseCodexConnection } from '../contracts/codex'
 import { parseWorkflowCommand, parseWorkflowView } from '../contracts/workflows'
@@ -26,7 +26,7 @@ import type { PodsBridge } from '../contracts/ipc'
 
 const bridge: PodsBridge = {
   async mcpAccess(command) { return parseMcpAccess(await ipcRenderer.invoke(channels.mcpAccess, parseMcpAccessCommand(command))) },
-  async runtimeApproval(command) { return parseRuntimeApprovalPreference(await ipcRenderer.invoke(channels.runtimeApproval, parseRuntimeApprovalCommand(command))) },
+  async runtimeApproval(command) { return parseRuntimeApprovalView(await ipcRenderer.invoke(channels.runtimeApproval, parseRuntimeApprovalCommand(command))) },
   async central(command) { return ipcRenderer.invoke(channels.central, command) },
   async codex(command) { return parseCodexConnection(await ipcRenderer.invoke(channels.codex, parseCodexCommand(command))) },
   async chats(command) { return parseChatsView(await ipcRenderer.invoke(channels.chats, parseChatsCommand(command))) },

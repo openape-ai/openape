@@ -134,13 +134,17 @@ it('forwards macOS suspend and resume to the worker', async () => {
 
 it('exposes automatic runtime approval only through the validated desktop preference channel', async () => {
   main = await startMain()
-  expect(await main.invoke(channels.runtimeApproval, { type: 'get' })).toEqual({ enabled: false })
-  await expect(main.invoke(channels.runtimeApproval, { type: 'set', enabled: true }, true)).rejects.toThrow()
-  expect(await main.invoke(channels.runtimeApproval, { type: 'set', enabled: true })).toEqual({ enabled: true })
-  expect(await main.invoke(channels.runtimeApproval, { type: 'get' })).toEqual({ enabled: true })
+  const view = { enabled: false, standing: false, owner: 'owner@example.test', scope: 'a'.repeat(64) }
+  main.worker.runtimeApprovalCommand.mockResolvedValue(view)
+  expect(await main.invoke(channels.runtimeApproval, { type: 'get' })).toEqual(view)
+  for (const command of [{ type: 'set', enabled: true }, { type: 'setStanding', enabled: true, scope: 'a'.repeat(64) }, { type: 'manage' }]) {
+    await expect(main.invoke(channels.runtimeApproval, command, true)).rejects.toThrow()
+    expect(await main.invoke(channels.runtimeApproval, command)).toEqual(view)
+    expect(main.worker.runtimeApprovalCommand).toHaveBeenLastCalledWith(command)
+  }
   await expect(main.invoke(channels.runtimeApproval, { type: 'set', enabled: 'true' })).rejects.toThrow()
-  await expect(main.invoke(channels.runtimeApproval, { type: 'set', enabled: true, podId })).rejects.toThrow()
-  expect(await main.invoke(channels.runtimeApproval, { type: 'set', enabled: false })).toEqual({ enabled: false })
+  await expect(main.invoke(channels.runtimeApproval, { type: 'setStanding', enabled: true, owner: 'foreign' })).rejects.toThrow()
+  await expect(main.invoke(channels.runtimeApproval, { type: 'manage', issuer: 'https://foreign.test' })).rejects.toThrow()
 })
 
 it('restricts MCP grants to the trusted renderer and never accepts an agent-provided expiry', async () => {

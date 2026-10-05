@@ -1,5 +1,26 @@
 # Active work
 
+## Standing runtime approval — issue 1422
+
+Owner-approved implementation: [issue1422](https://repos.openape.ai/patrick/monorepo/issues/1422),
+[plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M45FMPAY4XDXY7FMVTB2F093).
+Checkout: `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-standing-runtime`,
+branch `feature/issue-1422-standing-runtime`, base `d5cbc516`.
+
+The explicit all-Pods option binds consent to the signed-in owner and registered
+runtime, preserves the legacy local-MCP setting, and authorizes only exact
+per-Pod runtime grants. A scope receipt rejects stale settings after an account
+or runtime change. Decisions and preference changes are serialized. Existing
+IdP grant management owns revocation; disabling automatic approvals does not
+revoke issued grants. Action authorization and schedules are unchanged.
+
+Retained regression tests protect consent migration, identity binding, refusal,
+serialization, trusted IPC and independent controls. Full lint/typecheck and
+app build pass. The full unit contract and inspected English/light and
+German/dark settings screenshots are recorded in the PR/Test Runs receipt.
+Next: exact-head CI, native PR merge, signed-local delivery and installed UI
+acceptance. Production standing approval remains an explicit owner decision.
+
 ## Service authorization recovery — issue 1421
 
 A temporary HTTP failure while creating a runtime grant must use the existing
