@@ -30,6 +30,26 @@ Compose fixes the public origin, database location and fixture mode. Never enabl
 
 The iOS application uses bundle `ai.openape.pods`, team `Q994DN23WB`, iOS/iPadOS 18 and both `applinks` and `webcredentials` association services. Signed Simulator login-layout checks do not establish the HTTPS authentication handoff on a physical device. Apple distribution signing, upload, beta review and store review remain separate gates.
 
+## Desktop compatibility and identity-preserving recovery
+
+Before installing a desktop update, compare its workspace format, network tables
+and schema with the deployed relay. Deploy and verify the compatible relay first;
+then back up the stopped desktop profile and install the signed app. A healthy
+relay alone does not prove compatibility with the desktop publication contract.
+
+A rotated refresh token replay revokes its session family, not a still-valid runtime
+registration. Use Register desktop and the normal owner browser login to recover
+the same runtime ID, signing/agreement keys and generation. Reauthentication keeps
+pairings, local adoption receipts, publication journals and effect records; it does
+not replay uncertain work. Previous revoked sessions stay revoked.
+
+A revoked device, different owner/generation, missing local registration or lost
+relay registration needs explicit recovery. Registration must never silently create
+a new identity or rotate the generation to hide that conflict. Do not restore stale
+registration tokens from an old profile over newer sessions. After reauthentication,
+verify the unchanged runtime/generation and central receipt reconciliation before
+resuming operations; preserve unknown outcomes for their existing review flow.
+
 ## Native validation toolchain
 
 The iOS workspace selects `/Applications/Xcode.app/Contents/Developer` for its Swift and Simulator checks. The existing macOS CI runner deliberately defaults to Command Line Tools; that environment does not supply the Swift Testing module. Keep this selection scoped to iOS commands and do not change the runner launch configuration or other workspaces.
