@@ -118,3 +118,15 @@ describe('pod tabs with the production stylesheet', () => {
     await page.screenshot({ path: artifact('external-terminal-de-dark.png'), element: document.querySelector('.program-permissions')! })
   })
 })
+
+it.each(['en', 'de'] as const)('explains automatic recovery without a manual unlock in {0}', async (language) => {
+  const view: RunView = { runs: [{ id: '00000000-0000-4000-8000-000000000042', podId, scriptHash: hash, state: 'failed', startedAt: 1_790_000_000_000, finishedAt: 1_790_000_005_000, summary: 'Run failed', error: 'Temporary read failure', checkpointRevision: 2, recovery: null, automaticRecovery: { disposition: 'retry', reason: 'Automatic retry scheduled', nextAt: 1_790_000_015_000, attempt: 1 } }], events: [] }
+  applyLanguage(language)
+  await openTab(language === 'de' ? 'Historie' : 'History', { runs: async () => structuredClone(view), scheduling: async () => ({ spec: { kind: 'interval', seconds: 300 }, enabled: true, revision: 1, nextAt: 1_790_000_300_000, error: null, pending: 1, blocked: 0, failed: 0, concurrency: 2 }) })
+  await show(language === 'de' ? 560 : 1060, 850, language === 'de' ? 'dark' : 'light')
+  expect(document.querySelector('.automatic-recovery')?.textContent).toContain(language === 'de' ? 'Automatischer Wiederanlauf' : 'Automatic retry')
+  expect(document.querySelector('.next-action')).toBeNull()
+  expect(pageFits()).toBe(true)
+  expect(content()).toBeLessThanOrEqual(1)
+  await page.screenshot({ path: artifact(`automatic-recovery-${language}.png`) })
+})

@@ -81,6 +81,9 @@ export default defineComponent({
         {{ t("Save schedule") }}
       </button>
     </form>
+    <p v-if="view?.failed" class="muted">
+      {{ t('Failed inputs retained: {p0}. Future scheduled runs remain eligible.', { p0: view.failed }) }}
+    </p>
     <p v-if="view?.nextAt" class="muted">
       {{ view.enabled && pod.lifecycle === 'active' ? t("Next scheduled time") : t("Saved next time · automatic execution paused") }}: {{ dateTime(view.nextAt) }}
     </p>

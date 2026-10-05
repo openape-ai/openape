@@ -130,12 +130,12 @@ Automatische Ausführungen laufen auf diesem Mac, nicht in der Cloud. Das Schlie
 
 Wenn die App wieder läuft oder der Mac aufwacht, wird für einen überfälligen aktivierten Zeitplan ein Nachholstart eingereiht, sofern noch kein Zeitplanstart wartet. Der nächste Termin wird in die Zukunft verschoben, statt jedes verpasste Intervall einzeln nachzuholen. Gespeicherter Fortschritt und Skript bestimmen, welche Daten dieser Lauf verarbeitet; damit ist nicht garantiert, dass jede verpasste E-Mail oder Datei nachgeholt wird.
 
-Unterbrochene Läufe sowie blockierte oder bereits beanspruchte Eingaben benötigen eine Wiederherstellungsentscheidung, bevor weitere Arbeit startet. Pro Pod läuft höchstens eine Ausführung gleichzeitig. Pausieren verhindert neue automatische Starts und lässt einen aktiven Lauf enden; Lauf abbrechen in der Historie stoppt ihn. Der verbundene Codex kann Zeitpläne auf deinen Auftrag hin aktivieren.
+Gewöhnliche Fehler und sicher beendete Unterbrechungen werden automatisch mit begrenzten Wiederholungen fortgesetzt. Nur unklare externe Auswirkungen, geänderte Berechtigungen oder nicht nachweislich beendete Prozesse erfordern eine Prüfung. Pro Pod läuft höchstens eine Ausführung gleichzeitig. Pausieren verhindert neue automatische Starts und lässt einen aktiven Lauf enden; Lauf abbrechen in der Historie stoppt ihn. Der verbundene Codex kann Zeitpläne auf deinen Auftrag hin aktivieren.
 
 1. Öffne nach einem erfolgreichen manuellen Lauf Einstellungen → Zeitplan und Limits. Wähle In einem Intervall mit Minuten oder Täglich mit Ortszeit und ausdrücklicher Zeitzone, beispielsweise Europe/Vienna.
 2. Aktiviere Diesen Zeitplan aktivieren und wähle Zeitplan speichern. Ist der Pod pausiert, wähle nach Prüfung der Bereitschaft zusätzlich Automatische Ausführung fortsetzen.
 3. Prüfe Nächster geplanter Zeitpunkt, den Aktivierungsstatus und angezeigte Fehler. Lass Pods laufen und den Mac wach, wenn Ausführungen erforderlich sind.
-4. Zum Stoppen weiterer Zeitplanläufe deaktiviere und speichere den Zeitplan oder pausiere die automatische Ausführung. Prüfe nach Ruhezustand, Beenden oder Absturz zuerst die Historie, bevor du unterbrochene Arbeit erneut startest.
+4. Zum Stoppen weiterer Zeitplanläufe deaktiviere und speichere den Zeitplan oder pausiere die automatische Ausführung. Die Historie zeigt nach Ruhezustand, Beenden oder Absturz den automatischen Wiederanlauf und notwendige Prüfungen.
 
 ![Einen Zeitplan bewusst aktivieren](images/handbook-settings-de.png)
 
@@ -151,7 +151,7 @@ Berechtigungs- oder Validierungsfehler: Öffne Technische Details in der Histori
 
 Kein automatischer Lauf: Prüfe aktivierten Zeitplan, Nächster geplanter Zeitpunkt, Pausenstatus und aktives Skript. Beende offene Einrichtungsterminals regulär. Lass Mac und App laufen. Kläre gestoppte Läufe, blockierte Eingaben und Ressourcenfehler in der Historie vor dem Fortsetzen.
 
-Unterbrochener oder fehlgeschlagener Lauf: Wähle ihn in der Historie und dann Erneuten Versuch vorbereiten. Das prüft gespeicherten Fortschritt, ohne das Skript zu starten. Kläre unsichere Zustellungen und wähle danach Unerledigte Arbeit erneut ausführen, wenn angeboten. Für blockierte Starts nutze Noch nicht gestartete Aufträge erneut vormerken. Wiederholte Klicks auf Ausführen können zusätzliche Anfragen erzeugen.
+Unterbrochener oder fehlgeschlagener Lauf: Die Historie zeigt den nächsten automatischen Wiederanlauf oder einen bereits erfolgten Folgeversuch. Nach ausgeschöpften Versuchen bleiben fehlgeschlagene Eingänge sichtbar; normale Fehler deaktivieren keine späteren Termine. Nur bei notwendiger Prüfung oder aufbewahrten fehlgeschlagenen Eingängen bietet die Historie eine manuelle Wiederherstellung an. Kläre ungewisse Zustellungen vor einem erneuten Versand.
 
 Unbekannte Zustellung: Prüfe zuerst das externe Ziel. Halte deine Beobachtung in der Historie fest und wähle Bereits zugestellt oder Nicht zugestellt · Wiederholung erlauben. Rate nicht und sende nicht blind erneut; eine verlorene Antwort beweist nicht, dass nichts passiert ist.
 
@@ -334,7 +334,7 @@ Weitere Optionen kann einen Pod archivieren oder einen archivierten Pod nach nat
 
 Die Historie zeigt das Ergebnis, den nächsten Schritt und Was passiert ist. Wiederholte Programmaufrufe und KI-Anfragen werden mit der Anzahl erfolgreicher und nicht abgeschlossener Aufrufe gruppiert. Routinemäßige Berechtigungsprüfungen bleiben zusammen mit der festgelegten Skriptversion und gespeicherten Ereignissen in den aufklappbaren Technischen Details.
 
-Lauf abbrechen stoppt einen aktiven Lauf. Unterbrochene Arbeit bleibt nach Absturz oder Neustart sichtbar. Erneuten Versuch vorbereiten prüft gespeicherten Fortschritt und mögliche Zustellungen, ohne das Skript zu starten. Nach erfolgreicher Prüfung wird Unerledigte Arbeit erneut ausführen verfügbar. Kläre zuerst ungewisse Zustellungen. Nach einem gestoppten Lauf führt auch die Übersicht zu dieser Prüfung.
+Lauf abbrechen beendet diesen Versuch ohne sofortige Wiederholung. Ein aktivierter Zeitplan bleibt aktiviert. Gewöhnliche Fehler und sicher beendete Unterbrechungen werden automatisch mit den ursprünglichen Eingängen und dem gespeicherten Fortschritt wiederholt: höchstens fünf Versuche für einzelne Pods und Workflows, drei für Netzwerke. Der Abstand beginnt bei zwei Sekunden und wächst bis höchstens sechzig Sekunden. Danach bleiben fehlgeschlagene Eingänge zur Prüfung erhalten; unabhängige spätere Arbeit kann fortfahren. Ungewisse Zustellungen halten die davon abhängige Arbeit bis zur Klärung an.
 
 Pro Pod läuft höchstens eine Ausführung. Weitere wartende Startaufträge zählt vorgemerkte Startanfragen, keine E-Mails oder Dateien. Mehrfaches Starten kann mehrere Anfragen erzeugen. Nicht gestartete Anfragen erneut versuchen gilt für eine blockierte Warteschlange. Fortschrittsstände dokumentieren erfolgreiche Arbeit; allein das Fortsetzen eines Codex-Gesprächs ist keine Wiederherstellungsentscheidung.
 
@@ -383,7 +383,7 @@ export async function run(context) {
 
 ## Vertiefung: Ausführungsfreigaben und Laufansicht
 
-Ein manueller Lauf öffnet benötigte OpenApe-Freigaben im Browser. Gleichzeitig erscheint im Pod eine Karte mit Freigabe öffnen. Damit bleibt die erforderliche Aktion auch sichtbar, wenn sich der Browser nicht öffnen lässt. Hintergrundläufe zeigen die Karte ohne automatischen Browserwechsel. Das Warten dauert höchstens 15 Minuten und pausiert das aktive Skript-Zeitlimit. Lauf abbrechen beendet das Warten. Nach einem App-Neustart ist eine ausdrückliche Wiederherstellung nötig; eine alte Freigabe startet keinen gestoppten Lauf neu.
+Ein manueller Lauf öffnet benötigte OpenApe-Freigaben im Browser. Gleichzeitig erscheint im Pod eine Karte mit Freigabe öffnen. Damit bleibt die erforderliche Aktion auch sichtbar, wenn sich der Browser nicht öffnen lässt. Hintergrundläufe zeigen die Karte ohne automatischen Browserwechsel. Das Warten dauert höchstens 15 Minuten und pausiert das aktive Skript-Zeitlimit. Lauf abbrechen beendet das Warten. Nach einem App-Neustart wird sicher wiederholbare Arbeit automatisch unter aktuellen Grant-Prüfungen fortgesetzt. Eine alte Freigabe allein startet keinen abgebrochenen Versuch neu.
 
 Die Ausführungserlaubnis gehört zu diesem Pod und seinem OpenApe-Agenten. Pod-Ausführung erlauben erstellt eine widerrufbare dauerhafte Regel; Einmal erlaubt nur die aktuelle Anfrage. Skriptänderungen erweitern keine Verzeichnis-, Anwendungs-, HTTP- oder Geheimnis-Zuweisungen. Der Desktop-Dienst prüft die strukturierte Freigabe mit der ape-shell-Autorisierungsbibliothek und startet das festgehaltene Skript in der bestehenden nativen Sandbox. Das externe Terminal verwendet weiterhin das ape-shell-CLI.
 

@@ -1,3 +1,5 @@
+import { recoveryDecision, recoveryHold } from '../recovery/policy'
+import type { RecoveryFailure } from '../recovery/policy'
 import { NetworkData } from './network-data'
 import { emptyNetworkDataPin, networkConfiguration, networkDataPin, networkLegacyVariables } from './network-config'
 import type { NetworkGates } from './network-gates'
@@ -131,6 +133,7 @@ export class NetworkInvocations {
       const { definition } = this.events.authority(authority, true)
       this.store.transaction(() => {
         this.store.db.prepare('UPDATE networks SET state=\'paused\' WHERE id=?').run(definition.id)
+        this.store.db.prepare('UPDATE network_invocation_controls SET failure_kind=\'quota\' WHERE run_id=?').run(authority.runId)
         this.store.db.prepare('INSERT INTO network_runtime_status(network_id,intake_error,inspected_at) VALUES(?,?,?) ON CONFLICT(network_id) DO UPDATE SET intake_error=excluded.intake_error,inspected_at=excluded.inspected_at').run(definition.id, failure.message, Date.now())
       })
       return
@@ -159,7 +162,7 @@ export class NetworkInvocations {
     })
   }
 
-  async finish(authority: NetworkAuthority, state: RunState, summary: string, error: string | null, completedInputIds: string[], emissions: NetworkEmission[], transient = false): Promise<void> {
+  async finish(authority: NetworkAuthority, state: RunState, summary: string, error: string | null, completedInputIds: string[], emissions: NetworkEmission[], failure: RecoveryFailure | boolean = { cause: 'failure' }): Promise<void> {
     if (!['completed', 'completedWithGaps', 'failed', 'cancelled', 'blocked'].includes(state)) throw new Error('Network settlement requires a terminal script result')
     this.store.transaction(() => {
       this.events.authority(authority, true)
@@ -167,7 +170,7 @@ export class NetworkInvocations {
     })
     try { await confirmDomainsStopped(this.store, authority.runId, this.helper) }
     catch (failure) { this.interrupt(authority, failure instanceof Error ? failure.message : 'Execution cleanup is unverified'); return }
-    this.settle(authority, state, summary, error, completedInputIds, emissions, transient)
+    this.settle(authority, state, summary, error, completedInputIds, emissions, typeof failure === 'boolean' ? { cause: failure ? 'infrastructure' : state === 'cancelled' ? 'owner-cancelled' : 'failure' } : failure)
   }
 
   async finishGate(authority: NetworkAuthority, summary: string, settleTask: () => void, incomplete = false): Promise<void> {
@@ -181,7 +184,7 @@ export class NetworkInvocations {
     this.store.transaction(() => {
       this.events.authority(authority, true)
       settleTask()
-      this.settle(authority, incomplete ? 'completedWithGaps' : 'completed', summary, incomplete ? summary : null, [], [], false)
+      this.settle(authority, incomplete ? 'completedWithGaps' : 'completed', summary, incomplete ? summary : null, [], [], { cause: 'owner-cancelled' })
       if (incomplete) this.store.db.prepare('UPDATE network_invocation_controls SET resolved_receipt=? WHERE run_id=?').run(canonicalNetworkJson({ kind: 'gate-maintenance-step', taskId: JSON.parse(row.manifest as string).gateTaskId, summary, at: Date.now(), noScriptLaunched: true }), authority.runId)
     })
   }
@@ -231,7 +234,7 @@ export class NetworkInvocations {
     })
   }
 
-  private settle(authority: NetworkAuthority, state: RunState, summary: string, error: string | null, completedInputIds: string[], emissions: NetworkEmission[], transient: boolean): void {
+  private settle(authority: NetworkAuthority, state: RunState, summary: string, error: string | null, completedInputIds: string[], emissions: NetworkEmission[], failure: RecoveryFailure): void {
     if (!['completed', 'completedWithGaps', 'failed', 'cancelled', 'blocked'].includes(state)) throw new Error('Network settlement requires a terminal script result')
     if (summary.length > 10000 || (error !== null && error.length > 10000)) throw new Error('Network settlement diagnostic exceeds its size limit')
     this.store.transaction(() => {
@@ -269,13 +272,14 @@ export class NetworkInvocations {
         this.store.db.prepare('INSERT INTO network_effect_receipts VALUES(?,?,?,\'unknown\',?,?)').run(effect.logical_action_key!, effect.attempt!, sequence, canonicalNetworkJson({ reason: 'Invocation stopped with an unresolved effect' }), Date.now())
         this.store.db.prepare('UPDATE network_effect_attempts SET state=\'unknown\' WHERE logical_action_key=? AND attempt=?').run(effect.logical_action_key!, effect.attempt!)
       }
-      const control = this.store.db.prepare('SELECT attempt FROM network_invocation_controls WHERE run_id=?').get(authority.runId)!
+      const control = this.store.db.prepare('SELECT attempt,review_required,failure_kind FROM network_invocation_controls WHERE run_id=?').get(authority.runId)!
       const requiresFreshGate = Boolean(JSON.parse(row.manifest as string).gateBindings?.length)
-      const retry = transient && !unsafe && !requiresFreshGate && Number(control.attempt) < 3
+      const decision = recoveryDecision(failure, Number(control.attempt) - 1, unsafe ? 'External outcome requires reconciliation' : control.review_required ? 'Source identity conflict requires owner review' : control.failure_kind === 'quota' ? 'Capacity requires owner review' : requiresFreshGate ? 'A fresh approval is required' : recoveryHold(this.store, member.podId, authority.runId), Date.now(), 3)
+      const retry = !completed && decision.disposition === 'retry'
       if (retry) this.calls?.abandonUnacceptedRetry(authority.runId)
-      const retryAt = retry ? Date.now() + Math.ceil(2000 * 2 ** (Number(control.attempt) - 1) * (0.8 + Math.random() * 0.4)) : null
+      const retryAt = retry ? decision.nextAt : null
       const nextState = unsafe ? 'unknown' : completed ? 'done' : retry ? 'retry_wait' : 'blocked'
-      this.store.db.prepare('UPDATE network_invocation_controls SET deadline=NULL,retry_at=?,failure_kind=?,diagnostic=?,stopped_receipt=? WHERE run_id=?').run(retryAt, completed ? null : unsafe ? 'uncertain' : requiresFreshGate ? 'recovery' : transient ? retry ? 'transient' : 'exhausted' : error?.includes('deadline') || error?.includes('time limit') ? 'timeout' : error?.includes('192 MiB') ? 'quota' : 'invalid', error, canonicalNetworkJson({ processesStopped: true, generation: row.generation, inspectedAt: Date.now() }), authority.runId)
+      this.store.db.prepare('UPDATE network_invocation_controls SET deadline=NULL,retry_at=?,failure_kind=?,diagnostic=?,stopped_receipt=? WHERE run_id=?').run(retryAt, completed ? null : unsafe ? 'uncertain' : control.failure_kind === 'quota' ? 'quota' : requiresFreshGate ? 'recovery' : decision.disposition === 'hold' ? 'recovery' : retry ? 'transient' : 'exhausted', error, canonicalNetworkJson({ processesStopped: true, generation: row.generation, inspectedAt: Date.now() }), authority.runId)
       if (retryAt !== null) this.store.db.prepare('UPDATE network_deliveries SET ready_at=? WHERE run_id=? AND state=\'claimed\'').run(retryAt, authority.runId)
       this.store.db.prepare('UPDATE network_deliveries SET state=?,claim_token=NULL,reason=? WHERE run_id=? AND state=\'claimed\'').run(nextState, completed ? null : error ?? summary, authority.runId)
       if (inputs.length) { this.count(definition.id, 'claimed', -inputs.length); this.count(definition.id, nextState, inputs.length) }

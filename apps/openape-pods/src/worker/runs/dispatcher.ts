@@ -1,8 +1,11 @@
+import { randomUUID } from 'node:crypto'
+import { RunCancellation, unresolvedOperation } from '../recovery/policy'
+import type { RecoveryFailure } from '../recovery/policy'
 import { programRequest } from '../../main/programs/invoke'
 import { supportedNetworkCapability } from '../../contracts/network-capabilities'
 import { boundedStep } from '../scheduling/tick-step'
 import type { NetworkGates, NetworkGateStep, NetworkGateService } from '../scheduling/network-gates'
-import { InfrastructureError, retryInfrastructure } from '../../contracts/infrastructure'
+import { AuthorityError, InfrastructureError, retryInfrastructure } from '../../contracts/infrastructure'
 import { assignedJev, parseJevRequest, parseJevResult } from '../../contracts/jev'
 import type { JevRequest, JevEvaluation } from '../../contracts/jev'
 import { MailWorkflow } from '../mail/workflow'
@@ -119,6 +122,7 @@ export class RunDispatcher {
   start(podId: string, trigger: RunTrigger = { reason: 'manual', eventIds: [] }, accepted?: (runId: string) => void): string {
     if (this.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=?').get(podId)) throw new Error('Network instances require network intake and dispatch')
     this.store.assertStorage()
+    if (unresolvedOperation(this.store, podId)) throw new Error('An operation without replay evidence requires review')
     if (this.store.db.prepare('SELECT 1 FROM effect_ledger WHERE pod_id=? AND state IN (\'intent\',\'unknown\')').get(podId)) throw new Error('An HTTP delivery needs review before this pod can run again')
     const pod = this.store.getPod(podId)
     if (!pod.activeScript) throw new Error('Choose and validate a script before running this pod')
@@ -135,7 +139,7 @@ export class RunDispatcher {
     return reservation.run.id
   }
 
-  cancelPod(podId: string, message = 'Run cancelled by the owner'): void { this.active.get(podId)?.controller.abort(new Error(message)) }
+  cancelPod(podId: string, message = 'Run cancelled by the owner', cause: RecoveryFailure['cause'] = 'owner-cancelled'): void { this.active.get(podId)?.controller.abort(new RunCancellation(cause, message)) }
 
   startNetwork(invocations: NetworkInvocations, authority: NetworkAuthority): void {
     this.store.assertStorage()
@@ -191,7 +195,7 @@ export class RunDispatcher {
 
   async stop(): Promise<void> {
     const active = [...this.active.values()]
-    for (const run of active) run.controller.abort(new Error('Application is quitting'))
+    for (const run of active) run.controller.abort(new RunCancellation('shutdown', 'Application is quitting'))
     await Promise.all(active.map(run => run.work))
   }
 
@@ -220,10 +224,10 @@ export class RunDispatcher {
     let infrastructureWaiting = 0
     let networkMailReads = 0
     let networkAgentCalls = 0
-    let scriptStarted = false
+    let infrastructureFailure: RecoveryFailure | undefined
     const graph = graphRun(this.store, id); let delivered: DeliveredItem[] = []; const emits: (GraphEmit & { channel: string })[] = []
     const settle = (completed: boolean) => { if (graph) settleItems(this.store, graph, completed && this.runs.get(id).state === 'completed', delivered, emits, Date.now()) }
-    const retryService = async <T>(operation: string, work: () => Promise<T>, signal: AbortSignal, budgetMs?: number) => {
+    const retryService = async <T>(operation: string, work: () => Promise<T>, signal: AbortSignal, budgetMs = 30000) => {
       let waiting = false
       try {
         return await retryInfrastructure(async () => {
@@ -232,7 +236,8 @@ export class RunDispatcher {
             this.cancelPod(pod.id, 'Infrastructure retry cancelled because the owner paused execution')
             signal.throwIfAborted()
           }
-          return work()
+          try { return await work() }
+          catch (error) { if (error instanceof AuthorityError) infrastructureFailure = { cause: 'authority' }; if (error instanceof InfrastructureError) infrastructureFailure = { cause: 'infrastructure', retryAfterMs: error.failure.retryAfterMs }; throw error }
         }, signal, (retry) => {
           if (retry && !waiting) { waiting = true; infrastructureWaiting++ }
           appendEvent('infrastructure', { operation, ...(retry ?? { state: 'restored' }) })
@@ -307,6 +312,7 @@ export class RunDispatcher {
       }
       const invokeTool = async (body: unknown, toolSignal: AbortSignal) => {
         assertCurrent()
+        appendEvent('recovery-boundary', { kind: 'read', operation: 'tools.invoke' })
         if (!manifest.capabilities.some(capability => capability === 'mail.read' || capability.startsWith('tool.app_') || capability.startsWith('tool.ssh_')) || !this.services?.tool) throw new Error('No tool capability is assigned to this pod')
         const operation = retryService('tool authorization', async () => { assertCurrent(); return this.services!.tool!(body, toolSignal, scope) }, toolSignal)
         pendingAgents.add(operation)
@@ -325,7 +331,7 @@ export class RunDispatcher {
       appendEvent('environment', { script: artifact, workspace: input.workspace, values: Object.fromEntries(Object.entries(runtime.environment).filter(([key]) => ['HOME', 'TMPDIR', 'PATH', 'SHELL', 'PODS_POD_ID', 'LANG', 'TERM'].includes(key))) })
       const result = await executeScript(runtime, directory, artifact, input, signal, {
         budgetPaused: () => infrastructureWaiting > 0 || agentBudgetPaused() || this.runs.approvals(pod.id).some(item => item.runId === id),
-        event: (type, data) => { assertCurrent(); appendEvent(type, data); if (type === 'process') scriptStarted = true; if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
+        event: (type, data) => { assertCurrent(); appendEvent(type, data); if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
         request: async (operation, payload, operationSignal) => {
           assertCurrent()
           if (operation === 'jev.evaluate') {
@@ -405,9 +411,16 @@ export class RunDispatcher {
             if (!this.services?.mailArchive) throw new Error('Mail archive service is unavailable')
             // In a graph the script never names what may move; the consumed gate batches do.
             const request = graph ? { ...archiveTarget(payload), gate: gateCoverage(this.store, graph, delivered) } : payload
+            const boundaryId = randomUUID()
+            appendEvent('recovery-boundary', { id: boundaryId, kind: 'untracked', operation })
             const work = this.services.mailArchive(request, operationSignal, scope)
             pendingAgents.add(work)
-            try { const result = await work; assertCurrent(); return result }
+            try {
+              const result = await work
+              const views = Array.isArray(result) ? result : [result]
+              if (views.every(value => value && typeof value === 'object' && 'state' in value && ['completed', 'pending', 'denied', 'expired'].includes(String(value.state)))) appendEvent('recovery-boundary-result', { id: boundaryId, state: 'confirmed' })
+              assertCurrent(); return result
+            }
             finally { pendingAgents.delete(work) }
           }
           if (operation.startsWith('mail.workflow.')) {
@@ -515,13 +528,13 @@ export class RunDispatcher {
         if (!this.store.db.prepare('SELECT 1 FROM claims WHERE pod_id=? AND id=? AND kind=\'gap\'').get(pod.id, gap)) throw new Error('Result references an uncommitted gap')
       }
       if (shellScope) { await this.services?.closeShell?.(shellScope); shellScope = undefined }
-      await this.finish(id, result.status, result.summary, result.status === 'failed' || result.status === 'blocked' ? result.summary : null, result.completedInputIds, undefined, () => settle(true), network)
+      await this.finish(id, result.status, result.summary, result.status === 'failed' || result.status === 'blocked' ? result.summary : null, result.completedInputIds, epoch, () => settle(true), network, infrastructureFailure ?? { cause: 'failure' })
     }
     catch (error) {
       if (network) network.invocations.recordConflict(network.authority, error)
       const message = (error instanceof Error ? error.message : 'Run failed').slice(0, 10000)
       await Promise.allSettled(pendingAgents)
-      await this.finish(id, signal.aborted ? 'cancelled' : 'failed', signal.aborted ? 'Run cancelled' : 'Run failed', message, [], !signal.aborted && !scriptStarted && error instanceof InfrastructureError ? epoch : undefined, () => settle(false), network)
+      await this.finish(id, signal.aborted ? 'cancelled' : 'failed', signal.aborted ? 'Run cancelled' : 'Run failed', message, [], epoch, () => settle(false), network, signal.aborted ? { cause: signal.reason instanceof RunCancellation ? signal.reason.cause : 'owner-cancelled' } : infrastructureFailure ?? { cause: error instanceof AuthorityError ? 'authority' : error instanceof InfrastructureError ? 'infrastructure' : 'failure', ...(error instanceof InfrastructureError ? { retryAfterMs: error.failure.retryAfterMs } : {}) })
     }
     finally {
       try { if (shellScope) await this.services?.closeShell?.(shellScope) }
@@ -530,14 +543,14 @@ export class RunDispatcher {
     }
   }
 
-  private async finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = [], retryEpoch?: number, settle: () => void = () => {}, network?: NetworkExecution): Promise<void> {
-    if (network) { await network.invocations.finish(network.authority, state, summary, error, completedInputIds, network.emissions, retryEpoch !== undefined); return }
+  private async finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = [], retryEpoch?: number, settle: () => void = () => {}, network?: NetworkExecution, failure?: RecoveryFailure): Promise<void> {
+    if (network) { await network.invocations.finish(network.authority, state, summary, error, completedInputIds, network.emissions, failure ?? { cause: 'failure' }); return }
     try { await confirmDomainsStopped(this.store, id, this.runtime.helper) }
     catch (failure) {
       this.runs.interrupt(id, failure instanceof Error ? failure.message : 'Execution cleanup is unverified')
       return
     }
-    this.store.transaction(() => { this.runs.finish(id, state, summary, error, completedInputIds, retryEpoch); settle() })
+    this.store.transaction(() => { this.runs.finish(id, state, summary, error, completedInputIds, retryEpoch, failure); settle() })
   }
 
 }

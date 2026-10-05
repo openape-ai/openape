@@ -161,7 +161,15 @@ export class NetworkEngine {
     const pending = this.store.db.prepare(`SELECT i.network_id,i.network_revision,i.run_id,i.generation FROM network_invocations i JOIN networks n ON n.id=i.network_id JOIN run_leases l ON l.run_id=i.run_id
       WHERE n.owner_issuer=? AND n.owner_subject=? AND i.state IN ('interrupted','blocked','unknown') ORDER BY l.heartbeat`).all(owner.issuer, owner.subject)
     await Promise.all(pending.map(async (row) => {
-      try { await this.recover({ type: 'inspect', id: row.network_id, revision: row.network_revision, runId: row.run_id, generation: row.generation }) }
+      try {
+        await this.recover({ type: 'inspect', id: row.network_id, revision: row.network_revision, runId: row.run_id, generation: row.generation })
+        const current = this.store.db.prepare('SELECT i.*,n.state AS network_state,n.baseline_state,n.activation_epoch AS current_activation,n.restore_nonce AS current_restore FROM network_invocations i JOIN networks n ON n.id=i.network_id WHERE i.run_id=?').get(row.run_id!)!
+        const manifest = JSON.parse(current.manifest as string)
+        const pod = this.store.getPod(current.pod_id as string)
+        if (current.network_state !== 'active' || current.baseline_state !== 'ready' || current.activation_epoch !== current.current_activation || current.restore_nonce !== current.current_restore || current.execution_kind !== 'script' || manifest.reason === 'manual' || pod.lifecycle !== 'active' || manifest.resourceEpoch !== this.resources.epoch(pod.id) || manifest.assignmentRevision !== pod.bindingRevision) return
+        await this.recover({ type: 'retry', id: row.network_id, revision: row.network_revision, runId: row.run_id, generation: row.generation })
+        this.trace(String(row.network_id), 'automatic-startup-retry', { runId: row.run_id, generation: row.generation })
+      }
       catch (failure) { this.attention(row.network_id as string, 'startup-recovery-needs-review', { runId: row.run_id }, failure) }
     }))
   }

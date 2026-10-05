@@ -11,7 +11,7 @@ import type { DefinitionCommand, DefinitionsView } from '../contracts/definition
 import type { NetworkGateManifest } from '../contracts/network-gates'
 import { resolveSshTarget, sshGrantArgv } from './ssh/configuration'
 import { invokeSsh } from './ssh/invoke'
-import { InfrastructureError, retryInfrastructure } from '../contracts/infrastructure'
+import { AuthorityError, InfrastructureError, retryInfrastructure } from '../contracts/infrastructure'
 import type { InfrastructureFailure } from '../contracts/infrastructure'
 import { MailArchiveService } from './mail/archive/service'
 import { ArchiveStore } from './mail/archive/store'
@@ -159,9 +159,9 @@ export class FixtureWorker {
       if (message && typeof message === 'object' && 'service' in message) {
         const request = message.service as ServiceRequest
         const respond = async () => {
-          let reply: { id: string, value?: unknown, error?: string, infrastructure?: InfrastructureFailure }
+          let reply: { id: string, value?: unknown, error?: string, infrastructure?: InfrastructureFailure, authority?: boolean }
           try { reply = { id: request.id, value: await this.executeService(request) } }
-          catch (error) { reply = { id: request.id, error: error instanceof Error ? error.message : 'Mail broker failed', ...(error instanceof InfrastructureError && ['http', 'shell', 'tool'].includes(request.kind ?? 'tool') ? { infrastructure: error.failure } : {}) } }
+          catch (error) { reply = { id: request.id, error: error instanceof Error ? error.message : 'Mail broker failed', ...(error instanceof AuthorityError ? { authority: true } : {}), ...(error instanceof InfrastructureError && ['http', 'shell', 'tool'].includes(request.kind ?? 'tool') ? { infrastructure: error.failure } : {}) } }
           if (this.child === child) child.postMessage({ serviceReply: reply })
         }
         void respond().catch((error: unknown) => { console.error('Broker response failed', error); child.kill() })
