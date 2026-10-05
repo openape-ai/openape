@@ -48,6 +48,27 @@ describe('pod workspace shell', () => {
     expect(wrapper.find('#panel-History').exists()).toBe(false)
     wrapper.unmount()
   })
+  it('tells on Overview what the last run did, unless the script only repeated the outcome', async () => {
+    const podId = '00000000-0000-4000-8000-000000000001'
+    const overview = async (summary: string) => {
+      const run = { id: '00000000-0000-4000-8000-000000000002', podId, scriptHash: 'a'.repeat(64), state: 'completed', startedAt: 1, finishedAt: 2, summary, error: null, checkpointRevision: 0 }
+      window.pods = { mcpAccess: async () => ({ mode: 'off', duration: 'hour', expiresAt: null }), runtimeApproval: async () => ({ enabled: false, standing: false, owner: null, scope: null }),
+        codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }), chats: async () => ({ conversations: [], activeConversationId: null }),
+        definitions: async () => ({ definitions: [], instances: [], provisioning: [] }), networks: async () => ({ networks: [] }), workflows: async () => ({ workflows: [], runs: [] }),
+        runs: async () => ({ runs: [run], events: [] }), getStatus: async () => ready, onStatus: () => () => {},
+        workspace: async () => ({ organization: { revision: 1, groups: [] }, pods: [{ id: podId, name: 'Fixture', revision: 1, lifecycle: 'active', activeScript: run.scriptHash }] }),
+        details: async () => ({ counts: {}, claims: [], versions: [] }), resources: async () => ({ resources: [] }),
+        scheduling: async () => ({ enabled: false, pending: 0, blocked: 0 }),
+        onboarding: async () => ({ connections: [], complete: true, owner: null, runtime: { ready: true, error: null } }),
+        data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }),
+      } as unknown as typeof window.pods
+      const wrapper = mount(App, { props: { initialPodId: podId } }); await flushPromises()
+      const text = wrapper.get('#panel-Overview').text(); wrapper.unmount()
+      return text
+    }
+    expect(await overview('Unchanged: 204 tasks. No Telegram message.')).toContain('Run completedUnchanged: 204 tasks. No Telegram message.')
+    expect((await overview('Run completed')).match(/Run completed/g)).toHaveLength(1)
+  })
   it('surfaces IPC connection failure instead of claiming readiness', async () => {
     window.pods = { mcpAccess: async () => ({ mode: 'off', duration: 'hour', expiresAt: null }), runtimeApproval: async () => ({ enabled: false, standing: false, owner: null, scope: null }), codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }), chats: async () => ({ conversations: [], activeConversationId: null }), definitions: async () => ({ definitions: [], instances: [], provisioning: [] }), networks: async () => ({ networks: [] }), workflows: async () => ({ workflows: [], runs: [] }), packages: async () => { throw new Error('No package search fixture configured') }, programs: async () => { throw new Error('No program fixture configured') }, language: async () => 'en' as const, scripts: async () => { throw new Error('No script fixture configured') }, data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }), onboarding: async () => ({ connections: [], complete: true, owner: null, runtime: { ready: true, error: null } }), master: async () => ({ connected: false, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }), details: async () => ({ claims: [], total: 0, counts: { finding: 0, question: 0, gap: 0 }, checkpointRevision: 0, versions: [], source: null }), scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }), runs: async () => ({ runs: [], events: [] }), resources: async () => ({ resources: [], epoch: 0 }), workspace: async () => ({ organization: { revision: 1, groups: [] }, pods: [] }), getStatus: async () => { throw new Error('Connection rejected') }, onStatus: () => () => {} }
     const wrapper = mount(App, { props: { initialPodId: '00000000-0000-4000-8000-000000000001' } }); await flushPromises()
