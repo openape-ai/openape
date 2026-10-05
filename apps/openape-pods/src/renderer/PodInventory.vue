@@ -35,7 +35,7 @@ function memberships(id: string) { return props.workflows.workflows.filter(item 
       </div><input v-model="search" :aria-label="t('Search Pods')" :placeholder="t('Search Pods')" type="search">
     </div>
     <button v-for="pod in visible" :key="pod.id" class="inventory-row" @click="$emit('select', pod.id)">
-      <span><strong>{{ pod.name }}</strong><small>{{ memberships(pod.id) || t('Standalone Pod') }}</small></span><span class="badge">{{ label(pod.lifecycle) }}</span><span aria-hidden="true">›</span>
+      <span><strong>{{ pod.name }}</strong><small v-if="pod.description" class="inventory-purpose">{{ pod.description }}</small><small>{{ memberships(pod.id) || t('Standalone Pod') }}</small></span><span class="badge">{{ label(pod.lifecycle) }}</span><span aria-hidden="true">›</span>
     </button>
     <p v-if="!visible.length" class="muted">
       {{ archived ? t('No archived Pods') : t('No matching Pods') }}

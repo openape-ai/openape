@@ -43,6 +43,14 @@ async function open() {
   await wrapper.find('.central-pod').trigger('click'); await flushPromises()
   return fixture
 }
+it('shows what each Pod does in the inventory before it is opened', async () => {
+  const fixture = centralFixture()
+  fixture.host.workspace.pods[0]!.description = 'Reviews recent releases.'
+  wrapper = mount(CentralWorkspace, { props: { client: fixture.client } }); await flushPromises()
+  const rows = wrapper.findAll('.central-pod').map(row => row.text())
+  expect(rows[0]).toContain('Reviews recent releases.')
+  expect(rows[1]).not.toContain('Reviews recent releases.')
+})
 it('hides open content when the Pod goes offline and prevents editing offline Pods', async () => {
   const fixture = await open()
   expect(wrapper!.text()).toContain('What this Pod does')

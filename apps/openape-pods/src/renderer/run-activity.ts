@@ -48,6 +48,8 @@ export function runHeadline(run: RunRecord): string {
   if (run.state === 'running') return 'Run in progress'
   return 'Run stopped before completion'
 }
+/** What the script reported about a run; empty when it only repeated the outcome the headline already states. */
+export function runResult(run: RunRecord): string { return ['Run failed', 'Run cancelled', 'Run completed'].includes(run.summary) ? '' : run.summary }
 export function runSteps(events: RunEvent[], state: RunRecord['state'] = 'running') {
   const calls = new Map<string, { operation: string, state: string, application: string }>()
   let current: string | undefined
