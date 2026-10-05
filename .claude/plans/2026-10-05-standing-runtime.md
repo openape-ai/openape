@@ -19,7 +19,7 @@ Expose standing approval separately from MCP-only approval, with the current own
 Run `. ./scripts/activate-node.sh`, use pinned pnpm10.29.3, and `pnpm run doctor`. Install frozen dependencies. Run lint, typecheck, app build, existing targeted unit/component tests and browser layout tests; inspect screenshots. Run repository-required checks before commit and required CI for the pushed head. Publish actual results under private Reports/Test Runs and verify the link. Create and attach a native PR, explicitly link the issue, and merge only with required exact-head checks. Deliver signed local build if release gates pass.
 
 ## Rollback
-Revert the feature PR and reinstall the prior signed desktop if necessary. Disabling the preference stops new approvals. Existing IdP grants require separate explicit revocation; do not silently revoke unrelated grants, change scripts, enable schedules or broaden action permissions.
+Revert the feature PR and reinstall the prior signed desktop if necessary. Keep the original runtime-approval preference alongside the prior app for a downgrade; the old parser does not accept the new standing field. Do not restore a stale identity/session profile. Disabling the preference stops new approvals. Existing IdP grants require separate explicit revocation; do not silently revoke unrelated grants, change scripts, enable schedules or broaden action permissions.
 
 ## Progress
 - 2026-10-05: Proposal approved by owner; current architecture and existing suites inspected; issue1422 and isolated worktree created.
@@ -32,4 +32,7 @@ Revert the feature PR and reinstall the prior signed desktop if necessary. Disab
 - Continue enforcing exact owner/Pod/broker/action bindings.
 
 ## Outcomes
-Pending implementation and verification.
+Feature merged through PR235 at 01c02b1c; exact-source CI5389 and full-main CI5390 passed. Signed delivery is pending the retention guard below.
+
+## Retention correction before delivery
+A reproduced security regression showed that pruning the last grant reference after more than 50 runs can forget a denied/revoked decision. Retain the latest approval record per Pod, permission, issuer and subject until a newer reference for that exact scope exists. This also preserves an approved reference whose current IdP state becomes revoked. Three regression cases failed before the fix; the full existing data suite now passes (68 tests). Keep these tests because forgetting refusal would reopen automatic authorization. Follow-up branch: bugfix/issue-1422-retain-runtime-grants.
