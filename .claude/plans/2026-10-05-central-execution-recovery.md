@@ -1,7 +1,7 @@
 # Plan: Central execution recovery without permanent failure locks
 
 ## Purpose / Big Picture
-Owner request on October 5, 2026: solve execution failures permanently in the central runtime so one problem does not leave a Pod unable to run. A failed attempt must remain observable without becoming an indefinite Pod-wide latch. The owner has authorized this objective; the owner approved this concrete plan on October 5, 2026. Implementation is active.
+Owner request on October 5, 2026: solve execution failures permanently in the central runtime so one problem does not leave a Pod unable to run. A failed attempt must remain observable without becoming an indefinite Pod-wide latch. The owner has authorized this objective; the owner approved this concrete plan on October 5, 2026. Implementation and installed acceptance are complete.
 
 User-visible outcome: active scheduled monitors continue at their next eligible interval after an ordinary failure or safe shutdown. Transient work retries automatically with bounded backoff. Only a specific unresolved external outcome or unverified running process requires review. Standing runtime grants remain independent of action grants. No recipe-specific try/catch patches and no owner-facing opt-in are needed for normal recovery.
 
@@ -65,8 +65,9 @@ Take a consistent protected backup of the stopped profile and prior app, verify 
 Keep the prior signed app and a consistent pre-upgrade profile backup. Prefer a forward fix. Additive migrations and unknown-state handling must fail closed in older clients; never install an older binary over a profile it cannot understand. If restoration is necessary, assess remote grants/rotated sessions and reconcile work completed since backup before restoring: do not replay confirmed external deliveries or restore stale credentials blindly. A rollback must never clear unknown effect evidence. The existing all-Pods standing consent and action grants remain separate.
 
 ## Progress
+- Completed October 5: PR237 / 062143d2 delivered; exact-source/main CI5393/5394 passed. Signed desktop/schema37 and compatible relay installed. Automatic IURIO recovery, catch-up and regular five-minute follow-up completed; verified private evidence: https://report.openape.ai/r/ktucXlYdTYlspg_QajaQz9TD.
 - Implementation: persisted recovery decisions use the existing run event journal and retry fields; schema 37 prevents older clients from interpreting the new terminal failed-input state. Typed broker authority errors cross the worker bridge. No dependency or test runner was added.
-- Verification: root lint/typecheck, app build, 153 suites / 1,315 tests, and six browser layout checks passed. English/light and German/dark screenshots inspected. Delivery and production recovery remain pending.
+- Verification: root lint/typecheck, app build, 153 suites / 1,315 tests, and six browser layout checks passed. English/light and German/dark screenshots inspected. Delivery and production recovery are verified below.
 - Network automatic retries retain the existing three-attempt durable limit (within the approved maximum of five); standalone/workflow attempts use five. This avoids replacing the network control table merely to broaden its retry budget.
 - 2026-10-05: Owner approved the plan. Implementation started on feature/issue-1423-central-recovery.
 - 2026-10-05: Owner requested central elimination of indefinite failure locks. Inspected canonical/installed5fb7b4bd and actual IURIO failure state. Issue1423 created. Concrete implementation plan drafted; approval pending. No production recovery mutation or implementation change has been made for this task.
@@ -81,4 +82,8 @@ Keep the prior signed app and a consistent pre-upgrade profile backup. Prefer a 
 - Reconcile historical blocks through the same policy so installation fixes existing affected monitors as well as new runs.
 
 ## Outcomes & Retrospective
-Pending approval, implementation and verification.
+PR237 merged as `062143d2e41aed0f3dad860a3898e94910fc1b73`; exact-source CI5393 and full main CI5394 passed. Signed-local desktop0.1.2/schema37 and relay `prod-062143d2` are delivered. Root lint/typecheck, app build, 1,315 Pods tests, six browser checks, full repository unit checks and mounted signed-DMG acceptance passed. App and DMG are notarized, stapled and Gatekeeper accepted. [Verified private Test Runs](https://report.openape.ai/r/ktucXlYdTYlspg_QajaQz9TD) includes installed screenshots and actual backend receipts.
+
+IURIO Task monitor resumed its September30 shutdown automatically at12:33:16CEST, using the original accepted input and existing runtime/read grants. It reported12 real changes through its separate existing Telegram grant, with one completed HTTP receipt. Catch-up at12:33:41 and regular schedule at12:37:56 both completed with204 unchanged tasks and no additional message. There are zero blocked inputs and no approval wait. No manual retry, queue edit or script change was used.
+
+All38 stored Pods,70 resources,81 scripts, seven schedule definitions,86 permanent credential IDs and exact assignment/network bindings remain. Standing consent was verified checked and byte-identical. Credential ciphertext refresh and temporary broker files are expected runtime activity, not byte-preservation claims. The eleven-member network stays paused at revision2. Protected paired backup: `/Users/patrickhofmann/Library/Application Support/OpenApe Pods Rollback/20261005-central-recovery-1423` (2,271 app entries,15,919 profile entries, all verified). The schema36 binary cannot read schema37; preserve newer effect receipts and rotating sessions during any separately assessed rollback.
