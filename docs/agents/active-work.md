@@ -1,5 +1,15 @@
 # Active work
 
+## Runtime identity recovery — issue 1408
+
+[Issue1408](https://repos.openape.ai/patrick/monorepo/issues/1408). Checkout: `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-standing-runtime`; branch `bugfix/issue-1408-preserve-runtime-identity`, base `0b11e01457fc3d85e5f657d090a3ca097a049dc0`.
+
+A revoked session family now requests normal browser authentication using the existing runtime ID and keys. Returned owner, ID and generation must match before credentials or worker registration are replaced. Revoked devices, missing local registration, changed generations and terminal enrollment conflicts fail closed. Compatibility and recovery documentation records the relay-first preflight. Eight retained main-process regressions exercise the real RelayAuth/RelayStore and worker registration with synthetic transport/browser/keychain boundaries; the additional relay regression protects revocation, pairing and same-device enrollment. These permanent tests cover consequential workspace identity loss.
+
+Root lint/typecheck, app build, all1,323 Pods tests and all35 relay tests passed. Next: native PR review, exact-source CI, protected merge, full-main CI and signed-local delivery acceptance.
+
+Patrick separately authorized the Delta Mind mail network: revision3, eleven active members,900second Intake;13 real invocations, three pending owner choices and no mail writes. Nine verified completed Pods issues were closed. [Private activation/backlog Test Runs](https://report.openape.ai/r/kK52np16fhKsZGU_Kz_a_uAq). M14 observation and both human routes remain open under issue1417.
+
 ## Central execution recovery — issue 1423
 
 [Issue1423](https://repos.openape.ai/patrick/monorepo/issues/1423), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M45PKJ4JQAX647R6ZND47A1J), [PR237](https://repos.openape.ai/patrick/monorepo/pulls/237). Checkout: `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-standing-runtime`; delivery receipt branch `bugfix/issue-1423-delivery-receipt`.
