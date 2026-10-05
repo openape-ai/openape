@@ -1,4 +1,4 @@
-import { transientNetwork, transientResponse } from '../../contracts/infrastructure'
+import { AuthorityError, transientNetwork, transientResponse  } from '../../contracts/infrastructure'
 import type { BrokeredGrant } from '@openape/core'
 import { sameBrokeredGrant } from '@openape/grants'
 import { authorizeAssignedCommand } from '@openape/apes/assigned'
@@ -58,9 +58,9 @@ export class AgentAuthority {
       let category = ''
       try { const problem = JSON.parse(text); const type = problem.type ?? problem.data?.type; category = type === 'https://openape.org/errors/grant_not_approved' ? 'grant_not_approved' : '' }
       catch { category = '' }
-      if (category === 'grant_not_approved') throw new Error('The grant is no longer approved; review its current status before retrying')
-      if (response.status === 401) throw new Error('OpenApe authentication expired; reconnect the Pod owner in App settings')
-      if (response.status === 403) throw new Error('OpenApe rejected this Pod identity; check its assigned owner and permissions')
+      if (category === 'grant_not_approved') throw new AuthorityError('The grant is no longer approved; review its current status before retrying')
+      if (response.status === 401) throw new AuthorityError('OpenApe authentication expired; reconnect the Pod owner in App settings')
+      if (response.status === 403) throw new AuthorityError('OpenApe rejected this Pod identity; check its assigned owner and permissions')
       throw new Error(`The permission service rejected the request (${response.status}); inspect the grant before retrying`)
     }
     return JSON.parse(text) as unknown
@@ -84,7 +84,7 @@ export class AgentAuthority {
       const previousId = await this.previous?.(resolved.permission, this.connection)
       if (previousId && previousId !== grant?.id) grant = await this.grant(previousId, signal)
     }
-    if (grant && ['denied', 'revoked'].includes(grant.status)) throw new Error(`Permission ${grant.status}; review this Pod's permissions before retrying`)
+    if (grant && ['denied', 'revoked'].includes(grant.status)) throw new AuthorityError(`Permission ${grant.status}; review this Pod's permissions before retrying`)
     if (!grant || grant.status === 'used' || grant.status === 'expired') {
       const created = await this.request('/api/grants', 'POST', signal, { requester: this.connection.subject, target_host: this.connection.targetHost, audience: 'shapes', grant_type: assignment.command.cliId === 'pod-runtime' ? 'always' : 'once', waits_until: Math.floor(Date.now() / 1000) + 15 * 60, command: assignment.command.argv, permissions: [resolved.permission], authorization_details: [resolved.detail], execution_context: resolved.executionContext, reason: resolved.detail.display, ...(summary ? { summary: { text: summary } } : {}) }) as { id?: unknown }
       if (typeof created?.id !== 'string') throw new Error('Permission service returned an invalid grant')
@@ -112,7 +112,7 @@ export class AgentAuthority {
       catch (error) { await publish('cancelled'); throw error }
       if (grant.status !== 'approved') await publish(grant.status === 'denied' ? 'denied' : grant.status === 'revoked' ? 'revoked' : 'expired')
     }
-    if (grant.status !== 'approved') throw new Error(grant.status === 'pending' || grant.status === 'expired' ? 'Permission approval expired; start a new run when you are ready to approve it' : `Permission ${grant.status}; review this Pod's permissions before retrying`)
+    if (grant.status !== 'approved') throw new AuthorityError(grant.status === 'pending' || grant.status === 'expired' ? 'Permission approval expired; start a new run when you are ready to approve it' : `Permission ${grant.status}; review this Pod's permissions before retrying`)
     await publish('approved')
     return grant.id
   }
@@ -120,7 +120,7 @@ export class AgentAuthority {
   async assertActive(grantId: string, signal: AbortSignal): Promise<void> {
     if (!/^[\w-]{1,128}$/.test(grantId)) throw new Error('Invalid assigned grant')
     const state = await this.request(`/api/pods/agents/${encodeURIComponent(this.connection.subject)}?grant=${encodeURIComponent(grantId)}`, 'GET', signal) as Record<string, unknown>
-    if (!state || state.email !== this.connection.subject || state.owner !== this.connection.owner || state.active !== true || state.grantActive !== true || state.grantId !== grantId || !Array.isArray(state.keyIds) || !state.keyIds.includes(this.connection.keyId)) throw new Error('Pod identity, key or grant is no longer active')
+    if (!state || state.email !== this.connection.subject || state.owner !== this.connection.owner || state.active !== true || state.grantActive !== true || state.grantId !== grantId || !Array.isArray(state.keyIds) || !state.keyIds.includes(this.connection.keyId)) throw new AuthorityError('Pod identity, key or grant is no longer active')
   }
 
   async authorize(assignment: AssignedAuthorization, signal: AbortSignal, summary?: string): Promise<void> {

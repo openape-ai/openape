@@ -69,7 +69,7 @@ it.each(['settle', 'cancel', 'revoke', 'failure'] as const)('fences Jev network 
   release()
   await expect.poll(() => f.store.db.prepare('SELECT state FROM network_invocations WHERE pod_id=?').get(consumer)?.state).not.toBe('running')
   const delivery = f.store.db.prepare('SELECT state FROM network_deliveries').get()!
-  expect(delivery.state).toBe(outcome === 'settle' ? 'done' : 'blocked')
+  expect(delivery.state).toBe(outcome === 'settle' ? 'done' : outcome === 'failure' ? 'retry_wait' : 'blocked')
   expect(f.store.db.prepare('SELECT * FROM effect_ledger').all()).toEqual([])
   expect(f.store.db.prepare('SELECT * FROM network_effect_attempts').all()).toEqual([])
   expect(JSON.stringify(f.engine.execute({ type: 'trace', id, revision: 1, before: null, caseId: null }))).not.toContain(request.state)

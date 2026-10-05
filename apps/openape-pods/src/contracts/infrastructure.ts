@@ -1,5 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises'
 
+export class AuthorityError extends Error {}
+
 export interface InfrastructureFailure { phase: 'authorization' | 'read', retryAfterMs: number }
 export class InfrastructureError extends Error {
   constructor(readonly failure: InfrastructureFailure) {

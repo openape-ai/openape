@@ -3976,5 +3976,12 @@
   "Invalid standing runtime owner": "Ungültiger Eigentümer der dauerhaften Laufzeitfreigabe",
   "Invalid standing runtime issuer": "Ungültiger Identity Provider der dauerhaften Laufzeitfreigabe",
   "Runtime approval settings are unavailable": "Die Einstellungen zur Laufzeitfreigabe sind nicht verfügbar",
-  "The account or runtime changed; reopen App settings before granting approval": "Das Konto oder die Runtime wurde geändert. Öffne die App-Einstellungen erneut, bevor du die Freigabe erteilst."
+  "The account or runtime changed; reopen App settings before granting approval": "Das Konto oder die Runtime wurde geändert. Öffne die App-Einstellungen erneut, bevor du die Freigabe erteilst.",
+  "Automatic retry at {p0}": "Automatischer Wiederanlauf um {p0}",
+  "This attempt stopped. Future scheduled runs remain enabled.": "Dieser Versuch wurde beendet. Künftige geplante Läufe bleiben möglich.",
+  "Work continued in a later attempt.": "Die Arbeit wurde in einem späteren Versuch fortgesetzt.",
+  "Failed inputs retained: {p0}. Future scheduled runs remain eligible.": "Fehlgeschlagene Eingänge aufbewahrt: {p0}. Künftige geplante Läufe bleiben möglich.",
+  "Invalid automatic recovery state": "Ungültiger Zustand der automatischen Wiederherstellung",
+  "Invalid failed input count": "Ungültige Anzahl fehlgeschlagener Eingänge",
+  "An operation without replay evidence requires review": "Eine Aktion ohne gesichertes Ergebnis muss geprüft werden"
 }
