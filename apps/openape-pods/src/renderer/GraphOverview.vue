@@ -1,7 +1,8 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
 import type { PropType } from 'vue'
-import type { StoredPod } from '../contracts/control'
+import type { CollectionDescription, StoredPod } from '../contracts/control'
+import { descriptionSummary } from '../contracts/description'
 import type { Organization } from '../contracts/groups'
 import type { WorkflowDefinition, WorkflowView } from '../contracts/workflows'
 import type { NetworkSummary, NetworkView } from '../contracts/networks'
@@ -15,6 +16,7 @@ interface Section { id: string | null, name: string, graphs: WorkflowDefinition[
 export default defineComponent({
   props: {
     networks: { type: Object as PropType<NetworkView>, default: () => ({ networks: [] }) },
+    descriptions: { type: Array as PropType<CollectionDescription[]>, default: () => [] },
     networkError: { type: String, default: '' },
     view: { type: Object as PropType<WorkflowView>, required: true },
     pods: { type: Array as PropType<StoredPod[]>, required: true },
@@ -41,6 +43,7 @@ export default defineComponent({
   },
   methods: {
     t, dateTime, diagnostic, label,
+    purpose(id: string): string { return descriptionSummary(this.descriptions.find(item => item.id === id)?.text ?? '') },
     waiting(graph: WorkflowDefinition) { return waitingDecisions(graph, this.view.gates) },
     meta(graph: WorkflowDefinition): string {
       const schedule = graph.paused && graph.enabled ? t('paused') : !graph.schedule || !graph.enabled ? t('Manual only') : graph.schedule.kind === 'interval' && graph.schedule.seconds === 3600 ? t('hourly') : graph.schedule.kind === 'daily' ? t('daily at {time}', { time: graph.schedule.time }) : t('scheduled')
@@ -97,7 +100,7 @@ export default defineComponent({
       </header>
       <div class="graph-cards">
         <button v-for="network in section.networks" :key="network.id" class="graph-card" @click="$emit('select', network.id)">
-          <small>{{ t('Persistent network') }} · {{ t(network.state) }}</small><strong>{{ network.name }}</strong><span>{{ t('Decisions: {count}', { count: network.decisions ?? (networks.gates ?? []).filter(gate => gate.networkId === network.id && ['preparing', 'pending', 'consuming', 'unknown', 'superseded'].includes(gate.state)).length }) }}</span>
+          <small>{{ t('Persistent network') }} · {{ t(network.state) }}</small><strong>{{ network.name }}</strong><span v-if="purpose(network.id)">{{ purpose(network.id) }}</span><span>{{ t('Decisions: {count}', { count: network.decisions ?? (networks.gates ?? []).filter(gate => gate.networkId === network.id && ['preparing', 'pending', 'consuming', 'unknown', 'superseded'].includes(gate.state)).length }) }}</span>
           <span>{{ t('Waiting: {count}', { count: (network.counts.pending ?? 0) + (network.counts.retry_wait ?? 0) }) }}</span>
           <span v-if="network.health.oldestPendingAt">{{ t('Oldest waiting item: {time}', { time: dateTime(network.health.oldestPendingAt) }) }}</span>
           <span v-if="network.health.lastFailure || network.health.intakeError || network.health.lastSchedulerError" class="graph-waiting">{{ t('Runtime needs attention') }}</span>
@@ -105,6 +108,7 @@ export default defineComponent({
         <button v-for="graph in section.graphs" :key="graph.id" class="graph-card" @click="$emit('select', graph.id)">
           <small>{{ meta(graph) }}</small>
           <strong>{{ graph.name }}</strong>
+          <span v-if="purpose(graph.id)">{{ purpose(graph.id) }}</span>
           <span v-if="waiting(graph).choices" class="graph-waiting">{{ t('Choices waiting: {count}', { count: waiting(graph).choices }) }}</span>
           <span v-if="waiting(graph).approvals" class="graph-waiting">{{ t('Approvals waiting: {count}', { count: waiting(graph).approvals }) }}</span>
         </button>

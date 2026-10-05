@@ -36,6 +36,27 @@ it('opens local workflows from the desktop landing page and resumes the selected
   await click('Pause workflow')
   expect(wrapper.get('[role="alert"]').text()).toContain('Workflow connection unavailable')
 })
+it('tells on the desktop overview what a workflow is for', async () => {
+  const id = '00000000-0000-4000-8000-000000000003'
+  const view: WorkflowView = { workflows: [{ ...sequenceParts, id, revision: 1, name: 'Morning review', nodes: [{ podId, after: [], handoff: true }], schedule: null, enabled: false, paused: true, nextAt: null }], runs: [] }
+  const bridge = installWorkspace({ workflows: async () => structuredClone(view), central: async command => command.type === 'status' ? { enabled: false } : command.type === 'inventory' ? [] : { requestError: { status: 400, message: 'No fixture change feed' } } })
+  const list = bridge.workspace
+  bridge.workspace = async command => ({ ...await list(command), descriptions: [{ id, text: 'Collects calendar, mail and open issues every morning.', revision: 1 }] })
+  wrapper = mount(DesktopWorkspace); await flushPromises()
+  expect(wrapper.get('.graph-card').text()).toContain('Collects calendar, mail and open issues every morning.')
+})
+it('shows a workflow description read-only in the browser workspace', async () => {
+  const f = await browserFixture()
+  const id = '00000000-0000-4000-8000-000000000004'
+  f.host.workflows = { workflows: [{ ...sequenceParts, id, revision: 1, name: 'Morning review', nodes: [{ podId, after: [], handoff: false }], schedule: null, enabled: false, paused: false, nextAt: null }], runs: [], graphs: true } as never
+  f.host.workspace.descriptions = [{ id, text: 'Collects calendar, mail and open issues every morning.', revision: 1 }]
+  Reflect.deleteProperty(window, 'pods')
+  wrapper = mount(BrowserWorkspace, { props: { client: f.client } }); await flushPromises()
+  const card = wrapper.findAll('.graph-card').find(item => item.text().includes('Morning review'))!
+  expect(card.text()).toContain('Collects calendar, mail and open issues every morning.')
+  await card.trigger('click'); await flushPromises()
+  expect(wrapper.get('.collection-description').text()).toBe('Collects calendar, mail and open issues every morning.')
+})
 async function open() {
   const fixture = centralFixture()
   wrapper = mount(CentralWorkspace, { props: { client: fixture.client } })
