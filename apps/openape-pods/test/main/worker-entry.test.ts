@@ -119,6 +119,15 @@ it('routes assigned SSH observations through the real worker entry without requi
   finally { bridge.mockRestore(); store.close() }
 })
 
+it('lists descriptions with the workspace and routes a description command through the real worker', async () => {
+  await send({ id: 'workspace-list', command: { type: 'list' } })
+  expect(replies).toHaveBeenCalledWith({ id: 'workspace-list', state: expect.objectContaining({ descriptions: [], pods: expect.arrayContaining([expect.objectContaining({ name: 'Scheduled example' })]) }) })
+  await send({ id: 'describe-unknown', command: { type: 'describeCollection', id: randomUUID(), revision: 0, text: 'Nothing to describe' } })
+  expect(replies).toHaveBeenCalledWith({ id: 'describe-unknown', error: 'Network or workflow not found' })
+  await send({ id: 'describe-forged', command: { type: 'describeCollection', id: randomUUID(), revision: 0, text: 'Purpose', owner: 'forged' } })
+  expect(replies).toHaveBeenCalledWith({ id: 'describe-forged', error: 'Unsupported workspace command' })
+})
+
 it('validates the local network route and refuses creation on a central-connected runtime before mutation', async () => {
   await send({ id: 'networks-list', command: { networks: { type: 'list' } } })
   expect(replies).toHaveBeenCalledWith({ id: 'networks-list', state: { networks: [] } })
