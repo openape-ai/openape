@@ -454,7 +454,7 @@ it('cancels only pending imports and forgets journals whose Pods were deleted', 
 it('migrates schema 33 with a verified copy and restores unfinished imports closed', async () => {
   const { root, store } = workspace(); const exported = await packageFixture()
   for (const table of [...aliasTables, ...sharingTables].reverse()) store.db.exec(`DROP TABLE ${table}`)
-  store.db.exec('DROP TABLE network_choices; PRAGMA user_version=33'); store.close(); stores.splice(stores.indexOf(store), 1)
+  store.db.exec('DROP TABLE collection_descriptions; DROP TABLE network_choices; PRAGMA user_version=33'); store.close(); stores.splice(stores.indexOf(store), 1)
   const migrated = new PodDatabase(store.root); stores.push(migrated)
   expect(migrated.db.prepare('PRAGMA user_version').get()!.user_version).toBe(schemaVersion)
   expect(readdirSync(store.root).filter(file => file.startsWith('before-v33-'))).toHaveLength(1)

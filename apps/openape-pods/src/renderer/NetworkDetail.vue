@@ -3,28 +3,30 @@ import { defineComponent } from 'vue'
 import { parseCentralNetworkRead } from '../contracts/central-networks'
 import type { CentralNetworkRead } from '../contracts/central-networks'
 import type { PropType } from 'vue'
-import type { StoredPod } from '../contracts/control'
+import type { CollectionDescription, StoredPod } from '../contracts/control'
 import type { GraphDetail } from '../contracts/graphs'
 import { deriveEdges } from '../contracts/graphs'
 import type { NetworkDataPage, NetworkDetails, NetworkTracePage } from '../contracts/network-operations'
 import type { NetworkCommand, NetworkPreview, NetworkSummary, NetworkView } from '../contracts/networks'
 import type { WorkflowDefinition } from '../contracts/workflows'
+import CollectionDescriptionForm from './CollectionDescription.vue'
 import GraphView from './GraphView.vue'
 import NetworkRetirement from './NetworkRetirement.vue'
 import { dateTime, diagnostic, t } from './i18n'
 import { choiceFields } from './utils/choice-payload'
 
 export default defineComponent({
-  components: { GraphView, NetworkRetirement },
+  components: { CollectionDescriptionForm, GraphView, NetworkRetirement },
   props: {
     network: { type: Object as PropType<NetworkSummary>, required: true },
     view: { type: Object as PropType<NetworkView>, required: true },
     pods: { type: Array as PropType<StoredPod[]>, required: true },
+    description: Object as PropType<CollectionDescription>,
     readOnly: Boolean,
     readNetwork: Function as PropType<(command: CentralNetworkRead) => Promise<NetworkView>>,
     active: { type: Boolean, default: true },
   },
-  emits: ['changed', 'back', 'openPod', 'replace'],
+  emits: ['changed', 'back', 'openPod', 'replace', 'describe'],
   data() { return { remoteChoices: [] as NonNullable<NetworkView['choices']>, remoteGates: [] as NonNullable<NetworkView['gates']>, loading: false, activityLoading: false, recordsLoading: false, details: null as NetworkDetails | null, trace: null as NetworkTracePage | null, records: null as NetworkDataPage | null, tab: 'structure', caseId: null as string | null, selected: '', loadRequest: 0, error: '', actionError: '', activityError: '', recordsError: '', activityRequest: 0, recordsRequest: 0, now: Date.now(), busy: false, processing: false, processPods: [] as string[], reviewedPaused: [] as string[], budget: 10, preview: null as NetworkPreview | null, evidence: {} as Record<string, string>, timer: null as ReturnType<typeof setTimeout> | null, closed: false } },
   computed: {
     choices() { return (this.readNetwork ? this.remoteChoices : this.view.choices ?? []).filter(choice => choice.networkId === this.network.id) },
@@ -174,6 +176,7 @@ export default defineComponent({
     <p v-if="actionError" ref="actionError" tabindex="-1" role="alert" class="error-message">
       {{ diagnostic(actionError) }}
     </p>
+    <CollectionDescriptionForm :description="description" :label="t('What this network does')" :read-only="readOnly || !!readNetwork" @save="$emit('describe', $event)" />
     <div v-if="!readOnly && !readNetwork && network.state !== 'archived'" class="network-actions">
       <button v-if="network.state === 'paused'" class="secondary" :disabled="busy || !!view.unavailableReason" @click="$emit('replace')">
         {{ t('Edit paused composition') }}

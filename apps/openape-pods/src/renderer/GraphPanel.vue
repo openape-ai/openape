@@ -7,7 +7,8 @@ import NetworkDetail from './NetworkDetail.vue'
 import type { NetworkView } from '../contracts/networks'
 import { defineComponent } from 'vue'
 import type { PropType } from 'vue'
-import type { StoredPod, WorkspaceState } from '../contracts/control'
+import type { CollectionDescription, StoredPod, WorkspaceState } from '../contracts/control'
+import CollectionDescriptionForm from './CollectionDescription.vue'
 import type { GraphDetail, GraphNodeKind } from '../contracts/graphs'
 import type { Organization } from '../contracts/groups'
 import type { WorkflowCommand, WorkflowDefinition, WorkflowView } from '../contracts/workflows'
@@ -29,11 +30,12 @@ import type { ArrangementFilter } from './utils/graph-presentation'
 import { sharingAvailable } from './utils/sharing'
 
 export default defineComponent({
-  components: { NetworkReplacement, NetworkConversion, NetworkCreate, NetworkDetail, GateReview, GraphCreate, GraphInspector, GraphOverview, GraphView, ItemTrace, WorkflowPanel },
+  components: { CollectionDescriptionForm, NetworkReplacement, NetworkConversion, NetworkCreate, NetworkDetail, GateReview, GraphCreate, GraphInspector, GraphOverview, GraphView, ItemTrace, WorkflowPanel },
   props: {
     view: { type: Object as PropType<WorkflowView>, required: true },
     pods: { type: Array as PropType<StoredPod[]>, required: true },
     organization: { type: Object as PropType<Organization>, required: true },
+    descriptions: { type: Array as PropType<CollectionDescription[]>, default: () => [] },
     selectedId: { type: String, default: '' },
     readOnly: Boolean,
     readNetwork: Function as PropType<(command: CentralNetworkRead) => Promise<NetworkView>>,
@@ -124,6 +126,12 @@ export default defineComponent({
     async openTrace(key: string) { await this.load(key); this.page = 'trace' },
     openGate(key: string) { this.gate = key; this.page = 'gate' },
     startCreate(groupId: string | null) { this.createIn = groupId; this.page = 'create'; this.error = '' },
+    described(id: string): CollectionDescription | undefined { return this.descriptions.find(item => item.id === id) },
+    async describe(id: string, text: string) {
+      this.error = ''
+      try { await this.workspace({ type: 'describeCollection', id, revision: this.described(id)?.revision ?? 0, text }) }
+      catch (error) { this.error = error instanceof Error ? error.message : String(error) }
+    },
     async workspace(command: Parameters<typeof window.pods.workspace>[0]): Promise<WorkspaceState> {
       const state = await window.pods.workspace(command)
       this.$emit('workspace', state)
@@ -169,9 +177,12 @@ export default defineComponent({
         {{ t('Share') }}
       </button>
     </p>
-    <NetworkDetail :network="network" :view="networks" :read-network="readNetwork" :pods="pods" :read-only="readOnly" :active="active" @changed="networkChanged" @replace="page = 'replace'" @back="$emit('select', '')" @open-pod="$emit('openPod', $event)" />
+    <p v-if="error" role="alert" class="error-message">
+      {{ diagnostic(error) }}
+    </p>
+    <NetworkDetail :network="network" :view="networks" :read-network="readNetwork" :pods="pods" :description="described(network.id)" :read-only="readOnly" :active="active" @describe="describe(network!.id, $event)" @changed="networkChanged" @replace="page = 'replace'" @back="$emit('select', '')" @open-pod="$emit('openPod', $event)" />
   </div>
-  <GraphOverview v-else-if="!definition" v-model:filter="overviewFilter" :networks="networks" :network-error="networkError" :view="view" :pods="pods" :organization="organization" :read-only="readOnly" :sharing="sharing" @select="$emit('select', $event)" @open-pod="$emit('openPod', $event)" @create="startCreate" @create-workflow="page = 'workflow-create'" @import="$emit('import')" />
+  <GraphOverview v-else-if="!definition" v-model:filter="overviewFilter" :networks="networks" :descriptions="descriptions" :network-error="networkError" :view="view" :pods="pods" :organization="organization" :read-only="readOnly" :sharing="sharing" @select="$emit('select', $event)" @open-pod="$emit('openPod', $event)" @create="startCreate" @create-workflow="page = 'workflow-create'" @import="$emit('import')" />
   <section v-else class="graph-panel">
     <header class="graph-panel-heading">
       <p>
@@ -195,6 +206,7 @@ export default defineComponent({
         {{ t(arrangementLabel(definition.mode)) }} · {{ headline }}
       </p>
     </header>
+    <CollectionDescriptionForm :description="described(definition.id)" :label="t(definition.mode === 'sequence' ? 'What this workflow does' : 'What this network does')" :read-only="readOnly" @save="describe(definition!.id, $event)" />
     <p v-if="error" role="alert" class="error-message">
       {{ diagnostic(error) }}
     </p>

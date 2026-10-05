@@ -200,6 +200,14 @@ describe('overview', () => {
     expect(card.text()).toContain('Pod · active')
     expect(card.text()).toContain('Reports changes to open pull requests by Telegram.')
   })
+  it('says on each network and workflow card what it is for', () => {
+    const f = operationalFixture()
+    const descriptions = [{ id: graphId, text: 'Sorts incoming mail and asks before archiving. Runs hourly.', revision: 1 }, { id: f.networkId, text: 'Handles synthetic cases.', revision: 2 }]
+    const cards = mount(GraphOverview, { props: { view, pods: [...pods, ...f.pods], organization: { revision: 5, groups: [...organization.groups, ...f.organization.groups] }, networks: f.view, descriptions } }).findAll('.graph-card').map(card => card.text())
+    expect(cards.find(text => text.includes('Email management'))).toContain('Sorts incoming mail and asks before archiving.')
+    expect(cards.find(text => text.includes('Email management'))).not.toContain('Runs hourly.')
+    expect(cards.find(text => text.includes(f.definition.name))).toContain('Handles synthetic cases.')
+  })
   it('names a sequence workflow, a manual graph and hides creation in a read-only view', () => {
     const sequence = { ...definition, id: id(5), name: 'Morgenbriefing', mode: 'sequence' as const, groupId: null, enabled: false, gates: [], channels: [] }
     const wrapper = mount(GraphOverview, { props: { view: { workflows: [sequence], runs: [] }, pods, organization, readOnly: true } })
@@ -282,6 +290,29 @@ describe('graph panel', () => {
     expect(wrapper.text()).toContain('Select a node to read its contract.')
     await wrapper.findAll('.graph-node')[1]!.trigger('click')
     expect(wrapper.find('.graph-inspector h2').text()).toBe('Triage')
+  })
+  it('shows what a workflow is for under its title and saves an edited description', async () => {
+    bridge(() => ({ ...view, graph: detail }))
+    const workspace = vi.fn(async () => ({ pods, organization, descriptions: [{ id: graphId, text: 'Sorts mail and asks first.', revision: 2 }] }))
+    window.pods = { ...window.pods, workspace } as unknown as typeof window.pods
+    const wrapper = mount(GraphPanel, { props: { view, pods, organization, selectedId: graphId, descriptions: [{ id: graphId, text: 'Sorts mail.', revision: 1 }] } }); await flushPromises()
+    expect(wrapper.get('.collection-description').text()).toContain('Sorts mail.')
+    await button(wrapper, 'Edit description').trigger('click')
+    expect(wrapper.get('.collection-description label').text()).toBe('What this network does')
+    await wrapper.get('.collection-description textarea').setValue('Sorts mail and asks first.')
+    await wrapper.get('.collection-description form').trigger('submit'); await flushPromises()
+    expect(workspace).toHaveBeenCalledWith({ type: 'describeCollection', id: graphId, revision: 1, text: 'Sorts mail and asks first.' })
+    expect(wrapper.emitted('workspace')?.[0]).toEqual([{ pods, organization, descriptions: [{ id: graphId, text: 'Sorts mail and asks first.', revision: 2 }] }])
+  })
+  it('keeps the draft and reports the reason when a description cannot be saved', async () => {
+    bridge(() => ({ ...view, graph: detail }))
+    window.pods = { ...window.pods, workspace: vi.fn(async () => { throw new Error('Description changed; reload before saving') }) } as unknown as typeof window.pods
+    const wrapper = mount(GraphPanel, { props: { view, pods, organization, selectedId: graphId, descriptions: [] } }); await flushPromises()
+    await button(wrapper, 'Add description').trigger('click')
+    await wrapper.get('.collection-description textarea').setValue('My unfinished text')
+    await wrapper.get('.collection-description form').trigger('submit'); await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('Description changed')
+    expect((wrapper.get('.collection-description textarea').element as HTMLTextAreaElement).value).toBe('My unfinished text')
   })
   it('opens the trace of one item and the approval that item waits for', async () => {
     const trace = { key: 'mail-1', title: 'Only today: 20 % off', events: [{ node: triage, outcome: 'emitted', channel: 'mail.newsletter', reason: 'Bulk sender', confidence: 0.93, at: 1 }, { node: 'gate:batch', outcome: 'held', channel: 'mail.newsletter', reason: null, confidence: null, at: 2 }] }
@@ -603,6 +634,33 @@ describe('persistent network owner controls', () => {
     expect(wrapper.get('[role=status]').text()).toContain('bounded central publication')
     expect(wrapper.findAll('button').find(item => item.text().startsWith('Persistent network'))!.attributes('disabled')).toBeDefined()
     expect(networks).not.toHaveBeenCalled(); wrapper.unmount()
+  })
+})
+
+describe('network description', () => {
+  it('shows the description under the network title and hands an edit to its host', async () => {
+    const f = operationalFixture()
+    installWorkspace({ networks: vi.fn(async () => structuredClone(f.view)) })
+    const wrapper = mount(NetworkDetail, { props: { network: f.view.networks[0]!, view: f.view, pods: f.pods, description: { id: f.networkId, text: 'Handles synthetic cases.', revision: 1 } } })
+    try {
+      await flushPromises()
+      expect(wrapper.get('.collection-description').text()).toContain('Handles synthetic cases.')
+      await button(wrapper, 'Edit description').trigger('click')
+      await wrapper.get('.collection-description textarea').setValue('Handles synthetic cases and reviews them.')
+      await wrapper.get('.collection-description form').trigger('submit')
+      expect(wrapper.emitted('describe')).toEqual([['Handles synthetic cases and reviews them.']])
+    }
+    finally { wrapper.unmount() }
+  })
+  it('shows the description without an edit control in a read-only view', async () => {
+    const f = operationalFixture()
+    installWorkspace({ networks: vi.fn(async () => structuredClone(f.view)) })
+    const wrapper = mount(NetworkDetail, { props: { network: f.view.networks[0]!, view: f.view, pods: f.pods, readOnly: true, description: { id: f.networkId, text: 'Handles synthetic cases.', revision: 1 } } })
+    try {
+      await flushPromises()
+      expect(wrapper.get('.collection-description').text()).toBe('Handles synthetic cases.')
+    }
+    finally { wrapper.unmount() }
   })
 })
 
