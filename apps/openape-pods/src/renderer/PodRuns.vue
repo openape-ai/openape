@@ -19,7 +19,7 @@ export default defineComponent({
     selectedRun() { return this.view.runs.find(run => run.id === this.runId) ?? this.view.runs[0] },
     jevEvaluations() { return this.view.events.filter(event => event.type === 'jev').map(event => ({ sequence: event.sequence, ...event.data as { model: string, attempts: number, durationMs: number, usage: { input_tokens: number, output_tokens: number } } })) },
     steps() { return runSteps(this.view.events, this.selectedRun?.state) },
-    needsRecovery() { return !!this.selectedRun && ['interrupted', 'failed', 'cancelled', 'blocked'].includes(this.selectedRun.state) && this.selectedRun.recovery?.state !== 'retryQueued' },
+    needsRecovery() { return !!this.selectedRun && ['interrupted', 'failed', 'cancelled', 'blocked'].includes(this.selectedRun.state) && this.selectedRun.recovery?.state !== 'retryQueued' && (!this.selectedRun.automaticRecovery || this.selectedRun.automaticRecovery.disposition === 'hold' || this.selectedRun.automaticRecovery.retainedInputs === true) },
     hasActiveRun() { return this.view.runs.some(run => run.state === 'running') },
     actionFailure() { return runFailure(this.error || (this.scheduleError !== this.selectedRun?.error ? this.scheduleError : '') || null) },
     timing() { return this.view.timing ? { active: duration(this.view.timing.activeMs), waiting: duration(this.view.timing.waitingMs) } : null },
@@ -82,7 +82,7 @@ export default defineComponent({
         </p>
         <div :class="failure || needsRecovery ? 'run-problem' : 'run-outcome'" role="status">
           <h3>{{ diagnostic(runHeadline(selectedRun)) }}</h3>
-          <p v-if="failure">
+          <p v-if="failure && (!selectedRun.automaticRecovery || selectedRun.automaticRecovery.disposition === 'hold')">
             {{ diagnostic(failure.help) }}
           </p>
           <p v-else-if="selectedRun.state === 'running'">
@@ -94,6 +94,9 @@ export default defineComponent({
           <button v-if="failure?.action" class="secondary" @click="$emit('navigate', failure.action)">
             {{ failure.action === 'permissions' ? t('Review permissions') : failure.action === 'identity' ? t('Open pod identity') : t('Open App settings') }}
           </button>
+          <p v-if="selectedRun.automaticRecovery" class="automatic-recovery">
+            {{ selectedRun.automaticRecovery.disposition === 'retry' ? t('Automatic retry at {p0}', { p0: dateTime(selectedRun.automaticRecovery.nextAt!) }) : selectedRun.automaticRecovery.disposition === 'isolated' ? t('This attempt stopped. Future scheduled runs remain enabled.') : selectedRun.automaticRecovery.disposition === 'continued' ? t('Work continued in a later attempt.') : diagnostic(selectedRun.automaticRecovery.reason) }}
+          </p>
           <div v-if="needsRecovery" class="next-action">
             <strong>{{ t('Next step') }}</strong>
             <p v-if="selectedRun.recovery?.state === 'ready'">

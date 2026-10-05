@@ -314,6 +314,9 @@ export class WorkflowEngine {
         requiredReason = failed ? 'A required terminal branch was prevented by an owner decision' : remaining ? 'Completed workflow steps retain unprocessed inputs; owner review is required' : missing.length ? 'A required terminal branch did not execute; owner review is required' : 'Waiting for required owner decisions'
       }
     }
+    const exhausted = nodes.some(node => node.state === 'blocked' && node.run_id && this.store.db.prepare('SELECT 1 FROM run_events WHERE run_id=? AND type=\'recovery\' AND json_extract(data,\'$.disposition\')=\'isolated\'').get(node.run_id))
+    const held = nodes.some(node => node.state === 'blocked' && (!node.run_id || !this.store.db.prepare('SELECT 1 FROM run_events WHERE run_id=? AND type=\'recovery\' AND json_extract(data,\'$.disposition\')=\'isolated\'').get(node.run_id)))
+    if (exhausted && !held && !nodes.some(node => node.state === 'running')) { failed = true; requiredReason = 'Automatic attempts exhausted; failed inputs remain available for review' }
     const blocked = nodes.some(node => node.state === 'blocked')
     this.store.transaction(() => {
       this.store.db.prepare('UPDATE workflow_runs SET state=?,reason=?,finished_at=? WHERE id=?').run(completed ? 'completed' : failed ? 'failed' : blocked || requiredReason?.includes('review') ? 'blocked' : 'running', requiredReason ?? (blocked ? 'Review blocked nodes before continuing' : null), completed || failed ? this.now() : null, id)
