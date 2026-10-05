@@ -1,3 +1,4 @@
+import { unresolvedOperation } from './policy'
 import { EffectLedger } from './effects'
 import { confirmDomainsStopped } from './domains'
 import type { PodDatabase } from '../storage/database'
@@ -38,6 +39,7 @@ export class Recovery {
     try {
       if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE run_id=?').get(runId) && !this.store.db.prepare('SELECT 1 FROM execution_domains WHERE run_id=?').get(runId)) throw new Error('This legacy run has no process-domain evidence; manual investigation is required')
       await confirmDomainsStopped(this.store, runId, this.helper)
+      if (unresolvedOperation(this.store, podId)) throw new Error('An operation without replay evidence requires review')
       if (this.store.db.prepare('SELECT 1 FROM effect_ledger WHERE run_id=? AND state IN (\'intent\',\'unknown\')').get(runId)) throw new Error('An external effect has an unknown outcome; reconciliation evidence is required')
       this.store.transaction(() => {
         this.store.db.prepare('DELETE FROM run_leases WHERE run_id=?').run(runId)
@@ -59,7 +61,7 @@ export class Recovery {
     this.store.transaction(() => {
       const previous = this.store.db.prepare('SELECT request_event_id FROM recovery_reviews WHERE run_id=?').get(runId)?.request_event_id
       if (previous) return
-      this.store.db.prepare('UPDATE accepted_events SET state=\'pending\',run_id=NULL,error=NULL WHERE run_id=? AND state=\'blocked\'').run(runId)
+      this.store.db.prepare('UPDATE accepted_events SET state=\'pending\',run_id=NULL,error=NULL WHERE run_id=? AND state IN (\'blocked\',\'failed\')').run(runId)
       const event = this.scheduler.acceptEvent(podId, 'manual', `recovery:${runId}`, {})
       this.store.db.prepare('UPDATE recovery_reviews SET state=\'retryQueued\',request_event_id=? WHERE run_id=?').run(event, runId)
     })
@@ -70,8 +72,8 @@ export class Recovery {
     if (this.store.db.prepare('SELECT 1 FROM workflow_reservations WHERE pod_id=?').get(podId)) throw new Error('Pod is reserved by an unfinished workflow')
     this.validate(podId)
     if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=?').get(podId)) throw new Error('Recover or finish the active run first')
-    if (this.store.db.prepare('SELECT 1 FROM accepted_events WHERE pod_id=? AND state=\'blocked\' AND run_id IS NOT NULL').get(podId)) throw new Error('Recover the failed run before retrying queued input')
-    this.store.db.prepare('UPDATE accepted_events SET state=\'pending\',error=NULL WHERE pod_id=? AND state=\'blocked\' AND run_id IS NULL').run(podId)
+    if (this.store.db.prepare('SELECT 1 FROM accepted_events WHERE pod_id=? AND state IN (\'blocked\',\'failed\') AND run_id IS NOT NULL').get(podId)) throw new Error('Recover the failed run before retrying queued input')
+    this.store.db.prepare('UPDATE accepted_events SET state=\'pending\',error=NULL WHERE pod_id=? AND state IN (\'blocked\',\'failed\') AND run_id IS NULL').run(podId)
     this.scheduler.requestManual(podId)
   }
 }

@@ -8,6 +8,7 @@ import { PodDatabase, digest } from '../../src/worker/storage/database'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { RunDispatcher } from '../../src/worker/runs/dispatcher'
 import { installExample } from '../../src/worker/runs/examples'
+import { Scheduler } from '../../src/worker/scheduling/scheduler'
 import { SetupControl } from '../../src/worker/onboarding/control'
 import { executeScript } from '../../src/worker/runs/runner'
 import { parseJevRequest, syntheticJevResult, defaultJevModel } from '../../src/contracts/jev'
@@ -63,4 +64,21 @@ it('refuses a script without the Jev capability before calling its provider', as
   expect(f.dispatcher.view(f.pod.id).runs[0]?.error).toContain('not assigned')
   expect(f.jev).not.toHaveBeenCalled()
   expect(digest(f.store.readBlob(hash))).toBe(hash)
+})
+
+it('recovers a post-start service failure automatically with the original input and then completes', async () => {
+  const f = fixture()
+  f.store.db.prepare('UPDATE pods SET lifecycle=\'active\' WHERE id=?').run(f.pod.id)
+  f.jev.mockRejectedValueOnce(new Error('Temporary provider read failure'))
+  const scheduler = new Scheduler(f.store, f.dispatcher)
+  const input = scheduler.acceptEvent(f.pod.id, 'manual', 'recover-once', {})
+  scheduler.tick()
+  await expect.poll(() => f.dispatcher.view(f.pod.id).runs[0]?.state).toBe('failed')
+  expect(scheduler.view(f.pod.id)).toMatchObject({ blocked: 0, pending: 1, retry: { attempt: 1 } })
+  const at = scheduler.view(f.pod.id).retry!.at
+  new Scheduler(f.store, f.dispatcher, () => at).tick()
+  await expect.poll(() => f.dispatcher.view(f.pod.id).runs[0]?.state).toBe('completed')
+  expect(f.jev).toHaveBeenCalledTimes(2)
+  expect(f.store.db.prepare('SELECT state FROM accepted_events WHERE id=?').get(input)?.state).toBe('processed')
+  expect(f.dispatcher.view(f.pod.id).runs.map(run => run.state)).toEqual(['completed', 'failed'])
 })
