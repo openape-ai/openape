@@ -40,8 +40,11 @@ onBeforeUnmount(() => { if (access.remote && text.value !== saved.value) descrip
 <template>
   <form class="card" @submit.prevent="save">
     <h2>{{ t('Description') }}</h2>
-    <label for="pod-description">{{ t('What should this Pod do?') }}</label>
+    <label for="pod-description">{{ t('What this Pod does') }}</label>
     <textarea id="pod-description" v-model="text" maxlength="4000" rows="3" :disabled="busy" />
+    <p class="muted">
+      {{ t('This text explains the Pod. It does not change the script.') }}
+    </p>
     <div class="overview-actions">
       <button class="secondary" type="submit" :disabled="busy">
         {{ t('Save description') }}

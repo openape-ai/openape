@@ -51,6 +51,12 @@ it('derives elapsed time and activity from observed events without inventing mod
   expect(runFailure('Script failed: {"message":"Identity authorization failed (400)"}')?.help).toContain('does not mean')
 })
 
+it('reports what a run did unless its summary only repeats the outcome', async () => {
+  const { runResult } = await import('../src/renderer/run-activity')
+  const run = { id: podId, podId, scriptHash: 'a'.repeat(64), state: 'completed' as const, startedAt: 1, finishedAt: 2, summary: '', error: null, checkpointRevision: 0, recovery: null }
+  expect(runResult({ ...run, summary: 'Unchanged: 204 tasks.' })).toBe('Unchanged: 204 tasks.')
+  for (const summary of ['', 'Run completed', 'Run failed', 'Run cancelled']) expect(runResult({ ...run, summary })).toBe('')
+})
 it('summarizes repeated work without approval noise and explains the Codex storage interruption', async () => {
   const { runSteps, runFailure } = await import('../src/renderer/run-activity')
   const events = Array.from({ length: 5 }, (_, index) => [

@@ -21,7 +21,7 @@ import PodSettings from './PodSettings.vue'
 import PodValues from './PodValues.vue'
 import PodResources from './PodResources.vue'
 import PodRuns from './PodRuns.vue'
-import { runFailure, runHeadline } from './run-activity'
+import { runFailure, runHeadline, runResult } from './run-activity'
 import RunApproval from './RunApproval.vue'
 import type { RunApproval as Approval } from '../contracts/activity'
 import PodKnowledge from './PodKnowledge.vue'
@@ -62,7 +62,7 @@ export default defineComponent({
     navigate(page: string) { if (this.embedded && page === 'App settings') { this.$emit('settings'); return }; this.selected = page },
     share(selection: PortableSourceSelection) { this.shareSelection = selection; this.selected = 'Share' },
     podResources(podId: string) { return window.pods.resources({ type: 'list', podId }) },
-    t, runFailure, runHeadline, diagnostic, label, dateTime,
+    t, runFailure, runHeadline, runResult, diagnostic, label, dateTime,
     async openRun(podId: string, runId: string) { await this.selectPod(podId); this.requestedRun = runId; this.selected = 'History' },
     openValues(alias = '') { this.requestedSecret = alias; this.selected = 'Values' },
     workspaceChanged(state: WorkspaceState) { if (state.organization.revision < this.organization.revision) return; this.pods = state.pods; this.organization = state.organization },
@@ -192,7 +192,9 @@ export default defineComponent({
             <article class="card">
               <div class="card-heading">
                 <h2>{{ t('Last run') }}</h2><span class="badge">{{ label(runs[0]?.state ?? 'Not run yet') }}</span>
-              </div><p>{{ runs[0] ? diagnostic(runHeadline(runs[0])) : t('Ready for its first manual run.') }}</p><p v-if="runs[0]" class="muted">
+              </div><p>{{ runs[0] ? diagnostic(runHeadline(runs[0])) : t('Ready for its first manual run.') }}</p><p v-if="runs[0] && !runs[0].error && runResult(runs[0])">
+                {{ label(runResult(runs[0])) }}
+              </p><p v-if="runs[0]" class="muted">
                 {{ dateTime(runs[0].startedAt) }}
               </p><p v-if="runs[0]?.error && !schedule?.retry" class="error-message">
                 {{ diagnostic(runFailure(runs[0].error)?.help) }}
