@@ -18,8 +18,13 @@ Retained regression tests protect consent migration, identity binding, refusal,
 serialization, trusted IPC and independent controls. Full lint/typecheck and
 app build pass. The full unit contract and inspected English/light and
 German/dark settings screenshots are recorded in the PR/Test Runs receipt.
-Next: exact-head CI, native PR merge, signed-local delivery and installed UI
-acceptance. Production standing approval remains an explicit owner decision.
+PR235 merged at `01c02b1c` with CI5389/5390 passing. A final retention audit
+reproduced deletion of the last denied/revoked grant reference after 50 runs.
+Follow-up `bugfix/issue-1422-retain-runtime-grants` pins the latest authorization
+reference per Pod/permission/issuer/subject; all 68 data tests pass, including
+three new permanent security regressions that failed before the fix. Next:
+follow-up CI/merge, fresh signed-local delivery and installed acceptance.
+Production standing approval remains an explicit owner decision.
 
 ## Service authorization recovery — issue 1421
 

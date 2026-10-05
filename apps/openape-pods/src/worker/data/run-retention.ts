@@ -65,6 +65,21 @@ export class RunRetention {
                 AND newer.sequence>e.sequence AND json_extract(newer.data,'$.grantId')=json_extract(e.data,'$.grantId'))
           )
           AND NOT EXISTS (
+            SELECT 1 FROM run_events e JOIN runs owner ON owner.id=e.run_id
+            WHERE e.run_id=r.id AND e.type='approval'
+              AND json_extract(e.data,'$.permission') IS NOT NULL
+              AND json_extract(e.data,'$.issuer') IS NOT NULL
+              AND json_extract(e.data,'$.subject') IS NOT NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM run_events newer JOIN runs other ON other.id=newer.run_id
+                WHERE other.pod_id=owner.pod_id AND newer.type='approval'
+                  AND json_extract(newer.data,'$.permission')=json_extract(e.data,'$.permission')
+                  AND json_extract(newer.data,'$.issuer')=json_extract(e.data,'$.issuer')
+                  AND json_extract(newer.data,'$.subject')=json_extract(e.data,'$.subject')
+                  AND (newer.at>e.at OR (newer.at=e.at AND newer.sequence>e.sequence))
+              )
+          )
+          AND NOT EXISTS (
             SELECT 1 FROM workflow_attempts a JOIN workflow_runs w ON w.id=a.workflow_run_id
             WHERE a.run_id=r.id AND (w.finished_at IS NULL OR EXISTS(SELECT 1 FROM workflow_call_requests call WHERE call.workflow_run_id=w.id AND call.finished_at IS NULL)) AND NOT EXISTS(SELECT 1 FROM workflow_gate_attempts maintenance WHERE maintenance.run_id=r.id)
           )

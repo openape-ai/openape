@@ -340,6 +340,27 @@ it.each(['lease', 'intent', 'unknown', 'needsReview', 'ready', 'retryQueued', 'p
   expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
 })
 
+it.each(['approved', 'denied', 'revoked'])('retains the latest %s grant reference until the same authorization scope has a newer reference', async (state) => {
+  const f = await retentionFixture(60)
+  const approval = { grantId: 'runtime-grant', state, permission: 'pod.execute', issuer: 'https://id.example', subject: 'owner' }
+  const append = (runId: string, sequence: number, data: typeof approval) => {
+    f.store.db.prepare('INSERT INTO run_events VALUES(?,?,\'approval\',?,?)').run(runId, sequence, JSON.stringify(data), sequence)
+  }
+  append(f.runId, 1, approval)
+  append(f.ids[59]!, 2, { ...approval, permission: 'mail.read' })
+  append(f.ids[59]!, 3, { ...approval, issuer: 'https://other.example' })
+  append(f.ids[59]!, 4, { ...approval, subject: 'other-owner' })
+  await f.retention.runs.prune()
+  expect(f.store.db.prepare('SELECT data FROM run_events WHERE run_id=?').get(f.runId)?.data).toBe(JSON.stringify(approval))
+  expect(f.store.db.prepare('SELECT id FROM runs').all()).toHaveLength(51)
+  expect(await readFile(join(f.root, 'runs', f.runId, 'output.txt'), 'utf8')).toBe('Execution output')
+  append(f.ids[59]!, 5, approval)
+  await f.retention.runs.prune()
+  expect(f.store.db.prepare('SELECT id FROM runs WHERE id=?').get(f.runId)).toBeUndefined()
+  expect(f.store.db.prepare('SELECT id FROM runs').all()).toHaveLength(50)
+  expect(f.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+})
+
 it('rolls back history and journal together when database deletion fails', async () => {
   const f = await retentionFixture()
   f.store.db.exec('CREATE TRIGGER fail_retention BEFORE DELETE ON runs BEGIN SELECT RAISE(ABORT,\'synthetic interruption\'); END;')
