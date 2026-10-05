@@ -12,6 +12,7 @@ import type { RunDispatcher } from '../runs/dispatcher'
 import type { Scheduler } from '../scheduling/scheduler'
 import { WorkspaceDetails } from '../workspace/details'
 import { PodGroups } from '../workspace/groups'
+import { listedPods } from '../workspace/pod-list'
 import { PodVariables } from '../resources/variables'
 
 export class CentralProjection {
@@ -27,7 +28,7 @@ export class CentralProjection {
   snapshot(owner: Owner, networkReads = false): CentralSnapshot {
     if (!networkReads && this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()) throw new Error('Persistent networks require bounded publication support before this workspace can connect')
     const result = this.store.transaction(() => {
-      const pods = this.store.listPods()
+      const pods = listedPods(this.store)
       this.assertOwner(owner)
       const hasNetworks = networkReads && !!this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()
       const tables = hasNetworks ? networkPublicationTables(this.store) : Object.fromEntries(centralTables.map(table => [table, this.store.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()]))
