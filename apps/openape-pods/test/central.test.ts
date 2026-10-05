@@ -1,7 +1,8 @@
 import { seedNetwork } from './storage/network-fixture'
 // @vitest-environment node
 import { DataControl } from '../src/worker/data/control'
-import { parseCentralCommand } from '../src/contracts/central'
+import { commandPodIds, parseCentralCommand } from '../src/contracts/central'
+import { networkBrowserMutationAllowed } from '../src/contracts/central-networks'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -344,6 +345,18 @@ it('deletes through MCP with coordinated cleanup and keeps an owner-scoped recei
   expect(server.inventory(actor.owner)[0]?.workspace.pods).toEqual([])
   expect(() => server.read(actor.owner, actor.id, pod.id)).toThrow()
   expect(() => server.visibleOperation({ ...actor.owner, subject: 'other' }, id)).toThrow('workspace_operation_not_found')
+})
+
+it('accepts descriptions through the central workspace while other network member changes stay desktop-only', () => {
+  const id = randomUUID()
+  const collection = parseCentralCommand({ channel: 'workspace', body: { type: 'describeCollection', id, revision: 0, text: 'Sorts incoming mail.' } })
+  expect(commandPodIds(collection, { workspace: { pods: [{ id: randomUUID() }, { id: randomUUID() }] } })).toEqual([])
+  expect(networkBrowserMutationAllowed(collection)).toBe(true)
+  expect(networkBrowserMutationAllowed(parseCentralCommand({ channel: 'details', body: { type: 'describe', podId: id, revision: 0, text: 'Reads the mailbox.' } }))).toBe(true)
+  expect(networkBrowserMutationAllowed(parseCentralCommand({ channel: 'runs', body: { type: 'start', podId: id } }))).toBe(false)
+  expect(networkBrowserMutationAllowed({ channel: 'details', body: { type: 'activate', podId: id } })).toBe(false)
+  expect(() => parseCentralCommand({ channel: 'workspace', body: { type: 'describeCollection', id, revision: 0, text: 'x'.repeat(1001) } })).toThrow()
+  expect(() => parseCentralCommand({ channel: 'workspace', body: { type: 'pauseAll' } })).toThrow()
 })
 
 it('allows only reviewed deletion through the central data channel', () => {
