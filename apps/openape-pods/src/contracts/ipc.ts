@@ -1,6 +1,6 @@
 import type { DefinitionCommand, DefinitionsView } from './definitions'
 import type { McpAccess, McpAccessCommand } from './mcp-access'
-import type { RuntimeApprovalCommand, RuntimeApprovalPreference } from './runtime-approval'
+import type { RuntimeApprovalCommand, RuntimeApprovalView } from './runtime-approval'
 import type { CodexCommand, CodexConnection } from './codex'
 import type { ChatsCommand, ChatsView } from './chats'
 import type { WorkflowCommand, WorkflowView } from './workflows'
@@ -31,7 +31,7 @@ export interface PodStatus {
 }
 export interface PodsBridge {
   mcpAccess: (command: McpAccessCommand) => Promise<McpAccess>
-  runtimeApproval: (command: RuntimeApprovalCommand) => Promise<RuntimeApprovalPreference>
+  runtimeApproval: (command: RuntimeApprovalCommand) => Promise<RuntimeApprovalView>
   central?: (command: Record<string, unknown>) => Promise<unknown>
   codex: (command: CodexCommand) => Promise<CodexConnection>
   chats: (command: ChatsCommand) => Promise<ChatsView>

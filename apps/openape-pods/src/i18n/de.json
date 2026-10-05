@@ -3963,5 +3963,18 @@
   "Network members require bounded network MCP operations or desktop review": "Netzwerkmitglieder benötigen begrenzte Netzwerk-MCP-Aktionen oder eine Prüfung am Desktop",
   "Retained network workflows require bounded network MCP operations or desktop review": "Erhaltene Netzwerk-Workflows benötigen begrenzte Netzwerk-MCP-Aktionen oder eine Prüfung am Desktop",
   "Network MCP request identity was reused with different arguments or owner": "Die Netzwerk-MCP-Auftragskennung wurde mit anderen Argumenten oder einem anderen Eigentümer wiederverwendet",
-  "Network MCP operation failed or was interrupted; inspect network state before another action": "Die Netzwerk-MCP-Aktion ist fehlgeschlagen oder wurde unterbrochen; prüfe den Netzwerkzustand vor einer weiteren Aktion"
+  "Network MCP operation failed or was interrupted; inspect network state before another action": "Die Netzwerk-MCP-Aktion ist fehlgeschlagen oder wurde unterbrochen; prüfe den Netzwerkzustand vor einer weiteren Aktion",
+  "Script execution": "Skriptausführung",
+  "Runtime approval for {owner} on this device": "Laufzeitfreigabe für {owner} auf diesem Gerät",
+  "Connect this runtime and sign in with your DDISA account first": "Verbinde diese Runtime und melde dich zuerst mit deinem DDISA-Konto an",
+  "Always allow script execution for all my Pods on this runtime": "Skriptausführung für alle meine Pods auf dieser Runtime dauerhaft erlauben",
+  "Includes existing and future Pods, manual runs, schedules and re-runs. Applies only to this account and runtime. This does not activate schedules.": "Gilt für bestehende und zukünftige Pods, manuelle und geplante Läufe sowie Wiederholungen. Nur für dieses Konto und diese Runtime. Aktiviert keine Zeitpläne.",
+  "The local MCP option covers only locally created MCP Pods. Both options authorize script starts only. Mail, folder, program, network and secret permissions remain separate. Denied or revoked approvals stay blocked.": "Die lokale MCP-Option gilt nur für lokal über MCP erstellte Pods. Beide Optionen erlauben ausschließlich Skriptstarts. Rechte für Mail, Ordner, Programme, Netzwerk und Secrets bleiben separat. Abgelehnte oder widerrufene Freigaben bleiben gesperrt.",
+  "To stop new automatic approvals, turn off both options. Existing approvals remain valid until revoked in grant management.": "Schalte beide Optionen aus, um neue automatische Freigaben zu stoppen. Bestehende Freigaben bleiben gültig, bis du sie in der Grant-Verwaltung widerrufst.",
+  "Manage and revoke existing grants": "Bestehende Grants verwalten und widerrufen",
+  "Invalid runtime approval state": "Ungültiger Zustand der Laufzeitfreigabe",
+  "Invalid standing runtime owner": "Ungültiger Eigentümer der dauerhaften Laufzeitfreigabe",
+  "Invalid standing runtime issuer": "Ungültiger Identity Provider der dauerhaften Laufzeitfreigabe",
+  "Runtime approval settings are unavailable": "Die Einstellungen zur Laufzeitfreigabe sind nicht verfügbar",
+  "The account or runtime changed; reopen App settings before granting approval": "Das Konto oder die Runtime wurde geändert. Öffne die App-Einstellungen erneut, bevor du die Freigabe erteilst."
 }
