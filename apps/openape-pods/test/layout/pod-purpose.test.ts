@@ -80,3 +80,27 @@ it('lays out choice fields as label and value and keeps a long value inside a ph
     await page.screenshot({ path: screenshotPath(`choice-card-${width}.png`) })
   }
 })
+
+it('shows what a network is for on its card and page and keeps the edit form inside a phone', async () => {
+  const f = operationalFixture()
+  const descriptions = [{ id: f.networkId, text: 'Sorts incoming mail into newsletters, invoices and replies, and asks the owner before anything is archived. Uncertain mail waits for a decision.', revision: 1 }]
+  installWorkspace({ language: async () => 'en', workspace: async () => ({ organization: f.organization, pods: f.pods, descriptions }), networks: async () => structuredClone(f.view), definitions: async () => f.definitions })
+  await page.viewport(1060, 850)
+  wrapper = mount(App, { attachTo: document.body }); await flushPromises(); await frame()
+  const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.isVisible() && button.text().includes(text))!.trigger('click'); await flushPromises(); await frame() }
+  expect(wrapper.get('.graph-card').text()).toContain('Sorts incoming mail into newsletters, invoices and replies, and asks the owner before anything is archived.')
+  fits()
+  await page.screenshot({ path: screenshotPath('network-card-description.png') })
+  await click(f.definition.name)
+  const block = () => wrapper!.get('.collection-description').element.getBoundingClientRect()
+  expect(block().top).toBeGreaterThanOrEqual(wrapper.get('.network-detail h1').element.getBoundingClientRect().bottom)
+  expect(Math.abs(wrapper.get('.collection-description > .text-button').element.getBoundingClientRect().left - wrapper.get('.collection-description p').element.getBoundingClientRect().left)).toBeLessThan(2)
+  fits()
+  await page.screenshot({ path: screenshotPath('network-description-1060.png') })
+  await click('Edit description')
+  await page.viewport(390, 850); await frame()
+  fits()
+  expect(wrapper.get('.collection-description textarea').element.getBoundingClientRect().right).toBeLessThanOrEqual(390)
+  expect(wrapper.get('.collection-description textarea').element.getBoundingClientRect().width).toBeGreaterThan(250)
+  await page.screenshot({ path: screenshotPath('network-description-edit-390.png') })
+})
