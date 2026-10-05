@@ -1,3 +1,5 @@
+import type { AgentConnection } from './broker/authorization'
+import type { RuntimeApprovalBinding, RuntimeApprovalCommand, RuntimeApprovalView } from '../contracts/runtime-approval'
 import { readOnlyAction } from './codex/access'
 import { codexNetworkRead, parseCodexNetworkAction } from '../contracts/codex-networks'
 import { applicationBundle, applicationDefinition } from './programs/application'
@@ -85,7 +87,7 @@ import { parseRunView } from '../contracts/runs'
 import type { RunCommand, RunView } from '../contracts/runs'
 import { parseResourceState } from '../contracts/resources'
 import type { InternalResourceCommand, ResourceState } from '../contracts/resources'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { parseWorkspace } from '../contracts/control'
 import type { WorkspaceCommand, WorkspaceState } from '../contracts/control'
 import { app, shell, utilityProcess } from 'electron'
@@ -279,6 +281,53 @@ export class FixtureWorker {
     await this.setupReady
     if (!this.connections) throw new Error('Connection service unavailable')
     return this.connections.remoteOwner()
+  }
+
+  private async runtimeApprovalBinding(): Promise<RuntimeApprovalBinding | null> {
+    await this.setupReady
+    if (!this.connections) return null
+    const view = await this.connections.view()
+    const owner = view.connections.find(item => item.id === view.owner)
+    const runtimeId = this.central?.status().runtimeId
+    if (!owner || owner.state !== 'ready' || !runtimeId) return null
+    const current = await this.connections.remoteOwner()
+    return { ...current.owner, account: current.email, runtimeId }
+  }
+
+  async runtimeApprovalCommand(command: RuntimeApprovalCommand): Promise<RuntimeApprovalView> {
+    const policy = this.runtimeApproval
+    if (!policy) throw new Error('Runtime approval settings are unavailable')
+    return policy.exclusive(async () => {
+      const binding = await this.runtimeApprovalBinding()
+      const scope = binding ? createHash('sha256').update(JSON.stringify(binding)).digest('hex') : null
+      if (command.type === 'set') policy.setEnabled(command.enabled)
+      if (command.type === 'setStanding') {
+        if (command.enabled && !binding) throw new Error('Connect this runtime and sign in with your DDISA account first')
+        if (command.enabled && command.scope !== scope) throw new Error('The account or runtime changed; reopen App settings before granting approval')
+        policy.setStanding(command.enabled ? binding : null)
+      }
+      if (command.type === 'manage') {
+        if (!binding) throw new Error('Connect this runtime and sign in with your DDISA account first')
+        await shell.openExternal(new URL('/grants', binding.issuer).href)
+      }
+      return { enabled: policy.enabled, standing: policy.standingAllows(binding), owner: binding?.account ?? null, scope }
+    })
+  }
+
+  private async approveStandingRuntime(connection: AgentConnection & { ownerConnection: string }, podId: string, grantId: string, signal: AbortSignal): Promise<boolean> {
+    const policy = this.runtimeApproval
+    const connections = this.connections
+    if (!policy || !connections) return false
+    return policy.exclusive(async () => {
+      const allowed = async () => {
+        const binding = await this.runtimeApprovalBinding()
+        const current = binding ? { email: binding.account, owner: { issuer: binding.issuer } } : await connections.remoteOwner()
+        return current.email === connection.owner && current.owner.issuer === (connection.decisionIssuer ?? connection.issuer) && policy.allows(podId, binding)
+      }
+      if (!await allowed()) return false
+      await connections.approveRuntimeGrant(connection, podId, grantId, signal, allowed)
+      return true
+    })
   }
 
   async indexRemotePods(owner: Owner): Promise<void> {
@@ -642,13 +691,7 @@ export class FixtureWorker {
         const runtime = { executable: process.execPath, cli: app.isPackaged ? join(process.resourcesPath, 'apes/ape-shell.mjs') : join(dist, 'vendor/apes/ape-shell.mjs'), client: join(dist, 'runtime/shell-client.mjs') }
         const environment = await podEnvironment(this.root, scope.podId, runtime)
         const connection = await this.connections.podConnection(scope.podId)
-        const authority = new AgentAuthority(connection, observe, previous, this.runtimeApproval?.allows(scope.podId)
-          ? async (grantId, signal) => {
-            if (!this.runtimeApproval?.allows(scope.podId)) return false
-            await this.connections!.approveRuntimeGrant(connection, scope.podId, grantId, signal, () => this.runtimeApproval!.allows(scope.podId))
-            return true
-          }
-          : undefined)
+        const authority = new AgentAuthority(connection, observe, previous, (grantId, signal) => this.approveStandingRuntime(connection, scope.podId, grantId, signal))
         const adapterPath = join(dist, 'vendor/pod-runtime-shapes.toml')
         const adapter = loadAdapter('pod-runtime', adapterPath)
         const argv = ['pod-runtime', 'run', '--pod', scope.podId, '--name', context.name, '--script', join(this.root, 'runs', scope.runId, 'run.mjs'), '--workspace', environment.workspace, '--home', environment.home, '--environment', JSON.stringify(visibleEnvironment(environment.environment))]
