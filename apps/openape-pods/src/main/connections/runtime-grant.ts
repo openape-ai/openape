@@ -3,7 +3,7 @@ import { sameBrokeredGrant } from '@openape/grants'
 import type { AgentConnection } from '../broker/authorization'
 import { connectionRequest, readJSON } from './http'
 
-export async function approveRuntimeGrant(connection: AgentConnection, podId: string, grantId: string, bearer: string, signal: AbortSignal, allowed: () => boolean): Promise<void> {
+export async function approveRuntimeGrant(connection: AgentConnection, podId: string, grantId: string, bearer: string, signal: AbortSignal, allowed: () => boolean | Promise<boolean>): Promise<void> {
   if (!/^[\w-]{1,128}$/.test(grantId) || !/^[a-f0-9-]{36}$/.test(podId)) throw new Error('Invalid runtime approval identity')
   const issuer = connection.decisionIssuer ?? connection.issuer
   const path = `/api/grants/${grantId}`
@@ -23,7 +23,7 @@ export async function approveRuntimeGrant(connection: AgentConnection, podId: st
   if (grant.status === 'approved') return
   if (grant.status !== 'pending') throw new Error(`Runtime permission ${String(grant.status)}; automatic approval cannot replace this decision`)
   signal.throwIfAborted()
-  if (!allowed()) throw new Error('Automatic runtime approval was disabled before the decision')
+  if (!await allowed()) throw new Error('Automatic runtime approval was disabled before the decision')
   const result = await connectionRequest(issuer, `${path}/approve`, {}, signal, bearer)
   const approved = result.grant as { id?: string, status?: string } | undefined
   if (approved?.id !== grantId || approved.status !== 'approved') throw new Error('Runtime permission was not approved')
