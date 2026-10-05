@@ -266,6 +266,16 @@ it('publishes the description summary with the workspace inventory', () => {
   expect(restored.workspace.pods.find(item => item.id === pod.id)?.description).toBe('Watches the task board and reports changes by Telegram.')
 })
 
+it('publishes network and workflow descriptions with the workspace inventory', async () => {
+  const { store, projection, actor } = fixture()
+  const { CollectionDescriptions } = await import('../src/worker/workspace/collection-descriptions')
+  const id = randomUUID()
+  store.db.prepare('INSERT INTO workflows(id,revision,name,nodes) VALUES(?,1,\'Morning briefing\',\'[]\')').run(id)
+  new CollectionDescriptions(store).execute({ type: 'describeCollection', id, revision: 0, text: 'Sends one morning briefing by Telegram.' })
+  const parts = splitSnapshot(projection.snapshot(actor.owner))
+  expect(assembleSnapshot(key => parts.get(key), [...parts.keys()]).workspace.descriptions).toEqual([{ id, text: 'Sends one morning briefing by Telegram.', revision: 1 }])
+})
+
 it('publishes only TypeSafe availability through both full and partitioned central snapshots', async () => {
   const { store, projection, actor, pod } = fixture()
   const { SetupControl } = await import('../src/worker/onboarding/control')

@@ -47,7 +47,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 37
+export const schemaVersion = 38
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -349,6 +349,7 @@ PRAGMA user_version=27;`)
       if (version < 35) this.db.exec(`${aliasSchema} PRAGMA user_version=35;`)
       if (version < 36) this.db.exec(`${networkRoutingSchema} PRAGMA user_version=36;`)
       if (version < 37) this.db.exec('PRAGMA user_version=37;')
+      if (version < 38) this.db.exec('CREATE TABLE collection_descriptions(id TEXT PRIMARY KEY, body TEXT NOT NULL, revision INTEGER NOT NULL, updated_at INTEGER NOT NULL); PRAGMA user_version=38;')
     })
   }
 
