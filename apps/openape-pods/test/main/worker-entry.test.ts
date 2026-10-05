@@ -208,6 +208,12 @@ it('rechecks network browser mutation authority in the real worker when an older
   expect(replies).toHaveBeenCalledWith({ id: 'network-legacy-start', error: expect.stringContaining('desktop review') })
   await send({ id: 'network-safe-pause', command: { central: { type: 'assertCommand', command: { channel: 'scheduling', body: { type: 'lifecycle', podId: network.pod.id, revision: 1, lifecycle: 'paused' } } } } })
   expect(replies).toHaveBeenCalledWith({ id: 'network-safe-pause', state: true })
+  await send({ id: 'network-describe', command: { central: { type: 'assertCommand', command: { channel: 'details', body: { type: 'describe', podId: network.pod.id, revision: 0, text: 'Explains this member' } } } } })
+  expect(replies).toHaveBeenCalledWith({ id: 'network-describe', state: true })
+  await send({ id: 'network-describe-collection', command: { central: { type: 'assertCommand', command: { channel: 'workspace', body: { type: 'describeCollection', id: network.networkId, revision: 0, text: 'Explains this network' } } } } })
+  expect(replies).toHaveBeenCalledWith({ id: 'network-describe-collection', state: true })
+  await send({ id: 'network-activate', command: { central: { type: 'assertCommand', command: { channel: 'details', body: { type: 'activate', podId: network.pod.id, hash: 'a'.repeat(64), expectedActive: null, assignmentRevision: 1 } } } } })
+  expect(replies).toHaveBeenCalledWith({ id: 'network-activate', error: expect.stringContaining('desktop review') })
 })
 it('routes validated portable import commands through the real worker only after identity setup', async () => {
   const exported = await createPortablePackage({
