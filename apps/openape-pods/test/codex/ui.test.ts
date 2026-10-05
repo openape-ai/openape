@@ -74,20 +74,38 @@ it('persists the owner checkbox and restores its checked state after reopening',
   let enabled = false
   const runtimeApproval = vi.fn(async (command: { type: string, enabled?: boolean }) => {
     if (command.type === 'set') enabled = command.enabled!
-    return { enabled }
+    return { enabled, standing: false, owner: 'owner@example.test', scope: 'a'.repeat(64) }
   })
   installWorkspace({ runtimeApproval })
   const view = mount(RuntimeApprovalSettings); await flushPromises()
-  expect(view.get('input').element.checked).toBe(false)
-  await view.get('input').setValue(true); await flushPromises()
+  expect(view.get<HTMLInputElement>('.runtime-approval-option input').element.checked).toBe(false)
+  await view.get<HTMLInputElement>('.runtime-approval-option input').setValue(true); await flushPromises()
   expect(runtimeApproval).toHaveBeenLastCalledWith({ type: 'set', enabled: true })
-  expect(view.get('input').element.checked).toBe(true)
+  expect(view.get<HTMLInputElement>('.runtime-approval-option input').element.checked).toBe(true)
   view.unmount()
   const reopened = mount(RuntimeApprovalSettings); await flushPromises()
-  expect(reopened.get('input').element.checked).toBe(true)
+  expect(reopened.get<HTMLInputElement>('.runtime-approval-option input').element.checked).toBe(true)
   runtimeApproval.mockRejectedValueOnce(new Error('Disk is read-only'))
-  await reopened.get('input').setValue(false); await flushPromises()
-  expect(reopened.get('input').element.checked).toBe(true)
+  await reopened.get<HTMLInputElement>('.runtime-approval-option input').setValue(false); await flushPromises()
+  expect(reopened.get<HTMLInputElement>('.runtime-approval-option input').element.checked).toBe(true)
   expect(reopened.get('[role="alert"]').text()).toContain('Disk is read-only')
   reopened.unmount()
+})
+
+it('keeps standing consent separate and opens existing grant management without changing consent', async () => {
+  let standing = false
+  const runtimeApproval = vi.fn(async (command: { type: string, enabled?: boolean }) => {
+    if (command.type === 'setStanding') standing = command.enabled!
+    return { enabled: false, standing, owner: 'owner@example.test', scope: 'a'.repeat(64) }
+  })
+  installWorkspace({ runtimeApproval })
+  const view = mount(RuntimeApprovalSettings); await flushPromises()
+  await view.get('.standing-runtime-option input').setValue(true); await flushPromises()
+  expect(runtimeApproval).toHaveBeenLastCalledWith({ type: 'setStanding', enabled: true, scope: 'a'.repeat(64) })
+  expect((view.get<HTMLInputElement>('.runtime-approval-option input').element as HTMLInputElement).checked).toBe(false)
+  await view.get('.manage-runtime-grants').trigger('click'); await flushPromises()
+  expect(runtimeApproval).toHaveBeenLastCalledWith({ type: 'manage' })
+  expect((view.get('.standing-runtime-option input').element as HTMLInputElement).checked).toBe(true)
+  expect(view.text()).toContain('Existing approvals remain valid')
+  view.unmount()
 })

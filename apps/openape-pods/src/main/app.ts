@@ -313,8 +313,7 @@ async function start(): Promise<void> {
   ipcMain.handle(channels.runtimeApproval, (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     const command = parseRuntimeApprovalCommand(value)
-    if (command.type === 'set') runtimeApproval.setEnabled(command.enabled)
-    return { enabled: runtimeApproval.enabled }
+    return worker.runtimeApprovalCommand(command)
   })
   ipcMain.handle(channels.codex, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
