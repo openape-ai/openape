@@ -150,3 +150,21 @@ it('bounds the replay buffer per runtime so one desktop cannot starve another', 
   expect(() => store.deliver(other, seal(otherRoute, {}, device.keys.agreement, otherKey))).not.toThrow()
   // 1001 sealed envelopes (ECDH, AES-GCM and ECDSA each) exceed Vitest's 5-second default on the shared Linux runner.
 }, 60000)
+
+it('issues a fresh session for the same runtime after replay while retaining revocation and pairing', () => {
+  const { store, owner, runtime, runtimeKey, device } = fixture()
+  store.pair(runtime, device.id)
+  const first = store.issue(runtime.id)
+  const proof = signBytes(proofBytes('session-refresh', runtime.id, sha256(first.refreshToken)), runtimeKey)
+  const rotated = store.refresh(first.refreshToken, proof)
+  expect(() => store.refresh(first.refreshToken, proof)).toThrow('refresh_replay')
+  const registered = store.register(runtime.id, owner, 'runtime', runtime.keys)
+  expect(registered).toEqual(runtime)
+  const recovered = store.issue(registered.id)
+  expect(store.authenticate(recovered.accessToken)).toEqual(runtime)
+  expect(() => store.authenticate(rotated.accessToken)).toThrow('authentication_required')
+  expect(() => store.requirePair(runtime, device)).not.toThrow()
+  store.revoke(runtime, runtime.id)
+  expect(() => store.register(runtime.id, owner, 'runtime', runtime.keys)).toThrow('registration_conflict')
+  expect(() => store.authenticate(recovered.accessToken)).toThrow('authentication_required')
+})
