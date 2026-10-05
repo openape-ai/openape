@@ -271,7 +271,7 @@ export class ConnectionManager {
     return { permission: resolved.permission, display: resolved.detail.display, authority: { identity: connection.identity, ownerConnection: connection.ownerConnection, grantId: '' } }
   }
 
-  async approveRuntimeGrant(connection: AgentConnection & { ownerConnection: string }, podId: string, grantId: string, signal: AbortSignal, allowed: () => boolean): Promise<void> {
+  async approveRuntimeGrant(connection: AgentConnection & { ownerConnection: string }, podId: string, grantId: string, signal: AbortSignal, allowed: () => boolean | Promise<boolean>): Promise<void> {
     const bearer = await this.owner.bearer(connection.ownerConnection, connection.decisionIssuer ?? connection.issuer, connection.owner, signal)
     await approveRuntimeGrant(connection, podId, grantId, bearer, signal, allowed)
   }

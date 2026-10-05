@@ -7,7 +7,7 @@ import { RuntimeApprovalPolicy } from '../../src/main/codex/runtime-approval'
 import { handleMailArchive } from '../../src/main/mail/archive/handler'
 import type { ServiceRequest } from '../../src/contracts/services'
 
-vi.mock('electron', () => ({ utilityProcess: { fork: vi.fn() }, safeStorage: {}, app: { getPath: () => '/nonexistent' } }))
+vi.mock('electron', () => ({ utilityProcess: { fork: vi.fn() }, safeStorage: {}, app: { getPath: () => '/nonexistent' }, shell: { openExternal: vi.fn(async () => {}) } }))
 vi.mock('../../src/main/mail/archive/handler', () => ({ handleMailArchive: vi.fn() }))
 
 it.each([false, true])('keeps archive authority alive until its asynchronous operation settles (failure: %s)', async (failure) => {
@@ -179,4 +179,50 @@ it('keeps bounded local reads outside central mutation serialization and attests
   expect(dispatch).toHaveBeenLastCalledWith({ codex: request, ownerOperation: true })
   central.networkReads = false
   await expect(worker.codex({ id, action: { action: 'networks', command: { type: 'pause', id, revision: 1 } } })).rejects.toThrow('bounded relay')
+})
+
+it('binds standing approval to the live owner/runtime and keeps legacy local execution working', async () => {
+  const { FixtureWorker } = await import('../../src/main/worker')
+  const { shell } = await import('electron')
+  const root = mkdtempSync(join(tmpdir(), 'pods-standing-'))
+  try {
+    const policy = new RuntimeApprovalPolicy(root)
+    const worker = new FixtureWorker(() => {}, policy)
+    const podId = '00000000-0000-4000-8000-000000000001'
+    let runtimeId = '00000000-0000-4000-8000-000000000002'
+    let account = 'owner@example.test'
+    const issuer = 'https://owner.example.test'
+    const approveRuntimeGrant = vi.fn(async (_connection, _podId, _grantId, _signal, allowed) => { expect(await allowed()).toBe(true) })
+    const connections = {
+      view: async () => ({ owner: 'connection', connections: [{ id: 'connection', state: 'ready', account }] }),
+      remoteOwner: async () => ({ owner: { issuer, subject: account }, email: account }),
+      approveRuntimeGrant,
+    }
+    Object.assign(worker, { connections, central: { status: () => ({ runtimeId }) } })
+    const connection = { issuer, owner: account, subject: 'pod@example.test', keyId: 'key', targetHost: `pods:${podId}`, ownerConnection: 'connection', accessToken: async () => 'SYNTHETIC' }
+    const service = worker as unknown as { approveStandingRuntime: (value: typeof connection, podId: string, grantId: string, signal: AbortSignal) => Promise<boolean> }
+    const approve = () => service.approveStandingRuntime(connection, podId, 'grant', new AbortController().signal)
+    expect(await approve()).toBe(false)
+    const { scope } = await worker.runtimeApprovalCommand({ type: 'get' })
+    expect(await worker.runtimeApprovalCommand({ type: 'setStanding', enabled: true, scope })).toEqual({ enabled: false, standing: true, owner: account, scope })
+    expect(await approve()).toBe(true)
+    account = 'another@example.test'
+    await expect(worker.runtimeApprovalCommand({ type: 'setStanding', enabled: true, scope })).rejects.toThrow('account or runtime changed')
+    expect(await approve()).toBe(false)
+    expect((await worker.runtimeApprovalCommand({ type: 'get' })).standing).toBe(false)
+    account = connection.owner
+    runtimeId = podId
+    expect(await approve()).toBe(false)
+    runtimeId = '00000000-0000-4000-8000-000000000002'
+    await worker.runtimeApprovalCommand({ type: 'manage' })
+    expect(shell.openExternal).toHaveBeenLastCalledWith(`${issuer}/grants`)
+    await worker.runtimeApprovalCommand({ type: 'setStanding', enabled: false, scope })
+    expect(await approve()).toBe(false)
+    expect(approveRuntimeGrant).toHaveBeenCalledTimes(1)
+    policy.recordPod(podId); policy.setEnabled(true)
+    Object.assign(worker, { central: null })
+    expect(await approve()).toBe(true)
+    await expect(worker.runtimeApprovalCommand({ type: 'setStanding', enabled: true, scope })).rejects.toThrow('Connect this runtime')
+  }
+  finally { rmSync(root, { recursive: true, force: true }) }
 })

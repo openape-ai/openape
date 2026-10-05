@@ -12,7 +12,7 @@ function fixture() {
   vi.stubGlobal('fetch', fetcher)
   return { grant, fetcher }
 }
-const approve = (allowed = () => true) => approveRuntimeGrant(connection, podId, 'grant-1', 'ORIGINAL_OWNER_TOKEN', new AbortController().signal, allowed)
+const approve = (allowed: () => boolean | Promise<boolean> = () => true) => approveRuntimeGrant(connection, podId, 'grant-1', 'ORIGINAL_OWNER_TOKEN', new AbortController().signal, allowed)
 
 it('checks and approves only at the original decision IdP with the owner bearer', async () => {
   const { fetcher } = fixture()
@@ -43,4 +43,10 @@ it('rejects additional permissions, a changed resource and a disabled preference
   f = fixture()
   await expect(approve(() => false)).rejects.toThrow('disabled')
   expect(f.fetcher).toHaveBeenCalledTimes(1)
+})
+
+it('rechecks asynchronous owner policy before sending an approval', async () => {
+  const { fetcher } = fixture()
+  await expect(approve(async () => false)).rejects.toThrow('disabled')
+  expect(fetcher).toHaveBeenCalledTimes(1)
 })
