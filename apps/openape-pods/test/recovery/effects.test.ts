@@ -114,3 +114,15 @@ it('returns the original HTTP receipt after its run and folder have been pruned'
   expect(() => f.ledger.begin(f.pod.id, current.id, 'delivery', 'http.request', { ...input, body: 'changed' })).toThrow('conflicting')
   expect(() => f.store.db.prepare('UPDATE effect_ledger SET state=\'unknown\' WHERE effect_key=\'delivery\'').run()).toThrow('CHECK')
 })
+
+it('keeps an unreceipted broker action fenced across fresh runs and manual recovery', async () => {
+  const f = fixture()
+  f.runs.append(f.run.id, 'recovery-boundary', { id: 'archive-action', kind: 'untracked', operation: 'mail.archive' })
+  f.runs.finish(f.run.id, 'failed', 'Interrupted action', 'Provider outcome unavailable')
+  const dispatcher = new RunDispatcher(f.store, f.resources, { helper: '/unused', executable: '/unused', entry: '/unused', runtimeDirectories: [], environment: {}, binary: '/unused', catalog: '/unused', manifest: '/unused', sdkHost: '/unused' })
+  expect(() => dispatcher.start(f.pod.id)).toThrow('without replay evidence')
+  const recovery = new Recovery(f.store, f.resources, new Scheduler(f.store, dispatcher), '/unused')
+  await expect(recovery.inspect(f.pod.id, f.run.id)).rejects.toThrow('without replay evidence')
+  f.runs.append(f.run.id, 'recovery-boundary-result', { id: 'archive-action', state: 'confirmed' })
+  await expect(recovery.inspect(f.pod.id, f.run.id)).resolves.toBeUndefined()
+})

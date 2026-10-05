@@ -1,5 +1,14 @@
 # Active work
 
+## Central execution recovery — issue 1423
+
+Owner requested removal of permanent Pod-wide failure locks. [Issue1423](https://repos.openape.ai/patrick/monorepo/issues/1423), [review plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M45PKJ4JQAX647R6ZND47A1J), local plan `.claude/plans/2026-10-05-central-execution-recovery.md`.
+Checkout: `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-standing-runtime`; branch `feature/issue-1423-central-recovery`; inspected canonical/installed base `5fb7b4bd44804f1636c63e9dea22b7bb11437f31`. Doctor passes.
+
+The proposed central policy separates failed attempts, durable input disposition and concrete external-effect/process evidence. Ordinary failures and safe shutdowns allow later scheduled work; bounded retries preserve original inputs. Only uncertain external outcomes, unresolved authority or unverified running domains hold dependent work. Existing scheduler/network/workflow adapters and historical blocked-input reconciliation are in scope. Current IURIO Task monitor has a September30 cancelled run with approved grants and no effect record, plus one pending scheduled input. No production recovery mutation was made during planning.
+
+Owner approved the plan on October 5. Central policy, typed cancellation/authority errors, original-batch backoff, isolated failed inputs, legacy startup reconciliation, workflow/network adapters and shared UI are implemented. Root lint/typecheck and app build pass; all 153 Pods suites / 1,315 tests pass. Six browser layout checks pass; English/light and German/dark recovery screenshots were inspected. Next: exact-source PR/CI, relay compatibility rollout, signed desktop acceptance and installed IURIO recovery. Do not remove receipt/lease/authority guards as a blanket unblock. Standing runtime issue1422 is already delivered, activated and closed.
+
 ## Standing runtime approval — issue 1422
 
 Owner-approved implementation: [issue1422](https://repos.openape.ai/patrick/monorepo/issues/1422),

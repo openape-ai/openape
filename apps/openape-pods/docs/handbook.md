@@ -130,12 +130,12 @@ Automatic execution runs on this Mac, not in the cloud. Closing the window keeps
 
 When the app is running again or the Mac wakes, an overdue enabled schedule queues one catch-up start if a schedule start is not already pending. It advances the next due time into the future instead of replaying every missed interval. Saved progress and the script determine which data that run processes; this does not guarantee that every missed email or file is recovered.
 
-Interrupted runs and blocked or claimed inputs need recovery before further work can start. One Pod can run only once at a time. Pausing blocks new automatic starts but lets an active run finish; use Cancel run in History to stop it. Connected Codex can enable schedules when you request it.
+Ordinary failures and safe interruptions retry automatically with bounded backoff. After repeated failure, the affected input remains available for review and later scheduled runs remain eligible. Uncertain deliveries, changed permissions and unverified processes still require review. One Pod can run only once at a time. Pausing blocks new automatic starts but lets an active run finish; use Cancel run in History to stop it. Connected Codex can enable schedules when you request it.
 
 1. After a successful manual run, open Settings → Schedule and limits. Choose At an interval and enter minutes, or Daily with Local time and an explicit timezone such as Europe/Vienna.
 2. Check Enable this schedule and choose Save schedule. If the Pod is paused, separately choose Resume automatic execution after reviewing readiness.
 3. Check Next scheduled time, the enabled state and any displayed error. Keep Pods running and the Mac awake when execution is needed.
-4. To stop future scheduled work, disable and save the schedule or pause automatic execution. Inspect History after sleep, quitting or a crash before retrying interrupted work.
+4. To stop future scheduled work, disable and save the schedule or pause automatic execution. History shows automatic recovery after sleep, quitting or a crash, and identifies any operation requiring your review.
 
 ![Enable a schedule deliberately](images/handbook-settings.png)
 
@@ -151,7 +151,7 @@ Permission or validation error: open Technical details in History. Check the exa
 
 No automatic run: check the enabled schedule, Next scheduled time, paused state and active script. Close any setup terminal normally. Keep the Mac awake and the app running. Resolve stopped runs, blocked inputs and resource errors in History before resuming.
 
-Interrupted or failed run: select it in History and choose Prepare retry. This checks saved progress without starting the script. Resolve uncertain deliveries, then choose Retry unfinished work when offered. Use Retry unstarted requests for blocked starts. Repeated clicks on Run can create extra requests.
+Interrupted or failed run: History shows the next automatic retry or whether work continued in a later attempt. Failed inputs remain visible after the retry limit; normal failures do not disable future schedules. When History requires review, use Prepare retry to check saved progress and resolve uncertain deliveries before Retry unfinished work. Use Retry unstarted requests for blocked starts. Repeated clicks on Run can create extra requests.
 
 Unknown delivery: check the external destination first. Record what you observed in History, then choose Already delivered or Not delivered · allow retry. Do not guess or blindly resend; a lost response does not prove that nothing happened.
 
@@ -334,7 +334,7 @@ More options can archive a Pod or delete an archived Pod after the native confir
 
 History shows the result, the next action and What happened. Repeated application calls and AI requests are grouped with successful and unfinished counts. Routine permission checks stay in collapsed Technical details, together with the pinned script and persisted events.
 
-Cancel run stops an active run. Interrupted work remains visible after a crash or restart. Choose Prepare retry to check saved progress and possible deliveries without starting the script. Retry unfinished work becomes available after a successful check. Resolve uncertain deliveries first. Overview also leads to this check after a stopped run.
+Cancel run stops that attempt without immediately retrying it; an enabled future schedule stays enabled. Ordinary failures and safe shutdowns retry automatically using the original inputs and committed progress. Standalone and workflow work gets at most five attempts; network work retains its three-attempt limit. Retries start after two seconds and back off to at most sixty seconds, respecting service retry delays. Exhausted inputs remain failed, and independent future work can proceed. History offers Prepare retry only for a review condition or retained failed input. Unknown deliveries require reconciliation before dependent work can continue.
 
 At most one run executes per pod. Other waiting starts counts queued start requests, not emails or files. Repeated start clicks may create several requests. Retry unstarted requests applies to a blocked queue. Checkpoints record successful progress; resuming a Codex thread alone is not a recovery decision.
 
@@ -383,7 +383,7 @@ export async function run(context) {
 
 ## Further detail: Execution approvals and run activity
 
-Starting a manual run opens any required OpenApe approval in your browser. A waiting card also appears in the Pod workspace with Open approval, so a browser-opening failure does not hide the required action. Background runs show the card without opening the browser automatically. Approval waits last at most 15 minutes and pause the script's active time limit. Cancel run stops waiting. After an application restart, a stopped run requires explicit recovery; approving its old request does not restart it.
+Starting a manual run opens any required OpenApe approval in your browser. A waiting card also appears in the Pod workspace with Open approval, so a browser-opening failure does not hide the required action. Background runs show the card without opening the browser automatically. Approval waits last at most 15 minutes and pause the script's active time limit. Cancel run stops waiting. After an application restart, safe stopped work is recovered automatically with current grant checks; approving an old request alone does not restart a cancelled attempt.
 
 The managed execution permission belongs to this Pod and its OpenApe agent. Allow Pod execution creates a revocable standing rule; Once authorizes only the current request. Script edits do not expand directory, application, HTTP or secret assignments. The desktop broker verifies the structured permission through the ape-shell authorization library, then launches the pinned script inside the existing native sandbox. External Terminal.app continues to use the ape-shell CLI.
 

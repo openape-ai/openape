@@ -1,3 +1,4 @@
+import { recoverStoppedRuns } from './recovery/automatic'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { CodexNetworks } from './codex/networks'
 import type { NetworkCommand, NetworkView } from '../contracts/networks'
@@ -23,7 +24,7 @@ import type { RemoteInternal } from './remote/control'
 import { ChatRegistry } from './master/chat-registry'
 import { parseChatsCommand } from '../contracts/chats'
 import { reviewMailBatch, reconcileMailEffect } from './mail/workflow'
-import { confirmDomainsStopped, inspectDomainRecords  } from './recovery/domains'
+import { confirmDomainsStopped } from './recovery/domains'
 import { parseWorkflowCommand } from '../contracts/workflows'
 import { WorkflowEngine } from './workflows/engine'
 import { WorkflowCalls } from './workflows/calls'
@@ -80,7 +81,7 @@ if (!port) throw new Error('Pods worker requires its owning Electron process')
 const store = new PodDatabase(process.cwd())
 const mailBridge = new MailBridge(value => port.postMessage(value))
 let dispatcher: RunDispatcher
-const registry = new ResourceRegistry(store, (podId) => { dispatcher.cancelPod(podId, 'Resource permissions changed'); port.postMessage({ programCancel: podId }) })
+const registry = new ResourceRegistry(store, (podId) => { dispatcher.cancelPod(podId, 'Resource permissions changed', 'authority'); port.postMessage({ programCancel: podId }) })
 const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
 const executable = process.env.PODS_RUNTIME_EXECUTABLE
 if (!executable) throw new Error('Trusted runtime executable is missing')
@@ -194,6 +195,7 @@ const timer = setInterval(() => {
   ticking = (async () => {
     try {
       try {
+        await tickStep('automatic recovery', 15000, () => recoverStoppedRuns(store, runtime.helper, 1))
         await tickStep('workflow cancellations', 20000, () => networks.invocations.calls!.reconcileCancellations())
         await tickStep('run retention', 1000, () => data.retention.runs.prune())
         // The full inventory lstats every profile entry (~1 s on a real profile), so it runs every minute unless a limit is already near.
@@ -282,7 +284,7 @@ port.on('message', async (event) => {
     }
     if (request.command && typeof request.command === 'object' && 'inspectCredentials' in request.command) {
       await cleanupEncryptedBackupStaging(store.root)
-      await inspectDomainRecords(store.db.prepare('SELECT d.* FROM execution_domains d WHERE NOT EXISTS(SELECT 1 FROM network_invocations i WHERE i.run_id=d.run_id)').all(), join(store.root, 'runs'), runtime.helper)
+      await recoverStoppedRuns(store, runtime.helper)
       await networks.reconcileStartup()
       await new DependencyStore(store).recover(runtime.helper)
       new ProgramControl(store, registry).execute({ type: 'recover' })
@@ -382,7 +384,7 @@ port.on('message', async (event) => {
       const check = request.command.serviceCheck as ServiceCheck
       const state = authorizeRunService(store, registry, dispatcher.runs, check)
       if (check.infrastructure !== undefined) dispatcher.runs.append(check.scope.runId, 'infrastructure', { operation: 'authority monitor', ...(check.infrastructure ?? { state: 'restored' }) })
-      if (check.authorityLost) dispatcher.cancelPod(check.scope.podId, 'Pod execution permission is no longer active; review the Pod permissions before retrying')
+      if (check.authorityLost) dispatcher.cancelPod(check.scope.podId, 'Pod execution permission is no longer active; review the Pod permissions before retrying', 'authority')
       port.postMessage({ id: request.id, state }); return
     }
     if (request.command && typeof request.command === 'object' && 'scripts' in request.command) {

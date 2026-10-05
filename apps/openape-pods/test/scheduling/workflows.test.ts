@@ -128,21 +128,22 @@ it('reserves whole membership, prevents overlapping triggers and blocks standalo
   expect(f.engine.run(waiting).state).toBe('running')
   expect(f.started.filter(run => run.podId === b)).toHaveLength(2)
 })
-it('holds descendants after failure while independent branches complete, then retries only failed work', async () => {
+it('holds descendants after failure while independent branches complete, then automatically retries only failed work', () => {
   const f = fixture(); const a = f.pod(); const b = f.pod(); const c = f.pod(); const d = f.pod()
   const id = f.workflow([a, b, c, d], [[], [], [a], [b]])
   const run = f.engine.start(id, 1); f.engine.tick(); f.complete(a, 'failed'); f.complete(b); f.engine.tick()
-  expect(f.started.map(run => run.podId)).toEqual([a, b, d]); expect(f.engine.run(run).state).toBe('blocked')
-  f.complete(d); f.engine.tick(); await f.engine.retry(run, a)
+  expect(f.started.map(run => run.podId)).toEqual([a, b, d]); expect(f.engine.run(run).state).toBe('running')
+  f.complete(d); f.engine.tick(); f.time(Number(f.store.db.prepare('SELECT retry_at FROM run_inputs WHERE run_id=?').get(f.started[0]!.id)!.retry_at)); f.engine.tick()
   expect(f.started.map(run => run.podId)).toEqual([a, b, d, a])
   f.complete(a); f.engine.tick(); expect(f.started.at(-1)!.podId).toBe(c)
-  expect(f.recovery.inspect).toHaveBeenCalledOnce()
+  expect(f.recovery.inspect).not.toHaveBeenCalled()
   expect(f.started.filter(run => run.podId === b)).toHaveLength(1)
 })
 it('does not release successors for completedWithGaps or unknown external effects', () => {
   const f = fixture(); const a = f.pod(); const b = f.pod(); const id = f.workflow([a, b], [[], [a]])
   const run = f.engine.start(id, 1); f.engine.tick(); f.complete(a, 'completedWithGaps'); f.engine.tick()
-  expect(f.engine.run(run).state).toBe('blocked'); expect(f.started).toHaveLength(1)
+  expect(f.engine.run(run).state).toBe('running'); expect(f.started).toHaveLength(1)
+  expect(f.engine.run(run).nodes.find(node => node.podId === b)?.state).toBe('waiting')
 })
 it('persists completed siblings across restart and requires explicit recovery for interrupted work', () => {
   const f = fixture(); const a = f.pod(); const b = f.pod(); const c = f.pod()

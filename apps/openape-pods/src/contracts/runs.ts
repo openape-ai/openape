@@ -2,7 +2,8 @@ import { parseRunApproval } from './activity'
 import type { RunApproval } from './activity'
 
 export type RunState = 'running' | 'completed' | 'completedWithGaps' | 'failed' | 'cancelled' | 'blocked' | 'interrupted'
-export interface RunRecord { id: string, podId: string, scriptHash: string, state: RunState, startedAt: number, finishedAt: number | null, summary: string, error: string | null, checkpointRevision: number, recovery: { state: 'ready' | 'needsReview' | 'retryQueued', error: string | null } | null }
+export interface AutomaticRecovery { retainedInputs?: boolean, disposition: 'retry' | 'isolated' | 'hold' | 'continued', reason: string, nextAt: number | null, attempt: number }
+export interface RunRecord { automaticRecovery?: AutomaticRecovery, id: string, podId: string, scriptHash: string, state: RunState, startedAt: number, finishedAt: number | null, summary: string, error: string | null, checkpointRevision: number, recovery: { state: 'ready' | 'needsReview' | 'retryQueued', error: string | null } | null }
 export interface RunEvent { sequence: number, type: string, data: unknown, at: number }
 export interface RunView { timing?: { activeMs: number, waitingMs: number }, approvals?: (RunApproval & { runId: string })[],  effects?: { key: string, runId: string }[], runs: RunRecord[], events: RunEvent[] }
 export type RunCommand = { type: 'openApproval', podId: string, runId: string, grantId: string } | { type: 'resolveHttp', podId: string, runId: string, key: string, applied: boolean, evidence: string } | { type: 'list', podId: string, runId?: string, after?: number } | { type: 'installExample', podId: string, variant: 'deterministic' | 'agent' } | { type: 'start', podId: string, expectedScript?: string } | { type: 'cancel', podId: string, runId: string } | { type: 'recover', podId: string, runId: string, action: 'inspect' | 'retry' } | { type: 'retryQueue', podId: string }
@@ -26,6 +27,7 @@ export function parseRunView(value: unknown): RunView {
   if (!Array.isArray(view.runs) || view.runs.length > 100 || !Array.isArray(view.events) || view.events.length > 500) throw new Error('Invalid run view collections')
   if (view.effects && (!Array.isArray(view.effects) || view.effects.length > 100 || view.effects.some(item => typeof item.key !== 'string' || !/^[\w.:-]{1,160}$/.test(item.key) || !/^[a-f0-9-]{36}$/.test(item.runId)))) throw new Error('Invalid HTTP delivery review')
   for (const run of view.runs) {
+    if (run?.automaticRecovery && (!['retry', 'isolated', 'hold', 'continued'].includes(run.automaticRecovery.disposition) || typeof run.automaticRecovery.reason !== 'string' || !Number.isSafeInteger(run.automaticRecovery.attempt) || (run.automaticRecovery.nextAt !== null && !Number.isSafeInteger(run.automaticRecovery.nextAt)))) throw new Error('Invalid automatic recovery state')
     if (!run || (run.recovery !== null && (!run.recovery || !['ready', 'needsReview', 'retryQueued'].includes(run.recovery.state) || (run.recovery.error !== null && typeof run.recovery.error !== 'string'))) || !/^[a-f0-9-]{36}$/.test(run.id) || !/^[a-f0-9-]{36}$/.test(run.podId) || !/^[a-f0-9]{64}$/.test(run.scriptHash)
       || !['running', 'completed', 'completedWithGaps', 'failed', 'cancelled', 'blocked', 'interrupted'].includes(run.state)
       || !Number.isSafeInteger(run.startedAt) || (run.finishedAt !== null && !Number.isSafeInteger(run.finishedAt))
