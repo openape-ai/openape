@@ -218,7 +218,7 @@ describe('durable network event acceptance', () => {
   })
 })
 
-it('persists jittered infrastructure deadlines and stops at three total source attempts', async () => {
+it('persists bounded infrastructure deadlines and stops at three total source attempts', async () => {
   const { store, invocations, reserve } = invocationFixture()
   let previous: string | null = null
   for (let attempt = 1; attempt <= 3; attempt++) {

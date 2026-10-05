@@ -44,7 +44,7 @@ export class NetworkRecovery {
       if (control.retry_consumed_at !== null) throw new Error('Original network retry was already consumed; inspect its latest attempt')
       if (control.review_required) throw new Error('Source identity conflict requires a reviewed correction')
       if (Number(control.attempt) >= 3) throw new Error('Network retry attempts exhausted; explicit replay review is required')
-      const inputs = this.store.db.prepare('SELECT * FROM network_deliveries WHERE run_id=? AND state IN (\'blocked\',\'unknown\')').all(runId)
+      const inputs = this.store.db.prepare('SELECT * FROM network_deliveries WHERE run_id=? AND state IN (\'blocked\',\'unknown\',\'retry_wait\')').all(runId)
       if (inputs.length !== (JSON.parse(invocation.manifest as string).inputClaims?.length ?? 0)) throw new Error('The original claim batch changed; retry requires review')
       const network = this.store.db.prepare('SELECT revision,activation_epoch,restore_nonce FROM networks WHERE id=?').get(networkId)!
       const namespace = { networkRevision: network.revision, activationEpoch: network.activation_epoch, restoreNonce: network.restore_nonce }
