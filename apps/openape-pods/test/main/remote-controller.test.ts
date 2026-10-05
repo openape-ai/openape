@@ -1,0 +1,142 @@
+// @vitest-environment node
+import { randomUUID } from 'node:crypto'
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, expect, it, vi } from 'vitest'
+import { ProtocolError } from '@openape/pods-protocol'
+import { generateKey, proofBytes, publicKey, sha256, signBytes } from '@openape/pods-protocol/crypto'
+import { RelayStore } from '../../../openape-pods-relay/server/utils/store'
+import { RelayAuth } from '../../../openape-pods-relay/server/utils/auth'
+import { RemoteController } from '../../src/main/remote/controller'
+import type { FixtureWorker } from '../../src/main/worker'
+import { PodDatabase } from '../../src/worker/storage/database'
+import { RemoteControl } from '../../src/worker/remote/control'
+import { ResourceRegistry } from '../../src/worker/resources/registry'
+import { RunDispatcher } from '../../src/worker/runs/dispatcher'
+import { Scheduler } from '../../src/worker/scheduling/scheduler'
+import { MasterControl } from '../../src/worker/master/control'
+import { MasterService } from '../../src/worker/master/service'
+import type { AgentRuntime } from '../../src/worker/agent/executor'
+
+const browser = vi.hoisted(() => vi.fn())
+vi.mock('electron', () => ({ safeStorage: { isEncryptionAvailable: () => true, encryptString: (text: string) => Buffer.from(text), decryptString: (bytes: Buffer) => bytes.toString() }, shell: { openExternal: browser } }))
+const cleanups: (() => Promise<void>)[] = []
+afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); browser.mockReset() })
+
+async function fixture() {
+  vi.stubEnv('OPENAPE_PODS_CENTRAL_ENABLED', '1')
+  const root = await mkdtemp(join(tmpdir(), 'pods-reauth-'))
+  const relay = new RelayStore(':memory:')
+  const store = new PodDatabase(root)
+  const resources = new ResourceRegistry(store, () => {})
+  const runtime = {} as AgentRuntime
+  const runs = new RunDispatcher(store, resources, runtime)
+  const scheduler = new Scheduler(store, runs)
+  const master = new MasterService(store, runtime, new MasterControl(store, resources, runs, scheduler, runtime))
+  const remote = new RemoteControl(store, master, runs, resources, scheduler)
+  const owner = { issuer: 'https://id.example.test', subject: 'owner@example.test' }
+  const signing = generateKey(); const agreement = generateKey()
+  const registration = relay.register(randomUUID(), owner, 'runtime', { signing: publicKey(signing), agreement: publicKey(agreement) })
+  const first = relay.issue(registration.id)
+  const proof = signBytes(proofBytes('session-refresh', registration.id, sha256(first.refreshToken)), signing)
+  const rotated = relay.refresh(first.refreshToken, proof)
+  expect(() => relay.refresh(first.refreshToken, proof)).toThrow('refresh_replay')
+  const saved = { id: registration.id, signing, agreement, enabled: true, tokens: { ...first, expiresAt: new Date(0).toISOString() } }
+  await mkdir(join(root, 'remote'), { recursive: true }); await writeFile(join(root, 'remote/registration.enc'), JSON.stringify(saved))
+  await mkdir(join(root, 'central')); await writeFile(join(root, 'central/state.json'), '{"revision":17,"hash":"retained"}')
+  await writeFile(join(root, 'central/publication.json'), '{"pending":"retained"}')
+  await remote.execute({ type: 'configure', registration })
+  const device = relay.register(randomUUID(), owner, 'mobile', { signing: publicKey(generateKey()), agreement: publicKey(generateKey()) })
+  relay.pair(registration, device.id); await remote.execute({ type: 'pair', device })
+  const worker = { remote: vi.fn(remote.execute.bind(remote)), remoteOwner: async () => ({ owner, email: owner.subject }), indexRemotePods: vi.fn(async () => {}) }
+  const auth = new RelayAuth(relay, 'https://pods.example.test')
+  browser.mockImplementation(async (url: string) => {
+    const id = new URL(url).searchParams.get('id')!
+    const row = relay.db.prepare('SELECT body FROM auth_flows WHERE id=?').get(id)!
+    relay.db.prepare('UPDATE auth_flows SET body=? WHERE id=?').run(JSON.stringify({ ...JSON.parse(String(row.body)), owner }), id)
+  })
+  const requests: string[] = []
+  const fetcher = vi.fn(async (url: string, init: RequestInit = {}) => {
+    const path = new URL(url).pathname; requests.push(path)
+    const body = JSON.parse(String(init.body ?? '{}'))
+    try {
+      if (path.endsWith('/session/refresh')) return Response.json(relay.refresh(body.refreshToken, body.signature))
+      if (path.endsWith('/session/begin')) return Response.json(auth.begin(body))
+      if (path.endsWith('/session/exchange')) return Response.json(auth.exchange(body))
+      if (path.endsWith('/registration')) {
+        const h = new Headers(init.headers)
+        return Response.json(relay.authenticateRequest(h.get('authorization')!.slice(7), 'runtime', 'GET', path, { id: h.get('x-pods-request-id')!, at: h.get('x-pods-request-at')!, digest: h.get('x-pods-body-digest')!, signature: h.get('x-pods-proof')! }))
+      }
+      throw new Error(`Unexpected route ${path}`)
+    }
+    catch (error) { if (error instanceof ProtocolError) return Response.json({ code: error.code }, { status: error.status }); throw error }
+  })
+  vi.stubGlobal('fetch', fetcher)
+  const controller = new RemoteController(root, worker as unknown as FixtureWorker, 'https://pods.example.test')
+  cleanups.push(async () => { await controller.stop(); relay.close(); store.close(); await rm(root, { recursive: true, force: true }) })
+  const readSaved = async () => JSON.parse(await readFile(join(root, 'remote/registration.enc'), 'utf8')) as typeof saved
+  return { root, relay, store, remote, owner, registration, saved, rotated, worker, controller, requests, fetcher, readSaved, enable: () => controller.enable({ owner, email: owner.subject }) }
+}
+
+it('reauthenticates a replay-revoked session with the same runtime, keys, generation and pairing', async () => {
+  const f = await fixture()
+  const devices = f.store.db.prepare('SELECT * FROM remote_devices').all()
+  const registration = f.relay.registration(f.registration.id)
+  await f.enable()
+  const saved = await f.readSaved()
+  expect(saved).toMatchObject({ id: f.saved.id, signing: f.saved.signing, agreement: f.saved.agreement, enabled: true })
+  expect(saved.tokens.registration).toEqual({ id: registration.id, generation: registration.generation, owner: f.owner })
+  expect(f.relay.authenticate(saved.tokens.accessToken)).toEqual(registration)
+  expect(() => f.relay.authenticate(f.rotated.accessToken)).toThrow('authentication_required')
+  expect(f.store.db.prepare('SELECT * FROM remote_devices').all()).toEqual(devices)
+  expect(await readFile(join(f.root, 'central/state.json'), 'utf8')).toBe('{"revision":17,"hash":"retained"}')
+  expect(await readFile(join(f.root, 'central/publication.json'), 'utf8')).toBe('{"pending":"retained"}')
+  expect(f.requests).not.toContain('/api/runtime/v1/rotate')
+  expect(browser).toHaveBeenCalledTimes(1)
+  await f.enable()
+  expect(browser).toHaveBeenCalledTimes(1)
+  expect(f.relay.db.prepare('SELECT count(*) AS count FROM registrations').get()?.count).toBe(2)
+})
+
+it('refuses revoked devices without replacing their identity or opening enrollment', async () => {
+  const f = await fixture(); f.relay.revoke(f.registration, f.registration.id)
+  await expect(f.enable()).rejects.toThrow('registration_unavailable')
+  expect(await f.readSaved()).toEqual({ ...f.saved, enabled: false })
+  expect(browser).not.toHaveBeenCalled()
+  expect(f.worker.remote.mock.calls.some(([c]) => c.type === 'configure')).toBe(false)
+})
+
+it.each(['owner', 'generation', 'missing'] as const)('refuses a local %s mismatch before changing identity or requesting login', async (mismatch) => {
+  const f = await fixture()
+  if (mismatch === 'missing') f.store.db.exec('DELETE FROM remote_registration')
+  else f.store.db.prepare('UPDATE remote_registration SET body=?').run(JSON.stringify({ ...f.registration, ...(mismatch === 'owner' ? { owner: { ...f.owner, subject: 'someone-else' } } : { generation: randomUUID() }) }))
+  await expect(f.enable()).rejects.toThrow(/registration|identity/)
+  expect(await f.readSaved()).toEqual(f.saved)
+  expect(f.requests).toEqual([])
+})
+
+it('refuses a changed relay generation without rotating or overwriting local registration', async () => {
+  const f = await fixture(); f.relay.rotate(f.registration)
+  await expect(f.enable()).rejects.toThrow('differs from the existing workspace')
+  expect(await f.readSaved()).toEqual({ ...f.saved, enabled: false })
+  expect(f.worker.remote.mock.calls.some(([c]) => c.type === 'configure')).toBe(false)
+})
+
+it('reports terminal registration conflicts rather than polling them as pending login', async () => {
+  const f = await fixture()
+  browser.mockImplementationOnce(async () => { f.relay.revoke(f.registration, f.registration.id) })
+  const normal = f.fetcher.getMockImplementation()!
+  f.fetcher.mockImplementation(async (url, init) => url.endsWith('/exchange') ? Response.json({ code: 'registration_conflict' }, { status: 409 }) : normal(url, init))
+  await expect(f.enable()).rejects.toThrow('registration_conflict')
+  expect(f.requests.filter(x => x.endsWith('/session/begin'))).toHaveLength(1)
+  expect(await f.readSaved()).toEqual({ ...f.saved, enabled: false })
+})
+
+it('retains identity and does not request browser login for transient relay failures', async () => {
+  const f = await fixture()
+  f.fetcher.mockImplementationOnce(async () => Response.json({ code: 'unavailable' }, { status: 503 }))
+  await expect(f.enable()).rejects.toThrow('503')
+  expect(await f.readSaved()).toEqual({ ...f.saved, enabled: false })
+  expect(browser).not.toHaveBeenCalled()
+})
