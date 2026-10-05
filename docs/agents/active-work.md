@@ -1,5 +1,17 @@
 # Active work
 
+## Pods visibility — issues 1424 and 1425
+
+[Issue1424](https://repos.openape.ai/patrick/monorepo/issues/1424) and [issue1425](https://repos.openape.ai/patrick/monorepo/issues/1425), both closed; plans [A](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M4631YCZMYKBKW7F3AQ96D2Z) and [B](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M46759EEZEZA4A9ZQNEDG0JD). Checkout: `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-visibility`.
+
+The Pod inventory and standalone overview cards show a one-line purpose per Pod, the Pod overview states the last run's own summary, network choice cards show readable fields with the raw payload under technical details, and the description field is labelled as an explanation. Networks and workflows have an owner-written description (local table `collection_descriptions`, schema 38) that the desktop owner edits on the detail page; overview cards show its summary. Both travel in the workspace state, not in a published table or definition. Editing network and workflow descriptions from the browser or through MCP is not available.
+
+[PR242](https://repos.openape.ai/patrick/monorepo/pulls/242) merged as `e0a15434e7ad77c4ab44a882843d6ea75e14ea4b` and [PR243](https://repos.openape.ai/patrick/monorepo/pulls/243) as `0c6bf3c3c36d1f44d1c3b90cb5073de32a1fb3f8`; exact-source CI5403/5404 and both full-main checks passed. Root lint/typecheck, app build, 1,357 Pods tests, 35 relay tests and five browser layout tests passed. Synthetic evidence: [package A](https://testrun.openape.ai/r/DWKW3tg0aqgc-Vb03zOto0uY), [package B](https://testrun.openape.ai/r/S3EXK34pXTB6V_lFng8kFsyI).
+
+Signed-local 0.1.2 from clean `0c6bf3c3`, schema 38, is installed since October 5, 17:13 CEST. App and DMG notarization, stapling, Gatekeeper and mounted synthetic acceptance passed (296 packages; DMG SHA256 `fb00d3f1cb292cb54966f3a79778e7b2bfe43e807cd34ada14a454864a1a0153`). The installed archive equals the built one. After migration 38 Pods, 81 scripts, 70 resources, seven schedule definitions, one network with 11 members, five workflows, 86 credential files and the runtime identity are unchanged; the desktop is online and the Delta Mind mail network active. Schedules stood still for about two minutes; the first scheduled runs on the new build completed. The first natural network Intake run `55b0d90c-c6ac-46fc-ab55-8c85781b6b07` completed at 17:19 CEST without error; the network stays at revision 3 with no scheduler or intake error.
+
+The relay remains `prod-062143d2` and was not deployed. Its contract code accepts the new workspace fields and the central inventory returns the Pod summaries, but the browser workspace serves the previous interface until a relay deployment. Paired byte-verified rollback of the schema-37 app and profile: `/Users/patrickhofmann/Library/Application Support/OpenApe Pods Rollback/20261005-visibility-1424-1425`. Never open the schema-38 profile with the earlier build. Not verified: Electron E2E and the browser workspace on the deployed relay.
+
 ## Runtime identity recovery — issue 1408
 
 [Issue1408](https://repos.openape.ai/patrick/monorepo/issues/1408). Checkout: `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-standing-runtime`; branch `bugfix/issue-1408-preserve-runtime-identity`, base `0b11e01457fc3d85e5f657d090a3ca097a049dc0`.
