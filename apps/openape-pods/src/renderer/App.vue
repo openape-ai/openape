@@ -25,7 +25,7 @@ import { runFailure, runHeadline, runResult } from './run-activity'
 import RunApproval from './RunApproval.vue'
 import type { RunApproval as Approval } from '../contracts/activity'
 import PodKnowledge from './PodKnowledge.vue'
-import type { StoredPod, WorkspaceState } from '../contracts/control'
+import type { CollectionDescription, StoredPod, WorkspaceState } from '../contracts/control'
 import type { PodDetails } from '../contracts/details'
 import type { RunRecord } from '../contracts/runs'
 import type { ScheduleView } from '../contracts/scheduling'
@@ -37,7 +37,7 @@ export default defineComponent({
   emits: ['settings'],
   setup() { return { access: usePodAccess() } },
   data() {
-    return { sharing: sharingAvailable && typeof window.pods?.sharing === 'function', shareSelection: null as PortableSourceSelection | null, requestedRun: '', workflowId: '', workflows: { workflows: [], runs: [] } as WorkflowView, requestedSecret: '', approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: this.initialPodId ? 'Overview' : 'Workflows', tabs: ['Overview', 'Script', 'Values', 'Permissions', 'Settings', 'History'], pods: [] as StoredPod[], podId: this.initialPodId, creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
+    return { sharing: sharingAvailable && typeof window.pods?.sharing === 'function', shareSelection: null as PortableSourceSelection | null, requestedRun: '', workflowId: '', workflows: { workflows: [], runs: [] } as WorkflowView, descriptions: [] as CollectionDescription[], requestedSecret: '', approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: this.initialPodId ? 'Overview' : 'Workflows', tabs: ['Overview', 'Script', 'Values', 'Permissions', 'Settings', 'History'], pods: [] as StoredPod[], podId: this.initialPodId, creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
   computed: {
     framePage(): string { return ['App settings', 'Setup', 'Data'].includes(this.selected) ? 'App settings' : ['Workflows', 'Import', 'Share'].includes(this.selected) ? 'Workflows' : 'Pods' },
@@ -65,7 +65,7 @@ export default defineComponent({
     t, runFailure, runHeadline, runResult, diagnostic, label, dateTime,
     async openRun(podId: string, runId: string) { await this.selectPod(podId); this.requestedRun = runId; this.selected = 'History' },
     openValues(alias = '') { this.requestedSecret = alias; this.selected = 'Values' },
-    workspaceChanged(state: WorkspaceState) { if (state.organization.revision < this.organization.revision) return; this.pods = state.pods; this.organization = state.organization },
+    workspaceChanged(state: WorkspaceState) { if (state.organization.revision < this.organization.revision) return; this.pods = state.pods; this.organization = state.organization; this.descriptions = state.descriptions ?? [] },
     poll() { if (this.closed) return; this.timer = setTimeout(async () => { await this.refresh(); this.poll() }, 1000) },
     async refresh() {
       if (this.busy || (!this.access.remote && this.status?.worker.state !== 'ready')) return
@@ -143,7 +143,7 @@ export default defineComponent({
         <AppSettings v-if="selected === 'App settings'" />
         <PodInventory v-else-if="selected === 'Pods'" :pods="pods" :workflows="workflows" :organization="organization" :available="status?.worker.state === 'ready' && !attention" @updated="workspaceChanged" @select="selectPod" @create="createPod" />
         <template v-else-if="selected === 'Workflows'">
-          <GraphPanel :view="workflows" :pods="pods" :organization="organization" :selected-id="workflowId" @changed="workflows = $event" @workspace="workspaceChanged" @select="workflowId = $event" @open-pod="selectPod" @share="share" @import="selected = 'Import'" />
+          <GraphPanel :view="workflows" :pods="pods" :organization="organization" :descriptions="descriptions" :selected-id="workflowId" @changed="workflows = $event" @workspace="workspaceChanged" @select="workflowId = $event" @open-pod="selectPod" @share="share" @import="selected = 'Import'" />
         </template>
         <template v-else-if="selected === 'Import'">
           <button class="text-button" @click="selected = 'Workflows'">

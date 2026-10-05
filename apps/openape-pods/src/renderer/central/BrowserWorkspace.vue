@@ -117,7 +117,7 @@ onBeforeUnmount(() => { closed = true })
         <p v-if="!runtime.online" class="muted">
           {{ t('Desktop offline') }} · {{ t('Showing the last synchronized networks and workflows.') }}
         </p>
-        <GraphPanel v-if="runtime.workflows?.graphs || runtime.networks" :key="`graphs:${runtime.id}`" :view="runtime.workflows ?? { workflows: [], runs: [] }" :read-network="readNetwork" :pods="runtime.workspace.pods" :organization="runtime.workspace.organization" :selected-id="workflowId" read-only @select="workflowId = $event" @open-pod="openPod" />
+        <GraphPanel v-if="runtime.workflows?.graphs || runtime.networks" :key="`graphs:${runtime.id}`" :view="runtime.workflows ?? { workflows: [], runs: [] }" :read-network="readNetwork" :pods="runtime.workspace.pods" :organization="runtime.workspace.organization" :descriptions="runtime.workspace.descriptions ?? []" :selected-id="workflowId" read-only @select="workflowId = $event" @open-pod="openPod" />
         <WorkflowPanel v-else-if="runtime.workflows" :key="runtime.id" :view="runtime.workflows" :pods="runtime.workspace.pods" :selected-id="workflowId" read-only @select="workflowId = $event" @open-pod="openPod" />
         <p v-else class="muted" role="status">
           {{ t('Workflow data is not available yet. Reconnect the desktop to synchronize it.') }}
