@@ -258,6 +258,14 @@ it('reassembles the projected snapshot exactly from parts and keeps each run his
   expect(view.runs.events).toEqual(view.history[view.runs.runs[0]!.id]!.events)
 })
 
+it('publishes the description summary with the workspace inventory', () => {
+  const { projection, actor, pod, details } = fixture()
+  details.execute({ type: 'describe', podId: pod.id, revision: 0, text: 'Watches the task board and reports changes by Telegram. Runs every five minutes.' })
+  const parts = splitSnapshot(projection.snapshot(actor.owner))
+  const restored = assembleSnapshot(key => parts.get(key), [...parts.keys()])
+  expect(restored.workspace.pods.find(item => item.id === pod.id)?.description).toBe('Watches the task board and reports changes by Telegram.')
+})
+
 it('publishes only TypeSafe availability through both full and partitioned central snapshots', async () => {
   const { store, projection, actor, pod } = fixture()
   const { SetupControl } = await import('../src/worker/onboarding/control')

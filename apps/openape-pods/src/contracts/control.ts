@@ -3,7 +3,7 @@ import type { JevAvailability } from './jev'
 import { parseGroupCommand, parseOrganization } from './groups'
 import type { GroupCommand, Organization } from './groups'
 
-export interface StoredPod { id: string, name: string, revision: number, lifecycle: 'active' | 'paused' | 'archived', activeScript: string | null }
+export interface StoredPod { id: string, name: string, revision: number, lifecycle: 'active' | 'paused' | 'archived', activeScript: string | null, description?: string }
 export interface WorkspaceState { jev?: JevAvailability | null, pods: StoredPod[], organization: Organization }
 export type WorkspaceCommand = GroupCommand | { type: 'list' } | { type: 'pauseAll' } | { type: 'create', name: string } | { type: 'update', id: string, revision: number, name: string, lifecycle: StoredPod['lifecycle'] }
 export function parseCommand(value: unknown): WorkspaceCommand {
@@ -28,6 +28,7 @@ export function parseWorkspace(value: unknown): WorkspaceState {
   for (const pod of state.pods) {
     parseCommand({ type: 'update', id: pod.id, revision: pod.revision, name: pod.name, lifecycle: pod.lifecycle })
     if (pod.activeScript !== null && (typeof pod.activeScript !== 'string' || !/^[a-f0-9]{64}$/.test(pod.activeScript))) throw new Error('Invalid active script')
+    if (pod.description !== undefined && (typeof pod.description !== 'string' || pod.description.length > 160)) throw new Error('Invalid pod description')
   }
   parseOrganization(state.organization, state.pods.map(pod => pod.id))
   return state

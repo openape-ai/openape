@@ -12,6 +12,7 @@ import type { WorkflowDefinition } from '../contracts/workflows'
 import GraphView from './GraphView.vue'
 import NetworkRetirement from './NetworkRetirement.vue'
 import { dateTime, diagnostic, t } from './i18n'
+import { choiceFields } from './utils/choice-payload'
 
 export default defineComponent({
   components: { GraphView, NetworkRetirement },
@@ -27,6 +28,7 @@ export default defineComponent({
   data() { return { remoteChoices: [] as NonNullable<NetworkView['choices']>, remoteGates: [] as NonNullable<NetworkView['gates']>, loading: false, activityLoading: false, recordsLoading: false, details: null as NetworkDetails | null, trace: null as NetworkTracePage | null, records: null as NetworkDataPage | null, tab: 'structure', caseId: null as string | null, selected: '', loadRequest: 0, error: '', actionError: '', activityError: '', recordsError: '', activityRequest: 0, recordsRequest: 0, now: Date.now(), busy: false, processing: false, processPods: [] as string[], reviewedPaused: [] as string[], budget: 10, preview: null as NetworkPreview | null, evidence: {} as Record<string, string>, timer: null as ReturnType<typeof setTimeout> | null, closed: false } },
   computed: {
     choices() { return (this.readNetwork ? this.remoteChoices : this.view.choices ?? []).filter(choice => choice.networkId === this.network.id) },
+    choiceCards() { return this.choices.map(choice => ({ choice, readable: choiceFields(choice.payload) })) },
     gates() { return (this.readNetwork ? this.remoteGates : this.view.gates ?? []).filter(gate => gate.networkId === this.network.id) },
     structure(): WorkflowDefinition | null {
       const definition = this.details?.definition
@@ -64,6 +66,7 @@ export default defineComponent({
   beforeUnmount() { this.closed = true; if (this.timer) clearTimeout(this.timer) },
   methods: {
     t, diagnostic, dateTime,
+    fieldValue(value: string): string { return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value) && !Number.isNaN(Date.parse(value)) ? dateTime(value) : value },
     eventLabel(kind: string): string {
       if (kind === 'composition-replaced-reviewed') return t('Composition replacement reviewed')
       if (kind === 'legacy-conversion-reviewed') return t('Legacy conversion reviewed')
@@ -339,9 +342,20 @@ export default defineComponent({
           </button>
         </div>
       </article>
-      <article v-for="choice in choices" :key="`${choice.eventId}:${choice.gate}`">
+      <article v-for="{ choice, readable } in choiceCards" :key="`${choice.eventId}:${choice.gate}`">
         <h3>{{ choice.title }}</h3>
-        <pre>{{ choice.payload }}</pre>
+        <template v-if="readable">
+          <p v-if="readable.headline" class="choice-headline">
+            <strong>{{ readable.headline }}</strong>
+          </p>
+          <dl class="choice-fields">
+            <template v-for="[name, value] in readable.fields" :key="name">
+              <dt>{{ name }}</dt><dd>{{ fieldValue(value) }}</dd>
+            </template>
+          </dl>
+          <details><summary>{{ t('Technical details') }}</summary><pre>{{ choice.payload }}</pre></details>
+        </template>
+        <pre v-else>{{ choice.payload }}</pre>
         <p v-if="choice.truncated">
           {{ t('Payload preview is truncated; the original remains stored locally.') }}
         </p>
@@ -395,5 +409,6 @@ export default defineComponent({
 </template>
 
 <style>
+.choice-fields{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 16px;margin:8px 0}.choice-fields dt{color:var(--muted)}.choice-fields dd{margin:0;overflow-wrap:anywhere}
 .network-collection[aria-pressed=true]{background:var(--tint);border-color:var(--accent);font-weight:700}.network-detail{display:flex;flex-direction:column;gap:16px;min-width:0}.network-detail h1{margin:10px 0}.network-detail p{overflow-wrap:anywhere;margin:4px 0}.network-detail label,.network-detail li{overflow-wrap:anywhere}.network-timers ul{padding-left:20px}.network-process .paused-consent{margin-left:28px;padding:10px;border-left:3px solid var(--border)}.network-detail .text-button{min-height:36px}.network-detail pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto;font-size:12px}.network-detail article,.network-process{padding:16px;border:1px solid var(--border);border-radius:12px;margin:10px 0}.network-detail textarea{display:block;width:100%;min-height:72px;box-sizing:border-box}.network-detail .graph-modes{flex-wrap:wrap}.network-process label{display:flex;gap:8px;align-items:center;margin:10px 0}.network-process input[type=checkbox]{width:auto}.network-process input[type=number]{max-width:90px}.network-actions>label{flex:1 0 100%}.network-failure-count{align-self:flex-start}.network-actions{display:flex;flex-wrap:wrap;gap:10px}
 </style>

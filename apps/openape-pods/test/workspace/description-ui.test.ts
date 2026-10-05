@@ -24,3 +24,11 @@ it('retains unsaved text and exposes a conflicting save instead of overwriting i
   expect(wrapper.get('[role="alert"]').text()).toContain('Description changed')
   wrapper.unmount()
 })
+
+it('presents the text as an explanation that does not change the script', async () => {
+  window.pods = { details: vi.fn().mockResolvedValue({ description: null }) } as unknown as typeof window.pods
+  const wrapper = mount(PodDescription, { props: { podId: crypto.randomUUID() } }); await flushPromises()
+  expect(wrapper.get('label').text()).toBe('What this Pod does')
+  expect(wrapper.text()).toContain('This text explains the Pod. It does not change the script.')
+  wrapper.unmount()
+})

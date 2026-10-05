@@ -5,7 +5,7 @@ import type { StoredPod } from '../contracts/control'
 import type { Organization } from '../contracts/groups'
 import type { WorkflowDefinition, WorkflowView } from '../contracts/workflows'
 import type { NetworkSummary, NetworkView } from '../contracts/networks'
-import { dateTime, diagnostic, t } from './i18n'
+import { dateTime, diagnostic, label, t } from './i18n'
 import { arrangementLabel, waitingDecisions } from './utils/graph-presentation'
 import type { ArrangementFilter } from './utils/graph-presentation'
 import { sharingAvailable } from './utils/sharing'
@@ -40,7 +40,7 @@ export default defineComponent({
     },
   },
   methods: {
-    t, dateTime, diagnostic,
+    t, dateTime, diagnostic, label,
     waiting(graph: WorkflowDefinition) { return waitingDecisions(graph, this.view.gates) },
     meta(graph: WorkflowDefinition): string {
       const schedule = graph.paused && graph.enabled ? t('paused') : !graph.schedule || !graph.enabled ? t('Manual only') : graph.schedule.kind === 'interval' && graph.schedule.seconds === 3600 ? t('hourly') : graph.schedule.kind === 'daily' ? t('daily at {time}', { time: graph.schedule.time }) : t('scheduled')
@@ -114,8 +114,9 @@ export default defineComponent({
       </h3>
       <div v-if="section.pods.length" class="graph-cards">
         <button v-for="pod in section.pods" :key="pod.id" class="graph-card" @click="$emit('openPod', pod.id)">
-          <small>{{ t('Pod') }}</small>
+          <small>{{ t('Pod') }} · {{ label(pod.lifecycle) }}</small>
           <strong>{{ pod.name }}</strong>
+          <span v-if="pod.description">{{ pod.description }}</span>
           <span v-if="view.contracts?.[pod.id]" class="muted">{{ view.contracts[pod.id]!.summary }}</span>
         </button>
       </div>

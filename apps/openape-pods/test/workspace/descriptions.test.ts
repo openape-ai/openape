@@ -8,6 +8,9 @@ import { afterAll, afterEach, expect, it } from 'vitest'
 import { PodDatabase } from '../../src/worker/storage/database'
 import { PodDescriptions } from '../../src/worker/master/descriptions'
 import { MasterConversations } from '../../src/worker/master/conversations'
+import { descriptionSummary } from '../../src/contracts/description'
+import { parseWorkspace } from '../../src/contracts/control'
+import { listedPods } from '../../src/worker/workspace/pod-list'
 
 const root = mkdtempSync(join(tmpdir(), 'pod-descriptions-'))
 const store = new PodDatabase(root)
@@ -97,4 +100,33 @@ it('does not overwrite a manual edit when a legacy summary finishes later', asyn
   expect(descriptions.view(pod.id)).toMatchObject({ text: 'Owner purpose', revision: 1 })
   descriptions.request(pod.id, true); descriptions.start(); await descriptions.idle()
   expect(descriptions.view(pod.id)).toMatchObject({ text: 'Owner purpose', revision: 1 })
+})
+
+it('shortens a description to its first full sentence for lists', () => {
+  expect(descriptionSummary('Checks open pull requests every 15 minutes. Reports changes by Telegram.')).toBe('Checks open pull requests every 15 minutes.')
+  expect(descriptionSummary('  Monitors\n the   board  ')).toBe('Monitors the board')
+  expect(descriptionSummary('')).toBe('')
+})
+
+it('does not stop at an abbreviation and caps long text at a word boundary', () => {
+  expect(descriptionSummary('Prüft z. B. eingehende Rechnungen und legt sie im Ordner ab. Läuft täglich.')).toBe('Prüft z. B. eingehende Rechnungen und legt sie im Ordner ab.')
+  const capped = descriptionSummary('word '.repeat(80))
+  expect(capped.length).toBeLessThanOrEqual(160)
+  expect(capped).toMatch(/word…$/)
+})
+
+it('lists each Pod with the summary of its saved description', () => {
+  const pod = store.createPod({ name: 'Listed' }); const silent = store.createPod({ name: 'Silent' })
+  new WorkspaceDetails(store, new ResourceRegistry(store, () => {})).execute({ type: 'describe', podId: pod.id, revision: 0, text: 'Watches the task board and reports changes by Telegram. Runs every five minutes.' })
+  const listed = listedPods(store)
+  expect(listed.find(item => item.id === pod.id)?.description).toBe('Watches the task board and reports changes by Telegram.')
+  expect(listed.find(item => item.id === silent.id)).not.toHaveProperty('description')
+})
+
+it('accepts a listed summary and rejects an oversized or non-text one', () => {
+  const pod = { id: crypto.randomUUID(), name: 'Listed', revision: 1, lifecycle: 'active' as const, activeScript: null }
+  const state = (description: unknown) => ({ pods: [{ ...pod, description }], organization: { revision: 1, groups: [] } })
+  expect(parseWorkspace(state('Watches the board.')).pods[0]!.description).toBe('Watches the board.')
+  expect(() => parseWorkspace(state('x'.repeat(161)))).toThrow('Invalid pod description')
+  expect(() => parseWorkspace(state(7))).toThrow('Invalid pod description')
 })

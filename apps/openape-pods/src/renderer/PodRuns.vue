@@ -1,7 +1,7 @@
 <script lang="ts">
 import { usePodAccess } from './pod-access'
 import { t, diagnostic, label, dateTime } from './i18n'
-import { runSteps, runHeadline, runFailure, duration } from './run-activity'
+import { runSteps, runHeadline, runFailure, runResult, duration } from './run-activity'
 import RunApproval from './RunApproval.vue'
 import { defineComponent } from 'vue'
 import type { StoredPod } from '../contracts/control'
@@ -33,7 +33,7 @@ export default defineComponent({
   },
   beforeUnmount() { this.closed = true; if (this.timer) clearTimeout(this.timer) },
   methods: {
-    t, diagnostic, label, dateTime, runHeadline, runFailure,
+    t, diagnostic, label, dateTime, runHeadline, runFailure, runResult,
     scheduleRefresh() {
       if (this.closed) return
       this.timer = setTimeout(async () => {
@@ -88,8 +88,8 @@ export default defineComponent({
           <p v-else-if="selectedRun.state === 'running'">
             {{ diagnostic(currentOperation) }}
           </p>
-          <p v-else-if="selectedRun.summary && !['Run failed', 'Run cancelled', 'Run completed'].includes(selectedRun.summary)">
-            {{ label(selectedRun.summary) }}
+          <p v-else-if="runResult(selectedRun)">
+            {{ label(runResult(selectedRun)) }}
           </p>
           <button v-if="failure?.action" class="secondary" @click="$emit('navigate', failure.action)">
             {{ failure.action === 'permissions' ? t('Review permissions') : failure.action === 'identity' ? t('Open pod identity') : t('Open App settings') }}

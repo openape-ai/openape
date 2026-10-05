@@ -25,6 +25,7 @@ import GraphView from '../../src/renderer/GraphView.vue'
 import ItemTrace from '../../src/renderer/ItemTrace.vue'
 import { applyLanguage } from '../../src/renderer/i18n'
 import { channelNames, contractScript, declaredChannels, newGraph, withMember } from '../../src/renderer/utils/graph-create'
+import { choiceFields } from '../../src/renderer/utils/choice-payload'
 import { parseGraphContract } from '../../src/contracts/graphs'
 
 afterEach(() => applyLanguage('en'))
@@ -186,12 +187,18 @@ describe('overview', () => {
     const wrapper = mount(GraphOverview, { props: { view, pods, organization } })
     expect(wrapper.find('.graph-overview-heading p').text()).toBe('Networks connect Pods. Workflows define ordered processes.')
     expect(wrapper.findAll('.graph-group').map(section => section.find('h2').text())).toEqual(['Delta Mind', 'Ungrouped'])
-    expect(wrapper.findAll('.graph-card').map(card => card.text())).toEqual(['Bounded graph · Pods: 3 · hourlyEmail managementChoices waiting: 1Approvals waiting: 3', 'PodPR monitor'])
+    expect(wrapper.findAll('.graph-card').map(card => card.text())).toEqual(['Bounded graph · Pods: 3 · hourlyEmail managementChoices waiting: 1Approvals waiting: 3', 'Pod · pausedPR monitor'])
     await wrapper.findAll('.graph-card')[0]!.trigger('click'); await wrapper.findAll('.graph-card')[1]!.trigger('click')
     await button(wrapper, 'Create network').trigger('click'); await button(wrapper, '+ Create network in Delta Mind').trigger('click')
     expect(wrapper.emitted('select')).toEqual([[graphId]])
     expect(wrapper.emitted('openPod')).toEqual([[single]])
     expect(wrapper.emitted('create')).toEqual([[null], [group]])
+  })
+  it('tells what a standalone Pod does and whether it runs', () => {
+    const described = pods.map(pod => pod.id === single ? { ...pod, lifecycle: 'active' as const, description: 'Reports changes to open pull requests by Telegram.' } : pod)
+    const card = mount(GraphOverview, { props: { view, pods: described, organization } }).findAll('.graph-card')[1]!
+    expect(card.text()).toContain('Pod · active')
+    expect(card.text()).toContain('Reports changes to open pull requests by Telegram.')
   })
   it('names a sequence workflow, a manual graph and hides creation in a read-only view', () => {
     const sequence = { ...definition, id: id(5), name: 'Morgenbriefing', mode: 'sequence' as const, groupId: null, enabled: false, gates: [], channels: [] }
@@ -596,6 +603,58 @@ describe('persistent network owner controls', () => {
     expect(wrapper.get('[role=status]').text()).toContain('bounded central publication')
     expect(wrapper.findAll('button').find(item => item.text().startsWith('Persistent network'))!.attributes('disabled')).toBeDefined()
     expect(networks).not.toHaveBeenCalled(); wrapper.unmount()
+  })
+})
+
+describe('choice cards', () => {
+  const mail = JSON.stringify({ account: 'owner@example.com', category: 'newsletter', confidence: 0.78, date: '2026-10-05T10:50:29Z', evidence: 'a'.repeat(64), knownContact: false, sender: 'news@example.com', subject: 'October product news' })
+  function pending(payload: string, truncated = false) {
+    const f = operationalFixture()
+    f.view.choices = [{ networkId: f.networkId, revision: 1, eventId: f.id(70), caseId: f.id(71), gate: 'review', title: 'Review uncertain mail', payload, truncated, options: [{ key: 'keep', title: 'Keep for review' }] }]
+    const networks = vi.fn(async () => structuredClone(f.view))
+    installWorkspace({ networks })
+    return { f, networks, wrapper: mount(NetworkDetail, { props: { network: f.view.networks[0]!, view: f.view, pods: f.pods } }) }
+  }
+  async function card(wrapper: ReturnType<typeof pending>['wrapper']) {
+    await flushPromises(); await button(wrapper, 'Decisions and failures').trigger('click'); await flushPromises()
+    return wrapper.findAll('article').find(article => article.text().includes('Review uncertain mail'))!
+  }
+
+  it('reads the headline and plain fields and leaves digests to the raw view', () => {
+    expect(choiceFields(mail)).toEqual({ headline: 'October product news', fields: [['account', 'owner@example.com'], ['category', 'newsletter'], ['confidence', '0.78'], ['date', '2026-10-05T10:50:29Z'], ['knownContact', 'false'], ['sender', 'news@example.com']] })
+  })
+  it('keeps the raw view for anything that is not a complete JSON object with plain fields', () => {
+    for (const payload of ['', 'plain text', '[1,2]', '7', 'null', '{"subject":"cut', '{}', '{"nested":{"a":1}}']) expect(choiceFields(payload)).toBeNull()
+  })
+  it('limits a card to eight fields and shortens long values', () => {
+    const many = choiceFields(JSON.stringify(Object.fromEntries(Array.from({ length: 12 }, (_, index) => [`field${index}`, 'x'.repeat(300)]))))!
+    expect(many.fields).toHaveLength(8)
+    expect(many.fields[0]![1]).toHaveLength(200)
+    expect(many.fields[0]![1].endsWith('…')).toBe(true)
+  })
+  it('lets the owner decide from readable fields and keeps the raw payload under technical details', async () => {
+    const { f, networks, wrapper } = pending(mail)
+    try {
+      const article = await card(wrapper)
+      expect(article.get('.choice-headline').text()).toBe('October product news')
+      expect(article.get('dl').text()).toContain('sendernews@example.com')
+      expect(article.get('dl').text()).not.toContain('T10:50:29Z')
+      expect(article.findAll('pre')).toHaveLength(1)
+      expect(article.get('details').text()).toBe(`Technical details${mail}`)
+      await button(wrapper, 'Keep for review').trigger('click'); await flushPromises()
+      expect(networks).toHaveBeenCalledWith({ type: 'choose', id: f.networkId, revision: 1, eventId: f.id(70), gate: 'review', option: 'keep' })
+    }
+    finally { wrapper.unmount() }
+  })
+  it('shows a truncated payload unchanged', async () => {
+    const { wrapper } = pending('{"subject":"October product ne', true)
+    try {
+      const article = await card(wrapper)
+      expect(article.get('pre').text()).toBe('{"subject":"October product ne')
+      expect(article.find('details').exists()).toBe(false)
+      expect(article.text()).toContain('Payload preview is truncated')
+    }
+    finally { wrapper.unmount() }
   })
 })
 
