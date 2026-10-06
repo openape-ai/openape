@@ -257,6 +257,12 @@ async function start(): Promise<void> {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     if (!window) throw new Error('Owner window is unavailable')
     const command = parseProgramCommand(value)
+    if (command.type === 'openFolder') {
+      // The owner's editor opens the Pod folder (home and workspace); no Pod process is involved.
+      const failure = await shell.openPath(join(root, 'pods', command.podId))
+      if (failure) throw new Error('Could not open the Pod folder')
+      return worker.resources({ type: 'list', podId: command.podId })
+    }
     if (command.type === 'openShell') {
       const launcher = await worker.program(command)
       if (typeof launcher !== 'string') throw new Error('Invalid pod terminal launcher')
