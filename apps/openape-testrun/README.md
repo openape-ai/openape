@@ -2,6 +2,14 @@
 
 OpenApe Reports stores client-authored private documents, shared test reports and compatible private structured briefings. Package, image, database and CLI identity remain `openape-testrun` / `testrun.openape.ai`. `report.openape.ai` is the general reading entry point; `ape-testruns` and old `/r/:slug?v=N` links are unchanged.
 
+## Reading surface
+
+`/reports` is one library of HTML documents and earlier uploads (search with `/`,
+categories, tags, a filter sheet) backed by `GET /api/library`; `/reports/removed`
+restores removed reports privately. `/d/ID` and `/r/SLUG` give the report the whole
+window below a 48 px bar, with a Details drawer. There is no browser editor; see
+[reading and finding reports](../../docs/operations/single-html-reports.md#reading-and-finding-reports--issue-1433).
+
 ## Generic client documents
 
 Enable new publishing with `NUXT_DOCUMENT_PUBLISHING_ENABLED=true` after the migration

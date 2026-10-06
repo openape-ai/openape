@@ -30,6 +30,32 @@ retained active HTML under publisher responsibility. Browser CSP is defense in d
 not a promise that document data cannot leave. Do not remove the visible trust notice.
 External images are provider-dependent, and exported files are outside hosted headers.
 
+## Reading and finding reports — issue 1433
+
+Reports is a read-only application ([issue 1433](https://repos.openape.ai/patrick/monorepo/issues/1433),
+[plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M48ZTNG1PGJZ65AYX4QDHNHN)).
+An opened report gets the page: one 48 px bar and the document filling the rest. The
+trust decision appears on the sealed document area and is still required per version;
+versions, retention, download, publisher data and technical facts open in a Details
+drawer. Earlier uploads (`/r/SLUG`) render in the same frame without the decision.
+
+There is no browser editor. Plans change through `ape-plans edit ID --body-from-file
+FILE --expected-version N`; the Plans API keeps returning 428 without and 409 with a
+stale expected version. Old `/d/ID/edit` links redirect permanently to `/d/ID` (an
+exact `?v=N` is kept).
+
+`GET /api/library` (scope `reports:read`) is the one merged, keyset-paginated feed of
+readable HTML documents and the caller's earlier uploads, ordered by update time or
+title. It uses the access predicates of `GET /api/documents` and `GET /api/reports`;
+filters an upload cannot satisfy (tags, team, publisher data, named/team/public access)
+leave uploads out. The first page carries facets: filtered total, category counts and
+the most used tags. Recently removed lists `GET /api/documents?deleted=true` with each
+report's removal time and purge time; restore stays owner-only and private.
+
+Publisher type is shown only where data records it: earlier uploads store `human` or
+`agent`. HTML versions store only the publishing actor, so the library has no
+publisher-type filter yet ([issue 1434](https://repos.openape.ai/patrick/monorepo/issues/1434)).
+
 ## Controls and recovery
 
 - `NUXT_HTML_PUBLISHING_ENABLED`: schema-2 creation and metadata/content updates;
