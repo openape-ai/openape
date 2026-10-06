@@ -18,6 +18,8 @@ export interface MapApproval { grantId: string, title: string }
 export interface MapPod {
   id: string
   name: string
+  revision: number
+  script: string | null
   description: string | null
   group: string | null
   groupId: string | null
@@ -39,6 +41,7 @@ export interface MapGateOption { key: string, title: string, channel: string }
 export interface MapGate { key: string, kind: 'choose' | 'approve', title: string, takes: string, options: MapGateOption[], open: number, batches: Record<string, number> }
 export interface MapCollection {
   id: string
+  revision: number
   kind: 'network' | 'chain'
   bounded: boolean
   name: string

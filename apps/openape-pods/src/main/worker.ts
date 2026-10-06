@@ -233,6 +233,7 @@ export class FixtureWorker {
     await this.setupReady
     if (!this.programs) throw new Error('Program service is not ready')
     if (command.type === 'launchStatus') return this.programs.launchStatus(command.podId)
+    if (command.type === 'openFolder') throw new Error('The Pod folder opens from the owner window')
     if (command.type === 'openShell') {
       const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
       return this.programs.openShell(command.podId, { executable: process.execPath, cli: app.isPackaged ? join(process.resourcesPath, 'apes/ape-shell.mjs') : join(dist, 'vendor/apes/ape-shell.mjs'), client: join(dist, 'runtime/shell-client.mjs') })

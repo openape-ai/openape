@@ -81,7 +81,7 @@ describe('Automatisierungen', () => {
     await button('Linde').trigger('click')
     expect(wrapper!.findAll('tbody tr').map(row => row.find('td').text())).toEqual(['Linde · Server report', 'Linde · Portal development and systems'])
     await wrapper!.findAll('tbody tr')[0]!.trigger('click')
-    expect(wrapper!.emitted('open')).toEqual([[view.collections.find(collection => collection.name === 'Linde · Server report')!.id]])
+    expect(wrapper!.find('.automation-detail .dhead b').text()).toBe('Linde · Server report')
   })
 
   it('describes a pinned node in the info panel and opens its details', async () => {
@@ -99,7 +99,9 @@ describe('Automatisierungen', () => {
     expect(info).toContain('liest: TypeSafe / Jev (10), delta (10)')
     expect(info).toContain('schreibt: delta (10)')
     await button('Details öffnen').trigger('click')
-    expect(wrapper!.emitted('open')).toEqual([[pod('Triage').id]])
+    expect(wrapper!.find('.automation-detail .dhead b').text()).toBe('Triage')
+    await wrapper!.find('.automation-detail .x').trigger('click')
+    expect(wrapper!.find('.automation-detail').exists()).toBe(false)
     shell.pin('app:o365-cli:phofmann@delta-mind.at'); await flushPromises()
     expect(wrapper!.find('.automation-info').text()).toContain('phofmann@delta-mind.at')
     expect(wrapper!.find('.automation-info').text()).toContain('o365-cli · installiert')

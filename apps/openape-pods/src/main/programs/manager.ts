@@ -81,7 +81,7 @@ export class ProgramManager {
     finally { await this.dispatch({ type: 'release', podId, sessionId }) }
   }
 
-  async terminal(command: Exclude<ProgramCommand, { type: 'network' } | { type: 'openShell' } | { type: 'add' } | { type: 'replace' | 'launch' | 'launchStatus' } | { type: 'importState' } | { type: 'prepare' }>): Promise<TerminalView> {
+  async terminal(command: Exclude<ProgramCommand, { type: 'network' } | { type: 'openShell' } | { type: 'openFolder' } | { type: 'add' } | { type: 'replace' | 'launch' | 'launchStatus' } | { type: 'importState' } | { type: 'prepare' }>): Promise<TerminalView> {
     if (command.type === 'grant') throw new Error('Permission approval requires the owner window')
     if (command.type === 'start') {
       for (const [id, session] of this.sessions) {
