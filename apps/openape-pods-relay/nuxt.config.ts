@@ -18,6 +18,11 @@ export default defineNuxtConfig({
     relayFixture: false,
     relayAppleTeam: 'Q994DN23WB',
     relayAppleBundle: 'ai.openape.pods',
+    relayApnsEnabled: false,
+    relayApnsKeyId: '',
+    relayApnsKey: '',
+    relayApnsHost: 'api.push.apple.com',
+    relayApnsSandboxHost: 'api.sandbox.push.apple.com',
   },
   nitro: { preset: 'node-server', experimental: { websocket: true } },
 })

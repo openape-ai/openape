@@ -30,6 +30,31 @@ Compose fixes the public origin, database location and fixture mode. Never enabl
 
 The iOS application uses bundle `ai.openape.pods`, team `Q994DN23WB`, iOS/iPadOS 18 and both `applinks` and `webcredentials` association services. Signed Simulator login-layout checks do not establish the HTTPS authentication handoff on a physical device. Apple distribution signing, upload, beta review and store review remain separate gates.
 
+## Notifications (APNs)
+
+The relay sends content-free APNs hints only when `NUXT_RELAY_APNS_ENABLED=true` and an APNs authentication key is configured. Request the `.p8` key, its key ID and the team ID through secrets.openape.ai, never through chat or the plan. Environment:
+
+```dotenv
+NUXT_RELAY_APNS_ENABLED=false
+NUXT_RELAY_APNS_KEY_ID=
+NUXT_RELAY_APNS_KEY=-----BEGIN PRIVATE KEY-----...-----END PRIVATE KEY-----
+```
+
+`NUXT_RELAY_APPLE_TEAM`/`NUXT_RELAY_APPLE_BUNDLE` already name the topic (`ai.openape.pods`). Development builds register `development` tokens and are sent through `api.sandbox.push.apple.com`; TestFlight and App Store builds use `production`. Health reports `notifications: true` when the sender is enabled. Disable notifications independently of the relay by setting the flag to `false` and recreating `pods-relay`; registrations survive and resume when it is re-enabled. Audit rows `push_registered`, `push_sent`, `push_failed`, `push_unregistered` and `push_token_unregistered` carry IDs and times only.
+
+## TestFlight and distribution
+
+`pnpm --filter @openape/pods-ios archive` archives the Release build for `generic/platform=iOS` with automatic signing for team `Q994DN23WB`, exports it with `ExportOptions.plist` (`app-store-connect`) and writes `.artifacts/distribution/receipt-<build>.json` with the archived head. It uploads only when `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_PATH` and `PODS_UPLOAD=1` are set; otherwise the owner uploads the exported `.ipa` through Xcode Organizer or Transporter. App Store Connect app record, bundle identifier capabilities (Associated Domains, Push Notifications), Beta App Review and tester groups are owner actions in the Apple workflow. Desktop Developer ID/notarization assets do not establish iOS signing.
+
+Tester checklist per build (record build number, relay image, desktop version and device OS):
+
+1. Sign in with the pilot owner, pair the desktop with the matching code, open an existing Pod and confirm the transcript and run history match the desktop.
+2. Lock and unlock the device: the session survives, cached content stays readable while offline ("Offline · cached content"), and a run cannot be started offline.
+3. Enable notifications in Devices, send a message from the desktop while the app is in the background, and confirm the notification names no content and opens the Pod; confirm the same update appears without a notification when the app is foregrounded.
+4. Start a run from the phone, approve it at the identity provider, and confirm the identical result on both devices; cancel a running run and confirm it ends only after the desktop reports it.
+5. Revoke the device from the desktop and from another device; confirm the refusal text and that content already shown is still visible until sign-out.
+6. Sign out: keys, cache and drafts are gone; signing in again requires pairing.
+
 ## Desktop compatibility and identity-preserving recovery
 
 Before installing a desktop update, compare its workspace format, network tables
