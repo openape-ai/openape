@@ -9,13 +9,13 @@
   "paused": 6,
   "degraded": [
    {
-    "podId": "9d307901-85ff-41e6-a96b-a7f918142c1c",
+    "podId": "541572c7-192e-4e4a-92df-5e70e77c390a",
     "reason": "completedWithGaps"
    }
   ],
   "decisions": [
    {
-    "networkId": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+    "networkId": "e045674b-4618-4035-860e-9050702ecb11",
     "gate": "uncertain-review",
     "title": "Review uncertain mail",
     "kind": "choose",
@@ -136,11 +136,13 @@
  ],
  "pods": [
   {
-   "id": "29107815-e7ef-4473-a1a9-5b2e2f348067",
+   "id": "0942c944-7ba7-4cec-ab45-dfdf0736abd0",
    "name": "Intake",
+   "revision": 1,
+   "script": "4b961f217b3627603c44543d0ca3463dbe86726b03bf9de638afe4dfdb9249d4",
    "description": null,
    "group": "Delta Mind",
-   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "groupId": "341bad6b-6360-4a19-a934-63870e0bb222",
    "lifecycle": "active",
    "draft": false,
    "kind": "source",
@@ -180,7 +182,7 @@
     "summary": "Read 6 sampled messages and emitted 0 changed provider versions. No mailbox writes."
    },
    "runs": 10,
-   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "collection": "e045674b-4618-4035-860e-9050702ecb11",
    "queue": {
     "blocked": 0,
     "error": null
@@ -188,11 +190,13 @@
    "approvals": []
   },
   {
-   "id": "355be341-19c2-4d47-8d11-1d61a5972ed9",
+   "id": "365c2dcd-2286-4724-993f-23898212370d",
    "name": "Sent mail",
+   "revision": 1,
+   "script": "4736464822f7709ae4006eed8649e67a0c0aed48276736d0723ef396da5b6aef",
    "description": null,
    "group": "Delta Mind",
-   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "groupId": "341bad6b-6360-4a19-a934-63870e0bb222",
    "lifecycle": "active",
    "draft": false,
    "kind": "code",
@@ -210,7 +214,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "collection": "e045674b-4618-4035-860e-9050702ecb11",
    "queue": {
     "blocked": 0,
     "error": null
@@ -218,11 +222,13 @@
    "approvals": []
   },
   {
-   "id": "e83e19a4-7958-4bd4-b9fe-e319f4ab11ec",
+   "id": "924cac54-1285-4ee5-95bf-2b65734a7f02",
    "name": "List filter",
+   "revision": 1,
+   "script": "b884c4b4712b7aa6f9c8ce310b4e965ea2d6cdf57027c7dd55c06575adc9de25",
    "description": null,
    "group": "Delta Mind",
-   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "groupId": "341bad6b-6360-4a19-a934-63870e0bb222",
    "lifecycle": "active",
    "draft": false,
    "kind": "code",
@@ -244,7 +250,7 @@
     "summary": "List filter completed"
    },
    "runs": 10,
-   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "collection": "e045674b-4618-4035-860e-9050702ecb11",
    "queue": {
     "blocked": 0,
     "error": null
@@ -252,11 +258,13 @@
    "approvals": []
   },
   {
-   "id": "ae761725-8024-4b9f-8164-96a525db71c6",
+   "id": "a7bbc888-38ac-4cd3-a5e1-bb748aa05106",
    "name": "Triage",
+   "revision": 1,
+   "script": "e55efd9ed0a75f4519b64d6540636d0788aa6762595e52cda04784bcb3b74d56",
    "description": null,
    "group": "Delta Mind",
-   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "groupId": "341bad6b-6360-4a19-a934-63870e0bb222",
    "lifecycle": "active",
    "draft": false,
    "kind": "decision",
@@ -291,7 +299,7 @@
     "summary": "Triage completed"
    },
    "runs": 10,
-   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "collection": "e045674b-4618-4035-860e-9050702ecb11",
    "queue": {
     "blocked": 0,
     "error": null
@@ -299,11 +307,13 @@
    "approvals": []
   },
   {
-   "id": "90bad739-f5c9-4188-af53-02cbffafc7a5",
+   "id": "6c068c42-0083-45ef-9909-3c4bb55830c8",
    "name": "Categorisation",
+   "revision": 1,
+   "script": "e822203e7eb85012d3231f572b8f4e87f2e71789f95687d28383c95d0da77a0b",
    "description": null,
    "group": "Delta Mind",
-   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "groupId": "341bad6b-6360-4a19-a934-63870e0bb222",
    "lifecycle": "active",
    "draft": false,
    "kind": "code",
@@ -329,7 +339,7 @@
     "summary": "Categorisation completed"
    },
    "runs": 10,
-   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "collection": "e045674b-4618-4035-860e-9050702ecb11",
    "queue": {
     "blocked": 0,
     "error": null
@@ -337,11 +347,13 @@
    "approvals": []
   },
   {
-   "id": "e9682b42-ce4b-4008-842f-426325cecf73",
+   "id": "e90942de-8a12-47e5-89f9-64dbb346de7b",
    "name": "Review",
+   "revision": 1,
+   "script": "88c8242b6a78d0f2d779dc06698c2ab827314a4beace7226f031136cd0d9da8b",
    "description": null,
    "group": "Delta Mind",
-   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "groupId": "341bad6b-6360-4a19-a934-63870e0bb222",
    "lifecycle": "active",
    "draft": false,
    "kind": "code",
@@ -359,7 +371,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "collection": "e045674b-4618-4035-860e-9050702ecb11",
    "queue": {
     "blocked": 0,
     "error": null
@@ -367,11 +379,13 @@
    "approvals": []
   },
   {
-   "id": "e9e01cad-2122-4ca2-8a99-05432a8ff53d",
+   "id": "73bb6f46-1e24-41c0-ab40-4064ef41f85b",
    "name": "Newsletter batch",
+   "revision": 1,
+   "script": "1a97b0f7bf20a75c84be86fa7bd5555276075971e05101e0d74256d601c29fa6",
    "description": null,
    "group": "Delta Mind",
-   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "groupId": "341bad6b-6360-4a19-a934-63870e0bb222",
    "lifecycle": "active",
    "draft": false,
    "kind": "code",
@@ -389,7 +403,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "collection": "e045674b-4618-4035-860e-9050702ecb11",
    "queue": {
     "blocked": 0,
     "error": null
@@ -397,11 +411,13 @@
    "approvals": []
   },
   {
-   "id": "ce23164e-b01c-4d65-8ccc-dba5a9343785",
+   "id": "98c08182-b9bf-4b37-9baa-2590ce2d98fc",
    "name": "Invoice preview",
+   "revision": 1,
+   "script": "c41a269fd4c8259b69c16547988251526bc0cacfd38a4462b77c58c635d1508a",
    "description": null,
    "group": "Delta Mind",
-   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "groupId": "341bad6b-6360-4a19-a934-63870e0bb222",
    "lifecycle": "active",
    "draft": false,
    "kind": "code",
@@ -419,7 +435,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "collection": "e045674b-4618-4035-860e-9050702ecb11",
    "queue": {
     "blocked": 0,
     "error": null
@@ -427,11 +443,13 @@
    "approvals": []
   },
   {
-   "id": "9f9de6a8-5cb2-4afe-8ab1-0c617cd8defc",
+   "id": "12402f11-1fa8-41f9-84d1-7891dc80e145",
    "name": "Reply drafts",
+   "revision": 1,
+   "script": "46ce2492897324831aa62e4c8e4aa39569c6ce03ee33373bf78f2691eaf0989f",
    "description": null,
    "group": "Delta Mind",
-   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "groupId": "341bad6b-6360-4a19-a934-63870e0bb222",
    "lifecycle": "active",
    "draft": false,
    "kind": "code",
@@ -449,7 +467,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "collection": "e045674b-4618-4035-860e-9050702ecb11",
    "queue": {
     "blocked": 0,
     "error": null
@@ -457,11 +475,13 @@
    "approvals": []
   },
   {
-   "id": "7e8cb062-1560-4fa7-854b-78ad1f5afe7c",
+   "id": "9a2e62de-66bb-4f60-b94b-cb0f0749fdcf",
    "name": "Archive preview",
+   "revision": 1,
+   "script": "d9f320c73c5a29734c498f20c89bc22084770aab5e59413d326c44e2c8bbddc0",
    "description": null,
    "group": "Delta Mind",
-   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "groupId": "341bad6b-6360-4a19-a934-63870e0bb222",
    "lifecycle": "active",
    "draft": false,
    "kind": "effect",
@@ -484,7 +504,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "collection": "e045674b-4618-4035-860e-9050702ecb11",
    "queue": {
     "blocked": 0,
     "error": null
@@ -492,11 +512,13 @@
    "approvals": []
   },
   {
-   "id": "c706ec78-4509-4062-bc50-4ea412d331d8",
+   "id": "1909bdfc-3f22-400f-a512-4aab3c760c9c",
    "name": "Memory",
+   "revision": 1,
+   "script": "0a6f97fd6478facbd69d386efc6f17bf155b79db074b53d4a36eed2aa9007225",
    "description": null,
    "group": "Delta Mind",
-   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "groupId": "341bad6b-6360-4a19-a934-63870e0bb222",
    "lifecycle": "active",
    "draft": false,
    "kind": "code",
@@ -517,7 +539,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "collection": "e045674b-4618-4035-860e-9050702ecb11",
    "queue": {
     "blocked": 0,
     "error": null
@@ -525,8 +547,10 @@
    "approvals": []
   },
   {
-   "id": "b306b2c6-0526-4e26-9b86-cc0f8edec89a",
+   "id": "608175ae-0e19-427b-86fc-b961063f307e",
    "name": "Mail-Prüfung · Morgenbriefing",
+   "revision": 1,
+   "script": "03ed1a3089f4d03ec065e76853f644f557bfb47f70cfde7540641fe6a2202f72",
    "description": null,
    "group": null,
    "groupId": null,
@@ -566,7 +590,7 @@
     "summary": "No pending mail archive decisions"
    },
    "runs": 50,
-   "collection": "1ff4064f-a156-4bd5-a7d6-96f63e5f5508",
+   "collection": "c01e2456-f281-4f70-9971-fa069f136d65",
    "queue": {
     "blocked": 0,
     "error": null
@@ -574,8 +598,10 @@
    "approvals": []
   },
   {
-   "id": "a011a863-5f64-4008-aaef-f0df877b5130",
+   "id": "539e6b38-4839-410f-9214-23795ba1ce83",
    "name": "Morgenbriefing · Kalender und Issues",
+   "revision": 1,
+   "script": "03ed1a3089f4d03ec065e76853f644f557bfb47f70cfde7540641fe6a2202f72",
    "description": null,
    "group": null,
    "groupId": null,
@@ -609,7 +635,7 @@
     "summary": "Calendar and issue sources collected for 2026-10-06"
    },
    "runs": 1,
-   "collection": "1ff4064f-a156-4bd5-a7d6-96f63e5f5508",
+   "collection": "c01e2456-f281-4f70-9971-fa069f136d65",
    "queue": {
     "blocked": 0,
     "error": null
@@ -617,8 +643,10 @@
    "approvals": []
   },
   {
-   "id": "33e785ad-826d-42e7-bdba-e454d916e919",
+   "id": "d952b803-eab2-40dd-9e64-7132b3def073",
    "name": "Morgenbriefing · Redaktion",
+   "revision": 1,
+   "script": "03ed1a3089f4d03ec065e76853f644f557bfb47f70cfde7540641fe6a2202f72",
    "description": null,
    "group": null,
    "groupId": null,
@@ -646,7 +674,7 @@
     "summary": "German editorial report ready for 2026-10-06"
    },
    "runs": 1,
-   "collection": "1ff4064f-a156-4bd5-a7d6-96f63e5f5508",
+   "collection": "c01e2456-f281-4f70-9971-fa069f136d65",
    "queue": {
     "blocked": 0,
     "error": null
@@ -654,8 +682,10 @@
    "approvals": []
   },
   {
-   "id": "9a49e4e7-c4a8-40be-8995-d578f8e941e8",
+   "id": "109a4739-8ef8-4bf3-8b50-1ae5663135f6",
    "name": "Morgenbriefing · Calendar-Bot",
+   "revision": 1,
+   "script": "03ed1a3089f4d03ec065e76853f644f557bfb47f70cfde7540641fe6a2202f72",
    "description": null,
    "group": null,
    "groupId": null,
@@ -704,7 +734,7 @@
     "summary": "Telegram delivery confirmed for 2026-10-06; message 245"
    },
    "runs": 1,
-   "collection": "1ff4064f-a156-4bd5-a7d6-96f63e5f5508",
+   "collection": "c01e2456-f281-4f70-9971-fa069f136d65",
    "queue": {
     "blocked": 0,
     "error": null
@@ -712,11 +742,13 @@
    "approvals": []
   },
   {
-   "id": "9d307901-85ff-41e6-a96b-a7f918142c1c",
+   "id": "541572c7-192e-4e4a-92df-5e70e77c390a",
    "name": "IURIO PR monitor",
+   "revision": 1,
+   "script": "03ed1a3089f4d03ec065e76853f644f557bfb47f70cfde7540641fe6a2202f72",
    "description": null,
    "group": "iurio",
-   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "groupId": "49c8c27f-d6ae-4443-81e4-b1b651da4ec7",
    "lifecycle": "active",
    "draft": false,
    "kind": "effect",
@@ -780,11 +812,13 @@
    ]
   },
   {
-   "id": "c7a17149-c76a-4ad8-808f-99731505514d",
+   "id": "9b19b664-452f-48a1-9d32-f9c544dc3a4f",
    "name": "IURIO Task monitor",
+   "revision": 1,
+   "script": "03ed1a3089f4d03ec065e76853f644f557bfb47f70cfde7540641fe6a2202f72",
    "description": null,
    "group": "iurio",
-   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "groupId": "49c8c27f-d6ae-4443-81e4-b1b651da4ec7",
    "lifecycle": "active",
    "draft": false,
    "kind": "effect",
@@ -837,8 +871,10 @@
    "approvals": []
   },
   {
-   "id": "dd261fdb-87d3-46d0-b033-1e8b521a54d7",
+   "id": "93fe02fb-0c7e-499b-8cee-ae72cab0c8b2",
    "name": "zaz Service-Agent",
+   "revision": 1,
+   "script": "03ed1a3089f4d03ec065e76853f644f557bfb47f70cfde7540641fe6a2202f72",
    "description": null,
    "group": null,
    "groupId": null,
@@ -888,8 +924,10 @@
    "approvals": []
   },
   {
-   "id": "0937607d-88e6-4ec5-b641-c8719d6104e4",
+   "id": "b2da8b14-6797-4e2f-a8f5-74bd294c6980",
    "name": "Mail-Kurzbericht",
+   "revision": 1,
+   "script": "03ed1a3089f4d03ec065e76853f644f557bfb47f70cfde7540641fe6a2202f72",
    "description": null,
    "group": null,
    "groupId": null,
@@ -920,8 +958,10 @@
    "approvals": []
   },
   {
-   "id": "adce864e-e4d8-4154-8877-50b0601ea150",
+   "id": "1fc74793-58f9-488e-8004-c6e1db5fdf21",
    "name": "Daily action website",
+   "revision": 1,
+   "script": null,
    "description": null,
    "group": null,
    "groupId": null,
@@ -946,8 +986,10 @@
    "approvals": []
   },
   {
-   "id": "2482e5ec-7ea4-43fc-91f5-48fa074d88fb",
+   "id": "d0600b94-7bdd-4b82-96f0-9bcb8c4e5443",
    "name": "Archived research",
+   "revision": 1,
+   "script": "03ed1a3089f4d03ec065e76853f644f557bfb47f70cfde7540641fe6a2202f72",
    "description": null,
    "group": null,
    "groupId": null,
@@ -972,11 +1014,13 @@
    "approvals": []
   },
   {
-   "id": "7c708f3e-1bf4-4077-8ec8-4ca0cffd3903",
+   "id": "959469cf-798d-492c-bfd9-4a78ab4a5bbe",
    "name": "IURIO · Intake",
+   "revision": 1,
+   "script": "12c37c6da0966d0411421ad2ad7ac478e14df7fd78395881dbd3fd22201b9372",
    "description": null,
    "group": "iurio",
-   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "groupId": "49c8c27f-d6ae-4443-81e4-b1b651da4ec7",
    "lifecycle": "paused",
    "draft": false,
    "kind": "source",
@@ -1000,7 +1044,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "collection": "869b5fdb-210f-4a4e-9d35-66ebb03c05e3",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1008,11 +1052,13 @@
    "approvals": []
   },
   {
-   "id": "7f5caa3b-b40a-4c5e-93ea-ae311483ed1e",
+   "id": "68baccde-b87e-4ae2-8c38-da5d5bf1bd6f",
    "name": "IURIO · Sent mail",
+   "revision": 1,
+   "script": "f018c06c680f29848bd466197e0284f5106ee2e6536e4de8e12200f0cbcb822f",
    "description": null,
    "group": "iurio",
-   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "groupId": "49c8c27f-d6ae-4443-81e4-b1b651da4ec7",
    "lifecycle": "paused",
    "draft": false,
    "kind": "code",
@@ -1030,7 +1076,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "collection": "869b5fdb-210f-4a4e-9d35-66ebb03c05e3",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1038,11 +1084,13 @@
    "approvals": []
   },
   {
-   "id": "cce3929c-c977-4c6f-90e9-8cee6d12355d",
+   "id": "d874e7d8-6648-4733-beb5-392b4a50111b",
    "name": "IURIO · List filter",
+   "revision": 1,
+   "script": "4e6102f0eff456486cd6a1b1cc6da9a9cf53d3e469ecf3d0f1a8bed8757d87fb",
    "description": null,
    "group": "iurio",
-   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "groupId": "49c8c27f-d6ae-4443-81e4-b1b651da4ec7",
    "lifecycle": "paused",
    "draft": false,
    "kind": "code",
@@ -1060,7 +1108,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "collection": "869b5fdb-210f-4a4e-9d35-66ebb03c05e3",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1068,11 +1116,13 @@
    "approvals": []
   },
   {
-   "id": "e4e5f9cd-dc39-437c-8037-f27e8070a621",
+   "id": "3ce4dc8f-38d2-4711-9c4f-9f825aa5d170",
    "name": "IURIO · Triage",
+   "revision": 1,
+   "script": "9de6538637b16e2fedcd34cf8b5fd29744746adeb3f808ba3b46178897c0cd0e",
    "description": null,
    "group": "iurio",
-   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "groupId": "49c8c27f-d6ae-4443-81e4-b1b651da4ec7",
    "lifecycle": "paused",
    "draft": false,
    "kind": "decision",
@@ -1090,7 +1140,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "collection": "869b5fdb-210f-4a4e-9d35-66ebb03c05e3",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1098,11 +1148,13 @@
    "approvals": []
   },
   {
-   "id": "ebd9b44a-1d69-4cc2-8c2f-a88850b4c02e",
+   "id": "2bd362c6-1c35-4b3e-a0d9-a92f5be8a9d3",
    "name": "IURIO · Categorisation",
+   "revision": 1,
+   "script": "61a655b095caf92e2651b2e8acd137249bb7023faa22700a50dd04c9b6138cea",
    "description": null,
    "group": "iurio",
-   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "groupId": "49c8c27f-d6ae-4443-81e4-b1b651da4ec7",
    "lifecycle": "paused",
    "draft": false,
    "kind": "code",
@@ -1124,7 +1176,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "collection": "869b5fdb-210f-4a4e-9d35-66ebb03c05e3",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1132,11 +1184,13 @@
    "approvals": []
   },
   {
-   "id": "e8e31bc2-d642-4abf-835a-5658dc5b5e1c",
+   "id": "12de372d-f9b8-4ae4-8cc2-8d4c3a1b2587",
    "name": "IURIO · Review",
+   "revision": 1,
+   "script": "90c6075cdb6efc45f3af1645d16e8ec3af69835b33a5c4b97df1e0248dffa185",
    "description": null,
    "group": "iurio",
-   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "groupId": "49c8c27f-d6ae-4443-81e4-b1b651da4ec7",
    "lifecycle": "paused",
    "draft": false,
    "kind": "code",
@@ -1154,7 +1208,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "collection": "869b5fdb-210f-4a4e-9d35-66ebb03c05e3",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1162,11 +1216,13 @@
    "approvals": []
   },
   {
-   "id": "a756774d-c19a-4884-b837-57ad6d0536a3",
+   "id": "8ecc2d8e-82e6-4d80-8143-facfe72adef9",
    "name": "IURIO · Newsletter batch",
+   "revision": 1,
+   "script": "1ea21f322beb93f0c7c522fb29034ebfbeb7ecbc0b6e14c12feb55236ae408b9",
    "description": null,
    "group": "iurio",
-   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "groupId": "49c8c27f-d6ae-4443-81e4-b1b651da4ec7",
    "lifecycle": "paused",
    "draft": false,
    "kind": "code",
@@ -1184,7 +1240,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "collection": "869b5fdb-210f-4a4e-9d35-66ebb03c05e3",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1192,11 +1248,13 @@
    "approvals": []
   },
   {
-   "id": "6813652e-b4e7-4fa0-a711-eb34c74b6bcd",
+   "id": "9ccbdde8-a1c6-4c70-a876-a1616c0a82d9",
    "name": "IURIO · Invoice preview",
+   "revision": 1,
+   "script": "410700ed17e44ca3638907e93f18ecbc4622fdd954ca38c1c901d6a401e75e2f",
    "description": null,
    "group": "iurio",
-   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "groupId": "49c8c27f-d6ae-4443-81e4-b1b651da4ec7",
    "lifecycle": "paused",
    "draft": false,
    "kind": "code",
@@ -1214,7 +1272,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "collection": "869b5fdb-210f-4a4e-9d35-66ebb03c05e3",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1222,11 +1280,13 @@
    "approvals": []
   },
   {
-   "id": "151ba3a0-5ad4-45df-b652-b03dd2eca462",
+   "id": "e44b5277-f1bd-4051-afbe-ce36d379e5cc",
    "name": "IURIO · Reply drafts",
+   "revision": 1,
+   "script": "9825570c0089715c77b1cb5636feda258135c6217433a209612cc614b373a484",
    "description": null,
    "group": "iurio",
-   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "groupId": "49c8c27f-d6ae-4443-81e4-b1b651da4ec7",
    "lifecycle": "paused",
    "draft": false,
    "kind": "code",
@@ -1244,7 +1304,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "collection": "869b5fdb-210f-4a4e-9d35-66ebb03c05e3",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1252,11 +1312,13 @@
    "approvals": []
   },
   {
-   "id": "22fc58fa-5f4b-46e6-9b93-e2207d5e3ea8",
+   "id": "5d69777f-4e0d-4eea-bed3-c42e4100fa77",
    "name": "IURIO · Archive preview",
+   "revision": 1,
+   "script": "571d4ebb79b17647b640b545c5052bb3c6718f1fa5e6a03880edefc438ecdcde",
    "description": null,
    "group": "iurio",
-   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "groupId": "49c8c27f-d6ae-4443-81e4-b1b651da4ec7",
    "lifecycle": "paused",
    "draft": false,
    "kind": "code",
@@ -1272,7 +1334,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "collection": "869b5fdb-210f-4a4e-9d35-66ebb03c05e3",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1280,11 +1342,13 @@
    "approvals": []
   },
   {
-   "id": "09a80ebb-7a91-435e-9350-fb378a837b3a",
+   "id": "3e804b6e-caf5-4503-97f1-b9c0591a5306",
    "name": "IURIO · Memory",
+   "revision": 1,
+   "script": "46dfbe07728834ba61962d649e6411e7e0e0d870675d0d12fa237c8dc5300125",
    "description": null,
    "group": "iurio",
-   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "groupId": "49c8c27f-d6ae-4443-81e4-b1b651da4ec7",
    "lifecycle": "paused",
    "draft": false,
    "kind": "code",
@@ -1305,7 +1369,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "collection": "869b5fdb-210f-4a4e-9d35-66ebb03c05e3",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1313,11 +1377,13 @@
    "approvals": []
   },
   {
-   "id": "39b77752-0fcf-4d1c-99d7-b0186d02da1d",
+   "id": "574c63c2-97a6-43ce-9db4-42540f2cf3e2",
    "name": "Linde · Server report",
+   "revision": 1,
+   "script": "03ed1a3089f4d03ec065e76853f644f557bfb47f70cfde7540641fe6a2202f72",
    "description": null,
    "group": "Linde",
-   "groupId": "ee83dd1f-7004-4f7e-8f5a-dc62d4ecf8bd",
+   "groupId": "2eb2c6fc-83a3-42eb-b4fc-203485e9ad86",
    "lifecycle": "paused",
    "draft": false,
    "kind": "effect",
@@ -1368,7 +1434,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "99140a35-8b32-4301-8b26-f79709b24ab3",
+   "collection": "59825272-4a06-4ebc-ba75-00d161cc0144",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1376,11 +1442,13 @@
    "approvals": []
   },
   {
-   "id": "cc087550-9ae0-4508-82c1-f25a193e867b",
+   "id": "9cb743c6-1285-4a5c-aeb1-3e3d0feb10fa",
    "name": "Portal · Issues",
+   "revision": 1,
+   "script": "cecece032dd97079278c3e0bb793a0a67f7feb378bc4895c069be18e862203a7",
    "description": null,
    "group": "Linde",
-   "groupId": "ee83dd1f-7004-4f7e-8f5a-dc62d4ecf8bd",
+   "groupId": "2eb2c6fc-83a3-42eb-b4fc-203485e9ad86",
    "lifecycle": "paused",
    "draft": false,
    "kind": "source",
@@ -1396,7 +1464,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "c16e4c3e-6fce-49f9-90b3-e172f1abc402",
+   "collection": "13ed775f-3324-4272-90ea-26223ed337ff",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1404,11 +1472,13 @@
    "approvals": []
   },
   {
-   "id": "7abde50a-cf04-4de4-869e-669f98ffb218",
+   "id": "66e98bff-8abe-490e-9e13-87de5e1482b8",
    "name": "Portal · Triage",
+   "revision": 1,
+   "script": "e50be69161c9c4b462fe49623b1485fe7e60c8c8615d66c33f5438c9e1e1e3f0",
    "description": null,
    "group": "Linde",
-   "groupId": "ee83dd1f-7004-4f7e-8f5a-dc62d4ecf8bd",
+   "groupId": "2eb2c6fc-83a3-42eb-b4fc-203485e9ad86",
    "lifecycle": "paused",
    "draft": false,
    "kind": "code",
@@ -1426,7 +1496,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "c16e4c3e-6fce-49f9-90b3-e172f1abc402",
+   "collection": "13ed775f-3324-4272-90ea-26223ed337ff",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1434,11 +1504,13 @@
    "approvals": []
   },
   {
-   "id": "ea32f7b8-b62a-47d0-bb2c-87c2ad22f561",
+   "id": "9d5d7a8a-10ba-43f1-ba4c-e29fa4e5af13",
    "name": "Portal · Report",
+   "revision": 1,
+   "script": "b36b45ab42cc51544aaa8c925ea95efc74560438c9ac530a22d1284bc443c75d",
    "description": null,
    "group": "Linde",
-   "groupId": "ee83dd1f-7004-4f7e-8f5a-dc62d4ecf8bd",
+   "groupId": "2eb2c6fc-83a3-42eb-b4fc-203485e9ad86",
    "lifecycle": "paused",
    "draft": false,
    "kind": "code",
@@ -1454,7 +1526,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "c16e4c3e-6fce-49f9-90b3-e172f1abc402",
+   "collection": "13ed775f-3324-4272-90ea-26223ed337ff",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1462,11 +1534,13 @@
    "approvals": []
   },
   {
-   "id": "448977cc-33bb-404c-896e-00feb2c63f00",
+   "id": "bc91baea-938f-484c-9125-b08759912cf4",
    "name": "Portal · Deploy check",
+   "revision": 1,
+   "script": "2012d1efb2a8a138a7453687ab3b3d1220efab19c38b6c40495930daf96cba80",
    "description": null,
    "group": "Linde",
-   "groupId": "ee83dd1f-7004-4f7e-8f5a-dc62d4ecf8bd",
+   "groupId": "2eb2c6fc-83a3-42eb-b4fc-203485e9ad86",
    "lifecycle": "paused",
    "draft": false,
    "kind": "source",
@@ -1482,7 +1556,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "c16e4c3e-6fce-49f9-90b3-e172f1abc402",
+   "collection": "13ed775f-3324-4272-90ea-26223ed337ff",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1490,11 +1564,13 @@
    "approvals": []
   },
   {
-   "id": "18d38db3-6646-4d74-936c-9928101024da",
+   "id": "6b87e336-c48a-4363-9114-3b4a20dd21b5",
    "name": "Portal · Deploy report",
+   "revision": 1,
+   "script": "7eaa492412c28c42e89b1fa1c06b70247293c6b0a96712de0b8c849fc3b7746e",
    "description": null,
    "group": "Linde",
-   "groupId": "ee83dd1f-7004-4f7e-8f5a-dc62d4ecf8bd",
+   "groupId": "2eb2c6fc-83a3-42eb-b4fc-203485e9ad86",
    "lifecycle": "paused",
    "draft": false,
    "kind": "code",
@@ -1510,7 +1586,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "c16e4c3e-6fce-49f9-90b3-e172f1abc402",
+   "collection": "13ed775f-3324-4272-90ea-26223ed337ff",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1520,25 +1596,26 @@
  ],
  "collections": [
   {
-   "id": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "id": "e045674b-4618-4035-860e-9050702ecb11",
+   "revision": 1,
    "kind": "network",
    "bounded": false,
    "name": "Delta Mind · Mail-Netzwerk",
    "group": "Delta Mind",
-   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "groupId": "341bad6b-6360-4a19-a934-63870e0bb222",
    "state": "active",
    "members": [
-    "29107815-e7ef-4473-a1a9-5b2e2f348067",
-    "355be341-19c2-4d47-8d11-1d61a5972ed9",
-    "e83e19a4-7958-4bd4-b9fe-e319f4ab11ec",
-    "ae761725-8024-4b9f-8164-96a525db71c6",
-    "90bad739-f5c9-4188-af53-02cbffafc7a5",
-    "e9682b42-ce4b-4008-842f-426325cecf73",
-    "e9e01cad-2122-4ca2-8a99-05432a8ff53d",
-    "ce23164e-b01c-4d65-8ccc-dba5a9343785",
-    "9f9de6a8-5cb2-4afe-8ab1-0c617cd8defc",
-    "7e8cb062-1560-4fa7-854b-78ad1f5afe7c",
-    "c706ec78-4509-4062-bc50-4ea412d331d8"
+    "0942c944-7ba7-4cec-ab45-dfdf0736abd0",
+    "365c2dcd-2286-4724-993f-23898212370d",
+    "924cac54-1285-4ee5-95bf-2b65734a7f02",
+    "a7bbc888-38ac-4cd3-a5e1-bb748aa05106",
+    "6c068c42-0083-45ef-9909-3c4bb55830c8",
+    "e90942de-8a12-47e5-89f9-64dbb346de7b",
+    "73bb6f46-1e24-41c0-ab40-4064ef41f85b",
+    "98c08182-b9bf-4b37-9baa-2590ce2d98fc",
+    "12402f11-1fa8-41f9-84d1-7891dc80e145",
+    "9a2e62de-66bb-4f60-b94b-cb0f0749fdcf",
+    "1909bdfc-3f22-400f-a512-4aab3c760c9c"
    ],
    "schedule": {
     "spec": {
@@ -1610,7 +1687,8 @@
    "lastRun": null
   },
   {
-   "id": "1ff4064f-a156-4bd5-a7d6-96f63e5f5508",
+   "id": "c01e2456-f281-4f70-9971-fa069f136d65",
+   "revision": 3,
    "kind": "chain",
    "bounded": false,
    "name": "Morgenbriefing",
@@ -1618,10 +1696,10 @@
    "groupId": null,
    "state": "active",
    "members": [
-    "b306b2c6-0526-4e26-9b86-cc0f8edec89a",
-    "a011a863-5f64-4008-aaef-f0df877b5130",
-    "33e785ad-826d-42e7-bdba-e454d916e919",
-    "9a49e4e7-c4a8-40be-8995-d578f8e941e8"
+    "608175ae-0e19-427b-86fc-b961063f307e",
+    "539e6b38-4839-410f-9214-23795ba1ce83",
+    "d952b803-eab2-40dd-9e64-7132b3def073",
+    "109a4739-8ef8-4bf3-8b50-1ae5663135f6"
    ],
    "schedule": {
     "spec": {
@@ -1641,25 +1719,26 @@
    }
   },
   {
-   "id": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "id": "869b5fdb-210f-4a4e-9d35-66ebb03c05e3",
+   "revision": 1,
    "kind": "network",
    "bounded": true,
    "name": "IURIO · DOCPIT mail management",
    "group": "iurio",
-   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "groupId": "49c8c27f-d6ae-4443-81e4-b1b651da4ec7",
    "state": "paused",
    "members": [
-    "7c708f3e-1bf4-4077-8ec8-4ca0cffd3903",
-    "7f5caa3b-b40a-4c5e-93ea-ae311483ed1e",
-    "cce3929c-c977-4c6f-90e9-8cee6d12355d",
-    "e4e5f9cd-dc39-437c-8037-f27e8070a621",
-    "ebd9b44a-1d69-4cc2-8c2f-a88850b4c02e",
-    "e8e31bc2-d642-4abf-835a-5658dc5b5e1c",
-    "a756774d-c19a-4884-b837-57ad6d0536a3",
-    "6813652e-b4e7-4fa0-a711-eb34c74b6bcd",
-    "151ba3a0-5ad4-45df-b652-b03dd2eca462",
-    "22fc58fa-5f4b-46e6-9b93-e2207d5e3ea8",
-    "09a80ebb-7a91-435e-9350-fb378a837b3a"
+    "959469cf-798d-492c-bfd9-4a78ab4a5bbe",
+    "68baccde-b87e-4ae2-8c38-da5d5bf1bd6f",
+    "d874e7d8-6648-4733-beb5-392b4a50111b",
+    "3ce4dc8f-38d2-4711-9c4f-9f825aa5d170",
+    "2bd362c6-1c35-4b3e-a0d9-a92f5be8a9d3",
+    "12de372d-f9b8-4ae4-8cc2-8d4c3a1b2587",
+    "8ecc2d8e-82e6-4d80-8143-facfe72adef9",
+    "9ccbdde8-a1c6-4c70-a876-a1616c0a82d9",
+    "e44b5277-f1bd-4051-afbe-ce36d379e5cc",
+    "5d69777f-4e0d-4eea-bed3-c42e4100fa77",
+    "3e804b6e-caf5-4503-97f1-b9c0591a5306"
    ],
    "schedule": null,
    "counts": {},
@@ -1714,15 +1793,16 @@
    "lastRun": null
   },
   {
-   "id": "99140a35-8b32-4301-8b26-f79709b24ab3",
+   "id": "59825272-4a06-4ebc-ba75-00d161cc0144",
+   "revision": 1,
    "kind": "chain",
    "bounded": false,
    "name": "Linde · Server report",
    "group": "Linde",
-   "groupId": "ee83dd1f-7004-4f7e-8f5a-dc62d4ecf8bd",
+   "groupId": "2eb2c6fc-83a3-42eb-b4fc-203485e9ad86",
    "state": "paused",
    "members": [
-    "39b77752-0fcf-4d1c-99d7-b0186d02da1d"
+    "574c63c2-97a6-43ce-9db4-42540f2cf3e2"
    ],
    "schedule": {
     "spec": {
@@ -1738,19 +1818,20 @@
    "lastRun": null
   },
   {
-   "id": "c16e4c3e-6fce-49f9-90b3-e172f1abc402",
+   "id": "13ed775f-3324-4272-90ea-26223ed337ff",
+   "revision": 1,
    "kind": "network",
    "bounded": true,
    "name": "Linde · Portal development and systems",
    "group": "Linde",
-   "groupId": "ee83dd1f-7004-4f7e-8f5a-dc62d4ecf8bd",
+   "groupId": "2eb2c6fc-83a3-42eb-b4fc-203485e9ad86",
    "state": "paused",
    "members": [
-    "cc087550-9ae0-4508-82c1-f25a193e867b",
-    "7abde50a-cf04-4de4-869e-669f98ffb218",
-    "ea32f7b8-b62a-47d0-bb2c-87c2ad22f561",
-    "448977cc-33bb-404c-896e-00feb2c63f00",
-    "18d38db3-6646-4d74-936c-9928101024da"
+    "9cb743c6-1285-4a5c-aeb1-3e3d0feb10fa",
+    "66e98bff-8abe-490e-9e13-87de5e1482b8",
+    "9d5d7a8a-10ba-43f1-ba4c-e29fa4e5af13",
+    "bc91baea-938f-484c-9125-b08759912cf4",
+    "6b87e336-c48a-4363-9114-3b4a20dd21b5"
    ],
    "schedule": null,
    "counts": {},
@@ -1761,357 +1842,357 @@
  ],
  "edges": [
   {
-   "from": "29107815-e7ef-4473-a1a9-5b2e2f348067",
-   "to": "355be341-19c2-4d47-8d11-1d61a5972ed9",
+   "from": "0942c944-7ba7-4cec-ab45-dfdf0736abd0",
+   "to": "365c2dcd-2286-4724-993f-23898212370d",
    "type": "channel",
    "channel": "mail.sent-raw",
    "flow": 0
   },
   {
-   "from": "29107815-e7ef-4473-a1a9-5b2e2f348067",
-   "to": "e83e19a4-7958-4bd4-b9fe-e319f4ab11ec",
+   "from": "0942c944-7ba7-4cec-ab45-dfdf0736abd0",
+   "to": "924cac54-1285-4ee5-95bf-2b65734a7f02",
    "type": "channel",
    "channel": "mail.open",
    "flow": 3
   },
   {
-   "from": "355be341-19c2-4d47-8d11-1d61a5972ed9",
-   "to": "c706ec78-4509-4062-bc50-4ea412d331d8",
+   "from": "365c2dcd-2286-4724-993f-23898212370d",
+   "to": "1909bdfc-3f22-400f-a512-4aab3c760c9c",
    "type": "channel",
    "channel": "mail.sent",
    "flow": 0
   },
   {
-   "from": "e83e19a4-7958-4bd4-b9fe-e319f4ab11ec",
-   "to": "ae761725-8024-4b9f-8164-96a525db71c6",
+   "from": "924cac54-1285-4ee5-95bf-2b65734a7f02",
+   "to": "a7bbc888-38ac-4cd3-a5e1-bb748aa05106",
    "type": "channel",
    "channel": "mail.filtered",
    "flow": 7
   },
   {
-   "from": "ae761725-8024-4b9f-8164-96a525db71c6",
-   "to": "90bad739-f5c9-4188-af53-02cbffafc7a5",
+   "from": "a7bbc888-38ac-4cd3-a5e1-bb748aa05106",
+   "to": "6c068c42-0083-45ef-9909-3c4bb55830c8",
    "type": "channel",
    "channel": "mail.triaged",
    "flow": 8
   },
   {
-   "from": "90bad739-f5c9-4188-af53-02cbffafc7a5",
-   "to": "e9682b42-ce4b-4008-842f-426325cecf73",
+   "from": "6c068c42-0083-45ef-9909-3c4bb55830c8",
+   "to": "e90942de-8a12-47e5-89f9-64dbb346de7b",
    "type": "channel",
    "channel": "mail.useful",
    "flow": 1
   },
   {
-   "from": "90bad739-f5c9-4188-af53-02cbffafc7a5",
-   "to": "e9e01cad-2122-4ca2-8a99-05432a8ff53d",
+   "from": "6c068c42-0083-45ef-9909-3c4bb55830c8",
+   "to": "73bb6f46-1e24-41c0-ab40-4064ef41f85b",
    "type": "channel",
    "channel": "mail.newsletter",
    "flow": 0
   },
   {
-   "from": "90bad739-f5c9-4188-af53-02cbffafc7a5",
-   "to": "ce23164e-b01c-4d65-8ccc-dba5a9343785",
+   "from": "6c068c42-0083-45ef-9909-3c4bb55830c8",
+   "to": "98c08182-b9bf-4b37-9baa-2590ce2d98fc",
    "type": "channel",
    "channel": "mail.invoice",
    "flow": 0
   },
   {
-   "from": "90bad739-f5c9-4188-af53-02cbffafc7a5",
-   "to": "9f9de6a8-5cb2-4afe-8ab1-0c617cd8defc",
+   "from": "6c068c42-0083-45ef-9909-3c4bb55830c8",
+   "to": "12402f11-1fa8-41f9-84d1-7891dc80e145",
    "type": "channel",
    "channel": "mail.reply",
    "flow": 1
   },
   {
-   "from": "90bad739-f5c9-4188-af53-02cbffafc7a5",
-   "to": "c706ec78-4509-4062-bc50-4ea412d331d8",
+   "from": "6c068c42-0083-45ef-9909-3c4bb55830c8",
+   "to": "1909bdfc-3f22-400f-a512-4aab3c760c9c",
    "type": "channel",
    "channel": "mail.unsure",
    "flow": 14
   },
   {
-   "from": "90bad739-f5c9-4188-af53-02cbffafc7a5",
+   "from": "6c068c42-0083-45ef-9909-3c4bb55830c8",
    "to": "gate:uncertain-review",
    "type": "channel",
    "channel": "mail.unsure",
    "flow": 14
   },
   {
-   "from": "e9682b42-ce4b-4008-842f-426325cecf73",
-   "to": "c706ec78-4509-4062-bc50-4ea412d331d8",
+   "from": "e90942de-8a12-47e5-89f9-64dbb346de7b",
+   "to": "1909bdfc-3f22-400f-a512-4aab3c760c9c",
    "type": "channel",
    "channel": "mail.reviewed",
    "flow": 1
   },
   {
-   "from": "e9e01cad-2122-4ca2-8a99-05432a8ff53d",
+   "from": "73bb6f46-1e24-41c0-ab40-4064ef41f85b",
    "to": "gate:newsletter-approval",
    "type": "channel",
    "channel": "mail.batch",
    "flow": 0
   },
   {
-   "from": "ce23164e-b01c-4d65-8ccc-dba5a9343785",
-   "to": "c706ec78-4509-4062-bc50-4ea412d331d8",
+   "from": "98c08182-b9bf-4b37-9baa-2590ce2d98fc",
+   "to": "1909bdfc-3f22-400f-a512-4aab3c760c9c",
    "type": "channel",
    "channel": "invoice.candidate",
    "flow": 0
   },
   {
-   "from": "9f9de6a8-5cb2-4afe-8ab1-0c617cd8defc",
-   "to": "c706ec78-4509-4062-bc50-4ea412d331d8",
+   "from": "12402f11-1fa8-41f9-84d1-7891dc80e145",
+   "to": "1909bdfc-3f22-400f-a512-4aab3c760c9c",
    "type": "channel",
    "channel": "draft.candidate",
    "flow": 1
   },
   {
    "from": "gate:uncertain-review",
-   "to": "e9682b42-ce4b-4008-842f-426325cecf73",
+   "to": "e90942de-8a12-47e5-89f9-64dbb346de7b",
    "type": "channel",
    "channel": "mail.useful",
    "flow": 1
   },
   {
    "from": "gate:uncertain-review",
-   "to": "e9e01cad-2122-4ca2-8a99-05432a8ff53d",
+   "to": "73bb6f46-1e24-41c0-ab40-4064ef41f85b",
    "type": "channel",
    "channel": "mail.newsletter",
    "flow": 0
   },
   {
    "from": "gate:uncertain-review",
-   "to": "ce23164e-b01c-4d65-8ccc-dba5a9343785",
+   "to": "98c08182-b9bf-4b37-9baa-2590ce2d98fc",
    "type": "channel",
    "channel": "mail.invoice",
    "flow": 0
   },
   {
    "from": "gate:uncertain-review",
-   "to": "9f9de6a8-5cb2-4afe-8ab1-0c617cd8defc",
+   "to": "12402f11-1fa8-41f9-84d1-7891dc80e145",
    "type": "channel",
    "channel": "mail.reply",
    "flow": 1
   },
   {
    "from": "gate:newsletter-approval",
-   "to": "7e8cb062-1560-4fa7-854b-78ad1f5afe7c",
+   "to": "9a2e62de-66bb-4f60-b94b-cb0f0749fdcf",
    "type": "channel",
    "channel": "mail.approved",
    "flow": 0
   },
   {
    "from": "gate:newsletter-approval",
-   "to": "c706ec78-4509-4062-bc50-4ea412d331d8",
+   "to": "1909bdfc-3f22-400f-a512-4aab3c760c9c",
    "type": "channel",
    "channel": "mail.excluded",
    "flow": 0
   },
   {
-   "from": "b306b2c6-0526-4e26-9b86-cc0f8edec89a",
-   "to": "a011a863-5f64-4008-aaef-f0df877b5130",
+   "from": "608175ae-0e19-427b-86fc-b961063f307e",
+   "to": "539e6b38-4839-410f-9214-23795ba1ce83",
    "type": "channel",
    "channel": "handoff",
    "flow": 1
   },
   {
-   "from": "a011a863-5f64-4008-aaef-f0df877b5130",
-   "to": "33e785ad-826d-42e7-bdba-e454d916e919",
+   "from": "539e6b38-4839-410f-9214-23795ba1ce83",
+   "to": "d952b803-eab2-40dd-9e64-7132b3def073",
    "type": "channel",
    "channel": "handoff",
    "flow": 1
   },
   {
-   "from": "33e785ad-826d-42e7-bdba-e454d916e919",
-   "to": "9a49e4e7-c4a8-40be-8995-d578f8e941e8",
+   "from": "d952b803-eab2-40dd-9e64-7132b3def073",
+   "to": "109a4739-8ef8-4bf3-8b50-1ae5663135f6",
    "type": "channel",
    "channel": "handoff",
    "flow": 1
   },
   {
-   "from": "7c708f3e-1bf4-4077-8ec8-4ca0cffd3903",
-   "to": "7f5caa3b-b40a-4c5e-93ea-ae311483ed1e",
+   "from": "959469cf-798d-492c-bfd9-4a78ab4a5bbe",
+   "to": "68baccde-b87e-4ae2-8c38-da5d5bf1bd6f",
    "type": "channel",
    "channel": "mail.sent-raw",
    "flow": 0
   },
   {
-   "from": "7c708f3e-1bf4-4077-8ec8-4ca0cffd3903",
-   "to": "cce3929c-c977-4c6f-90e9-8cee6d12355d",
+   "from": "959469cf-798d-492c-bfd9-4a78ab4a5bbe",
+   "to": "d874e7d8-6648-4733-beb5-392b4a50111b",
    "type": "channel",
    "channel": "mail.open",
    "flow": 0
   },
   {
-   "from": "7f5caa3b-b40a-4c5e-93ea-ae311483ed1e",
-   "to": "09a80ebb-7a91-435e-9350-fb378a837b3a",
+   "from": "68baccde-b87e-4ae2-8c38-da5d5bf1bd6f",
+   "to": "3e804b6e-caf5-4503-97f1-b9c0591a5306",
    "type": "channel",
    "channel": "mail.sent",
    "flow": 0
   },
   {
-   "from": "cce3929c-c977-4c6f-90e9-8cee6d12355d",
-   "to": "e4e5f9cd-dc39-437c-8037-f27e8070a621",
+   "from": "d874e7d8-6648-4733-beb5-392b4a50111b",
+   "to": "3ce4dc8f-38d2-4711-9c4f-9f825aa5d170",
    "type": "channel",
    "channel": "mail.filtered",
    "flow": 0
   },
   {
-   "from": "e4e5f9cd-dc39-437c-8037-f27e8070a621",
-   "to": "ebd9b44a-1d69-4cc2-8c2f-a88850b4c02e",
+   "from": "3ce4dc8f-38d2-4711-9c4f-9f825aa5d170",
+   "to": "2bd362c6-1c35-4b3e-a0d9-a92f5be8a9d3",
    "type": "channel",
    "channel": "mail.triaged",
    "flow": 0
   },
   {
-   "from": "ebd9b44a-1d69-4cc2-8c2f-a88850b4c02e",
-   "to": "e8e31bc2-d642-4abf-835a-5658dc5b5e1c",
+   "from": "2bd362c6-1c35-4b3e-a0d9-a92f5be8a9d3",
+   "to": "12de372d-f9b8-4ae4-8cc2-8d4c3a1b2587",
    "type": "channel",
    "channel": "mail.useful",
    "flow": 0
   },
   {
-   "from": "ebd9b44a-1d69-4cc2-8c2f-a88850b4c02e",
-   "to": "a756774d-c19a-4884-b837-57ad6d0536a3",
+   "from": "2bd362c6-1c35-4b3e-a0d9-a92f5be8a9d3",
+   "to": "8ecc2d8e-82e6-4d80-8143-facfe72adef9",
    "type": "channel",
    "channel": "mail.newsletter",
    "flow": 0
   },
   {
-   "from": "ebd9b44a-1d69-4cc2-8c2f-a88850b4c02e",
-   "to": "6813652e-b4e7-4fa0-a711-eb34c74b6bcd",
+   "from": "2bd362c6-1c35-4b3e-a0d9-a92f5be8a9d3",
+   "to": "9ccbdde8-a1c6-4c70-a876-a1616c0a82d9",
    "type": "channel",
    "channel": "mail.invoice",
    "flow": 0
   },
   {
-   "from": "ebd9b44a-1d69-4cc2-8c2f-a88850b4c02e",
-   "to": "151ba3a0-5ad4-45df-b652-b03dd2eca462",
+   "from": "2bd362c6-1c35-4b3e-a0d9-a92f5be8a9d3",
+   "to": "e44b5277-f1bd-4051-afbe-ce36d379e5cc",
    "type": "channel",
    "channel": "mail.reply",
    "flow": 0
   },
   {
-   "from": "ebd9b44a-1d69-4cc2-8c2f-a88850b4c02e",
-   "to": "09a80ebb-7a91-435e-9350-fb378a837b3a",
+   "from": "2bd362c6-1c35-4b3e-a0d9-a92f5be8a9d3",
+   "to": "3e804b6e-caf5-4503-97f1-b9c0591a5306",
    "type": "channel",
    "channel": "mail.unsure",
    "flow": 0
   },
   {
-   "from": "ebd9b44a-1d69-4cc2-8c2f-a88850b4c02e",
+   "from": "2bd362c6-1c35-4b3e-a0d9-a92f5be8a9d3",
    "to": "gate:uncertain-review",
    "type": "channel",
    "channel": "mail.unsure",
    "flow": 0
   },
   {
-   "from": "e8e31bc2-d642-4abf-835a-5658dc5b5e1c",
-   "to": "09a80ebb-7a91-435e-9350-fb378a837b3a",
+   "from": "12de372d-f9b8-4ae4-8cc2-8d4c3a1b2587",
+   "to": "3e804b6e-caf5-4503-97f1-b9c0591a5306",
    "type": "channel",
    "channel": "mail.reviewed",
    "flow": 0
   },
   {
-   "from": "a756774d-c19a-4884-b837-57ad6d0536a3",
+   "from": "8ecc2d8e-82e6-4d80-8143-facfe72adef9",
    "to": "gate:newsletter-approval",
    "type": "channel",
    "channel": "mail.batch",
    "flow": 0
   },
   {
-   "from": "6813652e-b4e7-4fa0-a711-eb34c74b6bcd",
-   "to": "09a80ebb-7a91-435e-9350-fb378a837b3a",
+   "from": "9ccbdde8-a1c6-4c70-a876-a1616c0a82d9",
+   "to": "3e804b6e-caf5-4503-97f1-b9c0591a5306",
    "type": "channel",
    "channel": "invoice.candidate",
    "flow": 0
   },
   {
-   "from": "151ba3a0-5ad4-45df-b652-b03dd2eca462",
-   "to": "09a80ebb-7a91-435e-9350-fb378a837b3a",
+   "from": "e44b5277-f1bd-4051-afbe-ce36d379e5cc",
+   "to": "3e804b6e-caf5-4503-97f1-b9c0591a5306",
    "type": "channel",
    "channel": "draft.candidate",
    "flow": 0
   },
   {
    "from": "gate:uncertain-review",
-   "to": "e8e31bc2-d642-4abf-835a-5658dc5b5e1c",
+   "to": "12de372d-f9b8-4ae4-8cc2-8d4c3a1b2587",
    "type": "channel",
    "channel": "mail.useful",
    "flow": 0
   },
   {
    "from": "gate:uncertain-review",
-   "to": "a756774d-c19a-4884-b837-57ad6d0536a3",
+   "to": "8ecc2d8e-82e6-4d80-8143-facfe72adef9",
    "type": "channel",
    "channel": "mail.newsletter",
    "flow": 0
   },
   {
    "from": "gate:uncertain-review",
-   "to": "6813652e-b4e7-4fa0-a711-eb34c74b6bcd",
+   "to": "9ccbdde8-a1c6-4c70-a876-a1616c0a82d9",
    "type": "channel",
    "channel": "mail.invoice",
    "flow": 0
   },
   {
    "from": "gate:uncertain-review",
-   "to": "151ba3a0-5ad4-45df-b652-b03dd2eca462",
+   "to": "e44b5277-f1bd-4051-afbe-ce36d379e5cc",
    "type": "channel",
    "channel": "mail.reply",
    "flow": 0
   },
   {
    "from": "gate:newsletter-approval",
-   "to": "22fc58fa-5f4b-46e6-9b93-e2207d5e3ea8",
+   "to": "5d69777f-4e0d-4eea-bed3-c42e4100fa77",
    "type": "channel",
    "channel": "mail.approved",
    "flow": 0
   },
   {
    "from": "gate:newsletter-approval",
-   "to": "09a80ebb-7a91-435e-9350-fb378a837b3a",
+   "to": "3e804b6e-caf5-4503-97f1-b9c0591a5306",
    "type": "channel",
    "channel": "mail.excluded",
    "flow": 0
   },
   {
-   "from": "cc087550-9ae0-4508-82c1-f25a193e867b",
-   "to": "7abde50a-cf04-4de4-869e-669f98ffb218",
+   "from": "9cb743c6-1285-4a5c-aeb1-3e3d0feb10fa",
+   "to": "66e98bff-8abe-490e-9e13-87de5e1482b8",
    "type": "channel",
    "channel": "portal.issue",
    "flow": 0
   },
   {
-   "from": "7abde50a-cf04-4de4-869e-669f98ffb218",
-   "to": "ea32f7b8-b62a-47d0-bb2c-87c2ad22f561",
+   "from": "66e98bff-8abe-490e-9e13-87de5e1482b8",
+   "to": "9d5d7a8a-10ba-43f1-ba4c-e29fa4e5af13",
    "type": "channel",
    "channel": "portal.ready",
    "flow": 0
   },
   {
-   "from": "448977cc-33bb-404c-896e-00feb2c63f00",
-   "to": "18d38db3-6646-4d74-936c-9928101024da",
+   "from": "bc91baea-938f-484c-9125-b08759912cf4",
+   "to": "6b87e336-c48a-4363-9114-3b4a20dd21b5",
    "type": "channel",
    "channel": "deploy.state",
    "flow": 0
   },
   {
    "from": "app:o365-cli:phofmann@delta-mind.at",
-   "to": "29107815-e7ef-4473-a1a9-5b2e2f348067",
+   "to": "0942c944-7ba7-4cec-ab45-dfdf0736abd0",
    "type": "read",
    "channel": null,
    "flow": 10
   },
   {
    "from": "dir:/Users/fixture/Pods/delta",
-   "to": "29107815-e7ef-4473-a1a9-5b2e2f348067",
+   "to": "0942c944-7ba7-4cec-ab45-dfdf0736abd0",
    "type": "read",
    "channel": null,
    "flow": 10
   },
   {
-   "from": "29107815-e7ef-4473-a1a9-5b2e2f348067",
+   "from": "0942c944-7ba7-4cec-ab45-dfdf0736abd0",
    "to": "dir:/Users/fixture/Pods/delta",
    "type": "write",
    "channel": null,
@@ -2119,20 +2200,20 @@
   },
   {
    "from": "ai:jev",
-   "to": "ae761725-8024-4b9f-8164-96a525db71c6",
+   "to": "a7bbc888-38ac-4cd3-a5e1-bb748aa05106",
    "type": "read",
    "channel": null,
    "flow": 10
   },
   {
    "from": "dir:/Users/fixture/Pods/delta",
-   "to": "ae761725-8024-4b9f-8164-96a525db71c6",
+   "to": "a7bbc888-38ac-4cd3-a5e1-bb748aa05106",
    "type": "read",
    "channel": null,
    "flow": 10
   },
   {
-   "from": "ae761725-8024-4b9f-8164-96a525db71c6",
+   "from": "a7bbc888-38ac-4cd3-a5e1-bb748aa05106",
    "to": "dir:/Users/fixture/Pods/delta",
    "type": "write",
    "channel": null,
@@ -2140,13 +2221,13 @@
   },
   {
    "from": "app:o365-cli:phofmann@delta-mind.at",
-   "to": "7e8cb062-1560-4fa7-854b-78ad1f5afe7c",
+   "to": "9a2e62de-66bb-4f60-b94b-cb0f0749fdcf",
    "type": "read",
    "channel": null,
    "flow": 0
   },
   {
-   "from": "7e8cb062-1560-4fa7-854b-78ad1f5afe7c",
+   "from": "9a2e62de-66bb-4f60-b94b-cb0f0749fdcf",
    "to": "app:o365-cli:phofmann@delta-mind.at",
    "type": "write",
    "channel": null,
@@ -2154,13 +2235,13 @@
   },
   {
    "from": "app:pods-mail:phofmann@delta-mind.at",
-   "to": "b306b2c6-0526-4e26-9b86-cc0f8edec89a",
+   "to": "608175ae-0e19-427b-86fc-b961063f307e",
    "type": "read",
    "channel": null,
    "flow": 50
   },
   {
-   "from": "b306b2c6-0526-4e26-9b86-cc0f8edec89a",
+   "from": "608175ae-0e19-427b-86fc-b961063f307e",
    "to": "app:pods-mail:phofmann@delta-mind.at",
    "type": "write",
    "channel": null,
@@ -2168,13 +2249,13 @@
   },
   {
    "from": "dir:/Users/fixture/Briefing Evidence/mail",
-   "to": "b306b2c6-0526-4e26-9b86-cc0f8edec89a",
+   "to": "608175ae-0e19-427b-86fc-b961063f307e",
    "type": "read",
    "channel": null,
    "flow": 50
   },
   {
-   "from": "b306b2c6-0526-4e26-9b86-cc0f8edec89a",
+   "from": "608175ae-0e19-427b-86fc-b961063f307e",
    "to": "dir:/Users/fixture/Briefing Evidence/mail",
    "type": "write",
    "channel": null,
@@ -2182,34 +2263,34 @@
   },
   {
    "from": "app:o365-cli:phofmann@delta-mind.at",
-   "to": "a011a863-5f64-4008-aaef-f0df877b5130",
+   "to": "539e6b38-4839-410f-9214-23795ba1ce83",
    "type": "read",
    "channel": null,
    "flow": 1
   },
   {
    "from": "app:repos-issues:*",
-   "to": "a011a863-5f64-4008-aaef-f0df877b5130",
+   "to": "539e6b38-4839-410f-9214-23795ba1ce83",
    "type": "read",
    "channel": null,
    "flow": 1
   },
   {
    "from": "dir:/Users/fixture/Briefing Evidence/mail",
-   "to": "33e785ad-826d-42e7-bdba-e454d916e919",
+   "to": "d952b803-eab2-40dd-9e64-7132b3def073",
    "type": "read",
    "channel": null,
    "flow": 1
   },
   {
    "from": "svc:https://api.telegram.org",
-   "to": "9a49e4e7-c4a8-40be-8995-d578f8e941e8",
+   "to": "109a4739-8ef8-4bf3-8b50-1ae5663135f6",
    "type": "read",
    "channel": null,
    "flow": 1
   },
   {
-   "from": "9a49e4e7-c4a8-40be-8995-d578f8e941e8",
+   "from": "109a4739-8ef8-4bf3-8b50-1ae5663135f6",
    "to": "svc:https://api.telegram.org",
    "type": "write",
    "channel": null,
@@ -2217,13 +2298,13 @@
   },
   {
    "from": "svc:https://report.openape.ai",
-   "to": "9a49e4e7-c4a8-40be-8995-d578f8e941e8",
+   "to": "109a4739-8ef8-4bf3-8b50-1ae5663135f6",
    "type": "read",
    "channel": null,
    "flow": 1
   },
   {
-   "from": "9a49e4e7-c4a8-40be-8995-d578f8e941e8",
+   "from": "109a4739-8ef8-4bf3-8b50-1ae5663135f6",
    "to": "svc:https://report.openape.ai",
    "type": "write",
    "channel": null,
@@ -2231,20 +2312,20 @@
   },
   {
    "from": "app:az:*",
-   "to": "9d307901-85ff-41e6-a96b-a7f918142c1c",
+   "to": "541572c7-192e-4e4a-92df-5e70e77c390a",
    "type": "read",
    "channel": null,
    "flow": 6
   },
   {
    "from": "svc:https://dev.azure.com",
-   "to": "9d307901-85ff-41e6-a96b-a7f918142c1c",
+   "to": "541572c7-192e-4e4a-92df-5e70e77c390a",
    "type": "read",
    "channel": null,
    "flow": 6
   },
   {
-   "from": "9d307901-85ff-41e6-a96b-a7f918142c1c",
+   "from": "541572c7-192e-4e4a-92df-5e70e77c390a",
    "to": "svc:https://api.telegram.org",
    "type": "write",
    "channel": null,
@@ -2252,13 +2333,13 @@
   },
   {
    "from": "app:iurio:*",
-   "to": "c7a17149-c76a-4ad8-808f-99731505514d",
+   "to": "9b19b664-452f-48a1-9d32-f9c544dc3a4f",
    "type": "read",
    "channel": null,
    "flow": 30
   },
   {
-   "from": "c7a17149-c76a-4ad8-808f-99731505514d",
+   "from": "9b19b664-452f-48a1-9d32-f9c544dc3a4f",
    "to": "svc:https://api.telegram.org",
    "type": "write",
    "channel": null,
@@ -2266,13 +2347,13 @@
   },
   {
    "from": "svc:https://zaz.delta-mind.at",
-   "to": "dd261fdb-87d3-46d0-b033-1e8b521a54d7",
+   "to": "93fe02fb-0c7e-499b-8cee-ae72cab0c8b2",
    "type": "read",
    "channel": null,
    "flow": 150
   },
   {
-   "from": "dd261fdb-87d3-46d0-b033-1e8b521a54d7",
+   "from": "93fe02fb-0c7e-499b-8cee-ae72cab0c8b2",
    "to": "svc:https://zaz.delta-mind.at",
    "type": "write",
    "channel": null,
@@ -2280,13 +2361,13 @@
   },
   {
    "from": "app:pods-mail:patrick@docpit.eu",
-   "to": "7c708f3e-1bf4-4077-8ec8-4ca0cffd3903",
+   "to": "959469cf-798d-492c-bfd9-4a78ab4a5bbe",
    "type": "read",
    "channel": null,
    "flow": 0
   },
   {
-   "from": "7c708f3e-1bf4-4077-8ec8-4ca0cffd3903",
+   "from": "959469cf-798d-492c-bfd9-4a78ab4a5bbe",
    "to": "app:pods-mail:patrick@docpit.eu",
    "type": "write",
    "channel": null,
@@ -2294,41 +2375,41 @@
   },
   {
    "from": "ssh:dev-portal.lindeverlag.at",
-   "to": "39b77752-0fcf-4d1c-99d7-b0186d02da1d",
+   "to": "574c63c2-97a6-43ce-9db4-42540f2cf3e2",
    "type": "read",
    "channel": null,
    "flow": 0
   },
   {
    "from": "ssh:portal-staging.lindeverlag.at",
-   "to": "39b77752-0fcf-4d1c-99d7-b0186d02da1d",
+   "to": "574c63c2-97a6-43ce-9db4-42540f2cf3e2",
    "type": "read",
    "channel": null,
    "flow": 0
   },
   {
    "from": "ssh:portal.lindeverlag.at",
-   "to": "39b77752-0fcf-4d1c-99d7-b0186d02da1d",
+   "to": "574c63c2-97a6-43ce-9db4-42540f2cf3e2",
    "type": "read",
    "channel": null,
    "flow": 0
   },
   {
    "from": "ssh:db.lindeverlag.at",
-   "to": "39b77752-0fcf-4d1c-99d7-b0186d02da1d",
+   "to": "574c63c2-97a6-43ce-9db4-42540f2cf3e2",
    "type": "read",
    "channel": null,
    "flow": 0
   },
   {
    "from": "ssh:weiloner.at",
-   "to": "39b77752-0fcf-4d1c-99d7-b0186d02da1d",
+   "to": "574c63c2-97a6-43ce-9db4-42540f2cf3e2",
    "type": "read",
    "channel": null,
    "flow": 0
   },
   {
-   "from": "39b77752-0fcf-4d1c-99d7-b0186d02da1d",
+   "from": "574c63c2-97a6-43ce-9db4-42540f2cf3e2",
    "to": "svc:https://api.telegram.org",
    "type": "write",
    "channel": null,
