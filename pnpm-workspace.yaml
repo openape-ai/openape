@@ -176,9 +176,11 @@ overrides:
   '@tiptap/suggestion': 3.30.5
   '@tiptap/vue-3': 3.30.5
   '@tiptap/y-tiptap': 3.0.7
-  sharp: 0.35.4
+  # GHSA-wq5f-xc86-pv6w (CVE-2026-96889, librsvg); 0.35.5 published 2026-09-27.
+  sharp: 0.35.5
   smol-toml: 1.7.1
-  shell-quote: '>=1.8.4'
+  # GHSA-pqg4-j6r4-53mv; 1.11.0 published 2026-09-29.
+  shell-quote: '>=1.11.0'
   # 4.x removes the default export that @nuxt/devtools 3.x imports; see ignoreGhsas.
   simple-git: '>=3.36.0 <4'
   socket.io-parser: '>=4.2.7'
