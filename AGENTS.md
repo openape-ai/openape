@@ -89,5 +89,9 @@ intended deviation before implementation. Do not redefine the protocol in an
 app or rewrite historical/specification links as part of a host migration.
 
 Keep the current issue/PR, worktree, SHA, actual check evidence and next step in
-[active work](docs/agents/active-work.md). Dated plans and old start prompts are
-historical context; current code/configuration and verified live state decide.
+[active work](docs/agents/active-work.md), updated inside the implementing PR.
+Record post-merge receipts (merge SHA, CI runs, evidence links, deployment state)
+as a comment on the merged PR (`pnpm git:cli -- pr comment`) and, where relevant,
+the issue. Never open a PR only to record a receipt (owner decision, issue 1431).
+Dated plans and old start prompts are historical context; current
+code/configuration and verified live state decide.
