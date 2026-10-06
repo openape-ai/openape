@@ -114,3 +114,13 @@
 .radios input { margin-top: 3px; accent-color: var(--accent); }
 .radios small { display: block; color: var(--muted); font-size: 13px; }
 pre.cmd { font: 13px/1.6 var(--mono); background: var(--paper-2); border: 1px solid var(--rule); border-radius: var(--radius-s); padding: 10px 12px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+
+/* Page column shared by the library and Recently removed */
+.lib { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 28px; max-width: 1240px; margin: 0 auto; padding: 24px 20px 80px; }
+.lib.single { grid-template-columns: minmax(0, 1fr); max-width: 900px; }
+.group-h { position: sticky; top: calc(var(--bar-h) + var(--safe-top, 0px)); z-index: 2; background: var(--paper-2); font-size: 13px; font-weight: 600; color: var(--muted); padding: 6px 18px; border-bottom: 1px solid var(--rule); margin: 0; }
+.sheet .row:last-child { border-bottom: 0; }
+@media (max-width: 760px) {
+  .lib, .lib.single { grid-template-columns: minmax(0, 1fr); padding: 14px 12px 80px; gap: 0; }
+  .group-h { padding: 6px 14px; }
+}

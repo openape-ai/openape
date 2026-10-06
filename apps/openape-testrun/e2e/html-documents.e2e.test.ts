@@ -74,17 +74,17 @@ describe('authenticated single-file HTML delivery', () => {
     expect(authorization.status()).toBe(302)
     await page.goto(authorization.headers().location!); await page.waitForURL('**/reports')
     await page.goto(`${base}/reports`)
-    const collection = page.getByRole('region', { name: 'HTML reports' })
-    await collection.getByLabel('Tags (all, separated by commas)').fill('reports,consolidation')
-    await expect.poll(() => collection.locator('article').count()).toBe(3)
-    await collection.getByRole('combobox', { name: /^Category/u }).selectOption('Test Runs')
-    try { await expect.poll(() => collection.locator('article').count()).toBe(1) }
-    catch (error) { await page.screenshot({ path: join(artifacts, 'collection-failure.png'), fullPage: true }); writeFileSync(join(artifacts, 'collection-diagnostics.json'), JSON.stringify({ diagnostics, text: await collection.textContent() }, null, 2)); throw error }
+    await page.goto(`${base}/reports?tag=reports&tag=consolidation`)
+    const rows = page.locator('.sheet a.row')
+    await expect.poll(() => rows.count()).toBe(3)
+    await page.locator('.rail').getByRole('button', { name: /^Test Runs/u }).click()
+    try { await expect.poll(() => rows.count()).toBe(1) }
+    catch (error) { await page.screenshot({ path: join(artifacts, 'collection-failure.png'), fullPage: true }); writeFileSync(join(artifacts, 'collection-diagnostics.json'), JSON.stringify({ diagnostics, text: await page.locator('main, body').first().textContent() }, null, 2)); throw error }
     await page.screenshot({ path: join(artifacts, 'collection-filtered.png'), fullPage: true })
     const timings = []
     for (const document of documents) {
       const start = Date.now(); await page.goto(`${base}/d/${document.id}`)
-      await page.getByRole('button', { name: 'Open active document' }).click()
+      await page.getByRole('button', { name: 'Open report' }).click()
       const frame = page.frameLocator('iframe')
       try { await frame.locator('#total').waitFor({ timeout: 10000 }) }
       catch (error) { await page.screenshot({ path: join(artifacts, 'delivery-failure.png'), fullPage: true }); writeFileSync(join(artifacts, 'delivery-diagnostics.json'), JSON.stringify({ diagnostics, frames: page.frames().map(frame => frame.url()), text: await page.locator('body').textContent() }, null, 2)); throw error }
@@ -108,7 +108,8 @@ describe('authenticated single-file HTML delivery', () => {
           await page.setViewportSize({ width: 390, height: 844 }); await page.emulateMedia({ colorScheme: theme })
           expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
           await page.evaluate(() => window.scrollTo(0, 0)); await inner.evaluate(() => window.scrollTo(0, 0))
-          expect(await page.locator('.html-report').evaluate(element => getComputedStyle(element).backgroundColor)).toBe(theme === 'dark' ? 'rgb(20, 35, 31)' : 'rgb(247, 246, 241)')
+          expect(await page.locator('.reader').evaluate(element => getComputedStyle(element).backgroundColor)).toBe(theme === 'dark' ? 'rgb(18, 21, 24)' : 'rgb(236, 238, 234)')
+          expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true)
           await page.screenshot({ path: join(artifacts, `narrow-${theme}.png`) })
         }
         await page.setViewportSize({ width: 1440, height: 1000 }); await page.emulateMedia({ colorScheme: 'light' })
@@ -143,14 +144,14 @@ describe('authenticated single-file HTML delivery', () => {
     const context = await browser.newContext(); const page = await context.newPage(); const requests: Record<string, string>[] = []
     const png = /data:image\/png;base64,([^"\s]+)/u.exec(documents[0]!.source)![1]!
     await page.route(imageUrl, async (route) => { requests.push(await route.request().allHeaders()); await route.fulfill({ contentType: 'image/png', body: Buffer.from(png, 'base64') }) })
-    await page.goto(`${base}/d/${document.document_id}`); await page.getByText('1 external image reference(s)', { exact: false }).waitFor()
-    await page.getByRole('button', { name: 'Open active document' }).click()
+    await page.goto(`${base}/d/${document.document_id}`); await page.getByText('It loads 1 image from other websites.', { exact: false }).waitFor()
+    await page.getByRole('button', { name: 'Open report' }).click()
     const frame = page.frameLocator('iframe')
     await expect.poll(() => frame.locator('img').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBe(300)
     expect(requests).toHaveLength(1); expect(requests[0]).not.toHaveProperty('cookie'); expect(requests[0]).not.toHaveProperty('authorization'); expect(requests[0]).not.toHaveProperty('referer')
     await page.screenshot({ path: join(artifacts, 'external-image.png'), fullPage: true })
     await page.unroute(imageUrl); await page.route(imageUrl, route => route.abort())
-    await page.reload(); await page.getByRole('button', { name: 'Open active document' }).click()
+    await page.reload(); await page.getByRole('button', { name: 'Open report' }).click()
     await frame.getByText('The report remains understandable without its image.').waitFor()
     expect(await frame.locator('img').getAttribute('alt')).toBe('Unavailable provider image')
     await page.screenshot({ path: join(artifacts, 'external-unavailable.png'), fullPage: true })
