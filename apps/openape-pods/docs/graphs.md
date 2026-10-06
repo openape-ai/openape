@@ -377,11 +377,11 @@ program grants and introduces no new grant claim, endpoint or error format.
 
 ## Reading networks and workflows
 
-The workspace uses one **Networks & workflows** destination with **All**, **Networks** and **Workflows** filters. A network is an existing definition in `channels` mode; a workflow is an existing definition in `sequence` mode. Both have a graph picture. The company group and all Pod rights remain unchanged. Each network execution is bounded and manual or scheduled; the term does not imply a continuously running service.
+The **Automatisierungen** tab shows every network and chain as a group on one map, next to standalone Pods and the systems they read and write; the **Liste** view shows the same members as a table. A network is an existing definition in `channels` mode; a chain (workflow) is an existing definition in `sequence` mode. The MCP `workspace` tool returns the same read model with `{type:"read",view:"map"}`. The company group and all Pod rights remain unchanged. Each network execution is bounded and manual or scheduled; the term does not imply a continuously running service.
 
-**Structure** shows all possible connections derived from validated contracts. **Last run** emphasizes connections with recorded deliveries and subdues unused paths without moving nodes. A delivery count is not proof that a downstream external effect succeeded; inspect the item trace, node outcome and effect receipt. Human choices and pending approvals appear as separate counts, deduplicated by item identity. Approval grants, uncertainty reconciliation and company boundaries retain their existing semantics.
+Edges inside a group follow the validated contracts; dotted particles carry the recorded deliveries of the last 24 hours. A delivery count is not proof that a downstream external effect succeeded; inspect the Pod history, node outcome and effect receipt. Human choices and pending approvals are counted on the **Entscheidungen** tab, deduplicated by item identity. Approval grants, uncertainty reconciliation and company boundaries retain their existing semantics.
 
-The selected Pod inspector shows **Receives**, **Produces**, **Allowed actions** and **Approval**. Readable channel titles appear with their exact technical names. Those names remain authoritative for contracts and emits. Channel field lists document payload shape; they do not enforce a JSON schema.
+The detail page of a network shows its members, decision points (gates with their takes, options and open batches), numbers, schedule and latest run; the detail page of a Pod shows what it takes and gives under **Kanäle**. Readable channel titles appear with their exact technical names. Those names remain authoritative for contracts and emits. Channel field lists document payload shape; they do not enforce a JSON schema.
 
 ## Prompt, loop and graph engineering
 
