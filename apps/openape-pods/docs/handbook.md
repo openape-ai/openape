@@ -8,7 +8,7 @@ Generated from handbook.json. Screenshots use the packaged app with synthetic da
 
 ## What Pods does and how to get it
 
-OpenApe Pods runs repeatable tasks on your Mac. Configure a Pod directly or describe the task to connected Codex. Each Pod keeps its own workspace, permissions, results and history. Verify a real run before relying on scheduled execution.
+OpenApe Pods runs repeatable tasks on your Mac. Describe the task to connected Codex; Pods shows your automations on one map and gathers everything that needs your decision in one place. Each Pod keeps its own workspace, permissions, results and history. Verify a real run before relying on scheduled execution.
 
 Availability — September 2026: Pods is an internal pilot, not a publicly released download. A Developer ID signed and Apple-notarized internal app exists, but public distribution is not approved. This guide provides no public download link or release date. If you have not been given an authorized internal build, you cannot complete installation from this page.
 
@@ -16,9 +16,41 @@ If you have received that build, open its DMG, copy OpenApe Pods into Applicatio
 
 For a first task, use a small folder of non-sensitive sample files and read-only access. Keep automatic execution off until you have checked a manual result. All screenshots in this guide use isolated synthetic data. They illustrate the current interface, not a successful connection to your accounts.
 
+## Automations: map, list and detail
+
+Automations is the landing tab. The five counters at the top are system counts: active, paused, degraded, decisions waiting for you and unknown deliveries. Their subtitles come from your data, for example the name of a degraded Pod and its reason.
+
+The map shows your Pods in the middle, the services, applications and folders they read on the left, pure destinations on the right and the authorities above: your decisions, the identity provider and the AI. Dotted lines carry the recorded reads and writes of the last 24 hours; networks and chains appear as groups with their members. List shows the same Pods as a table. Filter by group and hide layers with the chips Channels, Read, Write, Approvals and Paused.
+
+Select a node to read its facts in the info panel. Open details opens the detail page with schedule, members, decision points, numbers, access by kind, secrets as aliases, channels, the developer section and the latest run. Pause, Resume and Run now are the owner commands on this page; nothing here writes to your accounts.
+
+Stand HH:MM marks a published snapshot in the browser; Live · HH:MM means the desktop answers directly. The browser renders the same tab from the snapshot of the selected desktop. Native controls such as opening the script folder or choosing a private file stay on the desktop and are shown disabled in the browser.
+
+1. Open Pods; Automations is the landing page.
+2. Switch between Map and List, choose a group and toggle the layers.
+3. Select a Pod, chain or network and choose Open details.
+4. Use Pause, Resume or Run now on the detail page. Details öffnen in the developer section opens the Pod editor for permissions, variables and secrets, history and identity.
+
+![Automations: map, list and detail](images/handbook-automations.png)
+
+## Decisions: everything that waits for you
+
+The Decisions tab lists five kinds of owner decisions: Questions from choose gates, Approvals of batches at the identity provider, Rights a Pod is missing, Unknown deliveries whose result is unclear and Setup proposals including secret requests. The number in the tab is the count of open items.
+
+Questions show the recorded fields of each case and the options of the gate with their exact titles; Group by bundles cases by one field so a single choice applies to the whole group. Approvals link to the identity provider; rights open the approval; unknown deliveries need your observation at the destination before Delivered or Not delivered, send again.
+
+Pods never decides for you: no model, no MCP action and no schedule chooses, approves, excludes or pauses. Rights are decided at the identity provider only; the app shows status and links.
+
+1. Open Decisions; the tab shows how many items wait.
+2. Read the case, then choose an option or exclude it; Group by decides many cases with the same field at once.
+3. For unknown deliveries check the destination first, note what you saw and record it.
+4. Setup lists Codex proposals and open secret requests; Set up in the Pod opens the Pod editor.
+
+![Decisions: everything that waits for you](images/handbook-decisions.png)
+
 ## Connect your personal accounts
 
-Open App settings → Your accounts. Connect your DDISA account to decide permission requests and your Codex / GPT account for LLM calls. Optional TypeSafe / Jev setup is directly in App settings.
+Choose your account at the top right, or open the gear menu → More settings → Open desktop settings, and go to Your accounts. Connect your DDISA account to decide permission requests and your Codex / GPT account for LLM calls. Optional TypeSafe / Jev setup is on the same page.
 
 Pods finds your identity provider through the DDISA record of your email domain. Every Pod, permission and mobile device uses this one DDISA account; there is nothing to select. Pod agents are not your accounts and are never listed here. Switching to another DDISA account gives your Pods new agents, and their permissions must be granted again.
 
@@ -27,19 +59,19 @@ Other services are configured per Pod: application sign-in belongs in Permission
 1. Under Your DDISA account, enter your email and choose Sign in. Complete the browser flow and return to Pods; the account shows Signed in.
 2. Under Codex / GPT account, choose Sign in. Complete the offered browser flow and check Signed in before using AI-powered scripts.
 3. If an account later shows Expired or an error, choose Sign in again on the same account. Enter another email only if you want to switch accounts, and review Confirm switch.
-4. Choose Continue to workspace. To change the interface language, use App settings → Language.
+4. Choose Continue to workspace. To change the interface language, use the gear menu → Language.
 
 ![Connect your personal accounts](images/handbook-setup.png)
 
 ## Structured decisions with Jev
 
-Connect TypeSafe with an API key in desktop App settings. The key is verified using model discovery, stored encrypted on this Mac, and never given to scripts or Codex. Replacing the key preserves the connection. Codex configures the Pod assignment through the resources API.
+Connect TypeSafe with an API key in the desktop settings (account button at the top right, or gear menu → More settings). The key is verified using model discovery, stored encrypted on this Mac, and never given to scripts or Codex. Replacing the key preserves the connection. Codex configures the Pod assignment through the resources API.
 
 Codex writes the script; Jev evaluates bounded semantic questions at runtime. Use ordinary code for exact rules, Jev for Choice, Score or Noul decisions, and an explicit agent.run call for generated text. A Jev-only script needs no active Codex account. Synthetic validation proves the script contract, not decision quality.
 
 Review what text the script sends to TypeSafe. Preserve ambiguous decisions for review and test German/English examples before relying on automation. Retries may incur additional charges; history shows successful evaluation usage, model, attempts and duration.
 
-1. Enter the API key in App settings → TypeSafe AI - Jev - API Key.
+1. Enter the API key in the desktop settings → TypeSafe AI - Jev - API Key.
 2. Ask Codex to configure Jev through the resources API with a pinned model such as jev-1.13.0 and an attempt budget (default 20 per run), then declare jev.evaluate in the script capabilities. Script and Permissions contain no Jev setup panel.
 3. Validate, inspect the script and run once. Connecting alone never grants a Pod access. Central web shows availability; enter keys on the owning desktop.
 
@@ -53,16 +85,16 @@ const relevance = result.answers.relevant.noul
 
 ## Create your first Pod
 
-Choose New pod, enter a name and save. Edit its purpose directly under Overview → Description. Describe the source, desired result and how you will recognize success.
+Pods are created by Codex only. Choose New automation with Codex on the Automations tab: Pods writes a brief from the selected group or node, copies it and opens Codex when it is connected. Describe the source, the desired result and how you will recognize success.
 
-For assisted setup, connect Codex under App settings → Work from Codex, restart Codex and give it your task there. Pods contains management forms and execution history; conversations stay in Codex.
+Connect Codex once under the desktop settings → Work from Codex and restart Codex; the gear menu shows whether Codex is connected. Pods contains the map, the decisions and the Pod editor; conversations stay in Codex.
 
 Connected Codex can configure access, save and validate a script, activate it and enable a schedule when requested. Its confirmation policy belongs to Codex. A response saying ready is not evidence of a completed run.
 
-In desktop App settings, “Always allow script execution for all my Pods on this runtime” covers existing and future Pods for the signed-in owner on this connected runtime. Manual, scheduled and repeated runs receive exact reusable runtime grants. The separate local MCP option retains its narrower scope; an existing opt-in is never automatically expanded. Neither option starts schedules or grants mail, folder, program, network or secret permissions. Denied or revoked grants remain blocked. Turn off both options to stop new automatic approvals. Use “Manage and revoke existing grants” to open the owner identity provider and revoke existing grants separately. MCP and the central web interface cannot change these settings.
+In the gear menu, “Always let the scripts of all my Pods run on this Mac” covers existing and future Pods for the signed-in owner on this connected runtime. Manual, scheduled and repeated runs receive exact reusable runtime grants. The separate local MCP option retains its narrower scope; an existing opt-in is never automatically expanded. Neither option starts schedules or grants mail, folder, program, network or secret permissions. Denied or revoked grants remain blocked. Turn off both options to stop new automatic approvals. Use “Manage existing grants at the IdP” to open the owner identity provider and revoke existing grants separately. MCP and the central web interface cannot change these settings.
 
-1. Create the Pod or ask connected Codex to create it.
-2. Provide ordinary settings in Codex; transfer secrets through OpenApe Secrets or enter them in Variables and secrets.
+1. Hand the brief to Codex; it creates the Pod, its script and the access proposals.
+2. Provide ordinary settings in Codex; transfer secrets through OpenApe Secrets or enter them on the detail page under Secrets.
 3. Ask Codex to configure the required access and validate the saved script.
 4. Inspect the actual saved script, assignments and schedule in Pods.
 5. Check a real run and its external result before relying on the automation.
@@ -99,11 +131,13 @@ After changing assignments, a Pod is paused and its previous script validation n
 
 Use Variables and secrets for this Pod. Ordinary variables are visible to the assistant and are not encrypted. Use them for non-sensitive settings such as a folder label or destination ID. Passwords, API keys and tokens belong in Secrets.
 
-Codex can ask for a secret by name and purpose but cannot read its stored value. Use OpenApe Secrets for transfer or enter the value in the protected form. Never paste it in conversation, source, screenshots or support messages.
+Codex can ask for a secret by name and purpose but cannot read its stored value. On the detail page under Secrets choose + Secret: type the value, read a private file on this Mac, or request it through OpenApe Secrets. Never paste it in conversation, source, screenshots or support messages.
+
+A request through OpenApe Secrets registers this Mac once as a consumer with its own key and lists the request under Decisions → Setup. You fill it in at secrets.openape.ai in the browser; the value is sealed against the key of this Mac, Pods collects it once and the request is destroyed. The gear menu shows the registration with Revoke. Codex can raise the same request with requestSecret; it sees only the alias.
 
 Assigning a secret lets this Pod’s validated scripts read that alias. Review the source: a script can deliberately copy a secret into a prompt, file or log. Secret storage does not make arbitrary code safe. Managed secret values are encrypted locally and excluded from backup exports.
 
-1. Choose Set secret on the requested alias, or enter Credential alias in the protected form. Enter the value only in the masked Credential value field, then choose Save or replace credential.
+1. On the detail page choose + Secret, or Replace beside an alias. Type it: enter the value in the masked field and Save. From a file: choose a private file on this Mac. From OpenApe Secrets: enter the purpose and Request.
 2. Check the alias in the list. The value field clears after submission, even if saving fails; use the displayed result to check success.
 3. Review Secrets used by the script and save script access when needed. Ask Codex to continue configuration, then check the saved Script.
 4. Review the aliases used by the script, then ask Codex to validate and finish configuration or use the Script controls directly.
@@ -130,12 +164,12 @@ Automatic execution runs on this Mac, not in the cloud. Closing the window keeps
 
 When the app is running again or the Mac wakes, an overdue enabled schedule queues one catch-up start if a schedule start is not already pending. It advances the next due time into the future instead of replaying every missed interval. Saved progress and the script determine which data that run processes; this does not guarantee that every missed email or file is recovered.
 
-Ordinary failures and safe interruptions retry automatically with bounded backoff. After repeated failure, the affected input remains available for review and later scheduled runs remain eligible. Uncertain deliveries, changed permissions and unverified processes still require review. One Pod can run only once at a time. Pausing blocks new automatic starts but lets an active run finish; use Cancel run in History to stop it. Connected Codex can enable schedules when you request it.
+Interrupted runs and blocked or claimed inputs need recovery before further work can start. One Pod can run only once at a time. Pausing blocks new automatic starts but lets an active run finish; use Cancel run in History to stop it. Connected Codex can enable schedules when you request it.
 
 1. After a successful manual run, open Settings → Schedule and limits. Choose At an interval and enter minutes, or Daily with Local time and an explicit timezone such as Europe/Vienna.
 2. Check Enable this schedule and choose Save schedule. If the Pod is paused, separately choose Resume automatic execution after reviewing readiness.
 3. Check Next scheduled time, the enabled state and any displayed error. Keep Pods running and the Mac awake when execution is needed.
-4. To stop future scheduled work, disable and save the schedule or pause automatic execution. History shows automatic recovery after sleep, quitting or a crash, and identifies any operation requiring your review.
+4. To stop future scheduled work, disable and save the schedule or pause automatic execution. Inspect History after sleep, quitting or a crash before retrying interrupted work.
 
 ![Enable a schedule deliberately](images/handbook-settings.png)
 
@@ -143,7 +177,7 @@ Ordinary failures and safe interruptions retry automatically with bounded backof
 
 Codex reports ready: inspect the saved script, resources and actual run state in Pods. If input is missing or an operation failed, ask Codex to inspect current state and repair it.
 
-Account unavailable: open App settings → Your accounts and choose Sign in again on the account that shows Expired or an error. For AI access, check the Codex / GPT connection and the model selected in the script. Switching to another DDISA account does not repair an agent; it replaces all Pod agents.
+Account unavailable: choose your account at the top right → Your accounts and choose Sign in again on the account that shows Expired or an error. For AI access, check the Codex / GPT connection and the model selected in the script. Switching to another DDISA account does not repair an agent; it replaces all Pod agents.
 
 Waiting for approval: use Open approval and decide the request at your DDISA provider. Waiting is limited to 15 minutes. If it expires, inspect the stopped run and prepare recovery; approving an old request after restarting the app does not restart that run.
 
@@ -151,7 +185,7 @@ Permission or validation error: open Technical details in History. Check the exa
 
 No automatic run: check the enabled schedule, Next scheduled time, paused state and active script. Close any setup terminal normally. Keep the Mac awake and the app running. Resolve stopped runs, blocked inputs and resource errors in History before resuming.
 
-Interrupted or failed run: History shows the next automatic retry or whether work continued in a later attempt. Failed inputs remain visible after the retry limit; normal failures do not disable future schedules. When History requires review, use Prepare retry to check saved progress and resolve uncertain deliveries before Retry unfinished work. Use Retry unstarted requests for blocked starts. Repeated clicks on Run can create extra requests.
+Interrupted or failed run: select it in History and choose Prepare retry. This checks saved progress without starting the script. Resolve uncertain deliveries, then choose Retry unfinished work when offered. Use Retry unstarted requests for blocked starts. Repeated clicks on Run can create extra requests.
 
 Unknown delivery: check the external destination first. Record what you observed in History, then choose Already delivered or Not delivered · allow retry. Do not guess or blindly resend; a lost response does not prove that nothing happened.
 
@@ -173,7 +207,7 @@ Disconnecting a DDISA account under Your accounts revokes permissions using it a
 
 ## Back up and restore your work
 
-Open App settings → Data & backups. Normal app data lives in ~/Library/Application Support/OpenApe Pods. Use the export and restore controls instead of copying a live database.
+Choose your account at the top right → Data & backups, or choose Export backup… in the gear menu. Normal app data lives in ~/Library/Application Support/OpenApe Pods. Use the export and restore controls instead of copying a live database.
 
 Export includes settings, scripts, workspaces, knowledge, sources and history. Managed account credentials, secret values, protected application state and shell HOME/history are excluded. Personal content or secrets you manually wrote into script source or workspace files can still be in the backup. Keep exports private.
 
@@ -190,7 +224,7 @@ Verify update and back up checks an approved signed update candidate and prepare
 
 ## Choose your language
 
-Open App settings in the sidebar and use Language to switch between Deutsch and English. Your choice is saved per local profile and applies to the interface, native menus and app-owned dialogs. Unsaved editor content is retained when navigating there.
+Open the gear menu at the top right and use Language to switch between Deutsch and English. Your choice is saved per local profile and applies to the interface, native menus and app-owned dialogs. Unsaved editor content is retained when navigating there.
 
 Pod and group names, knowledge, sources, conversation messages, script code and technical audit payloads stay in their original language. The switch does not translate your content or change model prompts. Known app diagnostics are translated; an unknown external diagnostic is labeled and retained exactly. Dates and numbers follow the selected display language; stored times, schedule time zones and script contracts remain unchanged.
 
@@ -198,17 +232,13 @@ The handbook is available as complete English and German offline editions with m
 
 ## Organize pods in groups
 
-Use groups in the sidebar to organize related pods. Every pod belongs to one flat group or Ungrouped. Group names, membership and collapsed state are saved on this Mac and included in backups. Groups appear in creation order; pods keep their original creation order within each group.
+Groups organize related Pods; the Automations tab filters the map and the list by group. Every Pod belongs to one flat group or Ungrouped. Group names and membership are saved on this Mac and included in backups.
 
-Grouping does not share resources or permissions, invalidate a script or alter a running task. New pods begin in Ungrouped. Removing a group keeps every pod; deleting a pod remains a separate Data & backups action.
+Grouping does not share resources or permissions, invalidate a script or alter a running task. New Pods begin in Ungrouped. Removing a group keeps every pod; deleting a pod remains a separate Data & backups action.
 
-1. Choose + Group beside YOUR PODS, enter a Group name and choose Create group. Names contain 1–100 characters; up to fifty groups are supported.
-2. Select a pod, open Settings and choose Group. Dragging a pod onto a sidebar group also works.
-3. Choose a group heading to collapse or expand it. The selected pod stays open in the workspace while its group is collapsed.
-4. Choose the three-dot button beside a group to rename it. To remove the group, choose Remove group and confirm that its pods move to Ungrouped.
-5. If another edit changed the groups, keep your entered text, wait for the sidebar to refresh and try again.
-
-![Organize pods in groups](images/handbook-groups.png)
+1. Ask Codex to set the group of a Pod, or open the Pod editor with Details öffnen and choose Group under Settings; a new name creates the group. Names contain 1–100 characters; up to fifty groups are supported.
+2. Choose a group chip on the Automations tab to show only that group; All and Without group are always available.
+3. Rename or remove a group through Codex; removing keeps every Pod and moves it to Ungrouped.
 
 ## Overview
 
@@ -216,7 +246,7 @@ Description is an editable statement of the Pod purpose. Existing descriptions a
 
 The description does not change script execution or permissions. Ask connected Codex to implement behavioral changes, then inspect the saved script and real run history.
 
-1. Open a Pod and edit Description.
+1. Open a Pod with Details öffnen on the Automations tab and edit Description.
 2. Save description, or reload to read a concurrent update.
 3. Inspect the last run and use Run now when the script is ready.
 
@@ -334,7 +364,7 @@ More options can archive a Pod or delete an archived Pod after the native confir
 
 History shows the result, the next action and What happened. Repeated application calls and AI requests are grouped with successful and unfinished counts. Routine permission checks stay in collapsed Technical details, together with the pinned script and persisted events.
 
-Cancel run stops that attempt without immediately retrying it; an enabled future schedule stays enabled. Ordinary failures and safe shutdowns retry automatically using the original inputs and committed progress. Standalone and workflow work gets at most five attempts; network work retains its three-attempt limit. Retries start after two seconds and back off to at most sixty seconds, respecting service retry delays. Exhausted inputs remain failed, and independent future work can proceed. History offers Prepare retry only for a review condition or retained failed input. Unknown deliveries require reconciliation before dependent work can continue.
+Cancel run stops an active run. Interrupted work remains visible after a crash or restart. Choose Prepare retry to check saved progress and possible deliveries without starting the script. Retry unfinished work becomes available after a successful check. Resolve uncertain deliveries first. Overview also leads to this check after a stopped run.
 
 At most one run executes per pod. Other waiting starts counts queued start requests, not emails or files. Repeated start clicks may create several requests. Retry unstarted requests applies to a blocked queue. Checkpoints record successful progress; resuming a Codex thread alone is not a recovery decision.
 
@@ -383,7 +413,7 @@ export async function run(context) {
 
 ## Further detail: Execution approvals and run activity
 
-Starting a manual run opens any required OpenApe approval in your browser. A waiting card also appears in the Pod workspace with Open approval, so a browser-opening failure does not hide the required action. Background runs show the card without opening the browser automatically. Approval waits last at most 15 minutes and pause the script's active time limit. Cancel run stops waiting. After an application restart, safe stopped work is recovered automatically with current grant checks; approving an old request alone does not restart a cancelled attempt.
+Starting a manual run opens any required OpenApe approval in your browser. A waiting card also appears in the Pod workspace with Open approval, so a browser-opening failure does not hide the required action. Background runs show the card without opening the browser automatically. Approval waits last at most 15 minutes and pause the script's active time limit. Cancel run stops waiting. After an application restart, a stopped run requires explicit recovery; approving its old request does not restart it.
 
 The managed execution permission belongs to this Pod and its OpenApe agent. Allow Pod execution creates a revocable standing rule; Once authorizes only the current request. Script edits do not expand directory, application, HTTP or secret assignments. The desktop broker verifies the structured permission through the ape-shell authorization library, then launches the pinned script inside the existing native sandbox. External Terminal.app continues to use the ape-shell CLI.
 
@@ -391,7 +421,7 @@ History shows actual operations, active elapsed time, approval wait time and the
 
 ## Further detail: Connections and the mail notification recipe
 
-For a mail notification task, first connect your personal accounts under App settings → Your accounts. Manage the Pod identity in its Settings. Other programs authenticate in Permissions, through the Pod’s external Terminal.app window or the application opened with Play.
+For a mail notification task, first connect your personal accounts under the desktop settings → Your accounts. Manage the Pod identity in its Settings. Other programs authenticate in Permissions, through the Pod’s external Terminal.app window or the application opened with Play.
 
 For a mail notification pod, select your installed o365-cli in Permissions and configure it through Terminal.app using its own auth commands. Inspect its help and approved apes descriptor before writing the script. Installed versions can differ from the former prototype protocol; do not use o365-cli pods commands unless your selected installation actually supports them.
 
@@ -401,25 +431,27 @@ Use examples/mail-notification.mjs from the source checkout. The first successfu
 
 Validate and run manually before enabling a 15-minute interval in Settings. Review the secrets assigned to this Pod. The recipe records a pending notification before sending it and stores the receipt before acknowledging progress. When delivery is uncertain, inspect the destination and resolve the outcome in History before retrying.
 
-## Connect Pods in networks and workflows
+## Networks and chains on the map
 
-Networks & workflows is one workspace destination with All, Networks and Workflows filters. Networks exchange items through the declared channels of their Pods; workflows use Starts after dependencies. Choose Create network or Create workflow to use the corresponding existing editor. A workflow node waits for every predecessor to finish successfully; independent branches may run in parallel. Connecting Pods keeps their rights and independent schedules unchanged.
+Networks and chains appear on the Automations map as groups with their members: a network exchanges items through the declared channels of its Pods, a chain runs its Pods in order. Codex creates and changes them; the detail page shows members, decision points, numbers, schedule and the latest run and offers Pause, Resume and Run now. Connecting Pods keeps their rights and independent schedules unchanged.
 
-Structure shows possible contract-derived connections. Last run emphasizes recorded deliveries and keeps unused paths visible. A delivery count does not confirm an external action succeeded: inspect the item trace and actual result. Select a Pod to read Receives, Produces, Allowed actions and Approval; readable channel titles retain their exact technical names. Open choices and pending approvals have separate counts.
+Dotted lines show the recorded deliveries of the last 24 hours. A count does not confirm an external action succeeded: inspect the Pod’s history and the actual result. Channel titles keep their exact technical names. Open questions and pending approvals of a network are counted on the Decisions tab.
 
 Prompt engineering defines one bounded task and its result criteria inside a Pod. Loop engineering uses finite attempts and time limits inside a script, with a visible failure or review result at the limit. Graph engineering coordinates validated handoffs and human gates. A model never grants rights or approves a gate. Network executions remain bounded manual or scheduled runs; cross-Pod feedback cycles are unsupported.
 
-The workflow has its own interval, daily, one-time or cron schedule. New schedules are off. Run workflow once also works when the workflow or member Pods are paused. Pause stops new node starts, while already running nodes finish. History explains waiting and blocked states. Retry keeps completed nodes and requires reconciliation of uncertain effects.
+A chain has its own interval, daily, one-time or cron schedule. New schedules are off. Run now also works when the chain or member Pods are paused. Pause stops new node starts, while already running nodes finish. The history explains waiting and blocked states. Retry keeps completed nodes and requires reconciliation of uncertain effects.
 
-Mail workflows require separately reviewed batch-aware recipes. Review the exact mailbox, assigned application, archive rules, protected communication partners and Telegram destination. The first run establishes a quiet baseline. Preview makes no moves or Telegram deliveries. Protected senders, recipients and known conversations remain for human review. Production autonomous archiving stays blocked until conditional moves can be verified with the provider.
+Mail handling runs as a network with approve gates: nothing is archived without an approved batch, and uncertain mail waits as a question on the Decisions tab. The first run establishes a quiet baseline; protected senders, recipients and known conversations remain for human review.
 
-1. Choose Networks & workflows. Filter Networks or Workflows, then choose Create network or Create workflow. Enter a name and select existing Pods.
-2. Select all required predecessors, inspect the graph and upcoming schedule occurrences, then save with the schedule off. Cycles cannot be saved.
-3. Run a synthetic workflow and inspect every node and mail receipt before considering live setup. Installation, mailbox mutations, Telegram sends and activation require separate approval.
+1. Hand the brief to Codex: which Pods belong together, which channels they take and give, and which gates need a human.
+2. Inspect the network on the map and its detail page; a network with diagnostics neither starts nor becomes enabled.
+3. Run it once, decide the open questions, and enable the schedule only after the result is checked.
 
 ## Work from your Codex
 
 Connected Codex on this Mac administers Pods directly: it can manage variables and resources, validate and activate scripts, enable schedules and start or recover runs. No global Node installation is needed; Pods supplies its runtime.
+
+New automation with Codex on the Automations tab writes a brief with the selected group or node and the Pods it already knows; the desktop opens Codex, the browser copies the brief for you to paste.
 
 Any confirmation follows the Codex client settings. There is no additional approval queue in Pods. Full access in Codex does not remove script validation, stale-revision checks or real provider sign-in requirements.
 
@@ -427,9 +459,9 @@ Codex receives safe resource metadata and run state, not account tokens, Pod key
 
 Pods must be running. After moving or reinstalling it, open it once to refresh the launcher. Historical proposals do not execute on upgrade; Codex can retire superseded ones explicitly.
 
-Disconnect under App settings → Work from Codex. If you edited the registered Codex entry yourself, Pods leaves it alone; remove it with codex mcp remove openape-pods.
+Disconnect under the desktop settings → Work from Codex (gear menu → More settings). If you edited the registered Codex entry yourself, Pods leaves it alone; remove it with codex mcp remove openape-pods.
 
-1. Connect Codex under App settings → Work from Codex.
+1. Connect Codex under the desktop settings → Work from Codex.
 2. Restart Codex once.
 3. Ask Codex to configure or run the selected Pods.
 4. Check the applied settings and actual run status in Pods; no second approval click is required.
@@ -444,8 +476,8 @@ Import creates paused copies with fresh identities. Nothing runs until you assig
 
 In the browser you can review and configure an import on the connected desktop; opening the package file and saving an exported one happen on the desktop. Cancelling before the paused copy exists discards everything; afterwards the Pods are yours to delete individually.
 
-1. Open a Pod, workflow or network and choose Share; set the package title, keys, aliases, included files and public defaults.
+1. Open the detail page of a Pod, chain or network and choose Export…; set the package title, keys, aliases, included files and public defaults.
 2. Review the exact package and its privacy findings, acknowledge what you checked, then save the .openape file.
-3. On the receiving device choose Import under Networks & workflows and open the package file.
+3. On the receiving device open the gear menu → Portable Pods → Import… and open the package file.
 4. Enter the required values, create the paused copy, then bind folders, destinations and applications on each Pod and add secrets.
 5. Finish setup, validate and activate each Pod, create the compositions and enable schedules only when you are ready.
