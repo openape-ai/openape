@@ -813,9 +813,6 @@ importers:
       '@iconify-json/lucide':
         specifier: 'catalog:'
         version: 1.2.114
-      '@libsql/client':
-        specifier: ^0.14.0
-        version: 0.14.0
       '@nuxt/ui':
         specifier: 'catalog:'
         version: 4.9.0(0da694eb9a2797bec1a1d969bda7e714)
@@ -831,37 +828,19 @@ importers:
       '@tailwindcss/typography':
         specifier: ^0.5.19
         version: 0.5.20(tailwindcss@4.3.1)
-      drizzle-orm:
-        specifier: '>=0.45.2'
-        version: 0.45.2(@libsql/client@0.14.0)(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(better-sqlite3@12.11.1)(bun-types@1.3.14)(kysely@0.29.5)
       h3:
         specifier: 'catalog:'
         version: 1.15.11
-      jose:
-        specifier: 'catalog:'
-        version: 5.10.0
-      marked:
-        specifier: 'catalog:'
-        version: 18.0.5
       nuxt:
         specifier: 'catalog:'
         version: 4.5.2(bb9ab914cb18cba0992e0eb7ee14321d)
-      sanitize-html:
-        specifier: ^2.14.0
-        version: 2.17.5
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.1
-      ulid:
-        specifier: 'catalog:'
-        version: 2.4.0
     devDependencies:
       '@playwright/test':
         specifier: 'catalog:'
         version: 1.62.1
-      '@types/sanitize-html':
-        specifier: ^2.13.0
-        version: 2.16.1
       openape-e2e:
         specifier: workspace:*
         version: link:../../examples/e2e

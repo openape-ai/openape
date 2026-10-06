@@ -2,7 +2,7 @@
 
 Approved [plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M486HDNVQDQED9S45AJTJNF3)
 and [native issue](https://repos.openape.ai/patrick/monorepo/issues/1429).
-Implementation is under verification; this runbook is not a production receipt.
+The October 6 production cutover is recorded below; final retirement acceptance is in progress.
 The [creator guide](../../packages/ape-testruns/README.md) and generated CLI help ship
 with the publishing package. No existing producer schedule, credentials or delivery
 state is changed by this migration. No test notification may be sent.
@@ -42,7 +42,7 @@ External images are provider-dependent, and exported files are outside hosted he
 - Plans: `NUXT_REPORTS_WRITES_FROZEN` freezes old API mutations even before routing
   changes; `NUXT_REPORTS_ORIGIN` then routes to Reports without opening the old DB.
 - Both apps share a new `NUXT_PLANS_BRIDGE_SECRET` / `NUXT_REPORTS_BRIDGE_SECRET`
-  of at least 32 characters. Preserve the existing Plans invite signing secret as
+  of at least 32 characters. The forwarding shim returns 503 when its destination is missing; it has no fallback database or writer. Preserve the existing Plans invite signing secret as
   Reports `NUXT_PLANS_INVITE_SECRET`, so existing invitations remain valid.
 
 Bridge assertions last 30 seconds and bind the verified subject/actor, exact method,
@@ -169,3 +169,26 @@ IURIO Task monitor and zaz are active without blocked inputs, and the Delta Mind
 mail network is active at revision 3. This task did not make those changes.
 First regular post-rollout publication is recorded separately after observing it;
 a successful no-send acceptance fixture is not that observation.
+
+## Production cutover receipt, October 6
+
+Native implementation PR 259 merged as `6fbec604`, release PR 262 as `5965c083`,
+and CLI version-display PR 263 as `cf61e9fc`. Registry Reports 0.4.0 and Plans 1.0.6
+are installed and verified with the existing shared login. Both production services
+run tested `prod-5ecd9033`, after full clean-main `check:ci` and external CI5455.
+The unrelated intervening Troop merge is preserved without deploying Troop.
+
+All 154 frozen Plans reconcile exactly, with zero additions on repeat import.
+Frozen source digest: `04125f08b2a54763ef04b03555783ca4ab10e86f67240c4c340394791b5f0168`.
+Consistent DB/journal/config backups are protected on Chatty under
+`/home/openape/migrations/reports-1429-20261006`. Never restore the frozen policy
+journal over its current counterpart. Reports is the sole writer, both freezes
+are off, and HTML publication is enabled. Content DNS and router removal/restoration
+were tested before activation; TLS, direct-navigation denial and application-route
+isolation pass. No producer configuration, credential or delivery state changed.
+
+[Private production Test Runs](https://report.openape.ai/d/01M48K08CJ2SYKSDBFV947ETA6)
+contains actual installed CLI/production receipts, real-clock expiry/restoration,
+15 denial checks and personally inspected authenticated screenshots. The first
+narrow screenshots expose a metadata overlap; the correction and retired writer
+removal require the follow-up deployment. This receipt does not claim final acceptance.

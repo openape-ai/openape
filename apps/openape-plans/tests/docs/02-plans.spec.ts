@@ -27,7 +27,7 @@ test('write a plan', async ({ page, doc }) => {
   await expect(page.getByRole('heading', { name: 'Move billing to the new API' })).toBeVisible()
   await doc.step({
     action: 'Select Create plan',
-    description: 'The plan opens with its rendered markdown.',
+    description: 'The plan opens in Reports. Review its publisher notice before opening active content.',
     shot: '02-plan-created',
   })
 

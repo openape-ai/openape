@@ -24,13 +24,6 @@ export default defineNuxtConfig({
     reportsOrigin: '',
     reportsBridgeSecret: '',
     reportsWritesFrozen: false,
-    // DB — overridden at runtime by NUXT_TURSO_URL. Defaults to a local dev
-    // file so `pnpm dev` works without any env setup. Production MUST set
-    // NUXT_TURSO_URL (path under shared/ so it survives deploy rotation).
-    tursoUrl: 'file:./dev.db',
-    tursoAuthToken: '',
-    // Invite JWT — runtime-overridden by NUXT_INVITE_SECRET.
-    inviteSecret: 'dev-invite-secret-change-me-min-32-chars',
     // CLI token JWT (HS256) now uses openapeSp.sessionSecret as the signing
     // secret (via signPlansCliToken / verifyPlansCliToken). The old
     // cliTokenSecret / idpIssuer / idpJwksUri / idpAudience keys have been
