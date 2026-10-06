@@ -6,29 +6,29 @@ import { WorkspaceRequestError } from '../../src/renderer/central/client'
 import { browserFixture } from './browser-fixture'
 
 let wrapper: VueWrapper | undefined
+let current: Awaited<ReturnType<typeof browserFixture>> | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined })
 async function click(text: string) { const button = wrapper!.findAll('button').find(item => item.isVisible() && item.text() === text); expect(button, text).toBeDefined(); await button!.trigger('click'); await flushPromises() }
 async function open() {
-  const fixture = await browserFixture()
+  const fixture = await browserFixture(); current = fixture
   Reflect.deleteProperty(window, 'pods')
   wrapper = mount(BrowserWorkspace, { props: { client: fixture.client }, attachTo: document.body }); await flushPromises()
   return fixture
 }
-async function pod() { await wrapper!.get('[aria-label="Pods"]').trigger('click'); await flushPromises(); await wrapper!.get('.central-pod').trigger('click'); await flushPromises() }
+// The editor opens from the shell's detail page; here the host method is called directly.
+async function pod() { await (wrapper!.vm as unknown as { openPod: (id: string) => Promise<void> }).openPod(current!.host.workspace.pods[0]!.id); await flushPromises() }
 
 it('uses the desktop shell and every Pod section without a native bridge', async () => {
   await open()
-  expect(wrapper!.get('h1').text()).toBe('Networks & workflows')
-  expect(wrapper!.get('.workflow-inventory').text()).toContain('Morning review')
+  expect(wrapper!.get('[role="tablist"]').text()).toContain('Automations')
   expect(wrapper!.get('.account-status').text()).toContain('owner@example.invalid')
   await pod()
   for (const tab of ['Script', 'Variables and secrets', 'Permissions', 'Settings', 'History', 'Overview']) {
     await click(tab)
     expect(wrapper!.findAll('[role="alert"]').map(item => item.text()).join(' ')).toBe('')
   }
-  await click('Permissions'); await click('Work from Codex')
-  expect(wrapper!.get('.app-settings').text()).toContain('Manage these accounts on the desktop.')
-  await click('Sign out')
+  await wrapper!.get('[data-testid="back-to-automations"]').trigger('click'); await flushPromises()
+  await click('⚙ Settings'); await click('Sign out')
   expect(wrapper!.emitted('logout')).toHaveLength(1)
 })
 
@@ -37,12 +37,12 @@ it('preserves descriptions across tabs and guards sidebar navigation until disca
   await wrapper!.get('#pod-description').setValue('Unsaved browser draft')
   await click('History'); await click('Overview')
   expect((wrapper!.get('#pod-description').element as HTMLTextAreaElement).value).toBe('Unsaved browser draft')
-  await wrapper!.get('[aria-label="Networks & workflows"]').trigger('click'); await flushPromises()
+  await wrapper!.get('[data-testid="back-to-automations"]').trigger('click'); await flushPromises()
   expect(wrapper!.get('[aria-label="Unsaved changes"]').isVisible()).toBe(true)
   await click('Keep editing')
   expect((wrapper!.get('#pod-description').element as HTMLTextAreaElement).value).toBe('Unsaved browser draft')
-  await wrapper!.get('[aria-label="Networks & workflows"]').trigger('click'); await flushPromises(); await click('Discard changes')
-  expect(wrapper!.get('.workflow-inventory').isVisible()).toBe(true)
+  await wrapper!.get('[data-testid="back-to-automations"]').trigger('click'); await flushPromises(); await click('Discard changes')
+  expect(wrapper!.get('.automations-shell').isVisible()).toBe(true)
 })
 
 it('saves through the owner-scoped command contract and retains edits after conflicts', async () => {
@@ -95,7 +95,7 @@ it('shows inventory failures on the workflow start page and retries visibly', as
   wrapper = mount(BrowserWorkspace, { props: { client: fixture.client }, attachTo: document.body }); await flushPromises()
   expect(wrapper.findAll('[role="alert"]').some(item => item.isVisible() && item.text().includes('Workspace unavailable'))).toBe(true)
   await click('Retry')
-  expect(wrapper.get('.workflow-inventory').text()).toContain('Morning review')
+  expect(wrapper.get('[role="tablist"]').text()).toContain('Automations')
 })
 
 it('accepts an applied description receipt and clears the navigation guard', async () => {
@@ -107,8 +107,8 @@ it('accepts an applied description receipt and clears the navigation guard', asy
   await wrapper!.get('#pod-description').setValue('Saved browser description')
   await wrapper!.get('#pod-description').element.closest('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); await flushPromises()
   expect(wrapper!.findAll('[role="alert"]').map(item => item.text()).join(' ')).toBe('')
-  await wrapper!.get('[aria-label="Networks & workflows"]').trigger('click'); await flushPromises()
-  expect(wrapper!.get('.workflow-inventory').isVisible()).toBe(true)
+  await wrapper!.get('[data-testid="back-to-automations"]').trigger('click'); await flushPromises()
+  expect(wrapper!.get('.automations-shell').isVisible()).toBe(true)
   expect(wrapper!.find('[aria-label="Unsaved changes"]').exists()).toBe(false)
 })
 

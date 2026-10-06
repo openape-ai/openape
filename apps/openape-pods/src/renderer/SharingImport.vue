@@ -247,7 +247,9 @@ defineExpose({ reload })
         </template>
       </div>
       <p v-if="current.state === 'committed'" class="muted">
-        <template v-if="!completable">{{ t('Resolve every open item first') }}. </template>{{ t('Imported Pods stay paused without an active script until you validate and activate them after setup.') }}
+        <template v-if="!completable">
+          {{ t('Resolve every open item first') }}.
+        </template>{{ t('Imported Pods stay paused without an active script until you validate and activate them after setup.') }}
       </p>
     </article>
   </section>
