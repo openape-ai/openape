@@ -16,7 +16,7 @@ const main = defineCommand({
   meta: {
     name: 'ape-chat',
     version: VERSION,
-    description: 'CLI for chat.openape.ai — talk to humans and agents from the shell',
+    description: `CLI for chat.openape.ai — talk to humans and agents from the shell${process.env.OPENAPE_ISSUE_REPORTING_ENABLED === '1' ? '\nReport a problem: https://repos.openape.ai/report?product=chat' : ''}`,
   },
   subCommands: {
     whoami: whoamiCommand,

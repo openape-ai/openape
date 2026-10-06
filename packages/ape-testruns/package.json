@@ -1,24 +1,27 @@
 {
   "name": "@openape/ape-testruns",
-  "version": "0.2.2",
-  "description": "CLI for testrun.openape.ai — upload a test run, share one link that proves it works",
+  "version": "0.4.0",
+  "description": "Publish single-file HTML reports and upload compatible OpenApe test evidence",
   "type": "module",
   "license": "MIT",
   "bin": {
-    "ape-testruns": "./dist/cli.mjs"
+    "ape-testruns": "./dist/cli.mjs",
+    "ape-reports": "./dist/reports.mjs"
   },
   "files": [
     "dist",
-    "README.md"
+    "examples",
+    "README.md",
+    "REPORTS-CLI.md"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/openape-ai/testrun.git",
-    "directory": "cli"
+    "url": "git+https://repos.openape.ai/patrick/monorepo.git",
+    "directory": "packages/ape-testruns"
   },
-  "homepage": "https://github.com/openape-ai/testrun#readme",
+  "homepage": "https://report.openape.ai",
   "bugs": {
-    "url": "https://github.com/openape-ai/testrun/issues"
+    "url": "https://repos.openape.ai/patrick/monorepo/issues"
   },
   "publishConfig": {
     "access": "public"
@@ -33,13 +36,17 @@
   "dependencies": {
     "@openape/cli-auth": "workspace:*",
     "@openape/proof-cli": "workspace:*",
-    "citty": "^0.1.6"
+    "citty": "^0.1.6",
+    "htmlparser2": "10.1.0",
+    "postcss": "8.5.25",
+    "postcss-value-parser": "4.2.0"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@openape/report-contracts": "workspace:*"
   },
   "engines": {
     "node": ">=20"

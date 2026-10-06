@@ -1,7 +1,7 @@
 {
   "name": "@openape/troop",
   "type": "module",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "private": true,
   "turbo": {
     "tags": [
@@ -16,7 +16,8 @@
     "typecheck": "nuxt typecheck",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:layout": "vitest run --config vitest.browser.config.ts"
+    "test:layout": "vitest run --config vitest.browser.config.ts",
+    "docs": "playwright test && test2docs build"
   },
   "dependencies": {
     "@iconify-json/lucide": "catalog:",
@@ -29,6 +30,7 @@
     "@openape/prompt-injection-detector": "workspace:*",
     "croner": "^10.0.1",
     "drizzle-orm": "catalog:",
+    "h3": "catalog:",
     "highlight.js": "^11.11.1",
     "idb-keyval": "^6.3.0",
     "jose": "catalog:",
@@ -51,6 +53,9 @@
     "happy-dom": "catalog:",
     "playwright": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "openape-e2e": "workspace:*",
+    "test2docs": "^0.1.0",
+    "@playwright/test": "catalog:"
   }
 }

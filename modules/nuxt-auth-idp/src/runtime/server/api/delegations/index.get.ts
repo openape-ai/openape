@@ -1,4 +1,5 @@
 import { defineEventHandler, getQuery } from 'h3'
+import { expireStaleGrants } from '../../utils/expire-stale-grants'
 import { useGrantStores } from '../../utils/grant-stores'
 import { requireAuth } from '../../utils/admin'
 
@@ -30,13 +31,13 @@ export default defineEventHandler(async (event) => {
   const cursor = query.cursor ? String(query.cursor) : undefined
 
   if (role === 'delegator') {
-    const results = await grantStore.findByDelegator(email)
+    const results = await expireStaleGrants(await grantStore.findByDelegator(email), grantStore)
     results.sort((a, b) => b.created_at - a.created_at)
     return paginate(results, limit, cursor)
   }
 
   if (role === 'delegate') {
-    const results = await grantStore.findByDelegate(email)
+    const results = await expireStaleGrants(await grantStore.findByDelegate(email), grantStore)
     results.sort((a, b) => b.created_at - a.created_at)
     return paginate(results, limit, cursor)
   }
@@ -57,5 +58,5 @@ export default defineEventHandler(async (event) => {
   }
 
   results.sort((a, b) => b.created_at - a.created_at)
-  return paginate(results, limit, cursor)
+  return paginate(await expireStaleGrants(results, grantStore), limit, cursor)
 })

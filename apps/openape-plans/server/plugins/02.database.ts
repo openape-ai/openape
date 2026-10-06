@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
 
 export default defineNitroPlugin(async () => {
+  if (useRuntimeConfig().reportsOrigin) return
   if (process.env.OPENAPE_E2E === '1') return
 
   try {

@@ -7,20 +7,22 @@
 //
 // Committed output, so the docs build never depends on a capture run. This
 // script wipes and rewrites content/5.apps/ + public/guides/ — edit the story
-// captions in compose/demo/stories/, not the generated pages.
+// captions in compose/demo/stories/ or Pods handbook.json, not the generated pages.
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readHandbooks, sectionMarkdown } from '../../openape-pods/scripts/handbook-content.mjs'
 
 const docsRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const monorepoRoot = join(docsRoot, '..', '..')
 
 // dir under apps/ → { slug, title } for the guide page + screenshot folder.
 // An app only appears here once it has captured guides (apps/<app>/docs/
-// stories.json). openape-monitor and openape-question-service run in prod but
-// have no story-kit story and no local-stack service yet, so they have no page
-// in this section — add compose/demo/stories/<app>.mjs and a local-stack
-// service first, then list them here.
+// stories.json). openape-monitor, openape-question-service and
+// openape-dashboard run in prod but have no story-kit story and no local-stack
+// service yet, so they have no page in this section — add
+// compose/demo/stories/<app>.mjs and a local-stack service first, then list
+// them here.
 const APPS = [
   { dir: 'openape-free-idp', slug: 'idp', title: 'OpenApe ID' },
   { dir: 'openape-troop', slug: 'troop', title: 'Troop' },
@@ -30,7 +32,23 @@ const APPS = [
   { dir: 'openape-testrun', slug: 'testrun', title: 'Testrun' },
   { dir: 'openape-timetrack', slug: 'timetrack', title: 'Timetrack' },
   { dir: 'openape-pr', slug: 'pr', title: 'PR' },
+  { dir: 'openape-crm', slug: 'crm', title: 'CRM' },
+  { dir: 'openape-pods', slug: 'pods', title: 'Pods', source: 'handbook' },
 ]
+
+/**
+ * Keep the summary at a word boundary; it also serves as the OG description.
+ */
+function summarize(text, max) {
+  const flat = text.replace(/\n/g, ' ').trim()
+  if (flat.length <= max) return flat
+  const cut = flat.slice(0, max - 1)
+  const lastSpace = cut.lastIndexOf(' ')
+  return `${(lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut).replace(/[,;:.\s]+$/, '')}…`
+}
+
+const podsDocs = join(monorepoRoot, 'apps', 'openape-pods', 'docs')
+const handbook = readHandbooks(podsDocs).en
 
 const sectionDir = join(docsRoot, 'content', '5.apps')
 const shotsRoot = join(docsRoot, 'public', 'guides')
@@ -40,8 +58,31 @@ mkdirSync(sectionDir, { recursive: true })
 
 writeFileSync(join(sectionDir, '.navigation.yml'), 'title: Apps\nicon: i-lucide-layout-grid\n')
 
+const overview = []
 let written = 0
 APPS.forEach((app, i) => {
+  if (app.source === 'handbook') {
+    const imageDir = join(shotsRoot, app.slug)
+    mkdirSync(imageDir, { recursive: true })
+    for (const section of handbook.sections) {
+      if (section.image) cpSync(join(podsDocs, 'images', section.image), join(imageDir, section.image))
+    }
+    const lines = [
+      '---', `title: ${JSON.stringify(app.title)}`, `description: ${JSON.stringify(handbook.subtitle)}`, '---', '',
+      '::note',
+      'Pods is a native Mac app. These screenshots show its current interface with isolated synthetic data. This guide shares its English content with the offline handbook; a German offline edition is also maintained.',
+      '::', '',
+      handbook.sections.flatMap(section => sectionMarkdown(section, `/guides/${app.slug}`)).join('\n\n'), '',
+      '## Related guides', '',
+      '- [OpenApe ID: your account and approvals](/apps/idp)',
+      '- [Permissions and grants](/ecosystem/grants)',
+      '- [All app guides](/apps)', '',
+    ]
+    writeFileSync(join(sectionDir, `${String(i + 2).padStart(2, '0')}.${app.slug}.md`), `${lines.join('\n')}\n`)
+    overview.push({ ...app, blurb: handbook.subtitle })
+    written++
+    return
+  }
   const storiesPath = join(monorepoRoot, 'apps', app.dir, 'docs', 'stories.json')
   if (!existsSync(storiesPath)) {
     console.warn(`[aggregate-guides] skip ${app.slug}: no stories.json`)
@@ -58,15 +99,17 @@ APPS.forEach((app, i) => {
   // JSON.stringify → a valid double-quoted YAML scalar; intros carry colons and
   // em-dashes that would otherwise turn the frontmatter into a nested map (and
   // hand the OG renderer an object instead of a string).
-  const desc = (ordered[0].intro ?? `How ${app.title} is used, step by step.`).replace(/\n/g, ' ').slice(0, 200)
+  const intro = ordered[0].intro ?? `How ${app.title} is used, step by step.`
+  const desc = summarize(intro, 200)
+  overview.push({ ...app, blurb: summarize(intro, 130) })
   const lines = [
     '---',
     `title: ${JSON.stringify(app.title)}`,
     `description: ${JSON.stringify(desc)}`,
     '---',
     '',
-    `# ${app.title}`,
-    '',
+    // No `# ${app.title}` in the body: the frontmatter `title` already renders
+    // as the page heading; a second H1 would duplicate it.
     '::note',
     'Every step below is captured from a live end-to-end run on the local stack — the screenshots refresh on each capture, so this guide cannot drift from the real product.',
     '::',
@@ -81,8 +124,29 @@ APPS.forEach((app, i) => {
       if (step.shot) lines.push(`![${step.title}](/guides/${app.slug}/${step.shot})`, '')
     }
   }
-  writeFileSync(join(sectionDir, `${i + 1}.${app.slug}.md`), `${lines.join('\n')}\n`)
+  const prefix = String(i + 2).padStart(2, '0')
+  writeFileSync(join(sectionDir, `${prefix}.${app.slug}.md`), `${lines.join('\n')}\n`)
   written++
 })
 
-console.log(`[aggregate-guides] wrote ${written} app guides → content/5.apps/ + public/guides/`)
+// Without this page /apps is a 404: the section otherwise exists only as a
+// navigation group, and README and run.sh link exactly that URL.
+const indexLines = [
+  '---',
+  'title: Overview',
+  `description: ${JSON.stringify(`Step-by-step OpenApe app guides: ${overview.map(a => a.title).join(', ')}.`)}`,
+  '---',
+  '',
+  'Find setup steps, screenshots and practical checks for each app. Web app screenshots come from local story runs. Pods is a native Mac app: its guide shares the offline handbook content and uses isolated synthetic desktop fixtures. Each guide explains what its examples demonstrate.',
+  '',
+  '::card-group',
+  ...overview.flatMap(app => [
+    `  ::card{title="${app.title}" icon="i-lucide-app-window" to="/apps/${app.slug}"}`,
+    `  ${app.blurb}`,
+    '  ::',
+  ]),
+  '::',
+]
+writeFileSync(join(sectionDir, '01.index.md'), `${indexLines.join('\n')}\n`)
+
+console.log(`[aggregate-guides] wrote ${written} app guides + the overview → content/5.apps/ + public/guides/`)

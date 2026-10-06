@@ -1,0 +1,14 @@
+schema = "openape-shapes/v1"
+[cli]
+id = "pod-runtime"
+executable = "pod-runtime"
+audience = "shapes"
+version = "1"
+[[operation]]
+id = "run"
+command = ["run"]
+required_options = ["pod", "name", "script", "workspace"]
+display = "Run the stored script of {name}"
+action = "run"
+risk = "high"
+resource_chain = ["pod:id={pod}"]

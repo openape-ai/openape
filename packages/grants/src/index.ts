@@ -29,6 +29,8 @@ export {
   denyGrant,
   type ExtendMode,
   introspectGrant,
+  isCallerWaiting,
+  isGrantExpired,
   revokeGrant,
   useGrant,
   validateDelegation,
@@ -69,3 +71,5 @@ export {
   type WideningScope,
   type WideningSuggestion,
 } from './widening-suggestions.js'
+
+export * from './brokering.js'

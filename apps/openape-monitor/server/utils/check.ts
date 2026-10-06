@@ -5,7 +5,7 @@ import { useRuntimeConfig } from 'nitropack/runtime'
 import { ulid } from 'ulid'
 import { useDb } from '../database/drizzle'
 import { checks, monitors } from '../database/schema'
-import { checkOnce } from './check-core'
+import { checkHeartbeat, checkOnce } from './check-core'
 import { sendMail } from './mail-resend'
 
 type Monitor = InferSelectModel<typeof monitors>
@@ -16,15 +16,21 @@ const HISTORY_KEEP = 100
 function alertMail(m: Monitor, result: CheckResult, publicUrl: string): { subject: string, text: string } {
   const base = (publicUrl || 'https://monitor.openape.ai').replace(/\/$/, '')
   const dashboard = `${base}/monitors`
+  // A heartbeat monitor has no URL to name, and "not responding" would be
+  // misleading: nothing was asked. It went quiet.
+  const subject = m.kind === 'heartbeat' ? m.name : `${m.name} (${m.url})`
   if (result.up) {
+    const detail = m.kind === 'heartbeat'
+      ? 'Pings are arriving again.'
+      : `Status: ${result.statusCode ?? '—'}, ${result.latencyMs ?? '—'}ms`
     return {
       subject: `✅ UP again: ${m.name}`,
-      text: `${m.name} (${m.url}) is reachable again.\n\nStatus: ${result.statusCode ?? '—'}, ${result.latencyMs ?? '—'}ms\n\n→ ${dashboard}`,
+      text: `${subject} is alive again.\n\n${detail}\n\n→ ${dashboard}`,
     }
   }
   return {
     subject: `🔴 DOWN: ${m.name}`,
-    text: `${m.name} (${m.url}) is not responding.\n\n${result.error ?? `HTTP ${result.statusCode}`}\n\n→ ${dashboard}`,
+    text: `${subject} ${m.kind === 'heartbeat' ? 'stopped reporting in' : 'is not responding'}.\n\n${result.error ?? `HTTP ${result.statusCode}`}\n\n→ ${dashboard}`,
   }
 }
 
@@ -35,8 +41,10 @@ function alertMail(m: Monitor, result: CheckResult, publicUrl: string): { subjec
  * the level.
  */
 export async function runCheck(m: Monitor): Promise<CheckResult> {
-  const result = await checkOnce(m.url)
   const nowSec = Math.floor(Date.now() / 1000)
+  const result = m.kind === 'heartbeat'
+    ? checkHeartbeat(m, nowSec)
+    : await checkOnce(m.url)
   const status = result.up ? 'up' : 'down'
   const changed = m.lastStatus != null && m.lastStatus !== status
 

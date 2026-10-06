@@ -9,18 +9,23 @@
     "dev": "nuxt dev --port 3000",
     "nuxt-prepare": "nuxi prepare",
     "typecheck": "nuxt typecheck",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "docs": "playwright test && test2docs build"
   },
   "dependencies": {
     "@nuxt/ui": "catalog:",
     "@openape/nuxt-auth-idp": "workspace:*",
     "@openape/unstorage-s3-driver": "workspace:*",
     "aws4fetch": "catalog:",
+    "h3": "catalog:",
     "nuxt": "catalog:",
     "tailwindcss": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "@playwright/test": "catalog:",
+    "openape-e2e": "workspace:*",
+    "test2docs": "^0.1.0"
   }
 }
