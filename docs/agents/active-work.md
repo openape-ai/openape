@@ -1,5 +1,14 @@
 # Active work
 
+## Reports redesign — issue 1433
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1433; plan: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M48ZTNG1PGJZ65AYX4QDHNHN (owner-approved October 6, 2026); approved prototype copy: https://report.openape.ai/d/01M48ZPPY22PGEDKFX64H6YRKD.
+- Worktree `openape-monorepo.worktrees/issue-1433-reports-redesign`, branch `feature/issue-1433-reports-redesign`, base `c98a018b`. Tested source `68b44e9f`.
+- Delivered M1–M6: tokens, one merged library over `GET /api/library`, full-page reading view with the trust gate on the sealed frame and a Details drawer, Recently removed with a private restore dialog, browser editor removed (`/d/ID/edit` → 301 `/d/ID`).
+- Evidence: https://report.openape.ai/d/01M492M570VKK81C4HX0GJB5EY (Test Runs): repository lint/typecheck, Reports build, affected unit contract (79 Reports tests), layout 13/13, serial E2E 37/37, 68 personally inspected screenshots.
+- Follow-up: publisher type for HTML reports, https://repos.openape.ai/patrick/monorepo/issues/1434.
+- Next: owner review of the native PR. No deployment without explicit owner approval.
+
 ## Single-HTML Reports and Plans consolidation — issue 1429
 
 - Plan: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M486HDNVQDQED9S45AJTJNF3
