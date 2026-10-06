@@ -289,7 +289,8 @@ export async function startAcceptance(family) {
           assert.ok(chat.messages.some(item => item.role === 'user' && item.text === 'Prepare the assigned read command.'))
           assert.ok(chat.messages.some(item => item.text === 'The reviewed desktop script is ready.'))
           assert.equal(current.pod.lifecycle, 'paused')
-          await page.reload(); await page.locator('.pod-button').first().click(); await page.getByRole('tab', { name: 'History', exact: true }).click()
+          // The desktop reopens on Workflows; the Pod inventory lists every Pod as a row.
+          await page.reload(); await page.getByRole('button', { name: 'Pods', exact: true }).click(); await page.locator('.inventory-row').first().click(); await page.getByRole('tab', { name: 'History', exact: true }).click()
           await page.getByText(expectedResult, { exact: true }).waitFor()
           await mkdir('.artifacts', { recursive: true }); await page.screenshot({ path: `.artifacts/${family}-desktop-result.png` })
           const evidence = { family, ownerProfileUsed: false, liveModelUsed: false, actualDDISA: true, actualDesktop: true, nativeClient: true, encryptedTransport: true, approvedGrants: [...programApprovals, ...approved], desktopCommandSetupRequired: true, runId: current.runs[0].id, result: expectedResult, modelCalls }
