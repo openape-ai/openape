@@ -57,8 +57,8 @@ describe('report page on a phone', () => {
     // If any of these is empty the geometry below is measuring nothing.
     expect(shots()).toHaveLength(2)
     expect(images.map(img => img.naturalWidth)).toEqual([WIDE_SHOT_WIDTH, SMALL_SHOT_WIDTH])
-    expect(document.querySelectorAll('.stub-icon').length).toBeGreaterThan(0)
-    expect(document.querySelectorAll('.stub-badge')).toHaveLength(1)
+    expect(document.querySelector('.sum')?.textContent).toContain('All 1 checks passed')
+    expect(document.querySelector('.docbar h1')?.textContent).toContain('Proof link round-trip')
     expect(document.querySelector('.prose-report pre')).not.toBeNull()
     expect(document.querySelector('.prose-report ul li')).not.toBeNull()
   })

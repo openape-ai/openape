@@ -1,6 +1,7 @@
 import type { Client, InValue, Row } from '@libsql/client'
-import type { ReportIdentity } from './html-store'
+import type { HtmlDocumentRow, ReportIdentity } from './html-store'
 import { invalid, label, metadata, RECOVERY_MS, tags } from '../../shared/html-publication'
+import { removedAt } from './html-store'
 
 export interface Discovery { search?: string, category?: string, tags?: string[], metadata?: Record<string, string>, team?: string, series?: string, deleted?: boolean, limit?: number, cursor?: string }
 export function pagination(limit: unknown, cursor: unknown) {
@@ -37,7 +38,10 @@ export async function discoverHtml(client: Client, identity: ReportIdentity, fil
   for (const tag of tags(filter.tags ?? [])) { conditions.push('EXISTS(SELECT 1 FROM json_each(v.tags) WHERE value=?)'); args.push(tag) }
   for (const [key, value] of Object.entries(metadata(filter.metadata ?? {}))) { conditions.push('EXISTS(SELECT 1 FROM json_each(v.metadata) WHERE key=? AND value=?)'); args.push(key, value) }
   const result = await client.execute({ sql: `SELECT d.*,v.id AS publication_id,v.version,v.title,v.category,v.language,v.tags,v.metadata,v.author FROM html_documents d JOIN html_versions v ON v.document_id=d.id AND v.version=d.latest_version WHERE ${conditions.join(' AND ')} ORDER BY d.updated_at DESC,d.id DESC LIMIT ? OFFSET ?`, args: [...args, limit + 1, offset] })
-  const items = result.rows.map(item => ({ ...item, tags: JSON.parse(String(item.tags)), metadata: JSON.parse(String(item.metadata)), readers: undefined, url: `${base}/d/${item.id}`, version_url: `${base}/d/${item.id}?v=${item.version}` }))
+  const items = result.rows.map((item) => {
+    const removed = filter.deleted ? removedAt(item as unknown as HtmlDocumentRow, now) : null
+    return { ...item, tags: JSON.parse(String(item.tags)), metadata: JSON.parse(String(item.metadata)), readers: undefined, url: `${base}/d/${item.id}`, version_url: `${base}/d/${item.id}?v=${item.version}`, ...(filter.deleted ? { unavailable_at: removed!, purge_at: removed! + RECOVERY_MS } : {}) }
+  })
   return page(items, limit, offset)
 }
 export async function discoverLabels(client: Client, identity: ReportIdentity, kind: 'tags' | 'categories', search: string, team: string | undefined, category: string | undefined, now = Date.now()) {
