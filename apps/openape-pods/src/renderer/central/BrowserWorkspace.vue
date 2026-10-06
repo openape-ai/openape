@@ -3,7 +3,8 @@ import SharingImport from '../SharingImport.vue'
 import type { SharingCommand, SharingState } from '../../contracts/sharing'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { CentralNetworkRead } from '../../contracts/central-networks'
-import type { NetworkView } from '../../contracts/networks'
+import type { NetworkChoiceView, NetworkView } from '../../contracts/networks'
+import type { NetworkGateView } from '../../contracts/network-gate-view'
 import type { CentralCommand, CentralRuntime } from '../../contracts/central'
 import type { BrowserWorkspaceClient } from './client'
 import { WorkspaceRequestError } from './client'
@@ -23,6 +24,8 @@ const error = ref('')
 const connectionError = ref('')
 const page = ref('Automations')
 const now = ref(Date.now())
+const tab = ref<'automations' | 'decisions'>('automations')
+const inbox = ref<{ choices: NetworkChoiceView[], gates: NetworkGateView[] }>({ choices: [], gates: [] })
 const runtimes = ref<CentralRuntime[]>([])
 const runtimeId = ref('')
 const workflowId = ref('')
@@ -47,10 +50,22 @@ async function signIn() {
 }
 function inventory(value: CentralRuntime[]) {
   runtimes.value = value; loaded.value = true; now.value = Date.now()
+  void loadInbox()
   if (!value.some(host => host.id === runtimeId.value)) { runtimeId.value = value[0]?.id ?? ''; workflowId.value = '' }
 }
 function navigate(destination: string) {
   workspace.value?.requestNavigation(() => { workspace.value?.showInventory(true); workflowId.value = ''; page.value = destination })
+}
+// Choices and batches are bounded reads served by the online desktop, one per network with open decisions.
+async function loadInbox() {
+  const host = runtime.value
+  if (!host?.online || !props.client.network) { inbox.value = { choices: [], gates: [] }; return }
+  const pending = (host.networks?.networks ?? []).filter(network => network.decisions)
+  try {
+    const details = await Promise.all(pending.map(network => props.client.network!(host.id, { type: 'detail', id: network.id, revision: network.revision })))
+    inbox.value = { choices: details.flatMap(detail => detail.choices ?? []), gates: details.flatMap(detail => detail.gates ?? []) }
+  }
+  catch (cause) { connectionError.value = cause instanceof Error ? cause.message : String(cause) }
 }
 async function readNetwork(command: CentralNetworkRead): Promise<NetworkView> {
   const host = runtime.value
@@ -90,7 +105,7 @@ onBeforeUnmount(() => { closed = true })
         {{ t('Retry') }}
       </button>
     </p>
-    <AutomationsShell v-if="subject && page === 'Automations'" :view="runtime?.workspace.map ?? null" :live="!!runtime?.online" :now="now" :decisions="runtime?.workspace.map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" @settings="navigate('App settings')" @command="remoteCommand" />
+    <AutomationsShell v-if="subject && page === 'Automations'" :view="runtime?.workspace.map ?? null" :live="!!runtime?.online" :now="now" :decisions="runtime?.workspace.map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" :tab="tab" :inbox="{ choices: inbox.choices, gates: inbox.gates, graphGates: runtime?.workflows?.gates ?? null, proposals: [] }" @update:tab="tab = $event" @settings="navigate('App settings')" @command="remoteCommand" />
     <section v-if="subject" v-show="page === 'Workflows'">
       <template v-if="importing && runtime">
         <button class="text-button" @click="importing = false">

@@ -36,8 +36,9 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
   const lastRuns = new Map(db.prepare('SELECT pod_id,state,started_at,finished_at,summary FROM runs ORDER BY started_at,rowid').all().map(row => [row.pod_id as string, run(row)]))
   // A Pod that is running again is still degraded while its last settled run failed or left gaps.
   const settled = new Map(db.prepare('SELECT pod_id,state FROM runs WHERE finished_at IS NOT NULL ORDER BY started_at,rowid').all().map(row => [row.pod_id as string, String(row.state)]))
+  const unknownEffects = db.prepare('SELECT pod_id,effect_key,run_id FROM effect_ledger WHERE operation=\'http.request\' AND state=\'unknown\' ORDER BY rowid').all()
   const blocked = db.prepare('SELECT pod_id,count(*) AS count,min(error) AS error FROM accepted_events WHERE state=\'blocked\' GROUP BY pod_id').all()
-  const approvals = db.prepare('SELECT r.pod_id,e.data FROM run_events e JOIN runs r ON r.id=e.run_id WHERE r.state=\'running\' AND e.type=\'approval\' AND e.sequence=(SELECT max(newer.sequence) FROM run_events newer WHERE newer.run_id=e.run_id AND newer.type=\'approval\' AND json_extract(newer.data,\'$.grantId\')=json_extract(e.data,\'$.grantId\')) AND json_extract(e.data,\'$.state\')=\'pending\' ORDER BY e.at').all()
+  const approvals = db.prepare('SELECT r.pod_id,e.run_id,e.data FROM run_events e JOIN runs r ON r.id=e.run_id WHERE r.state=\'running\' AND e.type=\'approval\' AND e.sequence=(SELECT max(newer.sequence) FROM run_events newer WHERE newer.run_id=e.run_id AND newer.type=\'approval\' AND json_extract(newer.data,\'$.grantId\')=json_extract(e.data,\'$.grantId\')) AND json_extract(e.data,\'$.state\')=\'pending\' ORDER BY e.at').all()
   const schedules = new Map(db.prepare('SELECT pod_id,spec,enabled FROM schedules').all().map(row => [row.pod_id as string, { spec: JSON.parse(row.spec as string), enabled: row.enabled === 1 } satisfies MapSchedule]))
   const manifests = new Map(db.prepare('SELECT p.id,s.manifest FROM pods p JOIN scripts s ON s.pod_id=p.id AND s.hash=p.active_script').all().map(row => [row.id as string, parseManifest(JSON.parse(row.manifest as string))]))
   const contractOf = (podId: string): GraphContract | null => (manifests.get(podId)?.contract as GraphContract | undefined) ?? null
@@ -152,7 +153,8 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
       kind, ai, channels: { takes: contract?.takes ?? [], gives: contract?.gives ?? [] }, resources: mapped, secrets,
       schedule: schedules.get(pod.id) ?? sourceSchedules.get(pod.id) ?? null, lastRun: local ? lastRuns.get(pod.id) ?? null : null, runs: local ? runTotals[pod.id] ?? 0 : 0,
       collection: collectionOf.get(pod.id) ?? null, queue: local ? { blocked: Number(queue?.count ?? 0), error: (queue?.error as string | null) ?? null } : { blocked: 0, error: null },
-      approvals: approvals.filter(row => local && row.pod_id === pod.id).map(row => parseRunApproval(JSON.parse(row.data as string))).map(approval => ({ grantId: approval.grantId, title: approval.title })),
+      unknown: unknownEffects.filter(row => local && row.pod_id === pod.id).map(row => ({ key: String(row.effect_key), runId: String(row.run_id) })),
+      approvals: approvals.filter(row => local && row.pod_id === pod.id).map(row => parseRunApproval(JSON.parse(row.data as string))).map((approval, index) => ({ grantId: approval.grantId, title: approval.title, runId: String(approvals.filter(row => row.pod_id === pod.id)[index]!.run_id) })),
     })
   }
 
