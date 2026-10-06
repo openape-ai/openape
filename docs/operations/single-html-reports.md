@@ -142,7 +142,7 @@ bundled into the CLI and both apps, so the workspace graph selects all consumers
 
 All existing producers retain their previously verified compatibility decisions in the
 [previous delivery record](generic-reports-migration.md). The current inventory and
-receipt will be updated after rollout: schema-1 PR reports and briefing sender stay
+receipt below record the rollout: schema-1 PR reports and briefing sender stay
 compatible; existing Test Runs upload/exporters stay compatible; upstream mail/calendar
 and direct-message producers remain unaffected. New direct HTML publication and optional
 local templates are additive. A no-send fixture is distinct from the first regular
@@ -175,7 +175,11 @@ a successful no-send acceptance fixture is not that observation.
 Native implementation PR 259 merged as `6fbec604`, release PR 262 as `5965c083`,
 and CLI version-display PR 263 as `cf61e9fc`. Registry Reports 0.4.0 and Plans 1.0.6
 are installed and verified with the existing shared login. Both production services
-run tested `prod-5ecd9033`, after full clean-main `check:ci` and external CI5455.
+initially ran tested `prod-5ecd9033`, after full clean-main `check:ci` and external CI5455.
+Retirement PR 264 then merged as `f1e6e1a7` after source CI5463 and exact-head review.
+Both services now run tested `prod-f1e6e1a7`, with a successful full clean-main local
+`check:ci` and healthy image deployment. Plans has no legacy database module or open
+plans.db descriptor; the protected original backup remains.
 The unrelated intervening Troop merge is preserved without deploying Troop.
 
 All 154 frozen Plans reconcile exactly, with zero additions on repeat import.
@@ -189,6 +193,13 @@ isolation pass. No producer configuration, credential or delivery state changed.
 
 [Private production Test Runs](https://report.openape.ai/d/01M48K08CJ2SYKSDBFV947ETA6)
 contains actual installed CLI/production receipts, real-clock expiry/restoration,
-15 denial checks and personally inspected authenticated screenshots. The first
-narrow screenshots expose a metadata overlap; the correction and retired writer
-removal require the follow-up deployment. This receipt does not claim final acceptance.
+15 denial checks and ten embedded, personally inspected authenticated screenshots
+in version 3. The narrow metadata correction and old writer removal are deployed.
+Owner access, all ten images, anonymous denial and missing/stale version failures
+were verified after deployment. Full external main CI5469 later reported a Pods
+test failure; the current-main gate is checked separately before further merges.
+
+The first regular post-cutover producer publication remains outstanding. IURIO has
+upstream Azure read gaps; the next morning workflow is October 7 at 07:00 Vienna.
+A thread follow-up at 07:15 inspects the natural run and receipts without changing
+producers or triggering notifications. The issue stays open until acceptance.
