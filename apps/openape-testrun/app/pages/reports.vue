@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import HtmlCollection from '../components/HtmlCollection.vue'
+
 const route = useRoute()
 const category = computed(() => typeof route.query.category === 'string' ? route.query.category : undefined)
 const offset = computed(() => Number(route.query.offset) || 0)
@@ -24,6 +26,8 @@ const selectedCount = computed(() => category.value ? data.value?.categories.fin
       </NuxtLink>
     </div>
     <template v-else>
+      <HtmlCollection />
+      <h2>Earlier reports and Test Run uploads</h2>
       <nav aria-label="Report categories">
         <NuxtLink to="/reports" :aria-current="!category ? 'page' : undefined">
           All reports · {{ data?.total ?? 0 }}
