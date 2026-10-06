@@ -31,7 +31,7 @@ describe('Automatisierungen', () => {
       ['6', 'pausiert', 'davon 2 Netze, 1 Entwürfe, 1 archiviert'],
       ['1', 'gestört', 'IURIO PR monitor · mit Lücken abgeschlossen'],
       ['17', 'Entscheidungen warten auf dich', 'Review uncertain mail · Delta Mind'],
-      ['0', 'unklare Zustellungen', 'nichts abzugleichen'],
+      ['1', 'unklare Zustellungen', '1 Zustellungen abzugleichen'],
     ])
     expect(wrapper!.find('.kpi.alert').text()).toContain('gestört')
     expect(wrapper!.find('[role="tablist"]').text()).toContain('Automatisierungen')
@@ -110,13 +110,15 @@ describe('Automatisierungen', () => {
     expect(wrapper!.find('.automation-info').text()).toContain('11 Mitglieder · aktiv')
   })
 
-  it('shows the loading state without a map and the decisions slot on the second tab', async () => {
+  it('shows the loading state without a map and the decisions inbox on the second tab', async () => {
     await mountShell({ view: null, decisions: 0 })
     expect(wrapper!.find('[role="status"]').text()).toBe('Loading workspace…')
     expect(wrapper!.find('[role="tablist"]').text()).not.toContain('0')
     wrapper!.unmount()
-    wrapper = mount(AutomationsShell, { props: { view, live: true, now: NOW, tab: 'decisions' }, slots: { decisions: '<p id="inbox">inbox here</p>' } })
-    expect(wrapper.find('#inbox').exists()).toBe(true)
-    expect(wrapper.findAll('.kpi')).toHaveLength(0)
+    wrapper = mount(AutomationsShell, { props: { view, live: true, now: NOW, tab: 'decisions' } })
+    await flushPromises()
+    expect(wrapper.find('.decisions-inbox').exists()).toBe(true)
+    expect(wrapper.findAll('.kpi')).toHaveLength(5)
+    expect(wrapper.find('[role="tablist"]').text()).toContain('Decisions 2')
   })
 })

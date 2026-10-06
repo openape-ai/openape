@@ -76,12 +76,13 @@ it('derives systems, pods, collections, measured edges and KPIs from the stored 
     active: 5, paused: 6,
     degraded: [{ podId: monitor.id, reason: 'completedWithGaps' }],
     decisions: [{ networkId: f.network, gate: 'uncertain-review', title: 'Review uncertain mail', kind: 'choose', count: 17 }],
-    unknownDeliveries: 0,
+    unknownDeliveries: 1,
   })
-  f.store.db.prepare('UPDATE effect_ledger SET state=\'unknown\' WHERE rowid=(SELECT min(rowid) FROM effect_ledger)').run()
+  expect(bot.unknown).toHaveLength(1)
+  f.store.db.prepare('UPDATE effect_ledger SET state=\'unknown\' WHERE rowid=(SELECT max(rowid) FROM effect_ledger)').run()
   f.store.db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at,state,error) VALUES(?,?,\'schedule\',\'k\',\'{}\',?,\'blocked\',\'Execution permission requires owner review\')').run('event-blocked', monitor.id, NOW)
   const later = mapView(f.store, NOW)
-  expect(later.kpis.unknownDeliveries).toBe(1)
+  expect(later.kpis.unknownDeliveries).toBe(2)
   expect(later.kpis.degraded).toEqual([{ podId: monitor.id, reason: 'Execution permission requires owner review' }])
   expect(later.pods.find(pod => pod.id === monitor.id)!.queue).toEqual({ blocked: 1, error: 'Execution permission requires owner review' })
 })

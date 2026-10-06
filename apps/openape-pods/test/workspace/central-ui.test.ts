@@ -394,7 +394,8 @@ it('recovers the browser activity after the initial network detail request fails
   const f = await browserFixture(); const network = operationalFixture()
   f.host.networks = { networks: [{ ...network.view.networks[0]!, decisions: 2 }] }
   f.client.network = vi.fn(async (_runtime, command) => command.type === 'detail' ? { networks: network.view.networks, details: network.view.details } : { networks: network.view.networks, trace: network.view.trace })
-  vi.mocked(f.client.network).mockRejectedValueOnce(new Error('Synthetic initial network outage'))
+  // The inventory's inbox read and the network detail both hit the outage once.
+  vi.mocked(f.client.network).mockRejectedValueOnce(new Error('Synthetic initial network outage')).mockRejectedValueOnce(new Error('Synthetic initial network outage'))
   Reflect.deleteProperty(window, 'pods')
   wrapper = mount(BrowserWorkspace, { props: { client: f.client } }); await flushPromises()
   const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.text() === text)!.trigger('click'); await flushPromises() }
