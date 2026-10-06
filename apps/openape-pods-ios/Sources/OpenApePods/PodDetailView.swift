@@ -107,7 +107,13 @@ struct PodDetailView: View {
                 ? Color.indigo.opacity(0.08) : Color.secondary.opacity(0.05),
               in: RoundedRectangle(cornerRadius: 16))
           }
-          ForEach(model.conversation["changes"].array, id: \.recordID) { review in
+          // Resolved reviews carry no timestamp to place them in the history;
+          // only reviews that still need attention stay below the messages.
+          ForEach(
+            model.conversation["changes"].array.filter {
+              !["applied", "discarded"].contains($0["state"].string ?? "")
+            }, id: \.recordID
+          ) { review in
             ChangeReviewCard(review: review, enabled: model.canControl) { apply in
               Task { await model.decide(review, apply: apply) }
             }
