@@ -135,6 +135,7 @@ export class RemoteControl {
     const lease = Date.parse(command.leaseUntil)
     if (!Number.isFinite(lease) || lease <= this.now() || lease > this.now() + 30000) throw new ProtocolError('dispatch_lease_expired', 409)
     this.store.db.prepare('INSERT INTO remote_inbox VALUES(?,?,?,?,\'received\',NULL,NULL,?)').run(route.id, command.hash, route.deviceId, JSON.stringify(route), this.now())
+    if (route.direction === 'command') await this.hold('after-journal')
     try {
       const body = route.direction === 'command' ? parseCommand(route.kind as CommandKind, command.body) : object(command.body, ['podId', 'conversationId', 'runId', 'before', 'operationId'])
       if (body.podId) this.ownerPod(route.owner, uuid(body.podId))
@@ -189,6 +190,7 @@ export class RemoteControl {
       if (this.store.db.prepare('SELECT phase FROM remote_pods WHERE pod_id=?').get(podId)?.phase !== 'ready') throw new ProtocolError('desktop_action_required', 409)
       let receipt!: Receipt
       this.startRun(podId, route.id, (runId) => { receipt = this.commit(route, 'started', { runId }, { podId, runId }) })
+      await this.hold('after-reservation')
       return receipt
     }
     if (route.kind === 'run.cancel') { this.runs.cancel(podId, body.runId!); return this.commit(route, 'applied', { cancellationRequested: true }, { podId, runId: body.runId }) }
@@ -236,6 +238,12 @@ export class RemoteControl {
       throw new ProtocolError('unsupported_operation', 426)
     }
     return this.commit(route, 'applied', this.view(result as MasterView))
+  }
+
+  // Acceptance fixtures stop the worker at a durable point; the process is then killed by the harness.
+  private hold(point: 'after-journal' | 'after-reservation'): Promise<void> {
+    if (process.env.PODS_FIXTURE_HOLD_REMOTE !== point) return Promise.resolve()
+    return new Promise<never>(() => {})
   }
 
   private commit(route: Route, state: Receipt['state'], data: unknown, ids: Partial<Receipt> = {}) {
