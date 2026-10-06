@@ -22,7 +22,8 @@ const assemble = option('--assemble')
 const reviewed = args.includes('--reviewed')
 const directory = assemble ? resolve(assemble) : join(root, '.artifacts', 'redesign-evidence', `${new Date().toISOString().replaceAll(':', '-')}-${milestone}-${randomUUID().slice(0, 8)}`)
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
-const reference = JSON.parse(readFileSync(join(root, '../../.claude/plans/pods-redesign/testrun.json'), 'utf8'))
+// The reference run's manifest (mock version 26), so product screens keep the same ids, titles and captions.
+const reference = JSON.parse(readFileSync(join(root, 'scripts/redesign-screens.json'), 'utf8'))
 const suites = [
   ['worker', ['test/worker']],
   ['renderer', ['test/renderer']],
