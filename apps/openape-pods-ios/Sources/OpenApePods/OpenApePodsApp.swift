@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct OpenApePodsApp: App {
+  @UIApplicationDelegateAdaptor(NotificationCoordinator.self) private var coordinator
   @State private var model = PodsModel()
   init() {
     #if DEBUG && targetEnvironment(simulator)
@@ -13,6 +14,14 @@ struct OpenApePodsApp: App {
     #endif
   }
   var body: some Scene {
-    WindowGroup { PodsRootView(model: model).task { await model.restore() } }
+    WindowGroup {
+      PodsRootView(model: model).task {
+        NotificationCoordinator.shared?.model = model
+        await model.restore()
+        if model.notificationsEnabled {
+          await NotificationCoordinator.shared?.requestRegistration()
+        }
+      }
+    }
   }
 }

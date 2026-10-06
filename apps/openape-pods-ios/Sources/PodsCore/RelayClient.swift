@@ -448,8 +448,21 @@ public actor RelayClient {
     }
   }
   public func pendingOperations() -> [String] { Array(cache.pending.keys).sorted() }
+  /// Opt-in APNs registration; the relay stores only the opaque token and environment.
+  public func registerPush(token: String, environment: String) async throws -> Bool {
+    let body = try JSONEncoder().encode(["token": token, "environment": environment])
+    let data = try await request("/api/mobile/v1/notifications", method: "POST", body: body)
+    let decoded = try? JSONDecoder().decode([String: JSONValue].self, from: data)
+    if case .bool(let enabled)? = decoded?["enabled"] { return enabled }
+    return false
+  }
+  public func unregisterPush() async throws {
+    _ = try await request("/api/mobile/v1/notifications", method: "DELETE")
+  }
   public func signOut() async throws -> String? {
     var warning: String?
+    // Unbinding the push token is best effort; revocation below removes it server-side as well.
+    _ = try? await request("/api/mobile/v1/notifications", method: "DELETE")
     do {
       _ = try await request("/api/mobile/v1/session/revoke", method: "POST", body: Data("{}".utf8))
     } catch {
