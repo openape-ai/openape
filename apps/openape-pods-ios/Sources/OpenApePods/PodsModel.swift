@@ -29,6 +29,31 @@ final class PodsModel: NSObject, ASWebAuthenticationPresentationContextProviding
   var pod: JSONValue { pods.first(where: { $0["id"].string == selectedPod }) ?? .null }
   var online: Bool { runtime?.online == true }
   var canControl: Bool { online && paired && !busy && pending.isEmpty }
+  /// Steps that only the desktop can finish; shown as an explicit handoff instead of silent chat text.
+  var desktopHandoff: [String] {
+    var reasons: [String] = []
+    if pod["phase"].string == "needs_desktop_action" {
+      reasons.append(pod["error"].string ?? "Agent setup needs the desktop.")
+    }
+    for proposal in conversation["proposals"].array
+    where proposal["state"].string == "pending" && proposal["body"]["provider"].string != "variable"
+    {
+      reasons.append(
+        "Permission request waits for your approval on the desktop: "
+          + (proposal["body"]["description"].string ?? "setup request"))
+    }
+    for review in conversation["changes"].array
+    where review["state"].string == "pending"
+      && (review["workflow"] != .null
+        || review["targets"].array.contains(where: {
+          $0["actions"].array.contains(where: { $0["action"].string == "setGroup" })
+        }))
+    {
+      reasons.append("Workflow or group changes are applied on the desktop.")
+    }
+    return reasons
+  }
+  var canLoadOlder: Bool { conversation["nextBefore"].integer != nil && online && paired }
 
   func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
     UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
@@ -204,6 +229,24 @@ final class PodsModel: NSObject, ASWebAuthenticationPresentationContextProviding
             runtime: runtime.id, kind: "run", body: .object(["podId": .string(id)])))
         if online { try await loadDetail() }
       }
+    }
+  }
+  func loadOlder() async {
+    await perform {
+      guard let client, let runtime, let id = selectedPod,
+        let conversationId = pod["conversationId"].string,
+        let before = conversation["nextBefore"].integer,
+        case .object(var current) = conversation
+      else { return }
+      let older = try await client.send(
+        runtime: runtime, kind: "conversation",
+        body: .object([
+          "podId": .string(id), "conversationId": .string(conversationId),
+          "before": .number(Double(before)),
+        ]), query: true)
+      current["messages"] = .array(older["messages"].array + conversation["messages"].array)
+      current["nextBefore"] = older["nextBefore"]
+      conversation = .object(current)
     }
   }
   func saveDraft() async {
@@ -402,6 +445,9 @@ final class PodsModel: NSObject, ASWebAuthenticationPresentationContextProviding
     defer { busy = false }
     do {
       try await action()
+    } catch PodsError.service(_, "desktop_action_required") {
+      self.error =
+        "This step needs your desktop. Finish it in OpenApe Pods on the Mac, then refresh here."
     } catch PodsError.service(_, "revision_conflict") {
       // The desktop changed what the phone reviewed; show the current version instead of a failure.
       reviewConflict = true
