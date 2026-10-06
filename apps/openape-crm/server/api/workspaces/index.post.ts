@@ -5,7 +5,7 @@ import { pipelineStages, workspaceMembers, workspaces } from '../../database/sch
 import { createProblemError } from '../../utils/problem'
 import { defaultStageRows } from '../../utils/stages'
 
-/** POST /api/workspaces — Workspace anlegen; der Aufrufer wird `owner`. */
+/** POST /api/workspaces — create a workspace; the caller becomes `owner`. */
 export default defineEventHandler(async (event) => {
   const caller = await requireCaller(event)
   const body = await readBody<{ name?: string }>(event)

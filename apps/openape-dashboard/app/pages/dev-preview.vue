@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Dev-only Design-Preview mit Fixture-Daten — die echte /dashboard-Seite ist
-// auth-gated, für Design-Iteration (Screenshots) braucht es echte Pixel ohne
-// Login. In Prod-Builds existiert die Route nicht.
+// auth-gated, but design iteration (screenshots) needs real pixels without a
+// login. The route does not exist in prod builds.
 if (!import.meta.dev)
   throw createError({ statusCode: 404, statusMessage: 'Not found' })
 

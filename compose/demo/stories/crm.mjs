@@ -7,8 +7,8 @@
 import { approveIfPrompted, click, fillEmail } from '../story-kit.mjs'
 
 /**
- * Eine Fehlerseite ist kein Screenshot wert: ohne diese Sperre fotografiert der
- * Capture einen 500er und der Guide zeigt ihn als Anleitung.
+ * An error page is not worth a screenshot: without this guard the capture
+ * photographs a 500 and the guide presents it as instructions.
  */
 async function expectRendered(page, marker) {
   const body = await page.locator('body').innerText()

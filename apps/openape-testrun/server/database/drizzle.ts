@@ -16,3 +16,7 @@ export function useDb() {
   }
   return _db
 }
+
+export function useDatabaseClient() {
+  return useDb().$client
+}

@@ -1,0 +1,21 @@
+[Unit]
+Description=OpenApe Forgejo issue archive gateway
+After=network-online.target forgejo.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=git
+Group=git
+WorkingDirectory=/opt/openape-issue-archive
+ExecStart=/usr/bin/node /opt/openape-issue-archive/scripts/issue-archive.mjs --config /etc/openape-issue-archive.json
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

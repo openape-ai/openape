@@ -11,7 +11,7 @@ const MAX_IDS = 500
 /**
  * POST /api/deals/reorder — der Client schickt die neue Reihenfolge EINER
  * Spalte; der Server schreibt Stufe und Position aller genannten Deals neu.
- * Ein Aufruf pro Drop, auch wenn die Karte die Spalte gewechselt hat.
+ * One call per drop, even when the card changed column.
  * Body: { workspace_id, stage, ids: string[] }
  */
 export default defineEventHandler(async (event) => {
@@ -29,8 +29,8 @@ export default defineEventHandler(async (event) => {
   await requireRole(db, workspaceId, caller.email)
   const stage = await requireStage(db, workspaceId, body?.stage)
 
-  // Fremde IDs dürfen nicht mitwandern: nur was wirklich in DIESEM Workspace
-  // liegt, wird geschrieben.
+  // Foreign ids must not ride along: only what really sits in THIS workspace
+  // gets written.
   const owned = await db
     .select({ id: deals.id, stage: deals.stage, closedAt: deals.closedAt })
     .from(deals)
@@ -42,8 +42,8 @@ export default defineEventHandler(async (event) => {
   const now = Date.now()
   await Promise.all(ids.map((id, position) => {
     const current = known.get(id)!
-    // Ein bereits abgeschlossener Deal behält sein Abschlussdatum — bloßes
-    // Umsortieren innerhalb „Gewonnen" darf es nicht auf heute schieben.
+    // A deal that already closed keeps its closing date — merely
+    // reordering inside "won" must not push it to today.
     const closedAt = stage.outcome === 'open' ? null : current.closedAt ?? now
     return db.update(deals)
       .set({ stage: stage.key, position, closedAt })

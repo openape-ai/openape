@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createGrantStore } from '../src/runtime/server/utils/grant-store'
 
-// In-memory storage — der Store selbst ist die Unit, nicht die Persistenz.
+// In-memory storage — the store itself is the unit, not the persistence.
 const mem = new Map<string, any>()
 vi.mock('../src/runtime/server/utils/grant-storage', () => ({
   useGrantStorage: () => ({

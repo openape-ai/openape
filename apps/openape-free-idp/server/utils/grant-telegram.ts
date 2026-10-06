@@ -29,7 +29,7 @@ export interface GrantTelegramDeps {
    */
   approver: string
   debouncer: GrantMailDebouncer
-  resolveApprover: (requester: string) => Promise<string | null>
+  resolveApprover: (requester: string, grant?: OpenApeGrant) => Promise<string | null>
   countPendingForApprover: (approver: string) => Promise<number>
   send: (chatId: string, text: string) => Promise<void>
 }
@@ -72,7 +72,7 @@ export async function notifyApproverOfPendingGrantByTelegram(
 ): Promise<'sent' | 'debounced' | 'skipped'> {
   if (grant.status !== 'pending' || grant.auto_approval_kind) return 'skipped'
 
-  const approver = await deps.resolveApprover(grant.request.requester)
+  const approver = await deps.resolveApprover(grant.request.requester, grant)
   if (!approver || approver !== deps.approver) return 'skipped'
 
   if (!deps.debouncer.shouldSend(approver)) return 'debounced'

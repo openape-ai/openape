@@ -1,0 +1,80 @@
+# Shared check contract
+
+`scripts/check.mjs` and `.openape/checks.json` define the local and CI checks.
+
+- `pnpm check:affected --base origin/main --head HEAD` selects changed workspaces
+  and all transitive consumers, including local tracked and untracked changes.
+  Root configuration/tooling changes select every workspace. When base equals
+  head, the previous commit is used; an initial commit needs an explicit base.
+- `pnpm check:ci` runs the complete automatic merge gate: audit, repository
+  tooling, lint, typecheck and unit/component tests. `check:affected` defaults
+  to the same unit suite for selected workspaces; the pre-push hook does too.
+- E2E and real-browser layout are manual only (owner decision 2026-09-24,
+  issue 1379). Neither has an automatic workflow or required merge context.
+  Explicit `pnpm check:ci --suite e2e` and `pnpm check:ci --suite layout` run
+  those suites when needed; `check:affected` accepts the same explicit options.
+  Existing workspace-level test commands remain available. Native Pods E2E
+  require an unlocked Mac; they must never start implicitly on push or merge.
+- `--dry-run` prints resolved SHAs, dirty state, workspace selection and commands.
+
+The runner preserves its own Git hook context when selecting revisions, but removes
+Git-local repository and command-config environment variables from child steps.
+This includes the direct tooling step before Turbo: synthetic Git repositories
+must discover their own state from their working directory. Child checks must not
+rely on inherited command-line `safe.directory` or authentication overrides; use
+explicit repository/system configuration where required. Direct fixture invocations
+outside this runner remain responsible for their own Git environment isolation.
+
+Selected libraries/modules and their transitive workspace dependencies are built
+serially before checks. Consumed CLI applications are included only when selected
+or required by that dependency closure. Application builds outside this list
+remain explicit acceptance/release commands. Unit checks include production dependency audit,
+repository tooling tests, lint, typecheck and workspace tests. Missing scripts
+fail before execution; current coverage gaps are explicit reviewed exceptions
+in the contract. An exception does not imply that a test exists or passed.
+
+The native iOS client `@openape/pods-ios` is outside the contract by owner
+decision (2026-09-23, issue 1364): the gate covers the desktop app, and iOS is a
+separate topic. Its Xcode checks run only on demand with
+`pnpm --filter @openape/pods-ios test:layout`.
+
+Each invocation writes complete step logs and a machine-readable summary under
+`.openape/check-results/<run>/`. E2E invocations also write Vitest JSON reports.
+The first failed step returns nonzero and preserves its log. These local files
+are ignored by Git. CI attaches the directory as an artifact and preserves the
+existing E2E proof-link manifest. Forgejo requires upload-artifact v3 or a
+patched v4: https://forgejo.org/docs/latest/user/actions/advanced-features/
+
+Forgejo workflows run on every mirrored branch at the exact source commit.
+Branch heads run `check:affected --base origin/main`, so the required merge
+evidence covers only the workspaces the head changed; pushes to `main` run the
+complete unit contract as the post-merge safety net. Documentation under `docs/`
+(except `docs/architecture/`), `.claude/` and root Markdown files never select
+a workspace; a head that changes only those files passes with zero steps. The native forge's required checks are enabled only after the external
+runner and status adapter have been verified (rollout M4).
+
+## Docker runner cache endpoint
+
+The Docker runner on `chatty.delta-mind.at` needs a reachable cache proxy.
+Issue 1416 found that the default public host IP and random proxy port were
+blocked by UFW, producing 20-second restore timeouts for both dependency and
+Turbo caches. Its configuration at `/var/lib/forgejo-runner/config.yml` now pins
+`cache.proxy_port` to `37431` and `cache.actions_cache_url_override` to
+`http://10.0.0.1:37431`, the existing Docker bridge address. The internal cache
+server port remains automatic. UFW permits that destination/port only from
+Docker bridge interfaces (`br+`) in the configured `10.0.0.0/8` Docker pool.
+No public allow rule is added. A container probe must receive an HTTP response;
+404 at the bare proxy root is expected because cache URLs contain job routes.
+Actual cache save/restore logs establish the functional acceptance.
+
+Restart the runner only when its CI job containers are absent. The original
+configuration is preserved at `config.yml.issue-1416-backup`; rollback restores
+that file and removes only the named issue-1416 cache rule. A temporary rule
+for the in-flight job is removed after completion. Do not interrupt another
+run or broaden the public firewall to repair cache transport.
+
+Cache actions use Forgejo v4 at `0057852bfaa89a56745cba8c7296529d2fc39830`.
+The older v3 post-save process can retain unresolved HTTP requests after a
+successful upload. The vendor v4 save entry explicitly exits only after its
+save promise completes. Keep that behavior in the cache action itself; do not
+terminate a running check process to manufacture success.

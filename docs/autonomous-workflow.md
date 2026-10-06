@@ -2,6 +2,8 @@
 
 This document explains how tasks flow autonomously in OpenApe Werkstatt — from creation to completion without manual intervention.
 
+Development issue discussion and resolution belong to [native issues](https://repos.openape.ai/issues). This task workflow covers general work and reminders. Link a development issue when needed, without copying its lifecycle. Plans owns implementation proposals. Existing worker pauses and company exclusions remain in force.
+
 ## Overview
 
 OpenApe Werkstatt implements an autonomous task system where agents can:
@@ -14,9 +16,9 @@ This E2E flow proves the concept of an autonomous company where tasks move from 
 
 ## Related Objective
 
-This workflow supports the objective **"Erste Self-Service-Aufgabe E2E beweisen"**:
+This workflow supports the objective **"Prove the first self-service task end to end"**:
 
-> Eine Aufgabe fliesst voll automatisch: in tasks.openape.ai angelegt → vom zustaendigen Agent gepollt → erledigt → als done zurueck, mit Ergebnis-Notiz. Das ist der Existenzbeweis der autonomen Firma.
+> A task is created in tasks.openape.ai, polled by the responsible agent, completed and returned as done with a result note. This demonstrates the autonomous task workflow.
 
 ## Task Lifecycle
 
@@ -153,35 +155,16 @@ Creates a new task:
 
 ## Working with Code
 
-When a task requires code changes:
+For development work, follow the [native contribution workflow](how-to-contribute.md#working-with-code) and the selected checkout's `AGENTS.md`.
 
-1. Find related issues at `git.openape.ai`:
-   ```bash
-   curl -s -H "Authorization: token $FORGEJO_TOKEN" \
-     "https://git.openape.ai/api/v1/repos/issues/search?assigned=true&state=open&type=issues"
-   ```
+1. Query native issues using `pnpm git:cli -- issue list --all-repos --state open --assignee me` from a working checkout with the pinned Node version active. The API/CLI uses DDISA and live access checks.
+2. Read the issue, its linked plan and the existing implementation. Create an isolated feature branch from canonical main.
+3. Make targeted changes and run the repository's required checks.
+4. Push to repos.openape.ai and create a native PR with the full issue URL and validation evidence. Add the reciprocal relation with `pnpm git:cli -- issue link <number> --pull-repo patrick/monorepo --pull-number <pr-number>`.
+5. Preserve exact-source review and external check gates. Follow the worker's existing merge authorization. Forgejo remains the CI/code mirror and frozen issue archive; never open or mutate monorepo issues there.
+6. After verified resolution, explicitly close the issue using its current version. A merged PR does not close it automatically. Update a linked task/reminder only for its independent completion criteria.
 
-2. Create a worktree:
-   ```bash
-   git_worktree create --repo <repo-url> --task-id <task-id> --branch <branch-name>
-   ```
-
-3. Make targeted edits (never rewrite whole files)
-
-4. Run verification:
-   ```bash
-   verify --cwd ~/work/<task-id> --command "<test-command>"
-   ```
-
-5. Push branch and open PR:
-   ```bash
-   curl -s -X POST -H "Authorization: token $FORGEJO_TOKEN" \
-     -H 'Content-Type: application/json' \
-     "https://git.openape.ai/api/v1/repos/<owner>/<repo>/pulls" \
-     -d '{"head":"<branch>","base":"main","title":"...","body":"Closes #<n>"}'
-   ```
-
-6. Include PR URL in task notes before closing
+Do not resume a paused worker or remove company exclusions as part of changing issue endpoints. Historical task and plan links remain usable through the archive compatibility route; do not rewrite historical conversation payloads.
 
 ## Guardrails
 
@@ -240,7 +223,7 @@ file_write --path ~/repos/openape/docs/autonomous-workflow.md --content "..."
 # ... git operations ...
 
 # 6. Agent reports results
-printf '%s' "Created docs/autonomous-workflow.md. PR: https://git.openape.ai/..." | \
+printf '%s' "Created docs/autonomous-workflow.md. PR: https://repos.openape.ai/patrick/monorepo/pulls/<number>" | \
   ape-tasks edit 01KVGGRFA9CGC9XNKHR8Z0B8BX --notes-from-stdin
 
 # 7. Agent completes the task

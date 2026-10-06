@@ -1,0 +1,7 @@
+{
+  "name": "@openape/pods-protocol", "version": "0.1.0", "private": true, "type": "module",
+  "description": "Versioned native Pods transport and authenticated content envelopes",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }, "./crypto": { "types": "./dist/crypto.d.ts", "import": "./dist/crypto.js" } },
+  "scripts": { "build": "tsup", "typecheck": "tsc --noEmit", "lint": "eslint .", "test": "vitest run" },
+  "devDependencies": { "@types/node": "catalog:", "tsup": "catalog:", "typescript": "catalog:", "vitest": "catalog:" }
+}

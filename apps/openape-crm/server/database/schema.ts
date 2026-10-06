@@ -1,6 +1,6 @@
 import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
-// Ein Workspace ist der Datentopf: Deals, Kontakte, Firmen und Notizen hängen
+// A workspace is the container: deals, contacts, companies and notes all hang
 // daran, Zugriff regelt workspace_members (owner|manager|member).
 
 export const workspaces = sqliteTable('workspaces', {
@@ -23,7 +23,7 @@ export const workspaceMembers = sqliteTable('workspace_members', {
 
 export const workspaceInvites = sqliteTable('workspace_invites', {
   id: text('id').primaryKey(),
-  /** Zufälliges Geheimnis aus dem Einladungslink — kein JWT, kein Secret nötig. */
+  /** Random secret from the invitation link — no JWT, no secret needed. */
   token: text('token').notNull().unique(),
   workspaceId: text('workspace_id').notNull(),
   createdBy: text('created_by').notNull(),
@@ -62,10 +62,10 @@ export const contacts = sqliteTable('contacts', {
 
 export const pipelineStages = sqliteTable('pipeline_stages', {
   workspaceId: text('workspace_id').notNull(),
-  /** Stabiler Schlüssel, auf den `deals.stage` zeigt — Umbenennen ändert nur `name`. */
+  /** Stable key that `deals.stage` points at — renaming only touches `name`. */
   key: text('key').notNull(),
   name: text('name').notNull(),
-  /** Nur `outcome` entscheidet über den Abschluss, nie der Name der Stufe. */
+  /** Only `outcome` decides whether it closes, never the stage name. */
   outcome: text('outcome', { enum: ['open', 'won', 'lost'] }).notNull().default('open'),
   position: integer('position').notNull(),
 }, t => [
@@ -76,7 +76,7 @@ export const deals = sqliteTable('deals', {
   id: text('id').primaryKey(),
   workspaceId: text('workspace_id').notNull(),
   title: text('title').notNull(),
-  /** Betrag in Cent, EUR. Kein Float, keine zweite Währung. */
+  /** Amount in cents, EUR. No float, no second currency. */
   valueCents: integer('value_cents').notNull().default(0),
   stage: text('stage').notNull(),
   contactId: text('contact_id'),

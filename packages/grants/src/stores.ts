@@ -1,6 +1,8 @@
 import type { GrantStatus, OpenApeGrant, PaginatedResponse, PaginationParams } from '@openape/core'
 
 export interface GrantListParams extends PaginationParams {
+  brokerOwner?: string | null
+  requesterFilter?: string
   status?: GrantStatus
   requester?: string | string[]
   role?: string
@@ -93,8 +95,10 @@ export class InMemoryGrantStore implements GrantStore {
     }
     if (params?.requester) {
       const requesters = Array.isArray(params.requester) ? new Set(params.requester) : new Set([params.requester])
-      grants = grants.filter(g => requesters.has(g.request.requester))
+      grants = grants.filter(g => params.brokerOwner !== undefined ? (g.brokered ? g.brokered.owner === params.brokerOwner : requesters.has(g.request.requester)) : requesters.has(g.request.requester))
     }
+
+    if (params?.requesterFilter) grants = grants.filter(g => g.request.requester === params.requesterFilter)
 
     // Sort by created_at DESC
     grants.sort((a, b) => b.created_at - a.created_at)
