@@ -127,7 +127,7 @@ describe('private briefing publication and viewing', () => {
       await page.goto(authorization.headers().location!)
       await page.waitForURL('**/reports')
       await page.goto(`${origin}/r/${series.slug}?v=1`)
-      await page.getByRole('heading', { name: 'A little clarity for today.' }).waitFor()
+      await page.locator('.briefing').getByRole('heading', { name: 'A little clarity for today.' }).waitFor()
       expect(await page.locator('.briefing').textContent()).toContain('Personal events may be missing')
       const cookie = (await context.cookies()).filter(item => item.name.startsWith('openape-sp')).map(item => `${item.name}=${item.value}`).join('; ')
       const mutation = await fetch(`${origin}/api/report-series`, { method: 'POST', body: JSON.stringify({ name: 'Cross origin' }), headers: { cookie, 'content-type': 'application/json', origin: 'https://evil.example' } })
