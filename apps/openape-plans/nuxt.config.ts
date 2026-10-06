@@ -21,6 +21,9 @@ export default defineNuxtConfig({
   css: ['~/assets/main.css'],
 
   runtimeConfig: {
+    reportsOrigin: '',
+    reportsBridgeSecret: '',
+    reportsWritesFrozen: false,
     // DB — overridden at runtime by NUXT_TURSO_URL. Defaults to a local dev
     // file so `pnpm dev` works without any env setup. Production MUST set
     // NUXT_TURSO_URL (path under shared/ so it survives deploy rotation).
@@ -60,18 +63,19 @@ export default defineNuxtConfig({
         {
           id: 'plans:read',
           description: 'Read your plans.',
-          grants: ['GET /api/plans', 'GET /api/plans/:id'],
+          grants: ['GET /api/teams', 'GET /api/teams/:id', 'GET /api/teams/:id/plans', 'GET /api/teams/:id/invites', 'GET /api/plans/:id'],
         },
         {
           id: 'plans:write',
           description: 'Create, edit and manage your plans.',
-          grants: ['POST /api/plans', 'PATCH /api/plans/:id', 'POST /api/plans/:id/status'],
+          grants: ['POST /api/teams', 'POST /api/teams/:id/plans', 'POST /api/teams/:id/invites', 'POST /api/teams/:id/archive', 'POST /api/teams/:id/unarchive', 'POST /api/invites/accept', 'PATCH /api/plans/:id', 'PATCH /api/teams/:id', 'DELETE /api/plans/:id', 'DELETE /api/teams/:id', 'DELETE /api/teams/:id/members/:email', 'DELETE /api/invites/:id'],
         },
       ],
     },
   },
 
   nitro: {
+    externals: { inline: ['@openape/report-contracts'] },
     preset: 'node-server',
   },
 })

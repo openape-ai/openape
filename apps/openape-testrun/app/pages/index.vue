@@ -13,7 +13,7 @@ onMounted(async () => {
   if (user.value) {
     const returnTo = sessionStorage.getItem('reports-return')
     sessionStorage.removeItem('reports-return')
-    await navigateTo(returnTo && /^\/r\/[\w-]+(?:\?v=\d+)?$/.test(returnTo) ? returnTo : '/reports')
+    await navigateTo(returnTo && /^\/(?:r\/[\w-]+|d\/[\w-]+(?:\/edit)?)(?:\?v=\d+)?$/.test(returnTo) ? returnTo : '/reports')
   }
 })
 
@@ -24,7 +24,7 @@ async function onSubmit() {
   error.value = ''
   try {
     const returnTo = route.query.returnTo
-    if (typeof returnTo === 'string' && /^\/r\/[\w-]+(?:\?v=\d+)?$/.test(returnTo)) sessionStorage.setItem('reports-return', returnTo)
+    if (typeof returnTo === 'string' && /^\/(?:r\/[\w-]+|d\/[\w-]+(?:\/edit)?)(?:\?v=\d+)?$/.test(returnTo)) sessionStorage.setItem('reports-return', returnTo)
     await login(value)
   }
   catch (err: unknown) {

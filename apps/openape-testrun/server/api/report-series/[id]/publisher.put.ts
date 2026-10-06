@@ -1,7 +1,6 @@
 import { defineEventHandler, getRouterParam } from 'h3'
-import { and, eq } from 'drizzle-orm'
-import { useDb } from '../../../database/drizzle'
-import { reportSeries } from '../../../database/schema'
+import { useDatabaseClient } from '../../../database/drizzle'
+import { row, transaction } from '../../../utils/html-store'
 import { reportOwner } from '../../../utils/report-auth'
 import { limitReportRequests, readReportBody } from '../../../utils/report-request'
 import { createProblemError } from '../../../utils/problem'
@@ -16,10 +15,12 @@ export default defineEventHandler(async (event) => {
     || (body.publisher !== null && (typeof body.publisher !== 'string' || !/^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/.test(body.publisher) || body.publisher.length > 300))) {
     throw createProblemError({ status: 400, title: 'Invalid publisher binding' })
   }
-  const db = useDb()
-  const series = await db.select().from(reportSeries).where(and(eq(reportSeries.id, id), eq(reportSeries.owner, principal.subject))).get()
-  if (!series) throw createProblemError({ status: 404, title: 'Report series not found' })
-  const updated = await db.update(reportSeries).set({ publisher: body.publisher as string | null, revision: series.revision + 1 }).where(and(eq(reportSeries.id, id), eq(reportSeries.revision, body.expectedRevision as number))).returning({ revision: reportSeries.revision }).get()
-  if (!updated) throw createProblemError({ status: 409, title: 'Publisher binding changed; reload before editing' })
-  return updated
+  return transaction(useDatabaseClient(), async (tx) => {
+    const series = await row(tx, 'SELECT * FROM report_series WHERE id=? AND owner=?', [id, principal.subject])
+    if (!series) throw createProblemError({ status: 404, title: 'Report series not found' })
+    if (series.revision !== body.expectedRevision) throw createProblemError({ status: 409, title: 'Publisher binding changed; reload before editing' })
+    const revision = Number(series.revision) + 1
+    await tx.execute({ sql: 'UPDATE report_series SET publisher=?,revision=? WHERE id=?', args: [body.publisher as string | null, revision, id] })
+    return { revision }
+  })
 })

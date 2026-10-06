@@ -9,6 +9,7 @@ const teamId = computed(() => String(route.params.id))
 const planId = computed(() => String(route.params.planId))
 
 interface Plan {
+  version?: number
   id: string
   title: string
   body_md: string
@@ -16,6 +17,7 @@ interface Plan {
   caller_role: 'owner' | 'editor' | 'viewer'
 }
 
+const version = ref<number>()
 const loading = ref(true)
 const saving = ref(false)
 const error = ref('')
@@ -68,6 +70,7 @@ async function load() {
       error.value = 'Viewers cannot edit plans'
       return
     }
+    version.value = plan.version
     title.value = plan.title
     bodyMd.value = plan.body_md
     status.value = plan.status
@@ -88,7 +91,7 @@ async function onSave() {
   try {
     await apiFetch(`/api/plans/${planId.value}`, {
       method: 'PATCH',
-      body: { title: title.value.trim(), body_md: bodyMd.value, status: status.value },
+      body: { expected_version: version.value, title: title.value.trim(), body_md: bodyMd.value, status: status.value },
     })
     await navigateTo(`/teams/${teamId.value}/plans/${planId.value}`)
   }

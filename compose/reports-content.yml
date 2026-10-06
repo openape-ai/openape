@@ -1,0 +1,22 @@
+# Install through the existing Traefik file provider after isolation acceptance.
+# The existing openape.ai wildcard certificate covers this hostname.
+http:
+  routers:
+    reports-content:
+      rule: Host(`report-content.openape.ai`)
+      entryPoints: [https]
+      service: testrun@file
+      tls: {}
+      observability:
+        accessLogs: false
+        tracing: false
+        metrics: false
+    reports-content-http:
+      rule: Host(`report-content.openape.ai`)
+      entryPoints: [http]
+      middlewares: [redirect-https@file]
+      service: noop@internal
+      observability:
+        accessLogs: false
+        tracing: false
+        metrics: false
