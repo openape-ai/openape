@@ -168,9 +168,9 @@ onMounted(() => { if (q.value) topbar.value?.focus() })
             </label>
           </div>
         </div>
-        <div v-if="chips.length" class="chips">
+        <div class="chips">
           <span v-for="chip in chips" :key="chip.key" class="chip">{{ chip.label }}<button type="button" :aria-label="`Remove filter ${chip.label}`" @click="update(chip.clear)"><AppIcon name="x" small /></button></span>
-          <button type="button" class="link" @click="clearAll">
+          <button v-if="chips.length" type="button" class="link" @click="clearAll">
             Clear all
           </button>
         </div>
