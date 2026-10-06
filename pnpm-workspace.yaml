@@ -123,6 +123,9 @@ overrides:
   # GHSA-g2v6-rqmx-r4w6 (@vue/server-renderer <3.5.42); 3.5.43 published 2026-09-17.
   vue: '>=3.5.43'
   lodash: ^4.17.21
+  # GHSA-6qxp-vccf-f47h (high, <1.31.0) reaches openclaw and devframe transitively.
+  # 1.31.0 published 2026-09-28 18:59 UTC; seven-day quarantine already passed.
+  '@modelcontextprotocol/sdk@<1.31.0': '>=1.31.0 <2'
   node-forge: '>=1.4.0'
   path-to-regexp: '>=8.4.0'
   # GHSA-jqcg-44mw-7w3h; 2.0.8 published 2026-09-15.
