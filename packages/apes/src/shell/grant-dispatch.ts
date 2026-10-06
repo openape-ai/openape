@@ -5,6 +5,7 @@ import { apiFetch, getGrantsEndpoint } from '../http.js'
 import { notifyGrantPending } from '../notifications.js'
 import {
   createShapesGrant,
+  GRANT_WAIT_MS,
   fetchGrantToken,
   findExistingGrant,
   isAutoApproved,
@@ -13,6 +14,7 @@ import {
   resolveCommand,
   verifyAndConsume,
   waitForGrantStatus,
+  waitsUntil,
 } from '../shapes/index.js'
 import { createWaitProgressReporter } from '../wait-progress.js'
 import { checkSudoRejection, isApesSelfDispatch } from './apes-self-dispatch.js'
@@ -201,6 +203,8 @@ export async function requestGrantForShellLine(
         grant_type: options.approval ?? 'once',
         command: ['bash', '-c', line],
         reason: `Shell session: ${line.slice(0, 100)}`,
+        // Same deadline this loop actually honours, below (#1306).
+        waits_until: waitsUntil(),
       },
     })
     if (!isAutoApproved(grant)) {
@@ -214,7 +218,7 @@ export async function requestGrantForShellLine(
       })
     }
 
-    const maxWait = 300_000
+    const maxWait = GRANT_WAIT_MS
     const interval = 3_000
     const start = Date.now()
     // Progress lines on stderr while pending — see wait-progress.ts (#1065).

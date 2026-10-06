@@ -1,0 +1,252 @@
+:root {
+	--primary-color: #1f2937;
+	--accent-color: #2563eb;
+	--bg-color: #f8f9fa;
+	--card-bg: #ffffff;
+	--text-color: #333333;
+	--muted-color: #666666;
+	--border-color: #e0e0e0;
+	--sidebar-width: 280px;
+}
+
+* {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+
+body {
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+	line-height: 1.6;
+	color: var(--text-color);
+	background-color: var(--bg-color);
+}
+
+.layout {
+	display: flex;
+	min-height: 100vh;
+}
+
+.sidebar {
+	width: var(--sidebar-width);
+	background-color: var(--primary-color);
+	color: white;
+	padding: 2rem 1rem;
+	position: fixed;
+	height: 100vh;
+	overflow-y: auto;
+}
+
+.sidebar h1 {
+	font-size: 1.25rem;
+	margin-bottom: 2rem;
+	padding-bottom: 1rem;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.sidebar nav ul {
+	list-style: none;
+}
+
+.sidebar nav a {
+	color: rgba(255, 255, 255, 0.8);
+	text-decoration: none;
+	display: block;
+	padding: 0.5rem 0;
+	transition: color 0.2s;
+}
+
+.sidebar nav a:hover,
+.sidebar nav a.active {
+	color: white;
+}
+
+.nav-group-title {
+	font-size: 0.75rem;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: rgba(255, 255, 255, 0.5);
+	margin-top: 1rem;
+	margin-bottom: 0.25rem;
+	display: block;
+}
+
+.nav-group > ul {
+	padding-left: 0.5rem;
+}
+
+.content {
+	flex: 1;
+	margin-left: var(--sidebar-width);
+	padding: 2rem 3rem;
+	max-width: 900px;
+}
+
+.content h1 {
+	font-size: 2rem;
+	color: var(--primary-color);
+	margin-bottom: 0.5rem;
+}
+
+.description {
+	font-size: 1.1rem;
+	color: var(--muted-color);
+	margin-bottom: 2rem;
+	padding: 1rem;
+	background: var(--card-bg);
+	border-left: 4px solid var(--accent-color);
+	border-radius: 0 4px 4px 0;
+}
+
+section {
+	margin-bottom: 3rem;
+}
+
+section h2 {
+	font-size: 1.5rem;
+	color: var(--primary-color);
+	margin-bottom: 1rem;
+	padding-bottom: 0.5rem;
+	border-bottom: 2px solid var(--border-color);
+}
+
+section > p {
+	margin-bottom: 1.5rem;
+	color: #555;
+}
+
+.step-card {
+	background: var(--card-bg);
+	border-radius: 8px;
+	padding: 1.5rem;
+	margin-bottom: 1.5rem;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.step-card h3 {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	font-size: 1.1rem;
+	color: var(--primary-color);
+	margin-bottom: 0.75rem;
+}
+
+.step-number {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	background: var(--accent-color);
+	color: white;
+	border-radius: 50%;
+	font-size: 0.9rem;
+	font-weight: bold;
+	flex-shrink: 0;
+}
+
+.step-card p {
+	color: #555;
+	margin-bottom: 1rem;
+}
+
+.step-card figure {
+	margin: 0;
+}
+
+.step-card img {
+	max-width: 100%;
+	border-radius: 4px;
+	border: 1px solid var(--border-color);
+}
+
+footer {
+	margin-top: 3rem;
+	padding-top: 1.5rem;
+	border-top: 1px solid var(--border-color);
+	color: #888;
+	font-size: 0.9rem;
+}
+
+.guide-list {
+	display: grid;
+	gap: 1rem;
+}
+
+.guide-link {
+	display: block;
+	background: var(--card-bg);
+	padding: 1.25rem 1.5rem;
+	border-radius: 8px;
+	text-decoration: none;
+	color: var(--text-color);
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.guide-link:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.guide-link h3 {
+	color: var(--accent-color);
+	margin-bottom: 0.25rem;
+}
+
+.guide-link p {
+	color: var(--muted-color);
+	font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+	.layout {
+		flex-direction: column;
+	}
+
+	.sidebar {
+		position: static;
+		width: 100%;
+		height: auto;
+		padding: 1rem;
+	}
+
+	.sidebar h1 {
+		margin-bottom: 1rem;
+	}
+
+	.sidebar nav ul {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+
+	.sidebar nav a {
+		padding: 0.25rem 0.75rem;
+		background: rgba(255, 255, 255, 0.1);
+		border-radius: 4px;
+	}
+
+	.content {
+		margin-left: 0;
+		padding: 1.5rem;
+	}
+}
+
+@media print {
+	.sidebar {
+		display: none;
+	}
+
+	.content {
+		margin-left: 0;
+		max-width: 100%;
+	}
+
+	.step-card {
+		break-inside: avoid;
+		box-shadow: none;
+		border: 1px solid var(--border-color);
+	}
+}

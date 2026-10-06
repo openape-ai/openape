@@ -1,8 +1,8 @@
-import type { OpenApeCliAuthorizationDetail, OpenApeGrant } from '@openape/core'
+import type { BrokeredGrant, OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGrantSummary } from '@openape/core'
 import { computeCmdHash } from '@openape/core'
-import { cliAuthorizationDetailCovers, verifyAuthzJWT } from '@openape/grants'
+import { cliAuthorizationDetailCovers, sameBrokeredGrant, verifyAuthzJWT } from '@openape/grants'
 import { execFileSync } from 'node:child_process'
-import { hostname } from 'node:os'
+import { shellTargetHost } from '../shell/context.js'
 import consola from 'consola'
 import { getGenericAuditLogPath } from '../config.js'
 import { appendGenericCallLog } from '../audit/generic-log.js'
@@ -59,12 +59,26 @@ export function isAutoApproved(grant: { status?: string, approved_automatically?
   return grant.approved_automatically === true || grant.status === 'approved'
 }
 
+/**
+ * How long a caller waits for a decision before giving up. Both the waiting and
+ * the deadline announced to the approver come from here — if they drifted, the
+ * grant card would promise a countdown nobody honours, which is worse than no
+ * countdown at all.
+ */
+export const GRANT_WAIT_MS = 300_000
+
+/** The wall-clock moment this caller stops caring, in epoch seconds. */
+export function waitsUntil(nowMs: number = Date.now()): number {
+  return Math.floor((nowMs + GRANT_WAIT_MS) / 1000)
+}
+
 export async function createShapesGrant(
   resolved: ResolvedCommand,
   params: {
     idp: string
     approval: 'once' | 'timed' | 'always'
     reason?: string
+    summary?: OpenApeGrantSummary
   },
 ): Promise<CreateShapesGrantResult> {
   const grantsEndpoint = await getGrantsEndpoint(params.idp)
@@ -77,7 +91,7 @@ export async function createShapesGrant(
     idp: params.idp,
     body: {
       requester,
-      target_host: hostname(),
+      target_host: shellTargetHost(),
       audience: resolved.adapter.cli.audience ?? 'shapes',
       grant_type: params.approval,
       command: resolved.executionContext.argv,
@@ -85,6 +99,9 @@ export async function createShapesGrant(
       permissions: [resolved.permission],
       authorization_details: [resolved.detail],
       execution_context: resolved.executionContext,
+      // Tell the approver when this stops being a live decision (#1306).
+      waits_until: waitsUntil(),
+      ...(params.summary ? { summary: params.summary } : {}),
     },
   })
 }
@@ -98,7 +115,7 @@ export async function createShapesGrant(
  */
 export async function waitForGrantStatus(idp: string, grantId: string): Promise<'approved' | 'denied' | 'revoked'> {
   const grantsEndpoint = await getGrantsEndpoint(idp)
-  const deadline = Date.now() + 300_000
+  const deadline = Date.now() + GRANT_WAIT_MS
   const reportProgress = createWaitProgressReporter(grantId)
 
   while (Date.now() < deadline) {
@@ -147,18 +164,38 @@ function hasStructuredCliGrant(claims: Record<string, unknown>): boolean {
  * Split out so the interactive shell can re-use the verify + consume path
  * without being forced into the `execFileSync`-based one-shot execution.
  */
-export async function verifyAndConsume(token: string, resolved: ResolvedCommand): Promise<void> {
+export interface AssignedGrantScope {
+  brokered?: BrokeredGrant
+  issuer: string
+  subject: string
+  targetHost: string
+  grantId: string
+  jwksUri: string
+  grantsEndpoint: string
+  runAs?: string
+  signal?: AbortSignal
+  fetch?: (url: string, options: RequestInit) => Promise<Response>
+}
+export async function verifyAndConsume(token: string, resolved: ResolvedCommand, scope?: AssignedGrantScope): Promise<void> {
   const payload = decodePayload(token)
-  const issuer = String(payload.iss ?? '')
+  const issuer = scope?.issuer ?? String(payload.iss ?? '')
   if (!issuer)
     throw new Error('Grant token is missing issuer')
 
-  const discovery = await discoverEndpoints(issuer)
-  const jwksUri = String(discovery.jwks_uri ?? `${issuer}/.well-known/jwks.json`)
+  const discovery = scope ? {} : await discoverEndpoints(issuer)
+  const jwksUri = scope?.jwksUri ?? String(discovery.jwks_uri ?? `${issuer}/.well-known/jwks.json`)
+  const transport = scope?.fetch ?? fetch
+  let jwks: Parameters<typeof verifyAuthzJWT>[1]['jwks']
+  if (scope?.fetch) {
+    const response = await transport(jwksUri, { redirect: 'error', signal: AbortSignal.any([...(scope.signal ? [scope.signal] : []), AbortSignal.timeout(10000)]) })
+    if (!response.ok) throw new Error(`JWKS request failed: ${response.status}`)
+    jwks = await response.json() as typeof jwks
+  }
   const result = await verifyAuthzJWT(token, {
     expectedIss: issuer,
     expectedAud: resolved.adapter.cli.audience ?? 'shapes',
     jwksUri,
+    jwks,
   })
 
   if (!result.valid || !result.claims) {
@@ -166,6 +203,9 @@ export async function verifyAndConsume(token: string, resolved: ResolvedCommand)
   }
 
   const claims = result.claims
+  if (claims.brokered && !scope) throw new Error('Brokered grants require an explicitly assigned owner and agent binding')
+  if (scope && (!sameBrokeredGrant(scope.brokered, claims.brokered) || (scope.brokered && claims.decided_by !== scope.brokered.owner))) throw new Error('Grant does not match the assigned broker connection')
+  if (scope && (claims.sub !== scope.subject || claims.target_host !== scope.targetHost || claims.grant_id !== scope.grantId || claims.run_as !== scope.runAs || claims.execution_context?.adapter_digest !== resolved.digest)) throw new Error('Grant does not match the assigned identity, host or adapter')
   const details = grantedCliDetails(claims as unknown as Record<string, unknown>)
 
   if (claims.execution_context?.adapter_digest && claims.execution_context.adapter_digest !== resolved.digest) {
@@ -205,9 +245,10 @@ export async function verifyAndConsume(token: string, resolved: ResolvedCommand)
     }
   }
 
-  const grantsEndpoint = await getGrantsEndpoint(issuer)
-  const consume = await fetch(`${grantsEndpoint}/${claims.grant_id}/consume`, {
+  const grantsEndpoint = scope?.grantsEndpoint ?? await getGrantsEndpoint(issuer)
+  const consume = await transport(`${grantsEndpoint}/${encodeURIComponent(claims.grant_id)}/consume`, {
     method: 'POST',
+    ...(scope ? { redirect: 'error' as const, signal: AbortSignal.any([...(scope.signal ? [scope.signal] : []), AbortSignal.timeout(10000)]) } : {}),
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -217,10 +258,11 @@ export async function verifyAndConsume(token: string, resolved: ResolvedCommand)
     throw new Error(`Consume failed: ${consume.status} ${consume.statusText}`)
   }
 
-  const consumeResult = await consume.json() as { error?: string }
+  const consumeResult = await consume.json() as { error?: string, status?: string }
   if (consumeResult.error) {
     throw new Error(`Grant rejected at consume step: ${consumeResult.error}`)
   }
+  if (scope && !['valid', 'consumed'].includes(consumeResult.status ?? '')) throw new Error('Unrecognized grant consume response')
 }
 
 /**
@@ -343,8 +385,22 @@ export async function findExistingGrant(
 
   for (const grant of response.data) {
     const req = grant.request
-    if (req.grant_type === 'once')
-      continue
+    if (req.grant_type === 'once') {
+      // An approved `once` grant is still worth exactly one run: single use is
+      // enforced at /consume, which flips it to `used` and answers
+      // `already_consumed` afterwards — and this query only asks for
+      // `approved`, so a spent grant never reaches here. Skipping them outright
+      // meant a human could approve a once grant and be asked to approve a
+      // second one for the very same command.
+      //
+      // Matched on argv_hash rather than the looser coverage rules below,
+      // because verifyAndConsume enforces argv_hash for once grants: a grant
+      // that merely *covers* this command would fail the run instead of
+      // prompting for a new one.
+      const argvHash = resolved.executionContext.argv_hash
+      if (!argvHash || req.execution_context?.argv_hash !== argvHash)
+        continue
+    }
     if (req.grant_type === 'timed' && grant.expires_at && grant.expires_at <= now)
       continue
     if (req.audience !== expectedAudience)
@@ -406,7 +462,7 @@ export async function createCompoundGrant(
     idp: params.idp,
     body: {
       requester,
-      target_host: hostname(),
+      target_host: shellTargetHost(),
       audience: compound.audience,
       grant_type: params.approval,
       command: compound.executionContext.argv,
@@ -437,8 +493,22 @@ export async function findExistingCompoundGrant(
 
   for (const grant of response.data) {
     const req = grant.request
-    if (req.grant_type === 'once')
-      continue
+    if (req.grant_type === 'once') {
+      // An approved `once` grant is still worth exactly one run: single use is
+      // enforced at /consume, which flips it to `used` and answers
+      // `already_consumed` afterwards — and this query only asks for
+      // `approved`, so a spent grant never reaches here. Skipping them outright
+      // meant a human could approve a once grant and be asked to approve a
+      // second one for the very same command.
+      //
+      // Matched on argv_hash rather than the looser coverage rules below,
+      // because verifyAndConsume enforces argv_hash for once grants: a grant
+      // that merely *covers* this command would fail the run instead of
+      // prompting for a new one.
+      const argvHash = compound.executionContext.argv_hash
+      if (!argvHash || req.execution_context?.argv_hash !== argvHash)
+        continue
+    }
     if (req.grant_type === 'timed' && grant.expires_at && grant.expires_at <= now)
       continue
     if (req.audience !== compound.audience)
@@ -476,6 +546,7 @@ export async function verifyAndConsumeCompound(token: string, compound: Resolved
   }
 
   const claims = result.claims
+  if (claims.brokered) throw new Error('Brokered grants require an explicitly assigned owner and agent binding')
   const details = grantedCliDetails(claims as unknown as Record<string, unknown>)
   if (details.length === 0)
     throw new Error('Grant carries no structured CLI details for a compound command')

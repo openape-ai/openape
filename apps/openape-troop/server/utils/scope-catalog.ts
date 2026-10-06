@@ -56,8 +56,16 @@ export const TROOP_SCOPES: TroopScope[] = [
   },
   {
     id: 'troop:cockpit-serve',
-    description: 'Claim and resolve the owner\'s cockpit tasks (companies and services) as their operator. Does not include agent or nest management.',
+    description: 'Claim and resolve the owner\'s cockpit tasks (companies and services) as their operator, read the org context (tree, objectives, reports) and post reports. Does not include agent or nest management.',
     grants: [
+      // Serving a company includes knowing it: org tree, objectives and
+      // reports are the operator's working context; posting reports is how
+      // it reports back (#1262). Handlers derive the owner from the
+      // delegated sub, so these stay owner-bound like the queue.
+      'GET /api/cockpit/orgs/:orgId/tree',
+      'GET /api/orgs/:id/objectives',
+      'GET /api/orgs/:id/reports',
+      'POST /api/orgs/:id/reports',
       // Serving the owner's services starts with discovering them (#1075) —
       // without this the worker's service loop only ever sees an empty list.
       'GET /api/cockpit/services',

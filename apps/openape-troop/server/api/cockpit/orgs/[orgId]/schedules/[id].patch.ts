@@ -5,12 +5,13 @@ import { requireOwnedOrg } from '../../../../../utils/cockpit/org-access'
 import { isValidCron } from '../../../../../utils/cockpit/schedule'
 
 // Edit a trigger — any subset of kind/prompt/atHour/everyMinutes/fireAt/cronExpr/
-// enabled. A timing change clears lastRunAt so the new schedule re-arms cleanly.
+// enabled/notify. A timing change clears lastRunAt so the new schedule re-arms
+// cleanly; `notify` does not, it only decides whether the answer rings.
 export default defineEventHandler(async (event) => {
   const { owner, orgId } = await requireOwnedOrg(event)
   const id = getRouterParam(event, 'id')
   if (!id) throw createError({ statusCode: 400, statusMessage: 'id required' })
-  const body = await readBody<{ kind?: string, prompt?: string, atHour?: number | null, everyMinutes?: number | null, fireAt?: number | null, cronExpr?: string | null, enabled?: boolean }>(event)
+  const body = await readBody<{ kind?: string, prompt?: string, atHour?: number | null, everyMinutes?: number | null, fireAt?: number | null, cronExpr?: string | null, enabled?: boolean, notify?: boolean }>(event)
   const patch: Record<string, unknown> = {}
   if (typeof body?.kind === 'string') patch.kind = body.kind.trim()
   if (typeof body?.prompt === 'string') patch.prompt = body.prompt.trim()
@@ -23,6 +24,7 @@ export default defineEventHandler(async (event) => {
     patch.cronExpr = c
   }
   if (typeof body?.enabled === 'boolean') patch.enabled = body.enabled
+  if (typeof body?.notify === 'boolean') patch.notify = body.notify
   if (Object.keys(patch).length === 0) throw createError({ statusCode: 400, statusMessage: 'no fields' })
   if ('atHour' in patch || 'everyMinutes' in patch || 'fireAt' in patch || 'cronExpr' in patch) patch.lastRunAt = null
   await useDb().update(cockpitSchedules).set(patch).where(and(eq(cockpitSchedules.id, id), eq(cockpitSchedules.ownerEmail, owner), eq(cockpitSchedules.orgId, orgId)))

@@ -19,23 +19,29 @@ One of `draft`, `active`, `done`, `archived`. Default on create is `draft`.
 The creator is the plan's `owner_email`. The plan owner OR a team owner can
 soft-delete the plan. Any editor/owner in the team can update title/body/status.
 
-## Soft delete
+## Recovery after Reports consolidation
 
-`ape-plans rm <id>` sets `deleted_at` in the DB. The plan disappears from
-listings and returns 404 on subsequent fetches. MVP does not offer an undo
-command, but the row is recoverable via SQL until the periodic purge runs.
+Removal denies access to every version. The owner can recover for 30 days using
+`ape-reports restore ID --permanent` or another explicit new lifetime. Restoration
+starts private; after 30 days online content is purged. Updates do not renew expiry.
 
-## Update tracking
+## Update tracking and conflicts
 
-Every write sets `updated_at` (unix seconds) and `updated_by` (caller email).
-This is how you tell which human or agent last touched a plan:
+`show --json` includes immutable `version`, `updated_at` and `updated_by`. Status
+is descriptive metadata; explicit user approval is recorded separately.
 
+The consolidated service requires `expected_version` on writes, returns 428 for
+old unversioned clients, and rejects stale writes with 409. Interactive editing
+uses the version loaded before opening the editor. File/stdin replacement requires
+the version of the source originally read:
+
+```sh
+ape-plans show ID --json
+ape-plans edit ID --body-from-file plan.html --expected-version 3
 ```
-ape-plans show 01H... --json | jq '{updated_at, updated_by}'
-```
 
-## Concurrent edits
-
-MVP is last-write-wins: no compare-and-swap. Two agents saving different
-bodies at the same time will overwrite each other. Use team conventions to
-avoid this; a proper ETag/If-Match flow is planned for v2.
+Keep your draft after a conflict and reconcile the newer source. Never retry by
+blindly substituting the latest version. Append/prepend/section operations transform
+the freshly read source and submit that version. Status/removal also accept an
+explicit `--expected-version`; otherwise they use the version read by the command.
+The CLI remains usable against the pre-consolidation service during rollout.

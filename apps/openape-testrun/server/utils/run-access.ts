@@ -1,9 +1,11 @@
 import type { H3Event } from 'h3'
+import { setHeader } from 'h3'
 import { and, eq, isNull } from 'drizzle-orm'
 import { useRuntimeConfig } from 'nitropack/runtime'
 import { useDb } from '../database/drizzle'
 import { runs } from '../database/schema'
 import { createProblemError } from './problem'
+import { privateReportHeaders, reportOwner } from './report-auth'
 import type { Caller } from '@openape/nuxt-auth-sp'
 
 export type RunRow = typeof runs.$inferSelect
@@ -14,16 +16,25 @@ export async function loadOwnRun(event: H3Event, caller: Caller): Promise<RunRow
   const db = useDb()
   const run = await db.select().from(runs).where(and(eq(runs.id, id), isNull(runs.deletedAt))).get()
   if (!run) throw createProblemError({ status: 404, title: 'Run not found' })
+  denyNonSharedTest(event, run)
   if (run.createdBy !== caller.email) {
     throw createProblemError({ status: 403, title: 'Forbidden', detail: 'Only the uploader can access this run via the authenticated API. Use the public share link instead.' })
   }
   return run
 }
 
-export async function loadRunBySlug(slug: string): Promise<RunRow> {
+export async function loadRunBySlug(event: H3Event, slug: string): Promise<RunRow> {
   const db = useDb()
   const run = await db.select().from(runs).where(and(eq(runs.slug, slug), isNull(runs.deletedAt))).get()
   if (!run) throw createProblemError({ status: 404, title: 'Run not found' })
+  if (['briefing', 'document'].includes(run.reportType) && run.visibility === 'private') {
+    privateReportHeaders(event)
+    const principal = await reportOwner(event)
+    if (principal.subject !== run.createdBy) throw createProblemError({ status: 404, title: 'Report not found' })
+  }
+  else {
+    denyNonSharedTest(event, run)
+  }
   return run
 }
 
@@ -46,4 +57,11 @@ export function publicRunUrl(event: H3Event, slug: string): string {
   const configured = (useRuntimeConfig().publicUrl as string)?.replace(/\/$/, '')
   const base = configured || getRequestURL(event).origin
   return `${base}/r/${slug}`
+}
+
+export function denyNonSharedTest(event: H3Event, run: Pick<RunRow, 'reportType' | 'visibility'>) {
+  if (run.reportType === 'test' && run.visibility === 'shared') return
+  setHeader(event, 'cache-control', 'private, no-store')
+  setHeader(event, 'vary', 'Cookie, Authorization')
+  throw createProblemError({ status: 404, title: 'Report not found' })
 }

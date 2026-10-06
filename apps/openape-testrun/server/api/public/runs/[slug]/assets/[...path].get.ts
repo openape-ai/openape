@@ -4,6 +4,7 @@ import { useDb } from '../../../../../database/drizzle'
 import { assets } from '../../../../../database/schema'
 import { createProblemError } from '../../../../../utils/problem'
 import { loadRunBySlug, requestedVersion } from '../../../../../utils/run-access'
+import { rasterContentType } from '../../../../../utils/raster-image'
 
 /**
  * GET /api/public/runs/:slug/assets/<path>?v=<n> — screenshot bytes, NO auth
@@ -14,15 +15,19 @@ export default defineEventHandler(async (event) => {
   const slug = getRouterParam(event, 'slug')
   const path = getRouterParam(event, 'path')
   if (!slug || !path) throw createProblemError({ status: 400, title: 'Slug and path required' })
-  const run = await loadRunBySlug(slug)
+  const run = await loadRunBySlug(event, slug)
   const version = requestedVersion(event, run)
 
   const db = useDb()
   const asset = await db.select().from(assets).where(and(eq(assets.runId, run.id), eq(assets.path, decodeURIComponent(path)), eq(assets.version, version))).get()
   if (!asset) throw createProblemError({ status: 404, title: 'Asset not found' })
 
-  setHeader(event, 'content-type', asset.contentType)
+  const contentType = rasterContentType(Buffer.from(asset.bytes))
+  setHeader(event, 'content-type', contentType ?? 'application/octet-stream')
+  setHeader(event, 'x-content-type-options', 'nosniff')
+  setHeader(event, 'content-security-policy', 'default-src \'none\'; sandbox')
+  if (!contentType) setHeader(event, 'content-disposition', 'attachment')
   setHeader(event, 'content-length', asset.size)
-  setHeader(event, 'cache-control', 'public, max-age=31536000, immutable')
+  if (run.visibility === 'shared') setHeader(event, 'cache-control', 'public, max-age=31536000, immutable')
   return asset.bytes
 })

@@ -1,0 +1,41 @@
+{
+  "id": "openape-grant-gate",
+  "name": "OpenApe Grant Gate",
+  "description": "Routes every agent exec through the DDISA grant flow. Requests with the agent identity, approves with the owner identity, fails closed.",
+  "activation": {
+    "onStartup": true
+  },
+  "enabledByDefault": false,
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "agents"
+    ],
+    "properties": {
+      "agents": {
+        "type": "object",
+        "description": "Map of OpenClaw agent id to that agent's apes auth home (the directory containing .config/apes/auth.json). Agents missing here are blocked.",
+        "additionalProperties": {
+          "type": "string"
+        }
+      },
+      "apeShellPath": {
+        "type": "string",
+        "description": "Absolute path to the ape-shell binary."
+      },
+      "waitTimeoutMs": {
+        "type": "number",
+        "description": "How long to wait for a grant decision before failing closed."
+      },
+      "approvalSurface": {
+        "type": "string",
+        "enum": [
+          "idp",
+          "openclaw"
+        ],
+        "description": "Where the human is asked. \"idp\" (default) polls the grant so any IdP surface can decide and works for unattended agents; \"openclaw\" prompts in-session but requires an interactive channel."
+      }
+    }
+  }
+}

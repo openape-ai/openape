@@ -5,11 +5,11 @@ import { requireAgentOrg } from '../../../utils/cockpit/agent-org'
 const MAX_TOOLS = 128
 const MAX_LEN = 200
 
-// Der Worker meldet nach jedem yolo_sync, was er ans IdP gepusht hat (bzw. dass
-// die Policy unverändert aktuell ist oder der Push scheiterte). Ohne diesen
-// Report weiß troop nichts vom Policy-Zustand — eine stale Policy sieht im
-// Cockpit dann aus wie "der Operator darf das halt nicht" (Vorfall 30.07.,
-// zwei Tage `jq *` ohne Wirkung). `tools` nur bei ok mitschicken: bei einem
+// After every yolo_sync the worker reports what it pushed to the IdP (or that
+// the policy was already current, or that the push failed). Without that report
+// troop knows nothing about the policy state — a stale policy then looks in the
+// cockpit like "the operator simply isn't allowed to" (incident 2026-07-30, two
+// days of `jq *` having no effect). Send `tools` only on ok: on a
 // Fehlschlag bleibt die zuletzt WIRKSAME Liste stehen, denn gegen die driftet
 // die Rolle.
 export default defineEventHandler(async (event) => {

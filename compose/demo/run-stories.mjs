@@ -15,6 +15,7 @@ import idpStories from './stories/idp.mjs'
 import prStories from './stories/pr.mjs'
 import plansStories from './stories/plans.mjs'
 import tasksStories from './stories/tasks.mjs'
+import crmStories from './stories/crm.mjs'
 import timetrackStories from './stories/timetrack.mjs'
 import testrunStories from './stories/testrun.mjs'
 import troopStories from './stories/troop.mjs'
@@ -55,10 +56,11 @@ const ctx = {
   TASKS: 'https://tasks.openape.test',
   PLANS: 'https://plans.openape.test',
   TIMETRACK: 'https://timetrack.openape.test',
+  CRM: 'https://crm.openape.test',
   REG_TOKEN: process.env.REG_TOKEN || '',
 }
 
-for (const run of [idpStories, idpRecoveryStories, troopStories, chatStories, testrunStories, prStories, tasksStories, plansStories, timetrackStories])
+for (const run of [idpStories, idpRecoveryStories, troopStories, chatStories, testrunStories, prStories, tasksStories, plansStories, timetrackStories, crmStories])
   await run(ctx)
 
 const failures = kit.finish('demo')

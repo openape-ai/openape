@@ -16,16 +16,19 @@ export class GrantsClient {
     this.agentToken = token
   }
 
-  private headers(): Record<string, string> {
+  private headers(tokenOverride?: string): Record<string, string> {
     const h: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (this.agentToken) {
-      h.Authorization = `Bearer ${this.agentToken}`
+    const token = tokenOverride ?? this.agentToken
+    if (token) {
+      h.Authorization = `Bearer ${token}`
     }
     return h
   }
 
   /**
-   * Create a grant request on the IdP.
+   * Create a grant request on the IdP. `agentToken` is the requesting
+   * agent's verified JWT — the IdP requires it (#1276) and binds the
+   * grant's requester to the token subject.
    */
   async requestGrant(opts: {
     requester: string
@@ -36,10 +39,11 @@ export class GrantsClient {
     reason?: string
     requestHash?: string
     duration?: number
+    agentToken?: string
   }): Promise<OpenApeGrant> {
     const res = await fetch(`${this.idpUrl}/api/grants`, {
       method: 'POST',
-      headers: this.headers(),
+      headers: this.headers(opts.agentToken),
       body: JSON.stringify({
         requester: opts.requester,
         target_host: opts.targetHost,

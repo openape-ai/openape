@@ -44,6 +44,38 @@
     "used_at": {
       "type": "number",
       "description": "Unix timestamp (seconds) when the grant was consumed."
+    },
+    "brokered": {
+      "type": "object",
+      "properties": {
+        "connection_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "broker_issuer": {
+          "type": "string",
+          "format": "uri"
+        },
+        "agent_issuer": {
+          "type": "string",
+          "format": "uri"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "key_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "connection_id",
+        "broker_issuer",
+        "agent_issuer",
+        "owner",
+        "key_id"
+      ],
+      "additionalProperties": false
     }
   },
   "required": ["id", "request", "status", "created_at"],

@@ -16,6 +16,8 @@ function loadSchema(filename: string): Record<string, unknown> {
 // Load all schemas so $ref resolution works across them
 const schemaFiles = [
   'authz-jwt-claims.json',
+  'broker-request-claims.json',
+  'broker-connection-claims.json',
   'client-metadata.json',
   'ddisa-record.json',
   'delegation.json',

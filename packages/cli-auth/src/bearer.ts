@@ -46,6 +46,7 @@ export async function getAuthorizedBearer(opts: AuthorizedBearerOptions): Promis
     if (
       cached
       && cached.expires_at > now + SP_TOKEN_SKEW_SECONDS
+      && typeof cached.endpoint === 'string'
       && sameEndpoint(cached.endpoint, opts.endpoint)
     ) {
       return `Bearer ${cached.access_token}`

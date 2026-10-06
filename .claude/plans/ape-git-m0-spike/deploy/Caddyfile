@@ -1,0 +1,7 @@
+{
+	email phofmann@delta-mind.at
+}
+
+repos.openape.ai {
+	reverse_proxy app:3300
+}

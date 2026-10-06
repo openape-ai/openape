@@ -1,5 +1,6 @@
 import type { OpenApeAuthZClaims, OpenApeGrant } from '@openape/core'
-import type { JWTPayload, KeyLike } from 'jose'
+import type { JWTPayload, KeyLike, JSONWebKeySet } from 'jose'
+import { createLocalJWKSet } from 'jose'
 import { createRemoteJWKS, signJWT, verifyJWT } from '@openape/core'
 
 /**
@@ -45,6 +46,7 @@ export async function issueAuthzJWT(
   }
 
   const claims: OpenApeAuthZClaims = {
+    ...(grant.brokered ? { brokered: grant.brokered } : {}),
     iss: issuer,
     sub: grant.request.requester,
     aud: grant.request.audience,
@@ -78,6 +80,7 @@ export interface VerifyAuthzOptions {
   expectedAud?: string
   publicKey?: KeyLike | Uint8Array
   jwksUri?: string
+  jwks?: JSONWebKeySet
 }
 
 /**
@@ -89,7 +92,7 @@ export async function verifyAuthzJWT(
 ): Promise<{ valid: boolean, claims?: OpenApeAuthZClaims, error?: string }> {
   try {
     const verifyKey = options.publicKey
-      ?? (options.jwksUri ? createRemoteJWKS(options.jwksUri) : undefined)
+      ?? (options.jwks ? createLocalJWKSet(options.jwks) : options.jwksUri ? createRemoteJWKS(options.jwksUri) : undefined)
 
     if (!verifyKey) {
       return { valid: false, error: 'No verification key or JWKS URI provided' }

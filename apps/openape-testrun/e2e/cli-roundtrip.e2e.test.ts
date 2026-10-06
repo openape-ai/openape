@@ -177,6 +177,7 @@ beforeAll(async () => {
     timeoutMs: 150_000,
     env: ({ url }) => ({
       NUXT_IGNORE_LOCK: '1',
+      NUXT_DOCUMENT_PUBLISHING_ENABLED: 'true',
       NUXT_TURSO_URL: `file:${db}`,
       NUXT_OPENAPE_SP_SESSION_SECRET: SECRET,
       NUXT_OPENAPE_SP_CLIENT_ID: CLIENT_ID,
@@ -264,4 +265,20 @@ describe('ape-testruns CLI roundtrip (real binary against a booted server)', () 
     expect(res.status).not.toBe(0)
     expect(res.stderr).toMatch(/Not logged in|apes login/)
   })
+})
+
+it('publishes a client document through the real CLI and reuses its exact receipt', async () => {
+  const file = join(runDir, 'document.json')
+  writeFileSync(file, JSON.stringify({ type: 'document', schemaVersion: 1, title: 'CLI document', language: 'en', html: '<h1>Actual CLI publication</h1>' }))
+  const args = ['publish', file, '--key', 'cli-document-one', '--category', 'Custom CLI category', '--json', '--endpoint', base]
+  const first = await runCli(args, homeDir)
+  expect(first.status, first.stderr).toBe(0)
+  const publication = JSON.parse(first.stdout)
+  const replay = await runCli(args, homeDir)
+  expect(replay.status, replay.stderr).toBe(0)
+  expect(JSON.parse(replay.stdout)).toMatchObject({ id: publication.id, replayed: true })
+  expect((await fetch(publication.url.replace('/r/', '/api/public/runs/'))).status).toBe(401)
+  writeFileSync(file, JSON.stringify({ type: 'document', schemaVersion: 1, title: 'Changed', html: '<h1>Changed</h1>' }))
+  const conflict = await runCli(args, homeDir)
+  expect(conflict.status).not.toBe(0); expect(conflict.stderr).toContain('409')
 })

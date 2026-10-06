@@ -60,6 +60,12 @@ import { createTelegramTransport } from './telegram-api'
 import { TelegramChatApi } from './telegram-chat-api'
 import { TelegramChannel } from './telegram-channel'
 
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  process.stdout.write('ape-agent — OpenApe agent service\n')
+  if (process.env.OPENAPE_ISSUE_REPORTING_ENABLED === '1') process.stdout.write('Report a problem: https://repos.openape.ai/report?product=apes\n')
+  process.exit(0)
+}
+
 const AGENT_CONFIG_PATH = join(homedir(), '.openape', 'agent', 'agent.json')
 const TELEGRAM_OWNER_PIN_PATH = join(homedir(), '.openape', 'agent', 'telegram-owner.json')
 const MEMORY_PATH = join(homedir(), '.openape', 'agent', 'MEMORY.md')

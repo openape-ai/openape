@@ -1,0 +1,33 @@
+import { defineEventHandler, readBody, setResponseStatus } from 'h3'
+import { ulid } from 'ulid'
+import { useDb } from '../../database/drizzle'
+import { organizations } from '../../database/schema'
+import { createProblemError } from '../../utils/problem'
+import { requireRole } from '../../utils/workspace-access'
+
+/** POST /api/organizations — Firma anlegen. Body: { workspace_id, name, domain? } */
+export default defineEventHandler(async (event) => {
+  const caller = await requireCaller(event)
+  const body = await readBody<{ workspace_id?: string, name?: string, domain?: string }>(event)
+  const workspaceId = body?.workspace_id
+  if (!workspaceId) throw createProblemError({ status: 400, title: 'workspace_id required' })
+
+  const name = body?.name?.trim()
+  if (!name || name.length > 200) throw createProblemError({ status: 400, title: 'name must be 1–200 chars' })
+
+  const db = useDb()
+  await requireRole(db, workspaceId, caller.email)
+
+  const now = Date.now()
+  const id = ulid()
+  await db.insert(organizations).values({
+    id,
+    workspaceId,
+    name,
+    domain: body?.domain?.trim().slice(0, 255) ?? null,
+    createdAt: now,
+  })
+
+  setResponseStatus(event, 201)
+  return { id, name, domain: body?.domain ?? null, created_at: now }
+})

@@ -30,12 +30,12 @@ const APPS = [
   // org retired (merged into troop, B0) — no preview target.
 ]
 
-// Retired apps: keine neuen Previews mehr, aber der Teardown muss sie weiter
-// abräumen. Vorfall 30.07.: #792 nahm `org` am 18.06. aus APPS — die Previews
-// der noch offenen PRs #793/#835 wurden beim Schliessen nie abgeräumt und
-// liefen sechs Wochen weiter, weil der Teardown nur über APPS iterierte.
-// Eine App hier eintragen statt sie spurlos zu löschen; ein Eintrag darf
-// verschwinden, sobald kein PR von vor der Stilllegung mehr offen ist.
+// Retired apps: no new previews, but teardown still has to clean them up.
+// Incident 2026-07-30: #792 removed `org` from APPS on 2026-06-18 — the
+// previews of the still-open PRs #793/#835 were never torn down on close and
+// kept running for six weeks, because teardown only iterated over APPS.
+// Put a retired app here instead of deleting it without trace; an entry may
+// go once no PR from before the retirement is open any more.
 const RETIRED_UUIDS = ['sf7j3jqd5u8wavamqqtx5g4z']
 
 // A change here affects every app's preview image (shared workspace deps and
@@ -103,7 +103,7 @@ if (!pr) {
 
 if (action === 'closed') {
   // Teardown for every app — apps without a preview answer 404, which is fine.
-  // Retired apps are included: sonst überlebt ihr Preview das Schliessen des PRs.
+  // Retired apps are included: otherwise their preview outlives the PR closing.
   const targets = [
     ...APPS.map(a => ({ name: a.name, uuid: a.uuid })),
     ...RETIRED_UUIDS.map(uuid => ({ name: `retired:${uuid.slice(0, 8)}`, uuid })),

@@ -1,3 +1,9 @@
 # Local dev SQLite DB (created by nuxt dev / node .output)
 dev.db
 dev.db-*
+
+# docs run artefacts
+.docs-run.db
+.test2docs/
+test-results/
+tests/docs/.auth/

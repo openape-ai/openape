@@ -1,5 +1,50 @@
 # @openape/apes
 
+## 1.36.0
+
+### Minor Changes
+
+- 7bb2ea4: git-style dispatch for unknown subcommands: `apes <sub>` now runs `apes-<sub>`
+  from PATH when `<sub>` is not a builtin. Installing a subcommand is
+  `npm i -g @openape/apes-<sub>`, removing it is `npm rm -g`. The child inherits
+  nothing but a freshly refreshed `~/.config/apes/auth.json`, which it reads
+  through `@openape/cli-auth` like every other OpenApe CLI.
+
+### Patch Changes
+
+- cf2d089: New `apes openclaw` subcommand: `apes openclaw add <agentId>` enrols a
+  per-agent DDISA identity, sandboxes that OpenClaw agent completely, mounts its
+  identity read-only into the container, and maps it to the `openape-grant-gate`
+  plugin — so the only way onto the host is an elevated exec, and every elevated
+  exec becomes a grant request made as that agent.
+
+  External subcommand dispatch now runs before citty's builtin help handling, so
+  `apes <sub> --help` reaches the child. Installed executables can never shadow a
+  builtin command.
+
+- bfe1bb7: Reuse an approved `once` grant instead of asking for a second approval.
+
+  `findExistingGrant` and `findExistingCompoundGrant` skipped every `once` grant,
+  so a caller that had already obtained approval — like the OpenClaw grant gate,
+  which pre-flights the grant before exec starts — handed the command to
+  ape-shell and triggered a fresh approval request for the same command. The
+  human approved twice, or the run timed out having been approved once.
+
+  Single use is unaffected: it is enforced at `/consume`, which marks the grant
+  `used` and answers `already_consumed` afterwards, and the lookup only ever
+  queries `status=approved`. Once grants are matched strictly on `argv_hash`
+  rather than the looser coverage rules, because `verifyAndConsume` enforces that
+  hash for once grants — a grant that merely covered the command would fail the
+  run instead of prompting for a new one.
+
+- Updated dependencies [3c8bc08]
+- Updated dependencies [b48b952]
+  - @openape/shapes@0.9.1
+  - @openape/core@0.21.0
+  - @openape/agent-runtime@0.2.9
+  - @openape/grants@0.13.1
+  - @openape/proxy@0.4.10
+
 ## 1.35.4
 
 ### Patch Changes

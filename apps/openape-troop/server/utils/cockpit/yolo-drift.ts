@@ -1,8 +1,8 @@
 // Drift zwischen den aktuellen Rollen-tools einer Org und der Toolliste, die
-// beim letzten erfolgreichen YOLO-Sync in die Policy geflossen ist. Verglichen
-// werden die INPUTS des Syncs (Rollen-Union), nicht die abgeleiteten Patterns —
+// flowed into the policy on the last successful YOLO sync. What is compared are
+// the sync's INPUTS (the role union), not the derived patterns —
 // die Ableitung (Plumbing, OUTWARD-Filter, Formen-Expansion) bleibt allein im
-// Worker und muss hier nicht nachgebaut werden.
+// worker and does not need rebuilding here.
 export function diffTools(current: string[], synced: string[]): { added: string[], removed: string[] } {
   const cur = new Set(current)
   const syn = new Set(synced)

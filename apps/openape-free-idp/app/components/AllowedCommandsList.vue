@@ -127,8 +127,8 @@ async function revoke(g: StandingGrant) {
   <div class="space-y-4">
     <div>
       <div class="flex items-center justify-between gap-2">
-        <h2 class="text-base font-semibold text-white">
-          Erlaubte Commands
+        <h2 class="text-sm font-medium text-gray-300">
+          Scoped Commands
         </h2>
         <UButton
           color="primary"
@@ -137,11 +137,11 @@ async function revoke(g: StandingGrant) {
           icon="i-lucide-plus"
           @click="emit('addScoped')"
         >
-          Hinzufügen
+          Scoped Command
         </UButton>
       </div>
       <p class="text-xs text-gray-500 mt-1">
-        Was darf dieser Agent ohne Rückfrage ausführen?
+        Strukturierte Regeln pro CLI — zusätzlich zu den Patterns oben.
       </p>
     </div>
 

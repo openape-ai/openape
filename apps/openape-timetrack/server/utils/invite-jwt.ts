@@ -1,7 +1,7 @@
 import { SignJWT, jwtVerify } from 'jose'
 import { useRuntimeConfig } from 'nitropack/runtime'
 
-// Ein Invite-Token deckt Company- ODER Projekt-Invites ab. `scope` + `rid`
+// One invite token covers company OR project invites. `scope` + `rid`
 // (resource id) unterscheiden die beiden; `role` ist die zu vergebende Rolle.
 export type InviteScope = 'company' | 'project'
 

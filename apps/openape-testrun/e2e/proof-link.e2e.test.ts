@@ -1,3 +1,4 @@
+import { createClient } from '@libsql/client'
 import type { RunningServer } from 'openape-e2e/lifecycle'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -20,6 +21,7 @@ const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 let server: RunningServer
 let base = ''
+let databaseUrl = ''
 
 // Forge an SP-scoped CLI token the booted app's verifyCliToken accepts: same
 // HS256 secret + clientId (issuer/audience) the SP is configured with.
@@ -45,6 +47,7 @@ const manifest = {
 
 beforeAll(async () => {
   const db = join(makeTempDir('testrun-e2e-'), 'e2e.db')
+  databaseUrl = `file:${db}`
   server = await startServer({
     cwd: appRoot,
     readyPath: '/api/health',
@@ -153,5 +156,39 @@ describe('proof-link — CLI-track E2E (dev mode)', () => {
     const other = await upload(seriesManifest, 'someone-else@openape.ai')
     expect(other.slug).not.toBe(first.slug)
     expect(other.version).toBe(1)
+  })
+})
+
+describe('privacy rollback boundary', () => {
+  it('denies private and unknown report kinds on every legacy resource path', async () => {
+    const owner = await cliToken()
+    const db = createClient({ url: databaseUrl })
+    try {
+      for (const [reportType, visibility] of [['briefing', 'private'], ['test', 'private'], ['future', 'shared']]) {
+        const created = await fetch(`${base}/api/runs`, { method: 'POST', headers: { authorization: `Bearer ${owner}`, 'content-type': 'application/json' }, body: JSON.stringify({ ...manifest, series: 'private-boundary' }) })
+        expect(created.status).toBe(201)
+        const run = await created.json() as { id: string, slug: string }
+        await db.execute({ sql: 'UPDATE runs SET report_type = ?, visibility = ? WHERE id = ?', args: [reportType!, visibility!, run.id] })
+        for (const path of [`/api/public/runs/${run.slug}`, `/api/public/runs/${run.slug}?v=1`, `/api/public/runs/${run.slug}/assets/secret.png?v=1`, `/api/runs/${run.id}`]) {
+          for (const headers of [{}, { authorization: `Bearer ${owner}` }, { authorization: `Bearer ${await cliToken('other@example.com')}` }]) {
+            const response = await fetch(`${base}${path}`, { headers })
+            if (reportType === 'briefing' && headers.authorization === `Bearer ${owner}` && path.startsWith('/api/public/runs/') && !path.includes('/assets/')) {
+              expect(response.status).toBe(200)
+              continue
+            }
+            expect([401, 404]).toContain(response.status)
+            expect(await response.text()).not.toContain(manifest.title)
+          }
+        }
+        const assetWrite = await fetch(`${base}/api/runs/${run.id}/assets/secret.png`, { method: 'PUT', headers: { authorization: `Bearer ${owner}`, 'content-type': 'image/png' }, body: new Uint8Array([1]) })
+        expect(assetWrite.status).toBe(404)
+        expect((await fetch(`${base}/api/runs/${run.id}`, { method: 'DELETE', headers: { authorization: `Bearer ${owner}` } })).status).toBe(404)
+        const list = await (await fetch(`${base}/api/runs`, { headers: { authorization: `Bearer ${owner}` } })).json() as { id: string }[]
+        expect(list.some(item => item.id === run.id)).toBe(false)
+        const denial = await fetch(`${base}/api/public/runs/${run.slug}`)
+        expect(denial.headers.get('cache-control')).toBe('private, no-store')
+      }
+    }
+    finally { db.close() }
   })
 })
