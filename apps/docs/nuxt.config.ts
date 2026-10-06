@@ -1,5 +1,6 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
+  runtimeConfig: { public: { issueReportingEnabled: false } },
   modules: [
     '@nuxt/eslint',
     '@nuxt/image',
@@ -49,8 +50,8 @@ export default defineNuxtConfig({
     prerender: {
       routes: [
         '/',
-        // Statische Fehlerseite fuer den Caddy-Fallback: ohne sie beantwortet
-        // der Server jede unbekannte URL mit einer weissen Seite.
+        // Static error page for the Caddy fallback: without it the server
+        // answers every unknown URL with a blank page.
         '/404.html',
       ],
       crawlLinks: true,

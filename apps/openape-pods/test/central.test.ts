@@ -1,0 +1,443 @@
+import { seedNetwork } from './storage/network-fixture'
+// @vitest-environment node
+import { DataControl } from '../src/worker/data/control'
+import { commandPodIds, parseCentralCommand } from '../src/contracts/central'
+import { networkBrowserMutationAllowed } from '../src/contracts/central-networks'
+import { randomUUID } from 'node:crypto'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, expect, it, vi } from 'vitest'
+import { RunRetention } from '../src/worker/data/run-retention'
+import { PodDatabase, schemaVersion } from '../src/worker/storage/database'
+import { ResourceRegistry } from '../src/worker/resources/registry'
+import { RunDispatcher } from '../src/worker/runs/dispatcher'
+import { Scheduler } from '../src/worker/scheduling/scheduler'
+import { MasterControl } from '../src/worker/master/control'
+import { ScriptWorkspace } from '../src/worker/workspace/scripts'
+import { WorkspaceDetails } from '../src/worker/workspace/details'
+import { CentralProjection } from '../src/worker/central/projection'
+import { CentralController, centralState, offlineAlert, partBatches } from '../src/main/central/controller'
+import type { CentralExecutor } from '../src/main/central/controller'
+import { assembleSnapshot, splitSnapshot } from '../src/contracts/central-parts'
+import { WorkspaceStore } from '../../openape-pods-relay/server/utils/workspace-store'
+import type { WorkspaceActor } from '../../openape-pods-relay/server/utils/workspace-store'
+import type { AgentRuntime } from '../src/worker/agent/executor'
+import type { CentralSnapshot } from '../src/contracts/central'
+
+vi.mock('electron', () => ({ utilityProcess: { fork: vi.fn() }, safeStorage: {}, app: { getPath: () => '/nonexistent' } }))
+
+const cleanup: (() => Promise<void> | void)[] = []
+afterEach(async () => { for (const task of cleanup.splice(0).reverse()) await task() })
+function fixture() {
+  const root = mkdtempSync(join(tmpdir(), 'pods-central-'))
+  const store = new PodDatabase(root)
+  cleanup.push(() => { store.close(); rmSync(root, { recursive: true, force: true }) })
+  const resources = new ResourceRegistry(store, () => {})
+  const runtime = {} as AgentRuntime
+  const runs = new RunDispatcher(store, resources, runtime)
+  const scheduler = new Scheduler(store, runs)
+  const master = new MasterControl(store, resources, runs, scheduler, runtime)
+  const scripts = new ScriptWorkspace(store, resources, master)
+  const projection = new CentralProjection(store, resources, scripts, runs, scheduler)
+  const owner = { issuer: 'https://owner.example', subject: 'owner' }
+  const actor = { id: randomUUID(), generation: randomUUID(), owner }
+  const pod = store.createPod({ name: 'Test monitor' })
+  store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,?,?,NULL)').run(pod.id, JSON.stringify(owner), actor.id, actor.generation, 'ready', '{}')
+  return { store, root, projection, actor, pod, details: new WorkspaceDetails(store, resources) }
+}
+type Completion = Parameters<WorkspaceStore['publish']>[5]
+function relay(server: WorkspaceStore, actor: WorkspaceActor) {
+  return async (body: Record<string, unknown>): Promise<unknown> => {
+    const lease = String(body.lease)
+    if (body.type === 'networks') return server.publishNetworks(actor, lease, body.view)
+    if (body.type === 'readClaim') return server.claimNetworkRead(actor, lease)
+    if (body.type === 'readComplete') return server.completeNetworkRead(actor, lease, String(body.id), body.value, body.error as string | null)
+    if (body.type === 'inventory') return server.inventory(actor.owner)
+    if (body.type === 'read') return body.view ? server.view(actor.owner, String(body.runtimeId), String(body.podId), body as never) : server.read(actor.owner, String(body.runtimeId), String(body.podId))
+    if (body.type === 'operation') return server.visibleOperation(actor.owner, String(body.id))
+    if (body.type === 'submit') return server.submit(actor.owner, String(body.runtimeId), Number(body.revision), body.command as Parameters<WorkspaceStore['submit']>[3], String(body.id))
+    if (body.type === 'begin') return server.begin(actor)
+    if (body.type === 'parts') return server.stage(actor, lease, body.parts as Record<string, unknown>)
+    if (body.type === 'publish' && body.format === 2) return server.publishParts(actor, lease, String(body.id), Number(body.revision), body.changes as Record<string, string | null>, String(body.hash), body.completion as Completion)
+    if (body.type === 'publish') return server.publish(actor, lease, String(body.id), Number(body.revision), body.snapshot, body.completion as Completion)
+    if (body.type === 'heartbeat') return server.heartbeat(actor, lease, String(body.hash))
+    if (body.type === 'claim') return server.claim(actor, lease)
+    if (body.type === 'disconnect') return server.disconnect(actor, lease)
+    throw new Error(`Unexpected request ${String(body.type)}`)
+  }
+}
+it('adopts the current schema repeatedly without credentials or local process leases', () => {
+  const { store, projection, actor, pod } = fixture()
+  const first = projection.snapshot(actor.owner)
+  expect(first.workspace.pods[0]?.id).toBe(pod.id)
+  expect(first.archive.schema).toBe(schemaVersion)
+  expect(Object.keys(first.archive.tables)).not.toContain('connections')
+  expect(Object.keys(first.archive.tables)).not.toContain('run_leases')
+  expect(first).toEqual(projection.snapshot(actor.owner))
+  store.db.prepare('UPDATE remote_pods SET owner=?').run(JSON.stringify({ ...actor.owner, subject: 'other' }))
+  expect(() => projection.snapshot(actor.owner)).toThrow('Every Pod must belong')
+})
+it('executes the same MCP/browser command once and exposes central results with offline gates', async () => {
+  const { root, store, projection, actor, pod, details } = fixture()
+  const runId = randomUUID()
+  store.db.prepare('INSERT INTO runs VALUES(?,?,?,\'failed\',1,2,?,?,0,0)').run(runId, pod.id, 'b'.repeat(64), 'Synthetic result', 'Synthetic failure')
+  const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
+  const execute = vi.fn(async () => details.execute({ type: 'describe', podId: pod.id, revision: 0, text: 'Shared with both clients' }))
+  const request = relay(server, actor)
+  const controller = new CentralController(root, request, { snapshot: async () => projection.snapshot(actor.owner), execute, gate: async () => {} }, '/unused-no-artifacts')
+  cleanup.push(() => controller.stop()); controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+  const { FixtureWorker } = await import('../src/main/worker')
+  const worker = new FixtureWorker(() => {}); worker.central = controller
+  const call = (query: Record<string, unknown>) => worker.codex({ id: randomUUID(), action: { action: 'workspace', query } })
+  expect(await call({ type: 'inventory' })).toMatchObject([{ online: true, workspace: { pods: [{ id: pod.id, online: true }] } }])
+  const id = randomUUID()
+  const command = { channel: 'details' as const, body: { type: 'describe', podId: pod.id, revision: 0, text: 'Shared with both clients' } }
+  const submit = { type: 'submit', runtimeId: actor.id, revision: 1, command, id }
+  await call(submit)
+  await call(submit)
+  await vi.waitFor(() => expect(server.operation(actor.owner, id).state).toBe('applied'), { timeout: 5000 })
+  expect(await call(submit)).toMatchObject({ id, state: 'applied' })
+  expect(await call({ type: 'operation', id })).toMatchObject({ id, state: 'applied' })
+  await expect(call({ ...submit, command: { ...command, body: { ...command.body, text: 'Changed retry' } } })).rejects.toThrow('workspace_operation_conflict')
+  await expect(call({ ...submit, id: randomUUID() })).rejects.toThrow('workspace_revision_conflict')
+  expect(await call({ type: 'read', runtimeId: actor.id, podId: pod.id })).toMatchObject({ pod: { details: { description: { text: 'Shared with both clients' } }, runs: { runs: [{ id: runId, summary: 'Synthetic result', error: 'Synthetic failure', state: 'failed' }] } } })
+  expect(execute).toHaveBeenCalledOnce()
+  expect(server.read(actor.owner, actor.id, pod.id).pod.details.description?.text).toBe('Shared with both clients')
+  const archived = server.db.prepare('SELECT value FROM parts WHERE runtime_id=? AND key=\'table/pod_descriptions/0\'').get(actor.id)!.value as string
+  expect(JSON.parse(archived) as CentralSnapshot['archive']['tables'][string]).toHaveLength(1)
+  expect(controller.status()).toMatchObject({ state: 'online', format: 2, runtimeId: actor.id, error: null })
+  await controller.stop()
+  expect(await call({ type: 'inventory' })).toMatchObject([{ online: false, workspace: { pods: [{ id: pod.id, online: false }] } }])
+  await expect(call({ type: 'read', runtimeId: actor.id, podId: pod.id })).rejects.toThrow('pod_offline')
+  await expect(call({ ...submit, id: randomUUID(), revision: 2 })).rejects.toThrow('pod_offline')
+})
+
+it.each(['before publication', 'after commit'])('reconciles a lost response %s without executing the command twice', async (failure) => {
+  const { root, projection, actor, pod, details } = fixture()
+  let now = Date.now(); let failed = false; let executed = false
+  const server = new WorkspaceStore(':memory:', () => now); cleanup.push(() => server.close())
+  const execute = vi.fn(async () => { executed = true; return details.execute({ type: 'describe', podId: pod.id, revision: 0, text: 'Recovered result' }) })
+  const forward = relay(server, actor)
+  const request = async (body: Record<string, unknown>): Promise<unknown> => {
+    if (body.type === 'operation') return server.operation(actor.owner, String(body.id))
+    const result = await forward(body)
+    if (body.type === 'publish' && body.completion && failure === 'after commit' && !failed) { failed = true; now += 30001; throw new Error('Publication response lost') }
+    return result
+  }
+  const controller = new CentralController(root, request, { snapshot: async () => {
+    if (executed && failure === 'before publication' && !failed) { failed = true; now += 30001; throw new Error('Snapshot interrupted') }
+    return projection.snapshot(actor.owner)
+  }, execute, gate: async () => {} }, '/unused-no-artifacts')
+  cleanup.push(() => controller.stop()); controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+  const id = randomUUID()
+  server.submit(actor.owner, actor.id, 1, { channel: 'details', body: { type: 'describe', podId: pod.id, revision: 0, text: 'Recovered result' } }, id)
+  await vi.waitFor(() => expect(server.operation(actor.owner, id).state, controller.error ?? '').toBe('applied'), { timeout: 6000 })
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true), { timeout: 6000 })
+  expect(failed).toBe(true)
+  expect(execute).toHaveBeenCalledOnce()
+  expect(server.read(actor.owner, actor.id, pod.id).pod.details.description?.text).toBe('Recovered result')
+}, 12000)
+
+const fast = { heartbeatMs: 100, publishIntervalMs: 0 }
+function connected(options: { request?: (forward: (body: Record<string, unknown>) => Promise<unknown>, body: Record<string, unknown>) => Promise<unknown>, executor?: Partial<CentralExecutor> } = {}) {
+  const { root, projection, actor, pod, store, details } = fixture()
+  const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
+  const forward = relay(server, actor)
+  const requests: Record<string, unknown>[] = []
+  const request = async (body: Record<string, unknown>) => { requests.push(body); return options.request ? options.request(forward, body) : forward(body) }
+  const gates: number[] = []
+  const executor: CentralExecutor = { snapshot: async () => projection.snapshot(actor.owner), execute: async () => null, gate: async (until) => { gates.push(until) }, ...options.executor }
+  const controller = new CentralController(root, request, executor, '/unused-no-artifacts', fast)
+  cleanup.push(() => controller.stop())
+  return { controller, server, actor, pod, store, details, requests, gates, root }
+}
+
+it('keeps heartbeats and the scheduling lease alive while a large publication is still uploading', async () => {
+  let release!: () => void
+  const hold = new Promise<void>((resolve) => { release = resolve })
+  let holding = false
+  const { controller, details, pod, gates, requests } = connected({ request: async (forward, body) => {
+    if (body.type === 'parts' && holding) await hold
+    return forward(body)
+  } })
+  cleanup.push(() => release())
+  controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+  holding = true
+  const mark = requests.length
+  await details.execute({ type: 'describe', podId: pod.id, revision: 0, text: 'A change that must be published' })
+  await vi.waitFor(() => expect(requests.slice(mark).some(item => item.type === 'parts')).toBe(true), { timeout: 5000 })
+  const before = requests.filter(item => item.type === 'heartbeat').length
+  const leases = gates.length
+  await vi.waitFor(() => expect(requests.filter(item => item.type === 'heartbeat').length).toBeGreaterThan(before + 2), { timeout: 5000 })
+  expect(gates.slice(leases).every(until => until > Date.now())).toBe(true)
+  expect(controller.status()).toMatchObject({ state: 'online', error: null })
+  release()
+  await vi.waitFor(() => expect(controller.status().lastPublication).not.toBeNull())
+})
+
+it('publishes complete snapshots to an older service that has no part format', async () => {
+  const { controller, server, actor, requests } = connected({ request: async (forward, body) => {
+    if (body.type === 'parts' || (body.type === 'publish' && body.format === 2)) throw new Error('Unsupported by an older service')
+    const result = await forward(body)
+    if (body.type === 'begin') { const { format: _format, manifest: _manifest, runtimeId: _runtimeId, ...legacy } = result as Record<string, unknown>; return legacy }
+    return result
+  } })
+  controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+  expect(controller.status().format).toBe(1)
+  expect(requests.some(item => item.type === 'publish' && 'snapshot' in item)).toBe(true)
+  expect(server.inventory(actor.owner)[0]?.online).toBe(true)
+})
+
+it('names the failing phase as the offline reason in status, inventory and MCP errors', async () => {
+  const { controller, actor } = connected({ executor: { snapshot: async () => { throw new Error('Worker response timed out; reload state before retrying') } } })
+  controller.start()
+  await vi.waitFor(() => expect(controller.error).toBe('worker snapshot: Worker response timed out; reload state before retrying'))
+  expect(controller.status()).toMatchObject({ state: 'connecting', runtimeId: actor.id })
+  await expect(controller.local(async () => 'never')).rejects.toThrow('Central workspace offline: worker snapshot: Worker response timed out')
+  expect(await controller.query({ type: 'inventory' })).toMatchObject([{ id: actor.id, online: false, desktop: { state: 'connecting', error: 'worker snapshot: Worker response timed out; reload state before retrying' } }])
+})
+
+it('refuses workspace queries before the first lease instead of sending an empty lease', async () => {
+  const { controller, requests } = connected()
+  await expect(controller.query({ type: 'inventory' })).rejects.toThrow('Central workspace offline: connecting')
+  expect(requests).toEqual([])
+})
+
+it('does not rebuild the snapshot while the worker reports no data change', async () => {
+  let version = 1
+  const snapshot = vi.fn()
+  const { controller, requests } = connected({ executor: { version: async () => version } })
+  const executor = (controller as unknown as { executor: CentralExecutor }).executor
+  const original = executor.snapshot
+  executor.snapshot = async () => { snapshot(); return original() }
+  controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+  const claims = requests.filter(item => item.type === 'claim').length
+  await vi.waitFor(() => expect(requests.filter(item => item.type === 'claim').length).toBeGreaterThan(claims + 2), { timeout: 5000 })
+  expect(snapshot).toHaveBeenCalledOnce()
+  version++
+  await vi.waitFor(() => expect(snapshot).toHaveBeenCalledTimes(2), { timeout: 5000 })
+})
+
+it('rebuilds a format-2 journal the service refuses instead of retrying it forever', async () => {
+  const { controller, root } = connected()
+  mkdirSync(join(root, 'central'), { recursive: true })
+  writeFileSync(join(root, 'central/publication.json'), JSON.stringify({ id: randomUUID(), revision: 0, format: 2, hash: 'f'.repeat(64), changes: {}, parts: {} }))
+  controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+})
+
+it('alerts the owner once after five minutes offline and again when scheduling resumes', () => {
+  const since = 1_000_000
+  expect(offlineAlert({ state: 'reconnecting', since }, false, since + 60000)).toBeNull()
+  expect(offlineAlert({ state: 'offline', since }, false, since + 5 * 60000)).toBe('alert')
+  expect(offlineAlert({ state: 'offline', since }, true, since + 10 * 60000)).toBeNull()
+  expect(offlineAlert({ state: 'online', since }, true, since + 11 * 60000)).toBe('recovered')
+  expect(centralState(false, null, since, since + 10 * 60000)).toBe('connecting')
+  expect(centralState(false, since - 1, since, since + 60000)).toBe('reconnecting')
+  expect(centralState(false, since - 1, since, since + 3 * 60000)).toBe('offline')
+  expect(partBatches({ a: 'x'.repeat(10), b: 'y'.repeat(10), c: 'z'.repeat(30) }, 25).map(Object.keys)).toEqual([['a', 'b'], ['c']])
+})
+
+it('reassembles the projected snapshot exactly from parts and keeps each run history entry small', () => {
+  const { store, projection, actor, pod } = fixture()
+  for (let index = 0; index < 3; index++) {
+    const id = randomUUID()
+    store.db.prepare('INSERT INTO runs VALUES(?,?,?,\'completed\',?,?,?,NULL,0,0)').run(id, pod.id, 'b'.repeat(64), index, index + 1, `Run ${index}`)
+    store.db.prepare('INSERT INTO run_events VALUES(?,1,\'log\',?,?)').run(id, JSON.stringify({ index }), index)
+  }
+  const snapshot = projection.snapshot(actor.owner)
+  const parts = splitSnapshot(snapshot)
+  expect(assembleSnapshot(key => parts.get(key), [...parts.keys()])).toEqual(snapshot)
+  const view = snapshot.pods[0]!
+  for (const entry of Object.values(view.history)) expect(entry.runs).toHaveLength(1)
+  expect(view.runs.events).toEqual(view.history[view.runs.runs[0]!.id]!.events)
+})
+
+it('publishes the description summary with the workspace inventory', () => {
+  const { projection, actor, pod, details } = fixture()
+  details.execute({ type: 'describe', podId: pod.id, revision: 0, text: 'Watches the task board and reports changes by Telegram. Runs every five minutes.' })
+  const parts = splitSnapshot(projection.snapshot(actor.owner))
+  const restored = assembleSnapshot(key => parts.get(key), [...parts.keys()])
+  expect(restored.workspace.pods.find(item => item.id === pod.id)?.description).toBe('Watches the task board and reports changes by Telegram.')
+})
+
+it('publishes network and workflow descriptions with the workspace inventory', async () => {
+  const { store, projection, actor } = fixture()
+  const { CollectionDescriptions } = await import('../src/worker/workspace/collection-descriptions')
+  const id = randomUUID()
+  store.db.prepare('INSERT INTO workflows(id,revision,name,nodes) VALUES(?,1,\'Morning briefing\',\'[]\')').run(id)
+  new CollectionDescriptions(store).execute({ type: 'describeCollection', id, revision: 0, text: 'Sends one morning briefing by Telegram.' })
+  const parts = splitSnapshot(projection.snapshot(actor.owner))
+  expect(assembleSnapshot(key => parts.get(key), [...parts.keys()]).workspace.descriptions).toEqual([{ id, text: 'Sends one morning briefing by Telegram.', revision: 1 }])
+})
+
+it('publishes only TypeSafe availability through both full and partitioned central snapshots', async () => {
+  const { store, projection, actor, pod } = fixture()
+  const { SetupControl } = await import('../src/worker/onboarding/control')
+  const setup = new SetupControl(store, new ResourceRegistry(store, () => {})); const id = randomUUID()
+  setup.execute({ type: 'save', connection: { id, provider: 'typesafe', account: 'TypeSafe / Jev', state: 'ready', error: null }, metadata: { verifiedAt: 12, private: 'not-for-central' } })
+  const snapshot = projection.snapshot(actor.owner)
+  const parts = splitSnapshot(snapshot)
+  const restored = assembleSnapshot(key => parts.get(key), [...parts.keys()])
+  expect(restored.workspace.jev).toEqual({ id, state: 'ready', verifiedAt: 12 })
+  expect(restored.pods.find(item => item.id === pod.id)?.resources.jev).toEqual(restored.workspace.jev)
+  expect(JSON.stringify(restored)).not.toContain('not-for-central')
+  setup.execute({ type: 'save', connection: { id, provider: 'typesafe', account: 'TypeSafe / Jev', state: 'expired', error: null }, metadata: { verifiedAt: 12 } })
+  expect(projection.snapshot(actor.owner).workspace.jev?.state).toBe('expired')
+})
+
+it('publishes retention to central list, detail and archive while preserving account Pods and detached receipts', async () => {
+  const f = connected()
+  const ids = Array.from({ length: 55 }, () => randomUUID())
+  for (const [index, id] of ids.entries()) f.store.db.prepare('INSERT INTO runs VALUES(?,?,?,\'completed\',?,?,\'Done\',NULL,0,1)').run(id, f.pod.id, 'a'.repeat(64), index, index + 1)
+  f.store.db.prepare('INSERT INTO effect_ledger VALUES(?,?,?,?,?,\'completed\',\'{"receipt":"once"}\')').run(f.pod.id, 'delivery', 'http.request', 'b'.repeat(64), ids[0]!)
+  f.controller.start()
+  await vi.waitFor(() => expect(f.controller.available, f.controller.error ?? '').toBe(true))
+  expect(f.server.view(f.actor.owner, f.actor.id, f.pod.id, { view: 'runs', offset: 0 })).toMatchObject({ total: 55 })
+  await new RunRetention(f.store).prune()
+  await vi.waitFor(() => expect(f.server.view(f.actor.owner, f.actor.id, f.pod.id, { view: 'runs', offset: 0 })).toMatchObject({ total: 50 }), { timeout: 5000 })
+  expect(() => f.server.view(f.actor.owner, f.actor.id, f.pod.id, { view: 'run', runId: ids[0]! })).toThrow('run_not_found')
+  expect(f.server.inventory(f.actor.owner)[0]?.workspace.pods.map(pod => pod.id)).toEqual([f.pod.id])
+  const session = f.server.db.prepare('SELECT lease FROM runtimes WHERE id=?').get(f.actor.id)!
+  const snapshot = f.server.archive(f.actor, String(session.lease))!
+  expect(snapshot.archive.tables.runs).toHaveLength(50)
+  expect(snapshot.archive.tables.effect_ledger).toMatchObject([{ run_id: null, result: '{"receipt":"once"}' }])
+  expect(JSON.stringify(snapshot)).not.toContain(ids[0])
+  expect(f.server.db.prepare('SELECT * FROM staged_parts').all()).toEqual([])
+  expect(f.server.db.prepare('SELECT snapshot FROM runtimes').get()?.snapshot).toBeNull()
+})
+
+it('deletes through MCP with coordinated cleanup and keeps an owner-scoped receipt after removal', async () => {
+  const { root, store, projection, actor, pod } = fixture()
+  const data = new DataControl(store, 'unused-helper')
+  const credentialId = randomUUID()
+  new ResourceRegistry(store, () => {}).assignCredential(pod.id, 'service_key', credentialId, 0)
+  store.updatePod(pod.id, pod.revision, { name: pod.name, lifecycle: 'archived' })
+  const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
+  const { FixtureWorker } = await import('../src/main/worker')
+  const worker = new FixtureWorker(() => {})
+  const purgePodKeys = vi.fn(async () => {})
+  Object.assign(worker, { connections: { busy: () => false, purgePodKeys }, dispatch: async (request: { central?: unknown, data: Parameters<DataControl['execute']>[0] }) => request.central ? true : data.execute(request.data) })
+  const execute = vi.fn((command: import('../src/contracts/central').CentralCommand) => worker.centralExecute(command))
+  const controller = new CentralController(root, relay(server, actor), { snapshot: async () => projection.snapshot(actor.owner), execute, gate: async () => {} }, '/unused-no-artifacts')
+  worker.central = controller
+  cleanup.push(() => controller.stop()); controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+  const body = { type: 'deletePod' as const, podId: pod.id, revision: 2, name: pod.name }
+  await expect(worker.data(body)).rejects.toThrow('local deletion and restore are disabled')
+  const id = randomUUID()
+  const query = { type: 'submit', runtimeId: actor.id, revision: 1, id, command: { channel: 'data', body } }
+  const call = (query: Record<string, unknown>) => worker.codex({ id: randomUUID(), action: { action: 'workspace', query } })
+  await call(query)
+  await vi.waitFor(() => expect(server.operation(actor.owner, id).state, controller.error ?? '').toBe('applied'), { timeout: 5000 })
+  expect(await call({ type: 'operation', id })).toMatchObject({ id, state: 'applied' })
+  expect(await call(query)).toMatchObject({ id, state: 'applied' })
+  expect(execute).toHaveBeenCalledOnce()
+  expect(store.listPods()).toEqual([])
+  expect(purgePodKeys).toHaveBeenCalledExactlyOnceWith(pod.id, [credentialId])
+  expect(data.retention.jobs()).toEqual([])
+  expect(server.inventory(actor.owner)[0]?.workspace.pods).toEqual([])
+  expect(() => server.read(actor.owner, actor.id, pod.id)).toThrow()
+  expect(() => server.visibleOperation({ ...actor.owner, subject: 'other' }, id)).toThrow('workspace_operation_not_found')
+})
+
+it('accepts descriptions through the central workspace while other network member changes stay desktop-only', () => {
+  const id = randomUUID()
+  const collection = parseCentralCommand({ channel: 'workspace', body: { type: 'describeCollection', id, revision: 0, text: 'Sorts incoming mail.' } })
+  expect(commandPodIds(collection, { workspace: { pods: [{ id: randomUUID() }, { id: randomUUID() }] } })).toEqual([])
+  expect(networkBrowserMutationAllowed(collection)).toBe(true)
+  expect(networkBrowserMutationAllowed(parseCentralCommand({ channel: 'details', body: { type: 'describe', podId: id, revision: 0, text: 'Reads the mailbox.' } }))).toBe(true)
+  expect(networkBrowserMutationAllowed(parseCentralCommand({ channel: 'runs', body: { type: 'start', podId: id } }))).toBe(false)
+  expect(networkBrowserMutationAllowed({ channel: 'details', body: { type: 'activate', podId: id } })).toBe(false)
+  expect(() => parseCentralCommand({ channel: 'workspace', body: { type: 'describeCollection', id, revision: 0, text: 'x'.repeat(1001) } })).toThrow()
+  expect(() => parseCentralCommand({ channel: 'workspace', body: { type: 'pauseAll' } })).toThrow()
+})
+
+it('allows only reviewed deletion through the central data channel', () => {
+  const body = { type: 'deletePod', podId: randomUUID(), revision: 2, name: 'Reviewed Pod' }
+  expect(parseCentralCommand({ channel: 'data', body }).body).toEqual(body)
+  for (const command of [{ type: 'restore' }, { type: 'cleanup' }, { type: 'jobs' }, { ...body, name: '' }, { ...body, revision: 0 }, { ...body, force: true }]) {
+    expect(() => parseCentralCommand({ channel: 'data', body: command })).toThrow()
+  }
+})
+
+it('fails closed before publishing any legacy table or projection from a network workspace', () => {
+  const f = fixture(); seedNetwork(f.store)
+  expect(() => f.projection.snapshot(f.actor.owner)).toThrow('bounded publication support')
+})
+
+it('connects network volume with stable legacy parts and leaves complete data local', () => {
+  const f = fixture(); const network = seedNetwork(f.store)
+  f.store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,?,?,NULL)').run(network.pod.id, JSON.stringify(f.actor.owner), f.actor.id, f.actor.generation, 'ready', '{}')
+  f.store.transaction(() => {
+    f.store.db.prepare(`WITH RECURSIVE sequence(value) AS (SELECT 0 UNION ALL SELECT value+1 FROM sequence WHERE value<11999)
+      INSERT INTO run_events SELECT ?,value,'log',?,1 FROM sequence`).run(network.runId, JSON.stringify({ message: 'x'.repeat(4096) }))
+  })
+  const snapshot = f.projection.snapshot(f.actor.owner, true)
+  expect(Buffer.byteLength(JSON.stringify(snapshot))).toBeLessThan(1024 * 1024)
+  expect(snapshot.archive.tables.run_events).toEqual([])
+  expect(snapshot.pods.find(pod => pod.id === network.pod.id)!.runs.runs).toEqual([])
+  expect(f.store.db.prepare('SELECT count(*) AS count FROM run_events').get()!.count).toBe(12000)
+  const before = splitSnapshot(snapshot)
+  f.store.db.prepare('DELETE FROM run_events WHERE sequence<1000').run()
+  expect(splitSnapshot(f.projection.snapshot(f.actor.owner, true))).toEqual(before)
+  const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
+  const { lease } = server.begin(f.actor)
+  const published = server.publish(f.actor, lease, randomUUID(), 0, snapshot)
+  server.heartbeat(f.actor, lease, published.hash)
+  expect(server.inventory(f.actor.owner)[0]!.online).toBe(true)
+  expect(() => f.projection.snapshot(f.actor.owner)).toThrow('bounded publication support')
+}, 15000)
+
+it('serves runtime reads without executing owner commands or changing the publication revision', async () => {
+  const f = fixture(); const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
+  const execute = vi.fn(); const networkRead = vi.fn(async () => ({ networks: [] }))
+  const controller = new CentralController(f.root, relay(server, f.actor), { snapshot: async enabled => f.projection.snapshot(f.actor.owner, enabled), networkRead, execute, gate: async () => {} }, '/unused-no-artifacts')
+  cleanup.push(() => controller.stop()); controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+  expect(controller.networkReads).toBe(true)
+  const revision = server.inventory(f.actor.owner)[0]!.revision
+  const id = server.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'list' })
+  let result: unknown
+  await vi.waitFor(() => { result = server.networkReadResult(f.actor.owner, f.actor.id, id); expect(result).toBeDefined() }, { timeout: 4000 })
+  expect(result).toEqual({ value: { networks: [] }, error: null })
+  expect(server.inventory(f.actor.owner)[0]!.revision).toBe(revision)
+  expect(execute).not.toHaveBeenCalled()
+})
+
+it('keeps the runtime online when the optional network read service fails', async () => {
+  const f = fixture(); const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const networkRead = vi.fn(async () => { throw new Error('Synthetic network read is too large') })
+  const controller = new CentralController(f.root, relay(server, f.actor), { snapshot: async enabled => f.projection.snapshot(f.actor.owner, enabled), networkRead, execute: vi.fn(), gate: async () => {} }, '/unused-no-artifacts')
+  cleanup.push(() => log.mockRestore()); cleanup.push(() => controller.stop()); controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+  expect(controller.status().networkReadError).toContain('too large')
+  expect(server.inventory(f.actor.owner)[0]!.online).toBe(true)
+  expect(log).toHaveBeenCalledWith('Network read service unavailable', expect.any(Error))
+})
+
+it('keeps private network configuration local and rejects legacy mutation bypasses', () => {
+  const f = fixture(); const network = seedNetwork(f.store)
+  f.store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,?,?,NULL)').run(network.pod.id, JSON.stringify(f.actor.owner), f.actor.id, f.actor.generation, 'ready', '{}')
+  f.store.db.prepare('INSERT INTO pod_variables VALUES(?,?,?,1)').run(network.pod.id, 'business', 'private-network-variable')
+  f.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), network.pod.id, 'reference', 'ready', 'private-network-resource', '{}')
+  f.store.db.prepare('INSERT INTO pod_variables VALUES(?,?,?,1)').run(f.pod.id, 'legacy', 'retained-legacy-variable')
+  const snapshot = f.projection.snapshot(f.actor.owner, true)
+  expect(JSON.stringify(snapshot)).not.toContain('private-network-')
+  expect(JSON.stringify(snapshot)).toContain('retained-legacy-variable')
+  expect(snapshot.pods.find(pod => pod.id === network.pod.id)).toMatchObject({ networkId: network.networkId, resources: { resources: [], variables: [] } })
+  const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
+  const { lease } = server.begin(f.actor)
+  const published = server.publish(f.actor, lease, randomUUID(), 0, snapshot)
+  server.heartbeat(f.actor, lease, published.hash)
+  expect(() => server.submit(f.actor.owner, f.actor.id, published.revision, { channel: 'runs', body: { type: 'start', podId: network.pod.id } }, randomUUID())).toThrow('network_member_requires_desktop_review')
+  expect(() => server.submit(f.actor.owner, f.actor.id, published.revision, { channel: 'runs', body: { type: 'start', podId: f.pod.id } }, randomUUID())).not.toThrow()
+  expect(f.store.db.prepare('SELECT value FROM pod_variables WHERE pod_id=?').get(network.pod.id)!.value).toBe('private-network-variable')
+})

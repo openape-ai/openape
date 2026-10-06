@@ -5,7 +5,7 @@ import type { RoleContext } from './visibility'
 const VIEWER = 'viewer@example.com'
 const AUTHOR = 'author@example.com'
 
-// E gehört AUTHOR; Betrachter ist VIEWER (≠ Autor) sofern nicht anders.
+// E belongs to AUTHOR; the viewer is VIEWER (≠ author) unless stated otherwise.
 function rights(ctx: RoleContext, authoredByViewer = false) {
   return resolveEntryRights(VIEWER, { userEmail: authoredByViewer ? VIEWER : AUTHOR }, ctx)
 }

@@ -1,0 +1,10 @@
+# Caddyfile for the forge VM — lives at /home/ubuntu/prod/Caddyfile (mounted by
+# compose/forge.yml). Kept in the repo as the source of truth; copy manually on
+# change, the deployer only syncs the compose file.
+{
+	email phofmann@delta-mind.at
+}
+
+repos.openape.ai {
+	reverse_proxy git:3026
+}

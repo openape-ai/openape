@@ -5,7 +5,7 @@ export { ApiError }
 
 /**
  * Ruft die crm.openape.ai-API mit Bearer-Auth auf. Die Anmeldung kommt aus
- * `apes login` — @openape/cli-auth tauscht den IdP-Token gegen einen
+ * `apes login` — @openape/cli-auth trades the IdP token for a
  * SP-Token und cached ihn.
  */
 export async function apiCall<T = unknown>(

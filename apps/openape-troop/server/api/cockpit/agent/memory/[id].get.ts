@@ -12,6 +12,6 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   if (!id) throw createError({ statusCode: 400, statusMessage: 'id required' })
   const [doc] = await useDb().select().from(memory).where(and(eq(memory.id, id), eq(memory.ownerEmail, agent)))
-  if (!doc) throw createError({ statusCode: 404, statusMessage: 'unknown memory' })
+  if (!doc || (doc.scope !== 'company' && doc.targetId !== agent && doc.targetId !== 'ceo')) throw createError({ statusCode: 404, statusMessage: 'unknown memory' })
   return { id: doc.id, title: doc.title, body: doc.body }
 })

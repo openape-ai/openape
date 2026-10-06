@@ -1,3 +1,4 @@
+import { shellStartupArguments } from './context.js'
 import { randomBytes } from 'node:crypto'
 import type { IPty } from '@lydell/node-pty'
 import * as pty from '@lydell/node-pty'
@@ -90,7 +91,7 @@ export class PtyBridge {
     // into bash would cause `apes <subcommand>` at the REPL prompt to print
     // "unsupported invocation" instead of running.
     const { APES_SHELL_WRAPPER: _wrapperMarker, APES_SHELL_MODE: _modeMarker, ...inheritedEnv } = process.env
-    this.term = pty.spawn('bash', ['--login', '-i'], {
+    this.term = pty.spawn('/bin/bash', shellStartupArguments(), {
       name: 'xterm-256color',
       cols,
       rows,

@@ -4,8 +4,8 @@ import { h } from 'vue'
 import { describe, expect, it } from 'vitest'
 import ConfirmDialog from '../app/components/ConfirmDialog.vue'
 
-// Nuxt UI ist in der App global; hier auf einfache Elemente reduziert, damit
-// die Assertions den sichtbaren Text lesen und nicht das Design-System.
+// Nuxt UI is global in the app; reduced to plain elements here so the
+// assertions read the visible text rather than the design system.
 const global = {
   stubs: {
     UModal: { props: ['open'], render(this: { open: boolean, $slots: Record<string, () => unknown> }) {

@@ -2,12 +2,12 @@ import consola from 'consola'
 import { apiFetch, getGrantsEndpoint } from './http'
 
 /**
- * Why-pending-Diagnosen (#1109): der Grant-Detail-Endpoint erklärt, welcher
- * Auto-Approve-Mechanismus warum NICHT gegriffen hat. Für den konsumierenden
+ * Why-pending diagnostics (#1109): the grant detail endpoint explains which
+ * auto-approve mechanism did NOT fire, and why. For the consuming
  * Agenten ist der wichtigste Fall die Substitution: ein Kommando mit `$( )`,
- * Loops oder Heredocs wird fail-closed behandelt und kann durch Retries NIE
- * auto-approved werden — ohne diesen Hinweis grindet der Loop Karte um Karte
- * (Befund 30.07.: 27 pending Karten an einem Tag, alle dieselbe Ursache).
+ * loops or heredocs is treated fail-closed and can NEVER be auto-approved by
+ * retrying — without this hint the loop grinds card after card (finding
+ * 2026-07-30: 27 pending cards in one day, all the same cause).
  */
 export interface PendingDiagnostic {
   source: string
@@ -28,8 +28,8 @@ export async function fetchPendingDiagnostics(idp: string, grantId: string): Pro
     return grant.pending_diagnostics ?? []
   }
   catch (err) {
-    // Enrichment, nicht Kernpfad: der Pending-Block ist auch ohne Diagnose
-    // korrekt. Trotzdem sichtbar machen statt still schlucken.
+    // Enrichment, not the core path: the pending block is correct without the
+    // diagnosis too. Still make it visible rather than swallowing it.
     consola.debug(`Could not fetch pending diagnostics for ${grantId}: ${(err as Error).message}`)
     return []
   }

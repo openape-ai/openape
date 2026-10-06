@@ -22,7 +22,7 @@ const emit = defineEmits<{
   remove: []
 }>()
 
-/** Abschlussspalten heben sich ab — sonst sieht das Board-Ende aus wie jede andere Stufe. */
+/** Closing columns stand out — otherwise the end of the board looks like any other stage. */
 const tone = computed(() => ({
   open: 'bg-zinc-900/40',
   won: 'bg-emerald-950/40 ring-1 ring-emerald-900/50',

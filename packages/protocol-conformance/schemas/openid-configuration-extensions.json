@@ -66,6 +66,26 @@
         "type": "string"
       },
       "description": "List of supported delegation scopes."
+    },
+    "openape_grant_brokering_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "openape_broker_connections_endpoint": {
+      "type": "string",
+      "format": "uri"
+    },
+    "openape_brokered_grants_endpoint": {
+      "type": "string",
+      "format": "uri"
+    },
+    "openape_broker_enrollment_endpoint": {
+      "type": "string",
+      "format": "uri"
+    },
+    "openape_agent_domain": {
+      "type": "string",
+      "minLength": 1
     }
   },
   "required": ["ddisa_version", "ddisa_auth_methods_supported"],

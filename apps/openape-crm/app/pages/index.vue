@@ -12,7 +12,7 @@ const error = ref('')
 onMounted(async () => {
   await fetchUser()
   if (user.value) {
-    // invite.vue merkt sich das Ziel vor dem Login; der OIDC-Callback landet hier.
+    // invite.vue parks the target before login; the OIDC callback lands here.
     const stored = window.sessionStorage.getItem('openape-crm:returnTo')
     window.sessionStorage.removeItem('openape-crm:returnTo')
     await navigateTo(stored?.startsWith('/') ? stored : '/board', { replace: true })

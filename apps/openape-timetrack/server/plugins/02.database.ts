@@ -1,10 +1,10 @@
 import { sql } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
 
-// Greenfield: schlichtes CREATE TABLE IF NOT EXISTS beim Boot. Keine ALTER-
-// Migrationen nötig (kein Pre-existing-Schema). In try/catch wegen Turso
-// Cold-Start (siehe OpenApe Memory-Lesson — Plugin darf Folge-Plugins nicht
-// crashen). OPENAPE_E2E=1 überspringt DB-Init für UI-only Smoke-Tests.
+// Greenfield: a plain CREATE TABLE IF NOT EXISTS on boot. No ALTER migrations
+// needed (no pre-existing schema). Wrapped in try/catch because of Turso cold
+// starts (see the OpenApe memory lesson — a plugin must not crash the plugins
+// after it). OPENAPE_E2E=1 skips DB init for UI-only smoke tests.
 export default defineNitroPlugin(async () => {
   if (process.env.OPENAPE_E2E === '1') return
 

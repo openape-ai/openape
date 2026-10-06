@@ -1,7 +1,7 @@
 /**
- * Stufen liegen pro Workspace in `pipeline_stages` und sind umbenennbar. Was
- * ein Deal trägt, ist der stabile `key` — der überlebt jedes Umbenennen.
- * Ob eine Stufe abschließt, sagt `outcome`, nicht ihr Name.
+ * Stages live per workspace in `pipeline_stages` and can be renamed. What a
+ * deal carries is the stable `key` — it survives every rename. Whether a stage
+ * closes is said by `outcome`, not by its name.
  */
 export const OUTCOMES = ['open', 'won', 'lost'] as const
 
@@ -14,7 +14,7 @@ export interface PipelineStage {
   position: number
 }
 
-/** Die Pipeline, mit der jeder neue Workspace startet. */
+/** The pipeline every new workspace starts with. */
 export const DEFAULT_STAGES: readonly Omit<PipelineStage, 'position'>[] = [
   { key: 'lead', name: 'Lead', outcome: 'open' },
   { key: 'qualified', name: 'Qualifiziert', outcome: 'open' },
@@ -30,8 +30,9 @@ export function isOutcome(value: unknown): value is Outcome {
 }
 
 /**
- * Ein Schlüssel aus dem Namen — lesbar in CLI und URL. Kollidiert er, hängt
- * eine Zahl an; bleibt auch das leer (nur Sonderzeichen), zählt `stufe-n`.
+ * A key derived from the name — readable in CLI and URL. On a collision a
+ * number is appended; if that comes out empty too (punctuation only), the
+ * counted `stufe-n` is used.
  */
 export function stageKey(name: string, taken: readonly string[]): string {
   const base = name.toLowerCase()

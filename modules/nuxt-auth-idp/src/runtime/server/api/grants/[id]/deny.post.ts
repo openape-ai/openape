@@ -1,3 +1,4 @@
+import { requireBrokerGrantOwner } from '../../../utils/broker-owner'
 import { denyGrant } from '@openape/grants'
 import { defineEventHandler, getRouterParam } from 'h3'
 import { requireAuth } from '../../../utils/admin'
@@ -23,7 +24,8 @@ export default defineEventHandler(async (event) => {
 
   // Allow if the logged-in user is the requester themselves
   const isRequester = grant.request.requester === email
-  if (!isRequester) {
+  if (grant.brokered) await requireBrokerGrantOwner(event, grant, false)
+  if (!grant.brokered && !isRequester) {
     const requesterUser = await userStore.findByEmail(grant.request.requester)
     if (!requesterUser) {
       throw createProblemError({ status: 403, title: 'Requester not found for this grant' })

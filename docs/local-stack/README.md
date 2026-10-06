@@ -1,6 +1,7 @@
 # Local Containerized Test Stack
 
-The whole OpenApe web topology — the DDISA **IdP** plus two **SP** apps — running
+The local OpenApe topology — the DDISA **IdP**, eight **SP** apps and the public
+docs site — running
 locally in Docker under real `https://*.openape.test` hostnames, mirroring the
 chatty/prod setup (subdomains, TLS, DNS-based DDISA discovery). A headless
 Chromium drives the real user flows and captures their screenshots.
@@ -53,12 +54,19 @@ Then visit `https://id.openape.test`, `https://troop.openape.test`,
 | `idp`        | `openape-free-idp` — DDISA Identity Provider (passkeys)              | `https://id.openape.test`    |
 | `troop`      | `openape-troop` — SP (agent control plane)                          | `https://troop.openape.test` |
 | `chat`       | `openape-chat` — SP (chat)                                          | `https://chat.openape.test`  |
+| `tasks`, `plans`, `testrun`, `timetrack`, `crm`, `pr` | Additional SP apps | `https://<service>.openape.test` |
+| `docs` | Public documentation | `https://docs.openape.test` |
 | `playwright` | headless-Chromium runner (on the same network) — captures the flows | —                            |
 
 Real DNS, real TLS (Node trusts Caddy's CA — verification is **not** disabled),
 and **real DDISA discovery**: the SPs learn the IdP from the
 `_ddisa.openape.test` TXT record, and the IdP reads `mode=allowlist-user` from
 the same record to drive its consent policy. No public DNS, no `id.openape.ai`.
+
+The Compose file is authoritative: `docker compose -f compose/local-stack.yml config --services`.
+Use `pnpm doctor -- --services --app WORKSPACE` to inspect required services
+without starting or resetting them. The demo and agent-lifecycle profiles add
+optional drivers; not every monorepo app is currently defined in this stack.
 
 ## Flow docs (per app)
 

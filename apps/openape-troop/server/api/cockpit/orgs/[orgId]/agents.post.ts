@@ -4,6 +4,7 @@ import { cockpitAgents } from '../../../../database/schema'
 import { requireOwnedOrg } from '../../../../utils/cockpit/org-access'
 import { scoreProcedure } from '../../../../utils/cockpit/procedure-score'
 import { assertVars } from '../../../../utils/cockpit/vars'
+import { validateTools } from '../../../../utils/task-validation'
 
 // Add a delegation leaf (role, duties, tools) the Operator can hand tool-work to.
 // `procedure` is its work instruction, `vars` its own facts — both owner-only.
@@ -12,7 +13,9 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<{ role?: string, label?: string, duties?: string, procedure?: string, vars?: unknown, tools?: string[], reportsTo?: string }>(event)
   const label = (body?.label ?? '').trim()
   if (!label) throw createError({ statusCode: 400, statusMessage: 'label required' })
-  const tools = Array.isArray(body?.tools) ? body.tools.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim()) : []
+  const checkedTools = validateTools(body?.tools ?? [])
+  if (!checkedTools.ok) throw createError({ statusCode: 400, statusMessage: checkedTools.reason })
+  const tools = checkedTools.tools
   const procedure = (body?.procedure ?? '').trim()
   const { score, reason } = scoreProcedure(procedure, owner)
   const row = {

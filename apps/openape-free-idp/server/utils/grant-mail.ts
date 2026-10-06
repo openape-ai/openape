@@ -47,7 +47,7 @@ export interface GrantMailDeps {
   issuer: string
   debouncer: GrantMailDebouncer
   /** Approver for a requester (users.approver ?? own email), null if no user row. */
-  resolveApprover: (requester: string) => Promise<string | null>
+  resolveApprover: (requester: string, grant?: OpenApeGrant) => Promise<string | null>
   countPendingForApprover: (approver: string) => Promise<number>
   sendMail: (to: string, mail: PendingGrantMail) => Promise<void>
 }
@@ -67,7 +67,7 @@ export async function notifyApproverOfPendingGrantByMail(
 ): Promise<'sent' | 'debounced' | 'skipped'> {
   if (grant.status !== 'pending' || grant.auto_approval_kind) return 'skipped'
 
-  const approver = await deps.resolveApprover(grant.request.requester)
+  const approver = await deps.resolveApprover(grant.request.requester, grant)
   if (!approver) return 'skipped'
 
   if (!deps.debouncer.shouldSend(approver)) return 'debounced'

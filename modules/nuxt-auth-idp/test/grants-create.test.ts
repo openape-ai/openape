@@ -2,6 +2,8 @@ import { computeCmdHash } from '@openape/core'
 import { computeArgvHash, InMemoryGrantStore } from '@openape/grants'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('../src/runtime/server/utils/broker-forward', () => ({ maybeForwardBrokerGrant: async () => undefined }))
+
 const readBodyMock = vi.fn()
 const setResponseStatusMock = vi.fn()
 let grantStore = new InMemoryGrantStore()

@@ -23,7 +23,7 @@ export default defineNuxtConfig({
     // without env setup. Prod MUST set NUXT_TURSO_URL (path under shared/).
     tursoUrl: 'file:./dev.db',
     tursoAuthToken: '',
-    // Resend für die Morning-Mail — NUXT_RESEND_API_KEY / NUXT_MAIL_FROM.
+    // Resend for the morning mail — NUXT_RESEND_API_KEY / NUXT_MAIL_FROM.
     resendApiKey: '',
     mailFrom: 'OpenApe Briefing <briefing@openape.ai>',
     // NUXT_PUBLIC_URL — canonical public origin (deep-links, redirects).
@@ -64,8 +64,8 @@ export default defineNuxtConfig({
 
   nitro: {
     preset: 'node-server',
-    // PFLICHT: ohne asyncContext fällt useEvent()/Store-Lookup in Nitro still
-    // auf Defaults zurück (leere Daten). Siehe OpenApe Memory-Lesson.
+    // REQUIRED: without asyncContext useEvent()/store lookup in Nitro silently
+    // falls back to defaults (empty data). See the OpenApe memory lesson.
     experimental: { asyncContext: true, tasks: true },
     // 06:30 lokale Container-Zeit — compose setzt TZ=Europe/Vienna.
     scheduledTasks: { '30 6 * * *': ['morning-mail'] },

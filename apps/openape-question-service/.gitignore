@@ -3,3 +3,9 @@ dev.db
 dev.db-*
 .output/
 .data/
+
+# docs run artefacts
+.docs-run.db
+.test2docs/
+test-results/
+tests/docs/.auth/

@@ -34,7 +34,7 @@ const today = new Date().toLocaleDateString('de-AT', { weekday: 'long', day: 'nu
 
 const chipTargets = computed(() => new Map(props.kpis.map(k => [k.id, k.key])))
 
-// Details sind der Inhalt: Themen-Kacheln default offen, Chevron klappt zu.
+// The details are the content: topic tiles open by default, chevron collapses.
 const userToggled = ref(new Map<string, boolean>())
 
 function isOpen(key: string): boolean {
@@ -47,7 +47,7 @@ function toggle(key: string) {
   userToggled.value = next
 }
 
-// Leere „erledigt"-Mitglieder brauchen keine Detail-Box — eine Zeile reicht.
+// Members with nothing done need no detail box — one line is enough.
 const renderedDetails = computed(() => {
   const map = new Map<string, { html: string, missing: number }>()
   for (const kpi of props.kpis) {

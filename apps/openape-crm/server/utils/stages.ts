@@ -25,7 +25,7 @@ export async function listStages(db: Db, workspaceId: string): Promise<PipelineS
     .all()
 }
 
-/** Die Stufe, in die ein Deal soll — samt `outcome`, das über den Abschluss entscheidet. */
+/** The stage a deal should go to — including the `outcome` that decides closing. */
 export async function requireStage(db: Db, workspaceId: string, key: unknown): Promise<PipelineStage> {
   const stage = typeof key === 'string'
     ? await db
@@ -44,7 +44,7 @@ export async function requireStage(db: Db, workspaceId: string, key: unknown): P
   return stage
 }
 
-/** Die erste Stufe der Pipeline — dort landet ein Deal ohne Angabe. */
+/** The first stage of the pipeline — where a deal lands with nothing specified. */
 export async function firstStage(db: Db, workspaceId: string): Promise<PipelineStage> {
   const stages = await listStages(db, workspaceId)
   if (!stages[0]) throw createProblemError({ status: 409, title: 'workspace has no stages' })
@@ -59,7 +59,7 @@ export function parseStageName(value: unknown): string {
   return name
 }
 
-/** Positionen 0…n neu schreiben — eine Quelle der Wahrheit statt Lückenarithmetik. */
+/** Rewrite positions 0…n — one source of truth instead of gap arithmetic. */
 export async function writePositions(db: Db, workspaceId: string, keys: string[]): Promise<void> {
   await Promise.all(keys.map((key, position) =>
     db.update(pipelineStages)

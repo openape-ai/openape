@@ -7,8 +7,8 @@ import { buildColumns, dropInto, formatEuro, idToSelection, NO_SELECTION, select
 const STAGES: PipelineStage[] = DEFAULT_STAGES.map((stage, position) => ({ ...stage, position }))
 
 function deal(id: string, stage: string, position: number, valueCents = 0): Deal {
-  // `stage` bleibt hier absichtlich ein roher String: die Spaltenlogik muss
-  // auch mit einer Zeile klarkommen, deren Stufe es im Code nicht mehr gibt.
+  // `stage` stays a raw string here on purpose: the column logic has to cope
+  // with a row whose stage no longer exists in the code.
   return {
     id,
     title: id,
@@ -84,7 +84,7 @@ describe('formatEuro', () => {
 
 describe('selection sentinel', () => {
   // Ein Eintrag mit leerem Wert liess Nuxt UIs Select werfen und die ganze
-  // Seite mit 500 abstuerzen — die Option "ohne …" braucht einen echten Wert.
+  // crash the page with a 500 — the "without …" option needs a real value.
   it('never uses an empty string as an option value', () => {
     expect(NO_SELECTION).not.toBe('')
   })

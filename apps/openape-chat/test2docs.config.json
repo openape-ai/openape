@@ -1,0 +1,25 @@
+{
+  "title": "OpenApe Chat — Manual",
+  "description": "Talk to the people you have agreed to talk to: contacts first, then messages.",
+  "lang": "en",
+  "inDir": ".test2docs",
+  "outDir": "docs/manual",
+  "viewport": {
+    "width": 480,
+    "height": 900
+  },
+  "groups": [
+    {
+      "title": "Getting started",
+      "categories": [
+        "contacts"
+      ]
+    },
+    {
+      "title": "Talking",
+      "categories": [
+        "messages"
+      ]
+    }
+  ]
+}

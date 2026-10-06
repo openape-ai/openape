@@ -1,3 +1,4 @@
+import { shellStdio, shellTargetHost } from '../shell/context.js'
 import { execFileSync } from 'node:child_process'
 import { hostname } from 'node:os'
 import { basename } from 'node:path'
@@ -407,7 +408,7 @@ async function runShellMode(
   if (adapterHandled) return
 
   const grantsUrl = await getGrantsEndpoint(idp)
-  const targetHost = (args.host as string) || hostname()
+  const targetHost = (args.host as string) || shellTargetHost()
 
   // Try to find an existing timed/always session grant for ape-shell
   try {
@@ -687,7 +688,7 @@ function execShellCommand(command: string[]): void {
   try {
     const { APES_SHELL_WRAPPER: _wrapperMarker, APES_SHELL_MODE: _modeMarker, ...inheritedEnv } = process.env
     execFileSync(command[0]!, command.slice(1), {
-      stdio: 'inherit',
+      stdio: shellStdio(),
       env: inheritedEnv,
     })
   }
@@ -832,7 +833,7 @@ async function runAudienceMode(
   const idp = getIdpUrl(args.idp as string | undefined)!
   const grantsUrl = await getGrantsEndpoint(idp)
   const command = commandArgv ?? action.split(' ')
-  const targetHost = (args.host as string) || hostname()
+  const targetHost = (args.host as string) || shellTargetHost()
   const runAs = resolveRunAsTarget((args.as as string | undefined) ?? undefined)
 
   // Step 0: Reuse path — look for an existing approved 'timed' /
