@@ -5,6 +5,7 @@ import type { ConnectionView } from '../../contracts/onboarding'
 import type { RuntimeApprovalView } from '../../contracts/runtime-approval'
 import { diagnostic, t } from '../i18n'
 import LanguageSwitcher from '../LanguageSwitcher.vue'
+import type { SecretsView } from '../../contracts/secrets'
 
 /**
  * Settings as a gear menu: the three accounts, the two execution switches, language, backups and
@@ -12,8 +13,8 @@ import LanguageSwitcher from '../LanguageSwitcher.vue'
  * this menu only shows status and switches that the desktop already offers. The browser shows
  * status and sign-out and points to the desktop for everything native.
  */
-const props = defineProps<{ browser?: boolean, subject?: string }>()
-const emit = defineEmits<{ close: [], logout: [] }>()
+const props = defineProps<{ browser?: boolean, subject?: string, consumer?: SecretsView['consumer'] }>()
+const emit = defineEmits<{ close: [], logout: [], revoke: [] }>()
 const native = !props.browser && typeof window !== 'undefined' && !!window.pods
 const owner = ref<ConnectionView | null>(null)
 const jev = ref<ConnectionView | null>(null)
@@ -69,6 +70,9 @@ defineExpose({ load })
     </div>
     <div class="acct" data-account="jev">
       <span>{{ 'TypeSafe Jev' }}</span><span class="pill" :class="jev?.state === 'ready' ? 'ok' : 'off'">{{ browser ? t('on the desktop') : jev?.state === 'ready' ? t('connected') : t('not connected') }}</span><span class="meta">{{ t('decisions in scripts') }}</span>
+    </div>
+    <div class="acct" data-consumer>
+      <span>{{ 'OpenApe Secrets' }}</span><span class="pill" :class="consumer ? 'ok' : 'off'">{{ browser ? t('on the desktop') : consumer ? t('this Mac is registered') : t('not registered') }}</span><span class="meta">{{ t('receives sealed secrets, collected once') }}<template v-if="consumer && !browser"> · {{ consumer.id }}<button class="secondary small" type="button" :disabled="busy" @click="emit('revoke')">{{ t('Revoke') }}</button></template></span>
     </div>
     <div class="eyebrow">
       {{ t('Execution') }}

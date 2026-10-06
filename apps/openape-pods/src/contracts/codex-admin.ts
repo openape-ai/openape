@@ -7,7 +7,7 @@ import { parseProgramCommand } from './programs'
 import { parseCredentialAlias } from './credentials'
 import type { CodexRequest } from './codex'
 
-export const administrationActions = ['resources', 'scripts', 'recovery', 'program', 'importSecret', 'description', 'setup']
+export const administrationActions = ['resources', 'scripts', 'recovery', 'program', 'importSecret', 'requestSecret', 'description', 'setup']
 
 export function parseAdministration(action: Record<string, unknown>) {
   const { action: kind, command, revision, path, adapterPath, commandName, runtimePath } = action
@@ -31,6 +31,13 @@ export function parseAdministration(action: Record<string, unknown>) {
     parseCredentialAlias(value.alias)
     if (adapterPath !== undefined || commandName !== undefined || runtimePath !== undefined) throw new Error('Invalid credential import fields')
     return { kind, revision: Number(revision), command: value, path: absolutePath(path) } as const
+  }
+  if (kind === 'requestSecret') {
+    const value = command as { podId: string, alias: string, purpose: string, epoch: number }
+    if (!value || Object.keys(value).some(key => !['podId', 'alias', 'purpose', 'epoch'].includes(key)) || !/^[a-f0-9-]{36}$/.test(value.podId) || !Number.isSafeInteger(value.epoch) || value.epoch < 0 || typeof value.purpose !== 'string' || value.purpose.length > 500) throw new Error('Invalid secret request')
+    parseCredentialAlias(value.alias)
+    noPaths(action)
+    return { kind, revision: Number(revision), command: value } as const
   }
   if (kind === 'resources' && (command as { type?: unknown })?.type === 'importJev') {
     const value = command as { type: 'importJev', podId: string, epoch: number }
