@@ -285,25 +285,6 @@ it('mounts native editors only for this desktop and never sends another runtime 
   expect(wrapper.find('.mcp-access').exists()).toBe(false)
 })
 
-it('creates a standalone Pod through the central command receipt and opens its saved settings', async () => {
-  const fixture = centralFixture()
-  const id = '00000000-0000-4000-8000-000000000201'
-  const command = vi.spyOn(fixture.client, 'command').mockImplementation(async (_runtime, _revision, command, receiptId) => {
-    const created = { ...fixture.host.workspace.pods[0]!, id, name: String(command.body.name) }
-    fixture.host.workspace.pods.push(created)
-    fixture.view.id = id; fixture.view.scripts.pod = created
-    return { id: receiptId, runtimeId: fixture.host.id, command, state: 'applied', result: null, error: null, revision: ++fixture.host.revision }
-  })
-  wrapper = mount(CentralWorkspace, { props: { client: fixture.client } }); await flushPromises()
-  await wrapper.findAll('button').find(button => button.text() === '＋ New pod')!.trigger('click')
-  await wrapper.get('[aria-label="New Pod name"]').setValue('Independent audit')
-  await wrapper.get('form.central-create').trigger('submit'); await flushPromises()
-  expect(command).toHaveBeenCalledExactlyOnceWith(fixture.host.id, 1, { channel: 'workspace', body: { type: 'create', name: 'Independent audit' } }, expect.any(String))
-  expect(wrapper.get('.central-title h1').text()).toBe('Independent audit')
-  await wrapper.findAll('.central-tabs button').find(button => button.text() === 'Settings')!.trigger('click')
-  expect(wrapper.get('input[maxlength="100"]').element).toHaveProperty('value', 'Independent audit')
-})
-
 it('keeps remote edits until navigation is explicitly confirmed', async () => {
   await open()
   await wrapper!.get('[aria-label="Pod description"]').setValue('Unfinished remote edit')

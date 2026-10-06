@@ -25,7 +25,7 @@ export default defineComponent({
     readOnly: Boolean,
     sharing: { type: Boolean, default: sharingAvailable },
   },
-  emits: ['select', 'openPod', 'create', 'createWorkflow', 'import', 'update:filter'],
+  emits: ['select', 'openPod', 'import', 'update:filter'],
   computed: {
     sections(): Section[] {
       const definitions = this.view.workflows.filter(item => this.filter === 'all' || item.mode === this.filter)
@@ -66,12 +66,6 @@ export default defineComponent({
         <button v-if="sharing" class="secondary" @click="$emit('import')">
           {{ t('Import') }}
         </button>
-        <button v-if="filter !== 'sequence'" class="primary" @click="$emit('create', null)">
-          {{ t('Create network') }}
-        </button>
-        <button v-if="filter !== 'channels'" class="secondary" @click="$emit('createWorkflow')">
-          {{ t('Create workflow') }}
-        </button>
       </div>
     </header>
     <p v-if="networkError" role="alert">
@@ -94,9 +88,6 @@ export default defineComponent({
     <section v-for="section in sections" :key="section.id ?? 'ungrouped'" class="graph-group">
       <header>
         <h2>{{ section.name }}</h2>
-        <button v-if="!readOnly && section.id && filter !== 'sequence'" class="text-button" @click="$emit('create', section.id)">
-          {{ t('+ Create network in {group}', { group: section.name }) }}
-        </button>
       </header>
       <div class="graph-cards">
         <button v-for="network in section.networks" :key="network.id" class="graph-card" @click="$emit('select', network.id)">

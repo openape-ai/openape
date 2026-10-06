@@ -42,8 +42,6 @@ const dailyTime = ref('09:00')
 const timezone = ref(Intl.DateTimeFormat().resolvedOptions().timeZone)
 const scheduleKind = ref('interval')
 const scheduleEnabled = ref(false)
-const newName = ref('')
-const creating = ref(false)
 const pendingNavigation = ref<'inventory' | { runtimeId: string, podId: string } | null>(null)
 const archived = ref(false)
 const search = ref('')
@@ -59,23 +57,12 @@ const runtime = computed(() => runtimes.value.find(item => item.id === selected.
 const listed = computed(() => runtime.value?.workspace.pods.find(item => item.id === selected.value?.podId))
 const available = computed(() => !!listed.value?.online && !!current.value && (selected.value?.runtimeId !== props.desktopStatus?.runtimeId || props.desktopStatus?.state === 'online'))
 const runList = computed(() => [...current.value?.pod.runs.runs ?? [], ...olderRuns.value])
-const activeRuntime = computed(() => runtimes.value.find(item => item.id === props.desktopStatus?.runtimeId && item.online) ?? (runtime.value?.online ? runtime.value : runtimes.value.find(item => item.online)))
 const localEditor = computed(() => props.desktop && !!props.desktopStatus?.runtimeId && selected.value?.runtimeId === props.desktopStatus.runtimeId)
 function visiblePods(host: CentralRuntime) { return host.workspace.pods.filter(pod => (pod.lifecycle === 'archived') === archived.value && pod.name.toLowerCase().includes(search.value.toLowerCase())) }
 function memberships(runtimeId: string, id: string) {
   const host = runtimes.value.find(item => item.id === runtimeId)
   const view = runtimeId === props.desktopStatus?.runtimeId ? props.workflows : host?.workflows
   return [...view?.workflows.filter(item => item.nodes.some(node => node.podId === id)).map(item => item.name) ?? [], ...host?.networks?.networks.filter(network => network.podIds?.includes(id)).map(network => network.name) ?? []].join(' · ')
-}
-async function createPod() {
-  const target = activeRuntime.value
-  if (!target) return
-  const before = new Set(target.workspace.pods.map(pod => pod.id))
-  await send('workspace', { type: 'create', name: newName.value }, target)
-  if (error.value || operationId.value) return
-  const created = runtimes.value.find(item => item.id === target.id)?.workspace.pods.find(pod => !before.has(pod.id))
-  newName.value = ''; creating.value = false
-  if (created) await select(target.id, created.id)
 }
 
 function editorState() {
@@ -298,17 +285,8 @@ onBeforeUnmount(() => { generation++; abort.abort() })
             <h1>{{ t('Pods') }}</h1><p class="central-muted">
               {{ t('Every Pod has its own script, permissions and history.') }}
             </p>
-          </div><button :disabled="!activeRuntime || busy" @click="creating = !creating">
-            {{ t('＋ New pod') }}
-          </button>
+          </div>
         </header>
-        <form v-if="creating" class="central-create central-card" @submit.prevent="createPod">
-          <input v-model="newName" :aria-label="t('New Pod name')" :placeholder="t('New Pod')" maxlength="100" required><button :disabled="!activeRuntime || !newName.trim() || busy || !!operationId">
-            {{ t('Create') }}
-          </button><button type="button" @click="creating = false">
-            {{ t('Cancel') }}
-          </button>
-        </form>
         <div class="inventory-toolbar">
           <div class="central-tabs" role="group" :aria-label="t('Pods')">
             <button :aria-pressed="!archived" @click="archived = false">

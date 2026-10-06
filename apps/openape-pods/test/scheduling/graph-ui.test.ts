@@ -9,13 +9,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GateBatchView } from '../../src/contracts/gates'
 import type { GraphDetail, GraphGate } from '../../src/contracts/graphs'
 import type { WorkflowDefinition, WorkflowView } from '../../src/contracts/workflows'
-import { sequenceParts, parseWorkflowCommand  } from '../../src/contracts/workflows'
+import { sequenceParts  } from '../../src/contracts/workflows'
 import NetworkConversion from '../../src/renderer/NetworkConversion.vue'
 import NetworkCreate from '../../src/renderer/NetworkCreate.vue'
 import NetworkDetail from '../../src/renderer/NetworkDetail.vue'
 import { operationalFixture, recoveryFixture, conversionFixture } from '../layout/network-fixture'
 import GateReview from '../../src/renderer/GateReview.vue'
-import GraphCreate from '../../src/renderer/GraphCreate.vue'
 import GraphInspector from '../../src/renderer/GraphInspector.vue'
 import GraphOverview from '../../src/renderer/GraphOverview.vue'
 import GraphPanel from '../../src/renderer/GraphPanel.vue'
@@ -24,9 +23,7 @@ import { installWorkspace } from '../layout/workspace-fixture'
 import GraphView from '../../src/renderer/GraphView.vue'
 import ItemTrace from '../../src/renderer/ItemTrace.vue'
 import { applyLanguage } from '../../src/renderer/i18n'
-import { channelNames, contractScript, declaredChannels, newGraph, withMember } from '../../src/renderer/utils/graph-create'
 import { choiceFields } from '../../src/renderer/utils/choice-payload'
-import { parseGraphContract } from '../../src/contracts/graphs'
 
 afterEach(() => applyLanguage('en'))
 const id = (index: number) => `00000000-0000-4000-8000-00000000000${index}`
@@ -189,10 +186,8 @@ describe('overview', () => {
     expect(wrapper.findAll('.graph-group').map(section => section.find('h2').text())).toEqual(['Delta Mind', 'Ungrouped'])
     expect(wrapper.findAll('.graph-card').map(card => card.text())).toEqual(['Bounded graph · Pods: 3 · hourlyEmail managementChoices waiting: 1Approvals waiting: 3', 'Pod · pausedPR monitor'])
     await wrapper.findAll('.graph-card')[0]!.trigger('click'); await wrapper.findAll('.graph-card')[1]!.trigger('click')
-    await button(wrapper, 'Create network').trigger('click'); await button(wrapper, '+ Create network in Delta Mind').trigger('click')
     expect(wrapper.emitted('select')).toEqual([[graphId]])
     expect(wrapper.emitted('openPod')).toEqual([[single]])
-    expect(wrapper.emitted('create')).toEqual([[null], [group]])
   })
   it('tells what a standalone Pod does and whether it runs', () => {
     const described = pods.map(pod => pod.id === single ? { ...pod, lifecycle: 'active' as const, description: 'Reports changes to open pull requests by Telegram.' } : pod)
@@ -214,60 +209,6 @@ describe('overview', () => {
     expect(wrapper.findAll('.graph-card')[0]!.text()).toBe('Workflow · Pods: 3 · Manual onlyMorgenbriefing')
     expect(wrapper.findAll('button').map(item => item.text())).not.toContain('Create network')
     expect(mount(GraphOverview, { props: { view: { workflows: [], runs: [] }, pods: [], organization: { revision: 1, groups: [] } } }).text()).toContain('No network, workflow or pod yet.')
-  })
-})
-
-describe('create by hand', () => {
-  it('creates a graph from the free Pods of the chosen group', async () => {
-    const wrapper = mount(GraphCreate, { props: { view: { workflows: [], runs: [] }, pods, organization, groupId: group } })
-    await button(wrapper, 'Bounded graph').trigger('click')
-    expect(button(wrapper, 'Create').attributes('disabled')).toBeDefined()
-    await wrapper.find('input[type="text"]').setValue('Email management')
-    expect(wrapper.findAll('.graph-create-check').map(item => item.text())).toEqual(['Intake', 'Triage', 'Archive'])
-    await wrapper.findAll('.graph-create-check input')[0]!.setValue(true)
-    await wrapper.findAll('select')[1]!.setValue('hourly')
-    await wrapper.find('form').trigger('submit')
-    expect(wrapper.emitted('create')).toEqual([[{ kind: 'graph', name: 'Email management', groupId: group, schedule: 'hourly', time: '07:00', podIds: [intake] }]])
-  })
-  it('creates a Pod with a contract and offers the channels of the chosen graph for takes', async () => {
-    const wrapper = mount(GraphCreate, { props: { view, pods, organization, groupId: group } })
-    await button(wrapper, 'Pod').trigger('click')
-    const [name, summary, gives] = wrapper.findAll('input[type="text"]')
-    await name!.setValue('Invoice filing'); await gives!.setValue('invoice.filed, invoice.failed')
-    expect(button(wrapper, 'Create').attributes('title')).toBe('Enter a subtitle of at most 40 characters.')
-    await summary!.setValue('PDF in accounting')
-    const [, graph, takes] = wrapper.findAll('select')
-    await graph!.setValue(graphId)
-    expect(takes!.findAll('option').map(option => option.text())).toEqual(['Nothing, starts with the network', ...definition.channels.map(channel => channel.name)])
-    await takes!.setValue('mail.useful')
-    await wrapper.find('form').trigger('submit')
-    expect(wrapper.emitted('create')).toEqual([[{ kind: 'pod', name: 'Invoice filing', summary: 'PDF in accounting', groupId: group, graphId, takes: ['mail.useful'], gives: ['invoice.filed', 'invoice.failed'] }]])
-  })
-  it('creates a group, shows a failure and cancels', async () => {
-    const wrapper = mount(GraphCreate, { props: { view, pods, organization, error: 'Workflow limit reached' } })
-    expect(wrapper.find('[role="alert"]').text()).toBe('Workflow limit reached')
-    await button(wrapper, 'Group').trigger('click')
-    await wrapper.find('input[type="text"]').setValue('Private')
-    await wrapper.find('form').trigger('submit'); await button(wrapper, 'Cancel').trigger('click')
-    expect(wrapper.emitted('create')).toEqual([[{ kind: 'group', name: 'Private' }]])
-    expect(wrapper.emitted('cancel')).toHaveLength(1)
-  })
-  it('builds a save command the worker accepts, starting disabled with every contract channel declared', () => {
-    const command = newGraph(graphId, { kind: 'graph', name: ' Mail ', groupId: group, schedule: 'daily', time: '07:00', podIds: [intake, triage] }, contracts)
-    expect(parseWorkflowCommand(command)).toMatchObject({ name: 'Mail', enabled: false, mode: 'channels', schedule: { kind: 'daily', time: '07:00' }, channels: [{ name: 'mail.open' }, { name: 'mail.newsletter' }, { name: 'mail.unsure' }] })
-    expect(declaredChannels([{ name: 'mail.open', title: 'New mail', fields: ['subject'] }], [contracts[intake], null, undefined])).toEqual([{ name: 'mail.open', title: 'New mail', fields: ['subject'] }])
-    expect(channelNames(' invoice.filed,invoice.failed  invoice.filed ')).toEqual(['invoice.filed', 'invoice.failed'])
-  })
-  it('adds a member to a graph and writes a script whose contract the runtime accepts', async () => {
-    const contract = { takes: ['mail.useful'], gives: ['invoice.filed'], summary: 'PDF in accounting' }
-    const command = withMember(definition, single, contract)
-    expect(parseWorkflowCommand(command)).toMatchObject({ revision: 3, nodes: [{ podId: intake }, { podId: triage }, { podId: archive }, { podId: single }] })
-    expect(command.channels!.map(channel => channel.name)).toContain('invoice.filed')
-    const script = await import(`data:text/javascript,${encodeURIComponent(contractScript(contract))}`)
-    expect(parseGraphContract(script.contract)).toEqual(contract)
-    const emitted: unknown[] = []
-    expect(await script.run({ items: [{ key: 'mail-1', channel: 'mail.useful', data: { id: 'one' } }], emit: async (...values: unknown[]) => { emitted.push(values) }, input: { eventIds: [] } })).toMatchObject({ status: 'completed', summary: '1 items' })
-    expect(emitted).toEqual([['invoice.filed', { key: 'mail-1', data: { id: 'one' } }]])
   })
 })
 
@@ -428,23 +369,13 @@ describe('connected desktop graphs', () => {
     await click('Useful')
     expect(workflows).toHaveBeenCalledWith({ type: 'gateChoose', id: graphId, gate: 'review', itemId: id(6), option: 'useful' })
   })
-  it('updates the group overview after creating a group through the graph surface', async () => {
-    const { workspace } = await open()
-    await click('Create network')
-    await click('Create a Pod or company')
-    await click('Group')
-    await desktop!.get('input').setValue('IURIO')
-    await desktop!.get('form').trigger('submit'); await flushPromises()
-    expect(workspace).toHaveBeenCalledWith({ type: 'organize', revision: 4, action: 'create', name: 'IURIO' })
-    expect(desktop!.findAll('.graph-group h2').map(item => item.text())).toEqual(['Delta Mind', 'IURIO', 'Ungrouped'])
-  })
 })
 
 describe('networks and workflows presentation', () => {
   it('keeps the chosen mode filter when returning from a detail and reuses the workflow editor', async () => {
     const sequence = { ...definition, id: id(5), name: 'Morning briefing', mode: 'sequence' as const, gates: [], channels: [] }
     const published = { ...view, workflows: [definition, sequence], graphs: { [graphId]: detail } }
-    const workflows = bridge(() => published)
+    bridge(() => published)
     const wrapper = mount(GraphPanel, { props: { view: published, pods, organization } })
     await button(wrapper, 'Networks').trigger('click')
     expect(wrapper.findAll('.graph-card').map(card => card.find('strong').text())).toEqual(['Email management'])
@@ -455,18 +386,6 @@ describe('networks and workflows presentation', () => {
     expect(button(wrapper, 'Networks').attributes('aria-pressed')).toBe('true')
     await button(wrapper, 'Workflows').trigger('click')
     expect(wrapper.findAll('.graph-card').map(card => card.find('strong').text())).toEqual(['Morning briefing'])
-    await button(wrapper, 'Create workflow').trigger('click')
-    expect(wrapper.find('form[aria-label="Edit workflow"]').exists()).toBe(true)
-    await button(wrapper, 'Cancel').trigger('click')
-    expect(button(wrapper, 'Workflows').attributes('aria-pressed')).toBe('true')
-    expect(wrapper.find('.graph-create').exists()).toBe(false)
-    await button(wrapper, 'Create workflow').trigger('click')
-    await wrapper.get('form input[required]').setValue('New ordered workflow')
-    await wrapper.get('form input[type="checkbox"]').setValue(true)
-    await wrapper.get('form').trigger('submit'); await flushPromises()
-    expect(workflows).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'save', revision: 0, name: 'New ordered workflow', schedule: null, enabled: false, nodes: [{ podId: pods[0]!.id, after: [], handoff: false }] }))
-    expect(wrapper.emitted('changed')).toEqual([[published]])
-    expect(wrapper.emitted('select')!.at(-1)![0]).toBe(workflows.mock.calls.at(-1)![0].id)
   })
   it('counts choices and approvals separately without counting held approval items or duplicate batches twice', () => {
     const held = [...batch.items.map(item => ({ itemId: item.itemId, key: item.key, title: item.title, workflowId: graphId, gate: approve.key })), ...view.gates!.held, ...view.gates!.held]
@@ -600,41 +519,6 @@ describe('persistent network owner controls', () => {
     finally { wrapper.unmount() }
   })
 
-  it('requires an explicit shared value and sends a reviewed paused composition', async () => {
-    const f = operationalFixture()
-    const networks = vi.fn(async (command: Parameters<typeof window.pods.networks>[0]) => structuredClone(command).type === 'setup' ? { networks: [], setup: f.setup } : { ...f.view, createdId: f.networkId })
-    installWorkspace({ networks, definitions: async () => f.definitions })
-    const wrapper = mount(NetworkCreate, { props: { pods: f.pods, organization: f.organization, workflows: { workflows: [], runs: [] }, networks: { networks: [] }, groupId: f.groupId } })
-    try {
-      await flushPromises()
-      await wrapper.findAll('button').find(item => item.text().startsWith('Persistent network'))!.trigger('click')
-      await wrapper.get('input[maxlength="120"]').setValue('Owner reviewed network')
-      for (const input of wrapper.findAll('input[type=checkbox]').reverse()) await input.setValue(true)
-      await wrapper.get('form').trigger('submit'); await flushPromises()
-      expect(wrapper.text()).toContain('Created paused. Activation is a separate action.')
-      expect(wrapper.text()).toContain('Synthetic mailbox · read only')
-      const shared = wrapper.findAll('fieldset').find(item => item.get('legend').text() === 'Shared values')!
-      expect(shared.findAll('input[type=checkbox]')).toHaveLength(1)
-      await shared.get('input[type=checkbox]').setValue(true)
-      await shared.get('input[maxlength="1024"]').setValue('one-shared@example.invalid')
-      await button(wrapper, 'Add field').trigger('click')
-      await wrapper.get('input[pattern]').setValue('subject')
-      await wrapper.get('form').trigger('submit'); await flushPromises()
-      expect(networks).toHaveBeenCalledWith(expect.objectContaining({ type: 'create', draft: expect.objectContaining({ expectedSetup: f.setup.fingerprint, sharedValues: { mailbox: 'one-shared@example.invalid' } }) }))
-      expect(wrapper.emitted('created')).toHaveLength(1)
-    }
-    finally { wrapper.unmount() }
-  })
-
-  it('shows the connected-runtime creation fence before a request can be made', async () => {
-    const f = operationalFixture(); const networks = vi.fn()
-    installWorkspace({ networks, definitions: async () => f.definitions })
-    const wrapper = mount(NetworkCreate, { props: { pods: f.pods, organization: f.organization, workflows: { workflows: [], runs: [] }, networks: { networks: [], unavailableReason: 'Network creation requires bounded central publication support' } } })
-    await flushPromises()
-    expect(wrapper.get('[role=status]').text()).toContain('bounded central publication')
-    expect(wrapper.findAll('button').find(item => item.text().startsWith('Persistent network'))!.attributes('disabled')).toBeDefined()
-    expect(networks).not.toHaveBeenCalled(); wrapper.unmount()
-  })
 })
 
 describe('network description', () => {
