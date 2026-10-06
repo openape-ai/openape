@@ -27,6 +27,10 @@ import { centralId, parseCentralCommand } from '../contracts/central'
 import { administrationActions, parseAdministration } from '../contracts/codex-admin'
 import type { AdministrationJournal, AdministrationReceipt } from '../contracts/codex-admin'
 import { importPrivateSecret } from './codex/secret-import'
+import { SecretsGate } from './secrets/gate'
+import type { ConsumerRecord } from './secrets/gate'
+import type { SecretRequestRow, SecretsCommand, SecretsView } from '../contracts/secrets'
+import type { SecretRowCommand } from '../worker/secrets/store'
 import { programDefinition } from './programs/definition'
 import { modelResources } from '../worker/master/resources'
 import { object as remoteObject, uuid as remoteUuid, sameOwner } from '@openape/pods-protocol'
@@ -95,6 +99,10 @@ import type { UtilityProcess } from 'electron'
 import { dirname, join } from 'node:path'
 import type { WorkerStatus } from '../contracts/ipc'
 
+const secretsOrigin = 'https://secrets.openape.ai'
+// A fixed record id in the encrypted store for this Mac's consumer key at OpenApe Secrets.
+const secretsConsumerRecord = '6f0c2d2e-5b1a-4f0e-9c7d-3a2b1c0d9e8f'
+
 export class FixtureWorker {
   central: CentralController | null = null
   private shellIdentities = new Map<string, { close: () => Promise<void> }>()
@@ -102,6 +110,7 @@ export class FixtureWorker {
   private archiveService?: MailArchiveService
   private programs: ProgramManager | null = null
   private connections: ConnectionManager | null = null
+  private secretsGate: SecretsGate | null = null
   private providerGateway: Awaited<ReturnType<typeof startAgentGateway>> | null = null
   private providerAbort = new AbortController()
   private jevAttempts = new Map<string, number>()
@@ -203,6 +212,47 @@ export class FixtureWorker {
     this.providerGateway = await startAgentGateway({ provider: (body, signal) => this.connections!.provider(body, signal), tool: async () => { throw new Error('Model credential gateway has no tools') } }, this.providerAbort.signal)
     this.programs = new ProgramManager(join(this.root, 'authentication'), runtime.helper, this.credentials!, this.connections, podId => this.resources({ type: 'list', podId }), command => this.dispatch({ program: command }))
     await this.connections.initialize(async () => { await this.dispatch({ inspectCredentials: true }); await this.credentials!.reconcileScriptSecrets(await this.dispatch({ credentialInventory: true }) as { id: string, podId: string }[]); await this.finishDeletions() })
+    this.secretsGate = new SecretsGate({
+      origin: secretsOrigin,
+      fetch: (input, init) => fetch(input, init),
+      ownerToken: signal => this.connections!.ownerBearer(signal),
+      consumer: {
+        load: async () => {
+          try { return await this.credentials!.readConnection(secretsConsumerRecord) as unknown as ConsumerRecord }
+          catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error }
+        },
+        save: record => this.credentials!.connect(secretsConsumerRecord, JSON.stringify(record)),
+        erase: () => this.credentials!.eraseConnection(secretsConsumerRecord),
+      },
+      rows: {
+        list: () => this.secretRows({ type: 'list' }),
+        record: async (row) => { await this.secretRows({ type: 'record', row }) },
+        update: async (id, patch) => { await this.secretRows({ type: 'update', id, patch }) },
+      },
+      store: async (podId, alias, value) => { await this.saveSecret(podId, alias, value) },
+    })
+    this.secretsGate.start()
+  }
+
+  private async secretRows(command: SecretRowCommand): Promise<SecretRequestRow[]> { return await this.dispatch({ secrets: command }) as SecretRequestRow[] }
+
+  /** The existing credential path with the current resource epoch; the value never leaves this process. */
+  private async saveSecret(podId: string, alias: string, value: string): Promise<void> {
+    const { epoch } = parseResourceState(await this.dispatch({ resource: { type: 'list', podId } }))
+    await this.resources({ type: 'saveCredential', podId, alias, value, epoch })
+  }
+
+  async importSecretFile(podId: string, alias: string, path: string): Promise<void> {
+    await importPrivateSecret(path, value => this.saveSecret(podId, alias, value))
+  }
+
+  async secrets(command: SecretsCommand): Promise<SecretsView> {
+    if (!this.secretsGate) throw new Error('OpenApe Secrets is unavailable until the desktop is set up')
+    if (command.type === 'request') await this.secretsGate.request(command.podId, command.alias, command.purpose)
+    if (command.type === 'cancel') await this.secretsGate.cancel(command.id)
+    if (command.type === 'revokeConsumer') await this.secretsGate.revoke()
+    if (command.type === 'importFile') throw new Error('The private file is chosen in the owner window')
+    return this.secretsGate.view()
   }
 
   private async finishDeletions(): Promise<void> {
@@ -422,6 +472,13 @@ export class FixtureWorker {
     }
     else if (action.kind === 'importSecret') {
       await importPrivateSecret(action.path, value => this.resources({ type: 'saveCredential', ...action.command, value }))
+    }
+    else if (action.kind === 'requestSecret') {
+      if (!this.secretsGate) throw new Error('OpenApe Secrets is unavailable until the desktop is set up')
+      const { epoch } = parseResourceState(await this.dispatch({ resource: { type: 'list', podId: action.command.podId } }))
+      if (epoch !== action.command.epoch) throw new Error('Pod or resources changed; reload before requesting a secret')
+      const row = await this.secretsGate.request(action.command.podId, action.command.alias, action.command.purpose)
+      return { requestId: row.id, status: row.status, expiresAt: row.expiresAt }
     }
     else {
       await this.resources(action.command)
@@ -654,7 +711,7 @@ export class FixtureWorker {
     throw new Error('Unsupported central execution')
   }
 
-  private dispatch(command: { definitions: DefinitionCommand } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { networkGateCheck: { scope: ServiceScope, manifest: NetworkGateManifest, operation: string, grantId?: string } } | { networks: NetworkCommand, ownerOperation?: boolean } | { central: { type: 'snapshot', owner: Owner, networkReads?: boolean } | { type: 'networkRead', owner: Owner, command: NetworkCommand } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { definitions: DefinitionCommand } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { networkGateCheck: { scope: ServiceScope, manifest: NetworkGateManifest, operation: string, grantId?: string } } | { networks: NetworkCommand, ownerOperation?: boolean } | { central: { type: 'snapshot', owner: Owner, networkReads?: boolean } | { type: 'networkRead', owner: Owner, command: NetworkCommand } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()
@@ -808,6 +865,7 @@ export class FixtureWorker {
     await this.setupReady
     await this.programs?.stop()
     await this.closeShellIdentities()
+    await this.secretsGate?.stop()
     await this.connections?.stop()
     this.providerAbort.abort()
     await this.providerGateway?.close()

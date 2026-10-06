@@ -133,4 +133,19 @@ describe('Automatisierungen layout', () => {
     expect(background).not.toBe('rgb(255, 255, 255)')
     await shot('14-dunkel-karte')
   })
+
+  it('shows the secret form with its three ways inside the detail drawer', async () => {
+    await mountShell(1440, 1000)
+    const shell = wrapper!.vm as unknown as { open: (id: string | null) => void }
+    const bot = view.pods.find(pod => pod.name === 'Morgenbriefing · Calendar-Bot')!
+    shell.open(bot.id); await flushPromises(); await frames(5)
+    await button('+ Geheimnis').trigger('click'); await flushPromises(); await frames(2)
+    await wrapper!.findAll('[data-testid="secret-form"] .seg button')[2]!.trigger('click'); await flushPromises(); await frames(2)
+    const drawer = document.querySelector('.automation-detail')!.getBoundingClientRect()
+    const form = document.querySelector('[data-testid="secret-form"]')!.getBoundingClientRect()
+    expect(form.left).toBeGreaterThanOrEqual(drawer.left); expect(form.right).toBeLessThanOrEqual(drawer.right)
+    expect(document.querySelectorAll('[data-testid="secret-form"] .seg button')).toHaveLength(3)
+    document.querySelector('[data-testid="secret-form"]')!.scrollIntoView({ block: 'center' })
+    await shot('07-geheimnis-anfrage')
+  })
 })

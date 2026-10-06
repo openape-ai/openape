@@ -7,16 +7,17 @@ import type { AccessProposal, MasterCommand } from '../../contracts/master'
 import type { NetworkGateView } from '../../contracts/network-gate-view'
 import type { NetworkChoiceView, NetworkCommand } from '../../contracts/networks'
 import type { WorkflowCommand } from '../../contracts/workflows'
+import type { SecretRequestRow, SecretsCommand } from '../../contracts/secrets'
 import { diagnostic, label, language, t } from '../i18n'
-import { stamp } from '../utils/cadence'
+import { clock, stamp } from '../utils/cadence'
 
 /**
  * Everything that waits for the owner, in five sections: questions per choose gate, approval
  * batches decided at the identity provider, runtime rights, unknown deliveries and setup
  * proposals. Every decision leaves as an existing owner command; nothing here approves on its own.
  */
-const props = defineProps<{ view: MapView, choices: NetworkChoiceView[], gates: NetworkGateView[], graphGates: { batches: GateBatchView[], held: GateHeldItem[] } | null, proposals: AccessProposal[], desktop: boolean }>()
-const emit = defineEmits<{ network: [command: NetworkCommand], workflow: [command: WorkflowCommand], command: [command: CentralCommand], master: [command: MasterCommand], open: [id: string] }>()
+const props = defineProps<{ view: MapView, choices: NetworkChoiceView[], gates: NetworkGateView[], graphGates: { batches: GateBatchView[], held: GateHeldItem[] } | null, proposals: AccessProposal[], desktop: boolean, requests?: SecretRequestRow[], secretsOrigin?: string }>()
+const emit = defineEmits<{ network: [command: NetworkCommand], workflow: [command: WorkflowCommand], command: [command: CentralCommand], master: [command: MasterCommand], open: [id: string], secrets: [command: SecretsCommand] }>()
 const headline = ['subject', 'title', 'name']
 const groupBy = ref('')
 const raw = ref(false)
@@ -89,7 +90,9 @@ const podName = (id: string) => props.view.pods.find(pod => pod.id === id)?.name
 const rights = computed(() => props.view.pods.flatMap(pod => [...pod.approvals.map(approval => ({ pod, approval, error: null as string | null })), ...(pod.queue.blocked && !pod.approvals.length ? [{ pod, approval: null, error: pod.queue.error }] : [])]))
 const unknown = computed(() => props.view.pods.flatMap(pod => pod.unknown.map(item => ({ pod, ...item }))))
 const pending = computed(() => props.proposals.filter(proposal => proposal.state === 'pending'))
-const total = computed(() => openEvents.value + batches.value.length + graphBatches.value.length + held.value.length + rights.value.length + unknown.value.length + pending.value.length)
+const requests = computed(() => (props.requests ?? []).filter(row => row.status !== 'collected' && row.status !== 'expired'))
+const requestState = (status: SecretRequestRow['status']) => status === 'failed' ? t('failed') : status === 'filled' ? t('filled') : t('requested')
+const total = computed(() => openEvents.value + batches.value.length + graphBatches.value.length + held.value.length + rights.value.length + unknown.value.length + pending.value.length + requests.value.length)
 const provider = (proposal: AccessProposal) => proposal.body.provider === 'credential' ? t('Secrets') : proposal.body.provider === 'directory' ? t('Folders and files') : proposal.body.provider === 'http' ? t('Services, via HTTPS') : proposal.body.provider === 'variable' ? t('Variables') : t('Applications, installed')
 defineExpose({ total })
 </script>
@@ -268,7 +271,23 @@ defineExpose({ total })
     <h2>{{ t('Setup') }} <span class="meta">· {{ t('proposals for access a script needs') }}</span></h2>
     <div class="inbox" data-testid="setup">
       <slot name="setup" />
-      <div v-if="!pending.length" class="item">
+      <div v-for="row in requests" :key="row.id" class="item" data-testid="secret-request">
+        <div class="row">
+          <span class="pill" :class="row.status === 'failed' ? 'warn' : row.status === 'filled' ? 'pods' : 'warn'">{{ requestState(row.status) }}</span><span class="subj">{{ t('Secret {alias} for {pod}', { alias: row.alias, pod: podName(row.podId) }) }}</span>
+        </div>
+        <div class="meta">
+          {{ row.purpose || t('no purpose given') }} · {{ t('requested {time}', { time: clock(row.createdAt, language) }) }} · {{ t('valid 24 h') }} · {{ t('Request {id}', { id: row.id }) }}{{ row.error ? ` · ${diagnostic(row.error)}` : '' }}
+        </div>
+        <div class="row auth">
+          <span class="pill idp">{{ 'OpenApe Secrets' }}</span><span class="meta">{{ t('You fill it in the browser, sealed against the key of this Mac. Pods collects it once and the request is destroyed.') }}</span>
+        </div>
+        <div class="opts">
+          <a v-if="row.status === 'requested'" class="secondary" :href="secretsOrigin ?? 'https://secrets.openape.ai'" target="_blank" rel="noopener">{{ t('Fill in at secrets.openape.ai') }}</a><button class="secondary" type="button" :disabled="!desktop" :title="desktop ? undefined : t('Only on the desktop')" @click="emit('secrets', { type: 'cancel', id: row.id })">
+            {{ t('Cancel') }}
+          </button>
+        </div>
+      </div>
+      <div v-if="!pending.length && !requests.length" class="item">
         <div class="row">
           <span class="pill off">{{ t('none') }}</span><span class="meta">{{ t('Appears when Codex proposes a folder, an application, an HTTPS destination, a secret or a setting for a script, or when Pods requests a secret through OpenApe Secrets.') }}</span>
         </div>

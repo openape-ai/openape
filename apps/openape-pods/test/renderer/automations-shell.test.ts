@@ -7,6 +7,7 @@ import AutomationsShell from '../../src/renderer/central/AutomationsShell.vue'
 import { applyLanguage } from '../../src/renderer/i18n'
 import { clock, stamp } from '../../src/renderer/utils/cadence'
 import fixture from './map-view.json'
+import type { SecretsView } from '../../src/contracts/secrets'
 
 // Visible text and emitted commands of the Automatisierungen surface; geometry lives in test/layout/automations.test.ts.
 const view = parseMapView(fixture) as MapView
@@ -122,5 +123,37 @@ describe('Automatisierungen', () => {
     expect(wrapper.find('.decisions-inbox').exists()).toBe(true)
     expect(wrapper.findAll('.kpi')).toHaveLength(5)
     expect(wrapper.find('[role="tablist"]').text()).toContain('Decisions 2')
+  })
+
+  it('opens the secret form from the detail and hands typed values, files and requests to the host', async () => {
+    const bot = pod('Morgenbriefing · Calendar-Bot')
+    const secrets: SecretsView = { origin: 'https://secrets.openape.ai', consumer: { id: '01CONSUMER0', registeredAt: NOW }, requests: [{ id: '01REQ0', podId: bot.id, alias: 'calendar_bot_token', purpose: 'Calendar access', status: 'requested', expiresAt: NOW + 86400000, createdAt: NOW, updatedAt: NOW, error: null }] }
+    await mountShell({ desktop: true, secrets })
+    ;(wrapper!.vm as unknown as { open: (id: string) => void }).open(bot.id); await flushPromises()
+    expect(wrapper!.find('[data-testid="secret-form"]').exists()).toBe(false)
+    expect(wrapper!.find('[data-testid="secret-request"]').text()).toContain('calendar_bot_token')
+    expect(wrapper!.find('[data-testid="secret-request"]').text()).toContain('requested')
+    await button('+ Secret').trigger('click')
+    expect(wrapper!.find('[data-testid="secret-form"]').exists()).toBe(true)
+    await wrapper!.find('[data-testid="secret-form"] input').setValue('reports_publisher_key')
+    await wrapper!.find('[data-testid="secret-form"] input[type="password"]').setValue('value-1')
+    await button('Save').trigger('click')
+    expect(wrapper!.emitted('secretSave')).toEqual([[bot.id, 'reports_publisher_key', 'value-1']])
+    expect(wrapper!.find('[data-testid="secret-form"]').exists()).toBe(false)
+    await button('Replace').trigger('click')
+    expect((wrapper!.find('[data-testid="secret-form"] input').element as HTMLInputElement).value).toBe('calendar_bot_token')
+    await wrapper!.findAll('[data-testid="secret-form"] .seg button')[2]!.trigger('click')
+    await wrapper!.findAll('[data-testid="secret-form"] input')[1]!.setValue('Calendar of both accounts')
+    await button('Request').trigger('click')
+    expect(wrapper!.emitted('secrets')).toEqual([[{ type: 'request', podId: bot.id, alias: 'calendar_bot_token', purpose: 'Calendar of both accounts' }]])
+    await button('+ Secret').trigger('click')
+    await wrapper!.findAll('[data-testid="secret-form"] .seg button')[1]!.trigger('click')
+    await wrapper!.find('[data-testid="secret-form"] input').setValue('pem_key')
+    await button('Choose file…').trigger('click')
+    expect(wrapper!.emitted('secrets')!.at(-1)).toEqual([{ type: 'importFile', podId: bot.id, alias: 'pem_key' }])
+    await button('⚙ Settings').trigger('click'); await flushPromises()
+    expect(wrapper!.find('[data-consumer]').text()).toContain('01CONSUMER0')
+    await button('Revoke').trigger('click')
+    expect(wrapper!.emitted('secrets')!.at(-1)).toEqual([{ type: 'revokeConsumer' }])
   })
 })
