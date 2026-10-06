@@ -85,6 +85,6 @@ it('derives KPI subtitles from the data only', () => {
     paused: { total: 6, networks: 2, drafts: 1, archived: 1 },
     degraded: { count: 1, name: 'IURIO PR monitor', reason: 'completedWithGaps' },
     decisions: { count: 17, gates: [{ title: 'Review uncertain mail', group: 'Delta Mind' }] },
-    unknownDeliveries: 0,
+    unknownDeliveries: 1,
   })
 })

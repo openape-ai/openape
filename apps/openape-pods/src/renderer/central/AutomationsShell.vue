@@ -6,6 +6,12 @@ import { clock } from '../utils/cadence'
 import AutomationDetail from './AutomationDetail.vue'
 import type { NetworkControl, WorkflowControl } from './AutomationDetail.vue'
 import AutomationInfo from './AutomationInfo.vue'
+import DecisionsInbox from './DecisionsInbox.vue'
+import type { GateBatchView, GateHeldItem } from '../../contracts/gates'
+import type { AccessProposal, MasterCommand } from '../../contracts/master'
+import type { NetworkGateView } from '../../contracts/network-gate-view'
+import type { NetworkChoiceView, NetworkCommand } from '../../contracts/networks'
+import type { WorkflowCommand } from '../../contracts/workflows'
 import type { CentralCommand } from '../../contracts/central'
 import AutomationsList from './AutomationsList.vue'
 import AutomationsMap from './AutomationsMap.vue'
@@ -17,8 +23,8 @@ import { ungrouped } from '../utils/automation-layout'
  * The two product surfaces behind one tab bar: Automatisierungen (this file) and Entscheidungen
  * (the `decisions` slot). Settings open from the gear; creation hands a brief to Codex.
  */
-const props = defineProps<{ view: MapView | null, live: boolean, now: number, decisions?: number, tab?: 'automations' | 'decisions', desktop?: boolean }>()
-const emit = defineEmits<{ 'update:tab': [tab: 'automations' | 'decisions'], 'settings': [], 'codex': [pinned: string | null, group: string | null], 'command': [command: CentralCommand], 'network': [control: NetworkControl], 'workflow': [control: WorkflowControl], 'secret': [podId: string, alias: string | null], 'folder': [podId: string] }>()
+const props = defineProps<{ view: MapView | null, live: boolean, now: number, decisions?: number, tab?: 'automations' | 'decisions', desktop?: boolean, inbox?: { choices: NetworkChoiceView[], gates: NetworkGateView[], graphGates: { batches: GateBatchView[], held: GateHeldItem[] } | null, proposals: AccessProposal[] } }>()
+const emit = defineEmits<{ 'update:tab': [tab: 'automations' | 'decisions'], 'settings': [], 'codex': [pinned: string | null, group: string | null], 'command': [command: CentralCommand], 'network': [control: NetworkControl], 'workflow': [control: WorkflowControl], 'secret': [podId: string, alias: string | null], 'folder': [podId: string], 'networkCommand': [command: NetworkCommand], 'workflowCommand': [command: WorkflowCommand], 'master': [command: MasterCommand] }>()
 const mode = ref<'map' | 'list'>('map')
 const group = ref('all')
 const layers = ref<Layers>({ channel: true, read: true, write: true, auth: true, paused: true })
@@ -26,6 +32,8 @@ const playing = ref(true)
 const pinned = ref<string | null>(null)
 const hovered = ref<string | null>(null)
 const detail = ref<string | null>(null)
+const inboxView = ref<InstanceType<typeof DecisionsInbox> | null>(null)
+const waiting = computed(() => props.decisions ?? inboxView.value?.total ?? 0)
 const current = computed(() => props.tab ?? 'automations')
 const groups = computed(() => [...new Set([...props.view?.pods.map(pod => pod.group) ?? [], ...props.view?.collections.map(collection => collection.group) ?? []].filter((name): name is string => !!name))])
 const chips: { key: keyof Layers, label: string, color: string }[] = [{ key: 'channel', label: 'Channels', color: 'var(--accent)' }, { key: 'read', label: 'Read', color: 'var(--read)' }, { key: 'write', label: 'Write', color: 'var(--warn)' }, { key: 'auth', label: 'Approvals', color: 'var(--idp)' }, { key: 'paused', label: 'Paused', color: 'var(--muted)' }]
@@ -42,7 +50,7 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
           {{ t('Automations') }}
         </button>
         <button role="tab" :aria-selected="current === 'decisions'" @click="emit('update:tab', 'decisions')">
-          {{ t('Decisions') }} <span v-if="decisions" class="n">{{ decisions }}</span>
+          {{ t('Decisions') }} <span v-if="waiting" class="n">{{ waiting }}</span>
         </button>
       </nav>
       <button class="gear" type="button" :title="t('Settings')" @click="emit('settings')">
@@ -105,7 +113,14 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
       </template>
     </section>
     <section v-else role="tabpanel">
-      <slot name="decisions" />
+      <p v-if="!view" class="muted" role="status">
+        {{ t('Loading workspace…') }}
+      </p>
+      <DecisionsInbox v-else ref="inboxView" :view="view" :choices="inbox?.choices ?? []" :gates="inbox?.gates ?? []" :graph-gates="inbox?.graphGates ?? null" :proposals="inbox?.proposals ?? []" :desktop="!!desktop" @network="emit('networkCommand', $event)" @workflow="emit('workflowCommand', $event)" @command="emit('command', $event)" @master="emit('master', $event)" @open="(id) => { detail = id; emit('update:tab', 'automations') }">
+        <template #setup>
+          <slot name="setup" />
+        </template>
+      </DecisionsInbox>
     </section>
     <AutomationDetail v-if="view && detail" :id="detail" :key="detail" :view="view" :now="now" :desktop="!!desktop" @close="detail = null" @open="(id) => { detail = id; pinned = id }" @command="emit('command', $event)" @network="emit('network', $event)" @workflow="emit('workflow', $event)" @secret="(podId, alias) => emit('secret', podId, alias)" @folder="emit('folder', $event)">
       <template #secret>
