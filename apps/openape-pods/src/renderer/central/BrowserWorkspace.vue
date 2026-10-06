@@ -4,7 +4,7 @@ import type { SharingCommand, SharingState } from '../../contracts/sharing'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { CentralNetworkRead } from '../../contracts/central-networks'
 import type { NetworkView } from '../../contracts/networks'
-import type { CentralRuntime } from '../../contracts/central'
+import type { CentralCommand, CentralRuntime } from '../../contracts/central'
 import type { BrowserWorkspaceClient } from './client'
 import { WorkspaceRequestError } from './client'
 import WorkspaceFrame from '../WorkspaceFrame.vue'
@@ -65,6 +65,7 @@ async function openPod(id: string) {
   await workspace.value?.select(runtime.value.id, id)
   page.value = 'Pods'
 }
+const remoteCommand = (command: CentralCommand) => void workspace.value?.command(command.channel, command.body, runtime.value)
 function expired() { subject.value = ''; runtimes.value = []; emit('login') }
 function logout() { workspace.value?.requestNavigation(() => emit('logout')) }
 onMounted(signIn)
@@ -89,7 +90,7 @@ onBeforeUnmount(() => { closed = true })
         {{ t('Retry') }}
       </button>
     </p>
-    <AutomationsShell v-if="subject && page === 'Automations'" :view="runtime?.workspace.map ?? null" :live="!!runtime?.online" :now="now" :decisions="runtime?.workspace.map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" @settings="navigate('App settings')" @open="openPod" />
+    <AutomationsShell v-if="subject && page === 'Automations'" :view="runtime?.workspace.map ?? null" :live="!!runtime?.online" :now="now" :decisions="runtime?.workspace.map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" @settings="navigate('App settings')" @command="remoteCommand" />
     <section v-if="subject" v-show="page === 'Workflows'">
       <template v-if="importing && runtime">
         <button class="text-button" @click="importing = false">

@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { t, diagnostic } from '../i18n'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import type { CentralStatus } from '../../contracts/central'
+import type { CentralCommand, CentralStatus } from '../../contracts/central'
+import type { ScheduleCommand } from '../../contracts/scheduling'
+import type { RunCommand } from '../../contracts/runs'
 import CentralWorkspace from './CentralWorkspace.vue'
 import AutomationsShell from './AutomationsShell.vue'
+import type { NetworkControl, WorkflowControl } from './AutomationDetail.vue'
 import type { MapView } from '../../contracts/map-view'
 import { desktopWorkspaceClient } from './client'
 import App from '../App.vue'
@@ -59,6 +62,18 @@ async function register() {
   catch (cause) { error.value = String(cause) }
   finally { registering.value = false }
 }
+// Owner commands of the detail page go to the local worker; the next poll shows the result.
+async function run(action: () => Promise<unknown>) {
+  try { await action(); error.value = '' }
+  catch (cause) { error.value = String(cause) }
+}
+function localCommand(command: CentralCommand) {
+  if (command.channel === 'scheduling') void run(() => window.pods.scheduling(command.body as unknown as ScheduleCommand))
+  else if (command.channel === 'runs') void run(() => window.pods.runs(command.body as unknown as RunCommand))
+}
+const networkControl = (control: NetworkControl) => void run(() => window.pods.networks(control))
+const workflowControl = (control: WorkflowControl) => void run(() => window.pods.workflows(control))
+const openFolder = (podId: string) => void run(() => window.pods.programs({ type: 'openFolder', podId }))
 function navigate(destination: string) {
   page.value = destination
   if (destination === 'Pods') workspace.value?.showInventory()
@@ -83,7 +98,7 @@ async function openPod(id: string) {
     <p v-if="error" role="alert" class="error-message">
       {{ diagnostic(error) }}
     </p>
-    <AutomationsShell v-if="page === 'Automations'" :view="map" :live="true" :now="now" :decisions="map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" @settings="page = 'App settings'" @open="openPod" />
+    <AutomationsShell v-if="page === 'Automations'" :view="map" :live="true" :now="now" :decisions="map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" desktop @settings="page = 'App settings'" @command="localCommand" @network="networkControl" @workflow="workflowControl" @folder="openFolder" />
     <section v-show="page === 'Workflows'">
       <template v-if="sharing">
         <button class="text-button" @click="sharing = null">
