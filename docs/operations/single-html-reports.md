@@ -197,7 +197,8 @@ contains actual installed CLI/production receipts, real-clock expiry/restoration
 in version 3. The narrow metadata correction and old writer removal are deployed.
 Owner access, all ten images, anonymous denial and missing/stale version failures
 were verified after deployment. Full external main CI5469 later reported a Pods
-test failure; the current-main gate is checked separately before further merges.
+test failure. Newer canonical main `82d39a3a` passed the full external CI5471
+before the delivery receipt merge; the earlier failure is not relabelled as passing.
 
 The first regular post-cutover producer publication remains outstanding. IURIO has
 upstream Azure read gaps; the next morning workflow is October 7 at 07:00 Vienna.
