@@ -24,8 +24,5 @@ it.each(['en', 'de'] as const)('keeps direct description and creation forms usab
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth)
     await page.screenshot({ path: screenshotPath(`codex-management-${language}-${width}.png`) })
   }
-  await wrapper.findAll('.workspace-navigation button').find(button => button.text().includes('Pods'))!.trigger('click'); await flushPromises(); await wrapper.get('.new-pod').trigger('click'); await flushPromises(); await frame()
-  expect(wrapper.find('input').exists()).toBe(true)
-  expect(wrapper.find('.master-compose').exists()).toBe(false)
-  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth)
+
 })

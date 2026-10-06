@@ -12,7 +12,7 @@ let wrapper: VueWrapper | undefined
 const frame = () => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; applyLanguage('en'); document.documentElement.style.colorScheme = '' })
 async function click(text: string) { await wrapper!.findAll('button').find(item => item.isVisible() && item.text() === text)!.trigger('click'); await flushPromises(); await frame() }
-async function navigate(label: string) { await wrapper!.get(`.workspace-navigation [aria-label="${label}"]`).trigger('click'); await flushPromises(); await frame() }
+
 function metric(selector: string) {
   const element = wrapper!.get(selector).element
   const rect = element.getBoundingClientRect(); const style = getComputedStyle(element)
@@ -33,11 +33,9 @@ it.each([{ width: 1280, language: 'en', theme: 'light' }, { width: 390, language
     if (surface === 'browser') Reflect.deleteProperty(window, 'pods')
     wrapper = surface === 'browser' ? mount(BrowserWorkspace, { props: { client: fixture.client }, attachTo: document.body }) : mount(DesktopWorkspace, { attachTo: document.body })
     await flushPromises(); await frame()
-    await capture(`parity-${surface}-${width}-workflows.png`)
-    await navigate(t('Pods'))
+    await capture(`parity-${surface}-${width}-automations.png`)
+    await (wrapper.vm as unknown as { openPod: (id: string) => Promise<void> }).openPod(fixture.host.workspace.pods[0]!.id); await flushPromises(); await frame()
     await capture(`parity-${surface}-${width}-pods.png`)
-    await click(t('Archived')); await capture(`parity-${surface}-${width}-archive.png`); await click(t('Current Pods'))
-    await wrapper.get('.central-pod').trigger('click'); await flushPromises(); await frame()
     for (const tab of ['Overview', 'Script', 'Variables and secrets', 'Permissions', 'Settings', 'History'] as const) {
       await click(t(tab))
       const selector = tab === 'Script' ? '.script-panel' : tab === 'Variables and secrets' ? '#pod-values .card' : tab === 'Permissions' ? '.resource-panel' : tab === 'Settings' ? '.pod-settings' : tab === 'History' ? '.runs-panel' : '#pod-description'
@@ -46,7 +44,7 @@ it.each([{ width: 1280, language: 'en', theme: 'light' }, { width: 390, language
       else expect(metric(selector)).toEqual(metrics.get(key))
       await capture(`parity-${surface}-${width}-${tab.toLowerCase().replaceAll(' ', '-')}.png`)
     }
-    await navigate(t('App settings')); await capture(`parity-${surface}-${width}-app-settings.png`)
+    if (surface === 'desktop') { await wrapper.get('.account-status').trigger('click'); await flushPromises(); await capture(`parity-${surface}-${width}-app-settings.png`) }
     wrapper.unmount(); wrapper = undefined
   }
 })

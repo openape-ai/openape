@@ -13,8 +13,8 @@ import type { SecretsView } from '../../contracts/secrets'
  * this menu only shows status and switches that the desktop already offers. The browser shows
  * status and sign-out and points to the desktop for everything native.
  */
-const props = defineProps<{ browser?: boolean, subject?: string, consumer?: SecretsView['consumer'] }>()
-const emit = defineEmits<{ close: [], logout: [], revoke: [] }>()
+const props = defineProps<{ browser?: boolean, subject?: string, consumer?: SecretsView['consumer'], sharing?: boolean }>()
+const emit = defineEmits<{ close: [], logout: [], revoke: [], advanced: [], import: [] }>()
 const native = !props.browser && typeof window !== 'undefined' && !!window.pods
 const owner = ref<ConnectionView | null>(null)
 const jev = ref<ConnectionView | null>(null)
@@ -92,6 +92,16 @@ defineExpose({ load })
       <span>{{ t('Data & backups') }}</span><button v-if="!browser" class="secondary small" type="button" :disabled="busy" @click="backup">
         {{ t('Export backup…') }}
       </button><span v-else class="meta">{{ t('Manage backups and local storage on the desktop.') }}</span>
+    </div>
+    <div v-if="sharing" class="acct" data-sharing>
+      <span>{{ t('Portable Pods') }}</span><button class="secondary small" type="button" :disabled="busy" @click="emit('import')">
+        {{ t('Import…') }}
+      </button>
+    </div>
+    <div class="acct" data-advanced>
+      <span>{{ t('More settings') }}</span><button v-if="!browser" class="secondary small" type="button" :disabled="busy" @click="emit('advanced')">
+        {{ t('Open desktop settings…') }}
+      </button><span v-else class="meta">{{ t('on the desktop') }}</span><span class="meta">{{ t('sign-in flows, Jev key, MCP duration, data and backups') }}</span>
     </div>
     <div class="acct">
       <span>{{ t('Rights') }}</span><a v-if="browser" :href="grants" target="_blank" rel="noopener">{{ t('Manage existing grants at the IdP') }}</a><button v-else class="secondary small" type="button" :disabled="busy || !approval?.owner" @click="manageGrants">

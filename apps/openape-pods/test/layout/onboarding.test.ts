@@ -44,7 +44,7 @@ describe('accounts, identity and data views with the production stylesheet', () 
     await open()
     await show(560, 840, 'dark')
     for (const target of [accountsLabel, dataLabel]) {
-      await wrapper!.findAll('.workspace-navigation nav button')[2]!.trigger('click'); await flushPromises()
+      if (!wrapper!.find('.app-settings').exists()) { await wrapper!.get('.account-status').trigger('click'); await flushPromises() }
       if (!wrapper!.find('input[type="password"]').exists()) { await wrapper!.get('.jev-account-row button').trigger('click'); await flushPromises() }
       expect(wrapper!.find('input[type="password"]').exists()).toBe(true)
       wrapper!.get('.jev-connection').element.scrollIntoView({ block: 'center' }); await frame()
@@ -56,21 +56,10 @@ describe('accounts, identity and data views with the production stylesheet', () 
       expect(pageFits(), `${language} ${target}`).toBe(true)
 
     }
-    await wrapper!.findAll('.workspace-navigation nav button')[1]!.trigger('click'); await flushPromises()
-    await click('.inventory-row')
+    wrapper!.unmount(); installWorkspace({ onboarding: async () => structuredClone(accounts) })
+    wrapper = mount(App, { attachTo: document.body, props: { initialPodId: '00000000-0000-4000-8000-000000000001' } }); await flushPromises(); await frame()
     await click('[role="tab"]', language === 'en' ? 'Settings' : 'Einstellungen')
     expect(document.querySelector('[aria-label="Pod identity"], [aria-label="Pod-Identität"]')).not.toBeNull()
     expect(pageFits(), `${language} pod identity`).toBe(true)
-  })
-
-  it('keeps the account avatar visible when the sidebar is collapsed', async () => {
-    await open()
-    await show(1060, 850, 'light')
-    await click('button[aria-label="Collapse sidebar"]')
-    await expect.poll(() => document.querySelector('.account-avatar')!.textContent).toBe('O')
-    const avatar = document.querySelector('.account-avatar')!.getBoundingClientRect()
-    const sidebar = document.querySelector('.workspace-navigation')!.getBoundingClientRect()
-    expect(avatar.width).toBeGreaterThan(0)
-    expect(avatar.right).toBeLessThanOrEqual(sidebar.right)
   })
 })

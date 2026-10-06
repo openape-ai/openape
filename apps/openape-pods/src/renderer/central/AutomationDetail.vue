@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import type { CentralCommand } from '../../contracts/central'
 import type { MapPod, MapResource, MapView } from '../../contracts/map-view'
 import type { SecretRequestRow } from '../../contracts/secrets'
+import type { PortableSourceSelection } from '../../contracts/sharing'
 import { diagnostic, language, t } from '../i18n'
 import { cadence, stamp } from '../utils/cadence'
 import { nodeFacts } from '../utils/automation-layout'
@@ -15,8 +16,8 @@ import { nodeFacts } from '../utils/automation-layout'
  */
 export interface NetworkControl { type: 'pause' | 'activate', id: string, revision: number }
 export type WorkflowControl = { type: 'pause', id: string, revision: number, paused: boolean } | { type: 'start', id: string, revision: number }
-const props = defineProps<{ view: MapView, id: string, now: number, desktop: boolean, requests?: SecretRequestRow[] }>()
-const emit = defineEmits<{ close: [], open: [id: string], command: [command: CentralCommand], network: [control: NetworkControl], workflow: [control: WorkflowControl], secret: [podId: string, alias: string | null], folder: [podId: string] }>()
+const props = defineProps<{ view: MapView, id: string, now: number, desktop: boolean, requests?: SecretRequestRow[], sharing?: boolean }>()
+const emit = defineEmits<{ close: [], open: [id: string], command: [command: CentralCommand], network: [control: NetworkControl], workflow: [control: WorkflowControl], secret: [podId: string, alias: string | null], folder: [podId: string], editor: [podId: string], share: [selection: PortableSourceSelection] }>()
 const pod = computed(() => props.view.pods.find(item => item.id === props.id) ?? null)
 const collection = computed(() => props.view.collections.find(item => item.id === props.id) ?? null)
 const system = computed(() => props.view.systems.find(item => item.id === props.id) ?? null)
@@ -104,6 +105,13 @@ function runNow() {
         <span class="muted">{{ label }}:</span> {{ value }}
       </div>
     </div>
+    <div v-if="collection && sharing" class="sec">
+      <div class="opts">
+        <button class="secondary" type="button" @click="emit('share', { kind: collection.kind === 'network' ? 'network' : 'workflow', id: collection.id })">
+          {{ t('Export…') }}
+        </button>
+      </div>
+    </div>
     <div v-if="parent" class="sec">
       <div class="eyebrow">
         {{ t('Part of') }}
@@ -169,8 +177,12 @@ function runNow() {
       <div class="eyebrow">
         {{ t('For developers') }}
       </div><div class="opts">
-        <button class="secondary" type="button" :disabled="!desktop" :title="desktop ? undefined : t('Only on the desktop')" @click="emit('folder', pod.id)">
+        <button class="secondary" type="button" @click="emit('editor', pod.id)">
+          {{ t('Open details') }}
+        </button><button class="secondary" type="button" :disabled="!desktop" :title="desktop ? undefined : t('Only on the desktop')" @click="emit('folder', pod.id)">
           {{ t('Open in editor') }}
+        </button><button v-if="sharing" class="secondary" type="button" @click="emit('share', { kind: 'pod', id: pod.id })">
+          {{ t('Export…') }}
         </button><span class="muted mono">{{ scriptPath }}</span>
       </div><div class="muted mono">
         {{ t('Active script') }}: {{ pod.script ? pod.script.slice(0, 12) : t(pod.draft ? 'draft' : 'no active script') }}

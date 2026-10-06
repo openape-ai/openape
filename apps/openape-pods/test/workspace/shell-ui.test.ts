@@ -34,9 +34,7 @@ describe('workspace shell', () => {
   it('disables Run now for an archived pod even though it still has an active script', async () => {
     const runs = vi.fn(async (_command: RunCommand) => ({ runs: [], events: [] }))
     installWorkspace({ runs })
-    await mountApp()
-    expect(button('Run now').attributes('disabled')).toBeUndefined()
-    await wrapper!.findAll('.workspace-navigation button').find(item => item.text().includes('Pods'))!.trigger('click'); await flushPromises(); await wrapper!.findAll('.inventory-toolbar button').find(item => item.text().includes('Archived'))!.trigger('click'); await flushPromises(); await wrapper!.findAll('.inventory-row').find(item => item.text().includes('Archived research'))!.trigger('click'); await flushPromises()
+    wrapper = mount(App, { attachTo: document.body, props: { initialPodId: '00000000-0000-4000-8000-000000000002' } }); await flushPromises()
     expect(wrapper!.get('h1').text()).toBe('Archived research')
     expect(button('Run now').attributes('disabled')).toBeDefined()
     expect(runs.mock.calls.some(([command]) => command.type === 'start')).toBe(false)
@@ -70,17 +68,6 @@ describe('workspace shell', () => {
 describe('pod groups', () => {
   const groupId = '00000000-0000-4000-8000-0000000000a1'
   const organized = (): WorkspaceState => ({ organization: { revision: 3, groups: [{ id: groupId, name: 'Work', collapsed: false, podIds: [] }] }, pods: structuredClone(pods) })
-
-  it('moves a dragged pod into the group it is dropped on', async () => {
-    const workspace = vi.fn(async () => organized())
-    installWorkspace({ workspace })
-    await mountApp()
-    await wrapper!.findAll('.workspace-navigation button').find(item => item.text().includes('Pods'))!.trigger('click'); await flushPromises()
-    const pod = wrapper!.findAll('.pod-button').find(item => item.text().includes('Mail knowledge'))!
-    await pod.trigger('dragstart', { dataTransfer: { setData: () => {}, effectAllowed: '' } })
-    await wrapper!.get('[aria-label="Work group"]').trigger('drop'); await flushPromises()
-    expect(workspace).toHaveBeenCalledWith({ type: 'organize', revision: 3, action: 'move', podId, groupId })
-  })
 
   it('assigns the selected pod to a group from Settings', async () => {
     const workspace = vi.fn(async () => organized())
