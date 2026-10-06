@@ -69,4 +69,7 @@ const main = defineCommand({
   },
 })
 
+if (!process.argv.includes('--help') && !process.argv.includes('--version') && ['new', 'edit', 'status', 'rm', 'teams', 'accept'].includes(process.argv[2] ?? '')) {
+  process.stderr.write('Deprecated: use ape-report-render plan and ape-reports; team operations use ape-reports teams. Legacy commands remain available during migration.\n')
+}
 await runProofCli(main)

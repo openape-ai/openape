@@ -1,5 +1,13 @@
 # @openape/ape-testruns
 
+## 0.5.0
+
+### Minor Changes
+
+- Add offline Plan and Test Run rendering, portable templates with embedded screenshots,
+  and native Reports team commands. Deprecate legacy authoring commands while preserving
+  compatibility until the producer inventory and observation gates are complete.
+
 ## 0.4.0
 
 ### Minor Changes

@@ -1845,12 +1845,18 @@ importers:
       htmlparser2:
         specifier: 10.1.0
         version: 10.1.0
+      marked:
+        specifier: 'catalog:'
+        version: 18.0.5
       postcss:
         specifier: '>=8.5.18'
         version: 8.5.25
       postcss-value-parser:
         specifier: 4.2.0
         version: 4.2.0
+      sanitize-html:
+        specifier: ^2.14.0
+        version: 2.17.5
     devDependencies:
       '@openape/report-contracts':
         specifier: workspace:*
@@ -1858,6 +1864,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.0
+      '@types/sanitize-html':
+        specifier: ^2.13.0
+        version: 2.16.1
       tsup:
         specifier: 'catalog:'
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.25)(tsx@4.22.4)(typescript@5.9.3)(yaml@2.9.0)

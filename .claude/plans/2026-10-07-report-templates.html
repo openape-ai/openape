@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Report templates for Test Runs and Plans</title>
+<script id="openape-report" type="application/json">{"category": "Plans", "tags": ["reports", "templates", "plans", "test-runs"], "metadata": {"plans.status": "draft", "issue.number": "1437"}}</script>
+<style>
+:root{--bg:#fbfaf7;--fg:#1d2327;--mut:#5d666e;--line:#dcdfd8;--card:#fff;--acc:#2944bd;--warn:#7a5200;--warn-bg:#fff3d4;--ok:#2c6e47}
+@media (prefers-color-scheme:dark){:root{--bg:#121518;--fg:#e6e9ed;--mut:#9aa3ad;--line:#2c3238;--card:#1a1e23;--acc:#93a6ff;--warn:#f1d08a;--warn-bg:#2d2513;--ok:#6fc290}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overflow-wrap:anywhere}
+main{max-width:920px;margin:0 auto;padding:clamp(16px,5vw,48px)}
+h1{font-size:clamp(26px,5vw,34px);line-height:1.2;margin:8px 0 10px;letter-spacing:-.01em}
+h2{font-size:21px;margin:40px 0 10px}h3{font-size:17px;margin:24px 0 6px}
+p{margin:0 0 12px}.lead{font-size:18px;color:var(--mut)}
+.badges{display:flex;flex-wrap:wrap;gap:8px}.badge{border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:13px;color:var(--mut)}
+.badge.warn{background:var(--warn-bg);color:var(--warn);border-color:transparent;font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:14px 0}
+.callout{border-left:4px solid var(--warn);background:var(--warn-bg);padding:12px 16px;border-radius:6px;margin:14px 0}
+.callout.danger{border-color:#c0392b}
+table{width:100%;border-collapse:collapse;font-size:15px;margin:10px 0}
+th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:8px 10px 8px 0}th{color:var(--mut);font-weight:600}
+code{font:14px ui-monospace,Menlo,monospace;background:var(--card);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+pre{font:13.5px/1.55 ui-monospace,Menlo,monospace;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow:auto;white-space:pre}
+pre code{border:0;padding:0;background:none}
+.ms{border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin:12px 0;background:var(--card)}
+.ms h3{margin:0 0 4px}.ms .goal{margin:0 0 8px}.ms ul{margin:4px 0 8px;padding-left:20px}.proof{font-size:14px;color:var(--mut)}
+.ask{display:inline-block;font-size:12px;font-weight:700;color:var(--warn);background:var(--warn-bg);border-radius:4px;padding:0 6px;margin-right:6px}
+a{color:var(--acc)}
+ul{padding-left:22px}
+</style>
+</head>
+<body><main>
+<div class="badges"><span class="badge warn">Active · design approved</span><span class="badge">Milestone 1 approved · implementation starting</span><span class="badge">Issue 1437</span></div>
+<h1>Report templates for Test Runs and Plans</h1>
+<p class="lead">Agents publish test evidence and plans by filling one JSON file, running one render script and publishing the resulting HTML with <code>ape-reports</code>. After all producers have moved, <code>ape-testruns upload</code> and <code>ape-plans</code> are removed, and every instruction names only the new way.</p>
+
+<div class="card">
+<p><strong>Issue:</strong> <a href="https://repos.openape.ai/patrick/monorepo/issues/1437">patrick/monorepo issue 1437</a></p>
+<p><strong>Context:</strong> Reports (report.openape.ai) is the read-only home for single-HTML documents since the October 6 redesign (issue 1433). Publishing is already one command, <code>ape-reports publish file.html --key KEY</code>. What is missing is a consistent, well-designed way to <em>produce</em> the two most common documents, test evidence and plans, without hand-writing HTML each time.</p>
+<p style="margin:0"><strong>Today:</strong> <code>packages/ape-testruns/examples/</code> contains <code>testrun.html</code>, <code>plan.html</code> and a 12-line <code>render-plan.mjs</code> that only replaces a title and a description. <code>ape-reports docs templates</code> still says templates are local and optional.</p>
+</div>
+
+<section class="callout"><h2>Implementation checkpoint — October 7, 2026</h2><p>M1 approved. M2 local renderer and templates implemented; M3 native team commands implemented with existing scopes and compatible team-list output. M4 inventory found supported schema-1 Pod publishers, remaining workflow guidance and unavailable network-member reads. No retrospective 30-day server access history exists, so neither full inventory acceptance nor seven quiet days is claimed. Legacy-write observation is added without logging identities or content.</p><p>M5 repository guidance updated; global guidance activates after installed release acceptance. M6 deprecation release is prepared (Reports CLI 0.5.0, Plans compatibility CLI 1.0.7); removal remains conditional. Independent Claude Opus 5.5 code/UI reviews found and prompted fixes to Markdown fidelity, team-list compatibility, unknown input handling, passing/incomplete states and team deletion safety. Native read URLs and supported publisher contracts remain.</p></section><h2>Owner decisions (October 6, 2026)</h2>
+<ol>
+<li><strong>Templates are files plus a render script.</strong> The <code>ape-reports</code> commands stay as they are; the script writes one HTML file that <code>ape-reports preview</code>/<code>publish</code> then handle.</li>
+<li><strong>Plans take structured JSON</strong> (goal, decisions, milestones with acceptance criteria, risks, verification, progress), not Markdown.</li>
+<li><strong>Test Runs take the existing <code>ape-testruns</code> manifest</strong> (tests, steps, screenshot paths) unchanged; local screenshots are embedded.</li>
+<li><strong>The old CLIs are deprecated and then removed.</strong></li>
+</ol>
+
+<h2>Implementation choices from the proposed recommendations</h2>
+<table>
+<tr><th>#</th><th>Question</th><th>Recommendation</th></tr>
+<tr><td><span class="ask">D1</span></td><td>Team management: <code>ape-plans</code> creates teams, invites, accepts invitations and manages members; <code>ape-reports</code> only lists teams. Without a replacement, removal loses team management.</td><td>Move the existing team commands into <code>ape-reports teams create|invite|accept|members|archive</code> against the same Reports team API. This is the only CLI change.</td></tr>
+<tr><td><span class="ask">D2</span></td><td>How agents call the render script on any machine.</td><td>Ship templates and script inside the already-installed <code>@openape/ape-testruns</code> package (it provides <code>ape-reports</code>) with a small bin <code>ape-report-render</code>: <code>ape-report-render test-run DIR/testrun.json out.html</code>, <code>ape-report-render plan plan.json out.html</code>. One source, no copies in skills.</td></tr>
+<tr><td><span class="ask">D3</span></td><td>Server write paths of the old CLIs: <code>POST /api/runs</code> + asset uploads, and the Plans compatibility API (<code>/api/plans-compat/*</code>, old plans.openape.ai host).</td><td>Remove the write paths after the producer inventory is migrated; keep every read path so existing <code>/r/SLUG</code> links and migrated plan URLs keep working.</td></tr>
+<tr><td><span class="ask">D4</span></td><td>Time between deprecation and removal.</td><td>Seven days of deprecation notices with no remaining producer in the inventory, then removal.</td></tr>
+</table>
+
+<h2>Milestones</h2>
+
+<div class="ms"><h3>M1 · Template design prototypes</h3>
+<p class="goal">Two rendered prototypes from realistic sample JSON, approved by the owner before code is final.</p>
+<ul>
+<li>Test Run: summary verdict (passed/failed/skipped counts, duration, project, tested commit), checks table, tests with steps, captions, errors and embedded screenshots in a window frame; failed items first-class.</li>
+<li>Plan: status line, lead, owner decisions, open decisions, milestone cards with goal, steps, acceptance criteria and proof, non-goals, risks, verification commands, progress log, links.</li>
+<li>Both: own document design (documents keep their design inside Reports), light and dark, readable at 375 px with no horizontal overflow (lesson from issue 1435), print-friendly, no external resources.</li>
+</ul>
+<p class="proof">Proof: both prototypes published privately under Plans; screenshots at 1440/375 px light/dark; owner approval recorded here.</p></div>
+
+<div class="ms"><h3>M2 · Render script and templates</h3>
+<p class="goal"><code>ape-report-render</code> produces one valid single-HTML file per template.</p>
+<ul>
+<li>Location: <code>packages/ape-testruns/templates/</code> (<code>test-run.html</code>, <code>plan.html</code>) and <code>src/render.ts</code>, built into the package and published with it.</li>
+<li>Input validation with precise errors: the test-run manifest uses the existing validation rules; the plan schema is versioned (<code>"schema": "openape.plan/1"</code>) and documented.</li>
+<li>Text is escaped; Markdown in manifest summaries, descriptions, captions and errors is rendered with the existing marked/sanitize-html allowlist. Screenshots are embedded as data URIs; files above 8 MiB or a document above 20 MiB fail with a clear message.</li>
+<li>Embedded <code>script#openape-report</code> sets category (Test Runs / Plans), tags and metadata (<code>tests.result</code>, <code>tests.commit</code>, <code>plans.status</code>).</li>
+<li>Remove <code>examples/render-plan.mjs</code>; examples become the sample inputs.</li>
+</ul>
+<p class="proof">Proof: unit tests render the samples and pass <code>inspectHtml</code> from <code>@openape/report-contracts</code> (the server's own validation), escape hostile input and enforce limits; <code>ape-reports preview out.html --check</code> exits 0 for both.</p></div>
+
+<div class="ms"><h3>M3 · Team commands in ape-reports (if D1 approved)</h3>
+<p class="goal">Everything <code>ape-plans</code> does for teams works through <code>ape-reports</code>.</p>
+<ul><li>Port <code>teams create|invite|accept|members|archive</code> to the Reports team API; same version checks and outputs; generated CLI reference updated.</li></ul>
+<p class="proof">Proof: existing reports CLI tests extended; one real round trip on a synthetic team in the E2E harness.</p></div>
+
+<div class="ms"><h3>M4 · Producer inventory and migration</h3>
+<p class="goal">No scheduled or scripted producer still calls the old CLIs or write APIs.</p>
+<ul>
+<li>Inventory: all repositories under <code>~/Companies</code>, Pods scripts and schedules, troop workflows, CI scripts, skills, cron/launchd jobs, and server logs of <code>POST /api/runs</code> and <code>/api/plans-compat</code> writes over the last 30 days.</li>
+<li>Migrate each producer to render + <code>ape-reports publish</code>; no test notifications, no change to delivery state.</li>
+</ul>
+<p class="proof">Proof: inventory table with owner, path and migrated commit for each producer; seven days of server logs without old write calls.</p></div>
+
+<div class="ms"><h3>M5 · Instructions everywhere</h3>
+<p class="goal">Every agent instruction names only templates + <code>ape-reports</code>.</p>
+<ul>
+<li>Repository: <code>AGENTS.md</code>, <code>docs/agents/engineering-guide.md</code>, <code>docs/operations/single-html-reports.md</code>, <code>apps/docs/content/5.apps/</code>, package READMEs and <code>ape-reports docs</code> topics (<code>templates</code>, <code>test-runs</code>, <code>plans</code>).</li>
+<li>Global: <code>~/.claude/AGENTS.md</code> (also used by Codex via symlink), <code>reference/visual-verification.md</code>, <code>reference/openape-tooling.md</code>, skills <code>ape-plans</code> (rewritten as the plan-template workflow) and <code>iurio-loop</code>; committed and pushed in the <code>~/.claude</code> repository.</li>
+<li>Vault: <code>_Allgemein/feedback_openape_first.md</code>, <code>_Allgemein/feedback_plans_as_html.md</code>, project notes; changelog entries only at the end.</li>
+</ul>
+<p class="proof">Proof: <code>rg -n "ape-testruns upload|ape-plans (new|edit|status)"</code> over all instruction locations returns only historical changelog lines.</p></div>
+
+<div class="ms"><h3>M6 · Deprecation and removal</h3>
+<p class="goal">The old CLIs and their write paths are gone; all links still open.</p>
+<ul>
+<li>Release with deprecation notices (<code>ape-testruns upload</code>, <code>ape-plans</code>), then <code>npm deprecate</code> for <code>@openape/ape-plans</code> after owner confirmation.</li>
+<li>After D4: remove <code>packages/ape-plans</code>, the upload command, and (D3) the server write paths; keep read routes, old slugs, migrated plan URLs and redirects; update workspace map and dependency graph.</li>
+</ul>
+<p class="proof">Proof: old <code>/r/SLUG</code> and migrated plan links return 200 for authorized readers; removed write routes return 404/410; <code>pnpm check:ci</code> green; tested deployment with rollback tag.</p></div>
+
+<h2>Non-goals</h2>
+<ul>
+<li>No template registry, server-side rendering or template upload to Reports.</li>
+<li>No change to the reading surface of Reports or to the trust decision for active HTML.</li>
+<li>No conversion of existing immutable plan or test-run versions; a migrated plan moves to JSON on its next edit.</li>
+<li>No notification features.</li>
+</ul>
+
+<h2>Risks</h2>
+<table>
+<tr><th>Risk</th><th>Mitigation</th></tr>
+<tr><td>An unknown scheduled producer still uploads and breaks after removal.</td><td>Inventory from code and from 30 days of server write logs; seven quiet days before removal; read paths stay.</td></tr>
+<tr><td>Large screenshot sets exceed the 20 MiB document limit.</td><td>Clear error with the total size; documented option to downscale (macOS <code>sips</code>) before rendering.</td></tr>
+<tr><td>Agents keep using old habits from cached instructions.</td><td>Deprecation notices in the old CLIs point to the exact new command; instructions updated in the same milestone as the release.</td></tr>
+<tr><td>Team management lost on removal.</td><td>D1 / M3 before M6.</td></tr>
+</table>
+
+<div class="callout danger"><p style="margin:0"><strong>Invariants:</strong> published versions stay immutable; stable links keep opening the newest version; edits require the read version; plan status is never approval; active HTML stays isolated with an explicit trust decision; no deployment, npm deprecation or removal without explicit owner approval at that step.</p></div>
+
+<h2>Verification</h2>
+<pre><code>ape-report-render test-run ./run/testrun.json ./run/report.html
+ape-reports preview ./run/report.html --check
+ape-reports publish ./run/report.html --key run-2026-10-07 --category "Test Runs"
+
+ape-report-render plan ./plan.json ./plan.html
+ape-reports publish ./plan.html --document PLAN_ID --expected-version N --key plan-v2
+
+pnpm check:affected --base origin/main --head HEAD --suite unit</code></pre>
+
+<h2>Progress</h2>
+<ul><li>2026-10-06 Issue 1437 created; owner decided delivery form, plan input, test-run input and removal; plan drafted. Superseded by the October 7 implementation instruction below.</li></ul>
+<h2>Approval and execution record</h2><p>2026-10-07: Patrick accepted the published Test Run and Plan mockups and instructed “Akzeptiert. Zieh das durch nun.” The approved design is document 01M49MYRK3TBJ850CR0S0GYGQW version 1, artifact SHA-256 b3a5646d7c7947471975e74a3492c14b8457167c519aaa04727ceabb1e7e01e3. This is explicit design and implementation approval; progress metadata is not approval.</p><p>Execute the existing plan using its recommended D1–D4 choices: preserve team capabilities, package one renderer, migrate producers before retiring writes, and require seven quiet days before removal. Do not manufacture the observation period or remove compatibility while active callers remain. Publishing, release and rollout are covered by the instruction to complete implementation; destructive retirement remains conditional on the recorded acceptance gates.</p><p>Worktree: openape-monorepo.worktrees/issue-1437-report-templates. Branch: feature/issue-1437-report-templates. Base: 6a8ad37b329e95703d01e04cc5193604f3a0b32f. Keep native active-work and this online/local plan synchronized. Existing issue 1429 regular-producer acceptance is separate and stays open until proven.</p><h2>Changelog</h2><p>2026-10-07: Owner approved the two design mockups. M1 design accepted; M2–M6 pending actual delivery and verification.</p></main></body></html>

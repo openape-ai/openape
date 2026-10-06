@@ -1,0 +1,76 @@
+{
+  "schema": "openape.plan/1",
+  "title": "A clearer home for report evidence",
+  "goal": "Example data for the Plans template. Put decisions first, with detail available when needed.",
+  "status": "draft",
+  "project": "Synthetic OpenApe example",
+  "owner": "Example owner",
+  "date": "2026-10-07",
+  "decisions": [
+    {
+      "title": "Confirm the template direction",
+      "description": "Use the reviewed editorial layout, with failures and pending decisions visible.",
+      "status": "proposed"
+    }
+  ],
+  "milestones": [
+    {
+      "title": "Agree on the design",
+      "goal": "Review both example documents.",
+      "status": "active",
+      "steps": [
+        "Inspect desktop and phone layouts",
+        "Review light, dark and print output"
+      ],
+      "acceptance": [
+        "The owner explicitly approves both designs"
+      ],
+      "proof": "Approval not yet recorded.",
+      "rollback": "Keep the current workflow."
+    },
+    {
+      "title": "Build and verify the templates",
+      "goal": "Render local structured data into one HTML file.",
+      "status": "planned",
+      "steps": [
+        "Embed screenshot evidence",
+        "Validate all inputs"
+      ],
+      "acceptance": [
+        "Examples pass Reports validation and fit a 375 px screen"
+      ]
+    },
+    {
+      "title": "Verify private publication",
+      "goal": "Inspect the published documents.",
+      "status": "planned",
+      "acceptance": [
+        "Owner viewing works; anonymous access is denied"
+      ]
+    }
+  ],
+  "scope": [
+    "Two local templates",
+    "Responsive and printable documents"
+  ],
+  "nonGoals": [
+    "Changing existing report permissions",
+    "Sending notifications"
+  ],
+  "risks": [
+    {
+      "title": "Important details get hidden",
+      "mitigation": "Failures and blockers are expanded by default."
+    }
+  ],
+  "verification": [
+    "ape-reports preview output.html --check"
+  ],
+  "changelog": [
+    {
+      "date": "2026-10-07",
+      "text": "Synthetic example created; no delivery or approval claimed."
+    }
+  ],
+  "links": []
+}

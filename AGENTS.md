@@ -63,8 +63,9 @@ supply-chain quarantine and targeted overrides in `pnpm-workspace.yaml`.
   browser test where actual CSS is loaded. Do not bypass authentication to view
   a private page. Publish actual results and personally inspected screenshots
   through OpenApe Reports under Test Runs, then verify the returned link and
-  category. Existing `ape-testruns upload` remains supported for synthetic shared
-  evidence; private documents require owner access. Keep local exports when needed.
+  category. Use `ape-report-render test-run` with actual evidence, then
+  `ape-reports publish --category 'Test Runs'`. Plans use the local plan template
+  and `ape-reports`; private documents require owner access. Keep local exports when needed.
   See the [engineering guide](docs/agents/engineering-guide.md).
 - Generated map/graph: `pnpm graph`; freshness: `pnpm docs:check`. Add purposes
   in `.openape/workspace-purpose.json` when introducing a workspace.
