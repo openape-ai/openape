@@ -22,6 +22,8 @@ final class PodsModel: NSObject, ASWebAuthenticationPresentationContextProviding
   var pending: [String] = []
   var lastUpdated: Date?
   var reviewConflict = false
+  var notificationsEnabled = UserDefaults.standard.bool(forKey: "notifications.enabled")
+  var notificationsServerEnabled = true
   private var client: RelayClient?
   private var authentication: ASWebAuthenticationSession?
   private var serviceOrigin = URL(string: "https://pods.openape.ai")!
@@ -164,6 +166,36 @@ final class PodsModel: NSObject, ASWebAuthenticationPresentationContextProviding
     draft = ""
     paired = false
     pairingCode = nil
+  }
+  /// Called by the notification coordinator with Apple's device token.
+  func registerPush(token: String) async {
+    guard notificationsEnabled, let client else { return }
+    #if DEBUG
+      let environment = "development"
+    #else
+      let environment = "production"
+    #endif
+    do {
+      notificationsServerEnabled = try await client.registerPush(
+        token: token, environment: environment)
+    } catch {
+      self.error = error.localizedDescription
+    }
+  }
+  func setNotifications(_ enabled: Bool) async {
+    notificationsEnabled = enabled
+    UserDefaults.standard.set(enabled, forKey: "notifications.enabled")
+    if enabled {
+      await NotificationCoordinator.shared?.requestRegistration()
+    } else {
+      await perform { try await client?.unregisterPush() }
+    }
+  }
+  /// A notification is only a hint: open the runtime and refresh; nothing is approved or executed.
+  func openRuntime(_ id: String) async {
+    guard signedIn else { return }
+    if runtime?.id != id { await selectRuntime(id) }
+    await refresh()
   }
   func loadDevices() async {
     await perform { devices = try await client?.devices() ?? [] }
