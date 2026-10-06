@@ -113,7 +113,7 @@ async function codexRegistration(): Promise<CodexRegistration> {
 }
 async function manageRemote(): Promise<void> {
   if (!window) return
-  const action = await dialog.showMessageBox(window, { title: t('Mobile access'), message: t('OpenApe Pods on iPhone and iPad'), detail: translateDiagnostic(preference.language, remote.error) || t('Execution and credentials stay on this desktop. Mobile devices must be paired here before accessing Pods.'), buttons: [t('Cancel'), t('Register desktop'), t('Pair mobile device'), t('Disable mobile access'), t('Offer installed CLI'), t('Withdraw offered CLI'), t('Remove paired device')], defaultId: 0, cancelId: 0 })
+  const action = await dialog.showMessageBox(window, { title: t('Mobile access'), message: t('OpenApe Pods on iPhone and iPad'), detail: translateDiagnostic(preference.language, remote.error) || t('Execution and credentials stay on this desktop. Mobile devices must be paired here before accessing Pods. The relay at pods.openape.ai routes end-to-end encrypted content and sees only identities, device IDs, timing and sizes; run approvals stay with your identity provider.'), buttons: [t('Cancel'), t('Register desktop'), t('Pair mobile device'), t('Disable mobile access'), t('Offer installed CLI'), t('Withdraw offered CLI'), t('Remove paired device')], defaultId: 0, cancelId: 0 })
   if (action.response === 1) { await remote.enable(await worker.remoteOwner()); return }
   if (action.response === 3) { await remote.disable(); return }
   if (action.response === 4) {
@@ -136,7 +136,7 @@ async function manageRemote(): Promise<void> {
   }
   if (action.response === 6) {
     for (const device of await remote.pairedDevices()) {
-      const confirm = await dialog.showMessageBox(window, { title: t('Remove paired device'), message: device.id, detail: t('This device can no longer access this desktop. Authorized runs already started continue; cancel them separately.'), buttons: [t('Keep'), t('Remove pairing')], defaultId: 0, cancelId: 0 })
+      const confirm = await dialog.showMessageBox(window, { title: t('Remove paired device'), message: device.id, detail: t('This device can no longer access this desktop. Authorized runs already started continue; cancel them separately. Content already shown on the device cannot be recalled.'), buttons: [t('Keep'), t('Remove pairing')], defaultId: 0, cancelId: 0 })
       if (confirm.response === 1) await remote.unpair(device.id)
     }
     return
