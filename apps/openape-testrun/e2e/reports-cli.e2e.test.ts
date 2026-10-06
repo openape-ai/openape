@@ -89,6 +89,8 @@ describe('built CLI and Plans compatibility journeys', () => {
     const teamResponse = await api(plans, plansToken, 'POST', '/api/teams', { name: 'Compatibility fixture' })
     expect(teamResponse.status, await teamResponse.clone().text()).toBe(201)
     const team = await teamResponse.json()
+    const newPage = await fetch(`${plans.url}/teams/${team.id}/plans/new`, { redirect: 'manual' })
+    expect(newPage.status).toBe(200); expect(newPage.headers.get('location')).toBeNull()
     const source = join(directory, 'source.md'); writeFileSync(source, '# Original source\n\nPreserve editing.')
     const created = run('plans', ['new', '--team', team.id, '--title', 'Compatible Plan', '--body-from-file', source])
     expect(created).toMatchObject({ status: 'draft', version: 1 })

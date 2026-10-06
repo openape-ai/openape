@@ -16,12 +16,14 @@ COPY . ./.output
 # binding — install the arch-matched one (same step as compose/Nuxt.Dockerfile;
 # under --platform linux/amd64 process.arch resolves to x64).
 RUN cd .output/server \
- && LIBSQL_VER=$(node -p "require('./node_modules/libsql/package.json').version") \
- && PKGARCH=$(node -p "process.arch === 'arm64' ? 'arm64' : 'x64'") \
- && npm pack "@libsql/linux-${PKGARCH}-gnu@${LIBSQL_VER}" \
- && mkdir -p "node_modules/@libsql/linux-${PKGARCH}-gnu" \
- && tar -xzf "libsql-linux-${PKGARCH}-gnu-${LIBSQL_VER}.tgz" -C "node_modules/@libsql/linux-${PKGARCH}-gnu" --strip-components=1 \
- && rm -f "libsql-linux-${PKGARCH}-gnu-${LIBSQL_VER}.tgz"
+ && if [ -f node_modules/libsql/package.json ]; then \
+      LIBSQL_VER=$(node -p "require('./node_modules/libsql/package.json').version") \
+      && PKGARCH=$(node -p "process.arch === 'arm64' ? 'arm64' : 'x64'") \
+      && npm pack "@libsql/linux-${PKGARCH}-gnu@${LIBSQL_VER}" \
+      && mkdir -p "node_modules/@libsql/linux-${PKGARCH}-gnu" \
+      && tar -xzf "libsql-linux-${PKGARCH}-gnu-${LIBSQL_VER}.tgz" -C "node_modules/@libsql/linux-${PKGARCH}-gnu" --strip-components=1 \
+      && rm -f "libsql-linux-${PKGARCH}-gnu-${LIBSQL_VER}.tgz"; \
+    fi
 ENV NITRO_PORT=${PORT}
 ENV HOST=0.0.0.0
 ENV PORT=${PORT}
