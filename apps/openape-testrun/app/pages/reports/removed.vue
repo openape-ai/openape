@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { daysLeft, days, kindOf, shortDate } from '../../utils/report-format'
+import { daysLeft, kindOf, shortDate } from '../../utils/report-format'
 import { toast } from '../../utils/toast'
 import AppIcon from '../../components/AppIcon.vue'
 import AppTopBar from '../../components/AppTopBar.vue'
@@ -74,7 +74,7 @@ async function restore(lifetime: { permanent: true } | { expiresIn: string }) {
               <span class="row-title">{{ item.title }}</span>
               <span class="row-sub">
                 <span>{{ item.removed_at === item.unavailable_at ? 'Removed' : 'Expired' }} {{ shortDate(item.unavailable_at) }}</span>
-                <span class="warn-text">Restorable for {{ days(daysLeft(item.purge_at)) }} more</span>
+                <span class="warn-text">Restorable for {{ daysLeft(item.purge_at) }} more {{ daysLeft(item.purge_at) === 1 ? 'day' : 'days' }}</span>
               </span>
             </span>
             <button class="btn" type="button" @click="choose(item)">
