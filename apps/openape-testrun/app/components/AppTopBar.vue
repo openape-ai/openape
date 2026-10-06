@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useOpenApeAuth } from '#imports'
 import { copyText } from '../utils/toast'
 import AppDialog from './AppDialog.vue'
 import AppIcon from './AppIcon.vue'
