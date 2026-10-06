@@ -30,6 +30,12 @@ import { sessionHostAgents } from './lib/runtime-routing'
 import { TroopSync } from './lib/troop-sync'
 import { readNestVersion, TroopWs } from './lib/troop-ws'
 
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  process.stdout.write('openape-nest — OpenApe agent service\n')
+  if (process.env.OPENAPE_ISSUE_REPORTING_ENABLED === '1') process.stdout.write('Report a problem: https://repos.openape.ai/report?product=apes\n')
+  process.exit(0)
+}
+
 const APES_BIN = process.env.OPENAPE_APES_BIN ?? 'apes'
 const RECONCILE_DEBOUNCE_MS = 1000
 // Central scheduler cadence for the in-process path — one tick drives every

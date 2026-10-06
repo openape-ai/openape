@@ -12,7 +12,7 @@ interface Body {
   workspace_id?: string
   name?: string
   outcome?: string
-  /** Schlüssel der Stufe, hinter der eingefügt wird; fehlt sie, hängt die neue ans Ende. */
+  /** Key of the stage to insert after; when absent the new one goes to the end. */
   after?: string | null
 }
 

@@ -1,3 +1,4 @@
+import { requireBrokerGrantOwner } from '../../utils/broker-owner'
 import type { GrantType, ProblemDetails } from '@openape/core'
 import type { ApproveGrantOverrides } from '@openape/grants'
 import { approveGrant, denyGrant, revokeGrant } from '@openape/grants'
@@ -34,6 +35,8 @@ export default defineEventHandler(async (event) => {
 
   for (const item of body.operations) {
     try {
+      const existing = await grantStore.findById(item.id)
+      if (existing?.brokered) await requireBrokerGrantOwner(event, existing, item.action === 'approve')
       let grant
       switch (item.action) {
         case 'approve': {

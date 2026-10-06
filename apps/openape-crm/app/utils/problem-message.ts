@@ -1,7 +1,7 @@
 /**
  * Die API antwortet im Problem-Format (`server/utils/problem.ts`): Titel und
- * optionales Detail liegen unter `data`. Das hier ist der eine Ort, an dem aus
- * einem geworfenen Fehler ein Satz für den Nutzer wird.
+ * optional detail sit under `data`. This is the one place where a thrown
+ * error becomes a sentence for the user.
  */
 export interface ProblemMessage {
   title: string

@@ -48,5 +48,8 @@ provide('navigation', navigation)
         :navigation="navigation"
       />
     </ClientOnly>
+    <footer v-if="useRuntimeConfig().public.issueReportingEnabled" class="border-t border-zinc-800 p-3 text-center text-sm">
+      <a href="https://repos.openape.ai/report?product=docs" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" class="text-amber-500 hover:underline">Report a problem</a>
+    </footer>
   </UApp>
 </template>

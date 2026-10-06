@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
+let brokerEnabled = false
+let brokerAgentDomain = ''
+vi.mock('nitropack/runtime', () => ({ useRuntimeConfig: () => ({ openapeIdp: { brokerAgentDomain } }) }))
+vi.mock('../src/runtime/server/utils/broker-store', () => ({ hasBrokerStore: () => brokerEnabled }))
+
 const RE_ISSUER_URL = /^https:\/\/id\.openape\.at\//
 
 // Mock h3 (Nitro dependency, not available in unit tests)
@@ -89,4 +94,17 @@ describe('jWKS endpoint', () => {
     // Must NOT contain private key material
     expect(key.d).toBeUndefined()
   })
+})
+
+it('advertises brokering only with durable storage and agent enrollment only for the configured domain', async () => {
+  const { default: handler } = await import('../src/runtime/server/routes/well-known/openid-configuration.get')
+  expect(handler({} as any).openape_grant_brokering_version).toBeUndefined()
+  try {
+    brokerEnabled = true
+    expect(handler({} as any)).toMatchObject({ openape_grant_brokering_version: '1.0', openape_brokered_grants_endpoint: 'https://id.openape.at/api/brokered-grants' })
+    expect(handler({} as any).openape_agent_domain).toBeUndefined()
+    brokerAgentDomain = 'pods.example.test'
+    expect(handler({} as any)).toMatchObject({ openape_agent_domain: brokerAgentDomain, openape_broker_enrollment_endpoint: 'https://id.openape.at/api/broker-agents' })
+  }
+  finally { brokerEnabled = false; brokerAgentDomain = '' }
 })

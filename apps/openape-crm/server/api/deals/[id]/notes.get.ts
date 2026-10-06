@@ -5,7 +5,7 @@ import { deals, notes } from '../../../database/schema'
 import { createProblemError } from '../../../utils/problem'
 import { requireRole } from '../../../utils/workspace-access'
 
-/** GET /api/deals/:id/notes — Notizen zum Deal, neueste zuerst. */
+/** GET /api/deals/:id/notes — notes on the deal, newest first. */
 export default defineEventHandler(async (event) => {
   const caller = await requireCaller(event)
   const dealId = getRouterParam(event, 'id')!

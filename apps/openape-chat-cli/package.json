@@ -19,7 +19,7 @@
   },
   "homepage": "https://github.com/openape-ai/openape#readme",
   "bugs": {
-    "url": "https://github.com/openape-ai/openape/issues"
+    "url": "https://repos.openape.ai/report?product=chat"
   },
   "publishConfig": {
     "access": "public"

@@ -1,4 +1,5 @@
 import { defineCommand } from 'citty'
+import { version } from '../package.json'
 import {
   makeDocsCommand,
   makeLoginCommand,
@@ -10,10 +11,12 @@ import { testrunClient } from './client.ts'
 import { openCommand } from './commands/open.ts'
 import { listCommand, rmCommand, showCommand } from './commands/runs.ts'
 import { uploadCommand } from './commands/upload.ts'
+import { publishCommand } from './commands/publish.ts'
 import agent from './docs/agent.md'
 import auth from './docs/auth.md'
 import cli from './docs/cli.md'
 import manifest from './docs/manifest.md'
+import documents from './docs/documents.md'
 
 const DESCRIPTOR = {
   name: 'testruns',
@@ -23,12 +26,12 @@ const DESCRIPTOR = {
   configFile: 'auth-testruns.json',
 } as const
 
-const DOCS: Record<string, string> = { agent, auth, cli, manifest }
+const DOCS: Record<string, string> = { agent, auth, cli, manifest, documents }
 
 const main = defineCommand({
   meta: {
     name: 'ape-testruns',
-    version: '0.1.1',
+    version,
     description: [
       'Upload a test run — descriptions, screenshots, pass/fail — and share one',
       'link that proves it works: https://testrun.openape.ai/r/<slug>.',
@@ -41,6 +44,7 @@ const main = defineCommand({
   },
   subCommands: {
     upload: uploadCommand,
+    publish: publishCommand,
     list: listCommand,
     show: showCommand,
     rm: rmCommand,

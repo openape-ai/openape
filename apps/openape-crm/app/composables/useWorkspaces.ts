@@ -10,8 +10,8 @@ export interface Workspace {
 const STORAGE_KEY = 'openape-crm:workspace'
 
 /**
- * Die Workspaces des eingeloggten Users plus der zuletzt gewählte — der lebt
- * im localStorage, damit Board, Kontakte und Einstellungen denselben zeigen.
+ * The signed-in user's workspaces plus the one last picked — that lives in
+ * localStorage so board, contacts and settings all show the same one.
  */
 export function useWorkspaces() {
   const list = useState<Workspace[]>('crm-workspaces', () => [])

@@ -4,8 +4,8 @@ import { setActiveWorkspaceId } from '../config.ts'
 import { printJson, printLine } from '../output.ts'
 
 /**
- * Nimmt eine Einladung an — als vollständige URL aus `ape-crm workspaces
- * invite` oder als roher Token.
+ * Accepts an invitation — either the full URL from `ape-crm workspaces
+ * invite`, or the raw token.
  */
 export const acceptCommand = defineCommand({
   meta: { name: 'accept', description: 'Accept an invite URL or raw token.' },

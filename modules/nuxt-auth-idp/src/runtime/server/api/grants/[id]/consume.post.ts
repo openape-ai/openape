@@ -1,3 +1,4 @@
+import { useBrokerStore } from '../../../utils/broker-store'
 import { introspectGrant, useGrant, verifyAuthzJWT } from '@openape/grants'
 import { defineEventHandler, getHeader, getRouterParam } from 'h3'
 import { useGrantStores } from '../../../utils/grant-stores'
@@ -35,7 +36,7 @@ export default defineEventHandler(async (event) => {
   const token = authHeader.slice(7)
 
   // Verify JWT signature
-  const { keyStore } = useIdpStores()
+  const { keyStore, userStore } = useIdpStores()
   const signingKey = await keyStore.getSigningKey()
   const result = await verifyAuthzJWT(token, {
     publicKey: signingKey.publicKey,
@@ -56,6 +57,12 @@ export default defineEventHandler(async (event) => {
   if (!grant) {
     throw createProblemError({ status: 404, title: 'Grant not found', type: 'https://openape.org/errors/grant_not_found' })
   }
+
+  if (grant.brokered || result.claims.brokered) return await useBrokerStore(event).consume(id, result.claims)
+
+  if (result.claims.sub !== grant.request.requester) throw createProblemError({ status: 403, title: 'Grant requester does not match the token subject' })
+  const requester = await userStore.findByEmail(grant.request.requester)
+  if (!requester?.isActive) throw createProblemError({ status: 403, title: 'Grant requester is inactive or missing' })
 
   // Check grant status
   switch (grant.status) {

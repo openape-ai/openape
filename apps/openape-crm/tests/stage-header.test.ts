@@ -46,8 +46,8 @@ describe('stageHeader', () => {
     expect(wrapper.emitted('rename')).toEqual([['Angebot draußen']])
   })
 
-  // Enter blendet das Feld aus und feuert dabei `blur` — ohne Sperre liefe das
-  // Umbenennen zweimal und der Nutzer sähe zwei Bestätigungen.
+  // Enter hides the field and fires `blur` on the way out — without the guard
+  // the rename would run twice and the user would see two confirmations.
   it('renames once, even though enter also triggers blur', async () => {
     const wrapper = mount(StageHeader, { props, global })
     const input = await startRename(wrapper)

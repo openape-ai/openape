@@ -31,7 +31,7 @@ const stageItems = computed(() => props.stages.map(stage => ({ label: stage.name
       </p>
     </button>
 
-    <!-- Am Handy gibt es kein HTML5-Drag: dort wird die Stufe umgeschaltet. -->
+    <!-- Phones have no HTML5 drag: there the stage is switched instead. -->
     <USelect
       :model-value="deal.stage"
       :items="stageItems"

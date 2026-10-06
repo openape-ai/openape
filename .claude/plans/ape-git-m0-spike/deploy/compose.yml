@@ -1,0 +1,16 @@
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /srv/ape-git/caddy/data:/data
+      - /srv/ape-git/caddy/config:/config
+  app:
+    build: ./app
+    restart: unless-stopped
+    volumes:
+      - /srv/ape-git/repos:/app/repos
+      - /srv/ape-git/scopes.json:/app/scopes.json:ro

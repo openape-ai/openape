@@ -87,7 +87,40 @@ export function worktreePathFor(taskId: string): string {
 
 const q = (s: string): string => `'${s}'` // safe: callers validate charset first
 
-export function buildCreateCommand(repo: unknown, taskId: string, branch: string): string {
+/**
+ * The branch names the issue it belongs to (`<type>/issue-<nr>-<...>`, the
+ * convention in CONTRIBUTING.md). That number — not the task id — is what
+ * makes two attempts the same piece of work: a fresh task for an issue
+ * already under way gets a new task id and a freely chosen branch name, and
+ * without this the agent would start over instead of continuing.
+ */
+export function issueOf(branch: string): string | null {
+  return /(?:^|\/)issue-(\d+)(?:\D|$)/.exec(branch)?.[1] ?? null
+}
+
+/** Distinct exit code so a refusal reads as a decision, not as a broken command. */
+export const DUPLICATE_EXIT_CODE = 17
+
+/**
+ * Refuse before anything is created when the issue already has an attempt,
+ * and say which one — the agent can then continue there. The requested branch
+ * is excluded: re-running the same attempt is the idempotent case a polling
+ * agent depends on.
+ */
+function buildDuplicateGuard(baseDir: string, branch: string): string {
+  const issue = issueOf(branch)
+  if (!issue) return 'true'
+  const pattern = `(^|/)issue-${issue}([^0-9]|$)`
+  return [
+    `existing=$(git -C ${q(baseDir)} for-each-ref --format='%(refname:short)' refs/heads refs/remotes`,
+    `| sed 's|^origin/||' | sort -u | grep -E ${q(pattern)} | grep -vx ${q(branch)} || true);`,
+    `if [ -n "$existing" ]; then`,
+    `printf 'issue ${issue} already has: %s\\n' "$(echo "$existing" | tr '\\n' ' ')" >&2;`,
+    `exit ${DUPLICATE_EXIT_CODE}; fi`,
+  ].join(' ')
+}
+
+export function buildCreateCommand(repo: unknown, taskId: string, branch: string, allowDuplicate = false): string {
   const id = assertTaskId(taskId)
   const br = assertBranch(branch)
   const { source, baseDir, isUrl } = resolveRepo(repo)
@@ -121,6 +154,7 @@ export function buildCreateCommand(repo: unknown, taskId: string, branch: string
     clone,
     ghAuth,
     `git -C ${q(baseDir)} fetch --quiet || true`,
+    allowDuplicate ? 'true' : buildDuplicateGuard(baseDir, br),
     `{ ${reset}; }`,
     `git -C ${q(baseDir)} worktree add -B ${q(br)} ${q(wt)}`,
     `echo ${q(wt)}`,
@@ -141,23 +175,24 @@ function buildListCommand(): string {
 export const gitWorktreeTools: ToolDefinition[] = [
   {
     name: 'git.worktree',
-    description: 'Manage isolated git worktrees for coding tasks. action=create clones the repo (cached under ~/repos) and adds a fresh worktree under ~/work/<task_id> on a new branch. action=remove tears it down. action=list shows current task worktrees. Git operations go through the DDISA grant cycle (git-shape).',
+    description: 'Manage isolated git worktrees for coding tasks. One attempt per issue: create refuses when the issue in the branch name already has a branch or worktree, and names it. action=create clones the repo (cached under ~/repos) and adds a fresh worktree under ~/work/<task_id> on a new branch. action=remove tears it down. action=list shows current task worktrees. Git operations go through the DDISA grant cycle (git-shape).',
     parameters: {
       type: 'object',
       properties: {
         action: { type: 'string', enum: ['create', 'remove', 'list'], description: 'create | remove | list' },
         repo: { type: 'string', description: 'For create/remove: git remote URL (https/git@) or a path under $HOME to an existing clone.' },
         task_id: { type: 'string', description: 'For create/remove: identifier for the worktree, ^[a-zA-Z0-9._-]{1,64}$. The worktree lands at ~/work/<task_id>.' },
-        branch: { type: 'string', description: 'For create: new branch name, ^[A-Za-z0-9._/-]{1,128}$.' },
+        branch: { type: 'string', description: 'For create: new branch name, ^[A-Za-z0-9._/-]{1,128}$. Name it <type>/issue-<nr>-<short> so a second attempt at the same issue can be recognised.' },
+        allow_duplicate: { type: 'boolean', description: 'For create: start a SECOND attempt at an issue that already has one. Only after reporting the existing branch to the user and being told to go ahead — otherwise continue on the branch the refusal names.' },
       },
       required: ['action'],
     },
     execute: async (args: unknown) => {
-      const a = args as { action?: unknown, repo?: unknown, task_id?: unknown, branch?: unknown }
+      const a = args as { action?: unknown, repo?: unknown, task_id?: unknown, branch?: unknown, allow_duplicate?: unknown }
       let cmd: string
       if (a.action === 'create') {
         if (typeof a.branch !== 'string') throw new Error('branch is required for action=create')
-        cmd = buildCreateCommand(a.repo, assertTaskId(a.task_id), a.branch)
+        cmd = buildCreateCommand(a.repo, assertTaskId(a.task_id), a.branch, a.allow_duplicate === true)
       }
       else if (a.action === 'remove') {
         cmd = buildRemoveCommand(a.repo, assertTaskId(a.task_id))
@@ -169,6 +204,20 @@ export const gitWorktreeTools: ToolDefinition[] = [
         throw new Error('action must be one of: create, remove, list')
       }
       const res = await runApeShell(cmd)
+      // A refusal is an answer, not a failure: hand back what already exists
+      // so the agent can continue there instead of opening a rival branch.
+      if (res.exit_code === DUPLICATE_EXIT_CODE) {
+        const found = /already has: (.*)/.exec(res.stderr ?? '')?.[1]?.trim() ?? ''
+        return {
+          action: 'create',
+          refused: 'duplicate_attempt',
+          issue: issueOf(a.branch as string),
+          existing: found ? found.split(/\s+/) : [],
+          hint: 'This issue is already being worked on. Continue on the branch above. '
+            + 'To start a second attempt anyway, tell the user which branch exists and '
+            + 'call again with allow_duplicate: true.',
+        }
+      }
       return {
         action: a.action,
         ...(a.action !== 'list' ? { worktree: worktreePathFor(assertTaskId(a.task_id)) } : {}),
@@ -181,4 +230,4 @@ export const gitWorktreeTools: ToolDefinition[] = [
   },
 ]
 
-export const _internal = { resolveRepo, worktreePathFor, buildCreateCommand, buildRemoveCommand, buildListCommand, assertTaskId, assertBranch }
+export const _internal = { resolveRepo, worktreePathFor, buildCreateCommand, issueOf, DUPLICATE_EXIT_CODE, buildRemoveCommand, buildListCommand, assertTaskId, assertBranch }

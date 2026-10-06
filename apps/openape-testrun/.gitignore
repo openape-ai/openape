@@ -2,3 +2,4 @@
 # Vitest browser-mode leftovers from a failing layout run
 .vitest-attachments/
 tests/layout/__screenshots__/
+.artifacts/

@@ -80,7 +80,7 @@ export const workspacesCommand = defineCommand({
     endpoint: { type: 'string', description: 'Override endpoint.' },
   },
   async run({ args, rawArgs }) {
-    // citty ruft den Elternbefehl, wenn kein Unterbefehl passt. Default = list.
+    // citty calls the parent command when no subcommand matches. Default = list.
     if (rawArgs.some(a => ['list', 'new', 'use', 'invite'].includes(a))) return
     const rows = await apiCall<Workspace[]>('GET', '/api/workspaces', { endpoint: args.endpoint })
     if (args.json) { printJson(rows); return }

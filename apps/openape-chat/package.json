@@ -1,7 +1,7 @@
 {
   "name": "@openape/chat",
   "type": "module",
-  "version": "0.2.26",
+  "version": "0.2.27",
   "private": true,
   "scripts": {
     "postinstall": "nuxt prepare",
@@ -10,7 +10,8 @@
     "nuxt-prepare": "nuxi prepare",
     "typecheck": "nuxt typecheck",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "docs": "playwright test && test2docs build"
   },
   "dependencies": {
     "@iconify-json/lucide": "catalog:",
@@ -20,6 +21,7 @@
     "@openape/nuxt-auth-sp": "workspace:*",
     "@vite-pwa/nuxt": "catalog:",
     "drizzle-orm": "catalog:",
+    "h3": "catalog:",
     "jose": "catalog:",
     "marked": "catalog:",
     "nuxt": "catalog:",
@@ -28,6 +30,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@playwright/test": "catalog:",
     "@types/node": "catalog:",
     "@types/web-push": "catalog:",
     "@vitejs/plugin-vue": "catalog:",
@@ -35,6 +38,8 @@
     "@vue/test-utils": "catalog:",
     "h3": "catalog:",
     "happy-dom": "catalog:",
+    "openape-e2e": "workspace:*",
+    "test2docs": "^0.1.0",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

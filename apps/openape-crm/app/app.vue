@@ -18,5 +18,6 @@ useSeoMeta({
     <NuxtLayout>
       <NuxtPage />
     </NuxtLayout>
+    <OpenApeReportLink product="crm" :enabled="useRuntimeConfig().public.issueReportingEnabled" />
   </UApp>
 </template>

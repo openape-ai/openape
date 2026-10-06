@@ -19,5 +19,6 @@ useSeoMeta({
 <template>
   <UApp>
     <NuxtPage />
+    <OpenApeReportLink product="question-service" :enabled="useRuntimeConfig().public.issueReportingEnabled" />
   </UApp>
 </template>
