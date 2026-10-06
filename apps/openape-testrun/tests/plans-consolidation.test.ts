@@ -12,6 +12,7 @@ import { manageHtml, purgeHtml, readHtml, row } from '../server/utils/html-store
 import { applyPlansRollback, capturePlans, importPlans, plansSnapshotDigest, reconcilePlans, rollbackPlansSnapshot } from '../server/utils/plans-migration'
 import { listPlans, readPlan, writePlan } from '../server/utils/plans-store'
 import { acceptPlanInvite, mutateTeam, previewPlanInvite } from '../server/utils/plans-teams'
+import { editRedirect } from '../server/middleware/report-pages'
 
 const owner = { subject: 'owner@example.com', actor: 'owner@example.com' }
 const editor = { subject: 'editor@example.com', actor: 'editor@example.com' }
@@ -119,5 +120,14 @@ describe('Plans single-store compatibility', () => {
     await expect(verifyPlansBridge(secret, token, 'PATCH', '/plans/plan', '{"expected_version":2}')).rejects.toThrow('mismatch')
     expect(await verifyPlansBridge(secret, token, 'PATCH', '/plans/plan', '{"expected_version":1}')).toEqual({ subject: owner.subject, actor: editor.actor })
     await expect(verifyPlansBridge(secret, token, 'PATCH', '/plans/plan', '{"expected_version":1}')).rejects.toThrow('replay')
+  })
+})
+
+describe('retired browser editor', () => {
+  it('sends old edit links to the report, keeping an exact version and nothing else', () => {
+    expect(editRedirect('/d/01M48ZPPY22PGEDKFX64H6YRKD/edit', '')).toBe('/d/01M48ZPPY22PGEDKFX64H6YRKD')
+    expect(editRedirect('/d/legacy-plan-id/edit/', '?v=3')).toBe('/d/legacy-plan-id?v=3')
+    expect(editRedirect('/d/plan/edit', '?v=0&next=https://evil.example')).toBe('/d/plan')
+    for (const path of ['/d/plan', '/d//edit', '/d/%2F%2Fevil.example/edit', '/d/a/b/edit', '/x/d/plan/edit']) expect(editRedirect(path, '')).toBeNull()
   })
 })

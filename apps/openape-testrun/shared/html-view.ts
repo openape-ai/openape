@@ -15,6 +15,7 @@ export interface HtmlReportView {
   external_images: string[]
   external_links: string[]
   audience: string
+  team_id: string | null
   expires_at: number | null
   access_revision: number
   retention_revision: number

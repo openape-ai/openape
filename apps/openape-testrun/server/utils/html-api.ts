@@ -123,7 +123,7 @@ async function handleHtml(event: H3Event, parts: string[]) {
       return page(versions.rows.map(item => ({ ...item, version_url: `${base}/d/${document.id}?v=${item.version}` })), bounds.limit, bounds.offset)
     }
     if (action) invalid('Unknown document read operation')
-    return { document_id: document.id, ...versionMetadata(version), latest_version: document.latest_version, audience: document.audience, expires_at: document.expires_at, access_revision: document.access_revision, retention_revision: document.retention_revision, caller_role: callerRole, url: `${base}/d/${document.id}`, version_url: `${base}/d/${document.id}?v=${version.version}`, legacy_plan_id: document.legacy_plan_id }
+    return { document_id: document.id, ...versionMetadata(version), latest_version: document.latest_version, audience: document.audience, team_id: document.team_id, expires_at: document.expires_at, access_revision: document.access_revision, retention_revision: document.retention_revision, caller_role: callerRole, url: `${base}/d/${document.id}`, version_url: `${base}/d/${document.id}?v=${version.version}`, legacy_plan_id: document.legacy_plan_id }
   }
   if (method === 'POST' && action === 'viewer') {
     const identity = await optionalReportIdentity(event)

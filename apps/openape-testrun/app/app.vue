@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AppToast from './components/AppToast.vue'
+
 useHead({
   htmlAttrs: { lang: 'en' },
   meta: [
@@ -16,6 +18,7 @@ useSeoMeta({
 <template>
   <UApp>
     <NuxtPage />
+    <AppToast />
     <OpenApeReportLink product="testrun" :enabled="useRuntimeConfig().public.issueReportingEnabled" />
   </UApp>
 </template>
