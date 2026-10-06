@@ -68,6 +68,7 @@ it('rejects foreign issuers, unpaired devices and expired leases before local pe
   const { store, remote, command } = await fixture()
   await expect(remote.execute({ ...command, route: { ...command.route, owner: { ...command.route.owner, issuer: 'https://other.example' } } })).rejects.toThrow('remote_authorization_failed')
   await expect(remote.execute({ ...command, route: { ...command.route, deviceId: randomUUID() } })).rejects.toThrow('remote_authorization_failed')
+  await expect(remote.execute({ ...command, route: { ...command.route, keyEpoch: 2 } })).rejects.toThrow('remote_authorization_failed')
   await expect(remote.execute({ ...command, leaseUntil: new Date(Date.now() - 1).toISOString() })).rejects.toThrow('dispatch_lease_expired')
   expect(store.listPods()).toEqual([])
 })

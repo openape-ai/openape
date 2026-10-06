@@ -59,6 +59,31 @@ Responses use the original operation ID and a desktop-signed receipt (`applied`,
 
 The desktop persists sealed outgoing envelopes before sending, preserving their ciphertext/ID across reconnects. The relay assigns decimal cursors to authenticated events. The phone persists content/cursor before acknowledging; repeated acknowledgements are idempotent. Events expire after 24 hours or mobile acknowledgement. A replay gap returns `resync_required`; `/api/mobile/v1/sync` supplies a current cursor, and clients refresh desktop snapshots and query original operation receipts. They must not reinterpret `unknown` as failure or automatically resubmit it under a new ID.
 
+## Visibility and threat review
+
+Who can see what, by party. This is the disclosure basis for the native app, the desktop Mobile access dialog and the pilot.
+
+| Party | Sees | Never sees |
+| --- | --- | --- |
+| Desktop (owner's Mac) | Everything: Pod files, scripts, provider credentials, transcripts, results. It is the only execution and data authority. | — |
+| Paired phone/iPad | Content decrypted for that device: inventory, conversations, reviews, runs and results it fetched; its own drafts. | Provider credentials, private desktop keys, local files that were never projected, grant tokens. |
+| Relay `pods.openape.ai` | Owner `(issuer, subject)`, runtime/device UUIDs and generations, key epochs, command kinds, timing, sizes, delivery outcomes, 30-day audit rows (`device_id`, `action`, `at`). | Chat, script, result or review content: every body is an `encrypted-v1` envelope sealed to one recipient key and signed by the sender. The relay holds no content key and cannot forge an owner command. |
+| Owner identity provider (`id.openape.ai` or the owner's DDISA IdP) | Logins, device enrollment and every run approval: the exact grant request with its command details, decided by the owner in the browser. | Chat and script content, mobile cache, relay routing data. |
+| Model provider configured on the desktop | Prompts and tool results that the desktop sends for the selected Pod, exactly as for desktop-only use. | Mobile transport data. End-to-end encryption of the relay does not hide prompts from the chosen provider. |
+| APNs (planned, M5) | Device token and a content-free wake/navigation hint. | Any content; the app fetches through the relay after waking. |
+
+Threats considered and their controls:
+
+- **Relay reads or alters content.** Content is sealed with P-256 ECDH + HKDF-SHA256 + AES-256-GCM to the recipient's agreement key; the route (owner, runtime, generation, device, key epoch, operation ID, kind, expiry, sequence) is associated data and the whole envelope is ECDSA-signed by the sender. A changed route, a substituted recipient or signer, a wrong key epoch or an expired delivery fails to open on desktop and phone (`protocol.test.ts`, `ContentCryptoTests`, `control.test.ts`). The relay store test proves the SQLite file and audit table hold no readable content.
+- **Relay invents owner intent.** Every mobile command is signed by the paired device key and bound to the desktop-confirmed pairing code; approvals of runs and program assignments are decided at the owner IdP, not at the relay. Idempotency keys reject changed payloads (`operation_conflict`).
+- **Lost or stolen phone.** Keys and tokens are Keychain `WhenUnlockedThisDeviceOnly`; the cache uses complete file protection, is excluded from backups and bounded to 50 MiB / 7 days. Desktop unpairing or mobile revocation excludes the device from new key epochs and drops its buffered content. Content already decrypted on that device cannot be recalled; the desktop dialog and the Devices sheet say so.
+- **New phone obtains history.** Events are sealed per recipient device; a new device holds nothing until the owner confirms the pairing code on an online desktop, and the desktop then resyncs. An offline desktop cannot be bypassed.
+- **Replay.** Relay request proofs, idempotent operation hashes, dispatch leases, desktop inbox tombstones and the 24-hour replay bound with `resync_required` prevent re-execution; an expired command is reported `unknown` and reconciled on the desktop, never re-sent.
+- **Backup restore.** Restoring a desktop profile rotates the runtime generation: pending commands become `unknown`, pairings and buffered content are dropped, and devices pair again (M2).
+- **Logging.** Relay, desktop remote and native code log no bodies, tokens or paths; the relay audit table has only IDs, actions and times.
+
+Residual risks, stated: no forward secrecy after compromise of a long-lived recipient agreement key (rotation requires a new pairing); endpoint compromise, screenshots and authorized provider output are endpoint concerns; a revoked device keeps what it already displayed. A plaintext transport mode does not exist, so there is no downgrade path to negotiate; `encryption_required` (426) refuses peers without `encrypted-v1`.
+
 ## Storage, controls and rollout
 
 The relay uses its own SQLite database with WAL and schema guard. Registration and refresh-family revocation remove sessions, pairings and buffered content. Revocation stops subsequent commands; it does not pretend to cancel an already executing desktop process. Explicit run cancellation follows the existing run lease. Restoring a desktop backup disables remote registration, removes paired devices/outbox, fences incomplete commands and requires registration/pairing again.

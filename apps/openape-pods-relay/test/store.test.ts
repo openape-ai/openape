@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -8,7 +8,8 @@ import type { Owner, Route } from '@openape/pods-protocol'
 import { RelayStore } from '../server/utils/store'
 
 const stores: RelayStore[] = []
-afterEach(() => { for (const store of stores.splice(0)) store.close() })
+const directories: string[] = []
+afterEach(() => { for (const store of stores.splice(0)) store.close(); for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true }) })
 function fixture() {
   let now = Date.parse('2026-09-20T12:00:00.000Z')
   const store = new RelayStore(':memory:', () => now); stores.push(store)
@@ -167,4 +168,30 @@ it('issues a fresh session for the same runtime after replay while retaining rev
   store.revoke(runtime, runtime.id)
   expect(() => store.register(runtime.id, owner, 'runtime', runtime.keys)).toThrow('registration_conflict')
   expect(() => store.authenticate(recovered.accessToken)).toThrow('authentication_required')
+})
+
+it('stores commands, buffered content and audit rows without any readable content', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'pods-relay-store-')); directories.push(directory)
+  const path = join(directory, 'relay.sqlite')
+  let now = Date.parse('2026-10-06T12:00:00.000Z')
+  const store = new RelayStore(path, () => now); stores.push(store)
+  const owner: Owner = { issuer: 'https://id.example', subject: 'owner@example.test' }
+  const deviceKey = generateKey(); const runtimeKey = generateKey()
+  const device = store.register(randomUUID(), owner, 'mobile', { signing: publicKey(deviceKey), agreement: publicKey(deviceKey) })
+  const runtime = store.register(randomUUID(), owner, 'runtime', { signing: publicKey(runtimeKey), agreement: publicKey(runtimeKey) })
+  const marker = `private-${randomUUID()}`
+  const route: Route = { protocol: 'pods-mobile', major: 1, minor: 0, id: randomUUID(), runtimeId: runtime.id, generation: runtime.generation, deviceId: device.id, keyEpoch: 1, owner, direction: 'command', kind: 'chat.send', kindVersion: 1, issuedAt: new Date(now).toISOString(), expiresAt: new Date(now + 60000).toISOString(), sequence: '1' }
+  store.pair(runtime, device.id)
+  store.admit(device, seal(route, { text: marker, conversationId: randomUUID() }, runtime.keys.agreement, deviceKey), () => true)
+  store.deliver(runtime, seal({ ...route, id: randomUUID(), direction: 'event', kind: 'snapshot' }, { script: marker }, device.keys.agreement, runtimeKey))
+  store.audit(device.id, 'command_admitted')
+  store.db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+  const bytes = readFileSync(path).toString('latin1')
+  expect(bytes.includes(marker)).toBe(false)
+  expect(bytes.includes(Buffer.from(marker).toString('base64url'))).toBe(false)
+  const columns = (store.db.prepare('PRAGMA table_info(audit)').all() as { name: string }[]).map(row => row.name)
+  expect(columns).toEqual(['id', 'device_id', 'action', 'at'])
+  now += 86400001; store.purge()
+  expect(store.db.prepare('SELECT count(*) AS count FROM events').get()?.count).toBe(0)
+  expect(store.db.prepare('SELECT envelope FROM operations').get()?.envelope).toBeNull()
 })
