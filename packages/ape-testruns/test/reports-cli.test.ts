@@ -13,6 +13,17 @@ describe('ape-reports executable contract', () => {
       const result = cli.run(command, '--help'); expect(result.status).toBe(0); expect(result.stdout).toContain(`USAGE  ape-reports ${command}`)
     }
   })
+  it('exposes native team operations and rejects malformed changes before authentication', () => {
+    for (const command of ['create', 'show', 'members', 'update', 'invite', 'invites', 'accept', 'revoke-invite', 'remove-member', 'archive', 'unarchive', 'rm']) {
+      const result = cli.run('teams', command, '--help')
+      expect(result.status, result.stderr).toBe(0)
+      expect(result.stdout).toContain(`USAGE  ape-reports teams ${command}`)
+    }
+    expect(cli.run('teams', 'invite', 'team', '--max-uses', '0').status).toBe(2)
+    expect(cli.run('teams', 'update', 'team').status).toBe(2)
+    expect(cli.run('teams', 'accept', 'https://example.test/no-token').status).toBe(2)
+    expect(cli.run('teams', 'remove-member', 'team').status).toBe(2)
+  })
   it('previews all complete examples without authentication or a companion file', () => {
     for (const example of ['analysis', 'testrun', 'plan']) {
       const result = cli.run('preview', join(examples, `${example}.html`), '--json')

@@ -1,0 +1,43 @@
+{
+  "title": "Example \u2014 Report sharing verification",
+  "project": "Synthetic OpenApe example",
+  "summary": "Synthetic demonstration of the Test Run template. These are not actual verification results.",
+  "startedAt": "2026-10-07T09:41:00Z",
+  "finishedAt": "2026-10-07T09:43:34Z",
+  "tests": [
+    {
+      "id": "publish",
+      "title": "Publish a private report",
+      "status": "passed",
+      "steps": [
+        {
+          "title": "Open the owner view",
+          "caption": "The owner can read the report."
+        }
+      ]
+    },
+    {
+      "id": "revoked",
+      "title": "Revoked access to earlier versions",
+      "status": "failed",
+      "description": "A removed reader must lose access to all versions.",
+      "error": "Expected **404**, received **200**. Synthetic failure.",
+      "steps": [
+        {
+          "title": "Remove reader",
+          "status": "passed"
+        },
+        {
+          "title": "Open version 1",
+          "status": "failed"
+        }
+      ]
+    },
+    {
+      "id": "safari",
+      "title": "Safari device verification",
+      "status": "skipped",
+      "description": "Device unavailable in this example."
+    }
+  ]
+}
