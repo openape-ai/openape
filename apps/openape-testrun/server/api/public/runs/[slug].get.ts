@@ -13,6 +13,7 @@ export default defineEventHandler(async (event) => {
   const run = await loadRunBySlug(event, slug)
   const version = requestedVersion(event, run)
   const db = useDb()
+  const publisher = { created_by: run.createdBy, created_by_act: run.createdByAct, created_at: run.createdAt, visibility: run.visibility }
 
   if (run.reportType === 'document') {
     const document = await db.select().from(documentPublications).where(eq(documentPublications.id, run.id)).get()
@@ -20,7 +21,7 @@ export default defineEventHandler(async (event) => {
     const editions = document.seriesId
       ? await db.select({ id: documentPublications.id, version: documentPublications.version, title: runs.title, slug: runs.slug }).from(documentPublications).innerJoin(runs, eq(runs.id, documentPublications.id)).where(and(eq(documentPublications.seriesId, document.seriesId), eq(documentPublications.owner, run.createdBy))).orderBy(desc(documentPublications.version))
       : []
-    return { type: 'document' as const, title: run.title, category: document.category ?? 'Uncategorized', language: document.language, version: document.version, editions, documentUrl: `/api/public/runs/${run.slug}/document`, artifactDigest: document.artifactDigest, policyVersion: document.policyVersion }
+    return { type: 'document' as const, ...publisher, title: run.title, category: document.category ?? 'Uncategorized', language: document.language, version: document.version, editions, documentUrl: `/api/public/runs/${run.slug}/document`, artifactDigest: document.artifactDigest, policyVersion: document.policyVersion }
   }
 
   let shown: Pick<typeof run, 'title' | 'project' | 'summary' | 'status' | 'passedCount' | 'failedCount' | 'skippedCount' | 'manifest' | 'startedAt' | 'finishedAt' | 'createdAt'> = run
@@ -31,7 +32,7 @@ export default defineEventHandler(async (event) => {
   }
   if (run.reportType === 'briefing') {
     const editions = await db.select({ version: reportPublications.version, date: reportPublications.editionDate }).from(reportPublications).where(eq(reportPublications.seriesId, run.id)).orderBy(desc(reportPublications.version))
-    return { type: 'briefing' as const, briefing: JSON.parse(shown.manifest) as import('../../../../shared/briefing').Briefing, version, latest_version: run.version, editions }
+    return { type: 'briefing' as const, ...publisher, created_at: shown.createdAt, briefing: JSON.parse(shown.manifest) as import('../../../../shared/briefing').Briefing, version, latest_version: run.version, editions }
   }
   const manifest = JSON.parse(shown.manifest) as RunManifest
 
@@ -52,6 +53,7 @@ export default defineEventHandler(async (event) => {
 
   return {
     type: 'test' as const,
+    visibility: run.visibility,
     title: shown.title,
     project: shown.project,
     status: shown.status,
