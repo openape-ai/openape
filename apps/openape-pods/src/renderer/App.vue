@@ -4,8 +4,7 @@ import { t, diagnostic, label, dateTime } from './i18n'
 import { defineComponent } from 'vue'
 import WorkspaceFrame from './WorkspaceFrame.vue'
 import AppSettings from './AppSettings.vue'
-import PodInventory from './PodInventory.vue'
-import GraphPanel from './GraphPanel.vue'
+import LocalShell from './central/LocalShell.vue'
 import SharingImport from './SharingImport.vue'
 import SharingExport from './SharingExport.vue'
 import type { PortableSourceSelection, SharingCommand } from '../contracts/sharing'
@@ -32,17 +31,16 @@ import type { ScheduleView } from '../contracts/scheduling'
 import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
-  components: { WorkspaceFrame, AppSettings, PodInventory, GraphPanel, SharingImport, SharingExport, AccountStatus, RunApproval, PodDescription, DataManagement, Onboarding, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
+  components: { WorkspaceFrame, AppSettings, LocalShell, SharingImport, SharingExport, AccountStatus, RunApproval, PodDescription, DataManagement, Onboarding, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
   props: { embedded: Boolean, initialPodId: { type: String, default: '' }, refreshToken: { type: Number, default: 0 } },
   emits: ['settings'],
   setup() { return { access: usePodAccess() } },
   data() {
-    return { sharing: sharingAvailable && typeof window.pods?.sharing === 'function', shareSelection: null as PortableSourceSelection | null, requestedRun: '', workflowId: '', workflows: { workflows: [], runs: [] } as WorkflowView, descriptions: [] as CollectionDescription[], requestedSecret: '', approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: this.initialPodId ? 'Overview' : 'Workflows', tabs: ['Overview', 'Script', 'Values', 'Permissions', 'Settings', 'History'], pods: [] as StoredPod[], podId: this.initialPodId, creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
+    return { sharing: sharingAvailable && typeof window.pods?.sharing === 'function', shareSelection: null as PortableSourceSelection | null, requestedRun: '', workflowId: '', workflows: { workflows: [], runs: [] } as WorkflowView, descriptions: [] as CollectionDescription[], requestedSecret: '', approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: this.initialPodId ? 'Overview' : 'Pods', tabs: ['Overview', 'Script', 'Values', 'Permissions', 'Settings', 'History'], pods: [] as StoredPod[], podId: this.initialPodId, creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
   computed: {
-    framePage(): string { return ['App settings', 'Setup', 'Data'].includes(this.selected) ? 'App settings' : ['Workflows', 'Import', 'Share'].includes(this.selected) ? 'Workflows' : 'Pods' },
     activeTab(): string { return this.selected === 'Knowledge' ? 'Overview' : this.selected },
-    globalPage(): boolean { return ['App settings', 'Setup', 'Data', 'Workflows', 'Pods', 'Import', 'Share'].includes(this.selected) },
+    globalPage(): boolean { return ['App settings', 'Setup', 'Data', 'Pods', 'Import', 'Share'].includes(this.selected) },
     sharingApi(): (command: SharingCommand) => Promise<import('../contracts/sharing').SharingState> { return command => window.pods.sharing!(command) },
     pod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.podId) },
     workerLabel(): string { if (this.connectionError) return t('Unavailable'); return label({ starting: 'Starting', ready: 'Ready', error: 'Needs attention', stopped: 'Stopped' }[this.status?.worker.state ?? 'starting']) },
@@ -86,7 +84,6 @@ export default defineComponent({
     async selectPod(id: string) { this.requestedRun = ''; this.requestedSecret = ''; this.podId = id; this.approvals = []; this.creating = false; this.details = null; this.runs = []; this.schedule = null; this.selected = 'Overview'; await this.refresh() },
     async changed(id: string) { if (this.creating && id) this.selected = 'Overview'; this.podId = id; this.creating = !id; await this.refresh() },
     async selectTab(tab: string) { await this.refresh(); this.selected = tab },
-    createPod() { this.creating = true; this.podId = ''; this.selected = 'Settings' },
     async runOnce() {
       if (!this.pod) return; try { await this.access.api.runs({ type: 'start', podId: this.pod.id, expectedScript: this.pod.activeScript ?? undefined }); this.selected = 'History'; await this.refresh() }
       catch (error) { this.dataError = error instanceof Error ? error.message : 'Could not start run' }
@@ -109,7 +106,7 @@ export default defineComponent({
 </script>
 
 <template>
-  <WorkspaceFrame :page="framePage" :count="pods.filter(item => item.lifecycle !== 'archived').length" :embedded="embedded" @navigate="navigate">
+  <WorkspaceFrame :embedded="embedded">
     <template #account>
       <AccountStatus :available="status?.worker.state === 'ready'" @open="navigate('App settings')" />
     </template>
@@ -118,10 +115,10 @@ export default defineComponent({
     </template>
     <div class="main">
       <div class="window-drag" /><div class="content">
-        <button v-if="!globalPage && !embedded" class="text-button" @click="selected = 'Pods'">
-          ‹ {{ t('Pods') }}
+        <button v-if="selected !== 'Pods' && !embedded" class="text-button" data-testid="back-to-automations" @click="selected = 'Pods'">
+          ‹ {{ t('Automations') }}
         </button>
-        <div v-if="!['App settings', 'Pods', 'Workflows', 'Import', 'Share'].includes(selected)" class="page-heading">
+        <div v-if="!['App settings', 'Pods', 'Import', 'Share'].includes(selected)" class="page-heading">
           <h1>{{ globalPage ? (selected === 'Setup' ? t('Your accounts') : label(selected)) : creating ? t('New pod') : pod?.name ?? t('Your pods') }}</h1><span v-if="pod && !globalPage" class="muted">{{ nextRun }}</span><button v-if="sharing && pod && !globalPage" class="secondary" @click="share({ kind: 'pod', id: pod.id })">
             {{ t('Share') }}
           </button>
@@ -141,21 +138,12 @@ export default defineComponent({
         </nav>
         <RunApproval v-if="!globalPage && selected !== 'History' && podId" :pod-id="podId" :approvals="approvals" />
         <AppSettings v-if="selected === 'App settings'" />
-        <PodInventory v-else-if="selected === 'Pods'" :pods="pods" :workflows="workflows" :organization="organization" :available="status?.worker.state === 'ready' && !attention" @updated="workspaceChanged" @select="selectPod" @create="createPod" />
-        <template v-else-if="selected === 'Workflows'">
-          <GraphPanel :view="workflows" :pods="pods" :organization="organization" :descriptions="descriptions" :selected-id="workflowId" @changed="workflows = $event" @workspace="workspaceChanged" @select="workflowId = $event" @open-pod="selectPod" @share="share" @import="selected = 'Import'" />
-        </template>
+        <LocalShell v-else-if="selected === 'Pods'" :sharing="sharing" @open-pod="selectPod" @share="share" @advanced="navigate('App settings')" @import="selected = 'Import'" />
         <template v-else-if="selected === 'Import'">
-          <button class="text-button" @click="selected = 'Workflows'">
-            ‹ {{ t('Networks & workflows') }}
-          </button>
           <SharingImport :api="sharingApi" :organization="organization" desktop :resources="podResources" @changed="refresh" @open-pod="selectPod" />
         </template>
         <template v-else-if="selected === 'Share' && shareSelection">
-          <button class="text-button" @click="selected = shareSelection!.kind === 'pod' ? 'Overview' : 'Workflows'">
-            ‹ {{ shareSelection.kind === 'pod' ? pod?.name ?? t('Pods') : t('Networks & workflows') }}
-          </button>
-          <SharingExport :key="shareSelection.id" :selection="shareSelection" :api="sharingApi" @done="selected = shareSelection!.kind === 'pod' ? 'Overview' : 'Workflows'" />
+          <SharingExport :key="shareSelection.id" :selection="shareSelection" :api="sharingApi" @done="selected = 'Pods'" />
         </template>
         <DataManagement v-else-if="selected === 'Data'" />
         <Onboarding v-else-if="selected === 'Setup'" @finished="selected = 'Overview'" />
@@ -221,9 +209,9 @@ export default defineComponent({
               {{ t('Unfinished work is waiting. Open run history to prepare a retry.') }}
             </p>
           </template><article v-else class="card empty-panel">
-            <h2>{{ t('No pods yet') }}</h2><button class="primary" @click="createPod()">
-              {{ t('Create your first pod') }}
-            </button>
+            <h2>{{ t('No pods yet') }}</h2><p class="muted">
+              {{ t('Create your first Pod from the Automations tab: hand a brief to Codex.') }}
+            </p>
           </article>
         </section>
       </div>

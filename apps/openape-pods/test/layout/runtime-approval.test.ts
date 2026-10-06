@@ -20,7 +20,7 @@ it.each(['en', 'de'] as const)('keeps the execution preference readable and oper
     await page.viewport(language === 'de' ? 560 : 1060, 850)
     document.documentElement.style.colorScheme = language === 'de' ? 'dark' : 'light'
     await flushPromises()
-    await view.findAll('.workspace-navigation nav button')[2]!.trigger('click'); await flushPromises()
+    await view.get('.account-status').trigger('click'); await flushPromises()
     const standing = view.get<HTMLInputElement>('.standing-runtime-option input')
     await standing.setValue(true); await flushPromises()
     expect(standing.element.checked).toBe(true)
