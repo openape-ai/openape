@@ -44,6 +44,7 @@ import { parseHttpReply } from '../contracts/http'
 import { PodVariables } from './resources/variables'
 import { PodGroups } from './workspace/groups'
 import { listedPods } from './workspace/pod-list'
+import { mapView } from './workspace/map-view'
 import { CollectionDescriptions } from './workspace/collection-descriptions'
 import { ScriptWorkspace } from './workspace/scripts'
 import { parseScriptCommand } from '../contracts/scripts'
@@ -486,7 +487,7 @@ port.on('message', async (event) => {
     if (command.type === 'pauseAll') store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE lifecycle=\'active\'').run()
     if (command.type === 'create') store.createPod({ name: command.name })
     if (command.type === 'update') { store.updatePod(command.id, command.revision, { name: command.name, lifecycle: command.lifecycle }); if (command.lifecycle === 'archived') dispatcher.cancelPod(command.id, 'Pod archived') }
-    port.postMessage({ id: request.id, state: { jev: jevAvailability(store), pods: listedPods(store), organization: new PodGroups(store).view(), descriptions: new CollectionDescriptions(store).view() } })
+    port.postMessage({ id: request.id, state: { jev: jevAvailability(store), pods: listedPods(store), organization: new PodGroups(store).view(), descriptions: new CollectionDescriptions(store).view(), ...(command.type === 'map' ? { map: mapView(store) } : {}) } })
   }
   catch (error) { port.postMessage({ id: request.id, error: error instanceof Error ? error.message : 'Workspace operation failed' }) }
 })
