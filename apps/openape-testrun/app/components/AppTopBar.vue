@@ -23,7 +23,10 @@ onMounted(async () => {
   if (!user.value) await fetchUser()
 })
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
-defineExpose({ focus: () => input.value?.focus() })
+defineExpose({
+  focus: () => input.value?.focus(),
+  openPublish: () => { publishOpen.value = true },
+})
 </script>
 
 <template>
