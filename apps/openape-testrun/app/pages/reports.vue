@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppTopBar from '../components/AppTopBar.vue'
 import HtmlCollection from '../components/HtmlCollection.vue'
 
 const route = useRoute()
@@ -10,51 +11,54 @@ const selectedCount = computed(() => category.value ? data.value?.categories.fin
 </script>
 
 <template>
-  <main class="reports-home">
-    <header>
-      <p>OpenApe Reports</p><NuxtLink to="/runs">
-        Test uploads →
-      </NuxtLink>
-    </header>
-    <h1>Your reports.</h1>
-    <p class="intro">
-      Documents, briefings and test results. Organized your way.
-    </p>
-    <div v-if="error">
-      <p>Sign in to view your reports.</p><NuxtLink to="/">
-        Sign in with OpenApe →
-      </NuxtLink>
-    </div>
-    <template v-else>
-      <HtmlCollection />
-      <h2>Earlier reports and Test Run uploads</h2>
-      <nav aria-label="Report categories">
-        <NuxtLink to="/reports" :aria-current="!category ? 'page' : undefined">
-          All reports · {{ data?.total ?? 0 }}
+  <div class="surface">
+    <AppTopBar search="" @search="() => {}" />
+    <main class="reports-home">
+      <header>
+        <p>OpenApe Reports</p><NuxtLink to="/runs">
+          Test uploads →
         </NuxtLink>
-        <NuxtLink v-for="item in data?.categories" :key="item.key" :to="{ path: '/reports', query: { category: item.key } }" :aria-current="category === item.key ? 'page' : undefined">
-          {{ item.label }} · {{ item.count }}
-        </NuxtLink>
-      </nav>
-      <p v-if="!data?.reports.length">
-        No reports in this view yet.
+      </header>
+      <h1>Your reports.</h1>
+      <p class="intro">
+        Documents, briefings and test results. Organized your way.
       </p>
-      <article v-for="item in data?.reports" :key="item.id">
-        <div><h2>{{ item.title }}</h2><p>{{ item.category }} · {{ item.visibility === 'private' ? 'Private' : 'Shared link' }}</p></div>
-        <NuxtLink :to="`/r/${item.slug}`">
-          Read →
+      <div v-if="error">
+        <p>Sign in to view your reports.</p><NuxtLink to="/">
+          Sign in with OpenApe →
         </NuxtLink>
-      </article>
-      <footer>
-        <NuxtLink v-if="offset > 0" :to="{ query: { category, offset: Math.max(0, offset - 50) } }">
-          ← Previous
-        </NuxtLink>
-        <NuxtLink v-if="offset + 50 < selectedCount" :to="{ query: { category, offset: offset + 50 } }">
-          Next →
-        </NuxtLink>
-      </footer>
-    </template>
-  </main>
+      </div>
+      <template v-else>
+        <HtmlCollection />
+        <h2>Earlier reports and Test Run uploads</h2>
+        <nav aria-label="Report categories">
+          <NuxtLink to="/reports" :aria-current="!category ? 'page' : undefined">
+            All reports · {{ data?.total ?? 0 }}
+          </NuxtLink>
+          <NuxtLink v-for="item in data?.categories" :key="item.key" :to="{ path: '/reports', query: { category: item.key } }" :aria-current="category === item.key ? 'page' : undefined">
+            {{ item.label }} · {{ item.count }}
+          </NuxtLink>
+        </nav>
+        <p v-if="!data?.reports.length">
+          No reports in this view yet.
+        </p>
+        <article v-for="item in data?.reports" :key="item.id">
+          <div><h2>{{ item.title }}</h2><p>{{ item.category }} · {{ item.visibility === 'private' ? 'Private' : 'Shared link' }}</p></div>
+          <NuxtLink :to="`/r/${item.slug}`">
+            Read →
+          </NuxtLink>
+        </article>
+        <footer>
+          <NuxtLink v-if="offset > 0" :to="{ query: { category, offset: Math.max(0, offset - 50) } }">
+            ← Previous
+          </NuxtLink>
+          <NuxtLink v-if="offset + 50 < selectedCount" :to="{ query: { category, offset: offset + 50 } }">
+            Next →
+          </NuxtLink>
+        </footer>
+      </template>
+    </main>
+  </div>
 </template>
 
 <style scoped>
