@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import HtmlReport from '../../app/components/HtmlReport.vue'
 import PlanSourceEditor from '../../app/components/PlanSourceEditor.vue'
 
-const report: HtmlReportView = { document_id: 'report', publication_id: 'version', version: 1, latest_version: 2, title: 'A report with deliberately long words for a narrow viewport', category: 'Test Runs', language: 'en', tags: ['reports', 'consolidation'], metadata: { 'tests.result': 'passed' }, author: 'owner@example.com', created_at: 1, artifact_digest: 'a'.repeat(64), policy_version: 'publisher-trusted-html/2', external_images: ['https://images.example.test/example.png'], external_links: ['https://example.test/evidence'], audience: 'private', expires_at: null, access_revision: 1, retention_revision: 1, caller_role: 'owner', url: '/d/report', version_url: '/d/report?v=1', legacy_plan_id: null }
+const report: HtmlReportView = { document_id: 'report', publication_id: 'version', version: 1, latest_version: 2, title: 'A report with deliberately long words for a narrow viewport', category: 'Test Runs', language: 'en', tags: ['reports', 'consolidation'], metadata: { 'verification.stage': 'production acceptance' }, author: 'owner@example.com', created_at: 1, artifact_digest: 'a'.repeat(64), policy_version: 'publisher-trusted-html/2', external_images: ['https://images.example.test/example.png'], external_links: ['https://example.test/evidence'], audience: 'private', expires_at: null, access_revision: 1, retention_revision: 1, caller_role: 'owner', url: '/d/report', version_url: '/d/report?v=1', legacy_plan_id: null }
 const global = { stubs: { NuxtLink: { setup: (_: unknown, { slots }: { slots: Slots }) => () => h('a', slots.default?.()) } } }
 let wrapper: ReturnType<typeof mount>
 afterEach(() => { wrapper?.unmount(); vi.unstubAllGlobals() })
@@ -22,6 +22,9 @@ describe('HTML document controls', () => {
     expect(fetch).toHaveBeenCalledWith('/api/documents/report/viewer', { method: 'POST', query: { revision: 1 } })
     expect(wrapper.get('iframe').attributes()).toMatchObject({ sandbox: 'allow-scripts', referrerpolicy: 'no-referrer', src: 'about:blank' })
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390)
+    const label = wrapper.get('dt').element.getBoundingClientRect()
+    const value = wrapper.get('dd').element.getBoundingClientRect()
+    expect(value.top).toBeGreaterThanOrEqual(label.bottom)
   })
   it('shows a denied viewer without inserting any document HTML', async () => {
     vi.stubGlobal('$fetch', vi.fn().mockRejectedValue(new Error('revoked')))

@@ -8,9 +8,10 @@ export default defineEventHandler(async (event) => {
   const url = getRequestURL(event); const method = getMethod(event)
   const compatibilityApi = /^\/api\/(?:plans|teams|invites)(?:\/|$)/u.test(url.pathname)
   if (compatibilityApi && String(config.reportsWritesFrozen) === 'true' && !['GET', 'HEAD'].includes(method)) throw createError({ statusCode: 503, statusMessage: 'Plans writes are frozen for migration' })
-  if (!origin) return
   const planPage = /^\/teams\/[^/]+\/plans\/([^/]+)(\/edit)?\/?$/u.exec(url.pathname)
-  if (planPage && ['GET', 'HEAD'].includes(method)) return sendRedirect(event, `${origin}/d/${encodeURIComponent(planPage[1]!)}${planPage[2] ?? ''}${url.search}`, 302)
+  const existingPlanPage = planPage && planPage[1] !== 'new'
+  if (!origin && (compatibilityApi || existingPlanPage)) throw createError({ statusCode: 503, statusMessage: 'Reports compatibility destination is not configured' })
+  if (existingPlanPage && ['GET', 'HEAD'].includes(method)) return sendRedirect(event, `${origin}/d/${encodeURIComponent(planPage[1]!)}${planPage[2] ?? ''}${url.search}`, 302)
   if (!compatibilityApi) return
   const preview = method === 'GET' && /^\/api\/invites\/[^/]+$/u.test(url.pathname)
   const principal = preview ? null : await requireScopedPrincipal(event, [method === 'GET' ? 'plans:read' : 'plans:write'])
