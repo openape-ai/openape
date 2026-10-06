@@ -13,6 +13,7 @@ import AppSettings from '../AppSettings.vue'
 import WorkflowPanel from '../WorkflowPanel.vue'
 import GraphPanel from '../GraphPanel.vue'
 import CentralWorkspace from './CentralWorkspace.vue'
+import AutomationsShell from './AutomationsShell.vue'
 import { t, diagnostic } from '../i18n'
 
 const props = defineProps<{ client: BrowserWorkspaceClient }>()
@@ -20,7 +21,8 @@ const emit = defineEmits<{ login: [], logout: [] }>()
 const subject = ref('')
 const error = ref('')
 const connectionError = ref('')
-const page = ref('Workflows')
+const page = ref('Automations')
+const now = ref(Date.now())
 const runtimes = ref<CentralRuntime[]>([])
 const runtimeId = ref('')
 const workflowId = ref('')
@@ -44,7 +46,7 @@ async function signIn() {
   }
 }
 function inventory(value: CentralRuntime[]) {
-  runtimes.value = value; loaded.value = true
+  runtimes.value = value; loaded.value = true; now.value = Date.now()
   if (!value.some(host => host.id === runtimeId.value)) { runtimeId.value = value[0]?.id ?? ''; workflowId.value = '' }
 }
 function navigate(destination: string) {
@@ -70,7 +72,7 @@ onBeforeUnmount(() => { closed = true })
 </script>
 
 <template>
-  <WorkspaceFrame :page="page" :count="loaded ? count : undefined" browser @navigate="navigate">
+  <WorkspaceFrame automations :page="page" :count="loaded ? count : undefined" browser @navigate="navigate">
     <template #account>
       <AccountStatus v-if="subject" :subject="subject" @open="navigate('App settings')" />
     </template>
@@ -87,6 +89,7 @@ onBeforeUnmount(() => { closed = true })
         {{ t('Retry') }}
       </button>
     </p>
+    <AutomationsShell v-if="subject && page === 'Automations'" :view="runtime?.workspace.map ?? null" :live="!!runtime?.online" :now="now" :decisions="runtime?.workspace.map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" @settings="navigate('App settings')" @open="openPod" />
     <section v-if="subject" v-show="page === 'Workflows'">
       <template v-if="importing && runtime">
         <button class="text-button" @click="importing = false">
