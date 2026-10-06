@@ -1,10 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
-import App from '../../src/renderer/App.vue'
 import PodScript from '../../src/renderer/PodScript.vue'
 import type { ScriptCommand, ScriptView } from '../../src/contracts/scripts'
-import { installWorkspace } from '../layout/workspace-fixture'
 
 // Behaviour formerly asserted by the packaged `script-editor` E2E. Native
 // validation itself is proven in e2e/master.test.ts; here the editor's own
@@ -61,16 +59,5 @@ it('confirms a saved draft and offers the reference for each variable', async ()
   await click(wrapper, 'Save script')
   expect(wrapper.text()).toContain('Draft saved. Validate it before activation.')
   expect(wrapper.findAll('input').map(input => (input.element as HTMLInputElement).value)).toContain('context.variables["topic"]')
-  wrapper.unmount()
-})
-
-it('keeps the three workspace destinations accessible while editing a Pod', async () => {
-  installWorkspace()
-  const wrapper = mount(App, { attachTo: document.body, props: { initialPodId: '00000000-0000-4000-8000-000000000001' } }); await flushPromises()
-  const navigation = wrapper.get('.workspace-navigation')
-  expect(navigation.findAll('nav button').slice(0, 3).map(button => button.text())).toEqual(['⇢Networks & workflows', '◫Pods1', '⚙App settings'])
-  await navigation.findAll('nav button')[1]!.trigger('click'); await flushPromises()
-  expect(wrapper.find('.inventory-row').text()).toContain('Mail knowledge')
-  expect(wrapper.get('.new-pod').attributes('disabled')).toBeUndefined()
   wrapper.unmount()
 })

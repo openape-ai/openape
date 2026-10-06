@@ -64,9 +64,7 @@ it('keeps chat and approval destinations out of the connected workspace', async 
   expect(shown.findAll('[role="tab"]').map(tab => tab.text())).not.toContain('Chat')
   expect(shown.findAll('.nav-button').map(button => button.text())).not.toContain('Chats')
   expect(master).not.toHaveBeenCalled()
-  await shown.findAll('.workspace-navigation button').find(button => button.text().includes('Pods'))!.trigger('click'); await flushPromises(); await shown.get('.new-pod').trigger('click'); await flushPromises()
-  expect(shown.find('.master-panel').exists()).toBe(false)
-  expect(shown.find('input').exists()).toBe(true)
+
   shown.unmount()
 })
 

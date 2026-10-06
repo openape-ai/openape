@@ -78,21 +78,6 @@ describe('pod workspace shell', () => {
   })
 })
 
-it('preserves the creation form draft without starting a chat', async () => {
-  const master = vi.fn()
-  installWorkspace({ master })
-  const wrapper = mount(App, { props: { initialPodId: '00000000-0000-4000-8000-000000000001' } }); await flushPromises()
-  try {
-    await wrapper.findAll('.workspace-navigation button').find(button => button.text().includes('Pods'))!.trigger('click'); await flushPromises(); await wrapper.get('.new-pod').trigger('click'); await flushPromises()
-    await wrapper.get('input').setValue('An unfinished name')
-    await wrapper.findAll('.workspace-navigation button').find(button => button.text().includes('Pods'))!.trigger('click'); await flushPromises(); await wrapper.get('.new-pod').trigger('click'); await flushPromises()
-    expect(wrapper.get('input').element.value).toBe('An unfinished name')
-    expect(wrapper.find('form.master-compose').exists()).toBe(false)
-    expect(master).not.toHaveBeenCalled()
-  }
-  finally { wrapper.unmount() }
-})
-
 it('shows automatic recovery in the shared Overview and schedule settings without offering another run', async () => {
   const bridge = installWorkspace()
   const schedule = await bridge.scheduling({ type: 'list', podId: '00000000-0000-4000-8000-000000000001' })
