@@ -1,5 +1,12 @@
 # @openape-plans/app
 
+## 0.0.10
+
+### Patch Changes
+
+- Updated dependencies
+  - @openape/ape-plans@1.0.7
+
 ## 0.0.9
 
 ### Patch Changes

@@ -39,10 +39,11 @@ trust decision appears on the sealed document area and is still required per ver
 versions, retention, download, publisher data and technical facts open in a Details
 drawer. Earlier uploads (`/r/SLUG`) render in the same frame without the decision.
 
-There is no browser editor. Plans change through `ape-plans edit ID --body-from-file
-FILE --expected-version N`; the Plans API keeps returning 428 without and 409 with a
-stale expected version. Old `/d/ID/edit` links redirect permanently to `/d/ID` (an
-exact `?v=N` is kept).
+There is no browser editor. Render Plans locally with `ape-report-render plan
+input.json output.html`, then use `ape-reports publish` with the document ID,
+original expected version and a stable publication key. Resolve conflicts before
+replacing content. Manage teams through `ape-reports teams`; publication uses an
+explicit `--team`. The compatibility source adapter remains during migration.
 
 `GET /api/library` (scope `reports:read`) is the one merged, keyset-paginated feed of
 readable HTML documents and the caller's earlier uploads, ordered by update time or

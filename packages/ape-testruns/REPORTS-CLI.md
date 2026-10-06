@@ -22,7 +22,19 @@ COMMANDS
   receipt        Recover an exact publication receipt
   categories     List accessible categories and document counts
   tags           List accessible tags and document counts
-  teams          List available teams and caller roles
+  teams          List teams and caller roles, including archived teams
+  teams create   Create a team; the caller becomes owner
+  teams show     Show a team, its members and legacy plans
+  teams members  List team members and roles
+  teams update   Rename a team or change its description
+  teams invite   Create a team invitation
+  teams invites  List active team invitations
+  teams revoke-invite Revoke an invitation
+  teams accept   Accept an invitation URL or token
+  teams remove-member Remove a member from a team
+  teams archive  Archive a team
+  teams unarchive Restore an archived team
+  teams rm       Delete a team; refuses remaining plans unless forced
   access         Inspect or replace document access
   retention      Inspect or explicitly change lifetime
   rm             Remove with a 30-day recovery period
@@ -302,7 +314,7 @@ NFC, whitespace normalization, lowercase and deduplication. At most 20 tags of 6
 ## teams
 
 ```text
-List available teams and caller roles
+List teams and caller roles, including archived teams
 
 USAGE  ape-reports teams
 
@@ -314,7 +326,206 @@ OPTIONS
   --limit <value>  Page size 1–100, default 20
   --cursor <value>  Opaque next_cursor from the previous response
 
-Team creation, membership and invitations use the compatible Plans UI/API and ape-plans commands.
+Use teams create, show, members, update, invite, invites, accept, revoke-invite, remove-member, archive, unarchive or rm. No default team is silently applied to private publications.
+```
+
+## teams create
+
+```text
+Create a team; the caller becomes owner
+
+USAGE  ape-reports teams create <name>
+
+OPTIONS
+  --help  Show root or command help
+  --json  Structured stdout; errors on stderr
+  --quiet  Suppress progress, not results or errors
+  --endpoint <value>  Reports service; default https://report.openape.ai; APE_REPORTS_ENDPOINT
+  --description <value>  Team description
+
+Uses the Reports team store and existing role checks. Does not send notifications. Invitations confer editor access when accepted; preserve tokens privately.
+```
+
+## teams show
+
+```text
+Show a team, its members and legacy plans
+
+USAGE  ape-reports teams show <team-id>
+
+OPTIONS
+  --help  Show root or command help
+  --json  Structured stdout; errors on stderr
+  --quiet  Suppress progress, not results or errors
+  --endpoint <value>  Reports service; default https://report.openape.ai; APE_REPORTS_ENDPOINT
+
+Uses the Reports team store and existing role checks. Does not send notifications. Invitations confer editor access when accepted; preserve tokens privately.
+```
+
+## teams members
+
+```text
+List team members and roles
+
+USAGE  ape-reports teams members <team-id>
+
+OPTIONS
+  --help  Show root or command help
+  --json  Structured stdout; errors on stderr
+  --quiet  Suppress progress, not results or errors
+  --endpoint <value>  Reports service; default https://report.openape.ai; APE_REPORTS_ENDPOINT
+
+Uses the Reports team store and existing role checks. Does not send notifications. Invitations confer editor access when accepted; preserve tokens privately.
+```
+
+## teams update
+
+```text
+Rename a team or change its description
+
+USAGE  ape-reports teams update <team-id>
+
+OPTIONS
+  --help  Show root or command help
+  --json  Structured stdout; errors on stderr
+  --quiet  Suppress progress, not results or errors
+  --endpoint <value>  Reports service; default https://report.openape.ai; APE_REPORTS_ENDPOINT
+  --name <value>  New team name
+  --description <value>  New description; empty clears it
+
+Uses the Reports team store and existing role checks. Does not send notifications. Invitations confer editor access when accepted; preserve tokens privately.
+```
+
+## teams invite
+
+```text
+Create a team invitation
+
+USAGE  ape-reports teams invite <team-id>
+
+OPTIONS
+  --help  Show root or command help
+  --json  Structured stdout; errors on stderr
+  --quiet  Suppress progress, not results or errors
+  --endpoint <value>  Reports service; default https://report.openape.ai; APE_REPORTS_ENDPOINT
+  --max-uses <value>  Positive integer, default 5
+  --expires-in <value>  Duration, default 7d
+  --note <value>  Invitation note
+
+Uses the Reports team store and existing role checks. Does not send notifications. Invitations confer editor access when accepted; preserve tokens privately.
+```
+
+## teams invites
+
+```text
+List active team invitations
+
+USAGE  ape-reports teams invites <team-id>
+
+OPTIONS
+  --help  Show root or command help
+  --json  Structured stdout; errors on stderr
+  --quiet  Suppress progress, not results or errors
+  --endpoint <value>  Reports service; default https://report.openape.ai; APE_REPORTS_ENDPOINT
+
+Uses the Reports team store and existing role checks. Does not send notifications. Invitations confer editor access when accepted; preserve tokens privately.
+```
+
+## teams revoke-invite
+
+```text
+Revoke an invitation
+
+USAGE  ape-reports teams revoke-invite <invite-id>
+
+OPTIONS
+  --help  Show root or command help
+  --json  Structured stdout; errors on stderr
+  --quiet  Suppress progress, not results or errors
+  --endpoint <value>  Reports service; default https://report.openape.ai; APE_REPORTS_ENDPOINT
+
+Uses the Reports team store and existing role checks. Does not send notifications. Invitations confer editor access when accepted; preserve tokens privately.
+```
+
+## teams accept
+
+```text
+Accept an invitation URL or token
+
+USAGE  ape-reports teams accept <url-or-token>
+
+OPTIONS
+  --help  Show root or command help
+  --json  Structured stdout; errors on stderr
+  --quiet  Suppress progress, not results or errors
+  --endpoint <value>  Reports service; default https://report.openape.ai; APE_REPORTS_ENDPOINT
+
+Uses the Reports team store and existing role checks. Does not send notifications. Invitations confer editor access when accepted; preserve tokens privately.
+```
+
+## teams remove-member
+
+```text
+Remove a member from a team
+
+USAGE  ape-reports teams remove-member <team-id> <email>
+
+OPTIONS
+  --help  Show root or command help
+  --json  Structured stdout; errors on stderr
+  --quiet  Suppress progress, not results or errors
+  --endpoint <value>  Reports service; default https://report.openape.ai; APE_REPORTS_ENDPOINT
+
+Uses the Reports team store and existing role checks. Does not send notifications. Invitations confer editor access when accepted; preserve tokens privately.
+```
+
+## teams archive
+
+```text
+Archive a team
+
+USAGE  ape-reports teams archive <team-id>
+
+OPTIONS
+  --help  Show root or command help
+  --json  Structured stdout; errors on stderr
+  --quiet  Suppress progress, not results or errors
+  --endpoint <value>  Reports service; default https://report.openape.ai; APE_REPORTS_ENDPOINT
+
+Uses the Reports team store and existing role checks. Does not send notifications. Invitations confer editor access when accepted; preserve tokens privately.
+```
+
+## teams unarchive
+
+```text
+Restore an archived team
+
+USAGE  ape-reports teams unarchive <team-id>
+
+OPTIONS
+  --help  Show root or command help
+  --json  Structured stdout; errors on stderr
+  --quiet  Suppress progress, not results or errors
+  --endpoint <value>  Reports service; default https://report.openape.ai; APE_REPORTS_ENDPOINT
+
+Uses the Reports team store and existing role checks. Does not send notifications. Invitations confer editor access when accepted; preserve tokens privately.
+```
+
+## teams rm
+
+```text
+Delete a team; refuses remaining plans unless forced
+
+USAGE  ape-reports teams rm <team-id>
+
+OPTIONS
+  --help  Show root or command help
+  --json  Structured stdout; errors on stderr
+  --quiet  Suppress progress, not results or errors
+  --endpoint <value>  Reports service; default https://report.openape.ai; APE_REPORTS_ENDPOINT
+  --force  Also soft-delete remaining legacy plans
+
+Uses the Reports team store and existing role checks. Does not send notifications. Invitations confer editor access when accepted; preserve tokens privately.
 ```
 
 ## access
