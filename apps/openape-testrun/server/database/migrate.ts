@@ -1,4 +1,5 @@
 import type { Client, Transaction } from '@libsql/client'
+import { migrateHtmlReports } from './html-migration'
 
 async function addColumn(tx: Transaction, table: string, name: string, definition: string) {
   const columns = await tx.execute(`PRAGMA table_info(${table})`)
@@ -76,6 +77,7 @@ export async function migrateReports(client: Client) {
       'CREATE INDEX IF NOT EXISTS idx_assets_run_path ON assets(run_id, path)',
       'CREATE INDEX IF NOT EXISTS idx_run_versions_run ON run_versions(run_id, version)',
     ]) await tx.execute(statement)
+    await migrateHtmlReports(tx)
     await tx.commit()
   }
   catch (error) {

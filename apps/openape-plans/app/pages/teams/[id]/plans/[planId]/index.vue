@@ -10,6 +10,7 @@ const teamId = computed(() => String(route.params.id))
 const planId = computed(() => String(route.params.planId))
 
 interface Plan {
+  version?: number
   id: string
   team_id: string
   title: string
@@ -64,7 +65,7 @@ async function changeStatus(next: Plan['status']) {
   try {
     plan.value = await apiFetch(`/api/plans/${planId.value}`, {
       method: 'PATCH',
-      body: { status: next },
+      body: { expected_version: plan.value?.version, status: next },
     }) as Plan
   }
   catch (err: unknown) {
@@ -77,7 +78,7 @@ async function deletePlan() {
   if (!plan.value) return
   if (!confirm(`Delete "${plan.value.title}"? This can only be undone from the DB.`)) return
   try {
-    await apiFetch(`/api/plans/${planId.value}`, { method: 'DELETE' })
+    await apiFetch(`/api/plans/${planId.value}`, { method: 'DELETE', body: { expected_version: plan.value?.version } })
     await navigateTo(`/teams/${teamId.value}`)
   }
   catch (err: unknown) {

@@ -22,6 +22,7 @@ interface PlanSummary {
 }
 
 interface PlanFull extends PlanSummary {
+  version?: number
   body_md: string
   created_at: number
 }
@@ -268,7 +269,7 @@ export const editCommand = defineCommand({
 
     const updated = await apiCall<PlanFull>('PATCH', `/api/plans/${args.planId}`, {
       endpoint: args.endpoint,
-      body: patch,
+      body: { ...patch, expected_version: current.version },
     })
     if (args.json) { printJson(updated); return }
     printLine(`updated ${updated.id}`)
@@ -296,9 +297,10 @@ export const statusCommand = defineCommand({
     if (!VALID_STATUS.includes(args.status as PlanStatus)) {
       throw createApiError(400, `Invalid status "${args.status}"`, `Valid: ${VALID_STATUS.join(', ')}.`)
     }
+    const current = await apiCall<PlanFull>('GET', `/api/plans/${args.planId}`, { endpoint: args.endpoint })
     await apiCall('PATCH', `/api/plans/${args.planId}`, {
       endpoint: args.endpoint,
-      body: { status: args.status },
+      body: { status: args.status, expected_version: current.version },
     })
     printLine(`${args.planId} → ${args.status}`)
   },
@@ -321,7 +323,8 @@ export const rmCommand = defineCommand({
     endpoint: { type: 'string', description: 'Override plans endpoint.' },
   },
   async run({ args }) {
-    await apiCall('DELETE', `/api/plans/${args.planId}`, { endpoint: args.endpoint })
+    const current = await apiCall<PlanFull>('GET', `/api/plans/${args.planId}`, { endpoint: args.endpoint })
+    await apiCall('DELETE', `/api/plans/${args.planId}`, { endpoint: args.endpoint, body: { expected_version: current.version } })
     printLine(`deleted ${args.planId}`)
   },
 })
