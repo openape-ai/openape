@@ -58,6 +58,8 @@ export async function listTeams(db: Client, identity: ReportIdentity, archived: 
   return results
 }
 async function removeTeam(tx: Transaction, id: string, force: boolean, now: number) {
+  const shared = await row(tx, 'SELECT COUNT(*) AS count FROM html_documents WHERE team_id=? AND audience=\'team\' AND legacy_plan_id IS NULL AND purged_at IS NULL AND removed_at IS NULL AND (expires_at IS NULL OR expires_at>?)', [id, now])
+  if (Number(shared?.count ?? 0)) throw new ReportError('CONFLICT', 'Team has shared reports that are still live; list reports by team and ask their owners to change access before deleting the team', 409)
   const active = await row(tx, 'SELECT COUNT(*) AS count FROM html_documents WHERE team_id=? AND legacy_plan_id IS NOT NULL AND purged_at IS NULL AND removed_at IS NULL AND (expires_at IS NULL OR expires_at>?)', [id, now])
   const count = Number(active?.count ?? 0)
   if (count && !force) throw new ReportError('CONFLICT', 'Team has plans; use force=true to remove them', 409)

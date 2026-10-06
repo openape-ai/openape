@@ -6,6 +6,7 @@ import { inspectHtml, invalid, ReportError } from '@openape/report-contracts/htm
 import { parseReportsArgs, reportsHelp } from './reports-options'
 import { reportsClient } from './reports-client'
 import { openReportUrl, previewReport } from './reports-preview'
+import { runTeamCommand } from './reports-teams'
 import { version } from '../package.json'
 
 type Values = Record<string, string | boolean | string[] | undefined>
@@ -74,12 +75,17 @@ export async function runReports(argv: string[]) {
   if (values.help) { process.stdout.write(`${reportsHelp(command || undefined)}\n`); return }
   if (values.version) { process.stdout.write(`${version}\n`); return }
   const positional = parsed.positionals
+  if (command.startsWith('teams ')) {
+    const result = await runTeamCommand(command, positional, values)
+    process.stdout.write(`${JSON.stringify(result, null, values.json ? undefined : 2)}\n`)
+    return
+  }
   const policy = ['access', 'retention'].includes(command)
   const expected = policy ? 2 : ['preview', 'publish', 'update', 'show', 'history', 'open', 'export', 'rm', 'restore'].includes(command) ? 1 : 0
   if (command !== 'docs' && positional.length !== expected) invalid(`Expected: ${reportsHelp(command).split('\n').find(line => line.startsWith('USAGE'))}`)
   if (command === 'docs') {
     const topic = positional[0]
-    const topics: Record<string, string> = { 'getting-started': 'Write one HTML file. Run preview, publish with a stable key, then show or open the receipt URL. Default private/permanent.', html: 'Embed CSS, JavaScript, data, raster images, SVG, canvas and fonts. Maximum HTML: 20 MiB, each embedded resource: 8 MiB. External HTTPS images load only in the reader browser; Reports never fetches them. Active code is publisher-trusted and may transmit document data despite browser defenses.', metadata: 'title and html lang supply defaults. Optional script#openape-report type=application/json contains category, tags and metadata. Flags override embedded values; repeated --meta replaces individual keys. Metadata cannot configure identity, audience or lifetime.', versions: 'Updates require document ID and expected version. Stable links follow latest; exact URLs/digests remain unchanged. Retain keys and exact bytes after uncertainty; conflicts require explicit reconciliation.', auth: 'apes login <email> once. Existing audience testrun.openape.ai is preserved. Series-bound publishers cannot administer access or lifetime.', sharing: 'Private owner-only by default; choose multiple verified-email readers, one existing team or public. Public includes history. Revocation applies to every version; downloaded copies cannot be recalled. No notification is sent.', retention: 'Permanent by default. Explicit m/h/d durations use server time. Expiry denies reads without cleanup. Recover within 30 days with a new explicit lifetime, initially owner-only. Online content is then purged; backup retention is separate.', templates: 'Optional local templates belong with repositories, skills or Pods. Publish only the resulting HTML. No template registry, manifest or asset upload is required.', 'test-runs': 'Publish actual commands, tested SHA, pass/fail/skip outcomes and personally inspected screenshots under Test Runs. Embed material evidence images. ape-testruns upload remains compatible.', plans: 'Use category Plans and optional plans.status metadata. Status is not approval. Record explicit owner decisions and exact approved versions. Legacy Plans source editing uses its compatibility renderer and version checks.', errors: 'Exit 0 success; 1 unexpected; 2 usage/validation; 3 authentication; 4 permission; 5 not found/gone; 6 conflict; 7 transport/service. JSON errors go to stderr. Never resolve uncertain writes with a new key.' }
+    const topics: Record<string, string> = { 'getting-started': 'Write one HTML file. Run preview, publish with a stable key, then show or open the receipt URL. Default private/permanent.', html: 'Embed CSS, JavaScript, data, raster images, SVG, canvas and fonts. Maximum HTML: 20 MiB, each embedded resource: 8 MiB. External HTTPS images load only in the reader browser; Reports never fetches them. Active code is publisher-trusted and may transmit document data despite browser defenses.', metadata: 'title and html lang supply defaults. Optional script#openape-report type=application/json contains category, tags and metadata. Flags override embedded values; repeated --meta replaces individual keys. Metadata cannot configure identity, audience or lifetime.', versions: 'Updates require document ID and expected version. Stable links follow latest; exact URLs/digests remain unchanged. Retain keys and exact bytes after uncertainty; conflicts require explicit reconciliation.', auth: 'apes login <email> once. Existing audience testrun.openape.ai is preserved. Series-bound publishers cannot administer access or lifetime.', sharing: 'Private owner-only by default; choose multiple verified-email readers, one existing team or public. Public includes history. Revocation applies to every version; downloaded copies cannot be recalled. No notification is sent.', retention: 'Permanent by default. Explicit m/h/d durations use server time. Expiry denies reads without cleanup. Recover within 30 days with a new explicit lifetime, initially owner-only. Online content is then purged; backup retention is separate.', templates: 'Use ape-report-render plan input.json output.html (openape.plan/1) or ape-report-render test-run testrun.json output.html. Offline; screenshots embedded; --overwrite required to replace output. See the installed RENDERING.md and examples. Publish only the resulting HTML.', 'test-runs': 'Publish actual commands, tested SHA, pass/fail/skip outcomes and personally inspected screenshots under Test Runs. Embed material evidence images. ape-testruns upload is deprecated but remains compatible during migration.', plans: 'Use category Plans and optional plans.status metadata. Status is not approval. Record explicit owner decisions and exact approved versions. Render locally with ape-report-render plan input.json output.html, then publish or replace HTML with an expected version. Manage teams through ape-reports teams. Legacy source editing remains compatible during migration.', errors: 'Exit 0 success; 1 unexpected; 2 usage/validation; 3 authentication; 4 permission; 5 not found/gone; 6 conflict; 7 transport/service. JSON errors go to stderr. Never resolve uncertain writes with a new key.' }
     if (positional.length > 1 || (topic && !topics[topic])) invalid('Unknown documentation topic')
     process.stdout.write(`${values.json ? JSON.stringify(topic ? { topic, text: topics[topic] } : { topics: Object.keys(topics) }) : topic ? topics[topic] : Object.keys(topics).join('\n')}\n`); return
   }
@@ -151,7 +157,10 @@ export async function runReports(argv: string[]) {
   else if (command === 'list') {
     result = await request('GET', `/api/documents${queryString(values, ['search', 'category', 'team', 'series-id', 'deleted', 'limit', 'cursor'])}`)
   }
-  else if (['categories', 'tags', 'teams'].includes(command)) {
+  else if (command === 'teams') {
+    result = await request('GET', `/api/documents/teams${queryString(values, ['limit', 'cursor'])}`)
+  }
+  else if (['categories', 'tags'].includes(command)) {
     result = await request('GET', `/api/documents/${command}${queryString(values, ['search', 'category', 'team', 'limit', 'cursor'])}`)
   }
   else if (command === 'history') {

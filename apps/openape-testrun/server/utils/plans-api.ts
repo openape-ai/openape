@@ -12,19 +12,21 @@ import { row, transaction } from './html-store'
 import { deletePlan, listPlans, member, readPlan, writePlan } from './plans-store'
 import { acceptPlanInvite, listTeams, mutateTeam, previewPlanInvite, teamDetail } from './plans-teams'
 
-async function handle(event: H3Event) {
+async function handle(event: H3Event, teamsOnly = false) {
   privateReportHeaders(event); limitReportRequests(event)
   const config = useRuntimeConfig()
-  if (String(config.plansConsolidated) !== 'true') throw new ReportError('UNAVAILABLE', 'Plans consolidation is not enabled', 503)
-  const url = getRequestURL(event); const prefix = '/api/plans-compat'; const path = url.pathname.slice(prefix.length) + url.search
+  if (!teamsOnly && String(config.plansConsolidated) !== 'true') throw new ReportError('UNAVAILABLE', 'Plans consolidation is not enabled', 503)
+  const url = getRequestURL(event); const prefix = teamsOnly ? '/api' : '/api/plans-compat'; const path = url.pathname.slice(prefix.length) + url.search
   const parts = url.pathname.slice(prefix.length).split('/').filter(Boolean).map(decodeURIComponent)
   const [resource, id, action] = parts; const method = getMethod(event); const db = useDatabaseClient(); const query = getQuery(event)
+  if (teamsOnly && (!['teams', 'invites'].includes(resource ?? '') || action === 'plans')) throw new ReportError('NOT_FOUND', 'Unknown Reports team operation', 404)
   if (parts.length > 4) invalid('Invalid compatibility path')
   const preview = resource === 'invites' && method === 'GET' && Boolean(id) && parts.length === 2
   let raw = ''; let data: unknown = {}
   if (!['GET', 'HEAD'].includes(method) && (getHeader(event, 'content-length') !== '0') && getHeader(event, 'content-type')) ({ raw, data } = await readReportBody(event, HTML_LIMIT * 2))
   let identity: ReportIdentity | null
   const bridge = getHeader(event, 'x-openape-plans-bridge')
+  if (bridge && teamsOnly) throw new ReportError('UNAUTHORIZED', 'Native Reports team routes require Reports authentication', 401)
   if (bridge) {
     try { identity = await verifyPlansBridge(String(config.plansBridgeSecret), bridge, method, path, raw) }
     catch { throw new ReportError('UNAUTHORIZED', 'Invalid Plans compatibility assertion', 401) }
@@ -33,7 +35,7 @@ async function handle(event: H3Event) {
     identity = preview ? null : await reportOwner(event, method === 'GET' ? 'reports:read' : 'reports:manage')
   }
   if (!identity && !preview) throw new ReportError('UNAUTHORIZED', 'Authentication required', 401)
-  if (method !== 'GET' && String(config.plansWritesFrozen) === 'true') throw new ReportError('UNAVAILABLE', 'Plans writes are temporarily frozen for reconciliation', 503)
+  if (method !== 'GET' && (String(config.plansWritesFrozen) === 'true' || (teamsOnly && String(config.htmlWritesFrozen) === 'true'))) throw new ReportError('UNAVAILABLE', 'Plans writes are temporarily frozen for reconciliation', 503)
   const secret = String(config.plansInviteSecret); const now = Date.now()
   if (preview) return previewPlanInvite(db, id!, secret, now)
   const caller = identity!
@@ -81,5 +83,10 @@ async function handle(event: H3Event) {
 }
 export async function plansApi(event: H3Event) {
   try { return await handle(event) }
+  catch (error) { htmlProblem(error) }
+}
+
+export async function reportsTeamsApi(event: H3Event) {
+  try { return await handle(event, true) }
   catch (error) { htmlProblem(error) }
 }

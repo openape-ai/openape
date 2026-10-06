@@ -1,7 +1,7 @@
 # OpenApe Reports CLI
 
 This package provides `ape-reports` for finished HTML documents and the compatible
-`ape-testruns` uploader. The single-file commands are available in the published 0.4.0 release.
+`ape-testruns` uploader. The package also provides `ape-report-render` for local Plan and Test Run templates.
 Reports and migrated Plans use the same production collection; legacy uploads
 and Plans URLs remain compatible.
 
@@ -72,12 +72,47 @@ ape-reports history DOCUMENT_ID
 ape-reports export DOCUMENT_ID --revision 1 --output ./saved.html
 ```
 
-An optional local renderer is included: `node examples/render-plan.mjs input.json
-plan.html`, where input contains `title` and `description` strings. It escapes input
-and creates a new single HTML file without overwriting an existing output. Keep
-custom templates with their repository, skill or Pod. Changing a template affects
-only later publications. Plans status is plain metadata and never owner approval;
-record explicit approval separately, with the version or digest it approved.
+## Render the approved templates locally
+
+```sh
+ape-report-render test-run ./run/testrun.json ./verification.html --commit COMMIT --command 'pnpm test' --environment local
+ape-report-render plan ./plan.json ./plan.html
+ape-reports preview ./verification.html --check
+ape-reports publish ./verification.html --category 'Test Runs' --key verification-COMMIT
+ape-reports publish ./plan.html --category Plans --team TEAM_ID --key plan-v1
+```
+
+The renderer is offline and does not execute tests or publish. Test Runs accept the
+existing manifest; raster screenshots are resolved relative to that JSON file and
+embedded. Missing images, escaping paths, invalid image types and size violations
+fail before writing. Outputs are created exclusively; replacement requires
+`--overwrite`. Skipped tests remain visible and never imply complete verification.
+The renderer preserves normalized input in an inert JSON block for future editing.
+
+Plans use `openape.plan/1`; see [input contract](RENDERING.md) and the installed
+`examples/plan.json`. Decisions, milestones, acceptance criteria, risks, verification
+and explicit approval have separate fields. `plans.status` is metadata, never approval.
+The examples are synthetic, not evidence that your project passed. Both templates
+include their CSS, work offline, adapt to small screens and support light/dark themes.
+Their implementation lives in this package; changing a template affects later output,
+never previously published immutable documents.
+
+## Manage teams
+
+```sh
+ape-reports teams
+ape-reports teams create 'Project team'
+ape-reports teams members TEAM_ID
+ape-reports teams invite TEAM_ID --max-uses 1 --expires-in 24h
+ape-reports teams accept INVITATION_URL
+ape-reports teams update TEAM_ID --name 'New name'
+```
+
+The native Reports commands preserve the existing team store, roles, invitations,
+archive and deletion semantics. Invitation URLs contain private tokens. No command
+sends invitations automatically. See `ape-reports teams --help` and the generated
+reference for all operations. Unlike the old CLI's `teams use`, publication always
+requires an explicit `--team`; the default remains private.
 
 ## Versions, retries and policy
 
@@ -109,7 +144,8 @@ a minimal retry tombstone prevents resurrection. Backups have separate retention
 
 ## Compatibility
 
-Existing `ape-testruns upload` accepts its existing manifest and screenshots; its old
+Existing `ape-testruns upload` is deprecated; render and publish HTML for new work.
+It still accepts its existing manifest and screenshots; its old
 links remain valid. Version-1 publishers and daily briefing receipts retain their
 existing contracts. New HTML publication creates no companion assets.
 

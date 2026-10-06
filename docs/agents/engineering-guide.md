@@ -36,9 +36,9 @@ packages/         # Publishable libraries
   protocol-conformance/  # @openape/protocol-conformance — DDISA conformance suite (private)
   ape-troop/      # @openape/ape-troop — owner CLI for troop.openape.ai (nests + agents)
   ape-tasks/      # @openape/ape-tasks — CLI for tasks.openape.ai
-  ape-testruns/   # @openape/ape-testruns — CLI for testrun.openape.ai
+  ape-testruns/   # ape-reports and ape-report-render — HTML publication and templates
   ape-pr/         # @openape/ape-pr — CLI for pr.openape.ai
-  ape-plans/      # @openape/ape-plans — CLI for plans.openape.ai
+  ape-plans/      # Deprecated compatibility CLI; use ape-reports
   ape-timetrack/  # @openape/ape-timetrack — CLI for timetrack.openape.ai
   ape-crm/        # @openape/ape-crm — CLI for crm.openape.ai
 
@@ -308,3 +308,12 @@ Liste prüfen:
 3. Akzeptiert der Endpoint User-Input? → Input Validation + Body Limit
 4. Ist der Endpoint Brute-Force-gefährdet? → Rate Limiting
 5. Gibt der Endpoint Secrets zurück? → Cache-Control: no-store
+
+## Report templates
+
+Render actual evidence with `ape-report-render test-run run/testrun.json report.html`,
+inspect the screenshots and publish with `ape-reports publish report.html --category
+'Test Runs' --key RUN_KEY`. Plans use `ape-report-render plan plan.json plan.html`
+and category `Plans`. Read `packages/ape-testruns/RENDERING.md` for the input contract.
+Keep commands, tested commit, outcomes and limitations accurate. Default publication
+is private; status metadata never grants access or records owner approval.

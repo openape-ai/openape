@@ -4,7 +4,7 @@ import { generateKeyPairSync } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { keyObjectToSshString } from 'openape-e2e/constants'
 import { startIdp } from 'openape-e2e/idp-fixture'
 import { loginWithSshKey } from 'openape-e2e/key-auth'
@@ -13,11 +13,11 @@ import { DdisaAgentTokens } from '../../openape-pods/src/main/programs/ddisa-age
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const workspace = resolve(root, '../..')
-const directory = makeTempDir('reports-cli-e2e-')
+let directory: string
 const owner = 'owner@reports.test'
 const managementToken = 'reports-cli-disposable-management'
 const bridgeSecret = 'reports-plans-bridge-synthetic-secret-1429'
-const cliHome = join(directory, 'auth')
+let cliHome: string
 let idp: RunningServer; let reports: RunningServer; let plans: RunningServer
 let reportsToken = ''; let plansToken = ''
 function run(binary: 'reports' | 'plans', args: string[], expected = 0) {
@@ -39,7 +39,9 @@ function run(binary: 'reports' | 'plans', args: string[], expected = 0) {
 async function api(service: RunningServer, token: string, method: string, path: string, body?: unknown) {
   return fetch(`${service.url}${path}`, { method, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body), redirect: 'manual' })
 }
-beforeAll(async () => {
+beforeEach(async () => {
+  directory = makeTempDir('reports-cli-e2e-')
+  cliHome = join(directory, 'auth')
   idp = await startIdp({ managementToken, ddisaMockRecords: { 'reports.test': { version: 'ddisa1', idp: 'https://idp.reports.test', mode: 'open' } } })
   const common = { NUXT_IGNORE_LOCK: '1', NUXT_OPENAPE_SP_SESSION_SECRET: 'disposable-cli-session-secret-at-least-32-characters', NUXT_FALLBACK_IDP_URL: idp.url, OPENAPE_SP_ALLOW_INSECURE_IDP: '1', DDISA_MOCK_RECORDS: JSON.stringify({ 'reports.test': { version: 'ddisa1', idp: idp.url, mode: 'open' } }) }
   reports = await startServer({ cwd: root, readyPath: '/api/health', timeoutMs: 180000, env: ({ url }) => ({ ...common, NUXT_TURSO_URL: `file:${join(directory, 'reports.db')}`, NUXT_OPENAPE_SP_CLIENT_ID: new URL(url).host, NUXT_PUBLIC_URL: url, NUXT_HTML_PUBLISHING_ENABLED: 'true', NUXT_PLANS_CONSOLIDATED: 'true', NUXT_PLANS_BRIDGE_SECRET: bridgeSecret, NUXT_PLANS_INVITE_SECRET: 'synthetic-plans-invites-secret-at-least-32' }) })
@@ -60,7 +62,7 @@ beforeAll(async () => {
     writeFileSync(join(cliHome, 'sp-tokens', `${audience}.json`), JSON.stringify({ aud: audience, endpoint: service.url, access_token: token, expires_at: Math.floor(Date.now() / 1000) + 3600 }), { mode: 0o600 })
   }
 }, 300000)
-afterAll(async () => { await plans?.stop(); await reports?.stop(); await idp?.stop() })
+afterEach(async () => { await plans?.stop(); await reports?.stop(); await idp?.stop() })
 
 describe('built CLI and Plans compatibility journeys', () => {
   it('publishes three single files, discovers shared tags, exports immutable bytes and rejects stale writes', () => {
@@ -84,6 +86,51 @@ describe('built CLI and Plans compatibility journeys', () => {
     run('reports', ['rm', id, '--expected-version', '2'])
     run('reports', ['restore', id, '--permanent'])
     expect(run('reports', ['access', 'show', id])).toMatchObject({ audience: 'private' })
+  })
+  it('manages teams through native Reports routes while retaining legacy reads', async () => {
+    const team = run('reports', ['teams', 'create', 'Native Reports team', '--description', 'Synthetic round trip'])
+    expect(team.id).toBeTruthy()
+    expect(run('reports', ['teams', 'members', team.id])).toEqual(expect.arrayContaining([expect.objectContaining({ email: owner, role: 'owner' })]))
+    run('reports', ['teams', 'update', team.id, '--name', 'Renamed Reports team'])
+    expect(run('reports', ['teams', 'show', team.id]).name).toBe('Renamed Reports team')
+    const invite = run('reports', ['teams', 'invite', team.id, '--max-uses', '1', '--expires-in', '1h'])
+    expect(run('reports', ['teams', 'accept', invite.url])).toMatchObject({ team_id: team.id, already_member: true })
+    const secondEmail = 'editor@reports.test'
+    const secondKey = generateKeyPairSync('ed25519')
+    const secondPublicKey = keyObjectToSshString(secondKey.publicKey, secondEmail)
+    for (const [path, body] of [['/api/admin/users', { email: secondEmail, name: 'Synthetic editor', password: 'synthetic-test-password' }], [`/api/admin/users/${secondEmail}/ssh-keys`, { publicKey: secondPublicKey, name: 'Fixture' }]] as const) {
+      const response = await fetch(`${idp.url}${path}`, { method: 'POST', headers: { authorization: `Bearer ${managementToken}`, 'content-type': 'application/json' }, body: JSON.stringify(body) })
+      expect(response.status, await response.text()).toBeLessThan(300)
+    }
+    const secondRaw = await loginWithSshKey(idp.url, secondEmail, secondKey.privateKey, secondPublicKey)
+    const secondExchange = await api(reports, '', 'POST', '/api/cli/exchange', { subject_token: secondRaw })
+    expect(secondExchange.status).toBe(201)
+    const secondToken = (await secondExchange.json()).access_token
+    expect((await api(reports, secondToken, 'PATCH', `/api/teams/${team.id}`, { name: 'Denied outsider' })).status).toBe(403)
+    const accepted = await api(reports, secondToken, 'POST', '/api/invites/accept', { token: invite.token })
+    expect(accepted.status).toBe(200)
+    expect(await accepted.json()).toMatchObject({ team_role: 'editor', already_member: false })
+    expect((await api(reports, secondToken, 'PATCH', `/api/teams/${team.id}`, { name: 'Denied editor' })).status).toBe(403)
+    expect(run('reports', ['teams', 'members', team.id])).toHaveLength(2)
+    run('reports', ['teams', 'remove-member', team.id, secondEmail])
+    expect((await api(reports, secondToken, 'GET', `/api/teams/${team.id}`)).status).toBe(403)
+    run('reports', ['teams', 'revoke-invite', invite.id])
+    expect(run('reports', ['teams', 'invites', team.id])).toEqual([])
+    run('reports', ['teams', 'archive', team.id])
+    expect(run('reports', ['teams', '--limit', '1']).items).toEqual([expect.objectContaining({ id: team.id, archived_at: expect.any(Number) })])
+    run('reports', ['teams', 'unarchive', team.id])
+    expect(run('plans', ['teams', 'show', team.id]).name).toBe('Renamed Reports team')
+    expect((await fetch(`${reports.url}/api/teams/${team.id}`)).status).toBe(401)
+    expect((await api(reports, reportsToken, 'POST', `/api/teams/${team.id}/plans`, { title: 'No legacy writes on native teams' })).status).toBe(404)
+    const shared = run('reports', ['publish', join(workspace, 'packages/ape-testruns/examples/analysis.html'), '--team', team.id, '--key', 'native-team-report'])
+    expect(run('reports', ['teams', 'rm', team.id], 6).error.message).toContain('shared reports')
+    expect(run('reports', ['teams', 'rm', team.id, '--force'], 6).error.message).toContain('shared reports')
+    run('reports', ['access', 'set', shared.document_id, '--private', '--expected-access-revision', '1'])
+    const removed = run('reports', ['publish', join(workspace, 'packages/ape-testruns/examples/analysis.html'), '--team', team.id, '--key', 'removed-team-report'])
+    run('reports', ['rm', removed.document_id, '--expected-version', '1'])
+    run('reports', ['teams', 'rm', team.id])
+    run('reports', ['restore', removed.document_id, '--permanent'])
+    expect(run('reports', ['access', 'show', removed.document_id])).toMatchObject({ audience: 'private' })
   })
   it('routes old URLs and versioned source writes through one store without opening the legacy database', async () => {
     const teamResponse = await api(plans, plansToken, 'POST', '/api/teams', { name: 'Compatibility fixture' })

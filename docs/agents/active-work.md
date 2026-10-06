@@ -1,5 +1,14 @@
 # Active work
 
+## Report templates and CLI migration — issue 1437
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1437; approved design: https://report.openape.ai/d/01M49MYRK3TBJ850CR0S0GYGQW; implementation plan: https://report.openape.ai/d/01M49KKGQCJP11RP8XQQT75835.
+- Owner approved implementation on October 7. Worktree `issue-1437-report-templates`, branch `feature/issue-1437-report-templates`, base `6a8ad37b329e95703d01e04cc5193604f3a0b32f`.
+- Implemented offline Plan/Test Run renderer, embedded raster evidence, input validation, approval separation, native Reports team CLI/API, deprecation notices and producer/guidance migration. Legacy read/write compatibility remains until its conditional retirement gate is met.
+- Checks so far: root lint 55 tasks, typecheck 78 tasks, Reports build, 15 CLI/renderer tests, 79 Reports unit tests, four isolated real-auth CLI/compatibility journeys. Desktop/mobile light/dark template screenshots, expanded passing state and print-CSS harness inspected. Claude Code Opus 5.5 independently reviewed code and UI twice; confirmed findings corrected, including exact Markdown evidence, team list compatibility and deletion policy. Final-head checks precede merge.
+- [Producer inventory and observation rules](../operations/report-templates.md): retrospective server access logs are unavailable; remaining project callers and eleven unavailable network-member source reads prevent a complete inventory. No seven-day quiet period is claimed.
+- Next: finish review and exact-source gates, release/install the CLI and deploy the Reports team/observation routes; record receipts on the PR/issue after merge. Keep retirement pending with its evidence requirements.
+
 ## Reports redesign — issue 1433
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1433; plan: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M48ZTNG1PGJZ65AYX4QDHNHN (owner-approved October 6, 2026); approved prototype copy: https://report.openape.ai/d/01M48ZPPY22PGEDKFX64H6YRKD.
