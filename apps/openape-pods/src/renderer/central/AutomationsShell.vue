@@ -15,6 +15,7 @@ import type { WorkflowCommand } from '../../contracts/workflows'
 import type { CentralCommand } from '../../contracts/central'
 import AutomationsList from './AutomationsList.vue'
 import AutomationsMap from './AutomationsMap.vue'
+import CodexHandoff from './CodexHandoff.vue'
 import KpiRow from './KpiRow.vue'
 import type { Layers } from '../utils/automation-layout'
 import { ungrouped } from '../utils/automation-layout'
@@ -23,7 +24,7 @@ import { ungrouped } from '../utils/automation-layout'
  * The two product surfaces behind one tab bar: Automatisierungen (this file) and Entscheidungen
  * (the `decisions` slot). Settings open from the gear; creation hands a brief to Codex.
  */
-const props = defineProps<{ view: MapView | null, live: boolean, now: number, decisions?: number, tab?: 'automations' | 'decisions', desktop?: boolean, inbox?: { choices: NetworkChoiceView[], gates: NetworkGateView[], graphGates: { batches: GateBatchView[], held: GateHeldItem[] } | null, proposals: AccessProposal[] } }>()
+const props = defineProps<{ view: MapView | null, live: boolean, now: number, decisions?: number, tab?: 'automations' | 'decisions', desktop?: boolean, codex?: 'connected' | 'disconnected', inbox?: { choices: NetworkChoiceView[], gates: NetworkGateView[], graphGates: { batches: GateBatchView[], held: GateHeldItem[] } | null, proposals: AccessProposal[] } }>()
 const emit = defineEmits<{ 'update:tab': [tab: 'automations' | 'decisions'], 'settings': [], 'codex': [pinned: string | null, group: string | null], 'command': [command: CentralCommand], 'network': [control: NetworkControl], 'workflow': [control: WorkflowControl], 'secret': [podId: string, alias: string | null], 'folder': [podId: string], 'networkCommand': [command: NetworkCommand], 'workflowCommand': [command: WorkflowCommand], 'master': [command: MasterCommand] }>()
 const mode = ref<'map' | 'list'>('map')
 const group = ref('all')
@@ -32,13 +33,14 @@ const playing = ref(true)
 const pinned = ref<string | null>(null)
 const hovered = ref<string | null>(null)
 const detail = ref<string | null>(null)
+const handoff = ref(false)
 const inboxView = ref<InstanceType<typeof DecisionsInbox> | null>(null)
 const waiting = computed(() => props.decisions ?? inboxView.value?.total ?? 0)
 const current = computed(() => props.tab ?? 'automations')
 const groups = computed(() => [...new Set([...props.view?.pods.map(pod => pod.group) ?? [], ...props.view?.collections.map(collection => collection.group) ?? []].filter((name): name is string => !!name))])
 const chips: { key: keyof Layers, label: string, color: string }[] = [{ key: 'channel', label: 'Channels', color: 'var(--accent)' }, { key: 'read', label: 'Read', color: 'var(--read)' }, { key: 'write', label: 'Write', color: 'var(--warn)' }, { key: 'auth', label: 'Approvals', color: 'var(--idp)' }, { key: 'paused', label: 'Paused', color: 'var(--muted)' }]
 function selectGroup(value: string) { group.value = value; pinned.value = null; hovered.value = null }
-function codex() { emit('codex', pinned.value, group.value === 'all' ? null : group.value === ungrouped ? t('without group') : group.value) }
+function openCodex() { handoff.value = true; emit('codex', pinned.value, group.value === 'all' ? null : group.value === ungrouped ? t('without group') : group.value) }
 defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: string | null) => { detail.value = id }, group, mode, layers })
 </script>
 
@@ -93,12 +95,12 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
             <button class="secondary" type="button" :title="t(playing ? 'Pause animation' : 'Resume animation')" @click="playing = !playing">
               {{ playing ? '❚❚' : '▶' }}
             </button>
-            <button class="secondary idp" type="button" @click="codex">
+            <button class="secondary idp" type="button" @click="openCodex">
               {{ t('New automation with Codex') }}
             </button>
           </div>
         </div>
-        <slot name="codex" />
+        <CodexHandoff v-if="handoff" :view="view" :pinned="pinned" :group="group === 'all' ? null : group === ungrouped ? t('without group') : group" :connected="codex === undefined ? null : codex === 'connected'" @close="handoff = false" @settings="emit('settings')" />
         <div class="automations-kindrow">
           <span class="automations-stamp" :class="{ live }">{{ live ? t('Live · {time}', { time: clock(now, language) }) : t('As of {time}', { time: clock(view.at, language) }) }}</span>
           <div class="kinds">
