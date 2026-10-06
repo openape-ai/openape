@@ -179,7 +179,10 @@ struct PodsRootView: View {
           }
           Section {
             Text(
-              "Revoking access blocks new remote commands. Authorized runs already started continue. Use Sign out to remove this device."
+              "Revoking access blocks new remote commands and new encrypted content. Authorized runs already started continue. Content already shown on a revoked device cannot be recalled. Use Sign out to remove this device."
+            )
+            Text(
+              "Your desktop and this device hold the content keys. The relay routes encrypted content and sees identities, device IDs, timing and sizes. Run approvals open your identity provider; model requests go to the provider configured on the desktop."
             )
           }
         }.navigationTitle("Device access")
