@@ -1,0 +1,8 @@
+{
+  "repository": "https://git.openape.ai/delta-mind/o365-cli.git",
+  "revision": "f3c2f71d6ce70f1c1bce028e2668ad66597e5d60",
+  "archiveSha256": "00407e4309730817b02e9b968ec84c724fbb9ea3f4f0b6704a181077fff5208e",
+  "go": "go1.26.0",
+  "protocol": 1,
+  "sourceArchive": "git archive of the exact reviewed commit, gzip with mtime zero; no local uncommitted files"
+}

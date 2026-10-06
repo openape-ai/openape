@@ -1,0 +1,365 @@
+<script setup lang="ts">
+import { chatModels, parseChatModel } from '../contracts/models'
+import type { ChatModel } from '../contracts/models'
+import ChangeReview from './ChangeReview.vue'
+import AccessProposals from './AccessProposals.vue'
+import { t, diagnostic, label } from './i18n'
+import { chatDraft } from './chat-buffer'
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import type { MasterCommand, MasterView } from '../contracts/master'
+
+const props = defineProps<{ podId: string | null, creationId?: string, conversationId?: string, bufferKey?: string }>()
+const emit = defineEmits<{ resources: [podId: string], settings: [podId: string, alias?: string], created: [podId: string], openChat: [id: string], context: [id: string], run: [podId: string, runId: string], workflow: [id: string] }>()
+const view = ref<MasterView | null>(null); const text = chatDraft(props.bufferKey ?? props.conversationId ?? props.podId ?? props.creationId ?? null); const error = ref(''); const busy = ref(false)
+const model = ref<ChatModel>('gpt-5.5')
+const history = ref<HTMLElement>(); const input = ref<HTMLTextAreaElement>(); const followLatest = ref(true)
+const palette = ref<'commands' | 'models' | null>(null)
+const modelQuery = ref(''); const modelIndex = ref(0)
+const modelSearch = ref<HTMLInputElement>(); const composer = ref<HTMLFormElement>()
+const slashToken = ref<{ start: number, end: number, text: string } | null>(null)
+const modelLocked = computed(() => busy.value || view.value?.state === 'running')
+const selectedModel = computed(() => chatModels.find(option => option.id === model.value)!.name)
+const filteredModels = computed(() => chatModels.filter(option => `${option.name} ${option.id}`.toLowerCase().includes(modelQuery.value.trim().toLowerCase())))
+function closePalette(): void { palette.value = null; slashToken.value = null }
+function slashAtCursor() {
+  const element = input.value
+  if (!element || element.selectionStart !== element.selectionEnd) return null
+  const end = element.selectionStart
+  if (text.value[end] && !/\s/.test(text.value[end]!)) return null
+  const match = text.value.slice(0, end).match(/(?:^|\s)\/(\w*)$/)
+  if (!match || !'model'.startsWith(match[1]!.toLowerCase())) return null
+  const start = end - match[1]!.length - 1
+  return { start, end, text: text.value.slice(start, end) }
+}
+function suggestCommand(): void {
+  slashToken.value = slashAtCursor()
+  palette.value = slashToken.value ? 'commands' : null
+}
+async function openModels(fromCommand = false): Promise<void> {
+  if (!fromCommand) slashToken.value = null
+  modelQuery.value = ''; modelIndex.value = chatModels.findIndex(option => option.id === model.value)
+  palette.value = 'models'
+  await nextTick(); modelSearch.value?.focus()
+  composer.value?.querySelector('[data-highlighted="true"]')?.scrollIntoView({ block: 'nearest' })
+}
+async function chooseModel(value: ChatModel): Promise<void> {
+  if (modelLocked.value) return
+  try { localStorage.setItem('pods-chat-model', value) }
+  catch (failure) { error.value = String(failure); return }
+  model.value = value
+  const token = slashToken.value
+  const cursor = token?.start ?? input.value?.selectionStart ?? text.value.length
+  if (token && text.value.slice(token.start, token.end) === token.text) text.value = text.value.slice(0, token.start) + text.value.slice(token.end)
+  closePalette()
+  await nextTick(); input.value?.focus(); input.value?.setSelectionRange(cursor, cursor)
+}
+async function modelKey(event: KeyboardEvent): Promise<void> {
+  if (event.isComposing || event.keyCode === 229) return
+  if (event.key === 'Escape') { event.preventDefault(); closePalette(); input.value?.focus(); return }
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    const option = filteredModels.value[modelIndex.value]
+    if (option) await chooseModel(option.id)
+    return
+  }
+  const count = filteredModels.value.length
+  if (!count || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+  event.preventDefault()
+  modelIndex.value = event.key === 'Home' ? 0 : event.key === 'End' ? count - 1 : (modelIndex.value + (event.key === 'ArrowDown' ? 1 : -1) + count) % count
+  await nextTick(); composer.value?.querySelector('[data-highlighted="true"]')?.scrollIntoView({ block: 'nearest' })
+}
+function leaveComposer(event: FocusEvent): void {
+  if (!(event.relatedTarget instanceof Node) || !composer.value?.contains(event.relatedTarget)) closePalette()
+}
+function dismissPalette(event: Event): void {
+  if (event.target instanceof Node && !composer.value?.contains(event.target)) closePalette()
+}
+watch(modelQuery, () => { modelIndex.value = 0 })
+const older = ref<MasterView['messages']>([]); const before = ref<number | null>(null)
+const otherActive = computed(() => !!view.value?.activeConversationId && view.value.activeConversationId !== view.value.conversation?.id)
+const messages = computed(() => {
+  const first = view.value?.initialRequest
+  const recent = [...older.value, ...view.value?.messages ?? []].filter(message => message.role !== 'tool' && message.id !== first?.id) ?? []
+  return first ? [first, ...recent] : recent
+})
+const activity = computed(() => [...older.value, ...view.value?.messages ?? []].filter(message => message.role === 'tool'))
+const canSend = computed(() => !palette.value && !busy.value && !!text.value.trim() && !!view.value?.connected && !otherActive.value)
+function trackScroll(): void {
+  const element = history.value
+  if (element) followLatest.value = element.scrollHeight - element.scrollTop - element.clientHeight < 64
+}
+async function scrollToLatest(): Promise<void> {
+  await nextTick()
+  if (history.value && followLatest.value) history.value.scrollTop = history.value.scrollHeight
+}
+watch(() => JSON.stringify([messages.value, view.value?.state, view.value?.proposals, view.value?.drafts, activity.value, view.value?.error, error.value]), scrollToLatest)
+watch(text, async () => {
+  await nextTick()
+  if (!input.value) return
+  input.value.style.height = 'auto'
+  input.value.style.height = `${Math.min(input.value.scrollHeight, 160)}px`
+}, { immediate: true })
+async function inputKey(event: KeyboardEvent): Promise<void> {
+  if (event.isComposing || event.keyCode === 229) return
+  if (palette.value === 'commands') {
+    if (event.key === 'Escape') { event.preventDefault(); closePalette(); return }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); return }
+    if ((event.key === 'Enter' || event.key === 'Tab') && !event.shiftKey) { event.preventDefault(); await openModels(true); return }
+  }
+  if (event.key !== 'Enter' || event.shiftKey) return
+  event.preventDefault()
+  await send()
+}
+let closed = false; let timer: ReturnType<typeof setTimeout> | undefined
+async function load(): Promise<void> {
+  const result = await window.pods.master({ type: 'list', podId: props.podId, ...(props.conversationId ? { conversationId: props.conversationId } : {}), ...(props.creationId ? { creationId: props.creationId } : {}) })
+  if (older.value.length) older.value = [...older.value, ...view.value?.messages ?? []].filter((message, index, all) => all.findIndex(item => item.id === message.id) === index)
+  older.value = older.value.filter(message => !result.messages.some(item => item.id === message.id))
+  view.value = result; if (!older.value.length) before.value = result.nextBefore ?? null
+  if (result.boundPodId) emit('created', result.boundPodId)
+}
+async function loadEarlier(): Promise<void> {
+  if (!before.value) return
+  try {
+    const result = await window.pods.master({ type: 'list', podId: props.podId, ...(view.value?.conversation && !props.creationId ? { conversationId: view.value.conversation.id } : {}), before: before.value })
+    older.value = [...result.messages, ...older.value]; before.value = result.nextBefore ?? null; followLatest.value = false
+  }
+  catch (failure) { error.value = String(failure) }
+}
+async function setupUpdated(): Promise<void> {
+  try { await load() }
+  catch (failure) { error.value = failure instanceof Error ? failure.message : 'Could not load master chat' }
+}
+async function resumeSetup(): Promise<void> {
+  await command({ type: 'send', id: crypto.randomUUID(), podId: props.podId, model: model.value, text: t('Continue setting up this pod. Inspect what is saved, finish the requested script and ask me for any missing information. Leave existing schedules unchanged and do not run the script.') })
+}
+async function refresh(): Promise<void> {
+  try { await load() }
+  catch (failure) { error.value = failure instanceof Error ? failure.message : 'Could not load master chat' }
+  if (!closed) timer = setTimeout(() => { void refresh() }, 500)
+}
+async function command(value: MasterCommand): Promise<void> {
+  busy.value = true; error.value = ''
+  try { view.value = await window.pods.master({ ...value, ...(view.value?.conversation && !props.creationId ? { conversationId: view.value.conversation.id, contextRevision: view.value.conversation.revision } : {}), ...(props.creationId ? { creationId: props.creationId } : {}) }); if ((value.type === 'send' || value.type === 'steer') && text.value === value.text) text.value = '' }
+  catch (failure) { error.value = failure instanceof Error ? failure.message : 'Master request failed' }
+  finally { busy.value = false }
+}
+async function send(): Promise<void> {
+  if (palette.value === 'models') return
+  const token = slashAtCursor()
+  if (token) { slashToken.value = token; await openModels(true); return }
+  if (!canSend.value) return
+  followLatest.value = true
+  await command({ type: view.value?.state === 'running' ? 'steer' : 'send', id: crypto.randomUUID(), text: text.value, podId: props.podId, model: model.value })
+  await scrollToLatest()
+}
+onMounted(async () => {
+  document.addEventListener('pointerdown', dismissPalette)
+  try { const saved = localStorage.getItem('pods-chat-model'); if (saved) model.value = parseChatModel(saved) }
+  catch (failure) { error.value = String(failure) }
+  if (props.creationId) {
+    try { await window.pods.master({ type: 'begin', id: props.creationId }) }
+    catch (failure) { error.value = String(failure); return }
+  }; await refresh()
+}); onBeforeUnmount(() => { closed = true; clearTimeout(timer); document.removeEventListener('pointerdown', dismissPalette) })
+</script>
+
+<template>
+  <div class="master-chat">
+    <div v-if="otherActive" role="status" class="chat-notice">
+      {{ t('Another chat is running') }} <button class="text-button" @click="emit('openChat', view!.activeConversationId!)">
+        {{ t('Open chat') }}
+      </button>
+    </div>
+    <div v-if="view?.conversation && !conversationId" class="context-chips">
+      <span v-if="view.conversation.context.workflow">{{ view.conversation.context.workflow.name }}</span><span v-for="pod in view.conversation.context.pods" :key="pod.id">{{ pod.name }}<span v-if="view.conversation.unavailablePodIds.includes(pod.id)"> · {{ t('Unavailable') }}</span></span><span v-if="view.conversation.workflowChanged">{{ t('Workflow changed. Use + to review its current members.') }}</span><span v-if="!view.conversation.context.pods.length">{{ t('Workspace context') }}</span>
+    </div>
+    <div ref="history" class="chat-scroll" @scroll="trackScroll">
+      <div class="chat-conversation">
+        <p v-if="view && !view.connected" class="muted chat-notice">
+          {{ t('Connect Codex to start a conversation. Your local history remains available.') }}
+        </p>
+        <p v-if="error || view?.error" role="alert" class="error-message">
+          {{ diagnostic(error || view?.error) }}
+        </p>
+        <section v-if="view?.adoption && podId" class="card">
+          <h3>{{ t('Recover creation chat') }}</h3><p>{{ t('These original requests can be linked to this pod. Review them before continuing.') }}</p>
+          <details>
+            <summary>{{ t('Review original requests') }}</summary><p v-for="request in view.adoption.requests" :key="request.id" class="master-text">
+              {{ request.text }}
+            </p>
+          </details>
+          <button :disabled="busy" @click="command({ type: 'adopt', podId, hash: view.adoption.hash })">
+            {{ t('Link this history to the pod') }}
+          </button>
+        </section>
+
+        <button v-if="before" class="text-button" @click="loadEarlier">
+          {{ t('Load earlier messages') }}
+        </button>
+        <p v-if="(view?.conversation?.revision ?? 1) > 1" class="context-notice">
+          {{ t('This context began with a fresh model session. Messages from earlier contexts stay readable here and are not sent again.') }}
+        </p>
+        <div class="master-history" role="log" :aria-label="t('Pod conversation')" aria-live="polite" aria-relevant="additions text">
+          <article v-for="message in messages" :key="message.id" class="master-message" :class="message.role" :aria-label="message.role === 'user' ? t('You') : t('Pod assistant')">
+            <small v-if="message.contextRevision" class="muted">{{ t('Context {p0}', { p0: message.contextRevision }) }}</small><p class="master-text">
+              {{ message.text }}
+            </p>
+          </article>
+        </div>
+        <div v-if="view && !messages.length && !view.proposals.length && view.state === 'idle'" class="chat-empty">
+          <h2>{{ t('How can I help?') }}</h2>
+          <p class="muted">
+            {{ t('Describe what you would like to do.') }}
+          </p>
+        </div>
+        <section v-if="view?.scriptState && (view.state === 'interrupted' || view.state === 'failed' || view.scriptState === 'missing')" class="setup-status" role="status">
+          <p>{{ t(view.scriptState === 'missing' ? 'No script has been saved for this pod yet.' : view.scriptState === 'draft' ? 'Your script draft is saved. Setup may still be incomplete.' : 'An active script is saved. The last conversation may be incomplete.') }}</p>
+          <p v-if="view.state === 'interrupted'">
+            {{ t('The response was interrupted. Saved settings are retained; announced changes may not have been saved.') }}
+          </p>
+        </section>
+        <details v-if="view?.drafts.length" class="chat-access">
+          <summary>{{ t('Saved Pod drafts') }}</summary><p v-for="draft in view.drafts" :key="draft.id">
+            <strong>{{ draft.name }}</strong> · {{ t(draft.validation ? 'Validated with synthetic services' : 'Unvalidated draft') }}<span v-if="draft.validationError" class="error-message"> · {{ diagnostic(draft.validationError) }}</span>
+          </p>
+        </details>
+        <ChangeReview v-if="view?.changes?.length" :view="view" :busy="busy" @command="command" @run="(podId, runId) => emit('run', podId, runId)" @workflow="id => emit('workflow', id)" />
+        <AccessProposals v-if="view?.proposals.length" :view="view" :busy="busy" @command="command" @updated="setupUpdated" @settings="(podId, alias) => emit('settings', podId, alias)" @resources="podId => emit('resources', podId)" />
+
+        <button v-if="view?.scriptState && view.state !== 'running' && (view.state === 'interrupted' || view.state === 'failed' || view.scriptState === 'missing' || view.proposals.length)" class="secondary" :disabled="busy || !view.connected" @click="resumeSetup">
+          {{ t('Continue setup') }}
+        </button>
+        <details v-if="activity.length || view?.drafts.length" class="chat-details">
+          <summary>{{ t('Technical details') }}</summary>
+          <details v-for="message in activity" :key="message.id" class="chat-activity">
+            <summary>{{ t('Inspect request and result') }} · {{ label(message.state) }}</summary>
+            <pre>{{ message.text }}</pre>
+          </details>
+          <section v-if="view?.drafts.length" :aria-label="t('Script drafts')">
+            <h3>{{ t("Script drafts") }}</h3><details v-for="draft in view.drafts" :key="draft.id" class="master-message">
+              <summary>{{ t("{p0} · revision {p1} · {p2}", { p0: draft.name, p1: draft.revision, p2: draft.validation ? t("Validated with synthetic services") : t("Unvalidated draft") }) }}</summary>
+              <p class="muted">
+                {{ t("Capabilities: {p0}", { p0: draft.capabilities.join(', ') || t("none") }) }}
+              </p><pre>{{ draft.code }}</pre><p v-if="draft.validation" class="muted">
+                {{ t("The script completed a bounded sandbox check with synthetic services. Real mail and model behavior still require verification.") }}
+              </p><details v-if="draft.validation">
+                <summary>{{ t("Validation details") }}</summary><pre>{{ draft.validation }}</pre>
+              </details>
+            </details>
+          </section>
+        </details>
+        <slot />
+        <p v-if="view?.state === 'running'" role="status" class="chat-status">
+          {{ t('Thinking…') }}
+        </p>
+        <p v-else-if="view?.state === 'interrupted'" role="status" class="chat-status">
+          {{ t('Response stopped.') }}
+        </p>
+      </div>
+    </div>
+    <form ref="composer" class="master-compose" @submit.prevent="send" @focusout="leaveComposer">
+      <div v-if="palette" class="composer-palette" :aria-label="t(palette === 'commands' ? 'Chat commands' : 'Choose model')">
+        <div v-if="palette === 'commands'" id="chat-command-options" role="listbox" :aria-label="t('Chat commands')">
+          <button id="model-command" type="button" role="option" aria-selected="true" class="command-option" @mousedown.prevent @click="openModels(true)">
+            <strong>{{ t('/model') }}</strong><span>{{ t('Choose model') }}</span><small>{{ selectedModel }}</small>
+          </button>
+        </div>
+        <template v-else>
+          <div class="palette-heading">
+            <strong>{{ t('Choose model') }}</strong><button type="button" class="text-button" :aria-label="t('Close model picker')" @click="closePalette(); input?.focus()">
+              ×
+            </button>
+          </div>
+          <input ref="modelSearch" v-model="modelQuery" role="combobox" :aria-label="t('Search models')" aria-autocomplete="list" aria-expanded="true" aria-controls="chat-model-options" :aria-activedescendant="filteredModels[modelIndex] ? `chat-model-${filteredModels[modelIndex]!.id}` : undefined" :placeholder="t('Search models…')" @keydown="modelKey">
+          <p v-if="modelLocked" class="palette-notice" role="status">
+            {{ t('Wait for the current response to finish before changing model.') }}
+          </p>
+          <div id="chat-model-options" class="model-options" role="listbox" :aria-label="t('Chat model')">
+            <button v-for="(option, index) in filteredModels" :id="`chat-model-${option.id}`" :key="option.id" type="button" role="option" :aria-selected="model === option.id" :data-highlighted="index === modelIndex" :disabled="modelLocked" tabindex="-1" @mousedown.prevent @click="chooseModel(option.id)">
+              <span>{{ option.name }}</span><span v-if="model === option.id" aria-hidden="true">✓</span>
+            </button>
+            <p v-if="!filteredModels.length" class="palette-notice" role="status">
+              {{ t('No matching models') }}
+            </p>
+          </div>
+        </template>
+      </div>
+      <label for="master-input" class="chat-sr-only">{{ t('Message') }}</label>
+      <textarea id="master-input" ref="input" v-model="text" rows="2" maxlength="20000" :placeholder="t('Write a message…')" :aria-expanded="palette === 'commands'" :aria-controls="palette === 'commands' ? 'chat-command-options' : undefined" @input="suggestCommand" @click="suggestCommand" @keydown="inputKey" />
+      <div class="compose-actions">
+        <button v-if="view?.conversation && !creationId" type="button" class="chat-add-context" :aria-label="t('Add context')" :title="t('Add context')" :disabled="busy || !!view.activeConversationId" @click="closePalette(); emit('context', view.conversation.id)">
+          +
+        </button>
+        <button type="button" class="composer-model" :aria-label="t('Chat model')" :title="t('Choose model with /model')" aria-haspopup="listbox" :aria-expanded="palette === 'models'" :disabled="modelLocked" @click="palette === 'models' ? closePalette() : openModels()">
+          {{ selectedModel }} <span aria-hidden="true">⌄</span>
+        </button>
+        <span class="compose-hint">{{ t('/ for commands') }}</span>
+        <button v-if="view?.state === 'running'" type="button" class="chat-stop" :disabled="busy" :aria-label="t('Stop response')" :title="t('Stop response')" @click="command({ type: 'cancel', podId: props.podId })">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" /></svg>
+        </button>
+        <button class="primary chat-send" :disabled="!canSend" :aria-label="t('Send')" :title="t('Send')">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5m-6 6 6-6 6 6" /></svg>
+        </button>
+      </div>
+    </form>
+  </div>
+</template>
+
+<style scoped>
+.chat-add-context { flex:none; width:34px; height:34px; padding:0; border:0; border-radius:50%; background:var(--sidebar); color:var(--text); font-size:26px; cursor:pointer; line-height:1; }
+.chat-add-context:disabled { opacity:.5; cursor:default; }
+.context-chips { display:flex; flex-wrap:wrap; gap:8px; padding:6px 24px; color:var(--muted); font-size:13px; }
+.context-notice { font-size:13px; color:var(--muted); line-height:1.5; }
+.chat-access pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:320px; overflow:auto; }
+.composer-palette { position:absolute; bottom:calc(100% + 8px); left:0; right:0; z-index:5; display:flex; flex-direction:column; gap:8px; max-height:min(320px,45vh); padding:10px; border:1px solid var(--border); border-radius:14px; background:var(--surface); box-shadow:0 8px 28px #0002; font-size:13px; }
+.composer-palette button { color:var(--text); font:inherit; }
+.command-option { display:flex; align-items:center; gap:12px; flex-wrap:wrap; width:100%; padding:10px; border:0; border-radius:8px; text-align:left; background:var(--sidebar); cursor:pointer; }
+.command-option small { margin-left:auto; color:var(--muted); }
+.palette-heading { display:flex; align-items:center; justify-content:space-between; padding:0 6px; }
+.palette-heading button { font-size:20px; }
+.composer-palette input { width:100%; min-width:0; flex:none; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text); font:inherit; }
+.model-options { min-height:0; overflow-y:auto; }
+.model-options button { display:flex; align-items:center; justify-content:space-between; width:100%; min-height:38px; padding:8px 10px; border:0; border-radius:8px; background:transparent; text-align:left; cursor:pointer; }
+.model-options button[data-highlighted="true"], .model-options button:hover { background:var(--sidebar); }
+.model-options button:disabled { opacity:.5; cursor:default; }
+.palette-notice { margin:4px 6px; color:var(--muted); font-size:12px; }
+.composer-model { display:flex; align-items:center; gap:6px; min-width:0; padding:6px; border:0; background:transparent; color:var(--muted); font:inherit; font-size:12px; cursor:pointer; }
+.composer-model:disabled { opacity:.5; cursor:default; }
+.master-chat { display:flex; flex-direction:column; flex:1; min-height:0; min-width:0; }
+.chat-scroll { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; }
+.chat-conversation { max-width:760px; margin:0 auto; padding:16px 16px 28px; }
+.master-history { display:flex; flex-direction:column; gap:28px; }
+.master-message { min-width:0; max-width:100%; }
+.master-message.user { align-self:flex-end; max-width:85%; padding:12px 18px; border-radius:22px; background:var(--sidebar); }
+.master-message.assistant { padding:4px 0; }
+.master-text { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:15px; line-height:1.75; }
+.chat-empty { text-align:center; padding:clamp(24px,10vh,100px) 0; }
+.chat-empty h2 { font-size:26px; font-weight:500; margin:0 0 12px; }
+.chat-notice, .chat-status { font-size:13px; color:var(--muted); }
+.chat-status { margin:22px 0 0; }
+.chat-details, .chat-access { margin:24px 0 0; font-size:13px; }
+.chat-details > summary { color:var(--muted); }
+.chat-activity, .chat-details section { margin-top:16px; }
+.chat-details pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:300px; overflow:auto; font-size:12px; }
+.chat-details .master-message { margin:12px 0; }
+.chat-access { border:1px solid var(--border); border-radius:12px; padding:14px; }
+.chat-access summary { line-height:1.6; }
+.master-compose { position:relative; width:calc(100% - 32px); max-width:728px; margin:12px auto 4px; flex-shrink:0; border:1px solid var(--border); background:var(--surface); border-radius:24px; padding:14px 16px 10px; box-shadow:0 2px 8px #00000008; }
+.master-compose:focus-within { border-color:var(--accent); }
+.master-compose textarea { display:block; width:100%; min-height:48px; max-height:160px; resize:none; padding:0; border:0; outline:none; background:transparent; color:inherit; font:inherit; font-size:15px; line-height:1.6; }
+.compose-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-top:8px; }
+.compose-hint { margin-right:auto; color:var(--muted); font-size:11px; }
+.chat-send, .chat-stop { display:grid; place-items:center; width:36px; height:36px; padding:0; border-radius:50%; flex-shrink:0; }
+.chat-stop { border:1px solid var(--border); background:transparent; color:inherit; cursor:pointer; }
+.chat-send svg, .chat-stop svg { width:22px; height:22px; }
+.chat-sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+@media(max-width:760px) {
+  .chat-conversation { padding:10px 6px 20px; }
+  .master-compose { width:100%; padding:12px; border-radius:20px; }
+  .master-message.user { max-width:92%; }
+  .master-text { font-size:14px; }
+  .compose-hint { display:none; }
+  .composer-model { margin-right:auto; font-size:11px; }
+}
+</style>

@@ -145,6 +145,11 @@ export function clearAuth(): void {
 }
 
 export function loadConfig(): ApesConfig {
+  if (process.env.APES_IGNORE_USER_CONFIG !== undefined) {
+    if (process.env.APES_IGNORE_USER_CONFIG !== '1')
+      throw new Error('Invalid APES_IGNORE_USER_CONFIG')
+    return {}
+  }
   if (!existsSync(CONFIG_FILE))
     return {}
   try {

@@ -1,0 +1,281 @@
+{
+  "generatedAt": "2026-09-12T07:04:32.658Z",
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83",
+  "architecture": "arm64",
+  "node": "v24.15.0",
+  "nodeSha256": "3200fbd9f7fd4410426dd541e10d1ab829d3472f270d743c7fabd1696c03fe32",
+  "nativeSha256": "c9f4cb1b20b0ea2a27d74f00f1055c4bbb02daae1b9a3df7f6fefee913375f77",
+  "scope": "M0a development sandbox-exec experiment, synthetic resources only; not a production enforcement proof",
+  "allowedConnections": 2,
+  "deniedEndpointConnections": 1,
+  "observations": [
+    {
+      "id": "workspace-write",
+      "expected": "allow",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 0,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:write pid=14003 ppid=14001"
+    },
+    {
+      "id": "snapshot-read",
+      "expected": "allow",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 0,
+      "sandboxSignal": null,
+      "stdout": "SYNTHETIC_ONLY",
+      "stderr": "PROBE_STARTED:read pid=14005 ppid=14001"
+    },
+    {
+      "id": "native-snapshot-read",
+      "expected": "allow",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 0,
+      "sandboxSignal": null,
+      "stdout": "SYNTHETIC_ONLY",
+      "stderr": "PROBE_STARTED:exec pid=14015 ppid=14001\nNATIVE_STARTED pid=14021 ppid=14015"
+    },
+    {
+      "id": "host-home-read",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:read pid=14024 ppid=14001\nEPERM: operation not permitted, open '<experiment>/.data/probe-zfGYxN/host-home/fake-credential'"
+    },
+    {
+      "id": "sibling-pod-read",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:read pid=14047 ppid=14001\nEPERM: operation not permitted, open '<experiment>/.data/probe-QkxbnU/pod-b/knowledge.txt'"
+    },
+    {
+      "id": "control-db-read",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:read pid=14049 ppid=14001\nEPERM: operation not permitted, open '<experiment>/.data/probe-vW9pAw/app/control.sqlite'"
+    },
+    {
+      "id": "outside-write",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:write pid=14051 ppid=14001\nEPERM: operation not permitted, open '<experiment>/.data/probe-Pa54VQ/host-home/fake-credential'"
+    },
+    {
+      "id": "snapshot-write",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:write pid=14053 ppid=14001\nEPERM: operation not permitted, open '<experiment>/.data/probe-W5XKqV/snapshots/run-a/reference.txt'"
+    },
+    {
+      "id": "snapshot-chmod",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:chmod pid=14055 ppid=14001\nEPERM: operation not permitted, chmod '<experiment>/.data/probe-syZKTa/snapshots/run-a/reference.txt'"
+    },
+    {
+      "id": "snapshot-rename",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:rename pid=14060 ppid=14001\nEPERM: operation not permitted, rename '<experiment>/.data/probe-PTMZWJ/snapshots/run-a/reference.txt' -> '<experiment>/.data/probe-PTMZWJ/snapshots/run-a/renamed'"
+    },
+    {
+      "id": "snapshot-unlink",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:unlink pid=14063 ppid=14001\nEPERM: operation not permitted, unlink '<experiment>/.data/probe-ELooD7/snapshots/run-a/reference.txt'"
+    },
+    {
+      "id": "snapshot-parent-write",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:write pid=14065 ppid=14001\nEPERM: operation not permitted, open '<experiment>/.data/probe-3BNh2r/snapshots/run-a/new-file'"
+    },
+    {
+      "id": "symlink-outside-read",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:read pid=14067 ppid=14001\nEPERM: operation not permitted, open '<experiment>/.data/probe-K5NXre/pod-a/workspace/outside-link'"
+    },
+    {
+      "id": "symlink-snapshot-write",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:write pid=14075 ppid=14001\nEPERM: operation not permitted, open '<experiment>/.data/probe-t8f6KL/pod-a/workspace/snapshot-link'"
+    },
+    {
+      "id": "hardlink-outside",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:link pid=14078 ppid=14001\nEPERM: operation not permitted, link '<experiment>/.data/probe-RJoc0y/host-home/fake-credential' -> '<experiment>/.data/probe-RJoc0y/pod-a/workspace/hardlink'"
+    },
+    {
+      "id": "native-outside-read",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:exec pid=14082 ppid=14001\nNATIVE_STARTED pid=14084 ppid=14082\nfopen: Operation not permitted"
+    },
+    {
+      "id": "absolute-shell-read",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:exec pid=14091 ppid=14001\nFailed to exec /bin/bash as variant for /bin/sh (1: Operation not permitted)."
+    },
+    {
+      "id": "grandchild-node-read",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:exec pid=14096 ppid=14001\nPROBE_STARTED:exec pid=14118 ppid=14096\nPROBE_STARTED:read pid=14119 ppid=14118\nEPERM: operation not permitted, open '<experiment>/.data/probe-Lqbbo5/host-home/fake-credential'"
+    },
+    {
+      "id": "unassigned-executable",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:exec pid=14122 ppid=14001\nspawnSync /usr/bin/id EPERM"
+    },
+    {
+      "id": "copied-executable",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:copy-exec pid=14126 ppid=14001\nspawnSync <experiment>/.data/probe-zA5RiO/pod-a/workspace/copied-native EPERM"
+    },
+    {
+      "id": "assigned-loopback-network",
+      "expected": "allow",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 0,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:network pid=14129 ppid=14001"
+    },
+    {
+      "id": "unassigned-loopback-network",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:network pid=14131 ppid=14001\nconnect EPERM 127.0.0.1:61820 - Local (0.0.0.0:0)"
+    },
+    {
+      "id": "inherited-sensitive-descriptor",
+      "expected": "deny",
+      "status": "FAIL",
+      "controlExit": 0,
+      "sandboxExit": 0,
+      "sandboxSignal": null,
+      "stdout": "SYNTHETIC_ONLY",
+      "stderr": "PROBE_STARTED:descriptor pid=14133 ppid=14001"
+    },
+    {
+      "id": "clean-launch-descriptor",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:descriptor pid=14135 ppid=14001\nEBADF: bad file descriptor, fstat"
+    },
+    {
+      "id": "replaced-symlink-read",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:replace-symlink pid=14137 ppid=14001\nEPERM: operation not permitted, open '<experiment>/.data/probe-mHrpYV/pod-a/workspace/snapshot-link'"
+    },
+    {
+      "id": "background-grandchild-read",
+      "expected": "deny",
+      "status": "PASS",
+      "controlExit": 0,
+      "sandboxExit": 1,
+      "sandboxSignal": null,
+      "stdout": "",
+      "stderr": "PROBE_STARTED:exec pid=14141 ppid=14001\nFailed to exec /bin/bash as variant for /bin/sh (1: Operation not permitted)."
+    }
+  ],
+  "sourceSha256": {
+    "src/boundaries.ts": "afdf70ac1ed959669d99f5e382f890a3b3dd6c392976f140e11052ee9e884096",
+    "src/child.ts": "43320e22f9870da4e916fcd4bc45e5172d8748cde9bc753faa86e3bc47799ea1",
+    "src/profile.test.ts": "7a404ea48a54a55786e1b7057e0bee21869a9168af1bc1e3c95a24910e64aac4",
+    "src/profile.ts": "5126fffd7862226500ff00bb6fffc36f30e17cfb3e66294f8498b66aa886a6c7",
+    "src/types.ts": "4bfceccdc1de262dab508e0cad05ebdd8998e8cf4d147da618ffe9f5b08b447f",
+    "native/file-probe.c": "8692cab7bcdef084615472a2181ad1114020637252ef888ff669744a25d05ff1"
+  }
+}

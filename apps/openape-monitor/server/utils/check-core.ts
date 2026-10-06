@@ -20,6 +20,31 @@ export function isDue(m: { lastCheckedAt: number | null, intervalSec: number }, 
 }
 
 /**
+ * Heartbeat monitors invert the direction: nothing is fetched, the watched
+ * process pings us, and `intervalSec` becomes the freshness budget — the
+ * longest a ping may be missing before the monitor counts as down.
+ *
+ * A monitor that has never been pinged is down. That is the honest reading:
+ * we have no evidence it is alive, and treating "no news" as good is exactly
+ * the failure this check exists to prevent.
+ */
+export function checkHeartbeat(m: { lastPingAt: number | null, intervalSec: number }, nowSec: number): CheckResult {
+  if (m.lastPingAt == null)
+    return { up: false, statusCode: null, latencyMs: null, error: 'No ping received yet' }
+
+  const ageSec = nowSec - m.lastPingAt
+  if (ageSec <= m.intervalSec)
+    return { up: true, statusCode: null, latencyMs: null, error: null }
+
+  return {
+    up: false,
+    statusCode: null,
+    latencyMs: null,
+    error: `Last ping ${ageSec}s ago, budget is ${m.intervalSec}s`,
+  }
+}
+
+/**
  * Map an HTTP status to up/down. 2xx–3xx = up; 4xx/5xx = down. A monitored URL
  * answering 401/404/500 is reachable but not "healthy" for an alive-test, which
  * is the same convention uptime services use by default.

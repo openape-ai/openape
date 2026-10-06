@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Mock grant data
+const requester = { email: 'agent@example.com', isActive: true }
 const mockGrants = new Map<string, any>()
 
 // Mock @openape/grants
@@ -31,6 +32,7 @@ vi.mock('h3', () => ({
 // Mock stores
 vi.mock('../src/runtime/server/utils/stores', () => ({
   useIdpStores: () => ({
+    userStore: { findByEmail: async () => requester },
     keyStore: {
       getSigningKey: async () => ({
         publicKey: 'mock-public-key',
@@ -60,6 +62,7 @@ vi.mock('nitropack/runtime', () => ({
 
 describe('grant consume endpoint', () => {
   beforeEach(() => {
+    requester.isActive = true
     mockGrants.clear()
     mockHeaders.clear()
   })
@@ -153,4 +156,19 @@ describe('grant consume endpoint', () => {
 
     await expect(handler({} as any)).rejects.toThrow('Invalid grant token')
   })
+  it('rejects a disabled requester even with a previously issued valid grant token', async () => {
+    mockHeaders.set('authorization', 'Bearer valid-jwt')
+    mockGrants.set('grant-1', { id: 'grant-1', status: 'approved', request: { requester: requester.email, grant_type: 'always' } })
+    requester.isActive = false
+    const { default: handler } = await import('../src/runtime/server/api/grants/[id]/consume.post')
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 403 })
+    expect(mockGrants.get('grant-1').status).toBe('approved')
+  })
+  it('rejects a token whose subject differs from the stored requester', async () => {
+    mockHeaders.set('authorization', 'Bearer valid-jwt')
+    mockGrants.set('grant-1', { id: 'grant-1', status: 'approved', request: { requester: 'other@example.com', grant_type: 'always' } })
+    const { default: handler } = await import('../src/runtime/server/api/grants/[id]/consume.post')
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 403 })
+  })
+
 })

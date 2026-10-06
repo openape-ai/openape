@@ -1,0 +1,6 @@
+dev.db
+dev.db-*
+data/
+.output/
+.data/
+.artifacts/

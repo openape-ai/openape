@@ -10,6 +10,21 @@ describe('cockpit queue — owner-bound', () => {
     expect(claimNext('carol@x')).toBeNull()
   })
 
+  it('company filter claims only that company, exclude skips it — same owner (#1262)', () => {
+    const dm = enqueue('Delta Mind', 'sp', 'dm-task', 'split@x')
+    const iu = enqueue('IURIO', 'sp', 'iurio-task', 'split@x')
+    // exclude: the generalist worker never sees Delta Mind
+    expect(claimNext('split@x', { excludeCompanies: ['Delta Mind'] })?.id).toBe(iu.id)
+    // positive filter: the company operator only sees its own company
+    expect(claimNext('split@x', { company: 'IURIO' })).toBeNull()
+    expect(claimNext('split@x', { company: 'Delta Mind' })?.id).toBe(dm.id)
+  })
+
+  it('claimNext without filter keeps the legacy owner-bound behavior (#1262)', () => {
+    const a = enqueue('Delta Mind', 'sp', 'x', 'legacy@x')
+    expect(claimNext('legacy@x')?.id).toBe(a.id)
+  })
+
   it('restoreTask re-offers a persisted task with its original id (boot rehydrate)', () => {
     restoreTask({ id: 'restored-1', company: 'c', owner: 'frank@x', systemPrompt: 'sp', userMessage: 'do it', createdAt: 1, notBefore: Date.now() + 60_000, lastNote: 'warte auf CI' })
     const t = claimNext('frank@x')

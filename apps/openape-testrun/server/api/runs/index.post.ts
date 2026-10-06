@@ -43,7 +43,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const head = manifest.series
-    ? await db.select().from(runs).where(and(eq(runs.createdBy, caller.email), eq(runs.series, manifest.series), isNull(runs.deletedAt))).orderBy(desc(runs.version)).limit(1).get()
+    ? await db.select().from(runs).where(and(eq(runs.createdBy, caller.email), eq(runs.series, manifest.series), eq(runs.reportType, 'test'), eq(runs.visibility, 'shared'), isNull(runs.deletedAt))).orderBy(desc(runs.version)).limit(1).get()
     : undefined
 
   if (head) {

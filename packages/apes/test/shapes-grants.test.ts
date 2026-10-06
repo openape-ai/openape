@@ -396,12 +396,69 @@ describe('@openape/shapes grants', () => {
       expect(result).toBeNull()
     })
 
-    it('skips once grants', async () => {
+    // A once grant the human already approved is worth exactly one run — the
+    // gate pre-flights the grant, and skipping it here made ape-shell request a
+    // SECOND approval for the very same command. Single use stays enforced at
+    // /consume, which flips the grant to `used`.
+    it('reuses an approved once grant bound to this exact argv', async () => {
       const resolved = buildResolved()
       getGrantsEndpointMock.mockResolvedValue('https://idp.example.com/api/grants')
       apiFetchMock.mockResolvedValue({
         data: [{
-          id: 'grant-once',
+          id: 'grant-once-same-argv',
+          status: 'approved',
+          request: {
+            grant_type: 'once',
+            audience: 'shapes',
+            permissions: [resolved.permission],
+            authorization_details: [resolved.detail],
+            execution_context: {
+              adapter_digest: resolved.digest,
+              argv_hash: resolved.executionContext.argv_hash,
+            },
+          },
+        }],
+      })
+
+      const { findExistingGrant } = await import('../src/shapes/grants.js')
+      const result = await findExistingGrant(resolved as any, 'https://idp.example.com')
+      expect(result).toBe('grant-once-same-argv')
+    })
+
+    // Matching a once grant only by coverage would hand back a grant that
+    // verifyAndConsume then rejects on argv_hash — a hard failure where the
+    // user should simply have been asked to approve.
+    it('skips a once grant bound to different argv', async () => {
+      const resolved = buildResolved()
+      getGrantsEndpointMock.mockResolvedValue('https://idp.example.com/api/grants')
+      apiFetchMock.mockResolvedValue({
+        data: [{
+          id: 'grant-once-other-argv',
+          status: 'approved',
+          request: {
+            grant_type: 'once',
+            audience: 'shapes',
+            permissions: [resolved.permission],
+            authorization_details: [resolved.detail],
+            execution_context: {
+              adapter_digest: resolved.digest,
+              argv_hash: 'SHA-256:someotherargv',
+            },
+          },
+        }],
+      })
+
+      const { findExistingGrant } = await import('../src/shapes/grants.js')
+      const result = await findExistingGrant(resolved as any, 'https://idp.example.com')
+      expect(result).toBeNull()
+    })
+
+    it('skips once grants that carry no argv binding', async () => {
+      const resolved = buildResolved()
+      getGrantsEndpointMock.mockResolvedValue('https://idp.example.com/api/grants')
+      apiFetchMock.mockResolvedValue({
+        data: [{
+          id: 'grant-once-unbound',
           status: 'approved',
           request: {
             grant_type: 'once',

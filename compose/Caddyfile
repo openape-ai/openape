@@ -70,6 +70,14 @@ timetrack.openape.test {
 	}
 }
 
+crm.openape.test {
+	tls internal
+	reverse_proxy crm:3024 {
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-Host {host}
+	}
+}
+
 pr.openape.test {
 	tls internal
 	reverse_proxy pr:3014 {

@@ -5,6 +5,8 @@ export const grants = sqliteTable('grants', {
   status: text('status').notNull(),
   type: text('type'),
   requester: text('requester').notNull(),
+  brokered: text('brokered', { mode: 'json' }),
+  brokerOwner: text('broker_owner'),
   targetHost: text('target_host').notNull(),
   audience: text('audience').notNull(),
   grantType: text('grant_type').notNull(),
@@ -321,3 +323,38 @@ export const recoveryTokens = sqliteTable('recovery_tokens', {
   index('idx_recovery_tokens_email').on(table.email),
   index('idx_recovery_tokens_expires_at').on(table.expiresAt),
 ])
+
+export const brokerConnections = sqliteTable('broker_connections', {
+  id: text('id').primaryKey(),
+  owner: text('owner').notNull(),
+  ownerIssuer: text('owner_issuer').notNull(),
+  brokerIssuer: text('broker_issuer').notNull(),
+  agentDomain: text('agent_domain').notNull(),
+  status: text('status').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, table => [index('idx_broker_connections_owner').on(table.owner)])
+
+export const brokerRequests = sqliteTable('broker_requests', {
+  connectionId: text('connection_id').notNull(),
+  jti: text('jti').notNull(),
+  expiresAt: integer('expires_at').notNull(),
+}, table => [primaryKey({ columns: [table.connectionId, table.jti] })])
+
+export const brokerAgents = sqliteTable('broker_agents', {
+  subject: text('subject').primaryKey(),
+  keyId: text('key_id').notNull(),
+  owner: text('owner').notNull(),
+  decisionIssuer: text('decision_issuer').notNull(),
+  connectionId: text('connection_id').notNull(),
+})
+
+export const brokerAudit = sqliteTable('broker_audit', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  grantId: text('grant_id').notNull(),
+  owner: text('owner').notNull(),
+  agent: text('agent').notNull(),
+  brokerIssuer: text('broker_issuer').notNull(),
+  connectionId: text('connection_id').notNull(),
+  event: text('event').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, table => [index('idx_broker_audit_grant').on(table.grantId)])

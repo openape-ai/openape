@@ -123,6 +123,41 @@ export async function revokeGrant(
 }
 
 /**
+ * Is anybody still waiting for this decision?
+ *
+ * `undefined` means the requester never said — then nothing may be claimed
+ * either way, because "abandoned" on a caller that is actually still polling
+ * would teach the owner to ignore the label.
+ */
+export function isCallerWaiting(
+  request: Pick<OpenApeGrantRequest, 'waits_until'>,
+  nowSec: number = Math.floor(Date.now() / 1000),
+): boolean | undefined {
+  if (typeof request.waits_until !== 'number') return undefined
+  return nowSec < request.waits_until
+}
+
+/**
+ * Has a timed grant outlived its `expires_at`?
+ *
+ * Expiry is enforced lazily: the stored status only flips to 'expired' when
+ * something introspects the grant by id. Anything that reads a grant WITHOUT
+ * going through that path — every listing — must apply this rule itself, or it
+ * reports a dead grant as approved. That is not cosmetic: `ensure-delegations`
+ * decides whether to renew by reading a list, so a stale 'approved' means it
+ * never renews (#1290).
+ */
+export function isGrantExpired(
+  grant: Pick<OpenApeGrant, 'status' | 'expires_at'> & { request: Pick<OpenApeGrant['request'], 'grant_type'> },
+  nowSec: number = Math.floor(Date.now() / 1000),
+): boolean {
+  return grant.status === 'approved'
+    && grant.request.grant_type === 'timed'
+    && !!grant.expires_at
+    && nowSec >= grant.expires_at
+}
+
+/**
  * Introspect a grant (RFC 7662 style).
  * Auto-expires timed grants that have passed their expiration.
  */
@@ -136,12 +171,7 @@ export async function introspectGrant(
   }
 
   // Auto-expire timed grants that have passed their expiration
-  if (
-    grant.status === 'approved'
-    && grant.request.grant_type === 'timed'
-    && grant.expires_at
-    && Math.floor(Date.now() / 1000) >= grant.expires_at
-  ) {
+  if (isGrantExpired(grant)) {
     await store.updateStatus(grantId, 'expired')
     const updated = await store.findById(grantId)
     return updated!

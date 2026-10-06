@@ -1,0 +1,65 @@
+import { networkPublicationTables, podNetwork } from './network-projection'
+import { jevAvailability } from '../onboarding/store'
+import type { Owner } from '@openape/pods-protocol'
+import { sameOwner } from '@openape/pods-protocol'
+import { centralMaxBytes, centralTables, parseCentralSnapshot } from '../../contracts/central'
+import type { CentralSnapshot } from '../../contracts/central'
+import type { PodDatabase } from '../storage/database'
+import { schemaVersion } from '../storage/database'
+import type { ResourceRegistry } from '../resources/registry'
+import type { ScriptWorkspace } from '../workspace/scripts'
+import type { RunDispatcher } from '../runs/dispatcher'
+import type { Scheduler } from '../scheduling/scheduler'
+import { WorkspaceDetails } from '../workspace/details'
+import { PodGroups } from '../workspace/groups'
+import { listedPods } from '../workspace/pod-list'
+import { CollectionDescriptions } from '../workspace/collection-descriptions'
+import { PodVariables } from '../resources/variables'
+
+export class CentralProjection {
+  constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly scripts: ScriptWorkspace, private readonly runs: RunDispatcher, private readonly scheduler: Scheduler) {}
+
+  assertOwner(owner: Owner): void {
+    for (const pod of this.store.listPods()) {
+      const binding = this.store.db.prepare('SELECT owner FROM remote_pods WHERE pod_id=?').get(pod.id)
+      if (!binding || !sameOwner(JSON.parse(String(binding.owner)), owner)) throw new Error('Every Pod must belong to the connected owner before adopting this workspace')
+    }
+  }
+
+  snapshot(owner: Owner, networkReads = false): CentralSnapshot {
+    if (!networkReads && this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()) throw new Error('Persistent networks require bounded publication support before this workspace can connect')
+    const result = this.store.transaction(() => {
+      const pods = listedPods(this.store)
+      this.assertOwner(owner)
+      const hasNetworks = networkReads && !!this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()
+      const tables = hasNetworks ? networkPublicationTables(this.store) : Object.fromEntries(centralTables.map(table => [table, this.store.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()]))
+      const details = new WorkspaceDetails(this.store, this.resources)
+      return {
+        version: 1 as const, workspace: { jev: jevAvailability(this.store), pods, organization: new PodGroups(this.store).view(), descriptions: new CollectionDescriptions(this.store).view() }, archive: { schema: schemaVersion, tables }, artifacts: [],
+        pods: pods.map((pod) => {
+          const networkId = hasNetworks ? podNetwork(this.store, pod.id) : null
+          if (networkId) {
+            return {
+              id: pod.id, networkId, ready: true,
+              details: { claims: [], counts: { finding: 0, question: 0, gap: 0 }, total: 0, versions: [], checkpointRevision: 0, source: null },
+              scripts: { pod, resourceEpoch: this.resources.epoch(pod.id), credentialAliases: [], versions: [], drafts: [], source: null },
+              resources: { resources: [], variables: [], epoch: this.resources.epoch(pod.id) },
+              scheduling: { spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: this.scheduler.view(pod.id).concurrency },
+              runs: { runs: [], events: [] }, versions: {}, history: {},
+            }
+          }
+          const scripts = this.scripts.view(pod.id)
+          const { timing: _timing, ...runs } = this.runs.view(pod.id)
+          return {
+            id: pod.id, ready: true, details: details.execute({ type: 'list', podId: pod.id }), scripts, runs,
+            scheduling: this.scheduler.view(pod.id), resources: { jev: jevAvailability(this.store), resources: this.resources.list(pod.id), variables: new PodVariables(this.store).list(pod.id), epoch: this.resources.epoch(pod.id) },
+            versions: Object.fromEntries([...scripts.versions.map(version => ({ kind: 'version' as const, id: version.hash })), ...scripts.drafts.map(draft => ({ kind: 'draft' as const, id: draft.id }))].map(selection => [selection.id, this.scripts.view(pod.id, selection)])),
+            history: Object.fromEntries(runs.runs.map(run => [run.id, { runs: [run], events: this.runs.runs.recentEvents(pod.id, run.id) }])),
+          }
+        }),
+      }
+    })
+    if (Buffer.byteLength(JSON.stringify(result)) > centralMaxBytes) throw new Error('Workspace exceeds the central snapshot limit; review retention before connecting')
+    return parseCentralSnapshot(result)
+  }
+}

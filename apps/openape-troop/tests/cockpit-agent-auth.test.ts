@@ -59,6 +59,17 @@ describe('troop:cockpit-serve catalog entry (#1033)', () => {
   // this route the catalog check rejects the listing, the worker's services
   // loop sees an empty list and spins — silently, because the caller swallows
   // the error. Cost the zaz service a full day of unserved tasks.
+  // #1262: an operator serving a company needs its org context (tree,
+  // objectives, reports) and a way to report back. Route missing from the
+  // catalog = closed to delegation, so these must be published here.
+  it('covers the org context and report routes (#1262)', () => {
+    const scope = TROOP_SCOPES.find(s => s.id === 'troop:cockpit-serve')
+    expect(scope!.grants).toContain('GET /api/cockpit/orgs/:orgId/tree')
+    expect(scope!.grants).toContain('GET /api/orgs/:id/objectives')
+    expect(scope!.grants).toContain('GET /api/orgs/:id/reports')
+    expect(scope!.grants).toContain('POST /api/orgs/:id/reports')
+  })
+
   it('covers the service discovery its own description promises', () => {
     const scope = TROOP_SCOPES.find(s => s.id === 'troop:cockpit-serve')
     expect(scope!.description).toContain('services')

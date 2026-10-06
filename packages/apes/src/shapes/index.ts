@@ -26,4 +26,7 @@ export type {
   ShapesOperation,
 } from '@openape/shapes'
 export { extractOption, extractWrappedCommand } from './commands/explain.js'
-export { createCompoundGrant, createShapesGrant, fetchGrantToken, findExistingCompoundGrant, findExistingGrant, isAutoApproved, resolveFromGrant, verifyAndConsume, verifyAndConsumeCompound, verifyAndExecute, waitForGrantStatus } from './grants.js'
+export { createCompoundGrant, createShapesGrant, fetchGrantToken, findExistingCompoundGrant, findExistingGrant, isAutoApproved, resolveFromGrant, verifyAndConsume, verifyAndConsumeCompound, verifyAndExecute, waitForGrantStatus,
+  GRANT_WAIT_MS,
+  waitsUntil,
+} from './grants.js'

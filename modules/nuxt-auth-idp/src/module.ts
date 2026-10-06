@@ -15,9 +15,15 @@ export interface RoutesOptions {
 }
 
 export interface ModuleOptions {
+  brokerAgentDomain?: string
   sessionSecret: string
   /** Session cookie max age in seconds (default: 604800 = 7 days) */
   sessionMaxAge: number
+  /**
+   * Accept POST /api/grants without a Bearer token (legacy / test fixtures).
+   * The grants spec requires authentication — leave this off in production.
+   */
+  allowUnauthenticatedGrantRequests: boolean
   managementToken: string
   adminEmails: string
   storageKey: string
@@ -92,10 +98,12 @@ export default defineNuxtModule<ModuleOptions>({
   defaults: {
     sessionSecret: 'change-me-to-a-real-secret-at-least-32-chars',
     sessionMaxAge: 60 * 60 * 24 * 7, // 7 days
+    allowUnauthenticatedGrantRequests: false,
     managementToken: '',
     adminEmails: '',
     storageKey: 'openape-idp',
     issuer: '',
+    brokerAgentDomain: '',
     rpName: '',
     rpID: '',
     rpOrigin: '',
@@ -372,6 +380,12 @@ export default defineNuxtModule<ModuleOptions>({
 
     // Server route handlers — Grants
     if (routeConfig.grants) {
+      addServerHandler({ route: '/api/broker-connections', handler: resolve('./runtime/server/api/broker-connections/index.get') })
+      addServerHandler({ route: '/api/broker-connections', method: 'post', handler: resolve('./runtime/server/api/broker-connections/index.post') })
+      addServerHandler({ route: '/api/broker-connections/:id', method: 'delete', handler: resolve('./runtime/server/api/broker-connections/[id].delete') })
+      addServerHandler({ route: '/api/broker-connections/:id/receipt', method: 'post', handler: resolve('./runtime/server/api/broker-connections/[id]/receipt.post') })
+      addServerHandler({ route: '/api/brokered-grants', method: 'post', handler: resolve('./runtime/server/api/brokered-grants.post') })
+      addServerHandler({ route: '/api/broker-agents', method: 'post', handler: resolve('./runtime/server/api/broker-agents.post') })
       addServerHandler({ route: '/api/grants', handler: resolve('./runtime/server/api/grants/index.get') })
       addServerHandler({ route: '/api/grants', method: 'post', handler: resolve('./runtime/server/api/grants/index.post') })
       addServerHandler({ route: '/api/grants/verify', method: 'post', handler: resolve('./runtime/server/api/grants/verify.post') })
@@ -421,6 +435,8 @@ export default defineNuxtModule<ModuleOptions>({
     if (routeConfig.agent) {
       addServerHandler({ route: '/api/agent/challenge', method: 'post', handler: resolve('./runtime/server/api/agent/challenge.post') })
       addServerHandler({ route: '/api/agent/authenticate', method: 'post', handler: resolve('./runtime/server/api/agent/authenticate.post') })
+      addServerHandler({ route: '/api/pods/agents/:email', method: 'get', handler: resolve('./runtime/server/api/pods/agents/[email].get') })
+      addServerHandler({ route: '/api/pods/agents', method: 'post', handler: resolve('./runtime/server/api/pods/agents.post') })
       addServerHandler({ route: '/api/agent/enroll', method: 'post', handler: resolve('./runtime/server/api/agent/enroll.post') })
 
       // Unified auth endpoints (agents + humans with SSH keys)

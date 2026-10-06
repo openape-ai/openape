@@ -1,6 +1,6 @@
 import { createError, defineEventHandler, setResponseHeader } from 'h3'
 import { useStorage } from 'nitropack/runtime'
-import { buildChangelogPayload } from '../utils/changelog'
+import packageJson from '../../package.json'
 
 export default defineEventHandler(async (event) => {
   setResponseHeader(event, 'cache-control', 'public, max-age=60')
@@ -9,5 +9,9 @@ export default defineEventHandler(async (event) => {
   if (!changelog) {
     throw createError({ statusCode: 503, statusMessage: 'Changelog unavailable' })
   }
-  return buildChangelogPayload(changelog)
+  return {
+    service: 'openape-troop',
+    version: packageJson.version,
+    changelog,
+  }
 })

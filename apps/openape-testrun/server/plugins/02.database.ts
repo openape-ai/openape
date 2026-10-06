@@ -1,68 +1,17 @@
-import { sql } from 'drizzle-orm'
-import { useDb } from '../database/drizzle'
+import { resolve } from 'node:path'
+import { initializeHtmlPolicyJournal } from '../utils/html-policy-journal'
+import { useDatabaseClient } from '../database/drizzle'
+import { migrateReports } from '../database/migrate'
+import { initializeReportsDatabase } from '../database/ready'
 
-export default defineNitroPlugin(async () => {
-  try {
-    const db = useDb()
-
-    await db.run(sql`CREATE TABLE IF NOT EXISTS runs (
-      id TEXT PRIMARY KEY,
-      slug TEXT NOT NULL UNIQUE,
-      title TEXT NOT NULL,
-      project TEXT,
-      summary TEXT,
-      status TEXT NOT NULL,
-      passed_count INTEGER NOT NULL DEFAULT 0,
-      failed_count INTEGER NOT NULL DEFAULT 0,
-      skipped_count INTEGER NOT NULL DEFAULT 0,
-      manifest TEXT NOT NULL,
-      started_at INTEGER,
-      finished_at INTEGER,
-      created_by TEXT NOT NULL,
-      created_by_act TEXT NOT NULL DEFAULT 'human',
-      created_at INTEGER NOT NULL,
-      deleted_at INTEGER
-    )`)
-    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_runs_creator ON runs(created_by)`)
-    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_runs_created ON runs(created_at)`)
-
-    await db.run(sql`CREATE TABLE IF NOT EXISTS assets (
-      id TEXT PRIMARY KEY,
-      run_id TEXT NOT NULL,
-      path TEXT NOT NULL,
-      content_type TEXT NOT NULL,
-      size INTEGER NOT NULL,
-      bytes BLOB NOT NULL,
-      created_at INTEGER NOT NULL
-    )`)
-    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_assets_run ON assets(run_id)`)
-    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_assets_run_path ON assets(run_id, path)`)
-
-    // Series versioning (idempotent ALTERs — fail silently once applied).
-    await db.run(sql`ALTER TABLE runs ADD COLUMN series TEXT`).catch(() => {})
-    await db.run(sql`ALTER TABLE runs ADD COLUMN version INTEGER NOT NULL DEFAULT 1`).catch(() => {})
-    await db.run(sql`ALTER TABLE assets ADD COLUMN version INTEGER NOT NULL DEFAULT 1`).catch(() => {})
-    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_runs_series ON runs(created_by, series)`)
-
-    await db.run(sql`CREATE TABLE IF NOT EXISTS run_versions (
-      id TEXT PRIMARY KEY,
-      run_id TEXT NOT NULL,
-      version INTEGER NOT NULL,
-      title TEXT NOT NULL,
-      project TEXT,
-      summary TEXT,
-      status TEXT NOT NULL,
-      passed_count INTEGER NOT NULL DEFAULT 0,
-      failed_count INTEGER NOT NULL DEFAULT 0,
-      skipped_count INTEGER NOT NULL DEFAULT 0,
-      manifest TEXT NOT NULL,
-      started_at INTEGER,
-      finished_at INTEGER,
-      created_at INTEGER NOT NULL
-    )`)
-    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_run_versions_run ON run_versions(run_id, version)`)
-  }
-  catch (err) {
-    console.error('[database] Table creation failed (tables may already exist):', err)
-  }
+export default defineNitroPlugin(() => {
+  initializeReportsDatabase(async () => {
+    const client = useDatabaseClient()
+    await migrateReports(client)
+    const config = useRuntimeConfig()
+    const local = String(config.tursoUrl).startsWith('file:') ? `${resolve(String(config.tursoUrl).slice(5))}.policies.json` : ''
+    const journal = String(config.htmlPolicyJournalPath || local)
+    if (!journal) throw new Error('Configure htmlPolicyJournalPath before serving Reports')
+    await initializeHtmlPolicyJournal(client, journal)
+  })
 })

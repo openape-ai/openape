@@ -63,7 +63,7 @@ function parseMaxQrRequests(): number {
 // is in here. The hyphen in `my-agents` is escaped explicitly. Extended in
 // #292 to cover the free-idp's custom paths (enroll, register, my-agents,
 // push, users) which were previously unlimited — see audit 2026-05-04.
-const RE_AUTH_PATHS = /^\/(?:api\/(?:session|auth|agent|webauthn|enroll|register|my-agents|push|users)\b|authorize\b|token\b)/
+const RE_AUTH_PATHS = /^\/(?:api\/(?:session|auth|agent|webauthn|enroll|register|my-agents|push|users|grants)\b|authorize\b|token\b)/
 
 // Machine-auth paths. These get the separate, higher-capacity bucket so
 // machine re-auth never throttles the human browser login from the same
@@ -71,7 +71,10 @@ const RE_AUTH_PATHS = /^\/(?:api\/(?:session|auth|agent|webauthn|enroll|register
 // `client_assertion` (not guessable, so no brute-force target) or OIDC
 // code exchange (the code is single-use and short-lived) — but it IS the
 // path that many agent identities behind ONE egress IP hit every minute.
-const RE_AGENT_PATHS = /^\/(?:api\/agent\b|token\b)/
+// `/api/grants` rides the agent bucket too (#1276): grant requests are
+// machine traffic (many per minute behind one egress IP) and must not
+// drain the human login budget — same #1073 reasoning as /token.
+const RE_AGENT_PATHS = /^\/(?:api\/(?:agent|grants)\b|token\b)/
 
 // Authenticated owner-management APIs. Bulk operations here (deleting 33
 // stale agents, listing users) are legitimate owner work, not credential

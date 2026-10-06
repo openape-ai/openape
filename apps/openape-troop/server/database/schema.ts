@@ -405,10 +405,10 @@ export const cockpitAgents = sqliteTable('cockpit_agents', {
 }, table => [index('idx_cockpit_agents_org').on(table.ownerEmail, table.orgId)])
 
 // cockpit_yolo_sync — was der Worker zuletzt als YOLO-Policy des Firmen-Operators
-// ans IdP gemeldet hat. Ein Row pro Org; der Worker berichtet nach jedem
-// yolo_sync (auch auf dem idempotenten Skip-Pfad). `tools` ist die Rollen-Union
-// (allowed.txt) zum Zeitpunkt des letzten erfolgreichen Syncs — Drift = Vergleich
-// mit der aktuellen Union, ohne die Muster-Ableitung des Workers nachzubauen.
+// reported to the IdP. One row per org; the worker reports after every
+// yolo_sync (including on the idempotent skip path). `tools` is the role union
+// (allowed.txt) at the time of the last successful sync — drift is a comparison
+// against the current union, without rebuilding the worker's pattern derivation.
 export const cockpitYoloSync = sqliteTable('cockpit_yolo_sync', {
   orgId: text('org_id').primaryKey(),
   ownerEmail: text('owner_email').notNull(),
@@ -422,11 +422,11 @@ export const cockpitYoloSync = sqliteTable('cockpit_yolo_sync', {
   reportedAt: integer('reported_at').notNull(),
 })
 
-// memory — nachschlagbare Fakten/Referenz für die Agents einer Firma (≈ CLAUDE.md/
-// Memory). `scope`: 'company' (jede Rolle) | 'role' (nur diese Rolle) | 'agent'
-// (nur dieser cockpit_agent). `targetId` = Rollen-String bzw. cockpit_agent-id;
+// memory — lookup facts/reference for a company's agents (≈ CLAUDE.md/memory).
+// `scope`: 'company' (every role) | 'role' (only that role) | 'agent' (only that
+// cockpit_agent). `targetId` = the role string or the cockpit_agent id;
 // leer bei 'company'. `mode`: 'inline' klein → direkt in den Prompt; 'reference'
-// groß → nur als Index-Zeile, der Agent holt den Body bei Bedarf per Fetch.
+// large → index row only, the agent fetches the body on demand.
 export const memory = sqliteTable('memory', {
   id: text('id').primaryKey(),
   ownerEmail: text('owner_email').notNull(),
@@ -481,6 +481,12 @@ export const cockpitSchedules = sqliteTable('cockpit_schedules', {
   cronExpr: text('cron_expr'), // 5-field cron (Europe/Vienna); takes precedence over atHour/everyMinutes
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
   createdBy: text('created_by').notNull().default('owner'), // 'owner' | 'operator' (agent self-scheduled)
+  // Should this trigger's answer reach the owner's phone, or only the chat?
+  // Defaults to true: a trigger stays as loud as it was until someone decides
+  // otherwise. Note that `createdBy` is NOT a usable proxy here — the KPI duties
+  // are owner-created and want silence, the reminders are operator-created and
+  // must ring (#1295).
+  notify: integer('notify', { mode: 'boolean' }).notNull().default(true),
   lastRunAt: integer('last_run_at'),
   createdAt: integer('created_at').notNull(),
 }, table => [index('idx_cockpit_schedules_owner').on(table.ownerEmail)])
@@ -525,6 +531,9 @@ export const cockpitTasks = sqliteTable('cockpit_tasks', {
   askedAt: integer('asked_at'),
   files: text('files'), // JSON [{id,mime,name}] — chat attachments riding the task
   allowedTools: text('allowed_tools'), // JSON string[] — the worker's command allowlist (#1036)
+  // Whether the answer rings the owner's phone (#1295). Persisted because a
+  // restart must not turn a deliberately silent trigger back into a loud one.
+  notify: integer('notify', { mode: 'boolean' }),
 })
 
 // cockpit_chat_messages — the persistent cockpit conversation per (owner, org).

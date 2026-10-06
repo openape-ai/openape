@@ -1,4 +1,5 @@
 import { defineCommand } from 'citty'
+import { version } from '../package.json'
 import {
   makeDocsCommand,
   makeLoginCommand,
@@ -40,7 +41,7 @@ const DOCS: Record<string, string> = { agent, auth, cli, errors, invites, plans,
 const main = defineCommand({
   meta: {
     name: 'ape-plans',
-    version: '1.0.1',
+    version,
     description: [
       'Living plans for humans and AI agents — persisted across sessions, devices, and hand-offs.',
       '',
