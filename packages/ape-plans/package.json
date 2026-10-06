@@ -1,6 +1,6 @@
 {
   "name": "@openape/ape-plans",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "CLI for plans.openape.ai — cross-device plan management for humans and AI agents",
   "type": "module",
   "license": "MIT",
@@ -19,12 +19,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/openape-ai/plans.git",
-    "directory": "cli"
+    "url": "git+https://repos.openape.ai/patrick/monorepo.git",
+    "directory": "packages/ape-plans"
   },
-  "homepage": "https://github.com/openape-ai/plans#readme",
+  "homepage": "https://plans.openape.ai",
   "bugs": {
-    "url": "https://github.com/openape-ai/plans/issues"
+    "url": "https://repos.openape.ai/patrick/monorepo/issues"
   },
   "publishConfig": {
     "access": "public"
