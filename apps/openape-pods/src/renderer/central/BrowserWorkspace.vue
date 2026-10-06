@@ -105,7 +105,7 @@ onBeforeUnmount(() => { closed = true })
         {{ t('Retry') }}
       </button>
     </p>
-    <AutomationsShell v-if="subject && page === 'Automations'" :view="runtime?.workspace.map ?? null" :live="!!runtime?.online" :now="now" :decisions="runtime?.workspace.map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" :tab="tab" :inbox="{ choices: inbox.choices, gates: inbox.gates, graphGates: runtime?.workflows?.gates ?? null, proposals: [] }" @update:tab="tab = $event" @settings="navigate('App settings')" @command="remoteCommand" />
+    <AutomationsShell v-if="subject && page === 'Automations'" :view="runtime?.workspace.map ?? null" :live="!!runtime?.online" :now="now" :decisions="runtime?.workspace.map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" :tab="tab" :inbox="{ choices: inbox.choices, gates: inbox.gates, graphGates: runtime?.workflows?.gates ?? null, proposals: [] }" :subject="subject" @update:tab="tab = $event" @logout="logout" @command="remoteCommand" />
     <section v-if="subject" v-show="page === 'Workflows'">
       <template v-if="importing && runtime">
         <button class="text-button" @click="importing = false">
