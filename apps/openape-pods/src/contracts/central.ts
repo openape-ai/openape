@@ -14,6 +14,7 @@ import { parseRunCommand, parseRunView } from './runs'
 import type { RunEvent, RunRecord, RunView } from './runs'
 import { parseResourceCommand, parseResourceState } from './resources'
 import type { ResourceState } from './resources'
+import type { MapView } from './map-view'
 
 export const centralTables = [
   'pods', 'remote_pods', 'master_creations', 'script_credential_approvals', 'assignments', 'scripts', 'checkpoints', 'sources', 'claims', 'settings', 'validations', 'resources', 'resource_epochs',
@@ -82,6 +83,7 @@ export interface CentralOperation {
 }
 export interface CentralClient {
   inventory: () => Promise<CentralRuntime[]>
+  map?: (runtimeId: string) => Promise<{ revision: number, map: MapView | null }>
   read: (runtimeId: string, podId: string) => Promise<CentralSummary>
   runs: (runtimeId: string, podId: string, offset: number) => Promise<{ revision: number, total: number, runs: RunRecord[] }>
   run: (runtimeId: string, podId: string, runId: string) => Promise<CentralRunDetail>

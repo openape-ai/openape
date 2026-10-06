@@ -4,6 +4,7 @@ import type { NetworkView } from '../../contracts/networks'
 import type { CentralClient, CentralOperation, CentralPod, CentralRunDetail, CentralRuntime, CentralSummary } from '../../contracts/central'
 import type { RunRecord } from '../../contracts/runs'
 import type { ScriptView } from '../../contracts/scripts'
+import type { MapView } from '../../contracts/map-view'
 
 export class WorkspaceRequestError extends Error {
   constructor(readonly status: number, message: string) { super(message) }
@@ -23,6 +24,7 @@ export function browserWorkspaceClient(): BrowserWorkspaceClient {
     session: () => request('session'),
     network: async (runtimeId, command) => parseCentralNetworkResult(await request('networks', { runtimeId, command: parseCentralNetworkRead(command) })),
     inventory: () => request('inventory'),
+    map: runtimeId => request(`pod?${new URLSearchParams({ runtimeId, view: 'map' })}`),
     read: (runtimeId, podId) => pod(runtimeId, podId, { view: 'summary' }),
     runs: (runtimeId, podId, offset) => pod(runtimeId, podId, { view: 'runs', offset: String(offset) }),
     run: (runtimeId, podId, runId) => pod(runtimeId, podId, { view: 'run', runId }),
@@ -61,6 +63,7 @@ export function desktopWorkspaceClient(bridge: (body: Record<string, unknown>) =
   }
   return {
     inventory: async () => await invoke({ type: 'inventory' }) as CentralRuntime[],
+    map: async runtimeId => await invoke({ type: 'read', runtimeId, view: 'map' }) as { revision: number, map: MapView | null },
     read: async (runtimeId, podId) => legacy<CentralSummary>(await read(runtimeId, podId, { view: 'summary' }), (pod, revision) => ({ revision, total: pod.runs.runs.length, pod: { ...pod, history: {}, versions: {} } })),
     runs: async (runtimeId, podId, offset) => legacy<{ revision: number, total: number, runs: RunRecord[] }>(await read(runtimeId, podId, { view: 'runs', offset }), (pod, revision) => ({ revision, total: pod.runs.runs.length, runs: pod.runs.runs.slice(offset, offset + 20) })),
     run: async (runtimeId, podId, runId) => legacy<CentralRunDetail>(await read(runtimeId, podId, { view: 'run', runId }), (pod, revision) => {
