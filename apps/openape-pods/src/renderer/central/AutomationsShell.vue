@@ -18,6 +18,8 @@ import AutomationsMap from './AutomationsMap.vue'
 import AppSettingsMenu from './AppSettingsMenu.vue'
 import CodexHandoff from './CodexHandoff.vue'
 import KpiRow from './KpiRow.vue'
+import SecretForm from './SecretForm.vue'
+import type { SecretsCommand, SecretsView } from '../../contracts/secrets'
 import type { Layers } from '../utils/automation-layout'
 import { ungrouped } from '../utils/automation-layout'
 
@@ -25,8 +27,8 @@ import { ungrouped } from '../utils/automation-layout'
  * The two product surfaces behind one tab bar: Automatisierungen (this file) and Entscheidungen
  * (the `decisions` slot). Settings open from the gear; creation hands a brief to Codex.
  */
-const props = defineProps<{ view: MapView | null, live: boolean, now: number, decisions?: number, tab?: 'automations' | 'decisions', desktop?: boolean, subject?: string, codex?: 'connected' | 'disconnected', inbox?: { choices: NetworkChoiceView[], gates: NetworkGateView[], graphGates: { batches: GateBatchView[], held: GateHeldItem[] } | null, proposals: AccessProposal[] } }>()
-const emit = defineEmits<{ 'update:tab': [tab: 'automations' | 'decisions'], 'settings': [], 'logout': [], 'codex': [pinned: string | null, group: string | null], 'command': [command: CentralCommand], 'network': [control: NetworkControl], 'workflow': [control: WorkflowControl], 'secret': [podId: string, alias: string | null], 'folder': [podId: string], 'networkCommand': [command: NetworkCommand], 'workflowCommand': [command: WorkflowCommand], 'master': [command: MasterCommand] }>()
+const props = defineProps<{ view: MapView | null, live: boolean, now: number, decisions?: number, tab?: 'automations' | 'decisions', desktop?: boolean, subject?: string, codex?: 'connected' | 'disconnected', inbox?: { choices: NetworkChoiceView[], gates: NetworkGateView[], graphGates: { batches: GateBatchView[], held: GateHeldItem[] } | null, proposals: AccessProposal[] }, secrets?: SecretsView | null }>()
+const emit = defineEmits<{ 'update:tab': [tab: 'automations' | 'decisions'], 'settings': [], 'logout': [], 'codex': [pinned: string | null, group: string | null], 'command': [command: CentralCommand], 'network': [control: NetworkControl], 'workflow': [control: WorkflowControl], 'secretSave': [podId: string, alias: string, value: string], 'secrets': [command: SecretsCommand], 'folder': [podId: string], 'networkCommand': [command: NetworkCommand], 'workflowCommand': [command: WorkflowCommand], 'master': [command: MasterCommand] }>()
 const mode = ref<'map' | 'list'>('map')
 const group = ref('all')
 const layers = ref<Layers>({ channel: true, read: true, write: true, auth: true, paused: true })
@@ -36,6 +38,7 @@ const hovered = ref<string | null>(null)
 const detail = ref<string | null>(null)
 const handoff = ref(false)
 const settings = ref(false)
+const secretForm = ref<{ podId: string, alias: string | null } | null>(null)
 const inboxView = ref<InstanceType<typeof DecisionsInbox> | null>(null)
 const waiting = computed(() => props.decisions ?? inboxView.value?.total ?? 0)
 const current = computed(() => props.tab ?? 'automations')
@@ -120,16 +123,16 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
       <p v-if="!view" class="muted" role="status">
         {{ t('Loading workspace…') }}
       </p>
-      <DecisionsInbox v-else ref="inboxView" :view="view" :choices="inbox?.choices ?? []" :gates="inbox?.gates ?? []" :graph-gates="inbox?.graphGates ?? null" :proposals="inbox?.proposals ?? []" :desktop="!!desktop" @network="emit('networkCommand', $event)" @workflow="emit('workflowCommand', $event)" @command="emit('command', $event)" @master="emit('master', $event)" @open="(id) => { detail = id; emit('update:tab', 'automations') }">
+      <DecisionsInbox v-else ref="inboxView" :view="view" :choices="inbox?.choices ?? []" :gates="inbox?.gates ?? []" :graph-gates="inbox?.graphGates ?? null" :proposals="inbox?.proposals ?? []" :requests="secrets?.requests ?? []" :secrets-origin="secrets?.origin" :desktop="!!desktop" @secrets="emit('secrets', $event)" @network="emit('networkCommand', $event)" @workflow="emit('workflowCommand', $event)" @command="emit('command', $event)" @master="emit('master', $event)" @open="(id) => { detail = id; emit('update:tab', 'automations') }">
         <template #setup>
           <slot name="setup" />
         </template>
       </DecisionsInbox>
     </section>
-    <AppSettingsMenu v-if="settings" :browser="!desktop" :subject="subject" @close="settings = false" @logout="emit('logout')" @keydown.escape="settings = false" />
-    <AutomationDetail v-if="view && detail" :id="detail" :key="detail" :view="view" :now="now" :desktop="!!desktop" @close="detail = null" @open="(id) => { detail = id; pinned = id }" @command="emit('command', $event)" @network="emit('network', $event)" @workflow="emit('workflow', $event)" @secret="(podId, alias) => emit('secret', podId, alias)" @folder="emit('folder', $event)">
+    <AppSettingsMenu v-if="settings" :browser="!desktop" :subject="subject" :consumer="secrets?.consumer ?? null" @revoke="emit('secrets', { type: 'revokeConsumer' })" @close="settings = false" @logout="emit('logout')" @keydown.escape="settings = false" />
+    <AutomationDetail v-if="view && detail" :id="detail" :key="detail" :view="view" :now="now" :desktop="!!desktop" :requests="secrets?.requests ?? []" @close="detail = null; secretForm = null" @open="(id) => { detail = id; pinned = id }" @command="emit('command', $event)" @network="emit('network', $event)" @workflow="emit('workflow', $event)" @secret="(podId, alias) => { secretForm = { podId, alias } }" @folder="emit('folder', $event)">
       <template #secret>
-        <slot name="secret" />
+        <SecretForm v-if="secretForm && secretForm.podId === detail" :key="secretForm.alias ?? ''" :pod-id="secretForm.podId" :alias="secretForm.alias" :desktop="!!desktop" @save="(podId, alias, value) => { secretForm = null; emit('secretSave', podId, alias, value) }" @file="(podId, alias) => { secretForm = null; emit('secrets', { type: 'importFile', podId, alias }) }" @request="(podId, alias, purpose) => { secretForm = null; emit('secrets', { type: 'request', podId, alias, purpose }) }" @cancel="secretForm = null" />
       </template>
     </AutomationDetail>
   </div>

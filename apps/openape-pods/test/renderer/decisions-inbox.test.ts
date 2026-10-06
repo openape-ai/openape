@@ -136,4 +136,23 @@ describe('Entscheidungen', () => {
     await wrapper.findAll('button').find(item => item.text() === 'Im Pod einrichten')!.trigger('click')
     expect(wrapper.emitted('update:tab')).toEqual([['automations']])
   })
+
+  it('lists open secret requests under setup with the fill link, cancels them on the desktop and hides settled ones', async () => {
+    const bot = view.pods.find(pod => pod.name === 'Morgenbriefing · Calendar-Bot')!
+    const row = { podId: bot.id, alias: 'calendar_bot_token', purpose: '', expiresAt: view.at + 86400000, createdAt: view.at, updatedAt: view.at, error: null }
+    await mountInbox({ requests: [{ ...row, id: '01REQ0', status: 'requested' }, { ...row, id: '01REQ1', status: 'failed', error: 'The envelope was collected elsewhere' }, { ...row, id: '01REQ2', status: 'collected' }, { ...row, id: '01REQ3', status: 'expired' }], secretsOrigin: 'https://secrets.openape.ai' })
+    const items = wrapper!.findAll('[data-testid="secret-request"]')
+    expect(items).toHaveLength(2)
+    expect(items[0]!.text()).toContain('Geheimnis calendar_bot_token für Morgenbriefing · Calendar-Bot')
+    expect(items[0]!.text()).toContain('ohne Zweckangabe'); expect(items[0]!.text()).toContain('gültig 24 h'); expect(items[0]!.text()).toContain('Anfrage 01REQ0')
+    expect(items[0]!.find('a').attributes('href')).toBe('https://secrets.openape.ai')
+    expect(items[1]!.text()).toContain('fehlgeschlagen'); expect(items[1]!.text()).toContain('Der Umschlag wurde anderswo abgeholt'); expect(items[1]!.find('a').exists()).toBe(false)
+    const total = (wrapper!.vm as unknown as { total: number }).total
+    await items[0]!.find('button').trigger('click')
+    expect(wrapper!.emitted('secrets')).toEqual([[{ type: 'cancel', id: '01REQ0' }]])
+    wrapper!.unmount()
+    await mountInbox({ requests: [{ ...row, id: '01REQ0', status: 'requested' }], desktop: false })
+    expect(wrapper!.find('[data-testid="secret-request"] button').attributes('disabled')).toBeDefined()
+    expect((wrapper!.vm as unknown as { total: number }).total).toBe(total - 1)
+  })
 })

@@ -86,6 +86,13 @@ export class ConnectionManager {
     return owner ? { owner, metadata: await this.metadata(owner.id) } : null
   }
 
+  /** The owner's identity token for an OpenApe service that the desktop uses as the owner. */
+  async ownerBearer(signal: AbortSignal): Promise<string> {
+    const selected = await this.ownerAccount()
+    if (!selected || selected.owner.state !== 'ready' || typeof selected.metadata.issuer !== 'string') throw new Error('Sign in before using OpenApe Secrets')
+    return this.owner.bearer(selected.owner.id, selected.metadata.issuer, selected.owner.account, signal)
+  }
+
   private async podIdentity(state: SetupState, podId: string): Promise<PodIdentityView> {
     const selected = await this.ownerAccount(state)
     if (!selected) return { podId, bound: false, ownerConnection: null, issuer: null, decisionIssuer: null, subject: null, brokerConnectionId: null }
