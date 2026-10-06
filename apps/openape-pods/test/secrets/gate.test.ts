@@ -96,7 +96,8 @@ it('closes cancelled, lapsed and foreign-collected requests without storing anyt
   await instance.cancel(cancelled.id)
   expect(service.requests[0]!.status).toBe('cancelled'); expect(rows[0]!.status).toBe('expired')
   await fill(foreign.id, 'gone'); service.requests[2]!.status = 'fetched'; service.requests[2]!.box = null
-  at += 86400 * 1000 + 1
+  // The service floors expires_at to whole seconds of its own clock; two days clear any second boundary.
+  at += 2 * 86400 * 1000
   await instance.poll()
   expect(rows.map(row => row.status)).toEqual(['expired', 'expired', 'failed'])
   expect(rows[2]!.error).toBe('The envelope was collected elsewhere')
