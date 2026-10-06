@@ -70,7 +70,7 @@ Who can see what, by party. This is the disclosure basis for the native app, the
 | Relay `pods.openape.ai` | Owner `(issuer, subject)`, runtime/device UUIDs and generations, key epochs, command kinds, timing, sizes, delivery outcomes, 30-day audit rows (`device_id`, `action`, `at`). | Chat, script, result or review content: every body is an `encrypted-v1` envelope sealed to one recipient key and signed by the sender. The relay holds no content key and cannot forge an owner command. |
 | Owner identity provider (`id.openape.ai` or the owner's DDISA IdP) | Logins, device enrollment and every run approval: the exact grant request with its command details, decided by the owner in the browser. | Chat and script content, mobile cache, relay routing data. |
 | Model provider configured on the desktop | Prompts and tool results that the desktop sends for the selected Pod, exactly as for desktop-only use. | Mobile transport data. End-to-end encryption of the relay does not hide prompts from the chosen provider. |
-| APNs (planned, M5) | Device token and a content-free wake/navigation hint. | Any content; the app fetches through the relay after waking. |
+| APNs (opt-in, M5) | The device token the owner registered, the runtime UUID as thread/collapse identifier and the fixed wording "A Pod on your desktop has an update." | Any content, account detail, device or operation identifier; the app fetches through the relay after waking. |
 
 Threats considered and their controls:
 
@@ -81,6 +81,7 @@ Threats considered and their controls:
 - **Replay.** Relay request proofs, idempotent operation hashes, dispatch leases, desktop inbox tombstones and the 24-hour replay bound with `resync_required` prevent re-execution; an expired command is reported `unknown` and reconciled on the desktop, never re-sent.
 - **Backup restore.** Restoring a desktop profile rotates the runtime generation: pending commands become `unknown`, pairings and buffered content are dropped, and devices pair again (M2).
 - **Logging.** Relay, desktop remote and native code log no bodies, tokens or paths; the relay audit table has only IDs, actions and times.
+- **Notifications.** APNs is opt-in per installation (`POST`/`DELETE /api/mobile/v1/notifications`). The relay sends a hint only when buffered content waits for a device that has not polled for 30 seconds, at most once per runtime and minute, with a 24-hour expiry and the runtime as collapse identifier. A tap opens the runtime and refreshes; nothing is approved or executed by a notification. Opt-out, device revocation and Apple's `410`/`Unregistered` remove the token. A missing or late notification never changes command truth: the foreground app resyncs through `/events` regardless.
 
 Residual risks, stated: no forward secrecy after compromise of a long-lived recipient agreement key (rotation requires a new pairing); endpoint compromise, screenshots and authorized provider output are endpoint concerns; a revoked device keeps what it already displayed. A plaintext transport mode does not exist, so there is no downgrade path to negotiate; `encryption_required` (426) refuses peers without `encrypted-v1`.
 

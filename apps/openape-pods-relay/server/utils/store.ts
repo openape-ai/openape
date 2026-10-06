@@ -28,6 +28,8 @@ export class RelayStore {
       CREATE TABLE IF NOT EXISTS event_watermarks(device_id TEXT PRIMARY KEY,floor INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS auth_flows(id TEXT PRIMARY KEY,state TEXT UNIQUE,body TEXT NOT NULL,expires INTEGER NOT NULL,code_hash TEXT UNIQUE);
       CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,device_id TEXT NOT NULL,action TEXT NOT NULL,at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS push_tokens(device_id TEXT PRIMARY KEY REFERENCES registrations(id),token TEXT NOT NULL,environment TEXT NOT NULL,updated_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS device_polls(device_id TEXT PRIMARY KEY,at INTEGER NOT NULL);
       PRAGMA user_version=1;`)
   }
 
@@ -116,6 +118,7 @@ export class RelayStore {
       this.db.prepare('DELETE FROM pairings WHERE device_id=? OR runtime_id=?').run(id, id)
       this.db.prepare('DELETE FROM events WHERE device_id=? OR runtime_id=?').run(id, id)
       this.db.prepare('UPDATE operations SET envelope=NULL WHERE device_id=? OR runtime_id=?').run(id, id)
+      this.db.prepare('DELETE FROM push_tokens WHERE device_id=?').run(id)
       this.audit(id, 'revoked')
     })
   }
@@ -218,12 +221,36 @@ export class RelayStore {
     })
   }
 
+  /// Opt-in APNs registration for one mobile installation. The token is an opaque Apple identifier, never content.
+  registerPush(actor: Registration, token: string, environment: string): void {
+    if (actor.kind !== 'mobile') throw new ProtocolError('not_found', 404)
+    if (!/^[0-9a-f]{64,400}$/.test(token)) throw new ProtocolError('invalid_push_token')
+    if (!['development', 'production'].includes(environment)) throw new ProtocolError('invalid_push_environment')
+    this.db.prepare('INSERT INTO push_tokens VALUES(?,?,?,?) ON CONFLICT(device_id) DO UPDATE SET token=excluded.token,environment=excluded.environment,updated_at=excluded.updated_at').run(actor.id, token, environment, this.now())
+    this.audit(actor.id, 'push_registered')
+  }
+
+  unregisterPush(deviceId: string, reason: 'opt_out' | 'unregistered'): void {
+    const removed = this.db.prepare('DELETE FROM push_tokens WHERE device_id=?').run(deviceId).changes
+    if (removed) this.audit(deviceId, reason === 'opt_out' ? 'push_unregistered' : 'push_token_unregistered')
+  }
+
+  pushTarget(deviceId: string): { token: string, environment: 'development' | 'production' } | null {
+    const row = this.db.prepare('SELECT token,environment FROM push_tokens WHERE device_id=?').get(deviceId)
+    return row ? { token: String(row.token), environment: row.environment as 'development' | 'production' } : null
+  }
+
+  lastPoll(deviceId: string): number {
+    return Number(this.db.prepare('SELECT at FROM device_polls WHERE device_id=?').get(deviceId)?.at ?? 0)
+  }
+
   syncCursor(actor: Registration): string {
     return String(this.db.prepare('SELECT max(value) AS cursor FROM (SELECT coalesce(max(sequence),0) AS value FROM events WHERE device_id=? UNION ALL SELECT floor AS value FROM event_watermarks WHERE device_id=?)').get(actor.id, actor.id)?.cursor ?? 0)
   }
 
   events(actor: Registration, cursor: string) {
     if (!/^(?:0|[1-9]\d{0,18})$/.test(cursor)) throw new ProtocolError('invalid_cursor')
+    this.db.prepare('INSERT INTO device_polls VALUES(?,?) ON CONFLICT(device_id) DO UPDATE SET at=excluded.at').run(actor.id, this.now())
     const floor = BigInt(String(this.db.prepare('SELECT floor FROM event_watermarks WHERE device_id=?').get(actor.id)?.floor ?? 0))
     if (BigInt(cursor) < floor) throw new ProtocolError('resync_required', 410)
     return this.db.prepare('SELECT sequence,envelope FROM events WHERE device_id=? AND sequence>? ORDER BY sequence LIMIT 100').all(actor.id, BigInt(cursor)).map(row => ({ cursor: String(row.sequence), envelope: parseEnvelope(JSON.parse(row.envelope as string)) }))
@@ -253,6 +280,7 @@ export class RelayStore {
       }
       this.db.prepare('DELETE FROM operations WHERE created_at<?').run(this.now() - limits.receiptMs)
       this.db.prepare('DELETE FROM audit WHERE at<?').run(this.now() - limits.receiptMs)
+      this.db.prepare('DELETE FROM device_polls WHERE device_id IN (SELECT id FROM registrations WHERE revoked=1)').run()
       this.db.prepare('DELETE FROM used_refresh WHERE family IN (SELECT family FROM sessions WHERE refresh_until<=? OR idle_until<=?)').run(this.now(), this.now())
       this.db.prepare('DELETE FROM sessions WHERE refresh_until<=? OR idle_until<=?').run(this.now(), this.now())
       this.db.prepare('DELETE FROM request_proofs WHERE expires<=?').run(this.now())
