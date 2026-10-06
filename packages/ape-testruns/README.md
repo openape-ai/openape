@@ -1,9 +1,9 @@
 # OpenApe Reports CLI
 
 This package provides `ape-reports` for finished HTML documents and the compatible
-`ape-testruns` uploader. The single-file commands are new in the upcoming 0.4
-release; production rollout and registry publication are tracked in issue 1429.
-Do not infer availability from this source checkout.
+`ape-testruns` uploader. The single-file commands are available in the published 0.4.0 release.
+Reports and migrated Plans use the same production collection; legacy uploads
+and Plans URLs remain compatible.
 
 ```sh
 npm install -g @openape/ape-testruns
