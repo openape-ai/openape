@@ -27,7 +27,8 @@
     "nuxt": "catalog:",
     "sanitize-html": "^2.14.0",
     "tailwindcss": "catalog:",
-    "ulid": "catalog:"
+    "ulid": "catalog:",
+    "@openape/report-contracts": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "catalog:",

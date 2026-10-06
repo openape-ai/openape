@@ -1,4 +1,5 @@
 import { defineCommand } from 'citty'
+import { version } from '../package.json'
 import {
   makeDocsCommand,
   makeLoginCommand,
@@ -30,7 +31,7 @@ const DOCS: Record<string, string> = { agent, auth, cli, manifest, documents }
 const main = defineCommand({
   meta: {
     name: 'ape-testruns',
-    version: '0.1.1',
+    version,
     description: [
       'Upload a test run — descriptions, screenshots, pass/fail — and share one',
       'link that proves it works: https://testrun.openape.ai/r/<slug>.',
