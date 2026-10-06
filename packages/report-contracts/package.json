@@ -7,7 +7,8 @@
   "exports": {
     "./html": "./src/html.ts",
     "./plans-bridge": "./src/plans-bridge.ts",
-    "./plans-renderer": "./src/plans-renderer.ts"
+    "./plans-renderer": "./src/plans-renderer.ts",
+    "./run-manifest": "./src/run-manifest.ts"
   },
   "scripts": {
     "lint": "eslint .",

@@ -1,3 +1,4 @@
+import { teamCommands } from './reports-teams'
 import { parseArgs } from 'node:util'
 import { ReportError } from '@openape/report-contracts/html'
 
@@ -27,7 +28,8 @@ export const reportsCommands: Record<string, { description: string, usage: strin
   receipt: { description: 'Recover an exact publication receipt', usage: '--key <key>', options: { key: write.key }, details: 'Lookup is scoped to the authorized publication identity. Never submit with a new key to resolve an unknown write outcome.' },
   categories: { description: 'List accessible categories and document counts', usage: '', options: { ...pages, search: string('Filter labels'), team: string('Accessible team ID') }, details: 'No setup required. Current editions only; private labels are never exposed.' },
   tags: { description: 'List accessible tags and document counts', usage: '', options: { ...pages, search: string('Filter labels'), category: string('Restrict suggestions to a category'), team: string('Accessible team ID') }, details: 'NFC, whitespace normalization, lowercase and deduplication. At most 20 tags of 64 code points. Labels grant no permissions and trigger no action.' },
-  teams: { description: 'List available teams and caller roles', usage: '', options: pages, details: 'Team creation, membership and invitations use the compatible Plans UI/API and ape-plans commands.' },
+  teams: { description: 'List teams and caller roles, including archived teams', usage: '', options: { ...pages }, details: 'Use teams create, show, members, update, invite, invites, accept, revoke-invite, remove-member, archive, unarchive or rm. No default team is silently applied to private publications.' },
+  ...teamCommands,
   access: { description: 'Inspect or replace document access', usage: 'show|set <document-id>', options: { ...audiences, 'expected-access-revision': string('Required for set; rejects stale policy writes') }, details: 'set requires exactly one audience. Owner/administrator only; series publishers have no administration rights. Owner retains access. Public includes history. No invitation, email or notification. Does not create a content version or revive expired documents.' },
   retention: { description: 'Inspect or explicitly change lifetime', usage: 'show|set <document-id>', options: { ...lifetimes, 'expected-retention-revision': string('Required for set; rejects stale policy writes') }, details: 'set requires exactly one lifetime. A day is 24 hours. All editions share a deadline; publication never renews it. Expired/deleted documents require restore. Recovery lasts 30 days before online content is purged; backups follow their separate retention.' },
   rm: { description: 'Remove with a 30-day recovery period', usage: '<document-id> --expected-version <n>', options: { 'expected-version': write['expected-version'] }, details: 'Owner/administrator only. Denies all version reads immediately. Repeated removal does not restart recovery. No immediate hard-delete command.' },
@@ -47,11 +49,12 @@ export function reportsHelp(command?: string) {
 export function parseReportsArgs(argv: string[]) {
   if (!argv.length || argv[0] === '--help' || argv[0] === '-h') return { command: '', positionals: [], values: { help: true } }
   if (argv[0] === '--version' && argv.length === 1) return { command: '', positionals: [], values: { version: true } }
-  const command = argv[0]!
+  const nested = argv[0] === 'teams' && argv[1] && !argv[1].startsWith('-')
+  const command = nested ? `teams ${argv[1]}` : argv[0]!
   const definition = reportsCommands[command]
   if (!definition) throw new ReportError('USAGE', `Unknown command: ${command}`)
   try {
-    const parsed = parseArgs({ args: argv.slice(1), options: { ...globalOptions, ...definition.options }, allowPositionals: true, strict: true })
+    const parsed = parseArgs({ args: argv.slice(nested ? 2 : 1), options: { ...globalOptions, ...definition.options }, allowPositionals: true, strict: true })
     return { command, ...parsed }
   }
   catch (error) { throw new ReportError('USAGE', error instanceof Error ? error.message : 'Invalid arguments') }

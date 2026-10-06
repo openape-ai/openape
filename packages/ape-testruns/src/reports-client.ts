@@ -17,10 +17,13 @@ export function reportsClient(endpoint: string) {
     catch (error) { throw new ReportError('TRANSPORT', `Service unavailable or unknown write outcome. Retain the original key and bytes; use receipt or an identical retry. ${error instanceof Error ? error.message : ''}`, 503) }
     if (!response.ok) {
       const raw = await response.text()
-      let failure: { data?: { code?: string, message?: string }, message?: string }
-      try { failure = JSON.parse(raw) }
-      catch { failure = { message: raw.slice(0, 300) } }
-      throw new ReportError(failure.data?.code ?? (response.status === 409 ? 'CONFLICT' : 'SERVICE'), failure.data?.message ?? failure.message ?? `HTTP ${response.status}`, response.status)
+      let parsed: unknown
+      try { parsed = JSON.parse(raw) }
+      catch { parsed = { message: raw.slice(0, 300) } }
+      const failure = parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {}
+      const data = failure.data && typeof failure.data === 'object' ? failure.data as Record<string, unknown> : {}
+      const message = [data.message, data.detail, failure.detail, failure.message, failure.title, failure.statusMessage].find(value => typeof value === 'string' && value.length)
+      throw new ReportError(typeof data.code === 'string' ? data.code : response.status === 409 ? 'CONFLICT' : 'SERVICE', typeof message === 'string' ? message : `HTTP ${response.status}`, response.status)
     }
     return text ? await response.text() : await response.json()
   }

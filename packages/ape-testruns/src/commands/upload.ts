@@ -43,6 +43,7 @@ export const uploadCommand = defineCommand({
     'task-ref': { type: 'string', description: 'Work this run belongs to ("ape-tasks:<id>"); attaches the report as proof in troop.' },
   },
   async run({ args }) {
+    info('Deprecated: render with ape-report-render test-run, then publish with ape-reports. Legacy uploads remain available during migration.')
     const dir = resolve(args.dir ?? '.')
     const manifestPath = args.manifest ? resolve(args.manifest) : join(dir, 'testrun.json')
 
