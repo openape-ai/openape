@@ -1,5 +1,18 @@
 # Active work
 
+## Single-HTML Reports and Plans consolidation — issue 1429
+
+- Plan: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M486HDNVQDQED9S45AJTJNF3
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1429
+- Owner explicitly approved end-to-end implementation in the fresh session on October 6, 2026. Approval is recorded in the synchronized plan, independently of status.
+- Worktree: `openape-monorepo.worktrees/issue-1429-reports`; branch `feature/issue-1429-generic-report-documents`; base `64b8d98ff69390636e640637aa08a51157504662`.
+- M1 evidence: https://report.openape.ai/r/D8KMoQ-Z2JsUNwQ_EcJGn2j5 (Test Runs). Owner accepted publisher-trusted active HTML with no absolute network-egress promise; Safari remote automation is disabled; native Safari prototype interaction and rendering were personally inspected without changing settings. Complete service census: 154 Plans (including 2 deleted), 2 teams/2 memberships, no invitations; Reports inventory is retained privately.
+- Owner also requires versions for legacy Plans writes; old unversioned clients receive an upgrade response.
+- M2–M5 implementation: HTML store/policies/capabilities, CLI, collection/source editor, Plans teams/invites/source adapter and compiled migration/reverse operator. Full root lint (55 tasks), typecheck (78 tasks), Reports build, 74 Reports unit tests, 31 serial Reports E2E tests, 12 layout tests, 27 Plans tests and 11 CLI tests pass. Eight current authenticated Chrome screenshots were personally inspected. Packed CLI installs and previews outside the workspace. The built-server E2E suite denies all routes and health until current backup policies reconcile, including missing/invalid journals.
+- Full-copy operator rehearsal imported 154 Plans, repeated with zero additions, reconciled source/metadata/roles, preserved a newer source edit during reverse mapping and denied a stale reverse apply. Protected source snapshots are not published. No production cutover occurred; all producer state remains preserved. npm authentication is available again.
+- Remaining: native review/CI and merge, scoped CLI version/release PR, tested production deployment/migration, installed-release journeys, retired-writer removal, guidance/evidence reconciliation and manual issue close. No production acceptance is claimed.
+
+
 ## Descriptions through the central workspace — issue 1426
 
 [Issue1426](https://repos.openape.ai/patrick/monorepo/issues/1426), closed. [PR246](https://repos.openape.ai/patrick/monorepo/pulls/246) merged as `42541063df04c2977e8b0f94e2861531b5b54c67`; exact-source and full-main checks passed; 1,358 Pods tests and 35 relay tests passed.

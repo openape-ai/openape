@@ -4,11 +4,14 @@ import { createHash, randomBytes } from 'node:crypto'
 import { setTimeout } from 'node:timers/promises'
 import { ulid } from 'ulid'
 import { createProblemError } from './problem'
+import { transaction } from './html-store'
 
 export async function createReportSeries(client: Client, owner: string, name: string) {
-  const id = ulid(); const slug = randomBytes(18).toString('base64url')
-  await client.execute({ sql: 'INSERT INTO report_series (id, owner, name, slug, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(owner, name) DO NOTHING', args: [id, owner, name, slug, Date.now()] })
-  return (await client.execute({ sql: 'SELECT id, name, slug, publisher, revision FROM report_series WHERE owner = ? AND name = ?', args: [owner, name] })).rows[0]!
+  return transaction(client, async (tx) => {
+    const id = ulid(); const slug = randomBytes(18).toString('base64url')
+    await tx.execute({ sql: 'INSERT INTO report_series (id, owner, name, slug, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(owner, name) DO NOTHING', args: [id, owner, name, slug, Date.now()] })
+    return (await tx.execute({ sql: 'SELECT id, name, slug, publisher, revision FROM report_series WHERE owner = ? AND name = ?', args: [owner, name] })).rows[0]!
+  })
 }
 
 async function publishBriefingOnce(client: Client, briefing: Briefing, raw: string, publisher: string, key: string) {

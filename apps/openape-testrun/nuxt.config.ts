@@ -26,8 +26,17 @@ export default defineNuxtConfig({
     publicUrl: '',
     briefingUrl: '',
     documentPublishingEnabled: false,
+    htmlPublishingEnabled: false,
+    htmlWritesFrozen: false,
+    plansConsolidated: false,
+    plansWritesFrozen: false,
+    plansBridgeSecret: '',
+    plansInviteSecret: '',
+    htmlContentOrigin: '',
+    htmlPolicyJournalPath: '',
     public: {
       siteName: 'OpenApe Reports',
+      htmlContentOrigin: '',
     },
   },
 
@@ -50,9 +59,9 @@ export default defineNuxtConfig({
     // tokens against the entry ids.
     manifest: {
       scopes: [
-        { id: 'reports:read', description: 'Read your report collection and private documents.', grants: ['GET /api/reports', 'GET /api/report-series', 'GET /api/public/runs/:slug', 'GET /api/public/runs/:slug/document', 'GET /api/public/runs/:slug/assets/*'] },
-        { id: 'reports:publish', description: 'Publish reports and reconcile exact receipts.', grants: ['POST /api/reports', 'POST /api/reports/preview', 'GET /api/reports/publication', 'GET /api/report-series/:id/editions/:date/publication'] },
-        { id: 'reports:manage', description: 'Create your series and manage its publisher.', grants: ['POST /api/report-series', 'PUT /api/report-series/:id/publisher'] },
+        { id: 'reports:read', description: 'Read your report collection and private documents.', grants: ['GET /api/plans-compat/teams', 'GET /api/plans-compat/teams/:id', 'GET /api/plans-compat/teams/:id/plans', 'GET /api/plans-compat/teams/:id/invites', 'GET /api/plans-compat/plans/:id', 'GET /api/documents', 'GET /api/documents/:id', 'GET /api/documents/:id/:action', 'POST /api/documents/:id/viewer', 'GET /api/reports', 'GET /api/report-series', 'GET /api/public/runs/:slug', 'GET /api/public/runs/:slug/document', 'GET /api/public/runs/:slug/assets/*'] },
+        { id: 'reports:publish', description: 'Publish reports and reconcile exact receipts.', grants: ['POST /api/documents', 'PATCH /api/documents/:id', 'POST /api/reports', 'POST /api/reports/preview', 'GET /api/reports/publication', 'GET /api/report-series/:id/editions/:date/publication'] },
+        { id: 'reports:manage', description: 'Create your series and manage its publisher.', grants: ['POST /api/plans-compat/teams', 'POST /api/plans-compat/teams/:id/plans', 'POST /api/plans-compat/teams/:id/invites', 'POST /api/plans-compat/teams/:id/archive', 'POST /api/plans-compat/teams/:id/unarchive', 'POST /api/plans-compat/invites/accept', 'PATCH /api/plans-compat/plans/:id', 'PATCH /api/plans-compat/teams/:id', 'DELETE /api/plans-compat/plans/:id', 'DELETE /api/plans-compat/teams/:id', 'DELETE /api/plans-compat/teams/:id/members/:email', 'DELETE /api/plans-compat/invites/:id', 'POST /api/documents/:id/access', 'POST /api/documents/:id/retention', 'POST /api/documents/:id/restore', 'DELETE /api/documents/:id', 'POST /api/report-series', 'PUT /api/report-series/:id/publisher'] },
         {
           id: 'testruns:read',
           description: 'List and read your uploaded test runs.',
@@ -68,6 +77,7 @@ export default defineNuxtConfig({
   },
 
   nitro: {
+    externals: { inline: ['@openape/report-contracts'] },
     preset: 'node-server',
   },
 })
