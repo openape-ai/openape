@@ -12,6 +12,13 @@ auditConfig:
     - CVE-2026-85393
   ignoreGhsas:
     - GHSA-vfj7-8cjw-p6xm
+    # simple-git 3.x via nuxt > @nuxt/devtools (development tooling only).
+    # Owner decision 2026-10-06, issue 1428: simple-git 4 drops the default export
+    # that every @nuxt/devtools 3.x release imports, so no update resolves these.
+    - GHSA-x6jw-m9v5-85vh
+    - GHSA-g4wm-2vf7-vfgr
+    - GHSA-858h-whjf-mvg5
+    - GHSA-v5rq-49vh-5v5c
 
 # Quarantine new npm releases for seven days. First-party packages are exempt.
 minimumReleaseAge: 10080
@@ -28,6 +35,9 @@ minimumReleaseAgeExclude:
   # Exact pin prevents this exception admitting newer, unquarantined releases.
   # Published 2026-08-03 02:36 UTC; eligible 2026-08-10 02:36 UTC.
   - hono
+  # source-map-js 1.2.2: GHSA-68fv-2mgg-jv7q. Exact override pin, see overrides.
+  # Published 2026-09-30 14:08 UTC; eligible 2026-10-07 14:08 UTC.
+  - source-map-js
 
 catalog:
   '@antfu/eslint-config': ^7.7.3
@@ -108,15 +118,24 @@ overrides:
   # the advisories do not require js-yaml 5 or nanoid 5.
   'js-yaml@4': '>=4.3.1'
   'nanoid@3': '>=3.3.18'
-  # A single Vue instance is required: Nuxt 4.5.2 needs 3.5.41.
+  # A single Vue instance is required: Nuxt 4.5.2 accepts ^3.5.40.
   # Duplicate instances broke six CRM component tests through resolveComponent.
-  vue: '>=3.5.41'
+  # GHSA-g2v6-rqmx-r4w6 (@vue/server-renderer <3.5.42); 3.5.43 published 2026-09-17.
+  vue: '>=3.5.43'
   lodash: ^4.17.21
   node-forge: '>=1.4.0'
   path-to-regexp: '>=8.4.0'
+  # GHSA-jqcg-44mw-7w3h; 2.0.8 published 2026-09-15.
+  proxy-addr: '>=2.0.8'
+  # GHSA-c8x8-7fp4-3x9w; 1.42.3 published 2026-08-24.
+  prosemirror-view: '>=1.42.3'
   picomatch: '>=4.0.4'
   postcss: '>=8.5.18'
   serialize-javascript: '>=7.0.3'
+  # GHSA-jp82-f5mq-hwhp; 1.6.3 and later published in September 2026.
+  seroval: '>=1.6.3'
+  # GHSA-68fv-2mgg-jv7q. Exact pin: 1.2.2 is still inside the seven-day quarantine.
+  source-map-js: 1.2.2
   # Patched releases verified on 2026-09-12; all exceed the seven-day quarantine.
   # Tiptap declares exact peer versions, so its package family moves together.
   '@tiptap/core': 3.30.5
@@ -160,7 +179,8 @@ overrides:
   sharp: 0.35.4
   smol-toml: 1.7.1
   shell-quote: '>=1.8.4'
-  simple-git: '>=3.36.0'
+  # 4.x removes the default export that @nuxt/devtools 3.x imports; see ignoreGhsas.
+  simple-git: '>=3.36.0 <4'
   socket.io-parser: '>=4.2.7'
   svgo: 4.1.0
   ws: '>=8.21.0'
