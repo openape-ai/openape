@@ -3,6 +3,8 @@ import { t, diagnostic } from '../i18n'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { CentralStatus } from '../../contracts/central'
 import CentralWorkspace from './CentralWorkspace.vue'
+import AutomationsShell from './AutomationsShell.vue'
+import type { MapView } from '../../contracts/map-view'
 import { desktopWorkspaceClient } from './client'
 import App from '../App.vue'
 import WorkspaceFrame from '../WorkspaceFrame.vue'
@@ -18,7 +20,9 @@ import type { Organization } from '../../contracts/groups'
 
 const invoke = window.pods.central!
 const client = desktopWorkspaceClient(invoke)
-const page = ref('Workflows')
+const page = ref('Automations')
+const map = ref<MapView | null>(null)
+const now = ref(Date.now())
 const workspace = ref<InstanceType<typeof CentralWorkspace> | null>(null)
 const workflows = ref<WorkflowView>({ workflows: [], runs: [] })
 const pods = ref<StoredPod[]>([])
@@ -35,8 +39,8 @@ let timer: ReturnType<typeof setTimeout> | undefined
 let closed = false
 async function poll() {
   try {
-    const [value, view, inventory] = await Promise.all([invoke({ type: 'status' }), window.pods.workflows({ type: 'list' }), window.pods.workspace({ type: 'list' })])
-    status.value = (value as CentralStatus & { enabled?: boolean }).enabled === false ? null : value as CentralStatus; workflows.value = view; workspaceChanged(inventory); error.value = ''
+    const [value, view, inventory] = await Promise.all([invoke({ type: 'status' }), window.pods.workflows({ type: 'list' }), window.pods.workspace({ type: 'map' })])
+    status.value = (value as CentralStatus & { enabled?: boolean }).enabled === false ? null : value as CentralStatus; workflows.value = view; workspaceChanged(inventory); map.value = inventory.map ?? null; now.value = Date.now(); error.value = ''
   }
   catch (cause) { error.value = String(cause) }
   if (!closed) timer = setTimeout(() => { void poll() }, 1000)
@@ -66,7 +70,7 @@ async function openPod(id: string) {
 </script>
 
 <template>
-  <WorkspaceFrame :page="page" :count="pods.filter(pod => pod.lifecycle !== 'archived').length" @navigate="navigate">
+  <WorkspaceFrame automations :page="page" :count="pods.filter(pod => pod.lifecycle !== 'archived').length" @navigate="navigate">
     <template #account>
       <AccountStatus @open="page = 'App settings'" />
     </template>
@@ -79,6 +83,7 @@ async function openPod(id: string) {
     <p v-if="error" role="alert" class="error-message">
       {{ diagnostic(error) }}
     </p>
+    <AutomationsShell v-if="page === 'Automations'" :view="map" :live="true" :now="now" :decisions="map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" @settings="page = 'App settings'" @open="openPod" />
     <section v-show="page === 'Workflows'">
       <template v-if="sharing">
         <button class="text-button" @click="sharing = null">

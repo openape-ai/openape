@@ -1716,3 +1716,10 @@ are implied by merging this preparation increment.
 - Base: `6b02cfc36508e1fe79dd4c4ffcbe81dc78edc85d`. Frozen install and doctor pass.
 - Implemented generic private documents/categories, parser sanitization, HTTP/iframe sandbox, compatible adapters and the receipt-first PR client. Full lint/typecheck and app builds pass; Reports 57 unit + 16 E2E + nine layout tests, Pods 629 tests and CLI four tests pass. Migration twice preserves all legacy rows; the deployed rollback image safely rejects new private documents. See `docs/operations/generic-reports-migration.md`.
 - Next: native PR/exact-source CI, clean-main deployment, real no-send producer previews, evidence upload, guidance and activation. Production, schedules and guidance are unchanged until acceptance.
+
+## Pods redesign: Automatisierungen and Entscheidungen — issue 1430
+
+- Plan: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M48KYW8JJKRSRDWRJ9DQT13Q (repo copy `.claude/plans/2026-10-06-pods-redesign.md`; mock, capture script and reference manifest under `.claude/plans/pods-redesign/`). Issue: https://repos.openape.ai/patrick/monorepo/issues/1430. Owner approved the autonomous run M0 to M8 on October 6, 2026; M9 (signed release, relay deploy, acceptance) stays an owner gate.
+- Worktrees `openape-monorepo.worktrees/pods-redesign-m<k>`, branches `feature/issue-1430-pods-redesign-m<k>`, one PR per milestone.
+- M0 merged as `82d39a3a` (PR 267): `view=map` read model in `src/worker/workspace/map-view.ts`, published as `workspace.map`, relay `read view=map`, MCP read; synthetic 38-Pod fixture `test/worker/map-fixture.ts` and its JSON export `test/renderer/map-view.json`. The published variant keeps network members' rights, runs and system edges local.
+- M1 (this branch): `AutomationsShell`, `KpiRow`, `AutomationsMap` (canvas), `AutomationsList`, `AutomationInfo` under `src/renderer/central/`, utilities `automation-layout.ts`, `kpis.ts`, `cadence.ts`; mounted as the default page of the desktop and browser workspaces. Evidence through `apps/openape-pods/scripts/redesign-evidence.mjs` (screens carry the reference run's ids).

@@ -1,0 +1,77 @@
+import { flushPromises, mount } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
+import { afterEach, describe, expect, it } from 'vitest'
+import { page } from 'vitest/browser'
+import type { MapView } from '../../src/contracts/map-view'
+import { parseMapView } from '../../src/contracts/map-view'
+import AutomationsShell from '../../src/renderer/central/AutomationsShell.vue'
+import { applyLanguage } from '../../src/renderer/i18n'
+import { colorResolver, geometry } from '../../src/renderer/utils/automation-layout'
+import fixture from '../renderer/map-view.json'
+import { screenshotPath } from './evidence'
+
+// Geometry of the Automatisierungen surface with the production stylesheet: the canvas height
+// follows the content, the info panel moves below the map under 1000 px, dark mode uses tokens.
+// Text and commands are asserted in test/renderer/automations-shell.test.ts.
+const view = parseMapView(fixture) as MapView
+const NOW = view.at + 11 * 60000
+// Nodes ease towards their targets at 14 % per frame; 40 frames bring them within a pixel.
+const frames = (count = 40) => new Promise<void>((done) => { const tick = (left: number) => left ? requestAnimationFrame(() => tick(left - 1)) : done(); tick(count) })
+let wrapper: VueWrapper | undefined
+afterEach(() => { wrapper?.unmount(); wrapper = undefined; document.documentElement.style.colorScheme = ''; applyLanguage('en') })
+async function mountShell(width: number, height: number, dark = false) {
+  await page.viewport(width, height)
+  document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+  applyLanguage('de')
+  wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, decisions: 17 } })
+  await flushPromises(); await frames()
+  return wrapper
+}
+const button = (text: string) => wrapper!.findAll('button').find(item => item.text().trim() === text)!
+const canvas = () => document.querySelector('[data-testid="automations-map"] canvas') as HTMLCanvasElement
+async function shot(name: string) { expect(document.documentElement.scrollWidth, `${name}: page overflow`).toBeLessThanOrEqual(innerWidth); await page.screenshot({ path: screenshotPath(`redesign-${name}.png`) }) }
+
+describe('Automatisierungen layout', () => {
+  it('sizes the canvas from its content and relays out a filtered group', async () => {
+    await mountShell(1440, 1000)
+    const full = canvas().height
+    expect(full).toBeGreaterThan(geometry.firstRow + geometry.cluster.h + geometry.chain.h + geometry.single.h + geometry.collapsed.h)
+    expect(canvas().getBoundingClientRect().width).toBeGreaterThan(700)
+    const info = document.querySelector('.automation-info')!.getBoundingClientRect()
+    expect(info.width).toBe(300)
+    expect(info.left).toBeGreaterThan(canvas().getBoundingClientRect().right)
+    await shot('01-automatisierungen-karte')
+    await shot('02-automatisierungen-karte-voll')
+    await button('iurio').trigger('click'); await flushPromises(); await frames()
+    expect(canvas().height).toBe(geometry.columnStart + 4 * geometry.columnStep + 60)
+    expect(canvas().height).toBeLessThan(full)
+    await shot('03-gruppe-iurio')
+    await button('Alle').trigger('click'); await flushPromises(); await frames()
+    expect(canvas().height).toBe(full)
+    await button('Liste').trigger('click'); await flushPromises()
+    expect(document.querySelector('.automations-list')!.getBoundingClientRect().width).toBeGreaterThan(1000)
+    await shot('04-liste')
+  })
+
+  it('moves the info panel below the map under 1000 px and keeps the toolbar inside 390 px', async () => {
+    await mountShell(390, 844)
+    const map = canvas().getBoundingClientRect(); const info = document.querySelector('.automation-info')!.getBoundingClientRect()
+    expect(info.top).toBeGreaterThanOrEqual(map.bottom)
+    expect(map.width).toBeLessThanOrEqual(390)
+    expect(document.querySelector('.automations-toolbar')!.getBoundingClientRect().right).toBeLessThanOrEqual(390)
+    await shot('12-mobil-karte')
+  })
+
+  it('renders the dark scheme from tokens', async () => {
+    await mountShell(1440, 1000, true)
+    // Canvas needs resolved colours; the probe turns a light-dark() token into the scheme's rgb value.
+    const resolve = colorResolver(document.body)
+    expect(resolve('--surface')).toMatch(/^rgb\(/)
+    expect(resolve('--surface')).not.toBe('rgb(255, 255, 255)')
+    const pixel = canvas().getContext('2d')!.getImageData(geometry.systemX, geometry.columnStart, 1, 1).data
+    expect(pixel[3]).toBeGreaterThan(0)
+    const background = getComputedStyle(document.querySelector('.kpi')!).backgroundColor
+    expect(background).not.toBe('rgb(255, 255, 255)')
+    await shot('14-dunkel-karte')
+  })
+})
