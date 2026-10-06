@@ -64,11 +64,7 @@ describe('workspace shell with the production stylesheet', () => {
       await show(width, height, scheme)
       const brand = wrapper!.get('.workspace-brand').element.getBoundingClientRect()
       expect(brand.top, 'brand clears native macOS window controls').toBeGreaterThanOrEqual(36)
-      if (width > 600) {
-        const settings = wrapper!.get('.nav-settings').element.getBoundingClientRect()
-        const account = wrapper!.get('.workspace-account').element.getBoundingClientRect()
-        expect(settings.bottom, 'settings sits directly above the account').toBeCloseTo(account.top, 0)
-      }
+
       for (const name of tabs[language]) {
         await click('[role="tab"]', name)
         expect(wrapper!.get('[role="tab"][aria-selected="true"]').text()).toBe(name)
@@ -117,27 +113,11 @@ describe('workspace shell with the production stylesheet', () => {
     await page.screenshot({ path: artifact('schedule-settings.png'), element: document.querySelector('.schedule-panel')! })
   })
 
-  it('wraps a long group name inside the narrow sidebar instead of widening it', async () => {
-    const longName = 'LongGroupName'.repeat(7)
-    await mountWorkspace({ workspace: async () => ({ organization: { revision: 2, groups: [{ id: '00000000-0000-4000-8000-0000000000a1', name: longName, collapsed: false, podIds: [pods[0]!.id] }] }, pods: structuredClone(pods) }) })
-    await show(560, 840, 'dark')
-    await click('.workspace-navigation button[aria-label="Pods"]')
-    await wrapper!.get('.inventory-groups summary').trigger('click'); await frame()
-    const label = Array.from(document.querySelectorAll<HTMLElement>('.group-name')).find(element => element.textContent === longName)!
-    expect(label.clientWidth).toBeGreaterThan(0)
-    expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth)
-    expect(overflow()).toEqual(fits)
-    // Counter-check: without wrapping, the same label does overflow.
-    label.style.overflowWrap = 'normal'
-    expect(label.scrollWidth).toBeGreaterThan(label.clientWidth)
-    label.style.removeProperty('overflow-wrap')
-  })
-
   it('keeps the language switcher inside a narrow dark window', async () => {
     applyLanguage('de')
     await mountWorkspace()
     await show(560, 840, 'dark')
-    await click('.workspace-navigation button[aria-label="App-Einstellungen"]')
+    await click('.account-status')
     const select = document.querySelector<HTMLElement>('.language-control select')!
     expect(select.getBoundingClientRect().width).toBeGreaterThan(0)
     expect(select.getBoundingClientRect().right).toBeLessThanOrEqual(innerWidth)

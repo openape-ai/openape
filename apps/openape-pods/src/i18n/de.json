@@ -4233,5 +4233,14 @@
   "Invalid secrets view": "Ungültige Secrets-Ansicht",
   "Invalid secrets consumer": "Ungültiger Secrets-Consumer",
   "Invalid secret request": "Ungültige Geheimnis-Anfrage",
-  "Secret request not found": "Geheimnis-Anfrage nicht gefunden"
+  "Secret request not found": "Geheimnis-Anfrage nicht gefunden",
+  "Export…": "Exportieren…",
+  "Import…": "Importieren…",
+  "Portable Pods": "Portable Pods",
+  "More settings": "Weitere Einstellungen",
+  "Open desktop settings…": "Desktop-Einstellungen öffnen…",
+  "sign-in flows, Jev key, MCP duration, data and backups": "Anmeldungen, Jev-Schlüssel, MCP-Dauer, Daten und Backups",
+  "online": "online",
+  "offline": "offline",
+  "Create your first Pod from the Automations tab: hand a brief to Codex.": "Den ersten Pod über den Tab Automatisierungen anlegen: einen Auftrag an Codex übergeben."
 }
