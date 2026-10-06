@@ -18,6 +18,21 @@ struct PodDetailView: View {
         Spacer()
         if model.busy { ProgressView() }
       }.padding(.horizontal).padding(.vertical, 8).foregroundStyle(.secondary)
+      if !model.desktopHandoff.isEmpty {
+        VStack(alignment: .leading, spacing: 6) {
+          Label("Waiting for your desktop", systemImage: "desktopcomputer").font(
+            .subheadline.bold())
+          ForEach(model.desktopHandoff, id: \.self) { reason in
+            Text(reason).font(.caption).fixedSize(horizontal: false, vertical: true)
+          }
+          Text("Finish the step in OpenApe Pods on the Mac, then refresh here.").font(.caption)
+            .foregroundStyle(.secondary)
+        }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
+          .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+          .padding(.horizontal).padding(.bottom, 8)
+          .accessibilityElement(children: .combine)
+          .accessibilityIdentifier("desktop.handoff")
+      }
       Picker("Pod section", selection: $section) {
         ForEach(["Chat", "Runs", "Setup"], id: \.self) { Text($0) }
       }.pickerStyle(.segmented).padding(.horizontal)
@@ -65,6 +80,10 @@ struct PodDetailView: View {
     VStack(spacing: 0) {
       ScrollView {
         LazyVStack(alignment: .leading, spacing: 20) {
+          if model.canLoadOlder {
+            Button("Load older messages") { Task { await model.loadOlder() } }
+              .disabled(model.busy).frame(maxWidth: .infinity)
+          }
           if model.conversation["messages"].array.isEmpty {
             ContentUnavailableView(
               "Describe your Pod", systemImage: "bubble.left.and.bubble.right",
@@ -98,6 +117,7 @@ struct PodDetailView: View {
           }
         }.padding()
       }
+      .defaultScrollAnchor(.bottom)
       .scrollDismissesKeyboard(.interactively)
       Divider()
       HStack(alignment: .bottom, spacing: 12) {
@@ -231,14 +251,29 @@ private struct ChangeReviewCard: View {
   let enabled: Bool
   let decide: (Bool) -> Void
   @State private var confirming = false
+  @State private var expanded: Bool
+  init(review: JSONValue, enabled: Bool, decide: @escaping (Bool) -> Void) {
+    self.review = review
+    self.enabled = enabled
+    self.decide = decide
+    // Matches the desktop: only a pending review opens by itself.
+    _expanded = State(initialValue: review["state"].string == "pending")
+  }
+  private var summary: String {
+    let targets = review["targets"].array.compactMap { $0["name"].string }.joined(separator: ", ")
+    return (review["kind"].string == "run" ? "Run once" : "Saved changes") + " · " + targets + " · "
+      + (review["state"].string ?? "Unknown")
+  }
   var body: some View {
+    DisclosureGroup(isExpanded: $expanded) {
+      details
+    } label: {
+      Label(summary, systemImage: "checkmark.shield").font(.subheadline.bold())
+        .accessibilityIdentifier("review.summary")
+    }.padding().background(Color.indigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+  }
+  private var details: some View {
     VStack(alignment: .leading, spacing: 14) {
-      Label(
-        review["kind"].string == "run" ? "Run review" : "Proposed changes",
-        systemImage: "checkmark.shield"
-      ).font(.headline)
-      Text("State: \(review["state"].string ?? "Unknown")").font(.caption).foregroundStyle(
-        .secondary)
       ForEach(Array(review["targets"].array.enumerated()), id: \.offset) { _, target in
         Text(target["name"].string ?? "Pod").font(.subheadline.bold())
         ForEach(Array(target["review"].array.enumerated()), id: \.offset) { _, change in
@@ -268,7 +303,7 @@ private struct ChangeReviewCard: View {
           }.buttonStyle(.borderedProminent)
         }.disabled(!enabled)
       }
-    }.padding().background(Color.indigo.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+    }.padding(.top, 8)
       .confirmationDialog(
         review["kind"].string == "run" ? "Start the reviewed run?" : "Apply these exact changes?",
         isPresented: $confirming, titleVisibility: .visible
