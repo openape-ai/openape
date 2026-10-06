@@ -1,6 +1,6 @@
 # Plan: Native mobile access to OpenApe Pods
 
-<span class="badge badge-info">Approved — implementation in progress</span> <span class="badge badge-neutral">Implementation: M2 accepted; M3–M6 delivered on the synthetic stack; device, TestFlight and App Store steps owner-gated</span> <span class="badge badge-info">First proof: register → sign in → create → chat → authorized run → result</span>
+<span class="badge badge-success">Implementation complete on the synthetic stack — Apple distribution deferred</span> <span class="badge badge-neutral">Implementation: M2 accepted; M3–M6 delivered on the synthetic stack; device, TestFlight and App Store steps owner-gated</span> <span class="badge badge-info">First proof: register → sign in → create → chat → authorized run → result</span>
 
 <p class="lead">Use the same Pods and conversations from iPhone, iPad and desktop. The registered desktop continues to run every script and program and hold local files and provider credentials. A new service at pods.openape.ai mediates authenticated traffic over an outbound desktop connection.</p>
 
@@ -412,6 +412,7 @@ Run this sequence against disposable identities and fixture data first; record e
 | 2026-09-20 | **Approved recommendation:** E2EE before real-data external beta; synthetic TLS-only M1 | Keeps M1 demonstrable while requiring an explicit content-visibility choice before sensitive content is involved. |
 | 2026-09-20 | **Approved recommendation:** original owner-IdP browser decisions | Preserves direct human/grant authority without exposing owner tokens to mediation or inventing a broker approval endpoint. |
 | 2026-09-20 | **Approved recommendation:** first-class desktop-required steps | OS/credential/local-path operations are not safely made remote by forwarding IPC. |
+| 2026-10-06 | **Deferred by the owner:** Apple distribution and physical-device acceptance leave this plan ("lassen wir iOS mal weg für diesen Plan") | All six milestones are implemented and proven on the synthetic stack. TestFlight upload, Beta App Review, APNs key, App Store Connect record, privacy/support pages, export declaration, App Review and the device checklists are recorded in `docs/operations/pods-mobile-release.md` and resume under a separate decision. The Debug build of main `b5c8f4dd` stays installed on the owner's iPhone against the production relay. |
 
 ### Open questions and approval conditions
 
@@ -434,7 +435,7 @@ Approval of this plan authorizes the specified implementation scope only when ex
 
 ## Outcomes & Retrospective
 
-**Current outcome:** All six milestones have their synthetic-stack implementation on main: M1 foundation and native proof, M2 delivery/recovery accepted (PR 248, evidence https://report.openape.ai/r/Qi8c8RSCwz4wFT0vcjSzdjlr), M3 private content with threat review and disclosures (PR 251), M4 approval UX with desktop handoff, paging and desktop-matching reviews (PR 253), M5 opt-in content-free notifications and distribution scaffolding, and the M6 readiness record (PR 255). What remains is owner- or Apple-gated: M1 fixture authorities and live-model smoke, physical-device checks for M3/M4, APNs key and App Store Connect record, TestFlight upload and Beta App Review, physical-device delivery and network tests, privacy/support pages, the encryption export declaration and the App Review outcome. Typed remote reviews for HTTP/program/dependency permissions stay deferred until the desktop persists those approvals as reviews.
+**Current outcome:** All six milestones have their synthetic-stack implementation on main: M1 foundation and native proof, M2 delivery/recovery accepted (PR 248, evidence https://report.openape.ai/r/Qi8c8RSCwz4wFT0vcjSzdjlr), M3 private content with threat review and disclosures (PR 251), M4 approval UX (PR 253), M5 opt-in content-free notifications and distribution scaffolding, M6 readiness record (PR 255). On October 6 the owner deferred Apple distribution and physical-device acceptance out of this plan; the owner-gated remainder (App Store Connect record, APNs key, TestFlight and Beta App Review, device checklists, privacy/support pages, export declaration, App Review outcome, M1 fixture authorities and live-model smoke) is listed in `docs/operations/pods-mobile-release.md` for a later decision. Typed remote reviews for HTTP/program/dependency permissions stay deferred until the desktop persists those approvals as reviews. The plan is closed as complete for its implementable scope.
 
 ### Evidence and primary references
 
@@ -474,3 +475,4 @@ Approval of this plan authorizes the specified implementation scope only when ex
 - 2026-10-06: Checkpoint 14 records the M3 gap analysis, the private-content change set (PR 251) and the owner-gated remainder.
 - 2026-10-06: Checkpoint 15 records the M4 review and the approval-UX change set (PR 253) resolving issues 1366–1368 on the phone.
 - 2026-10-06: Checkpoint 16 records the M5 notification and distribution delivery, the M6 readiness record and the owner-gated remainder across all milestones.
+- 2026-10-06: Owner deferred Apple distribution and device acceptance; plan closed as complete for the synthetic-stack scope, remainder recorded for a later decision.
