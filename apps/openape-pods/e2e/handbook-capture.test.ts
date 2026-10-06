@@ -49,7 +49,7 @@ it('handbook: captures current native screens from isolated synthetic data witho
   try {
     const page = await app.firstWindow()
     await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
-    await page.locator('.pod-button').first().waitFor()
+    await page.locator('.automations-shell').waitFor()
     await expect.poll(() => page.getByRole('button', { name: 'OpenApe account', exact: true }).textContent()).toContain('reader@example.invalid')
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(1180, 1000))
     await mkdir(resolve('.artifacts'), { recursive: true })
@@ -58,12 +58,21 @@ it('handbook: captures current native screens from isolated synthetic data witho
       const shot = async (name: string, locator = page.locator('body')) => {
         await locator.screenshot({ path: resolve(`.artifacts/handbook-${name}-${locale}.png`) })
       }
-      await page.getByRole('button', { name: /^(App settings|App-Einstellungen)$/ }).click()
-      await page.locator('.language-control select').selectOption(locale)
+      await page.getByRole('button', { name: /^⚙/ }).click()
+      await page.locator('.app-settings-menu .language-control select').selectOption(locale)
+      await page.keyboard.press('Escape')
+      await shot('automations')
+      await page.getByRole('tab', { name: title('Decisions', 'Entscheidungen') }).click()
+      await shot('decisions')
+      await page.getByRole('tab', { name: title('Automations', 'Automatisierungen') }).click()
+      await page.locator('.account-status').click()
       await page.getByRole('button', { name: title('Your accounts', 'Deine Konten'), exact: true }).click()
       await page.getByText(`reader@example.invalid · ${title('Signed in', 'Angemeldet')}`, { exact: true }).first().waitFor()
       await shot('setup')
-      await page.locator('.pod-button').first().click()
+      await page.getByTestId('back-to-automations').click()
+      await page.getByRole('button', { name: title('List', 'Liste'), exact: true }).click()
+      await page.getByRole('row', { name: /Sample folder review/ }).click()
+      await page.getByRole('button', { name: title('Open details', 'Details öffnen'), exact: true }).click()
       for (const [en, de, name] of [
         ['Overview', 'Übersicht', 'overview'], ['Script', 'Skript', 'script'],
         ['Permissions', 'Berechtigungen', 'permissions'], ['History', 'Historie', 'history'],
@@ -84,11 +93,11 @@ it('handbook: captures current native screens from isolated synthetic data witho
       await shot('identity', identity)
       await shot('settings', page.locator('.schedule-panel'))
       await page.getByRole('tab', { name: title('Overview', 'Übersicht'), exact: true }).click()
-      await shot('groups')
       await page.getByRole('button', { name: title('Results and sources', 'Ergebnisse und Quellen'), exact: true }).click()
       await page.getByText('Three sample files are available. No files were changed.', { exact: true }).waitFor()
       await shot('knowledge')
-      await page.getByRole('button', { name: title('App settings', 'App-Einstellungen'), exact: true }).click()
+      await page.getByTestId('back-to-automations').click()
+      await page.locator('.account-status').click()
       await page.getByRole('button', { name: title('Data & backups', 'Daten & Sicherungen'), exact: true }).click()
       await page.getByRole('heading', { name: title('Data & backups', 'Daten & Sicherungen'), exact: true }).first().waitFor()
       await shot('data')
