@@ -20,9 +20,11 @@ export async function certificate(root) {
 }
 
 export async function tlsProxy(tls, observe = async () => {}, mobileCallback = false) {
-  let target; const sockets = new Set(); const failures = []
+  let target; let gate = null; const sockets = new Set(); const failures = []
   const server = createServer(tls, (request, response) => {
     if (!target) { response.writeHead(503).end(); return }
+    // A simulated network loss: the client sees a dropped connection, the upstream never sees the request.
+    if (gate?.(request.method, new URL(request.url, 'https://fixture.test').pathname)) { request.socket.destroy(); return }
     const upstream = httpRequest(new URL(request.url, target), { method: request.method, headers: request.headers }, incoming => {
       const chunks = []
       incoming.on('data', chunk => chunks.push(chunk))
@@ -57,5 +59,5 @@ export async function tlsProxy(tls, observe = async () => {}, mobileCallback = f
   })
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
   const origin = `https://127.0.0.1:${server.address().port}`
-  return { origin, failures, forward: url => { target = url }, close: async () => { for (const socket of sockets) socket.destroy(); await new Promise(resolve => server.close(resolve)) } }
+  return { origin, failures, forward: url => { target = url }, interrupt: predicate => { gate = predicate }, close: async () => { for (const socket of sockets) socket.destroy(); await new Promise(resolve => server.close(resolve)) } }
 }

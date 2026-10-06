@@ -28,6 +28,8 @@ extension LoginTests {
     let origin = try XCTUnwrap(environment["PODS_ACCEPTANCE_CONTROL"])
     var request = URLRequest(url: try XCTUnwrap(URL(string: origin + path)))
     request.httpMethod = "POST"
+    // Desktop crash, backup and restore actions restart the packaged app and can take minutes.
+    request.timeoutInterval = 300
     request.setValue(environment["PODS_ACCEPTANCE_TOKEN"], forHTTPHeaderField: "x-fixture-token")
     request.setValue("application/json", forHTTPHeaderField: "content-type")
     request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -58,6 +60,74 @@ extension LoginTests {
     add(failure)
     XCTFail("Control never became available: \(element)\n\(app.debugDescription)")
     throw NSError(domain: "NativeAcceptance", code: 1)
+  }
+
+  @MainActor private func attach(_ title: String, _ app: XCUIApplication) {
+    let attachment = XCTAttachment(screenshot: app.screenshot())
+    attachment.name = title
+    attachment.lifetime = .keepAlways
+    add(attachment)
+  }
+
+  @MainActor private func dismissAlert(_ app: XCUIApplication, timeout: TimeInterval) -> String? {
+    guard app.alerts.firstMatch.waitForExistence(timeout: timeout) else { return nil }
+    let text = app.alerts.firstMatch.staticTexts.allElementsBoundByIndex.map(\.label).joined(
+      separator: " ")
+    let note = XCTAttachment(string: text)
+    note.name = "Alert text"
+    note.lifetime = .keepAlways
+    add(note)
+    app.alerts.buttons["OK"].tap()
+    return text
+  }
+
+  /// Compact layouts show either the Pod list or the detail; open the list when needed.
+  @MainActor private func showList(_ app: XCUIApplication) {
+    if !app.buttons["pod.create"].waitForExistence(timeout: 2) {
+      app.navigationBars.buttons.element(boundBy: 0).tap()
+    }
+  }
+
+  @MainActor private func openRuns(_ app: XCUIApplication) async throws {
+    // A tap on the Pod row is ignored while the model is busy; repeat until the detail opens.
+    for _ in 0..<12 {
+      if app.segmentedControls.buttons["Runs"].waitForExistence(timeout: 3) { break }
+      let row = app.buttons["pod.row"].firstMatch
+      if row.exists && row.isHittable { row.tap() }
+      try await Task.sleep(for: .seconds(1))
+    }
+    XCTAssertTrue(app.segmentedControls.buttons["Runs"].exists, app.debugDescription)
+    app.segmentedControls.buttons["Runs"].tap()
+  }
+
+  @MainActor private func startRun(_ app: XCUIApplication) async throws {
+    try await openRuns(app)
+    try await tap(app.buttons["Run once"], in: app)
+    try await tap(app.buttons["Start authorized run"], in: app)
+  }
+
+  /// Taps the pending operation's check button; returns the alert text if one appeared.
+  @MainActor private func checkPending(_ app: XCUIApplication) async throws -> String? {
+    showList(app)
+    let check = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Check '")).firstMatch
+    XCTAssertTrue(check.waitForExistence(timeout: 10), app.debugDescription)
+    try await tap(check, in: app)
+    let alert = dismissAlert(app, timeout: 45)
+    for _ in 0..<30 {
+      if !check.exists || !app.staticTexts["Awaiting confirmation"].exists { break }
+      try await Task.sleep(for: .milliseconds(500))
+    }
+    return alert
+  }
+
+  @MainActor private func waitOnline(_ app: XCUIApplication) async throws {
+    try await openRuns(app)
+    for _ in 0..<30 {
+      if app.staticTexts["Desktop online"].exists && app.buttons["Run once"].isEnabled { break }
+      try await tap(app.buttons["Refresh Pod"], in: app)
+      try await Task.sleep(for: .seconds(1))
+    }
+    XCTAssertTrue(app.staticTexts["Desktop online"].exists, app.debugDescription)
   }
 
   @MainActor func testNativeCreationChatAuthorizedDesktopRunAndSharedResult() async throws {
@@ -203,7 +273,82 @@ extension LoginTests {
     reconnected.lifetime = .keepAlways
     add(reconnected)
 
+    // M2 — disconnect before admission: the relay never saw the command; the retry re-sends it once.
+    _ = try await fixture("/interrupt", body: ["mode": "admission"])
+    try await startRun(app)
+    XCTAssertNotNil(dismissAlert(app, timeout: 30), app.debugDescription)
+    attach("Interrupted before admission", app)
+    _ = try await fixture("/reconnect")
+    let admitted = try await checkPending(app)
+    XCTAssertNil(admitted)
+    var state = try await fixture("/state")
+    XCTAssertEqual((state["runs"] as? [[String: Any]])?.count, 2, "\(state)")
+    try await waitOnline(app)
+    attach("Original run after reconnecting", app)
+
+    // M2 — disconnect before result acknowledgement: the result waits in the relay until the app polls again.
+    _ = try await fixture("/interrupt", body: ["mode": "events"])
+    try await startRun(app)
+    XCTAssertNotNil(dismissAlert(app, timeout: 45), app.debugDescription)
+    _ = try await fixture("/reconnect")
+    app.terminate()
+    app.launch()
+    // Reopening the app polls the relay: the buffered receipt resolves the pending command by itself.
+    try await tap(app.buttons["pod.row"].firstMatch, in: app)
+    for _ in 0..<30 {
+      if !app.staticTexts["Awaiting confirmation"].exists { break }
+      try await Task.sleep(for: .milliseconds(500))
+    }
+    if app.staticTexts["Awaiting confirmation"].exists {
+      let buffered = try await checkPending(app)
+      XCTAssertNil(buffered)
+    }
+    state = try await fixture("/state")
+    let bufferedRuns = state["runs"] as? [[String: Any]] ?? []
+    XCTAssertEqual(bufferedRuns.count, 3, "\(state)")
+    try await waitOnline(app)
+    let bufferedRun = try XCTUnwrap(bufferedRuns.first?["id"] as? String)
+    XCTAssertTrue(app.staticTexts[bufferedRun].waitForExistence(timeout: 20), app.debugDescription)
+    attach("Buffered result after app restart", app)
+
+    // M2 — desktop crash after the run reservation: the receipt keeps the original run ID.
+    _ = try await fixture("/hold", body: ["mode": "after-reservation"])
+    try await waitOnline(app)
+    try await startRun(app)
+    let reserved = try await fixture("/crash", body: ["mode": "after-reservation", "runs": "3"])
+    XCTAssertEqual(reserved["runs"] as? Int, 4, "\(reserved)")
+    _ = dismissAlert(app, timeout: 40)
+    if app.staticTexts["Awaiting confirmation"].exists
+      || app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Check '")).firstMatch.exists
+    {
+      let recovered = try await checkPending(app)
+      XCTAssertNil(recovered)
+    }
+    try await waitOnline(app)
+    let reservedRun = try XCTUnwrap((reserved["runIds"] as? [String])?.first)
+    XCTAssertTrue(app.staticTexts[reservedRun].waitForExistence(timeout: 20), app.debugDescription)
+    state = try await fixture("/state")
+    XCTAssertEqual((state["runs"] as? [[String: Any]])?.count, 4, "\(state)")
+    attach("Original run after desktop crash", app)
+
+    // M2 — desktop crash after the journal commit: an explicit unknown state, nothing started.
+    _ = try await fixture("/hold", body: ["mode": "after-journal"])
+    try await waitOnline(app)
+    try await startRun(app)
+    let journaled = try await fixture("/crash", body: ["mode": "after-journal", "runs": "4"])
+    XCTAssertEqual(journaled["runs"] as? Int, 4, "\(journaled)")
+    _ = dismissAlert(app, timeout: 40)
+    let unknownAlert = try await checkPending(app)
+    let unknown = try XCTUnwrap(unknownAlert, app.debugDescription)
+    XCTAssertTrue(unknown.contains("cannot tell"), unknown)
+    attach("Unknown outcome needs desktop inspection", app)
+    XCTAssertFalse(app.staticTexts["Awaiting confirmation"].exists, app.debugDescription)
+
+    let verified = try await fixture("/m2-verify")
+    XCTAssertEqual(verified["runs"] as? Int, 4, "\(verified)")
+
     // Removing the pairing on the desktop refuses further commands without a new run.
+    try await waitOnline(app)
     _ = try await fixture("/revoke-device")
     try await tap(app.buttons["Run once"], in: app)
     try await tap(app.buttons["Start authorized run"], in: app)
@@ -214,7 +359,7 @@ extension LoginTests {
     add(refused)
     app.alerts.buttons["OK"].tap()
     let refusal = try await fixture("/refused")
-    XCTAssertEqual(refusal["runs"] as? Int, 1)
+    XCTAssertEqual(refusal["runs"] as? Int, 4)
     try await tap(app.buttons["Refresh Pod"], in: app)
     // Compact layouts keep the empty detail column; return to the Pod list.
     if !app.staticTexts["pairing.code"].waitForExistence(timeout: 10) {
