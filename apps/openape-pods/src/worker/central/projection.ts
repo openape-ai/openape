@@ -13,6 +13,7 @@ import type { Scheduler } from '../scheduling/scheduler'
 import { WorkspaceDetails } from '../workspace/details'
 import { PodGroups } from '../workspace/groups'
 import { listedPods } from '../workspace/pod-list'
+import { mapView } from '../workspace/map-view'
 import { CollectionDescriptions } from '../workspace/collection-descriptions'
 import { PodVariables } from '../resources/variables'
 
@@ -35,7 +36,7 @@ export class CentralProjection {
       const tables = hasNetworks ? networkPublicationTables(this.store) : Object.fromEntries(centralTables.map(table => [table, this.store.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()]))
       const details = new WorkspaceDetails(this.store, this.resources)
       return {
-        version: 1 as const, workspace: { jev: jevAvailability(this.store), pods, organization: new PodGroups(this.store).view(), descriptions: new CollectionDescriptions(this.store).view() }, archive: { schema: schemaVersion, tables }, artifacts: [],
+        version: 1 as const, workspace: { jev: jevAvailability(this.store), pods, organization: new PodGroups(this.store).view(), descriptions: new CollectionDescriptions(this.store).view(), map: mapView(this.store, Date.now(), true) }, archive: { schema: schemaVersion, tables }, artifacts: [],
         pods: pods.map((pod) => {
           const networkId = hasNetworks ? podNetwork(this.store, pod.id) : null
           if (networkId) {

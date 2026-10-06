@@ -404,3 +404,15 @@ it('persists only redacted network health, bounds change history and strips appr
   expect(result.gates!.every(gate => gate.url === null)).toBe(true)
   expect(result.networks[0]!.health.intakeError).toBe('private-business-diagnostic')
 })
+
+it('serves the published map read model through view=map without naming a Pod', () => {
+  const { store, actor, other, state, lease } = setup()
+  expect(store.view(actor.owner, actor.id, null, { view: 'map' })).toEqual({ revision: 1, map: null })
+  const map = { at: 1791284700000, window: { from: 1791198300000, to: 1791284700000 }, kpis: { active: 1, paused: 0, degraded: [], decisions: [], unknownDeliveries: 0 }, systems: [], pods: [{ id: state.pods[0]!.id, name: 'Monitor', description: null, group: null, groupId: null, lifecycle: 'paused', draft: true, kind: 'code', ai: false, channels: { takes: [], gives: [] }, resources: [], secrets: ['token_alias'], schedule: null, lastRun: null, runs: 0, collection: null, queue: { blocked: 0, error: null }, approvals: [] }], collections: [], edges: [] }
+  const published = { ...state, workspace: { ...state.workspace, map } }
+  publishV2(store, actor, lease, {}, published, 1)
+  expect(store.view(actor.owner, actor.id, null, { view: 'map' })).toEqual({ revision: 2, map })
+  expect(store.inventory(actor.owner)[0]!.workspace.map).toEqual(map)
+  expect(() => store.view(other, actor.id, null, { view: 'map' })).toThrow()
+  expect(() => store.view(actor.owner, actor.id, null, { view: 'summary' })).toThrow('invalid_workspace_request')
+})
