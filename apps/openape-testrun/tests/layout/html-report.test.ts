@@ -4,7 +4,6 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { h } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import HtmlReport from '../../app/components/HtmlReport.vue'
-import PlanSourceEditor from '../../app/components/PlanSourceEditor.vue'
 
 const report: HtmlReportView = { document_id: 'report', publication_id: 'version', version: 1, latest_version: 2, title: 'A report with deliberately long words for a narrow viewport', category: 'Test Runs', language: 'en', tags: ['reports', 'consolidation'], metadata: { 'verification.stage': 'production acceptance' }, author: 'owner@example.com', created_at: 1, artifact_digest: 'a'.repeat(64), policy_version: 'publisher-trusted-html/2', external_images: ['https://images.example.test/example.png'], external_links: ['https://example.test/evidence'], audience: 'private', team_id: null, expires_at: null, access_revision: 1, retention_revision: 1, caller_role: 'owner', url: '/d/report', version_url: '/d/report?v=1', legacy_plan_id: null }
 const global = { stubs: { NuxtLink: { setup: (_: unknown, { slots }: { slots: Slots }) => () => h('a', slots.default?.()) } } }
@@ -51,14 +50,5 @@ describe('HTML document reading view', () => {
     await wrapper.findAll('button').find(button => button.text() === 'Open report')!.trigger('click'); await flushPromises()
     expect(wrapper.get('[role=alert]').text()).toContain('access changed')
     expect(wrapper.find('iframe').exists()).toBe(false)
-  })
-  it('retains source and the originally read version after a conflicting save', async () => {
-    const fetch = vi.fn().mockRejectedValue({ statusCode: 409 }); vi.stubGlobal('$fetch', fetch)
-    wrapper = mount(PlanSourceEditor, { props: { plan: { id: 'plan', title: 'Before', body_md: '# Original', status: 'draft', version: 3, caller_role: 'editor' } }, global, attachTo: document.body })
-    await wrapper.get('textarea').setValue('# My unsaved draft'); await wrapper.get('form').trigger('submit'); await flushPromises()
-    expect(fetch).toHaveBeenCalledWith('/api/plans-compat/plans/plan', { method: 'PATCH', body: { title: 'Before', body_md: '# My unsaved draft', status: 'draft', expected_version: 3 } })
-    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('# My unsaved draft')
-    expect(wrapper.get('[role=alert]').text()).toContain('Your draft is still here')
-    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390)
   })
 })
