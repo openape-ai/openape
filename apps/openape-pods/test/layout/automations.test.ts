@@ -69,6 +69,18 @@ describe('Automatisierungen layout', () => {
     await shot('06-netz-detail')
   })
 
+  it('shows the Codex handoff with the brief above the map', async () => {
+    await mountShell(1440, 900)
+    await wrapper!.setProps({ codex: 'connected' })
+    const shell = wrapper!.vm as unknown as { pin: (id: string | null) => void }
+    shell.pin('app:o365-cli:phofmann@delta-mind.at'); await flushPromises()
+    await button('Neue Automatisierung mit Codex').trigger('click'); await flushPromises(); await frames(2)
+    const panel = document.querySelector('.codex-handoff')!.getBoundingClientRect(); const map = canvas().getBoundingClientRect()
+    expect(panel.bottom).toBeLessThanOrEqual(map.top)
+    expect(panel.width).toBeGreaterThan(1200)
+    await shot('08-codex-uebergabe')
+  })
+
   it('moves the info panel below the map under 1000 px and keeps the toolbar inside 390 px', async () => {
     await mountShell(390, 844)
     const map = canvas().getBoundingClientRect(); const info = document.querySelector('.automation-info')!.getBoundingClientRect()

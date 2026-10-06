@@ -4152,5 +4152,18 @@
   "yes": "ja",
   "no": "nein",
   "Approval batch": "Freigabe-Batch",
-  "{count} items": "{count} Items"
+  "{count} items": "{count} Items",
+  "Hand over to Codex": "An Codex übergeben",
+  "Codex connected": "Codex verbunden",
+  "Codex not connected": "Codex nicht verbunden",
+  "Copied, paste into Codex": "Kopiert, in Codex einfügen",
+  "Selected, copy and paste into Codex": "Markiert, kopieren und in Codex einfügen",
+  "Open in Codex": "In Codex öffnen",
+  "Create a new automation in the group {group}.": "Lege eine neue Automatisierung an in der Gruppe {group}.",
+  "Create a new automation.": "Lege eine neue Automatisierung an.",
+  "Starting point: {name} ({direction}).": "Ausgangspunkt: {name} ({direction}).",
+  "write": "schreiben",
+  "read": "lesen",
+  "Like {name}, but with another source.": "Wie {name}, aber mit anderer Quelle.",
+  "Show me first the shape (Pod, chain or network), the map, the access it needs and the examples you use as checks. Create only afterwards, activate only as a preview, and request rights exclusively through Permissions and the identity provider.": "Zeig mir zuerst Bauform (Pod, Kette oder Netz), Karte, benötigte Zugriffe und die Beispiele, die du als Prüfung verwendest. Lege erst danach an, aktiviere nur als Vorschau, und fordere Rechte ausschließlich über Permissions und den IdP an."
 }
