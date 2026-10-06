@@ -11,6 +11,7 @@ import CentralWorkspace from './CentralWorkspace.vue'
 import AutomationsShell from './AutomationsShell.vue'
 import type { NetworkControl, WorkflowControl } from './AutomationDetail.vue'
 import type { MapView } from '../../contracts/map-view'
+import type { SecretsCommand, SecretsView } from '../../contracts/secrets'
 import { desktopWorkspaceClient } from './client'
 import App from '../App.vue'
 import WorkspaceFrame from '../WorkspaceFrame.vue'
@@ -30,6 +31,7 @@ const map = ref<MapView | null>(null)
 const networks = ref<NetworkView>({ networks: [] })
 const proposals = ref<AccessProposal[]>([])
 const codexConnected = ref<boolean | null>(null)
+const secrets = ref<SecretsView | null>(null)
 const tab = ref<'automations' | 'decisions'>('automations')
 let polls = 0
 const now = ref(Date.now())
@@ -52,7 +54,7 @@ async function poll() {
     const [value, view, inventory, networkView] = await Promise.all([invoke({ type: 'status' }), window.pods.workflows({ type: 'list' }), window.pods.workspace({ type: 'map' }), window.pods.networks({ type: 'list' })])
     status.value = (value as CentralStatus & { enabled?: boolean }).enabled === false ? null : value as CentralStatus; workflows.value = view; workspaceChanged(inventory); map.value = inventory.map ?? null; networks.value = networkView; now.value = Date.now(); error.value = ''
     // Setup proposals change rarely; the chat registry behind them is read every tenth poll.
-    if (polls++ % 10 === 0) { proposals.value = (await window.pods.master({ type: 'list' })).proposals; codexConnected.value = (await window.pods.codex({ type: 'status' })).state === 'connected' }
+    if (polls++ % 10 === 0) { proposals.value = (await window.pods.master({ type: 'list' })).proposals; codexConnected.value = (await window.pods.codex({ type: 'status' })).state === 'connected'; secrets.value = window.pods.secrets ? await window.pods.secrets({ type: 'list' }) : null }
   }
   catch (cause) { error.value = String(cause) }
   if (!closed) timer = setTimeout(() => { void poll() }, 1000)
@@ -86,6 +88,9 @@ const masterCommand = (command: MasterCommand) => void run(async () => { await w
 const networkControl = (control: NetworkControl) => void run(() => window.pods.networks(control))
 const workflowControl = (control: WorkflowControl) => void run(() => window.pods.workflows(control))
 const openFolder = (podId: string) => void run(() => window.pods.programs({ type: 'openFolder', podId }))
+const secretsCommand = (command: SecretsCommand) => void run(async () => { secrets.value = await window.pods.secrets!(command) })
+// The typed value takes the existing credential path with the current resource epoch; the next poll shows the alias.
+const secretSave = (podId: string, alias: string, value: string) => void run(async () => { const { epoch } = await window.pods.resources({ type: 'list', podId }); await window.pods.resources({ type: 'saveCredential', podId, alias, value, epoch }) })
 function navigate(destination: string) {
   page.value = destination
   if (destination === 'Pods') workspace.value?.showInventory()
@@ -110,7 +115,7 @@ async function openPod(id: string) {
     <p v-if="error" role="alert" class="error-message">
       {{ diagnostic(error) }}
     </p>
-    <AutomationsShell v-if="page === 'Automations'" :view="map" :live="true" :now="now" :decisions="map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" desktop :codex="codexConnected === null ? undefined : codexConnected ? 'connected' : 'disconnected'" :tab="tab" :inbox="{ choices: networks.choices ?? [], gates: networks.gates ?? [], graphGates: workflows.gates ?? null, proposals }" @update:tab="tab = $event" @network-command="networkCommand" @workflow-command="workflowCommand" @master="masterCommand" @command="localCommand" @network="networkControl" @workflow="workflowControl" @folder="openFolder" />
+    <AutomationsShell v-if="page === 'Automations'" :view="map" :live="true" :now="now" :decisions="map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" desktop :codex="codexConnected === null ? undefined : codexConnected ? 'connected' : 'disconnected'" :tab="tab" :inbox="{ choices: networks.choices ?? [], gates: networks.gates ?? [], graphGates: workflows.gates ?? null, proposals }" :secrets="secrets" @update:tab="tab = $event" @network-command="networkCommand" @workflow-command="workflowCommand" @master="masterCommand" @command="localCommand" @network="networkControl" @workflow="workflowControl" @folder="openFolder" @secrets="secretsCommand" @secret-save="secretSave" />
     <section v-show="page === 'Workflows'">
       <template v-if="sharing">
         <button class="text-button" @click="sharing = null">
