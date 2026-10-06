@@ -47,6 +47,7 @@ export default defineEventHandler(event => boundary(event, () => workspaceBounda
   if (body.type === 'read') {
     const view = workspaceView(body)
     const target = body.runtimeId ? centralId(body.runtimeId) : runtime.id
+    if (view?.view === 'map') return store.view(runtime.owner, target, null, view)
     return view ? store.view(runtime.owner, target, centralId(body.podId), view) : store.read(runtime.owner, target, centralId(body.podId))
   }
   throw new ProtocolError('unsupported_workspace_request')

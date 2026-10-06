@@ -69,6 +69,7 @@ export async function workspaceBoundary<T>(run: () => T | Promise<T>): Promise<T
 export function workspaceView(query: Record<string, unknown>): WorkspaceView | null {
   if (query.view === undefined) return null
   if (query.view === 'summary') return { view: 'summary' }
+  if (query.view === 'map') return { view: 'map' }
   if (query.view === 'runs') return { view: 'runs', offset: centralRevision(Number(query.offset ?? 0)) }
   if (query.view === 'run') return { view: 'run', runId: centralId(query.runId) }
   if (query.view === 'version' && typeof query.selection === 'string' && /^(?:[a-f0-9]{64}|[a-f0-9-]{36})$/.test(query.selection)) return { view: 'version', selection: query.selection }
