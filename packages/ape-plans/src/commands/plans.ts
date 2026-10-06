@@ -27,6 +27,18 @@ interface PlanFull extends PlanSummary {
   created_at: number
 }
 
+function expectedVersion(current: PlanFull, supplied: string | undefined, requireSourceVersion = false) {
+  if (supplied !== undefined) {
+    const version = Number(supplied)
+    if (!Number.isSafeInteger(version) || version < 1) throw createApiError(400, '--expected-version must be a positive integer')
+    return version
+  }
+  if (requireSourceVersion && current.version !== undefined) {
+    throw createApiError(428, 'File or stdin replacement requires --expected-version from the source you read', 'Run show --json before editing; reconcile newer source instead of adopting its version automatically.')
+  }
+  return current.version
+}
+
 interface TeamListItem {
   id: string
   name: string
@@ -194,9 +206,9 @@ export const newCommand = defineCommand({
  *   $ ape-plans edit 01HXX...
  *     (opens $EDITOR with current body pre-loaded)
  *
- *   $ ape-plans edit 01HXX... --body-from-file updated.md
+ *   $ ape-plans edit 01HXX... --body-from-file updated.md --expected-version 3
  *
- *   $ cat updated.md | ape-plans edit 01HXX... --body-from-stdin
+ *   $ cat updated.md | ape-plans edit 01HXX... --body-from-stdin --expected-version 3
  */
 export const editCommand = defineCommand({
   meta: {
@@ -213,6 +225,7 @@ export const editCommand = defineCommand({
     'prepend-body': { type: 'boolean', description: 'Prepend the new body content before the existing body.' },
     'replace-section': { type: 'string', description: 'Replace the Markdown section whose heading matches exactly (e.g. "## Progress") until the next same-or-shallower heading.' },
     json: { type: 'boolean', description: 'JSON output.' },
+    'expected-version': { type: 'string', description: 'Version originally read; required when replacing body from a file or stdin.' },
     endpoint: { type: 'string', description: 'Override plans endpoint.' },
   },
   async run({ args }) {
@@ -269,7 +282,7 @@ export const editCommand = defineCommand({
 
     const updated = await apiCall<PlanFull>('PATCH', `/api/plans/${args.planId}`, {
       endpoint: args.endpoint,
-      body: { ...patch, expected_version: current.version },
+      body: { ...patch, expected_version: expectedVersion(current, args['expected-version'], Boolean(args['body-from-file'] || args['body-from-stdin']) && bodyFlags.length === 0) },
     })
     if (args.json) { printJson(updated); return }
     printLine(`updated ${updated.id}`)
@@ -291,6 +304,7 @@ export const statusCommand = defineCommand({
   args: {
     planId: { type: 'positional', required: true, description: 'Plan ULID.' },
     status: { type: 'positional', required: true, description: 'New status.' },
+    'expected-version': { type: 'string', description: 'Version originally read; required when replacing body from a file or stdin.' },
     endpoint: { type: 'string', description: 'Override plans endpoint.' },
   },
   async run({ args }) {
@@ -300,7 +314,7 @@ export const statusCommand = defineCommand({
     const current = await apiCall<PlanFull>('GET', `/api/plans/${args.planId}`, { endpoint: args.endpoint })
     await apiCall('PATCH', `/api/plans/${args.planId}`, {
       endpoint: args.endpoint,
-      body: { status: args.status, expected_version: current.version },
+      body: { status: args.status, expected_version: expectedVersion(current, args['expected-version']) },
     })
     printLine(`${args.planId} → ${args.status}`)
   },
@@ -320,11 +334,12 @@ export const rmCommand = defineCommand({
   },
   args: {
     planId: { type: 'positional', required: true, description: 'Plan ULID.' },
+    'expected-version': { type: 'string', description: 'Version originally read; required when replacing body from a file or stdin.' },
     endpoint: { type: 'string', description: 'Override plans endpoint.' },
   },
   async run({ args }) {
     const current = await apiCall<PlanFull>('GET', `/api/plans/${args.planId}`, { endpoint: args.endpoint })
-    await apiCall('DELETE', `/api/plans/${args.planId}`, { endpoint: args.endpoint, body: { expected_version: current.version } })
+    await apiCall('DELETE', `/api/plans/${args.planId}`, { endpoint: args.endpoint, body: { expected_version: expectedVersion(current, args['expected-version']) } })
     printLine(`deleted ${args.planId}`)
   },
 })
