@@ -1,5 +1,13 @@
 # @openape/ape-plans
 
+## 1.0.7
+
+### Patch Changes
+
+- Add offline Plan and Test Run rendering, portable templates with embedded screenshots,
+  and native Reports team commands. Deprecate legacy authoring commands while preserving
+  compatibility until the producer inventory and observation gates are complete.
+
 ## 1.0.6
 
 ### Patch Changes

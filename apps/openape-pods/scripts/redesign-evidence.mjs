@@ -12,7 +12,8 @@ import { fileURLToPath } from 'node:url'
  *
  *   node scripts/redesign-evidence.mjs --milestone M1            # run and capture
  *   node scripts/redesign-evidence.mjs --assemble DIR --reviewed  # after personal inspection
- *   ape-testruns upload DIR --json
+ *   ape-report-render test-run DIR/testrun.json DIR/verification.html
+ *   ape-reports publish DIR/verification.html --category 'Test Runs' --key YOUR_RUN_KEY
  */
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const args = process.argv.slice(2)
@@ -71,5 +72,5 @@ const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '
 const cards = tests.at(-1).steps.map(step => `<article><h2>${escape(step.title)}</h2><p>${escape(step.caption)}</p><img alt="${escape(step.title)}" src="data:image/png;base64,${readFileSync(join(directory, step.shot)).toString('base64')}"></article>`).join('')
 writeFileSync(join(directory, 'report.html'), `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(manifest.title)}</title><style>body{font:15px/1.6 system-ui;max-width:1100px;margin:30px auto;padding:0 24px;color:#203127;background:#f7f8f5}article{background:white;padding:24px;border:1px solid #dce3dc;border-radius:12px;margin:24px 0}img{max-width:100%;height:auto}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style><h1>${escape(manifest.title)}</h1><p>${escape(summary)}</p><p>${reviewed ? 'Screenshots personally inspected.' : 'Visual review pending.'}</p><details><summary>All ${outcomes.length} assertions</summary>${outcomes.map(test => `<p><strong>${escape(test.status)}</strong> ${escape(test.fullName)}</p>`).join('')}</details>${cards}</html>`)
 console.log(`Report directory: ${directory}`)
-console.log(reviewed ? `Publish: ape-testruns upload '${directory}' --json` : `Inspect screenshots, then: node scripts/redesign-evidence.mjs --assemble '${directory}' --reviewed`)
+console.log(reviewed ? `Publish: ape-report-render test-run '${directory}/testrun.json' '${directory}/verification.html' && ape-reports publish '${directory}/verification.html' --category 'Test Runs' --key YOUR_RUN_KEY --json` : `Inspect screenshots, then: node scripts/redesign-evidence.mjs --assemble '${directory}' --reviewed`)
 if (tests.some(test => test.status === 'failed')) process.exitCode = 1

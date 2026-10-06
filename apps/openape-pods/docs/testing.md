@@ -92,7 +92,8 @@ personal inspection, assemble the same immutable evidence with:
 
 ```sh
 pnpm --filter @openape/pods report --browser --assemble /absolute/run/directory --reviewed
-ape-testruns upload /absolute/run/directory --json
+ape-report-render test-run /absolute/run/directory/testrun.json /absolute/run/directory/verification.html
+ape-reports publish /absolute/run/directory/verification.html --category 'Test Runs' --key YOUR_RUN_KEY --json
 ```
 
 The assembler rejects missing, older or altered screenshots and retains failed
