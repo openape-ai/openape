@@ -1,5 +1,11 @@
 # @openape/ape-plans
 
+## 1.0.6
+
+### Patch Changes
+
+- Report the published package version in ape-plans --version and help instead of the historical hard-coded 1.0.1.
+
 ## 1.0.5
 
 ### Patch Changes
