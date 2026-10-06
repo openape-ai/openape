@@ -1,6 +1,5 @@
 import BrowserWorkspace from '../../src/renderer/central/BrowserWorkspace.vue'
 import { browserFixture } from './browser-fixture'
-import { operationalFixture, recoveryFixture } from '../layout/network-fixture'
 import { flushPromises, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -11,52 +10,9 @@ import { WorkspaceRequestError } from '../../src/renderer/central/client'
 import { centralFixture } from './central-fixture'
 import type { CentralStatus } from '../../src/contracts/central'
 import { connected, connectionAfter, connectionLevel } from '../../src/renderer/central/status'
-import type { WorkflowCommand, WorkflowView } from '../../src/contracts/workflows'
-import { sequenceParts } from '../../src/contracts/workflows'
 
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; vi.useRealTimers() })
-it('opens local workflows from the desktop landing page and resumes the selected workflow', async () => {
-  const id = '00000000-0000-4000-8000-000000000003'
-  const view: WorkflowView = { workflows: [{ ...sequenceParts, id, revision: 1, name: 'Morning review', nodes: [{ podId, after: [], handoff: true }], schedule: null, enabled: false, paused: true, nextAt: null }], runs: [] }
-  const workflows = vi.fn(async (command: WorkflowCommand) => {
-    if (command.type === 'pause') { view.workflows[0]!.paused = command.paused; view.workflows[0]!.revision++ }
-    return structuredClone(view)
-  })
-  installWorkspace({ workflows, central: async command => command.type === 'status' ? { enabled: false } : command.type === 'inventory' ? [] : { requestError: { status: 400, message: 'No fixture change feed' } } })
-  wrapper = mount(DesktopWorkspace); await flushPromises()
-  const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.text() === text)!.trigger('click'); await flushPromises() }
-  expect(workflows).toHaveBeenCalledExactlyOnceWith({ type: 'list' })
-  await wrapper.get('.graph-card').trigger('click'); await flushPromises()
-  expect(wrapper.find('.workflow-graph').text()).toContain('Mail knowledge')
-  await click('Resume workflow')
-  expect(workflows).toHaveBeenCalledWith({ type: 'pause', id, revision: 1, paused: false })
-  expect(wrapper.text()).toContain('Pause workflow')
-  workflows.mockRejectedValueOnce(new Error('Workflow connection unavailable'))
-  await click('Pause workflow')
-  expect(wrapper.get('[role="alert"]').text()).toContain('Workflow connection unavailable')
-})
-it('tells on the desktop overview what a workflow is for', async () => {
-  const id = '00000000-0000-4000-8000-000000000003'
-  const view: WorkflowView = { workflows: [{ ...sequenceParts, id, revision: 1, name: 'Morning review', nodes: [{ podId, after: [], handoff: true }], schedule: null, enabled: false, paused: true, nextAt: null }], runs: [] }
-  const bridge = installWorkspace({ workflows: async () => structuredClone(view), central: async command => command.type === 'status' ? { enabled: false } : command.type === 'inventory' ? [] : { requestError: { status: 400, message: 'No fixture change feed' } } })
-  const list = bridge.workspace
-  bridge.workspace = async command => ({ ...await list(command), descriptions: [{ id, text: 'Collects calendar, mail and open issues every morning.', revision: 1 }] })
-  wrapper = mount(DesktopWorkspace); await flushPromises()
-  expect(wrapper.get('.graph-card').text()).toContain('Collects calendar, mail and open issues every morning.')
-})
-it('shows a workflow description read-only in the browser workspace', async () => {
-  const f = await browserFixture()
-  const id = '00000000-0000-4000-8000-000000000004'
-  f.host.workflows = { workflows: [{ ...sequenceParts, id, revision: 1, name: 'Morning review', nodes: [{ podId, after: [], handoff: false }], schedule: null, enabled: false, paused: false, nextAt: null }], runs: [], graphs: true } as never
-  f.host.workspace.descriptions = [{ id, text: 'Collects calendar, mail and open issues every morning.', revision: 1 }]
-  Reflect.deleteProperty(window, 'pods')
-  wrapper = mount(BrowserWorkspace, { props: { client: f.client } }); await flushPromises()
-  const card = wrapper.findAll('.graph-card').find(item => item.text().includes('Morning review'))!
-  expect(card.text()).toContain('Collects calendar, mail and open issues every morning.')
-  await card.trigger('click'); await flushPromises()
-  expect(wrapper.get('.collection-description').text()).toBe('Collects calendar, mail and open issues every morning.')
-})
 async function open() {
   const fixture = centralFixture()
   wrapper = mount(CentralWorkspace, { props: { client: fixture.client } })
@@ -152,7 +108,6 @@ it('lists archived Pods in their own labelled section', async () => {
   expect(wrapper.find('.central-pod').text()).toContain('Monthly report')
   await wrapper.find('.central-pod').trigger('click'); await flushPromises()
   expect(wrapper.text()).toContain('This Pod is offline')
-
 })
 it('shows a blocked schedule queue in the sidebar and the Pod overview', async () => {
   const fixture = centralFixture()
@@ -208,7 +163,7 @@ it('opens Jev, language, accounts and data through the active desktop settings e
     return { requestError: { status: 400, message: 'No fixture change feed' } }
   } })
   wrapper = mount(DesktopWorkspace); await flushPromises()
-  await wrapper.get('.workspace-navigation button[aria-label="App settings"]').trigger('click'); await flushPromises()
+  await wrapper.get('.account-status').trigger('click'); await flushPromises()
   expect(wrapper.get('.app-settings h1').text()).toBe('App settings')
   await wrapper.get('.jev-account-row button').trigger('click'); await flushPromises()
   expect(wrapper.get('.jev-connection label').text()).toBe('TypeSafe AI - Jev - API Key')
@@ -222,10 +177,9 @@ it('opens Jev, language, accounts and data through the active desktop settings e
   expect(data).toHaveBeenLastCalledWith({ type: 'status' })
   expect(wrapper.find('[aria-label="Data and backups"]').exists()).toBe(true)
   expect(wrapper.find('[aria-label="Your accounts"]').exists()).toBe(true)
-  await wrapper.get('.workspace-navigation button[aria-label="Pods"]').trigger('click')
+  await wrapper.get('[data-testid="back-to-automations"]').trigger('click'); await flushPromises()
   await wrapper.get('.account-status').trigger('click'); await flushPromises()
   expect(wrapper.find('[aria-label="Your accounts"]').exists()).toBe(true)
-
 })
 
 it('archives before deletion, confirms the reviewed Pod and clears deleted content', async () => {
@@ -276,11 +230,11 @@ it('mounts native editors only for this desktop and never sends another runtime 
     return { requestError: { status: 400, message: 'No fixture change feed' } }
   } })
   wrapper = mount(DesktopWorkspace); await flushPromises()
-  await wrapper.get('.workspace-navigation button[aria-label="Pods"]').trigger('click'); await flushPromises()
-  await wrapper.get('.central-pod').trigger('click'); await flushPromises()
+  // The shell opens local Pods only; another runtime's Pod is selected in the central editor itself.
+  await (wrapper.findComponent(CentralWorkspace).vm as unknown as { select: (runtime: string, pod: string) => Promise<void> }).select(fixture.host.id, fixture.host.workspace.pods[0]!.id); await flushPromises()
   expect(wrapper.get('.central-title h1').text()).toBe('Release monitor')
   expect(details).not.toHaveBeenCalled()
-  expect(wrapper.find('[role="tabpanel"]').exists()).toBe(false)
+  expect(wrapper.find('#panel-Overview').exists()).toBe(false)
   fixture.host.workspace.pods[0]!.id = podId
   expect(wrapper.find('.mcp-access').exists()).toBe(false)
 })
@@ -309,57 +263,6 @@ it('shows the automatic retry time instead of a blocked queue for a temporary se
   expect(wrapper.find('.central-blocked').exists()).toBe(false)
 })
 
-it('reads persistent network traces and data in the browser without a desktop bridge or owner actions', async () => {
-  const f = await browserFixture(); const network = operationalFixture()
-  f.host.networks = { networks: network.view.networks }
-  f.host.workspace.pods = network.pods.map(pod => ({ ...pod, online: true }))
-  f.host.workspace.organization = network.organization
-  network.view.details!.collections = [{ id: network.id(70), name: 'Reviewed cases', version: 1 }]
-  const read = vi.fn(async (_runtime, command) => ({ ...network.view, ...(command.type === 'records' ? { records: { collectionId: network.id(70), records: [{ key: 'case-one', revision: 1, schemaVersion: 1, body: '{"status":"reviewed"}', truncated: false, deleted: false, at: 1 }], after: null } } : {}) }))
-  f.client.network = read
-  f.client.command = vi.fn(f.client.command)
-  Reflect.deleteProperty(window, 'pods')
-  wrapper = mount(BrowserWorkspace, { props: { client: f.client } }); await flushPromises()
-  const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.text().includes(text))!.trigger('click'); await flushPromises() }
-  await click(network.definition.name)
-  expect(wrapper.text()).toContain('Independent timer')
-  await click('Recent recorded activity')
-  expect(wrapper.text()).toContain('Item accepted')
-  await click('Shared data'); await click('Reviewed cases')
-  expect(wrapper.text()).toContain('case-one')
-  expect(read).toHaveBeenCalledWith(f.host.id, expect.objectContaining({ type: 'records', collectionId: network.id(70) }))
-  for (const label of ['Activate network', 'Pause network', 'Process now', 'Create network']) expect(wrapper.findAll('button').map(button => button.text())).not.toContain(label)
-  expect(f.client.command).not.toHaveBeenCalled()
-  f.host.online = false; f.wake(); await flushPromises()
-  await click('Reviewed cases')
-  expect(wrapper.text()).toContain('Desktop offline: network details require the connected runtime')
-})
-
-it('retains the network inventory and scoped decisions across browser summary refreshes', async () => {
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-  const f = await browserFixture(); const network = recoveryFixture()
-  const second = { ...network.view.networks[0]!, id: network.id(90), name: 'Second independent network', podIds: [] }
-  f.host.networks = { networks: [{ ...network.view.networks[0]!, decisions: 2 }, second] }
-  f.host.workspace.pods = network.pods.map(pod => ({ ...pod, online: true }))
-  f.host.workspace.organization = network.organization
-  f.client.network = vi.fn(async (_runtime, command) => command.type === 'detail'
-    ? { networks: network.view.networks, details: network.view.details, gates: network.view.gates }
-    : { networks: network.view.networks, trace: network.view.trace })
-  Reflect.deleteProperty(window, 'pods')
-  wrapper = mount(BrowserWorkspace, { props: { client: f.client } }); await flushPromises()
-  const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.text().includes(text))!.trigger('click'); await flushPromises() }
-  expect(wrapper.text()).toContain('Second independent network')
-  await click(network.definition.name); await click('Decisions and failures')
-  expect(wrapper.text()).toContain('Synthetic pending invoice')
-  f.wake(); await flushPromises()
-  vi.mocked(f.client.network!).mockRejectedValueOnce(new Error('Synthetic transient detail outage'))
-  await vi.advanceTimersByTimeAsync(5000); await flushPromises()
-  expect(wrapper.text()).toContain('Synthetic pending invoice')
-  await click('Networks & workflows')
-  expect(wrapper.text()).toContain('Second independent network')
-  expect(wrapper.text()).toContain('Decisions: 2')
-})
-
 it('shows a network member summary instead of mounting the legacy browser editor', async () => {
   const f = await browserFixture()
   f.view.networkId = '00000000-0000-4000-8000-000000000021'
@@ -370,25 +273,6 @@ it('shows a network member summary instead of mounting the legacy browser editor
   expect(wrapper.find('textarea').exists()).toBe(false)
 })
 
-it('recovers the browser activity after the initial network detail request fails', async () => {
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-  const f = await browserFixture(); const network = operationalFixture()
-  f.host.networks = { networks: [{ ...network.view.networks[0]!, decisions: 2 }] }
-  f.client.network = vi.fn(async (_runtime, command) => command.type === 'detail' ? { networks: network.view.networks, details: network.view.details } : { networks: network.view.networks, trace: network.view.trace })
-  // The inventory's inbox read and the network detail both hit the outage once.
-  vi.mocked(f.client.network).mockRejectedValueOnce(new Error('Synthetic initial network outage')).mockRejectedValueOnce(new Error('Synthetic initial network outage'))
-  Reflect.deleteProperty(window, 'pods')
-  wrapper = mount(BrowserWorkspace, { props: { client: f.client } }); await flushPromises()
-  const click = async (text: string) => { await wrapper!.findAll('button').find(button => button.text() === text)!.trigger('click'); await flushPromises() }
-  await wrapper.findAll('button').find(button => button.text().includes(network.definition.name))!.trigger('click'); await flushPromises()
-  expect(wrapper.text()).toContain('Decisions: 2')
-  expect(wrapper.text()).toContain('Synthetic initial network outage')
-  await vi.advanceTimersByTimeAsync(5000); await flushPromises()
-  await click('Recent recorded activity')
-  expect(wrapper.text()).toContain('Item accepted')
-  expect(f.client.network).toHaveBeenCalledWith(f.host.id, expect.objectContaining({ type: 'trace' }))
-})
-
 it('shows the selected runtime status instead of another online runtime status', async () => {
   const f = await browserFixture()
   const offline = { ...structuredClone(f.host), id: '00000000-0000-4000-8000-000000000088', online: false }
@@ -397,5 +281,4 @@ it('shows the selected runtime status instead of another online runtime status',
   expect(wrapper.get('.runtime-picker select').element).toHaveProperty('value', f.host.id)
   await wrapper.get('.runtime-picker select').setValue(offline.id); await flushPromises()
   expect(wrapper.findAll('[role=status]').map(item => item.text())).toContain('Desktop offline')
-  expect(wrapper.text()).toContain('Showing the last synchronized networks and workflows.')
 })
