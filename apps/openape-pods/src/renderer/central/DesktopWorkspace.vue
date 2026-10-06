@@ -2,6 +2,9 @@
 import { t, diagnostic } from '../i18n'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { CentralCommand, CentralStatus } from '../../contracts/central'
+import type { NetworkCommand, NetworkView } from '../../contracts/networks'
+import type { AccessProposal, MasterCommand } from '../../contracts/master'
+import type { WorkflowCommand, WorkflowView  } from '../../contracts/workflows'
 import type { ScheduleCommand } from '../../contracts/scheduling'
 import type { RunCommand } from '../../contracts/runs'
 import CentralWorkspace from './CentralWorkspace.vue'
@@ -17,7 +20,6 @@ import GraphPanel from '../GraphPanel.vue'
 import SharingImport from '../SharingImport.vue'
 import SharingExport from '../SharingExport.vue'
 import type { PortableSourceSelection, SharingCommand } from '../../contracts/sharing'
-import type { WorkflowView } from '../../contracts/workflows'
 import type { CollectionDescription, StoredPod, WorkspaceState } from '../../contracts/control'
 import type { Organization } from '../../contracts/groups'
 
@@ -25,6 +27,10 @@ const invoke = window.pods.central!
 const client = desktopWorkspaceClient(invoke)
 const page = ref('Automations')
 const map = ref<MapView | null>(null)
+const networks = ref<NetworkView>({ networks: [] })
+const proposals = ref<AccessProposal[]>([])
+const tab = ref<'automations' | 'decisions'>('automations')
+let polls = 0
 const now = ref(Date.now())
 const workspace = ref<InstanceType<typeof CentralWorkspace> | null>(null)
 const workflows = ref<WorkflowView>({ workflows: [], runs: [] })
@@ -42,8 +48,10 @@ let timer: ReturnType<typeof setTimeout> | undefined
 let closed = false
 async function poll() {
   try {
-    const [value, view, inventory] = await Promise.all([invoke({ type: 'status' }), window.pods.workflows({ type: 'list' }), window.pods.workspace({ type: 'map' })])
-    status.value = (value as CentralStatus & { enabled?: boolean }).enabled === false ? null : value as CentralStatus; workflows.value = view; workspaceChanged(inventory); map.value = inventory.map ?? null; now.value = Date.now(); error.value = ''
+    const [value, view, inventory, networkView] = await Promise.all([invoke({ type: 'status' }), window.pods.workflows({ type: 'list' }), window.pods.workspace({ type: 'map' }), window.pods.networks({ type: 'list' })])
+    status.value = (value as CentralStatus & { enabled?: boolean }).enabled === false ? null : value as CentralStatus; workflows.value = view; workspaceChanged(inventory); map.value = inventory.map ?? null; networks.value = networkView; now.value = Date.now(); error.value = ''
+    // Setup proposals change rarely; the chat registry behind them is read every tenth poll.
+    if (polls++ % 10 === 0) proposals.value = (await window.pods.master({ type: 'list' })).proposals
   }
   catch (cause) { error.value = String(cause) }
   if (!closed) timer = setTimeout(() => { void poll() }, 1000)
@@ -71,6 +79,9 @@ function localCommand(command: CentralCommand) {
   if (command.channel === 'scheduling') void run(() => window.pods.scheduling(command.body as unknown as ScheduleCommand))
   else if (command.channel === 'runs') void run(() => window.pods.runs(command.body as unknown as RunCommand))
 }
+const networkCommand = (command: NetworkCommand) => void run(() => window.pods.networks(command))
+const workflowCommand = (command: WorkflowCommand) => void run(() => window.pods.workflows(command))
+const masterCommand = (command: MasterCommand) => void run(async () => { await window.pods.master(command); proposals.value = (await window.pods.master({ type: 'list' })).proposals })
 const networkControl = (control: NetworkControl) => void run(() => window.pods.networks(control))
 const workflowControl = (control: WorkflowControl) => void run(() => window.pods.workflows(control))
 const openFolder = (podId: string) => void run(() => window.pods.programs({ type: 'openFolder', podId }))
@@ -98,7 +109,7 @@ async function openPod(id: string) {
     <p v-if="error" role="alert" class="error-message">
       {{ diagnostic(error) }}
     </p>
-    <AutomationsShell v-if="page === 'Automations'" :view="map" :live="true" :now="now" :decisions="map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" desktop @settings="page = 'App settings'" @command="localCommand" @network="networkControl" @workflow="workflowControl" @folder="openFolder" />
+    <AutomationsShell v-if="page === 'Automations'" :view="map" :live="true" :now="now" :decisions="map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" desktop :tab="tab" :inbox="{ choices: networks.choices ?? [], gates: networks.gates ?? [], graphGates: workflows.gates ?? null, proposals }" @update:tab="tab = $event" @network-command="networkCommand" @workflow-command="workflowCommand" @master="masterCommand" @settings="page = 'App settings'" @command="localCommand" @network="networkControl" @workflow="workflowControl" @folder="openFolder" />
     <section v-show="page === 'Workflows'">
       <template v-if="sharing">
         <button class="text-button" @click="sharing = null">
