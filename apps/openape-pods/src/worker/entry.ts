@@ -46,6 +46,8 @@ import { PodGroups } from './workspace/groups'
 import { listedPods } from './workspace/pod-list'
 import { mapView } from './workspace/map-view'
 import { CollectionDescriptions } from './workspace/collection-descriptions'
+import { SecretRequests } from './secrets/store'
+import type { SecretRowCommand } from './secrets/store'
 import { ScriptWorkspace } from './workspace/scripts'
 import { parseScriptCommand } from '../contracts/scripts'
 import { DataControl } from './data/control'
@@ -402,6 +404,9 @@ port.on('message', async (event) => {
       }
       finally { preparing = null; maintenance = false }
       return
+    }
+    if (request.command && typeof request.command === 'object' && 'secrets' in request.command) {
+      port.postMessage({ id: request.id, state: new SecretRequests(store).execute(request.command.secrets as SecretRowCommand) }); return
     }
     if (request.command && typeof request.command === 'object' && 'details' in request.command) {
       port.postMessage({ id: request.id, state: details.execute(parseDetailsCommand(request.command.details)) }); return

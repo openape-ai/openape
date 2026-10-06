@@ -8,6 +8,7 @@ import { networkTables } from '../../src/worker/storage/network-schema'
 import type { DatabaseSync } from 'node:sqlite'
 
 export function removeNetworkGates(database: DatabaseSync): void {
+  database.exec('DROP TABLE secret_requests')
   database.exec('DROP TABLE collection_descriptions')
   database.exec('DROP TABLE network_choices')
   for (const table of [...aliasTables, ...sharingTables].reverse()) database.exec(`DROP TABLE ${table}`)

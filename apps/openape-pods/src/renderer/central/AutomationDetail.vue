@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { CentralCommand } from '../../contracts/central'
 import type { MapPod, MapResource, MapView } from '../../contracts/map-view'
+import type { SecretRequestRow } from '../../contracts/secrets'
 import { diagnostic, language, t } from '../i18n'
 import { cadence, stamp } from '../utils/cadence'
 import { nodeFacts } from '../utils/automation-layout'
@@ -14,7 +15,7 @@ import { nodeFacts } from '../utils/automation-layout'
  */
 export interface NetworkControl { type: 'pause' | 'activate', id: string, revision: number }
 export type WorkflowControl = { type: 'pause', id: string, revision: number, paused: boolean } | { type: 'start', id: string, revision: number }
-const props = defineProps<{ view: MapView, id: string, now: number, desktop: boolean }>()
+const props = defineProps<{ view: MapView, id: string, now: number, desktop: boolean, requests?: SecretRequestRow[] }>()
 const emit = defineEmits<{ close: [], open: [id: string], command: [command: CentralCommand], network: [control: NetworkControl], workflow: [control: WorkflowControl], secret: [podId: string, alias: string | null], folder: [podId: string] }>()
 const pod = computed(() => props.view.pods.find(item => item.id === props.id) ?? null)
 const collection = computed(() => props.view.collections.find(item => item.id === props.id) ?? null)
@@ -29,6 +30,8 @@ const kind = computed(() => collection.value ? t(collection.value.kind === 'netw
 const group = computed(() => pod.value?.group ?? collection.value?.group ?? null)
 const byKind = (kind: MapResource['kind']) => pod.value?.resources.filter(resource => resource.kind === kind) ?? []
 const secrets = computed(() => pod.value?.secrets ?? [])
+const openRequests = computed(() => (props.requests ?? []).filter(row => row.podId === props.id && row.status !== 'collected' && row.status !== 'expired'))
+const requestState = (status: SecretRequestRow['status']) => status === 'failed' ? t('failed') : status === 'filled' ? t('filled') : t('requested')
 const run = computed(() => pod.value?.lastRun ?? collection.value?.lastRun ?? null)
 const gates = computed(() => (collection.value?.gates ?? []).map(gate => gate.kind === 'choose' ? t('{title}: you decide ({count} open)', { title: gate.title, count: gate.open }) : t('{title}: approval at the IdP ({count} batches)', { title: gate.title, count: gate.batches.pending ?? 0 })))
 const numbers = computed(() => collection.value ? [[t('Deliveries'), String(collection.value.counts.done ?? 0)], [t('Open'), String(collection.value.counts.pending ?? 0)], ...(Object.keys(collection.value.flows).length ? [[t('Flows in 24 h'), Object.entries(collection.value.flows).map(([channel, count]) => `${channel} ${count}`).join(', ')]] : [])] : [])
@@ -141,7 +144,10 @@ function runNow() {
             {{ t('Replace') }}
           </button>
         </div>
-        <div v-if="!secrets.length" class="muted">
+        <div v-for="row in openRequests" :key="row.id" data-testid="secret-request">
+          <b>{{ row.alias }}</b> <span class="pill" :class="row.status === 'failed' ? 'warn' : 'pods'">{{ requestState(row.status) }}</span> <span class="muted">{{ 'OpenApe Secrets' }}{{ row.purpose ? ` · ${row.purpose}` : '' }}{{ row.error ? ` · ${diagnostic(row.error)}` : '' }}</span>
+        </div>
+        <div v-if="!secrets.length && !openRequests.length" class="muted">
           {{ t('none') }}
         </div>
         <div class="opts">
