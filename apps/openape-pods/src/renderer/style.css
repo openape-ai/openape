@@ -9,6 +9,16 @@
   --accent:light-dark(#326747,#9ac4a0);
   --tint:light-dark(#e4eddf,#304133);
   --warn:light-dark(#9b6115,#efc47f);
+  --warn-soft:light-dark(#fbefc9,#3e3010);
+  --ok:light-dark(#2d7a3e,#6ccb80);
+  --ok-soft:light-dark(#dff3e3,#173a21);
+  --bad:light-dark(#b3261e,#f28b82);
+  --bad-soft:light-dark(#f9dedc,#4a1d1a);
+  --idp:light-dark(#5a3fb5,#b39cf0);
+  --idp-soft:light-dark(#e7e0f8,#2d2350);
+  --read:#3b82c4;
+  --service:#2f8f6a;
+  --application:#3b82c4;
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   font-size:14px;
   color:var(--text);

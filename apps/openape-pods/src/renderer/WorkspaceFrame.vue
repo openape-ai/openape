@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { t } from './i18n'
 
-defineProps<{ page: string, count?: number, embedded?: boolean, browser?: boolean }>()
+defineProps<{ page: string, count?: number, embedded?: boolean, browser?: boolean, automations?: boolean }>()
 defineEmits<{ navigate: [page: string] }>()
 const collapsed = ref(false)
 </script>
@@ -19,6 +19,9 @@ const collapsed = ref(false)
           {{ collapsed ? '⇥' : '⇤' }}
         </button>
         <nav :aria-label="t('Your workspace')">
+          <button v-if="automations" class="nav-button" :aria-label="t('Automations')" :aria-current="page === 'Automations' ? 'page' : undefined" @click="$emit('navigate', 'Automations')">
+            <span aria-hidden="true">◎</span><span class="destination-label">{{ t('Automations') }}</span>
+          </button>
           <button class="nav-button" :aria-label="t('Networks & workflows')" :aria-current="page === 'Workflows' ? 'page' : undefined" @click="$emit('navigate', 'Workflows')">
             <span aria-hidden="true">⇢</span><span class="destination-label">{{ t('Networks & workflows') }}</span>
           </button>
