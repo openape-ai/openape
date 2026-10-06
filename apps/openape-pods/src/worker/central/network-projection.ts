@@ -2,6 +2,9 @@ import { networkBrowserMutationAllowed } from '../../contracts/central-networks'
 import type { CentralCommand } from '../../contracts/central'
 import { commandPodIds, centralTables } from '../../contracts/central'
 import type { PodDatabase } from '../storage/database'
+import { privatePods } from './projection-policy'
+
+export { privatePods }
 
 type Policy = 'pod' | 'podId' | 'run' | 'workflowRun' | 'workflowRunId' | 'workflow' | 'workflowId' | 'workflowHistory' | 'item' | 'public' | 'omit'
 const policies = {
@@ -16,7 +19,6 @@ const policies = {
   chat_conversations: 'omit', chat_contexts: 'omit', chat_members: 'omit', chat_message_context: 'omit', control_runs: 'omit', control_changes: 'omit',
 } as const satisfies Record<typeof centralTables[number], Policy>
 
-export const privatePods = `SELECT pod_id FROM network_members UNION SELECT pod_id FROM network_invocations UNION SELECT m.pod_id FROM workflow_members m JOIN workflow_call_requests c ON c.workflow_id=m.workflow_id`
 const publicRuns = `SELECT id FROM runs WHERE pod_id NOT IN (${privatePods})`
 const privateWorkflows = `SELECT workflow_id FROM workflow_members WHERE pod_id IN (${privatePods}) UNION SELECT ancestor_workflow_id FROM networks WHERE ancestor_workflow_id IS NOT NULL`
 const privateWorkflowRuns = `SELECT workflow_run_id FROM workflow_call_requests WHERE workflow_run_id IS NOT NULL UNION SELECT id FROM workflow_runs WHERE workflow_id IN (${privateWorkflows})`

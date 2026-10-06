@@ -3995,5 +3995,16 @@
   "Failed inputs retained: {p0}. Future scheduled runs remain eligible.": "Fehlgeschlagene Eingänge aufbewahrt: {p0}. Künftige geplante Läufe bleiben möglich.",
   "Invalid automatic recovery state": "Ungültiger Zustand der automatischen Wiederherstellung",
   "Invalid failed input count": "Ungültige Anzahl fehlgeschlagener Eingänge",
-  "An operation without replay evidence requires review": "Eine Aktion ohne gesichertes Ergebnis muss geprüft werden"
+  "An operation without replay evidence requires review": "Eine Aktion ohne gesichertes Ergebnis muss geprüft werden",
+  "Invalid map view": "Ungültige Kartenansicht",
+  "Invalid map view list": "Ungültige Liste in der Kartenansicht",
+  "Invalid map view number": "Ungültige Zahl in der Kartenansicht",
+  "Invalid map view text": "Ungültiger Text in der Kartenansicht",
+  "Invalid map view fields": "Ungültige Felder der Kartenansicht",
+  "Invalid map system": "Ungültiges System in der Kartenansicht",
+  "Invalid map pod": "Ungültiger Pod in der Kartenansicht",
+  "Invalid map resource": "Ungültige Ressource in der Kartenansicht",
+  "Invalid map collection": "Ungültige Sammlung in der Kartenansicht",
+  "Invalid map collection member": "Ungültiges Mitglied einer Sammlung in der Kartenansicht",
+  "Invalid map edge": "Ungültige Verbindung in der Kartenansicht"
 }
