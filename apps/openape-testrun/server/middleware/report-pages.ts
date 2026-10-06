@@ -13,5 +13,5 @@ export default defineEventHandler((event) => {
   const { pathname, search } = getRequestURL(event)
   const target = editRedirect(pathname, search)
   if (target) return sendRedirect(event, target, 301)
-  if (pathname.startsWith('/r/') || pathname === '/reports' || pathname === '/reports/removed') privateReportHeaders(event)
+  if (/^\/(?:r|d|reports)(?:\/|$)/u.test(pathname)) privateReportHeaders(event)
 })
