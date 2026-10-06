@@ -17,6 +17,7 @@ import { searchPackages } from './package-catalog'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { parseProgramCommand } from '../contracts/programs'
+import { parseSecretsCommand } from '../contracts/secrets'
 import { applicationDefinition } from './programs/application'
 import { programDefinition, suggestedProgram } from './programs/definition'
 import { LanguagePreference } from './language'
@@ -373,6 +374,15 @@ async function start(): Promise<void> {
   ipcMain.handle(channels.details, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     return worker.details(parseDetailsCommand(command))
+  })
+  ipcMain.handle(channels.secrets, async (event, value: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    if (!window) throw new Error('Owner window is unavailable')
+    const command = parseSecretsCommand(value)
+    if (command.type !== 'importFile') return worker.secrets(command)
+    const selected = await dialog.showOpenDialog(window, { title: t('Choose a private file on this Mac'), properties: ['openFile', 'showHiddenFiles'] })
+    if (!selected.canceled && selected.filePaths[0]) await worker.importSecretFile(command.podId, command.alias, selected.filePaths[0])
+    return worker.secrets({ type: 'list' })
   })
   ipcMain.handle(channels.workspace, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
