@@ -15,6 +15,7 @@ import type { WorkflowCommand } from '../../contracts/workflows'
 import type { CentralCommand } from '../../contracts/central'
 import AutomationsList from './AutomationsList.vue'
 import AutomationsMap from './AutomationsMap.vue'
+import AppSettingsMenu from './AppSettingsMenu.vue'
 import CodexHandoff from './CodexHandoff.vue'
 import KpiRow from './KpiRow.vue'
 import type { Layers } from '../utils/automation-layout'
@@ -24,8 +25,8 @@ import { ungrouped } from '../utils/automation-layout'
  * The two product surfaces behind one tab bar: Automatisierungen (this file) and Entscheidungen
  * (the `decisions` slot). Settings open from the gear; creation hands a brief to Codex.
  */
-const props = defineProps<{ view: MapView | null, live: boolean, now: number, decisions?: number, tab?: 'automations' | 'decisions', desktop?: boolean, codex?: 'connected' | 'disconnected', inbox?: { choices: NetworkChoiceView[], gates: NetworkGateView[], graphGates: { batches: GateBatchView[], held: GateHeldItem[] } | null, proposals: AccessProposal[] } }>()
-const emit = defineEmits<{ 'update:tab': [tab: 'automations' | 'decisions'], 'settings': [], 'codex': [pinned: string | null, group: string | null], 'command': [command: CentralCommand], 'network': [control: NetworkControl], 'workflow': [control: WorkflowControl], 'secret': [podId: string, alias: string | null], 'folder': [podId: string], 'networkCommand': [command: NetworkCommand], 'workflowCommand': [command: WorkflowCommand], 'master': [command: MasterCommand] }>()
+const props = defineProps<{ view: MapView | null, live: boolean, now: number, decisions?: number, tab?: 'automations' | 'decisions', desktop?: boolean, subject?: string, codex?: 'connected' | 'disconnected', inbox?: { choices: NetworkChoiceView[], gates: NetworkGateView[], graphGates: { batches: GateBatchView[], held: GateHeldItem[] } | null, proposals: AccessProposal[] } }>()
+const emit = defineEmits<{ 'update:tab': [tab: 'automations' | 'decisions'], 'settings': [], 'logout': [], 'codex': [pinned: string | null, group: string | null], 'command': [command: CentralCommand], 'network': [control: NetworkControl], 'workflow': [control: WorkflowControl], 'secret': [podId: string, alias: string | null], 'folder': [podId: string], 'networkCommand': [command: NetworkCommand], 'workflowCommand': [command: WorkflowCommand], 'master': [command: MasterCommand] }>()
 const mode = ref<'map' | 'list'>('map')
 const group = ref('all')
 const layers = ref<Layers>({ channel: true, read: true, write: true, auth: true, paused: true })
@@ -34,6 +35,7 @@ const pinned = ref<string | null>(null)
 const hovered = ref<string | null>(null)
 const detail = ref<string | null>(null)
 const handoff = ref(false)
+const settings = ref(false)
 const inboxView = ref<InstanceType<typeof DecisionsInbox> | null>(null)
 const waiting = computed(() => props.decisions ?? inboxView.value?.total ?? 0)
 const current = computed(() => props.tab ?? 'automations')
@@ -55,7 +57,7 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
           {{ t('Decisions') }} <span v-if="waiting" class="n">{{ waiting }}</span>
         </button>
       </nav>
-      <button class="gear" type="button" :title="t('Settings')" @click="emit('settings')">
+      <button class="gear" type="button" :title="t('Settings')" :aria-expanded="settings" @click="settings = !settings">
         ⚙ {{ t('Settings') }}
       </button>
     </header>
@@ -100,7 +102,7 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
             </button>
           </div>
         </div>
-        <CodexHandoff v-if="handoff" :view="view" :pinned="pinned" :group="group === 'all' ? null : group === ungrouped ? t('without group') : group" :connected="codex === undefined ? null : codex === 'connected'" @close="handoff = false" @settings="emit('settings')" />
+        <CodexHandoff v-if="handoff" :view="view" :pinned="pinned" :group="group === 'all' ? null : group === ungrouped ? t('without group') : group" :connected="codex === undefined ? null : codex === 'connected'" @close="handoff = false" @settings="settings = true" />
         <div class="automations-kindrow">
           <span class="automations-stamp" :class="{ live }">{{ live ? t('Live · {time}', { time: clock(now, language) }) : t('As of {time}', { time: clock(view.at, language) }) }}</span>
           <div class="kinds">
@@ -124,6 +126,7 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
         </template>
       </DecisionsInbox>
     </section>
+    <AppSettingsMenu v-if="settings" :browser="!desktop" :subject="subject" @close="settings = false" @logout="emit('logout')" @keydown.escape="settings = false" />
     <AutomationDetail v-if="view && detail" :id="detail" :key="detail" :view="view" :now="now" :desktop="!!desktop" @close="detail = null" @open="(id) => { detail = id; pinned = id }" @command="emit('command', $event)" @network="emit('network', $event)" @workflow="emit('workflow', $event)" @secret="(podId, alias) => emit('secret', podId, alias)" @folder="emit('folder', $event)">
       <template #secret>
         <slot name="secret" />

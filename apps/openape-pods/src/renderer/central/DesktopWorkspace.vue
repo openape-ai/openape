@@ -110,7 +110,7 @@ async function openPod(id: string) {
     <p v-if="error" role="alert" class="error-message">
       {{ diagnostic(error) }}
     </p>
-    <AutomationsShell v-if="page === 'Automations'" :view="map" :live="true" :now="now" :decisions="map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" desktop :codex="codexConnected === null ? undefined : codexConnected ? 'connected' : 'disconnected'" :tab="tab" :inbox="{ choices: networks.choices ?? [], gates: networks.gates ?? [], graphGates: workflows.gates ?? null, proposals }" @update:tab="tab = $event" @network-command="networkCommand" @workflow-command="workflowCommand" @master="masterCommand" @settings="page = 'App settings'" @command="localCommand" @network="networkControl" @workflow="workflowControl" @folder="openFolder" />
+    <AutomationsShell v-if="page === 'Automations'" :view="map" :live="true" :now="now" :decisions="map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" desktop :codex="codexConnected === null ? undefined : codexConnected ? 'connected' : 'disconnected'" :tab="tab" :inbox="{ choices: networks.choices ?? [], gates: networks.gates ?? [], graphGates: workflows.gates ?? null, proposals }" @update:tab="tab = $event" @network-command="networkCommand" @workflow-command="workflowCommand" @master="masterCommand" @command="localCommand" @network="networkControl" @workflow="workflowControl" @folder="openFolder" />
     <section v-show="page === 'Workflows'">
       <template v-if="sharing">
         <button class="text-button" @click="sharing = null">
