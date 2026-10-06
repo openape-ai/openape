@@ -147,3 +147,25 @@ compatible; existing Test Runs upload/exporters stay compatible; upstream mail/c
 and direct-message producers remain unaffected. New direct HTML publication and optional
 local templates are additive. A no-send fixture is distinct from the first regular
 producer publication; observe the latter without manually triggering it.
+
+## Producer compatibility, October 6
+
+Read-only supported Pods inventory was refreshed during issue 1429. No producer
+script, resource assignment, credential, schedule, checkpoint or pending effect
+was changed. Natural checkpoint progression is distinct from migration changes.
+
+| Producer | Verified current source | Decision | State preserved |
+| --- | --- | --- | --- |
+| IURIO PR monitor | `158083853caa5f07eec600317cc194afd2a058a99eac123d3a0fb6307e9b6df8`, local schema-1 HTML renderer | Compatible PR Updates adapter | Active; 900-second schedule revision 2; resource epoch 43; dedicated publisher and receipt-before-send flow |
+| Morning sender | `ce3ac5cbfc2b8e0f910dd036a8a4a23b62d42833797c0e25cac19c443e4c1009`, briefing/v1 | Compatible Briefings adapter | Active in enabled daily 07:00 workflow revision 7; standalone schedule remains disabled, resource epoch 34 |
+| Linde server report | `be3ba0bcbfb31c55b1a085a2187c8863b867dba9233f12bdc697159136365373`, local schema-1 HTML/CSS renderer | Compatible Test Runs adapter | Paused, separate workflow disabled; resource epoch 9; pending delivery state preserved |
+| Morning editorial/mail/calendar sources | Existing pinned workflow hashes | Unaffected upstream sources | No publication endpoint or schedule change |
+| Direct-message monitors and mail networks | Supported current workspace inventory | Unaffected | No report-contract dependency or manual trigger |
+| Existing CLI/Test Run/E2E/guide/iOS exporters | Existing manifest and asset ingestion | Compatible Test Runs adapter | Original URLs, uploads, authentication and series behavior retained |
+| New direct creator | `ape-reports`, one complete HTML file | New generic publication | Private/permanent defaults; local templates optional; no companion asset upload |
+
+The earlier migration record is historical: Mail-Kurzbericht is now archived,
+IURIO Task monitor and zaz are active without blocked inputs, and the Delta Mind
+mail network is active at revision 3. This task did not make those changes.
+First regular post-rollout publication is recorded separately after observing it;
+a successful no-send acceptance fixture is not that observation.
