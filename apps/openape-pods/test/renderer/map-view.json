@@ -1,0 +1,2338 @@
+{
+ "at": 1791284700000,
+ "window": {
+  "from": 1791198300000,
+  "to": 1791284700000
+ },
+ "kpis": {
+  "active": 5,
+  "paused": 6,
+  "degraded": [
+   {
+    "podId": "9d307901-85ff-41e6-a96b-a7f918142c1c",
+    "reason": "completedWithGaps"
+   }
+  ],
+  "decisions": [
+   {
+    "networkId": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+    "gate": "uncertain-review",
+    "title": "Review uncertain mail",
+    "kind": "choose",
+    "count": 17
+   }
+  ],
+  "unknownDeliveries": 0
+ },
+ "systems": [
+  {
+   "id": "app:o365-cli:phofmann@delta-mind.at",
+   "kind": "application",
+   "name": "phofmann@delta-mind.at",
+   "how": "o365-cli"
+  },
+  {
+   "id": "dir:/Users/fixture/Pods/delta",
+   "kind": "directory",
+   "name": "delta",
+   "how": "/Users/fixture/Pods/delta"
+  },
+  {
+   "id": "ai:jev",
+   "kind": "service",
+   "name": "TypeSafe / Jev",
+   "how": "jev-1.13.0"
+  },
+  {
+   "id": "app:pods-mail:phofmann@delta-mind.at",
+   "kind": "application",
+   "name": "phofmann@delta-mind.at",
+   "how": "pods-mail"
+  },
+  {
+   "id": "dir:/Users/fixture/Briefing Evidence/mail",
+   "kind": "directory",
+   "name": "mail",
+   "how": "/Users/fixture/Briefing Evidence/mail"
+  },
+  {
+   "id": "app:repos-issues:*",
+   "kind": "application",
+   "name": "repos-issues",
+   "how": "repos-issues"
+  },
+  {
+   "id": "svc:https://api.telegram.org",
+   "kind": "service",
+   "name": "api.telegram.org",
+   "how": "GET, POST"
+  },
+  {
+   "id": "svc:https://report.openape.ai",
+   "kind": "service",
+   "name": "report.openape.ai",
+   "how": "GET, POST"
+  },
+  {
+   "id": "app:az:*",
+   "kind": "application",
+   "name": "az",
+   "how": "az"
+  },
+  {
+   "id": "svc:https://dev.azure.com",
+   "kind": "service",
+   "name": "dev.azure.com",
+   "how": "GET"
+  },
+  {
+   "id": "app:iurio:*",
+   "kind": "application",
+   "name": "iurio",
+   "how": "iurio"
+  },
+  {
+   "id": "svc:https://zaz.delta-mind.at",
+   "kind": "service",
+   "name": "zaz.delta-mind.at",
+   "how": "GET, POST"
+  },
+  {
+   "id": "app:pods-mail:patrick@docpit.eu",
+   "kind": "application",
+   "name": "patrick@docpit.eu",
+   "how": "pods-mail"
+  },
+  {
+   "id": "ssh:dev-portal.lindeverlag.at",
+   "kind": "ssh",
+   "name": "dev-portal.lindeverlag.at",
+   "how": "ssh"
+  },
+  {
+   "id": "ssh:portal-staging.lindeverlag.at",
+   "kind": "ssh",
+   "name": "portal-staging.lindeverlag.at",
+   "how": "ssh"
+  },
+  {
+   "id": "ssh:portal.lindeverlag.at",
+   "kind": "ssh",
+   "name": "portal.lindeverlag.at",
+   "how": "ssh"
+  },
+  {
+   "id": "ssh:db.lindeverlag.at",
+   "kind": "ssh",
+   "name": "db.lindeverlag.at",
+   "how": "ssh"
+  },
+  {
+   "id": "ssh:weiloner.at",
+   "kind": "ssh",
+   "name": "weiloner.at",
+   "how": "ssh"
+  }
+ ],
+ "pods": [
+  {
+   "id": "29107815-e7ef-4473-a1a9-5b2e2f348067",
+   "name": "Intake",
+   "description": null,
+   "group": "Delta Mind",
+   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "lifecycle": "active",
+   "draft": false,
+   "kind": "source",
+   "ai": false,
+   "channels": {
+    "takes": [],
+    "gives": [
+     "mail.open",
+     "mail.sent-raw"
+    ]
+   },
+   "resources": [
+    {
+     "kind": "application",
+     "name": "o365-cli",
+     "how": "List emails in inbox for phofmann@delta-mind.at; Read email from account phofmann@delta-mind.at",
+     "system": "app:o365-cli:phofmann@delta-mind.at"
+    },
+    {
+     "kind": "directory",
+     "name": "delta",
+     "how": "readWrite",
+     "system": "dir:/Users/fixture/Pods/delta"
+    }
+   ],
+   "secrets": [],
+   "schedule": {
+    "spec": {
+     "kind": "interval",
+     "seconds": 900
+    },
+    "enabled": true
+   },
+   "lastRun": {
+    "at": 1791281129000,
+    "state": "completed",
+    "summary": "Read 6 sampled messages and emitted 0 changed provider versions. No mailbox writes."
+   },
+   "runs": 10,
+   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "355be341-19c2-4d47-8d11-1d61a5972ed9",
+   "name": "Sent mail",
+   "description": null,
+   "group": "Delta Mind",
+   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "lifecycle": "active",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "mail.sent-raw"
+    ],
+    "gives": [
+     "mail.sent"
+    ]
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "e83e19a4-7958-4bd4-b9fe-e319f4ab11ec",
+   "name": "List filter",
+   "description": null,
+   "group": "Delta Mind",
+   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "lifecycle": "active",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "mail.open"
+    ],
+    "gives": [
+     "mail.filtered"
+    ]
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": {
+    "at": 1791281129000,
+    "state": "completed",
+    "summary": "List filter completed"
+   },
+   "runs": 10,
+   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "ae761725-8024-4b9f-8164-96a525db71c6",
+   "name": "Triage",
+   "description": null,
+   "group": "Delta Mind",
+   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "lifecycle": "active",
+   "draft": false,
+   "kind": "decision",
+   "ai": true,
+   "channels": {
+    "takes": [
+     "mail.filtered"
+    ],
+    "gives": [
+     "mail.triaged"
+    ]
+   },
+   "resources": [
+    {
+     "kind": "service",
+     "name": "TypeSafe / Jev",
+     "how": "jev-1.13.0 · 20",
+     "system": "ai:jev"
+    },
+    {
+     "kind": "directory",
+     "name": "delta",
+     "how": "readWrite",
+     "system": "dir:/Users/fixture/Pods/delta"
+    }
+   ],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": {
+    "at": 1791281129000,
+    "state": "completed",
+    "summary": "Triage completed"
+   },
+   "runs": 10,
+   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "90bad739-f5c9-4188-af53-02cbffafc7a5",
+   "name": "Categorisation",
+   "description": null,
+   "group": "Delta Mind",
+   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "lifecycle": "active",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "mail.triaged"
+    ],
+    "gives": [
+     "mail.useful",
+     "mail.newsletter",
+     "mail.invoice",
+     "mail.reply",
+     "mail.unsure"
+    ]
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": {
+    "at": 1791281129000,
+    "state": "completed",
+    "summary": "Categorisation completed"
+   },
+   "runs": 10,
+   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "e9682b42-ce4b-4008-842f-426325cecf73",
+   "name": "Review",
+   "description": null,
+   "group": "Delta Mind",
+   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "lifecycle": "active",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "mail.useful"
+    ],
+    "gives": [
+     "mail.reviewed"
+    ]
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "e9e01cad-2122-4ca2-8a99-05432a8ff53d",
+   "name": "Newsletter batch",
+   "description": null,
+   "group": "Delta Mind",
+   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "lifecycle": "active",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "mail.newsletter"
+    ],
+    "gives": [
+     "mail.batch"
+    ]
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "ce23164e-b01c-4d65-8ccc-dba5a9343785",
+   "name": "Invoice preview",
+   "description": null,
+   "group": "Delta Mind",
+   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "lifecycle": "active",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "mail.invoice"
+    ],
+    "gives": [
+     "invoice.candidate"
+    ]
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "9f9de6a8-5cb2-4afe-8ab1-0c617cd8defc",
+   "name": "Reply drafts",
+   "description": null,
+   "group": "Delta Mind",
+   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "lifecycle": "active",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "mail.reply"
+    ],
+    "gives": [
+     "draft.candidate"
+    ]
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "7e8cb062-1560-4fa7-854b-78ad1f5afe7c",
+   "name": "Archive preview",
+   "description": null,
+   "group": "Delta Mind",
+   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "lifecycle": "active",
+   "draft": false,
+   "kind": "effect",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "mail.approved"
+    ],
+    "gives": []
+   },
+   "resources": [
+    {
+     "kind": "application",
+     "name": "o365-cli",
+     "how": "Move approved mail for phofmann@delta-mind.at",
+     "system": "app:o365-cli:phofmann@delta-mind.at"
+    }
+   ],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "c706ec78-4509-4062-bc50-4ea412d331d8",
+   "name": "Memory",
+   "description": null,
+   "group": "Delta Mind",
+   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "lifecycle": "active",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "mail.sent",
+     "mail.reviewed",
+     "invoice.candidate",
+     "draft.candidate",
+     "mail.excluded",
+     "mail.unsure"
+    ],
+    "gives": []
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "b306b2c6-0526-4e26-9b86-cc0f8edec89a",
+   "name": "Mail-Prüfung · Morgenbriefing",
+   "description": null,
+   "group": null,
+   "groupId": null,
+   "lifecycle": "active",
+   "draft": false,
+   "kind": "decision",
+   "ai": true,
+   "channels": {
+    "takes": [],
+    "gives": []
+   },
+   "resources": [
+    {
+     "kind": "application",
+     "name": "pods-mail",
+     "how": "List mail for phofmann@delta-mind.at; List mail for patrick@docpit.eu",
+     "system": "app:pods-mail:phofmann@delta-mind.at"
+    },
+    {
+     "kind": "directory",
+     "name": "mail",
+     "how": "readWrite",
+     "system": "dir:/Users/fixture/Briefing Evidence/mail"
+    }
+   ],
+   "secrets": [],
+   "schedule": {
+    "spec": {
+     "kind": "interval",
+     "seconds": 60
+    },
+    "enabled": true
+   },
+   "lastRun": {
+    "at": 1791284669000,
+    "state": "completed",
+    "summary": "No pending mail archive decisions"
+   },
+   "runs": 50,
+   "collection": "1ff4064f-a156-4bd5-a7d6-96f63e5f5508",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "a011a863-5f64-4008-aaef-f0df877b5130",
+   "name": "Morgenbriefing · Kalender und Issues",
+   "description": null,
+   "group": null,
+   "groupId": null,
+   "lifecycle": "active",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [],
+    "gives": []
+   },
+   "resources": [
+    {
+     "kind": "application",
+     "name": "o365-cli",
+     "how": "Read today calendar for phofmann@delta-mind.at",
+     "system": "app:o365-cli:phofmann@delta-mind.at"
+    },
+    {
+     "kind": "application",
+     "name": "repos-issues",
+     "how": "Read open issues",
+     "system": "app:repos-issues:*"
+    }
+   ],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": {
+    "at": 1791263129000,
+    "state": "completed",
+    "summary": "Calendar and issue sources collected for 2026-10-06"
+   },
+   "runs": 1,
+   "collection": "1ff4064f-a156-4bd5-a7d6-96f63e5f5508",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "33e785ad-826d-42e7-bdba-e454d916e919",
+   "name": "Morgenbriefing · Redaktion",
+   "description": null,
+   "group": null,
+   "groupId": null,
+   "lifecycle": "active",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [],
+    "gives": []
+   },
+   "resources": [
+    {
+     "kind": "directory",
+     "name": "mail",
+     "how": "read",
+     "system": "dir:/Users/fixture/Briefing Evidence/mail"
+    }
+   ],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": {
+    "at": 1791263129000,
+    "state": "completed",
+    "summary": "German editorial report ready for 2026-10-06"
+   },
+   "runs": 1,
+   "collection": "1ff4064f-a156-4bd5-a7d6-96f63e5f5508",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "9a49e4e7-c4a8-40be-8995-d578f8e941e8",
+   "name": "Morgenbriefing · Calendar-Bot",
+   "description": null,
+   "group": null,
+   "groupId": null,
+   "lifecycle": "active",
+   "draft": false,
+   "kind": "effect",
+   "ai": false,
+   "channels": {
+    "takes": [],
+    "gives": []
+   },
+   "resources": [
+    {
+     "kind": "service",
+     "name": "https://api.telegram.org",
+     "how": "GET, POST",
+     "system": "svc:https://api.telegram.org"
+    },
+    {
+     "kind": "service",
+     "name": "https://report.openape.ai",
+     "how": "GET, POST",
+     "system": "svc:https://report.openape.ai"
+    },
+    {
+     "kind": "secret",
+     "name": "calendar_bot_token",
+     "how": "",
+     "system": null
+    },
+    {
+     "kind": "secret",
+     "name": "reports_publisher_key",
+     "how": "",
+     "system": null
+    }
+   ],
+   "secrets": [
+    "calendar_bot_token",
+    "reports_publisher_key"
+   ],
+   "schedule": null,
+   "lastRun": {
+    "at": 1791263129000,
+    "state": "completed",
+    "summary": "Telegram delivery confirmed for 2026-10-06; message 245"
+   },
+   "runs": 1,
+   "collection": "1ff4064f-a156-4bd5-a7d6-96f63e5f5508",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "9d307901-85ff-41e6-a96b-a7f918142c1c",
+   "name": "IURIO PR monitor",
+   "description": null,
+   "group": "iurio",
+   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "lifecycle": "active",
+   "draft": false,
+   "kind": "effect",
+   "ai": false,
+   "channels": {
+    "takes": [],
+    "gives": []
+   },
+   "resources": [
+    {
+     "kind": "application",
+     "name": "az",
+     "how": "List pull requests for repository iurioServer",
+     "system": "app:az:*"
+    },
+    {
+     "kind": "service",
+     "name": "https://dev.azure.com",
+     "how": "GET",
+     "system": "svc:https://dev.azure.com"
+    },
+    {
+     "kind": "service",
+     "name": "https://api.telegram.org",
+     "how": "POST",
+     "system": "svc:https://api.telegram.org"
+    },
+    {
+     "kind": "secret",
+     "name": "telegram_bot_token",
+     "how": "",
+     "system": null
+    }
+   ],
+   "secrets": [
+    "telegram_bot_token"
+   ],
+   "schedule": {
+    "spec": {
+     "kind": "interval",
+     "seconds": 900
+    },
+    "enabled": true
+   },
+   "lastRun": {
+    "at": 1791284528000,
+    "state": "running",
+    "summary": "Läuft seit 13:01"
+   },
+   "runs": 6,
+   "collection": null,
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": [
+    {
+     "grantId": "grant-pr-monitor",
+     "title": "Execution permission for IURIO PR monitor"
+    }
+   ]
+  },
+  {
+   "id": "c7a17149-c76a-4ad8-808f-99731505514d",
+   "name": "IURIO Task monitor",
+   "description": null,
+   "group": "iurio",
+   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "lifecycle": "active",
+   "draft": false,
+   "kind": "effect",
+   "ai": false,
+   "channels": {
+    "takes": [],
+    "gives": []
+   },
+   "resources": [
+    {
+     "kind": "application",
+     "name": "iurio",
+     "how": "Read all active tasks in the IURIO development board",
+     "system": "app:iurio:*"
+    },
+    {
+     "kind": "service",
+     "name": "https://api.telegram.org",
+     "how": "POST",
+     "system": "svc:https://api.telegram.org"
+    },
+    {
+     "kind": "secret",
+     "name": "telegram_bot_token",
+     "how": "",
+     "system": null
+    }
+   ],
+   "secrets": [
+    "telegram_bot_token"
+   ],
+   "schedule": {
+    "spec": {
+     "kind": "interval",
+     "seconds": 300
+    },
+    "enabled": true
+   },
+   "lastRun": {
+    "at": 1791284609000,
+    "state": "completed",
+    "summary": "Unchanged: 204 tasks. No model call or Telegram message."
+   },
+   "runs": 30,
+   "collection": null,
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "dd261fdb-87d3-46d0-b033-1e8b521a54d7",
+   "name": "zaz Service-Agent",
+   "description": null,
+   "group": null,
+   "groupId": null,
+   "lifecycle": "active",
+   "draft": false,
+   "kind": "effect",
+   "ai": false,
+   "channels": {
+    "takes": [],
+    "gives": []
+   },
+   "resources": [
+    {
+     "kind": "service",
+     "name": "https://zaz.delta-mind.at",
+     "how": "GET, POST",
+     "system": "svc:https://zaz.delta-mind.at"
+    },
+    {
+     "kind": "secret",
+     "name": "zaz_agent_key",
+     "how": "",
+     "system": null
+    }
+   ],
+   "secrets": [
+    "zaz_agent_key"
+   ],
+   "schedule": {
+    "spec": {
+     "kind": "interval",
+     "seconds": 60
+    },
+    "enabled": true
+   },
+   "lastRun": {
+    "at": 1791284699000,
+    "state": "completed",
+    "summary": "zaz queue empty; no model call"
+   },
+   "runs": 150,
+   "collection": null,
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "0937607d-88e6-4ec5-b641-c8719d6104e4",
+   "name": "Mail-Kurzbericht",
+   "description": null,
+   "group": null,
+   "groupId": null,
+   "lifecycle": "paused",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [],
+    "gives": []
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": {
+    "spec": {
+     "kind": "interval",
+     "seconds": 900
+    },
+    "enabled": false
+   },
+   "lastRun": null,
+   "runs": 0,
+   "collection": null,
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "adce864e-e4d8-4154-8877-50b0601ea150",
+   "name": "Daily action website",
+   "description": null,
+   "group": null,
+   "groupId": null,
+   "lifecycle": "paused",
+   "draft": true,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [],
+    "gives": []
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": null,
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "2482e5ec-7ea4-43fc-91f5-48fa074d88fb",
+   "name": "Archived research",
+   "description": null,
+   "group": null,
+   "groupId": null,
+   "lifecycle": "archived",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [],
+    "gives": []
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": null,
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "7c708f3e-1bf4-4077-8ec8-4ca0cffd3903",
+   "name": "IURIO · Intake",
+   "description": null,
+   "group": "iurio",
+   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "lifecycle": "paused",
+   "draft": false,
+   "kind": "source",
+   "ai": false,
+   "channels": {
+    "takes": [],
+    "gives": [
+     "mail.open",
+     "mail.sent-raw"
+    ]
+   },
+   "resources": [
+    {
+     "kind": "application",
+     "name": "pods-mail",
+     "how": "List mail for patrick@docpit.eu",
+     "system": "app:pods-mail:patrick@docpit.eu"
+    }
+   ],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "7f5caa3b-b40a-4c5e-93ea-ae311483ed1e",
+   "name": "IURIO · Sent mail",
+   "description": null,
+   "group": "iurio",
+   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "lifecycle": "paused",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "mail.sent-raw"
+    ],
+    "gives": [
+     "mail.sent"
+    ]
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "cce3929c-c977-4c6f-90e9-8cee6d12355d",
+   "name": "IURIO · List filter",
+   "description": null,
+   "group": "iurio",
+   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "lifecycle": "paused",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "mail.open"
+    ],
+    "gives": [
+     "mail.filtered"
+    ]
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "e4e5f9cd-dc39-437c-8037-f27e8070a621",
+   "name": "IURIO · Triage",
+   "description": null,
+   "group": "iurio",
+   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "lifecycle": "paused",
+   "draft": false,
+   "kind": "decision",
+   "ai": true,
+   "channels": {
+    "takes": [
+     "mail.filtered"
+    ],
+    "gives": [
+     "mail.triaged"
+    ]
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "ebd9b44a-1d69-4cc2-8c2f-a88850b4c02e",
+   "name": "IURIO · Categorisation",
+   "description": null,
+   "group": "iurio",
+   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "lifecycle": "paused",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "mail.triaged"
+    ],
+    "gives": [
+     "mail.useful",
+     "mail.newsletter",
+     "mail.invoice",
+     "mail.reply",
+     "mail.unsure"
+    ]
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "e8e31bc2-d642-4abf-835a-5658dc5b5e1c",
+   "name": "IURIO · Review",
+   "description": null,
+   "group": "iurio",
+   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "lifecycle": "paused",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "mail.useful"
+    ],
+    "gives": [
+     "mail.reviewed"
+    ]
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "a756774d-c19a-4884-b837-57ad6d0536a3",
+   "name": "IURIO · Newsletter batch",
+   "description": null,
+   "group": "iurio",
+   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "lifecycle": "paused",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "mail.newsletter"
+    ],
+    "gives": [
+     "mail.batch"
+    ]
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "6813652e-b4e7-4fa0-a711-eb34c74b6bcd",
+   "name": "IURIO · Invoice preview",
+   "description": null,
+   "group": "iurio",
+   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "lifecycle": "paused",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "mail.invoice"
+    ],
+    "gives": [
+     "invoice.candidate"
+    ]
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "151ba3a0-5ad4-45df-b652-b03dd2eca462",
+   "name": "IURIO · Reply drafts",
+   "description": null,
+   "group": "iurio",
+   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "lifecycle": "paused",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "mail.reply"
+    ],
+    "gives": [
+     "draft.candidate"
+    ]
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "22fc58fa-5f4b-46e6-9b93-e2207d5e3ea8",
+   "name": "IURIO · Archive preview",
+   "description": null,
+   "group": "iurio",
+   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "lifecycle": "paused",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "mail.approved"
+    ],
+    "gives": []
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "09a80ebb-7a91-435e-9350-fb378a837b3a",
+   "name": "IURIO · Memory",
+   "description": null,
+   "group": "iurio",
+   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "lifecycle": "paused",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "mail.sent",
+     "mail.reviewed",
+     "invoice.candidate",
+     "draft.candidate",
+     "mail.excluded",
+     "mail.unsure"
+    ],
+    "gives": []
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "39b77752-0fcf-4d1c-99d7-b0186d02da1d",
+   "name": "Linde · Server report",
+   "description": null,
+   "group": "Linde",
+   "groupId": "ee83dd1f-7004-4f7e-8f5a-dc62d4ecf8bd",
+   "lifecycle": "paused",
+   "draft": false,
+   "kind": "effect",
+   "ai": false,
+   "channels": {
+    "takes": [],
+    "gives": []
+   },
+   "resources": [
+    {
+     "kind": "ssh",
+     "name": "dev-portal.lindeverlag.at",
+     "how": "read",
+     "system": "ssh:dev-portal.lindeverlag.at"
+    },
+    {
+     "kind": "ssh",
+     "name": "portal-staging.lindeverlag.at",
+     "how": "read",
+     "system": "ssh:portal-staging.lindeverlag.at"
+    },
+    {
+     "kind": "ssh",
+     "name": "portal.lindeverlag.at",
+     "how": "read",
+     "system": "ssh:portal.lindeverlag.at"
+    },
+    {
+     "kind": "ssh",
+     "name": "db.lindeverlag.at",
+     "how": "read",
+     "system": "ssh:db.lindeverlag.at"
+    },
+    {
+     "kind": "ssh",
+     "name": "weiloner.at",
+     "how": "read",
+     "system": "ssh:weiloner.at"
+    },
+    {
+     "kind": "service",
+     "name": "https://api.telegram.org",
+     "how": "POST",
+     "system": "svc:https://api.telegram.org"
+    }
+   ],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "99140a35-8b32-4301-8b26-f79709b24ab3",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "cc087550-9ae0-4508-82c1-f25a193e867b",
+   "name": "Portal · Issues",
+   "description": null,
+   "group": "Linde",
+   "groupId": "ee83dd1f-7004-4f7e-8f5a-dc62d4ecf8bd",
+   "lifecycle": "paused",
+   "draft": false,
+   "kind": "source",
+   "ai": false,
+   "channels": {
+    "takes": [],
+    "gives": [
+     "portal.issue"
+    ]
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "c16e4c3e-6fce-49f9-90b3-e172f1abc402",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "7abde50a-cf04-4de4-869e-669f98ffb218",
+   "name": "Portal · Triage",
+   "description": null,
+   "group": "Linde",
+   "groupId": "ee83dd1f-7004-4f7e-8f5a-dc62d4ecf8bd",
+   "lifecycle": "paused",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "portal.issue"
+    ],
+    "gives": [
+     "portal.ready"
+    ]
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "c16e4c3e-6fce-49f9-90b3-e172f1abc402",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "ea32f7b8-b62a-47d0-bb2c-87c2ad22f561",
+   "name": "Portal · Report",
+   "description": null,
+   "group": "Linde",
+   "groupId": "ee83dd1f-7004-4f7e-8f5a-dc62d4ecf8bd",
+   "lifecycle": "paused",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "portal.ready"
+    ],
+    "gives": []
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "c16e4c3e-6fce-49f9-90b3-e172f1abc402",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "448977cc-33bb-404c-896e-00feb2c63f00",
+   "name": "Portal · Deploy check",
+   "description": null,
+   "group": "Linde",
+   "groupId": "ee83dd1f-7004-4f7e-8f5a-dc62d4ecf8bd",
+   "lifecycle": "paused",
+   "draft": false,
+   "kind": "source",
+   "ai": false,
+   "channels": {
+    "takes": [],
+    "gives": [
+     "deploy.state"
+    ]
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "c16e4c3e-6fce-49f9-90b3-e172f1abc402",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  },
+  {
+   "id": "18d38db3-6646-4d74-936c-9928101024da",
+   "name": "Portal · Deploy report",
+   "description": null,
+   "group": "Linde",
+   "groupId": "ee83dd1f-7004-4f7e-8f5a-dc62d4ecf8bd",
+   "lifecycle": "paused",
+   "draft": false,
+   "kind": "code",
+   "ai": false,
+   "channels": {
+    "takes": [
+     "deploy.state"
+    ],
+    "gives": []
+   },
+   "resources": [],
+   "secrets": [],
+   "schedule": null,
+   "lastRun": null,
+   "runs": 0,
+   "collection": "c16e4c3e-6fce-49f9-90b3-e172f1abc402",
+   "queue": {
+    "blocked": 0,
+    "error": null
+   },
+   "approvals": []
+  }
+ ],
+ "collections": [
+  {
+   "id": "1a4f0cbd-9b4d-44be-b92f-456b2b1f5ff5",
+   "kind": "network",
+   "bounded": false,
+   "name": "Delta Mind · Mail-Netzwerk",
+   "group": "Delta Mind",
+   "groupId": "99acd1a4-efc2-4a09-a5e7-de1cc0fe74bf",
+   "state": "active",
+   "members": [
+    "29107815-e7ef-4473-a1a9-5b2e2f348067",
+    "355be341-19c2-4d47-8d11-1d61a5972ed9",
+    "e83e19a4-7958-4bd4-b9fe-e319f4ab11ec",
+    "ae761725-8024-4b9f-8164-96a525db71c6",
+    "90bad739-f5c9-4188-af53-02cbffafc7a5",
+    "e9682b42-ce4b-4008-842f-426325cecf73",
+    "e9e01cad-2122-4ca2-8a99-05432a8ff53d",
+    "ce23164e-b01c-4d65-8ccc-dba5a9343785",
+    "9f9de6a8-5cb2-4afe-8ab1-0c617cd8defc",
+    "7e8cb062-1560-4fa7-854b-78ad1f5afe7c",
+    "c706ec78-4509-4062-bc50-4ea412d331d8"
+   ],
+   "schedule": {
+    "spec": {
+     "kind": "interval",
+     "seconds": 900
+    },
+    "enabled": true
+   },
+   "counts": {
+    "done": 80
+   },
+   "flows": {
+    "draft.candidate": 1,
+    "mail.filtered": 7,
+    "mail.open": 3,
+    "mail.reply": 1,
+    "mail.reviewed": 1,
+    "mail.triaged": 8,
+    "mail.unsure": 14,
+    "mail.useful": 1
+   },
+   "gates": [
+    {
+     "key": "uncertain-review",
+     "kind": "choose",
+     "title": "Review uncertain mail",
+     "takes": "mail.unsure",
+     "options": [
+      {
+       "channel": "mail.useful",
+       "key": "keep",
+       "title": "Keep for review"
+      },
+      {
+       "channel": "mail.newsletter",
+       "key": "newsletter",
+       "title": "Newsletter candidate"
+      },
+      {
+       "channel": "mail.invoice",
+       "key": "invoice",
+       "title": "Invoice review"
+      },
+      {
+       "channel": "mail.reply",
+       "key": "reply",
+       "title": "Reply preview"
+      }
+     ],
+     "open": 17,
+     "batches": {}
+    },
+    {
+     "key": "newsletter-approval",
+     "kind": "approve",
+     "title": "Approve newsletter preview (no move)",
+     "takes": "mail.batch",
+     "options": [
+      {
+       "key": "approve",
+       "title": "Approve newsletter preview (no move)",
+       "channel": "mail.approved"
+      }
+     ],
+     "open": 0,
+     "batches": {}
+    }
+   ],
+   "lastRun": null
+  },
+  {
+   "id": "1ff4064f-a156-4bd5-a7d6-96f63e5f5508",
+   "kind": "chain",
+   "bounded": false,
+   "name": "Morgenbriefing",
+   "group": null,
+   "groupId": null,
+   "state": "active",
+   "members": [
+    "b306b2c6-0526-4e26-9b86-cc0f8edec89a",
+    "a011a863-5f64-4008-aaef-f0df877b5130",
+    "33e785ad-826d-42e7-bdba-e454d916e919",
+    "9a49e4e7-c4a8-40be-8995-d578f8e941e8"
+   ],
+   "schedule": {
+    "spec": {
+     "kind": "daily",
+     "time": "07:00",
+     "timezone": "Europe/Vienna"
+    },
+    "enabled": true
+   },
+   "counts": {},
+   "flows": {},
+   "gates": [],
+   "lastRun": {
+    "at": 1791263188000,
+    "state": "completed",
+    "summary": ""
+   }
+  },
+  {
+   "id": "41fe9530-82cf-4ff6-ac4d-d9ce0541d254",
+   "kind": "network",
+   "bounded": true,
+   "name": "IURIO · DOCPIT mail management",
+   "group": "iurio",
+   "groupId": "dbda6dbf-c5bc-44b5-8338-5b7c5827b087",
+   "state": "paused",
+   "members": [
+    "7c708f3e-1bf4-4077-8ec8-4ca0cffd3903",
+    "7f5caa3b-b40a-4c5e-93ea-ae311483ed1e",
+    "cce3929c-c977-4c6f-90e9-8cee6d12355d",
+    "e4e5f9cd-dc39-437c-8037-f27e8070a621",
+    "ebd9b44a-1d69-4cc2-8c2f-a88850b4c02e",
+    "e8e31bc2-d642-4abf-835a-5658dc5b5e1c",
+    "a756774d-c19a-4884-b837-57ad6d0536a3",
+    "6813652e-b4e7-4fa0-a711-eb34c74b6bcd",
+    "151ba3a0-5ad4-45df-b652-b03dd2eca462",
+    "22fc58fa-5f4b-46e6-9b93-e2207d5e3ea8",
+    "09a80ebb-7a91-435e-9350-fb378a837b3a"
+   ],
+   "schedule": null,
+   "counts": {},
+   "flows": {},
+   "gates": [
+    {
+     "key": "uncertain-review",
+     "kind": "choose",
+     "title": "Review uncertain mail",
+     "takes": "mail.unsure",
+     "options": [
+      {
+       "key": "keep",
+       "title": "Keep for review",
+       "channel": "mail.useful"
+      },
+      {
+       "key": "newsletter",
+       "title": "Newsletter candidate",
+       "channel": "mail.newsletter"
+      },
+      {
+       "key": "invoice",
+       "title": "Invoice review",
+       "channel": "mail.invoice"
+      },
+      {
+       "key": "reply",
+       "title": "Reply preview",
+       "channel": "mail.reply"
+      }
+     ],
+     "open": 0,
+     "batches": {}
+    },
+    {
+     "key": "newsletter-approval",
+     "kind": "approve",
+     "title": "Approve newsletter preview (no move)",
+     "takes": "mail.batch",
+     "options": [
+      {
+       "key": "approve",
+       "title": "Approve newsletter preview (no move)",
+       "channel": "mail.approved"
+      }
+     ],
+     "open": 0,
+     "batches": {}
+    }
+   ],
+   "lastRun": null
+  },
+  {
+   "id": "99140a35-8b32-4301-8b26-f79709b24ab3",
+   "kind": "chain",
+   "bounded": false,
+   "name": "Linde · Server report",
+   "group": "Linde",
+   "groupId": "ee83dd1f-7004-4f7e-8f5a-dc62d4ecf8bd",
+   "state": "paused",
+   "members": [
+    "39b77752-0fcf-4d1c-99d7-b0186d02da1d"
+   ],
+   "schedule": {
+    "spec": {
+     "kind": "cron",
+     "expression": "0 8 * * 1,4",
+     "timezone": "Europe/Vienna"
+    },
+    "enabled": false
+   },
+   "counts": {},
+   "flows": {},
+   "gates": [],
+   "lastRun": null
+  },
+  {
+   "id": "c16e4c3e-6fce-49f9-90b3-e172f1abc402",
+   "kind": "network",
+   "bounded": true,
+   "name": "Linde · Portal development and systems",
+   "group": "Linde",
+   "groupId": "ee83dd1f-7004-4f7e-8f5a-dc62d4ecf8bd",
+   "state": "paused",
+   "members": [
+    "cc087550-9ae0-4508-82c1-f25a193e867b",
+    "7abde50a-cf04-4de4-869e-669f98ffb218",
+    "ea32f7b8-b62a-47d0-bb2c-87c2ad22f561",
+    "448977cc-33bb-404c-896e-00feb2c63f00",
+    "18d38db3-6646-4d74-936c-9928101024da"
+   ],
+   "schedule": null,
+   "counts": {},
+   "flows": {},
+   "gates": [],
+   "lastRun": null
+  }
+ ],
+ "edges": [
+  {
+   "from": "29107815-e7ef-4473-a1a9-5b2e2f348067",
+   "to": "355be341-19c2-4d47-8d11-1d61a5972ed9",
+   "type": "channel",
+   "channel": "mail.sent-raw",
+   "flow": 0
+  },
+  {
+   "from": "29107815-e7ef-4473-a1a9-5b2e2f348067",
+   "to": "e83e19a4-7958-4bd4-b9fe-e319f4ab11ec",
+   "type": "channel",
+   "channel": "mail.open",
+   "flow": 3
+  },
+  {
+   "from": "355be341-19c2-4d47-8d11-1d61a5972ed9",
+   "to": "c706ec78-4509-4062-bc50-4ea412d331d8",
+   "type": "channel",
+   "channel": "mail.sent",
+   "flow": 0
+  },
+  {
+   "from": "e83e19a4-7958-4bd4-b9fe-e319f4ab11ec",
+   "to": "ae761725-8024-4b9f-8164-96a525db71c6",
+   "type": "channel",
+   "channel": "mail.filtered",
+   "flow": 7
+  },
+  {
+   "from": "ae761725-8024-4b9f-8164-96a525db71c6",
+   "to": "90bad739-f5c9-4188-af53-02cbffafc7a5",
+   "type": "channel",
+   "channel": "mail.triaged",
+   "flow": 8
+  },
+  {
+   "from": "90bad739-f5c9-4188-af53-02cbffafc7a5",
+   "to": "e9682b42-ce4b-4008-842f-426325cecf73",
+   "type": "channel",
+   "channel": "mail.useful",
+   "flow": 1
+  },
+  {
+   "from": "90bad739-f5c9-4188-af53-02cbffafc7a5",
+   "to": "e9e01cad-2122-4ca2-8a99-05432a8ff53d",
+   "type": "channel",
+   "channel": "mail.newsletter",
+   "flow": 0
+  },
+  {
+   "from": "90bad739-f5c9-4188-af53-02cbffafc7a5",
+   "to": "ce23164e-b01c-4d65-8ccc-dba5a9343785",
+   "type": "channel",
+   "channel": "mail.invoice",
+   "flow": 0
+  },
+  {
+   "from": "90bad739-f5c9-4188-af53-02cbffafc7a5",
+   "to": "9f9de6a8-5cb2-4afe-8ab1-0c617cd8defc",
+   "type": "channel",
+   "channel": "mail.reply",
+   "flow": 1
+  },
+  {
+   "from": "90bad739-f5c9-4188-af53-02cbffafc7a5",
+   "to": "c706ec78-4509-4062-bc50-4ea412d331d8",
+   "type": "channel",
+   "channel": "mail.unsure",
+   "flow": 14
+  },
+  {
+   "from": "90bad739-f5c9-4188-af53-02cbffafc7a5",
+   "to": "gate:uncertain-review",
+   "type": "channel",
+   "channel": "mail.unsure",
+   "flow": 14
+  },
+  {
+   "from": "e9682b42-ce4b-4008-842f-426325cecf73",
+   "to": "c706ec78-4509-4062-bc50-4ea412d331d8",
+   "type": "channel",
+   "channel": "mail.reviewed",
+   "flow": 1
+  },
+  {
+   "from": "e9e01cad-2122-4ca2-8a99-05432a8ff53d",
+   "to": "gate:newsletter-approval",
+   "type": "channel",
+   "channel": "mail.batch",
+   "flow": 0
+  },
+  {
+   "from": "ce23164e-b01c-4d65-8ccc-dba5a9343785",
+   "to": "c706ec78-4509-4062-bc50-4ea412d331d8",
+   "type": "channel",
+   "channel": "invoice.candidate",
+   "flow": 0
+  },
+  {
+   "from": "9f9de6a8-5cb2-4afe-8ab1-0c617cd8defc",
+   "to": "c706ec78-4509-4062-bc50-4ea412d331d8",
+   "type": "channel",
+   "channel": "draft.candidate",
+   "flow": 1
+  },
+  {
+   "from": "gate:uncertain-review",
+   "to": "e9682b42-ce4b-4008-842f-426325cecf73",
+   "type": "channel",
+   "channel": "mail.useful",
+   "flow": 1
+  },
+  {
+   "from": "gate:uncertain-review",
+   "to": "e9e01cad-2122-4ca2-8a99-05432a8ff53d",
+   "type": "channel",
+   "channel": "mail.newsletter",
+   "flow": 0
+  },
+  {
+   "from": "gate:uncertain-review",
+   "to": "ce23164e-b01c-4d65-8ccc-dba5a9343785",
+   "type": "channel",
+   "channel": "mail.invoice",
+   "flow": 0
+  },
+  {
+   "from": "gate:uncertain-review",
+   "to": "9f9de6a8-5cb2-4afe-8ab1-0c617cd8defc",
+   "type": "channel",
+   "channel": "mail.reply",
+   "flow": 1
+  },
+  {
+   "from": "gate:newsletter-approval",
+   "to": "7e8cb062-1560-4fa7-854b-78ad1f5afe7c",
+   "type": "channel",
+   "channel": "mail.approved",
+   "flow": 0
+  },
+  {
+   "from": "gate:newsletter-approval",
+   "to": "c706ec78-4509-4062-bc50-4ea412d331d8",
+   "type": "channel",
+   "channel": "mail.excluded",
+   "flow": 0
+  },
+  {
+   "from": "b306b2c6-0526-4e26-9b86-cc0f8edec89a",
+   "to": "a011a863-5f64-4008-aaef-f0df877b5130",
+   "type": "channel",
+   "channel": "handoff",
+   "flow": 1
+  },
+  {
+   "from": "a011a863-5f64-4008-aaef-f0df877b5130",
+   "to": "33e785ad-826d-42e7-bdba-e454d916e919",
+   "type": "channel",
+   "channel": "handoff",
+   "flow": 1
+  },
+  {
+   "from": "33e785ad-826d-42e7-bdba-e454d916e919",
+   "to": "9a49e4e7-c4a8-40be-8995-d578f8e941e8",
+   "type": "channel",
+   "channel": "handoff",
+   "flow": 1
+  },
+  {
+   "from": "7c708f3e-1bf4-4077-8ec8-4ca0cffd3903",
+   "to": "7f5caa3b-b40a-4c5e-93ea-ae311483ed1e",
+   "type": "channel",
+   "channel": "mail.sent-raw",
+   "flow": 0
+  },
+  {
+   "from": "7c708f3e-1bf4-4077-8ec8-4ca0cffd3903",
+   "to": "cce3929c-c977-4c6f-90e9-8cee6d12355d",
+   "type": "channel",
+   "channel": "mail.open",
+   "flow": 0
+  },
+  {
+   "from": "7f5caa3b-b40a-4c5e-93ea-ae311483ed1e",
+   "to": "09a80ebb-7a91-435e-9350-fb378a837b3a",
+   "type": "channel",
+   "channel": "mail.sent",
+   "flow": 0
+  },
+  {
+   "from": "cce3929c-c977-4c6f-90e9-8cee6d12355d",
+   "to": "e4e5f9cd-dc39-437c-8037-f27e8070a621",
+   "type": "channel",
+   "channel": "mail.filtered",
+   "flow": 0
+  },
+  {
+   "from": "e4e5f9cd-dc39-437c-8037-f27e8070a621",
+   "to": "ebd9b44a-1d69-4cc2-8c2f-a88850b4c02e",
+   "type": "channel",
+   "channel": "mail.triaged",
+   "flow": 0
+  },
+  {
+   "from": "ebd9b44a-1d69-4cc2-8c2f-a88850b4c02e",
+   "to": "e8e31bc2-d642-4abf-835a-5658dc5b5e1c",
+   "type": "channel",
+   "channel": "mail.useful",
+   "flow": 0
+  },
+  {
+   "from": "ebd9b44a-1d69-4cc2-8c2f-a88850b4c02e",
+   "to": "a756774d-c19a-4884-b837-57ad6d0536a3",
+   "type": "channel",
+   "channel": "mail.newsletter",
+   "flow": 0
+  },
+  {
+   "from": "ebd9b44a-1d69-4cc2-8c2f-a88850b4c02e",
+   "to": "6813652e-b4e7-4fa0-a711-eb34c74b6bcd",
+   "type": "channel",
+   "channel": "mail.invoice",
+   "flow": 0
+  },
+  {
+   "from": "ebd9b44a-1d69-4cc2-8c2f-a88850b4c02e",
+   "to": "151ba3a0-5ad4-45df-b652-b03dd2eca462",
+   "type": "channel",
+   "channel": "mail.reply",
+   "flow": 0
+  },
+  {
+   "from": "ebd9b44a-1d69-4cc2-8c2f-a88850b4c02e",
+   "to": "09a80ebb-7a91-435e-9350-fb378a837b3a",
+   "type": "channel",
+   "channel": "mail.unsure",
+   "flow": 0
+  },
+  {
+   "from": "ebd9b44a-1d69-4cc2-8c2f-a88850b4c02e",
+   "to": "gate:uncertain-review",
+   "type": "channel",
+   "channel": "mail.unsure",
+   "flow": 0
+  },
+  {
+   "from": "e8e31bc2-d642-4abf-835a-5658dc5b5e1c",
+   "to": "09a80ebb-7a91-435e-9350-fb378a837b3a",
+   "type": "channel",
+   "channel": "mail.reviewed",
+   "flow": 0
+  },
+  {
+   "from": "a756774d-c19a-4884-b837-57ad6d0536a3",
+   "to": "gate:newsletter-approval",
+   "type": "channel",
+   "channel": "mail.batch",
+   "flow": 0
+  },
+  {
+   "from": "6813652e-b4e7-4fa0-a711-eb34c74b6bcd",
+   "to": "09a80ebb-7a91-435e-9350-fb378a837b3a",
+   "type": "channel",
+   "channel": "invoice.candidate",
+   "flow": 0
+  },
+  {
+   "from": "151ba3a0-5ad4-45df-b652-b03dd2eca462",
+   "to": "09a80ebb-7a91-435e-9350-fb378a837b3a",
+   "type": "channel",
+   "channel": "draft.candidate",
+   "flow": 0
+  },
+  {
+   "from": "gate:uncertain-review",
+   "to": "e8e31bc2-d642-4abf-835a-5658dc5b5e1c",
+   "type": "channel",
+   "channel": "mail.useful",
+   "flow": 0
+  },
+  {
+   "from": "gate:uncertain-review",
+   "to": "a756774d-c19a-4884-b837-57ad6d0536a3",
+   "type": "channel",
+   "channel": "mail.newsletter",
+   "flow": 0
+  },
+  {
+   "from": "gate:uncertain-review",
+   "to": "6813652e-b4e7-4fa0-a711-eb34c74b6bcd",
+   "type": "channel",
+   "channel": "mail.invoice",
+   "flow": 0
+  },
+  {
+   "from": "gate:uncertain-review",
+   "to": "151ba3a0-5ad4-45df-b652-b03dd2eca462",
+   "type": "channel",
+   "channel": "mail.reply",
+   "flow": 0
+  },
+  {
+   "from": "gate:newsletter-approval",
+   "to": "22fc58fa-5f4b-46e6-9b93-e2207d5e3ea8",
+   "type": "channel",
+   "channel": "mail.approved",
+   "flow": 0
+  },
+  {
+   "from": "gate:newsletter-approval",
+   "to": "09a80ebb-7a91-435e-9350-fb378a837b3a",
+   "type": "channel",
+   "channel": "mail.excluded",
+   "flow": 0
+  },
+  {
+   "from": "cc087550-9ae0-4508-82c1-f25a193e867b",
+   "to": "7abde50a-cf04-4de4-869e-669f98ffb218",
+   "type": "channel",
+   "channel": "portal.issue",
+   "flow": 0
+  },
+  {
+   "from": "7abde50a-cf04-4de4-869e-669f98ffb218",
+   "to": "ea32f7b8-b62a-47d0-bb2c-87c2ad22f561",
+   "type": "channel",
+   "channel": "portal.ready",
+   "flow": 0
+  },
+  {
+   "from": "448977cc-33bb-404c-896e-00feb2c63f00",
+   "to": "18d38db3-6646-4d74-936c-9928101024da",
+   "type": "channel",
+   "channel": "deploy.state",
+   "flow": 0
+  },
+  {
+   "from": "app:o365-cli:phofmann@delta-mind.at",
+   "to": "29107815-e7ef-4473-a1a9-5b2e2f348067",
+   "type": "read",
+   "channel": null,
+   "flow": 10
+  },
+  {
+   "from": "dir:/Users/fixture/Pods/delta",
+   "to": "29107815-e7ef-4473-a1a9-5b2e2f348067",
+   "type": "read",
+   "channel": null,
+   "flow": 10
+  },
+  {
+   "from": "29107815-e7ef-4473-a1a9-5b2e2f348067",
+   "to": "dir:/Users/fixture/Pods/delta",
+   "type": "write",
+   "channel": null,
+   "flow": 10
+  },
+  {
+   "from": "ai:jev",
+   "to": "ae761725-8024-4b9f-8164-96a525db71c6",
+   "type": "read",
+   "channel": null,
+   "flow": 10
+  },
+  {
+   "from": "dir:/Users/fixture/Pods/delta",
+   "to": "ae761725-8024-4b9f-8164-96a525db71c6",
+   "type": "read",
+   "channel": null,
+   "flow": 10
+  },
+  {
+   "from": "ae761725-8024-4b9f-8164-96a525db71c6",
+   "to": "dir:/Users/fixture/Pods/delta",
+   "type": "write",
+   "channel": null,
+   "flow": 10
+  },
+  {
+   "from": "app:o365-cli:phofmann@delta-mind.at",
+   "to": "7e8cb062-1560-4fa7-854b-78ad1f5afe7c",
+   "type": "read",
+   "channel": null,
+   "flow": 0
+  },
+  {
+   "from": "7e8cb062-1560-4fa7-854b-78ad1f5afe7c",
+   "to": "app:o365-cli:phofmann@delta-mind.at",
+   "type": "write",
+   "channel": null,
+   "flow": 0
+  },
+  {
+   "from": "app:pods-mail:phofmann@delta-mind.at",
+   "to": "b306b2c6-0526-4e26-9b86-cc0f8edec89a",
+   "type": "read",
+   "channel": null,
+   "flow": 50
+  },
+  {
+   "from": "b306b2c6-0526-4e26-9b86-cc0f8edec89a",
+   "to": "app:pods-mail:phofmann@delta-mind.at",
+   "type": "write",
+   "channel": null,
+   "flow": 0
+  },
+  {
+   "from": "dir:/Users/fixture/Briefing Evidence/mail",
+   "to": "b306b2c6-0526-4e26-9b86-cc0f8edec89a",
+   "type": "read",
+   "channel": null,
+   "flow": 50
+  },
+  {
+   "from": "b306b2c6-0526-4e26-9b86-cc0f8edec89a",
+   "to": "dir:/Users/fixture/Briefing Evidence/mail",
+   "type": "write",
+   "channel": null,
+   "flow": 50
+  },
+  {
+   "from": "app:o365-cli:phofmann@delta-mind.at",
+   "to": "a011a863-5f64-4008-aaef-f0df877b5130",
+   "type": "read",
+   "channel": null,
+   "flow": 1
+  },
+  {
+   "from": "app:repos-issues:*",
+   "to": "a011a863-5f64-4008-aaef-f0df877b5130",
+   "type": "read",
+   "channel": null,
+   "flow": 1
+  },
+  {
+   "from": "dir:/Users/fixture/Briefing Evidence/mail",
+   "to": "33e785ad-826d-42e7-bdba-e454d916e919",
+   "type": "read",
+   "channel": null,
+   "flow": 1
+  },
+  {
+   "from": "svc:https://api.telegram.org",
+   "to": "9a49e4e7-c4a8-40be-8995-d578f8e941e8",
+   "type": "read",
+   "channel": null,
+   "flow": 1
+  },
+  {
+   "from": "9a49e4e7-c4a8-40be-8995-d578f8e941e8",
+   "to": "svc:https://api.telegram.org",
+   "type": "write",
+   "channel": null,
+   "flow": 2
+  },
+  {
+   "from": "svc:https://report.openape.ai",
+   "to": "9a49e4e7-c4a8-40be-8995-d578f8e941e8",
+   "type": "read",
+   "channel": null,
+   "flow": 1
+  },
+  {
+   "from": "9a49e4e7-c4a8-40be-8995-d578f8e941e8",
+   "to": "svc:https://report.openape.ai",
+   "type": "write",
+   "channel": null,
+   "flow": 2
+  },
+  {
+   "from": "app:az:*",
+   "to": "9d307901-85ff-41e6-a96b-a7f918142c1c",
+   "type": "read",
+   "channel": null,
+   "flow": 6
+  },
+  {
+   "from": "svc:https://dev.azure.com",
+   "to": "9d307901-85ff-41e6-a96b-a7f918142c1c",
+   "type": "read",
+   "channel": null,
+   "flow": 6
+  },
+  {
+   "from": "9d307901-85ff-41e6-a96b-a7f918142c1c",
+   "to": "svc:https://api.telegram.org",
+   "type": "write",
+   "channel": null,
+   "flow": 5
+  },
+  {
+   "from": "app:iurio:*",
+   "to": "c7a17149-c76a-4ad8-808f-99731505514d",
+   "type": "read",
+   "channel": null,
+   "flow": 30
+  },
+  {
+   "from": "c7a17149-c76a-4ad8-808f-99731505514d",
+   "to": "svc:https://api.telegram.org",
+   "type": "write",
+   "channel": null,
+   "flow": 8
+  },
+  {
+   "from": "svc:https://zaz.delta-mind.at",
+   "to": "dd261fdb-87d3-46d0-b033-1e8b521a54d7",
+   "type": "read",
+   "channel": null,
+   "flow": 150
+  },
+  {
+   "from": "dd261fdb-87d3-46d0-b033-1e8b521a54d7",
+   "to": "svc:https://zaz.delta-mind.at",
+   "type": "write",
+   "channel": null,
+   "flow": 0
+  },
+  {
+   "from": "app:pods-mail:patrick@docpit.eu",
+   "to": "7c708f3e-1bf4-4077-8ec8-4ca0cffd3903",
+   "type": "read",
+   "channel": null,
+   "flow": 0
+  },
+  {
+   "from": "7c708f3e-1bf4-4077-8ec8-4ca0cffd3903",
+   "to": "app:pods-mail:patrick@docpit.eu",
+   "type": "write",
+   "channel": null,
+   "flow": 0
+  },
+  {
+   "from": "ssh:dev-portal.lindeverlag.at",
+   "to": "39b77752-0fcf-4d1c-99d7-b0186d02da1d",
+   "type": "read",
+   "channel": null,
+   "flow": 0
+  },
+  {
+   "from": "ssh:portal-staging.lindeverlag.at",
+   "to": "39b77752-0fcf-4d1c-99d7-b0186d02da1d",
+   "type": "read",
+   "channel": null,
+   "flow": 0
+  },
+  {
+   "from": "ssh:portal.lindeverlag.at",
+   "to": "39b77752-0fcf-4d1c-99d7-b0186d02da1d",
+   "type": "read",
+   "channel": null,
+   "flow": 0
+  },
+  {
+   "from": "ssh:db.lindeverlag.at",
+   "to": "39b77752-0fcf-4d1c-99d7-b0186d02da1d",
+   "type": "read",
+   "channel": null,
+   "flow": 0
+  },
+  {
+   "from": "ssh:weiloner.at",
+   "to": "39b77752-0fcf-4d1c-99d7-b0186d02da1d",
+   "type": "read",
+   "channel": null,
+   "flow": 0
+  },
+  {
+   "from": "39b77752-0fcf-4d1c-99d7-b0186d02da1d",
+   "to": "svc:https://api.telegram.org",
+   "type": "write",
+   "channel": null,
+   "flow": 0
+  }
+ ]
+}
