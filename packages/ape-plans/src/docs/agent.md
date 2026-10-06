@@ -61,7 +61,7 @@ ape-plans teams use 01H...
 ape-plans new --title "No --team needed" --body-from-stdin <<<"# body"
 
 # Update. Same body input flags; --title and --status are patch-style.
-ape-plans edit 01H... --body-from-file updated.md
+ape-plans edit 01H... --body-from-file updated.md --expected-version 3
 ape-plans edit 01H... --status done
 ape-plans status 01H... active
 ```

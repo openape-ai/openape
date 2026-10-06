@@ -1,0 +1,29 @@
+{
+  "name": "@openape/report-contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared single-HTML validation and legacy Plans compatibility contracts.",
+  "exports": {
+    "./html": "./src/html.ts",
+    "./plans-bridge": "./src/plans-bridge.ts",
+    "./plans-renderer": "./src/plans-renderer.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "htmlparser2": "10.1.0",
+    "postcss": "8.5.25",
+    "postcss-value-parser": "4.2.0",
+    "jose": "catalog:",
+    "marked": "catalog:",
+    "sanitize-html": "^2.14.0"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/sanitize-html": "^2.13.0",
+    "typescript": "catalog:"
+  }
+}
