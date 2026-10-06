@@ -46,7 +46,7 @@ const emit = defineEmits<{ open: [], explain: [] }>()
 .gate { background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius-l); max-width: 500px; padding: 26px 26px 22px; box-shadow: 0 12px 32px rgba(15, 20, 25, .10); display: grid; gap: 14px; }
 .gate-head { display: flex; gap: 12px; align-items: flex-start; }
 .mark { width: 40px; height: 40px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; flex: none; }
-h2 { font-size: 19px; line-height: 1.3; font-weight: 680; margin: 0 0 4px; }
+h2 { font-size: 19px; line-height: 1.3; font-weight: 680; margin: 0; }
 p { color: var(--ink-2); margin: 0; }
 .gate-facts { display: grid; gap: 8px; font-size: 14px; border-top: 1px solid var(--rule); padding: 12px 0 0; margin: 0; list-style: none; }
 .gate-facts li { display: grid; grid-template-columns: 20px 1fr; gap: 8px; }
