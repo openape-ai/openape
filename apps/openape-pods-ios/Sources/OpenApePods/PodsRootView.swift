@@ -177,6 +177,21 @@ struct PodsRootView: View {
               Text("No other registered devices").foregroundStyle(.secondary)
             }
           }
+          Section("Notifications") {
+            Toggle(
+              "Notify this device about Pod updates",
+              isOn: Binding(
+                get: { model.notificationsEnabled },
+                set: { value in Task { await model.setNotifications(value) } })
+            ).disabled(model.busy)
+            Text(
+              "Notifications never contain messages, results or account details. They name the desktop only; the app fetches the update after you open it. Nothing is approved or started by a notification."
+            ).font(.caption).foregroundStyle(.secondary)
+            if model.notificationsEnabled && !model.notificationsServerEnabled {
+              Text("The relay has notifications switched off at the moment.").font(.caption)
+                .foregroundStyle(.orange)
+            }
+          }
           Section {
             Text(
               "Revoking access blocks new remote commands and new encrypted content. Authorized runs already started continue. Content already shown on a revoked device cannot be recalled. Use Sign out to remove this device."

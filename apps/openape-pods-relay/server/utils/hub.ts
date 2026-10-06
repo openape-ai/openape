@@ -2,12 +2,13 @@ import { randomUUID } from 'node:crypto'
 import { limits, ProtocolError } from '@openape/pods-protocol'
 import type { Capabilities } from '@openape/pods-protocol'
 import type { RelayStore, Registration } from './store'
+import type { Notifier } from './notifications'
 
 interface Peer { id: string, send: (data: string) => unknown, close: (code: number, reason: string) => unknown }
 interface Connection { peer: Peer, token: string, runtime: Registration, connectionId: string, lastSeen: number, capabilities: Capabilities }
 export class RuntimeHub {
   private readonly connections = new Map<string, Connection>()
-  constructor(private readonly store: RelayStore) {}
+  constructor(private readonly store: RelayStore, private readonly notifier?: Notifier) {}
   online(id: string): boolean {
     const connection = this.connections.get(id)
     if (!connection || this.store.now() - connection.lastSeen > 45000) return false
@@ -68,8 +69,10 @@ export class RuntimeHub {
   deliver(peerId: string, envelope: unknown): void {
     const connection = this.current(peerId)
     const cursor = this.store.deliver(connection.runtime, envelope)
-    const id = (envelope as { route: { id: string } }).route.id
-    connection.peer.send(JSON.stringify({ type: 'ack', id, cursor }))
+    const route = (envelope as { route: { id: string, deviceId: string } }).route
+    connection.peer.send(JSON.stringify({ type: 'ack', id: route.id, cursor }))
+    // The hint is best effort; a failed push never changes delivery truth.
+    void this.notifier?.afterDelivery(route.deviceId, connection.runtime.id).catch(() => { this.store.audit(route.deviceId, 'push_failed') })
   }
 
   close(peerId: string): void {
