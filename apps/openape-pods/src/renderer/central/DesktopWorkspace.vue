@@ -29,6 +29,7 @@ const page = ref('Automations')
 const map = ref<MapView | null>(null)
 const networks = ref<NetworkView>({ networks: [] })
 const proposals = ref<AccessProposal[]>([])
+const codexConnected = ref<boolean | null>(null)
 const tab = ref<'automations' | 'decisions'>('automations')
 let polls = 0
 const now = ref(Date.now())
@@ -51,7 +52,7 @@ async function poll() {
     const [value, view, inventory, networkView] = await Promise.all([invoke({ type: 'status' }), window.pods.workflows({ type: 'list' }), window.pods.workspace({ type: 'map' }), window.pods.networks({ type: 'list' })])
     status.value = (value as CentralStatus & { enabled?: boolean }).enabled === false ? null : value as CentralStatus; workflows.value = view; workspaceChanged(inventory); map.value = inventory.map ?? null; networks.value = networkView; now.value = Date.now(); error.value = ''
     // Setup proposals change rarely; the chat registry behind them is read every tenth poll.
-    if (polls++ % 10 === 0) proposals.value = (await window.pods.master({ type: 'list' })).proposals
+    if (polls++ % 10 === 0) { proposals.value = (await window.pods.master({ type: 'list' })).proposals; codexConnected.value = (await window.pods.codex({ type: 'status' })).state === 'connected' }
   }
   catch (cause) { error.value = String(cause) }
   if (!closed) timer = setTimeout(() => { void poll() }, 1000)
@@ -109,7 +110,7 @@ async function openPod(id: string) {
     <p v-if="error" role="alert" class="error-message">
       {{ diagnostic(error) }}
     </p>
-    <AutomationsShell v-if="page === 'Automations'" :view="map" :live="true" :now="now" :decisions="map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" desktop :tab="tab" :inbox="{ choices: networks.choices ?? [], gates: networks.gates ?? [], graphGates: workflows.gates ?? null, proposals }" @update:tab="tab = $event" @network-command="networkCommand" @workflow-command="workflowCommand" @master="masterCommand" @settings="page = 'App settings'" @command="localCommand" @network="networkControl" @workflow="workflowControl" @folder="openFolder" />
+    <AutomationsShell v-if="page === 'Automations'" :view="map" :live="true" :now="now" :decisions="map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" desktop :codex="codexConnected === null ? undefined : codexConnected ? 'connected' : 'disconnected'" :tab="tab" :inbox="{ choices: networks.choices ?? [], gates: networks.gates ?? [], graphGates: workflows.gates ?? null, proposals }" @update:tab="tab = $event" @network-command="networkCommand" @workflow-command="workflowCommand" @master="masterCommand" @settings="page = 'App settings'" @command="localCommand" @network="networkControl" @workflow="workflowControl" @folder="openFolder" />
     <section v-show="page === 'Workflows'">
       <template v-if="sharing">
         <button class="text-button" @click="sharing = null">
