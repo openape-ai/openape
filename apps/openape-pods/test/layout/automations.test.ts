@@ -53,6 +53,21 @@ describe('Automatisierungen layout', () => {
     await shot('04-liste')
   })
 
+  it('opens the detail drawer 520 px wide at the right edge and a network with its members', async () => {
+    await mountShell(1440, 1000)
+    const shell = wrapper!.vm as unknown as { open: (id: string | null) => void, pin: (id: string | null) => void }
+    const triage = view.pods.find(pod => pod.name === 'Triage')!
+    shell.pin(triage.id); shell.open(triage.id); await flushPromises(); await frames(5)
+    const drawer = document.querySelector('.automation-detail')!.getBoundingClientRect()
+    expect(drawer.width).toBe(520)
+    expect(drawer.right).toBe(1440 - 16)
+    expect(drawer.bottom).toBeLessThanOrEqual(1000)
+    await shot('05-pod-detail-triage')
+    shell.open(triage.collection!); await flushPromises(); await frames(5)
+    expect(document.querySelectorAll('.automation-detail .members button')).toHaveLength(11)
+    await shot('06-netz-detail')
+  })
+
   it('moves the info panel below the map under 1000 px and keeps the toolbar inside 390 px', async () => {
     await mountShell(390, 844)
     const map = canvas().getBoundingClientRect(); const info = document.querySelector('.automation-info')!.getBoundingClientRect()
