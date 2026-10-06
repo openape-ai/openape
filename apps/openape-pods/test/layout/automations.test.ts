@@ -8,6 +8,7 @@ import AutomationsShell from '../../src/renderer/central/AutomationsShell.vue'
 import { applyLanguage } from '../../src/renderer/i18n'
 import { colorResolver, geometry } from '../../src/renderer/utils/automation-layout'
 import fixture from '../renderer/map-view.json'
+import { choices } from '../renderer/decisions-inbox.test'
 import { screenshotPath } from './evidence'
 
 // Geometry of the Automatisierungen surface with the production stylesheet: the canvas height
@@ -75,6 +76,26 @@ describe('Automatisierungen layout', () => {
     expect(map.width).toBeLessThanOrEqual(390)
     expect(document.querySelector('.automations-toolbar')!.getBoundingClientRect().right).toBeLessThanOrEqual(390)
     await shot('12-mobil-karte')
+  })
+
+  it('lists the decisions full width with two-column facts, groups by sender and stacks at 390 px', async () => {
+    await mountShell(1440, 1000)
+    wrapper!.unmount()
+    applyLanguage('de')
+    wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, desktop: true, tab: 'decisions', inbox: { choices, gates: [], graphGates: null, proposals: [] } } })
+    await flushPromises(); await frames(2)
+    const card = document.querySelector('[data-testid="choices"] .item')!.getBoundingClientRect()
+    expect(card.width).toBeGreaterThan(1200)
+    const facts = getComputedStyle(document.querySelector('[data-testid="choices"] .facts')!).gridTemplateColumns.split(' ')
+    expect(facts).toHaveLength(4)
+    await shot('10-entscheidungen')
+    await (wrapper.find('.ctrls select') as unknown as { setValue: (value: string) => Promise<void> }).setValue('sender'); await flushPromises(); await frames(2)
+    expect(document.querySelectorAll('.grp').length).toBeGreaterThan(5)
+    await shot('11-entscheidungen-buendeln')
+    await page.viewport(390, 844); await frames(2)
+    expect(getComputedStyle(document.querySelector('[data-testid="choices"] .facts')!).gridTemplateColumns.split(' ')).toHaveLength(2)
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390)
+    await shot('13-mobil-entscheidungen')
   })
 
   it('renders the dark scheme from tokens', async () => {

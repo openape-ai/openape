@@ -14,7 +14,7 @@ export interface MapSystem { id: string, kind: MapSystemKind, name: string, how:
 export interface MapResource { kind: MapResourceKind, name: string, how: string, system: string | null }
 export interface MapRun { at: number, state: string, summary: string }
 export interface MapSchedule { spec: ScheduleSpec | WorkflowSchedule | null, enabled: boolean }
-export interface MapApproval { grantId: string, title: string }
+export interface MapApproval { grantId: string, title: string, runId: string }
 export interface MapPod {
   id: string
   name: string
@@ -36,6 +36,7 @@ export interface MapPod {
   collection: string | null
   queue: { blocked: number, error: string | null }
   approvals: MapApproval[]
+  unknown: { key: string, runId: string }[]
 }
 export interface MapGateOption { key: string, title: string, channel: string }
 export interface MapGate { key: string, kind: 'choose' | 'approve', title: string, takes: string, options: MapGateOption[], open: number, batches: Record<string, number> }
