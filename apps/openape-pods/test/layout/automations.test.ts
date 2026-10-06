@@ -81,6 +81,17 @@ describe('Automatisierungen layout', () => {
     await shot('08-codex-uebergabe')
   })
 
+  it('opens the settings as a gear menu at the top right', async () => {
+    await mountShell(1440, 900)
+    await button('⚙ Einstellungen').trigger('click'); await flushPromises(); await frames(2)
+    const menu = document.querySelector('.app-settings-menu')!.getBoundingClientRect()
+    expect(menu.width).toBe(380)
+    expect(menu.right).toBe(1440 - 16)
+    expect(document.querySelectorAll('.app-settings-menu [data-account]')).toHaveLength(3)
+    expect(document.querySelectorAll('.app-settings-menu [data-switch]')).toHaveLength(2)
+    await shot('09-einstellungen')
+  })
+
   it('moves the info panel below the map under 1000 px and keeps the toolbar inside 390 px', async () => {
     await mountShell(390, 844)
     const map = canvas().getBoundingClientRect(); const info = document.querySelector('.automation-info')!.getBoundingClientRect()
