@@ -31,7 +31,7 @@ function run(binary: 'reports' | 'plans', args: string[], expected = 0) {
   catch (error) {
     const failure = error as { status?: number, stderr?: string }
     expect(failure.status, failure.stderr).toBe(expected)
-    return JSON.parse(String(failure.stderr))
+    return binary === 'plans' ? { error: String(failure.stderr) } : JSON.parse(String(failure.stderr))
   }
   expect(expected, output).toBe(0)
   return binary === 'plans' && args[0] === 'status' ? output.trim() : JSON.parse(output)
@@ -94,7 +94,9 @@ describe('built CLI and Plans compatibility journeys', () => {
     expect(created).toMatchObject({ status: 'draft', version: 1 })
     expect(run('plans', ['show', created.id])).toMatchObject({ body_md: readFileSync(source, 'utf8'), version: 1 })
     writeFileSync(source, '# Changed source\n\nPreserved after consolidation.')
-    run('plans', ['edit', created.id, '--body-from-file', source])
+    expect(run('plans', ['edit', created.id, '--body-from-file', source], 1).error).toContain('--expected-version')
+    run('plans', ['edit', created.id, '--body-from-file', source, '--expected-version', '1'])
+    expect(run('plans', ['edit', created.id, '--body-from-file', source, '--expected-version', '1'], 1).error).toContain('plan changed')
     run('plans', ['status', created.id, 'done'])
     expect(run('plans', ['show', created.id])).toMatchObject({ status: 'done', version: 3, body_md: readFileSync(source, 'utf8') })
     expect(run('reports', ['show', created.id])).toMatchObject({ metadata: { 'plans.status': 'done' }, version: 3 })
