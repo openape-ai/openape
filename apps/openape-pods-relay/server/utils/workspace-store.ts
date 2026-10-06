@@ -21,7 +21,7 @@ export interface WorkspaceActor { id: string, generation: string, owner: Owner }
 interface RuntimeRow { id: string, owner: string, generation: string, lease: string, heartbeat: number, revision: number, hash: string, snapshot: string | null, previous_hash: string, seen_at: number, parts_hash: string, networks: string | null }
 interface Completion { id: string, result: unknown, error: string | null }
 interface PodView { id: string, ready: boolean, scheduling: ScheduleView, runs: { runIds: string[] } }
-export type WorkspaceView = { view: 'summary' } | { view: 'runs', offset: number } | { view: 'run', runId: string } | { view: 'version', selection: string }
+export type WorkspaceView = { view: 'summary' } | { view: 'map' } | { view: 'runs', offset: number } | { view: 'run', runId: string } | { view: 'version', selection: string }
 const digest = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex')
 const ownerKey = (owner: Owner) => JSON.stringify([owner.issuer, owner.subject])
 const stagedLimit = 256 * 1024 * 1024
@@ -331,7 +331,12 @@ export class WorkspaceStore {
   }
 
   // Small reads for format-2 clients; `read` stays the complete legacy Pod.
-  view(owner: Owner, runtimeId: string, podId: string, query: WorkspaceView): unknown {
+  view(owner: Owner, runtimeId: string, podId: string | null, query: WorkspaceView): unknown {
+    if (query.view === 'map') {
+      const row = this.ready(owner, runtimeId)
+      return { revision: row.revision, map: (this.reader(row.id)('workspace') as WorkspaceState).map ?? null }
+    }
+    if (podId === null) throw new ProtocolError('invalid_workspace_request')
     const row = this.ready(owner, runtimeId, [centralId(podId)])
     const read = this.reader(row.id)
     const pod = read(`pod/${podId}`) as PodView & Record<string, unknown>
