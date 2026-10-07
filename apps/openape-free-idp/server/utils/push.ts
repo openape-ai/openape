@@ -4,6 +4,7 @@ import webpush from 'web-push'
 import { useDb } from '../database/drizzle'
 import { pushSubscriptions, users } from '../database/schema'
 import { summarizeRequest } from './summarize-grant'
+import { grantApprovalPath } from './grant-approval-link'
 
 let _configured = false
 
@@ -133,7 +134,7 @@ export async function notifyApproverOfPendingGrant(grant: OpenApeGrant): Promise
     grant_id: grant.id,
     title: 'Approval needed',
     body: `${grant.request.requester}: ${summary}`,
-    deep_link: `/grant-approval?grant_id=${encodeURIComponent(grant.id)}`,
+    deep_link: grantApprovalPath(grant),
   })
 
   await deliverToSubscriptions(subs, payload, 'approver')

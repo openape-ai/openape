@@ -5,7 +5,7 @@ import { sameOwner } from '@openape/pods-protocol'
 import { gateLimits, itemTitle } from '../../contracts/gates'
 import type { GateBatchState } from '../../contracts/gates'
 import { InfrastructureError } from '../../contracts/infrastructure'
-import { networkGateActionHash, networkGateDigest, networkGatePayloadHash, networkGateSummary, parseNetworkGateCoverage, parseNetworkGateManifest, parseNetworkGateView } from '../../contracts/network-gates'
+import { networkGateActionHash, networkGateDigest, networkGatePayloadHash, parseNetworkGateCoverage, parseNetworkGateManifest, parseNetworkGateView } from '../../contracts/network-gates'
 import type { NetworkGateCoverage, NetworkGateManifest, NetworkGateView } from '../../contracts/network-gates'
 import { parseNetworkDefinition } from '../../contracts/networks'
 import type { NetworkCommand, NetworkDefinition } from '../../contracts/networks'
@@ -19,7 +19,9 @@ import type { NetworkInvocations } from './network-invocations'
 import { assertNetworkQuota } from './network-quota'
 
 export interface NetworkGateStep { authority: NetworkAuthority, taskId: string, attempt: number, generation: number, token: string }
-export type NetworkGateService = (body: { operation: 'create' | 'status' | 'consume' | 'assertActive', manifest: NetworkGateManifest, grantId?: string }, signal: AbortSignal) => Promise<unknown>
+export interface NetworkGateGrant { key: string, id: string }
+export type NetworkGateService = (body: { operation: 'create' | 'status' | 'consume' | 'assertActive', manifest: NetworkGateManifest, grants?: NetworkGateGrant[] }, signal: AbortSignal) => Promise<unknown>
+type MemberState = 'pending' | 'approved' | 'denied' | 'expired'
 interface Task { id: string, network_id: string, pod_id: string, generation: number, state: GateBatchState, manifest: string, grant_id: string | null, next_poll_at: number }
 interface GateBinding { taskId: string, grantId: string, manifestHash: string }
 
@@ -49,8 +51,7 @@ export class NetworkGates {
         const action = { ...base, actionHash: networkGateActionHash(base) }
         const manifest = parseNetworkGateManifest({ ...action, digest: networkGateDigest(action) })
         this.assertPinned(manifest)
-        const summary = networkGateSummary(manifest)
-        if (summary.length > gateLimits.summaryLength) throw new Error('Network gate summary exceeds its limit')
+        const summary = `${manifest.title}: ${items.length} items, one grant each`
         const body = canonicalNetworkJson(manifest)
         assertNetworkQuota(this.store, Buffer.byteLength(body) * 3 + items.length * 1024 + 8192)
         this.store.db.prepare(`INSERT INTO network_gate_tasks(id,network_id,network_revision,pod_id,generation,state,manifest,manifest_hash,restore_nonce,expires_at,created_at)
@@ -109,7 +110,7 @@ export class NetworkGates {
   }
 
   async round(step: NetworkGateStep, service: NetworkGateService, signal: AbortSignal): Promise<void> {
-    let result: { state: GateBatchState, grantId?: string, url?: string, error?: string, nextPollAt?: number }
+    let result: { state: GateBatchState, grantId?: string, url?: string, error?: string, nextPollAt?: number, refused?: Record<string, 'denied' | 'expired'> }
     try {
       const { task, manifest } = this.assertStep(step)
       signal.throwIfAborted()
@@ -128,31 +129,31 @@ export class NetworkGates {
       }
       else if (task.state === 'pending') {
         this.operation(step, 'status')
-        const status = await service({ operation: 'status', manifest, grantId: task.grant_id! }, signal)
+        const grants = this.itemGrants(task.id, manifest)
+        const states = this.memberStates(await service({ operation: 'status', manifest, grants }, signal), grants)
         this.assertStep(step); signal.throwIfAborted()
-        if (status === 'pending') {
+        const approved = grants.filter(grant => states[grant.key] === 'approved')
+        const refused = Object.fromEntries(grants.filter(grant => states[grant.key] === 'denied' || states[grant.key] === 'expired').map(grant => [grant.key, states[grant.key] as 'denied' | 'expired']))
+        if (grants.some(grant => states[grant.key] === 'pending')) {
           result = { state: 'pending', nextPollAt: Date.now() + 5000 }
         }
-        else if (status === 'denied' || status === 'expired') {
-          result = { state: status }
+        else if (!approved.length) {
+          result = { state: Object.values(refused).includes('denied') ? 'denied' : 'expired', refused }
         }
-        else if (status === 'approved') {
+        else {
           this.store.transaction(() => {
             this.assertStep(step)
             if (manifest.expiresAt <= Date.now()) throw new Error('Network approval expired before consumption')
             const changed = this.store.db.prepare(`UPDATE network_gate_tasks SET state='consuming' WHERE id=? AND generation=? AND state='pending'`).run(task.id, step.generation)
             if (changed.changes !== 1) throw new Error('Network gate state changed before consumption')
             this.operation(step, 'consume')
-            this.trace(manifest, 'gate-consuming', { taskId: task.id, grantId: task.grant_id, stepToken: step.token })
+            this.trace(manifest, 'gate-consuming', { taskId: task.id, grantIds: approved.map(grant => grant.id), stepToken: step.token })
           })
-          const consumed = await service({ operation: 'consume', manifest, grantId: task.grant_id! }, signal)
+          const consumed = await service({ operation: 'consume', manifest, grants: approved }, signal)
           if (consumed !== true) throw new Error('Network approval consumption was not confirmed')
           this.assertStep(step); signal.throwIfAborted()
           if (manifest.expiresAt <= Date.now()) throw new Error('Network approval expired before settlement')
-          result = { state: 'approved' }
-        }
-        else {
-          throw new Error('Invalid network approval status')
+          result = { state: 'approved', refused }
         }
       }
       else {
@@ -174,16 +175,43 @@ export class NetworkGates {
         return
       }
       const manifest = parseNetworkGateManifest(JSON.parse(task.manifest))
-      if (result.state === 'approved') { this.assertPinned(manifest); this.assertItems(manifest); if (manifest.expiresAt <= Date.now()) throw new Error('Network approval expired before release') }
+      const refused = result.refused ?? {}
+      if (result.state === 'approved') {
+        const released = { ...manifest, items: manifest.items.filter(item => !refused[item.deliveryId]) }
+        this.assertPinned(manifest); this.assertItems(released)
+        if (manifest.expiresAt <= Date.now()) throw new Error('Network approval expired before release')
+      }
       this.store.db.prepare('UPDATE network_gate_tasks SET state=?,grant_id=coalesce(?,grant_id) WHERE id=? AND generation=?').run(result.state, result.grantId ?? null, task.id, step.generation)
       this.store.db.prepare('UPDATE network_gate_controls SET next_poll_at=?,url=coalesce(?,url),error=? WHERE task_id=?').run(result.nextPollAt ?? manifest.expiresAt, result.url ?? null, result.error ?? null, task.id)
-      const receipt = canonicalNetworkJson({ taskId: task.id, state: result.state, generation: task.generation, stepToken: step.token, grantId: result.grantId ?? task.grant_id, digest: manifest.digest, actionHash: manifest.actionHash, at: Date.now() })
-      if (result.state === 'approved' || result.state === 'unknown') this.store.db.prepare('UPDATE network_gate_items SET outcome=?,receipt=? WHERE task_id=? AND outcome=\'held\'').run(result.state === 'approved' ? 'released' : 'unknown', receipt, task.id)
-      if (result.state === 'denied' || result.state === 'expired') this.dispose(task, result.state, `Owner approval ${result.state}`)
+      const receipt = canonicalNetworkJson({ taskId: task.id, state: result.state, generation: task.generation, stepToken: step.token, grantId: result.grantId ?? task.grant_id, refused, digest: manifest.digest, actionHash: manifest.actionHash, at: Date.now() })
+      for (const outcome of ['denied', 'expired'] as const) {
+        const deliveryIds = Object.keys(refused).filter(key => refused[key] === outcome)
+        if (deliveryIds.length) this.dispose(task, outcome, `Owner approval ${outcome}`, deliveryIds)
+      }
+      // A refused input stays unreleased even when its delivery could not be disposed above.
+      if (result.state === 'approved' || result.state === 'unknown') this.store.db.prepare('UPDATE network_gate_items SET outcome=?,receipt=? WHERE task_id=? AND outcome=\'held\' AND delivery_id NOT IN (SELECT value FROM json_each(?))').run(result.state === 'approved' ? 'released' : 'unknown', receipt, task.id, JSON.stringify(Object.keys(refused)))
+      if ((result.state === 'denied' || result.state === 'expired') && !Object.keys(refused).length) this.dispose(task, result.state, `Owner approval ${result.state}`)
       this.store.db.prepare('UPDATE network_gate_task_attempts SET state=?,finished_at=? WHERE task_id=? AND attempt=?').run(result.state === 'unknown' ? 'unknown' : 'completed', Date.now(), step.taskId, step.attempt)
       this.trace(manifest, 'gate-step-settled', { receipt: JSON.parse(receipt), error: result.error ?? null, noScriptLaunched: true })
     }, result.state === 'unknown' || result.error !== undefined)
     this.pruneStatusSteps(step.taskId)
+  }
+
+  /** The per-item grant identities recorded at creation, in manifest order. */
+  private itemGrants(taskId: string, manifest: NetworkGateManifest): NetworkGateGrant[] {
+    const rows = this.store.db.prepare('SELECT delivery_id,grant_id FROM network_gate_item_grants WHERE task_id=?').all(taskId)
+    return manifest.items.map((item) => {
+      const row = rows.find(entry => entry.delivery_id === item.deliveryId)
+      if (!row) throw new Error('Network gate input has no recorded approval grant')
+      return { key: item.deliveryId, id: row.grant_id as string }
+    })
+  }
+
+  private memberStates(value: unknown, grants: NetworkGateGrant[]): Record<string, MemberState> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid network approval status')
+    const states = value as Record<string, unknown>
+    if (Object.keys(states).length !== grants.length || grants.some(grant => !['pending', 'approved', 'denied', 'expired'].includes(states[grant.key] as string))) throw new Error('Invalid network approval status')
+    return states as Record<string, MemberState>
   }
 
   async failStep(step: NetworkGateStep, failure: unknown): Promise<void> {
@@ -219,7 +247,7 @@ export class NetworkGates {
     })
   }
 
-  resolve(networkId: string, command: Extract<NetworkCommand, { type: 'gateExclude' | 'gateDiscard' | 'gateReview' }>): void {
+  resolve(networkId: string, command: Extract<NetworkCommand, { type: 'gateDiscard' | 'gateReview' }>): void {
     this.store.assertStorage()
     this.store.transaction(() => {
       const task = this.task(command.taskId)
@@ -259,32 +287,6 @@ export class NetworkGates {
         this.trace(manifest, 'gate-owner-fresh-approval', { receipt: JSON.parse(receipt), resumed, noApprovalReleased: true })
         return
       }
-      if (command.type === 'gateExclude') {
-        if (task.state !== 'pending') throw new Error('Only a pending network grant can be excluded')
-        this.assertPinned(manifest)
-        this.assertItems(manifest)
-        if (manifest.expiresAt <= Date.now()) throw new Error('Network gate exclusion expired')
-        if (command.deliveryIds.some(id => !manifest.items.some(item => item.deliveryId === id))) throw new Error('Exclusion contains a foreign network gate input')
-        const receipt = canonicalNetworkJson({ outcome: 'excluded', taskId: task.id, generation: task.generation, grantId: task.grant_id, ownerEvidence: command.evidence, at: Date.now(), oldGrantCannotReleaseRemainingInputs: true })
-        this.store.db.prepare(`UPDATE network_gate_tasks SET state='superseded',generation=generation+1 WHERE id=?`).run(task.id)
-        for (const item of manifest.items) {
-          const excluded = command.deliveryIds.includes(item.deliveryId)
-          if (excluded) {
-            const changed = this.store.db.prepare(`UPDATE network_deliveries SET state='discarded',generation=generation+1,reason='Excluded by owner',review_receipt=? WHERE id=? AND state='pending' AND generation=?`).run(receipt, item.deliveryId, item.generation)
-            if (changed.changes !== 1) throw new Error('Network excluded input changed')
-            const definition = parseNetworkDefinition(JSON.parse(this.store.db.prepare('SELECT contract FROM network_revisions WHERE network_id=? AND revision=?').get(networkId, manifest.networkRevision)!.contract as string))
-            const route = definition.routes?.find(route => route.key === manifest.gate)
-            if (route?.kind === 'approve' && route.excluded) this.invocations.events.routeGate(definition, route.key, item.eventId, route.excluded, 'excluded')
-            const counted = this.store.db.prepare(`UPDATE network_queue_counts SET count=count-1 WHERE network_id=? AND state='pending' AND count>0`).run(networkId)
-            if (counted.changes !== 1) throw new Error('Network gate queue projection is inconsistent')
-            this.store.db.prepare(`INSERT INTO network_queue_counts VALUES(?,'discarded',1) ON CONFLICT(network_id,state) DO UPDATE SET count=count+1`).run(networkId)
-          }
-          this.store.db.prepare(`UPDATE network_gate_items SET outcome=?,receipt=json_object('decision',json(?),'priorReceipt',json(receipt)) WHERE task_id=? AND delivery_id=?`).run(excluded ? 'excluded' : 'obsolete', receipt, task.id, item.deliveryId)
-        }
-        this.store.db.prepare(`UPDATE network_gate_controls SET resolution=json_object('decision',json(?),'priorResolution',json(resolution)) WHERE task_id=?`).run(receipt, task.id)
-        this.trace(manifest, 'gate-owner-exclusion', { receipt: JSON.parse(receipt), freshApprovalRequired: true })
-        return
-      }
       if (task.state !== 'unknown') throw new Error('Only uncertain network gate work can be discarded')
       this.assertStoppedTask(task)
       this.store.db.prepare(`UPDATE network_gate_tasks SET state='superseded',generation=generation+1 WHERE id=?`).run(task.id)
@@ -302,6 +304,8 @@ export class NetworkGates {
       if (manifest.expiresAt <= Date.now()) throw new Error('Consumed network approval expired before dispatch')
     }
     catch (failure) { this.store.transaction(() => this.obsolete(row, failure)); return null }
+    // Batches approved under one collective grant predate per-item grants; they need a fresh approval.
+    if (!this.store.db.prepare('SELECT 1 FROM network_gate_item_grants WHERE task_id=? AND delivery_id=?').get(row.id, deliveryId)) { this.store.transaction(() => this.obsolete(row, new Error('Approval predates per-item grants; request a fresh approval'))); return null }
     if (!row.grant_id) throw new Error('Approved network gate is missing its consumed grant identity')
     return { taskId: row.id, grantId: row.grant_id, manifestHash: digest(row.manifest) }
   }
@@ -315,8 +319,9 @@ export class NetworkGates {
       const manifest = parseNetworkGateManifest(JSON.parse(task.manifest))
       this.assertPinned(manifest)
       if (manifest.expiresAt <= Date.now()) throw new Error('Network approval expired during dispatch')
-      const items = this.store.db.prepare(`SELECT delivery.id AS delivery_id,event.id AS event_id,event.item_key,event.payload FROM network_deliveries delivery JOIN network_gate_items item ON item.delivery_id=delivery.id
-        JOIN network_events event ON event.id=delivery.event_id WHERE delivery.run_id=? AND delivery.state='claimed' AND item.task_id=? AND item.outcome='released'`).all(authority.runId, task.id).map(item => ({ deliveryId: item.delivery_id as string, eventId: item.event_id as string, key: item.item_key as string, data: JSON.parse(item.payload as string) as Record<string, unknown> }))
+      const items = this.store.db.prepare(`SELECT delivery.id AS delivery_id,event.id AS event_id,event.item_key,event.payload,item_grant.grant_id FROM network_deliveries delivery JOIN network_gate_items item ON item.delivery_id=delivery.id
+        JOIN network_events event ON event.id=delivery.event_id JOIN network_gate_item_grants item_grant ON item_grant.task_id=item.task_id AND item_grant.delivery_id=item.delivery_id
+        WHERE delivery.run_id=? AND delivery.state='claimed' AND item.task_id=? AND item.outcome='released'`).all(authority.runId, task.id).map(item => ({ deliveryId: item.delivery_id as string, eventId: item.event_id as string, key: item.item_key as string, grantId: item.grant_id as string, data: JSON.parse(item.payload as string) as Record<string, unknown> }))
       for (const item of items) {
         const pin = manifest.items.find(pin => pin.deliveryId === item.deliveryId)!
         const delivery = this.store.db.prepare('SELECT generation FROM network_deliveries WHERE id=?').get(item.deliveryId)!
@@ -332,23 +337,28 @@ export class NetworkGates {
   }
 
   scriptCoverage(authority: NetworkAuthority) {
-    return this.coverage(authority).map(coverage => ({ gate: coverage.manifest.gate, items: coverage.items }))
+    return this.coverage(authority).map(coverage => ({ gate: coverage.manifest.gate, items: coverage.items.map(({ grantId: _grantId, ...item }) => item) }))
   }
 
   observeCreation(step: NetworkGateStep, value: unknown): void {
-    const reply = value as { id?: unknown, url?: unknown }
-    if (typeof reply?.id !== 'string' || !/^[\w-]{1,128}$/.test(reply.id) || typeof reply.url !== 'string' || reply.url.length > 2048) throw new Error('Invalid observed network grant creation')
+    const reply = value as { id?: unknown, url?: unknown, grants?: unknown }
+    if (typeof reply?.id !== 'string' || !/^[\w-]{1,128}$/.test(reply.id) || typeof reply.url !== 'string' || reply.url.length > 2048 || !Array.isArray(reply.grants)) throw new Error('Invalid observed network grant creation')
     const url = new URL(reply.url)
     if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) throw new Error('Invalid observed network approval origin')
     this.store.transaction(() => {
       const task = this.task(step.taskId)
+      const manifest = parseNetworkGateManifest(JSON.parse(task.manifest))
+      const grants = reply.grants as NetworkGateGrant[]
+      if (reply.id !== manifest.id || grants.length !== manifest.items.length || manifest.items.some(item => grants.filter(grant => grant?.key === item.deliveryId && typeof grant.id === 'string' && /^[\w-]{1,128}$/.test(grant.id)).length !== 1) || new Set(grants.map(grant => grant.id)).size !== grants.length) throw new Error('Network creation reply does not name one grant per input')
       const attempt = this.store.db.prepare('SELECT operation FROM network_gate_attempt_controls WHERE task_id=? AND attempt=?').get(step.taskId, step.attempt)
       if (attempt?.operation !== 'create') throw new Error('Network creation receipt has no issued operation journal')
-      if (task.grant_id === reply.id) return
-      if (task.grant_id !== null) throw new Error('Network creation reply conflicts with the observed grant identity')
-      this.store.db.prepare('UPDATE network_gate_tasks SET grant_id=? WHERE id=? AND grant_id IS NULL').run(reply.id as string, step.taskId)
+      const recorded = this.store.db.prepare('SELECT delivery_id,grant_id FROM network_gate_item_grants WHERE task_id=?').all(step.taskId)
+      if (task.grant_id === reply.id && recorded.length === grants.length && grants.every(grant => recorded.some(row => row.delivery_id === grant.key && row.grant_id === grant.id))) return
+      if (task.grant_id !== null || recorded.length) throw new Error('Network creation reply conflicts with the observed grant identity')
+      this.store.db.prepare('UPDATE network_gate_tasks SET grant_id=? WHERE id=? AND grant_id IS NULL').run(reply.id, step.taskId)
+      for (const grant of grants) this.store.db.prepare('INSERT INTO network_gate_item_grants VALUES(?,?,?)').run(step.taskId, grant.key, grant.id)
       this.store.db.prepare('UPDATE network_gate_controls SET url=coalesce(url,?) WHERE task_id=?').run(reply.url as string, step.taskId)
-      this.trace(parseNetworkGateManifest(JSON.parse(task.manifest)), 'gate-create-observed', { taskId: step.taskId, generation: step.generation, stepToken: step.token, grantId: reply.id, approvalReleased: false, at: Date.now() })
+      this.trace(manifest, 'gate-create-observed', { taskId: step.taskId, generation: step.generation, stepToken: step.token, grantIds: grants.map(grant => grant.id), approvalReleased: false, at: Date.now() })
     })
   }
 
@@ -398,12 +408,12 @@ export class NetworkGates {
     })
   }
 
-  authorizeService(scope: ServiceScope, value: unknown, operation: string, grantId?: string): void {
+  authorizeService(scope: ServiceScope, value: unknown, operation: string, grants?: unknown): void {
     const manifest = parseNetworkGateManifest(value)
     const task = this.task(manifest.id)
     if (task.pod_id !== scope.podId || task.manifest !== canonicalNetworkJson(manifest)) throw new Error('Network gate service differs from its frozen task')
     this.assertPinned(manifest)
-    if (operation !== 'create' && (!grantId || grantId !== task.grant_id)) throw new Error('Network gate grant identity differs from its task')
+    if (operation === 'create' ? Array.isArray(grants) && grants.length : !this.recordedGrants(task.id, grants)) throw new Error('Network gate grant identity differs from its task')
     const invocation = this.store.db.prepare('SELECT * FROM network_invocations WHERE run_id=? AND pod_id=?').get(scope.runId, scope.podId)
     if (!invocation || invocation.state !== 'running') throw new Error('Network gate requires a current execution')
     this.invocations.events.authority({ runId: scope.runId, claimToken: invocation.claim_token as string })
@@ -416,6 +426,13 @@ export class NetworkGates {
     if (!attempt || attempt.generation !== task.generation || !((operation === 'create' && task.state === 'preparing') || (operation === 'status' && task.state === 'pending') || (operation === 'consume' && task.state === 'consuming'))) throw new Error('Network gate maintenance state changed')
     this.assertItems(manifest)
     if (manifest.expiresAt <= Date.now()) throw new Error('Network gate service expired')
+  }
+
+  /** True when every named grant is the recorded grant of its input in this task. */
+  private recordedGrants(taskId: string, value: unknown): boolean {
+    if (!Array.isArray(value) || !value.length) return false
+    const recorded = this.store.db.prepare('SELECT delivery_id,grant_id FROM network_gate_item_grants WHERE task_id=?').all(taskId)
+    return value.every(grant => recorded.some(row => row.delivery_id === (grant as NetworkGateGrant)?.key && row.grant_id === (grant as NetworkGateGrant).id))
   }
 
   private assertStoppedTask(task: Task): void {
@@ -482,21 +499,31 @@ export class NetworkGates {
     this.dispose(task, 'obsolete', reason)
   }
 
-  private dispose(task: Task, outcome: 'denied' | 'expired' | 'obsolete' | 'excluded', reason: string): void {
+  /** Ends held inputs without release. A denied input goes to the gate's excluded channel when it has one. */
+  private dispose(task: Task, outcome: 'denied' | 'expired' | 'obsolete' | 'excluded', reason: string, deliveryIds?: string[]): void {
     const receipt = canonicalNetworkJson({ taskId: task.id, outcome, reason, at: Date.now(), priorTaskState: task.state, nothingReleasedByThisResolution: true })
-    for (const item of this.store.db.prepare('SELECT delivery_id FROM network_gate_items WHERE task_id=? AND outcome IN (\'held\',\'released\',\'unknown\')').all(task.id)) {
+    const manifest = parseNetworkGateManifest(JSON.parse(task.manifest))
+    const definition = outcome === 'denied' ? parseNetworkDefinition(JSON.parse(this.store.db.prepare('SELECT contract FROM network_revisions WHERE network_id=? AND revision=?').get(task.network_id, manifest.networkRevision)!.contract as string)) : null
+    const route = definition?.routes?.find(route => route.key === manifest.gate)
+    for (const item of this.store.db.prepare('SELECT delivery_id,event_id FROM network_gate_items WHERE task_id=? AND outcome IN (\'held\',\'released\',\'unknown\')').all(task.id)) {
+      if (deliveryIds && !deliveryIds.includes(item.delivery_id as string)) continue
       const delivery = this.store.db.prepare('SELECT state,run_id FROM network_deliveries WHERE id=?').get(item.delivery_id!)!
-      if (!['pending', 'retry_wait', ...(outcome === 'excluded' ? ['blocked', 'unknown'] : [])].includes(delivery.state as string)) continue
+      if (!['pending', 'retry_wait', ...(outcome === 'excluded' ? ['blocked', 'unknown'] : [])].includes(delivery.state as string)) {
+        // An owner refusal is recorded even when the delivery itself awaits other review.
+        if (deliveryIds) this.store.db.prepare(`UPDATE network_gate_items SET outcome=?,receipt=json_object('decision',json(?),'priorReceipt',json(receipt)) WHERE task_id=? AND delivery_id=?`).run(outcome, receipt, task.id, item.delivery_id!)
+        continue
+      }
       const state = outcome === 'obsolete' ? 'blocked' : 'discarded'
       this.store.db.prepare('UPDATE network_deliveries SET state=?,generation=generation+1,reason=?,review_receipt=? WHERE id=? AND state=?').run(state, reason, receipt, item.delivery_id!, delivery.state!)
       const counted = this.store.db.prepare('UPDATE network_queue_counts SET count=count-1 WHERE network_id=? AND state=? AND count>0').run(task.network_id, delivery.state!)
       if (counted.changes !== 1) throw new Error('Network gate queue projection is inconsistent')
       this.store.db.prepare('INSERT INTO network_queue_counts VALUES(?,?,1) ON CONFLICT(network_id,state) DO UPDATE SET count=count+1').run(task.network_id, state)
       if (delivery.state === 'retry_wait') this.store.db.prepare('UPDATE network_invocation_controls SET retry_at=NULL WHERE run_id=?').run(delivery.run_id!)
+      if (definition && route?.kind === 'approve' && route.excluded) this.invocations.events.routeGate(definition, route.key, item.event_id as string, route.excluded, 'excluded')
       this.store.db.prepare(`UPDATE network_gate_items SET outcome=?,receipt=json_object('decision',json(?),'priorReceipt',json(receipt)) WHERE task_id=? AND delivery_id=?`).run(outcome, receipt, task.id, item.delivery_id!)
     }
     this.store.db.prepare(`UPDATE network_gate_controls SET resolution=json_object('decision',json(?),'priorResolution',json(resolution)) WHERE task_id=?`).run(receipt, task.id)
-    this.trace(parseNetworkGateManifest(JSON.parse(task.manifest)), 'gate-work-disposed', { receipt: JSON.parse(receipt) })
+    this.trace(manifest, 'gate-work-disposed', { receipt: JSON.parse(receipt), deliveryIds: deliveryIds ?? null })
   }
 
   private trace(manifest: NetworkGateManifest, kind: string, body: unknown): void {

@@ -83,10 +83,10 @@ it('network gate boundary: uses the actual Electron main/worker route and signed
   const { id, consumer, identity, inspect, app, page } = await pendingNetworkGate()
   const pending = (await page.evaluate(() => window.pods.networks({ type: 'list' }))).gates![0]!
   expect(pending).toMatchObject({ state: 'pending', podId: consumer, networkId: id })
-  await expect(page.evaluate(({ id, taskId, generation }) => window.pods.networks({ type: 'gateExclude', id, revision: 1, taskId, generation, deliveryIds: [crypto.randomUUID()], evidence: 'Forged foreign input' }), { id, taskId: pending.id, generation: pending.generation })).rejects.toThrow('foreign network gate input')
+  await expect(page.evaluate(({ id, taskId, generation }) => window.pods.networks({ type: 'gateExclude', id, revision: 1, taskId, generation, deliveryIds: [crypto.randomUUID()], evidence: 'Removed decision' } as never), { id, taskId: pending.id, generation: pending.generation })).rejects.toThrow('Unsupported')
   const grant = identity.gates()[0]!
   const command = JSON.parse(grant.command[2]!)
-  expect(command).toMatchObject({ version: 3, podId: consumer, networkId: id, count: 1 })
+  expect(command).toMatchObject({ version: 3, podId: consumer, networkId: id, count: 1, item: { deliveryId: pending.items[0]!.deliveryId } })
   expect(command.dataPin).toMatch(/^[a-f0-9]{64}$/)
   expect(grant.consumeAttempts).toBe(0)
   identity.decideGate(grant.id, 'approved')
