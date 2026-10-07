@@ -1,5 +1,12 @@
 # Active work
 
+## Pods network-gates native E2E label — issue 1443
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1443. Worktree `.claude/worktrees/adoring-brahmagupta-463b2a`, branch `bugfix/issue-1443-network-gates-list-label`, base `6bd4c0d0`.
+- The Automations map draws Pod names on a canvas, so the reopened-app wait now uses the List view's `Gate consumer` cell. Functional assertions are unchanged.
+- Verification: `pnpm build && pnpm package:mac && npx vitest run --config vitest.electron.config.ts e2e/network-gates.test.ts` on an unlocked Mac, 2/2 passed; crash screenshot inspected.
+- Next: exact-source CI, native review and merge.
+
 ## Bilingual Plans — issue 1440
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1440; owner-requested implementation plan: https://report.openape.ai/d/01M4AR4BA9AACFE1MCCPPEP2MZ?v=1.
