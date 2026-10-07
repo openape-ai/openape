@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { blocking } from '../inbox/client'
-import type { InboxItem, Receipt } from '../inbox/client'
+import type { InboxItem, PendingAnswer, Receipt } from '../inbox/client'
 import { t } from '../inbox/i18n'
 import { receiptText } from '../inbox/receipt'
 
-const props = defineProps<{ item: InboxItem, receipt: Receipt | undefined, online: boolean, checking: boolean, preselect?: string }>()
-const emit = defineEmits<{ decide: [option: string, input?: string], check: [] }>()
+const props = defineProps<{ item: InboxItem, receipt: Receipt | undefined, online: boolean, checking: boolean, preselect?: string, pending?: PendingAnswer }>()
+const emit = defineEmits<{ decide: [option: string, input?: string], check: [], undo: [] }>()
 // An option that needs input arrives preselected when the owner picked it on the list card.
 const chosen = ref<string | null>(props.item.decision?.options.find(option => option.key === props.preselect && option.input)?.key ?? null)
 const input = ref('')
@@ -20,7 +20,7 @@ const link = computed(() => {
   return candidate && /^https:\/\//.test(candidate.url) ? candidate : null
 })
 const authority = computed(() => t(decision.value?.authority === 'secrets' ? 'authoritySecrets' : 'authorityIdp'))
-const blocked = computed(() => blocking(props.receipt, props.item))
+const blocked = computed(() => !!props.pending || blocking(props.receipt, props.item))
 const selected = computed(() => decision.value?.options.find(option => option.key === chosen.value) ?? null)
 
 const receiptLine = computed(() => receiptText(props.receipt))
@@ -41,6 +41,12 @@ function submit() {
 
 <template>
   <section class="decision" :aria-label="t('decideTitle')">
+    <div v-if="pending" class="row receipt" role="status">
+      <span>{{ t('pendingSend', { option: pending.title }) }}</span>
+      <button type="button" @click="emit('undo')">
+        {{ t('undo') }}
+      </button>
+    </div>
     <p v-if="receiptLine" class="receipt" :class="receipt?.state" role="status">
       {{ receiptLine }}
     </p>

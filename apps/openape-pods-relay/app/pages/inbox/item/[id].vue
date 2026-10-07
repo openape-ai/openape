@@ -57,7 +57,8 @@ async function change(patch: { read?: boolean, archived?: boolean }) {
   try { await inbox.mark(item.value.id, patch) }
   catch (cause) { error.value = cause instanceof Error ? cause.message : String(cause) }
 }
-async function decide(option: string, input?: string) { if (item.value) await inbox.decide(item.value, option, input) }
+async function decide(option: string, input?: string) { if (item.value) await inbox.answer(item.value, option, input) }
+function undo() { if (item.value) inbox.undo(item.value.id) }
 async function check() { if (item.value) await inbox.check(item.value.id) }
 </script>
 
@@ -87,7 +88,7 @@ async function check() { if (item.value) await inbox.check(item.value.id) }
           </li>
         </ul>
       </template>
-      <InboxDecision v-if="item.kind === 'decision'" :item="item" :preselect="typeof route.query.option === 'string' ? route.query.option : undefined" :receipt="state.receipts[item.id]" :online="online" :checking="!!state.checking[item.id]" @decide="decide" @check="check" />
+      <InboxDecision v-if="item.kind === 'decision'" :item="item" :preselect="typeof route.query.option === 'string' ? route.query.option : undefined" :receipt="state.receipts[item.id]" :online="online" :checking="!!state.checking[item.id]" :pending="state.pending[item.id]" @decide="decide" @check="check" @undo="undo" />
       <div v-else class="actions">
         <button type="button" class="secondary" :disabled="!online" @click="change({ archived: !item.archived })">
           {{ item.archived ? t('itemUnarchive') : t('itemArchive') }}
