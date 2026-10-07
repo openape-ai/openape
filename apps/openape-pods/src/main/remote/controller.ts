@@ -1,5 +1,6 @@
 import type { InboxPublication } from '../../worker/inbox/outbox'
-import { randomBytes, randomUUID } from 'node:crypto'
+import type { InboxDecision } from '../../contracts/inbox'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -30,6 +31,8 @@ export class RemoteController {
   private chain: Promise<void> = Promise.resolve()
   private abort = new AbortController()
   private delivering = false
+  private decisions: { digest: string, at: number } | null = null
+  private publishingDecisions = false
   error: string | null = null
   constructor(private readonly root: string, private readonly worker: FixtureWorker, private readonly origin = 'https://pods.openape.ai') {
     const url = new URL(origin)
@@ -191,6 +194,29 @@ export class RemoteController {
       }
     }
     finally { this.delivering = false }
+  }
+
+  /**
+   * Publishes the complete decision set whenever it changes, and at least every ten minutes so a
+   * restarted relay or a lost response converges. The relay resolves decisions missing from the set.
+   */
+  async publishDecisions(collect: () => Promise<InboxDecision[]>): Promise<void> {
+    if (this.publishingDecisions) return
+    this.publishingDecisions = true
+    try {
+      await this.load()
+      if (!this.saved?.enabled || !this.saved.tokens) return
+      const decisions = await collect()
+      const digest = createHash('sha256').update(JSON.stringify(decisions)).digest('hex')
+      if (this.decisions?.digest === digest && Date.now() - this.decisions.at < 600000) return
+      const identity = await this.worker.remoteOwner()
+      if (!sameOwner(identity.owner, this.saved.tokens.registration.owner)) return
+      await this.refresh()
+      const receipt = await this.signed('POST', '/api/runtime/v1/inbox/decisions', { decisions }) as { skipped?: number }
+      if (receipt.skipped) console.error(`The account inbox is full; ${receipt.skipped} new decisions were not added`)
+      this.decisions = { digest, at: Date.now() }
+    }
+    finally { this.publishingDecisions = false }
   }
 
   async workspaceRequest(body: Record<string, unknown>): Promise<unknown> {

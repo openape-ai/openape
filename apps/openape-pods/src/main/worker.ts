@@ -1,4 +1,6 @@
 import type { InboxOutboxCommand } from '../worker/inbox/outbox'
+import type { DecisionSources, InboxDecisions } from './inbox/decisions'
+import { parseInboxDecide } from '../contracts/inbox'
 import type { AgentConnection } from './broker/authorization'
 import type { RuntimeApprovalBinding, RuntimeApprovalCommand, RuntimeApprovalView } from '../contracts/runtime-approval'
 import { readOnlyAction } from './codex/access'
@@ -24,7 +26,7 @@ import { executeJev } from './connections/jev-service'
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import type { CentralController, CentralGate } from './central/controller'
 import type { CentralCommand, CentralSnapshot } from '../contracts/central'
-import { centralId, parseCentralCommand } from '../contracts/central'
+import { centralId, parseCentralCommand, parseInboxCentralCommand } from '../contracts/central'
 import { administrationActions, parseAdministration } from '../contracts/codex-admin'
 import type { AdministrationJournal, AdministrationReceipt } from '../contracts/codex-admin'
 import { importPrivateSecret } from './codex/secret-import'
@@ -106,6 +108,7 @@ const secretsConsumerRecord = '6f0c2d2e-5b1a-4f0e-9c7d-3a2b1c0d9e8f'
 
 export class FixtureWorker {
   central: CentralController | null = null
+  inbox: InboxDecisions | null = null
   private shellIdentities = new Map<string, { close: () => Promise<void> }>()
   private openedApprovals = new Set<string>()
   private archiveService?: MailArchiveService
@@ -562,14 +565,32 @@ export class FixtureWorker {
     const central = this.centralAction(command.type); if (central) return central.local(() => this.runs(command))
     await this.setupReady
     if (command.type !== 'openApproval') return parseRunView(await this.dispatch({ run: command }))
-    const view = parseRunView(await this.dispatch({ run: { type: 'list', podId: command.podId, runId: command.runId } }))
-    const pending = view.approvals?.find(item => item.runId === command.runId && item.grantId === command.grantId)
+    const { view, url } = await this.pendingApproval(command.podId, command.runId, command.grantId)
+    await shell.openExternal(url)
+    return view
+  }
+
+  /** The IdP address of a waiting runtime approval, verified against the Pod's own identity issuer. */
+  async approvalLink(podId: string, runId: string, grantId: string): Promise<string> { return (await this.pendingApproval(podId, runId, grantId)).url }
+
+  private async pendingApproval(podId: string, runId: string, grantId: string): Promise<{ view: RunView, url: string }> {
+    await this.setupReady
+    const view = parseRunView(await this.dispatch({ run: { type: 'list', podId, runId } }))
+    const pending = view.approvals?.find(item => item.runId === runId && item.grantId === grantId)
     if (!pending) throw new Error('This approval is no longer waiting; refresh the run status')
-    const connection = await this.connections!.podConnection(command.podId)
+    const connection = await this.connections!.podConnection(podId)
     if (pending.issuer !== (connection.decisionIssuer ?? connection.issuer) || pending.subject !== connection.subject) throw new Error('Approval belongs to a different Pod identity')
     const { runId: _runId, ...approval } = pending
-    await shell.openExternal(approvalURL(approval))
-    return view
+    return { view, url: approvalURL(approval) }
+  }
+
+  // Direct reads for the inbox projection: reading never becomes a workspace operation.
+  async inboxSources(): Promise<DecisionSources> {
+    const [workspace, networks, workflows, master] = await Promise.all([this.dispatch({ type: 'map' }), this.dispatch({ networks: { type: 'list' } }), this.dispatch({ workflow: { type: 'list' } }), this.dispatch({ master: { type: 'list' } })])
+    const proposals = parseMasterView(master).proposals
+    const podIds = [...new Set(proposals.filter(proposal => proposal.state === 'pending').map(proposal => proposal.podId))]
+    const resources = await Promise.all(podIds.map(async podId => [podId, parseResourceState(await this.dispatch({ resource: { type: 'list', podId } }))] as const))
+    return { map: parseWorkspace(workspace).map ?? null, networks: parseNetworkView(networks), workflows: parseWorkflowView(workflows), proposals, resources: Object.fromEntries(resources), secrets: this.secretsGate ? await this.secretsGate.view() : null }
   }
 
   // Imported Pods are ordinary local Pods: a connected workspace gives each its own identity as soon as the paused copy exists.
@@ -686,6 +707,10 @@ export class FixtureWorker {
   async centralVersion(): Promise<number> { return Number(await this.dispatch({ central: { type: 'version' } })) }
 
   async centralExecute(value: CentralCommand, operationId?: string): Promise<unknown> {
+    if (value.channel === 'inbox') {
+      if (!this.inbox) throw new Error('Inbox decisions are unavailable on this desktop')
+      return this.inbox.decide(parseInboxDecide(parseInboxCentralCommand(value).body))
+    }
     const parsed = parseCentralCommand(value)
     await this.dispatch({ central: { type: 'assertCommand', command: parsed } })
     const { channel, body } = parsed

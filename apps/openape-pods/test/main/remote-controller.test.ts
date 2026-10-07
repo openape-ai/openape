@@ -12,6 +12,8 @@ import { InboxStore, parsePublication } from '../../../openape-pods-relay/server
 import { RemoteController } from '../../src/main/remote/controller'
 import { InboxOutbox, parseNotify } from '../../src/worker/inbox/outbox'
 import type { InboxOutboxCommand, InboxPublication } from '../../src/worker/inbox/outbox'
+import { parseInboxDecisions } from '../../src/contracts/inbox'
+import type { InboxDecision } from '../../src/contracts/inbox'
 import type { FixtureWorker } from '../../src/main/worker'
 import { PodDatabase } from '../../src/worker/storage/database'
 import { RemoteControl } from '../../src/worker/remote/control'
@@ -72,6 +74,12 @@ async function fixture() {
       if (path.endsWith('/registration')) {
         const h = new Headers(init.headers)
         return Response.json(relay.authenticateRequest(h.get('authorization')!.slice(7), 'runtime', 'GET', path, { id: h.get('x-pods-request-id')!, at: h.get('x-pods-request-at')!, digest: h.get('x-pods-body-digest')!, signature: h.get('x-pods-proof')! }))
+      }
+      if (path === '/api/runtime/v1/inbox/decisions') {
+        const h = new Headers(init.headers)
+        const caller = relay.authenticateRequest(h.get('authorization')!.slice(7), 'runtime', 'POST', path, { id: h.get('x-pods-request-id')!, at: h.get('x-pods-request-at')!, digest: h.get('x-pods-body-digest')!, signature: h.get('x-pods-proof')! })
+        if (h.get('x-pods-body-digest') !== sha256(String(init.body))) throw new ProtocolError('invalid_request_body', 401)
+        return Response.json(inbox.syncDecisions(caller.owner, caller.id, parseInboxDecisions(body)))
       }
       if (path === '/api/runtime/v1/inbox') {
         const h = new Headers(init.headers)
@@ -168,4 +176,19 @@ it('delivers queued Pod notifications once with the signed runtime session and k
   await f.controller.deliverInbox()
   expect(f.outbox.execute({ type: 'status' })).toMatchObject({ pending: 0, refused: [{ eventId: queued.eventId, reason: expect.stringContaining('inbox_event_conflict') }] })
   expect(f.inbox.list(f.owner).items).toHaveLength(1)
+})
+
+it('publishes the owner decision set with the signed runtime session only when it changed', async () => {
+  const f = await fixture()
+  await f.enable()
+  const decision: InboxDecision = { sourceId: 'secret:request-1', type: 'secret', digest: 'a'.repeat(64), podId: null, podName: null, title: 'Geheimnis imap', body: 'Postfach lesen', authority: 'secrets', options: [{ key: 'cancel', title: 'Abbrechen', input: null }], link: { title: 'Ausfüllen', url: 'https://secrets.openape.ai/' } }
+  let current = [decision]
+  const publish = () => f.controller.publishDecisions(async () => current)
+  await publish()
+  expect(f.inbox.list(f.owner, { kind: 'decision' }).items).toMatchObject([{ state: 'open', title: 'Geheimnis imap', decision: { runtimeId: f.registration.id, authority: 'secrets' }, links: [{ url: 'https://secrets.openape.ai/' }] }])
+  await publish()
+  expect(f.requests.filter(path => path.endsWith('/inbox/decisions'))).toHaveLength(1)
+  current = []
+  await publish()
+  expect(f.inbox.list(f.owner, { kind: 'decision' }).items).toMatchObject([{ state: 'resolved' }])
 })

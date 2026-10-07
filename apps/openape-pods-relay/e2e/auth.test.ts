@@ -103,13 +103,6 @@ it('registers a desktop and mobile through real DDISA callbacks and rejects repl
   const inboxCookie = inboxCallback.headers.getSetCookie().map(value => value.split(';')[0]).filter(value => !value.endsWith('=')).join('; ')
   const inboxRead = await fetch(`${relay.url}/inbox/api/v1/items`, { headers: { cookie: inboxCookie } })
   expect((await inboxRead.json() as { items: { title: string }[] }).items.map(entry => entry.title)).toEqual(['Belege'])
-  // Any later sign-in in this browser that is not started by the inbox ends its inbox session (account switch).
-  const switched = await fetch(`${relay.url}/workspace-auth/login`, { method: 'POST', headers: { origin: relay.url, 'content-type': 'application/json' }, body: JSON.stringify({ email }) })
-  const switchFlow = [inboxCookie, ...switched.headers.getSetCookie().map(value => value.split(';')[0])].join('; ')
-  const switchGrant = await fetch((await switched.json() as { redirectUrl: string }).redirectUrl, { redirect: 'manual', headers: { authorization: `Bearer ${loginToken}` } })
-  await fetch(switchGrant.headers.get('location')!, { redirect: 'manual', headers: { cookie: switchFlow } })
-  const revoked = await fetch(`${relay.url}/inbox/api/v1/items`, { headers: { cookie: inboxCookie } })
-  expect(await revoked.json()).toMatchObject({ code: 'session_revoked' })
   const runtimePath = '/api/runtime/v1/workspace'
   async function central(body: Record<string, unknown>) {
     const encoded = JSON.stringify(body)
@@ -130,6 +123,32 @@ it('registers a desktop and mobile through real DDISA callbacks and rejects repl
   await central({ type: 'heartbeat', lease: session.lease, hash: published.hash })
   expect(await central({ type: 'claim', lease: session.lease })).toBeNull()
   await central({ type: 'heartbeat', lease: session.lease, hash: published.hash })
+  // Decisions (plan M2): the runtime publishes its set; the phone decides through the central operation pipeline.
+  const decisionsPath = '/api/runtime/v1/inbox/decisions'
+  const decisionSet = JSON.stringify({ decisions: [{ sourceId: 'effect:e2e', type: 'effect', digest: 'a'.repeat(64), podId: fixture.view.id, podName: 'Monitor', title: 'Unklare Zustellung', body: 'Lauf', authority: 'pods', options: [{ key: 'delivered', title: 'Zugestellt', input: 'evidence' }], link: null }] })
+  const synced = await fetch(`${relay.url}${decisionsPath}`, { method: 'POST', headers: { ...headers(desktop, decisionsPath, 'POST', decisionSet), 'content-type': 'application/json' }, body: decisionSet })
+  expect(await synced.json()).toEqual({ created: 1, updated: 0, resolved: 0, skipped: 0 })
+  const [decision] = (await (await fetch(`${relay.url}/inbox/api/v1/items?kind=decision`, { headers: { cookie: inboxCookie } })).json() as { items: { id: string }[] }).items
+  const decide = (body: Record<string, unknown>) => fetch(`${relay.url}/inbox/api/v1/items/${decision!.id}/decide`, { method: 'POST', headers: { cookie: inboxCookie, origin: relay.url, 'content-type': 'application/json' }, body: JSON.stringify({ digest: 'a'.repeat(64), ...body }) })
+  expect(await (await decide({ option: 'delivered', requestId: randomUUID() })).json()).toMatchObject({ code: 'invalid_inbox_input' })
+  expect(await (await decide({ option: 'delivered', input: 'Gesehen', digest: 'b'.repeat(64), requestId: randomUUID() })).json()).toMatchObject({ code: 'decision_changed' })
+  expect(await (await decide({ option: 'resend', input: 'Gesehen', requestId: randomUUID() })).json()).toMatchObject({ code: 'invalid_inbox_option' })
+  const requestId = randomUUID()
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const decided = await decide({ option: 'delivered', input: 'Gesehen', requestId })
+    expect(decided.status, await decided.clone().text()).toBe(200)
+    expect(await decided.json()).toMatchObject({ operation: { id: requestId, state: 'accepted', command: { channel: 'inbox', body: { type: 'decide', sourceId: 'effect:e2e', digest: 'a'.repeat(64), option: 'delivered', input: 'Gesehen' } } } })
+  }
+  expect(await central({ type: 'claim', lease: session.lease })).toMatchObject({ id: requestId, state: 'started' })
+  const decidedState = await central({ type: 'publish', lease: session.lease, id: randomUUID(), revision: 1, snapshot: state, completion: { id: requestId, result: { status: 'applied', sourceId: 'effect:e2e' }, error: null } }) as { revision: number }
+  expect(await (await fetch(`${relay.url}/inbox/api/v1/operations/${requestId}`, { headers: { cookie: inboxCookie } })).json()).toMatchObject({ operation: { id: requestId, state: 'applied' } })
+  // Any later sign-in in this browser that is not started by the inbox ends its inbox session (account switch).
+  const switched = await fetch(`${relay.url}/workspace-auth/login`, { method: 'POST', headers: { origin: relay.url, 'content-type': 'application/json' }, body: JSON.stringify({ email }) })
+  const switchFlow = [inboxCookie, ...switched.headers.getSetCookie().map(value => value.split(';')[0])].join('; ')
+  const switchGrant = await fetch((await switched.json() as { redirectUrl: string }).redirectUrl, { redirect: 'manual', headers: { authorization: `Bearer ${loginToken}` } })
+  await fetch(switchGrant.headers.get('location')!, { redirect: 'manual', headers: { cookie: switchFlow } })
+  const revoked = await fetch(`${relay.url}/inbox/api/v1/items`, { headers: { cookie: inboxCookie } })
+  expect(await revoked.json()).toMatchObject({ code: 'session_revoked' })
   const workspaceInventory = await fetch(`${relay.url}/api/workspace/v1/inventory`, { headers: { cookie: webCookie } })
   expect(workspaceInventory.status, await workspaceInventory.clone().text()).toBe(200)
   expect(await workspaceInventory.json()).toMatchObject([{ id: desktop.registration.id, online: true }])
@@ -164,7 +183,7 @@ it('registers a desktop and mobile through real DDISA callbacks and rejects repl
   const download = await fetch(`${relay.url}/api/workspace/v1/artifact?runtimeId=${desktop.registration.id}&podId=${fixture.view.id}&path=workspace/example.bin`, { headers: { cookie: webCookie } })
   expect(download.status).toBe(200)
   expect(sha256(new Uint8Array(await download.arrayBuffer()))).toBe(artifactHash)
-  const command = { runtimeId: desktop.registration.id, revision: 1, id: randomUUID(), command: { channel: 'details', body: { type: 'describe', podId: fixture.view.id, text: 'Browser edit', revision: 1 } } }
+  const command = { runtimeId: desktop.registration.id, revision: decidedState.revision, id: randomUUID(), command: { channel: 'details', body: { type: 'describe', podId: fixture.view.id, text: 'Browser edit', revision: 1 } } }
   const crossSite = await fetch(`${relay.url}/api/workspace/v1/commands`, { method: 'POST', headers: { cookie: webCookie, origin: 'https://other.example', 'content-type': 'application/json' }, body: JSON.stringify(command) })
   expect(crossSite.status).toBe(403)
   const submitted = await fetch(`${relay.url}/api/workspace/v1/commands`, { method: 'POST', headers: { cookie: webCookie, origin: relay.url, 'content-type': 'application/json' }, body: JSON.stringify(command) })

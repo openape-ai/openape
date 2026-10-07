@@ -134,6 +134,12 @@
    "title": "M0 decision inventory",
    "body": "Inventory of every section in `apps/openape-pods/src/renderer/central/DecisionsInbox.vue` and its handler at main `e89449e2` (October 7, 2026). Eight decision types exist; each maps to a mobile action or an authority handoff. No current type requires physical desktop presence.\n\n| Desktop decision | Source → handler | Authority | Mobile mapping (M2) | Browser workspace today |\n| --- | --- | --- | --- | --- |\n| Network choose-gate question | `network_choices` → network `choose` → `network-engine` | Pods | Mobile action with case, options and revision | Not possible: no central `choose` channel |\n| Held workflow item | workflow gates → `gateChoose` → `chooseGateItem` | Pods | Mobile action | Not possible: no workflow channel |\n| Network approval batch | `NetworkGates` → IdP batch; `gateOpen` / `gateDiscard` | IdP; discard Pods | Verified IdP link plus explicit discard with evidence | Link nulled in the central projection |\n| Graph/workflow approval batch | `graph_gate_batches` → `gateOpen` / `gateDiscard` | IdP; discard Pods | IdP link plus discard | Link works; discard desktop-only |\n| Runtime rights / blocked queue | approval `run_events` → `openApproval` (issuer/subject check) | IdP | IdP link, refresh on return | Not allowed centrally; projection fills only local Pods |\n| Unknown external delivery | `effect_ledger` unknown → `resolveHttp` after a native confirmation dialog | Owner observation | Explicit mobile confirmation of the observed result; never an automatic resend | Allowed, but bypasses the native dialog |\n| Secret request | `secretsGate` → secrets.openape.ai; `cancel` | Secrets; cancel Pods | Scoped Secrets link plus cancel | Requests not passed to the browser |\n| Setup proposal | `access_proposals` → open / master `decline` | Pods | Accept/decline supported proposals | Not passed (`proposals: []`) |\n\nConsequences for M2: add bounded central channels for network/workflow choices, setup proposals and secret-request cancellation; expose verified IdP links instead of nulling them; replace the native confirmation for unknown deliveries with an explicit mobile confirmation; extend the decision projection beyond local Pods.",
    "placement": "after-details"
+  },
+  {
+   "id": "m2-design",
+   "title": "M2 implementation design",
+   "body": "Implementation design for M2 (October 7, 2026), within the approved architecture.\n\n1. **Projection on the desktop.** A worker module collects all eight decision types into normalized entries: stable source ID (for example `network-choice:<eventId>`, `workflow-held:<workflow>:<item>`, `effect:<pod>:<key>`), Pod, bounded context, valid options, authority (`pods`, `idp`, `secrets`), verified handoff link and the source's own staleness guard (network revision and generation, pending state). Today four of the eight are not in the central snapshot at all (network questions, network approval batches, secret requests, recomputed proposal state).\n2. **Publication.** The desktop sends the complete projection with its signed runtime session to `POST /api/runtime/v1/inbox` whenever its digest changes. The relay upserts `decision` items per runtime (new ones get a push-outbox entry), marks vanished ones resolved and keeps them readable while the Mac is offline.\n3. **Deciding.** `POST /inbox/api/v1/items/:id/decide {option, evidence?, requestId}`: the relay validates the option against the stored entry and submits a new central command `inbox/decide` through the existing operation pipeline (idempotency ID, workspace revision, 30-second lease). The desktop maps the source ID to the existing handler (network choose, workflow gateChoose, gateDiscard, resolveHttp, secrets cancel, proposal decline/accept) and returns the receipt; the phone shows accepted → applied or failed. Offline Mac: no queueing, the action is unavailable.\n4. **Authority.** IdP approvals (network/workflow batches, runtime permissions) only open the verified IdP URL of the owner's issuer; Secrets requests open secrets.openape.ai. Unknown deliveries require typed evidence and an explicit observed/not-observed choice on the phone, replacing the desktop dialog; never an automatic resend.",
+   "placement": "after-details"
   }
  ],
  "milestones": [
@@ -173,7 +179,7 @@
    "id": "M2",
    "title": "Connect authoritative decisions",
    "goal": "Resolve desktop-equivalent decisions safely from the inbox.",
-   "status": "planned",
+   "status": "active",
    "steps": [
     "Publish normalized decision projections and route allowed actions through existing runtime handlers with current revisions, batch generation and idempotency.",
     "Implement verified IdP/Secrets handoffs, return reconciliation and explicit physical-task handoff; expose receipt and source freshness."
@@ -287,9 +293,9 @@
  ],
  "completion": {
   "result": "not-assessed",
-  "summary": "M0 accepted and M1 delivered on October 7, 2026; M3 (built-in notify) in progress."
+  "summary": "M0 accepted and M1 delivered on October 7, 2026; M3 (built-in notify) merged with installation pending; M2 decisions implemented and locally verified; one owner decision is open: accepting HTTPS proposals that need a new IdP grant from the phone."
  },
- "handoff": "M3 is active: context.notify in Pod scripts writes a durable worker outbox that the desktop main process delivers to POST /api/runtime/v1/inbox. Then M2 decisions, M4 UI, M5 push. Open device items for M5/M6: service-worker receipts on iOS declarative push and push-tagged opening.",
+ "handoff": "M2 is implemented on branch feature/issue-1446-inbox-decisions: the desktop projects the eight decision types, publishes the set signed to POST /api/runtime/v1/inbox/decisions, and POST /inbox/api/v1/items/:id/decide (with the displayed digest) submits an inbox-only central command that the desktop maps to its own owner command after re-reading the source. Setup proposals are accepted from the phone only without local interaction (typed variable, already assigned resource, Secrets request); folders, installations and network-member deliveries stay explicit desktop steps. Open owner decision: new HTTPS grants from the phone. Next: one signed desktop build with M2 and M3, relay deployment, a real decision from the phone, then M4. Open device items for M5/M6: service-worker receipts on iOS declarative push and push-tagged opening.",
  "changelog": [
   {
    "date": "2026-10-07",
@@ -314,6 +320,10 @@
   {
    "date": "2026-10-07",
    "text": "M1 delivered (PR 298) with two security follow-ups (PR 299, PR 300); automatic CI paused by owner decision (issue 1448); M3 started."
+  },
+  {
+   "date": "2026-10-07",
+   "text": "M2 implemented: desktop decision projection for all eight types with digest guard, signed publication, relay decision items and the decide route through an inbox-only central operation; setup acceptance without local interaction and gateReview with mandatory reason; IdP and Secrets decisions only hand off verified HTTPS links. An independent review found seven defects, all fixed. Local checks: root lint and typecheck, Pods 1,337 and relay 52 unit tests, both builds, relay E2E decision block."
   }
  ],
  "links": [
@@ -903,13 +913,13 @@
    },
    {
     "path": "completion.summary",
-    "source": "M0 accepted and M1 delivered on October 7, 2026; M3 (built-in notify) in progress.",
-    "text": "M0 abgenommen und M1 am 7. Oktober 2026 geliefert; M3 (eingebaute Mitteilungsaktion) in Arbeit."
+    "source": "M0 accepted and M1 delivered on October 7, 2026; M3 (built-in notify) merged with installation pending; M2 decisions implemented and locally verified; one owner decision is open: accepting HTTPS proposals that need a new IdP grant from the phone.",
+    "text": "M0 abgenommen und M1 am 7. Oktober 2026 geliefert; M3 (eingebaute Mitteilungsaktion) gemergt, Installation ausstehend; M2-Entscheidungen umgesetzt und lokal geprüft; eine Eigentümerentscheidung ist offen: HTTPS-Vorschläge, die eine neue IdP-Freigabe brauchen, vom Handy annehmen."
    },
    {
     "path": "handoff",
-    "source": "M3 is active: context.notify in Pod scripts writes a durable worker outbox that the desktop main process delivers to POST /api/runtime/v1/inbox. Then M2 decisions, M4 UI, M5 push. Open device items for M5/M6: service-worker receipts on iOS declarative push and push-tagged opening.",
-    "text": "M3 läuft: context.notify in Pod-Skripten schreibt in eine dauerhafte Worker-Warteschlange, die der Desktop-Hauptprozess an POST /api/runtime/v1/inbox ausliefert. Danach M2-Entscheidungen, M4-Oberfläche, M5-Push. Offene Gerätepunkte für M5/M6: Service-Worker-Quittungen bei deklarativem iOS-Push und Öffnen über den Push."
+    "source": "M2 is implemented on branch feature/issue-1446-inbox-decisions: the desktop projects the eight decision types, publishes the set signed to POST /api/runtime/v1/inbox/decisions, and POST /inbox/api/v1/items/:id/decide (with the displayed digest) submits an inbox-only central command that the desktop maps to its own owner command after re-reading the source. Setup proposals are accepted from the phone only without local interaction (typed variable, already assigned resource, Secrets request); folders, installations and network-member deliveries stay explicit desktop steps. Open owner decision: new HTTPS grants from the phone. Next: one signed desktop build with M2 and M3, relay deployment, a real decision from the phone, then M4. Open device items for M5/M6: service-worker receipts on iOS declarative push and push-tagged opening.",
+    "text": "M2 ist auf Branch feature/issue-1446-inbox-decisions umgesetzt: Der Desktop projiziert die acht Entscheidungsarten, veröffentlicht die Menge signiert an POST /api/runtime/v1/inbox/decisions, und POST /inbox/api/v1/items/:id/decide (mit der angezeigten Prüfsumme) reicht einen nur für die Inbox zulässigen zentralen Befehl ein, den der Desktop nach erneutem Lesen der Quelle auf seinen eigenen Eigentümerbefehl abbildet. Einrichtungsvorschläge werden vom Handy nur ohne lokale Interaktion angenommen (eingegebene Variable, bereits zugewiesene Ressource, Secrets-Anfrage); Ordner, Installationen und Zustellungen von Netzmitgliedern bleiben ausdrückliche Desktop-Schritte. Offene Eigentümerentscheidung: neue HTTPS-Freigaben vom Handy. Als Nächstes: ein signierter Desktop-Build mit M2 und M3, Relay-Auslieferung, eine echte Entscheidung vom Handy, dann M4. Offene Gerätepunkte für M5/M6: Service-Worker-Bestätigungen bei deklarativem Push auf iOS und Öffnen über Push-Markierung."
    },
    {
     "path": "changelog.0.text",
@@ -990,6 +1000,21 @@
     "path": "changelog.5.text",
     "source": "M1 delivered (PR 298) with two security follow-ups (PR 299, PR 300); automatic CI paused by owner decision (issue 1448); M3 started.",
     "text": "M1 geliefert (PR 298) mit zwei Sicherheitskorrekturen (PR 299, PR 300); automatische CI per Eigentümerentscheidung pausiert (Issue 1448); M3 begonnen."
+   },
+   {
+    "path": "sections.8.title",
+    "source": "M2 implementation design",
+    "text": "M2-Umsetzungsentwurf"
+   },
+   {
+    "path": "sections.8.body",
+    "source": "Implementation design for M2 (October 7, 2026), within the approved architecture.\n\n1. **Projection on the desktop.** A worker module collects all eight decision types into normalized entries: stable source ID (for example `network-choice:<eventId>`, `workflow-held:<workflow>:<item>`, `effect:<pod>:<key>`), Pod, bounded context, valid options, authority (`pods`, `idp`, `secrets`), verified handoff link and the source's own staleness guard (network revision and generation, pending state). Today four of the eight are not in the central snapshot at all (network questions, network approval batches, secret requests, recomputed proposal state).\n2. **Publication.** The desktop sends the complete projection with its signed runtime session to `POST /api/runtime/v1/inbox` whenever its digest changes. The relay upserts `decision` items per runtime (new ones get a push-outbox entry), marks vanished ones resolved and keeps them readable while the Mac is offline.\n3. **Deciding.** `POST /inbox/api/v1/items/:id/decide {option, evidence?, requestId}`: the relay validates the option against the stored entry and submits a new central command `inbox/decide` through the existing operation pipeline (idempotency ID, workspace revision, 30-second lease). The desktop maps the source ID to the existing handler (network choose, workflow gateChoose, gateDiscard, resolveHttp, secrets cancel, proposal decline/accept) and returns the receipt; the phone shows accepted → applied or failed. Offline Mac: no queueing, the action is unavailable.\n4. **Authority.** IdP approvals (network/workflow batches, runtime permissions) only open the verified IdP URL of the owner's issuer; Secrets requests open secrets.openape.ai. Unknown deliveries require typed evidence and an explicit observed/not-observed choice on the phone, replacing the desktop dialog; never an automatic resend.",
+    "text": "Umsetzungsentwurf für M2 (7. Oktober 2026) innerhalb der freigegebenen Architektur.\n\n1. **Projektion am Desktop.** Ein Worker-Modul sammelt alle acht Entscheidungstypen in einheitliche Einträge: stabile Quell-ID (zum Beispiel `network-choice:<eventId>`, `workflow-held:<workflow>:<item>`, `effect:<pod>:<key>`), Pod, begrenzter Kontext, gültige Optionen, Zuständigkeit (`pods`, `idp`, `secrets`), geprüfter Übergabelink und der quelleigene Schutz gegen veraltete Stände (Netzwerkrevision und Generation, offener Zustand). Vier der acht Typen sind heute gar nicht im zentralen Snapshot (Netzwerkfragen, Netzwerk-Freigabebündel, Secret-Anfragen, neu berechneter Vorschlagsstatus).\n2. **Veröffentlichung.** Der Desktop sendet die vollständige Projektion mit seiner signierten Runtime-Sitzung an `POST /api/runtime/v1/inbox`, sobald sich ihr Digest ändert. Das Relay legt `decision`-Einträge pro Runtime an oder aktualisiert sie (neue erhalten einen Push-Auftrag), markiert verschwundene als erledigt und hält sie lesbar, während der Mac offline ist.\n3. **Entscheiden.** `POST /inbox/api/v1/items/:id/decide {option, evidence?, requestId}`: Das Relay prüft die Option gegen den gespeicherten Eintrag und reicht über die bestehende Operationskette einen neuen zentralen Befehl `inbox/decide` ein (Idempotenz-ID, Workspace-Revision, 30-Sekunden-Frist). Der Desktop ordnet die Quell-ID dem vorhandenen Handler zu (Netzwerk-choose, Workflow-gateChoose, gateDiscard, resolveHttp, Secrets-cancel, Vorschlag ablehnen/annehmen) und liefert die Quittung; das Handy zeigt angenommen → angewendet oder fehlgeschlagen. Mac offline: kein Einreihen, die Aktion ist nicht verfügbar.\n4. **Zuständigkeit.** IdP-Freigaben (Netzwerk-/Workflow-Bündel, Laufzeitrechte) öffnen nur die geprüfte IdP-URL des Eigentümer-Issuers; Secret-Anfragen öffnen secrets.openape.ai. Unklare Zustellungen verlangen am Handy einen eingegebenen Nachweis und eine ausdrückliche Wahl beobachtet/nicht beobachtet statt des Desktop-Dialogs; nie automatisches erneutes Senden."
+   },
+   {
+    "path": "changelog.6.text",
+    "source": "M2 implemented: desktop decision projection for all eight types with digest guard, signed publication, relay decision items and the decide route through an inbox-only central operation; setup acceptance without local interaction and gateReview with mandatory reason; IdP and Secrets decisions only hand off verified HTTPS links. An independent review found seven defects, all fixed. Local checks: root lint and typecheck, Pods 1,337 and relay 52 unit tests, both builds, relay E2E decision block.",
+    "text": "M2 umgesetzt: Entscheidungsprojektion des Desktops für alle acht Arten mit Prüfsummen-Schutz, signierte Veröffentlichung, Entscheidungseinträge im Relay und die Entscheidungsroute über eine nur für die Inbox zulässige zentrale Operation; Annahme von Einrichtungsvorschlägen ohne lokale Interaktion und gateReview mit Pflichtbegründung; IdP- und Secrets-Entscheidungen übergeben nur verifizierte HTTPS-Links. Ein unabhängiges Review fand sieben Mängel, alle behoben. Lokale Prüfungen: Root-Lint und -Typecheck, 1.337 Pods- und 52 Relay-Unit-Tests, beide Builds, Entscheidungsblock im Relay-E2E."
    }
   ]
  },
