@@ -4,7 +4,8 @@ import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { ProtocolError } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
-import type { InboxDevice, InboxItem, InboxPublication, InboxSubscription, OutboxEntry } from './inbox-types'
+import type { InboxDecision } from '../../../openape-pods/src/contracts/inbox'
+import type { InboxDecisionData, InboxDevice, InboxItem, InboxPublication, InboxSubscription, OutboxEntry } from './inbox-types'
 
 // Push services that browsers hand out today; anything else is refused before the server ever connects to it.
 const pushHosts = [/^web\.push\.apple\.com$/, /^fcm\.googleapis\.com$/, /^updates\.push\.services\.mozilla\.com$/, /\.notify\.windows\.com$/]
@@ -75,6 +76,8 @@ export class InboxStore {
       CREATE INDEX IF NOT EXISTS owner_changes ON items(owner,sequence);
       CREATE INDEX IF NOT EXISTS due_outbox ON outbox(state,next);
       PRAGMA user_version=1;`)
+    // Added for decisions (M2); an older server ignores the column, so the version stays 1.
+    if (!this.db.prepare('PRAGMA table_info(items)').all().some(column => column.name === 'decision')) this.db.exec('ALTER TABLE items ADD COLUMN decision TEXT')
   }
 
   close(): void { this.db.close() }
@@ -145,6 +148,52 @@ export class InboxStore {
     })
   }
 
+  // The desktop publishes its complete set: new decisions get a push, changed ones update in place,
+  // vanished ones resolve and stay readable. A decision the owner deleted keeps its tombstone until it resolves,
+  // so it is not brought back. A full inbox skips new decisions but still resolves vanished ones.
+  syncDecisions(owner: Owner, runtimeId: string, decisions: InboxDecision[]): { created: number, updated: number, resolved: number, skipped: number } {
+    return this.transaction(() => {
+      const counts = { created: 0, updated: 0, resolved: 0, skipped: 0 }
+      const select = this.db.prepare('SELECT id,digest,state,deleted FROM items WHERE owner=? AND runtime_id=? AND event_id=? AND kind=\'decision\'')
+      for (const decision of decisions) {
+        const data: InboxDecisionData = { sourceId: decision.sourceId, digest: decision.digest, type: decision.type, authority: decision.authority, options: decision.options, runtimeId }
+        const links = JSON.stringify(decision.link ? [decision.link] : [])
+        const existing = select.get(key(owner), runtimeId, decision.sourceId) as { id: string, digest: string, state: string, deleted: number | null } | undefined
+        if (existing?.deleted) continue
+        if (existing) {
+          if (existing.digest === decision.digest && existing.state === 'open') continue
+          this.db.prepare('UPDATE items SET digest=?,state=\'open\',title=?,body=?,pod_id=?,pod_name=?,links=?,decision=?,sequence=? WHERE id=?')
+            .run(decision.digest, decision.title, decision.body, decision.podId, decision.podName, links, JSON.stringify(data), this.nextSequence(), existing.id)
+          counts.updated++
+          continue
+        }
+        const count = Number(this.db.prepare('SELECT count(*) AS n FROM items WHERE owner=? AND deleted IS NULL').get(key(owner))?.n)
+        if (count >= inboxLimits.itemsPerOwner) { counts.skipped++; continue }
+        const itemId = randomUUID()
+        this.db.prepare('INSERT INTO items(id,owner,runtime_id,event_id,digest,kind,state,title,body,pod_id,pod_name,run_id,links,created,sequence,decision) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+          .run(itemId, key(owner), runtimeId, decision.sourceId, decision.digest, 'decision', 'open', decision.title, decision.body, decision.podId, decision.podName, null, links, this.now(), this.nextSequence(), JSON.stringify(data))
+        this.db.prepare('INSERT INTO outbox(id,owner,item_id,created,state,next) VALUES(?,?,?,?,?,?)').run(randomUUID(), key(owner), itemId, this.now(), 'pending', this.now())
+        counts.created++
+      }
+      const current = new Set(decisions.map(decision => decision.sourceId))
+      const open = this.db.prepare('SELECT id,event_id FROM items WHERE owner=? AND runtime_id=? AND kind=\'decision\' AND state=\'open\'').all(key(owner), runtimeId) as { id: string, event_id: string }[]
+      for (const row of open.filter(row => !current.has(row.event_id))) {
+        this.db.prepare('UPDATE items SET state=\'resolved\',sequence=? WHERE id=?').run(this.nextSequence(), row.id)
+        this.db.prepare('DELETE FROM outbox WHERE item_id=? AND state=\'pending\'').run(row.id)
+        counts.resolved++
+      }
+      return counts
+    })
+  }
+
+  /** The stored, still open decision an owner acts on, with the digest the desktop must still match. */
+  openDecision(owner: Owner, itemId: string): { item: InboxItem, digest: string } {
+    const found = this.db.prepare('SELECT * FROM items WHERE id=? AND owner=? AND deleted IS NULL AND kind=\'decision\'').get(itemId, key(owner)) as Record<string, unknown> | undefined
+    if (!found) throw new ProtocolError('not_found', 404)
+    if (found.state !== 'open') throw new ProtocolError('decision_resolved', 409)
+    return { item: item(found), digest: String(found.digest) }
+  }
+
   list(owner: Owner, options: { kind?: string, archived?: boolean, before?: number } = {}): { items: InboxItem[], next: number | null } {
     const kind = options.kind === 'message' || options.kind === 'decision' ? options.kind : null
     const before = Number.isSafeInteger(options.before) && options.before! > 0 ? options.before! : Number.MAX_SAFE_INTEGER
@@ -173,7 +222,7 @@ export class InboxStore {
       this.item(owner, itemId)
       const at = this.now()
       if (change.deleted) {
-        this.db.prepare('UPDATE items SET deleted=?,title=\'\',body=\'\',links=\'[]\',sequence=? WHERE id=?').run(at, this.nextSequence(), itemId)
+        this.db.prepare('UPDATE items SET deleted=?,title=\'\',body=\'\',links=\'[]\',decision=NULL,sequence=? WHERE id=?').run(at, this.nextSequence(), itemId)
         this.db.prepare('DELETE FROM outbox WHERE item_id=? AND state=\'pending\'').run(itemId)
         return null
       }
@@ -197,9 +246,9 @@ export class InboxStore {
     return this.transaction(() => {
       const cutoff = this.now() - inboxLimits.retentionMs
       const stale = this.db.prepare('SELECT id FROM items WHERE deleted IS NULL AND created<? AND (kind=\'message\' OR state!=\'open\')').all(cutoff) as { id: string }[]
-      for (const { id: itemId } of stale) this.db.prepare('UPDATE items SET deleted=?,title=\'\',body=\'\',links=\'[]\',sequence=? WHERE id=?').run(this.now(), this.nextSequence(), itemId)
+      for (const { id: itemId } of stale) this.db.prepare('UPDATE items SET deleted=?,title=\'\',body=\'\',links=\'[]\',decision=NULL,sequence=? WHERE id=?').run(this.now(), this.nextSequence(), itemId)
       this.db.prepare('DELETE FROM outbox WHERE created<? OR item_id IN (SELECT id FROM items WHERE deleted IS NOT NULL)').run(this.now() - inboxLimits.pushAgeMs)
-      const purged = this.db.prepare('DELETE FROM items WHERE deleted IS NOT NULL AND deleted<?').run(this.now() - inboxLimits.tombstoneMs)
+      const purged = this.db.prepare('DELETE FROM items WHERE deleted IS NOT NULL AND deleted<? AND NOT (kind=\'decision\' AND state=\'open\')').run(this.now() - inboxLimits.tombstoneMs)
       return { expired: stale.length, purged: Number(purged.changes) }
     })
   }
@@ -207,7 +256,7 @@ export class InboxStore {
 
 function item(row: Record<string, unknown>): InboxItem {
   return {
-    id: String(row.id), kind: row.kind as InboxItem['kind'], state: String(row.state), title: String(row.title), body: String(row.body),
+    id: String(row.id), kind: row.kind as InboxItem['kind'], state: String(row.state), decision: typeof row.decision === 'string' ? JSON.parse(row.decision) as InboxDecisionData : null, title: String(row.title), body: String(row.body),
     pod: row.pod_id ? { id: String(row.pod_id), name: row.pod_name === null ? null : String(row.pod_name) } : null, runId: row.run_id === null ? null : String(row.run_id),
     links: JSON.parse(String(row.links)) as InboxItem['links'], created: Number(row.created), sequence: Number(row.sequence),
     read: row.read === null ? null : Number(row.read), archived: row.archived === null ? null : Number(row.archived), deleted: row.deleted === null ? null : Number(row.deleted),

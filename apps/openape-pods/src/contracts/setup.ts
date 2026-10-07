@@ -1,7 +1,7 @@
 import { parseCredentialAlias } from './credentials'
 import { parseHttpPermission } from './http'
 import { parseNetworkHosts, parseProgramArgv } from './programs'
-import type { DirectoryAccess } from './resources'
+import type { DirectoryAccess, PodResource } from './resources'
 
 export interface SetupRequest {
   provider: 'application' | 'http' | 'directory' | 'microsoft' | 'reference' | 'credential' | 'variable'
@@ -40,4 +40,16 @@ export function parseSetupRequest(value: unknown): SetupRequest {
   if (item.folders !== undefined && (!Array.isArray(item.folders) || item.folders.length > 100 || item.folders.some(folder => typeof folder !== 'string' || !folder || folder.length > 2048))) throw new Error('Invalid resource proposal')
   if (item.attachments !== undefined && typeof item.attachments !== 'boolean') throw new Error('Invalid resource proposal')
   return structuredClone(item) as unknown as SetupRequest
+}
+
+/** Whether an assigned resource already satisfies a setup request. Exact program arguments are verified separately. */
+export function setupResourceMatches(original: SetupRequest, request: SetupRequest, resource: PodResource): boolean {
+  if (resource.state !== 'ready') return false
+  const config = resource.configuration
+  if (request.provider === 'http') return config.type === 'http' && config.origin === request.origin && !!request.methods?.length && request.methods.every(method => (config.methods as string[]).includes(method))
+  if (request.provider === 'directory') return resource.kind === 'directory' && config.path === request.path && (config.access === 'readWrite' || config.access === request.access)
+  if (request.provider === 'reference') return resource.kind === 'reference' && config.path === request.path
+  if (request.provider === 'credential') return resource.kind === 'credential' && config.alias === original.alias && request.alias === original.alias
+  if (request.provider === 'application') return config.type === 'program' && (resource.name === request.application || config.cliId === request.application) && !request.networkHosts?.some(host => !(config.networkHosts as string[]).includes(host))
+  return false
 }

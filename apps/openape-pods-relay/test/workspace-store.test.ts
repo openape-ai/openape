@@ -416,3 +416,20 @@ it('serves the published map read model through view=map without naming a Pod', 
   expect(() => store.view(other, actor.id, null, { view: 'map' })).toThrow()
   expect(() => store.view(actor.owner, actor.id, null, { view: 'summary' })).toThrow('invalid_workspace_request')
 })
+
+it('creates inbox decision operations only through the inbox path, at the latest revision and idempotently', () => {
+  const { store, actor, other } = setup()
+  const command = { channel: 'inbox' as const, body: { type: 'decide', sourceId: 'effect:a', digest: 'a'.repeat(64), option: 'delivered', input: 'Gesehen' } }
+  const id = randomUUID()
+  // Browser, MCP and runtime submissions never accept an inbox decision.
+  expect(() => parseCentralCommand(command)).toThrow('Unsupported workspace channel')
+  expect(() => store.submit(actor.owner, actor.id, 1, command, randomUUID(), true)).toThrow()
+  expect(store.submitDecision(actor.owner, actor.id, command, id)).toMatchObject({ id, state: 'accepted', revision: 1, command })
+  expect(store.submitDecision(actor.owner, actor.id, command, id).id).toBe(id)
+  expect(store.existingOperation(actor.owner, id)?.id).toBe(id)
+  expect(store.existingOperation(other, id)).toBeNull()
+  expect(() => store.submitDecision(actor.owner, actor.id, { ...command, body: { ...command.body, option: 'resend' } }, id)).toThrow('workspace_operation_conflict')
+  expect(() => store.submitDecision(other, actor.id, command, id)).toThrow('workspace_operation_conflict')
+  expect(() => store.submitDecision(actor.owner, actor.id, command, randomUUID())).toThrow('workspace_busy')
+  expect(() => store.submitDecision(actor.owner, actor.id, { channel: 'details', body: { type: 'describe' } } as never, randomUUID())).toThrow('Invalid inbox workspace command')
+})

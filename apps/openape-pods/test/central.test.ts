@@ -25,6 +25,10 @@ import { WorkspaceStore } from '../../openape-pods-relay/server/utils/workspace-
 import type { WorkspaceActor } from '../../openape-pods-relay/server/utils/workspace-store'
 import type { AgentRuntime } from '../src/worker/agent/executor'
 import type { CentralSnapshot } from '../src/contracts/central'
+import { parseInboxDecide } from '../src/contracts/inbox'
+import { InboxDecisions } from '../src/main/inbox/decisions'
+import type { DecisionWorker } from '../src/main/inbox/decisions'
+import { InboxStore } from '../../openape-pods-relay/server/utils/inbox-store'
 
 vi.mock('electron', () => ({ utilityProcess: { fork: vi.fn() }, safeStorage: {}, app: { getPath: () => '/nonexistent' } }))
 
@@ -469,3 +473,33 @@ it('keeps private network configuration local and rejects legacy mutation bypass
   expect(() => server.submit(f.actor.owner, f.actor.id, published.revision, { channel: 'runs', body: { type: 'start', podId: f.pod.id } }, randomUUID())).not.toThrow()
   expect(f.store.db.prepare('SELECT value FROM pod_variables WHERE pod_id=?').get(network.pod.id)!.value).toBe('private-network-variable')
 })
+
+it('applies a phone decision once through the workspace operation and refuses the same decision afterwards', async () => {
+  const runId = randomUUID()
+  let waiting = true
+  let podId = ''
+  const sources = async () => ({ map: { pods: [{ id: podId, name: 'Monitor', approvals: [], unknown: waiting ? [{ key: 'invoice-7', runId }] : [] }], collections: [] }, networks: { networks: [] }, workflows: {}, proposals: [], resources: {}, secrets: null })
+  const worker = { inboxSources: sources, approvalLink: vi.fn(), networks: vi.fn(), workflows: vi.fn(), secrets: vi.fn(), master: vi.fn(), runs: vi.fn(async () => { waiting = false; return {} }) } as unknown as DecisionWorker & { runs: ReturnType<typeof vi.fn> }
+  const decisions = new InboxDecisions(worker, key => key)
+  const { controller, server, actor, pod } = connected({ executor: { execute: async command => decisions.decide(parseInboxDecide(command.body)) } })
+  podId = pod.id
+  controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+  const inbox = new InboxStore(':memory:'); cleanup.push(() => inbox.close())
+  inbox.syncDecisions(actor.owner, actor.id, await decisions.collect())
+  const [item] = inbox.list(actor.owner, { kind: 'decision' }).items
+  const { digest } = inbox.openDecision(actor.owner, item!.id)
+  // The command the relay route builds from the stored decision; the phone never sends a desktop command itself.
+  const command = { channel: 'inbox' as const, body: { type: 'decide', sourceId: item!.decision!.sourceId, digest, option: 'delivered', input: 'Im Postfach gesehen' } }
+  const first = randomUUID()
+  server.submitDecision(actor.owner, actor.id, command, first)
+  server.submitDecision(actor.owner, actor.id, command, first)
+  await vi.waitFor(() => expect(server.operation(actor.owner, first)).toMatchObject({ state: 'applied', result: { status: 'applied' } }), { timeout: 5000 })
+  expect(worker.runs).toHaveBeenCalledExactlyOnceWith({ type: 'resolveHttp', podId, runId, key: 'invoice-7', applied: true, evidence: 'Im Postfach gesehen' })
+  // A second device acting on the same, already decided item fails clearly instead of applying twice.
+  const second = randomUUID()
+  server.submitDecision(actor.owner, actor.id, command, second)
+  await vi.waitFor(() => expect(server.operation(actor.owner, second)).toMatchObject({ state: 'failed', error: 'This decision is no longer waiting' }), { timeout: 5000 })
+  expect(worker.runs).toHaveBeenCalledOnce()
+  expect(inbox.syncDecisions(actor.owner, actor.id, await decisions.collect())).toEqual({ created: 0, updated: 0, resolved: 1, skipped: 0 })
+}, 12000)
