@@ -69,6 +69,11 @@ describe('versioned report contract', () => {
       expect(() => renderTestRun({ ...run, evidence: [{ id: 'log', title: 'Log', kind: 'text', role: 'evidence', ...evidence }] }, directory)).toThrow(/Text evidence log contains NUL/)
     }
   })
+  it('rejects unpaired surrogates before encoding while preserving paired Unicode', () => {
+    expect(() => validateReport({ ...run, summary: 'a\uD800b' })).toThrow(/surrogate at report.summary/)
+    expect(() => validateReport({ ...run, evidence: [{ id: 'log', title: 'Log', kind: 'text', role: 'evidence', text: '\uDC00' }] })).toThrow(/surrogate at report.evidence.0.text/)
+    expect(visible(renderTestRun({ ...run, summary: 'Valid pair: 🦍' }, directory))).toContain('Valid pair: 🦍')
+  })
   it('rejects approval digests contradicting a locally recorded artifact version', () => {
     expect(() => validateReport({ ...plan, approval: { by: 'Owner', date: '2026-10-07', reference: 'Approved the frozen source', target: { url: 'https://example.org/source', version: 1, sourceDigest: 'a'.repeat(64) } }, provenance: [{ url: 'https://example.org/source', format: 'plan JSON', version: 1, digest: 'b'.repeat(64) }] })).toThrow(/contradicts/)
   })
