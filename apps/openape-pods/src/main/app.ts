@@ -10,6 +10,7 @@ import { parseRuntimeApprovalCommand } from '../contracts/runtime-approval'
 import { CentralController, offlineAlert } from './central/controller'
 import { centralObject } from '../contracts/central'
 import { RemoteController, RemoteServiceError } from './remote/controller'
+import { InboxDecisions } from './inbox/decisions'
 import { parseChatsCommand } from '../contracts/chats'
 import { parseWorkflowCommand } from '../contracts/workflows'
 import { parseNetworkCommand } from '../contracts/networks'
@@ -83,6 +84,7 @@ remote = new RemoteController(root, worker, fixtureRemoteOrigin)
 if (process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1') {
   central = new CentralController(root, body => remote.workspaceRequest(body), { snapshot: format => worker.centralSnapshot(format), networkRead: command => worker.centralNetworkRead(command), version: () => worker.centralVersion(), execute: (command, id) => worker.centralExecute(command, id), gate: until => worker.centralGate(until) }, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/'))
   worker.central = central
+  worker.inbox = new InboxDecisions(worker, t)
 }
 const codexDirectory = join(profileBase, 'codex')
 const codexTarget = { executable: process.execPath, script: join(__dirname, '../runtime/codex-mcp.mjs').replace('/app.asar/', '/app.asar.unpacked/'), socket: join(codexDirectory, 'control.sock') }
@@ -505,6 +507,12 @@ async function start(): Promise<void> {
   if (central) watchCentral(central)
   // Pod notifications wait in the worker outbox until the account inbox acknowledges them.
   setInterval(() => { remote.deliverInbox().catch((error: unknown) => console.error('Could not deliver Pod notifications', error)) }, 15000).unref()
+  // Decisions are taken through the central workspace, so they are published only while it is online.
+  setInterval(() => {
+    const inbox = worker.inbox
+    if (!central?.available || !inbox) return
+    remote.publishDecisions(() => inbox.collect()).catch((error: unknown) => console.error('Could not publish owner decisions', error))
+  }, 10000).unref()
   await refreshLauncher(join(codexDirectory, 'openape-pods-mcp'), codexTarget)
   await syncMcp()
   mcpExpiry = setInterval(() => {

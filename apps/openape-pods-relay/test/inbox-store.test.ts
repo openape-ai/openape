@@ -74,3 +74,44 @@ it('paginates, enforces bounds and expires old messages', () => {
   expect(store.retain().expired).toBe(inboxLimits.page + 2)
   expect(store.list(owner).items).toEqual([])
 })
+
+const decision = (sourceId: string, digest = 'a'.repeat(64)) => ({ sourceId, type: 'effect' as const, digest, podId: null, podName: null, title: 'Unklare Zustellung', body: 'Lauf 7', authority: 'pods' as const, options: [{ key: 'delivered', title: 'Zugestellt', input: 'evidence' as const }], link: null })
+
+it('syncs a runtime decision set: new ones push once, changed ones update, vanished ones resolve and stay readable', () => {
+  const { store } = setup()
+  expect(store.syncDecisions(owner, runtime, [decision('effect:a'), decision('effect:b')])).toEqual({ created: 2, updated: 0, resolved: 0, skipped: 0 })
+  expect(store.syncDecisions(owner, runtime, [decision('effect:a'), decision('effect:b')])).toEqual({ created: 0, updated: 0, resolved: 0, skipped: 0 })
+  expect(store.claimOutbox()).toHaveLength(2)
+  const [b, a] = store.list(owner, { kind: 'decision' }).items
+  expect(a).toMatchObject({ kind: 'decision', state: 'open', decision: { sourceId: 'effect:a', runtimeId: runtime, options: [{ key: 'delivered', input: 'evidence' }] } })
+  expect(store.openDecision(owner, a!.id).digest).toBe('a'.repeat(64))
+  // Another runtime of the same owner keeps its own set.
+  store.syncDecisions(owner, randomUUID(), [decision('effect:a')])
+  expect(store.syncDecisions(owner, runtime, [decision('effect:a', 'b'.repeat(64))])).toEqual({ created: 0, updated: 1, resolved: 1, skipped: 0 })
+  expect(store.openDecision(owner, a!.id).digest).toBe('b'.repeat(64))
+  expect(store.item(owner, b!.id)).toMatchObject({ state: 'resolved', title: 'Unklare Zustellung' })
+  expect(() => store.openDecision(owner, b!.id)).toThrow('decision_resolved')
+  // A returning decision reopens without a second push; one the owner deleted stays deleted.
+  store.mark(owner, a!.id, { deleted: true })
+  expect(store.syncDecisions(owner, runtime, [decision('effect:a', 'c'.repeat(64)), decision('effect:b')])).toEqual({ created: 0, updated: 1, resolved: 0, skipped: 0 })
+  expect(store.item(owner, b!.id).state).toBe('open')
+  expect(() => store.openDecision(owner, a!.id)).toThrow('not_found')
+  // Resolved and deleted decisions drop their pending push; only the other runtime's decision is still due.
+  expect(store.claimOutbox().map(entry => store.item(owner, entry.itemId).decision?.runtimeId)).toEqual([expect.not.stringMatching(runtime)])
+  expect(() => store.openDecision(other, b!.id)).toThrow('not_found')
+})
+
+it('keeps a deleted open decision deleted beyond tombstone purge and resolves decisions even with a full inbox', () => {
+  const { store, advance } = setup()
+  store.syncDecisions(owner, runtime, [decision('effect:a')])
+  const [item] = store.list(owner, { kind: 'decision' }).items
+  store.mark(owner, item!.id, { deleted: true })
+  advance(inboxLimits.tombstoneMs + 1)
+  store.retain()
+  expect(store.syncDecisions(owner, runtime, [decision('effect:a')])).toEqual({ created: 0, updated: 0, resolved: 0, skipped: 0 })
+  for (let index = 0; index < inboxLimits.itemsPerOwner; index++) store.publish(owner, runtime, message(`fill-${index}`))
+  expect(store.syncDecisions(owner, runtime, [decision('effect:b')])).toEqual({ created: 0, updated: 0, resolved: 1, skipped: 1 })
+  // Once resolved, the tombstone may be purged like any other.
+  advance(inboxLimits.tombstoneMs + 1)
+  expect(store.retain().purged).toBeGreaterThan(0)
+})

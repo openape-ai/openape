@@ -1,4 +1,5 @@
 import { parseSharingCommand } from './sharing'
+import { parseInboxDecide } from './inbox'
 import type { NetworkView } from './networks'
 import type { WorkflowView } from './workflows'
 import { parseDataCommand } from './data'
@@ -31,7 +32,7 @@ export const centralTables = [
 export const centralHeartbeatMs = 10000
 export const centralLeaseMs = 30000
 export const centralMaxBytes = 32 * 1024 * 1024
-export type CentralChannel = 'workspace' | 'details' | 'scripts' | 'scheduling' | 'runs' | 'resources' | 'data' | 'sharing' | 'local'
+export type CentralChannel = 'workspace' | 'details' | 'scripts' | 'scheduling' | 'runs' | 'resources' | 'data' | 'sharing' | 'inbox' | 'local'
 export interface CentralCommand { channel: CentralChannel, body: Record<string, unknown> }
 export interface CentralPod {
   networkId?: string
@@ -113,7 +114,7 @@ export function parseCentralCommand(value: unknown): CentralCommand {
   if (Object.keys(item).some(key => !['channel', 'body'].includes(key))) throw new Error('Invalid workspace command fields')
   const body = centralObject(item.body)
   const parsers = { workspace: parseCommand, details: parseDetailsCommand, scripts: parseScriptCommand, scheduling: parseScheduleCommand, runs: parseRunCommand, resources: parseResourceCommand, data: parseDataCommand, sharing: parseSharingCommand }
-  const allowed: Record<Exclude<CentralChannel, 'local'>, string[]> = {
+  const allowed: Record<Exclude<CentralChannel, 'local' | 'inbox'>, string[]> = {
     data: ['deletePod'], workspace: ['create', 'update', 'organize', 'describeCollection'], details: ['describe', 'activate'],
     scripts: ['save', 'validate', 'activate', 'prepareDependencies'], scheduling: ['save', 'lifecycle'],
     runs: ['start', 'cancel', 'recover', 'retryQueue', 'resolveHttp'], resources: ['saveVariable', 'removeVariable', 'revoke'],
@@ -121,10 +122,20 @@ export function parseCentralCommand(value: unknown): CentralCommand {
     sharing: ['list', 'show', 'configure', 'commit', 'complete', 'cancel', 'bind', 'prepareDependencies', 'finalize'],
   }
   if (typeof item.channel !== 'string' || !Object.hasOwn(parsers, item.channel)) throw new Error('Unsupported workspace channel')
-  const channel = item.channel as Exclude<CentralChannel, 'local'>
+  const channel = item.channel as Exclude<CentralChannel, 'local' | 'inbox'>
   if (!allowed[channel].includes(String(body.type))) throw new Error('This action requires the local desktop')
   const parsed = parsers[channel](body)
   return { channel, body: structuredClone(parsed) as unknown as Record<string, unknown> }
+}
+
+/**
+ * An owner decision taken in the account inbox. Only the relay's inbox route creates it from a stored
+ * decision, and only the desktop executes it; MCP, browser and runtime submissions never accept it.
+ */
+export function parseInboxCentralCommand(value: unknown): CentralCommand {
+  const item = centralObject(value)
+  if (Object.keys(item).length !== 2 || item.channel !== 'inbox') throw new Error('Invalid inbox workspace command')
+  return { channel: 'inbox', body: structuredClone(parseInboxDecide(item.body)) as unknown as Record<string, unknown> }
 }
 
 export function parseRuntimeCentralCommand(value: unknown): CentralCommand {
@@ -137,6 +148,8 @@ export function parseRuntimeCentralCommand(value: unknown): CentralCommand {
 
 export function commandPodIds(command: CentralCommand, snapshot: { workspace: { pods: { id: string }[] } }): string[] {
   const body = command.body
+  // A decision names its source, not a Pod; the desktop resolves the source when it executes.
+  if (command.channel === 'inbox') return []
   if (typeof body.podId === 'string') return [centralId(body.podId)]
   if (command.channel === 'workspace' && body.type === 'update') return [centralId(body.id)]
   if (command.channel === 'workspace' && body.type === 'describeCollection') return []
