@@ -92,6 +92,8 @@ export class InboxDecisions {
     return { decision: { sourceId: id, type, digest: sha256(JSON.stringify([id, content])), ...content }, act }
   }
 
+  // Network members change only through desktop review; the phone may still take gate decisions for the network.
+  private members(sources: DecisionSources): Set<string> { return new Set((sources.map?.collections ?? []).filter(collection => collection.kind === 'network').flatMap(collection => collection.members)) }
   private podName(sources: DecisionSources, podId: string): string | null { return sources.map?.pods.find(pod => pod.id === podId)?.name ?? null }
   private collection(sources: DecisionSources, id: string) { return sources.map?.collections.find(collection => collection.id === id) }
 
@@ -160,7 +162,7 @@ export class InboxDecisions {
   // Replaces the desktop confirmation dialog: the owner states what was observed outside, never an automatic resend.
   // Network members keep their retained network recovery, so their deliveries are reviewed on the desktop.
   private effects(sources: DecisionSources): Entry[] {
-    const members = new Set((sources.map?.collections ?? []).filter(collection => collection.kind === 'network').flatMap(collection => collection.members))
+    const members = this.members(sources)
     return (sources.map?.pods ?? []).flatMap(pod => pod.unknown.map((item) => {
       const desktop = members.has(pod.id)
       const options: InboxDecisionOption[] = desktop ? [] : [{ key: 'delivered', title: this.t('Delivered'), input: 'evidence' }, { key: 'resend', title: this.t('Not delivered, send again'), input: 'evidence' }]
@@ -183,17 +185,18 @@ export class InboxDecisions {
   // Accepts only what needs no local interaction: a typed variable, a resource that is already assigned, or a
   // scoped Secrets request. New grants, folders and installations remain an explicit step on the desktop.
   private proposals(sources: DecisionSources): Entry[] {
+    const members = this.members(sources)
     return sources.proposals.filter(proposal => proposal.state === 'pending').map((proposal) => {
       const request = proposal.body
       const alias = request.alias
-      const state = sources.resources[proposal.podId]
+      const state = members.has(proposal.podId) ? undefined : sources.resources[proposal.podId]
       const offered = request.argv ? undefined : state?.resources.find(resource => setupResourceMatches(request, request, resource))
       const requested = sources.secrets?.requests.some(row => row.podId === proposal.podId && row.alias === request.alias && ['requested', 'filled'].includes(row.status))
       const accept: [InboxDecisionOption, Act] | null = request.provider === 'variable' && alias && state
         ? [{ key: 'accept', title: this.t('Save variable'), input: 'value' }, async (_option, value) => this.worker.master({ type: 'answerSetup', id: proposal.id, podId: proposal.podId, value, revision: state.variables?.find(item => item.name === alias)?.revision ?? 0 })]
         : offered && state
           ? [{ key: 'accept', title: this.t('Set up {name}', { name: offered.name }), input: null }, async () => this.worker.master({ type: 'resolveSetup', id: proposal.id, podId: proposal.podId, resourceId: offered.id, epoch: state.epoch, request })]
-          : request.provider === 'credential' && alias && sources.secrets && !requested
+          : request.provider === 'credential' && alias && state && sources.secrets && !requested
             ? [{ key: 'request', title: this.t('Request'), input: null }, async () => this.worker.secrets({ type: 'request', podId: proposal.podId, alias, purpose: clip(request.description, 500) })]
             : null
       const desktopStep = !accept && !(request.provider === 'credential' && requested)

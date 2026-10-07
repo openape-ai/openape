@@ -58,8 +58,9 @@ function sources(): DecisionSources {
     proposal('c1cccccc-cccc-4ccc-8ccc-cccccccccccc', { provider: 'variable', alias: 'mandant', description: 'Mandantennummer' }),
     proposal('c2cccccc-cccc-4ccc-8ccc-cccccccccccc', { provider: 'http', description: 'Buchhaltung lesen', origin: 'https://api.example.test', methods: ['GET'] }),
     proposal('c3cccccc-cccc-4ccc-8ccc-cccccccccccc', { provider: 'credential', alias: 'smtp', description: 'Mail senden' }),
+    { ...proposal('c4cccccc-cccc-4ccc-8ccc-cccccccccccc', { provider: 'variable', alias: 'mandant', description: 'Mitglied-Variable' }), podId: member },
   ]
-  const resources = { [pod]: { epoch: 4, variables: [{ name: 'mandant', value: '', revision: 2 }], resources: [{ id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', podId: pod, revision: 1, kind: 'tool', state: 'ready', name: 'api.example.test', configuration: { type: 'http', origin: 'https://api.example.test', methods: ['GET', 'POST'] } }] } } as Record<string, ResourceState>
+  const resources = { [member]: { epoch: 1, variables: [], resources: [] }, [pod]: { epoch: 4, variables: [{ name: 'mandant', value: '', revision: 2 }], resources: [{ id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', podId: pod, revision: 1, kind: 'tool', state: 'ready', name: 'api.example.test', configuration: { type: 'http', origin: 'https://api.example.test', methods: ['GET', 'POST'] } }] } } as Record<string, ResourceState>
   return { map, networks, workflows, proposals, resources, secrets }
 }
 
@@ -93,7 +94,9 @@ it('projects every open desktop decision with its authority and a verified hando
   expect(byType(list, 'proposal', 'Buchhaltung').options.map(option => option.key)).toEqual(['accept', 'decline'])
   expect(byType(list, 'proposal', 'Mail senden')).toMatchObject({ authority: 'secrets', options: [{ key: 'request', title: 'Request' }, { key: 'decline' }] })
   expect(byType(list, 'proposal', 'Ordner')).toMatchObject({ options: [{ key: 'decline' }], body: 'Set up in the Pod · Only on the desktop' })
-  expect(list).toHaveLength(13)
+  // A network member's setup changes only through desktop review.
+  expect(byType(list, 'proposal', 'Mitglied-Variable')).toMatchObject({ options: [{ key: 'decline' }], body: 'Set up in the Pod · Only on the desktop' })
+  expect(list).toHaveLength(14)
 })
 
 it('publishes no runtime approval whose link cannot be verified against the Pod identity', async () => {
