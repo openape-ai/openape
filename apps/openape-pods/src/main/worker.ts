@@ -143,7 +143,9 @@ export class FixtureWorker {
     if (fixturePort && (!/^\d+$/.test(fixturePort) || Number(fixturePort) < 1024 || Number(fixturePort) > 65535)) throw new Error('Invalid synthetic model port')
     const fixtureHold = process.env.NODE_ENV === 'test' ? process.env.OPENAPE_PODS_FIXTURE_HOLD_REMOTE : undefined
     if (fixtureHold && !['after-journal', 'after-reservation'].includes(fixtureHold)) throw new Error('Invalid remote hold point')
-    this.child = utilityProcess.fork(join(__dirname, '../worker/entry.cjs'), [], { cwd: root, env: { HOME: root, TMPDIR: root, PATH: '/usr/bin:/bin', PODS_RUNTIME_EXECUTABLE: process.execPath, ...(process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1' ? { PODS_CENTRAL_ENABLED: '1' } : {}), ...(fixturePort ? { PODS_FIXTURE_MODEL_PORT: fixturePort } : {}), ...(fixtureHold ? { PODS_FIXTURE_HOLD_REMOTE: fixtureHold } : {}) }, serviceName: 'OpenApe Pods Fixture Worker', stdio: 'pipe' })
+    // Synthetic fixtures freeze gate batches at once instead of collecting inputs for two minutes.
+    const fixtureGates = process.env.NODE_ENV === 'test' && !!process.env.OPENAPE_PODS_FIXTURE_DIR
+    this.child = utilityProcess.fork(join(__dirname, '../worker/entry.cjs'), [], { cwd: root, env: { HOME: root, TMPDIR: root, PATH: '/usr/bin:/bin', PODS_RUNTIME_EXECUTABLE: process.execPath, ...(process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1' ? { PODS_CENTRAL_ENABLED: '1' } : {}), ...(fixturePort ? { PODS_FIXTURE_MODEL_PORT: fixturePort } : {}), ...(fixtureHold ? { PODS_FIXTURE_HOLD_REMOTE: fixtureHold } : {}), ...(fixtureGates ? { PODS_FIXTURE_GATE_COLLECT: '0' } : {}) }, serviceName: 'OpenApe Pods Fixture Worker', stdio: 'pipe' })
     const child = this.child
     const reportError = (error: string) => { this.state = { state: 'error', pid: child.pid ?? null, error }; this.publish(this.state) }
     child.on('message', (message: unknown) => {
