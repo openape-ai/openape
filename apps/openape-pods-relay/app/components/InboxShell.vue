@@ -62,6 +62,8 @@ function expired() { session.value = null; signedOut.value = true }
 defineExpose({ expired, reload: load })
 
 onMounted(() => {
+  // The service worker scope is /inbox/; the bare path would stay outside it. A server redirect rule also matches /inbox/.
+  if (window.location.pathname === '/inbox') { window.location.replace('/inbox/'); return }
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/inbox/sw.js', { scope: '/inbox/' }).catch((cause) => { error.value = `Service Worker: ${String(cause)}` })
     navigator.serviceWorker.addEventListener('message', navigate)
