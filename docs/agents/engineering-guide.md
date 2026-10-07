@@ -319,3 +319,13 @@ validated by `packages/ape-testruns/schemas/report.schema.json`. Canonical HTML
 structure lives in `packages/ape-testruns/templates/test-run.html` and `plan.html`.
 Keep commands, tested commit, outcomes and limitations accurate. Default publication
 is private; status metadata never grants access or records owner approval.
+
+### Plan reading experience
+
+Author new Plans from `packages/ape-testruns/examples/versioned/plan-bilingual.json`.
+Use the English source with complete German translations and German default. Keep
+the TL;DR directly below the title, followed by a concise four-stage problem
+overview (problem, impact, approach, outcome). Translate reader-facing narrative
+including acceptance criteria; preserve technical literals and shared original
+approval/evidence. The template switch and selected/both-language print view work
+offline. Missing or stale translations must be fixed before publication.

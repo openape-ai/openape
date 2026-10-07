@@ -1,0 +1,161 @@
+{
+  "schema": "openape.plan/2",
+  "language": "en",
+  "sample": true,
+  "title": "Understand the problem before reading the implementation",
+  "goal": "Make every Plan easy to assess in German and English.",
+  "summary": "Publish one bilingual Plan with a language switch, an immediate summary and a visual problem overview. Share evidence and decisions across both languages.",
+  "problem": {
+    "statement": "Readers must scan long implementation details to understand the actual problem.",
+    "impact": "Decisions take longer and the intended outcome is easily missed.",
+    "approach": "Lead with a short summary and a four-stage overview; offer German and English.",
+    "outcome": "Readers understand what changes, why it matters and how success will be demonstrated."
+  },
+  "status": "draft",
+  "revision": 1,
+  "milestones": [
+    {
+      "id": "reading",
+      "title": "Make the problem clear",
+      "goal": "Put the important information first.",
+      "status": "planned",
+      "acceptance": [
+        "The summary and problem overview precede implementation details."
+      ],
+      "rollback": "Use the previous renderer archive.",
+      "evidenceIds": [
+        "log"
+      ]
+    }
+  ],
+  "approval": {
+    "by": "Sample owner",
+    "date": "2026-10-07",
+    "reference": "Illustrative approval of proposal revision 1.",
+    "target": {
+      "revision": 1
+    },
+    "scope": "Illustrative layout acceptance only."
+  },
+  "translations": {
+    "defaultLanguage": "de",
+    "entries": [
+      {
+        "path": "title",
+        "source": "Understand the problem before reading the implementation",
+        "text": "Das Problem vor der Umsetzung verstehen"
+      },
+      {
+        "path": "goal",
+        "source": "Make every Plan easy to assess in German and English.",
+        "text": "Jeden Plan auf Deutsch und Englisch schnell beurteilen können."
+      },
+      {
+        "path": "summary",
+        "source": "Publish one bilingual Plan with a language switch, an immediate summary and a visual problem overview. Share evidence and decisions across both languages.",
+        "text": "Ein zweisprachiger Plan mit Sprachumschalter, kurzer Zusammenfassung und visuellem Problemüberblick. Nachweise und Entscheidungen gelten für beide Sprachen."
+      },
+      {
+        "path": "problem.statement",
+        "source": "Readers must scan long implementation details to understand the actual problem.",
+        "text": "Leser müssen lange Umsetzungsdetails durchsuchen, um das eigentliche Problem zu verstehen."
+      },
+      {
+        "path": "problem.impact",
+        "source": "Decisions take longer and the intended outcome is easily missed.",
+        "text": "Entscheidungen dauern länger; das angestrebte Ergebnis wird leicht übersehen."
+      },
+      {
+        "path": "problem.approach",
+        "source": "Lead with a short summary and a four-stage overview; offer German and English.",
+        "text": "Mit einer kurzen Zusammenfassung und vier übersichtlichen Schritten beginnen; Deutsch und Englisch anbieten."
+      },
+      {
+        "path": "problem.outcome",
+        "source": "Readers understand what changes, why it matters and how success will be demonstrated.",
+        "text": "Leser verstehen, was sich ändert, warum es wichtig ist und wie der Erfolg nachgewiesen wird."
+      },
+      {
+        "path": "milestones.0.title",
+        "source": "Make the problem clear",
+        "text": "Das Problem verständlich machen"
+      },
+      {
+        "path": "milestones.0.goal",
+        "source": "Put the important information first.",
+        "text": "Die entscheidenden Informationen stehen am Anfang."
+      },
+      {
+        "path": "milestones.0.acceptance.0",
+        "source": "The summary and problem overview precede implementation details.",
+        "text": "Zusammenfassung und Problemüberblick stehen vor den Umsetzungsdetails."
+      },
+      {
+        "path": "milestones.0.rollback",
+        "source": "Use the previous renderer archive.",
+        "text": "Das vorherige Renderer-Archiv verwenden."
+      },
+      {
+        "path": "decisions.0.title",
+        "source": "One source of facts",
+        "text": "Eine gemeinsame Datenbasis"
+      },
+      {
+        "path": "decisions.0.description",
+        "source": "Both language views share statuses and exact evidence.",
+        "text": "Beide Sprachansichten verwenden dieselben Statuswerte und unveränderten Nachweise."
+      },
+      {
+        "path": "risks.0.title",
+        "source": "Translation drift",
+        "text": "Veraltete Übersetzungen"
+      },
+      {
+        "path": "risks.0.mitigation",
+        "source": "Reject missing or stale source text before publication.",
+        "text": "Fehlende oder veraltete Ausgangstexte vor der Veröffentlichung ablehnen."
+      },
+      {
+        "path": "sections.0.title",
+        "source": "Reading guide",
+        "text": "Lesehilfe"
+      },
+      {
+        "path": "sections.0.body",
+        "source": "Read the TL;DR first, then the problem overview. [Open the milestone](#milestone-reading).",
+        "text": "Zuerst das TL;DR lesen, dann den Problemüberblick. [Zum Meilenstein](#milestone-reading)."
+      }
+    ]
+  },
+  "decisions": [
+    {
+      "title": "One source of facts",
+      "description": "Both language views share statuses and exact evidence.",
+      "status": "accepted",
+      "reference": "Sample owner: keep the original evidence unchanged."
+    }
+  ],
+  "risks": [
+    {
+      "title": "Translation drift",
+      "mitigation": "Reject missing or stale source text before publication."
+    }
+  ],
+  "sections": [
+    {
+      "id": "orientation",
+      "title": "Reading guide",
+      "body": "Read the TL;DR first, then the problem overview. [Open the milestone](#milestone-reading).",
+      "placement": "before-details"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "log",
+      "kind": "text",
+      "role": "reference",
+      "title": "Illustrative CLI output",
+      "text": "sample check: passed\nThis is illustrative, not actual verification."
+    }
+  ]
+}
