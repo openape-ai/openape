@@ -67,7 +67,7 @@ it('validates the command and the listed descriptions', () => {
 
 it('adds description storage to an existing schema-37 profile without touching its data', () => {
   const id = workflow()
-  store.db.exec('DROP TABLE secret_requests; DROP TABLE collection_descriptions; PRAGMA user_version=37')
+  store.db.exec('DROP TABLE network_gate_item_grants; DROP TABLE secret_requests; DROP TABLE collection_descriptions; PRAGMA user_version=37')
   store.close(); store = new PodDatabase(root)
   expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(schemaVersion)
   expect(store.db.prepare('SELECT name FROM workflows WHERE id=?').get(id)?.name).toBe('Morning briefing')

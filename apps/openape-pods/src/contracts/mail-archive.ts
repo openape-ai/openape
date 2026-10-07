@@ -25,6 +25,8 @@ export interface ArchiveRecord {
   manifest: ArchiveManifest
   state: 'preparing' | 'pending' | 'executing' | 'completed' | 'denied' | 'expired' | 'unknown'
   grantId?: string
+  /** One once-grant per message; records without it predate per-item grants. */
+  grants?: { id: string, grantId: string }[]
   url?: string
   outcomes: ArchiveOutcome[]
   error?: string
@@ -54,9 +56,12 @@ export function parseArchiveMail(value: unknown): ArchiveMail {
 export function sameArchiveMail(expected: ArchiveMail, actual: ArchiveMail): boolean {
   return ['id', 'version', 'folder', 'internetMessageId', 'sender', 'subject', 'receivedAt'].every(key => expected[key as keyof ArchiveMail] === actual[key as keyof ArchiveMail])
 }
-export function archiveCommand(manifest: ArchiveManifest): string[] { const { items, ...batch } = manifest; return ['pods-mail-archive', 'archive', JSON.stringify(batch), ...items.map(item => JSON.stringify(item))] }
-export function archiveSummary(manifest: ArchiveManifest): string {
-  const lines = [`${manifest.items.length} E-Mails archivieren`, `Postfach: ${manifest.mailbox}`, 'Aktion: Genau diese Nachrichten vom Posteingang ins Archiv verschieben.', `Gültig bis: ${new Date(manifest.expiresAt).toLocaleString('de-AT', { timeZone: 'Europe/Vienna' })} (Wien)`, 'Geänderte oder bereits verschobene Nachrichten werden übersprungen.', 'Die Prüfung erfolgt unmittelbar vor dem Verschieben; Microsoft garantiert keine atomare Versionsprüfung.', '']
-  manifest.items.forEach((mail, index) => lines.push(`${index + 1}. ${mail.subject || '(Ohne Betreff)'}`, `Von: ${mail.sender}`, `Eingang: ${mail.receivedAt}`, `Grund: ${mail.reason}`, mail.url, ''))
-  return lines.join('\n')
+/** The grant of one message binds the frozen proposal and exactly this message. */
+export function archiveItemCommand(manifest: ArchiveManifest, item: ArchiveItem): string[] {
+  const { items, ...batch } = manifest
+  return ['pods-mail-archive', 'archive', JSON.stringify({ ...batch, count: items.length }), JSON.stringify(item)]
+}
+/** First line is the row an owner reads in the batch approval; the rest is detail. */
+export function archiveItemSummary(item: ArchiveItem): string {
+  return [`${item.sender} – ${item.subject || '(Ohne Betreff)'}`, `Eingang: ${item.receivedAt}`, `Grund: ${item.reason}`, 'Aktion: vom Posteingang ins Archiv verschieben', item.url].join('\n')
 }

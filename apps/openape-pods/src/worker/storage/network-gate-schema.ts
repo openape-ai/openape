@@ -36,3 +36,22 @@ CREATE UNIQUE INDEX network_gate_item_held ON network_gate_items(delivery_id) WH
 
 export const networkGateTables = Array.from(networkGateSchema.matchAll(/CREATE TABLE (\w+)\(/g), match => match[1]!)
 export const networkGateIndexes = Array.from(networkGateSchema.matchAll(/CREATE (?:UNIQUE )?INDEX (\w+)/g), match => match[1]!)
+
+/** One once-grant per gate input (schema 40). Older batches carried one grant for the whole batch. */
+export const networkGateGrantSchema = `
+CREATE TABLE network_gate_item_grants(
+  task_id TEXT NOT NULL,
+  delivery_id TEXT NOT NULL,
+  grant_id TEXT NOT NULL CHECK(length(grant_id) BETWEEN 1 AND 128),
+  PRIMARY KEY(task_id,delivery_id),
+  FOREIGN KEY(task_id,delivery_id) REFERENCES network_gate_items(task_id,delivery_id)
+);
+`
+export const networkGateGrantTables = ['network_gate_item_grants']
+
+/** Waiting batches with one collective grant return their inputs for a new per-item batch. */
+export const migrateNetworkGateGrants = `
+UPDATE network_gate_controls SET error='Approval now uses one grant per item; these inputs wait for a new batch' WHERE task_id IN (SELECT id FROM network_gate_tasks WHERE state IN ('preparing','pending'));
+UPDATE network_gate_items SET outcome='obsolete',receipt=json_object('kind','per-item-grant-migration','at',unixepoch()*1000,'priorReceipt',json(receipt)) WHERE outcome='held' AND task_id IN (SELECT id FROM network_gate_tasks WHERE state IN ('preparing','pending'));
+UPDATE network_gate_tasks SET state='superseded',generation=generation+1 WHERE state IN ('preparing','pending');
+`

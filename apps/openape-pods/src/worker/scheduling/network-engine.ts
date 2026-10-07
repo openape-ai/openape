@@ -80,7 +80,7 @@ export class NetworkEngine {
       this.invocations.events.discardHeldFeedback(definition.id, command.eventId, command.evidence)
       return this.view()
     }
-    if (command.type === 'gateExclude' || command.type === 'gateDiscard' || command.type === 'gateReview') {
+    if (command.type === 'gateDiscard' || command.type === 'gateReview') {
       if (command.type === 'gateReview') this.validate(definition)
       this.gates.resolve(definition.id, command)
       return this.view()
