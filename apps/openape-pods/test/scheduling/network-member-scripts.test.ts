@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterEach, expect, it, vi } from 'vitest'
+import { emptyPackages } from '../../src/contracts/dependencies'
 import type { GraphContract } from '../../src/contracts/graphs'
 import { parseNetworkView } from '../../src/contracts/networks'
 import { digest } from '../../src/worker/storage/database'
@@ -38,7 +39,7 @@ function fixture() {
     return hash
   }
   const update = (hash: string) => f.engine.updateMemberScript({ type: 'updateMemberScript', id, revision: 1, podId: consumer, hash })
-  const pin = () => f.store.db.prepare('SELECT definition_version FROM network_members WHERE pod_id=?').get(consumer)!.definition_version
+  const pin = () => f.store.db.prepare('SELECT v.content_hash FROM network_members m JOIN pod_definition_versions v ON v.definition_id=m.definition_id AND v.version=m.definition_version WHERE m.pod_id=?').get(consumer)!.content_hash
   return { ...f, id, source, consumer, received, emit, choose, validated, update, pin }
 }
 
@@ -51,13 +52,14 @@ it('updates one member script while another decision stays open and runs the new
   f.update(hash)
 
   expect(f.store.getPod(f.consumer).activeScript).toBe(hash)
-  expect(f.pin()).toBe(2)
+  expect(f.pin()).toBe(hash)
   const network = f.store.db.prepare('SELECT revision,state FROM networks WHERE id=?').get(f.id)!
   expect(network).toMatchObject({ revision: 1, state: 'paused' })
   const revision = f.store.db.prepare('SELECT contract,content_hash FROM network_revisions WHERE network_id=?').get(f.id)!
   expect(revision.content_hash).toBe(digest(revision.contract as string))
-  expect(JSON.parse(revision.contract as string).members.find((member: { podId: string }) => member.podId === f.consumer)).toMatchObject({ definitionVersion: 2 })
-  expect(JSON.parse(f.store.db.prepare('SELECT body FROM network_trace_events WHERE kind=\'member-script-updated\'').get()!.body as string)).toMatchObject({ podId: f.consumer, script: hash, definitionVersion: 2, via: 'mcp' })
+  const pinned = f.store.db.prepare('SELECT definition_id,definition_version FROM network_members WHERE pod_id=?').get(f.consumer)!
+  expect(JSON.parse(revision.contract as string).members.find((member: { podId: string }) => member.podId === f.consumer)).toMatchObject({ definitionId: pinned.definition_id, definitionVersion: pinned.definition_version })
+  expect(JSON.parse(f.store.db.prepare('SELECT body FROM network_trace_events WHERE kind=\'member-script-updated\'').get()!.body as string)).toMatchObject({ podId: f.consumer, script: hash, definitionVersion: pinned.definition_version, via: 'mcp' })
   expect(parseNetworkView(f.engine.execute({ type: 'list' })).choices).toHaveLength(1)
   f.store.assertStorage()
   expect(mapView(f.store).pods.find(pod => pod.id === f.consumer)!.scriptUpdate).toMatchObject({ script: hash, previous: expect.stringMatching(/^[a-f0-9]{64}$/) })
@@ -73,6 +75,7 @@ it('updates one member script while another decision stays open and runs the new
 it('refuses contract, rights, dependency and unvalidated changes and leaves the pin unchanged', () => {
   const f = fixture()
   const active = f.store.getPod(f.consumer).activeScript
+  expect(() => f.update(f.validated(selected, 'checkpoint', { checkpointSchemaVersion: 99 }))).toThrow('Checkpoint or trigger changes')
   expect(() => f.update(f.validated({ ...selected, summary: 'Changed contract' }, 'contract'))).toThrow('Contract changes')
   expect(() => f.update(f.validated(selected, 'rights', { capabilities: ['mail.read'] }))).toThrow('Rights changes')
   expect(() => f.update(f.validated(selected, 'lock', { dependencyLockHash: 'b'.repeat(64) }))).toThrow('Dependency changes')
@@ -80,7 +83,7 @@ it('refuses contract, rights, dependency and unvalidated changes and leaves the 
   f.store.db.prepare('DELETE FROM validations WHERE script_hash=?').run(unvalidated)
   expect(() => f.update(unvalidated)).toThrow('Validate this script')
   expect(f.store.getPod(f.consumer).activeScript).toBe(active)
-  expect(f.pin()).toBe(1)
+  expect(f.pin()).toBe(active)
 })
 
 it('waits while the member itself has a running invocation', async () => {
@@ -89,8 +92,9 @@ it('waits while the member itself has a running invocation', async () => {
   f.choose(parseNetworkView(f.engine.execute({ type: 'list' })).choices![0]!.eventId)
   const authority = f.engine.invocations.reserve(f.id, f.consumer, f.resources.epoch(f.consumer), 'manual', true)!
   expect(authority).toBeTruthy()
+  const active = f.store.getPod(f.consumer).activeScript
   expect(() => f.update(f.validated(selected, 'busy'))).toThrow('Wait for this Pod\'s network executions to settle')
-  expect(f.pin()).toBe(1)
+  expect(f.pin()).toBe(active)
 })
 
 it('replays inputs of a run that failed under the earlier script exactly once', async () => {
@@ -128,6 +132,53 @@ it('does not replay a failed run that attempted an external effect', async () =>
   await f.engine.invocations.finish(authority, 'failed', 'Synthetic refusal', 'Failure after an applied effect', [], [])
   f.update(f.validated(selected, 'fixed'))
   const result = await f.engine.replayFailed({ type: 'replayFailed', id: f.id, revision: 1, podId: f.consumer })
-  expect(result.replay).toEqual({ replayed: [], skipped: [{ runId: authority.runId, reason: 'Runs with external effects or workflow calls cannot be replayed' }] })
+  expect(result.replay).toEqual({ replayed: [], skipped: [] })
   expect(f.store.db.prepare('SELECT state FROM network_deliveries WHERE run_id=?').get(authority.runId)!.state).not.toBe('pending')
+})
+
+it('keeps an active network active and forks a definition shared with another instance', async () => {
+  const f = fixture()
+  f.engine.execute({ type: 'activate', id: f.id, revision: 1 })
+  const shared = f.store.db.prepare('SELECT definition_id FROM instance_definition_bindings WHERE pod_id=?').get(f.consumer)!.definition_id as string
+  const other = f.store.createPod({ name: 'Other instance' })
+  f.store.db.prepare('INSERT INTO instance_definition_bindings VALUES(?,?,1,1)').run(other.id, shared)
+
+  f.update(f.validated(selected, 'fixed'))
+
+  expect(f.store.db.prepare('SELECT state,revision FROM networks WHERE id=?').get(f.id)).toMatchObject({ state: 'active', revision: 1 })
+  const member = f.store.db.prepare('SELECT definition_id,definition_version FROM network_members WHERE pod_id=?').get(f.consumer)!
+  expect(member.definition_id).not.toBe(shared)
+  expect(member.definition_version).toBe(1)
+  expect(f.store.db.prepare('SELECT max(version) AS version FROM pod_definition_versions WHERE definition_id=?').get(shared)!.version).toBe(1)
+  expect(f.store.db.prepare('SELECT state FROM pod_definition_sources WHERE definition_id=?').get(member.definition_id!)!.state).toBe('legacy')
+  f.store.assertStorage()
+})
+
+it('leaves owner-held and cancelled runs to desktop review', async () => {
+  const f = fixture()
+  await f.emit('first')
+  f.choose(parseNetworkView(f.engine.execute({ type: 'list' })).choices![0]!.eventId)
+  const authority = f.engine.invocations.reserve(f.id, f.consumer, f.resources.epoch(f.consumer), 'manual', true)!
+  await f.engine.invocations.finish(authority, 'failed', 'Synthetic refusal', 'Failure', [], [])
+  f.update(f.validated(selected, 'fixed'))
+  for (const kind of ['quota', 'recovery']) {
+    f.store.db.prepare('UPDATE network_invocation_controls SET failure_kind=? WHERE run_id=?').run(kind, authority.runId)
+    expect((await f.engine.replayFailed({ type: 'replayFailed', id: f.id, revision: 1, podId: f.consumer })).replay).toEqual({ replayed: [], skipped: [] })
+  }
+  f.store.db.prepare('UPDATE network_invocation_controls SET failure_kind=\'exhausted\',settlement_receipt=? WHERE run_id=?').run(JSON.stringify({ state: 'cancelled' }), authority.runId)
+  expect((await f.engine.replayFailed({ type: 'replayFailed', id: f.id, revision: 1, podId: f.consumer })).replay).toEqual({ replayed: [], skipped: [] })
+  f.store.db.prepare('UPDATE networks SET baseline_state=\'review_required\',state=\'paused\' WHERE id=?').run(f.id)
+  await expect(f.engine.replayFailed({ type: 'replayFailed', id: f.id, revision: 1, podId: f.consumer })).rejects.toThrow('Restored networks')
+})
+
+it('appends an unpublished version to a definition owned only by this member', async () => {
+  const f = fixture()
+  const binding = f.store.db.prepare('SELECT definition_id FROM instance_definition_bindings WHERE pod_id=?').get(f.consumer)!
+  const active = f.store.getPod(f.consumer).activeScript!
+  f.store.db.prepare('INSERT INTO pod_definition_sources VALUES(?,1,\'published\',?,?,?,NULL)').run(binding.definition_id!, f.consumer, f.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(f.consumer, active)!.manifest as string, JSON.stringify(emptyPackages()))
+  const hash = f.validated(selected, 'fixed')
+  f.update(hash)
+  expect(f.store.db.prepare('SELECT definition_id,definition_version FROM network_members WHERE pod_id=?').get(f.consumer)).toEqual({ definition_id: binding.definition_id, definition_version: 2 })
+  expect(f.store.db.prepare('SELECT state FROM pod_definition_sources WHERE definition_id=? AND version=2').get(binding.definition_id!)!.state).toBe('legacy')
+  expect(f.pin()).toBe(hash)
 })

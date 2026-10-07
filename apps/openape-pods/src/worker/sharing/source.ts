@@ -115,7 +115,7 @@ export function capturePortableSource(store: PodDatabase, ownerValue: Owner, sel
     for (const member of network?.definition.members ?? []) {
       const current = pods.find(item => item.pod.id === member.podId)!
       const definition = catalog.source(member.definitionId, member.definitionVersion)
-      if (current.pod.bindingRevision !== member.bindingRevision || definition.view.contentHash !== current.pod.activeScript || definition.view.lockHash !== current.manifest.dependencyLockHash || definition.dependencyHash !== current.dependencyHash || current.binding?.definition_id !== member.definitionId || current.binding?.definition_version !== member.definitionVersion) throw new Error('Network member no longer matches its published definition')
+      if (current.binding?.binding_revision !== member.bindingRevision || definition.view.contentHash !== current.pod.activeScript || definition.view.lockHash !== current.manifest.dependencyLockHash || definition.dependencyHash !== current.dependencyHash || current.binding?.definition_id !== member.definitionId || current.binding?.definition_version !== member.definitionVersion) throw new Error('Network member no longer matches its published definition')
     }
     const source = { owner, selection: { ...selection }, pods, workflow: workflow ?? null, network, calls: [...calls.values()] }
     const privateReferences = new Set([store.root, homedir(), owner.subject])

@@ -337,11 +337,13 @@ export class NetworkEngine {
       if (next.contract === undefined || canonicalNetworkJson(parseGraphContract(next.contract)) !== canonicalNetworkJson(member.contract)) throw new Error('Contract changes require a reviewed composition change')
       if (canonicalNetworkJson([...next.capabilities].sort()) !== canonicalNetworkJson([...previous.capabilities].sort()) || next.effects !== previous.effects) throw new Error('Rights changes require owner review')
       if (next.dependencyLockHash !== previous.dependencyLockHash) throw new Error('Dependency changes require owner review')
+      if (next.checkpointSchemaVersion !== previous.checkpointSchemaVersion || canonicalNetworkJson([...next.triggers].sort()) !== canonicalNetworkJson([...previous.triggers].sort())) throw new Error('Checkpoint or trigger changes require owner review')
       new WorkspaceDetails(this.store, this.resources).execute({ type: 'activate', podId, hash, expectedActive: pod.activeScript, assignmentRevision: pod.bindingRevision }, true)
-      const version = new DefinitionCatalog(this.store, this.resources, parseOwner(this.currentOwner())).appendScriptVersion(podId, next)
+      new DefinitionCatalog(this.store, this.resources, parseOwner(this.currentOwner())).appendScriptVersion(podId, next)
       const binding = this.binding(podId, parseOwner(this.currentOwner()), definition.groupId)
-      this.store.db.prepare('UPDATE network_members SET definition_version=?,binding_revision=? WHERE network_id=? AND pod_id=?').run(version, binding.binding_revision!, networkId, podId)
-      const amended = parseNetworkDefinition({ ...definition, members: definition.members.map(item => item.podId === podId ? { ...item, definitionVersion: version, bindingRevision: binding.binding_revision } : item) })
+      const version = binding.definition_version as number
+      this.store.db.prepare('UPDATE network_members SET definition_id=?,definition_version=?,binding_revision=? WHERE network_id=? AND pod_id=?').run(binding.definition_id!, version, binding.binding_revision!, networkId, podId)
+      const amended = parseNetworkDefinition({ ...definition, members: definition.members.map(item => item.podId === podId ? { ...item, definitionId: binding.definition_id, definitionVersion: version, bindingRevision: binding.binding_revision } : item) })
       this.validate(amended)
       const body = canonicalNetworkJson(amended)
       const prior = this.store.db.prepare('SELECT content_hash FROM network_revisions WHERE network_id=? AND revision=?').get(networkId, definition.revision)!
@@ -355,6 +357,8 @@ export class NetworkEngine {
     const { id: networkId, podId } = command
     const definition = this.definition(networkId, command.revision)
     if (!definition.members.some(member => member.podId === podId)) throw new Error('Pod is not a member of this network revision')
+    if (definition.joins?.some(join => join.podId === podId)) throw new Error('Join members cannot be replayed; review their held inputs in the desktop workspace')
+    if (this.store.db.prepare('SELECT baseline_state FROM networks WHERE id=?').get(networkId)!.baseline_state !== 'ready') throw new Error('Restored networks require review before replay')
     const script = this.store.getPod(podId).activeScript
     if (!script) throw new Error('The Pod has no active script')
     const assertCurrent = () => {
@@ -362,7 +366,12 @@ export class NetworkEngine {
       if (this.store.getPod(podId).activeScript !== script) throw new Error('The Pod script changed during replay')
     }
     const candidates = this.store.db.prepare(`SELECT i.run_id FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id JOIN runs r ON r.id=i.run_id
-      WHERE i.network_id=? AND i.pod_id=? AND i.state='blocked' AND c.resolved_receipt IS NULL AND c.retry_consumed_at IS NULL AND r.script_hash<>? ORDER BY r.started_at,i.run_id LIMIT ?`).all(networkId, podId, script, networkLimits.processNow)
+      WHERE i.network_id=? AND i.pod_id=? AND i.state='blocked' AND i.execution_kind='script' AND c.resolved_receipt IS NULL AND c.retry_consumed_at IS NULL AND c.review_required=0 AND r.script_hash<>?
+        AND c.failure_kind IN ('transient','exhausted','invalid') AND coalesce(json_extract(c.settlement_receipt,'$.state'),'')!='cancelled'
+        AND coalesce(json_array_length(i.manifest,'$.inputClaims'),0)>0 AND coalesce(json_array_length(i.manifest,'$.gateBindings'),0)=0
+        AND NOT EXISTS(SELECT 1 FROM network_effect_attempts e WHERE e.run_id=i.run_id) AND NOT EXISTS(SELECT 1 FROM effect_ledger l WHERE l.run_id=i.run_id)
+        AND NOT EXISTS(SELECT 1 FROM network_gate_task_attempts g WHERE g.run_id=i.run_id) AND NOT EXISTS(SELECT 1 FROM workflow_call_requests w WHERE w.caller_run_id=i.run_id)
+      ORDER BY r.started_at,i.run_id LIMIT ?`).all(networkId, podId, script, networkLimits.processNow)
     const recovery = new NetworkRecovery(this.store, this.helper)
     const replay: NetworkReplay = { replayed: [], skipped: [] }
     for (const { run_id: runId } of candidates) {
