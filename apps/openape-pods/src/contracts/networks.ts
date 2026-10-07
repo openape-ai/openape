@@ -70,7 +70,6 @@ export type NetworkCommand
     | { type: 'retry', id: string, revision: number, runId: string, generation: number }
     | { type: 'resolveConflict', id: string, revision: number, runId: string, generation: number, identityHash: string, decision: 'retainOriginal' | 'discardBatch', evidence: string }
     | { type: 'reconcileEffect', id: string, revision: number, runId: string, generation: number, key: string, attempt: number, sequence: number, outcome: 'confirmed_applied' | 'confirmed_not_applied', evidence: string }
-    | { type: 'gateExclude', id: string, revision: number, taskId: string, generation: number, deliveryIds: string[], evidence: string }
     | { type: 'gateReview', id: string, revision: number, taskId: string, generation: number, evidence: string }
     | { type: 'gateDiscard', id: string, revision: number, taskId: string, generation: number, evidence: string }
     | { type: 'discardFeedback', id: string, revision: number, eventId: string, evidence: string }
@@ -228,15 +227,10 @@ export function parseNetworkCommand(value: unknown): NetworkCommand {
     if (typeof input.gate !== 'string' || !/^[a-z][a-z0-9-]{0,31}$/.test(input.gate) || typeof input.option !== 'string' || !/^[a-z][a-z0-9-]{0,31}$/.test(input.option)) throw new Error('Invalid network choice')
     return { type: 'choose', id: uuid(input.id), revision: revision(input.revision), eventId: uuid(input.eventId), gate: input.gate, option: input.option }
   }
-  if (input.type === 'gateExclude' || input.type === 'gateDiscard' || input.type === 'gateReview') {
-    fields(input, ['type', 'id', 'revision', 'taskId', 'generation', 'evidence', ...(input.type === 'gateExclude' ? ['deliveryIds'] : [])])
+  if (input.type === 'gateDiscard' || input.type === 'gateReview') {
+    fields(input, ['type', 'id', 'revision', 'taskId', 'generation', 'evidence'])
     if (typeof input.evidence !== 'string' || !input.evidence.trim() || input.evidence.length > 4000) throw new Error('Network gate resolution requires explicit owner evidence')
-    const authority = { id: uuid(input.id), revision: revision(input.revision), taskId: uuid(input.taskId), generation: revision(input.generation), evidence: input.evidence }
-    if (input.type === 'gateDiscard' || input.type === 'gateReview') return { type: input.type, ...authority }
-    const deliveryIds = list(input.deliveryIds, 30).map(uuid)
-    if (!deliveryIds.length) throw new Error('Select at least one network gate input to exclude')
-    unique(deliveryIds)
-    return { type: 'gateExclude', ...authority, deliveryIds }
+    return { type: input.type, id: uuid(input.id), revision: revision(input.revision), taskId: uuid(input.taskId), generation: revision(input.generation), evidence: input.evidence }
   }
   if (input.type === 'activate' || input.type === 'pause') { fields(input, ['type', 'id', 'revision']); return { type: input.type, id: uuid(input.id), revision: revision(input.revision) } }
   if (input.type === 'discardFeedback') {

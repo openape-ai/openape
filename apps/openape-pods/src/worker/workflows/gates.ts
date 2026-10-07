@@ -2,7 +2,7 @@ import type { NetworkGates, NetworkGateService, NetworkGateStep } from '../sched
 import type { NetworkAuthority } from '../scheduling/network-events'
 import type { NetworkGateCoverage } from '../../contracts/network-gates'
 import { randomUUID } from 'node:crypto'
-import { gateDigest, gateLimits, gateSummary, itemTitle, payloadHash } from '../../contracts/gates'
+import { gateDigest, gateLimits, itemTitle, payloadHash } from '../../contracts/gates'
 import type { GateBatchItem, GateBatchState, GateBatchView, GateCoverage, GateHeldItem, GateManifest } from '../../contracts/gates'
 import type { GraphGate } from '../../contracts/graphs'
 import { InfrastructureError } from '../../contracts/infrastructure'
@@ -11,7 +11,7 @@ import type { PodDatabase } from '../storage/database'
 import { calledItemScope, graphNodes, hasPendingItems, inspectGraph, workflowItemScope } from './items'
 import type { DeliveredItem, GraphRun } from './items'
 
-export type GateService = (body: { operation: 'create' | 'status' | 'consume', manifest: GateManifest, grantId?: string }) => Promise<unknown>
+export type GateService = (body: { operation: 'create' | 'status' | 'consume', manifest: GateManifest, grants?: { key: string, id: string }[] }) => Promise<unknown>
 type ApproveGate = Extract<GraphGate, { kind: 'approve' }>
 interface Batch { id: string, workflowId: string, gate: string, podId: string, state: GateBatchState, grantId: string | null, url: string | null, title: string, digest: string, expiresAt: number, items: GateBatchItem[], error: string | null }
 interface Held { id: string, key: string, payload: string, workflowRunId: string }
@@ -83,11 +83,22 @@ export function gateNeedsRound(store: PodDatabase, workflowId: string, gate: str
   return hasPendingItems(store, workflowId, node(gate), workflowRunId)
 }
 
-function settle(store: PodDatabase, item: Batch, state: 'denied' | 'expired', reason: string | null, now: number): void {
+/** A denied item goes to the gate's excluded channel when it has one; an expired item ends at the gate. */
+function refuse(store: PodDatabase, item: Batch, gate: ApproveGate | undefined, entry: GateBatchItem, state: 'denied' | 'expired', now: number, reason: string | null = null): void {
+  const value = held(store, entry.itemId)
+  const channel = state === 'denied' && gate?.excluded ? gate.excluded : null
+  release(store, item.workflowId, item.gate, value, state === 'denied' ? 'refused' : 'expired', channel, reason, channel ? consumersNow(store, decisionDefinition(store, item.workflowId, value), channel, value.workflowRunId) : [], now)
+}
+function settle(store: PodDatabase, item: Batch, state: 'denied' | 'expired', reason: string | null, now: number, gate?: ApproveGate): void {
   store.transaction(() => {
-    for (const entry of item.items) release(store, item.workflowId, item.gate, held(store, entry.itemId), state === 'denied' ? 'refused' : 'expired', null, reason, [], now)
+    for (const entry of item.items) refuse(store, item, gate, entry, state, now, reason)
     update(store, item.id, state, now, { error: reason ?? undefined })
   })
+}
+function memberStates(value: unknown, grants: { key: string }[]): Record<string, 'pending' | 'approved' | 'denied' | 'expired'> {
+  const states = value as Record<string, unknown> | null
+  if (!states || typeof states !== 'object' || Array.isArray(states) || Object.keys(states).length !== grants.length || grants.some(grant => !['pending', 'approved', 'denied', 'expired'].includes(states[grant.key] as string))) throw new Error('Invalid approval status')
+  return states as Record<string, 'pending' | 'approved' | 'denied' | 'expired'>
 }
 
 /**
@@ -102,15 +113,22 @@ async function legacyGateRound(store: PodDatabase, run: GraphRun, service: GateS
     if (runBatches(store, run, 'workflow_id=? AND gate=? AND state=\'unknown\'', run.workflowId, gate.key).length) continue
     for (const pending of runBatches(store, run, 'workflow_id=? AND gate=? AND state=\'pending\'', run.workflowId, gate.key)) {
       if (pending.expiresAt <= now()) { settle(store, pending, 'expired', null, now()); continue }
+      // Batches requested under one collective grant predate per-item grants; their items join a new batch.
+      if (pending.items.some(entry => !entry.grantId)) { update(store, pending.id, 'superseded', now(), { error: 'Approval now uses one grant per item; these items wait for a new batch' }); continue }
       try {
-        const status = await service({ operation: 'status', manifest: manifest(pending), grantId: pending.grantId! })
-        if (status === 'pending') continue
-        if (status === 'denied' || status === 'expired') { settle(store, pending, status, null, now()); continue }
-        if (status !== 'approved') throw new Error('Invalid approval status')
+        const grants = pending.items.map(entry => ({ key: entry.key, id: entry.grantId as string }))
+        const states = memberStates(await service({ operation: 'status', manifest: manifest(pending), grants }), grants)
+        if (Object.values(states).includes('pending')) continue
+        const approved = pending.items.filter(entry => states[entry.key] === 'approved')
+        if (!approved.length) { settle(store, pending, Object.values(states).includes('denied') ? 'denied' : 'expired', null, now(), gate); continue }
         update(store, pending.id, 'consuming', now())
-        await service({ operation: 'consume', manifest: manifest(pending), grantId: pending.grantId! })
+        await service({ operation: 'consume', manifest: manifest(pending), grants: grants.filter(grant => states[grant.key] === 'approved') })
         store.transaction(() => {
-          const items = pending.items.map(entry => ({ ...entry, emittedId: release(store, run.workflowId, gate.key, held(store, entry.itemId), 'approved', gate.gives, null, [run.node], now()) }))
+          const items = pending.items.map((entry) => {
+            if (states[entry.key] === 'approved') return { ...entry, emittedId: release(store, run.workflowId, gate.key, held(store, entry.itemId), 'approved', gate.gives, null, [run.node], now()) }
+            refuse(store, pending, gate, entry, states[entry.key] === 'denied' ? 'denied' : 'expired', now())
+            return entry
+          })
           update(store, pending.id, 'approved', now(), { items })
         })
       }
@@ -129,7 +147,6 @@ async function legacyGateRound(store: PodDatabase, run: GraphRun, service: GateS
     // An item with the same key is approved once per batch; the rest waits for the next one.
     const unique = items.filter((item, index) => items.findIndex(other => other.key === item.key) === index)
     const frozen: Batch = { id: randomUUID(), workflowId: run.workflowId, gate: gate.key, podId: run.node, state: 'preparing', grantId: null, url: null, title: gate.title, digest: '', expiresAt: now() + gateLimits.expiryMs, items: unique, error: null }
-    while (frozen.items.length && gateSummary(manifest(frozen)).length > gateLimits.summaryLength) frozen.items.pop()
     if (!frozen.items.length) continue
     frozen.digest = gateDigest(frozen.items)
     store.transaction(() => {
@@ -137,9 +154,17 @@ async function legacyGateRound(store: PodDatabase, run: GraphRun, service: GateS
       for (const entry of frozen.items) record(store, frozen.workflowId, held(store, entry.itemId), frozen.gate, 'held', gate.takes, null, now())
     })
     try {
-      const grant = await service({ operation: 'create', manifest: manifest(frozen) }) as { id?: unknown, url?: unknown }
-      if (typeof grant?.id !== 'string' || typeof grant.url !== 'string') throw new Error('Invalid approval grant response')
-      update(store, frozen.id, 'pending', now(), { grantId: grant.id, url: grant.url })
+      const reply = await service({ operation: 'create', manifest: manifest(frozen) }) as { id?: unknown, url?: unknown, grants?: unknown }
+      if (typeof reply?.id !== 'string' || typeof reply.url !== 'string' || !Array.isArray(reply.grants)) throw new Error('Invalid approval grant response')
+      const grants = reply.grants as { key?: unknown, id?: unknown }[]
+      const items = frozen.items.map((entry) => {
+        const found = grants.filter(grant => grant?.key === entry.key && typeof grant.id === 'string' && /^[\w-]{1,128}$/.test(grant.id))
+        const [grant] = found
+        if (found.length !== 1 || typeof grant?.id !== 'string') throw new Error('Approval grant response does not name one grant per item')
+        return { ...entry, grantId: grant.id }
+      })
+      if (grants.length !== items.length) throw new Error('Approval grant response does not name one grant per item')
+      update(store, frozen.id, 'pending', now(), { grantId: reply.id, url: reply.url, items })
     }
     catch (error) { update(store, frozen.id, 'unknown', now(), { error: `Grant creation requires review: ${error instanceof Error ? error.message : 'unknown error'}` }) }
   }
@@ -156,28 +181,21 @@ export async function gateRound(store: PodDatabase, context: GraphRun | GateExec
 
 /** The consumed batches behind the items a Pod received in this run. */
 function legacyGateCoverage(store: PodDatabase, run: GraphRun, delivered: DeliveredItem[]): GateCoverage[] {
-  return batches(store, 'workflow_id=? AND pod_id=? AND state=\'approved\'', run.workflowId, run.node).map(item => ({ manifest: manifest(item), grantId: item.grantId!, items: delivered.filter(received => item.items.some(entry => entry.emittedId === received.id)).map(({ key, data }) => ({ key, data })) })).filter(coverage => coverage.items.length)
+  return batches(store, 'workflow_id=? AND pod_id=? AND state=\'approved\'', run.workflowId, run.node).map((item) => {
+    if (!item.grantId) throw new Error('Approved batch has no approval identity')
+    const items = delivered.flatMap(({ id, key, data }) => {
+      const entry = item.items.find(candidate => candidate.emittedId === id)
+      if (entry && !entry.grantId) throw new Error('Approved item predates per-item grants')
+      return entry?.grantId ? [{ key, grantId: entry.grantId, data }] : []
+    })
+    return { manifest: manifest(item), grantId: item.grantId, items }
+  }).filter(coverage => coverage.items.length)
 }
 
 export function gateCoverage(store: PodDatabase, run: GraphRun, delivered: DeliveredItem[]): GateCoverage[]
 export function gateCoverage(store: PodDatabase, context: { version: 2, network: NetworkGates, authority: NetworkAuthority }): NetworkGateCoverage[]
 export function gateCoverage(store: PodDatabase, context: GraphRun | { version: 2, network: NetworkGates, authority: NetworkAuthority }, delivered: DeliveredItem[] = []): GateCoverage[] | NetworkGateCoverage[] {
   return 'version' in context ? context.network.coverage(context.authority) : legacyGateCoverage(store, context, delivered)
-}
-
-/** Owner decision in the app: the excluded items leave the batch and its pending grant is never consumed. */
-export function excludeGateItems(store: PodDatabase, batchId: string, itemIds: string[], now: number): void {
-  store.transaction(() => {
-    const item = batch(store, batchId)
-    if (item.state !== 'pending') throw new Error('Only a batch that awaits approval can be changed')
-    if (!itemIds.length || itemIds.some(id => !item.items.some(entry => entry.itemId === id))) throw new Error('Item is not part of this batch')
-    const definition = decisionDefinition(store, item.workflowId, held(store, item.items[0]!.itemId))
-    const gate = definition.gates.find((candidate): candidate is ApproveGate => candidate.kind === 'approve' && candidate.key === item.gate)
-    if (!gate) throw new Error('Gate not found')
-    const consumers = gate.excluded ? consumersNow(store, definition, gate.excluded, held(store, item.items[0]!.itemId).workflowRunId) : []
-    for (const id of itemIds) release(store, item.workflowId, item.gate, held(store, id), 'excluded', gate.excluded, null, consumers, now)
-    update(store, batchId, 'superseded', now, { items: item.items.map(entry => ({ ...entry, excluded: itemIds.includes(entry.itemId) })) })
-  })
 }
 
 /** Owner decision in the app: one held item goes to the channel of the chosen option. */
