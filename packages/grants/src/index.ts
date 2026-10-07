@@ -31,6 +31,7 @@ export {
   introspectGrant,
   isCallerWaiting,
   isGrantExpired,
+  parseGrantBatch,
   revokeGrant,
   useGrant,
   validateDelegation,

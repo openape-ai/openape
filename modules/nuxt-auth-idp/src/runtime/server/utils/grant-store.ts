@@ -99,6 +99,7 @@ export function createGrantStore(): ExtendedGrantStore {
           if (params.brokerOwner !== undefined ? (grant.brokered ? grant.brokered.owner !== params.brokerOwner : !requesters.includes(grant.request.requester)) : !requesters.includes(grant.request.requester)) return false
         }
         if (params?.requesterFilter && grant.request.requester !== params.requesterFilter) return false
+        if (params?.batch && grant.request.batch?.id !== params.batch) return false
         return true
       })
 
