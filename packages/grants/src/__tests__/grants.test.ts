@@ -10,6 +10,7 @@ import {
   introspectGrant,
   isCallerWaiting,
   isGrantExpired,
+  parseGrantBatch,
   revokeGrant,
   useGrant,
   validateDelegation,
@@ -1206,5 +1207,29 @@ describe('isCallerWaiting', () => {
     const request = { waits_until: 1000 }
     expect(isCallerWaiting(request, 999)).toBe(true)
     expect(isCallerWaiting(request, 1001)).toBe(false)
+  })
+})
+
+describe('request batches', () => {
+  it('accepts a batch and keeps only its known fields', () => {
+    expect(parseGrantBatch(undefined)).toBeUndefined()
+    expect(parseGrantBatch({ id: 'b:1_x.y-z' })).toEqual({ id: 'b:1_x.y-z' })
+    expect(parseGrantBatch({ id: 'b', title: 'Newsletters', size: 30 })).toEqual({ id: 'b', title: 'Newsletters', size: 30 })
+  })
+
+  it.each([
+    [null], [[]], ['b'], [{ title: 'x' }], [{ id: '' }], [{ id: 'a b' }], [{ id: 'a'.repeat(129) }],
+    [{ id: 'b', title: ' ' }], [{ id: 'b', title: 'x'.repeat(201) }], [{ id: 'b', size: 0 }], [{ id: 'b', size: 1.5 }], [{ id: 'b', size: 101 }], [{ id: 'b', approve: true }],
+  ])('rejects %j', (value) => {
+    expect(() => parseGrantBatch(value)).toThrow()
+  })
+
+  it('lists only the members of one batch', async () => {
+    const store = new InMemoryGrantStore()
+    const base = { status: 'pending' as const, created_at: 1, request: { requester: 'agent@example.com', target_host: 'h', audience: 'a', grant_type: 'once' as const } }
+    await store.save({ ...base, id: 'a', request: { ...base.request, batch: { id: 'b-1' } } })
+    await store.save({ ...base, id: 'b', request: { ...base.request, batch: { id: 'b-2' } } })
+    await store.save({ ...base, id: 'c', request: base.request })
+    expect((await store.listGrants({ requester: 'agent@example.com', batch: 'b-1' })).data.map(grant => grant.id)).toEqual(['a'])
   })
 })

@@ -5,6 +5,7 @@ import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetail
 import { callerState, formatCountdown, formatWaited } from '../utils/caller-liveness'
 import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
 import { grantSummaryText, safeSummaryLink } from '../utils/grant-summary'
+import { grantBatchPath, groupPendingGrantBatches } from '../utils/grant-batch'
 import { buildRuleProposals, ruleTemplatePreview, standingRulePreview, suggestAllowPattern } from '../utils/rule-suggestions'
 
 useHead({ title: 'Grants' })
@@ -62,6 +63,7 @@ function getEffectiveDuration(grantId) {
   return preset === 'custom' ? customDurations.value[grantId] ?? 3600 : Number(preset)
 }
 const pendingGrants = computed(() => activeAndPending.value.filter(g => g.status === 'pending'))
+const pendingGroups = computed(() => groupPendingGrantBatches(pendingGrants.value))
 const activeGrants = computed(() => activeAndPending.value.filter(g => g.status === 'approved'))
 // Refetch when the PWA returns to the foreground (push tap focuses an
 // already-open window without remounting; without this the list would
@@ -349,7 +351,26 @@ function isExactCommand(detail) {
           </p>
         </UCard>
         <div v-else class="space-y-3">
-          <UCard v-for="grant in pendingGrants" :key="grant.id">
+          <UCard v-for="batch in pendingGroups.batches" :key="`${batch.requester}:${batch.batchId}`" data-pending-batch>
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div class="min-w-0 flex-1 text-sm space-y-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="text-base font-semibold">{{ formatRequesterName(batch.requester) }}</span>
+                  <UBadge color="primary" variant="soft" :label="batch.size ? `${batch.count} / ${batch.size}` : `${batch.count}`" />
+                </div>
+                <p v-if="batch.title" class="break-words">
+                  <span class="text-xs text-muted">Angabe des Antragstellers:</span> „{{ batch.title }}“
+                </p>
+                <p class="text-xs text-dimmed break-all">
+                  {{ batch.requester }} · {{ formatTime(batch.createdAt) }}
+                </p>
+              </div>
+              <UButton color="primary" :to="grantBatchPath(batch.requester, batch.batchId)">
+                Review batch
+              </UButton>
+            </div>
+          </UCard>
+          <UCard v-for="grant in pendingGroups.singles" :key="grant.id">
             <div class="flex flex-col gap-3">
               <div class="text-sm space-y-1">
                 <div class="flex flex-wrap items-center gap-2">

@@ -5,6 +5,7 @@ import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetail
 import { buildRuleProposals, ruleTemplatePreview, suggestAllowPattern } from '../utils/rule-suggestions'
 import { callerState, formatCountdown, formatWaited } from '../utils/caller-liveness'
 import PodRunGrant from '../components/PodRunGrant.vue'
+import GrantBatchDecision from '../components/GrantBatchDecision.vue'
 import { podRunPresentation } from '../utils/pod-run-grant'
 import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
 import { grantSummaryText, safeSummaryLink } from '../utils/grant-summary'
@@ -17,6 +18,8 @@ const error = ref('')
 const processing = ref(false)
 const selectedExtendMode = ref('separate')
 const grantId = computed(() => route.query.grant_id)
+// grants.md §3.4: batch ids are scoped to their requester.
+const batchQuery = computed(() => typeof route.query.batch === 'string' && typeof route.query.requester === 'string' && !route.query.grant_id ? { requester: route.query.requester, batchId: route.query.batch } : null)
 const callbackUrl = computed(() => route.query.callback)
 const isDelegate = computed(() => grant.value?.request?.permissions?.includes('delegate'))
 const hasSimilarGrants = computed(() => grant.value?.similar_grants?.similar_grants?.length > 0)
@@ -236,6 +239,7 @@ onMounted(async () => {
     await navigateTo(`/login?returnTo=${encodeURIComponent(returnTo)}`)
     return
   }
+  if (batchQuery.value) return
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', onVisibilityChange)
   }
@@ -340,7 +344,11 @@ function isExactCommand(detail) {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center p-4">
+  <GrantBatchDecision v-if="batchQuery && user" :requester="batchQuery.requester" :batch-id="batchQuery.batchId" />
+  <div v-else-if="batchQuery" class="min-h-screen flex items-center justify-center p-4 text-muted">
+    Loading...
+  </div>
+  <div v-else class="min-h-screen flex items-center justify-center p-4">
     <UCard class="w-full max-w-lg">
       <template #header>
         <h1 class="text-2xl font-bold text-center">

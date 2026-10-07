@@ -60,6 +60,10 @@
       },
       "description": "Supported grant categories."
     },
+    "openape_grant_batch_supported": {
+      "type": "boolean",
+      "description": "Whether the IdP stores request.batch and supports the batch list filter."
+    },
     "openape_delegation_scopes_supported": {
       "type": "array",
       "items": {

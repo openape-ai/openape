@@ -1,4 +1,4 @@
-import type { GrantType, OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
+import type { GrantType, OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGrantBatch, OpenApeGrantRequest } from '@openape/core'
 import { canonicalizeCliPermission, cliAuthorizationDetailCovers, cliAuthorizationDetailIsSimilar, mergeCliAuthorizationDetails, resourceChainsStructurallyMatch, widenCliAuthorizationDetail } from './cli-permissions.js'
 import type { GrantStore } from './stores.js'
 
@@ -120,6 +120,23 @@ export async function revokeGrant(
 
   const updated = await store.findById(grantId)
   return updated!
+}
+
+const BATCH_ID = /^[\w.:-]{1,128}$/
+
+/**
+ * Validates `request.batch` (grants.md §3.4). Returns the normalized value or
+ * throws with a message suitable for a 400 response.
+ */
+export function parseGrantBatch(value: unknown): OpenApeGrantBatch | undefined {
+  if (value === undefined) return undefined
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('batch must be an object')
+  const batch = value as Record<string, unknown>
+  if (Object.keys(batch).some(key => !['id', 'title', 'size'].includes(key))) throw new Error('batch has unknown fields')
+  if (typeof batch.id !== 'string' || !BATCH_ID.test(batch.id)) throw new Error('batch.id must be 1-128 characters from A-Z a-z 0-9 . _ : -')
+  if (batch.title !== undefined && (typeof batch.title !== 'string' || !batch.title.trim() || batch.title.length > 200)) throw new Error('batch.title must be 1-200 characters')
+  if (batch.size !== undefined && (!Number.isInteger(batch.size) || Number(batch.size) < 1 || Number(batch.size) > 100)) throw new Error('batch.size must be an integer from 1 to 100')
+  return { id: batch.id, ...(batch.title !== undefined ? { title: batch.title as string } : {}), ...(batch.size !== undefined ? { size: batch.size as number } : {}) }
 }
 
 /**
