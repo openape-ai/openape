@@ -2,10 +2,10 @@
 
 ## Pods mobile inbox PWA — issue 1446
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1446; approved plan revision 2: https://report.openape.ai/d/01M4B5Q1Q0W6C97A4ZXTFZ5WJR (v3 records M0 progress).
-- M0 prototype merged (PR 293 `4f8cea27`, redirect hotfix PR 295 `573ed67c`, issue 1447) and live as `prod-573ed67c` at https://pods.openape.ai/inbox/ behind `NUXT_INBOX_PROTOTYPE_ENABLED=true`; Traefik routes `/inbox`, previous file backed up in `~/traefik-backups` on chatty. VAPID keys exist only in the relay `.env`.
-- Pre-device evidence: https://report.openape.ai/d/01M4BAS8MHWA6FB4E8W29801WK.
-- Next: owner's physical iPhone checks and at least 20 controlled pushes over two days, then the device Test Run. M1–M7 wait for M0.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1446; approved plan revision 2, publication v6: https://report.openape.ai/d/01M4B5Q1Q0W6C97A4ZXTFZ5WJR?v=6.
+- Checkout `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo/.claude/worktrees/pods-inbox-pwa-m0-faca9e`, branch `feature/issue-1446-inbox-decisions` (base `18fab73d`; plan v6 source and handoff only, no M2 code yet).
+- M0 owner-accepted (iPhone 11 Pro Max, two-day series waived); M1 live as relay `prod-1e467932`; M3 (`context.notify`) merged in PR 301, signed desktop install pending and bundled with M2; M2 active (design in plan section `m2-design`).
+- Next: M2a decision projection, publication and `decide` route. Complete handoff: [pods-inbox-m2-handoff.md](pods-inbox-m2-handoff.md).
 
 ## Pods network member script updates — issue 1445
 
