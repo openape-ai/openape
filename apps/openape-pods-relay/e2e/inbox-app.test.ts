@@ -110,17 +110,25 @@ it('decides, reads, survives restart and reinstall, works offline and never mixe
   const effect = { sourceId: 'effect:mail-1', type: 'effect', digest: digest('effect-1'), podId: mac.podId, podName: 'Belege', title: 'Rechnung an Buchhaltung zustellen?', body: 'Die Zustellung der Rechnung R-2026-104 ist unklar.\nZustellen oder als bereits erledigt markieren.', authority: 'pods', options: [{ key: 'deliver', title: 'Erneut zustellen', input: null }, { key: 'seen', title: 'Bereits zugestellt', input: 'evidence' }], link: null }
   const idpGrant = { sourceId: 'approval:grant-1', type: 'approval', digest: digest('grant-1'), podId: mac.podId, podName: 'Belege', title: 'Zugriff auf mail.example freigeben', body: 'Der Pod möchte Mails lesen.', authority: 'idp', options: [], link: { title: 'In OpenApe ID freigeben', url: 'https://id.openape.ai/grant-approval/1' } }
   const desktopOnly = { sourceId: 'proposal:setup-1', type: 'proposal', digest: digest('setup-1'), podId: mac.podId, podName: 'Belege', title: 'Einrichtung prüfen', body: 'Die Einrichtung braucht einen lokalen Ordner.', authority: 'pods', options: [], link: null }
-  await mac.decisions([effect, idpGrant, desktopOnly])
+  const mailChoice = { sourceId: 'network-choice:mail-3', type: 'network-choice', digest: digest('choice-3'), podId: null, podName: null, title: 'Ready to explore this?', body: 'Review uncertain mail · Synthetic company · Mail network\naccount: owner@pods-inbox.test\ncategory: newsletter\nconfidence: 0.87\nsender: news@example.com\nurgency: normal', authority: 'pods', options: [{ key: 'keep', title: 'Keep for review', input: null }, { key: 'newsletter', title: 'Newsletter candidate', input: null }, { key: 'invoice', title: 'Invoice review', input: null }, { key: 'reply', title: 'Reply preview', input: null }], link: null }
+  await mac.decisions([mailChoice, effect, idpGrant, desktopOnly])
   await mac.message('notify-1', 'Monatsabschluss bereit', 'Alle Belege für September sind abgelegt.', [{ title: 'Bericht öffnen', url: 'https://report.openape.ai/d/example' }])
   await mac.message('notify-2', 'Neue Rechnung', 'Eine Rechnung von Beispiel GmbH wurde erkannt.')
 
   // Sign-in inside the app lands on Decisions; both tabs carry separate counts.
   const { context, page } = await phone(owner)
-  await expect.poll(() => page.getByRole('link', { name: /Entscheidungen/ }).textContent()).toContain('3')
+  await expect.poll(() => page.getByRole('link', { name: /Entscheidungen/ }).textContent()).toContain('4')
+  // A mail choice shows its sender first and classification hints instead of the raw field list.
+  const mailCard = page.locator('li.inbox-card', { hasText: 'Ready to explore this?' })
+  expect(await mailCard.locator('.sender').textContent()).toContain('news@example.com')
+  expect(await mailCard.textContent()).not.toContain('Review uncertain mail')
   expect(await page.getByRole('link', { name: /Mitteilungen/ }).textContent()).toContain('2')
   await expect.poll(() => page.evaluate(async () => !!(await navigator.serviceWorker.getRegistration('/inbox/'))?.active)).toBe(true)
   expect(await noHorizontalScroll(page)).toBe(true)
   await shot(page, '01-decisions')
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await shot(page, '01b-decisions-dark')
+  await page.emulateMedia({ colorScheme: 'light' })
 
   // An actual completed decision: evidence is required, acceptance is not shown as applied, the desktop applies it.
   await page.getByRole('link', { name: /Rechnung an Buchhaltung/ }).click()

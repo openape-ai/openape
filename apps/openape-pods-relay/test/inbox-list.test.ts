@@ -47,3 +47,15 @@ it('offers no card choices for IdP handoffs or completed decisions', () => {
   const done = decision({}, { state: 'resolved' })
   expect(list([idp, done]).findAll('button')).toHaveLength(0)
 })
+
+it('puts the sender first and replaces the raw field list with classification hints', () => {
+  const item = decision({}, { title: 'Ready to explore this?', body: 'Review uncertain mail · Synthetic company · Mail network\naccount: owner@example.com\ncategory: newsletter\nconfidence: 0.87\nsender: news@example.com\nurgency: normal' })
+  const wrapper = list([item])
+  const link = wrapper.get('.card-link')
+  expect(link.findAll('strong').map(node => node.text())).toEqual(['Absender: news@example.com', 'Ready to explore this?'])
+  expect(link.text()).toContain('newsletter · Sicherheit 87 %')
+  expect(link.text()).not.toContain('Review uncertain mail')
+  const plain = list([decision({}, { body: 'Eine Mail wartet.' })]).get('.card-link')
+  expect(plain.findAll('strong')).toHaveLength(1)
+  expect(plain.text()).toContain('Eine Mail wartet.')
+})
