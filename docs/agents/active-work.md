@@ -1,5 +1,12 @@
 # Active work
 
+## Pods mobile inbox PWA — issue 1446
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1446; approved plan revision 2: https://report.openape.ai/d/01M4B5Q1Q0W6C97A4ZXTFZ5WJR (owner approval October 7, 2026).
+- Worktree `.claude/worktrees/pods-inbox-pwa-m0-faca9e`, branch `feature/issue-1446-pods-inbox-pwa`, base `e89449e2`.
+- M0 prototype at `/inbox/` on the relay behind `NUXT_INBOX_PROTOTYPE_ENABLED`: two tabs, synthetic decision/message items, Web Push with receipts, push log, sign-in return to the exact item.
+- Next: deploy, then the owner's physical iPhone checks and at least 20 controlled pushes over two days. M1–M7 wait for M0.
+
 ## Pods owner decisions lost silently — issue 1444
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1444. Found on the installed app on October 7: choices after the first few were never saved, while the inbox showed them as decided.

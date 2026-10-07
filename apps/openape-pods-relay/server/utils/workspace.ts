@@ -27,7 +27,7 @@ export async function workspaceSession(event: H3Event) {
   const flowSecret = String(useRuntimeConfig().openapeSp.sessionSecret)
   if (flowSecret.length < 32 || /^(?:dev-|change-me|please-change)/i.test(flowSecret)) throw new ProtocolError('workspace_flow_unconfigured', 503)
   if (password.length < 32) throw new ProtocolError('workspace_session_unconfigured', 503)
-  return useSession<{ owner?: Owner }>(event, { name: 'pods-workspace', password, maxAge: 86400, cookie: { httpOnly: true, secure: getRequestURL(event).protocol === 'https:', sameSite: 'lax', path: '/' } })
+  return useSession<{ owner?: Owner, returnTo?: string }>(event, { name: 'pods-workspace', password, maxAge: 86400, cookie: { httpOnly: true, secure: getRequestURL(event).protocol === 'https:', sameSite: 'lax', path: '/' } })
 }
 
 export async function workspaceOwner(event: H3Event): Promise<Owner> {

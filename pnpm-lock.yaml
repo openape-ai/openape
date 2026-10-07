@@ -981,6 +981,9 @@ importers:
       vue:
         specifier: '>=3.5.43'
         version: 3.5.43(typescript@5.9.3)
+      web-push:
+        specifier: 'catalog:'
+        version: 3.6.7
     devDependencies:
       '@openape/pods':
         specifier: workspace:*
@@ -988,6 +991,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.0
+      '@types/web-push':
+        specifier: 'catalog:'
+        version: 3.6.4
       openape-e2e:
         specifier: workspace:*
         version: link:../../examples/e2e

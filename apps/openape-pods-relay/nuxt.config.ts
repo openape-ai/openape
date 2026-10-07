@@ -23,6 +23,10 @@ export default defineNuxtConfig({
     relayApnsKey: '',
     relayApnsHost: 'api.push.apple.com',
     relayApnsSandboxHost: 'api.sandbox.push.apple.com',
+    inboxPrototypeEnabled: false,
+    inboxPrototypeDatabase: './.data/inbox-prototype.sqlite',
+    inboxVapidPublicKey: '',
+    inboxVapidPrivateKey: '',
   },
   nitro: { preset: 'node-server', experimental: { websocket: true } },
 })
