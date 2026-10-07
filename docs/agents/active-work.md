@@ -2,12 +2,12 @@
 
 ## Pods mobile inbox PWA — issue 1446
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1446; approved plan revision 2, publication v7: https://report.openape.ai/d/01M4B5Q1Q0W6C97A4ZXTFZ5WJR?v=7; M2 Test Run: https://report.openape.ai/d/01M4BET0CNZSNKH7RJ3GQS32DZ.
-- Checkout `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo/.claude/worktrees/pods-inbox-pwa-m0-faca9e`, branch `feature/issue-1446-inbox-decisions` (base `18fab73d`).
-- M0 owner-accepted (iPhone 11 Pro Max, two-day series waived); M1 live as relay `prod-1e467932`; M3 (`context.notify`) merged in PR 301, signed desktop install pending and bundled with M2; M2 (decision projection for all eight types, signed publication, `items/:id/decide` through an inbox-only central operation, setup acceptance without local interaction, `gateReview`) implemented with review fixes.
-- Checks: root lint and typecheck, Pods 1,337 and relay 52 unit tests, both builds; relay E2E passes the decision block, then stops at the pre-existing browser-workspace readiness check.
-- Open owner decision: accepting HTTPS proposals that need a new IdP grant from the phone (currently a desktop step).
-- Next: signed desktop build M2+M3, relay deploy, real phone decision via API, M4 UI. Complete handoff: [pods-inbox-m2-handoff.md](pods-inbox-m2-handoff.md).
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1446; approved plan revision 2, publication v8: https://report.openape.ai/d/01M4B5Q1Q0W6C97A4ZXTFZ5WJR; rollout Test Run: https://report.openape.ai/d/01M4BJNYSN1TQPM4RKG81YW5Z0.
+- Checkout `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-inbox-m4`, branch `feature/issue-1446-inbox-pwa` (base `3c08d3c7`, merge of PR 302).
+- Delivered: M0 owner-accepted; M1 live; M2 + M3 live since October 7 18:18 as relay `prod-3c08d3c7` and signed desktop `3c08d3c7` (schema 41); 20 open network decisions published. No production decision executed yet; that is the owner's action and completes M2 acceptance.
+- M4 (this branch): installed mobile inbox at `/inbox/` replaces the M0 prototype (UI, API, database flag and push dispatcher removed). Decisions/Notifications tabs, detail, completed history, archive, settings (account, devices, language, push status), foreground sync over `changes`, account-bound offline copy, controlled service-worker update, DE/EN.
+- Checks: relay lint/typecheck, 62 unit and component tests, browser acceptance `e2e/inbox-app.test.ts` against the built relay (13 inspected screenshots); root lint/typecheck before the PR.
+- Next: native PR review and merge, relay deploy (no desktop change), owner acceptance on the real iPhone (decision, notification, restart/reinstall, VoiceOver), then M5 push. Handoff: [pods-inbox-m4-handoff.md](pods-inbox-m4-handoff.md).
 
 ## Pods network member script updates — issue 1445
 

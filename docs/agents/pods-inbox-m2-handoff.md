@@ -1,5 +1,7 @@
 # Handoff: Pods mobile inbox, M2 (October 7, 2026)
 
+> Historical. M2 and M3 were delivered on October 7, 2026 (relay `prod-3c08d3c7`, signed desktop `3c08d3c7`). Current state: [pods-inbox-m4-handoff.md](pods-inbox-m4-handoff.md) and [active work](active-work.md).
+
 Issue: https://repos.openape.ai/patrick/monorepo/issues/1446 · Plan (approved revision 2, publication v6): https://report.openape.ai/d/01M4B5Q1Q0W6C97A4ZXTFZ5WJR?v=6 · Plan source: `.claude/plans/2026-10-07-pods-ios-inbox/plan.json` (section `m2-design` holds the M2 design).
 
 ## Checkout
