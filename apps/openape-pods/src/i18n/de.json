@@ -4299,5 +4299,16 @@
   "Checkpoint or trigger changes require owner review": "Änderungen an Checkpoint oder Auslösern erfordern eine Prüfung durch den Owner",
   "Join members cannot be replayed; review their held inputs in the desktop workspace": "Join-Mitglieder können nicht wiederholt werden; ihre gehaltenen Eingaben im Desktop-Workspace prüfen",
   "Restored networks require review before replay": "Wiederhergestellte Netzwerke müssen vor einer Wiederholung geprüft werden",
-  "Owner-held, cancelled or capacity-limited runs require desktop review": "Vom Owner gehaltene, abgebrochene oder kapazitätsbegrenzte Läufe erfordern eine Prüfung am Desktop"
+  "Owner-held, cancelled or capacity-limited runs require desktop review": "Vom Owner gehaltene, abgebrochene oder kapazitätsbegrenzte Läufe erfordern eine Prüfung am Desktop",
+  "notify expects { key, title, body, links? }": "notify erwartet { key, title, body, links? }",
+  "notify accepts only key, title, body and links; the recipient is always the Pod owner": "notify akzeptiert nur key, title, body und links; Empfänger ist immer der Eigentümer des Pods",
+  "notify key must be 1–120 letters, digits, dots, dashes or underscores and stable for this message": "notify-key muss aus 1–120 Buchstaben, Ziffern, Punkten, Bindestrichen oder Unterstrichen bestehen und für diese Mitteilung stabil sein",
+  "notify title must be 1–300 characters": "notify-Titel muss 1–300 Zeichen lang sein",
+  "notify body must be non-empty and at most 64 KiB": "notify-Text darf nicht leer und höchstens 64 KiB groß sein",
+  "notify accepts at most five links": "notify akzeptiert höchstens fünf Links",
+  "notify links need a title and an https URL": "notify-Links brauchen einen Titel und eine https-URL",
+  "Unknown inbox notification": "Unbekannte Inbox-Mitteilung",
+  "Invalid inbox outbox command": "Ungültiger Befehl für die Inbox-Warteschlange",
+  "A run can queue at most 20 notifications": "Ein Lauf kann höchstens 20 Mitteilungen einreihen",
+  "notify key \"{p0}\" was already used with different content": "notify-key \"{p0}\" wurde bereits mit anderem Inhalt verwendet"
 }
