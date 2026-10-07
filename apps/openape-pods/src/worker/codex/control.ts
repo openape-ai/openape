@@ -42,7 +42,7 @@ export class CodexControl {
   }
 
   private assertLegacyAccess(action: Record<string, unknown>): void {
-    if (typeof action.podId === 'string' && podNetwork(this.store, action.podId)) throw new Error('Network members require bounded network MCP operations or desktop review')
+    if (typeof action.podId === 'string' && !['inspect', 'draft', 'validate'].includes(String(action.action)) && podNetwork(this.store, action.podId)) throw new Error('Network members accept inspect, draft and validate; update their scripts with networks updateMemberScript')
     if (!['inspectWorkflow', 'saveWorkflow', 'runWorkflow', 'setGraphValue'].includes(String(action.action))) return
     const parsed = parseMasterAction(action)
     if (parsed.action === 'saveWorkflow' && parsed.definition.nodes.some(node => podNetwork(this.store, node.podId))) throw new Error('Network members require bounded network MCP operations or desktop review')

@@ -125,6 +125,20 @@ export class DefinitionCatalog {
     else apply()
   }
 
+  // A member script update keeps the definition's state and public defaults and advances only its code version.
+  appendScriptVersion(podId: string, manifest: ScriptManifest): number {
+    this.assertPod(podId)
+    const binding = this.store.db.prepare('SELECT definition_id,definition_version FROM instance_definition_bindings WHERE pod_id=?').get(podId)
+    if (!binding) throw new Error('Adopt the existing instance before updating its script')
+    const id = binding.definition_id as string
+    const current = this.source(id, binding.definition_version as number).view
+    const version = Number(this.store.db.prepare('SELECT max(version) AS version FROM pod_definition_versions WHERE definition_id=?').get(id)!.version) + 1
+    if (version > 1000) throw new Error('Definition version limit reached')
+    this.insertVersion(id, version, podId, manifest, current.state, current.defaults)
+    this.store.db.prepare('UPDATE instance_definition_bindings SET definition_version=?,binding_revision=binding_revision+1 WHERE pod_id=?').run(version, podId)
+    return version
+  }
+
   private insertVersion(id: string, version: number, podId: string, manifest: ScriptManifest | null, state: 'legacy' | 'published', defaults: Record<string, unknown>): void {
     const values = definitionDefaults(defaults)
     const packages = manifest ? new DependencyStore(this.store).scriptManifest(podId, manifest.contentHash) : emptyPackages()

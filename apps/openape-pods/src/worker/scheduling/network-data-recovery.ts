@@ -2,7 +2,7 @@ import type { PodDatabase } from '../storage/database'
 import { digest } from '../storage/database'
 import { canonicalNetworkJson } from '../../contracts/network-json'
 
-export function abandonNetworkData(store: PodDatabase, runId: string, decision: 'owner-retry' | 'owner-discard' | 'owner-gate-review'): void {
+export function abandonNetworkData(store: PodDatabase, runId: string, decision: 'owner-retry' | 'owner-discard' | 'owner-gate-review' | 'script-replay'): void {
   const writes = store.db.prepare('SELECT collection_id,record_key,base_revision,revision,body,tombstone,artifact_refs FROM network_data_staging WHERE run_id=? ORDER BY collection_id,record_key,revision').all(runId)
   const artifacts = store.db.prepare('SELECT id,scope_id,content_hash,size FROM network_artifact_staging WHERE run_id=? ORDER BY id').all(runId)
   const workflowCalls = store.db.prepare('SELECT request_id,logical_key,request_hash FROM workflow_call_staging WHERE run_id=? ORDER BY request_id').all(runId)

@@ -26,6 +26,23 @@ export function networkSettlementIssues(store: PodDatabase, id: string): string[
   return issues
 }
 
+// Only the updated member must be idle; other members keep their open decisions because channels and contracts stay unchanged.
+export function memberScriptIssues(store: PodDatabase, networkId: string, podId: string): string[] {
+  const checks = [
+    [`SELECT 1 FROM network_invocations WHERE network_id=? AND pod_id=? AND state IN ('running','stopping','interrupted','unknown')`, 'Wait for this Pod\'s network executions to settle'],
+    [`SELECT 1 FROM network_deliveries d JOIN network_subscriptions s ON s.id=d.subscription_id WHERE d.network_id=? AND s.pod_id=? AND d.state IN ('claimed','unknown')`, 'Settle this Pod\'s claimed or uncertain inputs'],
+    [`SELECT 1 FROM network_gate_tasks WHERE network_id=? AND pod_id=? AND state IN ('preparing','pending','consuming','unknown')`, 'Resolve this Pod\'s pending or uncertain approvals'],
+    [`SELECT 1 FROM workflow_call_requests r JOIN network_invocations i ON i.run_id=r.caller_run_id WHERE r.network_id=? AND i.pod_id=? AND (r.state NOT IN ('completed','failed','cancelled') OR (r.result IS NOT NULL AND NOT EXISTS(SELECT 1 FROM workflow_call_controls c WHERE c.request_id=r.id AND c.delivery_state='delivered')))`, 'Settle this Pod\'s workflow calls'],
+    [`SELECT 1 FROM network_effect_attempts e JOIN network_invocations i ON i.run_id=e.run_id WHERE e.network_id=? AND i.pod_id=? AND (e.state IN ('intent','unknown') OR NOT EXISTS(SELECT 1 FROM network_effect_receipts r WHERE r.logical_action_key=e.logical_action_key AND r.attempt=e.attempt AND r.outcome=e.state))`, 'Reconcile this Pod\'s external effect receipts'],
+    [`SELECT 1 FROM network_members m JOIN run_leases l ON l.pod_id=m.pod_id WHERE m.network_id=? AND m.pod_id=?`, 'Wait for this Pod\'s process lease to settle'],
+    [`SELECT 1 FROM network_members m JOIN program_leases l ON l.pod_id=m.pod_id WHERE m.network_id=? AND m.pod_id=?`, 'Wait for this Pod\'s program lease to settle'],
+    [`SELECT 1 FROM network_members m JOIN effect_ledger e ON e.pod_id=m.pod_id WHERE m.network_id=? AND m.pod_id=? AND e.state IN ('intent','unknown')`, 'Reconcile this Pod\'s retained legacy effects'],
+  ] as const
+  const issues: string[] = checks.filter(([sql]) => store.db.prepare(`${sql} LIMIT 1`).get(networkId, podId)).map(([, issue]) => issue)
+  if (store.db.prepare(`SELECT 1 FROM network_process_previews WHERE network_id=? AND state='running' LIMIT 1`).get(networkId)) issues.push('Stop bounded processing first')
+  return issues
+}
+
 export function previewNetworkArchive(store: PodDatabase, definition: NetworkDefinition): ArchivePreview {
   const row = store.db.prepare('SELECT * FROM networks WHERE id=?').get(definition.id)!
   const issues = networkSettlementIssues(store, definition.id)
