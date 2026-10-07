@@ -1,5 +1,5 @@
 import type { AccessProposal, MasterCommand } from '../../contracts/master'
-import { parseSetupRequest } from '../../contracts/setup'
+import { parseSetupRequest, setupResourceMatches } from '../../contracts/setup'
 import type { SetupRequest } from '../../contracts/setup'
 import type { ProgramAssignment } from '../../contracts/programs'
 import type { PodDatabase } from '../storage/database'
@@ -50,16 +50,8 @@ export class MasterSetup {
     const resource = this.resources.list(command.podId).find(item => item.id === command.resourceId && item.state === 'ready')
     if (!resource || this.resources.epoch(command.podId) !== command.epoch) throw new Error('Resources changed; review the request again')
     const config = resource.configuration
-    let matches = false
-    if (request.provider === 'http') matches = config.type === 'http' && config.origin === request.origin && !!request.methods?.length && request.methods.every(method => (config.methods as string[]).includes(method))
-    if (request.provider === 'directory') matches = resource.kind === 'directory' && config.path === request.path && (config.access === 'readWrite' || config.access === request.access)
-    if (request.provider === 'reference') matches = resource.kind === 'reference' && config.path === request.path
-    if (request.provider === 'credential') matches = resource.kind === 'credential' && config.alias === original.alias && request.alias === original.alias
-    if (request.provider === 'application' && config.type === 'program' && (resource.name === request.application || config.cliId === request.application)) {
-      matches = true
-      if (request.argv) await resolveProgram(config as unknown as ProgramAssignment, command.podId, request.argv, true)
-      if (request.networkHosts?.some(host => !(config.networkHosts as string[]).includes(host))) matches = false
-    }
+    if (request.provider === 'application' && request.argv && config.type === 'program' && (resource.name === request.application || config.cliId === request.application)) await resolveProgram(config as unknown as ProgramAssignment, command.podId, request.argv, true)
+    const matches = setupResourceMatches(original, request, resource)
     if (!matches) throw new Error('The requested resource is not configured yet')
     this.store.transaction(() => {
       this.pending(command.id, command.podId)
