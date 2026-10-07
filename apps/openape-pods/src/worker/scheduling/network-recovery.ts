@@ -103,6 +103,34 @@ export class NetworkRecovery {
     })
   }
 
+  // A failed run that emitted nothing and attempted no effect may start over once its Pod runs a different script.
+  replayAfterScriptChange(networkId: string, runId: string, generation: number, scriptHash: string, assertCurrent: () => void): void {
+    this.store.transaction(() => {
+      assertCurrent()
+      const invocation = this.invocation(networkId, runId, generation)
+      if (invocation.execution_kind === 'gate_maintenance' || JSON.parse(invocation.manifest as string).gateBindings?.length) throw new Error('Approved inputs and grant maintenance cannot be replayed')
+      const control = this.store.db.prepare('SELECT * FROM network_invocation_controls WHERE run_id=?').get(runId)!
+      if (!control.stopped_receipt || JSON.parse(control.stopped_receipt as string).generation !== generation || this.store.db.prepare('SELECT 1 FROM run_leases WHERE run_id=?').get(runId)) throw new Error('Inspect the stopped failed invocation before replaying it')
+      if (control.resolved_receipt !== null || control.retry_consumed_at !== null || control.review_required) throw new Error('The failed invocation was already resolved, retried or needs identity review')
+      if (!['transient', 'exhausted', 'invalid'].includes(control.failure_kind as string) || (control.settlement_receipt && JSON.parse(control.settlement_receipt as string).state === 'cancelled')) throw new Error('Owner-held, cancelled or capacity-limited runs require desktop review')
+      if (this.store.db.prepare('SELECT 1 FROM network_effect_attempts WHERE run_id=? UNION ALL SELECT 1 FROM effect_ledger WHERE run_id=? UNION ALL SELECT 1 FROM network_gate_task_attempts WHERE run_id=? UNION ALL SELECT 1 FROM workflow_call_requests WHERE caller_run_id=? LIMIT 1').get(runId, runId, runId, runId)) throw new Error('Runs with external effects or workflow calls cannot be replayed')
+      if (this.store.db.prepare('SELECT script_hash FROM runs WHERE id=?').get(runId)?.script_hash === scriptHash) throw new Error('The failed run already used the current script')
+      const inputs = this.store.db.prepare('SELECT id,state FROM network_deliveries WHERE run_id=?').all(runId)
+      const pins = JSON.parse(invocation.manifest as string).inputClaims ?? []
+      if (!inputs.length || inputs.length !== pins.length || inputs.some(input => !['blocked', 'retry_wait'].includes(input.state as string) || !pins.some((pin: { id: string }) => pin.id === input.id))) throw new Error('The original failed input batch changed')
+      const receipt = canonicalNetworkJson({ runId, generation, replayedAt: Date.now(), scriptHash, inputIds: inputs.map(input => input.id), effectsAttempted: false })
+      for (const input of inputs) {
+        this.store.db.prepare('UPDATE network_deliveries SET state=\'pending\',attempt=0,ready_at=?,generation=generation+1,claim_token=NULL,boot_nonce=NULL,restore_nonce=NULL,activation_epoch=NULL,run_id=NULL,review_receipt=?,reason=? WHERE id=?').run(Date.now(), receipt, 'Replayed after a script update', input.id!)
+        this.store.db.prepare('UPDATE network_queue_counts SET count=count-1 WHERE network_id=? AND state=?').run(networkId, input.state!)
+      }
+      this.store.db.prepare('INSERT INTO network_queue_counts VALUES(?,\'pending\',?) ON CONFLICT(network_id,state) DO UPDATE SET count=count+excluded.count').run(networkId, inputs.length)
+      this.store.db.prepare('UPDATE network_invocation_controls SET resolved_receipt=?,deadline=NULL,retry_at=NULL,retry_authority=NULL WHERE run_id=?').run(receipt, runId)
+      this.store.db.prepare('UPDATE network_invocations SET state=\'failed\',generation=generation+1,claim_token=? WHERE run_id=?').run(randomUUID(), runId)
+      abandonNetworkData(this.store, runId, 'script-replay')
+      this.trace(networkId, runId, 'script-change-replayed', { receipt })
+    })
+  }
+
   discardFailure(networkId: string, runId: string, generation: number, evidence: string, assertCurrent: () => void): void {
     this.store.transaction(() => {
       assertCurrent()

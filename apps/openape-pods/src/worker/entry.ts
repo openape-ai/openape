@@ -1,5 +1,6 @@
 import { recoverStoppedRuns } from './recovery/automatic'
 import { AsyncLocalStorage } from 'node:async_hooks'
+import type { CodexNetworkCommand } from '../contracts/codex-networks'
 import { CodexNetworks } from './codex/networks'
 import type { NetworkCommand, NetworkView } from '../contracts/networks'
 import { assertNetworkBrowserCommand } from './central/network-projection'
@@ -135,7 +136,7 @@ const scripts = new ScriptWorkspace(store, registry, masterControl, runtime)
 const scriptController = new AbortController()
 const master = new MasterService(store, runtime, masterControl, fixtureProvider)
 const ownerOperations = new AsyncLocalStorage<boolean>()
-const codex = new CodexControl(store, masterControl, new CodexNetworks(store, networkOwner, command => executeNetwork(command, ownerOperations.getStore() === true)))
+const codex = new CodexControl(store, masterControl, new CodexNetworks(store, networkOwner, executeCodexNetwork))
 
 const remote = new RemoteControl(store, master, dispatcher, registry, scheduler, Date.now, { create: async (podId, applicationId) => String(await mailBridge.remoteProgramState({ operation: 'create', podId, applicationId })), discard: async (podId, stateId) => { await mailBridge.remoteProgramState({ operation: 'discard', podId, stateId }) } }, startControlledRun)
 function networkOwner() {
@@ -165,6 +166,12 @@ let tickTimeout: { phase: string, at: number } | null = null
 function tickStep<T>(phase: string, limitMs: number, work: () => Promise<T>): Promise<T | undefined> {
   tickPhase = phase
   return boundedStep(limitMs, work, () => { tickTimeout = { phase, at: Date.now() }; console.error(`Scheduler step ${phase} did not finish within ${limitMs} ms; continuing`) })
+}
+async function executeCodexNetwork(command: CodexNetworkCommand): Promise<NetworkView> {
+  if ((command.type === 'updateMemberScript' || command.type === 'replayFailed') && (!startupReady || (Date.now() >= centralUntil && ownerOperations.getStore() !== true) || suspended || maintenance)) throw new Error('Network execution requires a ready local runtime')
+  if (command.type === 'updateMemberScript') return networks.updateMemberScript(command)
+  if (command.type === 'replayFailed') return networks.replayFailed(command)
+  return executeNetwork(command, ownerOperations.getStore() === true)
 }
 async function executeNetwork(command: NetworkCommand, ownerOperation: boolean): Promise<NetworkView> {
   if (command.type === 'create' && !command.draft.expectedSetup) throw new Error('Network creation requires a reviewed setup fingerprint')
