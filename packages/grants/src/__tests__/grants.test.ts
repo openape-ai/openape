@@ -4,10 +4,12 @@ import {
   approveGrant,
   approveGrantWithExtension,
   approveGrantWithWidening,
+  assertGrantBatchMember,
   createDelegation,
   createGrant,
   denyGrant,
   introspectGrant,
+  InvalidGrantBatchError,
   isCallerWaiting,
   isGrantExpired,
   parseGrantBatch,
@@ -1231,5 +1233,43 @@ describe('request batches', () => {
     await store.save({ ...base, id: 'b', request: { ...base.request, batch: { id: 'b-2' } } })
     await store.save({ ...base, id: 'c', request: base.request })
     expect((await store.listGrants({ requester: 'agent@example.com', batch: 'b-1' })).data.map(grant => grant.id)).toEqual(['a'])
+  })
+})
+
+describe('request batch members', () => {
+  const member = (overrides: Partial<OpenApeGrantRequest> = {}): OpenApeGrantRequest => ({ requester: 'agent@example.com', target_host: 'pods:a', audience: 'gate', grant_type: 'once', waits_until: 2000, batch: { id: 'b-1', title: 'Mail', size: 2 }, ...overrides })
+
+  it('accepts uniform once members up to the announced size', async () => {
+    const store = new InMemoryGrantStore()
+    await assertGrantBatchMember(member(), store)
+    await store.save({ id: 'a', status: 'pending', created_at: 1, request: member() })
+    await assertGrantBatchMember(member(), store)
+    await store.save({ id: 'b', status: 'pending', created_at: 2, request: member() })
+    await expect(assertGrantBatchMember(member(), store)).rejects.toThrow('announced size')
+  })
+
+  it.each([
+    ['a lasting grant', { grant_type: 'always' as const }],
+    ['run_as', { run_as: 'root' }],
+    ['a delegate', { delegate: 'x@example.com' }],
+  ])('rejects %s', async (_name, overrides) => {
+    await expect(assertGrantBatchMember(member(overrides), new InMemoryGrantStore())).rejects.toBeInstanceOf(InvalidGrantBatchError)
+  })
+
+  it.each([
+    ['target', { target_host: 'pods:b' }],
+    ['audience', { audience: 'other' }],
+    ['deadline', { waits_until: 3000 }],
+    ['title', { batch: { id: 'b-1', title: 'Other', size: 2 } }],
+  ])('rejects a member with a different %s than the batch', async (_name, overrides) => {
+    const store = new InMemoryGrantStore()
+    await store.save({ id: 'a', status: 'pending', created_at: 1, request: member() })
+    await expect(assertGrantBatchMember(member(overrides), store)).rejects.toThrow('must share')
+  })
+
+  it('ignores members of another requester with the same batch id', async () => {
+    const store = new InMemoryGrantStore()
+    await store.save({ id: 'a', status: 'pending', created_at: 1, request: member({ requester: 'other@example.com', target_host: 'pods:z' }) })
+    await assertGrantBatchMember(member(), store)
   })
 })

@@ -124,19 +124,43 @@ export async function revokeGrant(
 
 const BATCH_ID = /^[\w.:-]{1,128}$/
 
+/** A request batch that violates grants.md §3.4; callers answer it with 400. */
+export class InvalidGrantBatchError extends Error {}
+
 /**
  * Validates `request.batch` (grants.md §3.4). Returns the normalized value or
  * throws with a message suitable for a 400 response.
  */
 export function parseGrantBatch(value: unknown): OpenApeGrantBatch | undefined {
   if (value === undefined) return undefined
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('batch must be an object')
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new InvalidGrantBatchError('batch must be an object')
   const batch = value as Record<string, unknown>
-  if (Object.keys(batch).some(key => !['id', 'title', 'size'].includes(key))) throw new Error('batch has unknown fields')
-  if (typeof batch.id !== 'string' || !BATCH_ID.test(batch.id)) throw new Error('batch.id must be 1-128 characters from A-Z a-z 0-9 . _ : -')
-  if (batch.title !== undefined && (typeof batch.title !== 'string' || !batch.title.trim() || batch.title.length > 200)) throw new Error('batch.title must be 1-200 characters')
-  if (batch.size !== undefined && (!Number.isInteger(batch.size) || Number(batch.size) < 1 || Number(batch.size) > 100)) throw new Error('batch.size must be an integer from 1 to 100')
+  if (Object.keys(batch).some(key => !['id', 'title', 'size'].includes(key))) throw new InvalidGrantBatchError('batch has unknown fields')
+  if (typeof batch.id !== 'string' || !BATCH_ID.test(batch.id)) throw new InvalidGrantBatchError('batch.id must be 1-128 characters from A-Z a-z 0-9 . _ : -')
+  if (batch.title !== undefined && (typeof batch.title !== 'string' || !batch.title.trim() || batch.title.length > 200)) throw new InvalidGrantBatchError('batch.title must be 1-200 characters')
+  if (batch.size !== undefined && (!Number.isInteger(batch.size) || Number(batch.size) < 1 || Number(batch.size) > 100)) throw new InvalidGrantBatchError('batch.size must be an integer from 1 to 100')
   return { id: batch.id, ...(batch.title !== undefined ? { title: batch.title as string } : {}), ...(batch.size !== undefined ? { size: batch.size as number } : {}) }
+}
+
+/**
+ * A batch member is a plain once-grant that matches the members already
+ * submitted under the same requester and batch id (grants.md §3.4), so a
+ * joint decision cannot hide a lasting or differently scoped grant.
+ */
+export async function assertGrantBatchMember(request: OpenApeGrantRequest, store: GrantStore): Promise<void> {
+  if (!request.batch) return
+  if ((request.grant_type ?? 'once') !== 'once') throw new InvalidGrantBatchError('batch members must be once grants')
+  if (request.run_as || request.delegator || request.delegate || request.scopes) throw new InvalidGrantBatchError('batch members cannot carry run_as or delegation fields')
+  const { data } = await store.listGrants({ requester: request.requester, requesterFilter: request.requester, batch: request.batch.id, limit: 100 })
+  const first = data.at(-1)
+  if (!first) return
+  const same = first.request.audience === request.audience
+    && first.request.target_host === request.target_host
+    && first.request.waits_until === request.waits_until
+    && first.request.batch?.title === request.batch.title
+    && first.request.batch?.size === request.batch.size
+  if (!same) throw new InvalidGrantBatchError('batch members must share audience, target_host, waits_until, title and size')
+  if (request.batch.size !== undefined && data.length >= request.batch.size) throw new InvalidGrantBatchError('batch already has its announced size')
 }
 
 /**

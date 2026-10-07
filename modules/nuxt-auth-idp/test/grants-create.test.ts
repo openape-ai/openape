@@ -341,4 +341,19 @@ describe('grant create endpoint', () => {
     const { default: handler } = await import('../src/runtime/server/api/grants/index.post')
     await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 400 })
   })
+
+  it('rejects a lasting grant hidden in a request batch (400)', async () => {
+    readBodyMock.mockResolvedValue({ requester: 'agent@example.com', target_host: 'pods:demo', audience: 'pods-graph-gate', grant_type: 'always', command: ['x'], batch: { id: 'b-1' } })
+    const { default: handler } = await import('../src/runtime/server/api/grants/index.post')
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 400 })
+  })
+
+  it('rejects a batch member whose target differs from the existing members (400)', async () => {
+    const base = { requester: 'agent@example.com', audience: 'pods-graph-gate', grant_type: 'once', waits_until: 2_000_000_000, command: ['x'], batch: { id: 'b-1', size: 3 } }
+    const { default: handler } = await import('../src/runtime/server/api/grants/index.post')
+    readBodyMock.mockResolvedValue({ ...base, target_host: 'pods:demo' })
+    await handler({} as any)
+    readBodyMock.mockResolvedValue({ ...base, target_host: 'pods:other', command: ['y'] })
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 400 })
+  })
 })

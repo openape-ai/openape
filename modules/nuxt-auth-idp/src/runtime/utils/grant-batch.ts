@@ -23,11 +23,15 @@ export function grantBatchRowLabel(grant: OpenApeGrant): string {
 
 /**
  * Rows in submission order; members submitted within the same second sort by
- * label, which keeps the list stable and groups equal senders.
+ * label, which keeps the list stable and groups equal senders. Only pending
+ * once-grants with the batch's scope can be decided together; anything else
+ * needs its single approval view.
  */
 export function grantBatchRows(members: OpenApeGrant[]): GrantBatchRow[] {
+  const scope = grantBatchScope(members)
+  const uniform = (grant: OpenApeGrant) => (grant.request.grant_type ?? 'once') === 'once' && !grant.request.run_as && !grant.request.delegate && grant.request.audience === scope?.audience && grant.request.target_host === scope?.targetHost
   return members
-    .map(grant => ({ grant, row: { id: grant.id, label: grantBatchRowLabel(grant), status: grant.status, decidable: grant.status === 'pending' } }))
+    .map(grant => ({ grant, row: { id: grant.id, label: grantBatchRowLabel(grant), status: grant.status, decidable: grant.status === 'pending' && uniform(grant) } }))
     .toSorted((a, b) => a.grant.created_at - b.grant.created_at || a.row.label.localeCompare(b.row.label))
     .map(({ row }) => row)
 }
@@ -35,6 +39,12 @@ export function grantBatchRows(members: OpenApeGrant[]): GrantBatchRow[] {
 /** Selected decidable members are approved, every other decidable member is denied. */
 export function grantBatchOperations(rows: GrantBatchRow[], selected: ReadonlySet<string>): GrantBatchOperation[] {
   return rows.filter(row => row.decidable).map(row => ({ id: row.id, action: selected.has(row.id) ? 'approve' : 'deny' }))
+}
+
+/** Audience and target shared by the batch, taken from the earliest member. */
+export function grantBatchScope(members: OpenApeGrant[]): { audience: string, targetHost: string } | null {
+  const first = members.toSorted((a, b) => a.created_at - b.created_at)[0]
+  return first ? { audience: first.request.audience, targetHost: first.request.target_host } : null
 }
 
 /** Title, announced size and missing count, taken from the earliest member. */

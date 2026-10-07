@@ -4,10 +4,12 @@
 // pending grants that actually need a human do.
 
 import { notifyApproverOfPendingGrant } from '../utils/push'
+import { isFollowUpBatchMember } from '../utils/grant-approval-link'
 
 export default defineNitroPlugin(() => {
   defineGrantPendingHook(async (grant) => {
     if (grant.status !== 'pending' || grant.auto_approval_kind) return
+    if (await isFollowUpBatchMember(grant, useGrantStores().grantStore)) return
     await notifyApproverOfPendingGrant(grant)
   })
 })

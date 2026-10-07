@@ -2,7 +2,7 @@ import { brokerInput } from '../utils/broker-input'
 import type { BrokeredGrant } from '@openape/core'
 import { defineEventHandler, readBody, setHeader, setResponseStatus } from 'h3'
 import { decodeJwt } from 'jose'
-import { BROKER_REQUEST_TYPE, brokerObject, introspectGrant, issueAuthzJWT, parseBrokerRequest, sameBrokeredGrant, verifyBrokerToken } from '@openape/grants'
+import { assertGrantBatchMember, BROKER_REQUEST_TYPE, InvalidGrantBatchError, brokerObject, introspectGrant, issueAuthzJWT, parseBrokerRequest, sameBrokeredGrant, verifyBrokerToken } from '@openape/grants'
 import { brokerVerificationKey, discoverBroker } from '../utils/broker-network'
 import { useBrokerStore } from '../utils/broker-store'
 import { getIdpIssuer, useIdpStores } from '../utils/stores'
@@ -30,6 +30,11 @@ export default defineEventHandler(async (event) => {
   const { grantStore } = useGrantStores()
   if (request.operation === 'create') {
     const grantRequest = await brokerInput(() => parseBrokerGrantRequest(request.request, request.sub))
+    try { await assertGrantBatchMember(grantRequest, grantStore) }
+    catch (error) {
+      if (!(error instanceof InvalidGrantBatchError)) throw error
+      throw createProblemError({ status: 400, title: `Invalid batch: ${error.message}`, type: 'https://openape.org/errors/broker_request_invalid' })
+    }
     const grant = { id: crypto.randomUUID(), status: 'pending' as const, type: 'command' as const, request: grantRequest, brokered: provenance, created_at: Math.floor(Date.now() / 1000) }
     await grantStore.save(grant)
     await runGrantPendingHooks(grant)

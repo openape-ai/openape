@@ -22,7 +22,7 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
     const respond = async () => {
       response.setHeader('Content-Type', 'application/json')
       if (request.url === '/.well-known/openid-configuration') {
-        response.end(JSON.stringify({ grants_endpoint: `${origin}/api/grants`, ...(provisioning ? { issuer: origin, openape_grant_brokering_version: '1.0', openape_broker_connections_endpoint: `${origin}/api/fixture-connections`, openape_broker_enrollment_endpoint: `${origin}/api/fixture-enrollment` } : {}) }))
+        response.end(JSON.stringify({ grants_endpoint: `${origin}/api/grants`, openape_grant_batch_supported: true, ...(provisioning ? { issuer: origin, openape_grant_brokering_version: '1.0', openape_broker_connections_endpoint: `${origin}/api/fixture-connections`, openape_broker_enrollment_endpoint: `${origin}/api/fixture-enrollment` } : {}) }))
       }
       else if (provisioning && request.url === `/api/fixture-connections/${brokerId}/receipt`) {
         if (request.headers.authorization !== 'Bearer SYNTHETIC_OWNER_TOKEN') { response.writeHead(403).end('{}'); return }

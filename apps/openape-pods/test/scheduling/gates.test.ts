@@ -279,10 +279,10 @@ describe('contracts', () => {
     expect(JSON.parse(request.command[2])).toMatchObject({ digest: manifest.digest, count: 1, podId, item: { key: 'news-1' } })
     await expect(handleGate({ ...input, scope: { ...scope, podId: randomUUID() }, body: { operation: 'create', manifest } })).rejects.toThrow('Gate batch belongs to another Pod')
     const listed = { id: 'grant-1', status: 'approved', decided_by: 'owner@example.test', request: { requester: 'agent@example.test', target_host: `pods:${podId}`, audience: 'pods-graph-gate', grant_type: 'once', waits_until: Math.floor(manifest.expiresAt / 1000), command: gateItemCommand(manifest, items[0]!), summary: { text: request.summary.text } } }
-    fetch.mockResolvedValue(Response.json({ data: [listed] }))
+    fetch.mockImplementation(async (url: unknown) => String(url).endsWith('/.well-known/openid-configuration') ? Response.json({ openape_grant_batch_supported: true }) : Response.json({ data: [listed] }))
     expect(await handleGate({ ...input, body: { operation: 'status', manifest, grants: [{ key: 'news-1', id: 'grant-1' }] } })).toEqual({ 'news-1': 'approved' })
     expect(String(fetch.mock.calls.at(-1)![0])).toBe(`https://id.example.test/api/grants?requester=agent%40example.test&batch=${manifest.id}&limit=100`)
-    fetch.mockResolvedValue(Response.json({ data: [{ ...listed, auto_approval_kind: 'standing' }] }))
+    fetch.mockImplementation(async (url: unknown) => String(url).endsWith('/.well-known/openid-configuration') ? Response.json({ openape_grant_batch_supported: true }) : Response.json({ data: [{ ...listed, auto_approval_kind: 'standing' }] }))
     await expect(handleGate({ ...input, body: { operation: 'status', manifest, grants: [{ key: 'news-1', id: 'grant-1' }] } })).rejects.toThrow('manual owner decision')
     await expect(handleGate({ ...input, body: { operation: 'status', manifest, grants: [{ key: 'news-9', id: 'grant-1' }] } })).rejects.toThrow('Invalid approval grant identities')
   })

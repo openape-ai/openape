@@ -183,9 +183,10 @@ export async function gateRound(store: PodDatabase, context: GraphRun | GateExec
 function legacyGateCoverage(store: PodDatabase, run: GraphRun, delivered: DeliveredItem[]): GateCoverage[] {
   return batches(store, 'workflow_id=? AND pod_id=? AND state=\'approved\'', run.workflowId, run.node).map((item) => {
     if (!item.grantId) throw new Error('Approved batch has no approval identity')
+    // Items released under one collective grant (before per-item grants) carry no
+    // grant of their own; they get no coverage, so nothing acts on them.
     const items = delivered.flatMap(({ id, key, data }) => {
       const entry = item.items.find(candidate => candidate.emittedId === id)
-      if (entry && !entry.grantId) throw new Error('Approved item predates per-item grants')
       return entry?.grantId ? [{ key, grantId: entry.grantId, data }] : []
     })
     return { manifest: manifest(item), grantId: item.grantId, items }
