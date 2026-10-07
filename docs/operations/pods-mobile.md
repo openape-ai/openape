@@ -88,3 +88,16 @@ Do not restore an old full relay database over a newer revocation history. Buffe
 Desktop schema 22 cannot be opened by older desktop binaries. Keep a pre-upgrade local backup for binary rollback. Restoring a backup pauses execution, removes remote registration/pairings/outbox and pending program reviews, withdraws program offers and marks in-flight commands unknown. Owner/agent identity references remain unchanged, but credentials are intentionally excluded from backups: recovered Pods require explicit desktop credential recovery and cannot silently provision a replacement identity.
 
 Never replay an uncertain operation under a new UUID to make a demo succeed. Reconcile the original operation/run first. Device or runtime revocation prevents subsequent commands; cancelling an already authorized run uses its separate run control.
+
+## Inbox PWA prototype (M0, issue 1446)
+
+The [mobile inbox plan](../../.claude/plans/2026-10-07-pods-ios-inbox/plan.json) first proves an installed web app on the owner's iPhone. The disposable prototype lives at `/inbox/` on the relay: Decisions and Notifications tabs, synthetic items, standard Web Push and a push log. It reuses the workspace DDISA browser session (`pods-workspace` cookie); sign-in resumes only same-origin `/inbox` paths. Content is service-readable synthetic data, not real Pod decisions, and is never end-to-end encrypted. Its separate database keeps removal to one file.
+
+```dotenv
+NUXT_INBOX_PROTOTYPE_ENABLED=true
+NUXT_INBOX_PROTOTYPE_DATABASE=/data/inbox-prototype.sqlite
+NUXT_INBOX_VAPID_PUBLIC_KEY=
+NUXT_INBOX_VAPID_PRIVATE_KEY=
+```
+
+Generate the VAPID pair on the host and write it straight into `shared/.env`; never copy the private key into chat, logs or plans. The Traefik router needs the `/inbox` paths from `compose/traefik/pods-idp.yml`. Each push is claimed once, persisted as an inbox item first and never retried; the service worker reports display (`shown`) and taps (`clicked`) with a per-push secret, and the item page reports `opened`. Disable with `NUXT_INBOX_PROTOTYPE_ENABLED=false`; rollback removes the database file and device subscriptions.
