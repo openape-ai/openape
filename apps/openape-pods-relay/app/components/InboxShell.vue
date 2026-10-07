@@ -203,6 +203,8 @@ html, body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.
 .inbox-tabs a { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px 6px; min-height: 52px; padding: 4px; color: var(--muted); text-decoration: none; text-align: center; border-radius: 10px; font-size: .8em; overflow-wrap: normal; hyphens: auto; }
 .inbox-tabs a[aria-current] { color: var(--accent); font-weight: 600; background: var(--bg); }
 .inbox-tabs .count { min-width: 1.4em; padding: 0 .35em; border-radius: 1em; background: var(--accent); color: var(--bg); font-size: .8em; font-weight: 700; line-height: 1.4em; }
+/* Scrolled content must not show through the transparent iOS status bar of the installed app. */
+.inbox::before { content: ''; position: fixed; top: 0; left: 0; right: 0; height: env(safe-area-inset-top); background: var(--bg); z-index: 3; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .inbox-body { white-space: pre-wrap; }
 </style>
