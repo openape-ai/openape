@@ -1,0 +1,34 @@
+{
+  "schema": "openape.plan/2",
+  "title": "Example: evaluate an accuracy hypothesis",
+  "goal": "Determine whether the experiment improves source fidelity.",
+  "status": "done",
+  "sample": true,
+  "revision": 3,
+  "milestones": [
+    {
+      "id": "evaluate",
+      "title": "Run the matched comparison",
+      "goal": "Compare with the frozen baseline.",
+      "status": "done",
+      "acceptance": [
+        "The comparison and its limits are recorded."
+      ],
+      "proof": "Illustrative result only."
+    }
+  ],
+  "completion": {
+    "result": "not-achieved",
+    "summary": "Evaluation completed; the proposed accuracy improvement was not demonstrated."
+  },
+  "approval": {
+    "by": "Example owner",
+    "date": "2026-10-06",
+    "reference": "Illustrative approval of the experiment, not its result.",
+    "scope": "Run the comparison described in revision 2.",
+    "target": {
+      "revision": 2
+    }
+  },
+  "handoff": "Review whether a different method is justified."
+}

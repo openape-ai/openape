@@ -40,14 +40,23 @@ export function jsonForHtml(value: unknown): string {
   return JSON.stringify(value).replaceAll('<', '\\u003c').replaceAll('>', '\\u003e').replaceAll('&', '\\u0026')
 }
 
-export function documentHtml(kind: 'plan' | 'test-run', title: string, content: string, metadata: Record<string, string>, source: unknown, templateDirectory = fileURLToPath(new URL('../templates', import.meta.url))): string {
+export function documentHtml(kind: 'plan' | 'test-run', title: string, content: string, metadata: Record<string, string>, source: unknown, templateDirectory = fileURLToPath(new URL('../templates', import.meta.url)), bodySlots?: Record<string, string>): string {
   const template = readFileSync(join(templateDirectory, `${kind}.html`), 'utf8')
+  const [frame, body] = template.split('<!-- report-body -->')
+  if (!frame || !body) invalid('Template must contain a report-body fragment')
+  const fill = (value: string, values: Record<string, string>) => value.replace(/\{\{([a-zA-Z]+)\}\}/gu, (_match, key: string) => {
+    if (values[key] === undefined) invalid(`Unknown template slot: ${key}`)
+    return values[key]
+  })
   const slots: Record<string, string> = {
+    language: bodySlots?.language ?? 'en',
+    banner: bodySlots?.banner ?? '', masthead: bodySlots?.masthead ?? '',
+    body: bodySlots ? fill(body, bodySlots) : '',
     title: escapeHtml(title), content, styles: readFileSync(join(templateDirectory, 'document.css'), 'utf8'),
     metadata: jsonForHtml({ category: kind === 'plan' ? 'Plans' : 'Test Runs', tags: [], metadata }),
     source: `<script id="openape-${kind}-source" type="application/json">${jsonForHtml(source)}</script>`,
   }
-  const html = template.replace(/\{\{(title|content|styles|metadata|source)\}\}/gu, (_match, key: string) => { const value = slots[key]; if (value === undefined) invalid(`Unknown template slot: ${key}`); return value })
+  const html = fill(frame, slots)
   inspectHtml(html)
   return html
 }
