@@ -2,7 +2,7 @@
 
 ## Pods mobile inbox PWA — issue 1446
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1446; approved plan revision 2, publication v6: https://report.openape.ai/d/01M4B5Q1Q0W6C97A4ZXTFZ5WJR?v=6.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1446; approved plan revision 2, publication v7: https://report.openape.ai/d/01M4B5Q1Q0W6C97A4ZXTFZ5WJR?v=7; M2 Test Run: https://report.openape.ai/d/01M4BET0CNZSNKH7RJ3GQS32DZ.
 - Checkout `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo/.claude/worktrees/pods-inbox-pwa-m0-faca9e`, branch `feature/issue-1446-inbox-decisions` (base `18fab73d`).
 - M0 owner-accepted (iPhone 11 Pro Max, two-day series waived); M1 live as relay `prod-1e467932`; M3 (`context.notify`) merged in PR 301, signed desktop install pending and bundled with M2; M2 (decision projection for all eight types, signed publication, `items/:id/decide` through an inbox-only central operation, setup acceptance without local interaction, `gateReview`) implemented with review fixes.
 - Checks: root lint and typecheck, Pods 1,337 and relay 52 unit tests, both builds; relay E2E passes the decision block, then stops at the pre-existing browser-workspace readiness check.
