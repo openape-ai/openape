@@ -435,6 +435,8 @@ Validate and run manually before enabling a 15-minute interval in Settings. Revi
 
 Networks and chains appear on the Automations map as groups with their members: a network exchanges items through the declared channels of its Pods, a chain runs its Pods in order. Codex creates and changes them; the detail page shows members, decision points, numbers, schedule and the latest run and offers Pause, Resume and Run now. Connecting Pods keeps their rights and independent schedules unchanged.
 
+Codex can also correct the script of a network member while the network keeps running, as long as its channels, rights and dependencies stay the same and that Pod has no running or uncertain work. Open questions of other Pods remain unaffected. The Pod’s detail page shows the update under Script changes; failed runs of that Pod can then start over under the corrected script, unless they attempted an external effect.
+
 Dotted lines show the recorded deliveries of the last 24 hours. A count does not confirm an external action succeeded: inspect the Pod’s history and the actual result. Channel titles keep their exact technical names. Open questions and pending approvals of a network are counted on the Decisions tab.
 
 Prompt engineering defines one bounded task and its result criteria inside a Pod. Loop engineering uses finite attempts and time limits inside a script, with a visible failure or review result at the limit. Graph engineering coordinates validated handoffs and human gates. A model never grants rights or approves a gate. Network executions remain bounded manual or scheduled runs; cross-Pod feedback cycles are unsupported.

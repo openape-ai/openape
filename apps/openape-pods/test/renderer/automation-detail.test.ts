@@ -26,6 +26,17 @@ const button = (text: string) => wrapper!.findAll('button').find(item => item.te
 const section = (eyebrow: string) => wrapper!.findAll('.sec').find(item => item.find('.eyebrow').exists() && item.find('.eyebrow').text() === eyebrow)!
 
 describe('AutomationDetail', () => {
+  it('shows the latest assistant script update of a network member', async () => {
+    const triage = pod('Triage')
+    const previous = 'a'.repeat(64); const script = 'b'.repeat(64)
+    Object.assign(triage, { scriptUpdate: { at: view.at, previous, script } })
+    try {
+      await mountDetail(triage.id)
+      expect(wrapper!.find('[data-script-update]').text()).toBe(`SkriptänderungenVom Assistenten aktualisiert ${stamp(view.at, 'de')}: aaaaaaaa → bbbbbbbb`)
+    }
+    finally { delete (triage as { scriptUpdate?: unknown }).scriptUpdate }
+  })
+
   it('shows a Pod with state, schedule, membership, access by kind, secrets as aliases, channels, developer facts and the latest run', async () => {
     const triage = pod('Triage')
     await mountDetail(triage.id)

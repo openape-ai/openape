@@ -8,6 +8,14 @@
 - PR: https://repos.openape.ai/patrick/monorepo/pulls/293. First CI runs failed with ENOSPC on the runner's `/data` (actions cache 67 GB); cache blobs older than 24 h were removed on October 7, so `/data` went from 93 % to 44 %. A recurring cache cleanup is still open.
 - Next: deploy, then the owner's physical iPhone checks and at least 20 controlled pushes over two days. M1–M7 wait for M0.
 
+## Pods network member script updates — issue 1445
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1445; approved plan: https://report.openape.ai/d/01M4B5W5S3S1DDBQF9PDFED194 (revision 1, owner approval October 7).
+- Worktree `openape-monorepo.worktrees/member-scripts-1445`, branch `feature/issue-1445-network-member-scripts`, base `e89449e2`.
+- MCP may inspect, draft and validate network member Pods; `networks updateMemberScript` activates a validated script with unchanged contract, capabilities, effects and dependency lock, re-pins only that member within the current network revision and records `member-script-updated`; `networks replayFailed` restarts blocked runs of that member that failed under an earlier script without effect attempts, workflow calls or approved inputs. The Pod detail shows the latest assistant script update.
+- Checks: Pods 1,312 unit/component tests, 53 browser layout tests, lint and typecheck clean. Local packaged E2E timed out with the installed app running; CI decides.
+- Next: PR, CI, merge, signed installation, Newsletter batch repair.
+
 ## Pods owner decisions lost silently — issue 1444
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1444. Found on the installed app on October 7: choices after the first few were never saved, while the inbox showed them as decided.
