@@ -301,7 +301,7 @@ export class RunDispatcher {
         for (const approval of coverage) {
           if (!this.services?.gate) throw new Error('Network approval service is unavailable')
           const reply = await boundedStep(30000, async () => {
-            const value = await this.services!.gate!({ operation: 'assertActive', manifest: approval.manifest, grantId: approval.grantId }, signal, scope)
+            const value = await this.services!.gate!({ operation: 'assertActive', manifest: approval.manifest, grants: approval.items.map(item => ({ key: item.deliveryId, id: item.grantId })) }, signal, scope)
             assertCurrent()
             gates.coverage(network.authority)
             return value

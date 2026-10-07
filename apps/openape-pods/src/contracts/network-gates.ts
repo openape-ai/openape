@@ -30,7 +30,8 @@ export interface NetworkGateManifest {
   digest: string
   items: NetworkGateItem[]
 }
-export interface NetworkGateCoverage { manifest: NetworkGateManifest, grantId: string, items: { deliveryId: string, eventId: string, key: string, data: Record<string, unknown> }[] }
+/** Approved inputs of one batch; each input carries its own consumed once-grant. */
+export interface NetworkGateCoverage { manifest: NetworkGateManifest, grantId: string, items: { deliveryId: string, eventId: string, key: string, grantId: string, data: Record<string, unknown> }[] }
 export { parseNetworkGateView } from './network-gate-view'
 export type { NetworkGateView } from './network-gate-view'
 
@@ -66,14 +67,14 @@ export function parseNetworkGateManifest(value: unknown): NetworkGateManifest {
   return structuredClone(manifest)
 }
 
-export function networkGateCommand(manifest: NetworkGateManifest): string[] {
+/** The grant of one input binds the frozen batch authority and exactly this input. */
+export function networkGateItemCommand(manifest: NetworkGateManifest, item: NetworkGateItem): string[] {
   const { items, title: _title, owner: _owner, ...authority } = manifest
-  return ['pods-graph-gate', 'approve', canonicalNetworkJson({ ...authority, count: items.length })]
+  const { deliveryId, eventId, generation, hash, channel } = item
+  return ['pods-graph-gate', 'approve', canonicalNetworkJson({ ...authority, count: items.length, item: { deliveryId, eventId, generation, hash, channel } })]
 }
 
-export function networkGateSummary(manifest: NetworkGateManifest): string {
-  return [`${manifest.title}: approve ${manifest.items.length} items`, `Valid until: ${new Date(manifest.expiresAt).toISOString()}`, 'Approval covers this pinned consumer and these exact inputs. Changed inputs or authority cannot reuse it.', '', ...manifest.items.map((item, index) => `${index + 1}. ${item.title}`)].join('\n')
-}
+export const networkGateItemSummary = (item: NetworkGateItem): string => item.title || item.key
 
 export function parseNetworkGateCoverage(value: unknown): NetworkGateCoverage {
   const input = networkDataObject(value)
@@ -81,10 +82,10 @@ export function parseNetworkGateCoverage(value: unknown): NetworkGateCoverage {
   const manifest = parseNetworkGateManifest(input.manifest)
   const items = input.items.map((value) => {
     const item = networkDataObject(value)
-    if (Object.keys(item).some(key => !['deliveryId', 'eventId', 'key', 'data'].includes(key))) throw new Error('Invalid network gate coverage item')
+    if (Object.keys(item).some(key => !['deliveryId', 'eventId', 'key', 'grantId', 'data'].includes(key)) || typeof item.grantId !== 'string' || !/^[\w-]{1,128}$/.test(item.grantId)) throw new Error('Invalid network gate coverage item')
     const data = networkDataObject(item.data)
     if (!manifest.items.some(approved => approved.deliveryId === item.deliveryId && approved.eventId === item.eventId && approved.key === item.key && approved.hash === networkGatePayloadHash(data))) throw new Error('Input is not covered by this network approval')
-    return { deliveryId: item.deliveryId as string, eventId: item.eventId as string, key: item.key as string, data }
+    return { deliveryId: item.deliveryId as string, eventId: item.eventId as string, key: item.key as string, grantId: item.grantId as string, data }
   })
   if (new Set(items.map(item => item.deliveryId)).size !== items.length) throw new Error('Duplicate network gate coverage item')
   return { manifest, grantId: input.grantId, items }

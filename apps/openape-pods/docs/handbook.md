@@ -37,12 +37,12 @@ Stand HH:MM marks a published snapshot in the browser; Live · HH:MM means the d
 
 The Decisions tab lists five kinds of owner decisions: Questions from choose gates, Approvals of batches at the identity provider, Rights a Pod is missing, Unknown deliveries whose result is unclear and Setup proposals including secret requests. The number in the tab is the count of open items.
 
-Questions show the recorded fields of each case and the options of the gate with their exact titles; Group by bundles cases by one field so a single choice applies to the whole group. Approvals link to the identity provider; rights open the approval; unknown deliveries need your observation at the destination before Delivered or Not delivered, send again.
+Questions show the recorded fields of each case and the options of the gate with their exact titles; Group by bundles cases by one field so a single choice applies to the whole group. Approvals link to the identity provider, which shows a batch as one list with a checkbox per item: approve the selected items and the others are denied. Each item has its own single-use grant, so only approved items continue and a denied item goes to the gate's excluded channel if it has one; rights open the approval; unknown deliveries need your observation at the destination before Delivered or Not delivered, send again.
 
 Pods never decides for you: no model, no MCP action and no schedule chooses, approves, excludes or pauses. Rights are decided at the identity provider only; the app shows status and links.
 
 1. Open Decisions; the tab shows how many items wait.
-2. Read the case, then choose an option or exclude it; Group by decides many cases with the same field at once.
+2. Read the case, then choose an option; Group by decides many cases with the same field at once. For an approval batch, open the identity provider, select the items to approve and confirm.
 3. For unknown deliveries check the destination first, note what you saw and record it.
 4. Setup lists Codex proposals and open secret requests; Set up in the Pod opens the Pod editor.
 
