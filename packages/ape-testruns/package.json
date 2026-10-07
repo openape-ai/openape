@@ -1,6 +1,6 @@
 {
   "name": "@openape/ape-testruns",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Publish single-file HTML reports and upload compatible OpenApe test evidence",
   "type": "module",
   "license": "MIT",

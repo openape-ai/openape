@@ -1,5 +1,11 @@
 # @openape/ape-testruns
 
+## 0.6.1
+
+### Patch Changes
+
+- Preserve valid replacement characters in evidence, reject NUL and unpaired Unicode surrogates explicitly, align publication label validation and improve command/status spacing.
+
 ## 0.6.0
 
 ### Minor Changes

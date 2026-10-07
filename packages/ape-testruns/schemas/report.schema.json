@@ -763,7 +763,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 300,
-          "pattern": "\\S"
+          "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f]+$"
         },
         "project": {
           "type": "string",
@@ -775,7 +775,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 50,
-          "pattern": "\\S"
+          "pattern": "^[a-zA-Z]{2,8}(?:-[a-zA-Z0-9]{1,8})*$"
         },
         "sample": {
           "type": "boolean"
@@ -1204,7 +1204,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 300,
-          "pattern": "\\S"
+          "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f]+$"
         },
         "project": {
           "type": "string",
@@ -1216,7 +1216,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 50,
-          "pattern": "\\S"
+          "pattern": "^[a-zA-Z]{2,8}(?:-[a-zA-Z0-9]{1,8})*$"
         },
         "sample": {
           "type": "boolean"

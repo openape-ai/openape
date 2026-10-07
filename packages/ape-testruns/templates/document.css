@@ -109,7 +109,7 @@ html{color-scheme:light dark;background:light-dark(#f3f3ef,#101513)}body{margin:
 #report-document .tally .t-pass{background:var(--forest)}
 #report-document .tally .t-fail{background:var(--alert)}
 #report-document .tally .t-skip{background:var(--line)}
-#report-document .counts{display:flex;flex-wrap:wrap;gap:4px 18px;padding:0 20px 16px;font-size:13px;color:var(--quiet)}
+#report-document .counts{display:flex;flex-wrap:wrap;gap:4px 18px;padding:14px 20px 16px;font-size:13px;color:var(--quiet)}
 #report-document .counts b{color:var(--ink);font-weight:600}
 #report-document .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px 24px;padding:16px 20px;border-top:1px solid var(--line);margin:0}
 #report-document .facts dt{margin:0;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
