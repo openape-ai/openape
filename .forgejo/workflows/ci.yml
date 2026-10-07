@@ -2,10 +2,9 @@
 # Branch heads run the affected subset against origin/main at their exact pushed
 # commit; pushes to main run the complete contract as the post-merge safety net.
 name: CI
+# Paused by owner decision on October 7, 2026 (issue 1448): manual dispatch only until a stable CI is approved.
 on:
-  push:
-    branches: ['**']
-  pull_request:
+  workflow_dispatch:
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
