@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { ProtocolError } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
 import type { InboxDecision } from '../../../openape-pods/src/contracts/inbox'
-import type { InboxDecisionData, InboxDevice, InboxItem, InboxPublication, InboxSubscription, OutboxEntry } from './inbox-types'
+import type { InboxDecisionData, InboxDevice, InboxItem, InboxPublication, InboxSubscription, OutboxEntry } from '../../shared/inbox-types'
 
 // Push services that browsers hand out today; anything else is refused before the server ever connects to it.
 const pushHosts = [/^web\.push\.apple\.com$/, /^fcm\.googleapis\.com$/, /^updates\.push\.services\.mozilla\.com$/, /\.notify\.windows\.com$/]
