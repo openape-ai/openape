@@ -18,9 +18,10 @@ export function inboxStore(): InboxStore {
 }
 
 // A phone stays signed in for 30 days (absolute); each request re-checks that its device was not revoked.
+// Path `/` so the sign-in callback and workspace logout receive the cookie and can revoke the device.
 async function cookieConfig(event: H3Event): Promise<SessionConfig> {
   await workspaceSession(event) // fails closed when the session secrets are not configured
-  return { name: 'pods-inbox', password: String(useRuntimeConfig().workspaceSessionSecret), maxAge: 30 * 86400, cookie: { httpOnly: true, secure: getRequestURL(event).protocol === 'https:', sameSite: 'lax', path: '/inbox/' } }
+  return { name: 'pods-inbox', password: String(useRuntimeConfig().workspaceSessionSecret), maxAge: 30 * 86400, cookie: { httpOnly: true, secure: getRequestURL(event).protocol === 'https:', sameSite: 'lax', path: '/' } }
 }
 
 // Resolves the signed-in human and their active inbox device. Only a DDISA sign-in started by the inbox creates one.
