@@ -78,6 +78,15 @@ it('registers a desktop and mobile through real DDISA callbacks and rejects repl
   const webCookie = webLogin.headers.getSetCookie().map(value => value.split(';')[0]).join('; ')
   const browserSession = await fetch(`${relay.url}/api/workspace/v1/session`, { headers: { cookie: webCookie } })
   expect(await browserSession.json()).toEqual({ subject: email })
+  // Sign-in may resume only a same-origin inbox item; anything else falls back to the workspace.
+  const item = `/inbox/item/${randomUUID()}?push=${randomUUID()}`
+  for (const [returnTo, expected] of [[item, item], ['/inbox/?tab=device', '/inbox/?tab=device'], ['https://evil.example/inbox/', '/workspace'], ['//evil.example/inbox/', '/workspace'], ['/inbox/../workspace-auth/logout', '/workspace']]) {
+    const resumed = await fetch(`${relay.url}/workspace-auth/login`, { method: 'POST', headers: { origin: relay.url, 'content-type': 'application/json' }, body: JSON.stringify({ email, returnTo }) })
+    const cookie = resumed.headers.getSetCookie().map(value => value.split(';')[0]).join('; ')
+    const granted = await fetch((await resumed.json() as { redirectUrl: string }).redirectUrl, { redirect: 'manual', headers: { authorization: `Bearer ${loginToken}` } })
+    const callback = await fetch(granted.headers.get('location')!, { redirect: 'manual', headers: { cookie } })
+    expect(callback.headers.get('location')).toBe(expected)
+  }
   const runtimePath = '/api/runtime/v1/workspace'
   async function central(body: Record<string, unknown>) {
     const encoded = JSON.stringify(body)
