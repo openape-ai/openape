@@ -91,7 +91,7 @@ onUnmounted(() => clearInterval(clock))
             <h1 class="text-2xl font-bold">
               {{ text.heading }}
             </h1>
-            <p class="text-sm text-muted break-all">
+            <p class="text-sm text-muted break-words">
               {{ text.by }} <span class="font-semibold">{{ formatRequesterName(requester) }}</span>
             </p>
           </div>
@@ -113,7 +113,7 @@ onUnmounted(() => clearInterval(clock))
           <p v-if="info.title" class="text-sm break-words">
             <span class="text-muted">{{ text.own }}:</span> <span class="font-semibold">{{ text.quoted(info.title) }}</span>
           </p>
-          <p v-if="scope" class="text-sm break-all" data-batch-scope>
+          <p v-if="scope" class="text-sm break-words" data-batch-scope>
             {{ text.scope(scope.targetHost, scope.audience) }}
           </p>
           <p v-if="info.size" class="text-sm text-muted" data-batch-received>

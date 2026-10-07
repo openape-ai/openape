@@ -365,9 +365,11 @@ function isExactCommand(detail) {
                   {{ batch.requester }} · {{ formatTime(batch.createdAt) }}
                 </p>
               </div>
-              <UButton color="primary" :to="grantBatchPath(batch.requester, batch.batchId)">
-                Review batch
-              </UButton>
+              <div class="shrink-0">
+                <UButton color="primary" :to="grantBatchPath(batch.requester, batch.batchId)">
+                  Review batch
+                </UButton>
+              </div>
             </div>
           </UCard>
           <UCard v-for="grant in pendingGroups.singles" :key="grant.id">
