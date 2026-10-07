@@ -2,12 +2,11 @@
 
 ## Pods mobile inbox PWA — issue 1446
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1446; approved plan revision 2, publication v8: https://report.openape.ai/d/01M4B5Q1Q0W6C97A4ZXTFZ5WJR; rollout Test Run: https://report.openape.ai/d/01M4BJNYSN1TQPM4RKG81YW5Z0.
-- Checkout `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-inbox-m4`, branch `feature/issue-1446-inbox-pwa` (base `3c08d3c7`, merge of PR 302), PR 303: https://repos.openape.ai/patrick/monorepo/pulls/303 (linked to the issue).
-- Delivered: M0 owner-accepted; M1 live; M2 + M3 live since October 7 18:18 as relay `prod-3c08d3c7` and signed desktop `3c08d3c7` (schema 41); 20 open network decisions published. No production decision executed yet; that is the owner's action and completes M2 acceptance.
-- M4 (this branch): installed mobile inbox at `/inbox/` replaces the M0 prototype (UI, API, database flag and push dispatcher removed). Decisions/Notifications tabs, detail, completed history, archive, settings (account, devices, language, push status), foreground sync over `changes`, account-bound offline copy, controlled service-worker update, DE/EN.
-- Checks on tested `4a18f5eb`: relay 67 unit/component tests, browser acceptance `e2e/inbox-app.test.ts` against the built relay (13 inspected screenshots), Test Run https://report.openape.ai/d/01M4BNGW74JB90KKER7Y0BAQY3; root lint/typecheck/docs:check on `f835fc82`. Independent review: three decision-safety defects and six warnings fixed in `f835fc82`.
-- Next: native PR review and merge, relay deploy (no desktop change), owner acceptance on the real iPhone (decision, notification, restart/reinstall, VoiceOver), then M5 push. Handoff: [pods-inbox-m4-handoff.md](pods-inbox-m4-handoff.md).
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1446; approved plan revision 2, publication v8: https://report.openape.ai/d/01M4B5Q1Q0W6C97A4ZXTFZ5WJR.
+- Live: M1–M4 as relay `prod-76ffae69` (PR 303, October 7); desktop `3c08d3c7` (schema 41). The owner made three real network decisions from the phone (all `applied`), which completes the M2 functional path; formal iPhone acceptance of M4 is open.
+- Current branch `feature/issue-1446-inbox-card-decisions` (worktree `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-inbox-m4`): owner request October 7 — Pods decisions are answered straight from the list card (direct send, no confirmation); options that need evidence or a value open the detail with the option preselected. Relay-only.
+- Checks: relay 72 unit/component tests, lint, typecheck, browser acceptance `e2e/inbox-app.test.ts` with the card step.
+- Next: merge and relay deploy after owner go; separately the gate batch quiet window (owner choice: about 2 minutes without new items, at most 10 minutes); M5 push. Handoff: [pods-inbox-m4-handoff.md](pods-inbox-m4-handoff.md).
 
 ## Pods network member script updates — issue 1445
 
