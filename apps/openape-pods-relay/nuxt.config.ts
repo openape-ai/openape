@@ -3,6 +3,8 @@ export default defineNuxtConfig({
   devtools: { enabled: false },
   ssr: false,
   app: { buildAssetsDir: '/pods-assets/' },
+  // The service worker scope is /inbox/; the bare path would be outside it.
+  routeRules: { '/inbox': { redirect: '/inbox/' } },
   modules: ['@openape/nuxt-auth-sp'],
   openapeSp: { routes: false, clientId: 'pods.openape.ai', spName: 'OpenApe Pods', postLoginRedirect: '/workspace' },
   runtimeConfig: {
@@ -23,6 +25,10 @@ export default defineNuxtConfig({
     relayApnsKey: '',
     relayApnsHost: 'api.push.apple.com',
     relayApnsSandboxHost: 'api.sandbox.push.apple.com',
+    inboxPrototypeEnabled: false,
+    inboxPrototypeDatabase: './.data/inbox-prototype.sqlite',
+    inboxVapidPublicKey: '',
+    inboxVapidPrivateKey: '',
   },
   nitro: { preset: 'node-server', experimental: { websocket: true } },
 })
