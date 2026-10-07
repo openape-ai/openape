@@ -10,7 +10,7 @@ import { eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as schema from '../server/database/schema'
 import { createDrizzleBrokerStore } from '../server/utils/drizzle-broker-store'
-import { createDrizzleGrantStore, grantToRow } from '../server/utils/drizzle-grant-store'
+import { BROKER_PENDING_LIMIT, createDrizzleGrantStore, grantToRow } from '../server/utils/drizzle-grant-store'
 import { countPendingForApprover } from '../server/utils/approver'
 
 let directory: string
@@ -132,7 +132,7 @@ describe('durable grant brokering', () => {
   })
 
   it('bounds the owner inbox across connections and audits decisions atomically', async () => {
-    const values = Array.from({ length: 100 }, () => ({ ...grant(), status: 'pending' as const }))
+    const values = Array.from({ length: BROKER_PENDING_LIMIT }, () => ({ ...grant(), status: 'pending' as const }))
     for (const value of values) await grantStore.save(value)
     await expect(grantStore.save({ ...grant(), status: 'pending' })).rejects.toMatchObject({ statusCode: 429 })
     await grantStore.updateStatus(values[0]!.id, 'denied', { decided_by: owner, decided_at: 2 })
@@ -250,5 +250,16 @@ describe('production pending request expiry', () => {
     expect(audit.filter(row => row.event === 'expired')).toHaveLength(100)
     expect(new Set(audit.filter(row => row.event === 'expired').map(row => row.grantId)).size).toBe(100)
     expect(audit.find(row => row.grantId === stale[0]!.id)).toMatchObject({ owner, agent: subject, connectionId: connection.id })
+  })
+})
+
+describe('grant batch listing', () => {
+  it('filters a requester\'s grants by request.batch.id in SQL', async () => {
+    const member = (id: string, batch?: string, requester = subject): OpenApeGrant => ({ id, status: 'pending', created_at: Math.floor(Date.now() / 1000), request: { requester, target_host: 'pods:fixture', audience: 'pods-graph-gate', grant_type: 'once', command: ['approve', id], ...(batch ? { batch: { id: batch, size: 2 } } : {}) } })
+    for (const value of [member('a', 'b-1'), member('b', 'b-1'), member('c', 'b-2'), member('d'), member('e', 'b-1', 'other@pods.provider.test')]) await grantStore.save(value)
+
+    const page = await grantStore.listGrants({ requester: subject, batch: 'b-1', limit: 100 })
+    expect(page.data.map(value => value.id).toSorted()).toEqual(['a', 'b'])
+    expect(page.data[0]!.request.batch).toEqual({ id: 'b-1', size: 2 })
   })
 })

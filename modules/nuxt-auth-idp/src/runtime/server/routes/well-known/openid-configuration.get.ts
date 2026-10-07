@@ -39,5 +39,6 @@ export default defineEventHandler(() => {
     openape_delegations_endpoint: `${issuer}/api/delegations`,
     openape_grant_types_supported: ['once', 'timed', 'always'],
     openape_grant_categories_supported: ['command', 'delegation'],
+    openape_grant_batch_supported: true,
   }
 })

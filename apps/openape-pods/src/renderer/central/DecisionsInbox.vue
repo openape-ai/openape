@@ -23,7 +23,6 @@ const groupBy = ref('')
 const raw = ref(false)
 const decided = ref<Record<string, { title: string, channel: string }>>({})
 const evidence = ref<Record<string, string>>({})
-const excluded = ref<Record<string, string[]>>({})
 const openBatch = ['preparing', 'pending', 'consuming', 'unknown', 'superseded']
 
 interface Case { id: string, networkId: string, revision: number, gate: string, title: string, event: NetworkChoiceView, payload: Record<string, unknown>, versions: number, options: { key: string, title: string, channel: string }[] }
@@ -194,19 +193,19 @@ defineExpose({ total })
         </p>
         <ul class="plainlist">
           <li v-for="item in batch.items" :key="item.deliveryId">
-            <label><input v-if="batch.state !== 'unknown'" type="checkbox" :checked="excluded[batch.id]?.includes(item.deliveryId)" @change="excluded = { ...excluded, [batch.id]: (excluded[batch.id] ?? []).includes(item.deliveryId) ? (excluded[batch.id] ?? []).filter(id => id !== item.deliveryId) : [...(excluded[batch.id] ?? []), item.deliveryId] }"> {{ item.title }} <span class="meta">{{ label(item.outcome) }}</span></label>
+            {{ item.title }} <span class="meta">{{ label(item.outcome) }}</span>
           </li>
         </ul>
-        <label class="meta">{{ t('Evidence') }} <input v-model="evidence[batch.id]" maxlength="4000"></label>
+        <p v-if="batch.state !== 'unknown'" class="meta">
+          {{ t('Select the items to approve at the IdP; unselected items are denied.') }}
+        </p>
+        <label v-else class="meta">{{ t('Evidence') }} <input v-model="evidence[batch.id]" maxlength="4000"></label>
         <div class="opts">
           <template v-if="batch.url">
             <button v-if="desktop" class="secondary idp" type="button" @click="emit('network', { type: 'gateOpen', id: batch.networkId, revision: view.collections.find(collection => collection.id === batch.networkId)?.revision ?? 1, taskId: batch.id, generation: batch.generation })">{{ t('Decide at the IdP') }}</button>
             <a v-else class="secondary idp" :href="batch.url" target="_blank" rel="noopener">{{ t('Decide at the IdP') }}</a>
           </template>
-          <button v-if="batch.state !== 'unknown'" class="secondary" type="button" :disabled="!desktop || !(excluded[batch.id]?.length) || !evidence[batch.id]?.trim()" @click="emit('network', { type: 'gateExclude', id: batch.networkId, revision: view.collections.find(collection => collection.id === batch.networkId)?.revision ?? 1, taskId: batch.id, generation: batch.generation, deliveryIds: excluded[batch.id] ?? [], evidence: evidence[batch.id] ?? '' })">
-            {{ t('Exclude selected') }}
-          </button>
-          <button v-else class="secondary" type="button" :disabled="!desktop || !evidence[batch.id]?.trim()" @click="emit('network', { type: 'gateDiscard', id: batch.networkId, revision: view.collections.find(collection => collection.id === batch.networkId)?.revision ?? 1, taskId: batch.id, generation: batch.generation, evidence: evidence[batch.id] ?? '' })">
+          <button v-if="batch.state === 'unknown'" class="secondary" type="button" :disabled="!desktop || !evidence[batch.id]?.trim()" @click="emit('network', { type: 'gateDiscard', id: batch.networkId, revision: view.collections.find(collection => collection.id === batch.networkId)?.revision ?? 1, taskId: batch.id, generation: batch.generation, evidence: evidence[batch.id] ?? '' })">
             {{ t('Discard batch') }}
           </button>
         </div>

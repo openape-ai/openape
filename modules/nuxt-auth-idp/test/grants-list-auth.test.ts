@@ -60,4 +60,18 @@ describe('GET /api/grants — requester authorization', () => {
     await handler({} as any)
     expect(listGrantsMock).toHaveBeenCalledWith(expect.objectContaining({ requester: 'patrick@hofmann.eco' }))
   })
+
+  it('rejects a batch filter without a requester, because batch ids are requester-scoped', async () => {
+    queryMock.mockReturnValue({ batch: 'b-1' })
+    bearerMock.mockResolvedValue({ sub: 'patrick@hofmann.eco' })
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 400 })
+    expect(listGrantsMock).not.toHaveBeenCalled()
+  })
+
+  it('passes the batch filter for a visible requester', async () => {
+    queryMock.mockReturnValue({ requester: 'agent@hofmann.eco', batch: 'b-1' })
+    bearerMock.mockResolvedValue({ sub: 'agent@hofmann.eco' })
+    await handler({} as any)
+    expect(listGrantsMock).toHaveBeenCalledWith(expect.objectContaining({ requester: 'agent@hofmann.eco', batch: 'b-1' }))
+  })
 })

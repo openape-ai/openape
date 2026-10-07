@@ -8,8 +8,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { ArchiveStore } from '../../src/main/mail/archive/store'
 import { MailArchiveService } from '../../src/main/mail/archive/service'
 import type { ArchiveAuthority, ArchiveProvider } from '../../src/main/mail/archive/service'
-import { archiveCommand, archiveSummary, parseArchiveProposal } from '../../src/contracts/mail-archive'
-import type { ArchiveMail } from '../../src/contracts/mail-archive'
+import { archiveItemCommand, archiveItemSummary, parseArchiveProposal } from '../../src/contracts/mail-archive'
+import type { ArchiveMail, ArchiveManifest } from '../../src/contracts/mail-archive'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 
 it('accepts archive prepare and process requests across the script frame boundary', () => {
@@ -35,37 +35,43 @@ async function fixture() {
   const store = new ArchiveStore(root); const service = new MailArchiveService(store); const podId = randomUUID()
   const mail: ArchiveMail = { id: 'immutable-message-1', version: 'reviewed-v1', folder: 'inbox-id', internetMessageId: '<message@example.test>', sender: 'sender@example.test', subject: 'Completed notification', receivedAt: '2026-09-26T05:00:00Z', url: 'https://outlook.office.com/mail/id/one' }
   const provider: ArchiveProvider = { applicationId: randomUUID(), applicationHash: 'pinned', read: vi.fn(async () => mail), move: vi.fn(async item => ({ state: 'archived' as const, receipt: { ...item, folder: 'archive-id', version: 'moved-v2' } })) }
-  const authority: ArchiveAuthority = { create: vi.fn(async () => ({ id: randomUUID(), url: 'https://id.example.test/grant-approval?grant_id=fixture' })), status: vi.fn(async () => 'pending' as const), consume: vi.fn(), assertActive: vi.fn() }
+  const authority: ArchiveAuthority = { create: vi.fn(async (manifest: ArchiveManifest) => ({ id: manifest.id, url: 'https://id.example.test/grant-approval?batch=fixture', grants: manifest.items.map(item => ({ id: item.id, grantId: randomUUID() })) })), statuses: vi.fn(), consume: vi.fn(), assertActive: vi.fn() }
+  /** The owner's decision per message; unlisted messages get `others`. */
+  const decide = (others: 'pending' | 'approved' | 'denied' | 'expired', per: Record<string, 'approved' | 'denied'> = {}) => vi.mocked(authority.statuses).mockImplementation(async record => Object.fromEntries(record.manifest.items.map(item => [item.id, per[item.id] ?? others])))
+  decide('pending')
   const proposal = { application: 'pods-mail', mailbox: 'owner@example.test', items: [{ id: mail.id, version: mail.version, reason: 'Completed; nothing to do' }] }
-  return { store, service, podId, mail, provider, authority, proposal }
+  return { store, service, podId, mail, provider, authority, proposal, decide }
 }
-it('freezes provider metadata and shows every message in the bound grant', async () => {
+it('freezes provider metadata and binds one grant to each message', async () => {
   const f = await fixture()
   const prepared = await f.service.prepare(f.podId, f.proposal, f.provider, f.authority)
   const [record] = await f.store.list(f.podId)
   expect(prepared).toMatchObject({ state: 'pending', count: 1 })
-  const summary = archiveSummary(record!.manifest)
-  for (const text of [f.mail.subject, f.mail.sender, f.mail.receivedAt, f.mail.url, f.proposal.mailbox, f.proposal.items[0]!.reason]) expect(summary).toContain(text)
-  expect(archiveCommand(record!.manifest).join(' ')).toContain(f.mail.version)
+  expect(record!.grants).toEqual([{ id: f.mail.id, grantId: expect.any(String) }])
+  const item = record!.manifest.items[0]!
+  const summary = archiveItemSummary(item)
+  expect(summary.split('\n')[0]).toBe(`${f.mail.sender} – ${f.mail.subject}`)
+  for (const text of [f.mail.receivedAt, f.mail.url, f.proposal.items[0]!.reason]) expect(summary).toContain(text)
+  for (const text of [f.mail.version, f.proposal.mailbox, record!.manifest.id]) expect(archiveItemCommand(record!.manifest, item).join(' ')).toContain(text)
   expect(f.provider.move).not.toHaveBeenCalled()
   expect(f.authority.consume).not.toHaveBeenCalled()
 })
 it.each(['pending', 'denied', 'expired'] as const)('does not move mail for a %s decision', async (status) => {
   const f = await fixture(); await f.service.prepare(f.podId, f.proposal, f.provider, f.authority)
-  vi.mocked(f.authority.status).mockResolvedValue(status)
+  f.decide(status)
   expect((await f.service.process(f.podId, async () => f.provider, f.authority))[0]?.state).toBe(status)
   expect(f.provider.move).not.toHaveBeenCalled(); expect(f.authority.consume).not.toHaveBeenCalled()
 })
 it('consumes exactly once and never adds new mail to the approved batch', async () => {
   const f = await fixture(); await f.service.prepare(f.podId, f.proposal, f.provider, f.authority)
-  vi.mocked(f.authority.status).mockResolvedValue('approved')
+  f.decide('approved')
   expect((await f.service.process(f.podId, async () => f.provider, f.authority))[0]).toMatchObject({ state: 'completed', outcomes: [{ id: f.mail.id, state: 'archived' }] })
   await new MailArchiveService(f.store).process(f.podId, async () => f.provider, f.authority)
   expect(f.authority.consume).toHaveBeenCalledTimes(1); expect(f.provider.move).toHaveBeenCalledTimes(1)
 })
 it.each(['changed', 'moved'] as const)('skips a %s message after approval', async (change) => {
   const f = await fixture(); await f.service.prepare(f.podId, f.proposal, f.provider, f.authority)
-  vi.mocked(f.authority.status).mockResolvedValue('approved')
+  f.decide('approved')
   vi.mocked(f.provider.read).mockResolvedValue(change === 'moved' ? null : { ...f.mail, version: 'new-version' })
   expect((await f.service.process(f.podId, async () => f.provider, f.authority))[0]).toMatchObject({ state: 'completed', outcomes: [{ state: 'skipped' }] })
   expect(f.provider.move).not.toHaveBeenCalled()
@@ -77,14 +83,14 @@ it('refuses changed identity between classification and grant preparation', asyn
 })
 it('retains an uncertain move across restart and never retries it', async () => {
   const f = await fixture(); await f.service.prepare(f.podId, f.proposal, f.provider, f.authority)
-  vi.mocked(f.authority.status).mockResolvedValue('approved'); vi.mocked(f.provider.move).mockRejectedValue(new Error('Connection lost after POST'))
+  f.decide('approved'); vi.mocked(f.provider.move).mockRejectedValue(new Error('Connection lost after POST'))
   expect((await f.service.process(f.podId, async () => f.provider, f.authority))[0]).toMatchObject({ state: 'unknown', outcomes: [{ state: 'unknown' }] })
   await new MailArchiveService(f.store).process(f.podId, async () => f.provider, f.authority)
   expect(f.provider.move).toHaveBeenCalledTimes(1)
   await expect(f.service.prepare(f.podId, f.proposal, f.provider, f.authority)).rejects.toThrow('reconciliation')
 })
 it('refuses changed program bindings and expired approved batches', async () => {
-  const f = await fixture(); await f.service.prepare(f.podId, f.proposal, f.provider, f.authority); vi.mocked(f.authority.status).mockResolvedValue('approved')
+  const f = await fixture(); await f.service.prepare(f.podId, f.proposal, f.provider, f.authority); f.decide('approved')
   expect((await f.service.process(f.podId, async () => ({ ...f.provider, applicationHash: 'changed' }), f.authority))[0]).toMatchObject({ state: 'expired', error: expect.stringContaining('application changed') })
   expect(f.authority.consume).not.toHaveBeenCalled()
   await f.service.prepare(f.podId, f.proposal, f.provider, f.authority)
@@ -101,16 +107,34 @@ it('validates proposal identities and resolves the companion archive operation e
   expect(resolved.detail).toMatchObject({ operation_id: 'archive', action: 'archive', constraints: { exact_command: true } })
 })
 
-it('keeps every displayed grant within the broker limits without hiding listed messages', async () => {
+it('keeps every message grant within the broker limits and leaves out only messages that cannot fit', async () => {
   const f = await fixture()
   const items = Array.from({ length: 20 }, (_, index) => ({ id: `mail-${index}`, version: 'v1', reason: 'Completed '.repeat(30) }))
-  vi.mocked(f.provider.read).mockImplementation(async id => ({ ...f.mail, id, version: 'v1', subject: 'An informative subject '.repeat(10) }))
+  vi.mocked(f.provider.read).mockImplementation(async id => ({ ...f.mail, id, version: 'v1', subject: id === 'mail-3' ? 'x'.repeat(2048) : 'An informative subject '.repeat(10), url: id === 'mail-3' ? `https://outlook.office.com/mail/id/${'a'.repeat(2000)}` : f.mail.url }))
   const prepared = await f.service.prepare(f.podId, { ...f.proposal, items }, f.provider, f.authority)
   const [record] = await f.store.list(f.podId)
-  expect(prepared.count).toBeGreaterThan(0); expect(prepared.count).toBeLessThan(items.length)
-  expect(archiveSummary(record!.manifest).length).toBeLessThanOrEqual(4096)
-  expect(archiveCommand(record!.manifest).every(argument => argument.length <= 4096)).toBe(true)
-  for (const mail of record!.manifest.items) expect(archiveSummary(record!.manifest)).toContain(mail.subject)
+  expect(prepared.count).toBe(items.length - 1)
+  expect(record!.manifest.items.map(item => item.id)).not.toContain('mail-3')
+  for (const item of record!.manifest.items) expect(archiveItemCommand(record!.manifest, item).every(argument => argument.length <= 4096)).toBe(true)
+})
+
+it('moves only the approved messages of a partly approved proposal', async () => {
+  const f = await fixture()
+  const items = ['mail-1', 'mail-2'].map(id => ({ id, version: 'v1', reason: 'Completed' }))
+  vi.mocked(f.provider.read).mockImplementation(async id => ({ ...f.mail, id, version: 'v1' }))
+  await f.service.prepare(f.podId, { ...f.proposal, items }, f.provider, f.authority)
+  f.decide('approved', { 'mail-2': 'denied' })
+  expect((await f.service.process(f.podId, async () => f.provider, f.authority))[0]).toMatchObject({ state: 'completed', outcomes: [{ id: 'mail-1', state: 'archived' }, { id: 'mail-2', state: 'skipped', reason: 'Not approved by the owner' }] })
+  expect(vi.mocked(f.authority.consume).mock.calls.map(call => call[1])).toEqual(['mail-1'])
+  expect(vi.mocked(f.provider.move).mock.calls.map(call => call[0].id)).toEqual(['mail-1'])
+})
+
+it('expires a proposal approved under one collective grant without consuming it', async () => {
+  const f = await fixture(); await f.service.prepare(f.podId, f.proposal, f.provider, f.authority)
+  const [record] = await f.store.list(f.podId)
+  await f.store.save({ ...record!, grants: undefined })
+  expect((await f.service.process(f.podId, async () => f.provider, f.authority))[0]).toMatchObject({ state: 'expired', error: expect.stringContaining('one grant per message') })
+  expect(f.authority.statuses).not.toHaveBeenCalled(); expect(f.provider.move).not.toHaveBeenCalled()
 })
 
 it('supersedes pending grants when the reviewed application changes without consuming old authority', async () => {

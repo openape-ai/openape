@@ -3,7 +3,7 @@ import type { ServiceScope } from '../../../contracts/services'
 import type { ResourceState } from '../../../contracts/resources'
 import type { ArchiveRecord } from '../../../contracts/mail-archive'
 import { parseArchiveProposal } from '../../../contracts/mail-archive'
-import { gateAudience, gateCommand, gateSummary, parseGateCoverage } from '../../../contracts/gates'
+import { gateAudience, gateItemCommand, gateItemSummary, parseGateCoverage } from '../../../contracts/gates'
 import { createGrantAuthority } from '../../gates/authority'
 import type { CredentialCache } from '../../connections/cache'
 import type { ConnectionManager } from '../../connections/manager'
@@ -40,7 +40,7 @@ export async function handleMailArchive(input: Request): Promise<unknown> {
     const directories = directoryPolicy(await assignedDirectories(input.root, scope.podId, state.resources))
     const lease = { ...directories, workspace, capabilities: scope.capabilities, signal, assertCurrent: () => signal.throwIfAborted(), registerDomain: async (path: string, ownerPid: number) => { await check({ path, ownerPid }); signal.throwIfAborted() } }
     const root = join(input.root, 'runs', scope.runId)
-    function provider(application: string, mailbox: string, record?: ArchiveRecord, assertActive: () => Promise<void> = async () => authority.assertActive(record!)) {
+    function provider(application: string, mailbox: string, record?: ArchiveRecord, assertActive: (id: string) => Promise<void> = async id => authority.assertActive(record!, id)) {
       const selected = archiveApplication(state.resources, scope.podId, scope.capabilities, application)
       return archiveProvider(selected.id, selected.assignment, mailbox, {
         read: async (argv) => {
@@ -52,7 +52,9 @@ export async function handleMailArchive(input: Request): Promise<unknown> {
         move: async (argv) => {
           if (!record) throw new Error('Preparation cannot move mail')
           const current = await check()
-          return moveApprovedMail({ resources: current.resources, manifest: record.manifest, argv, helper: input.helper, root, credentials: input.credentials, lease, assertAuthority: assertActive })
+          const id = argv[argv.indexOf('--message') + 1]
+          if (!id) throw new Error('Archive move names no message')
+          return moveApprovedMail({ resources: current.resources, manifest: record.manifest, argv, helper: input.helper, root, credentials: input.credentials, lease, assertAuthority: () => assertActive(id) })
         },
       })
     }
@@ -65,7 +67,14 @@ export async function handleMailArchive(input: Request): Promise<unknown> {
       const views = []
       for (const coverage of body.gate.map(parseGateCoverage)) {
         if (coverage.manifest.podId !== scope.podId) throw new Error('Approved batch belongs to another Pod')
-        const assertActive = () => gates.assertActive({ grantId: coverage.grantId, expiresAt: coverage.manifest.expiresAt, command: gateCommand(coverage.manifest), summary: gateSummary(coverage.manifest) })
+        // Every covered item carries its own consumed once-grant; all of them must still be valid.
+        const assertActive = async () => {
+          for (const item of coverage.items) {
+            const reviewed = coverage.manifest.items.find(entry => entry.key === item.key)
+            if (!reviewed) throw new Error('Approved item is not part of its batch')
+            await gates.assertActive({ grantId: item.grantId, expiresAt: coverage.manifest.expiresAt, command: gateItemCommand(coverage.manifest, reviewed), summary: gateItemSummary(reviewed) })
+          }
+        }
         const items = coverage.items.map(({ data }) => {
           if (typeof data.id !== 'string' || !data.id || typeof data.version !== 'string' || !data.version) throw new Error('Approved item names no message identity and version')
           return { id: data.id, version: data.version, reason: typeof data.reason === 'string' && data.reason.trim() ? data.reason.slice(0, 500) : coverage.manifest.title }
@@ -76,7 +85,7 @@ export async function handleMailArchive(input: Request): Promise<unknown> {
           move: async (mail) => {
             const record = (await service.records(scope.podId)).find(item => item.manifest.id === batch.id)
             if (!record) throw new Error('Approved batch is not recorded')
-            return provider(application, mailbox, record, assertActive).move(mail)
+            return provider(application, mailbox, record, async () => assertActive()).move(mail)
           },
         }, assertActive))
       }

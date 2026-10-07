@@ -37,12 +37,12 @@ Stand HH:MM kennzeichnet im Browser einen veröffentlichten Schnappschuss; Live 
 
 Der Tab Entscheidungen listet fünf Arten von Owner-Entscheidungen: Rückfragen aus Wahl-Gates, Freigaben von Bündeln beim Identity Provider, Rechte, die einem Pod fehlen, Unklare Zustellungen mit unklarem Ergebnis und Einrichtung mit Vorschlägen und Geheimnis-Anfragen. Die Zahl im Tab ist die Anzahl offener Einträge.
 
-Rückfragen zeigen die aufgezeichneten Felder jedes Falls und die Optionen des Gates mit ihren genauen Titeln; Bündeln nach fasst Fälle nach einem Feld zusammen, sodass eine Wahl für die ganze Gruppe gilt. Freigaben verlinken zum Identity Provider; Rechte öffnen die Freigabe; unklare Zustellungen brauchen deine Beobachtung am Ziel, bevor du Zugestellt oder Nicht zugestellt, erneut senden wählst.
+Rückfragen zeigen die aufgezeichneten Felder jedes Falls und die Optionen des Gates mit ihren genauen Titeln; Bündeln nach fasst Fälle nach einem Feld zusammen, sodass eine Wahl für die ganze Gruppe gilt. Freigaben verlinken zum Identity Provider, der ein Bündel als Liste mit einem Häkchen pro Eintrag zeigt: Die ausgewählten Einträge werden freigegeben, die übrigen abgelehnt. Jeder Eintrag hat einen eigenen einmaligen Grant; nur freigegebene Einträge laufen weiter, ein abgelehnter Eintrag geht in den Ausschluss-Kanal des Gates, falls es einen gibt. Rechte öffnen die Freigabe; unklare Zustellungen brauchen deine Beobachtung am Ziel, bevor du Zugestellt oder Nicht zugestellt, erneut senden wählst.
 
 Pods entscheidet nie für dich: kein Modell, keine MCP-Aktion und kein Zeitplan wählt, genehmigt, schließt aus oder pausiert. Rechte werden ausschließlich beim Identity Provider entschieden; die App zeigt Status und Links.
 
 1. Öffne Entscheidungen; der Tab zeigt, wie viele Einträge warten.
-2. Lies den Fall und wähle eine Option oder schließe ihn aus; Bündeln nach entscheidet viele Fälle mit demselben Feld auf einmal.
+2. Lies den Fall und wähle eine Option; Bündeln nach entscheidet viele Fälle mit demselben Feld auf einmal. Öffne bei einem Freigabe-Bündel den Identity Provider, wähle die freizugebenden Einträge und bestätige.
 3. Prüfe bei unklaren Zustellungen zuerst das Ziel, notiere deine Beobachtung und halte sie fest.
 4. Einrichtung listet Codex-Vorschläge und offene Geheimnis-Anfragen; Im Pod einrichten öffnet den Pod-Editor.
 

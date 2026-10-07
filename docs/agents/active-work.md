@@ -1,5 +1,13 @@
 # Active work
 
+## Grant batches — issue 1442
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1442; approved plan: https://report.openape.ai/d/01M4AQCZFG6NXWF4NYS8DWKGV6 (revision 1, owner approval October 7). Protocol PR 3 merged as `ac95a447`.
+- Worktree `openape-monorepo.worktrees/grant-batches`, branch `feature/issue-1442-grant-batches`, PR 289; base `31250d69`, merged with main `4687ed4d`.
+- IdP: optional `request.batch` with uniform once members, `batch` list filter, `openape_grant_batch_supported`, batch approval view and grouped pending list, one notification per batch. Pods: one once-grant per gate item for network gates, workflow gates and the mail archive; schema 40.
+- Evidence: https://report.openape.ai/d/01M4AVZ745E30GG2KF5TSA5R2W (v2): unit/layout suites, local acceptance against a running IdP with the real Pods grant authority; the native SIGKILL locator failure was pre-existing and is fixed by issue 1443.
+- Next: merge, IdP deployment, signed Pods installation, one real owner-decided batch.
+
 ## Pods network-gates native E2E label — issue 1443
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1443. Worktree `.claude/worktrees/adoring-brahmagupta-463b2a`, branch `bugfix/issue-1443-network-gates-list-label`, base `6bd4c0d0`.

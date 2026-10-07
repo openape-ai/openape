@@ -155,6 +155,19 @@ export interface OpenApeCliAuthorizationDetail {
 export type OpenApeAuthorizationDetail = OpenApeGrantAuthorizationDetail | OpenApeCliAuthorizationDetail
 
 /** What the requester says this grant is about */
+/**
+ * Display grouping for grants submitted for a joint decision (grants.md §3.4).
+ * Never changes what a member authorizes; members are grouped only by equal
+ * requester and id.
+ */
+export interface OpenApeGrantBatch {
+  id: string
+  /** The requester's own title for the batch. */
+  title?: string
+  /** Number of grants the requester intends to submit under this id. */
+  size?: number
+}
+
 export interface OpenApeGrantSummary {
   /** Free text, rendered with its line breaks intact. */
   text: string
@@ -201,6 +214,8 @@ export interface OpenApeGrantRequest {
    * the binding description of what will run.
    */
   summary?: OpenApeGrantSummary
+  /** Display grouping for a joint decision; see OpenApeGrantBatch. */
+  batch?: OpenApeGrantBatch
   /** Execute as this user identity */
   run_as?: string
   /** Delegator — who is being acted on behalf of (delegation grants only) */

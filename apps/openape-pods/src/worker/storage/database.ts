@@ -3,7 +3,7 @@ import { definitionSchema } from './definition-schema.ts'
 import { aliasSchema, sharingSchema } from './sharing-schema.ts'
 import { networkDataSchema } from './network-data-schema.ts'
 import { networkWorkflowSchema } from './network-workflow-schema.ts'
-import { networkGateSchema } from './network-gate-schema.ts'
+import { migrateNetworkGateGrants, networkGateGrantSchema, networkGateSchema } from './network-gate-schema.ts'
 import { assertNetworkStorage, networkSchema } from './network-schema.ts'
 import { migrateNetworkControls, migrateNetworkSettlements, networkControlSchema } from './network-control-schema.ts'
 import { migrateRemote } from '../remote/migration.ts'
@@ -47,7 +47,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 39
+export const schemaVersion = 40
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -351,6 +351,7 @@ PRAGMA user_version=27;`)
       if (version < 37) this.db.exec('PRAGMA user_version=37;')
       if (version < 38) this.db.exec('CREATE TABLE collection_descriptions(id TEXT PRIMARY KEY, body TEXT NOT NULL, revision INTEGER NOT NULL, updated_at INTEGER NOT NULL); PRAGMA user_version=38;')
       if (version < 39) this.db.exec('CREATE TABLE secret_requests(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE, alias TEXT NOT NULL, purpose TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN (\'requested\',\'filled\',\'collected\',\'expired\',\'failed\')), expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, error TEXT); PRAGMA user_version=39;')
+      if (version < 40) this.db.exec(`${networkGateGrantSchema} ${migrateNetworkGateGrants} PRAGMA user_version=40;`)
     })
   }
 
