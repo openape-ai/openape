@@ -1,5 +1,9 @@
 # External CI and protected branches
 
+> Paused since October 7, 2026 (owner decision, [issue 1448](https://repos.openape.ai/patrick/monorepo/issues/1448)):
+> `.forgejo/workflows/ci.yml` runs only on manual dispatch and the `main` policy is
+> `enabled: false`. Re-enable both together once a stable CI is approved.
+
 The path is: authenticated Git push or native merge → current-ref mirror scan →
 authenticated Forgejo push → existing isolated Forgejo runner → shared check
 contract → Forgejo commit status. The native forge queries that status directly

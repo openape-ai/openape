@@ -42,7 +42,11 @@ supply-chain quarantine and targeted overrides in `pnpm-workspace.yaml`.
   `pnpm check:affected --base origin/main --head HEAD --suite unit`; automatic
   CI also runs only the unit suite. Run a workspace's E2E or layout suite
   locally only while working on it (Pods: `test:fast` without Electron).
-- Merge gate: the external checks for the exact pushed head run the affected
+- CI is paused (owner decision October 7, 2026, issue 1448): Forgejo CI runs only on
+  manual dispatch and main's branch protection is disabled. Do not wait for or
+  require CI until the owner approves a stable solution; the local pre-push
+  affected unit check and the gates below remain.
+- Merge gate (when CI is active again): the external checks for the exact pushed head run the affected
   unit subset of the contract (audit, tooling, lint, typecheck and unit/component
   tests for changed workspaces and their consumers); it is recorded on the PR
   and required for merge. Pushes to main run the full unit contract; a red main
