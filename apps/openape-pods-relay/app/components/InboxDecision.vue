@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { blocking } from '../inbox/client'
 import type { InboxItem, Receipt } from '../inbox/client'
 import { t } from '../inbox/i18n'
 
@@ -11,12 +12,13 @@ const missing = ref(false)
 
 const decision = computed(() => props.item.decision)
 const open = computed(() => props.item.state === 'open')
-const link = computed(() => decision.value && decision.value.authority !== 'pods' ? props.item.links[0] ?? null : null)
+// Only a verified HTTPS handoff is offered, also for copies restored from device storage.
+const link = computed(() => {
+  const candidate = decision.value && decision.value.authority !== 'pods' ? props.item.links[0] : undefined
+  return candidate && /^https:\/\//.test(candidate.url) ? candidate : null
+})
 const authority = computed(() => t(decision.value?.authority === 'secrets' ? 'authoritySecrets' : 'authorityIdp'))
-const running = computed(() => !!props.receipt && ['sending', 'accepted', 'started'].includes(props.receipt.state))
-// After a send with unknown outcome only the same request may go out again; another option could act twice.
-// An applied answer waits for the desktop to resolve the item.
-const blocked = computed(() => running.value || props.receipt?.state === 'unsent' || props.receipt?.state === 'applied')
+const blocked = computed(() => blocking(props.receipt, props.item))
 const selected = computed(() => decision.value?.options.find(option => option.key === chosen.value) ?? null)
 
 const errors: Record<string, Parameters<typeof t>[0]> = { decision_changed: 'errorChanged', decision_resolved: 'errorResolved', pod_offline: 'errorPodOffline', workspace_busy: 'errorBusy', workspace_revision_conflict: 'errorBusy', invalid_inbox_input: 'errorInput', network: 'errorNetwork' }

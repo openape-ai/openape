@@ -13,9 +13,16 @@ const item = computed(() => state.items[id.value] ?? null)
 const online = computed(() => state.phase === 'ready')
 const missing = ref<'invalid' | 'missing' | 'offline' | null>(null)
 const error = ref('')
+function https(value: string): URL | null {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' ? url : null
+  }
+  catch { return null }
+}
 const safeLinks = computed(() => (item.value?.kind === 'message' ? item.value.links : []).flatMap((link) => {
-  const url = URL.parse(link.url)
-  return url?.protocol === 'https:' ? [{ title: link.title, url: url.href, host: url.host }] : []
+  const url = https(link.url)
+  return url ? [{ title: link.title, url: url.href, host: url.host }] : []
 }))
 let readMarked: string | null = null
 
