@@ -21,11 +21,15 @@ export function grantBatchRowLabel(grant: OpenApeGrant): string {
   return grant.id
 }
 
-/** Rows in submission order. Only pending members without an automatic decision can be decided here. */
+/**
+ * Rows in submission order; members submitted within the same second sort by
+ * label, which keeps the list stable and groups equal senders.
+ */
 export function grantBatchRows(members: OpenApeGrant[]): GrantBatchRow[] {
   return members
-    .toSorted((a, b) => a.created_at - b.created_at || a.id.localeCompare(b.id))
-    .map(grant => ({ id: grant.id, label: grantBatchRowLabel(grant), status: grant.status, decidable: grant.status === 'pending' }))
+    .map(grant => ({ grant, row: { id: grant.id, label: grantBatchRowLabel(grant), status: grant.status, decidable: grant.status === 'pending' } }))
+    .toSorted((a, b) => a.grant.created_at - b.grant.created_at || a.row.label.localeCompare(b.row.label))
+    .map(({ row }) => row)
 }
 
 /** Selected decidable members are approved, every other decidable member is denied. */

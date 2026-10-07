@@ -109,10 +109,9 @@ onUnmounted(() => clearInterval(clock))
           {{ text.empty }}
         </p>
         <template v-if="members.length">
-          <div v-if="info.title" class="text-sm">
-            <span class="text-muted">{{ text.own }}:</span>
-            <span class="font-semibold break-words"> {{ text.quoted(info.title) }}</span>
-          </div>
+          <p v-if="info.title" class="text-sm break-words">
+            <span class="text-muted">{{ text.own }}:</span> <span class="font-semibold">{{ text.quoted(info.title) }}</span>
+          </p>
           <p v-if="info.size" class="text-sm text-muted" data-batch-received>
             {{ text.received(members.length, info.size) }}
           </p>
@@ -137,7 +136,7 @@ onUnmounted(() => clearInterval(clock))
                 :disabled="processing"
                 @change="toggle(row.id, ($event.target as HTMLInputElement).checked)"
               >
-              <span v-else class="mt-0.5 shrink-0 rounded border border-default px-1.5 text-xs text-muted">{{ text.status[row.status] ?? row.status }}</span>
+              <span v-else class="mt-0.5 w-24 shrink-0 rounded border border-default px-1.5 text-center text-xs text-muted">{{ text.status[row.status] ?? row.status }}</span>
               <label :for="row.decidable ? `batch-${row.id}` : undefined" class="min-w-0 flex-1 text-sm break-words">
                 {{ row.label }}
                 <span v-if="failures[row.id]" class="block text-xs text-error">{{ failures[row.id] }}</span>
