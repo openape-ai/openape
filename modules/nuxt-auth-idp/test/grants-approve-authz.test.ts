@@ -29,6 +29,7 @@ vi.mock('h3', () => ({
 
 vi.mock('../src/runtime/server/utils/admin', () => ({
   requireAuth: vi.fn(async () => mockRequireAuthEmail),
+  isAdmin: () => false,
 }))
 
 vi.mock('../src/runtime/server/utils/grant-stores', () => ({
@@ -73,9 +74,9 @@ function detail(): OpenApeCliAuthorizationDetail {
   }
 }
 
-async function createGrantBy(requester: string): Promise<OpenApeGrant> {
+async function createGrantBy(requester: string, id = 'grant-approver-test'): Promise<OpenApeGrant> {
   const g: OpenApeGrant = {
-    id: 'grant-approver-test',
+    id,
     status: 'pending',
     created_at: Math.floor(Date.now() / 1000),
     request: {
@@ -192,5 +193,64 @@ describe('approve.post authorization', () => {
     const handler = await importHandler()
     const result = await handler({} as any)
     expect(result.grant.status).toBe('approved')
+  })
+})
+
+// The batch route must enforce the same per-action policy as the single
+// endpoints; a refused item is a per-item 403, not a whole-batch failure.
+describe('batch.post authorization', () => {
+  async function importBatchHandler() {
+    return (await import('../src/runtime/server/api/grants/batch.post')).default
+  }
+
+  beforeEach(() => {
+    grantStore = new InMemoryGrantStore()
+    usersInStore.clear()
+    usersInStore.set('agent@example.com', {
+      email: 'agent@example.com',
+      owner: 'patrick@hofmann.eco',
+      approver: undefined,
+    })
+  })
+
+  it('rejects an agent that self-approves through the batch route', async () => {
+    await createGrantBy('agent@example.com')
+    mockRequireAuthEmail = 'agent@example.com'
+    readBodyMock.mockReset().mockResolvedValue({ operations: [{ id: 'grant-approver-test', action: 'approve' }] })
+
+    const handler = await importBatchHandler()
+    const { results } = await handler({} as any)
+    expect(results).toEqual([expect.objectContaining({ id: 'grant-approver-test', success: false, error: expect.objectContaining({ status: 403 }) })])
+    expect((await grantStore.findById('grant-approver-test'))?.status).toBe('pending')
+  })
+
+  it('lets the owner approve through the batch route', async () => {
+    await createGrantBy('agent@example.com')
+    mockRequireAuthEmail = 'patrick@hofmann.eco'
+    readBodyMock.mockReset().mockResolvedValue({ operations: [{ id: 'grant-approver-test', action: 'approve' }] })
+
+    const handler = await importBatchHandler()
+    const { results } = await handler({} as any)
+    expect(results).toEqual([{ id: 'grant-approver-test', status: 'approved', success: true }])
+  })
+
+  it('refuses unrelated deny and revoke per item while processing the rest', async () => {
+    await createGrantBy('agent@example.com', 'grant-a')
+    await createGrantBy('agent@example.com', 'grant-b')
+    await createGrantBy('random@stranger.example', 'grant-own')
+    usersInStore.set('random@stranger.example', { email: 'random@stranger.example' })
+    mockRequireAuthEmail = 'random@stranger.example'
+    readBodyMock.mockReset().mockResolvedValue({
+      operations: [
+        { id: 'grant-a', action: 'deny' },
+        { id: 'grant-b', action: 'revoke' },
+        { id: 'grant-own', action: 'approve' },
+      ],
+    })
+
+    const handler = await importBatchHandler()
+    const { results } = await handler({} as any)
+    expect(results.map((r: { success: boolean, error?: { status: number } }) => r.error?.status ?? r.success)).toEqual([403, 403, true])
+    expect((await grantStore.findById('grant-a'))?.status).toBe('pending')
   })
 })
