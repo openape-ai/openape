@@ -81,8 +81,15 @@ function checkPlan(plan: Plan) {
   }
 }
 
+function validateUnicode(value: unknown, path = 'report'): void {
+  if (typeof value === 'string' && /[\uD800-\uDFFF]/u.test(value)) invalid(`Unpaired Unicode surrogate at ${path}`)
+  if (!value || typeof value !== 'object') return
+  for (const [key, child] of Object.entries(value)) validateUnicode(child, `${path}.${key}`)
+}
+
 export function validateReport(input: unknown): ReportDocument {
   if (!validate(input)) invalid(`Invalid report schema: ${ajv.errorsText(validate.errors, { separator: '; ' })}`)
+  validateUnicode(input)
   const doc = input as ReportDocument
   references(doc)
   for (const target of doc.targets ?? []) {
