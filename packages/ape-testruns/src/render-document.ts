@@ -6,7 +6,7 @@ import { marked, Renderer } from 'marked'
 import sanitizeHtml from 'sanitize-html'
 
 export function escapeHtml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll('\'', '&#39;')
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll('\'', '&#39;').replaceAll('\uFFFD', '&#xFFFD;')
 }
 
 function safeLink(href: string | undefined): boolean {
@@ -29,7 +29,7 @@ export function markdown(value: string | undefined): string {
     allowedTags: ['p', 'br', 'strong', 'em', 'del', 'blockquote', 'ul', 'ol', 'li', 'code', 'pre', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr', 'h1', 'h2', 'h3', 'h4'],
     allowedAttributes: { a: ['href', 'rel'] }, allowedSchemes: ['https'], allowProtocolRelative: false,
     transformTags: { a: (_tag, attributes) => ({ tagName: 'a', attribs: { ...(safeLink(attributes.href) ? { href: attributes.href } : {}), rel: 'noopener noreferrer' } }) },
-  })
+  }).replaceAll('\uFFFD', '&#xFFFD;')
 }
 
 export function items(values: string[]): string {
@@ -37,7 +37,7 @@ export function items(values: string[]): string {
 }
 
 export function jsonForHtml(value: unknown): string {
-  return JSON.stringify(value).replaceAll('<', '\\u003c').replaceAll('>', '\\u003e').replaceAll('&', '\\u0026')
+  return JSON.stringify(value).replaceAll('<', '\\u003c').replaceAll('>', '\\u003e').replaceAll('&', '\\u0026').replaceAll('\uFFFD', '\\ufffd')
 }
 
 export function documentHtml(kind: 'plan' | 'test-run', title: string, content: string, metadata: Record<string, string>, source: unknown, templateDirectory = fileURLToPath(new URL('../templates', import.meta.url)), bodySlots?: Record<string, string>): string {
@@ -66,5 +66,6 @@ export function masthead(category: string): string {
 }
 
 export function meta(values: (string | undefined)[]): string {
-  return `<div class="meta">${values.filter((value): value is string => Boolean(value)).map(value => `<span>${escapeHtml(value)}</span>`).join('')}</div>`
+  const present = values.filter((value): value is string => Boolean(value))
+  return present.length ? `<div class="meta">${present.map(value => `<span>${escapeHtml(value)}</span>`).join('')}</div>` : ''
 }
