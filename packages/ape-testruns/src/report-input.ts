@@ -48,9 +48,20 @@ function references(doc: ReportDocument) {
   walk(doc)
 }
 
+function timestampPrecision(value: string): number {
+  const fractionalDigits = value.match(/\.(\d+)(?:Z|[+-]\d{2}:\d{2})$/iu)?.[1]?.length ?? 0
+  return 10 ** (3 - Math.min(fractionalDigits, 3))
+}
+
 function checkRun(run: TestRun) {
   ordered(run)
-  for (const command of run.commands ?? []) ordered(command)
+  for (const command of run.commands ?? []) {
+    ordered(command)
+    if (command.durationMs === undefined || !command.startedAt || !command.finishedAt) continue
+    const elapsed = Date.parse(command.finishedAt) - Date.parse(command.startedAt)
+    const precision = Math.max(timestampPrecision(command.startedAt), timestampPrecision(command.finishedAt))
+    if (Math.abs(command.durationMs - elapsed) > precision) invalid(`Command ${command.id} duration contradicts its timestamps beyond ${precision} ms precision`)
+  }
   for (const check of run.tests) {
     if (check.status === 'failed' && !check.error && !check.observed) invalid(`Failed check ${check.id} needs error or observed`)
     for (const step of check.steps ?? []) {
