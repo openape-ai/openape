@@ -3,10 +3,10 @@
 ## Pods mobile inbox PWA — issue 1446
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1446; approved plan revision 2, publication v8: https://report.openape.ai/d/01M4B5Q1Q0W6C97A4ZXTFZ5WJR; rollout Test Run: https://report.openape.ai/d/01M4BJNYSN1TQPM4RKG81YW5Z0.
-- Checkout `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-inbox-m4`, branch `feature/issue-1446-inbox-pwa` (base `3c08d3c7`, merge of PR 302).
+- Checkout `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-inbox-m4`, branch `feature/issue-1446-inbox-pwa` (base `3c08d3c7`, merge of PR 302), PR 303: https://repos.openape.ai/patrick/monorepo/pulls/303 (linked to the issue).
 - Delivered: M0 owner-accepted; M1 live; M2 + M3 live since October 7 18:18 as relay `prod-3c08d3c7` and signed desktop `3c08d3c7` (schema 41); 20 open network decisions published. No production decision executed yet; that is the owner's action and completes M2 acceptance.
 - M4 (this branch): installed mobile inbox at `/inbox/` replaces the M0 prototype (UI, API, database flag and push dispatcher removed). Decisions/Notifications tabs, detail, completed history, archive, settings (account, devices, language, push status), foreground sync over `changes`, account-bound offline copy, controlled service-worker update, DE/EN.
-- Checks: relay lint/typecheck, 62 unit and component tests, browser acceptance `e2e/inbox-app.test.ts` against the built relay (13 inspected screenshots); root lint/typecheck before the PR.
+- Checks on tested `4a18f5eb`: relay 67 unit/component tests, browser acceptance `e2e/inbox-app.test.ts` against the built relay (13 inspected screenshots), Test Run https://report.openape.ai/d/01M4BNGW74JB90KKER7Y0BAQY3; root lint/typecheck/docs:check on `f835fc82`. Independent review: three decision-safety defects and six warnings fixed in `f835fc82`.
 - Next: native PR review and merge, relay deploy (no desktop change), owner acceptance on the real iPhone (decision, notification, restart/reinstall, VoiceOver), then M5 push. Handoff: [pods-inbox-m4-handoff.md](pods-inbox-m4-handoff.md).
 
 ## Pods network member script updates — issue 1445
