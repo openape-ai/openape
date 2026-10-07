@@ -157,7 +157,7 @@
    "id": "M1",
    "title": "Account sessions and durable inbox service",
    "goal": "Expose the owner inbox through bounded authenticated web APIs.",
-   "status": "active",
+   "status": "done",
    "steps": [
     "Reuse existing DDISA browser login/refresh/logout with scoped inbox authorization, CSRF protection, account-isolated subscriptions and no runtime pairing. Add storage behind a feature flag.",
     "Implement item publication, cursor pagination, read/archive state, revocation and bounded retention, with transactional push-outbox writes."
@@ -166,7 +166,8 @@
     "Two owners cannot read or mutate each other’s items; delegated actors cannot decide; revoked sessions and devices are rejected.",
     "A fresh signed-in device can read existing published items without a paired/online Mac; reinstall restores account state, not old device credentials."
    ],
-   "rollback": "Disable the inbox flag; keep additive tables and legacy routes intact."
+   "rollback": "Disable the inbox flag; keep additive tables and legacy routes intact.",
+   "proof": "PR 298 (69197975) plus security follow-ups PR 299 (d21d8e75) and PR 300 (1e467932), live as prod-1e467932 with NUXT_INBOX_ENABLED=true. Unit suite covers owner isolation, idempotent publication and conflicts, transactional outbox, restart persistence without a runtime, tombstones, device revocation and endpoint ownership. E2E covers signed runtime publication, reading via an inbox-started DDISA sign-in, and session_revoked after logout or another sign-in. A real Chromium cookie jar confirmed that a copied inbox cookie is refused after a later sign-in in the same browser. Inbox devices are created only by sign-ins started from the inbox; sessions last 30 days and are revocable."
   },
   {
    "id": "M2",
@@ -187,7 +188,7 @@
    "id": "M3",
    "title": "Add a built-in notification action",
    "goal": "A Pod can notify its owner without a Telegram bot or chat ID.",
-   "status": "planned",
+   "status": "active",
    "steps": [
     "Introduce a bounded context.notify API, or the equivalent established execution-context method confirmed in M0: stable event key, title, body and safe links. Enforce owner binding outside the script.",
     "Persist runtime outbox before dispatch, reconcile server receipts, and document accepted-versus-read semantics and quota errors."
@@ -286,9 +287,9 @@
  ],
  "completion": {
   "result": "not-assessed",
-  "summary": "M0 accepted by the owner on October 7, 2026 (two-day series waived); M1 started."
+  "summary": "M0 accepted and M1 delivered on October 7, 2026; M3 (built-in notify) in progress."
  },
- "handoff": "M1 is active: account-scoped durable inbox service behind a flag, replacing the M0 prototype store. Open device items for M5/M6: service-worker receipts on iOS declarative push and push-tagged opening.",
+ "handoff": "M3 is active: context.notify in Pod scripts writes a durable worker outbox that the desktop main process delivers to POST /api/runtime/v1/inbox. Then M2 decisions, M4 UI, M5 push. Open device items for M5/M6: service-worker receipts on iOS declarative push and push-tagged opening.",
  "changelog": [
   {
    "date": "2026-10-07",
@@ -309,6 +310,10 @@
   {
    "date": "2026-10-07",
    "text": "Owner accepted M0 on an iPhone 11 Pro Max and waived the two-day series; M1 started."
+  },
+  {
+   "date": "2026-10-07",
+   "text": "M1 delivered (PR 298) with two security follow-ups (PR 299, PR 300); automatic CI paused by owner decision (issue 1448); M3 started."
   }
  ],
  "links": [
@@ -343,6 +348,10 @@
   {
    "title": "M0 device Test Run",
    "url": "https://report.openape.ai/d/01M4BBDR0M5AP1RFHBBKYFX5XW"
+  },
+  {
+   "title": "PR 298 (M1 inbox service)",
+   "url": "https://repos.openape.ai/patrick/monorepo/pulls/298"
   }
  ],
  "evidence": [
@@ -894,13 +903,13 @@
    },
    {
     "path": "completion.summary",
-    "source": "M0 accepted by the owner on October 7, 2026 (two-day series waived); M1 started.",
-    "text": "M0 am 7. Oktober 2026 vom Eigentümer abgenommen (Zweitagesserie entfallen); M1 begonnen."
+    "source": "M0 accepted and M1 delivered on October 7, 2026; M3 (built-in notify) in progress.",
+    "text": "M0 abgenommen und M1 am 7. Oktober 2026 geliefert; M3 (eingebaute Mitteilungsaktion) in Arbeit."
    },
    {
     "path": "handoff",
-    "source": "M1 is active: account-scoped durable inbox service behind a flag, replacing the M0 prototype store. Open device items for M5/M6: service-worker receipts on iOS declarative push and push-tagged opening.",
-    "text": "M1 läuft: kontobezogener dauerhafter Inbox-Dienst hinter einem Schalter, der den M0-Prototyp-Speicher ersetzt. Offene Gerätepunkte für M5/M6: Service-Worker-Quittungen bei deklarativem iOS-Push und Öffnen über den Push."
+    "source": "M3 is active: context.notify in Pod scripts writes a durable worker outbox that the desktop main process delivers to POST /api/runtime/v1/inbox. Then M2 decisions, M4 UI, M5 push. Open device items for M5/M6: service-worker receipts on iOS declarative push and push-tagged opening.",
+    "text": "M3 läuft: context.notify in Pod-Skripten schreibt in eine dauerhafte Worker-Warteschlange, die der Desktop-Hauptprozess an POST /api/runtime/v1/inbox ausliefert. Danach M2-Entscheidungen, M4-Oberfläche, M5-Push. Offene Gerätepunkte für M5/M6: Service-Worker-Quittungen bei deklarativem iOS-Push und Öffnen über den Push."
    },
    {
     "path": "changelog.0.text",
@@ -971,6 +980,16 @@
     "path": "changelog.4.text",
     "source": "Owner accepted M0 on an iPhone 11 Pro Max and waived the two-day series; M1 started.",
     "text": "Eigentümer hat M0 auf einem iPhone 11 Pro Max abgenommen und auf die Zweitagesserie verzichtet; M1 begonnen."
+   },
+   {
+    "path": "milestones.1.proof",
+    "source": "PR 298 (69197975) plus security follow-ups PR 299 (d21d8e75) and PR 300 (1e467932), live as prod-1e467932 with NUXT_INBOX_ENABLED=true. Unit suite covers owner isolation, idempotent publication and conflicts, transactional outbox, restart persistence without a runtime, tombstones, device revocation and endpoint ownership. E2E covers signed runtime publication, reading via an inbox-started DDISA sign-in, and session_revoked after logout or another sign-in. A real Chromium cookie jar confirmed that a copied inbox cookie is refused after a later sign-in in the same browser. Inbox devices are created only by sign-ins started from the inbox; sessions last 30 days and are revocable.",
+    "text": "PR 298 (69197975) plus Sicherheitskorrekturen PR 299 (d21d8e75) und PR 300 (1e467932), live als prod-1e467932 mit NUXT_INBOX_ENABLED=true. Unit-Tests decken Kontotrennung, idempotente Veröffentlichung und Konflikte, transaktionale Push-Warteschlange, Persistenz über Neustart ohne Runtime, Grabsteine, Gerätewiderruf und Endpunkt-Zugehörigkeit ab. E2E deckt signierte Runtime-Veröffentlichung, Lesen nach einer von der Inbox gestarteten DDISA-Anmeldung und session_revoked nach Abmeldung oder anderer Anmeldung ab. Ein echter Chromium-Cookie-Speicher bestätigte, dass ein kopiertes Inbox-Cookie nach einer späteren Anmeldung im selben Browser abgelehnt wird. Inbox-Geräte entstehen nur durch von der Inbox gestartete Anmeldungen; Sitzungen gelten 30 Tage und sind widerrufbar."
+   },
+   {
+    "path": "changelog.5.text",
+    "source": "M1 delivered (PR 298) with two security follow-ups (PR 299, PR 300); automatic CI paused by owner decision (issue 1448); M3 started.",
+    "text": "M1 geliefert (PR 298) mit zwei Sicherheitskorrekturen (PR 299, PR 300); automatische CI per Eigentümerentscheidung pausiert (Issue 1448); M3 begonnen."
    }
   ]
  },

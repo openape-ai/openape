@@ -111,3 +111,9 @@ Generate the VAPID pair on the host and write it straight into `shared/.env`; ne
 - Runtime publication `POST /api/runtime/v1/inbox` uses the signed runtime session; the owner comes from the runtime registration. Items are idempotent per runtime and `eventId` (identical retry 200, changed content 409 `inbox_event_conflict`), bounded to 64 KiB bodies and five HTTPS links, and commit together with a push-outbox entry.
 - Retention: messages and resolved items become tombstones after 90 days and are purged 30 days later; open decisions stay. More than 10,000 live items per owner returns 507 `inbox_quota` instead of dropping content. Database backups keep deleted content for their own retention period.
 - Rollback: `NUXT_INBOX_ENABLED=false`; the additive database stays.
+
+## Pod notifications (M3, issue 1446)
+
+Pod scripts call `await context.notify({ key, title, body, links? })`. There is no recipient, bot or chat ID: the Pod owner's account inbox always receives it. The worker validates the same bounds as the inbox (title ≤ 300 characters, body ≤ 64 KiB, ≤ 5 HTTPS links, ≤ 20 per run) and stores it in `inbox_outbox` (schema 41) under the event ID `<podId>:<key>`. The same key with the same content is queued once, also across retried runs; changed content fails the call.
+
+The desktop main process delivers due entries every 15 seconds with the signed runtime session to `POST /api/runtime/v1/inbox`. A receipt marks the entry delivered. 400/409/413 refusals are final and visible in the outbox status. Every other failure (offline, 401 before token refresh, 503, 507 quota) retries the identical event with backoff (30 seconds to 1 hour); the inbox deduplicates it, so an uncertain delivery never creates a second message. Delivery requires a desktop registered with the relay for the same owner. `queued` means stored durably, not read. Existing Telegram scripts are unchanged; switching one producer is M7.
