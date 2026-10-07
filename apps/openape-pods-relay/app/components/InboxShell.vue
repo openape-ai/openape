@@ -52,6 +52,8 @@ async function applyUpdate() {
   if (!update.value || inbox.deciding.value || updating.value) return
   updating.value = true
   await inbox.sync()
+  // A decision may have started while syncing; the banner offers the update again once it settled.
+  if (inbox.deciding.value) { updating.value = false; return }
   navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload(), { once: true })
   update.value.postMessage({ type: 'activate-update' })
 }

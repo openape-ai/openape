@@ -19,7 +19,7 @@ function memoryStorage(): Storage {
 function setup(storage = memoryStorage(), shared?: InboxStore) {
   const store = shared ?? new InboxStore(':memory:')
   if (!shared) cleanup.push(() => store.close())
-  const server = { owner: alice as typeof alice | null, offline: false, revoked: false, decide: [] as Record<string, unknown>[], decideFails: null as string | 'network' | null, operation: 'accepted', requests: [] as string[] }
+  const server = { owner: alice as typeof alice | null, offline: false, revoked: false, decide: [] as Record<string, unknown>[], decideFails: null as string | 'network' | null, operation: 'accepted', requests: [] as string[], device: randomUUID(), hang: false }
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
   const fetch = async (input: string, init?: RequestInit) => {
     const url = new URL(String(input), 'https://pods.example')
@@ -29,11 +29,13 @@ function setup(storage = memoryStorage(), shared?: InboxStore) {
     if (server.revoked) return json(401, { code: 'session_revoked' })
     const owner = server.owner
     if (!owner) return json(401, { code: 'authentication_required' })
-    if (path === 'session') return json(200, { ...owner, device: randomUUID(), vapidPublicKey: '' })
-    if (path === 'changes') return json(200, store.changes(owner, Number(url.searchParams.get('after'))))
+    if (path === 'session') return json(200, { ...owner, device: server.device, vapidPublicKey: '' })
+    if (path === 'changes') return json(200, { ...store.changes(owner, Number(url.searchParams.get('after'))), device: server.device })
+    if (path === 'logout') throw new TypeError('Failed to fetch')
     if (/^items\/.+\/decide$/.test(path)) {
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>
       server.decide.push(body)
+      if (server.hang) return new Promise<Response>(() => {})
       if (server.decideFails === 'network') throw new TypeError('Failed to fetch')
       if (server.decideFails) return json(409, { code: server.decideFails })
       return json(200, { operation: { id: body.requestId, state: 'accepted', error: null } })
@@ -154,14 +156,52 @@ it('refreshes instead of deciding when the decision changed meanwhile', async ()
   expect(server.requests.filter(request => request.startsWith('GET changes')).length).toBe(before + 1)
 })
 
-it('turns a send interrupted by closing the app into an explicit resend', async () => {
+it('stores a send before it leaves, so closing the app midway allows only that request again', async () => {
   const storage = memoryStorage()
   const first = setup(storage)
   const itemId = first.decision(alice)
   await first.inbox.start()
-  storage.setItem('pods-inbox-cache-v1', JSON.stringify({ ...JSON.parse(storage.getItem('pods-inbox-cache-v1')!), receipts: { [itemId]: { option: 'yes', title: 'Ja', digest, requestId: randomUUID(), state: 'sending', error: null, at: 1 } } }))
-  const second = setup(storage)
-  second.server.offline = true
+  first.server.hang = true
+  void first.inbox.decide(first.inbox.state.items[itemId]!, 'yes')
+  await expect.poll(() => first.server.decide.length).toBe(1)
+
+  const second = setup(storage, first.store)
   await second.inbox.start()
-  expect(second.inbox.state.receipts[itemId]).toMatchObject({ state: 'unsent', error: 'network' })
+  expect(second.inbox.state.receipts[itemId]).toMatchObject({ state: 'unsent', option: 'yes', requestId: first.server.decide[0]!.requestId })
+  await second.inbox.decide(second.inbox.state.items[itemId]!, 'seen', 'Zugestellt')
+  expect(second.server.decide).toEqual([])
+})
+
+it('offers nothing new after an unclear outcome for the version still shown', async () => {
+  const { inbox, server, decision } = setup()
+  const itemId = decision(alice)
+  await inbox.start()
+  server.operation = 'unknown'
+  await inbox.decide(inbox.state.items[itemId]!, 'yes')
+  expect(inbox.state.receipts[itemId]!.state).toBe('unknown')
+  await inbox.decide(inbox.state.items[itemId]!, 'seen', 'Zugestellt')
+  expect(server.decide).toHaveLength(1)
+})
+
+it('starts over when another sign-in in this browser switched the account', async () => {
+  const storage = memoryStorage()
+  const { inbox, server, message, store } = setup(storage)
+  message(alice, 'a', 'Nur Alice')
+  await inbox.start()
+  store.publish(bob, runtime, parsePublication({ eventId: 'b', kind: 'message', title: 'Bob', body: 'x' }))
+  server.owner = bob; server.device = randomUUID()
+  await inbox.sync()
+  expect(inbox.state.account).toBe('bob · https://id.example')
+  expect(Object.values(inbox.state.items).map(item => item.title)).toEqual(['Bob'])
+  expect(storage.getItem('pods-inbox-cache-v1')).not.toContain('Nur Alice')
+})
+
+it('drops the local copy on sign-out even when the confirmation is lost', async () => {
+  const storage = memoryStorage()
+  const { inbox, message } = setup(storage)
+  message(alice, 'a')
+  await inbox.start()
+  await expect(inbox.logout()).rejects.toThrow()
+  expect(inbox.state.phase).toBe('signedOut')
+  expect(storage.getItem('pods-inbox-cache-v1')).toBeNull()
 })

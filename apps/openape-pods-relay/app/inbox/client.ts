@@ -16,7 +16,16 @@ const uuid = /^[0-9a-f-]{36}$/
 export const isItemId = (value: unknown): value is string => typeof value === 'string' && uuid.test(value)
 const storageKey = 'pods-inbox-cache-v1'
 interface Cache { version: 1, account: string, cursor: number, syncedAt: number | null, items: InboxItem[], receipts: Record<string, Receipt> }
-const running = (receipt: Receipt | undefined) => !!receipt && ['sending', 'accepted', 'started'].includes(receipt.state)
+export const running = (receipt: Receipt | undefined) => !!receipt && ['sending', 'accepted', 'started'].includes(receipt.state)
+/**
+ * Whether this phone's earlier answer still rules out a new one: while it runs, after a send with unknown outcome
+ * (only the same request may go again), and while an applied or unclear outcome refers to the version still shown.
+ */
+export function blocking(receipt: Receipt | undefined, item: InboxItem): boolean {
+  if (!receipt) return false
+  if (running(receipt) || receipt.state === 'unsent') return true
+  return ['applied', 'unknown'].includes(receipt.state) && item.state === 'open' && receipt.digest === item.decision?.digest
+}
 
 export interface InboxEnvironment { fetch: (input: string, init: RequestInit) => Promise<Response>, storage: Storage | null, now: () => number, wait: (ms: number) => Promise<void>, navigate: (url: string) => void }
 
@@ -129,7 +138,9 @@ export function createInbox(environment: InboxEnvironment) {
       try {
         let more = true
         while (more) {
-          const page = await api<{ items: InboxItem[], cursor: number, more: boolean }>(`changes?after=${state.cursor}`)
+          const page = await api<{ items: InboxItem[], cursor: number, more: boolean, device: string }>(`changes?after=${state.cursor}`)
+          // A sign-in in another tab replaced this browser's device session, possibly for another account: start over.
+          if (page.device !== state.session?.device) { syncing = null; state.syncing = false; return await start() }
           apply(page.items)
           state.cursor = page.cursor; more = page.more
         }
@@ -169,13 +180,15 @@ export function createInbox(environment: InboxEnvironment) {
   async function decide(item: InboxItem, optionKey: string, input?: string): Promise<void> {
     const option = item.decision?.options.find(entry => entry.key === optionKey)
     const previous = state.receipts[item.id]
-    if (!item.decision || !option || running(previous) || state.phase !== 'ready') return
-    if (previous?.state === 'unsent' && previous.option !== option.key) return
+    if (!item.decision || !option || state.phase !== 'ready') return
+    if (blocking(previous, item) && !(previous?.state === 'unsent' && previous.option === option.key)) return
     const text = input?.trim()
     const receipt: Receipt = previous?.state === 'unsent'
       ? { ...previous, state: 'sending', error: null }
       : { option: option.key, title: option.title, digest: item.decision.digest, requestId: crypto.randomUUID(), ...(text ? { input: text } : {}), state: 'sending', error: null, at: environment.now() }
+    // Stored before it leaves: if the app is closed meanwhile, the restart offers only this exact request again.
     state.receipts[item.id] = receipt
+    persist()
     try {
       const { operation } = await api<{ operation: CentralOperation }>(`items/${item.id}/decide`, { method: 'POST', body: { option: receipt.option, digest: receipt.digest, requestId: receipt.requestId, ...(receipt.input ? { input: receipt.input } : {}) } })
       state.receipts[item.id] = { ...receipt, state: operation.state, error: operation.error }
@@ -209,6 +222,8 @@ export function createInbox(environment: InboxEnvironment) {
         persist()
       }
       catch (error) {
+        // An operation the service no longer knows has an outcome only the desktop can tell.
+        if (error instanceof InboxError && error.code === 'workspace_operation_not_found') { state.receipts[itemId] = { ...receipt, state: 'unknown', error: null }; persist(); break }
         if (!(error instanceof InboxError && error.status === 401)) state.syncError = error instanceof InboxError ? error.code : 'network'
         return
       }
@@ -226,9 +241,10 @@ export function createInbox(environment: InboxEnvironment) {
     environment.navigate(result.redirectUrl)
   }
 
+  // The local copy goes even if the service's confirmation is lost; the next start shows whether a session remains.
   async function logout(): Promise<void> {
-    await api('logout', { method: 'POST' })
-    expire(null)
+    try { await api('logout', { method: 'POST' }) }
+    finally { expire(null) }
   }
 
   const devices = () => api<{ current: string, devices: InboxDevice[] }>('devices')
@@ -243,7 +259,8 @@ export function createInbox(environment: InboxEnvironment) {
   const messages = computed(() => list.value.filter(item => item.kind === 'message' && !item.archived).sort((a, b) => b.created - a.created))
   const archivedMessages = computed(() => list.value.filter(item => item.kind === 'message' && item.archived).sort((a, b) => b.created - a.created))
   const unread = computed(() => messages.value.filter(item => !item.read).length)
-  const deciding = computed(() => Object.values(state.receipts).some(running))
+  // Only answers to decisions that are still open hold back an app update; resolved ones need no reconciliation.
+  const deciding = computed(() => Object.entries(state.receipts).some(([itemId, receipt]) => running(receipt) && state.items[itemId]?.state === 'open'))
 
   return { state, start, sync, load, mark, decide, check, login, logout, devices, revoke, openDecisions, completedDecisions, messages, archivedMessages, unread, deciding }
 }

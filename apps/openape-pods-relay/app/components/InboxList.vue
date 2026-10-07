@@ -19,7 +19,7 @@ const excerpt = (body: string) => body.length > 160 ? `${body.slice(0, 160).trim
         <small>
           <template v-if="item.pod?.name">{{ t('itemPod', { name: item.pod.name }) }} · </template>{{ formatTime(item.created) }}
           <template v-if="item.decision?.options.length && item.state === 'open'"> · {{ item.decision.options.map(option => option.title).join(' / ') }}</template>
-          <template v-if="receipts?.[item.id]"> · {{ receipts[item.id]!.title }}</template>
+          <template v-if="receipts?.[item.id]?.state === 'applied'"> · {{ t('receiptAppliedShort', { option: receipts[item.id]!.title }) }}</template>
         </small>
       </NuxtLink>
     </li>
