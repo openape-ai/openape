@@ -1,0 +1,831 @@
+{
+  "schema": "openape.plan/2",
+  "language": "en",
+  "project": "OpenApe Pods",
+  "owner": "Patrick Hofmann",
+  "date": "2026-10-07",
+  "revision": 1,
+  "status": "draft",
+  "title": "Rebuild Pods for iOS: decisions and notifications",
+  "goal": "After signing in with DDISA, the owner can resolve supported Pod decisions and read Pod notifications on an iPhone, without opening the desktop app.",
+  "summary": "Replace the existing iOS product with two tabs: Decisions and Notifications. Use an account inbox at pods.openape.ai, retain the desktop as execution authority, and deliver notifications through real Apple push. Reuse technical components only where they fit this product.",
+  "problem": {
+    "statement": "The existing mobile app mirrors creation, chat and administration instead of the two tasks the owner needs on the phone.",
+    "impact": "Decisions still require desktop attention, while useful Pod output is routed through Telegram.",
+    "approach": "Build a native decision inbox and a durable notification inbox around the verified DDISA account.",
+    "outcome": "A notification opens the relevant item; the owner reads or decides, and the authoritative state is visible on every connected surface."
+  },
+  "context": "The owner requested a new plan and explicitly discarded the existing iOS product content. This is a replacement proposal, not a reskin or an implementation approval. Inspection used local monorepo main 6bd4c0d0512c2532b10f3b562dab19afeac7a471; the local origin/main ref was e89449e261260e88169394f4f49aa77130f564ea and was not fetched. Existing untracked work was preserved. Implementation must recheck canonical main.",
+  "scope": [
+    "A native SwiftUI app with Decisions and Notifications, item details and a small account/settings sheet; German and English.",
+    "DDISA login, device sessions and revocation; account-scoped inbox APIs, decision receipts, notification persistence and per-device push subscriptions.",
+    "Runtime adapters for current desktop decisions, a built-in notify operation for Pods, real APNs delivery and migration of one selected Telegram notification producer.",
+    "Physical iPhone acceptance and an internal signed distribution, with recorded operational rollback and revised mobile documentation."
+  ],
+  "nonGoals": [
+    "Pod creation, chat, script editing, network maps, run administration, resource browsing or execution on the phone.",
+    "Replacing DDISA grant authority, introducing a decision CLI for agents, or implementing arbitrary desktop control through mobile API calls.",
+    "A team inbox, Android, a general messenger, attachment uploads, migration of old Telegram history, or automatic replacement of all existing Telegram producers.",
+    "Public App Store publication and a separate iPad feature set; these can follow the internal iPhone acceptance."
+  ],
+  "decisions": [
+    {
+      "title": "Replace the product content",
+      "description": "The previous iOS screens and feature scope carry no preservation requirement. Keep the app identity and suitable infrastructure, not its old navigation or functional breadth.",
+      "status": "accepted",
+      "by": "Patrick Hofmann",
+      "date": "2026-10-07",
+      "reference": "die bestehende iOS App kann damit praktisch inhaltlich verworfen werden. natürlich braucht es noch mehr als die anmeldung - schreibe einen plan"
+    },
+    {
+      "title": "An account inbox, without per-Mac phone pairing",
+      "description": "The proposed new inbox belongs to the exact verified (issuer, subject). A native device signs in to pods.openape.ai and sees entries from runtimes already enrolled to that owner. Device session registration is automatic; the old encrypted remote-control pairing is not an onboarding requirement for this inbox.",
+      "status": "proposed"
+    },
+    {
+      "title": "Explicit service visibility for selected inbox content",
+      "description": "Use the existing central workspace trust model for a bounded inbox projection: the service can read selected decision context and notification bodies. This is not end-to-end encryption. Keep secrets, credentials, arbitrary files and full transcripts out. The legacy encrypted mobile transport remains a separate contract during transition. If server-blind inbox content is required, revise this plan before implementation rather than silently restoring pairing.",
+      "status": "proposed"
+    },
+    {
+      "title": "Decisions remain with their existing authority",
+      "description": "Pods handles business choices and supported setup/reconciliation commands. The owner IdP decides grants in its normal browser surface; Secrets handles secret entry. Returning to the app triggers status reconciliation and does not itself prove approval or execution.",
+      "status": "proposed"
+    },
+    {
+      "title": "Push is an alert, the inbox is the record",
+      "description": "Store the item before scheduling push. Use content-free generic APNs alerts by default, opaque item references for navigation and full authenticated content in the app. Push failure must never lose the inbox entry; notification taps never approve actions.",
+      "status": "proposed"
+    }
+  ],
+  "sections": [
+    {
+      "id": "experience",
+      "title": "What the owner sees",
+      "body": "1. Sign in with the DDISA account through the system browser. Return directly to Decisions; no runtime picker or pairing code is required for the new inbox. With no connected runtime, explain that the desktop must first connect with the same account.\n2. Decisions lists pending work across the account. Each card names the Pod and source, summarizes the question and consequence, and offers the current valid choices. Details contain enough evidence to decide; technical metadata is secondary. A short completed history explains where an item went.\n3. Notifications lists actual messages from Pods, newest first, with unread state, Pod name, time, full text and optional safe HTTPS links. Reading a message does not decide anything.\n4. A push opens its exact item after authentication. If it expired or was resolved elsewhere, show that outcome. A decision alert points to the decision instead of creating a duplicate message requiring separate dismissal.\n5. Settings contains account/logout, device revocation, push permission status and per-Pod mute controls. Muting suppresses push, not stored entries. Keep pending-decision counts separate from unread-message counts; the app badge initially counts pending decisions only.\n6. German is the initial language for Patrick, with English supported. Use system text styles, VoiceOver labels, adequate tap targets and clear empty/loading/offline/error states.",
+      "placement": "before-details"
+    },
+    {
+      "id": "decision-matrix",
+      "title": "Decision coverage and physical limits",
+      "body": "| Current decision | New mobile behavior | Authority / acceptance |\n| --- | --- | --- |\n| Network and workflow routing choices | Show the case, current options and consequence; choose one. | Existing runtime gate handlers; stale versions rejected. |\n| Frozen approval batches and runtime execution permissions | Explain scope and expiry; open the verified owner IdP link; refresh on return. | IdP grant authority and existing consumption checks; no mobile grant-approval endpoint. |\n| Batch exclusions and uncertain batches | Review selected members and mandatory reason, or discard an uncertain batch with explicit consequences. | Existing gate semantics, exact batch generation and revision; no widening of a grant. |\n| Unknown external delivery | Show destination, operation and uncertainty; record observed delivery or explicitly authorize the existing retry path. | Runtime reconciliation; an unknown result never becomes an automatic resend. |\n| Setup proposals | Accept/decline exact supported variable, HTTPS and pre-offered application proposals; reject secret text in ordinary fields. | Existing resource review rules and hashes; full arbitrary setup remains outside mobile scope. |\n| Missing secret | Open a scoped Secrets request and mirror its state. | secrets.openape.ai; no secret value through inbox or logs. |\n| Local folder selection, installation or local OS permission | Keep the item visible and explain the concrete desktop step. | Requires local interaction; these physical tasks are declared exceptions, not silently dropped decisions. |\n\nM0 must enumerate the current desktop inbox and actual command handlers. Every type is mapped to an executable mobile action, an authority handoff, or a justified physical exception. Any additional unhandled type blocks the coverage milestone.",
+      "placement": "before-details"
+    },
+    {
+      "id": "architecture",
+      "title": "Architecture and data contract",
+      "body": "Proposed flow: desktop runtime → authenticated inbox publication at pods.openape.ai → durable owner inbox → APNs alert → native item view. For a decision: phone → bounded authenticated command → online runtime or owner IdP → authoritative receipt → all inbox surfaces.\n\nExtend the existing relay service and central workspace model; do not create a new microservice. Separate inbox routes and device scopes from the broad legacy remote-control command API. Use verified issuer/subject everywhere, not an email string or a client-supplied owner ID. Reuse the DDISA browser flow/PKCE and session machinery only after removing any assumption that inbox authorization requires runtime pairing. Reject delegated agent identities for human decisions. Registration, logout and revocation invalidate push targets and sessions consistently; logout removes local account data.\n\nA decision projection carries stable source identity (runtime, generation, Pod, decision type, source ID), a revision, bounded display context, valid actions, authority, expiry, source freshness and current outcome. Enforce current revision and source ownership both at ingress and before runtime execution. Mobile commands have an idempotency ID and request digest. A relay acceptance receipt means received, not applied; timeout remains pending/unknown until reconciled. A restored runtime generation invalidates old actions. Never replay an offline decision automatically.\n\nA notification carries a stable producer event ID, runtime/Pod/run provenance, title, bounded body, creation time, optional safe links and optional decision reference. Owner identity is derived from the runtime session; scripts cannot supply arbitrary recipients. Store publication and push-outbox insertion transactionally. Retries with the same ID and digest return the same receipt; changed content conflicts. The runtime keeps a durable outbox until server acknowledgement. Consumer read/archive state is account-wide and survives app reinstall; paginated cursors and tombstones prevent deleted items from reappearing. Device keys, APNs tokens and session credentials remain outside item payloads.\n\nProposed initial limits: 64 KiB UTF-8 body, 90 days of message/completed-decision history, at most 10,000 retained entries per owner, bounded push retry age of 24 hours and paginated reads of 50 items. Pending decisions remain visible until their source resolves or expires. Exhausted storage limits reject new publications with an observable retryable/quota error rather than silently dropping unread content. Decide eviction order and backup deletion retention in M0. These are proposal defaults, not claims about current production.\n\nThe service stores only the selected inbox projection and is trusted with its content. Use HTTPS, existing access isolation, production storage/backup protection and content-free logs. Do not describe this path as end-to-end encrypted. Preserve the old encrypted-v1 transport while old clients need it; do not weaken its checks to implement the new inbox.",
+      "placement": "after-details"
+    },
+    {
+      "id": "offline",
+      "title": "Offline, concurrency and notification behavior",
+      "body": "Published messages and decision context remain readable from the service while the Mac is offline. A disconnected phone shows its protected cache with the last successful synchronization time. Runtime-dependent actions require an online, current runtime; show why they are unavailable rather than queueing owner intent. An IdP decision may complete while the runtime is offline, but the app must distinguish authority approval from later runtime consumption.\n\nWhen desktop and phone decide concurrently, one authoritative mutation wins; the other refreshes and shows the recorded result. A deleted Pod or expired batch produces a resolved/expired detail, never a broken deep link or an actionable stale card. Fetch changes on foreground, pull-to-refresh and push navigation; do not rely on background execution for correctness.\n\nNotifications from notify are intentional producer messages. Do not turn every run event or log line into push. Decisions get one alert on becoming actionable, with coalescing and a stable event ID. Per-Pod mute affects alerts only. Push retry/backoff, APNs token rotation and invalid-token cleanup are durable; do not reuse the current in-memory rate limiter as a delivery guarantee. APNs acceptance, device display, opened item and read state are separate observations.",
+      "placement": "after-details"
+    },
+    {
+      "id": "orientation",
+      "title": "Repository orientation and reuse",
+      "body": "Canonical repository: https://repos.openape.ai/patrick/monorepo. Draft source: .claude/plans/2026-10-07-pods-ios-inbox/plan.json. No product code is changed by authoring this plan.\n\n| Existing location | Treatment |\n| --- | --- |\n| apps/openape-pods-ios/Sources/OpenApePods/PodsRootView.swift, PodDetailView.swift, PodsModel.swift | Replace old creation/chat/detail navigation with the two-purpose app; no feature-parity obligation. |\n| apps/openape-pods-ios/Sources/PodsCore/RelayClient.swift, LocalStore.swift, Protocol.swift | Reuse bounded networking, secure storage and session patterns after separating inbox authorization from legacy pairing. |\n| apps/openape-pods-ios/Sources/OpenApePods/NotificationCoordinator.swift | Reuse registration plumbing; replace runtime-only navigation with item routing. |\n| apps/openape-pods/src/renderer/central/DecisionsInbox.vue | Inventory of current decision categories; do not copy Vue presentation into SwiftUI. |\n| apps/openape-pods/src/contracts/central*.ts, src/main/central/controller.ts, src/main/gates/ | Reuse authoritative commands and revision checks; add bounded inbox projection/adapters. |\n| apps/openape-pods/src/main/programs/runtime.ts | Locate the execution context for the proposed context.notify contract and durable runtime outbox. |\n| apps/openape-pods-relay/server/utils/workspace-store.ts, workspace.ts | Existing owner-keyed central storage and browser auth; extend with narrow native inbox service and human sessions. |\n| apps/openape-pods-relay/server/utils/notifications.ts | APNs transport exists; add persistent retry/deduplication and item routing. |\n| packages/pods-protocol; apps/openape-pods-ios/Tests, UITests | Extend current contract/test infrastructure; no new runner or default test-chain changes. |\n| docs/architecture/pods-mobile-protocol.md; docs/operations/pods-mobile*.md | Rewrite current product/trust/readiness statements and retain historical acceptance as historical evidence. |\n\nThe central WorkspaceStore persists JSON snapshots/parts readable by the service. The legacy mobile protocol describes a different encrypted path. Treating all existing pods.openape.ai traffic as server-blind would therefore be wrong. The new inbox explicitly selects the central trust model.\n\nThe existing mobile release note identifies physical-device/APNs and Apple distribution work as deferred; inspect current access and credentials through the supported secret flow during M6, never infer completion from the old synthetic tests.",
+      "placement": "after-details"
+    },
+    {
+      "id": "sequence",
+      "title": "Dependencies, release and approval",
+      "body": "Order: M0 → M1 → M2/M3 → M4 → M5 → M6 → M7. M2 and M3 are logically independent after M1, but this plan does not require parallel agents. No new third-party dependency is assumed.\n\nDeploy additive service contracts before the desktop producers and iOS client. Keep new capabilities off until compatible consumers are present. Record native issue/PR links, exact source SHA, rollout flag state and deployment receipts; follow the repository’s existing mirror/CI pipeline. Re-evaluate the old client compatibility window before removing any shared endpoint.\n\nThis draft has no implementation approval. The owner’s instruction authorizes writing the plan and establishes the product replacement, not approval of the new data-visibility contract. Before code changes, obtain approval bound to proposal revision 1, especially the account inbox without pairing and its service-readable content. If either choice changes, issue a new proposal revision. Apple credentials, a physical phone and selection of the pilot producer are later execution inputs, not blockers to authoring this plan.",
+      "placement": "after-details"
+    }
+  ],
+  "milestones": [
+    {
+      "id": "M0",
+      "title": "Freeze the product and contracts",
+      "goal": "Make replacement scope, data visibility and decision coverage executable.",
+      "status": "planned",
+      "steps": [
+        "Refresh canonical main in an isolated feature checkout, create/link a native development issue, and map every current decision handler.",
+        "Specify inbox types, retention/quota behavior, human-session scopes, notify limits and migration compatibility. Produce a small two-tab flow mockup with synthetic content."
+      ],
+      "acceptance": [
+        "Every existing decision type is mapped; only concrete physical desktop tasks require desktop handoff.",
+        "The account-only onboarding and server-readable projection match the approved revision; no unresolved trust-model choice is hidden in implementation."
+      ],
+      "rollback": "No production changes; revise the draft contracts."
+    },
+    {
+      "id": "M1",
+      "title": "Account sessions and durable inbox service",
+      "goal": "Expose only the owner inbox through bounded native APIs.",
+      "status": "planned",
+      "steps": [
+        "Adapt DDISA native login/refresh/logout for an inbox device session, with automatic device registration and no per-runtime pairing. Add scoped routes and additive storage behind a feature flag.",
+        "Implement item publication, cursor pagination, read/archive state, revocation and bounded retention, with transactional push-outbox writes."
+      ],
+      "acceptance": [
+        "Two owners cannot read or mutate each other’s items; delegated actors cannot decide; revoked sessions and devices are rejected.",
+        "A fresh signed-in device can read existing published items without a paired/online Mac; reinstall restores account state, not old device credentials."
+      ],
+      "rollback": "Disable the inbox flag; keep additive tables and legacy routes intact."
+    },
+    {
+      "id": "M2",
+      "title": "Connect authoritative decisions",
+      "goal": "Resolve desktop-equivalent decisions safely from the inbox.",
+      "status": "planned",
+      "steps": [
+        "Publish normalized decision projections and route allowed actions through existing runtime handlers with current revisions, batch generation and idempotency.",
+        "Implement verified IdP/Secrets handoffs, return reconciliation and explicit physical-task handoff; expose receipt and source freshness."
+      ],
+      "acceptance": [
+        "Each row of the decision matrix has a behavioral acceptance case; business decisions work from the phone without desktop UI interaction.",
+        "Concurrent desktop/phone action applies once; expired or modified cases fail clearly; relay acceptance and IdP approval never falsely imply completed execution."
+      ],
+      "rollback": "Disable mobile decision submission; retain readable history and existing desktop/IdP decisions."
+    },
+    {
+      "id": "M3",
+      "title": "Add a built-in notification action",
+      "goal": "A Pod can notify its owner without a Telegram bot or chat ID.",
+      "status": "planned",
+      "steps": [
+        "Introduce a bounded context.notify API, or the equivalent established execution-context method confirmed in M0: stable event key, title, body and safe links. Enforce owner binding outside the script.",
+        "Persist runtime outbox before dispatch, reconcile server receipts, and document accepted-versus-read semantics and quota errors."
+      ],
+      "acceptance": [
+        "A synthetic Pod produces a durable notification; crash/restart and transport retries do not create duplicates or lose an acknowledged item.",
+        "Malformed/oversized payloads, changed duplicate bodies and arbitrary-recipient attempts are refused with visible errors."
+      ],
+      "rollback": "Disable the new producer capability; preserve queued items and keep existing Telegram scripts unchanged."
+    },
+    {
+      "id": "M4",
+      "title": "Replace the native app experience",
+      "goal": "Ship only Decisions and Notifications as the main product surfaces.",
+      "status": "planned",
+      "steps": [
+        "Replace old navigation, creation, chat and administration screens; build login, lists, decision/message details, completed history and settings. Reuse secure storage and HTTP code selectively.",
+        "Implement foreground synchronization, item deep links, protected offline cache, stale-state labels, accessibility and DE/EN strings."
+      ],
+      "acceptance": [
+        "The native acceptance harness shows both tabs, an actual completed business decision, a readable full message and restored read state after relaunch.",
+        "Small-screen/large-text and VoiceOver inspection passes; offline and revoked-session views contain no misleading active controls."
+      ],
+      "rollback": "Keep the previous signed build available; gate new routes so a previous client cannot accidentally use new actions."
+    },
+    {
+      "id": "M5",
+      "title": "Connect reliable push and exact item navigation",
+      "goal": "Alert the owner without making push the source of truth.",
+      "status": "planned",
+      "steps": [
+        "Extend APNs transport with persistent retries/backoff, token rotation, per-device opt-in, per-Pod mute, decision alert coalescing and opaque item routing.",
+        "Distinguish APNs acceptance from device display and item read; preserve inbox delivery when push is denied, delayed or unavailable."
+      ],
+      "acceptance": [
+        "Mocked APNs failures, duplicate scheduling, token invalidation and server restart behave correctly; muted items remain in the inbox.",
+        "Taps on active, completed, expired and account-mismatched item references navigate safely and never execute a decision."
+      ],
+      "rollback": "Turn off APNs dispatch independently; the inbox and manual refresh remain functional."
+    },
+    {
+      "id": "M6",
+      "title": "Prove the flow on a real iPhone",
+      "goal": "Complete the previously deferred physical-device and push acceptance for this new product.",
+      "status": "planned",
+      "steps": [
+        "Verify Apple signing/app record, Associated Domains and APNs configuration. Request any missing key through secrets.openape.ai. Produce an internal signed/TestFlight build after required checks.",
+        "Exercise real DDISA login, a phone decision synchronized to desktop, an IdP decision with confirmed consumption, push with app backgrounded, tap-to-item, disabled push and offline Mac reading."
+      ],
+      "acceptance": [
+        "Record physical device/build IDs, observed APNs delivery and authoritative decision receipts in a verified Test Runs report; simulated results cannot satisfy this milestone.",
+        "No unresolved Apple credential/device blocker is described as complete; public App Store review remains separately out of scope."
+      ],
+      "rollback": "Pause internal distribution or dispatch and revert service flags; never restore a database over newer decisions or revocations."
+    },
+    {
+      "id": "M7",
+      "title": "Pilot, migrate and retire old mobile content",
+      "goal": "Use the new app for one real notification producer and daily decisions.",
+      "status": "planned",
+      "steps": [
+        "Select one existing Telegram notification producer with the owner, retain its old revision, switch only that producer after successful device acceptance, and observe at least two relevant deliveries/runs.",
+        "Remove unused old iOS screens and mobile-only creation/chat code after checking consumers. Keep still-used server capabilities for their compatibility window; update docs and privacy disclosures."
+      ],
+      "acceptance": [
+        "The selected real Pod reaches the phone without Telegram setup; decisions agree across phone and desktop; a documented rollback restores the producer without duplicate replay.",
+        "Every milestone has actual evidence or remains open; old acceptance is not reused as proof of the replacement."
+      ],
+      "rollback": "Restore only the selected producer revision for future events and disable new mobile capabilities; preserve receipts and deduplication records."
+    }
+  ],
+  "risks": [
+    {
+      "title": "Server visibility differs from the old encrypted mobile path",
+      "mitigation": "Require explicit approval of this proposal’s trust model; document exact projected fields and verify that no credentials or unrelated content enter the inbox."
+    },
+    {
+      "title": "Decision parity can conceal desktop-only assumptions",
+      "mitigation": "Use the complete decision matrix as the acceptance contract; preserve current authority/hash/revision checks and expose physical exceptions honestly."
+    },
+    {
+      "title": "Push credentials and device acceptance remain dependencies",
+      "mitigation": "Check access early in M0, obtain credentials only through Secrets, and keep real APNs/device acceptance mandatory in M6."
+    },
+    {
+      "title": "Duplicate or missing messages during migration",
+      "mitigation": "Persist stable producer IDs and outboxes; switch one producer only after receipt/device proof, retain rollback and never resend uncertain old events automatically."
+    }
+  ],
+  "verification": [
+    "Plan authoring only: validate the bilingual schema, render the canonical HTML template, inspect the report, publish privately under Plans, and compare the downloaded HTML digest. No product tests are claimed in this draft.",
+    "At implementation start, use the checkout toolchain in each shell: export OPENAPE_PNPM_BIN=/Users/patrickhofmann/Companies/private/repos/openape/.toolchains/pnpm/10.29.3/bin; export PATH=\"$OPENAPE_PNPM_BIN:$PATH\"; . ./scripts/activate-node.sh; pnpm run doctor. Recheck pins on canonical main before use.",
+    "Run lint → typecheck → affected app builds → relevant tests, fixing the first failure. Existing commands: pnpm lint; pnpm typecheck; pnpm --filter @openape/pods-protocol build; pnpm --filter @openape/pods-relay build; pnpm --filter @openape/pods build; pnpm --filter @openape/pods-ios typecheck. Verify package names and actual affected scope before executing.",
+    "Extend existing suites for consequential contracts: owner/actor isolation, revocation, idempotency, stale decisions, crash recovery and no grant self-approval. Use pnpm --filter @openape/pods-protocol test; pnpm --filter @openape/pods-relay test; pnpm --filter @openape/pods test:fast; pnpm --filter @openape/pods-ios test. No new runners, default test chains or redundant implementation-mirroring tests.",
+    "Adapt and run the established manual native harness: pnpm --filter @openape/pods-ios test:layout. Retain physical-device evidence separately. Before deployment use pnpm check:ci and the required exact-head external merge checks; report real screenshots/CLI receipts in one rendered Test Runs HTML."
+  ],
+  "completion": {
+    "result": "not-assessed",
+    "summary": "This document proposes the replacement. No implementation milestone or product acceptance has been completed under this plan."
+  },
+  "handoff": "Next: review proposal revision 1. After approval, start M0 on current canonical main and preserve this document as the living plan. The product direction is established; implementation and the proposed service-readable inbox await approval.",
+  "changelog": [
+    {
+      "date": "2026-10-07",
+      "text": "Created proposal revision 1 from the owner’s two-purpose product direction and explicit instruction to discard the old iOS content. Inspected existing decision categories, central workspace storage, mobile protocol, APNs transport and test scripts."
+    }
+  ],
+  "links": [
+    {
+      "title": "Canonical monorepo",
+      "url": "https://repos.openape.ai/patrick/monorepo"
+    },
+    {
+      "title": "Historical native mobile issue 1362",
+      "url": "https://repos.openape.ai/patrick/monorepo/issues/1362"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "owner-direction",
+      "kind": "text",
+      "role": "reference",
+      "title": "Original owner direction, 2026-10-07",
+      "text": "1. um Entscheidungen zu treffen die ich sonst auf der Desktop App treffen müsste.\n2. um Notifications zu erhalten, die ich ansonsten in den Pods an Telegram weiterleiten würde\n\ndie bestehende iOS App kann damit praktisch inhaltlich verworfen werden. natürlich braucht es noch mehr als die anmeldung - schreibe einen plan"
+    }
+  ],
+  "translations": {
+    "defaultLanguage": "de",
+    "entries": [
+      {
+        "path": "title",
+        "source": "Rebuild Pods for iOS: decisions and notifications",
+        "text": "Pods für iOS neu bauen: Entscheidungen und Mitteilungen"
+      },
+      {
+        "path": "goal",
+        "source": "After signing in with DDISA, the owner can resolve supported Pod decisions and read Pod notifications on an iPhone, without opening the desktop app.",
+        "text": "Nach der DDISA-Anmeldung kann der Eigentümer unterstützte Pod-Entscheidungen am iPhone erledigen und Pod-Mitteilungen lesen, ohne die Desktop-App zu öffnen."
+      },
+      {
+        "path": "summary",
+        "source": "Replace the existing iOS product with two tabs: Decisions and Notifications. Use an account inbox at pods.openape.ai, retain the desktop as execution authority, and deliver notifications through real Apple push. Reuse technical components only where they fit this product.",
+        "text": "Die bestehende iOS-App wird inhaltlich durch zwei Bereiche ersetzt: Entscheidungen und Mitteilungen. Eine Konto-Inbox auf pods.openape.ai verbindet das iPhone mit den Pods; die Ausführung bleibt am Desktop, Benachrichtigungen kommen über echten Apple-Push. Technische Bausteine werden nur bei Eignung übernommen."
+      },
+      {
+        "path": "problem.statement",
+        "source": "The existing mobile app mirrors creation, chat and administration instead of the two tasks the owner needs on the phone.",
+        "text": "Die bisherige mobile App bildet Erstellung, Chat und Verwaltung ab, statt sich auf die beiden am Handy benötigten Aufgaben zu konzentrieren."
+      },
+      {
+        "path": "problem.impact",
+        "source": "Decisions still require desktop attention, while useful Pod output is routed through Telegram.",
+        "text": "Entscheidungen binden den Eigentümer an den Desktop; wichtige Pod-Ergebnisse werden über Telegram zugestellt."
+      },
+      {
+        "path": "problem.approach",
+        "source": "Build a native decision inbox and a durable notification inbox around the verified DDISA account.",
+        "text": "Eine native Entscheidungs-Inbox und eine dauerhafte Mitteilungs-Inbox an das verifizierte DDISA-Konto anbinden."
+      },
+      {
+        "path": "problem.outcome",
+        "source": "A notification opens the relevant item; the owner reads or decides, and the authoritative state is visible on every connected surface.",
+        "text": "Eine Benachrichtigung öffnet den passenden Eintrag; der Eigentümer liest oder entscheidet und sieht auf allen verbundenen Oberflächen den maßgeblichen Stand."
+      },
+      {
+        "path": "context",
+        "source": "The owner requested a new plan and explicitly discarded the existing iOS product content. This is a replacement proposal, not a reskin or an implementation approval. Inspection used local monorepo main 6bd4c0d0512c2532b10f3b562dab19afeac7a471; the local origin/main ref was e89449e261260e88169394f4f49aa77130f564ea and was not fetched. Existing untracked work was preserved. Implementation must recheck canonical main.",
+        "text": "Der Eigentümer hat einen neuen Plan angefordert und den bisherigen Inhalt der iOS-App ausdrücklich zur Disposition gestellt. Dies ist ein Ersatzkonzept, kein Oberflächenumbau und keine Umsetzungsfreigabe. Geprüft wurde der lokale Monorepo-Stand main 6bd4c0d0512c2532b10f3b562dab19afeac7a471; der lokale origin/main-Verweis war e89449e261260e88169394f4f49aa77130f564ea und wurde nicht neu abgerufen. Bestehende unversionierte Arbeit blieb erhalten. Vor Umsetzung ist der kanonische main erneut zu prüfen."
+      },
+      {
+        "path": "scope.0",
+        "source": "A native SwiftUI app with Decisions and Notifications, item details and a small account/settings sheet; German and English.",
+        "text": "Eine native SwiftUI-App mit Entscheidungen und Mitteilungen, Detailansichten sowie einer kleinen Konto-/Einstellungsansicht; Deutsch und Englisch."
+      },
+      {
+        "path": "scope.1",
+        "source": "DDISA login, device sessions and revocation; account-scoped inbox APIs, decision receipts, notification persistence and per-device push subscriptions.",
+        "text": "DDISA-Anmeldung, Gerätesitzungen und Widerruf; kontogebundene Inbox-APIs, Entscheidungsbestätigungen, dauerhafte Mitteilungen und Push-Abonnements je Gerät."
+      },
+      {
+        "path": "scope.2",
+        "source": "Runtime adapters for current desktop decisions, a built-in notify operation for Pods, real APNs delivery and migration of one selected Telegram notification producer.",
+        "text": "Runtime-Anbindung der heutigen Desktop-Entscheidungen, eine eingebaute notify-Operation für Pods, echte APNs-Zustellung und Umstellung eines ausgewählten Telegram-Mitteilungserzeugers."
+      },
+      {
+        "path": "scope.3",
+        "source": "Physical iPhone acceptance and an internal signed distribution, with recorded operational rollback and revised mobile documentation.",
+        "text": "Abnahme auf einem echten iPhone und eine intern verteilte signierte Version mit dokumentierter Rückkehrmöglichkeit und aktualisierter Mobil-Dokumentation."
+      },
+      {
+        "path": "nonGoals.0",
+        "source": "Pod creation, chat, script editing, network maps, run administration, resource browsing or execution on the phone.",
+        "text": "Pod-Erstellung, Chat, Skriptbearbeitung, Netzwerkkarten, Laufverwaltung, Ressourcenbrowser oder Ausführung auf dem Handy."
+      },
+      {
+        "path": "nonGoals.1",
+        "source": "Replacing DDISA grant authority, introducing a decision CLI for agents, or implementing arbitrary desktop control through mobile API calls.",
+        "text": "Ersetzung der DDISA-Freigabeinstanz, eine Entscheidungs-CLI für Agenten oder beliebige Desktop-Steuerung über mobile API-Aufrufe."
+      },
+      {
+        "path": "nonGoals.2",
+        "source": "A team inbox, Android, a general messenger, attachment uploads, migration of old Telegram history, or automatic replacement of all existing Telegram producers.",
+        "text": "Eine Team-Inbox, Android, ein allgemeiner Messenger, Datei-Uploads, Übernahme alter Telegram-Verläufe oder automatische Umstellung aller bisherigen Telegram-Erzeuger."
+      },
+      {
+        "path": "nonGoals.3",
+        "source": "Public App Store publication and a separate iPad feature set; these can follow the internal iPhone acceptance.",
+        "text": "Öffentliche Veröffentlichung im App Store und ein eigener iPad-Funktionsumfang; beides kann nach der internen iPhone-Abnahme folgen."
+      },
+      {
+        "path": "decisions.0.title",
+        "source": "Replace the product content",
+        "text": "Produktinhalt ersetzen"
+      },
+      {
+        "path": "decisions.0.description",
+        "source": "The previous iOS screens and feature scope carry no preservation requirement. Keep the app identity and suitable infrastructure, not its old navigation or functional breadth.",
+        "text": "Die bisherigen iOS-Ansichten und ihr Funktionsumfang müssen nicht erhalten bleiben. App-Identität und geeignete Infrastruktur können bleiben; bisherige Navigation und Funktionsbreite sind keine Vorgabe."
+      },
+      {
+        "path": "decisions.1.title",
+        "source": "An account inbox, without per-Mac phone pairing",
+        "text": "Konto-Inbox ohne Handy-Kopplung an einzelne Macs"
+      },
+      {
+        "path": "decisions.1.description",
+        "source": "The proposed new inbox belongs to the exact verified (issuer, subject). A native device signs in to pods.openape.ai and sees entries from runtimes already enrolled to that owner. Device session registration is automatic; the old encrypted remote-control pairing is not an onboarding requirement for this inbox.",
+        "text": "Die vorgeschlagene neue Inbox gehört dem exakt verifizierten Paar (issuer, subject). Ein natives Gerät meldet sich bei pods.openape.ai an und sieht Einträge der bereits diesem Eigentümer zugeordneten Runtimes. Die Gerätesitzung wird automatisch registriert; die alte Kopplung für verschlüsselte Fernsteuerung ist keine Einstiegsvoraussetzung dieser Inbox."
+      },
+      {
+        "path": "decisions.2.title",
+        "source": "Explicit service visibility for selected inbox content",
+        "text": "Ausgewählte Inbox-Inhalte sind für den Dienst lesbar"
+      },
+      {
+        "path": "decisions.2.description",
+        "source": "Use the existing central workspace trust model for a bounded inbox projection: the service can read selected decision context and notification bodies. This is not end-to-end encryption. Keep secrets, credentials, arbitrary files and full transcripts out. The legacy encrypted mobile transport remains a separate contract during transition. If server-blind inbox content is required, revise this plan before implementation rather than silently restoring pairing.",
+        "text": "Für eine begrenzte Inbox-Projektion gilt das Vertrauensmodell des bestehenden zentralen Workspace: Der Dienst kann ausgewählten Entscheidungskontext und Mitteilungsinhalte lesen. Das ist keine Ende-zu-Ende-Verschlüsselung. Geheimnisse, Zugangsdaten, beliebige Dateien und vollständige Gesprächsverläufe bleiben ausgeschlossen. Der bisherige verschlüsselte Mobiltransport bleibt während des Übergangs ein separater Vertrag. Soll der Dienst Inbox-Inhalte nicht lesen können, wird der Plan vor Umsetzung angepasst, statt stillschweigend die Kopplung wieder einzuführen."
+      },
+      {
+        "path": "decisions.3.title",
+        "source": "Decisions remain with their existing authority",
+        "text": "Entscheidungen bleiben bei ihrer zuständigen Instanz"
+      },
+      {
+        "path": "decisions.3.description",
+        "source": "Pods handles business choices and supported setup/reconciliation commands. The owner IdP decides grants in its normal browser surface; Secrets handles secret entry. Returning to the app triggers status reconciliation and does not itself prove approval or execution.",
+        "text": "Pods bearbeitet fachliche Entscheidungen sowie unterstützte Einrichtung und Zustellklärung. Der IdP des Eigentümers entscheidet Berechtigungen in seiner regulären Browseransicht; Secrets übernimmt Geheimniseingaben. Die Rückkehr in die App löst einen Statusabgleich aus und belegt allein weder Freigabe noch Ausführung."
+      },
+      {
+        "path": "decisions.4.title",
+        "source": "Push is an alert, the inbox is the record",
+        "text": "Push weist hin, die Inbox bewahrt den Inhalt"
+      },
+      {
+        "path": "decisions.4.description",
+        "source": "Store the item before scheduling push. Use content-free generic APNs alerts by default, opaque item references for navigation and full authenticated content in the app. Push failure must never lose the inbox entry; notification taps never approve actions.",
+        "text": "Den Eintrag vor dem Push-Auftrag speichern. Standardmäßig inhaltsarme generische APNs-Hinweise, undurchsichtige Eintragsverweise zur Navigation und vollständige authentifizierte Inhalte in der App verwenden. Push-Fehler dürfen keinen Inbox-Eintrag verlieren; Antippen gibt niemals Aktionen frei."
+      },
+      {
+        "path": "sections.0.title",
+        "source": "What the owner sees",
+        "text": "Was der Eigentümer sieht"
+      },
+      {
+        "path": "sections.0.body",
+        "source": "1. Sign in with the DDISA account through the system browser. Return directly to Decisions; no runtime picker or pairing code is required for the new inbox. With no connected runtime, explain that the desktop must first connect with the same account.\n2. Decisions lists pending work across the account. Each card names the Pod and source, summarizes the question and consequence, and offers the current valid choices. Details contain enough evidence to decide; technical metadata is secondary. A short completed history explains where an item went.\n3. Notifications lists actual messages from Pods, newest first, with unread state, Pod name, time, full text and optional safe HTTPS links. Reading a message does not decide anything.\n4. A push opens its exact item after authentication. If it expired or was resolved elsewhere, show that outcome. A decision alert points to the decision instead of creating a duplicate message requiring separate dismissal.\n5. Settings contains account/logout, device revocation, push permission status and per-Pod mute controls. Muting suppresses push, not stored entries. Keep pending-decision counts separate from unread-message counts; the app badge initially counts pending decisions only.\n6. German is the initial language for Patrick, with English supported. Use system text styles, VoiceOver labels, adequate tap targets and clear empty/loading/offline/error states.",
+        "text": "1. Mit dem DDISA-Konto über den Systembrowser anmelden. Direkt zu Entscheidungen zurückkehren; die neue Inbox benötigt weder eine Runtime-Auswahl noch einen Kopplungscode. Ohne verbundene Runtime erklärt die App, dass sich zunächst der Desktop mit demselben Konto verbinden muss.\n2. Entscheidungen zeigt offene Aufgaben des Kontos. Jede Karte nennt Pod und Quelle, erklärt Frage und Konsequenz und bietet die aktuell gültigen Möglichkeiten. Details enthalten genug Belege für eine Entscheidung; technische Metadaten stehen im Hintergrund. Ein kurzer Erledigungsverlauf erklärt, wohin ein Eintrag verschwunden ist.\n3. Mitteilungen zeigt tatsächliche Nachrichten aus Pods, neueste zuerst, mit Ungelesen-Status, Pod-Name, Zeitpunkt, vollständigem Text und optionalen sicheren HTTPS-Links. Lesen entscheidet nichts.\n4. Ein Push öffnet nach Anmeldung genau seinen Eintrag. Ist er abgelaufen oder anderswo erledigt, wird dieser Ausgang angezeigt. Ein Entscheidungshinweis führt zur Entscheidung, statt eine zusätzliche separat abzuräumende Nachricht anzulegen.\n5. Einstellungen enthält Konto/Abmeldung, Gerätewiderruf, Push-Berechtigungsstatus und Stummschaltung je Pod. Stummschaltung unterdrückt Push, nicht gespeicherte Einträge. Offene Entscheidungen und ungelesene Mitteilungen werden getrennt gezählt; das App-Badge zählt zunächst nur offene Entscheidungen.\n6. Für Patrick startet die App auf Deutsch, Englisch wird ebenfalls unterstützt. Systemschriftgrößen, VoiceOver-Beschriftungen, ausreichende Berührungsflächen und klare Leer-/Lade-/Offline-/Fehlerzustände verwenden."
+      },
+      {
+        "path": "sections.1.title",
+        "source": "Decision coverage and physical limits",
+        "text": "Entscheidungsumfang und physische Grenzen"
+      },
+      {
+        "path": "sections.1.body",
+        "source": "| Current decision | New mobile behavior | Authority / acceptance |\n| --- | --- | --- |\n| Network and workflow routing choices | Show the case, current options and consequence; choose one. | Existing runtime gate handlers; stale versions rejected. |\n| Frozen approval batches and runtime execution permissions | Explain scope and expiry; open the verified owner IdP link; refresh on return. | IdP grant authority and existing consumption checks; no mobile grant-approval endpoint. |\n| Batch exclusions and uncertain batches | Review selected members and mandatory reason, or discard an uncertain batch with explicit consequences. | Existing gate semantics, exact batch generation and revision; no widening of a grant. |\n| Unknown external delivery | Show destination, operation and uncertainty; record observed delivery or explicitly authorize the existing retry path. | Runtime reconciliation; an unknown result never becomes an automatic resend. |\n| Setup proposals | Accept/decline exact supported variable, HTTPS and pre-offered application proposals; reject secret text in ordinary fields. | Existing resource review rules and hashes; full arbitrary setup remains outside mobile scope. |\n| Missing secret | Open a scoped Secrets request and mirror its state. | secrets.openape.ai; no secret value through inbox or logs. |\n| Local folder selection, installation or local OS permission | Keep the item visible and explain the concrete desktop step. | Requires local interaction; these physical tasks are declared exceptions, not silently dropped decisions. |\n\nM0 must enumerate the current desktop inbox and actual command handlers. Every type is mapped to an executable mobile action, an authority handoff, or a justified physical exception. Any additional unhandled type blocks the coverage milestone.",
+        "text": "| Heutige Entscheidung | Neues mobiles Verhalten | Zuständigkeit / Abnahme |\n| --- | --- | --- |\n| Routing in Netzwerken und Workflows | Fall, aktuelle Optionen und Konsequenz anzeigen; einen Weg wählen. | Bestehende Runtime-Gate-Handler; veraltete Versionen werden abgelehnt. |\n| Eingefrorene Freigabebatches und Ausführungsrechte | Umfang und Ablauf erklären; verifizierten IdP-Link des Eigentümers öffnen; bei Rückkehr aktualisieren. | IdP-Freigabe und bestehende Verbrauchsprüfung; kein mobiler Endpunkt zur Grant-Freigabe. |\n| Batch-Ausschlüsse und unklare Batches | Ausgewählte Mitglieder mit Pflichtbegründung prüfen oder einen unklaren Batch mit sichtbarer Konsequenz verwerfen. | Bestehende Gate-Semantik, genaue Batch-Generation und Revision; keine Ausweitung einer Freigabe. |\n| Unklare externe Zustellung | Ziel, Vorgang und Unsicherheit zeigen; beobachtete Zustellung festhalten oder den vorhandenen Wiederholungsweg ausdrücklich auslösen. | Runtime-Zustellklärung; ein unbekanntes Ergebnis wird niemals automatisch erneut gesendet. |\n| Einrichtungsvorschläge | Genau geprüfte unterstützte Variablen-, HTTPS- und vorab angebotene Anwendungsvorschläge annehmen/ablehnen; Geheimnisse in normalen Feldern ablehnen. | Bestehende Ressourcenprüfungen und Hashes; beliebige Einrichtung bleibt außerhalb des mobilen Umfangs. |\n| Fehlendes Geheimnis | Passende Secrets-Anfrage öffnen und ihren Stand anzeigen. | secrets.openape.ai; kein Geheimniswert über Inbox oder Logs. |\n| Lokale Ordnerauswahl, Installation oder Betriebssystemberechtigung | Eintrag sichtbar lassen und den konkreten Desktop-Schritt erklären. | Lokale Interaktion erforderlich; diese physischen Aufgaben sind erklärte Ausnahmen, keine still entfernten Entscheidungen. |\n\nM0 muss die aktuelle Desktop-Inbox und tatsächlichen Befehlshandler vollständig erfassen. Jeder Typ erhält eine ausführbare mobile Aktion, eine Weiterleitung zur zuständigen Instanz oder eine begründete physische Ausnahme. Jeder weitere unbehandelte Typ blockiert den Meilenstein zur Abdeckung."
+      },
+      {
+        "path": "sections.2.title",
+        "source": "Architecture and data contract",
+        "text": "Architektur und Datenvertrag"
+      },
+      {
+        "path": "sections.2.body",
+        "source": "Proposed flow: desktop runtime → authenticated inbox publication at pods.openape.ai → durable owner inbox → APNs alert → native item view. For a decision: phone → bounded authenticated command → online runtime or owner IdP → authoritative receipt → all inbox surfaces.\n\nExtend the existing relay service and central workspace model; do not create a new microservice. Separate inbox routes and device scopes from the broad legacy remote-control command API. Use verified issuer/subject everywhere, not an email string or a client-supplied owner ID. Reuse the DDISA browser flow/PKCE and session machinery only after removing any assumption that inbox authorization requires runtime pairing. Reject delegated agent identities for human decisions. Registration, logout and revocation invalidate push targets and sessions consistently; logout removes local account data.\n\nA decision projection carries stable source identity (runtime, generation, Pod, decision type, source ID), a revision, bounded display context, valid actions, authority, expiry, source freshness and current outcome. Enforce current revision and source ownership both at ingress and before runtime execution. Mobile commands have an idempotency ID and request digest. A relay acceptance receipt means received, not applied; timeout remains pending/unknown until reconciled. A restored runtime generation invalidates old actions. Never replay an offline decision automatically.\n\nA notification carries a stable producer event ID, runtime/Pod/run provenance, title, bounded body, creation time, optional safe links and optional decision reference. Owner identity is derived from the runtime session; scripts cannot supply arbitrary recipients. Store publication and push-outbox insertion transactionally. Retries with the same ID and digest return the same receipt; changed content conflicts. The runtime keeps a durable outbox until server acknowledgement. Consumer read/archive state is account-wide and survives app reinstall; paginated cursors and tombstones prevent deleted items from reappearing. Device keys, APNs tokens and session credentials remain outside item payloads.\n\nProposed initial limits: 64 KiB UTF-8 body, 90 days of message/completed-decision history, at most 10,000 retained entries per owner, bounded push retry age of 24 hours and paginated reads of 50 items. Pending decisions remain visible until their source resolves or expires. Exhausted storage limits reject new publications with an observable retryable/quota error rather than silently dropping unread content. Decide eviction order and backup deletion retention in M0. These are proposal defaults, not claims about current production.\n\nThe service stores only the selected inbox projection and is trusted with its content. Use HTTPS, existing access isolation, production storage/backup protection and content-free logs. Do not describe this path as end-to-end encrypted. Preserve the old encrypted-v1 transport while old clients need it; do not weaken its checks to implement the new inbox.",
+        "text": "Vorgeschlagener Ablauf: Desktop-Runtime → authentifizierte Veröffentlichung auf pods.openape.ai → dauerhafte Konto-Inbox → APNs-Hinweis → native Detailansicht. Für Entscheidungen: Handy → begrenzter authentifizierter Befehl → erreichbare Runtime oder Eigentümer-IdP → maßgebliche Bestätigung → alle Inbox-Oberflächen.\n\nBestehenden Relay-Dienst und zentrales Workspace-Modell erweitern; keinen neuen Microservice anlegen. Inbox-Routen und Geräteberechtigungen von der breiten bisherigen Fernsteuerungs-API trennen. Überall verifizierte issuer/subject verwenden, keine E-Mail-Zeichenfolge oder vom Client gelieferte Eigentümer-ID. DDISA-Browserablauf/PKCE und Sitzungsverwaltung erst nach Entfernung etwaiger Kopplungsannahmen für Inbox-Zugriff übernehmen. Delegierte Agentenidentitäten dürfen keine menschlichen Entscheidungen treffen. Registrierung, Abmeldung und Widerruf müssen Push-Ziele und Sitzungen konsistent ungültig machen; Abmeldung entfernt lokale Kontodaten.\n\nEine Entscheidungsprojektion enthält stabile Quellidentität (Runtime, Generation, Pod, Entscheidungstyp, Quell-ID), Revision, begrenzten Anzeigekontext, gültige Aktionen, Zuständigkeit, Ablauf, Aktualität der Quelle und Ergebnis. Aktuelle Revision und Quellzuordnung werden beim Eingang und erneut vor Ausführung geprüft. Mobile Befehle besitzen eine Idempotenz-ID und einen Anfrage-Digest. Relay-Annahme bedeutet empfangen, nicht angewendet; ein Timeout bleibt ausstehend/unklar bis zum Abgleich. Eine wiederhergestellte Runtime-Generation entwertet alte Aktionen. Offline-Entscheidungen niemals automatisch nachholen.\n\nEine Mitteilung enthält stabile Erzeuger-Ereignis-ID, Runtime-/Pod-/Lauf-Herkunft, Titel, begrenzten Inhalt, Erstellungszeit, optional sichere Links und einen Entscheidungsverweis. Der Eigentümer folgt aus der Runtime-Sitzung; Skripte können keine beliebigen Empfänger angeben. Veröffentlichung und Push-Outbox-Eintrag werden gemeinsam transaktional gespeichert. Wiederholungen mit gleicher ID und gleichem Digest liefern dieselbe Bestätigung; geänderter Inhalt erzeugt einen Konflikt. Die Runtime hält eine dauerhafte Outbox bis zur Serverbestätigung. Lese-/Archivstatus gilt kontoweit und übersteht eine App-Neuinstallation; paginierte Cursor und Löschmarkierungen verhindern das Wiederauftauchen gelöschter Einträge. Geräteschlüssel, APNs-Token und Sitzungszugangsdaten bleiben außerhalb der Eintragsdaten.\n\nVorgeschlagene Anfangsgrenzen: 64 KiB UTF-8-Inhalt, 90 Tage Verlauf für Mitteilungen/erledigte Entscheidungen, höchstens 10.000 gespeicherte Einträge je Eigentümer, höchstens 24 Stunden Push-Wiederholung und Seiten mit 50 Einträgen. Offene Entscheidungen bleiben bis zur Auflösung oder zum Ablauf an der Quelle sichtbar. Erschöpfte Speichergrenzen weisen neue Veröffentlichungen mit sichtbarem Wiederholungs-/Quotenfehler zurück, statt ungelesene Inhalte still zu verlieren. Löschreihenfolge und Löschfristen für Backups werden in M0 festgelegt. Das sind Planvorschläge, keine Aussagen über die aktuelle Produktion.\n\nDer Dienst speichert nur die ausgewählte Inbox-Projektion und darf deren Inhalt lesen. HTTPS, bestehende Zugriffstrennung, Schutz produktiver Speicher/Backups und inhaltsfreie Logs verwenden. Diesen Weg nicht als Ende-zu-Ende-verschlüsselt bezeichnen. Den alten encrypted-v1-Transport erhalten, solange alte Clients ihn benötigen; seine Prüfungen für die neue Inbox nicht abschwächen."
+      },
+      {
+        "path": "sections.3.title",
+        "source": "Offline, concurrency and notification behavior",
+        "text": "Offline-Verhalten, Gleichzeitigkeit und Benachrichtigungen"
+      },
+      {
+        "path": "sections.3.body",
+        "source": "Published messages and decision context remain readable from the service while the Mac is offline. A disconnected phone shows its protected cache with the last successful synchronization time. Runtime-dependent actions require an online, current runtime; show why they are unavailable rather than queueing owner intent. An IdP decision may complete while the runtime is offline, but the app must distinguish authority approval from later runtime consumption.\n\nWhen desktop and phone decide concurrently, one authoritative mutation wins; the other refreshes and shows the recorded result. A deleted Pod or expired batch produces a resolved/expired detail, never a broken deep link or an actionable stale card. Fetch changes on foreground, pull-to-refresh and push navigation; do not rely on background execution for correctness.\n\nNotifications from notify are intentional producer messages. Do not turn every run event or log line into push. Decisions get one alert on becoming actionable, with coalescing and a stable event ID. Per-Pod mute affects alerts only. Push retry/backoff, APNs token rotation and invalid-token cleanup are durable; do not reuse the current in-memory rate limiter as a delivery guarantee. APNs acceptance, device display, opened item and read state are separate observations.",
+        "text": "Veröffentlichte Mitteilungen und Entscheidungskontext bleiben bei ausgeschaltetem Mac vom Dienst lesbar. Ein Handy ohne Verbindung zeigt seinen geschützten Cache samt letztem erfolgreichen Abgleich. Runtime-abhängige Aktionen benötigen eine erreichbare aktuelle Runtime; die App erklärt ihre Nichtverfügbarkeit, statt Eigentümerabsichten zu puffern. Eine IdP-Entscheidung kann bei ausgeschalteter Runtime erfolgen, die App muss aber Freigabe durch die Instanz und späteren Verbrauch durch die Runtime unterscheiden.\n\nBei gleichzeitiger Entscheidung am Desktop und Handy gewinnt eine maßgebliche Änderung; die andere Oberfläche aktualisiert und zeigt das gespeicherte Ergebnis. Ein gelöschter Pod oder abgelaufener Batch ergibt eine erledigte/abgelaufene Detailansicht, niemals einen defekten Direktlink oder eine veraltete ausführbare Karte. Änderungen beim Öffnen, manuellen Aktualisieren und Push-Einstieg abrufen; Korrektheit darf nicht von Hintergrundausführung abhängen.\n\nnotify-Mitteilungen sind bewusste Nachrichten des Erzeugers. Nicht jedes Laufereignis und jede Logzeile zu Push machen. Entscheidungen erhalten beim Handlungsbedarf einen Hinweis mit Bündelung und stabiler Ereignis-ID. Stummschaltung je Pod betrifft nur Hinweise. Push-Wiederholungen mit Warteabständen, APNs-Tokenwechsel und Bereinigung ungültiger Token müssen dauerhaft verwaltet werden; der heutige Arbeitsspeicher-Ratenbegrenzer ist keine Zustellgarantie. APNs-Annahme, Anzeige am Gerät, geöffneter Eintrag und Lesestatus sind getrennte Beobachtungen."
+      },
+      {
+        "path": "sections.4.title",
+        "source": "Repository orientation and reuse",
+        "text": "Repository-Einstieg und Wiederverwendung"
+      },
+      {
+        "path": "sections.4.body",
+        "source": "Canonical repository: https://repos.openape.ai/patrick/monorepo. Draft source: .claude/plans/2026-10-07-pods-ios-inbox/plan.json. No product code is changed by authoring this plan.\n\n| Existing location | Treatment |\n| --- | --- |\n| apps/openape-pods-ios/Sources/OpenApePods/PodsRootView.swift, PodDetailView.swift, PodsModel.swift | Replace old creation/chat/detail navigation with the two-purpose app; no feature-parity obligation. |\n| apps/openape-pods-ios/Sources/PodsCore/RelayClient.swift, LocalStore.swift, Protocol.swift | Reuse bounded networking, secure storage and session patterns after separating inbox authorization from legacy pairing. |\n| apps/openape-pods-ios/Sources/OpenApePods/NotificationCoordinator.swift | Reuse registration plumbing; replace runtime-only navigation with item routing. |\n| apps/openape-pods/src/renderer/central/DecisionsInbox.vue | Inventory of current decision categories; do not copy Vue presentation into SwiftUI. |\n| apps/openape-pods/src/contracts/central*.ts, src/main/central/controller.ts, src/main/gates/ | Reuse authoritative commands and revision checks; add bounded inbox projection/adapters. |\n| apps/openape-pods/src/main/programs/runtime.ts | Locate the execution context for the proposed context.notify contract and durable runtime outbox. |\n| apps/openape-pods-relay/server/utils/workspace-store.ts, workspace.ts | Existing owner-keyed central storage and browser auth; extend with narrow native inbox service and human sessions. |\n| apps/openape-pods-relay/server/utils/notifications.ts | APNs transport exists; add persistent retry/deduplication and item routing. |\n| packages/pods-protocol; apps/openape-pods-ios/Tests, UITests | Extend current contract/test infrastructure; no new runner or default test-chain changes. |\n| docs/architecture/pods-mobile-protocol.md; docs/operations/pods-mobile*.md | Rewrite current product/trust/readiness statements and retain historical acceptance as historical evidence. |\n\nThe central WorkspaceStore persists JSON snapshots/parts readable by the service. The legacy mobile protocol describes a different encrypted path. Treating all existing pods.openape.ai traffic as server-blind would therefore be wrong. The new inbox explicitly selects the central trust model.\n\nThe existing mobile release note identifies physical-device/APNs and Apple distribution work as deferred; inspect current access and credentials through the supported secret flow during M6, never infer completion from the old synthetic tests.",
+        "text": "Kanonisches Repository: https://repos.openape.ai/patrick/monorepo. Planquelle: .claude/plans/2026-10-07-pods-ios-inbox/plan.json. Das Erstellen dieses Plans ändert keinen Produktcode.\n\n| Bestehender Ort | Behandlung |\n| --- | --- |\n| apps/openape-pods-ios/Sources/OpenApePods/PodsRootView.swift, PodDetailView.swift, PodsModel.swift | Alte Erstellungs-/Chat-/Detailnavigation durch die App mit zwei Aufgaben ersetzen; keine Pflicht zum Funktionserhalt. |\n| apps/openape-pods-ios/Sources/PodsCore/RelayClient.swift, LocalStore.swift, Protocol.swift | Begrenzte Netzwerkanbindung, sichere Speicherung und Sitzungsmuster nach Trennung der Inbox-Berechtigung von alter Kopplung übernehmen. |\n| apps/openape-pods-ios/Sources/OpenApePods/NotificationCoordinator.swift | Registrierung wiederverwenden; Runtime-Navigation durch Eintragsnavigation ersetzen. |\n| apps/openape-pods/src/renderer/central/DecisionsInbox.vue | Inventar aktueller Entscheidungsarten; Vue-Darstellung nicht nach SwiftUI kopieren. |\n| apps/openape-pods/src/contracts/central*.ts, src/main/central/controller.ts, src/main/gates/ | Maßgebliche Befehle und Revisionsprüfungen übernehmen; begrenzte Inbox-Projektion/Adapter ergänzen. |\n| apps/openape-pods/src/main/programs/runtime.ts | Ausführungskontext für den vorgeschlagenen context.notify-Vertrag und dauerhafte Runtime-Outbox ermitteln. |\n| apps/openape-pods-relay/server/utils/workspace-store.ts, workspace.ts | Bestehende kontogebundene zentrale Speicherung und Browser-Anmeldung; um begrenzten nativen Inbox-Dienst und menschliche Sitzungen erweitern. |\n| apps/openape-pods-relay/server/utils/notifications.ts | APNs-Transport vorhanden; dauerhafte Wiederholung/Deduplizierung und Eintragsnavigation ergänzen. |\n| packages/pods-protocol; apps/openape-pods-ios/Tests, UITests | Bestehende Verträge und Tests erweitern; kein neuer Runner und keine Änderung der Standard-Testkette. |\n| docs/architecture/pods-mobile-protocol.md; docs/operations/pods-mobile*.md | Aktuelle Produkt-/Vertrauens-/Auslieferungsaussagen neu schreiben; historische Abnahmen als historische Nachweise erhalten. |\n\nDer zentrale WorkspaceStore speichert für den Dienst lesbare JSON-Snapshots und -Teile. Das bisherige Mobilprotokoll beschreibt einen anderen, verschlüsselten Weg. Die Annahme, der Dienst könne grundsätzlich keine Inhalte von pods.openape.ai lesen, wäre deshalb falsch. Die neue Inbox wählt ausdrücklich das zentrale Vertrauensmodell.\n\nDie bisherige Mobil-Auslieferungsnotiz führt echte Geräte-/APNs-Abnahme und Apple-Verteilung als verschoben. Während M6 aktuelle Zugänge und Zugangsdaten über den vorgesehenen Geheimnisweg prüfen; Abschluss niemals aus alten synthetischen Tests ableiten."
+      },
+      {
+        "path": "sections.5.title",
+        "source": "Dependencies, release and approval",
+        "text": "Abhängigkeiten, Auslieferung und Freigabe"
+      },
+      {
+        "path": "sections.5.body",
+        "source": "Order: M0 → M1 → M2/M3 → M4 → M5 → M6 → M7. M2 and M3 are logically independent after M1, but this plan does not require parallel agents. No new third-party dependency is assumed.\n\nDeploy additive service contracts before the desktop producers and iOS client. Keep new capabilities off until compatible consumers are present. Record native issue/PR links, exact source SHA, rollout flag state and deployment receipts; follow the repository’s existing mirror/CI pipeline. Re-evaluate the old client compatibility window before removing any shared endpoint.\n\nThis draft has no implementation approval. The owner’s instruction authorizes writing the plan and establishes the product replacement, not approval of the new data-visibility contract. Before code changes, obtain approval bound to proposal revision 1, especially the account inbox without pairing and its service-readable content. If either choice changes, issue a new proposal revision. Apple credentials, a physical phone and selection of the pilot producer are later execution inputs, not blockers to authoring this plan.",
+        "text": "Reihenfolge: M0 → M1 → M2/M3 → M4 → M5 → M6 → M7. M2 und M3 sind nach M1 fachlich unabhängig; dieser Plan verlangt keine parallelen Agenten. Es wird keine neue Fremdabhängigkeit vorausgesetzt.\n\nAdditive Dienstverträge vor Desktop-Erzeugern und iOS-Client ausliefern. Neue Fähigkeiten ausgeschaltet lassen, bis passende Verbraucher vorhanden sind. Native Issue-/PR-Links, genauen Quell-SHA, Schalterstand und Deployment-Bestätigungen festhalten; bestehenden Mirror-/CI-Weg des Repositorys verwenden. Vor Entfernung gemeinsamer Endpunkte die Kompatibilitätsfrist alter Clients erneut prüfen.\n\nDieser Entwurf besitzt keine Umsetzungsfreigabe. Die Anweisung des Eigentümers autorisiert das Schreiben des Plans und legt den Produktersatz fest, nicht die Freigabe des neuen Datensichtbarkeitsvertrags. Vor Codeänderungen eine Freigabe für Planrevision 1 einholen, insbesondere zur Konto-Inbox ohne Kopplung und ihren für den Dienst lesbaren Inhalten. Ändert sich eine dieser Entscheidungen, eine neue Planrevision erstellen. Apple-Zugänge, ein echtes Handy und die Wahl des Piloterzeugers sind spätere Umsetzungsvoraussetzungen, keine Hindernisse für das Schreiben dieses Plans."
+      },
+      {
+        "path": "milestones.0.title",
+        "source": "Freeze the product and contracts",
+        "text": "Produkt und Verträge festlegen"
+      },
+      {
+        "path": "milestones.0.goal",
+        "source": "Make replacement scope, data visibility and decision coverage executable.",
+        "text": "Ersatzumfang, Datensichtbarkeit und Entscheidungsabdeckung ausführbar festlegen."
+      },
+      {
+        "path": "milestones.0.steps.0",
+        "source": "Refresh canonical main in an isolated feature checkout, create/link a native development issue, and map every current decision handler.",
+        "text": "Kanonischen main in einem isolierten Feature-Checkout aktualisieren, natives Entwicklungs-Issue erstellen/verknüpfen und jeden aktuellen Entscheidungshandler zuordnen."
+      },
+      {
+        "path": "milestones.0.steps.1",
+        "source": "Specify inbox types, retention/quota behavior, human-session scopes, notify limits and migration compatibility. Produce a small two-tab flow mockup with synthetic content.",
+        "text": "Inbox-Typen, Aufbewahrung/Quotenverhalten, Berechtigungen menschlicher Sitzungen, notify-Grenzen und Migrationskompatibilität definieren. Einen kleinen Ablaufentwurf mit zwei Bereichen und synthetischen Inhalten erstellen."
+      },
+      {
+        "path": "milestones.0.acceptance.0",
+        "source": "Every existing decision type is mapped; only concrete physical desktop tasks require desktop handoff.",
+        "text": "Jede bestehende Entscheidungsart ist zugeordnet; nur konkrete physische Desktop-Aufgaben erfordern die Rückkehr zum Desktop."
+      },
+      {
+        "path": "milestones.0.acceptance.1",
+        "source": "The account-only onboarding and server-readable projection match the approved revision; no unresolved trust-model choice is hidden in implementation.",
+        "text": "Kontobasierter Einstieg und serverlesbare Projektion entsprechen der freigegebenen Revision; keine offene Vertrauensentscheidung wird in der Umsetzung versteckt."
+      },
+      {
+        "path": "milestones.0.rollback",
+        "source": "No production changes; revise the draft contracts.",
+        "text": "Keine Produktionsänderung; Vertragsentwürfe anpassen."
+      },
+      {
+        "path": "milestones.1.title",
+        "source": "Account sessions and durable inbox service",
+        "text": "Kontositzungen und dauerhafter Inbox-Dienst"
+      },
+      {
+        "path": "milestones.1.goal",
+        "source": "Expose only the owner inbox through bounded native APIs.",
+        "text": "Nur die Konto-Inbox über begrenzte native APIs zugänglich machen."
+      },
+      {
+        "path": "milestones.1.steps.0",
+        "source": "Adapt DDISA native login/refresh/logout for an inbox device session, with automatic device registration and no per-runtime pairing. Add scoped routes and additive storage behind a feature flag.",
+        "text": "Native DDISA-Anmeldung/Erneuerung/Abmeldung für Inbox-Gerätesitzungen anpassen, mit automatischer Geräteregistrierung ohne Kopplung je Runtime. Begrenzte Routen und additive Speicherung hinter einem Funktionsschalter ergänzen."
+      },
+      {
+        "path": "milestones.1.steps.1",
+        "source": "Implement item publication, cursor pagination, read/archive state, revocation and bounded retention, with transactional push-outbox writes.",
+        "text": "Eintragsveröffentlichung, Cursor-Paginierung, Lese-/Archivstatus, Widerruf und begrenzte Aufbewahrung mit transaktionaler Push-Outbox implementieren."
+      },
+      {
+        "path": "milestones.1.acceptance.0",
+        "source": "Two owners cannot read or mutate each other’s items; delegated actors cannot decide; revoked sessions and devices are rejected.",
+        "text": "Zwei Eigentümer können gegenseitig keine Einträge lesen oder ändern; delegierte Akteure können nicht entscheiden; widerrufene Sitzungen und Geräte werden abgewiesen."
+      },
+      {
+        "path": "milestones.1.acceptance.1",
+        "source": "A fresh signed-in device can read existing published items without a paired/online Mac; reinstall restores account state, not old device credentials.",
+        "text": "Ein frisch angemeldetes Gerät kann veröffentlichte Einträge ohne gekoppelten/erreichbaren Mac lesen; Neuinstallation stellt Kontostand, nicht alte Gerätezugangsdaten wieder her."
+      },
+      {
+        "path": "milestones.1.rollback",
+        "source": "Disable the inbox flag; keep additive tables and legacy routes intact.",
+        "text": "Inbox-Schalter deaktivieren; additive Tabellen und alte Routen erhalten."
+      },
+      {
+        "path": "milestones.2.title",
+        "source": "Connect authoritative decisions",
+        "text": "Maßgebliche Entscheidungen anbinden"
+      },
+      {
+        "path": "milestones.2.goal",
+        "source": "Resolve desktop-equivalent decisions safely from the inbox.",
+        "text": "Desktop-äquivalente Entscheidungen verlässlich aus der Inbox erledigen."
+      },
+      {
+        "path": "milestones.2.steps.0",
+        "source": "Publish normalized decision projections and route allowed actions through existing runtime handlers with current revisions, batch generation and idempotency.",
+        "text": "Normalisierte Entscheidungsprojektionen veröffentlichen und erlaubte Aktionen mit aktuellen Revisionen, Batch-Generation und Idempotenz über bestehende Runtime-Handler führen."
+      },
+      {
+        "path": "milestones.2.steps.1",
+        "source": "Implement verified IdP/Secrets handoffs, return reconciliation and explicit physical-task handoff; expose receipt and source freshness.",
+        "text": "Verifizierte IdP-/Secrets-Weiterleitungen, Rückkehrabgleich und ausdrückliche Übergabe physischer Aufgaben implementieren; Bestätigung und Quellenaktualität anzeigen."
+      },
+      {
+        "path": "milestones.2.acceptance.0",
+        "source": "Each row of the decision matrix has a behavioral acceptance case; business decisions work from the phone without desktop UI interaction.",
+        "text": "Jede Zeile der Entscheidungsmatrix besitzt einen Verhaltensnachweis; fachliche Entscheidungen funktionieren vom Handy ohne Interaktion mit der Desktop-Oberfläche."
+      },
+      {
+        "path": "milestones.2.acceptance.1",
+        "source": "Concurrent desktop/phone action applies once; expired or modified cases fail clearly; relay acceptance and IdP approval never falsely imply completed execution.",
+        "text": "Gleichzeitige Desktop-/Handy-Aktion wird einmal angewendet; abgelaufene oder geänderte Fälle scheitern verständlich; Relay-Annahme und IdP-Freigabe täuschen keine abgeschlossene Ausführung vor."
+      },
+      {
+        "path": "milestones.2.rollback",
+        "source": "Disable mobile decision submission; retain readable history and existing desktop/IdP decisions.",
+        "text": "Mobile Entscheidungsübermittlung deaktivieren; lesbaren Verlauf und bisherige Desktop-/IdP-Entscheidungen erhalten."
+      },
+      {
+        "path": "milestones.3.title",
+        "source": "Add a built-in notification action",
+        "text": "Eingebaute Mitteilungsaktion ergänzen"
+      },
+      {
+        "path": "milestones.3.goal",
+        "source": "A Pod can notify its owner without a Telegram bot or chat ID.",
+        "text": "Ein Pod kann seinen Eigentümer ohne Telegram-Bot oder Chat-ID benachrichtigen."
+      },
+      {
+        "path": "milestones.3.steps.0",
+        "source": "Introduce a bounded context.notify API, or the equivalent established execution-context method confirmed in M0: stable event key, title, body and safe links. Enforce owner binding outside the script.",
+        "text": "Eine begrenzte context.notify-API oder die in M0 bestätigte gleichwertige bestehende Ausführungskontext-Methode einführen: stabiler Ereignisschlüssel, Titel, Inhalt und sichere Links. Eigentümerbindung außerhalb des Skripts durchsetzen."
+      },
+      {
+        "path": "milestones.3.steps.1",
+        "source": "Persist runtime outbox before dispatch, reconcile server receipts, and document accepted-versus-read semantics and quota errors.",
+        "text": "Runtime-Outbox vor Versand speichern, Serverbestätigungen abgleichen und Annahme-/Lesesemantik sowie Quotenfehler dokumentieren."
+      },
+      {
+        "path": "milestones.3.acceptance.0",
+        "source": "A synthetic Pod produces a durable notification; crash/restart and transport retries do not create duplicates or lose an acknowledged item.",
+        "text": "Ein synthetischer Pod erzeugt eine dauerhafte Mitteilung; Absturz/Neustart und Transportwiederholungen erzeugen keine Duplikate und verlieren keinen bestätigten Eintrag."
+      },
+      {
+        "path": "milestones.3.acceptance.1",
+        "source": "Malformed/oversized payloads, changed duplicate bodies and arbitrary-recipient attempts are refused with visible errors.",
+        "text": "Ungültige/zu große Daten, geänderte Duplikatinhalte und Versuche mit beliebigen Empfängern werden mit sichtbaren Fehlern abgelehnt."
+      },
+      {
+        "path": "milestones.3.rollback",
+        "source": "Disable the new producer capability; preserve queued items and keep existing Telegram scripts unchanged.",
+        "text": "Neue Erzeugerfunktion deaktivieren; gepufferte Einträge erhalten und bestehende Telegram-Skripte unverändert lassen."
+      },
+      {
+        "path": "milestones.4.title",
+        "source": "Replace the native app experience",
+        "text": "Native App-Oberfläche ersetzen"
+      },
+      {
+        "path": "milestones.4.goal",
+        "source": "Ship only Decisions and Notifications as the main product surfaces.",
+        "text": "Nur Entscheidungen und Mitteilungen als zentrale Produktoberflächen ausliefern."
+      },
+      {
+        "path": "milestones.4.steps.0",
+        "source": "Replace old navigation, creation, chat and administration screens; build login, lists, decision/message details, completed history and settings. Reuse secure storage and HTTP code selectively.",
+        "text": "Alte Navigation sowie Erstellung, Chat und Verwaltung ersetzen; Anmeldung, Listen, Entscheidungs-/Nachrichtendetails, Erledigungsverlauf und Einstellungen bauen. Sichere Speicherung und HTTP-Code gezielt übernehmen."
+      },
+      {
+        "path": "milestones.4.steps.1",
+        "source": "Implement foreground synchronization, item deep links, protected offline cache, stale-state labels, accessibility and DE/EN strings.",
+        "text": "Abgleich beim Öffnen, Direktlinks auf Einträge, geschützten Offline-Cache, Veraltet-Hinweise, Barrierefreiheit und DE-/EN-Texte implementieren."
+      },
+      {
+        "path": "milestones.4.acceptance.0",
+        "source": "The native acceptance harness shows both tabs, an actual completed business decision, a readable full message and restored read state after relaunch.",
+        "text": "Die native Abnahme zeigt beide Bereiche, eine tatsächlich abgeschlossene fachliche Entscheidung, eine vollständig lesbare Mitteilung und erhaltenen Lesestatus nach Neustart."
+      },
+      {
+        "path": "milestones.4.acceptance.1",
+        "source": "Small-screen/large-text and VoiceOver inspection passes; offline and revoked-session views contain no misleading active controls.",
+        "text": "Prüfung auf kleinem Bildschirm, mit großer Schrift und VoiceOver besteht; Offline- und Widerrufsansichten enthalten keine irreführend aktiven Bedienelemente."
+      },
+      {
+        "path": "milestones.4.rollback",
+        "source": "Keep the previous signed build available; gate new routes so a previous client cannot accidentally use new actions.",
+        "text": "Vorherige signierte Version bereithalten; neue Routen so begrenzen, dass ein alter Client nicht unbeabsichtigt neue Aktionen nutzt."
+      },
+      {
+        "path": "milestones.5.title",
+        "source": "Connect reliable push and exact item navigation",
+        "text": "Push und genaue Eintragsnavigation anbinden"
+      },
+      {
+        "path": "milestones.5.goal",
+        "source": "Alert the owner without making push the source of truth.",
+        "text": "Den Eigentümer benachrichtigen, ohne Push zur maßgeblichen Datenquelle zu machen."
+      },
+      {
+        "path": "milestones.5.steps.0",
+        "source": "Extend APNs transport with persistent retries/backoff, token rotation, per-device opt-in, per-Pod mute, decision alert coalescing and opaque item routing.",
+        "text": "APNs-Transport um dauerhafte Wiederholungen/Warteabstände, Tokenwechsel, Zustimmung je Gerät, Stummschaltung je Pod, gebündelte Entscheidungshinweise und undurchsichtige Eintragsverweise ergänzen."
+      },
+      {
+        "path": "milestones.5.steps.1",
+        "source": "Distinguish APNs acceptance from device display and item read; preserve inbox delivery when push is denied, delayed or unavailable.",
+        "text": "APNs-Annahme von Geräteanzeige und Lesen unterscheiden; Inbox-Zustellung auch bei verweigertem, verzögertem oder ausgefallenem Push erhalten."
+      },
+      {
+        "path": "milestones.5.acceptance.0",
+        "source": "Mocked APNs failures, duplicate scheduling, token invalidation and server restart behave correctly; muted items remain in the inbox.",
+        "text": "Simulierte APNs-Fehler, doppelte Aufträge, ungültige Token und Serverneustarts verhalten sich korrekt; stummgeschaltete Einträge bleiben in der Inbox."
+      },
+      {
+        "path": "milestones.5.acceptance.1",
+        "source": "Taps on active, completed, expired and account-mismatched item references navigate safely and never execute a decision.",
+        "text": "Antippen aktiver, erledigter, abgelaufener oder kontofremder Eintragsverweise navigiert sicher und führt niemals eine Entscheidung aus."
+      },
+      {
+        "path": "milestones.5.rollback",
+        "source": "Turn off APNs dispatch independently; the inbox and manual refresh remain functional.",
+        "text": "APNs-Versand unabhängig abschalten; Inbox und manuelles Aktualisieren bleiben funktionsfähig."
+      },
+      {
+        "path": "milestones.6.title",
+        "source": "Prove the flow on a real iPhone",
+        "text": "Ablauf auf einem echten iPhone nachweisen"
+      },
+      {
+        "path": "milestones.6.goal",
+        "source": "Complete the previously deferred physical-device and push acceptance for this new product.",
+        "text": "Die bisher verschobene Geräte- und Push-Abnahme für dieses neue Produkt abschließen."
+      },
+      {
+        "path": "milestones.6.steps.0",
+        "source": "Verify Apple signing/app record, Associated Domains and APNs configuration. Request any missing key through secrets.openape.ai. Produce an internal signed/TestFlight build after required checks.",
+        "text": "Apple-Signierung/App-Eintrag, Associated Domains und APNs-Konfiguration prüfen. Fehlende Schlüssel über secrets.openape.ai anfordern. Nach Pflichtprüfungen eine intern signierte/TestFlight-Version erstellen."
+      },
+      {
+        "path": "milestones.6.steps.1",
+        "source": "Exercise real DDISA login, a phone decision synchronized to desktop, an IdP decision with confirmed consumption, push with app backgrounded, tap-to-item, disabled push and offline Mac reading.",
+        "text": "Echte DDISA-Anmeldung, eine mit dem Desktop abgeglichene Handy-Entscheidung, eine IdP-Entscheidung mit bestätigtem Verbrauch, Push bei App im Hintergrund, Antippen zum Eintrag, deaktivierten Push und Lesen bei ausgeschaltetem Mac prüfen."
+      },
+      {
+        "path": "milestones.6.acceptance.0",
+        "source": "Record physical device/build IDs, observed APNs delivery and authoritative decision receipts in a verified Test Runs report; simulated results cannot satisfy this milestone.",
+        "text": "Geräte-/Build-IDs, beobachtete APNs-Zustellung und maßgebliche Entscheidungsbestätigungen in einem verifizierten Test-Runs-Bericht festhalten; Simulationen erfüllen diesen Meilenstein nicht."
+      },
+      {
+        "path": "milestones.6.acceptance.1",
+        "source": "No unresolved Apple credential/device blocker is described as complete; public App Store review remains separately out of scope.",
+        "text": "Kein offener Apple-Zugangs-/Geräteblocker wird als abgeschlossen beschrieben; öffentliche App-Store-Prüfung bleibt separat außerhalb des Umfangs."
+      },
+      {
+        "path": "milestones.6.rollback",
+        "source": "Pause internal distribution or dispatch and revert service flags; never restore a database over newer decisions or revocations.",
+        "text": "Interne Verteilung oder Versand pausieren und Dienstschalter zurücksetzen; niemals eine Datenbank über neuere Entscheidungen oder Widerrufe zurückspielen."
+      },
+      {
+        "path": "milestones.7.title",
+        "source": "Pilot, migrate and retire old mobile content",
+        "text": "Pilot durchführen, umstellen und alte Mobilinhalte entfernen"
+      },
+      {
+        "path": "milestones.7.goal",
+        "source": "Use the new app for one real notification producer and daily decisions.",
+        "text": "Die neue App für einen echten Mitteilungserzeuger und alltägliche Entscheidungen verwenden."
+      },
+      {
+        "path": "milestones.7.steps.0",
+        "source": "Select one existing Telegram notification producer with the owner, retain its old revision, switch only that producer after successful device acceptance, and observe at least two relevant deliveries/runs.",
+        "text": "Mit dem Eigentümer einen bisherigen Telegram-Mitteilungserzeuger auswählen, seine alte Revision erhalten, nur diesen Erzeuger nach erfolgreicher Geräteabnahme umstellen und mindestens zwei relevante Zustellungen/Läufe beobachten."
+      },
+      {
+        "path": "milestones.7.steps.1",
+        "source": "Remove unused old iOS screens and mobile-only creation/chat code after checking consumers. Keep still-used server capabilities for their compatibility window; update docs and privacy disclosures.",
+        "text": "Unbenutzte alte iOS-Ansichten und ausschließlich mobil verwendeten Erstellungs-/Chat-Code nach Verbraucherprüfung entfernen. Noch genutzte Serverfähigkeiten während ihrer Kompatibilitätsfrist erhalten; Dokumentation und Datenschutzaussagen aktualisieren."
+      },
+      {
+        "path": "milestones.7.acceptance.0",
+        "source": "The selected real Pod reaches the phone without Telegram setup; decisions agree across phone and desktop; a documented rollback restores the producer without duplicate replay.",
+        "text": "Der ausgewählte echte Pod erreicht das Handy ohne Telegram-Einrichtung; Entscheidungen stimmen zwischen Handy und Desktop überein; dokumentierter Rückweg stellt den Erzeuger ohne doppelte Wiederholung wieder her."
+      },
+      {
+        "path": "milestones.7.acceptance.1",
+        "source": "Every milestone has actual evidence or remains open; old acceptance is not reused as proof of the replacement.",
+        "text": "Jeder Meilenstein besitzt tatsächliche Nachweise oder bleibt offen; alte Abnahme wird nicht als Nachweis des Ersatzprodukts verwendet."
+      },
+      {
+        "path": "milestones.7.rollback",
+        "source": "Restore only the selected producer revision for future events and disable new mobile capabilities; preserve receipts and deduplication records.",
+        "text": "Nur die ausgewählte Erzeugerrevision für zukünftige Ereignisse wiederherstellen und neue mobile Fähigkeiten deaktivieren; Bestätigungen und Deduplizierungsdaten erhalten."
+      },
+      {
+        "path": "risks.0.title",
+        "source": "Server visibility differs from the old encrypted mobile path",
+        "text": "Serversichtbarkeit unterscheidet sich vom alten verschlüsselten Mobilweg"
+      },
+      {
+        "path": "risks.0.mitigation",
+        "source": "Require explicit approval of this proposal’s trust model; document exact projected fields and verify that no credentials or unrelated content enter the inbox.",
+        "text": "Ausdrückliche Freigabe des vorgeschlagenen Vertrauensmodells verlangen; genaue projizierte Felder dokumentieren und prüfen, dass keine Zugangsdaten oder sachfremden Inhalte in die Inbox gelangen."
+      },
+      {
+        "path": "risks.1.title",
+        "source": "Decision parity can conceal desktop-only assumptions",
+        "text": "Entscheidungsparität kann Desktop-Annahmen verdecken"
+      },
+      {
+        "path": "risks.1.mitigation",
+        "source": "Use the complete decision matrix as the acceptance contract; preserve current authority/hash/revision checks and expose physical exceptions honestly.",
+        "text": "Vollständige Entscheidungsmatrix als Abnahmevertrag verwenden; bestehende Zuständigkeits-/Hash-/Revisionsprüfungen erhalten und physische Ausnahmen ehrlich anzeigen."
+      },
+      {
+        "path": "risks.2.title",
+        "source": "Push credentials and device acceptance remain dependencies",
+        "text": "Push-Zugänge und Geräteabnahme bleiben Abhängigkeiten"
+      },
+      {
+        "path": "risks.2.mitigation",
+        "source": "Check access early in M0, obtain credentials only through Secrets, and keep real APNs/device acceptance mandatory in M6.",
+        "text": "Zugänge früh in M0 prüfen, Zugangsdaten ausschließlich über Secrets beschaffen und echte APNs-/Geräteabnahme in M6 verpflichtend lassen."
+      },
+      {
+        "path": "risks.3.title",
+        "source": "Duplicate or missing messages during migration",
+        "text": "Doppelte oder fehlende Mitteilungen bei Umstellung"
+      },
+      {
+        "path": "risks.3.mitigation",
+        "source": "Persist stable producer IDs and outboxes; switch one producer only after receipt/device proof, retain rollback and never resend uncertain old events automatically.",
+        "text": "Stabile Erzeuger-IDs und Outboxen dauerhaft speichern; nur einen Erzeuger nach Bestätigungs-/Gerätenachweis umstellen, Rückweg erhalten und unklare alte Ereignisse nie automatisch erneut senden."
+      },
+      {
+        "path": "verification.0",
+        "source": "Plan authoring only: validate the bilingual schema, render the canonical HTML template, inspect the report, publish privately under Plans, and compare the downloaded HTML digest. No product tests are claimed in this draft.",
+        "text": "Nur Planerstellung: zweisprachiges Schema validieren, kanonische HTML-Vorlage rendern, Bericht prüfen, privat unter Plans veröffentlichen und Digest des heruntergeladenen HTML vergleichen. Dieser Entwurf behauptet keine Produkttests."
+      },
+      {
+        "path": "verification.1",
+        "source": "At implementation start, use the checkout toolchain in each shell: export OPENAPE_PNPM_BIN=/Users/patrickhofmann/Companies/private/repos/openape/.toolchains/pnpm/10.29.3/bin; export PATH=\"$OPENAPE_PNPM_BIN:$PATH\"; . ./scripts/activate-node.sh; pnpm run doctor. Recheck pins on canonical main before use.",
+        "text": "Zu Umsetzungsbeginn in jeder Shell die Checkout-Toolchain verwenden: export OPENAPE_PNPM_BIN=/Users/patrickhofmann/Companies/private/repos/openape/.toolchains/pnpm/10.29.3/bin; export PATH=\"$OPENAPE_PNPM_BIN:$PATH\"; . ./scripts/activate-node.sh; pnpm run doctor. Vor Verwendung Versionsvorgaben auf kanonischem main prüfen."
+      },
+      {
+        "path": "verification.2",
+        "source": "Run lint → typecheck → affected app builds → relevant tests, fixing the first failure. Existing commands: pnpm lint; pnpm typecheck; pnpm --filter @openape/pods-protocol build; pnpm --filter @openape/pods-relay build; pnpm --filter @openape/pods build; pnpm --filter @openape/pods-ios typecheck. Verify package names and actual affected scope before executing.",
+        "text": "Lint → Typprüfung → betroffene App-Builds → relevante Tests ausführen und den ersten Fehler beheben. Bestehende Befehle: pnpm lint; pnpm typecheck; pnpm --filter @openape/pods-protocol build; pnpm --filter @openape/pods-relay build; pnpm --filter @openape/pods build; pnpm --filter @openape/pods-ios typecheck. Paketnamen und tatsächlichen Änderungsumfang vor Ausführung prüfen."
+      },
+      {
+        "path": "verification.3",
+        "source": "Extend existing suites for consequential contracts: owner/actor isolation, revocation, idempotency, stale decisions, crash recovery and no grant self-approval. Use pnpm --filter @openape/pods-protocol test; pnpm --filter @openape/pods-relay test; pnpm --filter @openape/pods test:fast; pnpm --filter @openape/pods-ios test. No new runners, default test chains or redundant implementation-mirroring tests.",
+        "text": "Bestehende Suiten für wichtige Verträge erweitern: Eigentümer-/Akteurtrennung, Widerruf, Idempotenz, veraltete Entscheidungen, Absturzwiederherstellung und keine Grant-Selbstfreigabe. pnpm --filter @openape/pods-protocol test; pnpm --filter @openape/pods-relay test; pnpm --filter @openape/pods test:fast; pnpm --filter @openape/pods-ios test verwenden. Keine neuen Runner, Standard-Testketten oder redundanten Implementierungsnachbau-Tests."
+      },
+      {
+        "path": "verification.4",
+        "source": "Adapt and run the established manual native harness: pnpm --filter @openape/pods-ios test:layout. Retain physical-device evidence separately. Before deployment use pnpm check:ci and the required exact-head external merge checks; report real screenshots/CLI receipts in one rendered Test Runs HTML.",
+        "text": "Bestehende manuelle native Abnahme anpassen und ausführen: pnpm --filter @openape/pods-ios test:layout. Nachweise echter Geräte separat erhalten. Vor Deployment pnpm check:ci und die vorgeschriebenen externen Merge-Prüfungen für den genauen Commit verwenden; echte Screenshots/CLI-Bestätigungen in einem gerenderten Test-Runs-HTML veröffentlichen."
+      },
+      {
+        "path": "completion.summary",
+        "source": "This document proposes the replacement. No implementation milestone or product acceptance has been completed under this plan.",
+        "text": "Dieses Dokument schlägt den Ersatz vor. Unter diesem Plan wurde noch kein Umsetzungsmeilenstein und keine Produktabnahme abgeschlossen."
+      },
+      {
+        "path": "handoff",
+        "source": "Next: review proposal revision 1. After approval, start M0 on current canonical main and preserve this document as the living plan. The product direction is established; implementation and the proposed service-readable inbox await approval.",
+        "text": "Als Nächstes: Planrevision 1 prüfen. Nach Freigabe M0 auf aktuellem kanonischem main beginnen und dieses Dokument als fortlaufenden Plan pflegen. Die Produktrichtung steht fest; Umsetzung und vorgeschlagene serverlesbare Inbox warten auf Freigabe."
+      },
+      {
+        "path": "changelog.0.text",
+        "source": "Created proposal revision 1 from the owner’s two-purpose product direction and explicit instruction to discard the old iOS content. Inspected existing decision categories, central workspace storage, mobile protocol, APNs transport and test scripts.",
+        "text": "Planrevision 1 aus der Produktrichtung mit zwei Aufgaben und der ausdrücklichen Anweisung erstellt, bisherigen iOS-Inhalt zu verwerfen. Entscheidungsarten, zentrale Workspace-Speicherung, Mobilprotokoll, APNs-Transport und Testskripte geprüft."
+      }
+    ]
+  }
+}
