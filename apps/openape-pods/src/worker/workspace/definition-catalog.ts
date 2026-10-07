@@ -125,18 +125,25 @@ export class DefinitionCatalog {
     else apply()
   }
 
-  // A member script update keeps the definition's state and public defaults and advances only its code version.
-  appendScriptVersion(podId: string, manifest: ScriptManifest): number {
+  // Member script updates stay local: a definition shared with other instances is forked, and versions are never published from here.
+  appendScriptVersion(podId: string, manifest: ScriptManifest): void {
     this.assertPod(podId)
     const binding = this.store.db.prepare('SELECT definition_id,definition_version FROM instance_definition_bindings WHERE pod_id=?').get(podId)
     if (!binding) throw new Error('Adopt the existing instance before updating its script')
+    if (this.store.readBlob(manifest.contentHash).length > 200000) throw new Error('Definition source exceeds the publication limit')
     const id = binding.definition_id as string
-    const current = this.source(id, binding.definition_version as number).view
+    const current = this.source(id, binding.definition_version as number)
+    if (current.sourcePodId !== podId || this.store.db.prepare('SELECT 1 FROM instance_definition_bindings WHERE definition_id=? AND pod_id!=?').get(id, podId)) {
+      const localId = randomUUID()
+      this.store.db.prepare('INSERT INTO pod_definitions VALUES(?,?,?,?,?)').run(localId, this.owner.issuer, this.owner.subject, this.store.db.prepare('SELECT name FROM pod_definitions WHERE id=?').get(id)!.name as string, Date.now())
+      this.insertVersion(localId, 1, podId, manifest, 'legacy', current.view.defaults)
+      this.store.db.prepare('UPDATE instance_definition_bindings SET definition_id=?,definition_version=1,binding_revision=binding_revision+1 WHERE pod_id=?').run(localId, podId)
+      return
+    }
     const version = Number(this.store.db.prepare('SELECT max(version) AS version FROM pod_definition_versions WHERE definition_id=?').get(id)!.version) + 1
     if (version > 1000) throw new Error('Definition version limit reached')
-    this.insertVersion(id, version, podId, manifest, current.state, current.defaults)
+    this.insertVersion(id, version, podId, manifest, 'legacy', current.view.defaults)
     this.store.db.prepare('UPDATE instance_definition_bindings SET definition_version=?,binding_revision=binding_revision+1 WHERE pod_id=?').run(version, podId)
-    return version
   }
 
   private insertVersion(id: string, version: number, podId: string, manifest: ScriptManifest | null, state: 'legacy' | 'published', defaults: Record<string, unknown>): void {

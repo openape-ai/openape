@@ -168,6 +168,7 @@ function tickStep<T>(phase: string, limitMs: number, work: () => Promise<T>): Pr
   return boundedStep(limitMs, work, () => { tickTimeout = { phase, at: Date.now() }; console.error(`Scheduler step ${phase} did not finish within ${limitMs} ms; continuing`) })
 }
 async function executeCodexNetwork(command: CodexNetworkCommand): Promise<NetworkView> {
+  if ((command.type === 'updateMemberScript' || command.type === 'replayFailed') && (!startupReady || (Date.now() >= centralUntil && ownerOperations.getStore() !== true) || suspended || maintenance)) throw new Error('Network execution requires a ready local runtime')
   if (command.type === 'updateMemberScript') return networks.updateMemberScript(command)
   if (command.type === 'replayFailed') return networks.replayFailed(command)
   return executeNetwork(command, ownerOperations.getStore() === true)
