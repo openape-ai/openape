@@ -3,7 +3,7 @@
 ## Pods fixture tests never wait for a keychain dialog — issue 1450
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1450. Owner rule October 7: every automated check runs without a person; `test:distribution --signed-local` for `c24af0e3` waited on a SecurityAgent keychain prompt.
-- Worktree `.claude/worktrees/issue-1450-pods-keychain-78e628`, branch `bugfix/issue-1450-pods-fixture-keychain`, base `930a8ee5`.
+- Worktree `.claude/worktrees/issue-1450-pods-keychain-78e628`, branch `bugfix/issue-1450-pods-fixture-keychain`, PR 308 (https://repos.openape.ai/patrick/monorepo/pulls/308), base `930a8ee5`. Evidence: https://report.openape.ai/d/01M4BY5ENTTV3KCK3S33MDHN5Q.
 - Fixture launches with `NODE_ENV=test` append Chromium's `use-mock-keychain`; `OPENAPE_PODS_TEST_REAL_KEYCHAIN=1` opts `credentials.test.ts` into the login keychain. `e2e/fixtures/keychain.ts` stops the app as soon as a SecurityAgent window is on screen (`credentials`, `programs`, `test:distribution`).
 - Cause detail: local fixture builds are only linker-signed and share one cdhash, which the existing "OpenApe Pods Fixture Safe Storage" item trusts; only newly signed builds (Developer ID, re-signed) prompt.
 - Checks: Pods 1,340 unit tests (new main-process contract with counter-proof), root lint/typecheck, `credentials` E2E on a re-signed build (mock passes without dialog; opt-in fails after 2 s with the guard message), unsigned `test:distribution` passed. `programs` E2E still fails at stale navigation after the redesign (pre-existing, keychain part passed).
