@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { inspectHtml } from '@openape/report-contracts/html'
 import { DomUtils, parseDocument } from 'htmlparser2'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { renderReceipt } from '../src/render-receipt'
 import { renderPlan } from '../src/render-plan'
 import { renderTestRun } from '../src/render-test-run'
 import { digest } from '../src/report-evidence'
@@ -46,6 +47,27 @@ describe('versioned report contract', () => {
     expect(() => validateReport({ ...run, commands: [{ ...command, durationMs: 1002 }] })).toThrow(/duration contradicts/)
     expect(() => validateReport({ ...run, commands: [{ ...command, startedAt: '2026-10-07T10:00:00Z', finishedAt: '2026-10-07T10:00:01Z', durationMs: 1900 }] })).not.toThrow()
     expect(() => validateReport({ ...run, commands: [{ ...command, durationMs: -1 }] })).toThrow()
+  })
+  it('validates publication labels before rendering', () => {
+    for (const input of [run, plan]) {
+      for (const language of ['de_AT', 'en US']) expect(() => validateReport({ ...input, language })).toThrow(/schema/)
+      for (const title of ['A\tB', 'A\nB', 'A\u007FB']) expect(() => validateReport({ ...input, title })).toThrow(/schema/)
+      expect(() => validateReport({ ...input, language: 'de-AT' })).not.toThrow()
+    }
+  })
+  it('preserves valid replacement characters and rejects NUL in text evidence', () => {
+    const text = 'build \uFFFD output'
+    writeFileSync(join(directory, 'log.txt'), text)
+    for (const evidence of [{ text }, { path: 'log.txt' }]) {
+      const input = { ...run, summary: text, evidence: [{ id: 'log', title: text, kind: 'text', role: 'evidence', ...evidence }] }
+      const html = renderTestRun(input, directory)
+      expect(visible(html)).toContain(text)
+      expect(renderReceipt('test-run', Buffer.from(JSON.stringify(input)), html).resolvedEvidenceDigests).toContainEqual({ id: 'log', digest: digest(text) })
+    }
+    writeFileSync(join(directory, 'nul.txt'), 'bad\u0000log')
+    for (const evidence of [{ text: 'bad\u0000log' }, { path: 'nul.txt' }]) {
+      expect(() => renderTestRun({ ...run, evidence: [{ id: 'log', title: 'Log', kind: 'text', role: 'evidence', ...evidence }] }, directory)).toThrow(/Text evidence log contains NUL/)
+    }
   })
   it('rejects approval digests contradicting a locally recorded artifact version', () => {
     expect(() => validateReport({ ...plan, approval: { by: 'Owner', date: '2026-10-07', reference: 'Approved the frozen source', target: { url: 'https://example.org/source', version: 1, sourceDigest: 'a'.repeat(64) } }, provenance: [{ url: 'https://example.org/source', format: 'plan JSON', version: 1, digest: 'b'.repeat(64) }] })).toThrow(/contradicts/)
