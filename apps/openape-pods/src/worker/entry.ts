@@ -146,6 +146,7 @@ function networkOwner() {
   return parseOwner((JSON.parse(row.body as string) as { owner: unknown }).owner)
 }
 const networks = new NetworkEngine(store, dispatcher, registry, runtime.helper, networkOwner, false)
+if (process.env.PODS_FIXTURE_GATE_COLLECT === '0') networks.gates.collect = { quietMs: 0, maxMs: 0 }
 networks.invocations.calls = new WorkflowCalls(store, networks.invocations.events, workflows)
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
 let centralNetworkReads = false
