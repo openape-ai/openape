@@ -40,6 +40,16 @@ describe('versioned report contract', () => {
     expect(visible(html)).toContain('exit 1')
     expect(visible(html)).toContain('characterization report')
   })
+  it('rejects inconsistent command durations while allowing recorded timestamp precision', () => {
+    const command = { id: 'command', command: 'probe', outcome: 'exited', exitCode: 0, startedAt: '2026-10-07T10:00:00.000Z', finishedAt: '2026-10-07T10:00:01.000Z' }
+    expect(() => validateReport({ ...run, commands: [{ ...command, durationMs: 1001 }] })).not.toThrow()
+    expect(() => validateReport({ ...run, commands: [{ ...command, durationMs: 1002 }] })).toThrow(/duration contradicts/)
+    expect(() => validateReport({ ...run, commands: [{ ...command, startedAt: '2026-10-07T10:00:00Z', finishedAt: '2026-10-07T10:00:01Z', durationMs: 1900 }] })).not.toThrow()
+    expect(() => validateReport({ ...run, commands: [{ ...command, durationMs: -1 }] })).toThrow()
+  })
+  it('rejects approval digests contradicting a locally recorded artifact version', () => {
+    expect(() => validateReport({ ...plan, approval: { by: 'Owner', date: '2026-10-07', reference: 'Approved the frozen source', target: { url: 'https://example.org/source', version: 1, sourceDigest: 'a'.repeat(64) } }, provenance: [{ url: 'https://example.org/source', format: 'plan JSON', version: 1, digest: 'b'.repeat(64) }] })).toThrow(/contradicts/)
+  })
   it('derives failed before incomplete and counts checks rather than steps', () => {
     const incomplete: TestRun = { ...run, tests: [...run.tests, { id: 'wait', title: 'Device unavailable', status: 'blocked', reason: 'Device locked' }, { id: 'skip', title: 'Deferred', status: 'skipped', reason: 'Outside this increment' }] }
     expect(inspectHtml(renderTestRun(incomplete, directory)).metadata['tests.result']).toBe('incomplete')
