@@ -155,6 +155,7 @@ it('decides, reads, survives restart and reinstall, works offline and never mixe
 
   // A full notification: opening it marks it read for the account; links stay external HTTPS.
   await page.getByRole('link', { name: /Mitteilungen/ }).click()
+  await page.getByRole('heading', { name: 'Mitteilungen' }).waitFor()
   await shot(page, '06-messages')
   await page.getByRole('link', { name: /Monatsabschluss bereit/ }).click()
   expect(await page.getByRole('link', { name: 'Bericht öffnen' }).getAttribute('rel')).toBe('noopener noreferrer')
