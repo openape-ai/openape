@@ -42,6 +42,7 @@ function resolveEvidence(item: Evidence, directory: string): ResolvedEvidence {
   const hash = digest(bytes)
   if (item.kind === 'text') {
     const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes)
+    if (text.includes('\u0000')) invalid(`Text evidence ${item.id} contains NUL`)
     return { id: item.id, digest: hash, html: `${heading}<pre><code>${e(text)}</code></pre>` }
   }
   if (item.inspection && item.inspection.digest !== hash) invalid(`Inspection digest mismatch for ${item.id}`)
