@@ -74,11 +74,14 @@ export type NetworkCommand
     | { type: 'gateDiscard', id: string, revision: number, taskId: string, generation: number, evidence: string }
     | { type: 'discardFeedback', id: string, revision: number, eventId: string, evidence: string }
     | { type: 'process', id: string, revision: number, previewId: string }
+    | { type: 'updateMemberScript', id: string, revision: number, podId: string, hash: string }
+    | { type: 'replayFailed', id: string, revision: number, podId: string }
 export interface NetworkHealth { oldestPendingAt: number | null, nextRetryAt: number | null, lastDispatchAt: number | null, lastSchedulerProgressAt: number | null, lastSchedulerError: string | null, intakeError: string | null, lastFailure: { runId: string, generation: number, kind: string, reason: string } | null }
 export interface NetworkSummary { decisions?: number, podIds?: string[], id: string, revision: number, groupId: string, name: string, state: 'active' | 'paused' | 'archived', counts: Record<string, number>, health: NetworkHealth }
 export interface NetworkPreview { id: string, networkId: string, revision: number, podIds: string[], pausedPodIds: string[], budget: number, expiresAt: number, sources: string[], consumers: string[] }
 export interface NetworkChoiceView { networkId: string, revision: number, eventId: string, caseId: string, gate: string, title: string, payload: string, truncated: boolean, options: { key: string, title: string }[] }
-export interface NetworkView { choices?: NetworkChoiceView[], replacement?: ReplacementPreview, archiveReview?: ArchivePreview, legacyItems?: LegacyItemsPage, conversion?: ConversionPreview, unavailableReason?: string, details?: NetworkDetails, setup?: NetworkSetup, trace?: NetworkTracePage, records?: NetworkDataPage, networks: NetworkSummary[], gates?: NetworkGateView[], preview?: NetworkPreview, processId?: string, createdId?: string }
+export interface NetworkView { choices?: NetworkChoiceView[], replacement?: ReplacementPreview, archiveReview?: ArchivePreview, legacyItems?: LegacyItemsPage, conversion?: ConversionPreview, unavailableReason?: string, details?: NetworkDetails, setup?: NetworkSetup, trace?: NetworkTracePage, records?: NetworkDataPage, networks: NetworkSummary[], gates?: NetworkGateView[], preview?: NetworkPreview, processId?: string, createdId?: string, replay?: NetworkReplay }
+export interface NetworkReplay { replayed: string[], skipped: { runId: string, reason: string }[] }
 export const networkLimits = { networks: 64, members: 64, channels: 32, batch: 50, processNow: 100, definitionBytes: 1024 * 1024 } as const
 
 function fields(value: unknown, names: string[]): Record<string, unknown> {
@@ -254,6 +257,12 @@ export function parseNetworkCommand(value: unknown): NetworkCommand {
     if (typeof input.key !== 'string' || !/^[a-f0-9]{64}$/.test(input.key) || !['confirmed_applied', 'confirmed_not_applied'].includes(input.outcome as string) || typeof input.evidence !== 'string' || !input.evidence.trim() || input.evidence.length > 4000) throw new Error('Network effect reconciliation requires explicit owner evidence')
     return { type: 'reconcileEffect', id: uuid(input.id), revision: revision(input.revision), runId: uuid(input.runId), generation: revision(input.generation), key: input.key, attempt: revision(input.attempt), sequence: revision(input.sequence), outcome: input.outcome as 'confirmed_applied' | 'confirmed_not_applied', evidence: input.evidence }
   }
+  if (input.type === 'updateMemberScript') {
+    fields(input, ['type', 'id', 'revision', 'podId', 'hash'])
+    if (typeof input.hash !== 'string' || !/^[a-f0-9]{64}$/.test(input.hash)) throw new Error('Invalid member script hash')
+    return { type: 'updateMemberScript', id: uuid(input.id), revision: revision(input.revision), podId: uuid(input.podId), hash: input.hash }
+  }
+  if (input.type === 'replayFailed') { fields(input, ['type', 'id', 'revision', 'podId']); return { type: 'replayFailed', id: uuid(input.id), revision: revision(input.revision), podId: uuid(input.podId) } }
   if (input.type === 'process') { fields(input, ['type', 'id', 'revision', 'previewId']); return { type: 'process', id: uuid(input.id), revision: revision(input.revision), previewId: uuid(input.previewId) } }
   if (input.type === 'preview') {
     fields(input, ['type', 'id', 'revision', 'podIds', 'pausedPodIds', 'budget'])
@@ -267,7 +276,7 @@ export function parseNetworkCommand(value: unknown): NetworkCommand {
 
 export function parseNetworkView(value: unknown): NetworkView {
   const input = networkDataObject(value)
-  if (Object.keys(input).some(key => !['networks', 'choices', 'gates', 'preview', 'processId', 'createdId', 'details', 'setup', 'trace', 'records', 'unavailableReason', 'conversion', 'archiveReview', 'legacyItems', 'replacement'].includes(key))) throw new Error('Invalid network view fields')
+  if (Object.keys(input).some(key => !['networks', 'choices', 'gates', 'preview', 'processId', 'createdId', 'details', 'setup', 'trace', 'records', 'unavailableReason', 'conversion', 'archiveReview', 'legacyItems', 'replacement', 'replay'].includes(key))) throw new Error('Invalid network view fields')
   const networks = list(input.networks, networkLimits.networks).map((value) => {
     const item = fields(value, ['id', 'revision', 'groupId', 'name', 'state', 'counts', 'health', ...(Object.hasOwn(networkDataObject(value), 'decisions') ? ['decisions'] : []), ...(Object.hasOwn(networkDataObject(value), 'podIds') ? ['podIds'] : [])])
     if (typeof item.name !== 'string' || item.name.length > 120 || !['active', 'paused', 'archived'].includes(item.state as string)) throw new Error('Invalid network summary')
@@ -290,6 +299,15 @@ export function parseNetworkView(value: unknown): NetworkView {
   })
   const result: NetworkView = { networks }
   if (input.replacement !== undefined) result.replacement = parseReplacementPreview(input.replacement)
+  if (input.replay !== undefined) {
+    const replay = fields(input.replay, ['replayed', 'skipped'])
+    const skipped = list(replay.skipped, networkLimits.processNow).map((value) => {
+      const item = fields(value, ['runId', 'reason'])
+      if (typeof item.reason !== 'string' || item.reason.length > 2000) throw new Error('Invalid network replay reason')
+      return { runId: uuid(item.runId), reason: item.reason }
+    })
+    result.replay = { replayed: list(replay.replayed, networkLimits.processNow).map(uuid), skipped }
+  }
   if (input.archiveReview !== undefined) result.archiveReview = parseArchivePreview(input.archiveReview)
   if (input.legacyItems !== undefined) result.legacyItems = parseLegacyItemsPage(input.legacyItems)
   if (input.conversion !== undefined) result.conversion = parseConversionPreview(input.conversion)

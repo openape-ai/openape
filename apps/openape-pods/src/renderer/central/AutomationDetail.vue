@@ -70,6 +70,11 @@ function runNow() {
     <div v-if="pod?.description" class="sec">
       <div>{{ pod.description }}</div>
     </div>
+    <div v-if="pod?.scriptUpdate" class="sec" data-script-update>
+      <div class="eyebrow">
+        {{ t('Script changes') }}
+      </div><div>{{ t('Updated by the assistant {when}: {previous} → {script}', { when: stamp(pod.scriptUpdate.at, language), previous: pod.scriptUpdate.previous.slice(0, 8), script: pod.scriptUpdate.script.slice(0, 8) }) }}</div>
+    </div>
     <div v-if="system" class="sec">
       <div class="muted">
         {{ system.kind === 'application' ? `${system.how} · ${t('installed')}` : system.kind === 'service' ? `${t('https')} · ${system.how}` : system.how }}
