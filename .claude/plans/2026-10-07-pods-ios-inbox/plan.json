@@ -76,6 +76,14 @@
    "by": "Patrick Hofmann",
    "date": "2026-10-07",
    "reference": "super - wir legen los mit diesem plan in einer frischen session"
+  },
+  {
+   "title": "Accept M0 without the two-day push series",
+   "description": "The owner tested the installed PWA on an iPhone 11 Pro Max, judged the flows to work and waived the 20-push/two-day observation. M0 is accepted on the owner's observation plus server records; push reliability and the missing service-worker receipts move into M5/M6 acceptance.",
+   "status": "accepted",
+   "by": "Patrick Hofmann",
+   "date": "2026-10-07",
+   "reference": "iPhone 11 Pro Max. Das scheint alles zu gehen. Wir machen weiter ohne 2Tage Test"
   }
  ],
  "sections": [
@@ -133,7 +141,7 @@
    "id": "M0",
    "title": "Prove the PWA on the actual iPhone first",
    "goal": "Resolve the platform uncertainty before building the full product.",
-   "status": "active",
+   "status": "done",
    "steps": [
     "Refresh canonical main in an isolated feature checkout, create/link a native development issue, and map every current decision handler.",
     "Create a minimal two-tab installed PWA with actual DDISA login, a synthetic decision, real Web Push and exact item navigation. Record the iPhone model/iOS version and test cold start, expired login, locked screen, IdP return, app update and network switching."
@@ -143,13 +151,13 @@
     "Continue with PWA only after the owner can repeatedly open a received push into the correct authenticated item, complete a decision, return from the IdP and restart without broken sessions. Observe at least 20 controlled pushes across two days and record every missing/delayed/duplicate event with Focus/network conditions; no unexplained loss or incorrect navigation may remain. This sample is a pilot gate, not a delivery SLA."
    ],
    "rollback": "Remove the disposable prototype and its test subscriptions. A reproducible platform blocker triggers a revised native proposal before further product implementation.",
-   "proof": "Prototype merged in PR 293 (4f8cea27) and hotfix PR 295 (573ed67c), deployed as prod-573ed67c at https://pods.openape.ai/inbox/ behind NUXT_INBOX_PROTOTYPE_ENABLED. Decision inventory recorded below. Pre-device Test Run: https://report.openape.ai/d/01M4BAS8MHWA6FB4E8W29801WK. The physical iPhone gate is open."
+   "proof": "Prototype merged in PR 293 (4f8cea27) and hotfix PR 295 (573ed67c), live as prod-573ed67c at https://pods.openape.ai/inbox/. Device: owner's iPhone 11 Pro Max, installed Home Screen app, Safari 26.6.1 user agent; one push subscription on web.push.apple.com. Two real pushes accepted by Apple (HTTP 201); the synthetic decision was recorded from the phone and the message was read. The owner reported the flows working and waived the two-day series. Not proven: service-worker shown/clicked receipts and push-tagged opening were not recorded and remain M5/M6 acceptance items. Evidence: https://report.openape.ai/d/01M4BAS8MHWA6FB4E8W29801WK and the device Test Run linked below."
   },
   {
    "id": "M1",
    "title": "Account sessions and durable inbox service",
    "goal": "Expose the owner inbox through bounded authenticated web APIs.",
-   "status": "planned",
+   "status": "active",
    "steps": [
     "Reuse existing DDISA browser login/refresh/logout with scoped inbox authorization, CSRF protection, account-isolated subscriptions and no runtime pairing. Add storage behind a feature flag.",
     "Implement item publication, cursor pagination, read/archive state, revocation and bounded retention, with transactional push-outbox writes."
@@ -278,9 +286,9 @@
  ],
  "completion": {
   "result": "not-assessed",
-  "summary": "M0 prototype and decision inventory are delivered; the physical iPhone gate (at least 20 controlled pushes over two days) is in progress. No milestone is complete."
+  "summary": "M0 accepted by the owner on October 7, 2026 (two-day series waived); M1 started."
  },
- "handoff": "Owner: install https://pods.openape.ai/inbox/ on the iPhone, sign in, enable notifications, start the two-day series and run the device checks. Agent: evaluate the push log and publish the device Test Run. M1–M7 stay blocked until M0 passes.",
+ "handoff": "M1 is active: account-scoped durable inbox service behind a flag, replacing the M0 prototype store. Open device items for M5/M6: service-worker receipts on iOS declarative push and push-tagged opening.",
  "changelog": [
   {
    "date": "2026-10-07",
@@ -297,6 +305,10 @@
   {
    "date": "2026-10-07",
    "text": "M0 prototype merged (PR 293, hotfix PR 295) and deployed as prod-573ed67c; decision inventory added; pre-device Test Run published. CI runner disk exhaustion was cleared on the way."
+  },
+  {
+   "date": "2026-10-07",
+   "text": "Owner accepted M0 on an iPhone 11 Pro Max and waived the two-day series; M1 started."
   }
  ],
  "links": [
@@ -327,6 +339,10 @@
   {
    "title": "Pre-device Test Run",
    "url": "https://report.openape.ai/d/01M4BAS8MHWA6FB4E8W29801WK"
+  },
+  {
+   "title": "M0 device Test Run",
+   "url": "https://report.openape.ai/d/01M4BBDR0M5AP1RFHBBKYFX5XW"
   }
  ],
  "evidence": [
@@ -878,13 +894,13 @@
    },
    {
     "path": "completion.summary",
-    "source": "M0 prototype and decision inventory are delivered; the physical iPhone gate (at least 20 controlled pushes over two days) is in progress. No milestone is complete.",
-    "text": "M0-Prototyp und Entscheidungsinventar sind geliefert; die Prüfung auf dem echten iPhone (mindestens 20 kontrollierte Pushes über zwei Tage) läuft. Noch kein Meilenstein ist abgeschlossen."
+    "source": "M0 accepted by the owner on October 7, 2026 (two-day series waived); M1 started.",
+    "text": "M0 am 7. Oktober 2026 vom Eigentümer abgenommen (Zweitagesserie entfallen); M1 begonnen."
    },
    {
     "path": "handoff",
-    "source": "Owner: install https://pods.openape.ai/inbox/ on the iPhone, sign in, enable notifications, start the two-day series and run the device checks. Agent: evaluate the push log and publish the device Test Run. M1–M7 stay blocked until M0 passes.",
-    "text": "Eigentümer: https://pods.openape.ai/inbox/ auf dem iPhone installieren, anmelden, Mitteilungen aktivieren, die Zweitagesserie starten und die Geräteprüfungen durchführen. Agent: Push-Protokoll auswerten und den Geräte-Test-Run veröffentlichen. M1–M7 bleiben bis zum bestandenen M0 gesperrt."
+    "source": "M1 is active: account-scoped durable inbox service behind a flag, replacing the M0 prototype store. Open device items for M5/M6: service-worker receipts on iOS declarative push and push-tagged opening.",
+    "text": "M1 läuft: kontobezogener dauerhafter Inbox-Dienst hinter einem Schalter, der den M0-Prototyp-Speicher ersetzt. Offene Gerätepunkte für M5/M6: Service-Worker-Quittungen bei deklarativem iOS-Push und Öffnen über den Push."
    },
    {
     "path": "changelog.0.text",
@@ -933,13 +949,28 @@
    },
    {
     "path": "milestones.0.proof",
-    "source": "Prototype merged in PR 293 (4f8cea27) and hotfix PR 295 (573ed67c), deployed as prod-573ed67c at https://pods.openape.ai/inbox/ behind NUXT_INBOX_PROTOTYPE_ENABLED. Decision inventory recorded below. Pre-device Test Run: https://report.openape.ai/d/01M4BAS8MHWA6FB4E8W29801WK. The physical iPhone gate is open.",
-    "text": "Prototyp in PR 293 (4f8cea27) und Korrektur-PR 295 (573ed67c) gemergt, als prod-573ed67c unter https://pods.openape.ai/inbox/ hinter NUXT_INBOX_PROTOTYPE_ENABLED ausgeliefert. Entscheidungsinventar unten erfasst. Test Run vor der Geräteprüfung: https://report.openape.ai/d/01M4BAS8MHWA6FB4E8W29801WK. Die Prüfung auf dem echten iPhone ist offen."
+    "source": "Prototype merged in PR 293 (4f8cea27) and hotfix PR 295 (573ed67c), live as prod-573ed67c at https://pods.openape.ai/inbox/. Device: owner's iPhone 11 Pro Max, installed Home Screen app, Safari 26.6.1 user agent; one push subscription on web.push.apple.com. Two real pushes accepted by Apple (HTTP 201); the synthetic decision was recorded from the phone and the message was read. The owner reported the flows working and waived the two-day series. Not proven: service-worker shown/clicked receipts and push-tagged opening were not recorded and remain M5/M6 acceptance items. Evidence: https://report.openape.ai/d/01M4BAS8MHWA6FB4E8W29801WK and the device Test Run linked below.",
+    "text": "Prototyp in PR 293 (4f8cea27) und Korrektur-PR 295 (573ed67c) gemergt, live als prod-573ed67c unter https://pods.openape.ai/inbox/. Gerät: iPhone 11 Pro Max des Eigentümers, installierte Home-Bildschirm-App, User-Agent Safari 26.6.1; ein Push-Abonnement bei web.push.apple.com. Zwei echte Pushes von Apple angenommen (HTTP 201); die synthetische Entscheidung wurde am Telefon erfasst und die Mitteilung gelesen. Der Eigentümer meldete funktionierende Abläufe und verzichtete auf die Zweitagesserie. Nicht nachgewiesen: Service-Worker-Quittungen für Anzeige/Antippen und das Öffnen über den Push wurden nicht aufgezeichnet und bleiben Abnahmepunkte von M5/M6. Nachweise: https://report.openape.ai/d/01M4BAS8MHWA6FB4E8W29801WK und der unten verlinkte Geräte-Test-Run."
    },
    {
     "path": "changelog.3.text",
     "source": "M0 prototype merged (PR 293, hotfix PR 295) and deployed as prod-573ed67c; decision inventory added; pre-device Test Run published. CI runner disk exhaustion was cleared on the way.",
     "text": "M0-Prototyp gemergt (PR 293, Korrektur-PR 295) und als prod-573ed67c ausgeliefert; Entscheidungsinventar ergänzt; Test Run vor der Geräteprüfung veröffentlicht. Unterwegs wurde ein voller Speicher des CI-Runners bereinigt."
+   },
+   {
+    "path": "decisions.6.title",
+    "source": "Accept M0 without the two-day push series",
+    "text": "M0 ohne zweitägige Push-Serie abnehmen"
+   },
+   {
+    "path": "decisions.6.description",
+    "source": "The owner tested the installed PWA on an iPhone 11 Pro Max, judged the flows to work and waived the 20-push/two-day observation. M0 is accepted on the owner's observation plus server records; push reliability and the missing service-worker receipts move into M5/M6 acceptance.",
+    "text": "Der Eigentümer hat die installierte PWA auf einem iPhone 11 Pro Max geprüft, die Abläufe als funktionierend beurteilt und auf die Beobachtung von 20 Pushes über zwei Tage verzichtet. M0 gilt auf Grundlage seiner Beobachtung und der Serveraufzeichnungen als abgenommen; Push-Zuverlässigkeit und die fehlenden Service-Worker-Quittungen gehen in die Abnahme von M5/M6 über."
+   },
+   {
+    "path": "changelog.4.text",
+    "source": "Owner accepted M0 on an iPhone 11 Pro Max and waived the two-day series; M1 started.",
+    "text": "Eigentümer hat M0 auf einem iPhone 11 Pro Max abgenommen und auf die Zweitagesserie verzichtet; M1 begonnen."
    }
   ]
  },
