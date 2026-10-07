@@ -1,0 +1,49 @@
+// @vitest-environment happy-dom
+import { mount, RouterLinkStub } from '@vue/test-utils'
+import { beforeEach, expect, it } from 'vitest'
+import InboxList from '../app/components/InboxList.vue'
+import type { InboxItem, Receipt } from '../app/inbox/client'
+import { chooseLanguage } from '../app/inbox/i18n'
+
+beforeEach(() => chooseLanguage('de'))
+const digest = 'd'.repeat(64)
+function decision(change: Partial<NonNullable<InboxItem['decision']>> = {}, item: Partial<InboxItem> = {}): InboxItem {
+  return {
+    id: crypto.randomUUID(), kind: 'decision', state: 'open', title: 'Newsletter freigeben?', body: 'Eine Mail wartet.', pod: null, runId: null, links: [], created: 1, sequence: 1, read: null, archived: null, deleted: null,
+    decision: { sourceId: 'network-choice:1', digest, type: 'network-choice', authority: 'pods', runtimeId: crypto.randomUUID(), options: [{ key: 'approve', title: 'Freigeben', input: null }, { key: 'reject', title: 'Ablehnen', input: null }], ...change },
+    ...item,
+  }
+}
+const list = (items: InboxItem[], receipts: Record<string, Receipt> = {}, online = true) => mount(InboxList, { props: { items, receipts, online, empty: 'leer' }, global: { stubs: { NuxtLink: RouterLinkStub } } })
+
+it('answers a Pods decision straight from its card', async () => {
+  const item = decision()
+  const wrapper = list([item])
+  expect(wrapper.findAll('button').map(button => button.text())).toEqual(['Freigeben', 'Ablehnen'])
+  expect(wrapper.get('[role=group]').attributes('aria-label')).toBe('Antworten auf „Newsletter freigeben?“')
+  await wrapper.findAll('button')[1]!.trigger('click')
+  expect(wrapper.emitted('decide')).toEqual([[item, 'reject']])
+})
+
+it('sends options that need evidence to the detail with the option preselected', () => {
+  const item = decision({ options: [{ key: 'deliver', title: 'Zustellen', input: null }, { key: 'seen', title: 'Bereits zugestellt', input: 'evidence' }] })
+  const wrapper = list([item])
+  expect(wrapper.findAll('button').map(button => button.text())).toEqual(['Zustellen'])
+  const links = wrapper.findAllComponents(RouterLinkStub)
+  expect(links.at(-1)!.props('to')).toEqual({ path: `/inbox/item/${item.id}`, query: { option: 'seen' } })
+})
+
+it('shows the receipt instead of choices while an answer runs, and disables choices offline', () => {
+  const item = decision()
+  const running = list([item], { [item.id]: { option: 'approve', title: 'Freigeben', digest, requestId: crypto.randomUUID(), state: 'accepted', error: null, at: 1 } })
+  expect(running.get('[role=status]').text()).toBe('Angenommen: Freigeben. Wartet auf den Mac; noch nicht angewendet.')
+  expect(running.findAll('button')).toHaveLength(0)
+  const offline = list([decision()], {}, false)
+  expect(offline.findAll('button').every(button => button.attributes('disabled') !== undefined)).toBe(true)
+})
+
+it('offers no card choices for IdP handoffs or completed decisions', () => {
+  const idp = decision({ authority: 'idp', options: [] }, { links: [{ title: 'Freigeben', url: 'https://id.openape.ai/x' }] })
+  const done = decision({}, { state: 'resolved' })
+  expect(list([idp, done]).findAll('button')).toHaveLength(0)
+})
