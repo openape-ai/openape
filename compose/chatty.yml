@@ -81,7 +81,6 @@ services:
       NUXT_RELAY_DATABASE: /data/relay.sqlite
       NUXT_WORKSPACE_DATABASE: /data/workspace.sqlite
       NUXT_INBOX_DATABASE: /data/inbox.sqlite
-      NUXT_INBOX_PROTOTYPE_DATABASE: /data/inbox-prototype.sqlite
       NUXT_RELAY_ORIGIN: https://pods.openape.ai
       NUXT_RELAY_FIXTURE: "false"
     volumes:
