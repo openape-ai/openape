@@ -1,5 +1,11 @@
 # @openape/ape-testruns
 
+## 0.7.0
+
+### Minor Changes
+
+- Add bilingual German/English Plans with an offline template switch, a top TL;DR, an accessible visual problem overview and complete source-bound translation validation. Preserve shared original evidence, approval and one-language inputs.
+
 ## 0.6.1
 
 ### Patch Changes

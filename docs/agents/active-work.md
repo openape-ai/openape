@@ -2,11 +2,25 @@
 
 ## Grant batches — issue 1442
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1442; approved plan: https://report.openape.ai/d/01M4AQCZFG6NXWF4NYS8DWKGV6 (revision 1, owner approval October 7). Protocol PR: https://repos.openape.ai/patrick/protocol/pulls/3.
-- Worktree `openape-monorepo.worktrees/grant-batches`, branch `feature/issue-1442-grant-batches`, base `31250d69` (includes the batch authorization fix from issue 1441).
-- IdP: optional `request.batch`, `batch` list filter, `openape_grant_batch_supported`, batch approval view with per-item checkboxes and grouped pending list. Pods: one once-grant per gate item for network gates, workflow gates and the mail archive; Pods-side exclusion removed; schema 40 returns pending collective-grant batches for re-batching.
-- Checks: nuxt-auth-idp 670 tests, grants 272, protocol conformance, free-idp store; Pods 1,301 unit/component tests. Local acceptance against a running IdP with the real Pods grant authority: agent self-approval refused per item, 2 of 3 approved in the batch view, exactly the approved grants consumed once, denied and repeated consumption refused.
-- Next: native Pods E2E and layout, exact-source CI, review and merge of both PRs, IdP deployment and Pods installation, then one real owner-decided batch.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1442; approved plan: https://report.openape.ai/d/01M4AQCZFG6NXWF4NYS8DWKGV6 (revision 1, owner approval October 7). Protocol PR 3 merged as `ac95a447`.
+- Worktree `openape-monorepo.worktrees/grant-batches`, branch `feature/issue-1442-grant-batches`, PR 289; base `31250d69`, merged with main `4687ed4d`.
+- IdP: optional `request.batch` with uniform once members, `batch` list filter, `openape_grant_batch_supported`, batch approval view and grouped pending list, one notification per batch. Pods: one once-grant per gate item for network gates, workflow gates and the mail archive; schema 40.
+- Evidence: https://report.openape.ai/d/01M4AVZ745E30GG2KF5TSA5R2W (v2): unit/layout suites, local acceptance against a running IdP with the real Pods grant authority; the native SIGKILL locator failure was pre-existing and is fixed by issue 1443.
+- Next: merge, IdP deployment, signed Pods installation, one real owner-decided batch.
+
+## Pods network-gates native E2E label — issue 1443
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1443. Worktree `.claude/worktrees/adoring-brahmagupta-463b2a`, branch `bugfix/issue-1443-network-gates-list-label`, base `6bd4c0d0`.
+- The Automations map draws Pod names on a canvas, so the reopened-app wait now uses the List view's `Gate consumer` cell. Functional assertions are unchanged.
+- Verification: `pnpm build && pnpm package:mac && npx vitest run --config vitest.electron.config.ts e2e/network-gates.test.ts` on an unlocked Mac, 2/2 passed; crash screenshot inspected.
+- Next: exact-source CI, native review and merge.
+
+## Bilingual Plans — issue 1440
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1440; owner-requested implementation plan: https://report.openape.ai/d/01M4AR4BA9AACFE1MCCPPEP2MZ?v=1.
+- Worktree `issue-1439-report-contract` reused without touching parallel work; branch `feature/issue-1440-bilingual-plans`, base `6c0d8e222e87e510ad2719eb2e15d9dfe1947cd9`.
+- Additive plan/2 summary/problem/translations; exact source matching and coverage guards; German/English/both offline template switch; localized labels, shared original evidence and approval; top TL;DR and responsive four-stage overview.
+- Verification: existing unit suite plus retained language/evidence contracts; actual Chrome offline/no-JavaScript, keyboard, light/dark, narrow/wide and selected/both print checks. Independent Claude Opus 5.5 review findings corrected; final focused review found no code blockers. Root lint/typecheck, CLI build and 49 tests pass; 12 browser combinations and the six-page bilingual PDF checked. PR: https://repos.openape.ai/patrick/monorepo/pulls/288. Next: final source CI, merge, local install and shared guidance activation; publish final evidence. Public npm release retains its existing authentication limitation.
 
 ## Batch grant approver policy — issue 1441
 

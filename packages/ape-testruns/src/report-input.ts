@@ -3,6 +3,7 @@ import { invalid } from '@openape/report-contracts/html'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import addFormats from 'ajv-formats'
 import schema from '../schemas/report.schema.json'
+import { germanPlan, validatePlanTranslations } from './plan-translations'
 
 const ajv = new Ajv2020({ allErrors: true })
 addFormats(ajv)
@@ -95,8 +96,18 @@ export function validateReport(input: unknown): ReportDocument {
   for (const target of doc.targets ?? []) {
     if (target.dirty && !target.changesDigest) invalid(`Dirty target ${target.id} needs changesDigest`)
   }
-  if (doc.schema === 'openape.test-run/1') checkRun(doc)
-  else checkPlan(doc)
+  if (doc.schema === 'openape.test-run/1') {
+    checkRun(doc)
+  }
+  else {
+    checkPlan(doc)
+    validatePlanTranslations(doc)
+    if (doc.translations) {
+      const localized = germanPlan(doc)
+      delete localized.translations
+      if (!validate(localized)) invalid(`Invalid German plan fields: ${ajv.errorsText(validate.errors, { separator: '; ' })}`)
+    }
+  }
   return doc
 }
 
