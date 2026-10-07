@@ -39,9 +39,11 @@ export class InboxPrototype {
 
   close(): void { this.db.close() }
 
+  // An endpoint stays with the account that registered it; a device moves accounts only after that account unsubscribes.
   subscribe(owner: Owner, subscription: Subscription, agent: string): void {
-    this.db.prepare('INSERT INTO subscriptions(endpoint,owner,p256dh,auth,agent,created) VALUES(?,?,?,?,?,?) ON CONFLICT(endpoint) DO UPDATE SET owner=excluded.owner,p256dh=excluded.p256dh,auth=excluded.auth,agent=excluded.agent')
+    const updated = this.db.prepare('INSERT INTO subscriptions(endpoint,owner,p256dh,auth,agent,created) VALUES(?,?,?,?,?,?) ON CONFLICT(endpoint) DO UPDATE SET p256dh=excluded.p256dh,auth=excluded.auth,agent=excluded.agent WHERE subscriptions.owner=excluded.owner')
       .run(subscription.endpoint, key(owner), subscription.p256dh, subscription.auth, agent.slice(0, 300), this.now())
+    if (Number(updated.changes) === 0) throw new ProtocolError('push_endpoint_taken', 409)
   }
 
   unsubscribe(owner: Owner, endpoint: string): void { this.db.prepare('DELETE FROM subscriptions WHERE endpoint=? AND owner=?').run(endpoint, key(owner)) }

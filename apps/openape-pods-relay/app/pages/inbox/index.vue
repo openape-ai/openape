@@ -81,9 +81,15 @@ async function cancel() {
   catch (cause) { status.value = cause instanceof Error ? cause.message : String(cause) }
 }
 
+// Signing out releases this device's push subscription so no further alerts reach it for this account.
 async function logout() {
-  await fetch('/workspace-auth/logout', { method: 'POST' })
-  shell.value?.expired()
+  try {
+    const subscription = 'serviceWorker' in navigator ? await (await navigator.serviceWorker.ready).pushManager?.getSubscription() : null
+    if (subscription) { await api('unsubscribe', { endpoint: subscription.endpoint }); await subscription.unsubscribe() }
+    await fetch('/workspace-auth/logout', { method: 'POST' })
+    shell.value?.expired()
+  }
+  catch (cause) { status.value = cause instanceof Error ? cause.message : String(cause) }
 }
 
 // Foreground return is the sync point; push delivery is never relied on for correctness.

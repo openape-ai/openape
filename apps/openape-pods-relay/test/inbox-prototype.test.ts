@@ -45,6 +45,12 @@ it('records receipts only for the secret token and refuses foreign push endpoint
   expect(store.receipt(due!.push.token, 'shown')).toBe(true)
   expect(store.push(due!.push.id)?.shown).toBe(1_000_000)
   expect(parseSubscription(subscription).endpoint).toBe(subscription.endpoint)
+  store.subscribe(owner, parseSubscription(subscription), 'iPhone')
+  expect(() => store.subscribe(other, parseSubscription({ ...subscription, keys: { ...subscription.keys, auth: 'b'.repeat(22) } }), 'attacker')).toThrow('push_endpoint_taken')
+  expect(store.subscriptions(JSON.stringify([owner.issuer, owner.subject]))[0]?.auth).toBe('a'.repeat(22))
+  store.unsubscribe(owner, subscription.endpoint)
+  store.subscribe(other, parseSubscription(subscription), 'same device, next account')
+  expect(store.devices(other)).toBe(1)
   for (const endpoint of ['http://web.push.apple.com/x', 'https://127.0.0.1/x', 'https://web.push.apple.com.evil.example/x', 'https://web.push.apple.com:8443/x']) {
     expect(() => parseSubscription({ ...subscription, endpoint })).toThrow('invalid_push_endpoint')
   }
