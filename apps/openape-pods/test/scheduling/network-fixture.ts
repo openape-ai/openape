@@ -32,6 +32,7 @@ export function networkFixture(services?: RunServices) {
   const dispatcher = new RunDispatcher(store, resources, { helper: '/unused', environment: {} } as AgentRuntime, services)
   const owner = { issuer: 'https://identity.example.invalid', subject: 'synthetic-network-owner' }
   const engine = new NetworkEngine(store, dispatcher, resources, '/unused', () => owner)
+  engine.gates.collect = { quietMs: 0, maxMs: 0 }
   fixtures.push({ store, engine, dispatcher })
   const groups = new PodGroups(store)
   groups.execute({ type: 'organize', action: 'create', name: 'Synthetic network company', revision: groups.view().revision })
