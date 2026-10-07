@@ -1,10 +1,10 @@
 import { useBrokerStore } from '../../../utils/broker-store'
-import { requireBrokerGrantOwner } from '../../../utils/broker-owner'
 import type { GrantType, OpenApeCliAuthorizationDetail } from '@openape/core'
 import type { ApproveGrantOverrides, ExtendMode } from '@openape/grants'
 import { approveGrant, approveGrantWithExtension, approveGrantWithWidening, issueAuthzJWT } from '@openape/grants'
 import { defineEventHandler, getRouterParam, readBody } from 'h3'
 import { requireAuth } from '../../../utils/admin'
+import { requireGrantActionAuthority } from '../../../utils/grant-authority'
 import { useGrantStores } from '../../../utils/grant-stores'
 import { getIdpIssuer, useIdpStores } from '../../../utils/stores'
 import { createProblemError } from '../../../utils/problem'
@@ -14,7 +14,7 @@ const VALID_GRANT_TYPES: GrantType[] = ['once', 'timed', 'always']
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   const { grantStore } = useGrantStores()
-  const { userStore, keyStore } = useIdpStores()
+  const { keyStore } = useIdpStores()
 
   if (!id) {
     throw createProblemError({ status: 400, title: 'Grant ID is required' })
@@ -40,37 +40,7 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 404, title: 'Grant not found', type: 'https://openape.org/errors/grant_not_found' })
   }
 
-  // Management token bypasses authorization check.
-  const isManagement = email === '_management_'
-  if (grant.brokered) await requireBrokerGrantOwner(event, grant)
-  if (!grant.brokered && !isManagement) {
-    const requesterUser = await userStore.findByEmail(grant.request.requester)
-    if (!requesterUser) {
-      throw createProblemError({ status: 403, title: 'Requester not found for this grant' })
-    }
-    // Approver-policy resolution. Per the User type convention
-    // (`packages/auth/src/idp/stores.ts:320`), `approver === undefined`
-    // means "defaults to owner, or self when there is no owner". So:
-    //
-    //   approver explicitly set    -> only that approver (and the owner) may approve.
-    //   approver unset, owner set  -> owner is the implicit approver (sub-user / agent).
-    //   approver unset, owner unset -> top-level human, self-approval is implicit.
-    //
-    // The previous `isRequester` shortcut allowed *every* requester to
-    // self-approve regardless of policy — that bypassed the entire
-    // delegation model: an agent with only its 1h IdP token could mint
-    // itself authz_jwt for arbitrary audiences without the human owner
-    // ever being involved. See security audit 2026-05-04.
-    const isOwner = requesterUser.owner !== undefined && requesterUser.owner === email
-    const isExplicitApprover = requesterUser.approver !== undefined && requesterUser.approver === email
-    const isImplicitSelfApprove
-      = requesterUser.approver === undefined
-      && requesterUser.owner === undefined
-      && requesterUser.email === email
-    if (!isOwner && !isExplicitApprover && !isImplicitSelfApprove) {
-      throw createProblemError({ status: 403, title: 'Only the owner or approver can approve this grant' })
-    }
-  }
+  await requireGrantActionAuthority(event, grant, email, 'approve')
 
   // widened_details and extend_mode are mutually exclusive
   const hasWidenedDetails = Array.isArray(body.widened_details) && body.widened_details.length > 0
