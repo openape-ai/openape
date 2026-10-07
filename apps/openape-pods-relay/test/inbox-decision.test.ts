@@ -99,3 +99,9 @@ it('speaks English when chosen', () => {
   const wrapper = mount(InboxDecision, { props: { item: decision(), receipt: receipt('accepted'), online: true, checking: false } })
   expect(wrapper.get('[role=status]').text()).toBe('Accepted: Zustellen. Waiting for the Mac; not applied yet.')
 })
+
+it('opens with the evidence form when the option was picked on the list card', () => {
+  const wrapper = mount(InboxDecision, { props: { item: decision(), receipt: undefined, online: true, checking: false, preselect: 'seen' } })
+  expect(wrapper.find('textarea').exists()).toBe(true)
+  expect(mount(InboxDecision, { props: { item: decision(), receipt: undefined, online: true, checking: false, preselect: 'yes' } }).find('form').exists()).toBe(false)
+})
