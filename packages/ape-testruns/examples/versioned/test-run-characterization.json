@@ -1,0 +1,40 @@
+{
+  "schema": "openape.test-run/1",
+  "title": "Example: successful characterization with an adverse finding",
+  "purpose": "characterization",
+  "sample": true,
+  "commands": [
+    {
+      "id": "probe",
+      "command": "node isolated-probe.mjs",
+      "outcome": "exited",
+      "exitCode": 0,
+      "summary": "The collector observed the synthetic marker."
+    }
+  ],
+  "tests": [
+    {
+      "id": "egress",
+      "title": "Observe whether the synthetic marker reaches the collector",
+      "status": "passed",
+      "expected": "The probe returns a conclusive collector observation.",
+      "observed": "The marker reached the collector.",
+      "commandIds": [
+        "probe"
+      ]
+    },
+    {
+      "id": "safari",
+      "title": "Repeat the probe in Safari",
+      "status": "blocked",
+      "reason": "No suitable device was available."
+    }
+  ],
+  "assessment": {
+    "outcome": "action-required",
+    "summary": "Characterization succeeded, but the observed transfer violates the intended boundary."
+  },
+  "limitations": [
+    "Only a disposable local harness was exercised."
+  ]
+}

@@ -64,8 +64,12 @@ supply-chain quarantine and targeted overrides in `pnpm-workspace.yaml`.
   a private page. Publish actual results and personally inspected screenshots
   through OpenApe Reports under Test Runs, then verify the returned link and
   category. Use `ape-report-render test-run` with actual evidence, then
-  `ape-reports publish --category 'Test Runs'`. Plans use the local plan template
-  and `ape-reports`; private documents require owner access. Keep local exports when needed.
+  `ape-reports publish --category 'Test Runs'`. New inputs use `openape.test-run/1` and `openape.plan/2`; read
+  [the contract](packages/ape-testruns/RENDERING.md) and
+  [schema](packages/ape-testruns/schemas/report.schema.json). The reviewed
+  [Test Run](packages/ape-testruns/templates/test-run.html) and
+  [Plan](packages/ape-testruns/templates/plan.html) files are canonical.
+  Plans use the local plan template and `ape-reports`; private documents require owner access. Keep local exports when needed.
   See the [engineering guide](docs/agents/engineering-guide.md).
 - Generated map/graph: `pnpm graph`; freshness: `pnpm docs:check`. Add purposes
   in `.openape/workspace-purpose.json` when introducing a workspace.

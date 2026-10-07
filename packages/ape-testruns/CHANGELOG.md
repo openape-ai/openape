@@ -1,5 +1,11 @@
 # @openape/ape-testruns
 
+## 0.6.0
+
+### Minor Changes
+
+- Add versioned Test Run and Plan input schemas, generated types, semantic and evidence-integrity validation, reviewed responsive HTML layouts and reproducible rendering receipts. Keep legacy input readers while removing unsupported single-commit claims from legacy context.
+
 ## 0.5.0
 
 ### Minor Changes
