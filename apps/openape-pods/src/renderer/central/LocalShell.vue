@@ -29,6 +29,8 @@ const secrets = ref<SecretsView | null>(null)
 const tab = ref<'automations' | 'decisions'>('automations')
 const now = ref(Date.now())
 const error = ref('')
+// A refused owner action stays visible until the next action succeeds; polling must not hide it.
+const actionError = ref('')
 let polls = 0
 let timer: ReturnType<typeof setTimeout> | undefined
 let closed = false
@@ -45,15 +47,15 @@ async function poll() {
 onMounted(poll)
 onBeforeUnmount(() => { closed = true; clearTimeout(timer) })
 // Owner commands go to the local worker; the next poll shows the result.
-async function run(action: () => Promise<unknown>) {
-  try { await action(); error.value = '' }
-  catch (cause) { error.value = String(cause) }
+async function run(action: () => Promise<unknown>, settle?: (error: string | null) => void) {
+  try { await action(); actionError.value = ''; settle?.(null) }
+  catch (cause) { actionError.value = String(cause); settle?.(String(cause)) }
 }
 function localCommand(command: CentralCommand) {
   if (command.channel === 'scheduling') void run(() => window.pods.scheduling(command.body as unknown as ScheduleCommand))
   else if (command.channel === 'runs') void run(() => window.pods.runs(command.body as unknown as RunCommand))
 }
-const networkCommand = (command: NetworkCommand) => void run(() => window.pods.networks(command))
+const networkCommand = (command: NetworkCommand, settle?: (error: string | null) => void) => void run(() => window.pods.networks(command), settle)
 const workflowCommand = (command: WorkflowCommand) => void run(() => window.pods.workflows(command))
 const masterCommand = (command: MasterCommand) => void run(async () => { await window.pods.master(command); proposals.value = (await window.pods.master({ type: 'list' })).proposals })
 const networkControl = (control: NetworkControl) => void run(() => window.pods.networks(control))
@@ -67,6 +69,9 @@ const secretSave = (podId: string, alias: string, value: string) => void run(asy
 <template>
   <p v-if="error" role="alert" class="error-message">
     {{ diagnostic(error) }}
+  </p>
+  <p v-if="actionError" role="alert" class="error-message" data-action-error>
+    {{ diagnostic(actionError) }}
   </p>
   <AutomationsShell :view="map" :live="true" :now="now" :decisions="map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" desktop :sharing="sharing" :codex="codexConnected === null ? undefined : codexConnected ? 'connected' : 'disconnected'" :tab="tab" :inbox="{ choices: networks.choices ?? [], gates: networks.gates ?? [], graphGates: workflows.gates ?? null, proposals }" :secrets="secrets" @update:tab="tab = $event" @network-command="networkCommand" @workflow-command="workflowCommand" @master="masterCommand" @command="localCommand" @network="networkControl" @workflow="workflowControl" @folder="openFolder" @secrets="secretsCommand" @secret-save="secretSave" @open-pod="emit('openPod', $event)" @share="emit('share', $event)" @advanced="emit('advanced')" @import="emit('import')" />
 </template>

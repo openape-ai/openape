@@ -25,6 +25,9 @@ type MemberState = 'pending' | 'approved' | 'denied' | 'expired'
 interface Task { id: string, network_id: string, pod_id: string, generation: number, state: GateBatchState, manifest: string, grant_id: string | null, next_poll_at: number }
 interface GateBinding { taskId: string, grantId: string, manifestHash: string }
 
+/** A superseded batch only waits for the owner while one of its inputs is blocked or uncertain. */
+export const supersededNeedsReview = `EXISTS(SELECT 1 FROM network_gate_items review_item JOIN network_deliveries review_delivery ON review_delivery.id=review_item.delivery_id WHERE review_item.task_id=task.id AND review_delivery.state IN ('blocked','unknown'))`
+
 export class NetworkGates {
   constructor(private readonly store: PodDatabase, private readonly invocations: NetworkInvocations, private readonly resources: ResourceRegistry) {}
 
@@ -240,6 +243,7 @@ export class NetworkGates {
   views(owner: { issuer: string, subject: string }): NetworkGateView[] {
     return this.store.db.prepare(`SELECT task.*,control.url,control.error FROM network_gate_tasks task JOIN network_gate_controls control ON control.task_id=task.id
       JOIN networks network ON network.id=task.network_id WHERE network.owner_issuer=? AND network.owner_subject=? AND (network.state='archived' OR json_extract(task.manifest,'$.networkRevision')=network.revision)
+      AND (task.state!='superseded' OR ${supersededNeedsReview})
       ORDER BY CASE WHEN task.state IN ('preparing','pending','consuming','unknown') THEN 0 ELSE 1 END,task.created_at DESC,task.id LIMIT 256`).all(owner.issuer, owner.subject).map((task) => {
       const manifest = parseNetworkGateManifest(JSON.parse(task.manifest as string))
       const outcomes = this.store.db.prepare('SELECT delivery_id,outcome FROM network_gate_items WHERE task_id=?').all(task.id!)
