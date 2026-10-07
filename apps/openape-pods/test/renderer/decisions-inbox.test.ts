@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
+import type { GateBatchView } from '../../src/contracts/gates'
 import type { MapView } from '../../src/contracts/map-view'
 import { parseMapView } from '../../src/contracts/map-view'
 import type { NetworkGateView } from '../../src/contracts/network-gate-view'
@@ -92,14 +93,14 @@ describe('Entscheidungen', () => {
     expect(wrapper!.find('[data-testid="choices"] .item:not(.done) .raw').text()).toContain('"gate": "uncertain-review"')
   })
 
-  it('lists approval batches with the IdP link, rights with the approval command, unknown deliveries and setup proposals', async () => {
+  it('lists approval batches with the IdP action, rights with the approval command, unknown deliveries and setup proposals', async () => {
     const monitor = view.pods.find(pod => pod.name === 'IURIO PR monitor')!
     const bot = view.pods.find(pod => pod.unknown.length)!
     await mountInbox({ gates: [batch], proposals: [proposal] })
     const batches = wrapper!.find('[data-testid="batches"]')
     expect(batches.text()).toContain('Freigabe-Batch · newsletter-approval')
     expect(batches.text()).toContain('2 Items')
-    expect(batches.find('a.idp').attributes('href')).toBe(batch.url)
+    expect(batches.find('button.idp').text()).toBe('Am IdP entscheiden')
     await batches.findAll('input[type="checkbox"]')[0]!.setValue(true)
     await batches.find('label input:not([type="checkbox"])').setValue('Werbung, nicht relevant')
     await batches.findAll('button').find(item => item.text() === 'Ausgewählte ausschließen')!.trigger('click')
@@ -123,6 +124,25 @@ describe('Entscheidungen', () => {
     await setup.findAll('button').find(item => item.text() === 'Ablehnen')!.trigger('click')
     expect(wrapper!.emitted('master')).toEqual([[{ type: 'decline', id: proposal.id, podId: proposal.podId }]])
     expect(wrapper!.findAll('.kpi').map(item => item.find('b').text())).toEqual(['17', '1', '1', '1', '1'])
+  })
+
+  it.each([true, false])('opens network and graph approvals on the correct host (desktop: %s)', async (desktop) => {
+    const graphBatch: GateBatchView = { id: '00000000-0000-4000-8000-0000000000b2', workflowId: '00000000-0000-4000-8000-0000000000f1', gate: 'review', podId: batch.podId, state: 'pending', url: 'https://id.openape.ai/grant-approval?grant_id=graph-batch', expiresAt: batch.expiresAt, error: null, items: [] }
+    await mountInbox({ desktop, gates: [batch], graphGates: { batches: [graphBatch], held: [] } })
+    const actions = wrapper!.findAll('[data-testid="batches"] .opts .idp')
+    expect(actions).toHaveLength(2)
+    if (!desktop) {
+      for (const [index, url] of [batch.url, graphBatch.url].entries()) {
+        expect(actions[index]!.element.tagName).toBe('A')
+        expect(actions[index]!.attributes()).toMatchObject({ href: url, target: '_blank', rel: 'noopener' })
+      }
+      expect(wrapper!.emitted('network')).toBeUndefined()
+      expect(wrapper!.emitted('workflow')).toBeUndefined()
+      return
+    }
+    for (const action of actions) { expect(action.element.tagName).toBe('BUTTON'); await action.trigger('click') }
+    expect(wrapper!.emitted('network')).toEqual([[{ type: 'gateOpen', id: network.id, revision: network.revision, taskId: batch.id, generation: batch.generation }]])
+    expect(wrapper!.emitted('workflow')).toEqual([[{ type: 'gateOpen', batchId: graphBatch.id }]])
   })
 
   it('shows the inbox on the second tab of the shell with the count in the tab and opens a Pod from a proposal', async () => {
