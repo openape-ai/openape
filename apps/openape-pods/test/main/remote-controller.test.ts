@@ -8,7 +8,10 @@ import { ProtocolError } from '@openape/pods-protocol'
 import { generateKey, proofBytes, publicKey, sha256, signBytes } from '@openape/pods-protocol/crypto'
 import { RelayStore } from '../../../openape-pods-relay/server/utils/store'
 import { RelayAuth } from '../../../openape-pods-relay/server/utils/auth'
+import { InboxStore, parsePublication } from '../../../openape-pods-relay/server/utils/inbox-store'
 import { RemoteController } from '../../src/main/remote/controller'
+import { InboxOutbox, parseNotify } from '../../src/worker/inbox/outbox'
+import type { InboxOutboxCommand, InboxPublication } from '../../src/worker/inbox/outbox'
 import type { FixtureWorker } from '../../src/main/worker'
 import { PodDatabase } from '../../src/worker/storage/database'
 import { RemoteControl } from '../../src/worker/remote/control'
@@ -49,7 +52,9 @@ async function fixture() {
   await remote.execute({ type: 'configure', registration })
   const device = relay.register(randomUUID(), owner, 'mobile', { signing: publicKey(generateKey()), agreement: publicKey(generateKey()) })
   relay.pair(registration, device.id); await remote.execute({ type: 'pair', device })
-  const worker = { remote: vi.fn(remote.execute.bind(remote)), remoteOwner: async () => ({ owner, email: owner.subject }), indexRemotePods: vi.fn(async () => {}) }
+  const outbox = new InboxOutbox(store)
+  const inbox = new InboxStore(':memory:')
+  const worker = { inboxOutbox: vi.fn(async (command: InboxOutboxCommand) => outbox.execute(command)), remote: vi.fn(remote.execute.bind(remote)), remoteOwner: async () => ({ owner, email: owner.subject }), indexRemotePods: vi.fn(async () => {}) }
   const auth = new RelayAuth(relay, 'https://pods.example.test')
   browser.mockImplementation(async (url: string) => {
     const id = new URL(url).searchParams.get('id')!
@@ -68,15 +73,21 @@ async function fixture() {
         const h = new Headers(init.headers)
         return Response.json(relay.authenticateRequest(h.get('authorization')!.slice(7), 'runtime', 'GET', path, { id: h.get('x-pods-request-id')!, at: h.get('x-pods-request-at')!, digest: h.get('x-pods-body-digest')!, signature: h.get('x-pods-proof')! }))
       }
+      if (path === '/api/runtime/v1/inbox') {
+        const h = new Headers(init.headers)
+        const caller = relay.authenticateRequest(h.get('authorization')!.slice(7), 'runtime', 'POST', path, { id: h.get('x-pods-request-id')!, at: h.get('x-pods-request-at')!, digest: h.get('x-pods-body-digest')!, signature: h.get('x-pods-proof')! })
+        if (h.get('x-pods-body-digest') !== sha256(String(init.body))) throw new ProtocolError('invalid_request_body', 401)
+        return Response.json(inbox.publish(caller.owner, caller.id, parsePublication(body)))
+      }
       throw new Error(`Unexpected route ${path}`)
     }
     catch (error) { if (error instanceof ProtocolError) return Response.json({ code: error.code }, { status: error.status }); throw error }
   })
   vi.stubGlobal('fetch', fetcher)
   const controller = new RemoteController(root, worker as unknown as FixtureWorker, 'https://pods.example.test')
-  cleanups.push(async () => { await controller.stop(); relay.close(); store.close(); await rm(root, { recursive: true, force: true }) })
+  cleanups.push(async () => { await controller.stop(); relay.close(); inbox.close(); store.close(); await rm(root, { recursive: true, force: true }) })
   const readSaved = async () => JSON.parse(await readFile(join(root, 'remote/registration.enc'), 'utf8')) as typeof saved
-  return { root, relay, store, remote, owner, registration, saved, rotated, worker, controller, requests, fetcher, readSaved, enable: () => controller.enable({ owner, email: owner.subject }) }
+  return { root, relay, store, remote, outbox, inbox, owner, registration, saved, rotated, worker, controller, requests, fetcher, readSaved, enable: () => controller.enable({ owner, email: owner.subject }) }
 }
 
 it('reauthenticates a replay-revoked session with the same runtime, keys, generation and pairing', async () => {
@@ -139,4 +150,22 @@ it('retains identity and does not request browser login for transient relay fail
   await expect(f.enable()).rejects.toThrow('503')
   expect(await f.readSaved()).toEqual({ ...f.saved, enabled: false })
   expect(browser).not.toHaveBeenCalled()
+})
+
+it('delivers queued Pod notifications once with the signed runtime session and keeps conflicts final', async () => {
+  const f = await fixture()
+  await f.enable()
+  const pod = f.store.createPod({ name: 'Belege' })
+  const queued = f.outbox.queue(pod, randomUUID(), parseNotify({ key: 'invoice-42', title: 'Rechnung abgelegt', body: 'Rechnung 42 liegt im Archiv.' }))
+  await f.controller.deliverInbox()
+  expect(f.inbox.list(f.owner).items.map(item => [item.title, item.pod?.name])).toEqual([['Rechnung abgelegt', 'Belege']])
+  expect(f.outbox.execute({ type: 'status' })).toEqual({ pending: 0, refused: [] })
+  // A lost acknowledgement retries the identical event; the inbox returns the stored receipt instead of a duplicate.
+  const publication = JSON.parse(String(f.store.db.prepare('SELECT publication FROM inbox_outbox WHERE event_id=?').get(queued.eventId)?.publication)) as InboxPublication
+  expect(f.inbox.publish(f.owner, f.registration.id, parsePublication(publication))).toMatchObject({ created: false })
+  // Changed content under an already delivered event is refused by the inbox and stays refused, never resent.
+  f.store.db.prepare('UPDATE inbox_outbox SET state=\'pending\',publication=? WHERE event_id=?').run(JSON.stringify({ ...publication, body: 'Geändert' }), queued.eventId)
+  await f.controller.deliverInbox()
+  expect(f.outbox.execute({ type: 'status' })).toMatchObject({ pending: 0, refused: [{ eventId: queued.eventId, reason: expect.stringContaining('inbox_event_conflict') }] })
+  expect(f.inbox.list(f.owner).items).toHaveLength(1)
 })

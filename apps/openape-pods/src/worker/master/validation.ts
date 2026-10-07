@@ -1,3 +1,4 @@
+import { parseNotify } from '../inbox/outbox'
 import { assignedSsh } from '../../contracts/ssh'
 import { assignedJev, parseJevRequest, syntheticJevResult } from '../../contracts/jev'
 import { parseWorkflowOutput } from '../../contracts/workflows'
@@ -79,6 +80,7 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
       if (operation === 'mail.workflow.filter') return { complete: true, output: { schema: 'mail-filter-result/v1', batchId: 'synthetic', mailbox: 'fixture@example.invalid', baseline: true, mode: 'preview', retained: [], archived: [], reportReceipts: [] } }
       if (operation === 'mail.workflow.remaining') return { baseline: true, complete: true, messages: [] }
       if (operation === 'mail.workflow.notify') return { delivered: true }
+      if (operation === 'notify') { parseNotify(payload); return { eventId: `${pod.id}:synthetic`, queued: false } }
       if (operation === 'credentials.get') {
         const alias = parseCredentialRead(payload)
         new ScriptCredentials(store, resources).readable(pod.id, alias)

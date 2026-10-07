@@ -1,3 +1,4 @@
+import { InboxOutbox, parseInboxOutboxCommand } from './inbox/outbox'
 import { recoverStoppedRuns } from './recovery/automatic'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { CodexNetworkCommand } from '../contracts/codex-networks'
@@ -351,6 +352,9 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'networks' in request.command) {
       const result = await executeNetwork(parseNetworkCommand(request.command.networks), 'ownerOperation' in request.command && request.command.ownerOperation === true)
       port.postMessage({ id: request.id, state: result }); return
+    }
+    if (request.command && typeof request.command === 'object' && 'inboxOutbox' in request.command) {
+      port.postMessage({ id: request.id, state: new InboxOutbox(store).execute(parseInboxOutboxCommand(request.command.inboxOutbox)) }); return
     }
     if (request.command && typeof request.command === 'object' && 'remote' in request.command) {
       port.postMessage({ id: request.id, state: await remote.execute(request.command.remote as RemoteInternal) }); return

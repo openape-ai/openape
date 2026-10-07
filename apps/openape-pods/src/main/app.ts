@@ -503,6 +503,8 @@ async function start(): Promise<void> {
   powerMonitor.on('resume', () => worker.lifecycle('resume'))
   worker.start(root)
   if (central) watchCentral(central)
+  // Pod notifications wait in the worker outbox until the account inbox acknowledges them.
+  setInterval(() => { remote.deliverInbox().catch((error: unknown) => console.error('Could not deliver Pod notifications', error)) }, 15000).unref()
   await refreshLauncher(join(codexDirectory, 'openape-pods-mcp'), codexTarget)
   await syncMcp()
   mcpExpiry = setInterval(() => {
