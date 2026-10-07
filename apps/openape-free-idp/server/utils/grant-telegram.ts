@@ -1,6 +1,7 @@
 import type { OpenApeGrant } from '@openape/core'
 import type { GrantMailDebouncer } from './grant-mail'
 import { summarizeRequest } from './summarize-grant'
+import { grantApprovalPath } from './grant-approval-link'
 
 /**
  * Shorter than the mail cooldown: Telegram is the channel the owner is in
@@ -45,7 +46,7 @@ export function formatPendingGrantMessage(
     shortRequester(grant.request.requester),
     summarizeRequest(grant.request),
     '',
-    `${issuer}/grant-approval?grant_id=${encodeURIComponent(grant.id)}`,
+    `${issuer}${grantApprovalPath(grant)}`,
   ]
   // Only worth saying when this is not the only one waiting — otherwise it is
   // noise on every single message.

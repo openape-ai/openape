@@ -4256,7 +4256,6 @@
   "Network creation reply does not name one grant per input": "Die Antwort nennt nicht genau eine Freigabe pro Eingabe",
   "Approval grant response does not name one grant per item": "Die Antwort nennt nicht genau eine Freigabe pro Eintrag",
   "Approved batch has no approval identity": "Das freigegebene Bündel hat keine Freigabe-Kennung",
-  "Approved item predates per-item grants": "Der freigegebene Eintrag stammt aus der Zeit vor Einzelfreigaben",
   "Approval now uses one grant per item; these inputs wait for a new batch": "Freigaben gelten jetzt pro Eintrag; diese Eingaben warten auf ein neues Bündel",
   "Approval now uses one grant per item; these items wait for a new batch": "Freigaben gelten jetzt pro Eintrag; diese Einträge warten auf ein neues Bündel",
   "Approval now uses one grant per message; prepare a fresh archive proposal": "Freigaben gelten jetzt pro Nachricht; bereite einen neuen Archiv-Vorschlag vor",
