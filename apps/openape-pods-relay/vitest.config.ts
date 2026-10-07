@@ -1,3 +1,5 @@
+import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vitest/config'
 
-export default defineConfig({ test: { environment: 'node', include: ['test/**/*.test.ts'] } })
+// Component tests opt into happy-dom per file; server and client logic run in Node.
+export default defineConfig({ plugins: [vue()], test: { environment: 'node', include: ['test/**/*.test.ts'] } })

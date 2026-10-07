@@ -194,7 +194,7 @@
    "id": "M3",
    "title": "Add a built-in notification action",
    "goal": "A Pod can notify its owner without a Telegram bot or chat ID.",
-   "status": "active",
+   "status": "done",
    "steps": [
     "Introduce a bounded context.notify API, or the equivalent established execution-context method confirmed in M0: stable event key, title, body and safe links. Enforce owner binding outside the script.",
     "Persist runtime outbox before dispatch, reconcile server receipts, and document accepted-versus-read semantics and quota errors."
@@ -209,7 +209,7 @@
    "id": "M4",
    "title": "Build the focused installed web app",
    "goal": "Expose Decisions and Notifications in a mobile layout independent of the full workspace.",
-   "status": "planned",
+   "status": "active",
    "steps": [
     "Add a dedicated mobile inbox entry with two tabs, detail views, completed history and settings. Configure manifest identity/start URL/scope, icons and safe areas. Reuse suitable Vue logic without importing the full desktop administration UI.",
     "Implement foreground sync, safe item URLs, bounded account-isolated offline reading, cache eviction recovery, controlled service-worker updates, accessibility and DE/EN strings."
@@ -293,9 +293,9 @@
  ],
  "completion": {
   "result": "not-assessed",
-  "summary": "M0 accepted and M1 delivered on October 7, 2026; M3 (built-in notify) merged with installation pending; M2 decisions implemented and locally verified; one owner decision is open: accepting HTTPS proposals that need a new IdP grant from the phone."
+  "summary": "M0 accepted and M1 delivered on October 7, 2026. M2 and M3 were rolled out the same evening as relay prod-3c08d3c7 and signed desktop 3c08d3c7 (schema 41); 20 open network decisions reached the account inbox. M2 acceptance completes with the owner's first real decision from the phone. M4 (installed mobile app) is implemented and browser-verified on PR 303; deployment and real-iPhone acceptance are open. Owner decisions: new HTTPS grants stay a desktop step; IdP approvals are confirmed on id.openape.ai."
  },
- "handoff": "M2 is implemented on branch feature/issue-1446-inbox-decisions: the desktop projects the eight decision types, publishes the set signed to POST /api/runtime/v1/inbox/decisions, and POST /inbox/api/v1/items/:id/decide (with the displayed digest) submits an inbox-only central command that the desktop maps to its own owner command after re-reading the source. Setup proposals are accepted from the phone only without local interaction (typed variable, already assigned resource, Secrets request); folders, installations and network-member deliveries stay explicit desktop steps. Open owner decision: new HTTPS grants from the phone. Next: one signed desktop build with M2 and M3, relay deployment, a real decision from the phone, then M4. Open device items for M5/M6: service-worker receipts on iOS declarative push and push-tagged opening.",
+ "handoff": "M4 is implemented on branch feature/issue-1446-inbox-pwa (PR 303): the installed app at /inbox/ replaces the M0 prototype and uses only the M1/M2 owner API. It syncs the change feed on start, foreground return, every 30 seconds while visible and on reconnect; keeps one localStorage copy bound to the account and wipes it on sign-in, sign-out, 401 and account switch; sends the displayed digest with a request ID, shows accepted/started as not applied, and allows only an unchanged manual resend after an uncertain send. The service worker caches only the public shell and hashed assets and activates a new version only on request. Next: merge, relay deployment (no desktop change), owner acceptance on the real iPhone (a real decision, a full notification, restart/reinstall, VoiceOver), then M5 push. Browser Test Run: https://report.openape.ai/d/01M4BNGW74JB90KKER7Y0BAQY3. Open device items for M5/M6: service-worker receipts on iOS declarative push and push-tagged opening.",
  "changelog": [
   {
    "date": "2026-10-07",
@@ -324,6 +324,14 @@
   {
    "date": "2026-10-07",
    "text": "M2 implemented: desktop decision projection for all eight types with digest guard, signed publication, relay decision items and the decide route through an inbox-only central operation; setup acceptance without local interaction and gateReview with mandatory reason; IdP and Secrets decisions only hand off verified HTTPS links. An independent review found seven defects, all fixed. Local checks: root lint and typecheck, Pods 1,337 and relay 52 unit tests, both builds, relay E2E decision block."
+  },
+  {
+   "date": "2026-10-07",
+   "text": "M2 and M3 rolled out: relay prod-3c08d3c7 after pnpm check:ci, notarized signed desktop 3c08d3c7 installed with paired rollback, schema 40 to 41 with unchanged Pods, scripts, resources, schedules and credentials; 20 open network decisions published centrally. No production decision was executed; that remains the owner's action. Rollout Test Run: https://report.openape.ai/d/01M4BJNYSN1TQPM4RKG81YW5Z0."
+  },
+  {
+   "date": "2026-10-07",
+   "text": "M4 implemented (PR 303): installed mobile app with Decisions, Notifications, details, completed history, archive, settings, foreground sync, account-bound offline copy, controlled service-worker updates and DE/EN; the M0 prototype API, flag and push dispatcher were removed. Browser acceptance against the built relay passed with 13 inspected screenshots: https://report.openape.ai/d/01M4BNGW74JB90KKER7Y0BAQY3."
   }
  ],
  "links": [
@@ -362,6 +370,14 @@
   {
    "title": "PR 298 (M1 inbox service)",
    "url": "https://repos.openape.ai/patrick/monorepo/pulls/298"
+  },
+  {
+   "title": "M4 browser Test Run",
+   "url": "https://report.openape.ai/d/01M4BNGW74JB90KKER7Y0BAQY3"
+  },
+  {
+   "title": "M2/M3 rollout Test Run",
+   "url": "https://report.openape.ai/d/01M4BJNYSN1TQPM4RKG81YW5Z0"
   }
  ],
  "evidence": [
@@ -913,13 +929,13 @@
    },
    {
     "path": "completion.summary",
-    "source": "M0 accepted and M1 delivered on October 7, 2026; M3 (built-in notify) merged with installation pending; M2 decisions implemented and locally verified; one owner decision is open: accepting HTTPS proposals that need a new IdP grant from the phone.",
-    "text": "M0 abgenommen und M1 am 7. Oktober 2026 geliefert; M3 (eingebaute Mitteilungsaktion) gemergt, Installation ausstehend; M2-Entscheidungen umgesetzt und lokal geprüft; eine Eigentümerentscheidung ist offen: HTTPS-Vorschläge, die eine neue IdP-Freigabe brauchen, vom Handy annehmen."
+    "source": "M0 accepted and M1 delivered on October 7, 2026. M2 and M3 were rolled out the same evening as relay prod-3c08d3c7 and signed desktop 3c08d3c7 (schema 41); 20 open network decisions reached the account inbox. M2 acceptance completes with the owner's first real decision from the phone. M4 (installed mobile app) is implemented and browser-verified on PR 303; deployment and real-iPhone acceptance are open. Owner decisions: new HTTPS grants stay a desktop step; IdP approvals are confirmed on id.openape.ai.",
+    "text": "M0 abgenommen und M1 am 7. Oktober 2026 geliefert. M2 und M3 wurden am selben Abend als Relay prod-3c08d3c7 und signierter Desktop 3c08d3c7 (Schema 41) ausgerollt; 20 offene Netz-Entscheidungen sind in der Konto-Inbox angekommen. Die M2-Abnahme schließt mit der ersten echten Entscheidung des Eigentümers vom Handy ab. M4 (installierte mobile App) ist auf PR 303 umgesetzt und im Browser geprüft; Auslieferung und Abnahme auf dem echten iPhone sind offen. Eigentümerentscheidungen: neue HTTPS-Freigaben bleiben ein Desktop-Schritt; IdP-Freigaben bestätigt der Eigentümer auf id.openape.ai."
    },
    {
     "path": "handoff",
-    "source": "M2 is implemented on branch feature/issue-1446-inbox-decisions: the desktop projects the eight decision types, publishes the set signed to POST /api/runtime/v1/inbox/decisions, and POST /inbox/api/v1/items/:id/decide (with the displayed digest) submits an inbox-only central command that the desktop maps to its own owner command after re-reading the source. Setup proposals are accepted from the phone only without local interaction (typed variable, already assigned resource, Secrets request); folders, installations and network-member deliveries stay explicit desktop steps. Open owner decision: new HTTPS grants from the phone. Next: one signed desktop build with M2 and M3, relay deployment, a real decision from the phone, then M4. Open device items for M5/M6: service-worker receipts on iOS declarative push and push-tagged opening.",
-    "text": "M2 ist auf Branch feature/issue-1446-inbox-decisions umgesetzt: Der Desktop projiziert die acht Entscheidungsarten, veröffentlicht die Menge signiert an POST /api/runtime/v1/inbox/decisions, und POST /inbox/api/v1/items/:id/decide (mit der angezeigten Prüfsumme) reicht einen nur für die Inbox zulässigen zentralen Befehl ein, den der Desktop nach erneutem Lesen der Quelle auf seinen eigenen Eigentümerbefehl abbildet. Einrichtungsvorschläge werden vom Handy nur ohne lokale Interaktion angenommen (eingegebene Variable, bereits zugewiesene Ressource, Secrets-Anfrage); Ordner, Installationen und Zustellungen von Netzmitgliedern bleiben ausdrückliche Desktop-Schritte. Offene Eigentümerentscheidung: neue HTTPS-Freigaben vom Handy. Als Nächstes: ein signierter Desktop-Build mit M2 und M3, Relay-Auslieferung, eine echte Entscheidung vom Handy, dann M4. Offene Gerätepunkte für M5/M6: Service-Worker-Bestätigungen bei deklarativem Push auf iOS und Öffnen über Push-Markierung."
+    "source": "M4 is implemented on branch feature/issue-1446-inbox-pwa (PR 303): the installed app at /inbox/ replaces the M0 prototype and uses only the M1/M2 owner API. It syncs the change feed on start, foreground return, every 30 seconds while visible and on reconnect; keeps one localStorage copy bound to the account and wipes it on sign-in, sign-out, 401 and account switch; sends the displayed digest with a request ID, shows accepted/started as not applied, and allows only an unchanged manual resend after an uncertain send. The service worker caches only the public shell and hashed assets and activates a new version only on request. Next: merge, relay deployment (no desktop change), owner acceptance on the real iPhone (a real decision, a full notification, restart/reinstall, VoiceOver), then M5 push. Browser Test Run: https://report.openape.ai/d/01M4BNGW74JB90KKER7Y0BAQY3. Open device items for M5/M6: service-worker receipts on iOS declarative push and push-tagged opening.",
+    "text": "M4 ist auf Branch feature/issue-1446-inbox-pwa (PR 303) umgesetzt: Die installierte App unter /inbox/ ersetzt den M0-Prototyp und nutzt nur die Eigentümer-API aus M1/M2. Sie synchronisiert den Änderungs-Feed beim Start, bei Rückkehr in den Vordergrund, alle 30 Sekunden im Vordergrund und nach Wiederverbindung; hält eine an das Konto gebundene localStorage-Kopie und löscht sie bei Anmeldung, Abmeldung, 401 und Kontowechsel; sendet die angezeigte Prüfsumme mit einer Anfrage-ID, zeigt angenommen/begonnen als nicht angewendet und erlaubt nach unsicherer Übermittlung nur ein unverändertes, manuelles erneutes Senden. Der Service Worker speichert nur die öffentliche Hülle und gehashte Assets und aktiviert eine neue Version nur auf Anforderung. Weiter: Merge, Relay-Auslieferung (keine Desktop-Änderung), Eigentümer-Abnahme auf dem echten iPhone (echte Entscheidung, vollständige Mitteilung, Neustart/Neuinstallation, VoiceOver), danach M5 Push. Browser-Test-Run: https://report.openape.ai/d/01M4BNGW74JB90KKER7Y0BAQY3. Offene Gerätepunkte für M5/M6: Service-Worker-Quittungen bei deklarativem iOS-Push und push-markiertes Öffnen."
    },
    {
     "path": "changelog.0.text",
@@ -1015,6 +1031,16 @@
     "path": "changelog.6.text",
     "source": "M2 implemented: desktop decision projection for all eight types with digest guard, signed publication, relay decision items and the decide route through an inbox-only central operation; setup acceptance without local interaction and gateReview with mandatory reason; IdP and Secrets decisions only hand off verified HTTPS links. An independent review found seven defects, all fixed. Local checks: root lint and typecheck, Pods 1,337 and relay 52 unit tests, both builds, relay E2E decision block.",
     "text": "M2 umgesetzt: Entscheidungsprojektion des Desktops für alle acht Arten mit Prüfsummen-Schutz, signierte Veröffentlichung, Entscheidungseinträge im Relay und die Entscheidungsroute über eine nur für die Inbox zulässige zentrale Operation; Annahme von Einrichtungsvorschlägen ohne lokale Interaktion und gateReview mit Pflichtbegründung; IdP- und Secrets-Entscheidungen übergeben nur verifizierte HTTPS-Links. Ein unabhängiges Review fand sieben Mängel, alle behoben. Lokale Prüfungen: Root-Lint und -Typecheck, 1.337 Pods- und 52 Relay-Unit-Tests, beide Builds, Entscheidungsblock im Relay-E2E."
+   },
+   {
+    "path": "changelog.7.text",
+    "source": "M2 and M3 rolled out: relay prod-3c08d3c7 after pnpm check:ci, notarized signed desktop 3c08d3c7 installed with paired rollback, schema 40 to 41 with unchanged Pods, scripts, resources, schedules and credentials; 20 open network decisions published centrally. No production decision was executed; that remains the owner's action. Rollout Test Run: https://report.openape.ai/d/01M4BJNYSN1TQPM4RKG81YW5Z0.",
+    "text": "M2 und M3 ausgerollt: Relay prod-3c08d3c7 nach pnpm check:ci, notarisierter signierter Desktop 3c08d3c7 mit gepaartem Rollback installiert, Schema 40 auf 41 bei unveränderten Pods, Skripten, Ressourcen, Zeitplänen und Zugangsdaten; 20 offene Netz-Entscheidungen zentral veröffentlicht. Keine Produktionsentscheidung wurde ausgeführt; das bleibt Aufgabe des Eigentümers. Rollout-Test-Run: https://report.openape.ai/d/01M4BJNYSN1TQPM4RKG81YW5Z0."
+   },
+   {
+    "path": "changelog.8.text",
+    "source": "M4 implemented (PR 303): installed mobile app with Decisions, Notifications, details, completed history, archive, settings, foreground sync, account-bound offline copy, controlled service-worker updates and DE/EN; the M0 prototype API, flag and push dispatcher were removed. Browser acceptance against the built relay passed with 13 inspected screenshots: https://report.openape.ai/d/01M4BNGW74JB90KKER7Y0BAQY3.",
+    "text": "M4 umgesetzt (PR 303): installierte mobile App mit Entscheidungen, Mitteilungen, Details, Erledigt-Verlauf, Archiv, Einstellungen, Vordergrund-Synchronisation, kontogebundener Offline-Kopie, kontrollierten Service-Worker-Updates und DE/EN; API, Schalter und Push-Versand des M0-Prototyps wurden entfernt. Die Browser-Abnahme gegen das gebaute Relay bestand mit 13 geprüften Screenshots: https://report.openape.ai/d/01M4BNGW74JB90KKER7Y0BAQY3."
    }
   ]
  },

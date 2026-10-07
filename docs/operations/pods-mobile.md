@@ -89,24 +89,22 @@ Desktop schema 22 cannot be opened by older desktop binaries. Keep a pre-upgrade
 
 Never replay an uncertain operation under a new UUID to make a demo succeed. Reconcile the original operation/run first. Device or runtime revocation prevents subsequent commands; cancelling an already authorized run uses its separate run control.
 
-## Inbox PWA prototype (M0, issue 1446)
+## Installed inbox app (M4, issue 1446)
 
-The [mobile inbox plan](../../.claude/plans/2026-10-07-pods-ios-inbox/plan.json) first proves an installed web app on the owner's iPhone. The disposable prototype lives at `/inbox/` on the relay: Decisions and Notifications tabs, synthetic items, standard Web Push and a push log. It reuses the workspace DDISA browser session (`pods-workspace` cookie); sign-in resumes only same-origin `/inbox` paths. Content is service-readable synthetic data, not real Pod decisions, and is never end-to-end encrypted. Its separate database keeps removal to one file.
+The [mobile inbox plan](../../.claude/plans/2026-10-07-pods-ios-inbox/plan.json) ships an installed web app at `/inbox/` on the relay; it replaced the M0 prototype (its API, `NUXT_INBOX_PROTOTYPE_*` flags and push dispatcher are gone; the old `inbox-prototype.sqlite` file can be deleted on the host). Routes: `/inbox/` (Decisions with completed history), `/inbox/messages` (Notifications, `?archived=1` for the archive), `/inbox/item/<id>`, `/inbox/settings`. It uses only the M1/M2 owner API below and needs `NUXT_INBOX_ENABLED=true`; the Traefik router needs the `/inbox` paths from `compose/traefik/pods-idp.yml`.
 
-```dotenv
-NUXT_INBOX_PROTOTYPE_ENABLED=true
-NUXT_INBOX_PROTOTYPE_DATABASE=/data/inbox-prototype.sqlite
-NUXT_INBOX_VAPID_PUBLIC_KEY=
-NUXT_INBOX_VAPID_PRIVATE_KEY=
-```
-
-Generate the VAPID pair on the host and write it straight into `shared/.env`; never copy the private key into chat, logs or plans. The Traefik router needs the `/inbox` paths from `compose/traefik/pods-idp.yml`. Each push is claimed once, persisted as an inbox item first and never retried; the service worker reports display (`shown`) and taps (`clicked`) with a per-push secret, and the item page reports `opened`. Disable with `NUXT_INBOX_PROTOTYPE_ENABLED=false`; rollback removes the database file and device subscriptions.
+- Sync: the phone pulls `changes?after=` on start, on return to the foreground, every 30 seconds while visible, on reconnect and on Refresh. Server state is authoritative; push is never needed for correctness.
+- Offline: one `localStorage` copy per browser (`pods-inbox-cache-v1`) bound to the signed-in account. It is discarded on sign-in, sign-out, any 401 (expired or revoked device) and when another account starts. Offline views are read-only with the last sync time and account; decisions are never queued or replayed.
+- Decisions send the digest the phone displayed and a request ID. A send with unknown outcome can only be resent unchanged by the owner; `accepted`/`started` are shown as not applied until the operation reports `applied`. IdP/Secrets decisions open their verified HTTPS link; steps without options or link say they need the Mac.
+- Service worker `/inbox/sw.js` (scope `/inbox/`) caches only the public app shell, icons and hashed `/pods-assets/` files, never API responses. A new version installs and waits; the app offers "Load now" after its running decisions settled. Bump `version` in `sw.js` whenever the worker changes.
+- Push: no push is sent until M5. Keep `NUXT_INBOX_VAPID_PUBLIC_KEY`/`NUXT_INBOX_VAPID_PRIVATE_KEY` in `shared/.env` (generated on the host, never copied into chat, logs or plans); the settings page only shows the notification permission.
+- Rollback: deploy the previous relay image. Server inbox data is untouched; an older worker version is replaced by the next activation, and private data never lived in its caches.
 
 ## Account inbox service (M1, issue 1446)
 
 `NUXT_INBOX_ENABLED=true` enables the durable owner inbox in its own database (`NUXT_INBOX_DATABASE`, compose: `/data/inbox.sqlite`). It is service-readable by design and never described as end-to-end encrypted.
 
-- Owner API `/inbox/api/v1/`: `session`, `items` (cursor `before`, `kind`, `archived=1`), `items/:id` (GET, PATCH `read`/`archived`/`deleted`), `changes?after=` (sync cursor including tombstones), `devices`, `devices/:id/revoke`, `logout`, `push/subscribe`, `push/unsubscribe`. Non-GET requests require the relay Origin.
+- Owner API `/inbox/api/v1/`: `session`, `items` (cursor `before`, `kind`, `archived=1`), `items/:id` (GET, PATCH `read`/`archived`/`deleted`), `items/:id/decide`, `operations/:id`, `changes?after=` (sync cursor including tombstones), `devices`, `devices/:id/revoke`, `logout`, `push/subscribe`, `push/unsubscribe`. Non-GET requests require the relay Origin.
 - Sessions: only a DDISA sign-in started from the inbox (validated `/inbox/` return path) registers an inbox device and sets the `pods-inbox` cookie (path `/` so sign-in and workspace logout can revoke it, 30 days absolute). A workspace session alone never opens the inbox. Every request re-checks the device; revocation, inbox logout, workspace logout or any other sign-in in the same browser revokes it, deletes its push subscriptions and refuses the cookie with `session_revoked`.
 - Runtime publication `POST /api/runtime/v1/inbox` uses the signed runtime session; the owner comes from the runtime registration. Items are idempotent per runtime and `eventId` (identical retry 200, changed content 409 `inbox_event_conflict`), bounded to 64 KiB bodies and five HTTPS links, and commit together with a push-outbox entry.
 - Retention: messages and resolved items become tombstones after 90 days and are purged 30 days later; open decisions stay. More than 10,000 live items per owner returns 507 `inbox_quota` instead of dropping content. Database backups keep deleted content for their own retention period.

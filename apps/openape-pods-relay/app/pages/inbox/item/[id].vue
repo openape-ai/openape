@@ -1,72 +1,108 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import InboxDecision from '../../../components/InboxDecision.vue'
 import InboxShell from '../../../components/InboxShell.vue'
+import { isItemId, useInbox } from '../../../inbox/client'
+import { formatTime, t } from '../../../inbox/i18n'
 
-interface Item { id: string, kind: 'decision' | 'message', title: string, body: string, choices: string[], outcome: string | null, created: number, decided: number | null }
-
+const inbox = useInbox()
+const { state } = inbox
 const route = useRoute()
-const shell = ref<InstanceType<typeof InboxShell>>()
-const item = ref<Item>()
+const id = computed(() => String(route.params.id))
+const item = computed(() => state.items[id.value] ?? null)
+const online = computed(() => state.phase === 'ready')
+const missing = ref<'invalid' | 'missing' | 'offline' | null>(null)
 const error = ref('')
-const busy = ref(false)
-const time = (at: number | null) => at ? new Date(at).toLocaleString('de-AT', { dateStyle: 'short', timeStyle: 'medium' }) : '—'
-
-async function request(path: string, body?: unknown) {
-  const response = await fetch(path, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
-  if (response.status === 401) { shell.value?.expired(); return }
-  const result = await response.json() as { item?: Item, code?: string }
-  if (!response.ok || !result.item) { error.value = result.code === 'not_found' ? 'Dieser Eintrag existiert nicht (mehr).' : `Fehler: ${result.code ?? response.status}`; return }
-  item.value = result.item
+function https(value: string): URL | null {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' ? url : null
+  }
+  catch { return null }
 }
+const safeLinks = computed(() => (item.value?.kind === 'message' ? item.value.links : []).flatMap((link) => {
+  const url = https(link.url)
+  return url ? [{ title: link.title, url: url.href, host: url.host }] : []
+}))
+let readMarked: string | null = null
 
-async function load() {
+// A pushed or shared link may point at anything; only a well-formed ID of this account opens, nothing else is executed.
+watch([id, () => state.phase], async () => {
   error.value = ''
-  const push = typeof route.query.push === 'string' ? `?push=${encodeURIComponent(route.query.push)}` : ''
-  await request(`/inbox/api/items/${encodeURIComponent(String(route.params.id))}${push}`)
-}
+  if (!isItemId(id.value)) { missing.value = 'invalid'; return }
+  if (state.phase === 'loading' || state.phase === 'signedOut') return
+  try {
+    const found = await inbox.load(id.value)
+    missing.value = found ? null : state.phase === 'ready' ? 'missing' : 'offline'
+  }
+  catch (cause) { error.value = cause instanceof Error ? cause.message : String(cause) }
+}, { immediate: true })
 
-async function decide(choice: string) {
-  if (busy.value || !item.value) return
-  busy.value = true
-  try { await request(`/inbox/api/items/${item.value.id}/decide`, { choice }) }
-  catch (cause) { error.value = String(cause) }
-  finally { busy.value = false }
-}
+// Opening a message marks it read for the whole account; deciding is always an explicit tap.
+watch([item, online], async () => {
+  try {
+    if (item.value?.kind === 'message' && !item.value.read && online.value && readMarked !== item.value.id) {
+      readMarked = item.value.id
+      await inbox.mark(item.value.id, { read: true })
+    }
+    const receipt = item.value ? state.receipts[item.value.id] : undefined
+    if (online.value && item.value && receipt && ['accepted', 'started'].includes(receipt.state)) await inbox.check(item.value.id)
+  }
+  catch (cause) { error.value = cause instanceof Error ? cause.message : String(cause) }
+}, { immediate: true })
 
-// A push tap can switch items while this page stays mounted.
-watch(() => route.fullPath, () => { item.value = undefined; load().catch((cause) => { error.value = String(cause) }) })
+async function change(patch: { read?: boolean, archived?: boolean }) {
+  if (!item.value) return
+  error.value = ''
+  try { await inbox.mark(item.value.id, patch) }
+  catch (cause) { error.value = cause instanceof Error ? cause.message : String(cause) }
+}
+async function decide(option: string, input?: string) { if (item.value) await inbox.decide(item.value, option, input) }
+async function check() { if (item.value) await inbox.check(item.value.id) }
 </script>
 
 <template>
-  <InboxShell ref="shell" @ready="load">
-    <NuxtLink :to="item?.kind === 'message' ? '/inbox/?tab=messages' : '/inbox/'" class="back">
-      ‹ Zurück
+  <InboxShell>
+    <NuxtLink :to="item?.kind === 'message' ? '/inbox/messages' : '/inbox/'" class="back">
+      ‹ {{ t('back') }}
     </NuxtLink>
+    <p v-if="missing" class="inbox-note" role="status">
+      {{ missing === 'invalid' ? t('itemInvalid') : missing === 'offline' ? t('itemOfflineMissing') : t('itemMissing') }}
+    </p>
     <p v-if="error" class="inbox-error" role="alert">
       {{ error }}
     </p>
-    <article v-if="item" class="inbox-card">
-      <small>{{ item.kind === 'decision' ? 'Entscheidung' : 'Mitteilung' }} · {{ time(item.created) }}</small>
+    <article v-if="item">
+      <small class="inbox-muted">{{ item.kind === 'decision' ? t('itemDecision') : t('itemMessage') }}<template v-if="item.pod?.name"> · {{ t('itemPod', { name: item.pod.name }) }}</template> · {{ formatTime(item.created) }}</small>
       <h1>{{ item.title }}</h1>
-      <p>{{ item.body }}</p>
-      <template v-if="item.kind === 'decision'">
-        <p v-if="item.outcome" role="status">
-          <strong>Entschieden: {{ item.outcome }}</strong> · {{ time(item.decided) }}
-        </p>
-        <div v-else class="choices">
-          <button v-for="choice in item.choices" :key="choice" type="button" :disabled="busy" @click="decide(choice)">
-            {{ choice }}
-          </button>
-        </div>
+      <p class="inbox-body">
+        {{ item.body }}
+      </p>
+      <template v-if="safeLinks.length">
+        <h2>{{ t('itemLinks') }}</h2>
+        <ul class="links">
+          <li v-for="link in safeLinks" :key="link.url">
+            <a :href="link.url" target="_blank" rel="noopener noreferrer">{{ link.title }}</a>
+            <small class="inbox-muted">{{ link.host }}</small>
+          </li>
+        </ul>
       </template>
-      <small>ID {{ item.id }}</small>
+      <InboxDecision v-if="item.kind === 'decision'" :item="item" :receipt="state.receipts[item.id]" :online="online" :checking="!!state.checking[item.id]" @decide="decide" @check="check" />
+      <div v-else class="actions">
+        <button type="button" class="secondary" :disabled="!online" @click="change({ archived: !item.archived })">
+          {{ item.archived ? t('itemUnarchive') : t('itemArchive') }}
+        </button>
+        <button type="button" class="secondary" :disabled="!online || !item.read" @click="change({ read: false })">
+          {{ t('itemMarkUnread') }}
+        </button>
+      </div>
     </article>
   </InboxShell>
 </template>
 
 <style scoped>
-.back { display: inline-block; padding: 10px 0; color: var(--accent); text-decoration: none; min-height: 44px; box-sizing: border-box; }
-h1 { font-size: 1.4em; margin: 6px 0; }
-.choices { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
-.choices button { flex: 1; }
+.back { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; }
+.links { padding-left: 1.2em; display: grid; gap: 8px; }
+.links small { display: block; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 </style>
