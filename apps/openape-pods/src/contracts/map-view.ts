@@ -37,6 +37,8 @@ export interface MapPod {
   queue: { blocked: number, error: string | null }
   approvals: MapApproval[]
   unknown: { key: string, runId: string }[]
+  // Latest script update of a network member through the local assistant, while that version is active.
+  scriptUpdate?: { at: number, previous: string, script: string }
 }
 export interface MapGateOption { key: string, title: string, channel: string }
 export interface MapGate { key: string, kind: 'choose' | 'approve', title: string, takes: string, options: MapGateOption[], open: number, batches: Record<string, number> }
@@ -107,6 +109,10 @@ export function parseMapView(value: unknown): MapView {
       if (!['service', 'application', 'directory', 'ssh', 'secret', 'reference'].includes(String(row.kind)) || (row.system !== null && !systems.has(text(row.system, 4200)))) throw new Error('Invalid map resource')
     }
     for (const alias of list(pod.secrets, 64)) text(alias, 200)
+    if (pod.scriptUpdate !== undefined) {
+      const update = object(pod.scriptUpdate); integer(update.at)
+      if ([update.previous, update.script].some(hash => typeof hash !== 'string' || !/^[a-f0-9]{64}$/.test(hash))) throw new Error('Invalid map script update')
+    }
     nodes.add(id)
   }
   for (const item of list(view.collections, mapLimits.collections)) {

@@ -45,8 +45,12 @@ it('keeps unrelated Pod access available while refusing legacy network member by
   await expect(send({ action: 'setVariable', podId: pod.id, revision: 1, name: 'mode', value: 'preview', variableRevision: 0 })).resolves.toHaveProperty('variables')
   const request = { id: randomUUID(), action: { action: 'resources', revision: 1, command: { type: 'list', podId: pod.id } } }
   expect(codex.administration({ type: 'begin', request })).toEqual({ completed: false })
-  for (const action of ['inspect', 'run', 'pause', 'resume', 'draft', 'setVariable']) await expect(send({ action, podId: network.pod.id, revision: 1 })).rejects.toThrow('bounded network MCP')
-  expect(() => codex.administration({ type: 'begin', request: { ...request, id: randomUUID(), action: { ...request.action, command: { type: 'list', podId: network.pod.id } } } })).toThrow('bounded network MCP')
+  for (const action of ['run', 'pause', 'resume', 'activate', 'rollback', 'setVariable', 'setSchedule']) await expect(send({ action, podId: network.pod.id, revision: 1 })).rejects.toThrow('update their scripts with networks updateMemberScript')
+  expect(() => codex.administration({ type: 'begin', request: { ...request, id: randomUUID(), action: { ...request.action, command: { type: 'list', podId: network.pod.id } } } })).toThrow('update their scripts with networks updateMemberScript')
+  const pinned = store.getPod(network.pod.id).activeScript
+  await expect(send({ action: 'inspect', podId: network.pod.id, revision: store.getPod(network.pod.id).bindingRevision })).resolves.toHaveProperty('pod.id', network.pod.id)
+  await expect(send({ action: 'draft', podId: network.pod.id, revision: store.getPod(network.pod.id).bindingRevision, draftId: null, draftRevision: 0, code: 'export async function run() {}', capabilities: [] })).resolves.toHaveProperty('status', 'draft')
+  expect(store.getPod(network.pod.id).activeScript).toBe(pinned)
   await expect(send({ action: 'saveWorkflow', definition: { type: 'save', id: randomUUID(), revision: 0, name: 'Bypass', nodes: [{ podId: network.pod.id, after: [], handoff: false }], schedule: null, enabled: false } })).rejects.toThrow('bounded network MCP')
   expect(store.db.prepare('SELECT count(*) AS count FROM runs WHERE pod_id=?').get(network.pod.id)?.count).toBe(1)
 })

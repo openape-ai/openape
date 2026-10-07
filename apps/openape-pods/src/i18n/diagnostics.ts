@@ -11,6 +11,7 @@ export const diagnosticPatterns = [
   'Feedback exceeded {p0} hops',
   'Feedback case is older than {p0} ms',
   'Definition update blocked: {p0}. The current version remains pinned.',
+  'Member script update blocked: {p0}. The current version remains pinned.',
   'Unclassified publication table: {p0}',
   'Instance {p0} is retained for provisioning retry. {p1}',
   'Collection record changed: {p0}/{p1}, current revision {p2}',
