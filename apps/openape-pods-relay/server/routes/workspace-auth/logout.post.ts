@@ -1,8 +1,9 @@
 import { boundary } from '../../utils/service'
-import { workspaceOrigin, workspaceSession } from '../../utils/workspace'
+import { signOut } from '../../utils/inbox-service'
+import { workspaceOrigin } from '../../utils/workspace'
 
 export default defineEventHandler(event => boundary(event, async () => {
   workspaceOrigin(event)
-  await (await workspaceSession(event)).clear()
+  await signOut(event)
   return { ok: true }
 }))
