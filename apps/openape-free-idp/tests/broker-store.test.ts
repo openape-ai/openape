@@ -252,3 +252,14 @@ describe('production pending request expiry', () => {
     expect(audit.find(row => row.grantId === stale[0]!.id)).toMatchObject({ owner, agent: subject, connectionId: connection.id })
   })
 })
+
+describe('grant batch listing', () => {
+  it('filters a requester\'s grants by request.batch.id in SQL', async () => {
+    const member = (id: string, batch?: string, requester = subject): OpenApeGrant => ({ id, status: 'pending', created_at: Math.floor(Date.now() / 1000), request: { requester, target_host: 'pods:fixture', audience: 'pods-graph-gate', grant_type: 'once', command: ['approve', id], ...(batch ? { batch: { id: batch, size: 2 } } : {}) } })
+    for (const value of [member('a', 'b-1'), member('b', 'b-1'), member('c', 'b-2'), member('d'), member('e', 'b-1', 'other@pods.provider.test')]) await grantStore.save(value)
+
+    const page = await grantStore.listGrants({ requester: subject, batch: 'b-1', limit: 100 })
+    expect(page.data.map(value => value.id).toSorted()).toEqual(['a', 'b'])
+    expect(page.data[0]!.request.batch).toEqual({ id: 'b-1', size: 2 })
+  })
+})

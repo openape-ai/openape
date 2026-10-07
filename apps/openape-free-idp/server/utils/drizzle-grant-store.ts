@@ -212,6 +212,7 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
         else conditions.push(inArray(grants.requester, requesters))
       }
       if (params?.requesterFilter) conditions.push(eq(grants.requester, params.requesterFilter))
+      if (params?.batch) conditions.push(sql`json_extract(${grants.request}, '$.batch.id') = ${params.batch}`)
       if (params?.cursor) {
         const cursorTs = Number(params.cursor)
         conditions.push(lt(grants.createdAt, cursorTs))

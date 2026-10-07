@@ -112,6 +112,51 @@
       "type": "string",
       "description": "Human-readable reason for the request."
     },
+    "summary": {
+      "type": "object",
+      "description": "The requester's own account of the request, for display in approval UIs. Not verified by the authorization server.",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Free text. Line breaks are significant."
+        },
+        "link": {
+          "type": "string",
+          "description": "Where the approver can verify the claim. Only http(s) may be rendered as a link."
+        }
+      },
+      "required": ["text"],
+      "additionalProperties": false
+    },
+    "waits_until": {
+      "type": "integer",
+      "description": "Unix timestamp until which the requester will wait for a decision."
+    },
+    "batch": {
+      "type": "object",
+      "description": "Display grouping for grants submitted for a joint decision. Never changes authorization semantics; members are grouped only by equal requester and id.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+          "description": "Requester-scoped batch identifier."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The requester's own title for the batch."
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Number of grants the requester intends to submit under this id."
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
     "delegator": {
       "type": "string",
       "description": "Who is being acted on behalf of (delegation grants only)."
