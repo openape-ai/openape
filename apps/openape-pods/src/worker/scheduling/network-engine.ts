@@ -2,6 +2,7 @@ import { supportedNetworkCapability, networkSourceCapability } from '../../contr
 import { currentCompositionDraft, NetworkReplacement } from './network-replacement'
 import { memberScriptIssues, networkSettlementIssues, previewNetworkArchive, retainedLegacyItems } from './network-retirement'
 import { DefinitionCatalog } from '../workspace/definition-catalog'
+import { DependencyStore } from '../dependencies/store'
 import { WorkspaceDetails } from '../workspace/details'
 import { previewNetworkConversion, retainedLegacyDeliveries } from './network-migration'
 import { parseConversionSelection } from '../../contracts/network-migration'
@@ -336,7 +337,8 @@ export class NetworkEngine {
       if (!this.store.db.prepare('SELECT 1 FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(podId, hash, pod.bindingRevision, this.resources.epoch(podId))) throw new Error('Validate this script for the current permissions first')
       if (next.contract === undefined || canonicalNetworkJson(parseGraphContract(next.contract)) !== canonicalNetworkJson(member.contract)) throw new Error('Contract changes require a reviewed composition change')
       if (canonicalNetworkJson([...next.capabilities].sort()) !== canonicalNetworkJson([...previous.capabilities].sort()) || next.effects !== previous.effects) throw new Error('Rights changes require owner review')
-      if (next.dependencyLockHash !== previous.dependencyLockHash) throw new Error('Dependency changes require owner review')
+      // The runtime part of the lock hash changes with every app release; only the script's own package set must stay the same.
+      if (new DependencyStore(this.store).scriptSet(podId, hash) !== new DependencyStore(this.store).scriptSet(podId, pod.activeScript)) throw new Error('Dependency changes require owner review')
       if (next.checkpointSchemaVersion !== previous.checkpointSchemaVersion || canonicalNetworkJson([...next.triggers].sort()) !== canonicalNetworkJson([...previous.triggers].sort())) throw new Error('Checkpoint or trigger changes require owner review')
       new WorkspaceDetails(this.store, this.resources).execute({ type: 'activate', podId, hash, expectedActive: pod.activeScript, assignmentRevision: pod.bindingRevision }, true)
       new DefinitionCatalog(this.store, this.resources, parseOwner(this.currentOwner())).appendScriptVersion(podId, next)
