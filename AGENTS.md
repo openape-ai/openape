@@ -69,6 +69,10 @@ supply-chain quarantine and targeted overrides in `pnpm-workspace.yaml`.
   [schema](packages/ape-testruns/schemas/report.schema.json). The reviewed
   [Test Run](packages/ape-testruns/templates/test-run.html) and
   [Plan](packages/ape-testruns/templates/plan.html) files are canonical.
+  New Plans are bilingual English/German with German default, a template language switch,
+  a TL;DR directly below the title and a short Problem → Impact → Approach → Outcome
+  overview before implementation details. Use the bilingual example and complete
+  source-bound translations; keep status, original approval and evidence shared.
   Plans use the local plan template and `ape-reports`; private documents require owner access. Keep local exports when needed.
   See the [engineering guide](docs/agents/engineering-guide.md).
 - Generated map/graph: `pnpm graph`; freshness: `pnpm docs:check`. Add purposes
