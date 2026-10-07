@@ -6,7 +6,7 @@ import type { Owner } from '@openape/pods-protocol'
 import { sha256 } from '@openape/pods-protocol/crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import { centralId, centralMaxBytes, centralRevision } from '../../../openape-pods/src/contracts/central'
-import { inboxPath } from './inbox-prototype'
+import { inboxPath } from './inbox-store'
 import { WorkspaceStore } from './workspace-store'
 import type { WorkspaceView } from './workspace-store'
 
@@ -49,7 +49,10 @@ export async function workspaceOwner(event: H3Event): Promise<Owner> {
   const session = await workspaceSession(event)
   if (!session.data.owner) throw new ProtocolError('authentication_required', 401)
   if (event.method !== 'GET') workspaceOrigin(event)
-  const owner = parseOwner(session.data.owner)
+  return assertEnrolled(parseOwner(session.data.owner))
+}
+
+export function assertEnrolled(owner: Owner): Owner {
   const config = useRuntimeConfig()
   if (config.relayEnrollment !== 'public' && !(config.relayEnrollment === 'pilot' && config.relayOwnerAllowlist.map(parseOwner).some(item => sameOwner(item, owner)))) throw new ProtocolError('enrollment_closed', 403)
   return owner

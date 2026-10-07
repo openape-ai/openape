@@ -101,3 +101,13 @@ NUXT_INBOX_VAPID_PRIVATE_KEY=
 ```
 
 Generate the VAPID pair on the host and write it straight into `shared/.env`; never copy the private key into chat, logs or plans. The Traefik router needs the `/inbox` paths from `compose/traefik/pods-idp.yml`. Each push is claimed once, persisted as an inbox item first and never retried; the service worker reports display (`shown`) and taps (`clicked`) with a per-push secret, and the item page reports `opened`. Disable with `NUXT_INBOX_PROTOTYPE_ENABLED=false`; rollback removes the database file and device subscriptions.
+
+## Account inbox service (M1, issue 1446)
+
+`NUXT_INBOX_ENABLED=true` enables the durable owner inbox in its own database (`NUXT_INBOX_DATABASE`, compose: `/data/inbox.sqlite`). It is service-readable by design and never described as end-to-end encrypted.
+
+- Owner API `/inbox/api/v1/`: `session`, `items` (cursor `before`, `kind`, `archived=1`), `items/:id` (GET, PATCH `read`/`archived`/`deleted`), `changes?after=` (sync cursor including tombstones), `devices`, `devices/:id/revoke`, `logout`, `push/subscribe`, `push/unsubscribe`. Non-GET requests require the relay Origin.
+- Sessions: the first inbox call after a DDISA workspace sign-in registers an inbox device and sets the `pods-inbox` cookie (path `/inbox/`, 30 days absolute). Every request re-checks the device; revocation or logout deletes its push subscriptions and refuses the cookie with `session_revoked`. A still-valid 24-hour workspace cookie can register a new device until it expires.
+- Runtime publication `POST /api/runtime/v1/inbox` uses the signed runtime session; the owner comes from the runtime registration. Items are idempotent per runtime and `eventId` (identical retry 200, changed content 409 `inbox_event_conflict`), bounded to 64 KiB bodies and five HTTPS links, and commit together with a push-outbox entry.
+- Retention: messages and resolved items become tombstones after 90 days and are purged 30 days later; open decisions stay. More than 10,000 live items per owner returns 507 `inbox_quota` instead of dropping content. Database backups keep deleted content for their own retention period.
+- Rollback: `NUXT_INBOX_ENABLED=false`; the additive database stays.
