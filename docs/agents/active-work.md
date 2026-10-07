@@ -1,5 +1,13 @@
 # Active work
 
+## Pods owner decisions lost silently — issue 1444
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1444. Found on the installed app on October 7: choices after the first few were never saved, while the inbox showed them as decided.
+- Worktree `openape-monorepo.worktrees/grant-batches`, branch `bugfix/issue-1444-pods-decisions-saving`, base `d58174bd`.
+- Desktop owner actions run one at a time and resubmit `workspace_busy` / `workspace_revision_conflict` refusals; the inbox shows "saving" until the case leaves the list and returns refused cases with their reason; action errors stay visible; superseded batches without inputs to review are hidden.
+- Checks: Pods 1,305 unit/component tests, 53 layout tests, lint and typecheck clean.
+- Next: PR, CI, merge, signed installation.
+
 ## Grant batches — issue 1442
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1442; approved plan: https://report.openape.ai/d/01M4AQCZFG6NXWF4NYS8DWKGV6 (revision 1, owner approval October 7). Protocol PR 3 merged as `ac95a447`.

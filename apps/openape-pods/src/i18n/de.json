@@ -4259,5 +4259,7 @@
   "Approval now uses one grant per item; these inputs wait for a new batch": "Freigaben gelten jetzt pro Eintrag; diese Eingaben warten auf ein neues Bündel",
   "Approval now uses one grant per item; these items wait for a new batch": "Freigaben gelten jetzt pro Eintrag; diese Einträge warten auf ein neues Bündel",
   "Approval now uses one grant per message; prepare a fresh archive proposal": "Freigaben gelten jetzt pro Nachricht; bereite einen neuen Archiv-Vorschlag vor",
-  "Not approved by the owner": "Vom Eigentümer nicht freigegeben"
+  "Not approved by the owner": "Vom Eigentümer nicht freigegeben",
+  "Saving: {title}": "Wird gespeichert: {title}",
+  "Not saved: {reason}": "Nicht gespeichert: {reason}"
 }
