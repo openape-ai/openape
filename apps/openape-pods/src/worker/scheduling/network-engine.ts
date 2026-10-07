@@ -1,6 +1,8 @@
 import { supportedNetworkCapability, networkSourceCapability } from '../../contracts/network-capabilities'
 import { currentCompositionDraft, NetworkReplacement } from './network-replacement'
-import { networkSettlementIssues, previewNetworkArchive, retainedLegacyItems } from './network-retirement'
+import { memberScriptIssues, networkSettlementIssues, previewNetworkArchive, retainedLegacyItems } from './network-retirement'
+import { DefinitionCatalog } from '../workspace/definition-catalog'
+import { WorkspaceDetails } from '../workspace/details'
 import { previewNetworkConversion, retainedLegacyDeliveries } from './network-migration'
 import { parseConversionSelection } from '../../contracts/network-migration'
 import type { ConversionSelection } from '../../contracts/network-migration'
@@ -13,8 +15,8 @@ import type { NetworkGateStep } from './network-gates'
 import { randomUUID } from 'node:crypto'
 import { parseOwner, sameOwner } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
-import { networkSubscriptionChannel, diagnoseNetwork, draftControls, draftFormatVersion, parseNetworkCommand, parseNetworkDefinition } from '../../contracts/networks'
-import type { NetworkDefinition, NetworkDraft, NetworkHealth, NetworkPreview, NetworkView } from '../../contracts/networks'
+import { networkLimits, networkSubscriptionChannel, diagnoseNetwork, draftControls, draftFormatVersion, parseNetworkCommand, parseNetworkDefinition } from '../../contracts/networks'
+import type { NetworkCommand, NetworkReplay, NetworkDefinition, NetworkDraft, NetworkHealth, NetworkPreview, NetworkView } from '../../contracts/networks'
 import { parseGraphContract } from '../../contracts/graphs'
 import { nextDue } from '../../contracts/clock'
 import { digest, parseManifest } from '../storage/database'
@@ -45,6 +47,7 @@ export class NetworkEngine {
   execute(value: unknown): NetworkView {
     const command = parseNetworkCommand(value)
     if (command.type === 'inspect' || command.type === 'retry' || command.type === 'reconcileEffect' || command.type === 'resolveConflict' || command.type === 'discardFailure') throw new Error('Network recovery must await process inspection')
+    if (command.type === 'updateMemberScript' || command.type === 'replayFailed') throw new Error('Member script maintenance is available through the local assistant connection')
     if (command.type === 'list') return this.view()
     if (command.type === 'conversionPreview') return { ...this.view(), conversion: previewNetworkConversion(this.store, this.resources, this.currentOwner(), command.selection) }
     if (command.type === 'convert') return this.convert(command.selection, command.expectedFingerprint)
@@ -308,6 +311,70 @@ export class NetworkEngine {
     for (const batch of this.batches.values()) this.trace(batch.preview.networkId, 'process-now-stopped', { previewId: batch.preview.id, admitted: batch.preview.budget - batch.remaining, explicitResumeRequired: true })
     for (const id of this.batches.keys()) this.endBatch(id, 'stopped')
     await Promise.all(this.pendingSettlements.values())
+  }
+
+  // Script-only change: the contract, rights and dependencies stay pinned, so open work of other members keeps its revision.
+  updateMemberScript(command: Extract<NetworkCommand, { type: 'updateMemberScript' }>): NetworkView {
+    const { id: networkId, podId, hash } = command
+    this.store.transaction(() => {
+      const definition = this.definition(networkId, command.revision)
+      const network = this.store.db.prepare('SELECT baseline_state FROM networks WHERE id=?').get(networkId)!
+      if (network.baseline_state !== 'ready') throw new Error('Restored networks require review before script updates')
+      const member = definition.members.find(item => item.podId === podId)
+      if (!member) throw new Error('Pod is not a member of this network revision')
+      const issues = memberScriptIssues(this.store, networkId, podId)
+      if (issues.length) throw new Error(`Member script update blocked: ${issues.join('; ')}. The current version remains pinned.`)
+      const pod = this.store.getPod(podId)
+      if (pod.lifecycle === 'archived' || !pod.activeScript) throw new Error('Archived Pods cannot be updated')
+      if (pod.activeScript === hash) throw new Error('This script version is already active')
+      const manifest = (scriptHash: string) => {
+        const row = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(podId, scriptHash)
+        if (!row) throw new Error('Validate this script for the Pod before updating the network member')
+        return parseManifest(JSON.parse(row.manifest as string))
+      }
+      const previous = manifest(pod.activeScript); const next = manifest(hash)
+      if (!this.store.db.prepare('SELECT 1 FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(podId, hash, pod.bindingRevision, this.resources.epoch(podId))) throw new Error('Validate this script for the current permissions first')
+      if (next.contract === undefined || canonicalNetworkJson(parseGraphContract(next.contract)) !== canonicalNetworkJson(member.contract)) throw new Error('Contract changes require a reviewed composition change')
+      if (canonicalNetworkJson([...next.capabilities].sort()) !== canonicalNetworkJson([...previous.capabilities].sort()) || next.effects !== previous.effects) throw new Error('Rights changes require owner review')
+      if (next.dependencyLockHash !== previous.dependencyLockHash) throw new Error('Dependency changes require owner review')
+      new WorkspaceDetails(this.store, this.resources).execute({ type: 'activate', podId, hash, expectedActive: pod.activeScript, assignmentRevision: pod.bindingRevision }, true)
+      const version = new DefinitionCatalog(this.store, this.resources, parseOwner(this.currentOwner())).appendScriptVersion(podId, next)
+      const binding = this.binding(podId, parseOwner(this.currentOwner()), definition.groupId)
+      this.store.db.prepare('UPDATE network_members SET definition_version=?,binding_revision=? WHERE network_id=? AND pod_id=?').run(version, binding.binding_revision!, networkId, podId)
+      const amended = parseNetworkDefinition({ ...definition, members: definition.members.map(item => item.podId === podId ? { ...item, definitionVersion: version, bindingRevision: binding.binding_revision } : item) })
+      this.validate(amended)
+      const body = canonicalNetworkJson(amended)
+      const prior = this.store.db.prepare('SELECT content_hash FROM network_revisions WHERE network_id=? AND revision=?').get(networkId, definition.revision)!
+      this.store.db.prepare('UPDATE network_revisions SET contract=?,content_hash=? WHERE network_id=? AND revision=?').run(body, digest(body), networkId, definition.revision)
+      this.trace(networkId, 'member-script-updated', { podId, revision: definition.revision, previousScript: pod.activeScript, script: hash, definitionVersion: version, previousContentHash: prior.content_hash, contentHash: digest(body), via: 'mcp' })
+    })
+    return this.view()
+  }
+
+  async replayFailed(command: Extract<NetworkCommand, { type: 'replayFailed' }>): Promise<NetworkView> {
+    const { id: networkId, podId } = command
+    const definition = this.definition(networkId, command.revision)
+    if (!definition.members.some(member => member.podId === podId)) throw new Error('Pod is not a member of this network revision')
+    const script = this.store.getPod(podId).activeScript
+    if (!script) throw new Error('The Pod has no active script')
+    const assertCurrent = () => {
+      this.definition(networkId, command.revision)
+      if (this.store.getPod(podId).activeScript !== script) throw new Error('The Pod script changed during replay')
+    }
+    const candidates = this.store.db.prepare(`SELECT i.run_id FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id JOIN runs r ON r.id=i.run_id
+      WHERE i.network_id=? AND i.pod_id=? AND i.state='blocked' AND c.resolved_receipt IS NULL AND c.retry_consumed_at IS NULL AND r.script_hash<>? ORDER BY r.started_at,i.run_id LIMIT ?`).all(networkId, podId, script, networkLimits.processNow)
+    const recovery = new NetworkRecovery(this.store, this.helper)
+    const replay: NetworkReplay = { replayed: [], skipped: [] }
+    for (const { run_id: runId } of candidates) {
+      const generation = () => Number(this.store.db.prepare('SELECT generation FROM network_invocations WHERE run_id=?').get(runId!)!.generation)
+      try {
+        await recovery.inspect(networkId, runId as string, generation(), assertCurrent)
+        recovery.replayAfterScriptChange(networkId, runId as string, generation(), script, assertCurrent)
+        replay.replayed.push(runId as string)
+      }
+      catch (error) { replay.skipped.push({ runId: runId as string, reason: (error instanceof Error ? error.message : 'Replay failed').slice(0, 2000) }) }
+    }
+    return { ...this.view(), replay }
   }
 
   updateInstance(podId: string, update: () => void): void {
