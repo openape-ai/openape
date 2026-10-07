@@ -199,7 +199,10 @@ defineExpose({ total })
         </ul>
         <label class="meta">{{ t('Evidence') }} <input v-model="evidence[batch.id]" maxlength="4000"></label>
         <div class="opts">
-          <a v-if="batch.url" class="secondary idp" :href="batch.url" target="_blank" rel="noopener">{{ t('Decide at the IdP') }}</a>
+          <template v-if="batch.url">
+            <button v-if="desktop" class="secondary idp" type="button" @click="emit('network', { type: 'gateOpen', id: batch.networkId, revision: view.collections.find(collection => collection.id === batch.networkId)?.revision ?? 1, taskId: batch.id, generation: batch.generation })">{{ t('Decide at the IdP') }}</button>
+            <a v-else class="secondary idp" :href="batch.url" target="_blank" rel="noopener">{{ t('Decide at the IdP') }}</a>
+          </template>
           <button v-if="batch.state !== 'unknown'" class="secondary" type="button" :disabled="!desktop || !(excluded[batch.id]?.length) || !evidence[batch.id]?.trim()" @click="emit('network', { type: 'gateExclude', id: batch.networkId, revision: view.collections.find(collection => collection.id === batch.networkId)?.revision ?? 1, taskId: batch.id, generation: batch.generation, deliveryIds: excluded[batch.id] ?? [], evidence: evidence[batch.id] ?? '' })">
             {{ t('Exclude selected') }}
           </button>
@@ -218,7 +221,10 @@ defineExpose({ total })
           </li>
         </ul>
         <div class="opts">
-          <a v-if="batch.url" class="secondary idp" :href="batch.url" target="_blank" rel="noopener">{{ t('Decide at the IdP') }}</a>
+          <template v-if="batch.url">
+            <button v-if="desktop" class="secondary idp" type="button" @click="emit('workflow', { type: 'gateOpen', batchId: batch.id })">{{ t('Decide at the IdP') }}</button>
+            <a v-else class="secondary idp" :href="batch.url" target="_blank" rel="noopener">{{ t('Decide at the IdP') }}</a>
+          </template>
           <button v-if="batch.state === 'unknown'" class="secondary" type="button" :disabled="!desktop" @click="emit('workflow', { type: 'gateDiscard', batchId: batch.id })">
             {{ t('Discard batch') }}
           </button>
