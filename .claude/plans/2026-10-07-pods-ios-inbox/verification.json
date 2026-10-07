@@ -1,0 +1,18 @@
+{
+  "scope": "Plan authoring and publication only; no product tests",
+  "schema": "openape.plan/2",
+  "proposalRevision": 2,
+  "translationFields": 115,
+  "renderer": "0.7.0",
+  "validation": "passed",
+  "publication": {
+    "id": "01M4B5Q1Q0W6C97A4ZXTFZ5WJR",
+    "version": 1,
+    "category": "Plans",
+    "audience": "private",
+    "status": "draft"
+  },
+  "exactExportDigestMatch": "31d397b61f7abceb68e1b1f5c90d78db32ac6194bc54df275574b77d3993974c",
+  "browser": "Authenticated published document opened; German screenshot inspected and English language switch verified.",
+  "limits": "No physical iPhone, push reliability or complete responsive/print acceptance in this planning task."
+}
