@@ -232,6 +232,27 @@ export interface Plan {
   approval?: Approval
   completion?: Completion
   handoff?: string
+  summary?: string
+  problem?: ProblemOverview
+  translations?: PlanTranslations
+}
+
+export interface ProblemOverview {
+  statement: string
+  impact: string
+  approach: string
+  outcome: string
+}
+
+export interface PlanTranslation {
+  path: string
+  source: string
+  text: string
+}
+
+export interface PlanTranslations {
+  defaultLanguage?: 'de' | 'en'
+  entries: PlanTranslation[]
 }
 
 export type ReportDocument = TestRun | Plan
