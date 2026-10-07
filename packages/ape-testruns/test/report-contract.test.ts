@@ -9,6 +9,7 @@ import { renderReceipt } from '../src/render-receipt'
 import { renderPlan } from '../src/render-plan'
 import { renderTestRun } from '../src/render-test-run'
 import { digest } from '../src/report-evidence'
+import { planTextEntries } from '../src/plan-translations'
 import { validateReport } from '../src/report-input'
 import type { Plan, TestRun } from '../src/report-types'
 
@@ -33,6 +34,63 @@ describe('versioned report contract', () => {
       expect(inspectHtml(html).externalImages).toEqual([])
       expect(html).not.toContain('{{')
     }
+  })
+  it('renders bilingual Plans with a top summary and one shared evidence record', () => {
+    const source = JSON.parse(readFileSync(new URL('../examples/versioned/plan-bilingual.json', import.meta.url), 'utf8'))
+    source.evidence = [{ id: 'log', title: 'Original log', kind: 'text', role: 'evidence', text: 'Exact evidence 🦍' }]
+    source.milestones[0].evidenceIds = ['log']
+    const html = renderPlan(source)
+    const document = parseDocument(html)
+    expect(inspectHtml(html).language).toBe('de')
+    expect(inspectHtml(html).metadata['plans.status']).toBe(source.status)
+    expect(visible(html)).toContain('Das Problem auf einen Blick')
+    expect(visible(html)).toContain('Problem at a glance')
+    const originalStatements = DomUtils.findAll(element => element.name === 'div' && element.attribs.lang === 'en', document.children)
+    expect(originalStatements.filter(element => DomUtils.textContent(element).trim() === source.approval.reference)).toHaveLength(2)
+    expect(originalStatements.filter(element => DomUtils.textContent(element).trim() === source.approval.scope)).toHaveLength(2)
+    expect(originalStatements.filter(element => DomUtils.textContent(element).trim() === source.decisions[0].reference)).toHaveLength(2)
+    const ids = DomUtils.findAll(element => Boolean(element.attribs.id), document.children).map(element => element.attribs.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(ids.filter(id => id === 'evidence-log')).toHaveLength(1)
+    expect(html.indexOf('class="plan-tldr"')).toBeLessThan(html.indexOf('class="state neutral"'))
+    expect(renderReceipt('plan', Buffer.from(JSON.stringify(source)), html).resolvedEvidenceDigests).toEqual([{ id: 'log', digest: digest('Exact evidence 🦍') }])
+    const embedded = DomUtils.getElementById('openape-plan-source', document.children)!
+    expect(JSON.parse(DomUtils.textContent(embedded))).toEqual(source)
+    expect(renderPlan(source)).toBe(html)
+    source.translations.defaultLanguage = 'en'
+    const english = renderPlan(source)
+    expect(inspectHtml(english).language).toBe('en')
+    expect(english.indexOf('class="plan-language plan-en"')).toBeLessThan(english.indexOf('class="plan-language plan-de"'))
+    source.evidence = []
+    delete source.milestones[0].evidenceIds
+    expect(renderPlan(source)).not.toContain('class="page shared-records"')
+  })
+  it('rejects incomplete, stale or fact-changing translations before rendering', () => {
+    const input = () => JSON.parse(readFileSync(new URL('../examples/versioned/plan-bilingual.json', import.meta.url), 'utf8'))
+    const missing = input(); missing.translations.entries.pop()
+    expect(() => renderPlan(missing)).toThrow(/Missing German/)
+    const stale = input(); stale.goal = 'A different goal'
+    expect(() => renderPlan(stale)).toThrow(/Stale translation/)
+    const unknown = input(); unknown.translations.entries[0].path = 'approval.reference'
+    expect(() => renderPlan(unknown)).toThrow(/Unknown translation/)
+    const duplicate = input(); duplicate.translations.entries.push(duplicate.translations.entries[0])
+    expect(() => renderPlan(duplicate)).toThrow(/Duplicate translation/)
+    const overview = input(); delete overview.problem
+    expect(() => renderPlan(overview)).toThrow(/summary and problem/)
+    const language = input(); language.language = 'de'
+    expect(() => renderPlan(language)).toThrow(/English source/)
+    const title = input(); title.translations.entries[0].text = 'Invalid\tTitle'
+    expect(() => renderPlan(title)).toThrow(/German plan fields/)
+  })
+  it('keeps authored anchor links local to their language and literal source text intact', () => {
+    const source = JSON.parse(readFileSync(new URL('../examples/versioned/plan-bilingual.json', import.meta.url), 'utf8'))
+    source.context = '[Milestone](#milestone-reading) and replacement \uFFFD'
+    source.translations.entries.push({ path: 'context', source: source.context, text: '[Meilenstein](#milestone-reading) und Ersatzzeichen \uFFFD' })
+    const html = renderPlan(source)
+    expect(html).toContain('href="#en-milestone-reading"')
+    expect(html).toContain('href="#de-milestone-reading"')
+    expect(visible(html)).toContain('Ersatzzeichen \uFFFD')
+    expect(planTextEntries(source).some(entry => entry.path.startsWith('approval.'))).toBe(false)
   })
   it('separates passing characterization, explicit adverse assessment and command exit 1', () => {
     const html = renderTestRun({ ...run, purpose: 'characterization', assessment: { outcome: 'action-required', summary: 'The unsafe behavior was reproduced.' }, commands: [{ id: 'audit', command: 'audit --fixture', outcome: 'exited', exitCode: 1, expectedExitCodes: [1] }] }, directory)

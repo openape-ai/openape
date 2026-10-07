@@ -163,3 +163,48 @@ never grants access or owner approval. Document ID, audience, team, expiry,
 idempotency key and expected publication version belong to publication state,
 not authoring input. Reuse key and bytes after an unknown outcome; a new intentional
 version gets a new key. Verify the returned authenticated document and category.
+
+## Bilingual Plans and the first screen
+
+New Plan authoring should use `examples/versioned/plan-bilingual.json`. The
+additive plan/2 fields are `summary` (a short TL;DR), `problem` (`statement`,
+`impact`, `approach`, `outcome`) and `translations`. Keep the summary to one to
+three sentences and each problem stage to one short sentence. The template puts
+these directly below the title, before metadata, approval and implementation
+steps. The four-stage overview uses semantic HTML and CSS, with mobile and print
+layouts; it is explanatory content, not evidence or an inferred conclusion.
+
+The English source remains the primary authored structure. `translations.entries`
+contains `{ "path": "milestones.0.title", "source": "Exact English title",
+"text": "Deutscher Titel" }` records. `source` must match the original string
+exactly; it is a synchronization guard, not a second authority. Include every
+present narrative field from this list:
+
+- `title`, `goal`, `summary`, `context`, `scope.*`, `nonGoals.*`, `verification.*`,
+  `handoff` and `problem.statement|impact|approach|outcome`.
+- `milestones.*.title|goal|steps.*|acceptance.*|blocker|proof|rollback`.
+- `decisions.*.title|description`, `risks.*.title|mitigation`,
+  `sections.*.title|body`, `changelog.*.text`, `completion.summary`.
+
+Numeric path components are zero-based array indexes. Missing, duplicate, unknown
+or stale entries fail before writing HTML. German projected fields also obey the
+original schema limits. Bilingual inputs require `summary`, `problem` and source
+`language: "en"` (or omitted). Translation meaning must be reviewed by the author;
+the renderer checks coverage and source identity, not semantic equivalence.
+
+IDs, lifecycle states, dates, owners, references, exact approval quotations and
+material evidence remain shared original records. Do not translate commands,
+paths or identifiers within prose/code blocks. Evidence, targets and references
+are embedded once beneath the language views; their original language is retained.
+An approval statement is explicitly labeled as original wording. A translation
+never grants or changes approval. The embedded source retains both language texts
+and the one shared set of facts in the same immutable report version.
+
+The template offers Deutsch, English and DE + EN. German is the default; set
+`translations.defaultLanguage: "en"` when needed. The selected default also sets
+the publication title/language. Native radio controls and CSS select the visible
+content without JavaScript, storage or network access. Each content panel declares
+its own language. Print follows the current selection; both-language view starts
+the second language on a new printed page. Internal IDs/links are namespaced per
+view; links to shared evidence remain stable. Existing monolingual plan/2 and
+legacy plan/1 sources continue to render without a language switch.
