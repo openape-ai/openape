@@ -1,5 +1,13 @@
 # Active work
 
+## Pods desktop IdP decision links — issue 1438
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1438
+- Worktree: `openape-monorepo.worktrees/issue-1438-pods-idp-links`; branch `bugfix/issue-1438-pods-idp-links`; base `dcf3d5cd0339b589cac140e417e8f679193eb69f`.
+- Desktop batch actions use the existing native network/workflow `gateOpen` commands; browser links keep their normal target. Electron navigation restrictions remain intact.
+- Verification: full `pnpm lint` (55 tasks), `pnpm typecheck` (78 tasks), Pods build and `pnpm --filter @openape/pods test:fast` pass (1,297 unit/component and 52 browser tests). Permanent component cases cover both batch types and hosts because attribute-only assertions missed the broken desktop behavior.
+- Next: native PR and exact-source external CI, then signed desktop delivery and installed acceptance. No installed-fix claim yet.
+
 ## Report templates and CLI migration — issue 1437
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1437; approved design: https://report.openape.ai/d/01M49MYRK3TBJ850CR0S0GYGQW; implementation plan: https://report.openape.ai/d/01M49KKGQCJP11RP8XQQT75835.
