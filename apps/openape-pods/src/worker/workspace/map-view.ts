@@ -20,6 +20,8 @@ const counter = (rows: Row[], key: string, value = 'count'): Record<string, numb
  * network members local, as the central publication does for every other table: their channel
  * topology, flows and gates stay, their resources, last runs and system edges are omitted.
  */
+const scriptUpdateWindowMs = 7 * 24 * 60 * 60 * 1000
+
 export function mapView(store: PodDatabase, now = Date.now(), published = false): MapView {
   const at = Math.floor(now / 60000) * 60000
   const from = at - mapWindowMs
@@ -94,6 +96,11 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
     }
   }
 
+  const scriptUpdates = new Map<string, { at: number, previous: string, script: string }>()
+  for (const row of db.prepare('SELECT body,created_at FROM network_trace_events WHERE kind=\'member-script-updated\' AND created_at>=? ORDER BY created_at,id').all(now - scriptUpdateWindowMs)) {
+    const body = JSON.parse(row.body as string) as { podId: string, previousScript: string, script: string }
+    scriptUpdates.set(body.podId, { at: row.created_at as number, previous: body.previousScript, script: body.script })
+  }
   for (const pod of store.listPods()) {
     const local = !hidden.has(pod.id)
     const resources = local ? db.prepare('SELECT * FROM resources WHERE pod_id=? AND state=\'ready\' ORDER BY rowid').all(pod.id).map(row => ({ kind: row.kind, name: row.name, configuration: JSON.parse(row.configuration as string) }) as Pick<PodResource, 'kind' | 'name' | 'configuration'>) : []
@@ -153,6 +160,7 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
       kind, ai, channels: { takes: contract?.takes ?? [], gives: contract?.gives ?? [] }, resources: mapped, secrets,
       schedule: schedules.get(pod.id) ?? sourceSchedules.get(pod.id) ?? null, lastRun: local ? lastRuns.get(pod.id) ?? null : null, runs: local ? runTotals[pod.id] ?? 0 : 0,
       collection: collectionOf.get(pod.id) ?? null, queue: local ? { blocked: Number(queue?.count ?? 0), error: (queue?.error as string | null) ?? null } : { blocked: 0, error: null },
+      ...(local && scriptUpdates.get(pod.id)?.script === pod.activeScript ? { scriptUpdate: scriptUpdates.get(pod.id) } : {}),
       unknown: unknownEffects.filter(row => local && row.pod_id === pod.id).map(row => ({ key: String(row.effect_key), runId: String(row.run_id) })),
       approvals: approvals.filter(row => local && row.pod_id === pod.id).map(row => parseRunApproval(JSON.parse(row.data as string))).map((approval, index) => ({ grantId: approval.grantId, title: approval.title, runId: String(approvals.filter(row => row.pod_id === pod.id)[index]!.run_id) })),
     })

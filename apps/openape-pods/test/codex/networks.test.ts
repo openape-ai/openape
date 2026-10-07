@@ -86,3 +86,13 @@ it('redacts global diagnostics and retains a completed receipt when the response
   expect(execute).toHaveBeenCalledTimes(1)
   expect(f.store.db.prepare('SELECT state FROM master_actions WHERE id=?').get(`codex-network:${request.id}`)!.state).toBe('completed')
 })
+
+it('accepts member script maintenance only through the local assistant connection', () => {
+  const f = fixture()
+  const hash = 'a'.repeat(64)
+  expect(parseCodexNetworkAction({ action: 'networks', command: { type: 'updateMemberScript', id: f.id, revision: 1, podId: f.consumer, hash } })).toEqual({ type: 'updateMemberScript', id: f.id, revision: 1, podId: f.consumer, hash })
+  expect(parseCodexNetworkAction({ action: 'networks', command: { type: 'replayFailed', id: f.id, revision: 1, podId: f.consumer } })).toMatchObject({ type: 'replayFailed' })
+  expect(() => parseCodexNetworkAction({ action: 'networks', command: { type: 'updateMemberScript', id: f.id, revision: 1, podId: f.consumer, hash: 'not-a-hash' } })).toThrow('hash')
+  expect(() => f.engine.execute({ type: 'updateMemberScript', id: f.id, revision: 1, podId: f.consumer, hash })).toThrow('local assistant connection')
+  expect(() => f.engine.execute({ type: 'replayFailed', id: f.id, revision: 1, podId: f.consumer })).toThrow('local assistant connection')
+})
