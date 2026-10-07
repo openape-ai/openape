@@ -193,14 +193,30 @@ it('decides, reads, survives restart and reinstall, works offline and never mixe
   await shot(restarted.page, '09-offline-decision')
   await restarted.context.setOffline(false)
 
-  // Back online, a Pods decision is answered straight from its card; the desktop receives exactly that option.
+  // Back online, a Pods decision is answered straight from its card, after an undo window; the desktop receives exactly that option.
   await restarted.page.goto(`${relay.url}/inbox/`)
   const card = restarted.page.locator('li.inbox-card', { hasText: 'Zweite Zustellung' })
+  const tops = () => restarted.page.locator('main > ul').first().locator('li.inbox-card').evaluateAll(cards => cards.map(node => Math.round(node.getBoundingClientRect().top)))
+  await card.getByRole('button', { name: 'Erneut zustellen' }).waitFor()
+  const before = await tops()
   await card.getByRole('button', { name: 'Erneut zustellen' }).click()
-  await expect.poll(() => card.getByRole('status').textContent()).toContain('noch nicht angewendet')
-  expect(await card.getByRole('button').count()).toBe(0)
-  await shot(restarted.page, '10-card-decision')
+  await expect.poll(() => card.getByRole('status').textContent()).toContain('wird gleich gesendet')
+  await card.getByRole('button', { name: 'Rückgängig' }).click()
+  await expect.poll(() => card.getByRole('button', { name: 'Erneut zustellen' }).isVisible()).toBe(true)
+  await restarted.page.waitForTimeout(5500)
+  expect(await mac.claim()).toBeNull()
+  await card.getByRole('button', { name: 'Erneut zustellen' }).click()
+  await shot(restarted.page, '10-card-undo')
+  await expect.poll(() => card.getByRole('status').textContent(), { timeout: 15000 }).toContain('noch nicht angewendet')
+  // Neither the answer nor a decision arriving meanwhile moves any card: the new one waits behind a floating hint.
+  await mac.decisions([idpGrant, desktopOnly, { ...effect, sourceId: 'effect:mail-2', digest: digest('effect-2'), title: 'Zweite Zustellung prüfen' }, { ...mailChoice, sourceId: 'network-choice:mail-4', digest: digest('choice-4'), title: 'Neue Mail während der Arbeit' }])
+  await restarted.page.getByRole('button', { name: 'Aktualisieren' }).click()
+  await expect.poll(() => restarted.page.getByRole('button', { name: '1 neue anzeigen' }).isVisible()).toBe(true)
+  expect(await tops()).toEqual(before)
+  await shot(restarted.page, '11-card-stable')
   expect((await mac.claim())!.command.body).toMatchObject({ type: 'decide', sourceId: 'effect:mail-2', option: 'deliver' })
+  await restarted.page.getByRole('button', { name: '1 neue anzeigen' }).click()
+  await expect.poll(() => restarted.page.locator('li.inbox-card', { hasText: 'Neue Mail während der Arbeit' }).isVisible()).toBe(true)
 
   // Reinstall: an empty browser signs in again and gets the account's read state from the service.
   const reinstalled = await phone(owner)
@@ -215,7 +231,7 @@ it('decides, reads, survives restart and reinstall, works offline and never mixe
   expect(await noHorizontalScroll(reinstalled.page)).toBe(true)
   // Values keep a readable line width instead of collapsing into a narrow column.
   expect(Math.min(...await reinstalled.page.locator('dd').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().width)))).toBeGreaterThan(300)
-  await shot(reinstalled.page, '11-settings-large-text')
+  await shot(reinstalled.page, '12-settings-large-text')
 
   // Revocation from the other device: the restarted phone loses its session and its stored copy on the next sync.
   const devices = await reinstalled.page.evaluate(async () => (await (await fetch('/inbox/api/v1/devices')).json()) as { current: string, devices: { id: string }[] })
@@ -225,7 +241,7 @@ it('decides, reads, survives restart and reinstall, works offline and never mixe
   await expect.poll(() => restarted.page.getByText('Dieses Gerät wurde abgemeldet. Gespeicherte Einträge wurden entfernt.').isVisible()).toBe(true)
   expect(await restarted.page.evaluate(() => localStorage.getItem('pods-inbox-cache-v1'))).toBeNull()
   expect(await restarted.page.locator('.inbox-card, section.decision').count()).toBe(0)
-  await shot(restarted.page, '12-revoked')
+  await shot(restarted.page, '13-revoked')
 
   // Account switch in the same browser: sign-out wipes the copy, the other account never sees the first one's items.
   await reinstalled.page.getByRole('button', { name: 'Abmelden', exact: true }).last().click()
@@ -254,7 +270,7 @@ it('decides, reads, survives restart and reinstall, works offline and never mixe
     await expect.poll(() => reinstalled.page.getByText('Eine neue Version ist bereit.').isVisible(), { timeout: 15000 }).toBe(true)
     // Installed but waiting: the page still runs under the old worker, both versions' shells exist side by side.
     expect(await reinstalled.page.evaluate(async () => ({ waiting: !!(await navigator.serviceWorker.getRegistration('/inbox/'))!.waiting, caches: (await caches.keys()).filter(name => name.startsWith('pods-inbox-')).sort() }))).toEqual({ waiting: true, caches: [`pods-inbox-${current}`, `pods-inbox-${next}`].sort() })
-    await shot(reinstalled.page, '13-update-ready')
+    await shot(reinstalled.page, '14-update-ready')
     await Promise.all([reinstalled.page.waitForEvent('load'), reinstalled.page.getByRole('button', { name: 'Jetzt laden' }).click()])
     await expect.poll(() => reinstalled.page.evaluate(async () => (await caches.keys()).filter(name => name.startsWith('pods-inbox-')))).toEqual([`pods-inbox-${next}`])
   }
@@ -264,6 +280,6 @@ it('decides, reads, survives restart and reinstall, works offline and never mixe
   await reinstalled.page.goto(`${relay.url}/inbox/settings`)
   await reinstalled.page.getByLabel('Sprache').selectOption('en')
   await expect.poll(() => reinstalled.page.getByRole('heading', { name: 'Settings' }).isVisible()).toBe(true)
-  await shot(reinstalled.page, '14-settings-english')
+  await shot(reinstalled.page, '15-settings-english')
   await Promise.all([restarted.context.close(), reinstalled.context.close()])
 }, 300000)
