@@ -1,15 +1,18 @@
-import { requireBrokerGrantOwner } from '../../utils/broker-owner'
 import type { GrantType, ProblemDetails } from '@openape/core'
 import type { ApproveGrantOverrides } from '@openape/grants'
 import { approveGrant, denyGrant, revokeGrant } from '@openape/grants'
 import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { requireAuth } from '../../utils/admin'
+import type { GrantAction } from '../../utils/grant-authority'
+import { requireGrantActionAuthority } from '../../utils/grant-authority'
 import { useGrantStores } from '../../utils/grant-stores'
 import { createProblemError } from '../../utils/problem'
 
+const GRANT_ACTIONS: GrantAction[] = ['approve', 'deny', 'revoke']
+
 interface BatchOperation {
   id: string
-  action: 'approve' | 'deny' | 'revoke'
+  action: GrantAction
   grant_type?: GrantType
   duration?: number
 }
@@ -35,8 +38,10 @@ export default defineEventHandler(async (event) => {
 
   for (const item of body.operations) {
     try {
+      if (!GRANT_ACTIONS.includes(item.action)) throw new Error(`Invalid action: ${item.action}`)
       const existing = await grantStore.findById(item.id)
-      if (existing?.brokered) await requireBrokerGrantOwner(event, existing, item.action === 'approve')
+      if (!existing) throw createProblemError({ status: 404, title: 'Grant not found', type: 'https://openape.org/errors/grant_not_found' })
+      await requireGrantActionAuthority(event, existing, email, item.action)
       let grant
       switch (item.action) {
         case 'approve': {
@@ -52,8 +57,6 @@ export default defineEventHandler(async (event) => {
         case 'revoke':
           grant = await revokeGrant(item.id, grantStore)
           break
-        default:
-          throw new Error(`Invalid action: ${item.action}`)
       }
       results.push({ id: item.id, status: grant.status, success: true })
     }
@@ -63,11 +66,7 @@ export default defineEventHandler(async (event) => {
         id: item.id,
         status: 'error',
         success: false,
-        error: {
-          type: 'https://openape.org/errors/grant_already_decided',
-          title: err instanceof Error ? err.message : 'Operation failed',
-          status: 400,
-        },
+        error: toProblemDetails(err),
       })
     }
   }
@@ -78,3 +77,12 @@ export default defineEventHandler(async (event) => {
 
   return { results }
 })
+
+function toProblemDetails(err: unknown): ProblemDetails {
+  if (err && typeof err === 'object' && 'statusCode' in err && 'data' in err) return err.data as ProblemDetails
+  return {
+    type: 'https://openape.org/errors/grant_already_decided',
+    title: err instanceof Error ? err.message : 'Operation failed',
+    status: 400,
+  }
+}

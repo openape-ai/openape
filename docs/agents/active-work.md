@@ -1,5 +1,13 @@
 # Active work
 
+## Batch grant approver policy — issue 1441
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1441. Security fix found by code reading on main `6c0d8e22`; not exploited.
+- Worktree `.claude/worktrees/gallant-gould-bff3b0`, branch `bugfix/issue-1441-batch-grant-authz`, base `6c0d8e22`.
+- `POST /api/grants/batch` now applies the same shared per-action policy (`grant-authority.ts`) as the single approve/deny/revoke endpoints; refused items return per-item 403.
+- Validation: root lint (55 tasks) and typecheck (78 tasks) pass; 650 nuxt-auth-idp tests pass. The new batch tests fail against the previous handler (agent self-approve succeeded).
+- Next: exact-source external CI, native review and merge, IdP deployment, then the production audit of decided grants described in the PR.
+
 ## Report data contract — issue 1439
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1439; approved proposal: https://report.openape.ai/d/01M4AGFRAXT93Y305ZEJJZQ023?v=1. Owner approved implementation on October 7; progress edition 2 records that decision.
