@@ -1,6 +1,6 @@
 import { defineOpenApeCallbackHandler } from '@openape/nuxt-auth-sp/handlers'
 import { parseOwner, ProtocolError, sameOwner } from '@openape/pods-protocol'
-import { workspaceSession } from '../../utils/workspace'
+import { inboxReturn, workspaceSession } from '../../utils/workspace'
 
 export default defineOpenApeCallbackHandler({
   async onSuccess(event, { claims }) {
@@ -11,7 +11,10 @@ export default defineOpenApeCallbackHandler({
     if (config.relayEnrollment !== 'public' && !(config.relayEnrollment === 'pilot' && allowed.some(item => sameOwner(item, owner)))) throw new ProtocolError('enrollment_closed', 403)
     const session = await workspaceSession(event)
     await session.clear(); await session.update({ owner })
-    await sendRedirect(event, '/workspace')
+    await sendRedirect(event, inboxReturn.take(event) ?? '/workspace')
   },
-  async onError(event) { await sendRedirect(event, '/workspace?login=failed') },
+  async onError(event) {
+    const returnTo = inboxReturn.take(event)
+    await sendRedirect(event, returnTo ? `${returnTo}${returnTo.includes('?') ? '&' : '?'}login=failed` : '/workspace?login=failed')
+  },
 })

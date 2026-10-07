@@ -1,4 +1,4 @@
-import { getHeader, getRequestURL, setHeader, useSession } from 'h3'
+import { deleteCookie, getCookie, getHeader, getRequestURL, setCookie, setHeader, useSession } from 'h3'
 import type { H3Event } from 'h3'
 import { useRuntimeConfig } from 'nitropack/runtime'
 import { parseOwner, ProtocolError, sameOwner } from '@openape/pods-protocol'
@@ -6,6 +6,7 @@ import type { Owner } from '@openape/pods-protocol'
 import { sha256 } from '@openape/pods-protocol/crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import { centralId, centralMaxBytes, centralRevision } from '../../../openape-pods/src/contracts/central'
+import { inboxPath } from './inbox-prototype'
 import { WorkspaceStore } from './workspace-store'
 import type { WorkspaceView } from './workspace-store'
 
@@ -28,6 +29,19 @@ export async function workspaceSession(event: H3Event) {
   if (flowSecret.length < 32 || /^(?:dev-|change-me|please-change)/i.test(flowSecret)) throw new ProtocolError('workspace_flow_unconfigured', 503)
   if (password.length < 32) throw new ProtocolError('workspace_session_unconfigured', 503)
   return useSession<{ owner?: Owner }>(event, { name: 'pods-workspace', password, maxAge: 86400, cookie: { httpOnly: true, secure: getRequestURL(event).protocol === 'https:', sameSite: 'lax', path: '/' } })
+}
+
+// The sign-in return path is kept outside the workspace session so login still creates a fresh session.
+export const inboxReturn = {
+  remember(event: H3Event, path: unknown): void {
+    if (typeof path === 'string' && inboxPath.test(path)) setCookie(event, 'pods-inbox-return', path, { httpOnly: true, secure: getRequestURL(event).protocol === 'https:', sameSite: 'lax', path: '/workspace-auth/', maxAge: 600 })
+    else deleteCookie(event, 'pods-inbox-return', { path: '/workspace-auth/' })
+  },
+  take(event: H3Event): string | undefined {
+    const path = getCookie(event, 'pods-inbox-return')
+    deleteCookie(event, 'pods-inbox-return', { path: '/workspace-auth/' })
+    return path && inboxPath.test(path) ? path : undefined
+  },
 }
 
 export async function workspaceOwner(event: H3Event): Promise<Owner> {
