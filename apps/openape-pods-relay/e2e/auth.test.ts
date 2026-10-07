@@ -18,7 +18,7 @@ const managementToken = 'pods-relay-disposable-fixture'
 const email = 'owner@pods-mobile.test'
 beforeAll(async () => {
   idp = await startIdp({ managementToken, ddisaMockRecords: { 'pods-mobile.test': { version: 'ddisa1', idp: 'https://identity.example', mode: 'open' } } })
-  relay = await startServer({ cwd: process.cwd(), readyPath: '/api/health', timeoutMs: 300000, env: ({ url }) => ({ NUXT_IGNORE_LOCK: '1', NUXT_WORKSPACE_ENABLED: 'true', NUXT_WORKSPACE_DATABASE: `${makeTempDir('pods-workspace-e2e-')}/workspace.sqlite`, NUXT_WORKSPACE_SESSION_SECRET: 'synthetic-workspace-session-secret-1378', NUXT_OPENAPE_SP_SESSION_SECRET: 'synthetic-workspace-flow-secret-1378', NUXT_OPENAPE_SP_OPENAPE_URL: idp.url, NUXT_OPENAPE_SP_CLIENT_ID: new URL(url).host, NUXT_RELAY_ORIGIN: url, NUXT_RELAY_ENABLED: 'true', NUXT_RELAY_ENROLLMENT: 'pilot', NUXT_RELAY_OWNER_ALLOWLIST: JSON.stringify([{ issuer: idp.url, subject: email }]), NUXT_RELAY_FIXTURE: 'true', NUXT_RELAY_IDP_URL: idp.url, NUXT_RELAY_DATABASE: `${makeTempDir('pods-relay-e2e-')}/relay.sqlite` }) })
+  relay = await startServer({ cwd: process.cwd(), readyPath: '/api/health', timeoutMs: 300000, env: ({ url }) => ({ NUXT_IGNORE_LOCK: '1', NUXT_WORKSPACE_ENABLED: 'true', NUXT_INBOX_ENABLED: 'true', NUXT_INBOX_DATABASE: `${makeTempDir('pods-inbox-e2e-')}/inbox.sqlite`, NUXT_WORKSPACE_DATABASE: `${makeTempDir('pods-workspace-e2e-')}/workspace.sqlite`, NUXT_WORKSPACE_SESSION_SECRET: 'synthetic-workspace-session-secret-1378', NUXT_OPENAPE_SP_SESSION_SECRET: 'synthetic-workspace-flow-secret-1378', NUXT_OPENAPE_SP_OPENAPE_URL: idp.url, NUXT_OPENAPE_SP_CLIENT_ID: new URL(url).host, NUXT_RELAY_ORIGIN: url, NUXT_RELAY_ENABLED: 'true', NUXT_RELAY_ENROLLMENT: 'pilot', NUXT_RELAY_OWNER_ALLOWLIST: JSON.stringify([{ issuer: idp.url, subject: email }]), NUXT_RELAY_FIXTURE: 'true', NUXT_RELAY_IDP_URL: idp.url, NUXT_RELAY_DATABASE: `${makeTempDir('pods-relay-e2e-')}/relay.sqlite` }) })
 })
 afterAll(async () => { if (relay) await relay.stop(); if (idp) await idp.stop() })
 it('registers a desktop and mobile through real DDISA callbacks and rejects replayed native handoffs', async () => {
@@ -87,6 +87,19 @@ it('registers a desktop and mobile through real DDISA callbacks and rejects repl
     const callback = await fetch(granted.headers.get('location')!, { redirect: 'manual', headers: { cookie } })
     expect(callback.headers.get('location')).toBe(expected)
   }
+  // Inbox (plan M1): the runtime publishes into its owner's inbox; the signed-in browser reads it without the runtime.
+  const publishPath = '/api/runtime/v1/inbox'
+  const publication = JSON.stringify({ eventId: 'e2e-message-1', kind: 'message', title: 'Belege', body: 'Rechnung abgelegt.' })
+  for (const expected of [201, 200]) {
+    const published = await fetch(`${relay.url}${publishPath}`, { method: 'POST', headers: { ...headers(desktop, publishPath, 'POST', publication), 'content-type': 'application/json' }, body: publication })
+    expect(published.status, await published.clone().text()).toBe(expected)
+  }
+  const inboxRead = await fetch(`${relay.url}/inbox/api/v1/items`, { headers: { cookie: webCookie } })
+  expect((await inboxRead.clone().json() as { items: { title: string }[] }).items.map(entry => entry.title)).toEqual(['Belege'])
+  const inboxCookie = [webCookie, ...inboxRead.headers.getSetCookie().map(value => value.split(';')[0])].join('; ')
+  expect((await fetch(`${relay.url}/inbox/api/v1/logout`, { method: 'POST', headers: { cookie: inboxCookie, origin: relay.url } })).status).toBe(200)
+  const revoked = await fetch(`${relay.url}/inbox/api/v1/items`, { headers: { cookie: inboxCookie } })
+  expect(await revoked.json()).toMatchObject({ code: 'session_revoked' })
   const runtimePath = '/api/runtime/v1/workspace'
   async function central(body: Record<string, unknown>) {
     const encoded = JSON.stringify(body)
