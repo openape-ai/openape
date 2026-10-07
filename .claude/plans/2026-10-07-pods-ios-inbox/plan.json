@@ -142,7 +142,8 @@
     "Every existing decision type is mapped; only concrete physical desktop tasks require desktop handoff.",
     "Continue with PWA only after the owner can repeatedly open a received push into the correct authenticated item, complete a decision, return from the IdP and restart without broken sessions. Observe at least 20 controlled pushes across two days and record every missing/delayed/duplicate event with Focus/network conditions; no unexplained loss or incorrect navigation may remain. This sample is a pilot gate, not a delivery SLA."
    ],
-   "rollback": "Remove the disposable prototype and its test subscriptions. A reproducible platform blocker triggers a revised native proposal before further product implementation."
+   "rollback": "Remove the disposable prototype and its test subscriptions. A reproducible platform blocker triggers a revised native proposal before further product implementation.",
+   "proof": "Prototype merged in PR 293 (4f8cea27) and hotfix PR 295 (573ed67c), deployed as prod-573ed67c at https://pods.openape.ai/inbox/ behind NUXT_INBOX_PROTOTYPE_ENABLED. Decision inventory recorded below. Pre-device Test Run: https://report.openape.ai/d/01M4BAS8MHWA6FB4E8W29801WK. The physical iPhone gate is open."
   },
   {
    "id": "M1",
@@ -277,9 +278,9 @@
  ],
  "completion": {
   "result": "not-assessed",
-  "summary": "Implementation started with M0 under development issue 1446. No milestone is complete and no device acceptance has been recorded yet."
+  "summary": "M0 prototype and decision inventory are delivered; the physical iPhone gate (at least 20 controlled pushes over two days) is in progress. No milestone is complete."
  },
- "handoff": "M0 is active in branch feature/issue-1446-pods-inbox-pwa. Next: decision inventory, minimal PWA prototype, deployment and the owner's physical iPhone checks. M1–M7 remain blocked until M0 passes.",
+ "handoff": "Owner: install https://pods.openape.ai/inbox/ on the iPhone, sign in, enable notifications, start the two-day series and run the device checks. Agent: evaluate the push log and publish the device Test Run. M1–M7 stay blocked until M0 passes.",
  "changelog": [
   {
    "date": "2026-10-07",
@@ -292,6 +293,10 @@
   {
    "date": "2026-10-07",
    "text": "Owner approved revision 2 including PWA-first and the service-readable account inbox. Implementation started with M0 under issue 1446; the plan source moved into the implementation branch."
+  },
+  {
+   "date": "2026-10-07",
+   "text": "M0 prototype merged (PR 293, hotfix PR 295) and deployed as prod-573ed67c; decision inventory added; pre-device Test Run published. CI runner disk exhaustion was cleared on the way."
   }
  ],
  "links": [
@@ -314,6 +319,14 @@
   {
    "title": "WebKit: Declarative Web Push",
    "url": "https://webkit.org/blog/16535/meet-declarative-web-push/"
+  },
+  {
+   "title": "PR 293 (M0 prototype)",
+   "url": "https://repos.openape.ai/patrick/monorepo/pulls/293"
+  },
+  {
+   "title": "Pre-device Test Run",
+   "url": "https://report.openape.ai/d/01M4BAS8MHWA6FB4E8W29801WK"
   }
  ],
  "evidence": [
@@ -865,13 +878,13 @@
    },
    {
     "path": "completion.summary",
-    "source": "Implementation started with M0 under development issue 1446. No milestone is complete and no device acceptance has been recorded yet.",
-    "text": "Die Umsetzung hat mit M0 unter Entwicklungs-Issue 1446 begonnen. Noch kein Meilenstein ist abgeschlossen und noch keine Geräteabnahme ist erfasst."
+    "source": "M0 prototype and decision inventory are delivered; the physical iPhone gate (at least 20 controlled pushes over two days) is in progress. No milestone is complete.",
+    "text": "M0-Prototyp und Entscheidungsinventar sind geliefert; die Prüfung auf dem echten iPhone (mindestens 20 kontrollierte Pushes über zwei Tage) läuft. Noch kein Meilenstein ist abgeschlossen."
    },
    {
     "path": "handoff",
-    "source": "M0 is active in branch feature/issue-1446-pods-inbox-pwa. Next: decision inventory, minimal PWA prototype, deployment and the owner's physical iPhone checks. M1–M7 remain blocked until M0 passes.",
-    "text": "M0 läuft im Branch feature/issue-1446-pods-inbox-pwa. Als Nächstes: Entscheidungsinventar, minimaler PWA-Prototyp, Auslieferung und die Prüfungen auf dem tatsächlichen iPhone des Eigentümers. M1–M7 bleiben bis zum bestandenen M0 gesperrt."
+    "source": "Owner: install https://pods.openape.ai/inbox/ on the iPhone, sign in, enable notifications, start the two-day series and run the device checks. Agent: evaluate the push log and publish the device Test Run. M1–M7 stay blocked until M0 passes.",
+    "text": "Eigentümer: https://pods.openape.ai/inbox/ auf dem iPhone installieren, anmelden, Mitteilungen aktivieren, die Zweitagesserie starten und die Geräteprüfungen durchführen. Agent: Push-Protokoll auswerten und den Geräte-Test-Run veröffentlichen. M1–M7 bleiben bis zum bestandenen M0 gesperrt."
    },
    {
     "path": "changelog.0.text",
@@ -917,6 +930,16 @@
     "path": "sections.7.body",
     "source": "Inventory of every section in `apps/openape-pods/src/renderer/central/DecisionsInbox.vue` and its handler at main `e89449e2` (October 7, 2026). Eight decision types exist; each maps to a mobile action or an authority handoff. No current type requires physical desktop presence.\n\n| Desktop decision | Source → handler | Authority | Mobile mapping (M2) | Browser workspace today |\n| --- | --- | --- | --- | --- |\n| Network choose-gate question | `network_choices` → network `choose` → `network-engine` | Pods | Mobile action with case, options and revision | Not possible: no central `choose` channel |\n| Held workflow item | workflow gates → `gateChoose` → `chooseGateItem` | Pods | Mobile action | Not possible: no workflow channel |\n| Network approval batch | `NetworkGates` → IdP batch; `gateOpen` / `gateDiscard` | IdP; discard Pods | Verified IdP link plus explicit discard with evidence | Link nulled in the central projection |\n| Graph/workflow approval batch | `graph_gate_batches` → `gateOpen` / `gateDiscard` | IdP; discard Pods | IdP link plus discard | Link works; discard desktop-only |\n| Runtime rights / blocked queue | approval `run_events` → `openApproval` (issuer/subject check) | IdP | IdP link, refresh on return | Not allowed centrally; projection fills only local Pods |\n| Unknown external delivery | `effect_ledger` unknown → `resolveHttp` after a native confirmation dialog | Owner observation | Explicit mobile confirmation of the observed result; never an automatic resend | Allowed, but bypasses the native dialog |\n| Secret request | `secretsGate` → secrets.openape.ai; `cancel` | Secrets; cancel Pods | Scoped Secrets link plus cancel | Requests not passed to the browser |\n| Setup proposal | `access_proposals` → open / master `decline` | Pods | Accept/decline supported proposals | Not passed (`proposals: []`) |\n\nConsequences for M2: add bounded central channels for network/workflow choices, setup proposals and secret-request cancellation; expose verified IdP links instead of nulling them; replace the native confirmation for unknown deliveries with an explicit mobile confirmation; extend the decision projection beyond local Pods.",
     "text": "Bestandsaufnahme aller Bereiche in `apps/openape-pods/src/renderer/central/DecisionsInbox.vue` und ihrer Handler auf main `e89449e2` (7. Oktober 2026). Es gibt acht Entscheidungstypen; jeder lässt sich einer mobilen Aktion oder einer Übergabe an die zuständige Instanz zuordnen. Kein aktueller Typ verlangt physische Anwesenheit am Desktop.\n\n| Desktop-Entscheidung | Quelle → Handler | Zuständigkeit | Mobile Zuordnung (M2) | Browser-Workspace heute |\n| --- | --- | --- | --- | --- |\n| Frage eines Netzwerk-Auswahltors | `network_choices` → Netzwerk-`choose` → `network-engine` | Pods | Mobile Aktion mit Fall, Optionen und Revision | Nicht möglich: kein zentraler `choose`-Kanal |\n| Angehaltener Workflow-Eintrag | Workflow-Tore → `gateChoose` → `chooseGateItem` | Pods | Mobile Aktion | Nicht möglich: kein Workflow-Kanal |\n| Netzwerk-Freigabebündel | `NetworkGates` → IdP-Bündel; `gateOpen` / `gateDiscard` | IdP; Verwerfen Pods | Geprüfter IdP-Link plus ausdrückliches Verwerfen mit Nachweis | Link in der zentralen Projektion entfernt |\n| Graph-/Workflow-Freigabebündel | `graph_gate_batches` → `gateOpen` / `gateDiscard` | IdP; Verwerfen Pods | IdP-Link plus Verwerfen | Link funktioniert; Verwerfen nur am Desktop |\n| Laufzeitrechte / blockierte Warteschlange | Freigabe-`run_events` → `openApproval` (Prüfung von issuer/subject) | IdP | IdP-Link, Aktualisierung bei Rückkehr | Zentral nicht erlaubt; Projektion nur für lokale Pods befüllt |\n| Unklare externe Zustellung | `effect_ledger` unklar → `resolveHttp` nach nativem Bestätigungsdialog | Beobachtung des Eigentümers | Ausdrückliche mobile Bestätigung des beobachteten Ergebnisses; nie automatisches erneutes Senden | Erlaubt, umgeht aber den nativen Dialog |\n| Secret-Anfrage | `secretsGate` → secrets.openape.ai; `cancel` | Secrets; Abbrechen Pods | Begrenzter Secrets-Link plus Abbrechen | Anfragen werden nicht an den Browser übergeben |\n| Einrichtungsvorschlag | `access_proposals` → Öffnen / Master-`decline` | Pods | Unterstützte Vorschläge annehmen/ablehnen | Nicht übergeben (`proposals: []`) |\n\nFolgen für M2: begrenzte zentrale Kanäle für Netzwerk-/Workflow-Auswahl, Einrichtungsvorschläge und Abbruch von Secret-Anfragen ergänzen; geprüfte IdP-Links bereitstellen statt sie zu entfernen; den nativen Bestätigungsdialog für unklare Zustellungen durch eine ausdrückliche mobile Bestätigung ersetzen; die Entscheidungsprojektion über lokale Pods hinaus erweitern."
+   },
+   {
+    "path": "milestones.0.proof",
+    "source": "Prototype merged in PR 293 (4f8cea27) and hotfix PR 295 (573ed67c), deployed as prod-573ed67c at https://pods.openape.ai/inbox/ behind NUXT_INBOX_PROTOTYPE_ENABLED. Decision inventory recorded below. Pre-device Test Run: https://report.openape.ai/d/01M4BAS8MHWA6FB4E8W29801WK. The physical iPhone gate is open.",
+    "text": "Prototyp in PR 293 (4f8cea27) und Korrektur-PR 295 (573ed67c) gemergt, als prod-573ed67c unter https://pods.openape.ai/inbox/ hinter NUXT_INBOX_PROTOTYPE_ENABLED ausgeliefert. Entscheidungsinventar unten erfasst. Test Run vor der Geräteprüfung: https://report.openape.ai/d/01M4BAS8MHWA6FB4E8W29801WK. Die Prüfung auf dem echten iPhone ist offen."
+   },
+   {
+    "path": "changelog.3.text",
+    "source": "M0 prototype merged (PR 293, hotfix PR 295) and deployed as prod-573ed67c; decision inventory added; pre-device Test Run published. CI runner disk exhaustion was cleared on the way.",
+    "text": "M0-Prototyp gemergt (PR 293, Korrektur-PR 295) und als prod-573ed67c ausgeliefert; Entscheidungsinventar ergänzt; Test Run vor der Geräteprüfung veröffentlicht. Unterwegs wurde ein voller Speicher des CI-Runners bereinigt."
    }
   ]
  },
