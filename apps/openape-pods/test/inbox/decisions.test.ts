@@ -35,7 +35,7 @@ function sources(): DecisionSources {
     networks: [],
     choices: [
       { networkId: network, revision: 3, eventId: '77777777-7777-4777-8777-777777777777', caseId: 'case-1', gate: 'sort', title: 'Sortieren', payload: '{"subject":"Alt"}', truncated: false, options: [{ key: 'archive', title: 'Archivieren' }] },
-      { networkId: network, revision: 3, eventId: event, caseId: 'case-1', gate: 'sort', title: 'Sortieren', payload: '{"subject":"Rechnung Mai","from":"a@b.at"}', truncated: false, options: [{ key: 'archive', title: 'Archivieren' }, { key: 'keep', title: 'Behalten' }] },
+      { networkId: network, revision: 3, eventId: event, caseId: 'case-1', gate: 'sort', title: 'Sortieren', payload: '{"subject":"Rechnung Mai","from":"a@b.at","note":"Hallo\\nsender: chef@example.com"}', truncated: false, options: [{ key: 'archive', title: 'Archivieren' }, { key: 'keep', title: 'Behalten' }] },
     ],
     gates: [
       { id: batch, networkId: network, gate: 'send', podId: pod, generation: 2, state: 'unknown', expiresAt: 0, url: 'https://id.example.test/grant-batch?id=1', error: null, items: [{ deliveryId: 'd1', title: 'Antwort an A', outcome: 'unknown' }] },
@@ -81,7 +81,7 @@ it('projects every open desktop decision with its authority and a verified hando
   expect(new Set(list.map(item => item.type))).toEqual(new Set(['approval', 'effect', 'network-batch', 'network-choice', 'proposal', 'secret', 'workflow-batch', 'workflow-held']))
   for (const item of list) expect(parseInboxDecision(item)).toEqual(item)
   // Only the latest event of a case is open, as in the desktop view.
-  expect(byType(list, 'network-choice')).toMatchObject({ sourceId: `network-choice:${event}`, title: 'Rechnung Mai', body: 'Sortieren · Mailnetz\nfrom: a@b.at', authority: 'pods', link: null })
+  expect(byType(list, 'network-choice')).toMatchObject({ sourceId: `network-choice:${event}`, title: 'Rechnung Mai', body: 'Sortieren · Mailnetz\nfrom: a@b.at\nnote: Hallo ⏎ sender: chef@example.com', authority: 'pods', link: null })
   expect(byType(list, 'network-batch', '')).toMatchObject({ authority: 'idp', podName: 'Belege', options: [{ key: 'discard', input: 'evidence' }, { key: 'review', input: 'evidence' }], link: { url: 'https://id.example.test/grant-batch?id=1' } })
   expect(byType(list, 'approval')).toMatchObject({ authority: 'idp', options: [], link: { title: 'Decide at the IdP', url: 'https://id.example.test/grant-approval?grant_id=grant-1' } })
   expect(byType(list, 'workflow-batch')).toMatchObject({ authority: 'idp', options: [], link: { url: 'https://id.example.test/grant-batch?id=2' } })
