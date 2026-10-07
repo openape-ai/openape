@@ -3,10 +3,12 @@ import { computed, ref } from 'vue'
 import { blocking } from '../inbox/client'
 import type { InboxItem, Receipt } from '../inbox/client'
 import { t } from '../inbox/i18n'
+import { receiptText } from '../inbox/receipt'
 
-const props = defineProps<{ item: InboxItem, receipt: Receipt | undefined, online: boolean, checking: boolean }>()
+const props = defineProps<{ item: InboxItem, receipt: Receipt | undefined, online: boolean, checking: boolean, preselect?: string }>()
 const emit = defineEmits<{ decide: [option: string, input?: string], check: [] }>()
-const chosen = ref<string | null>(null)
+// An option that needs input arrives preselected when the owner picked it on the list card.
+const chosen = ref<string | null>(props.item.decision?.options.find(option => option.key === props.preselect && option.input)?.key ?? null)
 const input = ref('')
 const missing = ref(false)
 
@@ -21,18 +23,7 @@ const authority = computed(() => t(decision.value?.authority === 'secrets' ? 'au
 const blocked = computed(() => blocking(props.receipt, props.item))
 const selected = computed(() => decision.value?.options.find(option => option.key === chosen.value) ?? null)
 
-const errors: Record<string, Parameters<typeof t>[0]> = { decision_changed: 'errorChanged', decision_resolved: 'errorResolved', pod_offline: 'errorPodOffline', workspace_busy: 'errorBusy', workspace_revision_conflict: 'errorBusy', invalid_inbox_input: 'errorInput', network: 'errorNetwork' }
-function errorText(code: string | null): string {
-  if (!code) return ''
-  const key = errors[code]
-  return key ? t(key) : /^[a-z_]+$/.test(code) ? t('errorGeneric', { code }) : code
-}
-const receiptText = computed(() => {
-  const receipt = props.receipt
-  if (!receipt) return ''
-  const values = { option: receipt.title, error: errorText(receipt.error) }
-  return { sending: t('receiptSending', values), unsent: t('receiptUnsent', values), refused: errorText(receipt.error), accepted: t('receiptAccepted', values), started: t('receiptStarted', values), applied: t('receiptApplied', values), failed: t('receiptFailed', values), unknown: t('receiptUnknown', values) }[receipt.state]
-})
+const receiptLine = computed(() => receiptText(props.receipt))
 
 function choose(key: string) {
   const option = decision.value?.options.find(entry => entry.key === key)
@@ -50,8 +41,8 @@ function submit() {
 
 <template>
   <section class="decision" :aria-label="t('decideTitle')">
-    <p v-if="receiptText" class="receipt" :class="receipt?.state" role="status">
-      {{ receiptText }}
+    <p v-if="receiptLine" class="receipt" :class="receipt?.state" role="status">
+      {{ receiptLine }}
     </p>
     <div v-if="receipt?.state === 'unsent' && open" class="row">
       <button type="button" :disabled="!online" @click="emit('decide', receipt.option)">

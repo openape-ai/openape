@@ -87,7 +87,7 @@ async function check() { if (item.value) await inbox.check(item.value.id) }
           </li>
         </ul>
       </template>
-      <InboxDecision v-if="item.kind === 'decision'" :item="item" :receipt="state.receipts[item.id]" :online="online" :checking="!!state.checking[item.id]" @decide="decide" @check="check" />
+      <InboxDecision v-if="item.kind === 'decision'" :item="item" :preselect="typeof route.query.option === 'string' ? route.query.option : undefined" :receipt="state.receipts[item.id]" :online="online" :checking="!!state.checking[item.id]" @decide="decide" @check="check" />
       <div v-else class="actions">
         <button type="button" class="secondary" :disabled="!online" @click="change({ archived: !item.archived })">
           {{ item.archived ? t('itemUnarchive') : t('itemArchive') }}
