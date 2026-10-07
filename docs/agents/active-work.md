@@ -1,5 +1,12 @@
 # Active work
 
+## Report data contract — issue 1439
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1439; approved proposal: https://report.openape.ai/d/01M4AGFRAXT93Y305ZEJJZQ023?v=1. Owner approved implementation on October 7; progress edition 2 records that decision.
+- Worktree `issue-1439-report-contract`, branch `feature/issue-1439-report-contract`, base `dcf3d5cd0339b589cac140e417e8f679193eb69f`.
+- Versioned schemas, generated types, semantic validation, evidence integrity, reviewed layouts and rendering receipts implemented. Behavioral tests retain regression coverage for misleading status/approval claims and evidence loss.
+- Validation: root lint 55 tasks, root typecheck 78 tasks, CLI build and 41 tests pass. Eight historical/proposed examples pass schema and semantic validation; eight real Chrome narrow/wide light/dark screenshots were personally inspected. Evidence: https://report.openape.ai/d/01M4AHX7XN3877QBANQ30VA3ED?v=1. Changesets generated package version 0.6.0 in an isolated release workspace, preserving unrelated pending changesets. Next: exact-source CI, native PR review, merge and local CLI adoption. npm publication depends on the existing registry login; no npm success is claimed.
+
 ## Report templates and CLI migration — issue 1437
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1437; approved design: https://report.openape.ai/d/01M49MYRK3TBJ850CR0S0GYGQW; implementation plan: https://report.openape.ai/d/01M49KKGQCJP11RP8XQQT75835.

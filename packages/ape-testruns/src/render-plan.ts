@@ -1,3 +1,4 @@
+import { renderVersioned } from './render-versioned'
 import type { PlanDocument } from './render-types'
 import { validatePlan } from './plan-input'
 import { documentHtml, escapeHtml as e, items, markdown, masthead, meta } from './render-document'
@@ -11,7 +12,8 @@ function milestones(plan: PlanDocument): string {
   return plan.milestones.map((item, index) => `<details class="milestone"${item.status === 'active' || item.status === 'blocked' || index === 0 ? ' open' : ''}><summary><span class="milestone-number">${String(index + 1).padStart(2, '0')}</span><span class="test-name">${e(item.title)}</span><span class="status">${e(item.status)}</span><span class="chevron">›</span></summary><div class="milestone-body">${markdown(item.goal)}${items(item.steps)}<div class="proof"><strong>Accepted when</strong>${items(item.acceptance)}</div>${item.proof ? `<h3>Evidence</h3>${markdown(item.proof)}` : ''}${item.rollback ? `<h3>Rollback</h3>${markdown(item.rollback)}` : ''}</div></details>`).join('')
 }
 
-export function renderPlan(input: unknown, templateDirectory?: string): string {
+export function renderPlan(input: unknown, templateDirectory?: string, directory = '.'): string {
+  if (input && typeof input === 'object' && 'schema' in input && input.schema === 'openape.plan/2') return renderVersioned(input, 'plan', directory, templateDirectory).html
   const plan = validatePlan(input)
   const complete = plan.milestones.filter(item => item.status === 'done').length
   const approval = plan.approval ? `<dt>Decision by</dt><dd>${e(plan.approval.by)}</dd><dt>Decision date</dt><dd>${e(plan.approval.date)}</dd><dt>Approved reference</dt><dd>${e(plan.approval.reference)}</dd>` : '<dt>Owner approval</dt><dd>Not recorded</dd>'

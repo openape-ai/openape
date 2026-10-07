@@ -1,0 +1,18 @@
+{
+  "schema": "openape.plan/2",
+  "title": "Example: small bounded change",
+  "goal": "Produce one independently verifiable change.",
+  "status": "draft",
+  "sample": true,
+  "milestones": [
+    {
+      "id": "deliver",
+      "title": "Deliver the change",
+      "goal": "Exercise the requested behavior.",
+      "status": "planned",
+      "acceptance": [
+        "A focused behavior check demonstrates the intended result."
+      ]
+    }
+  ]
+}

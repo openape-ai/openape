@@ -18,7 +18,8 @@ afterEach(() => { rmSync(directory, { recursive: true, force: true }) })
 describe('portable report templates', () => {
   it('renders both existing manifest data and structured plans into valid deterministic single HTML', () => {
     const testHtml = renderTestRun(run, directory, { commit: 'abc123', command: 'pnpm test' })
-    expect(inspectHtml(testHtml)).toMatchObject({ category: 'Test Runs', metadata: { 'tests.result': 'failed', 'tests.commit': 'abc123' }, externalImages: [] })
+    expect(inspectHtml(testHtml)).toMatchObject({ category: 'Test Runs', metadata: { 'tests.result': 'failed' }, externalImages: [] })
+    expect(inspectHtml(testHtml).metadata['tests.commit']).toBeUndefined()
     expect(testHtml).toContain('1</span><span class="metric-label">Not run')
     const summaries = DomUtils.getElementsByTagName('summary', parseDocument(testHtml)).map(element => DomUtils.textContent(element))
     expect(summaries[0]).toContain('Revoked access')
@@ -77,7 +78,7 @@ describe('portable report templates', () => {
   })
   it('rejects invalid schemas, missing acceptance, duplicate test ids and reversed timestamps', () => {
     expect(() => renderPlan({ ...plan, miletones: [] })).toThrow(/miletones is not supported/)
-    expect(() => renderPlan({ ...plan, schema: 'openape.plan/2' })).toThrow(/schema/)
+    expect(() => renderPlan({ ...plan, schema: 'openape.plan/99' })).toThrow(/schema/)
     expect(() => renderPlan({ ...plan, milestones: [{ ...plan.milestones[0], acceptance: [] }] })).toThrow(/acceptance/)
     expect(() => renderPlan({ ...plan, approval: { by: 'Owner' } })).toThrow(/approval.date/)
     expect(() => renderPlan({ ...plan, links: [{ title: 'Unsafe', url: 'javascript:alert(1)' }] })).toThrow(/HTTPS/)

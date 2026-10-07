@@ -1,3 +1,5 @@
+import { renderVersioned } from './render-versioned'
+import { isVersioned } from './report-input'
 import type { RunManifest, RunStep, RunTest } from '@openape/report-contracts/run-manifest'
 import type { RenderContext } from './render-types'
 import { readFileSync, realpathSync, statSync } from 'node:fs'
@@ -66,6 +68,10 @@ function validateRendererFields(input: unknown) {
 }
 
 export function renderTestRun(input: unknown, directory: string, context: RenderContext = {}, templateDirectory?: string): string {
+  if (isVersioned(input)) {
+    if (Object.values(context).some(value => value !== undefined)) invalid('Versioned Test Runs record context in their input; legacy context flags are not supported')
+    return renderVersioned(input, 'test-run', directory, templateDirectory).html
+  }
   validateRendererFields(input)
   const manifest = validateManifest(input)
   const counts = aggregateStatus(manifest.tests)
@@ -85,6 +91,6 @@ export function renderTestRun(input: unknown, directory: string, context: Render
     [String(counts.passed), 'Passed', 'good'], [String(counts.failed), 'Failed', 'bad'], [String(counts.skipped), 'Not run', ''],
     ...(elapsed ? [[elapsed, 'Total duration', '']] : []),
   ].map(([count, label, className]) => `<div><span class="number ${className}">${count}</span><span class="metric-label">${label}</span></div>`).join('')
-  const content = `${masthead('Test Runs')}<main class="page"><div class="eyebrow">Verification report</div><h1>${e(manifest.title)}</h1><div class="lead markdown">${markdown(manifest.summary)}</div>${meta([manifest.project, manifest.startedAt, context.commit ? `Commit ${context.commit}` : 'Tested commit not provided'])}<div class="${verdictClass}"><div><strong>${verdict}</strong><p>${counts.failed ? 'Resolve the failed checks before claiming acceptance.' : counts.skipped ? 'The skipped checks are not evidence of passing behavior.' : 'Every check recorded in this run passed.'}</p></div></div><div class="numbers">${metrics}</div><div class="columns"><section><div class="section-heading"><h2>Checks that matter</h2><span class="small">${manifest.tests.length} ${manifest.tests.length === 1 ? 'check' : 'checks'} · failures first</span></div>${tests}</section><aside><section><h3>Run context</h3><dl><dt>Project</dt><dd>${e(manifest.project ?? 'Not provided')}</dd><dt>Tested commit</dt><dd><code>${e(context.commit ?? 'Not provided')}</code></dd><dt>Environment</dt><dd>${e(context.environment ?? 'Not provided')}</dd></dl></section>${context.command ? `<section><h3>Command</h3><pre><code>${e(context.command)}</code></pre></section>` : ''}${context.nextStep ? `<section><h3>Next step</h3>${markdown(context.nextStep)}</section>` : ''}</aside></div><div class="foot"><span>Results are supplied by the publisher. This renderer does not execute tests.</span></div></main>`
-  return documentHtml('test-run', manifest.title, content, { 'tests.result': counts.failed ? 'failed' : counts.skipped && counts.passed ? 'incomplete' : counts.status, ...(context.commit ? { 'tests.commit': context.commit } : {}) }, { manifest, context }, templateDirectory)
+  const content = `${masthead('Test Runs')}<main class="page"><div class="eyebrow">Verification report</div><h1>${e(manifest.title)}</h1><div class="lead markdown">${markdown(manifest.summary)}</div>${meta([manifest.project, manifest.startedAt, context.commit ? `Commit ${context.commit}` : 'Tested commit not provided'])}<div class="${verdictClass}"><div><strong>${verdict}</strong><p>${counts.failed ? 'Resolve the failed checks before claiming acceptance.' : counts.skipped ? 'The skipped checks are not evidence of passing behavior.' : 'Every check recorded in this run passed.'}</p></div></div><div class="numbers">${metrics}</div><div class="columns"><section><div class="section-heading"><h2>Checks that matter</h2><span class="small">${manifest.tests.length} ${manifest.tests.length === 1 ? 'check' : 'checks'} · failures first</span></div>${tests}</section><aside><section><h3>Run context</h3><dl><dt>Project</dt><dd>${e(manifest.project ?? 'Not provided')}</dd><dt>Tested commit</dt><dd><code>${e(context.commit ?? 'Not provided')}</code></dd><dt>Environment</dt><dd>${e(context.environment ?? 'Not provided')}</dd></dl></section>${context.command ? `<section><h3>Command</h3><pre><code>${e(context.command)}</code></pre></section>` : ''}${context.nextStep ? `<section><h3>Next step</h3>${markdown(context.nextStep)}</section>` : ''}</aside></div><div class="foot"><span>Legacy manifest: missing skip reasons and inspection attestations are not supplied by this format. Context commit is not attributed to individual checks. Results are supplied by the publisher; the renderer does not execute tests.</span></div></main>`
+  return documentHtml('test-run', manifest.title, content, { 'tests.result': counts.failed ? 'failed' : counts.skipped && counts.passed ? 'incomplete' : counts.status  }, { manifest, context }, templateDirectory)
 }
