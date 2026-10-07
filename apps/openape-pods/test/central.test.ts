@@ -1,3 +1,4 @@
+import { ProtocolError } from '@openape/pods-protocol'
 import { seedNetwork } from './storage/network-fixture'
 // @vitest-environment node
 import { DataControl } from '../src/worker/data/control'
@@ -191,6 +192,33 @@ it('publishes complete snapshots to an older service that has no part format', a
   expect(controller.status().format).toBe(1)
   expect(requests.some(item => item.type === 'publish' && 'snapshot' in item)).toBe(true)
   expect(server.inventory(actor.owner)[0]?.online).toBe(true)
+})
+
+it('runs concurrent owner actions one at a time and resubmits busy or moved-revision refusals', async () => {
+  let refusals = 0
+  const order: string[] = []
+  const { controller, actor, server } = connected({ request: async (forward, body) => {
+    if (body.type !== 'submit') return forward(body)
+    if (refusals < 2) { refusals++; throw new ProtocolError(refusals === 1 ? 'workspace_busy' : 'workspace_revision_conflict', 409) }
+    // The desktop submits its own owner actions as the trusted runtime, as the service route does.
+    return server.submit(actor.owner, actor.id, Number(body.revision), body.command as Parameters<WorkspaceStore['submit']>[3], String(body.id), true)
+  } })
+  controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+  const results = await Promise.all(['first', 'second', 'third'].map(name => controller.local(async () => { order.push(name); return name })))
+  expect(results).toEqual(['first', 'second', 'third'])
+  expect(order).toEqual(['first', 'second', 'third'])
+  expect(refusals).toBe(2)
+}, 12000)
+
+it('reports other submit refusals immediately', async () => {
+  const { controller } = connected({ request: async (forward, body) => {
+    if (body.type === 'submit') throw new ProtocolError('workspace_operation_conflict', 409)
+    return forward(body)
+  } })
+  controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+  await expect(controller.local(async () => 'never')).rejects.toThrow('workspace_operation_conflict')
 })
 
 it('names the failing phase as the offline reason in status, inventory and MCP errors', async () => {
