@@ -33,6 +33,9 @@ scope.covered/excluded, targets, commands, evidence, limitations, nextStep,
 assessment, sections, links and provenance. Series is a label, not a server ID.
 Timestamp values must include their timezone; an end cannot precede its start.
 Elapsed duration is the run interval, never a sum of possibly parallel commands.
+If a command supplies durationMs and both timestamps, their durations must agree
+within the coarser timestamp precision: 1,000 ms for whole seconds, 100/10 ms for
+one/two fractional digits, and 1 ms for three or more fractional digits.
 
 Commands require id, command and outcome (exited/timed-out/interrupted/not-started).
 Only exited requires/allows exitCode. Optional cwd, targetId, timestamps, durationMs,
