@@ -5,27 +5,16 @@ import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { ProtocolError } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
+import { inboxPath, parseSubscription } from './inbox-store'
+import type { InboxSubscription } from './inbox-types'
+
+export { inboxPath, parseSubscription }
+
+const maxPending = 100
+const key = (owner: Owner) => JSON.stringify([owner.issuer, owner.subject])
 
 export interface InboxItem { id: string, kind: 'decision' | 'message', title: string, body: string, choices: string[], outcome: string | null, created: number, decided: number | null, read: number | null }
 export interface PushRecord { id: string, itemId: string | null, scheduled: number, sent: number | null, status: number | null, error: string | null, shown: number | null, clicked: number | null, opened: number | null }
-export interface Subscription { endpoint: string, p256dh: string, auth: string }
-
-// Push services that browsers hand out today; anything else is refused before the server ever connects to it.
-const pushHosts = [/^web\.push\.apple\.com$/, /^fcm\.googleapis\.com$/, /^updates\.push\.services\.mozilla\.com$/, /\.notify\.windows\.com$/]
-const maxPending = 100
-// Sign-in may resume only a same-origin inbox page.
-export const inboxPath = /^\/inbox\/(?:[\w-]+(?:\/[\w-]+)*\/?)?(?:\?[\w=&-]{1,200})?$/
-const key = (owner: Owner) => JSON.stringify([owner.issuer, owner.subject])
-
-export function parseSubscription(input: unknown): Subscription {
-  const value = input as { endpoint?: unknown, keys?: { p256dh?: unknown, auth?: unknown } } | null
-  const endpoint = typeof value?.endpoint === 'string' && value.endpoint.length <= 2048 ? URL.parse(value.endpoint) : null
-  const p256dh = value?.keys?.p256dh
-  const auth = value?.keys?.auth
-  if (!endpoint || endpoint.protocol !== 'https:' || endpoint.port || !pushHosts.some(host => host.test(endpoint.hostname))) throw new ProtocolError('invalid_push_endpoint')
-  if (typeof p256dh !== 'string' || !/^[\w-]{80,100}$/.test(p256dh) || typeof auth !== 'string' || !/^[\w-]{16,32}$/.test(auth)) throw new ProtocolError('invalid_push_keys')
-  return { endpoint: endpoint.href, p256dh, auth }
-}
 
 export class InboxPrototype {
   readonly db: DatabaseSync
@@ -42,7 +31,7 @@ export class InboxPrototype {
   close(): void { this.db.close() }
 
   // An endpoint stays with the account that registered it; a device moves accounts only after that account unsubscribes.
-  subscribe(owner: Owner, subscription: Subscription, agent: string): void {
+  subscribe(owner: Owner, subscription: InboxSubscription, agent: string): void {
     const updated = this.db.prepare('INSERT INTO subscriptions(endpoint,owner,p256dh,auth,agent,created) VALUES(?,?,?,?,?,?) ON CONFLICT(endpoint) DO UPDATE SET p256dh=excluded.p256dh,auth=excluded.auth,agent=excluded.agent WHERE subscriptions.owner=excluded.owner')
       .run(subscription.endpoint, key(owner), subscription.p256dh, subscription.auth, agent.slice(0, 300), this.now())
     if (Number(updated.changes) === 0) throw new ProtocolError('push_endpoint_taken', 409)
@@ -50,8 +39,8 @@ export class InboxPrototype {
 
   unsubscribe(owner: Owner, endpoint: string): void { this.db.prepare('DELETE FROM subscriptions WHERE endpoint=? AND owner=?').run(endpoint, key(owner)) }
   forget(endpoint: string): void { this.db.prepare('DELETE FROM subscriptions WHERE endpoint=?').run(endpoint) }
-  subscriptions(ownerKey: string): Subscription[] {
-    return this.db.prepare('SELECT endpoint,p256dh,auth FROM subscriptions WHERE owner=?').all(ownerKey) as unknown as Subscription[]
+  subscriptions(ownerKey: string): InboxSubscription[] {
+    return this.db.prepare('SELECT endpoint,p256dh,auth FROM subscriptions WHERE owner=?').all(ownerKey) as unknown as InboxSubscription[]
   }
 
   devices(owner: Owner): number { return Number(this.db.prepare('SELECT count(*) AS n FROM subscriptions WHERE owner=?').get(key(owner))?.n) }

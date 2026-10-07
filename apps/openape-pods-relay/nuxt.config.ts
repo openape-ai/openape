@@ -23,6 +23,8 @@ export default defineNuxtConfig({
     relayApnsKey: '',
     relayApnsHost: 'api.push.apple.com',
     relayApnsSandboxHost: 'api.sandbox.push.apple.com',
+    inboxEnabled: false,
+    inboxDatabase: './.data/inbox.sqlite',
     inboxPrototypeEnabled: false,
     inboxPrototypeDatabase: './.data/inbox-prototype.sqlite',
     inboxVapidPublicKey: '',
