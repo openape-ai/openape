@@ -1,16 +1,14 @@
-import { requireBrokerGrantOwner } from '../../../utils/broker-owner'
 import { revokeGrant } from '@openape/grants'
 import { defineEventHandler, getRouterParam } from 'h3'
-import { isAdmin, requireAuth } from '../../../utils/admin'
+import { requireAuth } from '../../../utils/admin'
 import { tryBearerAuth } from '../../../utils/agent-auth'
+import { requireGrantActionAuthority } from '../../../utils/grant-authority'
 import { useGrantStores } from '../../../utils/grant-stores'
-import { useIdpStores } from '../../../utils/stores'
 import { createProblemError } from '../../../utils/problem'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   const { grantStore } = useGrantStores()
-  const { userStore } = useIdpStores()
 
   if (!id) {
     throw createProblemError({ status: 400, title: 'Grant ID is required' })
@@ -25,14 +23,7 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 404, title: 'Grant not found', type: 'https://openape.org/errors/grant_not_found' })
   }
 
-  // Authorize: requester, approver, or admin
-  const isRequester = grant.request.requester === identity
-  const requesterUser = await userStore.findByEmail(grant.request.requester)
-  const isApprover = requesterUser && requesterUser.approver === identity
-  if (grant.brokered) await requireBrokerGrantOwner(event, grant, false)
-  if (!grant.brokered && !isRequester && !isApprover && !isAdmin(identity)) {
-    throw createProblemError({ status: 403, title: 'Only the requester, approver, or admin can revoke this grant' })
-  }
+  await requireGrantActionAuthority(event, grant, identity, 'revoke')
 
   try {
     const revoked = await revokeGrant(id, grantStore)

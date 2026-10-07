@@ -1,15 +1,13 @@
-import { requireBrokerGrantOwner } from '../../../utils/broker-owner'
 import { denyGrant } from '@openape/grants'
 import { defineEventHandler, getRouterParam } from 'h3'
 import { requireAuth } from '../../../utils/admin'
+import { requireGrantActionAuthority } from '../../../utils/grant-authority'
 import { useGrantStores } from '../../../utils/grant-stores'
-import { useIdpStores } from '../../../utils/stores'
 import { createProblemError } from '../../../utils/problem'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   const { grantStore } = useGrantStores()
-  const { userStore } = useIdpStores()
 
   if (!id) {
     throw createProblemError({ status: 400, title: 'Grant ID is required' })
@@ -22,19 +20,7 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 404, title: 'Grant not found', type: 'https://openape.org/errors/grant_not_found' })
   }
 
-  // Allow if the logged-in user is the requester themselves
-  const isRequester = grant.request.requester === email
-  if (grant.brokered) await requireBrokerGrantOwner(event, grant, false)
-  if (!grant.brokered && !isRequester) {
-    const requesterUser = await userStore.findByEmail(grant.request.requester)
-    if (!requesterUser) {
-      throw createProblemError({ status: 403, title: 'Requester not found for this grant' })
-    }
-    const isOwnerOrApprover = requesterUser.owner === email || requesterUser.approver === email
-    if (!isOwnerOrApprover) {
-      throw createProblemError({ status: 403, title: 'Only the owner or approver can deny this grant' })
-    }
-  }
+  await requireGrantActionAuthority(event, grant, email, 'deny')
 
   try {
     const denied = await denyGrant(id, email, grantStore)
