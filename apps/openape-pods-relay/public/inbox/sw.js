@@ -1,38 +1,82 @@
-// Pods Inbox M0 prototype service worker: shows pushes, records receipts, opens the exact item.
-// No fetch handler: nothing private is cached.
-const version = 'm0-2'
+// Pods Inbox service worker (plan issue 1446, M4).
+// Caches only the public app shell and versioned static assets; private API responses never enter a cache.
+// A new version waits until the page asks it to take over, so an update never reloads during a decision.
+const version = 'm4-1'
+const cacheName = `pods-inbox-${version}`
+const shell = '/inbox/'
+const precache = [shell, '/inbox/manifest.webmanifest', '/inbox/icon-180.png', '/inbox/icon-192.png', '/inbox/icon-512.png']
 
-globalThis.addEventListener('install', () => globalThis.skipWaiting())
-globalThis.addEventListener('activate', event => event.waitUntil(globalThis.clients.claim()))
+globalThis.addEventListener('install', event => event.waitUntil(caches.open(cacheName).then(cache => cache.addAll(precache))))
+globalThis.addEventListener('activate', event => event.waitUntil((async () => {
+  for (const name of await caches.keys()) {
+    if (name.startsWith('pods-inbox-') && name !== cacheName) await caches.delete(name)
+  }
+  await globalThis.clients.claim()
+})()))
+globalThis.addEventListener('message', (event) => {
+  if (event.data?.type === 'activate-update') globalThis.skipWaiting()
+})
 
-function receipt(token, phase) {
-  if (!token) return Promise.resolve()
-  return fetch('/inbox/api/receipt', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token, phase }) }).catch(() => {})
+function cacheable(response) {
+  return response.ok && response.type === 'basic' && !response.headers.get('cache-control')?.includes('no-store')
 }
 
+// The shell is the same public SPA document for every inbox page: network first, the cached copy only offline.
+async function navigation(request) {
+  try {
+    const response = await fetch(request)
+    if (cacheable(response) && response.headers.get('content-type')?.includes('text/html')) await (await caches.open(cacheName)).put(shell, response.clone())
+    return response
+  }
+  catch (error) {
+    const cached = await caches.match(shell)
+    if (cached) return cached
+    throw error
+  }
+}
+
+// Build assets and per-build metadata carry a hash or build ID in their path, so a cached copy is always the right one.
+async function asset(request) {
+  const cached = await caches.match(request)
+  if (cached) return cached
+  const response = await fetch(request)
+  if (!cacheable(response)) return response
+  const cache = await caches.open(cacheName)
+  await cache.put(request, response.clone())
+  // Every relay deployment adds new hashed files; keep the newest ones, oldest first out (keys keep insertion order).
+  const keys = await cache.keys()
+  for (const old of keys.filter(key => !precache.includes(new URL(key.url).pathname)).slice(0, -300)) await cache.delete(old)
+  return response
+}
+
+globalThis.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url)
+  if (event.request.method !== 'GET' || url.origin !== globalThis.location.origin) return
+  if (event.request.mode === 'navigate' && url.pathname.startsWith('/inbox/')) event.respondWith(navigation(event.request))
+  else if (url.pathname.startsWith('/pods-assets/') && url.pathname !== '/pods-assets/builds/latest.json') event.respondWith(asset(event.request))
+  else if (precache.includes(url.pathname) && url.pathname !== shell) event.respondWith(caches.match(url.pathname).then(cached => cached ?? fetch(event.request)))
+})
+
+// iOS revokes push permission when a push shows nothing, so every push displays a notification (M5 adds item routing).
 globalThis.addEventListener('push', (event) => {
   let message = {}
   try { message = event.data ? event.data.json() : {} }
   catch { message = {} }
   const notification = message.notification || {}
-  const data = notification.data || {}
-  const url = notification.navigate || data.url || '/inbox/'
-  // iOS revokes push permission when a push shows nothing, so always display, also while the app is open.
-  event.waitUntil(globalThis.registration.showNotification(notification.title || 'Pods', {
-    body: notification.body || 'Neuer Eintrag.', tag: notification.tag, icon: '/inbox/icon-192.png', data: { url, receipt: data.receipt, version },
-  }).then(() => receipt(data.receipt, 'shown')))
+  const url = notification.navigate || notification.data?.url || shell
+  event.waitUntil(globalThis.registration.showNotification(notification.title || 'Pods', { body: notification.body || '', tag: notification.tag, icon: '/inbox/icon-192.png', data: { url } }))
 })
 
 globalThis.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const { url = '/inbox/', receipt: token } = event.notification.data || {}
-  // Navigate first: WebKit allows focus/openWindow only briefly after the tap. The receipt runs in parallel.
-  event.waitUntil(Promise.all([receipt(token, 'clicked'), (async () => {
+  const target = new URL(event.notification.data?.url || shell, globalThis.location.origin)
+  const url = target.origin === globalThis.location.origin && target.pathname.startsWith('/inbox/') ? target.href : shell
+  // Navigate first: WebKit allows focus/openWindow only briefly after the tap.
+  event.waitUntil((async () => {
     const windows = await globalThis.clients.matchAll({ type: 'window', includeUncontrolled: true })
     const open = windows.find(client => new URL(client.url).pathname.startsWith('/inbox'))
     if (!open) return globalThis.clients.openWindow(url)
     const focused = await open.focus()
-    // navigate() reloads the target even if the app is still starting; postMessage is the fallback for clients that refuse it.
     return focused.navigate(url).catch(() => focused.postMessage({ type: 'navigate', url }))
-  })()]))
+  })())
 })

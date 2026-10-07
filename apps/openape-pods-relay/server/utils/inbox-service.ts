@@ -5,7 +5,7 @@ import { useRuntimeConfig } from 'nitropack/runtime'
 import { parseOwner, ProtocolError } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
 import { InboxStore } from './inbox-store'
-import type { InboxDevice } from './inbox-types'
+import type { InboxDevice } from '../../shared/inbox-types'
 import { assertEnrolled, workspaceOrigin, workspaceSession } from './workspace'
 
 interface InboxSessionData { owner?: Owner, deviceId?: string }
