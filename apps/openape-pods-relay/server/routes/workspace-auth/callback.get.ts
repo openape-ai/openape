@@ -1,5 +1,6 @@
 import { defineOpenApeCallbackHandler } from '@openape/nuxt-auth-sp/handlers'
 import { parseOwner, ProtocolError, sameOwner } from '@openape/pods-protocol'
+import { endInboxDevice, startInboxDevice } from '../../utils/inbox-service'
 import { inboxReturn, workspaceSession } from '../../utils/workspace'
 
 export default defineOpenApeCallbackHandler({
@@ -11,7 +12,11 @@ export default defineOpenApeCallbackHandler({
     if (config.relayEnrollment !== 'public' && !(config.relayEnrollment === 'pilot' && allowed.some(item => sameOwner(item, owner)))) throw new ProtocolError('enrollment_closed', 403)
     const session = await workspaceSession(event)
     await session.clear(); await session.update({ owner })
-    await sendRedirect(event, inboxReturn.take(event) ?? '/workspace')
+    const returnTo = inboxReturn.take(event)
+    // Only a sign-in started by the inbox creates an inbox device; any other sign-in ends this browser's inbox session.
+    if (returnTo) await startInboxDevice(event, owner)
+    else await endInboxDevice(event)
+    await sendRedirect(event, returnTo ?? '/workspace')
   },
   async onError(event) {
     const returnTo = inboxReturn.take(event)
