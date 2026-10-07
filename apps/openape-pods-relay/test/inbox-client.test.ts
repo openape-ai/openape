@@ -50,13 +50,20 @@ function setup(storage = memoryStorage(), shared?: InboxStore) {
     }
     return json(404, { code: 'not_found' })
   }
-  const inbox = createInbox({ fetch, storage, now: () => 1_000, wait: async () => {}, navigate: () => {} })
+  const timers: { ms: number, run: () => Promise<void>, cancelled: boolean }[] = []
+  const later = (ms: number, run: () => Promise<void>) => { const timer = { ms, run, cancelled: false }; timers.push(timer); return () => { timer.cancelled = true } }
+  const elapse = async () => {
+    for (const timer of timers.splice(0)) {
+      if (!timer.cancelled) await timer.run()
+    }
+  }
+  const inbox = createInbox({ fetch, storage, now: () => 1_000, wait: async () => {}, later, navigate: () => {} })
   const message = (owner: typeof alice, eventId: string, title = 'Belege') => store.publish(owner, runtime, parsePublication({ eventId, kind: 'message', title, body: 'Rechnung abgelegt.' })).id
   const decision = (owner: typeof alice, options = [{ key: 'yes', title: 'Ja', input: null }, { key: 'seen', title: 'Gesehen', input: 'evidence' as const }]) => {
     store.syncDecisions(owner, runtime, [{ sourceId: 'effect:1', type: 'effect', digest, podId: null, podName: 'Mail', title: 'Zustellen?', body: 'Eine Mail wartet.', authority: 'pods', options, link: null }])
     return store.list(owner, { kind: 'decision' }).items[0]!.id
   }
-  return { store, server, inbox, storage, message, decision }
+  return { store, server, inbox, storage, message, decision, timers, elapse }
 }
 
 it('syncs the change feed, removes tombstones and restores read state from the server after a reinstall', async () => {
@@ -204,4 +211,28 @@ it('drops the local copy on sign-out even when the confirmation is lost', async 
   await expect(inbox.logout()).rejects.toThrow()
   expect(inbox.state.phase).toBe('signedOut')
   expect(storage.getItem('pods-inbox-cache-v1')).toBeNull()
+})
+
+it('sends a tapped answer only after the undo window, with the version that was shown', async () => {
+  const { inbox, server, decision, timers, elapse, store } = setup()
+  const itemId = decision(alice)
+  await inbox.start()
+  await inbox.answer(inbox.state.items[itemId]!, 'yes')
+  expect(inbox.state.pending[itemId]).toMatchObject({ option: 'yes', title: 'Ja' })
+  expect(timers.map(timer => timer.ms)).toEqual([5000])
+  expect(inbox.deciding.value).toBe(true)
+  // A second tap during the window changes nothing; undo cancels without any request.
+  await inbox.answer(inbox.state.items[itemId]!, 'seen', 'x')
+  inbox.undo(itemId)
+  await elapse()
+  expect(server.decide).toEqual([])
+  expect(inbox.state.pending).toEqual({})
+
+  await inbox.answer(inbox.state.items[itemId]!, 'yes')
+  store.syncDecisions(alice, runtime, [{ sourceId: 'effect:1', type: 'effect', digest: 'b'.repeat(64), podId: null, podName: 'Mail', title: 'Geändert', body: 'Neu', authority: 'pods', options: [{ key: 'yes', title: 'Ja', input: null }], link: null }])
+  await inbox.sync()
+  await elapse()
+  // The desktop checks the digest the owner saw, so a change during the window is refused instead of applied.
+  expect(server.decide).toHaveLength(1)
+  expect(server.decide[0]).toMatchObject({ option: 'yes', digest })
 })

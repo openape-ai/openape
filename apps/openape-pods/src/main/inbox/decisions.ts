@@ -45,7 +45,8 @@ function payloadFields(payload: string): Record<string, unknown> {
   }
   catch { return { payload } }
 }
-const show = (value: unknown) => typeof value === 'string' ? value : JSON.stringify(value)
+// One field per line: a line break inside a value would forge another `key: value` line (e.g. a fake sender).
+const show = (value: unknown) => (typeof value === 'string' ? value : JSON.stringify(value)).replace(/\s*[\r\n\u2028\u2029]\s*/g, ' ⏎ ')
 
 /**
  * Projects the desktop Decisions view into account-inbox decisions and executes a decision taken

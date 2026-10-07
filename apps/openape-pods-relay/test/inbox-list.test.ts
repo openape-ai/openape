@@ -14,7 +14,7 @@ function decision(change: Partial<NonNullable<InboxItem['decision']>> = {}, item
     ...item,
   }
 }
-const list = (items: InboxItem[], receipts: Record<string, Receipt> = {}, online = true) => mount(InboxList, { props: { items, receipts, online, empty: 'leer' }, global: { stubs: { NuxtLink: RouterLinkStub } } })
+const list = (items: InboxItem[], receipts: Record<string, Receipt> = {}, online = true, pending = {}) => mount(InboxList, { props: { items, receipts, pending, online, actions: true, empty: 'leer' }, global: { stubs: { NuxtLink: RouterLinkStub } } })
 
 it('answers a Pods decision straight from its card', async () => {
   const item = decision()
@@ -37,7 +37,9 @@ it('shows the receipt instead of choices while an answer runs, and disables choi
   const item = decision()
   const running = list([item], { [item.id]: { option: 'approve', title: 'Freigeben', digest, requestId: crypto.randomUUID(), state: 'accepted', error: null, at: 1 } })
   expect(running.get('[role=status]').text()).toBe('Angenommen: Freigeben. Wartet auf den Mac; noch nicht angewendet.')
-  expect(running.findAll('button')).toHaveLength(0)
+  // The choices stay in the layout but hidden and inert, so the card keeps its height.
+  expect(running.get('.quick').classes()).toContain('covered')
+  expect(running.get('.quick').attributes('inert')).toBeDefined()
   const offline = list([decision()], {}, false)
   expect(offline.findAll('button').every(button => button.attributes('disabled') !== undefined)).toBe(true)
 })
@@ -45,7 +47,10 @@ it('shows the receipt instead of choices while an answer runs, and disables choi
 it('offers no card choices for IdP handoffs or completed decisions', () => {
   const idp = decision({ authority: 'idp', options: [] }, { links: [{ title: 'Freigeben', url: 'https://id.openape.ai/x' }] })
   const done = decision({}, { state: 'resolved' })
-  expect(list([idp, done]).findAll('button')).toHaveLength(0)
+  expect(list([idp]).findAll('button')).toHaveLength(0)
+  const resolved = list([done])
+  expect(resolved.get('.cover').text()).toBe('Erledigt. Diese Entscheidung wartet nicht mehr.')
+  expect(resolved.get('.quick').attributes('inert')).toBeDefined()
 })
 
 it('puts the sender first and replaces the raw field list with classification hints', () => {
@@ -58,4 +63,17 @@ it('puts the sender first and replaces the raw field list with classification hi
   const plain = list([decision({}, { body: 'Eine Mail wartet.' })]).get('.card-link')
   expect(plain.findAll('strong')).toHaveLength(1)
   expect(plain.text()).toContain('Eine Mail wartet.')
+})
+
+it('offers undo while a tapped answer waits', async () => {
+  const item = decision()
+  const wrapper = list([item], {}, true, { [item.id]: { option: 'approve', title: 'Freigeben', until: 1 } })
+  expect(wrapper.get('.cover').text()).toContain('„Freigeben“ wird gleich gesendet.')
+  await wrapper.get('.cover button').trigger('click')
+  expect(wrapper.emitted('undo')).toEqual([[item]])
+})
+
+it('promotes no sender when a second sender line could be forged', () => {
+  const item = decision({}, { body: 'Context\nsender: real@example.com\nnote: hi\nsender: boss@example.com' })
+  expect(list([item]).find('.sender').exists()).toBe(false)
 })
