@@ -1,5 +1,8 @@
 import type { Plan, ReportDocument, TestRun } from './report-types'
 import type { ResolvedEvidence } from './report-evidence'
+import { germanPlan } from './plan-translations'
+import { planLabel  } from './plan-labels'
+import type { PlanLanguage } from './plan-labels'
 import { invalid } from '@openape/report-contracts/html'
 import { documentHtml, escapeHtml as e, items, markdown, masthead, meta } from './render-document'
 import { externalLink, resolveReportEvidence } from './report-evidence'
@@ -15,10 +18,11 @@ function elapsedLabel(milliseconds: number): string {
   const seconds = Math.floor(milliseconds / 1000)
   return `${Math.floor(seconds / 60)}m ${seconds % 60}s`
 }
-function approvalTarget(plan: Plan): string {
+function approvalTarget(plan: Plan, language: PlanLanguage): string {
+  const t = (value: string) => planLabel(language, value)
   const target = plan.approval?.target
   if (!target) return ''
-  return `<dl>${target.revision ? `<dt>Approved proposal revision</dt><dd>${target.revision}</dd>` : ''}${target.url ? `<dt>Referenced artifact</dt><dd>${externalLink({ title: `Version ${target.version}`, url: target.url, version: target.version, digest: target.sourceDigest })}</dd>` : ''}${target.sourceDigest ? `<dt>Recorded source SHA-256</dt><dd><code>${e(target.sourceDigest)}</code></dd>` : ''}</dl>`
+  return `<dl>${target.revision ? `<dt>${t('Approved proposal revision')}</dt><dd>${target.revision}</dd>` : ''}${target.url ? `<dt>${t('Referenced artifact')}</dt><dd>${externalLink({ title: `Version ${target.version}`, url: target.url, version: target.version, digest: target.sourceDigest })}</dd>` : ''}${target.sourceDigest ? `<dt>${t('Recorded source SHA-256')}</dt><dd><code>${e(target.sourceDigest)}</code></dd>` : ''}</dl>`
 }
 function refs(ids: string[] | undefined, namespace: string): string {
   return ids?.length ? `<p class="small">${ids.map(id => `<a href="#${namespace}-${e(id)}">${e(id)}</a>`).join(' · ')}</p>` : ''
@@ -81,21 +85,28 @@ export function approvalLabel(plan: Plan): string {
   return 'Decision recorded · approval target unverified'
 }
 
-function planSlots(plan: Plan) {
+function planSlots(plan: Plan, language: PlanLanguage = 'en', sourceLanguage = plan.language ?? 'en') {
+  const t = (value: string) => planLabel(language, value)
   const approval = plan.approval
+  const original = (value?: string) => value ? `<div lang="${e(sourceLanguage)}">${markdown(value)}</div>` : ''
+  const originalDetail = (title: string, value?: string) => value ? `<section class="detail"><h3>${e(title)}</h3>${original(value)}</section>` : ''
   return {
-    masthead: masthead('Plans'), eyebrow: 'Implementation plan', lead: markdown(plan.goal), meta: meta([plan.project, plan.owner, plan.date, `Status: ${plan.status}`, plan.revision ? `Proposal revision ${plan.revision}` : undefined]),
-    state: `<section class="state neutral"><div class="state-head"><div><strong>${approvalLabel(plan)}</strong><p>A lifecycle status does not grant approval.</p></div></div>${approval ? `<div class="card"><p>${e(approval.by)} · ${e(approval.date)}</p>${markdown(approval.reference)}${detail('Approval scope', approval.scope)}${approvalTarget(plan)}</div>` : ''}</section>`,
-    context: narrative('Context & problem', plan.context),
-    scope: plan.scope?.length || plan.nonGoals?.length ? block('Scope', `<div class="pair"><div class="card"><h3>Included</h3>${items(plan.scope ?? [])}</div><div class="card"><h3>Out of scope</h3>${items(plan.nonGoals ?? [])}</div></div>`) : '',
-    decisions: block('Decisions', [...(plan.decisions ?? [])].sort((a, b) => Number(b.status === 'proposed') - Number(a.status === 'proposed')).map(item => `<section class="decision-row"><span class="status">${e(item.status)}</span><div><h3>${e(item.title)}</h3>${markdown(item.description)}${meta([item.by, item.date])}${markdown(item.reference)}</div></section>`).join('')),
-    progress: `${plan.milestones.filter(item => item.status === 'done').length} of ${plan.milestones.length} complete`,
-    details: plan.milestones.map((item, index) => `<details class="milestone ${item.status}" id="milestone-${e(item.id)}"${item.status === 'blocked' || item.status === 'active' || index === 0 ? ' open' : ''}><summary><span class="milestone-number">${index + 1}</span><span class="test-name">${e(item.title)}</span><span class="status">${e(item.status)}</span><span class="chevron">›</span></summary><div class="milestone-body">${markdown(item.goal)}${items(item.steps ?? [])}<div class="proof"><strong>Accepted when</strong>${items(item.acceptance)}</div>${detail('Blocker', item.blocker)}${detail('Evidence', item.proof)}${refs(item.evidenceIds, 'evidence')}${detail('Rollback', item.rollback)}</div></details>`).join(''),
-    completion: plan.completion ? block('Completion outcome', `<p class="status">${e(plan.completion.result)}</p>${markdown(plan.completion.summary)}${refs(plan.completion.evidenceIds, 'evidence')}`) : plan.status === 'done' ? block('Completion outcome', '<p>Not assessed. Completed work does not imply an achieved outcome.</p>') : '',
-    risks: block('Risks & tradeoffs', (plan.risks ?? []).map(item => `<div class="risk-row"><strong>${e(item.title)}</strong>${markdown(item.mitigation)}</div>`).join('')),
-    rollback: block('Rollback summary', `<dl class="rollback">${plan.milestones.map(item => `<dt>${e(item.id)}</dt><dd>${item.rollback ? markdown(item.rollback) : 'Not recorded'}</dd>`).join('')}</dl>`),
-    verification: list('Verification', plan.verification), handoff: narrative('Handoff & next action', plan.handoff),
-    history: block('Changelog', (plan.changelog ?? []).map(item => `<p><strong>${e(item.date)}</strong> · ${e(item.text)}</p>`).join('')),
+    masthead: masthead('Plans'), eyebrow: t('Implementation plan'), lead: markdown(plan.goal), meta: meta([plan.project, plan.owner, plan.date, `${t('Status')}: ${t(plan.status)}`, plan.revision ? `${t('Proposal revision')} ${plan.revision}` : undefined]),
+    tldr: plan.summary ? `<section class="plan-tldr" aria-label="TL;DR"><h2>TL;DR</h2>${markdown(plan.summary)}</section>` : '',
+    problem: plan.problem ? `<section class="problem-overview" aria-labelledby="problem-heading"><h2 id="problem-heading">${t('Problem at a glance')}</h2><ol>${(['statement', 'impact', 'approach', 'outcome'] as const).map((key, index) => `<li><span class="problem-stage">${index + 1} · ${t(['Problem', 'Impact', 'Approach', 'Outcome'][index]!)}</span>${markdown(plan.problem![key])}</li>`).join('')}</ol></section>` : '',
+    milestoneHeading: t('Milestones'),
+    foot: t('Content and inspection attestations are supplied by the author. The renderer does not execute checks or verify the author\'s identity.'),
+    state: `<section class="state neutral"><div class="state-head"><div><strong>${t(approvalLabel(plan))}</strong><p>${t('A lifecycle status does not grant approval.')}</p></div></div>${approval ? `<div class="card"><p>${e(approval.by)} · ${e(approval.date)}</p><h3>${t('Original approval statement')}</h3>${original(approval.reference)}${originalDetail(t('Approval scope (original wording)'), approval.scope)}${approvalTarget(plan, language)}</div>` : ''}</section>`,
+    context: narrative(t('Context & problem'), plan.context),
+    scope: plan.scope?.length || plan.nonGoals?.length ? block(t('Scope'), `<div class="pair"><div class="card"><h3>${t('Included')}</h3>${items(plan.scope ?? [])}</div><div class="card"><h3>${t('Out of scope')}</h3>${items(plan.nonGoals ?? [])}</div></div>`) : '',
+    decisions: block(t('Decisions'), [...(plan.decisions ?? [])].sort((a, b) => Number(b.status === 'proposed') - Number(a.status === 'proposed')).map(item => `<section class="decision-row"><span class="status">${e(t(item.status))}</span><div><h3>${e(item.title)}</h3>${markdown(item.description)}${meta([item.by, item.date])}${originalDetail(t('Decision reference (original wording)'), item.reference)}</div></section>`).join('')),
+    progress: `${plan.milestones.filter(item => item.status === 'done').length} ${t('of')} ${plan.milestones.length} ${t('complete')}`,
+    details: plan.milestones.map((item, index) => `<details class="milestone ${item.status}" id="milestone-${e(item.id)}"${item.status === 'blocked' || item.status === 'active' || index === 0 ? ' open' : ''}><summary><span class="milestone-number">${index + 1}</span><span class="test-name">${e(item.title)}</span><span class="status">${e(t(item.status))}</span><span class="chevron">›</span></summary><div class="milestone-body">${markdown(item.goal)}${items(item.steps ?? [])}<div class="proof"><strong>${t('Accepted when')}</strong>${items(item.acceptance)}</div>${detail(t('Blocker'), item.blocker)}${detail(t('Evidence'), item.proof)}${refs(item.evidenceIds, 'evidence')}${detail(t('Rollback'), item.rollback)}</div></details>`).join(''),
+    completion: plan.completion ? block(t('Completion outcome'), `<p class="status">${e(t(plan.completion.result))}</p>${markdown(plan.completion.summary)}${refs(plan.completion.evidenceIds, 'evidence')}`) : plan.status === 'done' ? block(t('Completion outcome'), `<p>${t('Not assessed. Completed work does not imply an achieved outcome.')}</p>`) : '',
+    risks: block(t('Risks & tradeoffs'), (plan.risks ?? []).map(item => `<div class="risk-row"><strong>${e(item.title)}</strong>${markdown(item.mitigation)}</div>`).join('')),
+    rollback: block(t('Rollback summary'), `<dl class="rollback">${plan.milestones.map(item => `<dt>${e(item.id)}</dt><dd>${item.rollback ? markdown(item.rollback) : t('Not recorded')}</dd>`).join('')}</dl>`),
+    verification: list(t('Verification'), plan.verification), handoff: narrative(t('Handoff & next action'), plan.handoff),
+    history: block(t('Changelog'), (plan.changelog ?? []).map(item => `<p><strong>${e(item.date)}</strong> · ${e(item.text)}</p>`).join('')),
   }
 }
 
@@ -113,5 +124,8 @@ export function renderVersioned(input: unknown, kind: 'plan' | 'test-run', direc
     if (commit) metadata['tests.commit'] = commit
   }
   const slots = { ...common(doc, evidence), ...(doc.schema === 'openape.plan/2' ? planSlots(doc) : runSlots(doc)) }
-  return { html: documentHtml(kind, doc.title, '', metadata, doc, templateDirectory, slots), evidence }
+  const german = doc.schema === 'openape.plan/2' && doc.translations ? germanPlan(doc) : undefined
+  const alternate = german ? { ...common(german, evidence), ...planSlots(german, 'de', doc.language ?? 'en') } : undefined
+  if (german && doc.sample) slots.banner = '<div class="sample-banner"><strong><span lang="de">Beispieldaten</span> / <span lang="en">Sample data</span></strong><span lang="de">Illustrative Inhalte, keine Prüfnachweise.</span><span lang="en">Illustrative content, not verification evidence.</span></div>'
+  return { html: documentHtml(kind, doc.title, '', metadata, doc, templateDirectory, slots, alternate, doc.schema === 'openape.plan/2' ? doc.translations?.defaultLanguage ?? 'de' : undefined), evidence }
 }
