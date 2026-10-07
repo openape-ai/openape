@@ -30,6 +30,10 @@
     "vitest": "catalog:",
     "openape-e2e": "workspace:*",
     "@openape/pods": "workspace:*",
-    "@types/web-push": "catalog:"
+    "@types/web-push": "catalog:",
+    "@vitejs/plugin-vue": "catalog:",
+    "@vue/test-utils": "catalog:",
+    "happy-dom": "catalog:",
+    "playwright": "catalog:"
   }
 }
