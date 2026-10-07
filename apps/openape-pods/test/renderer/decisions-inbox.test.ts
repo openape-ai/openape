@@ -59,20 +59,33 @@ describe('Entscheidungen', () => {
     expect(github.find('.auth').text()).toContain('mail.unsure · Fall 80d48713')
   })
 
-  it('emits one choose command per case with the chosen option key and shows the decided card', async () => {
+  it('emits one choose command per case and shows it as saving until the case leaves the list', async () => {
     await mountInbox()
     const github = wrapper!.findAll('[data-testid="choices"] .item').find(card => card.text().includes('Dependabot'))!
     await github.findAll('.opts button')[0]!.trigger('click')
-    expect(wrapper!.emitted('network')).toEqual([[{ type: 'choose', id: network.id, revision: network.revision, eventId: 'ed32bc79', gate: 'uncertain-review', option: 'keep' }]])
-    const done = wrapper!.find('[data-testid="choices"] .item.done')
-    expect(done.text()).toContain('Keep for review')
+    expect(wrapper!.emitted('network')).toEqual([[{ type: 'choose', id: network.id, revision: network.revision, eventId: 'ed32bc79', gate: 'uncertain-review', option: 'keep' }, expect.any(Function)]])
+    const done = wrapper!.find('[data-testid="choices"] [data-saving]')
+    expect(done.text()).toContain('Wird gespeichert: Keep for review')
     expect(done.text()).toContain('→ mail.useful')
     expect(wrapper!.findAll('.kpi')[0]!.find('b').text()).toBe('16')
     // The ATS case has two versions; choosing decides its latest event once.
     const ats = wrapper!.findAll('[data-testid="choices"] .item').find(card => card.text().includes('2 Fassungen'))!
     await ats.findAll('.opts button')[1]!.trigger('click')
-    expect(wrapper!.emitted('network')!.at(-1)).toEqual([{ type: 'choose', id: network.id, revision: network.revision, eventId: expect.stringMatching(/^(551b9282|61b04af6)$/), gate: 'uncertain-review', option: 'newsletter' }])
+    expect(wrapper!.emitted('network')!.at(-1)).toEqual([{ type: 'choose', id: network.id, revision: network.revision, eventId: expect.stringMatching(/^(551b9282|61b04af6)$/), gate: 'uncertain-review', option: 'newsletter' }, expect.any(Function)])
     expect(wrapper!.findAll('.kpi')[0]!.find('b').text()).toBe('14')
+  })
+
+  it('returns a case with the reason when saving its choice fails', async () => {
+    await mountInbox()
+    const github = () => wrapper!.findAll('[data-testid="choices"] .item').find(card => card.text().includes('Dependabot'))!
+    await github().findAll('.opts button')[0]!.trigger('click')
+    const settle = wrapper!.emitted('network')![0]![1] as (error: string | null) => void
+    settle('Remote service returned 409: workspace_busy')
+    await wrapper!.vm.$nextTick()
+    expect(wrapper!.find('[data-testid="choices"] [data-saving]').exists()).toBe(false)
+    expect(github().find('[role="alert"]').text()).toContain('Nicht gespeichert')
+    expect(github().findAll('.opts button')).toHaveLength(4)
+    expect(wrapper!.findAll('.kpi')[0]!.find('b').text()).toBe('17')
   })
 
   it('groups cases by a payload field and decides a whole group with single commands', async () => {
