@@ -1,3 +1,4 @@
+import type { InboxPublication } from '../../worker/inbox/outbox'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -28,6 +29,7 @@ export class RemoteController {
   private provisioning = new Map<string, Promise<void>>()
   private chain: Promise<void> = Promise.resolve()
   private abort = new AbortController()
+  private delivering = false
   error: string | null = null
   constructor(private readonly root: string, private readonly worker: FixtureWorker, private readonly origin = 'https://pods.openape.ai') {
     const url = new URL(origin)
@@ -161,6 +163,34 @@ export class RemoteController {
   private async refresh(): Promise<void> {
     if (!this.refreshing) this.refreshing = this.refreshTokens().finally(() => { this.refreshing = null })
     return this.refreshing
+  }
+
+  // Refusals (invalid or conflicting content) are final; every other failure retries the identical event,
+  // which the inbox deduplicates, so an uncertain delivery never produces a second message.
+  async deliverInbox(): Promise<void> {
+    if (this.delivering) return
+    this.delivering = true
+    try {
+      await this.load()
+      if (!this.saved?.enabled || !this.saved.tokens) return
+      const due = await this.worker.inboxOutbox({ type: 'due' }) as InboxPublication[]
+      if (!due.length) return
+      const identity = await this.worker.remoteOwner()
+      if (!sameOwner(identity.owner, this.saved.tokens.registration.owner)) return
+      await this.refresh()
+      for (const publication of due) {
+        try {
+          const receipt = await this.signed('POST', '/api/runtime/v1/inbox', publication) as { id: string }
+          await this.worker.inboxOutbox({ type: 'settle', eventId: publication.eventId, outcome: { state: 'delivered', itemId: receipt.id } })
+        }
+        catch (error) {
+          const reason = error instanceof Error ? error.message : 'Delivery failed'
+          const refused = error instanceof RemoteServiceError && [400, 409, 413].includes(error.status)
+          await this.worker.inboxOutbox({ type: 'settle', eventId: publication.eventId, outcome: refused ? { state: 'refused', reason } : { state: 'retry', reason } })
+        }
+      }
+    }
+    finally { this.delivering = false }
   }
 
   async workspaceRequest(body: Record<string, unknown>): Promise<unknown> {
