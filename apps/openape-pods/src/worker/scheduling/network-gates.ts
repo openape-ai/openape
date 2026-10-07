@@ -29,6 +29,8 @@ interface GateBinding { taskId: string, grantId: string, manifestHash: string }
 export const supersededNeedsReview = `EXISTS(SELECT 1 FROM network_gate_items review_item JOIN network_deliveries review_delivery ON review_delivery.id=review_item.delivery_id WHERE review_item.task_id=task.id AND review_delivery.state IN ('blocked','unknown'))`
 
 export class NetworkGates {
+  /** How long pending inputs are collected before a batch freezes; synthetic fixtures set both to zero. */
+  collect = { quietMs: gateLimits.collectQuietMs, maxMs: gateLimits.collectMaxMs }
   constructor(private readonly store: PodDatabase, private readonly invocations: NetworkInvocations, private readonly resources: ResourceRegistry) {}
 
   prepare(definition: NetworkDefinition, podId: string): void {
@@ -40,12 +42,12 @@ export class NetworkGates {
         const count = Number(this.store.db.prepare(`SELECT count(*) AS count FROM network_gate_tasks task JOIN network_gate_controls control ON control.task_id=task.id
           WHERE task.network_id=? AND task.pod_id=? AND control.gate_key=? AND (task.state IN ('preparing','pending','consuming','unknown') OR (task.state='approved' AND EXISTS(SELECT 1 FROM network_gate_items item JOIN network_deliveries delivery ON delivery.id=item.delivery_id WHERE item.task_id=task.id AND delivery.state IN ('pending','claimed','retry_wait','unknown'))))`).get(definition.id, podId, gate.key)!.count)
         if (count >= gateLimits.pendingBatches) return
-        const rows = this.store.db.prepare(`SELECT delivery.id,delivery.generation,event.id AS event_id,event.item_key,event.payload,event.payload_hash,event.channel
+        const rows = this.store.db.prepare(`SELECT delivery.id,delivery.generation,delivery.accepted_at,event.id AS event_id,event.item_key,event.payload,event.payload_hash,event.channel
           FROM network_deliveries delivery JOIN network_subscriptions subscription ON subscription.id=delivery.subscription_id JOIN network_events event ON event.id=delivery.event_id
           WHERE delivery.network_id=? AND subscription.network_revision=? AND subscription.pod_id=? AND subscription.channel=?
             AND delivery.state='pending' AND delivery.run_id IS NULL AND NOT EXISTS(SELECT 1 FROM network_gate_items item WHERE item.delivery_id=delivery.id AND item.outcome IN ('held','released','unknown'))
           ORDER BY delivery.accepted_at,delivery.id LIMIT ?`).all(definition.id, definition.revision, podId, gate.channel, gateLimits.batchItems)
-        if (!rows.length) return
+        if (!rows.length || this.collecting(rows.map(row => Number(row.accepted_at)))) return
         const member = definition.members.find(member => member.podId === podId)!
         const pod = this.store.getPod(podId)
         const network = this.store.db.prepare('SELECT * FROM networks WHERE id=?').get(definition.id)!
@@ -65,6 +67,13 @@ export class NetworkGates {
         this.trace(manifest, 'gate-batch-frozen', { taskId: manifest.id, digest: manifest.digest, actionHash: manifest.actionHash, itemCount: items.length })
       })
     }
+  }
+
+  // A full batch freezes at once; otherwise it waits for a quiet moment, bounded by the age of its oldest input.
+  private collecting(acceptedAt: number[]): boolean {
+    if (acceptedAt.length >= gateLimits.batchItems) return false
+    const now = Date.now()
+    return now - Math.max(...acceptedAt) < this.collect.quietMs && now - Math.min(...acceptedAt) < this.collect.maxMs
   }
 
   reserve(definition: NetworkDefinition, podId: string, reason: 'manual' | 'event', allowPaused = false, processPreviewId: string | null = null): NetworkGateStep | null {
