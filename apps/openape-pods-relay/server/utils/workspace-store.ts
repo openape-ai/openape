@@ -8,7 +8,7 @@ import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import type { Owner } from '@openape/pods-protocol'
 import { ProtocolError } from '@openape/pods-protocol'
-import { centralId, centralLeaseMs, centralMaxBytes, centralRevision, commandPodIds, parseCentralCommand, parseCentralSnapshot, parseRuntimeCentralCommand } from '../../../openape-pods/src/contracts/central'
+import { centralId, centralLeaseMs, centralMaxBytes, centralRevision, commandPodIds, parseCentralCommand, parseCentralSnapshot, parseInboxCentralCommand, parseRuntimeCentralCommand } from '../../../openape-pods/src/contracts/central'
 import type { CentralCommand, CentralOperation, CentralPod, CentralRuntime, CentralSnapshot } from '../../../openape-pods/src/contracts/central'
 import { assemblePod, assembleSnapshot, centralFormat, encodeParts, manifestDigest, parsePartKey, partHash, podRuns, splitSnapshot, validateManifest, validatePart } from '../../../openape-pods/src/contracts/central-parts'
 import type { CentralManifest } from '../../../openape-pods/src/contracts/central-parts'
@@ -362,7 +362,11 @@ export class WorkspaceStore {
   }
 
   submit(owner: Owner, runtimeId: string, revision: number, command: CentralCommand, id: string, trustedRuntime = false): CentralOperation {
-    centralId(id); centralRevision(revision); command = trustedRuntime ? parseRuntimeCentralCommand(command) : parseCentralCommand(command)
+    return this.enqueue(owner, runtimeId, revision, trustedRuntime ? parseRuntimeCentralCommand(command) : parseCentralCommand(command), id, trustedRuntime)
+  }
+
+  private enqueue(owner: Owner, runtimeId: string, revision: number, command: CentralCommand, id: string, trustedRuntime: boolean): CentralOperation {
+    centralId(id); centralRevision(revision)
     const requestHash = digest(JSON.stringify([runtimeId, revision, command]))
     return this.transaction(() => {
       const prior = this.db.prepare('SELECT * FROM operations WHERE id=?').get(id)
@@ -383,6 +387,18 @@ export class WorkspaceStore {
     })
   }
 
+  // The only way to create an inbox decision operation (called by the owner's inbox route). The revision is
+  // read in the same synchronous step, and a retry with the same id returns the operation it created.
+  submitDecision(owner: Owner, runtimeId: string, command: CentralCommand, id: string): CentralOperation {
+    const parsed = parseInboxCentralCommand(command)
+    const prior = this.db.prepare('SELECT owner,command FROM operations WHERE id=?').get(centralId(id))
+    if (prior) {
+      if (prior.owner !== ownerKey(owner) || prior.command !== JSON.stringify(parsed)) throw new ProtocolError('workspace_operation_conflict', 409)
+      return this.operation(owner, id)
+    }
+    return this.enqueue(owner, runtimeId, this.row(owner, runtimeId).revision, parsed, id, true)
+  }
+
   claim(actor: WorkspaceActor, lease: string): CentralOperation | null {
     return this.transaction(() => {
       const row = this.runtime(actor, lease)
@@ -398,6 +414,11 @@ export class WorkspaceStore {
       this.db.prepare('UPDATE operations SET state=\'started\' WHERE id=?').run(operation.id); this.changed(row)
       return this.operation(actor.owner, operation.id)
     })
+  }
+
+  /** The owner's operation with this id, if it exists; used to answer a retried request. */
+  existingOperation(owner: Owner, id: string): CentralOperation | null {
+    return this.db.prepare('SELECT 1 FROM operations WHERE id=? AND owner=?').get(centralId(id), ownerKey(owner)) ? this.operation(owner, id) : null
   }
 
   operation(owner: Owner, id: string): CentralOperation {
