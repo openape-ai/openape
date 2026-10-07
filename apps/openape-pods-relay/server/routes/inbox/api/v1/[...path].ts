@@ -22,14 +22,14 @@ export default defineEventHandler(event => boundary(event, () => workspaceBounda
   if (path === 'items' && event.method === 'GET') return store.list(owner, { kind: String(query.kind ?? ''), archived: query.archived === '1', before: Number(query.before ?? 0) })
   if (path === 'changes' && event.method === 'GET') return store.changes(owner, Number(query.after ?? 0) || 0)
   if (path === 'devices' && event.method === 'GET') return { current: device.id, devices: store.devices(owner) }
-  if (path === 'logout' && event.method === 'POST') { store.revokeDevice(owner, device.id); await signOut(event); return { ok: true } }
+  if (path === 'logout' && event.method === 'POST') { await signOut(event); return { ok: true } }
   if (path === 'push/subscribe' && event.method === 'POST') { store.subscribe(owner, device.id, parseSubscription(centralObject(await workspaceBody(event, 4096)).subscription)); return { ok: true } }
   if (path === 'push/unsubscribe' && event.method === 'POST') { store.unsubscribe(owner, device.id); return { ok: true } }
 
   const revoke = /^devices\/([^/]+)\/revoke$/.exec(path)
   if (revoke && event.method === 'POST' && id.test(revoke[1]!)) {
-    store.revokeDevice(owner, revoke[1]!)
     if (revoke[1] === device.id) await signOut(event)
+    else store.revokeDevice(owner, revoke[1]!)
     return { ok: true }
   }
   const item = /^items\/([^/]+)$/.exec(path)
