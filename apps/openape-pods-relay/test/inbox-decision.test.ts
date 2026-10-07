@@ -57,6 +57,19 @@ it('after an uncertain send offers only the unchanged resend', async () => {
   expect(wrapper.emitted('decide')).toEqual([['yes']])
 })
 
+it('offers no new choice after an unclear outcome for the same version', () => {
+  const wrapper = mount(InboxDecision, { props: { item: decision(), receipt: receipt('unknown'), online: true, checking: false } })
+  expect(wrapper.text()).toContain('Ergebnis unklar: Zustellen. Bitte am Mac prüfen.')
+  expect(buttons(wrapper)).toEqual([])
+  const changed = mount(InboxDecision, { props: { item: decision({ digest: 'c'.repeat(64) }), receipt: receipt('unknown'), online: true, checking: false } })
+  expect(buttons(changed)).toEqual(['Zustellen', 'Bereits erledigt'])
+})
+
+it('ignores a stored handoff link that is not HTTPS', () => {
+  const wrapper = mount(InboxDecision, { props: { item: decision({ authority: 'idp', options: [] }, { links: [{ title: 'x', url: 'javascript:alert(1)' }] }), receipt: undefined, online: true, checking: false } })
+  expect(wrapper.find('a').exists()).toBe(false)
+})
+
 it('explains a refusal and offers the current choices again', () => {
   const wrapper = mount(InboxDecision, { props: { item: decision(), receipt: receipt('refused', 'pod_offline'), online: true, checking: false } })
   expect(wrapper.text()).toContain('Der Mac ist gerade nicht verbunden')
