@@ -1,6 +1,7 @@
 import type { MessageKey } from './index'
 
 export const diagnosticPatterns = [
+  'notify key "{p0}" was already used with different content',
   'Variable {p0} is not a valid value of its declared input',
   'Validate and activate the script of {p0} before creating this composition',
   'Collection {p0} already exists in this group; choose to reuse it explicitly',

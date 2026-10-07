@@ -1,3 +1,4 @@
+import { InboxOutbox, parseNotify } from '../inbox/outbox'
 import { randomUUID } from 'node:crypto'
 import { RunCancellation, unresolvedOperation } from '../recovery/policy'
 import type { RecoveryFailure } from '../recovery/policy'
@@ -224,6 +225,7 @@ export class RunDispatcher {
     let infrastructureWaiting = 0
     let networkMailReads = 0
     let networkAgentCalls = 0
+    let notifications = 0
     let infrastructureFailure: RecoveryFailure | undefined
     const graph = graphRun(this.store, id); let delivered: DeliveredItem[] = []; const emits: (GraphEmit & { channel: string })[] = []
     const settle = (completed: boolean) => { if (graph) settleItems(this.store, graph, completed && this.runs.get(id).state === 'completed', delivered, emits, Date.now()) }
@@ -359,6 +361,11 @@ export class RunDispatcher {
             pendingAgents.add(operation); if (activeAgentCalls++ === 0) agentSince = Date.now()
             try { const reply = await operation; assertCurrent(); operationSignal.throwIfAborted(); return reply }
             finally { pendingAgents.delete(operation); if (--activeAgentCalls === 0) agentPausedMs += Date.now() - agentSince }
+          }
+          if (operation === 'notify') {
+            if (notifications++ >= 20) throw new Error('A run can queue at most 20 notifications')
+            const receipt = new InboxOutbox(this.store).queue(pod, id, parseNotify(payload))
+            appendEvent('notify', receipt); return receipt
           }
           if (network) {
             if (operation === 'tools.invoke' && payload !== null && typeof payload === 'object' && ('application' in payload || 'applicationId' in payload) && manifest.capabilities.some(capability => capability.startsWith('tool.app_'))) {
