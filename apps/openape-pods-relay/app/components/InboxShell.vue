@@ -136,7 +136,7 @@ onUnmounted(() => {
     </div>
 
     <template v-else>
-      <div v-if="update" class="inbox-banner" role="status">
+      <div v-if="update" class="inbox-banner floating" role="status">
         <span>{{ inbox.deciding.value ? t('updateWait') : t('update') }}</span>
         <button v-if="!inbox.deciding.value" type="button" class="secondary" :disabled="updating" @click="applyUpdate">
           {{ t('updateApply') }}
@@ -193,6 +193,7 @@ html, body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.
 .inbox-note { background: var(--warn-bg); border-radius: 10px; padding: 10px 12px; }
 .inbox-done { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
 .inbox-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 4px 0 8px; }
+.inbox-banner.floating { position: fixed; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); bottom: calc(72px + env(safe-area-inset-bottom)); max-width: 616px; margin: 0 auto; z-index: 3; box-shadow: 0 2px 12px rgb(0 0 0 / 20%); }
 .inbox-banner.warn { background: var(--warn-bg); border-color: var(--warn); }
 .inbox-banner small { flex-basis: 100%; color: var(--muted); }
 .inbox-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); min-height: 44px; }
@@ -203,6 +204,8 @@ html, body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.
 .inbox-tabs a { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px 6px; min-height: 52px; padding: 4px; color: var(--muted); text-decoration: none; text-align: center; border-radius: 10px; font-size: .8em; overflow-wrap: normal; hyphens: auto; }
 .inbox-tabs a[aria-current] { color: var(--accent); font-weight: 600; background: var(--bg); }
 .inbox-tabs .count { min-width: 1.4em; padding: 0 .35em; border-radius: 1em; background: var(--accent); color: var(--bg); font-size: .8em; font-weight: 700; line-height: 1.4em; }
+/* Scrolled content must not show through the transparent iOS status bar of the installed app. */
+.inbox::before { content: ''; position: fixed; top: 0; left: 0; right: 0; height: env(safe-area-inset-top); background: var(--bg); z-index: 3; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .inbox-body { white-space: pre-wrap; }
 </style>

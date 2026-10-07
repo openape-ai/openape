@@ -4,9 +4,9 @@
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1446; approved plan revision 2, publication v8: https://report.openape.ai/d/01M4B5Q1Q0W6C97A4ZXTFZ5WJR.
 - Live: M1–M4 as relay `prod-76ffae69` (PR 303, October 7); desktop `3c08d3c7` (schema 41). The owner made three real network decisions from the phone (all `applied`), which completes the M2 functional path; formal iPhone acceptance of M4 is open.
-- Current branch `feature/issue-1446-inbox-card-decisions` (worktree `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-inbox-m4`): owner request October 7 — Pods decisions are answered straight from the list card (direct send, no confirmation); options that need evidence or a value open the detail with the option preselected. Relay-only.
-- Checks: relay 72 unit/component tests, lint, typecheck, browser acceptance `e2e/inbox-app.test.ts` with the card step.
-- Next: merge and relay deploy after owner go; separately the gate batch quiet window (owner choice: about 2 minutes without new items, at most 10 minutes); M5 push. Handoff: [pods-inbox-m4-handoff.md](pods-inbox-m4-handoff.md).
+- Live since October 7 ~20:35: card decisions (PR 304) with relay `prod-c24af0e3`. Current branch `feature/issue-1446-inbox-card-sender` (owner feedback 20:43): the card shows the sender first (only when exactly one sender line exists), classification hints instead of the raw field list, smaller type, and a status-bar backdrop. Owner report 20:50 (cards jumped, a mis-tap could not be undone): every answer waits 5 s with Undo; the list freezes once touched or scrolled, new decisions wait behind a floating hint, answered cards keep their height; the update banner floats above the tab bar. The desktop now escapes line breaks in decision facts (active with the next desktop release).
+- Checks: relay 76 and Pods 1,339 unit/component tests, root lint/typecheck, browser acceptance `e2e/inbox-app.test.ts` with mail-choice card, undo and exact card positions.
+- Next: merge and relay deploy after owner go; M5 push. Handoff: [pods-inbox-m4-handoff.md](pods-inbox-m4-handoff.md).
 
 ## Pods gate batches collect before freezing — issue 1449
 

@@ -1,4 +1,4 @@
-import { computed, reactive } from 'vue'
+import { computed, reactive, toRaw } from 'vue'
 import type { CentralOperation } from '../../../openape-pods/src/contracts/central'
 import type { InboxDevice, InboxItem } from '../../shared/inbox-types'
 
@@ -27,7 +27,10 @@ export function blocking(receipt: Receipt | undefined, item: InboxItem): boolean
   return ['applied', 'unknown'].includes(receipt.state) && item.state === 'open' && receipt.digest === item.decision?.digest
 }
 
-export interface InboxEnvironment { fetch: (input: string, init: RequestInit) => Promise<Response>, storage: Storage | null, now: () => number, wait: (ms: number) => Promise<void>, navigate: (url: string) => void }
+export interface InboxEnvironment { fetch: (input: string, init: RequestInit) => Promise<Response>, storage: Storage | null, now: () => number, wait: (ms: number) => Promise<void>, later: (ms: number, run: () => Promise<void>) => () => void, navigate: (url: string) => void }
+/** An answer the owner just tapped; it leaves only after the undo window, with the version that was shown. */
+export interface PendingAnswer { option: string, title: string, until: number }
+export const undoMs = 5000
 
 // The owner inbox (plan issue 1446, M4). The server stays authoritative: the phone syncs the account's change feed,
 // keeps a disposable copy for offline reading under its account, and never queues or replays owner intent.
@@ -39,6 +42,7 @@ export function createInbox(environment: InboxEnvironment) {
     items: {} as Record<string, InboxItem>,
     receipts: {} as Record<string, Receipt>,
     checking: {} as Record<string, boolean>,
+    pending: {} as Record<string, PendingAnswer>,
     cursor: 0,
     syncedAt: null as number | null,
     syncing: false,
@@ -48,6 +52,7 @@ export function createInbox(environment: InboxEnvironment) {
     error: null as string | null,
   })
   let syncing: Promise<void> | null = null
+  const timers = new Map<string, () => void>()
 
   async function api<T>(path: string, init: { method?: string, body?: unknown } = {}): Promise<T> {
     const response = await environment.fetch(`/inbox/api/v1/${path}`, { method: init.method ?? 'GET', cache: 'no-store', credentials: 'same-origin', ...(init.body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(init.body) }) })
@@ -84,7 +89,9 @@ export function createInbox(environment: InboxEnvironment) {
     state.receipts = Object.fromEntries(Object.entries(cache.receipts ?? {}).map(([itemId, receipt]) => [itemId, receipt.state === 'sending' ? { ...receipt, state: 'unsent', error: 'network' } : receipt]))
   }
   function reset(): void {
-    Object.assign(state, { session: null, account: null, items: {}, receipts: {}, checking: {}, cursor: 0, syncedAt: null, syncError: null })
+    for (const cancel of timers.values()) cancel()
+    timers.clear()
+    Object.assign(state, { session: null, account: null, items: {}, receipts: {}, checking: {}, pending: {}, cursor: 0, syncedAt: null, syncError: null })
   }
 
   // Any 401 ends the local copy: an expired or revoked device must not keep showing account content.
@@ -231,6 +238,26 @@ export function createInbox(environment: InboxEnvironment) {
     if (!running(state.receipts[itemId])) await sync()
   }
 
+  // A tap starts the undo window instead of sending; nothing is stored, so closing the app in the window sends nothing.
+  // Resending an uncertain request is the same request again and needs no window.
+  async function answer(item: InboxItem, optionKey: string, input?: string): Promise<void> {
+    if (state.receipts[item.id]?.state === 'unsent') { await decide(item, optionKey, input); return }
+    const option = item.decision?.options.find(entry => entry.key === optionKey)
+    if (!option || state.pending[item.id] || state.phase !== 'ready' || blocking(state.receipts[item.id], item)) return
+    const shown = structuredClone(toRaw(item))
+    state.pending[item.id] = { option: option.key, title: option.title, until: environment.now() + undoMs }
+    timers.set(item.id, environment.later(undoMs, async () => {
+      timers.delete(item.id)
+      delete state.pending[item.id]
+      await decide(shown, option.key, input)
+    }))
+  }
+  function undo(itemId: string): void {
+    timers.get(itemId)?.()
+    timers.delete(itemId)
+    delete state.pending[itemId]
+  }
+
   async function login(email: string): Promise<void> {
     clearCache(); reset()
     const target = new URL(window.location.href)
@@ -260,9 +287,9 @@ export function createInbox(environment: InboxEnvironment) {
   const archivedMessages = computed(() => list.value.filter(item => item.kind === 'message' && item.archived).sort((a, b) => b.created - a.created))
   const unread = computed(() => messages.value.filter(item => !item.read).length)
   // Only answers to decisions that are still open hold back an app update; resolved ones need no reconciliation.
-  const deciding = computed(() => Object.entries(state.receipts).some(([itemId, receipt]) => running(receipt) && state.items[itemId]?.state === 'open'))
+  const deciding = computed(() => Object.keys(state.pending).length > 0 || Object.entries(state.receipts).some(([itemId, receipt]) => running(receipt) && state.items[itemId]?.state === 'open'))
 
-  return { state, start, sync, load, mark, decide, check, login, logout, devices, revoke, openDecisions, completedDecisions, messages, archivedMessages, unread, deciding }
+  return { state, start, sync, load, mark, decide, answer, undo, check, login, logout, devices, revoke, openDecisions, completedDecisions, messages, archivedMessages, unread, deciding }
 }
 export type Inbox = ReturnType<typeof createInbox>
 
@@ -279,6 +306,7 @@ export function useInbox(): Inbox {
     storage: browserStorage(),
     now: Date.now,
     wait: ms => new Promise(resolve => setTimeout(resolve, ms)),
+    later: (ms, run) => { const timer = setTimeout(run, ms); return () => clearTimeout(timer) },
     navigate: url => window.location.assign(url),
   })
   return instance
