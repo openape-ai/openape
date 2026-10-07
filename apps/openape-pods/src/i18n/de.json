@@ -4288,11 +4288,16 @@
   "Adopt the existing instance before updating its script": "Die bestehende Instanz zuerst übernehmen, bevor ihr Skript aktualisiert wird",
   "Wait for this Pod's network executions to settle": "Warten, bis die Netzwerkläufe dieses Pods abgeschlossen sind",
   "Settle this Pod's claimed or uncertain inputs": "Übernommene oder unsichere Eingaben dieses Pods abschließen",
-  "Resolve this Pod's pending or uncertain approvals": "Offene oder unsichere Freigaben dieses Pods klären",
   "Settle this Pod's workflow calls": "Workflow-Aufrufe dieses Pods abschließen",
   "Reconcile this Pod's external effect receipts": "Externe Wirkungsbelege dieses Pods abgleichen",
   "Wait for this Pod's process lease to settle": "Warten, bis die Prozess-Lease dieses Pods frei ist",
   "Wait for this Pod's program lease to settle": "Warten, bis die Programm-Lease dieses Pods frei ist",
   "Reconcile this Pod's retained legacy effects": "Erhaltene Legacy-Wirkungen dieses Pods abgleichen",
-  "Stop bounded processing first": "Zuerst die begrenzte Verarbeitung stoppen"
+  "Stop bounded processing first": "Zuerst die begrenzte Verarbeitung stoppen",
+  "Resolve this Pod's pending, approved or uncertain approvals": "Offene, freigegebene oder unsichere Freigaben dieses Pods abschließen",
+  "Resolve this Pod's source identity conflict": "Den Identitätskonflikt der Quelle dieses Pods klären",
+  "Checkpoint or trigger changes require owner review": "Änderungen an Checkpoint oder Auslösern erfordern eine Prüfung durch den Owner",
+  "Join members cannot be replayed; review their held inputs in the desktop workspace": "Join-Mitglieder können nicht wiederholt werden; ihre gehaltenen Eingaben im Desktop-Workspace prüfen",
+  "Restored networks require review before replay": "Wiederhergestellte Netzwerke müssen vor einer Wiederholung geprüft werden",
+  "Owner-held, cancelled or capacity-limited runs require desktop review": "Vom Owner gehaltene, abgebrochene oder kapazitätsbegrenzte Läufe erfordern eine Prüfung am Desktop"
 }
