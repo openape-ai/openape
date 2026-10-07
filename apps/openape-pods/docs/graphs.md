@@ -239,6 +239,11 @@ export interface GateManifest {
   consume the approved grants and hand exactly those items to `gives`; then
   freeze at most one new batch from the held items. Undecided items keep the
   whole batch waiting until its expiry.
+- Persistent network gates collect before they freeze: a batch is only frozen
+  once no new input arrived for two minutes, at the latest ten minutes after
+  its oldest input, or immediately when 30 inputs are waiting. Answers given
+  one after another therefore share one owner approval (issue 1449). A frozen
+  batch never grows; inputs arriving later wait for the next one.
 - A denied item ends its stay at the gate with the event `refused` and goes to
   `excluded` if set. An expired item ends with `expired`. Neither is handed to
   `gives`.
