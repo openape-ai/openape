@@ -1,5 +1,13 @@
 # Active work
 
+## Grant batches — issue 1442
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1442; approved plan: https://report.openape.ai/d/01M4AQCZFG6NXWF4NYS8DWKGV6 (revision 1, owner approval October 7). Protocol PR: https://repos.openape.ai/patrick/protocol/pulls/3.
+- Worktree `openape-monorepo.worktrees/grant-batches`, branch `feature/issue-1442-grant-batches`, base `31250d69` (includes the batch authorization fix from issue 1441).
+- IdP: optional `request.batch`, `batch` list filter, `openape_grant_batch_supported`, batch approval view with per-item checkboxes and grouped pending list. Pods: one once-grant per gate item for network gates, workflow gates and the mail archive; Pods-side exclusion removed; schema 40 returns pending collective-grant batches for re-batching.
+- Checks: nuxt-auth-idp 670 tests, grants 272, protocol conformance, free-idp store; Pods 1,301 unit/component tests. Local acceptance against a running IdP with the real Pods grant authority: agent self-approval refused per item, 2 of 3 approved in the batch view, exactly the approved grants consumed once, denied and repeated consumption refused.
+- Next: native Pods E2E and layout, exact-source CI, review and merge of both PRs, IdP deployment and Pods installation, then one real owner-decided batch.
+
 ## Batch grant approver policy — issue 1441
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1441. Security fix found by code reading on main `6c0d8e22`; not exploited.

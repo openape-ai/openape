@@ -75,6 +75,12 @@ describe('grant batch approval', () => {
     expect(wrapper.findAll('[data-batch-rows] input[type="checkbox"]').every(box => (box.element as HTMLInputElement).checked)).toBe(true)
   })
 
+  it('keeps members of the same second in a stable label order', async () => {
+    const same = (id: string, subject: string) => member(id, 0, { request: { ...member(id, 0).request, summary: { text: subject } } })
+    const { wrapper } = await mountBatch([same('g-c', 'Newsletter – What is new'), same('g-a', 'Bank – Statement'), same('g-b', 'Newsletter – What else')])
+    expect(wrapper.findAll('[data-batch-row]').map(row => row.attributes('data-batch-row'))).toEqual(['g-a', 'g-b', 'g-c'])
+  })
+
   it('approves the selected members and denies the rest in one batch call', async () => {
     const { wrapper, calls } = await mountBatch([member('g-1', 1), member('g-2', 2), member('g-3', 3)])
 
