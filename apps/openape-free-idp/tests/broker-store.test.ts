@@ -10,7 +10,7 @@ import { eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as schema from '../server/database/schema'
 import { createDrizzleBrokerStore } from '../server/utils/drizzle-broker-store'
-import { createDrizzleGrantStore, grantToRow } from '../server/utils/drizzle-grant-store'
+import { BROKER_PENDING_LIMIT, createDrizzleGrantStore, grantToRow } from '../server/utils/drizzle-grant-store'
 import { countPendingForApprover } from '../server/utils/approver'
 
 let directory: string
@@ -132,7 +132,7 @@ describe('durable grant brokering', () => {
   })
 
   it('bounds the owner inbox across connections and audits decisions atomically', async () => {
-    const values = Array.from({ length: 100 }, () => ({ ...grant(), status: 'pending' as const }))
+    const values = Array.from({ length: BROKER_PENDING_LIMIT }, () => ({ ...grant(), status: 'pending' as const }))
     for (const value of values) await grantStore.save(value)
     await expect(grantStore.save({ ...grant(), status: 'pending' })).rejects.toMatchObject({ statusCode: 429 })
     await grantStore.updateStatus(values[0]!.id, 'denied', { decided_by: owner, decided_at: 2 })

@@ -75,6 +75,20 @@ describe('grant batch approval', () => {
     expect(wrapper.findAll('[data-batch-rows] input[type="checkbox"]').every(box => (box.element as HTMLInputElement).checked)).toBe(true)
   })
 
+  it('names the shared scope and leaves a differently scoped member to its single view', async () => {
+    const lasting = member('g-2', 2, { request: { ...member('g-2', 2).request, grant_type: 'always' } })
+    const foreign = member('g-3', 3, { request: { ...member('g-3', 3).request, target_host: 'pods:other' } })
+    const { wrapper, calls } = await mountBatch([member('g-1', 1), lasting, foreign])
+
+    expect(wrapper.find('[data-batch-scope]').text()).toBe('Single-use approvals for pods:demo · pods-graph-gate')
+    expect(wrapper.find('#batch-g-2').exists()).toBe(false)
+    expect(wrapper.find('#batch-g-3').exists()).toBe(false)
+    expect(wrapper.find('[data-batch-row="g-2"]').text()).toContain('Review individually')
+    await button(wrapper, 'Approve 1').trigger('click')
+    await flushPromises()
+    expect(calls.find(call => call.url === '/api/grants/batch')?.opts?.body).toEqual({ operations: [{ id: 'g-1', action: 'approve' }] })
+  })
+
   it('keeps members of the same second in a stable label order', async () => {
     const same = (id: string, subject: string) => member(id, 0, { request: { ...member(id, 0).request, summary: { text: subject } } })
     const { wrapper } = await mountBatch([same('g-c', 'Newsletter – What is new'), same('g-a', 'Bank – Statement'), same('g-b', 'Newsletter – What else')])

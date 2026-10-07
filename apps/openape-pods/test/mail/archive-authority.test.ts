@@ -14,16 +14,23 @@ function fixture() {
   const connection: AgentConnection = { subject: 'agent@example.test', owner: 'owner@example.test', issuer: 'https://id.example.test', targetHost: `pods:${podId}`, keyId: 'key', accessToken: async () => 'synthetic-only' }
   const item = record.manifest.items[0]!
   const grant = { id: grantId, status: 'approved', decided_by: connection.owner, request: { requester: connection.subject, target_host: connection.targetHost, audience: 'pods-mail-archive', grant_type: 'once', waits_until: Math.floor(record.manifest.expiresAt / 1000), command: archiveItemCommand(record.manifest, item), summary: { text: archiveItemSummary(item) } } }
-  const fetch = vi.fn(async () => Response.json({ data: [grant] })); vi.stubGlobal('fetch', fetch)
-  return { record, grant, fetch, authority: createArchiveAuthority(connection, new AbortController().signal, async () => {}) }
+  let batchListing = true
+  const fetch = vi.fn(async (url: unknown) => String(url).endsWith('/.well-known/openid-configuration') ? Response.json({ openape_grant_batch_supported: batchListing }) : String(url).includes('/api/grants?') ? Response.json({ data: [grant] }) : Response.json(grant)); vi.stubGlobal('fetch', fetch)
+  const withoutListing = () => { batchListing = false }
+  return { record, grant, fetch, withoutListing, authority: createArchiveAuthority(connection, new AbortController().signal, async () => {}) }
 }
 it('accepts only the exact manually approved archive message', async () => {
   const f = fixture(); expect(await f.authority.statuses(f.record)).toEqual({ message: 'approved' })
   f.grant.request.command = ['pods-mail-archive', 'archive', 'different-message']
   await expect(f.authority.statuses(f.record)).rejects.toThrow('differs')
 })
+it('reads each member when the identity provider does not advertise batch listing', async () => {
+  const f = fixture(); f.withoutListing()
+  expect(await f.authority.statuses(f.record)).toEqual({ message: 'approved' })
+  expect(f.fetch.mock.calls.map(call => String(call[0]))).toEqual(['https://id.example.test/.well-known/openid-configuration', `https://id.example.test/api/grants/${f.grant.id}`])
+})
 it.each(['auto_approval_kind', 'decided_by_standing_grant'])('refuses automatic grants marked by %s', async (field) => {
-  const f = fixture(); f.fetch.mockResolvedValue(Response.json({ data: [{ ...f.grant, [field]: 'automatic' }] }))
+  const f = fixture(); Object.assign(f.grant, { [field]: 'automatic' })
   await expect(f.authority.statuses(f.record)).rejects.toThrow('manual owner')
 })
 it('rejects reusable grants and approvals by another owner', async () => {

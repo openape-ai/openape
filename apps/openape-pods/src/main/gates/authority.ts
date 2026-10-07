@@ -35,9 +35,19 @@ export function createGrantAuthority(connection: AgentConnection, signal: AbortS
     if (!binding.grantId || !grantIdPattern.test(binding.grantId)) throw new Error('Missing approval grant identity')
     return verify(await readJSON(await fetch(`${connection.issuer}/api/grants/${binding.grantId}`, { redirect: 'error', signal: timeout(), headers: await headers() })) as unknown as OpenApeGrant, binding)
   }
-  /** Brokered identities cannot list at their provider, so they read each member. */
+  let listing: Promise<boolean> | undefined
+  /** Lists by batch only where the provider advertises it (grants.md §2); brokered identities cannot list at their provider. */
+  function canList(): Promise<boolean> {
+    if (connection.brokered) return Promise.resolve(false)
+    listing ??= fetch(`${connection.issuer}/.well-known/openid-configuration`, { redirect: 'error', signal: timeout() }).then(readJSON).then(discovery => discovery.openape_grant_batch_supported === true)
+    return listing
+  }
   async function members(batchId: string, bindings: (GrantBinding & { key: string })[]): Promise<{ key: string, grant: OpenApeGrant }[]> {
-    if (connection.brokered) return Promise.all(bindings.map(async binding => ({ key: binding.key, grant: await get(binding) })))
+    if (!await canList()) {
+      const read: { key: string, grant: OpenApeGrant }[] = []
+      for (const binding of bindings) read.push({ key: binding.key, grant: await get(binding) })
+      return read
+    }
     await check(); signal.throwIfAborted()
     const query = new URLSearchParams({ requester: connection.subject, batch: batchId, limit: '100' })
     const page = await readJSON(await fetch(`${connection.issuer}/api/grants?${query}`, { redirect: 'error', signal: timeout(), headers: await headers() })) as { data?: unknown }

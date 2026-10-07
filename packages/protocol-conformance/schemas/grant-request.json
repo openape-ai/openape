@@ -134,7 +134,7 @@
     },
     "batch": {
       "type": "object",
-      "description": "Display grouping for grants submitted for a joint decision. Never changes authorization semantics; members are grouped only by equal requester and id.",
+      "description": "Display grouping for grants submitted for a joint decision. Never changes authorization semantics; members are grouped only by equal requester and id and must be uniform once grants (grants.md §3.4).",
       "properties": {
         "id": {
           "type": "string",

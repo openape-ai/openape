@@ -188,7 +188,8 @@ export class NetworkGates {
         const deliveryIds = Object.keys(refused).filter(key => refused[key] === outcome)
         if (deliveryIds.length) this.dispose(task, outcome, `Owner approval ${outcome}`, deliveryIds)
       }
-      if (result.state === 'approved' || result.state === 'unknown') this.store.db.prepare('UPDATE network_gate_items SET outcome=?,receipt=? WHERE task_id=? AND outcome=\'held\'').run(result.state === 'approved' ? 'released' : 'unknown', receipt, task.id)
+      // A refused input stays unreleased even when its delivery could not be disposed above.
+      if (result.state === 'approved' || result.state === 'unknown') this.store.db.prepare('UPDATE network_gate_items SET outcome=?,receipt=? WHERE task_id=? AND outcome=\'held\' AND delivery_id NOT IN (SELECT value FROM json_each(?))').run(result.state === 'approved' ? 'released' : 'unknown', receipt, task.id, JSON.stringify(Object.keys(refused)))
       if ((result.state === 'denied' || result.state === 'expired') && !Object.keys(refused).length) this.dispose(task, result.state, `Owner approval ${result.state}`)
       this.store.db.prepare('UPDATE network_gate_task_attempts SET state=?,finished_at=? WHERE task_id=? AND attempt=?').run(result.state === 'unknown' ? 'unknown' : 'completed', Date.now(), step.taskId, step.attempt)
       this.trace(manifest, 'gate-step-settled', { receipt: JSON.parse(receipt), error: result.error ?? null, noScriptLaunched: true })
@@ -507,7 +508,11 @@ export class NetworkGates {
     for (const item of this.store.db.prepare('SELECT delivery_id,event_id FROM network_gate_items WHERE task_id=? AND outcome IN (\'held\',\'released\',\'unknown\')').all(task.id)) {
       if (deliveryIds && !deliveryIds.includes(item.delivery_id as string)) continue
       const delivery = this.store.db.prepare('SELECT state,run_id FROM network_deliveries WHERE id=?').get(item.delivery_id!)!
-      if (!['pending', 'retry_wait', ...(outcome === 'excluded' ? ['blocked', 'unknown'] : [])].includes(delivery.state as string)) continue
+      if (!['pending', 'retry_wait', ...(outcome === 'excluded' ? ['blocked', 'unknown'] : [])].includes(delivery.state as string)) {
+        // An owner refusal is recorded even when the delivery itself awaits other review.
+        if (deliveryIds) this.store.db.prepare(`UPDATE network_gate_items SET outcome=?,receipt=json_object('decision',json(?),'priorReceipt',json(receipt)) WHERE task_id=? AND delivery_id=?`).run(outcome, receipt, task.id, item.delivery_id!)
+        continue
+      }
       const state = outcome === 'obsolete' ? 'blocked' : 'discarded'
       this.store.db.prepare('UPDATE network_deliveries SET state=?,generation=generation+1,reason=?,review_receipt=? WHERE id=? AND state=?').run(state, reason, receipt, item.delivery_id!, delivery.state!)
       const counted = this.store.db.prepare('UPDATE network_queue_counts SET count=count-1 WHERE network_id=? AND state=? AND count>0').run(task.network_id, delivery.state!)

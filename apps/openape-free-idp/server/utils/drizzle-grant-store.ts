@@ -15,6 +15,7 @@ interface ExtendedGrantStore extends GrantStore {
 type GrantRow = typeof grants.$inferSelect
 
 const PENDING_REQUEST_TTL_SECONDS = 48 * 3600
+export const BROKER_PENDING_LIMIT = 300
 const pendingExpirations = new WeakMap<ReturnType<typeof useDb>, Promise<void>>()
 
 export function grantToRow(grant: OpenApeGrant) {
@@ -100,7 +101,8 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
           const connection = await tx.select().from(brokerConnections).where(eq(brokerConnections.id, grant.brokered!.connection_id)).get()
           if (!connection || connection.status !== 'active' || connection.owner !== grant.brokered!.owner) throw createError({ statusCode: 403, statusMessage: 'Broker connection is missing or revoked' })
           const pending = await tx.select({ count: sql<number>`count(*)` }).from(grants).where(and(eq(grants.brokerOwner, grant.brokered!.owner), eq(grants.status, 'pending'))).get()
-          if ((pending?.count ?? 0) >= 100) throw createError({ statusCode: 429, statusMessage: 'Decide or dismiss existing broker requests before submitting more' })
+          // A request batch submits one once-grant per item (up to 30), so the inbox bound counts items, not decisions.
+          if ((pending?.count ?? 0) >= BROKER_PENDING_LIMIT) throw createError({ statusCode: 429, statusMessage: 'Decide or dismiss existing broker requests before submitting more' })
           await tx.insert(grants).values(row)
           await tx.insert(brokerAudit).values(brokerAuditRow(grant, 'created'))
         }, { behavior: 'immediate' })

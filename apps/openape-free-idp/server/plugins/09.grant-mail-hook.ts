@@ -8,6 +8,7 @@
 import { countPendingForApprover, resolveApprover } from '../utils/approver'
 import { sendPendingGrantEmail } from '../utils/email'
 import { createGrantMailDebouncer, notifyApproverOfPendingGrantByMail } from '../utils/grant-mail'
+import { isFollowUpBatchMember } from '../utils/grant-approval-link'
 
 export default defineNitroPlugin(() => {
   const debouncer = createGrantMailDebouncer()
@@ -17,6 +18,7 @@ export default defineNitroPlugin(() => {
     // silent no-op, not an error. Real send failures below DO throw and
     // are logged by the hook runner.
     if (!useRuntimeConfig().resendApiKey) return
+    if (await isFollowUpBatchMember(grant, useGrantStores().grantStore)) return
 
     await notifyApproverOfPendingGrantByMail(grant, {
       issuer: useRuntimeConfig().openapeIdp.issuer as string,

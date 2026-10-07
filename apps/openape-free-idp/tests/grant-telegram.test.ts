@@ -115,3 +115,24 @@ describe('notifyApproverOfPendingGrantByTelegram', () => {
     expect(second).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('request batches', () => {
+  it('links a batch member to its batch view', () => {
+    const grant = pendingGrant()
+    const member = { ...grant, request: { ...grant.request, batch: { id: 'b-1', title: 'Mail', size: 3 } } }
+    expect(formatPendingGrantMessage(member, ISSUER, 1)).toContain(`${ISSUER}/grant-approval?requester=${encodeURIComponent(grant.request.requester)}&batch=b-1`)
+  })
+
+  it('announces a batch once: later members are follow-ups', async () => {
+    const { InMemoryGrantStore } = await import('@openape/grants')
+    const { isFollowUpBatchMember } = await import('../server/utils/grant-approval-link')
+    const store = new InMemoryGrantStore()
+    const grant = pendingGrant()
+    const member = (id: string, created_at: number) => ({ ...grant, id, created_at, request: { ...grant.request, batch: { id: 'b-1' } } })
+    await store.save(member('m-1', 1))
+    expect(await isFollowUpBatchMember(member('m-1', 1), store)).toBe(false)
+    await store.save(member('m-2', 2))
+    expect(await isFollowUpBatchMember(member('m-2', 2), store)).toBe(true)
+    expect(await isFollowUpBatchMember(grant, store)).toBe(false)
+  })
+})

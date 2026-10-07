@@ -1,5 +1,6 @@
 import type { OpenApeGrant } from '@openape/core'
 import { summarizeRequest } from './summarize-grant'
+import { grantApprovalPath } from './grant-approval-link'
 
 /**
  * Per-approver mail cooldown (#1059): an agent bursting out many grant
@@ -78,7 +79,7 @@ export async function notifyApproverOfPendingGrantByMail(
       requester: grant.request.requester,
       summary: summarizeRequest(grant.request),
       // Same URL ape-shell prints to stdout for interactive callers.
-      approveUrl: `${deps.issuer}/grant-approval?grant_id=${encodeURIComponent(grant.id)}`,
+      approveUrl: `${deps.issuer}${grantApprovalPath(grant)}`,
       overviewUrl: `${deps.issuer}/grants`,
       pendingCount,
     })

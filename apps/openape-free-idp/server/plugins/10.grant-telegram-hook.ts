@@ -7,6 +7,7 @@ import { countPendingForApprover, resolveApprover } from '../utils/approver'
 import { createGrantMailDebouncer } from '../utils/grant-mail'
 import { GRANT_TELEGRAM_COOLDOWN_MS, notifyApproverOfPendingGrantByTelegram } from '../utils/grant-telegram'
 import { sendTelegramMessage } from '../utils/telegram'
+import { isFollowUpBatchMember } from '../utils/grant-approval-link'
 
 export default defineNitroPlugin(() => {
   const debouncer = createGrantMailDebouncer(GRANT_TELEGRAM_COOLDOWN_MS)
@@ -18,6 +19,7 @@ export default defineNitroPlugin(() => {
     // no-op, so dev and the example apps are unaffected. All three are needed
     // — a chat without a named approver would take anyone's grants.
     if (!telegramBotToken || !telegramChatId || !telegramApprover) return
+    if (await isFollowUpBatchMember(grant, useGrantStores().grantStore)) return
 
     await notifyApproverOfPendingGrantByTelegram(grant, {
       issuer: config.openapeIdp.issuer as string,
