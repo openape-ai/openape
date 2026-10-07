@@ -6,12 +6,13 @@ export { itemTitle } from './graph-projection'
 export const gateAudience = 'pods-graph-gate'
 export { gateLimits } from './gate-limits'
 export type GateBatchState = 'preparing' | 'pending' | 'consuming' | 'approved' | 'denied' | 'expired' | 'superseded' | 'unknown'
-export interface GateBatchItem { itemId: string, key: string, hash: string, title: string, excluded: boolean, emittedId: string | null }
+/** `excluded` is kept for batches decided before per-item grants; `grantId` names the item's own once-grant. */
+export interface GateBatchItem { itemId: string, key: string, hash: string, title: string, excluded: boolean, emittedId: string | null, grantId?: string }
 export interface GateBatchView { id: string, workflowId: string, gate: string, podId: string, state: GateBatchState, url: string | null, expiresAt: number, error: string | null, items: { itemId: string, key: string, title: string, excluded: boolean }[] }
 export interface GateHeldItem { itemId: string, workflowId: string, gate: string, key: string, title: string }
 /** What the owner approves: the consumer Pod, the expiry and a digest over every item of the batch. */
 export interface GateManifest { version: 1, id: string, workflowId: string, gate: string, title: string, podId: string, expiresAt: number, digest: string, items: { key: string, hash: string, title: string }[] }
-export interface GateCoverage { manifest: GateManifest, grantId: string, items: { key: string, data: Record<string, unknown> }[] }
+export interface GateCoverage { manifest: GateManifest, grantId: string, items: { key: string, grantId: string, data: Record<string, unknown> }[] }
 
 const uuid = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value)
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex')
@@ -30,15 +31,12 @@ export function parseGateManifest(value: unknown): GateManifest {
   if (new Set(manifest.items.map(item => item.key)).size !== manifest.items.length || manifest.digest !== gateDigest(manifest.items)) throw new Error('Gate batch does not match its digest')
   return structuredClone(manifest)
 }
-export function gateCommand(manifest: GateManifest): string[] {
+/** The grant of one item binds the frozen batch and exactly this item. */
+export function gateItemCommand(manifest: GateManifest, item: { key: string, hash: string }): string[] {
   const { items, title: _title, ...batch } = manifest
-  return ['pods-graph-gate', 'approve', JSON.stringify({ ...batch, count: items.length })]
+  return ['pods-graph-gate', 'approve', JSON.stringify({ ...batch, count: items.length, item: { key: item.key, hash: item.hash } })]
 }
-export function gateSummary(manifest: GateManifest): string {
-  const lines = [`${manifest.title}: ${manifest.items.length} Einträge freigeben`, `Gültig bis: ${new Date(manifest.expiresAt).toLocaleString('de-AT', { timeZone: 'Europe/Vienna' })} (Wien)`, 'Die Freigabe gilt genau für diese Einträge. Geänderte Einträge werden übersprungen.', '']
-  manifest.items.forEach((item, index) => lines.push(`${index + 1}. ${item.title}`))
-  return lines.join('\n')
-}
+export const gateItemSummary = (item: { key: string, title: string }): string => item.title || item.key
 /** The items of a consumed batch, checked against the manifest the owner approved. */
 export function parseGateCoverage(value: unknown): GateCoverage {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid gate coverage')
@@ -46,9 +44,9 @@ export function parseGateCoverage(value: unknown): GateCoverage {
   if (Object.keys(coverage).some(key => !['manifest', 'grantId', 'items'].includes(key)) || typeof coverage.grantId !== 'string' || !/^[\w-]{1,128}$/.test(coverage.grantId) || !Array.isArray(coverage.items) || coverage.items.length > gateLimits.batchItems) throw new Error('Invalid gate coverage')
   const manifest = parseGateManifest(coverage.manifest)
   const items = coverage.items.map((item) => {
-    if (!item || Object.keys(item).some(key => !['key', 'data'].includes(key)) || typeof item.key !== 'string' || !item.data || typeof item.data !== 'object' || Array.isArray(item.data)) throw new Error('Invalid gate coverage')
+    if (!item || Object.keys(item).some(key => !['key', 'grantId', 'data'].includes(key)) || typeof item.key !== 'string' || typeof item.grantId !== 'string' || !/^[\w-]{1,128}$/.test(item.grantId) || !item.data || typeof item.data !== 'object' || Array.isArray(item.data)) throw new Error('Invalid gate coverage')
     if (!manifest.items.some(approved => approved.key === item.key && approved.hash === payloadHash(item.data))) throw new Error('Item is not part of the approved batch')
-    return { key: item.key, data: item.data }
+    return { key: item.key, grantId: item.grantId, data: item.data }
   })
   return { manifest, grantId: coverage.grantId, items }
 }

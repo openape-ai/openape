@@ -315,4 +315,45 @@ describe('grant create endpoint', () => {
     expect(result.id).not.toBe('existing-exact-grant')
     expect(setResponseStatusMock).toHaveBeenCalledWith(expect.anything(), 201)
   })
+
+  it('stores a valid request batch with the grant', async () => {
+    readBodyMock.mockResolvedValue({
+      requester: 'agent@example.com',
+      target_host: 'pods:demo',
+      audience: 'pods-graph-gate',
+      grant_type: 'once',
+      command: ['pods-graph-gate', 'approve', '{"item":"a"}'],
+      batch: { id: 'b-1', title: 'Newsletters', size: 2 },
+    })
+    const { default: handler } = await import('../src/runtime/server/api/grants/index.post')
+    const result = await handler({} as any)
+    expect((await grantStore.findById(result.id))?.request.batch).toEqual({ id: 'b-1', title: 'Newsletters', size: 2 })
+  })
+
+  it.each([
+    [{ title: 'missing id' }],
+    [{ id: 'has space' }],
+    [{ id: 'x', size: 0 }],
+    [{ id: 'x', size: 101 }],
+    [{ id: 'x', approve: true }],
+  ])('rejects an invalid request batch %j (400)', async (batch) => {
+    readBodyMock.mockResolvedValue({ requester: 'agent@example.com', target_host: 'pods:demo', audience: 'pods-graph-gate', grant_type: 'once', command: ['x'], batch })
+    const { default: handler } = await import('../src/runtime/server/api/grants/index.post')
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 400 })
+  })
+
+  it('rejects a lasting grant hidden in a request batch (400)', async () => {
+    readBodyMock.mockResolvedValue({ requester: 'agent@example.com', target_host: 'pods:demo', audience: 'pods-graph-gate', grant_type: 'always', command: ['x'], batch: { id: 'b-1' } })
+    const { default: handler } = await import('../src/runtime/server/api/grants/index.post')
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 400 })
+  })
+
+  it('rejects a batch member whose target differs from the existing members (400)', async () => {
+    const base = { requester: 'agent@example.com', audience: 'pods-graph-gate', grant_type: 'once', waits_until: 2_000_000_000, command: ['x'], batch: { id: 'b-1', size: 3 } }
+    const { default: handler } = await import('../src/runtime/server/api/grants/index.post')
+    readBodyMock.mockResolvedValue({ ...base, target_host: 'pods:demo' })
+    await handler({} as any)
+    readBodyMock.mockResolvedValue({ ...base, target_host: 'pods:other', command: ['y'] })
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 400 })
+  })
 })

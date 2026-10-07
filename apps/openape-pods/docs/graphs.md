@@ -208,8 +208,8 @@ export interface GraphEmit {
 ## Approval gates
 
 A gate has no script and no identity of its own. The one Pod that takes what an
-approval gate gives requests the grant with its own agent identity, inside its
-own run. That Pod therefore also runs while the gate holds items.
+approval gate gives requests one once-grant per item with its own agent
+identity, inside its own run. That Pod therefore also runs while the gate holds items.
 
 ```ts
 export interface GateManifest {
@@ -228,33 +228,37 @@ export interface GateManifest {
 - `hash` is the SHA-256 of the item payload. `digest` is the SHA-256 over the
   sorted lines `key`, `hash` of every item, so the approval binds keys and
   payloads, including a message identity and version.
-- The grant uses the existing grant API: `grant_type: 'once'`, audience
-  `pods-graph-gate`, `command: ['pods-graph-gate', 'approve', <batch JSON with count and digest>]`,
-  permission `graph.gate:<batch>`, `waits_until` at the expiry. No new claim,
-  endpoint or error format.
+- Each item gets its own grant through the existing grant API: `grant_type: 'once'`,
+  audience `pods-graph-gate`, `command: ['pods-graph-gate', 'approve', <batch JSON with count, digest and the item>]`,
+  permission `graph.gate:<batch>`, `waits_until` at the expiry, the item title as
+  `summary` and `batch: { id, title, size }` (grants.md §3.4). The identity
+  provider shows the members as one list with a checkbox per item; the owner
+  approves the selected items and denies the rest in one step.
 - One round per run of the consumer Pod: expire overdue batches, read the
-  decision of every pending batch, consume an approved grant and hand its items
-  to `gives`, then freeze at most one new batch from the held items.
-- A refused or expired batch ends the stay of its items at the gate with the
-  event `refused` or `expired`. Nothing is handed on.
-- Excluding an item in the app supersedes the batch. Its pending grant is never
-  consumed, the excluded item goes to `excluded` if set, and the remaining items
-  form a new batch with a new grant in the next round.
+  decision of every item of each pending batch, and once no item is undecided,
+  consume the approved grants and hand exactly those items to `gives`; then
+  freeze at most one new batch from the held items. Undecided items keep the
+  whole batch waiting until its expiry.
+- A denied item ends its stay at the gate with the event `refused` and goes to
+  `excluded` if set. An expired item ends with `expired`. Neither is handed to
+  `gives`.
+- Batches requested under one collective grant (before per-item grants) return
+  their items for a new batch; their old grant is never consumed.
 - A failure while reading, consuming or requesting a grant sets the batch to
   `unknown` and blocks the gate. The owner reconciles by discarding the batch,
   which hands nothing on.
 - A `choose` gate needs no grant: the owner picks one option per held item in
   the app and the item goes to the channel of that option.
-- Gate decisions are owner commands of the app (`gateExclude`, `gateChoose`,
-  `gateDiscard`). No tool action approves, excludes or chooses.
+- Gate decisions are owner commands of the app (`gateChoose`, `gateDiscard`) or
+  decisions at the identity provider. No tool action approves, denies or chooses.
 
 In channel mode a Pod archives mail only with
 `context.mail.archive.process({ application, mailbox })`. The messages come from
 the consumed batches behind the items the Pod received in this run; each item
 payload must carry `id` and `version`. `prepare` is refused. Before anything
-moves, the grant must be consumed, manually decided by the owner, bound to the
-same digest and not expired, and each message must still have the approved
-version.
+moves, every item grant must be consumed, manually decided by the owner, bound
+to the same digest and item and not expired, and each message must still have
+the approved version.
 
 | Batch state | Meaning |
 | --- | --- |

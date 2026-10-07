@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { gateCommand, gateDigest, parseGateCoverage, parseGateManifest, payloadHash } from '../../src/contracts/gates'
+import { gateDigest, gateItemCommand, parseGateCoverage, parseGateManifest, payloadHash } from '../../src/contracts/gates'
 import type { GateCoverage, GateManifest } from '../../src/contracts/gates'
 import { diagnoseGraph } from '../../src/contracts/graphs'
 import type { ArchiveMail } from '../../src/contracts/mail-archive'
@@ -13,7 +13,7 @@ import { handleGate } from '../../src/main/gates/handler'
 import { MailArchiveService } from '../../src/main/mail/archive/service'
 import type { ArchiveProvider } from '../../src/main/mail/archive/service'
 import { ArchiveStore } from '../../src/main/mail/archive/store'
-import { chooseGateItem, discardGateBatch, excludeGateItems } from '../../src/worker/workflows/gates'
+import { chooseGateItem, discardGateBatch } from '../../src/worker/workflows/gates'
 import { closeGraphs, graphFixture } from './graph-fixture'
 import type { Item } from './graph-fixture'
 
@@ -30,7 +30,7 @@ const approve = { key: 'batch', title: 'Newsletter batch', kind: 'approve', take
  * mailbox are replaced: `grants` is what the owner decided, `moved` is what left the Inbox.
  */
 function fixture() {
-  const grants = new Map<string, { status: 'pending' | 'approved' | 'denied' | 'expired' | 'used', manifest: GateManifest }>()
+  const grants = new Map<string, { status: 'pending' | 'approved' | 'denied' | 'expired' | 'used', manifest: GateManifest, key: string }>()
   const mailbox = new Map(keys.map(key => [key, mail(key)])); const moved: string[] = []; const reports: unknown[] = []
   const root = mkdtempSync(join(tmpdir(), 'pods-gate-archive-')); roots.push(root)
   const archive = new MailArchiveService(new ArchiveStore(root))
@@ -38,19 +38,22 @@ function fixture() {
   const grant = (id: string) => { const found = grants.get(id); if (!found) throw new Error('Unknown grant'); return found }
   const f = graphFixture([approve], {
     gate: async (value) => {
-      const body = value as { operation: string, manifest: GateManifest, grantId: string }
+      const body = value as { operation: string, manifest: GateManifest, grants?: { key: string, id: string }[] }
       const manifest = parseGateManifest(body.manifest)
-      if (body.operation === 'create') { const id = randomUUID(); grants.set(id, { status: 'pending', manifest }); return { id, url: `https://id.example.test/grant-approval?grant_id=${id}` } }
-      if (JSON.stringify(gateCommand(grant(body.grantId).manifest)) !== JSON.stringify(gateCommand(manifest))) throw new Error('Approval grant differs from the reviewed batch or Pod identity')
-      if (body.operation === 'status') return grant(body.grantId).status
-      if (grant(body.grantId).status !== 'approved') throw new Error('Approval is not current')
-      grant(body.grantId).status = 'used'; return true
+      if (body.operation === 'create') return { id: manifest.id, url: `https://id.example.test/grant-approval?batch=${manifest.id}`, grants: manifest.items.map((item) => { const id = randomUUID(); grants.set(id, { status: 'pending', manifest, key: item.key }); return { key: item.key, id } }) }
+      for (const named of body.grants!) {
+        const stored = grant(named.id); const item = manifest.items.find(entry => entry.key === named.key)!
+        if (stored.key !== named.key || JSON.stringify(gateItemCommand(stored.manifest, item)) !== JSON.stringify(gateItemCommand(manifest, item))) throw new Error('Approval grant differs from the reviewed item or Pod identity')
+      }
+      if (body.operation === 'status') return Object.fromEntries(body.grants!.map(named => [named.key, grant(named.id).status]))
+      for (const named of body.grants!) { if (grant(named.id).status !== 'approved') throw new Error('Approval is not current'); grant(named.id).status = 'used' }
+      return true
     },
     mailArchive: async (value, _signal, scope) => {
       const body = value as { operation: string, target: { mailbox: string }, gate: GateCoverage[] }
       const views = []
       for (const coverage of body.gate.map(parseGateCoverage)) {
-        const assertActive = async () => { if (grants.get(coverage.grantId)?.status !== 'used' || coverage.manifest.expiresAt <= Date.now()) throw new Error('Consumed approval is no longer valid') }
+        const assertActive = async () => { if (coverage.items.some(item => grants.get(item.grantId)?.status !== 'used') || coverage.manifest.expiresAt <= Date.now()) throw new Error('Consumed approval is no longer valid') }
         views.push(await archive.processCovered(scope.podId, { id: coverage.manifest.id, grantId: coverage.grantId, expiresAt: coverage.manifest.expiresAt, mailbox: body.target.mailbox, items: coverage.items.map(item => ({ id: String(item.data.id), version: String(item.data.version), reason: 'Newsletter' })) }, provider, assertActive))
       }
       return views
@@ -65,7 +68,7 @@ function fixture() {
   const keeper = f.pod('Keeper', { takes: ['mail.kept'], gives: [], summary: 'Keeps mail' }, async (items) => { received.keeper!.push(items) })
   f.save([source, archiver, keeper], ['mail.newsletter', 'mail.approved', 'mail.kept'])
   const batches = () => f.engine.view().gates!.batches
-  const decide = (status: 'approved' | 'denied' | 'expired') => { for (const item of grants.values()) { if (item.status === 'pending') item.status = status } }
+  const decide = (status: 'approved' | 'denied' | 'expired', only?: string[]) => { for (const item of grants.values()) { if (item.status === 'pending' && (!only || only.includes(item.key))) item.status = status } }
   /** A second run in which the source finds nothing new. */
   const again = () => { f.behaviours.set(source, async () => {}); return f.run() }
   return { ...f, grants, mailbox, moved, reports, received, source, archiver, keeper, batches, decide, again }
@@ -79,7 +82,7 @@ describe('refusals: nothing moves', () => {
     expect(f.received.archive).toEqual([[], [], []])
     expect(f.reports).toEqual([[], [], []])
     expect(f.batches()).toMatchObject([{ state: 'pending', gate: 'batch', podId: f.archiver, items: keys.map(key => ({ key, excluded: false })) }])
-    expect(f.grants.size).toBe(1)
+    expect(f.grants.size).toBe(keys.length)
     expect(f.trace('news-1').map(event => event.outcome)).toEqual(['emitted', 'held'])
     expect(f.pending('gate:batch')).toEqual(keys)
   })
@@ -92,7 +95,7 @@ describe('refusals: nothing moves', () => {
     expect(f.moved).toEqual([])
     expect(f.received.archive.flat()).toEqual([])
     expect(f.batches()).toMatchObject([{ state: 'expired' }])
-    expect(Array.from(f.grants.values(), grant => grant.status)).toEqual(['approved'])
+    expect(Array.from(f.grants.values(), grant => grant.status)).toEqual(keys.map(() => 'approved'))
     expect(f.trace('news-1').at(-1)).toMatchObject({ node: 'gate:batch', outcome: 'expired' })
     expect(f.pending('gate:batch')).toEqual([])
   })
@@ -108,7 +111,8 @@ describe('refusals: nothing moves', () => {
     expect(f.moved).toEqual([])
     expect(f.received.archive.flat()).toEqual([])
     expect(f.batches()).toMatchObject([{ state: 'denied' }])
-    expect(f.trace('news-2').at(-1)).toMatchObject({ node: 'gate:batch', outcome: 'refused' })
+    expect(f.trace('news-2').find(event => event.node === 'gate:batch' && event.outcome === 'refused')).toBeDefined()
+    expect(f.received.keeper.flat().map(item => item.key)).toEqual(keys)
   })
   it('moves nothing when every message changed since the batch was frozen and reports why', async () => {
     const f = fixture()
@@ -136,7 +140,7 @@ describe('refusals: nothing moves', () => {
     f.store.db.prepare('UPDATE graph_gate_batches SET expires_at=expires_at+1').run()
     f.decide('approved'); await f.again()
     expect(f.moved).toEqual([])
-    expect(f.batches()).toMatchObject([{ state: 'unknown', error: 'Approval grant differs from the reviewed batch or Pod identity' }])
+    expect(f.batches()).toMatchObject([{ state: 'unknown', error: 'Approval grant differs from the reviewed item or Pod identity' }])
     expect(f.received.archive.flat()).toEqual([])
   })
   it('moves nothing when consuming the grant fails, blocks the gate and lets the owner discard the batch', async () => {
@@ -147,7 +151,7 @@ describe('refusals: nothing moves', () => {
     await f.again(); await f.again()
     expect(f.moved).toEqual([])
     expect(f.batches()).toMatchObject([{ state: 'unknown', error: 'Identity provider failed' }])
-    expect(f.grants.size).toBe(1)
+    expect(f.grants.size).toBe(keys.length)
     discardGateBatch(f.store, f.batches()[0]!.id, Date.now())
     expect(f.batches()).toMatchObject([{ state: 'denied', error: 'Discarded after review' }])
     expect(f.trace('news-1').at(-1)).toMatchObject({ outcome: 'refused', reason: 'Discarded after review' })
@@ -164,7 +168,8 @@ describe('refusals: nothing moves', () => {
     expect(f.moved).toEqual([])
     const items = [{ key: 'news-1', hash: payloadHash({ id: 'news-1', version: 'v1' }), title: 'One' }]
     const manifest: GateManifest = { version: 1, id: randomUUID(), workflowId: randomUUID(), gate: 'batch', title: 'Batch', podId: randomUUID(), expiresAt: 1, digest: gateDigest(items), items }
-    expect(() => parseGateCoverage({ manifest, grantId: 'grant', items: [{ key: 'news-1', data: { id: 'news-9', version: 'v1' } }] })).toThrow('Item is not part of the approved batch')
+    expect(() => parseGateCoverage({ manifest, grantId: 'grant', items: [{ key: 'news-1', grantId: 'grant-1', data: { id: 'news-9', version: 'v1' } }] })).toThrow('Item is not part of the approved batch')
+    expect(() => parseGateCoverage({ manifest, grantId: 'grant', items: [{ key: 'news-1', data: { id: 'news-1', version: 'v1' } }] })).toThrow('Invalid gate coverage')
     expect(() => parseGateManifest({ ...manifest, items: [...items, { key: 'news-2', hash: items[0]!.hash, title: 'Two' }] })).toThrow('does not match its digest')
   })
 })
@@ -176,7 +181,7 @@ describe('approval', () => {
     expect(f.moved).toEqual(keys)
     expect(f.received.archive.map(items => items.map(item => item.key))).toEqual([[], keys])
     expect(f.batches()).toMatchObject([{ state: 'approved' }])
-    expect(Array.from(f.grants.values(), grant => grant.status)).toEqual(['used'])
+    expect(Array.from(f.grants.values(), grant => grant.status)).toEqual(keys.map(() => 'used'))
     expect(f.trace('news-1').map(event => `${event.node === f.archiver ? 'archive' : event.node === f.source ? 'source' : event.node}:${event.outcome}`)).toEqual(['source:emitted', 'gate:batch:held', 'gate:batch:approved', 'archive:consumed'])
   })
   it('moves only the unchanged message of an approved batch', async () => {
@@ -185,21 +190,33 @@ describe('approval', () => {
     f.decide('approved'); await f.again()
     expect(f.moved).toEqual(['news-1'])
   })
-  it('never consumes the grant of a batch from which the owner excluded an item', async () => {
+  it('moves only the approved messages and hands a denied one to the excluded channel', async () => {
+    const f = fixture()
+    await f.run()
+    f.decide('denied', ['news-2']); f.decide('approved')
+    await f.again(); await f.again()
+    expect(f.moved).toEqual(['news-1', 'news-3'])
+    expect(f.received.keeper.flat().map(item => item.key)).toEqual(['news-2'])
+    expect(f.batches()).toMatchObject([{ state: 'approved' }])
+    expect(Array.from(f.grants.values(), grant => `${grant.key}:${grant.status}`)).toEqual(['news-1:used', 'news-2:denied', 'news-3:used'])
+    expect(f.trace('news-2').map(event => event.outcome)).toEqual(['emitted', 'held', 'refused', 'consumed'])
+  })
+  it('keeps the batch waiting until every item is decided', async () => {
+    const f = fixture()
+    await f.run(); f.decide('approved', ['news-1']); await f.again()
+    expect(f.moved).toEqual([])
+    expect(f.batches()).toMatchObject([{ state: 'pending' }])
+  })
+  it('returns the items of a batch with one collective grant to a new per-item batch', async () => {
     const f = fixture()
     await f.run()
     const [first] = f.batches()
-    excludeGateItems(f.store, first!.id, [first!.items[1]!.itemId], Date.now())
-    f.decide('approved')
+    const legacy = JSON.parse(f.store.db.prepare('SELECT items FROM graph_gate_batches WHERE id=?').get(first!.id)!.items as string).map(({ grantId: _grantId, ...entry }: { grantId?: string }) => entry)
+    f.store.db.prepare('UPDATE graph_gate_batches SET items=? WHERE id=?').run(JSON.stringify(legacy), first!.id)
     await f.again()
-    expect(f.moved).toEqual([])
-    expect(f.received.keeper.flat().map(item => item.key)).toEqual(['news-2'])
     expect(f.batches().map(batch => batch.state).sort()).toEqual(['pending', 'superseded'])
-    expect(Array.from(f.grants.values(), grant => grant.status)).toEqual(['approved', 'pending'])
-    f.decide('approved'); await f.again()
-    expect(f.moved).toEqual(['news-1', 'news-3'])
-    expect(f.trace('news-2').map(event => event.outcome)).toEqual(['emitted', 'held', 'excluded', 'consumed'])
-    expect(() => excludeGateItems(f.store, first!.id, [first!.items[0]!.itemId], Date.now())).toThrow('awaits approval')
+    expect(f.grants.size).toBe(keys.length * 2)
+    expect(f.moved).toEqual([])
   })
   it('keeps at most four batches of at most thirty items waiting', async () => {
     const f = fixture()
@@ -243,11 +260,10 @@ describe('contracts', () => {
   })
   it('accepts the three owner decisions as commands and nothing that approves a gate', () => {
     const id = randomUUID()
-    expect(parseWorkflowCommand({ type: 'gateExclude', batchId: id, itemIds: [id] })).toEqual({ type: 'gateExclude', batchId: id, itemIds: [id] })
+    expect(() => parseWorkflowCommand({ type: 'gateExclude', batchId: id, itemIds: [id] })).toThrow('Unsupported workflow command')
     expect(parseWorkflowCommand({ type: 'gateChoose', id, gate: 'review', itemId: id, option: 'keep' })).toMatchObject({ type: 'gateChoose' })
     expect(parseWorkflowCommand({ type: 'gateDiscard', batchId: id })).toEqual({ type: 'gateDiscard', batchId: id })
     expect(() => parseWorkflowCommand({ type: 'gateApprove', batchId: id })).toThrow('Unsupported workflow command')
-    expect(() => parseWorkflowCommand({ type: 'gateExclude', batchId: id, itemIds: [] })).toThrow('Invalid gate decision')
   })
   it('requests the grant as the consumer Pod with the existing once-grant fields only', async () => {
     const podId = randomUUID(); const items = [{ key: 'news-1', hash: payloadHash({ id: 'news-1' }), title: 'Newsletter' }]
@@ -256,13 +272,18 @@ describe('contracts', () => {
     const connections = { podConnection: async () => ({ subject: 'agent@example.test', owner: 'owner@example.test', issuer: 'https://id.example.test', targetHost: `pods:${podId}`, keyId: 'key', accessToken: async () => 'synthetic-only' }) }
     const scope = { podId, runId: randomUUID(), epoch: 0, assignmentRevision: 1, capabilities: [] }
     const input = { scope, connections: connections as never, check: async () => {}, signal: new AbortController().signal }
-    expect(await handleGate({ ...input, body: { operation: 'create', manifest } })).toEqual({ id: 'grant-1', url: 'https://id.example.test/grant-approval?grant_id=grant-1' })
+    expect(await handleGate({ ...input, body: { operation: 'create', manifest } })).toEqual({ id: manifest.id, url: `https://id.example.test/grant-approval?requester=agent%40example.test&batch=${manifest.id}`, grants: [{ key: 'news-1', id: 'grant-1' }] })
     const request = JSON.parse(String(fetch.mock.calls[0]![1]!.body))
-    expect(Object.keys(request).sort()).toEqual(['audience', 'command', 'grant_type', 'permissions', 'reason', 'requester', 'summary', 'target_host', 'waits_until'])
-    expect(request).toMatchObject({ requester: 'agent@example.test', audience: 'pods-graph-gate', grant_type: 'once', target_host: `pods:${podId}`, command: gateCommand(manifest), permissions: [`graph.gate:${manifest.id}`] })
-    expect(JSON.parse(request.command[2])).toMatchObject({ digest: manifest.digest, count: 1, podId })
+    expect(Object.keys(request).sort()).toEqual(['audience', 'batch', 'command', 'grant_type', 'permissions', 'reason', 'requester', 'summary', 'target_host', 'waits_until'])
+    expect(request).toMatchObject({ requester: 'agent@example.test', audience: 'pods-graph-gate', grant_type: 'once', target_host: `pods:${podId}`, command: gateItemCommand(manifest, items[0]!), permissions: [`graph.gate:${manifest.id}`], summary: { text: 'Newsletter' }, batch: { id: manifest.id, title: 'Newsletter batch', size: 1 } })
+    expect(JSON.parse(request.command[2])).toMatchObject({ digest: manifest.digest, count: 1, podId, item: { key: 'news-1' } })
     await expect(handleGate({ ...input, scope: { ...scope, podId: randomUUID() }, body: { operation: 'create', manifest } })).rejects.toThrow('Gate batch belongs to another Pod')
-    fetch.mockResolvedValue(Response.json({ id: 'grant-1', status: 'approved', decided_by: 'owner@example.test', auto_approval_kind: 'standing', request: { requester: 'agent@example.test', target_host: `pods:${podId}`, audience: 'pods-graph-gate', grant_type: 'once', waits_until: Math.floor(manifest.expiresAt / 1000), command: gateCommand(manifest), summary: { text: request.summary.text } } }))
-    await expect(handleGate({ ...input, body: { operation: 'status', manifest, grantId: 'grant-1' } })).rejects.toThrow('manual owner decision')
+    const listed = { id: 'grant-1', status: 'approved', decided_by: 'owner@example.test', request: { requester: 'agent@example.test', target_host: `pods:${podId}`, audience: 'pods-graph-gate', grant_type: 'once', waits_until: Math.floor(manifest.expiresAt / 1000), command: gateItemCommand(manifest, items[0]!), summary: { text: request.summary.text } } }
+    fetch.mockImplementation(async (url: unknown) => String(url).endsWith('/.well-known/openid-configuration') ? Response.json({ openape_grant_batch_supported: true }) : Response.json({ data: [listed] }))
+    expect(await handleGate({ ...input, body: { operation: 'status', manifest, grants: [{ key: 'news-1', id: 'grant-1' }] } })).toEqual({ 'news-1': 'approved' })
+    expect(String(fetch.mock.calls.at(-1)![0])).toBe(`https://id.example.test/api/grants?requester=agent%40example.test&batch=${manifest.id}&limit=100`)
+    fetch.mockImplementation(async (url: unknown) => String(url).endsWith('/.well-known/openid-configuration') ? Response.json({ openape_grant_batch_supported: true }) : Response.json({ data: [{ ...listed, auto_approval_kind: 'standing' }] }))
+    await expect(handleGate({ ...input, body: { operation: 'status', manifest, grants: [{ key: 'news-1', id: 'grant-1' }] } })).rejects.toThrow('manual owner decision')
+    await expect(handleGate({ ...input, body: { operation: 'status', manifest, grants: [{ key: 'news-9', id: 'grant-1' }] } })).rejects.toThrow('Invalid approval grant identities')
   })
 })

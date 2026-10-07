@@ -20,6 +20,7 @@ export default defineEventHandler(async (event) => {
   const cursor = query.cursor ? String(query.cursor) : undefined
   const status = query.status ? String(query.status) as GrantStatus : undefined
   const requester = query.requester ? String(query.requester) : undefined
+  const batch = query.batch ? String(query.batch) : undefined
   const section = query.section ? String(query.section) : undefined
   const days = Math.min(Math.max(Number(query.days) || 7, 1), 90)
 
@@ -60,11 +61,15 @@ export default defineEventHandler(async (event) => {
     const owner = await userStore.findByEmail(email)
     brokerVisibility.brokerOwner = owner?.isActive && owner.type !== 'agent' && !owner.owner && !bearerPayload?.delegation_grant && bearerPayload?.act !== 'agent' ? email : null
   }
+  // Batch ids are scoped to their requester (grants.md §4.2).
+  if (batch && !requester) {
+    throw createError({ statusCode: 400, message: 'The batch filter requires a requester' })
+  }
   if (requester) {
     if (!requesters.includes(requester) && !hasBrokerStore()) {
       throw createError({ statusCode: 403, message: 'Not authorized to list grants for this requester' })
     }
-    const page = await grantStore.listGrants({ limit, cursor, status, ...(hasBrokerStore() ? { requester: requesters, requesterFilter: requester, ...brokerVisibility } : { requester }) })
+    const page = await grantStore.listGrants({ limit, cursor, status, batch, ...(hasBrokerStore() ? { requester: requesters, requesterFilter: requester, ...brokerVisibility } : { requester }) })
     return { ...page, data: await expireStaleGrants(page.data, grantStore) }
   }
 

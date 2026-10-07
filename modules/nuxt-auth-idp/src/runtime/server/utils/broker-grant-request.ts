@@ -1,10 +1,10 @@
 import type { OpenApeGrantRequest, OpenApeAuthorizationDetail } from '@openape/core'
 import { computeCmdHash } from '@openape/core'
-import { brokerObject, brokerString, canonicalizeCliPermission, computeArgvHash, validateCliAuthorizationDetail } from '@openape/grants'
+import { brokerObject, brokerString, canonicalizeCliPermission, computeArgvHash, parseGrantBatch, validateCliAuthorizationDetail } from '@openape/grants'
 
 export async function parseBrokerGrantRequest(input: unknown, requester: string): Promise<OpenApeGrantRequest> {
   const value = brokerObject(input)
-  const allowed = ['requester', 'target_host', 'audience', 'grant_type', 'duration', 'command', 'permissions', 'authorization_details', 'execution_context', 'reason', 'summary', 'waits_until', 'cmd_hash']
+  const allowed = ['requester', 'target_host', 'audience', 'grant_type', 'duration', 'command', 'permissions', 'authorization_details', 'execution_context', 'reason', 'summary', 'waits_until', 'batch', 'cmd_hash']
   if (Object.keys(value).some(key => !allowed.includes(key)) || (value.requester !== undefined && value.requester !== requester)) throw new Error('Invalid brokered grant fields')
   brokerString(value.target_host)
   brokerString(value.audience)
@@ -17,6 +17,7 @@ export async function parseBrokerGrantRequest(input: unknown, requester: string)
     const summary = brokerObject(value.summary)
     if (Object.keys(summary).some(key => key !== 'text') || typeof summary.text !== 'string' || summary.text.length > 4096) throw new Error('Invalid request summary')
   }
+  if (value.batch !== undefined) value.batch = parseGrantBatch(value.batch)
   if (value.waits_until !== undefined && (!Number.isInteger(value.waits_until) || Number(value.waits_until) <= Date.now() / 1000)) throw new Error('Invalid request deadline')
   if (value.authorization_details !== undefined) {
     if (!Array.isArray(value.authorization_details) || value.authorization_details.length === 0 || value.authorization_details.length > 100) throw new Error('Invalid authorization details')

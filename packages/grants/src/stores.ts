@@ -3,6 +3,8 @@ import type { GrantStatus, OpenApeGrant, PaginatedResponse, PaginationParams } f
 export interface GrantListParams extends PaginationParams {
   brokerOwner?: string | null
   requesterFilter?: string
+  /** Filter by request.batch.id (grants.md §4.2). */
+  batch?: string
   status?: GrantStatus
   requester?: string | string[]
   role?: string
@@ -99,6 +101,7 @@ export class InMemoryGrantStore implements GrantStore {
     }
 
     if (params?.requesterFilter) grants = grants.filter(g => g.request.requester === params.requesterFilter)
+    if (params?.batch) grants = grants.filter(g => g.request.batch?.id === params.batch)
 
     // Sort by created_at DESC
     grants.sort((a, b) => b.created_at - a.created_at)

@@ -28,7 +28,7 @@ import { confirmDomainsStopped } from './recovery/domains'
 import { parseWorkflowCommand } from '../contracts/workflows'
 import { WorkflowEngine } from './workflows/engine'
 import { WorkflowCalls } from './workflows/calls'
-import { chooseGateItem, discardGateBatch, excludeGateItems } from './workflows/gates'
+import { chooseGateItem, discardGateBatch } from './workflows/gates'
 import { graphDetail } from './workflows/detail'
 import type { RunContextRequest, ServiceCheck  } from '../contracts/services'
 import { DefinitionCatalog } from './workspace/definition-catalog'
@@ -380,9 +380,9 @@ port.on('message', async (event) => {
       port.postMessage({ id: request.id, state: { name: store.getPod(check.scope.podId).name, reason } }); return
     }
     if (request.command && typeof request.command === 'object' && 'networkGateCheck' in request.command) {
-      const check = request.command.networkGateCheck as ServiceCheck & { manifest: unknown, operation: string, grantId?: string }
+      const check = request.command.networkGateCheck as ServiceCheck & { manifest: unknown, operation: string, grants?: unknown }
       authorizeRunService(store, registry, dispatcher.runs, check)
-      networks.gates.authorizeService(check.scope, check.manifest, check.operation, check.grantId)
+      networks.gates.authorizeService(check.scope, check.manifest, check.operation, check.grants)
       port.postMessage({ id: request.id, state: true }); return
     }
     if (request.command && typeof request.command === 'object' && 'serviceCheck' in request.command) {
@@ -434,7 +434,6 @@ port.on('message', async (event) => {
       if (command.type === 'pause') workflows.pause(command.id, command.revision, command.paused)
       if (command.type === 'retry') await workflows.retry(command.runId, command.podId)
       if (command.type === 'cancel') await workflows.cancel(command.runId)
-      if (command.type === 'gateExclude') excludeGateItems(store, command.batchId, command.itemIds, Date.now())
       if (command.type === 'gateChoose') chooseGateItem(store, command.id, command.gate, command.itemId, command.option, Date.now())
       if (command.type === 'gateDiscard') discardGateBatch(store, command.batchId, Date.now())
       if (command.type !== 'list' && command.type !== 'gateOpen' && startupReady && !suspended && Date.now() < centralUntil) scheduleDomains(store, [() => scheduler.tick(), () => workflows.tick(), () => { networks.invocations.calls!.tick(); networks.tick() }])

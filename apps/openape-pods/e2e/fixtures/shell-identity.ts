@@ -22,7 +22,7 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
     const respond = async () => {
       response.setHeader('Content-Type', 'application/json')
       if (request.url === '/.well-known/openid-configuration') {
-        response.end(JSON.stringify({ grants_endpoint: `${origin}/api/grants`, ...(provisioning ? { issuer: origin, openape_grant_brokering_version: '1.0', openape_broker_connections_endpoint: `${origin}/api/fixture-connections`, openape_broker_enrollment_endpoint: `${origin}/api/fixture-enrollment` } : {}) }))
+        response.end(JSON.stringify({ grants_endpoint: `${origin}/api/grants`, openape_grant_batch_supported: true, ...(provisioning ? { issuer: origin, openape_grant_brokering_version: '1.0', openape_broker_connections_endpoint: `${origin}/api/fixture-connections`, openape_broker_enrollment_endpoint: `${origin}/api/fixture-enrollment` } : {}) }))
       }
       else if (provisioning && request.url === `/api/fixture-connections/${brokerId}/receipt`) {
         if (request.headers.authorization !== 'Bearer SYNTHETIC_OWNER_TOKEN') { response.writeHead(403).end('{}'); return }
@@ -40,7 +40,13 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
         response.end(JSON.stringify({ owner: 'fixture-owner@example.test', email: subject, keyId, permissions: 'none', decisionIssuer: origin, brokerConnectionId: brokerId }))
       }
       else if (request.url?.startsWith('/api/grants?')) {
-        const requester = new URL(request.url, origin).searchParams.get('requester')
+        const query = new URL(request.url, origin).searchParams
+        const requester = query.get('requester')
+        const batch = query.get('batch')
+        if (batch) {
+          response.end(JSON.stringify({ data: [...grants.entries()].filter(([, grant]) => grant.requester === requester && (grant as { batch?: { id: string } }).batch?.id === batch).map(([id, grant]) => ({ id, status: grant.status ?? 'approved', request: grant, ...(grant.command?.[0] === 'pods-graph-gate' ? { decided_by: 'fixture-owner@example.test' } : {}) })) }))
+          return
+        }
         const podId = subjects.get(requester ?? '')
         response.end(JSON.stringify({ data: podId ? [{ id: `fixture-${podId}`, status: 'approved', request: { audience: 'ape-shell', target_host: `pods:${podId}`, grant_type: 'timed' } }] : [] }))
       }

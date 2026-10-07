@@ -10,8 +10,8 @@ import { NetworkEngine } from '../../src/worker/scheduling/network-engine'
 import type { AgentRuntime } from '../../src/worker/agent/executor'
 import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { gateCommand, gateDigest, gateSummary, parseGateManifest, payloadHash } from '../../src/contracts/gates'
-import { networkGateActionHash, networkGateCommand, networkGateDigest, networkGatePayloadHash, parseNetworkGateCoverage, parseNetworkGateManifest } from '../../src/contracts/network-gates'
+import { gateDigest, gateItemCommand, gateItemSummary, parseGateManifest, payloadHash } from '../../src/contracts/gates'
+import { networkGateActionHash, networkGateDigest, networkGateItemCommand, networkGatePayloadHash, parseNetworkGateCoverage, parseNetworkGateManifest } from '../../src/contracts/network-gates'
 import type { NetworkGateManifest } from '../../src/contracts/network-gates'
 import { parseNetworkDefinition } from '../../src/contracts/networks'
 import { canonicalNetworkJson } from '../../src/worker/scheduling/network-events'
@@ -28,19 +28,21 @@ function manifest(): NetworkGateManifest {
 }
 
 describe('versioned gate authority', () => {
-  it('preserves the exact legacy command and summary representation', () => {
-    const items = [{ key: 'one', hash: payloadHash({ subject: 'One' }), title: 'One' }]
+  it('binds each workflow item grant to the frozen batch and exactly that item', () => {
+    const items = [{ key: 'one', hash: payloadHash({ subject: 'One' }), title: 'One' }, { key: 'two', hash: payloadHash({ subject: 'Two' }), title: '' }]
     const legacy = { version: 1 as const, id: randomUUID(), workflowId: randomUUID(), gate: 'review', title: 'Review input', podId: randomUUID(), expiresAt: Date.UTC(2026, 9, 1, 10), digest: gateDigest(items), items }
     expect(parseGateManifest(legacy)).toEqual(legacy)
-    expect(gateCommand(legacy)).toEqual(['pods-graph-gate', 'approve', JSON.stringify({ version: 1, id: legacy.id, workflowId: legacy.workflowId, gate: 'review', podId: legacy.podId, expiresAt: legacy.expiresAt, digest: legacy.digest, count: 1 })])
-    expect(gateSummary(legacy)).toBe(['Review input: 1 Einträge freigeben', 'Gültig bis: 1.10.2026, 12:00:00 (Wien)', 'Die Freigabe gilt genau für diese Einträge. Geänderte Einträge werden übersprungen.', '', '1. One'].join('\n'))
+    expect(gateItemCommand(legacy, items[0]!)).toEqual(['pods-graph-gate', 'approve', JSON.stringify({ version: 1, id: legacy.id, workflowId: legacy.workflowId, gate: 'review', podId: legacy.podId, expiresAt: legacy.expiresAt, digest: legacy.digest, count: 2, item: { key: 'one', hash: items[0]!.hash } })])
+    expect(gateItemCommand(legacy, items[1]!)).not.toEqual(gateItemCommand(legacy, items[0]!))
+    expect(items.map(gateItemSummary)).toEqual(['One', 'two'])
   })
 
   it('binds network inputs and all consumer authority pins to the grant command', () => {
     const frozen = manifest()
     expect(parseNetworkGateManifest(frozen)).toEqual(frozen)
-    const command = JSON.parse(networkGateCommand(frozen)[2]!)
-    expect(command).toMatchObject({ version: 2, podId: frozen.podId, networkId: frozen.networkId, definitionId: frozen.definitionId, resourceEpoch: 0, actionHash: frozen.actionHash, digest: frozen.digest, count: 1 })
+    const item = frozen.items[0]!
+    const command = JSON.parse(networkGateItemCommand(frozen, item)[2]!)
+    expect(command).toMatchObject({ version: 2, podId: frozen.podId, networkId: frozen.networkId, definitionId: frozen.definitionId, resourceEpoch: 0, actionHash: frozen.actionHash, digest: frozen.digest, count: 1, item: { deliveryId: item.deliveryId, eventId: item.eventId, generation: 0, hash: item.hash, channel: item.channel } })
     for (const change of [{ podId: randomUUID() }, { definitionVersion: 2 }, { bindingRevision: 2 }, { assignmentRevision: 2 }, { resourceEpoch: 1 }, { scriptHash: 'b'.repeat(64) }, { restoreNonce: randomUUID() }, { activationEpoch: 2 }, { networkRevision: 2 }, { expiresAt: frozen.expiresAt + 1 }]) expect(() => parseNetworkGateManifest({ ...frozen, ...change })).toThrow('frozen digest')
   })
 
@@ -51,7 +53,7 @@ describe('versioned gate authority', () => {
     const action = { ...base, actionHash: networkGateActionHash(base) }
     const current = { ...action, digest: networkGateDigest(action) }
     expect(parseNetworkGateManifest(current)).toEqual(current)
-    expect(JSON.parse(networkGateCommand(current)[2]!)).toMatchObject({ version: 3, dataPin: base.dataPin })
+    expect(JSON.parse(networkGateItemCommand(current, current.items[0]!)[2]!)).toMatchObject({ version: 3, dataPin: base.dataPin })
     expect(() => parseNetworkGateManifest({ ...current, dataPin: 'd'.repeat(64) })).toThrow('frozen digest')
     expect(() => parseNetworkGateManifest({ ...old, dataPin: base.dataPin })).toThrow('fields')
     expect(parseNetworkGateManifest(old)).toEqual(old)
@@ -59,7 +61,7 @@ describe('versioned gate authority', () => {
 
   it('accepts canonical payload order and rejects changed or duplicated coverage', () => {
     const frozen = manifest(); const item = frozen.items[0]!
-    const coverage = { manifest: frozen, grantId: 'synthetic-once-grant', items: [{ deliveryId: item.deliveryId, eventId: item.eventId, key: item.key, data: { revision: 1, subject: 'One' } }] }
+    const coverage = { manifest: frozen, grantId: frozen.id, items: [{ deliveryId: item.deliveryId, eventId: item.eventId, key: item.key, grantId: 'synthetic-once-grant', data: { revision: 1, subject: 'One' } }] }
     expect(parseNetworkGateCoverage(coverage)).toEqual(coverage)
     expect(() => parseNetworkGateCoverage({ ...coverage, items: [{ ...coverage.items[0], data: { revision: 2, subject: 'One' } }] })).toThrow('not covered')
     expect(() => parseNetworkGateCoverage({ ...coverage, items: [...coverage.items, ...coverage.items] })).toThrow('Duplicate')
@@ -68,16 +70,17 @@ describe('versioned gate authority', () => {
   })
 })
 
-function runtimeFixture(status: () => string = () => 'pending', consume: () => Promise<unknown> = async () => true, routed = false) {
+/** `status` decides each input by its manifest index, as the owner would at the identity provider. */
+function runtimeFixture(status: (index: number) => string = () => 'pending', consume: (grants: { key: string, id: string }[]) => Promise<unknown> = async () => true, routed = false) {
   const calls: string[] = []
   const f = networkFixture({ gate: async (value, _signal, scope) => {
     scope.assertCurrent()
-    const body = value as { operation: string, manifest: NetworkGateManifest, grantId?: string }
-    f.engine.gates.authorizeService(scope, body.manifest, body.operation, body.grantId)
+    const body = value as { operation: string, manifest: NetworkGateManifest, grants?: { key: string, id: string }[] }
+    f.engine.gates.authorizeService(scope, body.manifest, body.operation, body.grants)
     calls.push(body.operation)
-    if (body.operation === 'create') return { id: `synthetic-once-grant-${body.manifest.id}`, url: 'https://identity.example.invalid/decision' }
-    if (body.operation === 'status') return status()
-    if (body.operation === 'consume') return consume()
+    if (body.operation === 'create') return { id: body.manifest.id, url: 'https://identity.example.invalid/decision', grants: body.manifest.items.map(item => ({ key: item.deliveryId, id: `synthetic-once-grant-${item.deliveryId}` })) }
+    if (body.operation === 'status') return Object.fromEntries(body.grants!.map(grant => [grant.key, status(body.manifest.items.findIndex(item => item.deliveryId === grant.key))]))
+    if (body.operation === 'consume') return consume(body.grants!)
     if (body.operation === 'assertActive') return true
     throw new Error('Unexpected synthetic gate operation')
   } })
@@ -198,25 +201,43 @@ it('invalidates a frozen v3 approval after configuration changes without releasi
   expect(f.started).not.toContain(f.consumer)
 })
 
-it('excludes selected inputs, supersedes the old grant and freezes a fresh approval for the remainder', async () => {
-  const f = runtimeFixture(() => 'approved')
+it('releases only the approved inputs of a batch and consumes only their grants', async () => {
+  const consumed: string[] = []
+  const f = runtimeFixture(index => index === 0 ? 'denied' : 'approved', async (grants) => { consumed.push(...grants.map(grant => grant.key)); return true })
   await f.emit('test.input', 'test.input')
   f.engine.tick(); await f.settle()
-  const original = f.engine.view().gates![0]!
-  f.engine.execute({ type: 'gateExclude', id: f.id, revision: 1, taskId: original.id, generation: original.generation, deliveryIds: [original.items[0]!.deliveryId], evidence: 'Synthetic owner excludes one exact input' })
-  expect(() => f.engine.execute({ type: 'gateExclude', id: f.id, revision: 1, taskId: original.id, generation: original.generation, deliveryIds: [original.items[0]!.deliveryId], evidence: 'Stale decision' })).toThrow('obsolete')
-  f.engine.tick(); await f.settle()
-  const remaining = f.engine.view().gates!.find(gate => gate.state === 'pending')!
-  expect(remaining.id).not.toBe(original.id)
-  expect(remaining.items).toHaveLength(1)
-  expect(remaining.items[0]!.deliveryId).not.toBe(original.items[0]!.deliveryId)
-  const manifests = f.store.db.prepare('SELECT manifest FROM network_gate_tasks ORDER BY created_at').all().map(row => JSON.parse(row.manifest as string))
-  expect(manifests[0].digest).not.toBe(manifests[1].digest)
-  expect(f.calls).toEqual(['create', 'create'])
+  const task = f.engine.view().gates![0]!
+  expect(task.items).toHaveLength(2)
+  expect(f.store.db.prepare('SELECT count(*) AS count FROM network_gate_item_grants WHERE task_id=?').get(task.id)!.count).toBe(2)
   f.due(); f.engine.tick(); await f.settle()
   f.engine.tick(); await f.settle()
-  expect(f.calls.filter(operation => operation === 'consume')).toHaveLength(1)
-  expect(f.store.db.prepare(`SELECT state FROM network_deliveries WHERE id=?`).get(original.items[0]!.deliveryId)!.state).toBe('discarded')
+  expect(consumed).toEqual([task.items[1]!.deliveryId])
+  expect(f.store.db.prepare('SELECT delivery_id,outcome FROM network_gate_items WHERE task_id=? ORDER BY outcome').all(task.id)).toEqual([{ delivery_id: task.items[0]!.deliveryId, outcome: 'denied' }, { delivery_id: task.items[1]!.deliveryId, outcome: 'released' }])
+  expect(f.store.db.prepare('SELECT state FROM network_deliveries WHERE id=?').get(task.items[0]!.deliveryId)!.state).toBe('discarded')
+  expect(f.store.db.prepare('SELECT state FROM network_deliveries WHERE id=?').get(task.items[1]!.deliveryId)!.state).toBe('done')
+  expect(f.started.filter(id => id === f.consumer)).toHaveLength(1)
+  expect(f.calls.filter(operation => operation === 'assertActive')).toHaveLength(1)
+})
+
+it('keeps the whole batch waiting while any input is undecided', async () => {
+  const f = runtimeFixture(index => index === 0 ? 'approved' : 'pending')
+  await f.emit('test.input', 'test.input')
+  f.engine.tick(); await f.settle()
+  f.due(); f.engine.tick(); await f.settle()
+  expect(f.calls).toEqual(['create', 'status'])
+  expect(f.engine.view().gates![0]!.state).toBe('pending')
+  expect(f.started).not.toContain(f.consumer)
+})
+
+it('refuses service calls that name a grant the task did not record', async () => {
+  const f = runtimeFixture()
+  await f.emit('test.input')
+  f.engine.tick(); await f.settle()
+  const task = f.store.db.prepare('SELECT manifest FROM network_gate_tasks').get()!
+  const manifest = JSON.parse(task.manifest as string) as NetworkGateManifest
+  const scope = { podId: f.consumer, runId: randomUUID() }
+  expect(() => f.engine.gates.authorizeService(scope as never, manifest, 'status', [{ key: manifest.items[0]!.deliveryId, id: 'foreign-grant' }])).toThrow('grant identity differs')
+  expect(() => f.engine.gates.authorizeService(scope as never, manifest, 'consume', [])).toThrow('grant identity differs')
 })
 
 it('allows explicit disposal of a stopped uncertain grant without claiming consumption failed', async () => {
@@ -254,11 +275,11 @@ it('fences a real SIGKILL after once-consumption and resumes only unrelated inpu
     const definition=JSON.parse(store.db.prepare('SELECT contract FROM network_revisions WHERE network_id=?').get(${JSON.stringify(f.id)}).contract);
     gates.prepare(definition,${JSON.stringify(f.consumer)});
     let step=gates.reserve(definition,${JSON.stringify(f.consumer)},'event');
-    await gates.round(step,async()=>({id:'synthetic-crash-once-grant',url:'https://identity.example.invalid/decision'}),new AbortController().signal);
+    await gates.round(step,async(body)=>({id:body.manifest.id,url:'https://identity.example.invalid/decision',grants:body.manifest.items.map(item=>({key:item.deliveryId,id:'synthetic-crash-'+item.deliveryId}))}),new AbortController().signal);
     store.db.prepare('UPDATE network_gate_controls SET next_poll_at=0').run();
     step=gates.reserve(definition,${JSON.stringify(f.consumer)},'event');
     await gates.round(step,async(body)=>{
-      if(body.operation==='status')return 'approved';
+      if(body.operation==='status')return Object.fromEntries(body.grants.map(grant=>[grant.key,'approved']));
       if(body.operation!=='consume')throw new Error('Unexpected synthetic grant operation');
       writeFileSync(${JSON.stringify(marker)},'once-consumed');
       process.kill(process.pid,'SIGKILL');
@@ -354,7 +375,7 @@ it('preserves restored gate uncertainty and allows owner disposal without reusin
   f.engine.execute({ type: 'gateDiscard', id: f.id, revision: 1, taskId: task.id, generation: task.generation, evidence: 'Synthetic owner discards the restored uncertain work after review' })
   expect(f.store.db.prepare('SELECT state FROM network_deliveries WHERE id=?').get(task.items[0]!.deliveryId)!.state).toBe('discarded')
   expect(f.calls).toEqual(['create'])
-  expect(f.store.db.prepare('SELECT grant_id FROM network_gate_tasks').get()!.grant_id).toContain('synthetic-once-grant')
+  expect(f.store.db.prepare('SELECT grant_id FROM network_gate_item_grants').get()!.grant_id).toContain('synthetic-once-grant')
 })
 
 it('preserves an uncertain consume and requires explicit owner review plus a new grant before any input resumes', async () => {
@@ -376,22 +397,6 @@ it('preserves an uncertain consume and requires explicit owner review plus a new
   expect(consumes).toBe(2)
   expect(f.started.filter(id => id === f.consumer)).toHaveLength(1)
   expect(f.store.db.prepare('SELECT state FROM network_gate_task_attempts WHERE task_id=? ORDER BY attempt DESC LIMIT 1').get(old.id)!.state).toBe('unknown')
-})
-
-it('refuses an older owner review that would invalidate inputs held by a newer grant', async () => {
-  const f = runtimeFixture()
-  await f.emit('test.input', 'test.input')
-  f.engine.tick(); await f.settle()
-  const original = f.engine.view().gates![0]!
-  f.engine.execute({ type: 'gateExclude', id: f.id, revision: 1, taskId: original.id, generation: original.generation, deliveryIds: [original.items[0]!.deliveryId], evidence: 'Synthetic exclusion' })
-  f.engine.tick(); await f.settle()
-  const views = f.engine.view().gates!
-  const old = views.find(gate => gate.id === original.id)!
-  const fresh = views.find(gate => gate.state === 'pending')!
-  const before = f.store.db.prepare('SELECT generation,state FROM network_deliveries WHERE id=?').get(fresh.items[0]!.deliveryId)
-  expect(() => f.engine.execute({ type: 'gateReview', id: f.id, revision: 1, taskId: old.id, generation: old.generation, evidence: 'Stale owner review after a newer exact grant' })).toThrow('no safe input')
-  expect(f.store.db.prepare('SELECT generation,state FROM network_deliveries WHERE id=?').get(fresh.items[0]!.deliveryId)).toEqual(before)
-  expect(f.engine.view().gates!.find(gate => gate.id === fresh.id)!.state).toBe('pending')
 })
 
 it('blocks gated transient failures and refuses retry or fresh approval without stopped-process evidence', async () => {
@@ -613,14 +618,15 @@ it('maps the approved channel only after the exact retained input receives appro
   expect(f.store.db.prepare('SELECT channel FROM network_events WHERE id=?').get(manifest.items[0]!.eventId)!.channel).toBe('test.input')
 })
 
-it('routes an explicit approval exclusion once and retains its input receipt', async () => {
-  const f = runtimeFixture(() => 'pending', async () => true, true)
+it('routes a denied input once to the excluded channel and retains its receipt', async () => {
+  const f = runtimeFixture(() => 'denied', async () => true, true)
   await f.emit('test.input')
   f.engine.tick(); await f.settle()
   const task = f.engine.view().gates![0]!
-  const command = { type: 'gateExclude', id: f.id, revision: 1, taskId: task.id, generation: task.generation, deliveryIds: [task.items[0]!.deliveryId], evidence: 'Synthetic explicit owner exclusion' }
-  f.engine.execute(command)
-  expect(() => f.engine.execute(command)).toThrow('obsolete')
+  f.due(); f.engine.tick(); await f.settle()
+  f.due(); f.engine.tick(); await f.settle()
+  expect(f.calls.filter(operation => operation === 'consume')).toHaveLength(0)
   expect(f.store.db.prepare('SELECT count(*) AS n FROM network_events WHERE channel=\'test.other\'').get()!.n).toBe(1)
-  expect(f.store.db.prepare('SELECT outcome,receipt FROM network_gate_items WHERE task_id=?').get(task.id)).toMatchObject({ outcome: 'excluded', receipt: expect.stringContaining('Synthetic explicit owner exclusion') })
+  expect(f.store.db.prepare('SELECT outcome,receipt FROM network_gate_items WHERE task_id=?').get(task.id)).toMatchObject({ outcome: 'denied', receipt: expect.stringContaining('Owner approval denied') })
+  expect(f.engine.view().gates!.find(gate => gate.id === task.id)!.state).toBe('denied')
 })

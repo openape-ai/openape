@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { closeNetworks, networkFixture } from './network-fixture'
 import { RunRetention } from '../../src/worker/data/run-retention'
 import { WorkflowEngine } from '../../src/worker/workflows/engine'
-import { excludeGateItems, discardGateBatch } from '../../src/worker/workflows/gates'
+import { discardGateBatch } from '../../src/worker/workflows/gates'
 import { WorkflowCalls } from '../../src/worker/workflows/calls'
 import { workflowInput, publishWorkflowOutput } from '../../src/worker/workflows/handoff'
 import { installExample } from '../../src/worker/runs/examples'
@@ -140,14 +140,14 @@ it('scopes result reads by case and cancels queued calls with a retained parent 
   expect(f.started).toHaveLength(1)
 })
 
-it.each([['approved', false], ['approved', true], ['denied', false], ['expired', false], ['excluded', false], ['unknown', false], ['ambiguous', false]] as const)('settles a required decision as %s with mixed channels %s', async (decision, mixed) => {
+it.each([['approved', false], ['approved', true], ['denied', false], ['expired', false], ['unknown', false], ['ambiguous', false]] as const)('settles a required decision as %s with mixed channels %s', async (decision, mixed) => {
   let approved = false
   const operations: string[] = []
   const f = networkFixture({ gate: async (body) => {
-    const operation = (body as { operation: string }).operation
+    const { operation, manifest, grants } = body as { operation: string, manifest: { id: string, items: { key: string }[] }, grants?: { key: string }[] }
     operations.push(operation)
-    if (operation === 'create') return { id: randomUUID(), url: 'https://identity.example.invalid/approval' }
-    if (operation === 'status') return approved ? decision === 'unknown' ? 'approved' : decision : 'pending'
+    if (operation === 'create') return { id: manifest.id, url: 'https://identity.example.invalid/approval', grants: manifest.items.map(item => ({ key: item.key, id: randomUUID() })) }
+    if (operation === 'status') return Object.fromEntries(grants!.map(grant => [grant.key, approved ? decision === 'unknown' ? 'approved' : decision : 'pending']))
     if (operation === 'consume' && decision === 'unknown') throw new Error('Synthetic lost grant response')
     return undefined
   } })
@@ -193,17 +193,6 @@ it.each([['approved', false], ['approved', true], ['denied', false], ['expired',
   expect(f.store.db.prepare('SELECT result FROM workflow_call_requests').get()!.result).toBeNull()
   workflows.tick(); await idle()
   expect(operations).toEqual(['create'])
-  if (decision === 'excluded') {
-    const batch = workflows.view().gates!.batches[0]!
-    excludeGateItems(f.store, batch.id, batch.items.map(item => item.itemId), Date.now())
-    workflows.tick(); await idle(); calls.tick()
-    expect(f.started).toEqual([root])
-    expect(operations).toEqual(['create'])
-    expect(f.store.db.prepare('SELECT state FROM workflow_call_requests').get()!.state).toBe('failed')
-    expect(f.store.db.prepare('SELECT count(*) AS count FROM workflow_reservations').get()!.count).toBe(0)
-    expect(f.store.db.prepare('SELECT count(*) AS count FROM workflow_call_result_events').get()!.count).toBe(1)
-    return
-  }
   approved = true
   f.store.db.prepare('UPDATE workflow_gate_poll_clocks SET next_poll_at=0').run()
   workflows.tick(); await idle()

@@ -4,12 +4,15 @@ import {
   approveGrant,
   approveGrantWithExtension,
   approveGrantWithWidening,
+  assertGrantBatchMember,
   createDelegation,
   createGrant,
   denyGrant,
   introspectGrant,
+  InvalidGrantBatchError,
   isCallerWaiting,
   isGrantExpired,
+  parseGrantBatch,
   revokeGrant,
   useGrant,
   validateDelegation,
@@ -1206,5 +1209,67 @@ describe('isCallerWaiting', () => {
     const request = { waits_until: 1000 }
     expect(isCallerWaiting(request, 999)).toBe(true)
     expect(isCallerWaiting(request, 1001)).toBe(false)
+  })
+})
+
+describe('request batches', () => {
+  it('accepts a batch and keeps only its known fields', () => {
+    expect(parseGrantBatch(undefined)).toBeUndefined()
+    expect(parseGrantBatch({ id: 'b:1_x.y-z' })).toEqual({ id: 'b:1_x.y-z' })
+    expect(parseGrantBatch({ id: 'b', title: 'Newsletters', size: 30 })).toEqual({ id: 'b', title: 'Newsletters', size: 30 })
+  })
+
+  it.each([
+    [null], [[]], ['b'], [{ title: 'x' }], [{ id: '' }], [{ id: 'a b' }], [{ id: 'a'.repeat(129) }],
+    [{ id: 'b', title: ' ' }], [{ id: 'b', title: 'x'.repeat(201) }], [{ id: 'b', size: 0 }], [{ id: 'b', size: 1.5 }], [{ id: 'b', size: 101 }], [{ id: 'b', approve: true }],
+  ])('rejects %j', (value) => {
+    expect(() => parseGrantBatch(value)).toThrow()
+  })
+
+  it('lists only the members of one batch', async () => {
+    const store = new InMemoryGrantStore()
+    const base = { status: 'pending' as const, created_at: 1, request: { requester: 'agent@example.com', target_host: 'h', audience: 'a', grant_type: 'once' as const } }
+    await store.save({ ...base, id: 'a', request: { ...base.request, batch: { id: 'b-1' } } })
+    await store.save({ ...base, id: 'b', request: { ...base.request, batch: { id: 'b-2' } } })
+    await store.save({ ...base, id: 'c', request: base.request })
+    expect((await store.listGrants({ requester: 'agent@example.com', batch: 'b-1' })).data.map(grant => grant.id)).toEqual(['a'])
+  })
+})
+
+describe('request batch members', () => {
+  const member = (overrides: Partial<OpenApeGrantRequest> = {}): OpenApeGrantRequest => ({ requester: 'agent@example.com', target_host: 'pods:a', audience: 'gate', grant_type: 'once', waits_until: 2000, batch: { id: 'b-1', title: 'Mail', size: 2 }, ...overrides })
+
+  it('accepts uniform once members up to the announced size', async () => {
+    const store = new InMemoryGrantStore()
+    await assertGrantBatchMember(member(), store)
+    await store.save({ id: 'a', status: 'pending', created_at: 1, request: member() })
+    await assertGrantBatchMember(member(), store)
+    await store.save({ id: 'b', status: 'pending', created_at: 2, request: member() })
+    await expect(assertGrantBatchMember(member(), store)).rejects.toThrow('announced size')
+  })
+
+  it.each([
+    ['a lasting grant', { grant_type: 'always' as const }],
+    ['run_as', { run_as: 'root' }],
+    ['a delegate', { delegate: 'x@example.com' }],
+  ])('rejects %s', async (_name, overrides) => {
+    await expect(assertGrantBatchMember(member(overrides), new InMemoryGrantStore())).rejects.toBeInstanceOf(InvalidGrantBatchError)
+  })
+
+  it.each([
+    ['target', { target_host: 'pods:b' }],
+    ['audience', { audience: 'other' }],
+    ['deadline', { waits_until: 3000 }],
+    ['title', { batch: { id: 'b-1', title: 'Other', size: 2 } }],
+  ])('rejects a member with a different %s than the batch', async (_name, overrides) => {
+    const store = new InMemoryGrantStore()
+    await store.save({ id: 'a', status: 'pending', created_at: 1, request: member() })
+    await expect(assertGrantBatchMember(member(overrides), store)).rejects.toThrow('must share')
+  })
+
+  it('ignores members of another requester with the same batch id', async () => {
+    const store = new InMemoryGrantStore()
+    await store.save({ id: 'a', status: 'pending', created_at: 1, request: member({ requester: 'other@example.com', target_host: 'pods:z' }) })
+    await assertGrantBatchMember(member(), store)
   })
 })
