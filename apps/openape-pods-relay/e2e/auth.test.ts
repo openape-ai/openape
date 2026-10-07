@@ -94,10 +94,20 @@ it('registers a desktop and mobile through real DDISA callbacks and rejects repl
     const published = await fetch(`${relay.url}${publishPath}`, { method: 'POST', headers: { ...headers(desktop, publishPath, 'POST', publication), 'content-type': 'application/json' }, body: publication })
     expect(published.status, await published.clone().text()).toBe(expected)
   }
-  const inboxRead = await fetch(`${relay.url}/inbox/api/v1/items`, { headers: { cookie: webCookie } })
-  expect((await inboxRead.clone().json() as { items: { title: string }[] }).items.map(entry => entry.title)).toEqual(['Belege'])
-  const inboxCookie = [webCookie, ...inboxRead.headers.getSetCookie().map(value => value.split(';')[0])].join('; ')
-  expect((await fetch(`${relay.url}/inbox/api/v1/logout`, { method: 'POST', headers: { cookie: inboxCookie, origin: relay.url } })).status).toBe(200)
+  // A workspace sign-in alone never opens the inbox; only a sign-in started by the inbox creates a device session.
+  expect(await (await fetch(`${relay.url}/inbox/api/v1/items`, { headers: { cookie: webCookie } })).json()).toMatchObject({ code: 'authentication_required' })
+  const inboxLogin = await fetch(`${relay.url}/workspace-auth/login`, { method: 'POST', headers: { origin: relay.url, 'content-type': 'application/json' }, body: JSON.stringify({ email, returnTo: '/inbox/' }) })
+  const inboxFlow = inboxLogin.headers.getSetCookie().map(value => value.split(';')[0]).join('; ')
+  const inboxGrant = await fetch((await inboxLogin.json() as { redirectUrl: string }).redirectUrl, { redirect: 'manual', headers: { authorization: `Bearer ${loginToken}` } })
+  const inboxCallback = await fetch(inboxGrant.headers.get('location')!, { redirect: 'manual', headers: { cookie: inboxFlow } })
+  const inboxCookie = inboxCallback.headers.getSetCookie().map(value => value.split(';')[0]).filter(value => !value.endsWith('=')).join('; ')
+  const inboxRead = await fetch(`${relay.url}/inbox/api/v1/items`, { headers: { cookie: inboxCookie } })
+  expect((await inboxRead.json() as { items: { title: string }[] }).items.map(entry => entry.title)).toEqual(['Belege'])
+  // Any later sign-in in this browser that is not started by the inbox ends its inbox session (account switch).
+  const switched = await fetch(`${relay.url}/workspace-auth/login`, { method: 'POST', headers: { origin: relay.url, 'content-type': 'application/json' }, body: JSON.stringify({ email }) })
+  const switchFlow = [inboxCookie, ...switched.headers.getSetCookie().map(value => value.split(';')[0])].join('; ')
+  const switchGrant = await fetch((await switched.json() as { redirectUrl: string }).redirectUrl, { redirect: 'manual', headers: { authorization: `Bearer ${loginToken}` } })
+  await fetch(switchGrant.headers.get('location')!, { redirect: 'manual', headers: { cookie: switchFlow } })
   const revoked = await fetch(`${relay.url}/inbox/api/v1/items`, { headers: { cookie: inboxCookie } })
   expect(await revoked.json()).toMatchObject({ code: 'session_revoked' })
   const runtimePath = '/api/runtime/v1/workspace'
