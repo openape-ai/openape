@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest'
-import { InboxPrototype, parseSubscription } from '../server/utils/inbox-prototype'
+import { inboxPath, InboxPrototype, parseSubscription } from '../server/utils/inbox-prototype'
 
 const cleanup: (() => void)[] = []
 afterEach(() => { for (const run of cleanup.splice(0)) run() })
@@ -55,4 +55,9 @@ it('records receipts only for the secret token and refuses foreign push endpoint
     expect(() => parseSubscription({ ...subscription, endpoint })).toThrow('invalid_push_endpoint')
   }
   expect(() => store.schedule(owner, [1_000_000 + 4 * 86400000])).toThrow('invalid_schedule')
+})
+
+it('resumes sign-in only on same-origin inbox paths', () => {
+  for (const path of ['/inbox/', '/inbox/?tab=device', '/inbox/item/0dce9eb2-fce0-45ba-aeec-d456d9eb56c9?push=89d338e6-da26-4f39-a53e-f08de790bffb']) expect(inboxPath.test(path)).toBe(true)
+  for (const path of ['/inbox', 'https://evil.example/inbox/', '//evil.example/inbox/', '/inbox/../workspace-auth/logout', '/inbox/%2e%2e/x', '/inbox/?next=https://evil.example', '/inbox/\\evil.example']) expect(inboxPath.test(path)).toBe(false)
 })

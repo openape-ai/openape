@@ -1,6 +1,6 @@
 // Pods Inbox M0 prototype service worker: shows pushes, records receipts, opens the exact item.
 // No fetch handler: nothing private is cached.
-const version = 'm0-1'
+const version = 'm0-2'
 
 globalThis.addEventListener('install', () => globalThis.skipWaiting())
 globalThis.addEventListener('activate', event => event.waitUntil(globalThis.clients.claim()))
@@ -26,15 +26,13 @@ globalThis.addEventListener('push', (event) => {
 globalThis.addEventListener('notificationclick', (event) => {
   event.notification.close()
   const { url = '/inbox/', receipt: token } = event.notification.data || {}
-  event.waitUntil((async () => {
-    await receipt(token, 'clicked')
+  // Navigate first: WebKit allows focus/openWindow only briefly after the tap. The receipt runs in parallel.
+  event.waitUntil(Promise.all([receipt(token, 'clicked'), (async () => {
     const windows = await globalThis.clients.matchAll({ type: 'window', includeUncontrolled: true })
     const open = windows.find(client => new URL(client.url).pathname.startsWith('/inbox'))
-    if (open) {
-      await open.focus()
-      open.postMessage({ type: 'navigate', url })
-      return
-    }
-    await globalThis.clients.openWindow(url)
-  })())
+    if (!open) return globalThis.clients.openWindow(url)
+    const focused = await open.focus()
+    // navigate() reloads the target even if the app is still starting; postMessage is the fallback for clients that refuse it.
+    return focused.navigate(url).catch(() => focused.postMessage({ type: 'navigate', url }))
+  })()]))
 })
