@@ -33,11 +33,17 @@ async function load() {
   emit('ready', session.value)
 }
 
+function returnPath(): string {
+  const target = new URL(route.fullPath, window.location.origin)
+  target.searchParams.delete('login')
+  return target.pathname + target.search
+}
+
 async function login() {
   if (busy.value) return
   busy.value = true; error.value = ''
   try {
-    const response = await fetch('/workspace-auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: email.value.trim(), returnTo: route.fullPath }), redirect: 'error' })
+    const response = await fetch('/workspace-auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: email.value.trim(), returnTo: returnPath() }), redirect: 'error' })
     const result = await response.json() as { redirectUrl?: string, statusMessage?: string, code?: string }
     if (!response.ok || !result.redirectUrl) throw new Error(result.statusMessage || result.code || 'Anmeldung konnte nicht gestartet werden.')
     window.location.assign(result.redirectUrl)

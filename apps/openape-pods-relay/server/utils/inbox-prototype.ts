@@ -13,6 +13,8 @@ export interface Subscription { endpoint: string, p256dh: string, auth: string }
 // Push services that browsers hand out today; anything else is refused before the server ever connects to it.
 const pushHosts = [/^web\.push\.apple\.com$/, /^fcm\.googleapis\.com$/, /^updates\.push\.services\.mozilla\.com$/, /\.notify\.windows\.com$/]
 const maxPending = 100
+// Sign-in may resume only a same-origin inbox page.
+export const inboxPath = /^\/inbox\/(?:[\w-]+(?:\/[\w-]+)*\/?)?(?:\?[\w=&-]{1,200})?$/
 const key = (owner: Owner) => JSON.stringify([owner.issuer, owner.subject])
 
 export function parseSubscription(input: unknown): Subscription {

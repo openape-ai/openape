@@ -50,9 +50,16 @@ async function enablePush() {
     if (!('PushManager' in window)) throw new Error('Push ist nur in der installierten App verfügbar (Teilen → Zum Home-Bildschirm).')
     permission.value = await Notification.requestPermission()
     if (permission.value !== 'granted') throw new Error('Mitteilungen wurden nicht erlaubt.')
-    const registration = await navigator.serviceWorker.ready
-    const subscription = await registration.pushManager.getSubscription() ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key(current.vapidPublicKey) })
-    const result = await api<{ devices: number }>('subscribe', { subscription: subscription.toJSON() })
+    const registration = await navigator.serviceWorker.getRegistration('/inbox/')
+    if (!registration) throw new Error('Service Worker nicht aktiv. App über den Home-Bildschirm neu öffnen.')
+    const create = () => registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key(current.vapidPublicKey) })
+    const existing = await registration.pushManager.getSubscription() ?? await create()
+    const result = await api<{ devices: number }>('subscribe', { subscription: existing.toJSON() }).catch(async (cause: Error) => {
+      // This browser's endpoint still belongs to another account: drop it so the push service issues a fresh one.
+      if (cause.message !== 'push_endpoint_taken') throw cause
+      await existing.unsubscribe()
+      return api<{ devices: number }>('subscribe', { subscription: (await create()).toJSON() })
+    })
     current.devices = result.devices
     status.value = 'Mitteilungen aktiv.'
   }
@@ -81,15 +88,19 @@ async function cancel() {
   catch (cause) { status.value = cause instanceof Error ? cause.message : String(cause) }
 }
 
-// Signing out releases this device's push subscription so no further alerts reach it for this account.
+// Signing out always ends the session. The local unsubscribe invalidates the endpoint at the push service
+// even if the server call fails; the server then forgets it on the next 404/410.
 async function logout() {
+  status.value = ''
   try {
-    const subscription = 'serviceWorker' in navigator ? await (await navigator.serviceWorker.ready).pushManager?.getSubscription() : null
-    if (subscription) { await api('unsubscribe', { endpoint: subscription.endpoint }); await subscription.unsubscribe() }
-    await fetch('/workspace-auth/logout', { method: 'POST' })
-    shell.value?.expired()
+    const registration = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration('/inbox/') : undefined
+    const subscription = await registration?.pushManager?.getSubscription()
+    if (subscription) await Promise.allSettled([api('unsubscribe', { endpoint: subscription.endpoint }), subscription.unsubscribe()])
   }
-  catch (cause) { status.value = cause instanceof Error ? cause.message : String(cause) }
+  catch (cause) { status.value = `Push-Abmeldung: ${cause instanceof Error ? cause.message : String(cause)}` }
+  const response = await fetch('/workspace-auth/logout', { method: 'POST' }).catch(() => null)
+  if (!response?.ok) { status.value = 'Abmelden fehlgeschlagen. Bitte erneut versuchen.'; return }
+  shell.value?.expired()
 }
 
 // Foreground return is the sync point; push delivery is never relied on for correctness.
