@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import assert from 'node:assert/strict'
 import { sha256 } from './distribution.mjs'
+import { failOnKeychainDialog } from '../e2e/fixtures/keychain.ts'
 
 const signedLocal = process.argv.includes('--signed-local')
 if (process.argv.slice(2).some(argument => argument !== '--signed-local')) throw new Error('Unsupported verification option')
@@ -33,6 +34,7 @@ try {
   assert.equal(manifest.releaseReady, false); assert.equal(manifest.version, version)
   const bom = JSON.parse(await readFile(join(bundle, 'Contents/Resources/bom.json'), 'utf8')); assert.ok(bom.packages.length > 5); assert.ok(bom.blockers.length)
   app = await electron.launch({ executablePath: join(bundle, 'Contents/MacOS/OpenApe Pods'), env: { HOME: profile, TMPDIR: root, PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: profile, NODE_ENV: 'test' } })
+  failOnKeychainDialog(app)
   const page = await app.firstWindow()
   // waitForFunction does not await an async predicate (a pending promise is truthy), so poll the actual worker state.
   const deadline = Date.now() + 60000

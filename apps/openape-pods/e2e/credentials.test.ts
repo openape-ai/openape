@@ -1,6 +1,7 @@
 import { fixtureShellIdentity } from './fixtures/shell-identity'
-import { randomBytes } from 'node:crypto'
+import { failOnKeychainDialog } from './fixtures/keychain'
 import { _electron as electron } from 'playwright'
+import type { Page } from 'playwright'
 import { mkdtemp, realpath, rm, readFile, readdir } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -9,33 +10,33 @@ import { fixtureDirectory } from '../src/main/fixture'
 import { PodDatabase } from '../src/worker/storage/database'
 
 // Geometry of the Values tab lives in test/layout/pod-tabs.test.ts. This file
-// keeps what needs the packaged app: real macOS safeStorage ciphertext, a restart
-// that decrypts it again, and key files erased on rotation and revocation.
+// keeps what needs the packaged app: safeStorage ciphertext, a restart that
+// decrypts it again, and key files erased on rotation and revocation. It uses
+// Chromium's mock keychain unless OPENAPE_PODS_TEST_REAL_KEYCHAIN=1 opts into
+// the login keychain, which needs a human or an unlocked dedicated keychain.
 it('credentials: packaged owner flow retains assigned secrets across runs and revokes access', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-credentials-ui-'))); fixtureDirectory(root)
   const store = new PodDatabase(root); const pod = store.createPod({ name: 'Customer review' }); store.close()
   const shellIdentity = await fixtureShellIdentity(root)
-  const syntheticCipher = process.env.OPENAPE_PODS_TEST_SYNTHETIC_CIPHER === '1'
-  const key = randomBytes(32).toString('hex')
+  const realKeychain = process.env.OPENAPE_PODS_TEST_REAL_KEYCHAIN === '1'
   const launch = async () => {
-    const running = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: syntheticCipher ? root : homedir(), TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
+    const running = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: realKeychain ? homedir() : root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test', ...(realKeychain ? { OPENAPE_PODS_TEST_REAL_KEYCHAIN: '1' } : {}) } })
+    failOnKeychainDialog(running)
     expect(await running.evaluate(({ app }) => app.getPath('userData'))).toBe(root)
     expect(await running.evaluate(({ app }) => app.getPath('sessionData'))).toBe(join(root, 'chromium'))
-    if (syntheticCipher) {
-      await running.evaluate(({ safeStorage }, key) => {
-        const { createCipheriv, createDecipheriv, randomBytes } = process.getBuiltinModule('node:crypto') as typeof import('node:crypto')
-        safeStorage.isEncryptionAvailable = () => true
-        safeStorage.encryptString = (value) => { const iv = randomBytes(12); const cipher = createCipheriv('aes-256-gcm', Buffer.from(key, 'hex'), iv); return Buffer.concat([iv, cipher.update(value), cipher.final(), cipher.getAuthTag()]) }
-        safeStorage.decryptString = (bytes) => { const cipher = createDecipheriv('aes-256-gcm', Buffer.from(key, 'hex'), bytes.subarray(0, 12)); cipher.setAuthTag(bytes.subarray(-16)); return Buffer.concat([cipher.update(bytes.subarray(12, -16)), cipher.final()]).toString() }
-      }, key)
-    }
     await shellIdentity.encrypt(running)
-    console.info(`Credential flow: ${syntheticCipher ? 'isolated synthetic cipher; macOS keychain is NOT verified' : 'real macOS safeStorage'}`)
+    console.info(`Credential flow: ${realKeychain ? 'real macOS login keychain' : 'Chromium mock keychain; macOS login keychain is NOT verified'}`)
     return running
+  }
+  const openPod = async (page: Page) => {
+    await page.getByRole('button', { name: 'List', exact: true }).click()
+    await page.getByRole('row', { name: /Customer review/ }).click()
+    await page.getByRole('button', { name: 'Open details', exact: true }).click()
   }
   let app = await launch()
   try {
     let page = await app.firstWindow(); page.setDefaultTimeout(7000); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
+    await openPod(page)
     await page.getByRole('tab', { name: 'Variables and secrets', exact: true }).click()
     console.info('Credential flow: rendered resources, saving synthetic encrypted value')
     await page.getByLabel('Credential alias', { exact: true }).fill('crm')
@@ -87,6 +88,7 @@ export async function run(context) {
     const result = await page.evaluate(podId => window.pods.runs({ type: 'start', podId }), pod.id)
     await expect.poll(async () => (await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), pod.id)).runs[0]?.state).toBe('completed')
     expect(result.runs.length).toBeGreaterThan(0)
+    await openPod(page)
     await page.getByRole('tab', { name: 'Variables and secrets', exact: true }).click()
     const rotated = await page.evaluate(({ podId, epoch }) => window.pods.resources({ type: 'saveCredential', podId, alias: 'crm', value: 'ROTATED_SYNTHETIC_VALUE', epoch }), { podId: pod.id, epoch: resources.epoch })
     const current = rotated.resources.find(item => item.state === 'ready')!
@@ -98,7 +100,7 @@ export async function run(context) {
     expect(await readdir(join(root, 'credentials'))).not.toContain(`${id}.encrypted`)
     expect((await page.evaluate(podId => window.pods.scripts({ type: 'list', podId }), pod.id)).source!.validated).toBe(false)
     expect((await page.evaluate(podId => window.pods.runs({ type: 'start', podId }), pod.id)).runs).toHaveLength(2)
-    expect(await page.evaluate(podId => window.pods.scheduling({ type: 'list', podId }), pod.id)).toMatchObject({ blocked: 1, error: expect.stringContaining('validation') })
+    expect(await page.evaluate(podId => window.pods.scheduling({ type: 'list', podId }), pod.id)).toMatchObject({ blocked: 0, failed: 1 })
     expect(await readdir(join(root, 'credentials'))).not.toContain(`${current.configuration.credentialId}.encrypted`)
     expect(await readdir(join(root, 'credentials'))).toContain(`${otherId}.encrypted`)
     expect((await page.evaluate(podId => window.pods.scheduling({ type: 'list', podId }), pod.id)).enabled).toBe(false)
