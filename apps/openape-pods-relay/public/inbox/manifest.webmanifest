@@ -1,0 +1,16 @@
+{
+  "id": "/inbox/",
+  "name": "Pods Inbox",
+  "short_name": "Pods",
+  "description": "Entscheidungen und Mitteilungen aus OpenApe Pods",
+  "lang": "de",
+  "start_url": "/inbox/",
+  "scope": "/inbox/",
+  "display": "standalone",
+  "background_color": "#f6f4ee",
+  "theme_color": "#1c4534",
+  "icons": [
+    { "src": "/inbox/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/inbox/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
