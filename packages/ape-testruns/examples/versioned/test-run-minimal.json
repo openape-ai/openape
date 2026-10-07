@@ -1,0 +1,15 @@
+{
+  "schema": "openape.test-run/1",
+  "title": "Example: offline export",
+  "purpose": "verification",
+  "sample": true,
+  "tests": [
+    {
+      "id": "export",
+      "title": "Export preserves the expected text",
+      "status": "passed",
+      "expected": "The supplied title appears in the export.",
+      "observed": "The title appears unchanged."
+    }
+  ]
+}

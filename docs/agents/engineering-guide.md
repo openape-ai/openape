@@ -314,6 +314,8 @@ Liste prüfen:
 Render actual evidence with `ape-report-render test-run run/testrun.json report.html`,
 inspect the screenshots and publish with `ape-reports publish report.html --category
 'Test Runs' --key RUN_KEY`. Plans use `ape-report-render plan plan.json plan.html`
-and category `Plans`. Read `packages/ape-testruns/RENDERING.md` for the input contract.
+and category `Plans`. Read `packages/ape-testruns/RENDERING.md` for the input contract. New authoring uses `openape.test-run/1` and `openape.plan/2`,
+validated by `packages/ape-testruns/schemas/report.schema.json`. Canonical HTML
+structure lives in `packages/ape-testruns/templates/test-run.html` and `plan.html`.
 Keep commands, tested commit, outcomes and limitations accurate. Default publication
 is private; status metadata never grants access or records owner approval.

@@ -1839,6 +1839,12 @@ importers:
       '@openape/proof-cli':
         specifier: workspace:*
         version: link:../proof-cli
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
+      ajv-formats:
+        specifier: 3.0.1
+        version: 3.0.1(ajv@8.20.0)
       citty:
         specifier: ^0.1.6
         version: 0.1.6
