@@ -1,9 +1,12 @@
 <!doctype html>
-<html lang="{{language}}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>{{title}}</title><script id="openape-report" type="application/json">{{metadata}}</script>{{source}}<style>{{styles}}</style></head><body><div id="report-document"><article class="document">{{content}}{{banner}}{{masthead}}{{body}}</article></div></body></html>
+<html lang="{{language}}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>{{title}}</title><script id="openape-report" type="application/json">{{metadata}}</script>{{source}}<style>{{styles}}</style></head><body><div id="report-document"><article class="document">{{content}}{{banner}}{{masthead}}{{controls}}{{body}}</article></div></body></html>
 <!-- report-body -->
 <main class="page">
-<div class="eyebrow">{{eyebrow}}</div><h1>{{title}}</h1><div class="lead markdown">{{lead}}</div>{{meta}}
+<div class="eyebrow">{{eyebrow}}</div><h1>{{title}}</h1>{{tldr}}{{problem}}<div class="lead markdown">{{lead}}</div>{{meta}}
 {{state}}
-{{context}}{{scope}}{{decisions}}{{beforeDetails}}<section class="block"><div class="section-heading"><h2>Milestones</h2><span class="small">{{progress}}</span></div>{{details}}</section>{{afterDetails}}{{completion}}{{evidence}}{{risks}}{{rollback}}{{verification}}{{handoff}}{{targets}}{{references}}{{history}}
-<div class="foot">Content and inspection attestations are supplied by the author. The renderer does not execute checks or verify the author's identity.</div>
+{{context}}{{scope}}{{decisions}}{{beforeDetails}}<section class="block"><div class="section-heading"><h2>{{milestoneHeading}}</h2><span class="small">{{progress}}</span></div>{{details}}</section>{{afterDetails}}{{completion}}{{evidence}}{{risks}}{{rollback}}{{verification}}{{handoff}}{{targets}}{{references}}{{history}}
+<div class="foot">{{foot}}</div>
 </main>
+
+<!-- report-language-controls -->
+<fieldset class="plan-language-controls"><legend>Sprache / Language</legend><label><input type="radio" name="plan-language" id="plan-language-de" value="de"{{deChecked}}>Deutsch</label><label><input type="radio" name="plan-language" id="plan-language-en" value="en"{{enChecked}}>English</label><label><input type="radio" name="plan-language" id="plan-language-both" value="both">DE + EN</label><p>Ansicht und Druck / View and print</p></fieldset>
