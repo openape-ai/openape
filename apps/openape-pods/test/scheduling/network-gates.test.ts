@@ -10,7 +10,7 @@ import { NetworkEngine } from '../../src/worker/scheduling/network-engine'
 import type { AgentRuntime } from '../../src/worker/agent/executor'
 import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { gateDigest, gateItemCommand, gateItemSummary, parseGateManifest, payloadHash } from '../../src/contracts/gates'
+import { gateDigest, gateItemCommand, gateItemSummary, gateLimits, parseGateManifest, payloadHash } from '../../src/contracts/gates'
 import { networkGateActionHash, networkGateDigest, networkGateItemCommand, networkGatePayloadHash, parseNetworkGateCoverage, parseNetworkGateManifest } from '../../src/contracts/network-gates'
 import type { NetworkGateManifest } from '../../src/contracts/network-gates'
 import { parseNetworkDefinition } from '../../src/contracts/networks'
@@ -219,6 +219,33 @@ it('releases only the approved inputs of a batch and consumes only their grants'
   expect(f.calls.filter(operation => operation === 'assertActive')).toHaveLength(1)
 })
 
+it('collects inputs answered one after another into one approval after a quiet moment', async () => {
+  const f = runtimeFixture()
+  f.engine.gates.collect = { quietMs: gateLimits.collectQuietMs, maxMs: gateLimits.collectMaxMs }
+  const tasks = () => f.store.db.prepare('SELECT manifest FROM network_gate_tasks').all().map(row => (JSON.parse(row.manifest as string) as NetworkGateManifest).items.length)
+  // Only the gated consumer's inputs age; the independent consumer receives copies of the same events.
+  const age = (ms: number, which: 'all' | 'oldest') => f.store.db.prepare(`UPDATE network_deliveries SET accepted_at=accepted_at-? WHERE id IN (SELECT delivery.id FROM network_deliveries delivery JOIN network_subscriptions subscription ON subscription.id=delivery.subscription_id WHERE subscription.pod_id=? ORDER BY delivery.accepted_at,delivery.id LIMIT ?)`).run(ms, f.consumer, which === 'all' ? -1 : 1)
+  await f.emit('test.input', 'test.input')
+  // One input answered a minute ago, the other just now: still collecting, nothing reaches the identity provider.
+  age(60000, 'oldest')
+  f.engine.tick(); await f.settle()
+  expect(tasks()).toEqual([])
+  expect(f.calls).toEqual([])
+  age(gateLimits.collectQuietMs, 'all')
+  f.engine.tick(); await f.settle()
+  expect(tasks()).toEqual([2])
+  expect(f.calls).toEqual(['create'])
+})
+
+it('stops collecting ten minutes after the oldest input even while new ones keep arriving', async () => {
+  const f = runtimeFixture()
+  f.engine.gates.collect = { quietMs: gateLimits.collectQuietMs, maxMs: gateLimits.collectMaxMs }
+  await f.emit('test.input', 'test.input')
+  f.store.db.prepare('UPDATE network_deliveries SET accepted_at=accepted_at-? WHERE id=(SELECT delivery.id FROM network_deliveries delivery JOIN network_subscriptions subscription ON subscription.id=delivery.subscription_id WHERE subscription.pod_id=? ORDER BY delivery.accepted_at,delivery.id LIMIT 1)').run(gateLimits.collectMaxMs, f.consumer)
+  f.engine.tick(); await f.settle()
+  expect(f.store.db.prepare('SELECT count(*) AS count FROM network_gate_tasks').get()!.count).toBe(1)
+})
+
 it('keeps the whole batch waiting while any input is undecided', async () => {
   const f = runtimeFixture(index => index === 0 ? 'approved' : 'pending')
   await f.emit('test.input', 'test.input')
@@ -272,6 +299,7 @@ it('fences a real SIGKILL after once-consumption and resumes only unrelated inpu
     const store = new PodDatabase(${JSON.stringify(f.store.root)});
     const invocations = new NetworkInvocations(store,new RunStore(store),'/unused');
     const gates = new NetworkGates(store,invocations,new ResourceRegistry(store,()=>{}));
+    gates.collect={quietMs:0,maxMs:0};
     invocations.gates=gates;
     const definition=JSON.parse(store.db.prepare('SELECT contract FROM network_revisions WHERE network_id=?').get(${JSON.stringify(f.id)}).contract);
     gates.prepare(definition,${JSON.stringify(f.consumer)});
@@ -291,6 +319,7 @@ it('fences a real SIGKILL after once-consumption and resumes only unrelated inpu
   expect(f.store.db.prepare('SELECT state FROM network_gate_tasks').get()!.state).toBe('consuming')
   const dispatcher = new RunDispatcher(f.store, f.resources, { helper: '/unused', environment: {} } as AgentRuntime, { gate: async () => { throw new Error('An interrupted once-consume must never be repeated') } })
   const engine = new NetworkEngine(f.store, dispatcher, f.resources, '/unused', () => f.owner)
+  engine.gates.collect = { quietMs: 0, maxMs: 0 }
   try {
     expect(f.store.db.prepare('SELECT state FROM network_gate_tasks').get()!.state).toBe('unknown')
     await engine.reconcileStartup()

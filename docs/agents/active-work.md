@@ -8,6 +8,14 @@
 - Checks: relay 72 unit/component tests, lint, typecheck, browser acceptance `e2e/inbox-app.test.ts` with the card step.
 - Next: merge and relay deploy after owner go; separately the gate batch quiet window (owner choice: about 2 minutes without new items, at most 10 minutes); M5 push. Handoff: [pods-inbox-m4-handoff.md](pods-inbox-m4-handoff.md).
 
+## Pods gate batches collect before freezing — issue 1449
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1449. Owner observation October 7: every answered network choice produced its own one-item IdP approval batch. Owner decision: a quiet window (about 2 minutes without new input, at most 10 minutes) instead of growing sealed batches.
+- Checkout `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-gate-quiet-window-1449`, branch `bugfix/issue-1449-gate-quiet-window` (base `76ffae69`).
+- Change: `NetworkGates.prepare` freezes only after the quiet window, the maximum age or a full batch; synthetic fixtures (unit fixture, Electron fixture worker via `PODS_FIXTURE_GATE_COLLECT`) keep immediate freezing.
+- Checks: Pods 1,339 unit tests, lint, typecheck, build, Electron `e2e/network-gates.test.ts` (2/2).
+- Next: merge after owner go, signed desktop build and installation with backup (no relay or schema change).
+
 ## Pods network member script updates — issue 1445
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1445; approved plan: https://report.openape.ai/d/01M4B5W5S3S1DDBQF9PDFED194 (revision 1, owner approval October 7).
