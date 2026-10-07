@@ -17,11 +17,13 @@ import { clock, stamp } from '../utils/cadence'
  * proposals. Every decision leaves as an existing owner command; nothing here approves on its own.
  */
 const props = defineProps<{ view: MapView, choices: NetworkChoiceView[], gates: NetworkGateView[], graphGates: { batches: GateBatchView[], held: GateHeldItem[] } | null, proposals: AccessProposal[], desktop: boolean, requests?: SecretRequestRow[], secretsOrigin?: string }>()
-const emit = defineEmits<{ network: [command: NetworkCommand], workflow: [command: WorkflowCommand], command: [command: CentralCommand], master: [command: MasterCommand], open: [id: string], secrets: [command: SecretsCommand] }>()
+const emit = defineEmits<{ network: [command: NetworkCommand, settle?: (error: string | null) => void], workflow: [command: WorkflowCommand], command: [command: CentralCommand], master: [command: MasterCommand], open: [id: string], secrets: [command: SecretsCommand] }>()
 const headline = ['subject', 'title', 'name']
 const groupBy = ref('')
 const raw = ref(false)
-const decided = ref<Record<string, { title: string, channel: string }>>({})
+/** A choice is shown as saving until its event leaves the waiting list; a refused save returns the case with its error. */
+const saving = ref<Record<string, { eventId: string, title: string, channel: string }>>({})
+const failures = ref<Record<string, string>>({})
 const evidence = ref<Record<string, string>>({})
 const openBatch = ['preparing', 'pending', 'consuming', 'unknown', 'superseded']
 
@@ -57,7 +59,8 @@ const gateHeads = computed(() => {
   return [...keys.values()]
 })
 const fields = computed(() => [...new Set(cases.value.flatMap(item => Object.keys(item.payload)))].filter(field => !headline.includes(field) && field !== 'evidence' && field !== 'date'))
-const open = (items: Case[]) => items.filter(item => !decided.value[item.id])
+const isSaving = (item: Case) => saving.value[item.id]?.eventId === item.event.eventId
+const open = (items: Case[]) => items.filter(item => !isSaving(item))
 const openEvents = computed(() => open(cases.value).reduce((sum, item) => sum + item.versions, 0))
 const headlineOf = (item: Case) => headline.map(key => item.payload[key]).find(value => typeof value === 'string' && value) as string | undefined ?? item.event.caseId
 const rest = (item: Case) => Object.entries(item.payload).filter(([key]) => !headline.includes(key))
@@ -76,8 +79,16 @@ function groups(items: Case[]): [string, Case[]][] {
 function choose(item: Case, key: string) {
   const option = item.options.find(option => option.key === key)
   if (!option) return
-  decided.value = { ...decided.value, [item.id]: { title: option.title, channel: option.channel } }
-  emit('network', { type: 'choose', id: item.networkId, revision: item.revision, eventId: item.event.eventId, gate: item.gate, option: key })
+  const eventId = item.event.eventId
+  saving.value = { ...saving.value, [item.id]: { eventId, title: option.title, channel: option.channel } }
+  const { [item.id]: _previous, ...others } = failures.value
+  failures.value = others
+  emit('network', { type: 'choose', id: item.networkId, revision: item.revision, eventId, gate: item.gate, option: key }, (error) => {
+    if (!error || saving.value[item.id]?.eventId !== eventId) return
+    const { [item.id]: _refused, ...rest } = saving.value
+    saving.value = rest
+    failures.value = { ...failures.value, [item.id]: error }
+  })
 }
 function chooseAll(items: Case[], key: string) { for (const item of open(items)) choose(item, key) }
 
@@ -136,9 +147,9 @@ defineExpose({ total })
               <span class="pill off">{{ groupBy }} = {{ groupKey }}</span><span class="meta">{{ t('{count} cases', { count: list.length }) }}</span><span v-if="open(list).length > 1" class="opts"><button v-for="option in list[0]!.options" :key="option.key" class="secondary" type="button" @click="chooseAll(list, option.key)">{{ t('all: {title}', { title: option.title }) }}</button></span>
             </div>
             <template v-for="item in list" :key="item.id">
-              <div v-if="decided[item.id]" class="item done">
+              <div v-if="isSaving(item)" class="item done" data-saving>
                 <div class="row">
-                  <span class="pill ok">{{ decided[item.id]!.title }}</span><span class="subj">{{ headlineOf(item) }}</span><span class="meta">→ {{ decided[item.id]!.channel }}</span>
+                  <span class="pill warn">{{ t('Saving: {title}', { title: saving[item.id]!.title }) }}</span><span class="subj">{{ headlineOf(item) }}</span><span class="meta">→ {{ saving[item.id]!.channel }}</span>
                 </div>
               </div>
               <div v-else class="item" :data-case="item.id">
@@ -153,6 +164,9 @@ defineExpose({ total })
                 <div class="row auth">
                   <span class="pill pods">{{ item.title }}</span><span class="meta mono">{{ gateDefinition(item.networkId, item.gate)?.takes }} · {{ t('Case {id}', { id: item.event.caseId.slice(0, 8) }) }}</span>
                 </div>
+                <p v-if="failures[item.id]" class="error-message" role="alert">
+                  {{ t('Not saved: {reason}', { reason: diagnostic(failures[item.id]!) }) }}
+                </p>
                 <div class="opts">
                   <button v-for="option in item.options" :key="option.key" class="secondary" type="button" :title="`→ ${option.channel}`" @click="choose(item, option.key)">
                     {{ option.title }}

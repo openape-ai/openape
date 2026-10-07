@@ -26,6 +26,11 @@ export interface CentralExecutor {
   gate: (until: number) => Promise<CentralGate | void>
 }
 export type WorkspaceRequest = (body: Record<string, unknown>) => Promise<unknown>
+/** Busy or moved-revision refusals of a submit; the service created no operation for them. */
+function refusedWithoutOperation(error: unknown): boolean {
+  const { status, code } = error as { status?: unknown, code?: unknown }
+  return status === 409 && (code === 'workspace_busy' || code === 'workspace_revision_conflict')
+}
 export const reconnectingMs = 2 * 60000
 export const offlineAlertMs = 5 * 60000
 const batchBytes = 2 * 1024 * 1024
@@ -61,6 +66,7 @@ export class CentralController {
   private networkPublishedAt = 0
   private networkReadError: string | null = null
   private state: State = { revision: 0, hash: '' }
+  private localQueue: Promise<void> = Promise.resolve()
   private online = false
   private operating = false
   private abort = new AbortController()
@@ -355,15 +361,36 @@ export class CentralController {
     }
   }
 
+  /**
+   * Owner actions on this desktop run one at a time through the workspace, so
+   * they never collide with each other. The service accepts one operation per
+   * runtime and only at the current revision; both refusals create no
+   * operation, so the same id is submitted again until the deadline.
+   */
   async local<T>(action: () => Promise<T>): Promise<T> {
     if (this.executing) return action()
+    const queued = this.localQueue.then(() => this.submitLocal(action))
+    this.localQueue = queued.then(() => undefined, () => undefined)
+    return queued
+  }
+
+  private async submitLocal<T>(action: () => Promise<T>): Promise<T> {
     if (!this.online) throw new Error(this.offlineMessage())
     const id = randomUUID()
     let localResult: T
     this.localActions.set(id, async () => { localResult = await action(); return { status: 'applied' } })
+    const deadline = Date.now() + 240000
     try {
-      await this.call({ type: 'submit', id, revision: this.state.revision, command: { channel: 'local', body: { type: 'ownerAction' } } })
-      const deadline = Date.now() + 240000
+      for (;;) {
+        try {
+          await this.call({ type: 'submit', id, revision: this.state.revision, command: { channel: 'local', body: { type: 'ownerAction' } } })
+          break
+        }
+        catch (error) {
+          if (!refusedWithoutOperation(error) || Date.now() >= deadline || this.abort.signal.aborted) throw error
+          await delay(250, undefined, { signal: this.abort.signal })
+        }
+      }
       while (Date.now() < deadline && !this.abort.signal.aborted) {
         const operation = await this.call({ type: 'operation', id }) as CentralOperation
         if (operation.state === 'applied') return localResult!
