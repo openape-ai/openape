@@ -1410,6 +1410,18 @@
           "minLength": 1,
           "maxLength": 20000,
           "pattern": "\\S"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1200,
+          "pattern": "\\S"
+        },
+        "problem": {
+          "$ref": "#/$defs/problemOverview"
+        },
+        "translations": {
+          "$ref": "#/$defs/planTranslations"
         }
       },
       "required": [
@@ -1418,6 +1430,94 @@
         "goal",
         "status",
         "milestones"
+      ],
+      "additionalProperties": false
+    },
+    "problemOverview": {
+      "type": "object",
+      "properties": {
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 800,
+          "pattern": "\\S"
+        },
+        "impact": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 800,
+          "pattern": "\\S"
+        },
+        "approach": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 800,
+          "pattern": "\\S"
+        },
+        "outcome": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 800,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "statement",
+        "impact",
+        "approach",
+        "outcome"
+      ],
+      "additionalProperties": false
+    },
+    "planTranslation": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100000,
+          "pattern": "\\S"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100000,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "path",
+        "source",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "planTranslations": {
+      "type": "object",
+      "properties": {
+        "defaultLanguage": {
+          "enum": [
+            "de",
+            "en"
+          ]
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/planTranslation"
+          },
+          "minItems": 1,
+          "maxItems": 5000
+        }
+      },
+      "required": [
+        "entries"
       ],
       "additionalProperties": false
     }
