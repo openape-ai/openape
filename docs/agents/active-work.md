@@ -1,5 +1,13 @@
 # Active work
 
+## Pods owner-chosen newsletters skip the second approval — issue 1451
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1451. Owner decision October 7: "Deine Wahl genügt" for mails he classified as newsletters himself.
+- Finding: the issue's direct route (choice `newsletter` → `mail.approved`) fails `validateNetworkRoutes` ("Approved output cannot have another producer"), and the gate-bound Archive preview subscribes to `mail.batch`, so it would not receive such events.
+- Draft plan revision 1 (awaiting owner approval and the option A/B choice): https://report.openape.ai/d/01M4BXR6KG3WD5M1GM6CPRQ9N7. Recommended: channel `mail.owner-newsletter` into a new Archive preview version; Codex prepares composition replacements, the owner applies them in the desktop Decisions tab.
+- Worktree `openape-monorepo.worktrees/issue-1451`, branch `feature/issue-1451-owner-chosen-newsletters`, base `930a8ee5`. No product code yet.
+- Next: owner approval, then M0 (synthetic composition test).
+
 ## Pods mobile inbox PWA — issue 1446
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1446; approved plan revision 2, publication v8: https://report.openape.ai/d/01M4B5Q1Q0W6C97A4ZXTFZ5WJR.

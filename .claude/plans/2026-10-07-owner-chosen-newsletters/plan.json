@@ -1,0 +1,417 @@
+{
+ "schema": "openape.plan/2",
+ "language": "en",
+ "project": "OpenApe Pods",
+ "owner": "Patrick Hofmann",
+ "date": "2026-10-07",
+ "revision": 1,
+ "status": "draft",
+ "title": "Mail network: owner-chosen newsletters skip the second approval",
+ "goal": "A mail the owner classifies as a newsletter reaches Archive preview without a second IdP approval, while newsletters classified automatically keep the approval gate; composition changes become possible again through an owner-reviewed path.",
+ "summary": "The change proposed in the issue (choice option `newsletter` → `mail.approved`) is rejected by the current validator, because an approved channel may only be produced by its approval gate. This plan keeps that safety rule: owner-chosen newsletters get their own channel into a new Archive preview version, and Codex prepares the composition replacement that the owner reviews and applies in the desktop Decisions tab.",
+ "problem": {
+  "statement": "Every mail the owner classifies as a newsletter candidate is shown to him again in the IdP approval batch.",
+  "impact": "The owner decides the same mail twice and perceives the network as repeating itself; the desktop currently cannot change a running network's composition at all.",
+  "approach": "Route owner-chosen newsletters through a separate channel and restore composition replacement as a Codex-prepared, owner-confirmed decision.",
+  "outcome": "One decision per owner-chosen newsletter; automatic newsletters still need IdP approval; every composition change has a reviewed diff and a receipt."
+ },
+ "context": "Issue 1451 records the owner decision of October 7, 2026 (\"Deine Wahl genügt\"). Inspection used canonical main 930a8ee5 in an isolated worktree and a read-only MCP `networks detail` of the installed Delta Mind mail network b95f1f8a revision 3 (active; 2 open choices, 1 pending approval batch with 11 held items, 11 pending deliveries). Facts: Archive preview (129579b8) has contract takes [mail.approved], gives [] and is bound to approve route `newsletter-approval` (takes mail.batch, gives mail.approved, excluded mail.excluded). `validateNetworkRoutes` (apps/openape-pods/src/contracts/networks.ts) throws \"Approved output cannot have another producer\" when a choose option targets an approve route's output, and the bound consumer subscribes to `mail.batch` through the gate, so events on `mail.approved` from another producer would not even be delivered. `NetworkReplacement` (worker) still provides preview/replace with fingerprint, settlement checks and a trace receipt; the redesign removed its UI (NetworkReplacement.vue in 76c0f84b) and the Codex MCP refuses composition changes. `updateMemberScript` (issue 1445) refuses contract changes. This is a proposal; no implementation approval is inferred.",
+ "scope": [
+  "Codex MCP networks: a write command that prepares a composition replacement for a paused network and stores it as a pending owner review with the worker's preview fingerprint; Codex can never apply it.",
+  "Desktop Decisions tab: a composition-change item with the exact before/after diff (channels, routes, gates, members added/retired), open settlement issues, and Apply/Discard; applying calls the existing replaceComposition with the reviewed fingerprint. Activation stays the separate existing control.",
+  "Mail network revision 4: new channel mail.owner-newsletter (same schema as mail.unsure); choice option newsletter gives it; a new Archive preview definition version takes [mail.approved, mail.owner-newsletter] as a fresh instance bound to the unchanged newsletter-approval gate; the old instance is retired with its history."
+ ],
+ "nonGoals": [
+  "Relaxing the rule that an approved channel has exactly one producer, or letting Pods auto-release items at an approval gate.",
+  "Composition review in the browser or the mobile inbox; it stays a desktop decision. Rights, activation and actual mail moves remain unchanged and separately approved.",
+  "Changing Categorisation, Newsletter batch or the automatic newsletter path."
+ ],
+ "decisions": [
+  {
+   "title": "Owner choice suffices for self-classified newsletters",
+   "description": "Mails the owner classified as newsletters skip the IdP approval; the gate remains for newsletters classified by the Categorisation Pod. Any later step that really moves mail needs its own approval.",
+   "status": "accepted",
+   "by": "Patrick Hofmann",
+   "date": "2026-10-07",
+   "reference": "Deine Wahl genügt (issue 1451)"
+  },
+  {
+   "title": "Recommended: separate channel instead of a validator exception",
+   "description": "Option A (recommended): channel `mail.owner-newsletter` into a new Archive preview version; keeps \"everything on mail.approved was IdP-approved\" and needs no engine change. Option B: allow a declared choose option to feed an approve route's output; requires changing the validator and the gate-bound subscription for every network. Option C (rejected): the gate auto-releases items with owner-choice ancestry; Pods would approve on the owner's behalf.",
+   "status": "proposed"
+  },
+  {
+   "title": "Codex prepares, the owner applies",
+   "description": "Matches the redesign rule that creation goes through Codex and the owner decides in the Decisions tab. The stored review binds the worker fingerprint, so any change to the network, its rights or its pending work invalidates it.",
+   "status": "proposed"
+  }
+ ],
+ "milestones": [
+  {
+   "id": "M0",
+   "status": "planned",
+   "title": "Confirm the target composition on a synthetic network",
+   "goal": "Prove option A is valid before building the review path.",
+   "steps": [
+    "Extend the existing replacement test (test/scheduling/network-migration.test.ts) with a fixture shaped like the mail network: replace a gate-bound sink by a fresh instance taking [approved, owner-chosen], retire the old one, and move the choose option.",
+    "Read the installed Archive preview script read-only to confirm it handles input independent of the channel name; otherwise note the minimal script change for the new version."
+   ],
+   "acceptance": [
+    "The replacement preview has no issues; after activation an owner newsletter choice reaches the new sink without a gate task, while an automatic batch item still creates one."
+   ],
+   "rollback": "Test-only; drop the test and fall back to an owner decision on option B."
+  },
+  {
+   "id": "M1",
+   "status": "planned",
+   "title": "Codex prepares composition replacements",
+   "goal": "Give Codex a bounded write that only creates a pending owner review.",
+   "steps": [
+    "Add prepareReplacement {id, revision, draft} to codex-networks.ts; the worker runs replacementPreview, stores draft, fingerprint, issues, added and retired in the hidden Codex review scope (reusing change sets, like the existing workflow review) and returns the preview; replaceComposition stays refused for MCP.",
+    "Document the command, preconditions (paused, settled) and receipt in the runtime reference so Codex can prepare it without guessing."
+   ],
+   "acceptance": [
+    "Contract and worker tests: Codex can prepare and re-prepare, cannot apply, and a prepared review is refused at apply time after any fingerprint change."
+   ],
+   "rollback": "Revert the PR; the MCP returns to read/pause/preview/process only; stored pending reviews are ignored."
+  },
+  {
+   "id": "M2",
+   "status": "planned",
+   "title": "Owner reviews and applies in the Decisions tab",
+   "goal": "Show exactly what changes and apply only the reviewed version.",
+   "steps": [
+    "Add a composition-change section to DecisionsInbox (desktop only; the browser shows that it waits on the desktop) using the existing compositionDiff helper; Apply sends replaceComposition with the stored fingerprint, Discard retires the review.",
+    "German and English labels; remove the unused renderer helper parts that stay unused."
+   ],
+   "acceptance": [
+    "Component tests: diff content, issues block Apply, Apply/Discard emit the exact commands, stale fingerprint shows the worker error.",
+    "Pods unit/component suite, root lint and typecheck pass; layout check of the new section at desktop and narrow width with inspected screenshots in a private Test Run."
+   ],
+   "rollback": "Revert the PR and reinstall the previous signed desktop build."
+  },
+  {
+   "id": "M3",
+   "status": "planned",
+   "title": "Apply revision 4 to the Delta Mind mail network",
+   "goal": "Deliver the owner decision on the installed desktop.",
+   "steps": [
+    "Signed desktop release with profile backup. Codex creates the new Archive preview definition version as a fresh Pod, pauses the network, and lists the open settlement items; the owner decides open choices and the pending approval batch.",
+    "Codex prepares revision 4; the owner reviews the diff, applies and reactivates the network."
+   ],
+   "acceptance": [
+    "Trace shows composition-replaced-reviewed for revision 4; the next owner newsletter choice reaches Archive preview without an IdP batch item; the next automatic newsletter still appears in an approval batch; no mail is moved."
+   ],
+   "rollback": "Pause, have Codex prepare the revision-3 composition with a fresh instance of the old definition, owner applies; history of both instances stays preserved."
+  }
+ ],
+ "risks": [
+  {
+   "title": "The network cannot settle",
+   "mitigation": "The preview lists the exact blocking items; the owner decides them before applying. Nothing is cancelled automatically."
+  },
+  {
+   "title": "Archive preview state is lost with the fresh instance",
+   "mitigation": "M0 inspects the checkpoint; the retired instance keeps its history and records. If state matters, M3 carries it over through the new definition's initial configuration, never by editing the database."
+  },
+  {
+   "title": "Signed fixture runs wait for a keychain prompt",
+   "mitigation": "Until issue 1450 lands, detect the SecurityAgent hang early and report it immediately instead of waiting."
+  }
+ ],
+ "verification": [
+  "Plan authoring only: bilingual schema validation, canonical template render, inspected HTML and private publication under Plans. No product tests are claimed in this draft."
+ ],
+ "handoff": "Awaiting owner approval of revision 1 and the choice between options A and B. Branch feature/issue-1451-owner-chosen-newsletters (worktree openape-monorepo.worktrees/issue-1451, base 930a8ee5) holds only this plan; implementation starts with M0 after approval.",
+ "changelog": [
+  {
+   "date": "2026-10-07",
+   "text": "Created proposal revision 1 after inspecting the replacement worker, the removed UI, the Codex network contract and the installed mail network; found that the issue's direct `mail.approved` route violates the single-producer rule."
+  }
+ ],
+ "links": [
+  {
+   "title": "Issue 1451",
+   "url": "https://repos.openape.ai/patrick/monorepo/issues/1451"
+  },
+  {
+   "title": "Canonical monorepo",
+   "url": "https://repos.openape.ai/patrick/monorepo"
+  }
+ ],
+ "translations": {
+  "defaultLanguage": "de",
+  "entries": [
+   {
+    "path": "title",
+    "source": "Mail network: owner-chosen newsletters skip the second approval",
+    "text": "Mail-Netz: selbst gewählte Newsletter ohne zweite Freigabe"
+   },
+   {
+    "path": "goal",
+    "source": "A mail the owner classifies as a newsletter reaches Archive preview without a second IdP approval, while newsletters classified automatically keep the approval gate; composition changes become possible again through an owner-reviewed path.",
+    "text": "Eine Mail, die der Owner selbst als Newsletter einordnet, erreicht Archive preview ohne zweite IdP-Freigabe; automatisch erkannte Newsletter behalten das Freigabe-Gate. Änderungen der Netz-Zusammensetzung werden über einen vom Owner geprüften Weg wieder möglich."
+   },
+   {
+    "path": "summary",
+    "source": "The change proposed in the issue (choice option `newsletter` → `mail.approved`) is rejected by the current validator, because an approved channel may only be produced by its approval gate. This plan keeps that safety rule: owner-chosen newsletters get their own channel into a new Archive preview version, and Codex prepares the composition replacement that the owner reviews and applies in the desktop Decisions tab.",
+    "text": "Die im Issue vorgeschlagene Änderung (Option `newsletter` → `mail.approved`) lehnt der aktuelle Validator ab, weil ein freigegebener Kanal nur von seinem Freigabe-Gate befüllt werden darf. Der Plan behält diese Sicherheitsregel: Selbst gewählte Newsletter bekommen einen eigenen Kanal in eine neue Archive-preview-Version; Codex bereitet die Ersetzung der Zusammensetzung vor, der Owner prüft und übernimmt sie im Desktop-Tab Entscheidungen."
+   },
+   {
+    "path": "problem.statement",
+    "source": "Every mail the owner classifies as a newsletter candidate is shown to him again in the IdP approval batch.",
+    "text": "Jede Mail, die der Owner als Newsletter-Kandidat einordnet, wird ihm im IdP-Freigabe-Batch erneut vorgelegt."
+   },
+   {
+    "path": "problem.impact",
+    "source": "The owner decides the same mail twice and perceives the network as repeating itself; the desktop currently cannot change a running network's composition at all.",
+    "text": "Der Owner entscheidet dieselbe Mail zweimal und erlebt das Netz als repetitiv; der Desktop kann die Zusammensetzung eines laufenden Netzes derzeit gar nicht ändern."
+   },
+   {
+    "path": "problem.approach",
+    "source": "Route owner-chosen newsletters through a separate channel and restore composition replacement as a Codex-prepared, owner-confirmed decision.",
+    "text": "Selbst gewählte Newsletter über einen eigenen Kanal führen und die Ersetzung der Zusammensetzung als von Codex vorbereitete, vom Owner bestätigte Entscheidung wiederherstellen."
+   },
+   {
+    "path": "problem.outcome",
+    "source": "One decision per owner-chosen newsletter; automatic newsletters still need IdP approval; every composition change has a reviewed diff and a receipt.",
+    "text": "Eine Entscheidung pro selbst gewähltem Newsletter; automatische Newsletter brauchen weiterhin die IdP-Freigabe; jede Änderung der Zusammensetzung hat einen geprüften Diff und eine Quittung."
+   },
+   {
+    "path": "context",
+    "source": "Issue 1451 records the owner decision of October 7, 2026 (\"Deine Wahl genügt\"). Inspection used canonical main 930a8ee5 in an isolated worktree and a read-only MCP `networks detail` of the installed Delta Mind mail network b95f1f8a revision 3 (active; 2 open choices, 1 pending approval batch with 11 held items, 11 pending deliveries). Facts: Archive preview (129579b8) has contract takes [mail.approved], gives [] and is bound to approve route `newsletter-approval` (takes mail.batch, gives mail.approved, excluded mail.excluded). `validateNetworkRoutes` (apps/openape-pods/src/contracts/networks.ts) throws \"Approved output cannot have another producer\" when a choose option targets an approve route's output, and the bound consumer subscribes to `mail.batch` through the gate, so events on `mail.approved` from another producer would not even be delivered. `NetworkReplacement` (worker) still provides preview/replace with fingerprint, settlement checks and a trace receipt; the redesign removed its UI (NetworkReplacement.vue in 76c0f84b) and the Codex MCP refuses composition changes. `updateMemberScript` (issue 1445) refuses contract changes. This is a proposal; no implementation approval is inferred.",
+    "text": "Issue 1451 hält die Owner-Entscheidung vom 7. Oktober 2026 fest (\"Deine Wahl genügt\"). Grundlage: kanonisches main 930a8ee5 in einem isolierten Worktree und ein lesendes MCP-`networks detail` des installierten Delta-Mind-Mail-Netzes b95f1f8a Revision 3 (aktiv; 2 offene Auswahlfragen, 1 offener Freigabe-Batch mit 11 gehaltenen Einträgen, 11 ausstehende Zustellungen). Fakten: Archive preview (129579b8) hat den Vertrag takes [mail.approved], gives [] und ist an die Approve-Route `newsletter-approval` gebunden (takes mail.batch, gives mail.approved, excluded mail.excluded). `validateNetworkRoutes` (apps/openape-pods/src/contracts/networks.ts) wirft \"Approved output cannot have another producer\", wenn eine Choose-Option den Ausgang einer Approve-Route befüllt; außerdem abonniert der gebundene Empfänger `mail.batch` über das Gate, Ereignisse eines anderen Produzenten auf `mail.approved` kämen also gar nicht an. `NetworkReplacement` (Worker) bietet weiterhin Vorschau/Ersetzung mit Fingerprint, Ruhezustandsprüfung und Trace-Quittung; das Redesign hat die Oberfläche entfernt (NetworkReplacement.vue in 76c0f84b), und das Codex-MCP verweigert Änderungen der Zusammensetzung. `updateMemberScript` (Issue 1445) verweigert Vertragsänderungen. Dies ist ein Vorschlag; eine Freigabe zur Umsetzung wird nicht abgeleitet."
+   },
+   {
+    "path": "scope.0",
+    "source": "Codex MCP networks: a write command that prepares a composition replacement for a paused network and stores it as a pending owner review with the worker's preview fingerprint; Codex can never apply it.",
+    "text": "Codex-MCP `networks`: ein Schreibbefehl, der für ein pausiertes Netz eine Ersetzung der Zusammensetzung vorbereitet und als offene Owner-Prüfung mit dem Vorschau-Fingerprint des Workers speichert; Codex kann sie nie anwenden."
+   },
+   {
+    "path": "scope.1",
+    "source": "Desktop Decisions tab: a composition-change item with the exact before/after diff (channels, routes, gates, members added/retired), open settlement issues, and Apply/Discard; applying calls the existing replaceComposition with the reviewed fingerprint. Activation stays the separate existing control.",
+    "text": "Desktop-Tab Entscheidungen: ein Eintrag \"Änderung der Zusammensetzung\" mit exaktem Vorher/Nachher-Diff (Kanäle, Routen, Gates, hinzugefügte/stillgelegte Mitglieder), offenen Ruhezustands-Hinweisen und Übernehmen/Verwerfen; Übernehmen ruft das bestehende `replaceComposition` mit dem geprüften Fingerprint auf. Die Aktivierung bleibt die bestehende separate Steuerung."
+   },
+   {
+    "path": "scope.2",
+    "source": "Mail network revision 4: new channel mail.owner-newsletter (same schema as mail.unsure); choice option newsletter gives it; a new Archive preview definition version takes [mail.approved, mail.owner-newsletter] as a fresh instance bound to the unchanged newsletter-approval gate; the old instance is retired with its history.",
+    "text": "Mail-Netz Revision 4: neuer Kanal `mail.owner-newsletter` (gleiches Schema wie `mail.unsure`); die Option `newsletter` befüllt ihn; eine neue Archive-preview-Definitionsversion mit takes [mail.approved, mail.owner-newsletter] als frische Instanz, gebunden an das unveränderte Gate `newsletter-approval`; die alte Instanz wird mit ihrer Historie stillgelegt."
+   },
+   {
+    "path": "nonGoals.0",
+    "source": "Relaxing the rule that an approved channel has exactly one producer, or letting Pods auto-release items at an approval gate.",
+    "text": "Die Regel lockern, dass ein freigegebener Kanal genau einen Produzenten hat, oder Pods Einträge an einem Freigabe-Gate selbst freigeben lassen."
+   },
+   {
+    "path": "nonGoals.1",
+    "source": "Composition review in the browser or the mobile inbox; it stays a desktop decision. Rights, activation and actual mail moves remain unchanged and separately approved.",
+    "text": "Prüfung der Zusammensetzung im Browser oder in der mobilen Inbox; sie bleibt eine Desktop-Entscheidung. Rechte, Aktivierung und echte Mail-Verschiebungen bleiben unverändert und separat freigegeben."
+   },
+   {
+    "path": "nonGoals.2",
+    "source": "Changing Categorisation, Newsletter batch or the automatic newsletter path.",
+    "text": "Änderungen an Categorisation, Newsletter batch oder dem automatischen Newsletter-Pfad."
+   },
+   {
+    "path": "decisions.0.title",
+    "source": "Owner choice suffices for self-classified newsletters",
+    "text": "Die eigene Wahl genügt bei selbst eingeordneten Newslettern"
+   },
+   {
+    "path": "decisions.0.description",
+    "source": "Mails the owner classified as newsletters skip the IdP approval; the gate remains for newsletters classified by the Categorisation Pod. Any later step that really moves mail needs its own approval.",
+    "text": "Mails, die der Owner selbst als Newsletter eingeordnet hat, überspringen die IdP-Freigabe; das Gate bleibt für Newsletter, die der Categorisation-Pod einordnet. Jeder spätere Schritt, der Mails wirklich verschiebt, braucht eine eigene Freigabe."
+   },
+   {
+    "path": "decisions.1.title",
+    "source": "Recommended: separate channel instead of a validator exception",
+    "text": "Empfehlung: eigener Kanal statt Validator-Ausnahme"
+   },
+   {
+    "path": "decisions.1.description",
+    "source": "Option A (recommended): channel `mail.owner-newsletter` into a new Archive preview version; keeps \"everything on mail.approved was IdP-approved\" and needs no engine change. Option B: allow a declared choose option to feed an approve route's output; requires changing the validator and the gate-bound subscription for every network. Option C (rejected): the gate auto-releases items with owner-choice ancestry; Pods would approve on the owner's behalf.",
+    "text": "Option A (empfohlen): Kanal `mail.owner-newsletter` in eine neue Archive-preview-Version; erhält \"alles auf mail.approved wurde an der IdP freigegeben\" und braucht keine Engine-Änderung. Option B: einer deklarierten Choose-Option erlauben, den Ausgang einer Approve-Route zu befüllen; erfordert Änderungen an Validator und Gate-gebundenem Abonnement für alle Netze. Option C (verworfen): Das Gate gibt Einträge mit Owner-Wahl in der Herkunft automatisch frei; Pods würde anstelle des Owners freigeben."
+   },
+   {
+    "path": "decisions.2.title",
+    "source": "Codex prepares, the owner applies",
+    "text": "Codex bereitet vor, der Owner übernimmt"
+   },
+   {
+    "path": "decisions.2.description",
+    "source": "Matches the redesign rule that creation goes through Codex and the owner decides in the Decisions tab. The stored review binds the worker fingerprint, so any change to the network, its rights or its pending work invalidates it.",
+    "text": "Entspricht der Redesign-Regel: Erstellen läuft über Codex, der Owner entscheidet im Tab Entscheidungen. Die gespeicherte Prüfung bindet den Worker-Fingerprint; jede Änderung am Netz, an seinen Rechten oder offener Arbeit macht sie ungültig."
+   },
+   {
+    "path": "milestones.0.title",
+    "source": "Confirm the target composition on a synthetic network",
+    "text": "Zielzusammensetzung an einem synthetischen Netz bestätigen"
+   },
+   {
+    "path": "milestones.0.goal",
+    "source": "Prove option A is valid before building the review path.",
+    "text": "Nachweisen, dass Option A gültig ist, bevor der Prüfweg gebaut wird."
+   },
+   {
+    "path": "milestones.0.steps.0",
+    "source": "Extend the existing replacement test (test/scheduling/network-migration.test.ts) with a fixture shaped like the mail network: replace a gate-bound sink by a fresh instance taking [approved, owner-chosen], retire the old one, and move the choose option.",
+    "text": "Den bestehenden Ersetzungstest (test/scheduling/network-migration.test.ts) um ein Fixture nach dem Muster des Mail-Netzes erweitern: einen Gate-gebundenen Empfänger durch eine frische Instanz mit takes [approved, owner-chosen] ersetzen, die alte stilllegen und die Choose-Option umhängen."
+   },
+   {
+    "path": "milestones.0.steps.1",
+    "source": "Read the installed Archive preview script read-only to confirm it handles input independent of the channel name; otherwise note the minimal script change for the new version.",
+    "text": "Das installierte Archive-preview-Skript lesend prüfen, ob es Eingaben unabhängig vom Kanalnamen verarbeitet; andernfalls die minimale Skriptänderung für die neue Version festhalten."
+   },
+   {
+    "path": "milestones.0.acceptance.0",
+    "source": "The replacement preview has no issues; after activation an owner newsletter choice reaches the new sink without a gate task, while an automatic batch item still creates one.",
+    "text": "Die Ersetzungsvorschau meldet keine Probleme; nach Aktivierung erreicht eine Owner-Wahl newsletter den neuen Empfänger ohne Gate-Aufgabe, ein automatischer Batch-Eintrag erzeugt weiterhin eine."
+   },
+   {
+    "path": "milestones.0.rollback",
+    "source": "Test-only; drop the test and fall back to an owner decision on option B.",
+    "text": "Nur Test; Test verwerfen und Option B dem Owner zur Entscheidung vorlegen."
+   },
+   {
+    "path": "milestones.1.title",
+    "source": "Codex prepares composition replacements",
+    "text": "Codex bereitet Ersetzungen der Zusammensetzung vor"
+   },
+   {
+    "path": "milestones.1.goal",
+    "source": "Give Codex a bounded write that only creates a pending owner review.",
+    "text": "Codex einen begrenzten Schreibbefehl geben, der nur eine offene Owner-Prüfung anlegt."
+   },
+   {
+    "path": "milestones.1.steps.0",
+    "source": "Add prepareReplacement {id, revision, draft} to codex-networks.ts; the worker runs replacementPreview, stores draft, fingerprint, issues, added and retired in the hidden Codex review scope (reusing change sets, like the existing workflow review) and returns the preview; replaceComposition stays refused for MCP.",
+    "text": "prepareReplacement {id, revision, draft} in codex-networks.ts ergänzen; der Worker führt replacementPreview aus, speichert Entwurf, Fingerprint, Probleme, Hinzugefügte und Stillgelegte im verborgenen Codex-Prüfbereich (Wiederverwendung der Change Sets wie bei der bestehenden Workflow-Prüfung) und gibt die Vorschau zurück; replaceComposition bleibt für MCP verweigert."
+   },
+   {
+    "path": "milestones.1.steps.1",
+    "source": "Document the command, preconditions (paused, settled) and receipt in the runtime reference so Codex can prepare it without guessing.",
+    "text": "Befehl, Voraussetzungen (pausiert, im Ruhezustand) und Quittung in der Runtime-Referenz dokumentieren, damit Codex ohne Raten vorbereiten kann."
+   },
+   {
+    "path": "milestones.1.acceptance.0",
+    "source": "Contract and worker tests: Codex can prepare and re-prepare, cannot apply, and a prepared review is refused at apply time after any fingerprint change.",
+    "text": "Vertrags- und Worker-Tests: Codex kann vorbereiten und neu vorbereiten, aber nicht anwenden; eine vorbereitete Prüfung wird beim Übernehmen nach jeder Fingerprint-Änderung abgelehnt."
+   },
+   {
+    "path": "milestones.1.rollback",
+    "source": "Revert the PR; the MCP returns to read/pause/preview/process only; stored pending reviews are ignored.",
+    "text": "PR zurücknehmen; das MCP kann wieder nur lesen/pausieren/Vorschau/verarbeiten; gespeicherte offene Prüfungen werden ignoriert."
+   },
+   {
+    "path": "milestones.2.title",
+    "source": "Owner reviews and applies in the Decisions tab",
+    "text": "Owner prüft und übernimmt im Tab Entscheidungen"
+   },
+   {
+    "path": "milestones.2.goal",
+    "source": "Show exactly what changes and apply only the reviewed version.",
+    "text": "Genau zeigen, was sich ändert, und nur die geprüfte Version übernehmen."
+   },
+   {
+    "path": "milestones.2.steps.0",
+    "source": "Add a composition-change section to DecisionsInbox (desktop only; the browser shows that it waits on the desktop) using the existing compositionDiff helper; Apply sends replaceComposition with the stored fingerprint, Discard retires the review.",
+    "text": "Einen Abschnitt \"Änderung der Zusammensetzung\" in DecisionsInbox ergänzen (nur Desktop; der Browser zeigt, dass er am Desktop wartet), mit dem bestehenden Helfer compositionDiff; Übernehmen sendet replaceComposition mit dem gespeicherten Fingerprint, Verwerfen legt die Prüfung ab."
+   },
+   {
+    "path": "milestones.2.steps.1",
+    "source": "German and English labels; remove the unused renderer helper parts that stay unused.",
+    "text": "Deutsche und englische Beschriftungen; verbleibende ungenutzte Teile des Renderer-Helfers entfernen."
+   },
+   {
+    "path": "milestones.2.acceptance.0",
+    "source": "Component tests: diff content, issues block Apply, Apply/Discard emit the exact commands, stale fingerprint shows the worker error.",
+    "text": "Komponententests: Diff-Inhalt, Probleme sperren Übernehmen, Übernehmen/Verwerfen senden die exakten Befehle, ein veralteter Fingerprint zeigt den Worker-Fehler."
+   },
+   {
+    "path": "milestones.2.acceptance.1",
+    "source": "Pods unit/component suite, root lint and typecheck pass; layout check of the new section at desktop and narrow width with inspected screenshots in a private Test Run.",
+    "text": "Pods-Unit-/Komponentensuite, Root-Lint und Typecheck grün; Layoutprüfung des neuen Abschnitts in Desktop- und schmaler Breite mit geprüften Screenshots in einem privaten Test Run."
+   },
+   {
+    "path": "milestones.2.rollback",
+    "source": "Revert the PR and reinstall the previous signed desktop build.",
+    "text": "PR zurücknehmen und den vorherigen signierten Desktop-Build wieder installieren."
+   },
+   {
+    "path": "milestones.3.title",
+    "source": "Apply revision 4 to the Delta Mind mail network",
+    "text": "Revision 4 im Delta-Mind-Mail-Netz anwenden"
+   },
+   {
+    "path": "milestones.3.goal",
+    "source": "Deliver the owner decision on the installed desktop.",
+    "text": "Die Owner-Entscheidung am installierten Desktop umsetzen."
+   },
+   {
+    "path": "milestones.3.steps.0",
+    "source": "Signed desktop release with profile backup. Codex creates the new Archive preview definition version as a fresh Pod, pauses the network, and lists the open settlement items; the owner decides open choices and the pending approval batch.",
+    "text": "Signiertes Desktop-Release mit Profil-Backup. Codex legt die neue Archive-preview-Definitionsversion als frischen Pod an, pausiert das Netz und listet die offenen Ruhezustands-Punkte; der Owner entscheidet offene Auswahlfragen und den offenen Freigabe-Batch."
+   },
+   {
+    "path": "milestones.3.steps.1",
+    "source": "Codex prepares revision 4; the owner reviews the diff, applies and reactivates the network.",
+    "text": "Codex bereitet Revision 4 vor; der Owner prüft den Diff, übernimmt und aktiviert das Netz wieder."
+   },
+   {
+    "path": "milestones.3.acceptance.0",
+    "source": "Trace shows composition-replaced-reviewed for revision 4; the next owner newsletter choice reaches Archive preview without an IdP batch item; the next automatic newsletter still appears in an approval batch; no mail is moved.",
+    "text": "Der Trace zeigt composition-replaced-reviewed für Revision 4; die nächste Owner-Wahl newsletter erreicht Archive preview ohne IdP-Batch-Eintrag; der nächste automatische Newsletter erscheint weiterhin in einem Freigabe-Batch; keine Mail wird verschoben."
+   },
+   {
+    "path": "milestones.3.rollback",
+    "source": "Pause, have Codex prepare the revision-3 composition with a fresh instance of the old definition, owner applies; history of both instances stays preserved.",
+    "text": "Pausieren, Codex bereitet die Zusammensetzung von Revision 3 mit einer frischen Instanz der alten Definition vor, der Owner übernimmt; die Historie beider Instanzen bleibt erhalten."
+   },
+   {
+    "path": "risks.0.title",
+    "source": "The network cannot settle",
+    "text": "Das Netz kommt nicht in den Ruhezustand"
+   },
+   {
+    "path": "risks.0.mitigation",
+    "source": "The preview lists the exact blocking items; the owner decides them before applying. Nothing is cancelled automatically.",
+    "text": "Die Vorschau nennt die blockierenden Punkte genau; der Owner entscheidet sie vor dem Übernehmen. Nichts wird automatisch abgebrochen."
+   },
+   {
+    "path": "risks.1.title",
+    "source": "Archive preview state is lost with the fresh instance",
+    "text": "Zustand von Archive preview geht mit der frischen Instanz verloren"
+   },
+   {
+    "path": "risks.1.mitigation",
+    "source": "M0 inspects the checkpoint; the retired instance keeps its history and records. If state matters, M3 carries it over through the new definition's initial configuration, never by editing the database.",
+    "text": "M0 prüft den Checkpoint; die stillgelegte Instanz behält Historie und Datensätze. Ist Zustand relevant, übernimmt M3 ihn über die Startkonfiguration der neuen Definition, nie durch Bearbeiten der Datenbank."
+   },
+   {
+    "path": "risks.2.title",
+    "source": "Signed fixture runs wait for a keychain prompt",
+    "text": "Signierte Fixture-Läufe warten auf einen Schlüsselbund-Dialog"
+   },
+   {
+    "path": "risks.2.mitigation",
+    "source": "Until issue 1450 lands, detect the SecurityAgent hang early and report it immediately instead of waiting.",
+    "text": "Bis Issue 1450 umgesetzt ist, den SecurityAgent-Hänger früh erkennen und sofort melden statt zu warten."
+   },
+   {
+    "path": "verification.0",
+    "source": "Plan authoring only: bilingual schema validation, canonical template render, inspected HTML and private publication under Plans. No product tests are claimed in this draft.",
+    "text": "Nur Planerstellung: Validierung des zweisprachigen Schemas, Rendern mit dem kanonischen Template, geprüftes HTML und private Veröffentlichung unter Plans. Dieser Entwurf behauptet keine Produkttests."
+   },
+   {
+    "path": "handoff",
+    "source": "Awaiting owner approval of revision 1 and the choice between options A and B. Branch feature/issue-1451-owner-chosen-newsletters (worktree openape-monorepo.worktrees/issue-1451, base 930a8ee5) holds only this plan; implementation starts with M0 after approval.",
+    "text": "Wartet auf Owner-Freigabe von Revision 1 und die Wahl zwischen Option A und B. Branch feature/issue-1451-owner-chosen-newsletters (Worktree openape-monorepo.worktrees/issue-1451, Basis 930a8ee5) enthält nur diesen Plan; die Umsetzung beginnt nach Freigabe mit M0."
+   },
+   {
+    "path": "changelog.0.text",
+    "source": "Created proposal revision 1 after inspecting the replacement worker, the removed UI, the Codex network contract and the installed mail network; found that the issue's direct `mail.approved` route violates the single-producer rule.",
+    "text": "Vorschlag Revision 1 erstellt nach Prüfung des Ersetzungs-Workers, der entfernten Oberfläche, des Codex-Netzvertrags und des installierten Mail-Netzes; festgestellt, dass die direkte `mail.approved`-Route aus dem Issue die Ein-Produzenten-Regel verletzt."
+   }
+  ]
+ }
+}
