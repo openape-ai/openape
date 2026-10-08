@@ -8,7 +8,8 @@ export const contract = { takes: [], gives: ['mail.open', 'mail.sent-raw'], summ
 const perRun = { 'mail.open': 4, 'mail.sent-raw': 2 }
 // Owner-approved backlog bound (plan 01M4EDTC): inbox mail of the last 30 days; sent mail only feeds Memory.
 const window = { 'mail.open': 30 * 86400000, 'mail.sent-raw': 2 * 86400000 }
-const listLimit = '250'
+// One listing must stay below the 256 KiB tool output bound; 100 rows are about 110 KiB.
+const listLimit = '100'
 // As before the cursor, the newest known mails are re-read so that a real content change is still asked again.
 const recheck = 3
 const fingerprint = value => createHash('sha256').update(value).digest('hex')
