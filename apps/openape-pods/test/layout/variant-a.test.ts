@@ -22,7 +22,7 @@ function fixture() {
   const inventory = [...structuredClone(pods), standalone]
   central.host.workspace.pods = inventory.map(pod => ({ ...pod, online: true }))
   const workflows: WorkflowView = { workflows: [{ ...sequenceParts, id: '00000000-0000-4000-8000-000000000004', revision: 1, name: 'Morning review', nodes: [{ podId, after: [], handoff: false }], schedule: { kind: 'daily', time: '09:00', timezone: 'Europe/Vienna' }, enabled: true, paused: false, nextAt: 1790665200000 }], runs: [] }
-  const status: CentralStatus = { state: 'online', runtimeId: central.host.id, error: null, since: 1790000000000, lastOnlineAt: 1790000000000, gateUntil: 0, lastTickAt: null, tickingSince: null, tickPhase: null, tickTimeout: null, format: 2, lastPublication: null }
+  const status: CentralStatus = { state: 'online', runtimeId: central.host.id, error: null, since: 1790000000000, lastOnlineAt: 1790000000000, gateUntil: 0, lastTickAt: null, tickingSince: null, tickPhase: null, tickTimeout: null, format: 2, lastPublication: null, uncertain: [] }
   let access: McpAccess = { mode: 'off', duration: 'hour', expiresAt: null }
   const bridge = installWorkspace({
     workspace: async () => ({ organization: { revision: 1, groups: [] }, pods: structuredClone(inventory) }),
