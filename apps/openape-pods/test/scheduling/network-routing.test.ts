@@ -22,9 +22,9 @@ function fixture() {
     channels: ['mail.unsure', 'mail.selected'].map(name => ({ name, title: name, schemaVersion: 1, schema: { type: 'object', properties: { subject: { type: 'string' } }, required: ['subject'], additionalProperties: false } })),
     routes: [{ key: 'review', title: 'Choose a route', kind: 'choose', takes: 'mail.unsure', options: [{ key: 'keep', title: 'Keep', channel: 'mail.selected' }, { key: 'other', title: 'Other', channel: 'mail.selected' }] }],
   } }).createdId!
-  const emit = async () => {
+  const emit = async (version = 'provider-v1') => {
     const authority = f.engine.invocations.reserve(id, source, f.resources.epoch(source), 'manual', true)!
-    await f.engine.invocations.finish(authority, 'completed', 'Synthetic input', null, [], [{ channel: 'mail.unsure', key: 'one', sourceItemId: 'immutable-one', sourceVersion: 'provider-v1', payload: { subject: 'One' } }])
+    await f.engine.invocations.finish(authority, 'completed', 'Synthetic input', null, [], [{ channel: 'mail.unsure', key: version === 'provider-v1' ? 'one' : `one-${version}`, sourceItemId: 'immutable-one', sourceVersion: version, payload: { subject: 'One' } }])
   }
   return { ...f, id, source, consumer, independent, received, emit }
 }
@@ -56,6 +56,34 @@ it('retains a paused owner choice, routes once with its original case and preser
   await f.emit()
   expect(f.engine.execute({ type: 'list' }).choices).toBeUndefined()
   expect(f.store.db.prepare('SELECT count(*) AS n FROM network_events').get()!.n).toBe(2)
+})
+
+it('answers every waiting revision of a case with one owner decision and asks a later revision again', async () => {
+  for (const answered of ['newest', 'oldest'] as const) {
+    const f = fixture()
+    await f.emit('provider-v1')
+    await f.emit('provider-v2')
+    const waiting = parseNetworkView(f.engine.execute({ type: 'list' })).choices!
+    expect(waiting.map(choice => choice.caseId)).toEqual([waiting[0]!.caseId, waiting[0]!.caseId])
+    const [oldest, newest] = waiting
+    const decided = answered === 'newest' ? newest! : oldest!
+    const other = answered === 'newest' ? oldest! : newest!
+    const command = { type: 'choose', id: f.id, revision: 1, gate: 'review', option: 'keep' }
+    f.engine.execute({ ...command, eventId: decided.eventId })
+    const view = parseNetworkView(f.engine.execute({ type: 'list' }))
+    expect(view.choices).toBeUndefined()
+    expect(view.networks[0]!.decisions).toBe(0)
+    expect(f.store.db.prepare('SELECT count(*) AS n FROM network_events WHERE channel=\'mail.selected\'').get()!.n).toBe(1)
+    expect(JSON.parse(f.store.db.prepare('SELECT body FROM network_trace_events WHERE kind=\'choice-superseded\' AND event_id=?').get(other.eventId)!.body as string)).toMatchObject({ gate: 'review', decidedEventId: decided.eventId, decision: 'keep' })
+    // A surface that still shows the answered revision repeats the same decision without effect.
+    f.engine.execute({ ...command, eventId: other.eventId })
+    expect(() => f.engine.execute({ ...command, eventId: other.eventId, option: 'other' })).toThrow('different owner decision')
+    expect(f.store.db.prepare('SELECT count(*) AS n FROM network_events WHERE channel=\'mail.selected\'').get()!.n).toBe(1)
+    expect(f.engine.execute({ type: 'archivePreview', id: f.id, revision: 1 }).archiveReview!.issues).not.toContain('Resolve pending owner choices before changing the composition')
+    await f.emit('provider-v3')
+    expect(parseNetworkView(f.engine.execute({ type: 'list' })).choices).toHaveLength(1)
+    closeNetworks()
+  }
 })
 
 it('blocks composition retirement while an owner choice is unresolved', async () => {
