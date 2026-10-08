@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useInbox } from '../inbox/client'
+import { watchInboxBadge } from '../inbox/badge'
 import { formatTime, language, t } from '../inbox/i18n'
 
 const inbox = useInbox()
 const { state } = inbox
+watchInboxBadge(inbox, navigator)
 const route = useRoute()
 const router = useRouter()
 const email = ref('')
