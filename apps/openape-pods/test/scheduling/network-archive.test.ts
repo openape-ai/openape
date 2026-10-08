@@ -5,7 +5,7 @@ import { loadAdapter, resolveCommand } from '@openape/apes'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { NetworkGateManifest } from '../../src/contracts/network-gates'
 import type { ProgramAssignment } from '../../src/contracts/programs'
-import { assertArchiveMove } from '../../src/contracts/network-capabilities'
+import { archiveNotStarted, assertArchiveMove } from '../../src/contracts/network-capabilities'
 import { archiveApproved, mailContentVersion } from '../../src/worker/scheduling/network-archive'
 import { closeNetworks, networkFixture } from './network-fixture'
 
@@ -16,7 +16,7 @@ const mailbox = 'owner@example.invalid'
 const mail = { id: 'message-1', changeKey: 'change-1', parentFolderId: 'inbox-folder', from: { emailAddress: { address: 'news@example.invalid' } }, toRecipients: [{ emailAddress: { address: mailbox } }], ccRecipients: [], subject: 'Weekly news', receivedDateTime: '2026-10-08T08:00:00Z', body: { content: 'Synthetic newsletter', contentType: 'text' }, hasAttachments: false }
 const reply = (operation: 'read' | 'move', fields: Record<string, unknown>) => ({ exitCode: 0, stderr: '', stdout: JSON.stringify({ protocol: 'pods-mail/v1', account: mailbox, operation, ...fields }) })
 
-function archiveFixture(options: { current?: typeof mail, move?: () => unknown } = {}) {
+function archiveFixture(options: { current?: typeof mail, move?: () => unknown, payload?: Record<string, string> } = {}) {
   const moves: string[][] = []
   const tool = vi.fn(async (body: unknown, _signal: AbortSignal, scope: { assertCurrent: () => void }) => {
     scope.assertCurrent()
@@ -59,7 +59,7 @@ function archiveFixture(options: { current?: typeof mail, move?: () => unknown }
   const settle = async () => { await expect.poll(() => f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0) }
   const approve = async () => {
     const authority = f.engine.invocations.reserve(id, source, f.resources.epoch(source), 'manual')!
-    await f.engine.invocations.finish(authority, 'completed', 'Synthetic intake', null, [], [{ channel: 'mail.batch', key: 'message-1', sourceItemId: mail.id, sourceVersion: mailContentVersion(mail), payload: { subject: mail.subject } }])
+    await f.engine.invocations.finish(authority, 'completed', 'Synthetic intake', null, [], [{ channel: 'mail.batch', key: 'message-1', sourceItemId: mail.id, sourceVersion: mailContentVersion(mail), payload: options.payload ?? { subject: mail.subject } }])
     for (let round = 0; round < 4; round++) { f.store.db.prepare('UPDATE network_gate_controls SET next_poll_at=0').run(); f.engine.tick(); await settle() }
   }
   const effects = () => f.store.db.prepare('SELECT a.state, group_concat(r.outcome) AS receipts FROM network_effect_attempts a JOIN network_effect_receipts r ON r.logical_action_key=a.logical_action_key AND r.attempt=a.attempt GROUP BY a.logical_action_key,a.attempt').all()
@@ -82,7 +82,7 @@ it('never moves a message twice for the same approved version', async () => {
   const run = f.store.db.prepare('SELECT run_id,network_id FROM network_invocations WHERE pod_id=?').get(f.archive)!
   const delivery = f.store.db.prepare('SELECT d.id FROM network_deliveries d JOIN network_subscriptions s ON s.id=d.subscription_id WHERE s.pod_id=?').get(f.archive)!
   const coverage = [{ manifest: JSON.parse(f.store.db.prepare('SELECT manifest FROM network_gate_tasks').get()!.manifest as string), grantId: 'once', items: [{ deliveryId: delivery.id as string, eventId: randomUUID(), key: 'message-1', grantId: 'once', data: {} }] }]
-  const again = await archiveApproved(f.store, { networkId: run.network_id as string, runId: run.run_id as string, podId: f.archive, owner: f.owner }, coverage, { application: 'mail', mailbox }, { read: async () => { throw new Error('No read expected') }, move: async () => { throw new Error('No move expected') } }, () => {})
+  const again = await archiveApproved(f.store, { networkId: run.network_id as string, runId: run.run_id as string, podId: f.archive, owner: f.owner }, coverage, { application: 'mail', mailbox }, { read: async () => { throw new Error('No read expected') }, move: async () => { throw new Error('No move expected') }, approved: async () => {} }, () => {})
   expect(again).toEqual([expect.objectContaining({ outcome: 'archived', reason: 'Already archived' })])
   expect(f.moves).toHaveLength(1)
 })
@@ -101,6 +101,21 @@ it('keeps an unbound move receipt unknown and blocks the member until reconcilia
   expect(f.outcomes).toEqual([[expect.objectContaining({ outcome: 'unknown' })]])
   expect(f.effects()).toEqual([{ state: 'unknown', receipts: 'intent,unknown' }])
   expect(f.store.db.prepare('SELECT state FROM network_invocations WHERE pod_id=? AND execution_kind=\'script\'').get(f.archive)!.state).toBe('unknown')
+})
+
+it('records a broker refusal before sending as not applied and keeps the member usable', async () => {
+  const f = archiveFixture({ move: () => { throw new Error(`${archiveNotStarted}: Approve this application command in Permissions first`) } })
+  await f.approve()
+  expect(f.outcomes).toEqual([[expect.objectContaining({ outcome: 'skipped', reason: expect.stringContaining('Approve this application command') })]])
+  expect(f.effects()).toEqual([{ state: 'confirmed_not_applied', receipts: 'intent,confirmed_not_applied' }])
+  expect(f.store.db.prepare('SELECT state FROM network_invocations WHERE pod_id=? AND execution_kind=\'script\'').get(f.archive)!.state).toBe('completed')
+})
+
+it('does not move a message whose provider subject differs from the approved item', async () => {
+  const f = archiveFixture({ payload: { subject: 'Invoice 4711' } })
+  await f.approve()
+  expect(f.outcomes).toEqual([[expect.objectContaining({ outcome: 'skipped', reason: 'Message does not match the approved sender and subject' })]])
+  expect(f.moves).toEqual([])
 })
 
 it('refuses the port for a source member', async () => {

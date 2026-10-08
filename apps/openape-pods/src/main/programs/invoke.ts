@@ -8,6 +8,7 @@ import type { CredentialCache } from '../connections/cache'
 import { PodToolBroker } from '../broker/tools'
 import type { BrokerLease } from '../broker/tools'
 import { startMailProxy } from '../mail/proxy'
+import { archiveRefusal } from '../../contracts/network-capabilities'
 
 export function programRequest(resources: PodResource[], podId: string, capabilities: string[], body: unknown) {
   const request = body as { applicationId?: string, application?: string, argv: string[] }
@@ -20,7 +21,8 @@ export function programRequest(resources: PodResource[], podId: string, capabili
 }
 export async function invokeProgram(resources: PodResource[], podId: string, body: unknown, helper: string, root: string, credentials: CredentialCache, lease: BrokerLease, observe?: GrantObserver, previous?: GrantLookup, action?: 'move') {
   const { id, assignment, argv } = programRequest(resources, podId, lease.capabilities, body)
-  const { authority, authorization } = await prepareProgramAuthorization(assignment, podId, argv, credentials, action === undefined, observe, previous, action)
+  // Authorization runs before any process starts; for the archive port a refusal here is evidence that nothing moved.
+  const { authority, authorization } = await prepareProgramAuthorization(assignment, podId, argv, credentials, action === undefined, observe, previous, action).catch((error: unknown) => { throw action ? archiveRefusal(error) : error })
   const proxy = assignment.networkHosts.length ? await startMailProxy(lease.signal, undefined, assignment.networkHosts) : undefined
   try {
     const broker = new PodToolBroker(helper, root, authority, credentials)
