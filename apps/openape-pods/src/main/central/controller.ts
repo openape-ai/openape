@@ -5,7 +5,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
-import type { CentralClient, CentralCommand, CentralOperation, CentralSnapshot, CentralState, CentralStatus } from '../../contracts/central'
+import type { CentralClient, CentralCommand, CentralOperation, CentralSnapshot, CentralState, CentralStatus, UncertainOperation } from '../../contracts/central'
 import { centralHeartbeatMs, parseCentralSnapshot } from '../../contracts/central'
 import { encodeParts, manifestDigest, splitSnapshot } from '../../contracts/central-parts'
 import type { CentralManifest } from '../../contracts/central-parts'
@@ -59,6 +59,11 @@ export function partBatches(parts: Record<string, unknown>, maximum = batchBytes
 
 class ConnectionLost extends Error {}
 
+export function uncertainOperation(operation: CentralOperation, executing: string | null): UncertainOperation {
+  const body = operation.command.body as Record<string, unknown>
+  return { id: operation.id, channel: operation.command.channel, type: typeof body?.type === 'string' ? body.type : null, podId: typeof body?.podId === 'string' ? body.podId : null, error: operation.error, startedLocally: executing === operation.id }
+}
+
 export class CentralController {
   private lease = ''
   private supportsNetworks = false
@@ -87,6 +92,7 @@ export class CentralController {
   private lastPublication: CentralStatus['lastPublication'] = null
   private publishedAt = 0
   private cached: { version: number, snapshot: CentralSnapshot, hash: string } | null = null
+  private uncertain: UncertainOperation[] = []
   error: string | null = null
   constructor(private readonly root: string, private readonly request: WorkspaceRequest, private readonly executor: CentralExecutor, private readonly helper: string, private readonly timing = { heartbeatMs: centralHeartbeatMs, publishIntervalMs: 5000 }) {}
 
@@ -96,7 +102,7 @@ export class CentralController {
   offlineMessage(): string { return `Central workspace offline: ${this.error ?? 'connecting'}` }
 
   status(): CentralStatus {
-    return { networkReadError: this.networkReadError, state: centralState(this.online, this.lastOnlineAt, this.since, Date.now()), error: this.error, since: this.since, lastOnlineAt: this.lastOnlineAt, gateUntil: this.gateUntil, lastTickAt: this.worker?.lastTickAt || null, tickingSince: this.worker?.tickingSince ?? null, tickPhase: this.worker?.tickPhase ?? null, tickTimeout: this.worker?.tickTimeout ?? null, format: this.format, runtimeId: this.runtimeId, lastPublication: this.lastPublication }
+    return { networkReadError: this.networkReadError, state: centralState(this.online, this.lastOnlineAt, this.since, Date.now()), error: this.error, since: this.since, lastOnlineAt: this.lastOnlineAt, gateUntil: this.gateUntil, lastTickAt: this.worker?.lastTickAt || null, tickingSince: this.worker?.tickingSince ?? null, tickPhase: this.worker?.tickPhase ?? null, tickTimeout: this.worker?.tickTimeout ?? null, format: this.format, runtimeId: this.runtimeId, lastPublication: this.lastPublication, uncertain: this.uncertain }
   }
 
   start(): void {
@@ -167,7 +173,15 @@ export class CentralController {
       if (!['applied', 'failed'].includes(operation.state)) await this.synchronize(completion)
     }
     if (completion) await rm(join(this.root, 'central/completion.json'))
-    if (session.pending.some(item => item.id !== (pending?.completion?.id ?? completion?.id))) throw new Error('A previous command has an uncertain outcome. Inspect its actual run and reconcile it before reconnecting')
+    const executing = (await this.read<{ id: string }>('executing.json'))?.id ?? null
+    this.uncertain = session.pending.filter(item => item.id !== (pending?.completion?.id ?? completion?.id)).map(item => uncertainOperation(item, executing))
+    // executing.json is saved before any command runs, so an uncertain command without it never started here.
+    const unstarted = this.uncertain.find(item => !item.startedLocally)
+    if (unstarted) {
+      await this.save('completion.json', { id: unstarted.id, result: null, error: 'Not executed: the desktop lost its connection before the command started. Submit it again.' })
+      throw new Error('Settling a command that never started on this desktop')
+    }
+    if (this.uncertain.length) throw new Error('A previous command has an uncertain outcome. Inspect its actual run and reconcile it before reconnecting')
     await this.synchronize()
     await this.serviceNetworks(false)
     this.phase = 'heartbeat'
@@ -400,6 +414,17 @@ export class CentralController {
       throw new Error(`Workspace operation ${id} is not confirmed. Reconcile this operation before retrying`)
     }
     finally { this.localActions.delete(id) }
+  }
+
+  /**
+   * Records the owner's reconciliation of an uncertain command as its completion. The next connection
+   * publishes it, so the service settles the operation without the command running again.
+   */
+  async reconcile(id: string, applied: boolean, evidence: string): Promise<{ id: string, applied: boolean, state: 'recorded' }> {
+    if (!this.uncertain.some(item => item.id === id)) throw new Error('This command is not an uncertain operation of this desktop')
+    if (await this.read('completion.json')) throw new Error('Another completion is waiting for publication; retry after it is published')
+    await this.save('completion.json', { id, result: { reconciled: true, applied, evidence }, error: applied ? null : `Reconciled as not applied: ${evidence}` })
+    return { id, applied, state: 'recorded' }
   }
 
   // Inventory carries this desktop's own connection status, which the service cannot know.

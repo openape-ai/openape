@@ -60,10 +60,15 @@ export function parseWorkspaceAction(value: Record<string, unknown>): Record<str
   const fields: Record<string, string[]> = {
     inventory: ['type'], read: ['type', 'runtimeId', 'podId', 'view', 'runId', 'offset', 'selection'],
     submit: ['type', 'runtimeId', 'revision', 'id', 'command'], operation: ['type', 'id'],
+    reconcile: ['type', 'id', 'applied', 'evidence'],
   }
   if (typeof query.type !== 'string' || !Object.hasOwn(fields, query.type) || Object.keys(query).some(key => !fields[query.type as string]!.includes(key))) throw new Error('Invalid workspace query')
   if (query.type === 'inventory') return { type: 'inventory' }
   if (query.type === 'operation') return { type: 'operation', id: centralId(query.id) }
+  if (query.type === 'reconcile') {
+    if (typeof query.applied !== 'boolean' || typeof query.evidence !== 'string' || !query.evidence.trim() || query.evidence.length > 2000) throw new Error('Reconcile needs applied (boolean) and evidence (1 to 2000 characters)')
+    return { type: 'reconcile', id: centralId(query.id), applied: query.applied, evidence: query.evidence.trim() }
+  }
   const runtimeId = centralId(query.runtimeId)
   if (query.type === 'read') {
     const view = query.view ?? 'summary'
@@ -85,9 +90,10 @@ export const workspaceHelp = {
     read: { type: 'read', runtimeId: 'UUID from inventory', podId: 'UUID from inventory', view: 'summary (default) | runs with offset | run with runId | version with selection (hash or draft id) | map without podId' },
     submit: { type: 'submit', runtimeId: 'UUID from inventory', revision: 'current runtime revision from inventory/read', id: 'new UUID saved before dispatch; reuse for identical retries', command: { channel: 'see commands', body: 'see commands' } },
     operation: { type: 'operation', id: 'same submit UUID' },
+    reconcile: { type: 'reconcile', id: 'UUID from runtime central.uncertain', applied: 'true when the evidence shows the command took effect, false otherwise', evidence: 'the actual local or external evidence, 1 to 2000 characters' },
   },
   receipts: 'submit returns accepted/started/applied/failed/unknown. Poll operation by the same id until applied or failed. Repeating the identical submit returns its existing receipt, even after its original revision changed. Never repeat unknown effects with a new id. On a revision conflict, read current state before proposing a new command.',
-  availability: 'inventory reports runtime.online, runtime.lastSeenAt, pod.online and pod.queue (blocked inputs, since, error); paused is distinct from offline. This desktop\'s own entry carries desktop: {state, error, since, gateUntil, lastTickAt}; error names the failing phase, for example "worker snapshot: …". Offline content and commands are refused by the service. The desktop must remain open and connected. read view=summary returns revision, total and pod (details, scripts, resources, scheduling, the latest 20 runs without events); view=runs pages older runs by 20; view=run returns one run with its events; view=version returns one script version. read view=map (no podId) returns the Automatisierungen read model: systems, pods, collections (networks and chains), measured edges of the last 24 h and the five KPIs; secrets appear as aliases only.',
+  availability: 'inventory reports runtime.online, runtime.lastSeenAt, pod.online and pod.queue (blocked inputs, since, error); paused is distinct from offline. This desktop\'s own entry carries desktop: {state, error, since, gateUntil, lastTickAt, uncertain}; runtime central.uncertain lists the same commands while the desktop is offline: each {id, channel, type, podId, error, startedLocally} is a central command with an unknown outcome that keeps this desktop offline and all its schedules paused. Inspect the actual runs and state of the named Pod, show the owner the evidence and ask for confirmation, then reconcile it with {type:reconcile,id,applied,evidence}; this records the outcome without executing the command again. error names the failing phase, for example "worker snapshot: …". Offline content and commands are refused by the service. The desktop must remain open and connected. read view=summary returns revision, total and pod (details, scripts, resources, scheduling, the latest 20 runs without events); view=runs pages older runs by 20; view=run returns one run with its events; view=version returns one script version. read view=map (no podId) returns the Automatisierungen read model: systems, pods, collections (networks and chains), measured edges of the last 24 h and the five KPIs; secrets appear as aliases only.',
   commands: {
     data: ['{type:deletePod,podId,revision,name} — permanently delete an archived Pod after explicit user instruction; inspect its current name/revision first. Active work and workflow references block deletion. Local data/keys and current central copies are removed; shared accounts, original files, remote identities/grants, backups and shared chat history remain. Poll the operation receipt; reuse its ID after a lost response.'],
     workspace: ['{type:create,name}', '{type:update,id,revision,name,lifecycle:active|paused|archived}', '{type:describeCollection,id,revision,text} — what a network or workflow is for, at most 1000 characters; id is the network or workflow UUID, revision the current one from inventory workspace.descriptions or 0 for a new description, empty text removes it. Explains only: never part of a definition, pin or hash.'],
