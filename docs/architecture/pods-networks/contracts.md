@@ -466,8 +466,8 @@ reason. The owner resolves held feedback with `discardFeedback` (event id plus
 evidence): the deliveries become `discarded` with a review receipt and a
 `feedback-review-resolved` trace event, which unblocks replacement and archival.
 A feedback channel cannot be part of an explicit join. Pause stops dispatch through
-the existing reservation rule; no production network effect writer exists, and the
-effect-key contract above excludes the hop. Known limits: the delay and the hold
+the existing reservation rule; the only production network effect writer is the
+mail archive port (below), and the effect-key contract above excludes the hop. Known limits: the delay and the hold
 apply to every subscriber of the feedback channel; a fresh gate approval resets
 `ready_at`; a workflow-call result inherits the highest hop of its whole case
 revision rather than of its causal chain, which can hold a parallel branch early;
@@ -1272,3 +1272,27 @@ the main process. The closed automatic scheduler gate does not reject that one
 explicit run, and no unrelated scheduler domain advances under its authority.
 Startup, suspend, maintenance, global concurrency, membership and grant checks
 remain required. Client-supplied authority fields are rejected.
+
+## Mail archive port
+
+The first external action port (issue 1454). A consumer whose every subscribed
+input is the output of an approve gate may hold exactly one assigned mail
+application (`tool.app_*`); its script still cannot invoke it.
+`context.network.archive({application, mailbox})` processes the invocation's gate
+coverage: per approved item it resolves the message id and version from the case
+`source_mapping`, computes the logical action key
+`[ownerIssuer, ownerSubject, podId, caseId, 'mail.archive', messageId, sourceVersion]`,
+returns `archived` without any provider call when the key is already
+`confirmed_applied`, and otherwise records `intent` before any provider call.
+It re-reads the message (granted `workflow read`), records `confirmed_not_applied`
+when the message is gone or its content version changed, and only then runs the
+granted `workflow move ... --destination archive` with the current changeKey and
+folder through the separate `mailMove` broker service, which accepts exactly that
+argv and the adapter action `move`. A bound receipt (before/after id, changed
+folder, request id) records `confirmed_applied`; a provider refusal records
+`confirmed_not_applied`; anything after dispatch without a bound receipt records
+`unknown`, which fails settlement and requires `reconcileEffect`. Microsoft Graph
+offers no atomic conditional move, so this port is the owner-confirmed operation
+`docs/workflows.md` requires: every move is bound to one owner once-grant and to a
+fresh read immediately before it.
+

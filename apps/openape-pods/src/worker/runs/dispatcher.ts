@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto'
 import { RunCancellation, unresolvedOperation } from '../recovery/policy'
 import type { RecoveryFailure } from '../recovery/policy'
 import { programRequest } from '../../main/programs/invoke'
-import { supportedNetworkCapability } from '../../contracts/network-capabilities'
+import { supportedNetworkCapability, networkArchiveMember } from '../../contracts/network-capabilities'
+import { archiveApproved, parseArchiveTarget } from '../scheduling/network-archive'
 import { boundedStep } from '../scheduling/tick-step'
 import type { NetworkGates, NetworkGateStep, NetworkGateService } from '../scheduling/network-gates'
 import { AuthorityError, InfrastructureError, retryInfrastructure } from '../../contracts/infrastructure'
@@ -79,6 +80,7 @@ export interface RunServices {
   credential?: (alias: string, signal: AbortSignal, scope: RunServiceScope) => Promise<string>
   provider?: AgentGatewayServices['provider']
   tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
+  mailMove?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
 }
 
 function archiveTarget(payload: unknown): { operation: 'process', target: unknown } {
@@ -383,6 +385,22 @@ export class RunDispatcher {
               networkMailReads++
               appendEvent('network-mail-read', { operation: request.read.operation, count: networkMailReads })
               return invokeTool(payload, operationSignal)
+            }
+            if (operation === 'network.archive') {
+              const { row, definition, member } = network.invocations.events.authority(network.authority)
+              if (!networkArchiveMember(definition, member, manifest.capabilities)) throw new Error('Only a member behind an approval gate with one assigned mail application can archive')
+              if (!this.services?.mailMove || !network.invocations.gates) throw new Error('Mail archive service is unavailable')
+              const target = parseArchiveTarget(payload)
+              const coverage = network.invocations.gates.coverage(network.authority)
+              const call = (service: 'read' | 'move') => async (argv: string[]) => {
+                const body = { application: target.application, argv }
+                if (service === 'read') return invokeTool(body, operationSignal)
+                appendEvent('recovery-boundary', { kind: 'effect', operation: 'network.archive' })
+                return this.services!.mailMove!(body, operationSignal, scope)
+              }
+              const outcomes = await archiveApproved(this.store, { networkId: definition.id, runId: id, podId: pod.id, owner: { issuer: row.owner_issuer as string, subject: row.owner_subject as string } }, coverage, target, { read: call('read'), move: call('move') }, assertCurrent)
+              appendEvent('network-archive', { outcomes: outcomes.map(({ deliveryId, outcome, reason }) => ({ deliveryId, outcome, reason })) })
+              return outcomes
             }
             if (!['graph.contract', 'graph.emit', 'network.emit', 'network.gateCoverage', 'data.get', 'data.put', 'data.delete', 'data.query', 'artifacts.create', 'artifacts.read', 'workflow.call', 'workflow.result', 'progress.commit'].includes(operation)) throw new Error('Network operation requires a declared runtime port')
             if (operation === 'data.get') return network.invocations.data.get(network.authority, payload)

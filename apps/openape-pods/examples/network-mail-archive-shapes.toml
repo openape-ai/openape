@@ -1,0 +1,22 @@
+schema = "openape-shapes/v1"
+[cli]
+id = "o365-cli"
+executable = "o365-cli"
+audience = "shapes"
+version = "network-archive-1"
+[[operation]]
+id = "workflow.read"
+command = ["workflow", "read"]
+required_options = ["account", "message"]
+display = "Read one approved message of {account} before archiving it"
+action = "read"
+risk = "low"
+resource_chain = ["account:email={account}", "mail:*"]
+[[operation]]
+id = "workflow.move"
+command = ["workflow", "move"]
+required_options = ["account", "message", "expected-version", "source-folder", "destination"]
+display = "Move one owner-approved message of {account} into its Archive folder"
+action = "move"
+risk = "high"
+resource_chain = ["account:email={account}", "mail:*"]
