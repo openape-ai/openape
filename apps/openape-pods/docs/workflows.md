@@ -113,6 +113,9 @@ refuses moves. Controlled tests can exercise confirmed/failed/unknown moves;
 they do not establish that missing provider guarantee. A future provider-backed
 solution or separately reviewed human-confirmed operation is needed before live
 archiving can be enabled. Schedule/owner approval alone cannot bypass this gate.
+Persistent networks provide that human-confirmed operation as the mail archive
+port: each move needs the owner's once-grant for exactly that message, see the
+[network contract](../../../docs/architecture/pods-networks/contracts.md#mail-archive-port).
 
 ## Concrete disabled pilot
 

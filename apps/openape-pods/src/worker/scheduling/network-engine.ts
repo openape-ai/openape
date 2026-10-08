@@ -1,4 +1,4 @@
-import { supportedNetworkCapability, networkSourceCapability } from '../../contracts/network-capabilities'
+import { supportedNetworkCapability, networkSourceCapability, networkArchiveMember } from '../../contracts/network-capabilities'
 import { currentCompositionDraft, NetworkReplacement } from './network-replacement'
 import { memberScriptIssues, networkSettlementIssues, previewNetworkArchive, retainedLegacyItems } from './network-retirement'
 import { DefinitionCatalog } from '../workspace/definition-catalog'
@@ -535,7 +535,7 @@ export class NetworkEngine {
       const manifest = parseManifest(JSON.parse(script.manifest as string))
       if (manifest.contract === undefined || canonicalNetworkJson(parseGraphContract(manifest.contract)) !== canonicalNetworkJson(member.contract) || manifest.dependencyLockHash !== binding.lock_hash) throw new Error('Network script contract or dependency lock differs from its definition')
       if (manifest.capabilities.some(capability => !supportedNetworkCapability(capability))) throw new Error('Network capabilities require declared runtime ports')
-      if (!member.source && manifest.capabilities.some(networkSourceCapability)) throw new Error('Network mail reads require a declared source')
+      if (!member.source && manifest.capabilities.some(networkSourceCapability) && !networkArchiveMember(definition, member, manifest.capabilities)) throw new Error('Network mail reads require a declared source')
       if (!member.source && !manifest.triggers.includes('event')) throw new Error('Network consumer script must allow event triggers')
       if (member.source?.schedule && !manifest.triggers.includes('schedule')) throw new Error('Scheduled network source script must allow schedule triggers')
       if (!this.store.db.prepare('SELECT 1 FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(member.podId, pod.activeScript!, pod.bindingRevision, this.resources.epoch(member.podId))) throw new Error('Network instance needs validation for its current resources')
