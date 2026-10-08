@@ -2641,7 +2641,7 @@
   "Invalid archive batch identity": "Ungültige Kennung der Archivierungsliste",
   "Invalid archive Pod identity": "Ungültige Pod-Identität für die Archivierung",
   "Archive proposals require live provider data; synthetic validation never creates grants or moves mail": "Archivierungsvorschläge benötigen echte Maildaten; die synthetische Prüfung erstellt keine Freigaben und verschiebt keine Mails",
-  "Mail archive service is unavailable": "Der Dienst für Archivierungsfreigaben ist nicht verfügbar",
+  "Mail archive service is unavailable": "Der Mail-Archivdienst ist nicht verfügbar",
   "Archive message details exceed the grant display limit": "Die Nachrichtendetails überschreiten das Anzeigelimit einer Freigabe",
   "Invalid Jev key import": "Ungültiger Import des Jev-Schlüssels",
   "Pod permissions changed; reload before importing Jev": "Pod-Berechtigungen geändert; vor dem Jev-Import neu laden",
@@ -4370,5 +4370,18 @@
   "Reconcile needs applied (boolean) and evidence (1 to 2000 characters)": "Der Abgleich braucht applied (boolean) und evidence (1 bis 2000 Zeichen)",
   "Settling a command that never started on this desktop": "Ein Auftrag, der auf diesem Desktop nie gestartet wurde, wird abgeschlossen",
   "This command is not an uncertain operation of this desktop": "Dieser Auftrag ist kein unklarer Auftrag dieses Desktops",
-  "Another completion is waiting for publication; retry after it is published": "Ein anderer Abschluss wartet auf Veröffentlichung; nach der Veröffentlichung erneut versuchen"
+  "Another completion is waiting for publication; retry after it is published": "Ein anderer Abschluss wartet auf Veröffentlichung; nach der Veröffentlichung erneut versuchen",
+  "The archive port only moves one message into the Archive folder": "Der Archiv-Port verschiebt nur eine Nachricht in den Archiv-Ordner",
+  "The archive port may only run the granted move operation": "Der Archiv-Port darf nur die freigegebene Verschiebe-Operation ausführen",
+  "Only a member behind an approval gate with one assigned mail application can archive": "Nur ein Mitglied hinter einem Freigabe-Gate mit genau einer zugewiesenen Mail-Anwendung kann archivieren",
+  "Archive needs exactly application and mailbox": "Archivieren braucht genau application und mailbox",
+  "Archive needs the assigned mail application": "Archivieren braucht die zugewiesene Mail-Anwendung",
+  "Archive needs the exact mailbox address": "Archivieren braucht die genaue Postfachadresse",
+  "Mail application returned no valid workflow receipt": "Die Mail-Anwendung hat keinen gültigen Workflow-Beleg geliefert",
+  "Approved delivery has no case": "Die freigegebene Zustellung hat keinen Fall",
+  "An earlier archive attempt of this message needs reconciliation": "Ein früherer Archivierungsversuch dieser Nachricht muss abgeglichen werden",
+  "Mail preflight read did not return the approved message": "Das Vorab-Lesen hat nicht die freigegebene Nachricht geliefert",
+  "A run can archive its approved mail only once": "Ein Lauf kann seine freigegebenen Mails nur einmal archivieren",
+  "Archive outcome arrived after its attempt was settled": "Das Archiv-Ergebnis kam erst nach dem Abschluss des Versuchs",
+  "Archive move not started: {p0}": "Archiv-Verschiebung nicht gestartet: {p0}"
 }
