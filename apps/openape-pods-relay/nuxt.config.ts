@@ -6,6 +6,7 @@ export default defineNuxtConfig({
   modules: ['@openape/nuxt-auth-sp'],
   openapeSp: { routes: false, clientId: 'pods.openape.ai', spName: 'OpenApe Pods', postLoginRedirect: '/workspace' },
   runtimeConfig: {
+    podsReleaseDirectory: '',
     workspaceEnabled: false,
     workspaceDatabase: './.data/workspace.sqlite',
     workspaceSessionSecret: '',
