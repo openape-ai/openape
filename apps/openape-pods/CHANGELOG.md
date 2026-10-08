@@ -1,5 +1,11 @@
 # @openape/pods
 
+## 0.1.3
+
+### Patch Changes
+
+- d0b2ae6: Add signed Mac update discovery and installation with a verified pre-update backup, plus a matching Pods download page and atomic release feed.
+
 ## 0.1.2
 
 ### Patch Changes
