@@ -20,3 +20,11 @@ display = "Move one owner-approved message of {account} into its Archive folder"
 action = "move"
 risk = "high"
 resource_chain = ["account:email={account}", "mail:*"]
+[[operation]]
+id = "auth.login"
+command = ["auth", "login"]
+required_options = ["account"]
+display = "Sign in {account} in the Pod terminal"
+action = "login"
+risk = "medium"
+resource_chain = ["account:email={account}"]
