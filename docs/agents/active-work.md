@@ -10,6 +10,8 @@
 - Native acceptance: signed/notarized disposable N and N+1 prove ordinary quit without staging, paired backup before native staging, one successful restart, synthetic profile preservation and Gatekeeper acceptance. The probe exposed an Electron ASAR backup failure; `original-fs` fixes it and a retained real-Electron regression passes. Source `6a406ee6` passed its affected-unit push hook; the full local contract also passed on identical code before that commit. Evidence: https://report.openape.ai/d/01M4E0B0K55MXYVP9E53Z67NNH?v=2.
 - Next: final PR review and merge, then deploy the website using its dedicated read-only release directory and updated Traefik routes. Promote a public artifact only after the full product/device gates pass. Keep issue 1453 open until a real MacBook install and N-to-N+1 product update are accepted.
 
+- Owner publication follow-up: after the unavailable-download disclosure, the owner explicitly requested a signed website build. Branch `feature/issue-1453-pods-public-release` versions only Pods to 0.1.3 and records a narrowly scoped initial-release authorization, retaining pending checks rather than claiming they passed. Next: final gates, native PR/merge, clean-source signed/notarized packaging, mounted acceptance and atomic public artifact promotion.
+
 ## Pods Inbox app badge — issue 1452
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1452. Worktree `openape-monorepo.worktrees/pods-inbox-badge`, branch `feature/issue-1452-pods-inbox-badge`, base `dfa801791e31ff2567e57d6d576c2af0e818d401`.

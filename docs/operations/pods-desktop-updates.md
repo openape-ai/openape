@@ -27,7 +27,7 @@ Never put signing credentials in Git or the release directory.
 ```sh
 pnpm --filter @openape/pods build
 pnpm --filter @openape/pods package:signed
-pnpm --filter @openape/pods test:distribution
+pnpm --filter @openape/pods test:distribution --signed
 ```
 
 Packaging generates a stapled DMG, a ZIP containing the notarized/stapled app,
@@ -35,6 +35,22 @@ SHA256SUMS and `release.json` in `apps/openape-pods/release/distribution`.
 Only a fully approved signed build emits the public manifest. Artifact hashes
 are computed after signing/stapling, and startup removes stale public metadata.
 Retain the review, source SHA, lock hash, release notes and native test receipt.
+
+## Owner-authorized initial publication
+
+For 0.1.3 only, issue 1453 records the owner's explicit instruction to publish a
+signed build after the pending public-release checks were disclosed. The external
+exact-source review can carry `ownerAuthorization` with that version, the exact
+instruction, `approvedBy: "Patrick Hofmann"`, the issue evidence URL and the
+explicit `pendingGates` list. Packaging logs each pending acceptance and retains
+the actual gate states in the shipped BOM. A failed check is never accepted by
+this authorization. Candidate signing and subsequent versions retain the ordinary
+review gates. Clean source, source/lock binding, supplemental notice hashes,
+Developer ID signing, notarization, Gatekeeper and artifact integrity still apply.
+
+The supplemental notices include the pinned upstream Codex license and NOTICE;
+this does not claim a complete native dependency license review. Device and real
+provider acceptance remain pending independently of the publication decision.
 
 ## Provision and deploy the website
 
