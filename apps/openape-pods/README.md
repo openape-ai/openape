@@ -610,7 +610,7 @@ restore remain disabled. Pending filesystem/key cleanup resumes on restart.
 
 ### Build artifacts and release gates
 
-`pnpm --filter @openape/pods package:distribution` creates a versioned unsigned DMG
+`pnpm --filter @openape/pods package:distribution` creates versioned unsigned DMG/ZIP archives
 and app under `release/distribution`, with SHA256SUMS, a conservative runtime npm
 closure, pinned native build metadata and collected license notices. No package is
 uploaded. This local artifact is for evaluation, not a release. Its signed-manifest
@@ -652,8 +652,40 @@ a newer version and a compatible schema. It exports a pre-update backup and veri
 the candidate again. It never installs or launches the candidate. Quit before manual
 replacement and keep the old app and backup together. For rollback, reinstall the old
 signed app and restore its compatible backup into a fresh profile; never open the
-migrated database with an incompatible old binary. No background updater, release
-tag, publication or deployment is part of this increment.
+migrated database with an incompatible old binary.
+
+### Automatic updates and public download
+
+Installed Apple Silicon apps check the stable channel at startup and every six
+hours. App settings → Data management shows the version, a manual check and a
+confirmed restart/install action. Development and fixture sessions stay disabled.
+An offline or unavailable feed leaves the installation unchanged; manual checks
+and the next scheduled check can retry.
+
+`electron-updater` 6.6.2 is pinned for Electron 40.9.3 and builder 26.15.3.
+Automatic download, install-on-quit, prereleases, downgrades and differential
+downloads are disabled. An explicit installation downloads and verifies the ZIP,
+expands it in a write-confined temporary directory and verifies the signed app
+before pausing worker starts. Active work/account setup and external Pods MCP
+processes refuse installation. Close those sessions and retry; nothing is killed.
+The worker drains its tick and checkpoints SQLite without editing schedules.
+A private full-profile backup and the previous app are verified before handing
+the archive to Squirrel.Mac. Backup failures resume scheduling; once native
+installation starts, keep the workspace paused until restart.
+
+Backups live under `~/Library/Application Support/OpenApe Pods Rollback`.
+They preserve encrypted files and device identity, exclude Chromium and
+checkpointed SQLite transient files, and remain paired with the previous app.
+The system Keychain stays on the device. Do not copy a backup onto the MacBook
+as an installation shortcut. Recovery requires reconciling remote sessions and
+effects; there is no automatic database downgrade or backup retention deletion.
+
+The relay serves `/download/mac`, `/api/releases/current` and the stable update
+feed from one promoted release. Without an approved release the landing page
+shows that the download is unavailable. The current verified execution matrix
+is displayed explicitly; the packaging minimum is not advertised as support.
+See [the release runbook](../../docs/operations/pods-desktop-updates.md) for
+review, packaging, promotion, rollback and outstanding physical acceptance.
 
 ## Direct script editor and user handbook
 

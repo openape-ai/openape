@@ -1,9 +1,11 @@
 <script lang="ts">
 import { t, diagnostic, label, number } from './i18n'
 import { defineComponent } from 'vue'
+import SoftwareUpdates from './SoftwareUpdates.vue'
 import type { DataCommand, DataView } from '../contracts/data'
 
 export default defineComponent({
+  components: { SoftwareUpdates },
   data() { return { view: null as DataView | null, limitGiB: 10, busy: false, error: '', notice: '' } },
   async mounted() { await this.perform({ type: 'status' }) },
   methods: {
@@ -79,6 +81,7 @@ export default defineComponent({
         {{ label(view.result.kind) }}: {{ view.result.path }}
       </p>
     </article>
+    <SoftwareUpdates />
     <article class="card">
       <h2>{{ t("Manual updates") }}</h2><p>{{ t("Choose a downloaded, signed OpenApe Pods app. Verification checks its publisher, version and database compatibility, then exports a backup before you install it.") }}</p><button class="secondary" :disabled="busy || !view || view.busy" @click="perform({ type: 'update' })">
         {{ t("Verify update and back up…") }}

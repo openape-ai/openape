@@ -31,8 +31,9 @@
   "dependencies": {
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
-    "vue": "catalog:",
-    "croner": "10.0.1"
+    "croner": "10.0.1",
+    "electron-updater": "6.6.2",
+    "vue": "catalog:"
   },
   "devDependencies": {
     "@openai/codex": "0.153.4",
@@ -40,6 +41,7 @@
     "@openape/apes": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
+    "@openape/pods-protocol": "workspace:*",
     "@types/node": "catalog:",
     "@vitejs/plugin-vue": "catalog:",
     "@vitest/browser": "catalog:",
@@ -58,7 +60,6 @@
     "typescript": "catalog:",
     "vite": "8.2.1",
     "vitest": "catalog:",
-    "vue-tsc": "catalog:",
-    "@openape/pods-protocol": "workspace:*"
+    "vue-tsc": "catalog:"
   }
 }

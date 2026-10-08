@@ -1,3 +1,4 @@
+export * from './releases'
 export * from './sharing'
 
 export const protocol = { name: 'pods-mobile', major: 1, minor: 0 } as const

@@ -1,0 +1,588 @@
+{
+  "schema": "openape.plan/2",
+  "language": "en",
+  "project": "OpenApe Pods",
+  "owner": "Patrick Hofmann",
+  "date": "2026-10-08",
+  "status": "active",
+  "revision": 2,
+  "milestones": [
+    {
+      "id": "M0",
+      "status": "active",
+      "title": "Prove the release and restart contract",
+      "goal": "Resolve native updater behavior and public-release readiness before wiring the product.",
+      "acceptance": [
+        "A compatible pinned electron-updater version works with Electron 40.9.3 and electron-builder 26.15.3; actual macOS quit/staging behavior is recorded.",
+        "A release-review inventory identifies exact missing evidence for licenses, signed boundaries, clean machine, provider/tenant refresh, sleep/wake and the supported OS/CPU matrix."
+      ],
+      "steps": [
+        "Create a native issue and isolated feature/issue-<number>-pods-auto-update checkout from current canonical main. Inspect existing unit/component and Electron acceptance harnesses.",
+        "Prototype with disposable signed bundles and an isolated profile. Prove that closing a window, normal quit, restart and a busy worker cannot skip backup or compatibility checks. Do not assume autoInstallOnAppQuit alone controls Squirrel.Mac staging."
+      ],
+      "rollback": "Discard the isolated prototype; keep the installed app unchanged.",
+      "proof": "Pinned-library tests verify that electron-updater 6.6.2 does not ask native Squirrel.Mac to stage a download until explicit installation. builder-util-runtime is overridden to patched 9.7.0. A disposable signed native prototype is still being notarized; full product/device acceptance remains open."
+    },
+    {
+      "id": "M1",
+      "status": "active",
+      "title": "Design the matching landing page and publish a complete release",
+      "goal": "Make the landing page feel like the existing Pods product and make download and feed refer to one validated release.",
+      "acceptance": [
+        "GET /download/mac redirects only to the promoted arm64 DMG; /updates/stable/darwin-arm64/ exposes updater metadata and immutable artifacts over HTTPS without a workspace login.",
+        "A release is promoted atomically only after DMG, ZIP, checksums, signed manifest and required evidence are present. Missing releases show an honest unavailable state.",
+        "The landing-page design is produced with Claude Opus 5.5, and the execution receipt records the actual model identity. Availability is checked before this step; if the requested model cannot be used, report the limitation and obtain an explicit replacement decision rather than silently substituting another model.",
+        "Personally inspected screenshots at 390px and 1440px demonstrate visual consistency with current Pods references, a clear Mac download and usable workspace sign-in. No horizontal overflow; keyboard focus and contrast remain usable. Component tests protect download availability and login interactions."
+      ],
+      "steps": [
+        "Extend apps/openape-pods/scripts/package.mjs and distribution.mjs: ZIP target, updater configuration/metadata, unique version and exact source review. Preserve signing, notarization and releaseReady gates.",
+        "Serve releases from a dedicated persistent directory behind the existing pods.openape.ai deployment, outside owner workspace data. Upload artifacts first, verify hashes and promote the small channel pointer last. Support correct content types, caching and Range requests. Keep previous immutable releases.",
+        "Inspect current desktop/workspace components, styles, tokens and representative screenshots. Give these references to Claude Opus 5.5 to design and implement the landing page in WorkspaceWelcome.vue. Match typography, colors, spacing, surfaces, buttons, icons and tone; reuse existing patterns where suitable. Integrate the download with Apple Silicon, macOS 14+, version and Applications-folder guidance, and preserve workspace sign-in."
+      ],
+      "rollback": "Withdraw channel metadata and restore the previous download pointer; never overwrite an existing version.",
+      "proof": "Opus model provenance is recorded. Actual Nuxt screenshots at 390 and 1440 pixels were inspected; both layouts have a visible fixture download, reachable sign-in and no horizontal overflow. Ninety relay tests cover metadata, immutable artifacts, byte ranges and welcome states. Publication preserves immutable versions and recovers identical retries. No public release artifact has been promoted."
+    },
+    {
+      "id": "M2",
+      "status": "active",
+      "title": "Update safely inside the app",
+      "goal": "Let the app discover and install updates without interrupting automation.",
+      "acceptance": [
+        "Startup and six-hour checks are single-flight, retry boundedly after offline errors, and offer a manual check. The UI shows current/new version, progress and actionable failure.",
+        "Installation cannot occur while active work or external MCP users make replacement unsafe; new starts are fenced, active work drains, backup succeeds and compatibility/signature checks pass before native staging. Failure restores normal scheduling without changing saved schedule definitions.",
+        "Same/older versions, another signing team, wrong architecture, corrupt downloads and incompatible schemas are refused; development and fixture builds never enter the production update channel."
+      ],
+      "steps": [
+        "Add a focused main-process updater and narrow IPC/UI contract, with German/English strings. Prefer electron-updater as the existing builder integration; pin and inventory its runtime dependencies.",
+        "Reuse and preserve src/main/update.ts checks and worker backup semantics. Verify signed distribution metadata before accepting a release, prevent new run races and handle before-quit-for-update explicitly. Provide Later and Restart and install. Never kill unrelated MCP processes."
+      ],
+      "rollback": "Disable the feed; retain the old app and matched pre-update backup. Restore only after reconciling effects and remote sessions; never automatically roll back a migrated database.",
+      "proof": "The implementation checks at startup/every six hours, verifies hashes/signatures/source/schema, rejects active work and external MCP processes, fences new work, checkpoints SQLite and verifies the paired full-profile/app backup before native handoff. Pods test:fast passed 1,354 unit/component and 53 browser tests. The actual update controls and refusal state were inspected using synthetic IPC data."
+    },
+    {
+      "id": "M3",
+      "status": "blocked",
+      "title": "Accept and release the MacBook installation",
+      "goal": "Demonstrate a real first installation and subsequent upgrade.",
+      "acceptance": [
+        "A downloaded, quarantined DMG installs and passes Gatekeeper on a clean Apple Silicon profile; the MacBook can sign in without inheriting another device identity or schedules.",
+        "A signed N-to-N+1 update preserves synthetic Pods, schedules, encrypted secrets, selected profile and runtime identity, and resumes once without duplicate work; offline, corrupt artifact, busy worker and backup failure cases are evidenced.",
+        "The live public link and feed return the accepted exact artifacts, and the Test Runs report separates passing checks, release readiness and any remaining device acceptance."
+      ],
+      "steps": [
+        "Run the repository gates and focused existing suites, review/merge through the native PR flow, then build from clean canonical main. CI remains manual-only under issue 1448.",
+        "Complete the exact-source distribution review, publish artifacts before enabling the website/feed, inspect actual screenshots and publish one Test Runs HTML. Deliver the verified MacBook download URL and record any owner-only physical acceptance."
+      ],
+      "rollback": "Withdraw the release pointer; keep working installations and evidence. A defect after migration is fixed forward unless the matched backup can safely be restored.",
+      "blocker": "The exact-source release review still has pending licenses, signed boundaries, clean machine, real provider, real tenant refresh, physical sleep/wake and OS/CPU matrix evidence; reviewed supplemental notices are absent. The configured MacBook SSH route timed out and its OS version is not confirmed."
+    }
+  ],
+  "decisions": [
+    {
+      "status": "proposed",
+      "title": "One product domain",
+      "description": "Use pods.openape.ai for both the download and update feed. Reuse its current host and deploy workflow; a generic static feed needs no new release service."
+    },
+    {
+      "status": "proposed",
+      "title": "Automatic discovery, controlled restart",
+      "description": "Check automatically. Offer one confirmed installation when safe; do not force a restart in the middle of a run. Native download/staging starts only after the proven safety boundary from M0."
+    },
+    {
+      "status": "proposed",
+      "title": "Public release is a separate gate",
+      "description": "Existing signed-local artifacts have releaseReady:false. Signing alone does not satisfy the current public distribution contract; complete its real gates rather than relabeling internal builds."
+    },
+    {
+      "status": "accepted",
+      "by": "Patrick Hofmann",
+      "date": "2026-10-08",
+      "reference": "Der Plan sollte auch vorsehen, dass wir mittels Claude Opus 5.5 die Startseite auch so designen, dass sie zum restlichen Design von OpenApe Pods passt.",
+      "title": "Claude Opus 5.5 for a consistent Pods landing page",
+      "description": "Claude Opus 5.5 designed and implemented WorkspaceWelcome.vue and the page metadata. Its CLI receipt reports canonicalModel claude-opus-5-5 and provider firstParty. Subsequent integration, checks and screenshot inspection were performed by Codex."
+    }
+  ],
+  "risks": [
+    {
+      "title": "Upgrade races and migration recovery",
+      "mitigation": "Fence worker starts across backup and shutdown; validate migrations and preserve the old app with its matched backup. Test external MCP process lifetime and updater event ordering on the pinned Electron version."
+    },
+    {
+      "title": "Release evidence may be incomplete",
+      "mitigation": "M0 enumerates missing exact-source license and device evidence. Publication remains blocked until those checks actually pass; build/release work is likely several hours, with physical-device acceptance potentially longer."
+    }
+  ],
+  "sections": [
+    {
+      "id": "source",
+      "placement": "before-details",
+      "title": "Verified starting point",
+      "body": "At canonical e3fd9fa8: package.mjs supports only darwin/arm64, builds dir + DMG, uses publish: never and publish: []. App version is 0.1.2, minimum macOS is 14.0. src/main/update.ts verifies signature/team/version/schema; app.ts only prepares a backup and instructs manual replacement. WorkspaceWelcome.vue contains sign-in but no download. The live root returns a client-rendered shell; the HTML-only fetch is not visual UI evidence. The local doctor passed with one existing-work warning. No update behavior has been tested yet."
+    },
+    {
+      "id": "execution-progress",
+      "title": "Implementation evidence and support correction",
+      "body": "Full root lint/typecheck, both application builds, documentation freshness and the local check:ci contract passed. The updater dependency security finding was fixed with a targeted override; no new audit exception was added.\n\nThe proposal initially confused the Electron packaging minimum (macOS 14) with execution support. The existing main/support.ts only permits Darwin 25.6.0 / arm64, locally verified as macOS 26.6.2. The landing page displays that verified matrix. Broader macOS execution support is not implemented or claimed.\n\nScreenshots use synthetic release 0.2.0; they do not prove a public, signed 0.2.0 release. Normal quit, native restart and full product acceptance remain separate from unit/component results."
+    }
+  ],
+  "translations": {
+    "defaultLanguage": "de",
+    "entries": [
+      {
+        "path": "title",
+        "source": "Pods: matching landing page, Mac download and automatic updates",
+        "text": "Pods: passende Startseite, Mac-Download und automatische Updates"
+      },
+      {
+        "path": "goal",
+        "source": "Install Pods on the MacBook from a landing page designed with Claude Opus 5.5 that matches the rest of OpenApe Pods, and deliver subsequent signed releases through the same domain without replacing applications by hand.",
+        "text": "Pods am MacBook über eine mit Claude Opus 5.5 gestaltete, zum restlichen OpenApe Pods passende Startseite installieren und spätere signierte Versionen über dieselbe Domain beziehen, ohne die App von Hand auszutauschen."
+      },
+      {
+        "path": "summary",
+        "source": "The matching landing page, release feed and guarded updater are implemented and locally checked. Public download still requires exact-source distribution evidence and MacBook acceptance.",
+        "text": "Die passende Startseite, der Release-Feed und der abgesicherte Updater sind implementiert und lokal geprüft. Der öffentliche Download benötigt noch Distributionsnachweise für den exakten Quellstand und die MacBook-Abnahme."
+      },
+      {
+        "path": "problem.statement",
+        "source": "The welcome page has no Mac download and the desktop only verifies manually selected updates.",
+        "text": "Auf der Startseite fehlt der Mac-Download; die Desktop-App prüft bisher nur manuell ausgewählte Updates."
+      },
+      {
+        "path": "problem.impact",
+        "source": "Installation on another Mac and every later upgrade require manual release work.",
+        "text": "Die Installation auf einem weiteren Mac und jedes spätere Upgrade benötigen manuelle Release-Arbeit."
+      },
+      {
+        "path": "problem.approach",
+        "source": "Have Claude Opus 5.5 align the landing page with the existing Pods design and connect signed release packaging, public download/feed and an update flow that preserves active work and local state.",
+        "text": "Claude Opus 5.5 gleicht die Startseite an das bestehende Pods-Design an; signierte Release-Pakete, öffentlicher Download/Feed und ein Update-Ablauf erhalten laufende Arbeit und lokale Daten."
+      },
+      {
+        "path": "problem.outcome",
+        "source": "A fresh Mac installs from the website and an installed app upgrades from version N to N+1 with its identity, Pods and schedules intact.",
+        "text": "Ein neuer Mac installiert über die Website; eine vorhandene App wechselt von N auf N+1 und behält Identität, Pods und Zeitpläne."
+      },
+      {
+        "path": "context",
+        "source": "Implementation follows the approval of proposal revision 2, on feature/issue-1453-pods-auto-update from canonical e3fd9fa8d2ae384c37092884d7631c5f1d939f03. The existing shared checkout and installed Pods app were preserved. Native issue 1453 records execution; no public desktop release has been promoted.",
+        "text": "Die Umsetzung folgt der Freigabe von Vorschlagsrevision 2 auf feature/issue-1453-pods-auto-update ab dem kanonischen Stand e3fd9fa8d2ae384c37092884d7631c5f1d939f03. Bestehender gemeinsamer Checkout und installierte Pods-App wurden erhalten. Natives Issue 1453 dokumentiert die Ausführung; es wurde kein öffentlicher Desktop-Release freigegeben."
+      },
+      {
+        "path": "scope.0",
+        "source": "Redesign the existing Pods welcome page using Claude Opus 5.5, grounded in the current Pods interface, with a public download entry, version, requirements and installation guidance; retain workspace sign-in.",
+        "text": "Die bestehende Pods-Startseite mit Claude Opus 5.5 auf Grundlage der aktuellen Pods-Oberfläche neu gestalten: öffentlicher Download-Einstieg, Version, Voraussetzungen und Installationshinweis; Workspace-Anmeldung erhalten."
+      },
+      {
+        "path": "scope.1",
+        "source": "Stable production feed and immutable DMG/ZIP artifacts for macOS arm64; monotonically increasing app versions and release notes.",
+        "text": "Stabiler produktiver Feed und unveränderliche DMG-/ZIP-Artefakte für macOS arm64; fortlaufend steigende App-Versionen und Versionshinweise."
+      },
+      {
+        "path": "scope.2",
+        "source": "Automatic checks at startup and periodically, manual check, visible result/errors and controlled installation; preserve profiles, Keychain identity and schedules.",
+        "text": "Automatische Prüfung beim Start und regelmäßig, manuelle Prüfung, sichtbare Ergebnisse/Fehler und kontrollierte Installation; Profile, Schlüsselbund-Identität und Zeitpläne erhalten."
+      },
+      {
+        "path": "scope.3",
+        "source": "A real signed N-to-N+1 upgrade on a separate acceptance profile and first installation on the MacBook.",
+        "text": "Ein echtes signiertes Upgrade von N auf N+1 mit getrenntem Abnahmeprofil sowie die Erstinstallation am MacBook."
+      },
+      {
+        "path": "nonGoals.0",
+        "source": "Windows, Linux, Intel Mac, App Store distribution, delta updates and a new general release platform.",
+        "text": "Windows, Linux, Intel-Mac, App-Store-Verteilung, Delta-Updates und eine neue allgemeine Release-Plattform."
+      },
+      {
+        "path": "nonGoals.1",
+        "source": "Moving existing Pods or credentials from the Mac mini to the MacBook, duplicating schedules, or changing the Git mirror pipeline.",
+        "text": "Bestehende Pods oder Zugangsdaten vom Mac mini aufs MacBook verschieben, Zeitpläne duplizieren oder die Git-Spiegelung ändern."
+      },
+      {
+        "path": "nonGoals.2",
+        "source": "Re-enabling paused CI or publishing internal signed-local builds by bypassing existing distribution gates.",
+        "text": "Die pausierte CI reaktivieren oder interne signed-local-Builds unter Umgehung bestehender Veröffentlichungsvoraussetzungen publizieren."
+      },
+      {
+        "path": "milestones.0.title",
+        "source": "Prove the release and restart contract",
+        "text": "Release- und Neustart-Vertrag nachweisen"
+      },
+      {
+        "path": "milestones.0.goal",
+        "source": "Resolve native updater behavior and public-release readiness before wiring the product.",
+        "text": "Das Verhalten des nativen Updaters und die Veröffentlichungsreife klären, bevor das Produkt angebunden wird."
+      },
+      {
+        "path": "milestones.0.acceptance.0",
+        "source": "A compatible pinned electron-updater version works with Electron 40.9.3 and electron-builder 26.15.3; actual macOS quit/staging behavior is recorded.",
+        "text": "Eine kompatible festgelegte electron-updater-Version funktioniert mit Electron 40.9.3 und electron-builder 26.15.3; das tatsächliche macOS-Verhalten beim Beenden und Vorbereiten ist dokumentiert."
+      },
+      {
+        "path": "milestones.0.acceptance.1",
+        "source": "A release-review inventory identifies exact missing evidence for licenses, signed boundaries, clean machine, provider/tenant refresh, sleep/wake and the supported OS/CPU matrix.",
+        "text": "Eine Bestandsaufnahme benennt die fehlenden Nachweise für Lizenzen, signierte Grenzen, frisches Gerät, Provider-/Tenant-Erneuerung, Ruhezustand und die unterstützte Betriebssystem-/CPU-Matrix."
+      },
+      {
+        "path": "milestones.0.steps.0",
+        "source": "Create a native issue and isolated feature/issue-<number>-pods-auto-update checkout from current canonical main. Inspect existing unit/component and Electron acceptance harnesses.",
+        "text": "Ein natives Issue und einen isolierten Checkout feature/issue-<number>-pods-auto-update vom aktuellen kanonischen main anlegen. Vorhandene Unit-/Komponenten- und Electron-Abnahmetests prüfen."
+      },
+      {
+        "path": "milestones.0.steps.1",
+        "source": "Prototype with disposable signed bundles and an isolated profile. Prove that closing a window, normal quit, restart and a busy worker cannot skip backup or compatibility checks. Do not assume autoInstallOnAppQuit alone controls Squirrel.Mac staging.",
+        "text": "Mit entbehrlichen signierten App-Paketen und isoliertem Profil erproben. Nachweisen, dass Fensterschließen, normales Beenden, Neustart und ein beschäftigter Worker weder Sicherung noch Kompatibilitätsprüfung umgehen. Nicht annehmen, dass autoInstallOnAppQuit allein die Squirrel.Mac-Vorbereitung kontrolliert."
+      },
+      {
+        "path": "milestones.0.rollback",
+        "source": "Discard the isolated prototype; keep the installed app unchanged.",
+        "text": "Den isolierten Prototyp verwerfen; die installierte App unverändert lassen."
+      },
+      {
+        "path": "milestones.1.title",
+        "source": "Design the matching landing page and publish a complete release",
+        "text": "Passende Startseite gestalten und ein vollständiges Release bereitstellen"
+      },
+      {
+        "path": "milestones.1.goal",
+        "source": "Make the landing page feel like the existing Pods product and make download and feed refer to one validated release.",
+        "text": "Die Startseite gestalterisch an das bestehende Pods-Produkt anschließen und Download sowie Feed auf dasselbe geprüfte Release beziehen."
+      },
+      {
+        "path": "milestones.1.acceptance.0",
+        "source": "GET /download/mac redirects only to the promoted arm64 DMG; /updates/stable/darwin-arm64/ exposes updater metadata and immutable artifacts over HTTPS without a workspace login.",
+        "text": "GET /download/mac leitet nur zum freigegebenen arm64-DMG weiter; /updates/stable/darwin-arm64/ liefert Update-Metadaten und unveränderliche Artefakte über HTTPS ohne Workspace-Login."
+      },
+      {
+        "path": "milestones.1.acceptance.1",
+        "source": "A release is promoted atomically only after DMG, ZIP, checksums, signed manifest and required evidence are present. Missing releases show an honest unavailable state.",
+        "text": "Ein Release wird erst atomar freigeschaltet, wenn DMG, ZIP, Prüfsummen, signiertes Manifest und erforderliche Nachweise vorliegen. Fehlende Releases werden verständlich als nicht verfügbar angezeigt."
+      },
+      {
+        "path": "milestones.1.steps.0",
+        "source": "Extend apps/openape-pods/scripts/package.mjs and distribution.mjs: ZIP target, updater configuration/metadata, unique version and exact source review. Preserve signing, notarization and releaseReady gates.",
+        "text": "apps/openape-pods/scripts/package.mjs und distribution.mjs erweitern: ZIP-Ziel, Updater-Konfiguration/-Metadaten, eindeutige Version und Prüfung des exakten Quellstands. Signatur-, Notarisierungs- und releaseReady-Prüfungen erhalten."
+      },
+      {
+        "path": "milestones.1.steps.1",
+        "source": "Serve releases from a dedicated persistent directory behind the existing pods.openape.ai deployment, outside owner workspace data. Upload artifacts first, verify hashes and promote the small channel pointer last. Support correct content types, caching and Range requests. Keep previous immutable releases.",
+        "text": "Releases aus einem eigenen persistenten Verzeichnis hinter dem bestehenden pods.openape.ai-Deployment ausliefern, außerhalb der Workspace-Daten. Erst Artefakte hochladen, Prüfsummen kontrollieren und zuletzt den kleinen Kanalzeiger umstellen. Content-Types, Caching und Range-Anfragen korrekt unterstützen. Frühere unveränderliche Releases behalten."
+      },
+      {
+        "path": "milestones.1.steps.2",
+        "source": "Inspect current desktop/workspace components, styles, tokens and representative screenshots. Give these references to Claude Opus 5.5 to design and implement the landing page in WorkspaceWelcome.vue. Match typography, colors, spacing, surfaces, buttons, icons and tone; reuse existing patterns where suitable. Integrate the download with Apple Silicon, macOS 14+, version and Applications-folder guidance, and preserve workspace sign-in.",
+        "text": "Aktuelle Desktop-/Workspace-Komponenten, Stile, Design-Tokens und repräsentative Screenshots prüfen. Diese Referenzen Claude Opus 5.5 übergeben, um die Startseite in WorkspaceWelcome.vue zu gestalten und umzusetzen. Typografie, Farben, Abstände, Flächen, Buttons, Icons und Tonalität angleichen; passende bestehende Muster wiederverwenden. Download mit Apple Silicon, macOS 14+, Version und Hinweis auf den Programme-Ordner integrieren und die Workspace-Anmeldung erhalten."
+      },
+      {
+        "path": "milestones.1.rollback",
+        "source": "Withdraw channel metadata and restore the previous download pointer; never overwrite an existing version.",
+        "text": "Kanal-Metadaten zurückziehen und den vorherigen Download-Zeiger wiederherstellen; keine vorhandene Version überschreiben."
+      },
+      {
+        "path": "milestones.2.title",
+        "source": "Update safely inside the app",
+        "text": "In der App sicher aktualisieren"
+      },
+      {
+        "path": "milestones.2.goal",
+        "source": "Let the app discover and install updates without interrupting automation.",
+        "text": "Die App soll Updates finden und installieren, ohne Automatisierungen zu unterbrechen."
+      },
+      {
+        "path": "milestones.2.acceptance.0",
+        "source": "Startup and six-hour checks are single-flight, retry boundedly after offline errors, and offer a manual check. The UI shows current/new version, progress and actionable failure.",
+        "text": "Prüfung beim Start und alle sechs Stunden läuft ohne parallele Doppelanfragen, wiederholt nach Offline-Fehlern begrenzt und bietet eine manuelle Prüfung. Die Oberfläche zeigt aktuelle/neue Version, Fortschritt und verständliche Fehler."
+      },
+      {
+        "path": "milestones.2.acceptance.1",
+        "source": "Installation cannot occur while active work or external MCP users make replacement unsafe; new starts are fenced, active work drains, backup succeeds and compatibility/signature checks pass before native staging. Failure restores normal scheduling without changing saved schedule definitions.",
+        "text": "Installation ist ausgeschlossen, solange aktive Arbeit oder externe MCP-Nutzer den Austausch unsicher machen; neue Starts werden gesperrt, laufende Arbeit endet, Sicherung und Kompatibilitäts-/Signaturprüfung gelingen vor der nativen Vorbereitung. Bei Fehlern läuft die Zeitplanung weiter, ohne gespeicherte Zeitplandefinitionen zu verändern."
+      },
+      {
+        "path": "milestones.2.acceptance.2",
+        "source": "Same/older versions, another signing team, wrong architecture, corrupt downloads and incompatible schemas are refused; development and fixture builds never enter the production update channel.",
+        "text": "Gleiche/ältere Versionen, fremdes Signatur-Team, falsche Architektur, beschädigte Downloads und inkompatible Schemata werden abgelehnt; Entwicklungs- und Fixture-Builds nutzen nie den produktiven Update-Kanal."
+      },
+      {
+        "path": "milestones.2.steps.0",
+        "source": "Add a focused main-process updater and narrow IPC/UI contract, with German/English strings. Prefer electron-updater as the existing builder integration; pin and inventory its runtime dependencies.",
+        "text": "Einen kleinen Updater im Hauptprozess mit engem IPC-/UI-Vertrag und deutschen/englischen Texten ergänzen. electron-updater als Integration zum bestehenden Builder bevorzugen; Laufzeitabhängigkeiten festlegen und inventarisieren."
+      },
+      {
+        "path": "milestones.2.steps.1",
+        "source": "Reuse and preserve src/main/update.ts checks and worker backup semantics. Verify signed distribution metadata before accepting a release, prevent new run races and handle before-quit-for-update explicitly. Provide Later and Restart and install. Never kill unrelated MCP processes.",
+        "text": "Prüfungen aus src/main/update.ts und die Sicherungssemantik des Workers erhalten und wiederverwenden. Signierte Distributionsmetadaten vor Annahme eines Releases prüfen, Start-Rennen verhindern und before-quit-for-update explizit behandeln. Später und Neu starten und installieren anbieten. Keine fremden MCP-Prozesse beenden."
+      },
+      {
+        "path": "milestones.2.rollback",
+        "source": "Disable the feed; retain the old app and matched pre-update backup. Restore only after reconciling effects and remote sessions; never automatically roll back a migrated database.",
+        "text": "Feed deaktivieren; alte App und zugehörige Sicherung behalten. Wiederherstellung erst nach Abgleich ausgeführter Aktionen und entfernter Sitzungen; eine migrierte Datenbank niemals automatisch zurücksetzen."
+      },
+      {
+        "path": "milestones.3.title",
+        "source": "Accept and release the MacBook installation",
+        "text": "MacBook-Installation abnehmen und veröffentlichen"
+      },
+      {
+        "path": "milestones.3.goal",
+        "source": "Demonstrate a real first installation and subsequent upgrade.",
+        "text": "Eine echte Erstinstallation und ein anschließendes Upgrade nachweisen."
+      },
+      {
+        "path": "milestones.3.acceptance.0",
+        "source": "A downloaded, quarantined DMG installs and passes Gatekeeper on a clean Apple Silicon profile; the MacBook can sign in without inheriting another device identity or schedules.",
+        "text": "Ein heruntergeladenes DMG mit Quarantänemarkierung installiert und besteht Gatekeeper mit frischem Apple-Silicon-Profil; das MacBook kann sich anmelden, ohne Identität oder Zeitpläne eines anderen Geräts zu übernehmen."
+      },
+      {
+        "path": "milestones.3.acceptance.1",
+        "source": "A signed N-to-N+1 update preserves synthetic Pods, schedules, encrypted secrets, selected profile and runtime identity, and resumes once without duplicate work; offline, corrupt artifact, busy worker and backup failure cases are evidenced.",
+        "text": "Ein signiertes Update von N auf N+1 erhält synthetische Pods, Zeitpläne, verschlüsselte Secrets, gewähltes Profil und Laufzeit-Identität und startet ohne doppelte Arbeit wieder; Offline-, beschädigtes Artefakt-, beschäftigter Worker- und Sicherungsfehler-Fälle sind belegt."
+      },
+      {
+        "path": "milestones.3.acceptance.2",
+        "source": "The live public link and feed return the accepted exact artifacts, and the Test Runs report separates passing checks, release readiness and any remaining device acceptance.",
+        "text": "Öffentlicher Live-Link und Feed liefern exakt die abgenommenen Artefakte; der Test-Runs-Bericht trennt bestandene Prüfungen, Veröffentlichungsreife und gegebenenfalls offene Geräteabnahme."
+      },
+      {
+        "path": "milestones.3.steps.0",
+        "source": "Run the repository gates and focused existing suites, review/merge through the native PR flow, then build from clean canonical main. CI remains manual-only under issue 1448.",
+        "text": "Repository-Prüfungen und gezielte bestehende Tests ausführen, über den nativen PR-Ablauf prüfen/mergen und dann vom sauberen kanonischen main bauen. CI bleibt gemäß Issue 1448 ausschließlich manuell."
+      },
+      {
+        "path": "milestones.3.steps.1",
+        "source": "Complete the exact-source distribution review, publish artifacts before enabling the website/feed, inspect actual screenshots and publish one Test Runs HTML. Deliver the verified MacBook download URL and record any owner-only physical acceptance.",
+        "text": "Die Distributionsprüfung des exakten Quellstands abschließen, Artefakte vor Aktivierung von Website/Feed veröffentlichen, echte Screenshots prüfen und ein Test-Runs-HTML publizieren. Den geprüften MacBook-Download-Link liefern und verbleibende physische Abnahme durch den Owner benennen."
+      },
+      {
+        "path": "milestones.3.rollback",
+        "source": "Withdraw the release pointer; keep working installations and evidence. A defect after migration is fixed forward unless the matched backup can safely be restored.",
+        "text": "Release-Zeiger zurückziehen; funktionierende Installationen und Nachweise erhalten. Einen Fehler nach Migration vorwärts beheben, sofern die zugehörige Sicherung nicht sicher wiederherstellbar ist."
+      },
+      {
+        "path": "decisions.0.title",
+        "source": "One product domain",
+        "text": "Eine Produkt-Domain"
+      },
+      {
+        "path": "decisions.0.description",
+        "source": "Use pods.openape.ai for both the download and update feed. Reuse its current host and deploy workflow; a generic static feed needs no new release service.",
+        "text": "pods.openape.ai für Download und Update-Feed verwenden. Bestehenden Host und Deployment-Ablauf nutzen; ein generischer statischer Feed benötigt keinen neuen Release-Dienst."
+      },
+      {
+        "path": "decisions.1.title",
+        "source": "Automatic discovery, controlled restart",
+        "text": "Automatisch finden, kontrolliert neu starten"
+      },
+      {
+        "path": "decisions.1.description",
+        "source": "Check automatically. Offer one confirmed installation when safe; do not force a restart in the middle of a run. Native download/staging starts only after the proven safety boundary from M0.",
+        "text": "Automatisch prüfen. Eine bestätigte Installation anbieten, sobald sie sicher ist; keinen Neustart mitten in einem Lauf erzwingen. Nativen Download und Vorbereitung erst nach der in M0 nachgewiesenen Sicherheitsgrenze starten."
+      },
+      {
+        "path": "decisions.2.title",
+        "source": "Public release is a separate gate",
+        "text": "Öffentliche Freigabe bleibt eine eigene Prüfung"
+      },
+      {
+        "path": "decisions.2.description",
+        "source": "Existing signed-local artifacts have releaseReady:false. Signing alone does not satisfy the current public distribution contract; complete its real gates rather than relabeling internal builds.",
+        "text": "Bestehende signed-local-Artefakte tragen releaseReady:false. Signierung allein erfüllt den aktuellen öffentlichen Distributionsvertrag nicht; dessen echte Voraussetzungen erfüllen, statt interne Builds umzuetikettieren."
+      },
+      {
+        "path": "risks.0.title",
+        "source": "Upgrade races and migration recovery",
+        "text": "Update-Rennen und Wiederherstellung nach Migration"
+      },
+      {
+        "path": "risks.0.mitigation",
+        "source": "Fence worker starts across backup and shutdown; validate migrations and preserve the old app with its matched backup. Test external MCP process lifetime and updater event ordering on the pinned Electron version.",
+        "text": "Worker-Starts während Sicherung und Beenden sperren; Migrationen prüfen und alte App mit passender Sicherung behalten. Lebensdauer externer MCP-Prozesse und Updater-Ereignisreihenfolge mit der festgelegten Electron-Version testen."
+      },
+      {
+        "path": "risks.1.title",
+        "source": "Release evidence may be incomplete",
+        "text": "Release-Nachweise können fehlen"
+      },
+      {
+        "path": "risks.1.mitigation",
+        "source": "M0 enumerates missing exact-source license and device evidence. Publication remains blocked until those checks actually pass; build/release work is likely several hours, with physical-device acceptance potentially longer.",
+        "text": "M0 benennt fehlende Lizenz- und Gerätenachweise für den exakten Quellstand. Veröffentlichung bleibt bis zu tatsächlich bestandenen Prüfungen gesperrt; Build-/Release-Arbeit dauert voraussichtlich mehrere Stunden, physische Geräteabnahme eventuell länger."
+      },
+      {
+        "path": "verification.0",
+        "source": "Activate scripts/activate-node.sh with the README pnpm PATH, run pnpm run doctor, then lint → typecheck → app build → existing focused tests. Before deployment run pnpm check:ci per the current repository instructions; do not reactivate hosted CI.",
+        "text": "scripts/activate-node.sh mit dem pnpm-PATH aus README aktivieren, pnpm run doctor ausführen, dann Lint → Typprüfung → App-Build → bestehende gezielte Tests. Vor Deployment gemäß aktuellen Repository-Regeln pnpm check:ci ausführen; gehostete CI nicht reaktivieren."
+      },
+      {
+        "path": "verification.1",
+        "source": "Use Pods test:fast, relevant existing Electron distribution acceptance and relay tests. Keep permanent tests for upgrade refusal, backup/start races, publication atomicity and visible update controls because these protect consequential release contracts.",
+        "text": "Pods test:fast, passende bestehende Electron-Distributionsabnahme und Relay-Tests nutzen. Dauerhafte Tests für Update-Ablehnung, Sicherungs-/Start-Rennen, atomare Veröffentlichung und sichtbare Update-Steuerung behalten, da diese wichtige Release-Verträge absichern."
+      },
+      {
+        "path": "verification.2",
+        "source": "Inspect actual website and update screenshots and publish them with command results through ape-report-render test-run and ape-reports under Test Runs. A website HTTP 200 alone proves neither a visible download nor a successful update.",
+        "text": "Echte Website- und Update-Screenshots prüfen und mit Kommandoergebnissen über ape-report-render test-run und ape-reports unter Test Runs veröffentlichen. HTTP 200 allein belegt weder einen sichtbaren Download noch ein erfolgreiches Update."
+      },
+      {
+        "path": "sections.0.title",
+        "source": "Verified starting point",
+        "text": "Geprüfter Ausgangspunkt"
+      },
+      {
+        "path": "sections.0.body",
+        "source": "At canonical e3fd9fa8: package.mjs supports only darwin/arm64, builds dir + DMG, uses publish: never and publish: []. App version is 0.1.2, minimum macOS is 14.0. src/main/update.ts verifies signature/team/version/schema; app.ts only prepares a backup and instructs manual replacement. WorkspaceWelcome.vue contains sign-in but no download. The live root returns a client-rendered shell; the HTML-only fetch is not visual UI evidence. The local doctor passed with one existing-work warning. No update behavior has been tested yet.",
+        "text": "Am kanonischen Stand e3fd9fa8: package.mjs unterstützt nur darwin/arm64, baut dir + DMG und verwendet publish: never sowie publish: []. Die App-Version ist 0.1.2, Mindestversion macOS 14.0. src/main/update.ts prüft Signatur/Team/Version/Schema; app.ts erstellt nur eine Sicherung und fordert zum manuellen Austausch auf. WorkspaceWelcome.vue enthält die Anmeldung, aber keinen Download. Die Live-Startseite liefert eine clientseitig gerenderte Hülle; der reine HTML-Abruf ist kein visueller UI-Nachweis. Der lokale Doctor bestand mit einer Warnung zu bestehender Arbeit. Das Update-Verhalten wurde noch nicht getestet."
+      },
+      {
+        "path": "handoff",
+        "source": "Finish the isolated native lifecycle probe, review the implementation PR and retain its Test Runs evidence. Complete the exact-source distribution gates and reach the MacBook before promoting a public signed release.",
+        "text": "Den isolierten nativen Ablauf prüfen, den Umsetzungs-PR prüfen und seine Test-Runs-Nachweise erhalten. Vor Freigabe eines öffentlichen signierten Releases die Distributionsprüfungen für den exakten Quellstand abschließen und das MacBook erreichbar machen."
+      },
+      {
+        "path": "completion.summary",
+        "source": "Product code and the local repository checks are implemented and passing; signed full-product upgrade, public artifact promotion and MacBook installation are not yet accepted.",
+        "text": "Produktcode und lokale Repository-Prüfungen sind umgesetzt und erfolgreich; signiertes vollständiges Produkt-Upgrade, öffentliche Artefakt-Freigabe und MacBook-Installation sind noch nicht abgenommen."
+      },
+      {
+        "path": "milestones.1.acceptance.2",
+        "source": "The landing-page design is produced with Claude Opus 5.5, and the execution receipt records the actual model identity. Availability is checked before this step; if the requested model cannot be used, report the limitation and obtain an explicit replacement decision rather than silently substituting another model.",
+        "text": "Das Startseiten-Design wird mit Claude Opus 5.5 erstellt; der Ausführungsnachweis hält die tatsächliche Modellidentität fest. Die Verfügbarkeit wird vor diesem Schritt geprüft; kann das gewünschte Modell nicht verwendet werden, die Einschränkung melden und eine ausdrückliche Ersatzentscheidung einholen, statt stillschweigend ein anderes Modell einzusetzen."
+      },
+      {
+        "path": "milestones.1.acceptance.3",
+        "source": "Personally inspected screenshots at 390px and 1440px demonstrate visual consistency with current Pods references, a clear Mac download and usable workspace sign-in. No horizontal overflow; keyboard focus and contrast remain usable. Component tests protect download availability and login interactions.",
+        "text": "Persönlich geprüfte Screenshots bei 390px und 1440px belegen die visuelle Übereinstimmung mit aktuellen Pods-Referenzen, einen klaren Mac-Download und nutzbare Workspace-Anmeldung. Kein horizontaler Überlauf; Tastaturfokus und Kontrast bleiben nutzbar. Komponententests sichern Download-Verfügbarkeit und Anmeldeinteraktionen ab."
+      },
+      {
+        "path": "decisions.3.title",
+        "source": "Claude Opus 5.5 for a consistent Pods landing page",
+        "text": "Claude Opus 5.5 für eine gestalterisch passende Pods-Startseite"
+      },
+      {
+        "path": "decisions.3.description",
+        "source": "Claude Opus 5.5 designed and implemented WorkspaceWelcome.vue and the page metadata. Its CLI receipt reports canonicalModel claude-opus-5-5 and provider firstParty. Subsequent integration, checks and screenshot inspection were performed by Codex.",
+        "text": "Claude Opus 5.5 hat WorkspaceWelcome.vue und die Seiten-Metadaten gestaltet und implementiert. Der CLI-Nachweis nennt canonicalModel claude-opus-5-5 und provider firstParty. Anschließende Integration, Prüfungen und Screenshot-Sichtung erfolgten durch Codex."
+      },
+      {
+        "path": "changelog.0.text",
+        "source": "Revision 2 adds the owner-requested landing-page design with Claude Opus 5.5, existing Pods design references, model provenance and responsive visual acceptance. The proposal remains a draft; no product implementation has begun.",
+        "text": "Revision 2 ergänzt auf Wunsch des Owners das Startseiten-Design mit Claude Opus 5.5, bestehende Pods-Designreferenzen, Modellnachweis und responsive visuelle Abnahme. Der Vorschlag bleibt ein Entwurf; die Produktumsetzung hat noch nicht begonnen."
+      },
+      {
+        "path": "milestones.0.proof",
+        "source": "Pinned-library tests verify that electron-updater 6.6.2 does not ask native Squirrel.Mac to stage a download until explicit installation. builder-util-runtime is overridden to patched 9.7.0. A disposable signed native prototype is still being notarized; full product/device acceptance remains open.",
+        "text": "Tests mit der festgelegten Bibliothek belegen, dass electron-updater 6.6.2 Squirrel.Mac erst nach ausdrücklicher Installation zur Vorbereitung auffordert. builder-util-runtime ist auf die korrigierte Version 9.7.0 festgelegt. Ein isolierter signierter nativer Prototyp wird noch notarisiert; die vollständige Produkt-/Geräteabnahme bleibt offen."
+      },
+      {
+        "path": "milestones.1.proof",
+        "source": "Opus model provenance is recorded. Actual Nuxt screenshots at 390 and 1440 pixels were inspected; both layouts have a visible fixture download, reachable sign-in and no horizontal overflow. Ninety relay tests cover metadata, immutable artifacts, byte ranges and welcome states. Publication preserves immutable versions and recovers identical retries. No public release artifact has been promoted.",
+        "text": "Der Opus-Modellnachweis ist erfasst. Echte Nuxt-Screenshots bei 390 und 1440 Pixeln wurden geprüft; beide Layouts zeigen den Test-Download, eine erreichbare Anmeldung und keinen horizontalen Überlauf. 90 Relay-Tests decken Metadaten, unveränderliche Artefakte, Byte-Bereiche und Startseitenzustände ab. Die Veröffentlichung erhält unveränderliche Versionen und kann identische Wiederholungen fortsetzen. Es wurde kein öffentliches Release-Artefakt freigegeben."
+      },
+      {
+        "path": "milestones.2.proof",
+        "source": "The implementation checks at startup/every six hours, verifies hashes/signatures/source/schema, rejects active work and external MCP processes, fences new work, checkpoints SQLite and verifies the paired full-profile/app backup before native handoff. Pods test:fast passed 1,354 unit/component and 53 browser tests. The actual update controls and refusal state were inspected using synthetic IPC data.",
+        "text": "Die Umsetzung prüft beim Start/alle sechs Stunden, verifiziert Hashes/Signaturen/Quellstand/Schema, lehnt aktive Arbeit und externe MCP-Prozesse ab, sperrt neue Arbeit, schreibt SQLite zurück und prüft die zugehörige vollständige Profil-/App-Sicherung vor nativer Übergabe. Pods test:fast bestand mit 1.354 Unit-/Komponenten- und 53 Browser-Tests. Die echten Update-Bedienelemente und der Ablehnungszustand wurden mit synthetischen IPC-Daten gesichtet."
+      },
+      {
+        "path": "milestones.3.blocker",
+        "source": "The exact-source release review still has pending licenses, signed boundaries, clean machine, real provider, real tenant refresh, physical sleep/wake and OS/CPU matrix evidence; reviewed supplemental notices are absent. The configured MacBook SSH route timed out and its OS version is not confirmed.",
+        "text": "Die Distributionsprüfung für den exakten Quellstand enthält noch offene Nachweise zu Lizenzen, signierten Sicherheitsgrenzen, frischem Gerät, echtem Provider, echter Tenant-Erneuerung, physischem Ruhezustand/Aufwachen und OS-/CPU-Matrix; geprüfte ergänzende Lizenztexte fehlen. Der konfigurierte MacBook-SSH-Zugang lief in einen Timeout, die OS-Version ist nicht bestätigt."
+      },
+      {
+        "path": "sections.1.title",
+        "source": "Implementation evidence and support correction",
+        "text": "Umsetzungsnachweise und korrigierte Systemanforderung"
+      },
+      {
+        "path": "sections.1.body",
+        "source": "Full root lint/typecheck, both application builds, documentation freshness and the local check:ci contract passed. The updater dependency security finding was fixed with a targeted override; no new audit exception was added.\n\nThe proposal initially confused the Electron packaging minimum (macOS 14) with execution support. The existing main/support.ts only permits Darwin 25.6.0 / arm64, locally verified as macOS 26.6.2. The landing page displays that verified matrix. Broader macOS execution support is not implemented or claimed.\n\nScreenshots use synthetic release 0.2.0; they do not prove a public, signed 0.2.0 release. Normal quit, native restart and full product acceptance remain separate from unit/component results.",
+        "text": "Vollständiger Root-Lint/Typecheck, beide App-Builds, Dokumentations-Aktualität und der lokale check:ci-Vertrag bestanden. Der Sicherheitsfund in der Updater-Abhängigkeit wurde durch eine gezielte Versionsvorgabe behoben; es wurde keine neue Audit-Ausnahme ergänzt.\n\nDer Vorschlag verwechselte zunächst das Electron-Paketminimum (macOS 14) mit der Ausführungsunterstützung. Das bestehende main/support.ts erlaubt nur Darwin 25.6.0 / arm64, lokal als macOS 26.6.2 geprüft. Die Startseite zeigt diese geprüfte Matrix. Breitere macOS-Ausführungsunterstützung wurde weder implementiert noch behauptet.\n\nDie Screenshots verwenden den synthetischen Release 0.2.0; sie belegen keinen öffentlichen signierten Release 0.2.0. Normales Beenden, nativer Neustart und vollständige Produktabnahme bleiben von Unit-/Komponentenergebnissen getrennt."
+      },
+      {
+        "path": "changelog.1.text",
+        "source": "Implementation progress after the exact owner approval: Opus design, guarded updater, atomic feed and passing local checks. Public release and target-device acceptance remain incomplete; the proposal revision and its original approval are preserved.",
+        "text": "Umsetzungsfortschritt nach der exakten Owner-Freigabe: Opus-Design, abgesicherter Updater, atomarer Feed und bestandene lokale Prüfungen. Öffentliche Freigabe und Zielgeräteabnahme bleiben unvollständig; Vorschlagsrevision und ursprüngliche Freigabe bleiben erhalten."
+      }
+    ]
+  },
+  "title": "Pods: matching landing page, Mac download and automatic updates",
+  "goal": "Install Pods on the MacBook from a landing page designed with Claude Opus 5.5 that matches the rest of OpenApe Pods, and deliver subsequent signed releases through the same domain without replacing applications by hand.",
+  "summary": "The matching landing page, release feed and guarded updater are implemented and locally checked. Public download still requires exact-source distribution evidence and MacBook acceptance.",
+  "problem": {
+    "statement": "The welcome page has no Mac download and the desktop only verifies manually selected updates.",
+    "impact": "Installation on another Mac and every later upgrade require manual release work.",
+    "approach": "Have Claude Opus 5.5 align the landing page with the existing Pods design and connect signed release packaging, public download/feed and an update flow that preserves active work and local state.",
+    "outcome": "A fresh Mac installs from the website and an installed app upgrades from version N to N+1 with its identity, Pods and schedules intact."
+  },
+  "context": "Implementation follows the approval of proposal revision 2, on feature/issue-1453-pods-auto-update from canonical e3fd9fa8d2ae384c37092884d7631c5f1d939f03. The existing shared checkout and installed Pods app were preserved. Native issue 1453 records execution; no public desktop release has been promoted.",
+  "scope": [
+    "Redesign the existing Pods welcome page using Claude Opus 5.5, grounded in the current Pods interface, with a public download entry, version, requirements and installation guidance; retain workspace sign-in.",
+    "Stable production feed and immutable DMG/ZIP artifacts for macOS arm64; monotonically increasing app versions and release notes.",
+    "Automatic checks at startup and periodically, manual check, visible result/errors and controlled installation; preserve profiles, Keychain identity and schedules.",
+    "A real signed N-to-N+1 upgrade on a separate acceptance profile and first installation on the MacBook."
+  ],
+  "nonGoals": [
+    "Windows, Linux, Intel Mac, App Store distribution, delta updates and a new general release platform.",
+    "Moving existing Pods or credentials from the Mac mini to the MacBook, duplicating schedules, or changing the Git mirror pipeline.",
+    "Re-enabling paused CI or publishing internal signed-local builds by bypassing existing distribution gates."
+  ],
+  "verification": [
+    "Activate scripts/activate-node.sh with the README pnpm PATH, run pnpm run doctor, then lint → typecheck → app build → existing focused tests. Before deployment run pnpm check:ci per the current repository instructions; do not reactivate hosted CI.",
+    "Use Pods test:fast, relevant existing Electron distribution acceptance and relay tests. Keep permanent tests for upgrade refusal, backup/start races, publication atomicity and visible update controls because these protect consequential release contracts.",
+    "Inspect actual website and update screenshots and publish them with command results through ape-report-render test-run and ape-reports under Test Runs. A website HTTP 200 alone proves neither a visible download nor a successful update."
+  ],
+  "handoff": "Finish the isolated native lifecycle probe, review the implementation PR and retain its Test Runs evidence. Complete the exact-source distribution gates and reach the MacBook before promoting a public signed release.",
+  "completion": {
+    "result": "partial",
+    "summary": "Product code and the local repository checks are implemented and passing; signed full-product upgrade, public artifact promotion and MacBook installation are not yet accepted."
+  },
+  "evidence": [
+    {
+      "id": "builder-docs",
+      "kind": "link",
+      "role": "reference",
+      "title": "electron-builder v26 auto update contract",
+      "url": "https://www.electron.build/v26/docs/features/auto-update/"
+    },
+    {
+      "id": "electron-docs",
+      "kind": "link",
+      "role": "reference",
+      "title": "Electron autoUpdater lifecycle; verify against pinned version",
+      "url": "https://www.electronjs.org/docs/latest/api/auto-updater"
+    },
+    {
+      "id": "implementation-issue",
+      "kind": "link",
+      "role": "evidence",
+      "title": "Implementation issue 1453",
+      "url": "https://repos.openape.ai/patrick/monorepo/issues/1453"
+    },
+    {
+      "id": "opus-receipt",
+      "kind": "text",
+      "role": "evidence",
+      "title": "Actual Claude model identity",
+      "text": "{\n  \"requestedModel\": \"claude-opus-5-5\",\n  \"canonicalModel\": \"claude-opus-5-5\",\n  \"provider\": \"firstParty\",\n  \"isError\": false,\n  \"files\": [\n    \"apps/openape-pods-relay/app/components/WorkspaceWelcome.vue\",\n    \"apps/openape-pods-relay/app/pages/index.vue\"\n  ],\n  \"verification\": \"Implementation was subsequently tested and visually inspected by Codex.\"\n}\n"
+    }
+  ],
+  "changelog": [
+    {
+      "date": "2026-10-08",
+      "text": "Revision 2 adds the owner-requested landing-page design with Claude Opus 5.5, existing Pods design references, model provenance and responsive visual acceptance. The proposal remains a draft; no product implementation has begun."
+    },
+    {
+      "date": "2026-10-08",
+      "text": "Implementation progress after the exact owner approval: Opus design, guarded updater, atomic feed and passing local checks. Public release and target-device acceptance remain incomplete; the proposal revision and its original approval are preserved."
+    }
+  ],
+  "approval": {
+    "by": "Patrick Hofmann",
+    "date": "2026-10-08",
+    "reference": "Plan ist freigegeben, setz das um.",
+    "target": {
+      "revision": 2
+    },
+    "scope": "Implementation of proposal revision 2, including Claude Opus 5.5 landing-page design."
+  }
+}
