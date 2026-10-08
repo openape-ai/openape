@@ -165,7 +165,8 @@ export class WorkspaceStore {
       return { revision: Number(prior.revision) }
     }
     if (row.revision !== expected) throw new ProtocolError('workspace_revision_conflict', 409)
-    const other = this.db.prepare('SELECT id FROM operations WHERE runtime_id=? AND state IN (\'started\',\'unknown\') AND id!=?').get(row.id, completion?.id ?? '')
+    // A completion may settle one unknown command while others still wait for their own reconciliation.
+    const other = this.db.prepare(`SELECT id FROM operations WHERE runtime_id=? AND state IN ('started'${completion ? '' : ',\'unknown\''}) AND id!=?`).get(row.id, completion?.id ?? '')
     if (other) throw new ProtocolError('workspace_operation_unresolved', 409)
     return null
   }

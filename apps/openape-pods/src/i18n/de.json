@@ -4366,5 +4366,9 @@
   "Update failed": "Update fehlgeschlagen",
   "Application backup verification failed": "Die Prüfung der App-Sicherung ist fehlgeschlagen",
   "Updates are checked automatically every six hours. Installation requires an idle workspace and creates a backup before restarting.": "Updates werden automatisch alle sechs Stunden geprüft. Die Installation erfordert einen ruhenden Workspace und erstellt vor dem Neustart eine Sicherung.",
-  "Quit and reopen Pods before trying again. Your workspace stays paused until restart because native installation has already started.": "Beende und öffne Pods erneut, bevor du es noch einmal versuchst. Dein Workspace bleibt bis zum Neustart angehalten, weil die native Installation bereits begonnen hat."
+  "Quit and reopen Pods before trying again. Your workspace stays paused until restart because native installation has already started.": "Beende und öffne Pods erneut, bevor du es noch einmal versuchst. Dein Workspace bleibt bis zum Neustart angehalten, weil die native Installation bereits begonnen hat.",
+  "Reconcile needs applied (boolean) and evidence (1 to 2000 characters)": "Der Abgleich braucht applied (boolean) und evidence (1 bis 2000 Zeichen)",
+  "Settling a command that never started on this desktop": "Ein Auftrag, der auf diesem Desktop nie gestartet wurde, wird abgeschlossen",
+  "This command is not an uncertain operation of this desktop": "Dieser Auftrag ist kein unklarer Auftrag dieses Desktops",
+  "Another completion is waiting for publication; retry after it is published": "Ein anderer Abschluss wartet auf Veröffentlichung; nach der Veröffentlichung erneut versuchen"
 }

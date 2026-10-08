@@ -68,7 +68,10 @@ export interface CentralStatus {
   format: 1 | 2 | null
   runtimeId: string | null
   lastPublication: { at: number, bytes: number } | null
+  uncertain: UncertainOperation[]
 }
+/** A central command whose outcome the service marked unknown; it blocks this desktop until reconciled. */
+export interface UncertainOperation { id: string, channel: string, type: string | null, podId: string | null, error: string | null, startedLocally: boolean }
 export interface CentralQueue { blocked: number, since: number | null, error: string | null }
 export interface CentralRuntime { networks?: NetworkView, workflows?: WorkflowView, id: string, revision: number, online: boolean, lastSeenAt?: number | null, workspace: Omit<WorkspaceState, 'pods'> & { pods: (WorkspaceState['pods'][number] & { online: boolean, queue?: CentralQueue })[] } }
 export interface CentralSummary { revision: number, total: number, pod: CentralPod }

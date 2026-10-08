@@ -429,6 +429,7 @@ export class FixtureWorker {
     if (request.action.action === 'workspace') {
       const query = parseWorkspaceAction(request.action)
       if (!this.central) throw new Error('Connect the central workspace in the desktop app first')
+      if (query.type === 'reconcile') return this.central.reconcile(query.id as string, query.applied as boolean, query.evidence as string)
       if (this.runtimeApproval && query.type === 'submit' && query.runtimeId === this.central.status().runtimeId) {
         const command = parseCentralCommand(query.command)
         if (command.channel === 'workspace' && command.body.type === 'create') this.runtimeApproval.recordCreation(centralId(query.id), centralId(query.runtimeId), command)

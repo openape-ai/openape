@@ -146,6 +146,44 @@ it.each(['before publication', 'after commit'])('reconciles a lost response %s w
   expect(server.read(actor.owner, actor.id, pod.id).pod.details.description?.text).toBe('Recovered result')
 }, 12000)
 
+it.each([false, true])('settles a command lost after its claim (started locally: %s) without executing it', async (startedLocally) => {
+  const { root, projection, actor, pod } = fixture()
+  let now = Date.now(); let lost = false
+  const server = new WorkspaceStore(':memory:', () => now); cleanup.push(() => server.close())
+  const execute = vi.fn(async () => null)
+  const forward = relay(server, actor)
+  const request = async (body: Record<string, unknown>): Promise<unknown> => {
+    if (body.type === 'operation') return server.operation(actor.owner, String(body.id))
+    const result = await forward(body)
+    if (body.type === 'claim' && result && !lost) {
+      lost = true
+      if (startedLocally) writeFileSync(join(root, 'central/executing.json'), JSON.stringify({ id: (result as { id: string }).id }))
+      now += 30001; throw new Error('Claim response lost')
+    }
+    return result
+  }
+  const controller = new CentralController(root, request, { snapshot: async () => projection.snapshot(actor.owner), execute, gate: async () => {} }, '/unused-no-artifacts')
+  cleanup.push(() => controller.stop()); controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+  const id = randomUUID()
+  server.submit(actor.owner, actor.id, 1, { channel: 'details', body: { type: 'describe', podId: pod.id, revision: 0, text: 'Never applied' } }, id)
+  await vi.waitFor(() => expect(lost).toBe(true), { timeout: 6000 })
+  if (startedLocally) {
+    await vi.waitFor(() => expect(controller.status().uncertain).toEqual([{ id, channel: 'details', type: 'describe', podId: pod.id, error: 'Runtime disconnected; reconcile before retrying', startedLocally: true }]), { timeout: 6000 })
+    expect(controller.available).toBe(false)
+    const { FixtureWorker } = await import('../src/main/worker')
+    const worker = new FixtureWorker(() => {}); worker.central = controller
+    const reconcile = (query: Record<string, unknown>) => worker.codex({ id: randomUUID(), action: { action: 'workspace', query: { type: 'reconcile', ...query } } })
+    await expect(reconcile({ id: randomUUID(), applied: false, evidence: 'No run' })).rejects.toThrow('not an uncertain operation')
+    await expect(reconcile({ id, applied: false, evidence: ' ' })).rejects.toThrow('Reconcile needs')
+    expect(await reconcile({ id, applied: false, evidence: 'No description change and no run after 12:25' })).toEqual({ id, applied: false, state: 'recorded' })
+  }
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true), { timeout: 6000 })
+  expect(server.operation(actor.owner, id)).toMatchObject({ state: 'failed', error: startedLocally ? 'Reconciled as not applied: No description change and no run after 12:25' : 'Not executed: the desktop lost its connection before the command started. Submit it again.' })
+  expect(controller.status().uncertain).toEqual([])
+  expect(execute).not.toHaveBeenCalled()
+}, 15000)
+
 const fast = { heartbeatMs: 100, publishIntervalMs: 0 }
 function connected(options: { request?: (forward: (body: Record<string, unknown>) => Promise<unknown>, body: Record<string, unknown>) => Promise<unknown>, executor?: Partial<CentralExecutor> } = {}) {
   const { root, projection, actor, pod, store, details } = fixture()
