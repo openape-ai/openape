@@ -24,3 +24,9 @@ export function assertArchiveMove(argv: string[]): void {
   const values = ['--account', '--message', '--expected-version', '--source-folder'].map((flag, index) => argv[2 + index * 2] === flag ? argv[3 + index * 2] : undefined)
   if (argv.length !== 12 || argv[0] !== 'workflow' || argv[1] !== 'move' || argv[10] !== '--destination' || argv[11] !== 'archive' || values.some(value => typeof value !== 'string' || !value || value.startsWith('-'))) throw new Error('The archive port only moves one message into the Archive folder')
 }
+
+/** Prefix of a broker refusal that happened before anything was sent to the mail provider. */
+export const archiveNotStarted = 'Archive move not started'
+export function archiveRefusal(error: unknown): Error {
+  return new Error(`Archive move not started: ${error instanceof Error ? error.message : 'refused'}`)
+}

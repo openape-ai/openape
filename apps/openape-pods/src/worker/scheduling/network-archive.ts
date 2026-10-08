@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { canonicalNetworkJson } from '../../contracts/network-json'
 import type { NetworkGateCoverage } from '../../contracts/network-gates'
+import { archiveNotStarted } from '../../contracts/network-capabilities'
 import type { PodDatabase } from '../storage/database'
 import { digest } from '../storage/database'
 
@@ -8,7 +9,10 @@ export interface ArchiveTarget { application: string, mailbox: string }
 export interface ArchiveTools {
   read: (argv: string[]) => Promise<unknown>
   move: (argv: string[]) => Promise<unknown>
+  /** Re-verifies the item's owner once-grant immediately before its move, so a revocation stops it. */
+  approved: (approval: NetworkGateCoverage, deliveryId: string) => Promise<void>
 }
+
 export interface ArchiveOutcome { deliveryId: string, messageId: string | null, outcome: 'archived' | 'skipped' | 'unknown', reason: string }
 interface ArchiveScope { networkId: string, runId: string, podId: string, owner: { issuer: string, subject: string } }
 interface ProviderMail { id: string, changeKey: string, parentFolderId: string, from?: unknown, toRecipients?: unknown[], ccRecipients?: unknown[], subject?: unknown, receivedDateTime?: unknown, body?: { content?: unknown }, hasAttachments?: unknown }
@@ -22,6 +26,8 @@ export function parseArchiveTarget(value: unknown): ArchiveTarget {
   return { application: target.application, mailbox: target.mailbox }
 }
 
+// eslint-disable-next-line no-control-regex
+const clean = (value: unknown, limit: number) => String(value ?? '').replace(/[\x00-\x1F\u202A-\u202E\u2066-\u2069]/g, ' ').slice(0, limit)
 const address = (value: unknown): string => ((value as { emailAddress?: { address?: string } } | null)?.emailAddress?.address ?? '').trim().toLowerCase()
 // Same fingerprint as the mail Intake (examples/network-mail-intake.mjs): read, flag and category changes keep it.
 export function mailContentVersion(mail: ProviderMail): string {
@@ -50,15 +56,16 @@ function receipt(store: PodDatabase, key: string, attempt: number, outcome: stri
 
 function settle(store: PodDatabase, key: string, attempt: number, state: Settled, body: Record<string, unknown>): void {
   store.transaction(() => {
-    store.db.prepare('UPDATE network_effect_attempts SET state=? WHERE logical_action_key=? AND attempt=? AND state=\'intent\'').run(state, key, attempt)
+    // Settlement may already have marked a stopped attempt unknown; its late outcome is left to owner reconciliation.
+    if (store.db.prepare('UPDATE network_effect_attempts SET state=? WHERE logical_action_key=? AND attempt=? AND state=\'intent\'').run(state, key, attempt).changes !== 1) throw new Error('Archive outcome arrived after its attempt was settled')
     receipt(store, key, attempt, state, body)
   })
 }
 
 /**
  * Moves each owner-approved mail of this invocation into the Archive folder, at most once per message version.
- * Microsoft Graph has no atomic conditional move, so every move is bound to an individual owner once-grant and to a
- * fresh read immediately before it; a changed message is not moved.
+ * Microsoft Graph has no atomic conditional move, so every move needs the item's still active owner once-grant, a fresh
+ * read immediately before it that matches the approved sender and subject, and an unchanged content version.
  */
 export async function archiveApproved(store: PodDatabase, scope: ArchiveScope, coverage: NetworkGateCoverage[], target: ArchiveTarget, tools: ArchiveTools, assertCurrent: () => void): Promise<ArchiveOutcome[]> {
   const outcomes: ArchiveOutcome[] = []
@@ -80,16 +87,18 @@ export async function archiveApproved(store: PodDatabase, scope: ArchiveScope, c
       })
       const progress = { dispatched: false }
       // Only a failure after the move was sent leaves its outcome open.
-      const outcome = await archiveOne(source.messageId, source.version, target, tools, assertCurrent, progress).catch((error: unknown) => ({ state: progress.dispatched ? 'unknown' as const : 'confirmed_not_applied' as const, reason: error instanceof Error ? error.message.slice(0, 500) : 'Archive outcome unavailable', receipt: null }))
+      const outcome = await archiveOne(source.messageId, source.version, item.data, target, { ...tools, approved: () => tools.approved(approval, item.deliveryId) }, assertCurrent, progress).catch((error: unknown) => {
+        const reason = error instanceof Error ? error.message.slice(0, 500) : 'Archive outcome unavailable'
+        return { state: progress.dispatched && !reason.startsWith(archiveNotStarted) ? 'unknown' as const : 'confirmed_not_applied' as const, reason, receipt: null }
+      })
       settle(store, key, attempt, outcome.state, { reason: outcome.reason, receipt: outcome.receipt })
       outcomes.push({ deliveryId: item.deliveryId, messageId: source.messageId, outcome: outcome.state === 'confirmed_applied' ? 'archived' : outcome.state === 'unknown' ? 'unknown' : 'skipped', reason: outcome.reason })
-      if (outcome.state === 'unknown') return outcomes
     }
   }
   return outcomes
 }
 
-async function archiveOne(messageId: string, version: string, target: ArchiveTarget, tools: ArchiveTools, assertCurrent: () => void, progress: { dispatched: boolean }): Promise<{ state: Settled, reason: string, receipt: unknown }> {
+async function archiveOne(messageId: string, version: string, approvedData: Record<string, unknown>, target: ArchiveTarget, tools: { read: ArchiveTools['read'], move: ArchiveTools['move'], approved: () => Promise<void> }, assertCurrent: () => void, progress: { dispatched: boolean }): Promise<{ state: Settled, reason: string, receipt: unknown }> {
   const read = workflowReply(await tools.read(['workflow', 'read', '--account', target.mailbox, '--message', messageId]), target.mailbox, 'read')
   assertCurrent()
   if (read.outcome === 'notApplied') return { state: 'confirmed_not_applied', reason: `Message unavailable: ${String(read.reason ?? 'not found').slice(0, 200)}`, receipt: null }
@@ -98,6 +107,9 @@ async function archiveOne(messageId: string, version: string, target: ArchiveTar
   if (read.outcome !== 'confirmed' || items?.length !== 1 || !mail || mail.id !== messageId || typeof mail.changeKey !== 'string' || !mail.changeKey || typeof mail.parentFolderId !== 'string' || !mail.parentFolderId) throw new Error('Mail preflight read did not return the approved message')
   const current = version.startsWith('content:') ? mailContentVersion(mail) : mail.changeKey
   if (current !== version) return { state: 'confirmed_not_applied', reason: 'Message changed after approval; it stays in place', receipt: null }
+  // The owner approved what the item showed; a source that named another message must not move it.
+  if ((typeof approvedData.subject === 'string' && approvedData.subject !== clean(mail.subject, 160)) || (typeof approvedData.sender === 'string' && approvedData.sender !== clean(address(mail.from), 120))) return { state: 'confirmed_not_applied', reason: 'Message does not match the approved sender and subject', receipt: null }
+  await tools.approved()
   assertCurrent()
   progress.dispatched = true
   const moved = workflowReply(await tools.move(['workflow', 'move', '--account', target.mailbox, '--message', messageId, '--expected-version', mail.changeKey, '--source-folder', mail.parentFolderId, '--destination', 'archive']), target.mailbox, 'move')

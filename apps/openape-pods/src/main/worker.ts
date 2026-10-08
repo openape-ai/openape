@@ -55,7 +55,7 @@ import { assignedDirectories, directoryPolicy } from '../runtime/directories'
 import { podEnvironment, podEnvironmentValues, visibleEnvironment } from '../runtime/environment'
 import { podWorkspace } from './programs/console'
 import { invokeProgram, programRequest } from './programs/invoke'
-import { assertArchiveMove } from '../contracts/network-capabilities'
+import { archiveRefusal, assertArchiveMove } from '../contracts/network-capabilities'
 import { ProgramManager } from './programs/manager'
 import type { ProgramDefinition, ProgramCommand } from '../contracts/programs'
 import type { ProgramInternal } from '../worker/resources/programs'
@@ -883,9 +883,14 @@ export class FixtureWorker {
       if (request.kind === 'mailMove' || (request.body && typeof request.body === 'object' && ('applicationId' in request.body || 'application' in request.body))) {
         if (!this.credentials) throw new Error('Credential store is unavailable')
         const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
-        const requested = programRequest(state.resources, scope.podId, scope.capabilities, request.body)
-        if (request.kind === 'mailMove') assertArchiveMove(requested.argv)
-        const grant = await this.connections!.existingProgramGrant(scope.podId, requested.assignment, requested.argv)
+        const notStarted = (error: unknown) => request.kind === 'mailMove' ? archiveRefusal(error) : error
+        let requested: ReturnType<typeof programRequest>
+        try {
+          requested = programRequest(state.resources, scope.podId, scope.capabilities, request.body)
+          if (request.kind === 'mailMove') assertArchiveMove(requested.argv)
+        }
+        catch (error) { throw notStarted(error) }
+        const grant = await this.connections!.existingProgramGrant(scope.podId, requested.assignment, requested.argv).catch((error: unknown) => { throw notStarted(error) })
         const resources = state.resources.map(item => item.id === requested.id ? { ...item, configuration: { ...item.configuration, grants: [...requested.assignment.grants.filter(item => item.permission !== grant.permission), grant] } } : item)
         const workspace = await podWorkspace(this.root, scope.podId)
         const directories = directoryPolicy(await assignedDirectories(this.root, scope.podId, resources))

@@ -4380,5 +4380,8 @@
   "Mail application returned no valid workflow receipt": "Die Mail-Anwendung hat keinen gültigen Workflow-Beleg geliefert",
   "Approved delivery has no case": "Die freigegebene Zustellung hat keinen Fall",
   "An earlier archive attempt of this message needs reconciliation": "Ein früherer Archivierungsversuch dieser Nachricht muss abgeglichen werden",
-  "Mail preflight read did not return the approved message": "Das Vorab-Lesen hat nicht die freigegebene Nachricht geliefert"
+  "Mail preflight read did not return the approved message": "Das Vorab-Lesen hat nicht die freigegebene Nachricht geliefert",
+  "A run can archive its approved mail only once": "Ein Lauf kann seine freigegebenen Mails nur einmal archivieren",
+  "Archive outcome arrived after its attempt was settled": "Das Archiv-Ergebnis kam erst nach dem Abschluss des Versuchs",
+  "Archive move not started: {p0}": "Archiv-Verschiebung nicht gestartet: {p0}"
 }
