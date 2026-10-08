@@ -246,16 +246,17 @@ export class NetworkEvents {
       }
       const id = this.routeGate(definition, gateKey, eventId, option.channel, optionKey)
       this.store.db.prepare('UPDATE network_choices SET option_key=?,result_event_id=?,decided_at=? WHERE network_id=? AND event_id=? AND gate_key=? AND option_key IS NULL').run(optionKey, id, Date.now(), definition.id, eventId, gateKey)
-      this.supersedeWaitingRevisions(definition, eventId, gateKey, optionKey)
+      this.supersedeOlderRevisions(definition, eventId, gateKey, optionKey)
     })
   }
 
-  // The owner decides a case, not one of its revisions: other revisions still waiting at this gate are answered by
-  // this decision and leave without a second route. A revision that arrives later is asked again.
-  private supersedeWaitingRevisions(definition: NetworkDefinition, eventId: string, gateKey: string, optionKey: string): void {
+  // An answered case revision also answers the older revisions of that case still waiting at this gate; they leave
+  // without a second route. Newer revisions and other items of the same revision carry new input and stay open.
+  private supersedeOlderRevisions(definition: NetworkDefinition, eventId: string, gateKey: string, optionKey: string): void {
     const waiting = this.store.db.prepare(`SELECT c.event_id,e.case_id,e.case_revision FROM network_choices c JOIN network_events e ON e.network_id=c.network_id AND e.id=c.event_id
       WHERE c.network_id=? AND c.network_revision=? AND c.gate_key=? AND c.decided_at IS NULL AND c.event_id!=?
-        AND e.case_id=(SELECT case_id FROM network_events WHERE network_id=? AND id=?)`).all(definition.id, definition.revision, gateKey, eventId, definition.id, eventId)
+        AND e.case_id=(SELECT case_id FROM network_events WHERE network_id=? AND id=?)
+        AND e.case_revision<(SELECT case_revision FROM network_events WHERE network_id=? AND id=?)`).all(definition.id, definition.revision, gateKey, eventId, definition.id, eventId, definition.id, eventId)
     for (const row of waiting) {
       this.store.db.prepare('DELETE FROM network_choices WHERE network_id=? AND event_id=? AND gate_key=? AND decided_at IS NULL').run(definition.id, row.event_id!, gateKey)
       this.store.db.prepare('INSERT INTO network_trace_events(network_id,case_id,event_id,kind,body,created_at) VALUES(?,?,?,\'choice-superseded\',?,?)').run(definition.id, row.case_id!, row.event_id!, canonicalNetworkJson({ gate: gateKey, caseRevision: row.case_revision, decidedEventId: eventId, decision: optionKey }), Date.now())
