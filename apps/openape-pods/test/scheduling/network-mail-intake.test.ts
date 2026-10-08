@@ -1,109 +1,100 @@
 // @vitest-environment node
 import { afterEach, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+const account = 'owner@example.invalid'
 const roots: string[] = []
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
+interface Mail { id: string, folder: string, internetMessageId: string, from: string, date: string, to: string[], body: string, changeKey: string }
 async function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'pods-provider-intake-')); roots.push(root)
   const script = await import(pathToFileURL(resolve('examples/network-mail-intake.mjs')).href)
-  const messages = { inbox: { id: 'immutable-inbox', changeKey: 'provider-v1', body: 'Synthetic body' }, sent: { id: 'immutable-sent', changeKey: 'provider-v1', body: 'Synthetic body' } }
+  const mails: Mail[] = []
+  const add = (id: string, minutesAgo: number, overrides: Partial<Mail> = {}) => mails.push({ id, folder: 'Inbox', internetMessageId: `<${id}@example.invalid>`, from: `${id}@sender.invalid`, date: new Date(Date.now() - minutesAgo * 60000).toISOString(), to: [account], body: 'Synthetic body', changeKey: 'provider-v1', ...overrides })
   const invoke = vi.fn(async ({ argv }: { argv: string[] }) => {
-    const folder = argv[argv.indexOf('--folder') + 1]
-    const row = argv[0] === 'mail' ? messages[folder === 'Inbox' ? 'inbox' : 'sent'] : Object.values(messages).find(item => item.id === argv.at(-1))!
-    const output = argv[0] === 'mail' ? [{ account: 'owner@example.invalid', message_id: row.id }] : { protocol: 'pods-mail/v1', account: 'owner@example.invalid', operation: 'read', outcome: 'confirmed', items: [{ id: row.id, changeKey: row.changeKey, subject: 'Synthetic', body: { contentType: 'text', content: row.body }, receivedDateTime: '2026-10-04T00:00:00Z', from: { emailAddress: { address: 'sender@example.invalid' } }, toRecipients: [], ccRecipients: [] }] }
-    return { exitCode: 0, stdout: JSON.stringify(output) }
+    if (argv[0] === 'mail') {
+      const folder = argv[argv.indexOf('--folder') + 1]
+      const rows = mails.filter(mail => mail.folder === folder).sort((a, b) => b.date.localeCompare(a.date)).map(mail => ({ account, message_id: mail.id, internet_message_id: mail.internetMessageId, date: mail.date, to: mail.to }))
+      return { exitCode: 0, stdout: JSON.stringify(rows) }
+    }
+    const mail = mails.find(item => item.id === argv.at(-1))!
+    return { exitCode: 0, stdout: JSON.stringify({ protocol: 'pods-mail/v1', account, operation: 'read', outcome: 'confirmed', items: [{ id: mail.id, changeKey: mail.changeKey, internetMessageId: mail.internetMessageId, subject: `Subject ${mail.id}`, body: { contentType: 'text', content: mail.body }, receivedDateTime: mail.date, from: { emailAddress: { address: mail.from } }, toRecipients: mail.to.map(address => ({ emailAddress: { address } })), ccRecipients: [] }] }) }
   })
+  const emit = vi.fn()
+  const values = { mailbox: account, 'preview-root': root, 'delivery-mode': 'preview', 'max-messages': '3' }
   const context = {
-    variables: { mailbox: 'owner@example.invalid', 'preview-root': root, 'delivery-mode': 'preview', 'max-messages': '3' }, config: {} as Record<string, { value: string, origin: string, kind: string }>,
-    input: { checkpointRevision: 0, checkpoint: {} as Record<string, unknown>, eventIds: [] },
-    network: undefined as undefined | { emit: ReturnType<typeof vi.fn> }, tools: { invoke },
+    variables: {}, config: Object.fromEntries(Object.entries(values).map(([name, value]) => [name, { value, origin: 'composition', kind: 'public' }])),
+    input: { checkpointRevision: 1, checkpoint: { version: 1, account, scope: 'latest-three-inbox-and-sent', recordedAt: '2026-10-01T00:00:00Z', initial: [], observed: [] } as Record<string, unknown>, eventIds: [] },
+    network: { emit } as undefined | { emit: typeof emit }, tools: { invoke },
     progress: { commit: vi.fn(async (value: { checkpoint: Record<string, unknown> }) => { context.input.checkpoint = value.checkpoint; context.input.checkpointRevision++ }) },
   }
-  return { script, context, messages, root }
+  const run = () => script.run(context)
+  return { context, mails, add, emit, run, root }
 }
+const inboxIds = (emit: ReturnType<typeof vi.fn>) => emit.mock.calls.map(([event]) => event).filter(event => event.channel === 'mail.open').map(event => event.sourceItemId)
 
-it('records only observed content versions as a bounded baseline, then emits changed content once', async () => {
+it('emits every inbox mail of the window exactly once, oldest first and four per run', async () => {
   const f = await fixture()
-  const baseline = await f.script.run(f.context)
-  expect(baseline.status).toBe('completed')
-  expect(baseline.summary).toContain('Emitted 0 items')
-  expect(f.context.input.checkpoint).toMatchObject({ scope: 'latest-three-inbox-and-sent', initial: [{ channel: 'mail.open', id: 'immutable-inbox', version: expect.stringMatching(/^content:[a-f0-9]{64}$/) }, { channel: 'mail.sent-raw', id: 'immutable-sent', version: expect.stringMatching(/^content:/) }] })
-  const emit = vi.fn()
-  f.context.network = { emit }
-  f.context.config = Object.fromEntries(Object.entries(f.context.variables).map(([name, value]) => [name, { value, origin: 'composition', kind: 'public' }]))
-  f.context.variables.mailbox = 'overridden@example.invalid'
-  await f.script.run(f.context)
-  expect(emit).not.toHaveBeenCalled()
-  // Reading or flagging a mail changes only its changeKey.
-  f.messages.inbox.changeKey = 'provider-v2'
-  await f.script.run(f.context)
-  expect(emit).not.toHaveBeenCalled()
-  f.messages.inbox.body = 'Corrected body'
-  await f.script.run(f.context)
-  expect(emit).toHaveBeenCalledTimes(1)
-  const event = emit.mock.calls[0]![0]
-  expect(event).toMatchObject({ channel: 'mail.open', sourceItemId: 'immutable-inbox', sourceVersion: expect.stringMatching(/^content:/) })
-  expect(JSON.parse(readFileSync(join(f.root, `${event.payload.evidence}.json`), 'utf8'))).toMatchObject({ messageId: 'immutable-inbox', version: event.sourceVersion, providerVersionAvailable: true })
-  await f.script.run(f.context)
-  expect(emit).toHaveBeenCalledTimes(1)
+  for (let index = 0; index < 30; index++) f.add(`inbox-${index}`, 60 * 24 * 10 - index * 60)
+  f.add('too-old', 60 * 24 * 40)
+  const first = await f.run()
+  expect(first.summary).toContain('emitted 4 new mails; 26 more wait')
+  expect(inboxIds(f.emit)).toEqual(['inbox-0', 'inbox-1', 'inbox-2', 'inbox-3'])
+  for (let index = 0; index < 10; index++) await f.run()
+  expect(inboxIds(f.emit)).toEqual(Array.from({ length: 30 }, (_, index) => `inbox-${index}`))
+  expect(f.context.input.checkpoint.observed).toHaveLength(0)
   expect(f.context.tools.invoke.mock.calls.every(([request]) => ['mail', 'workflow'].includes(request.argv[0]!) && ['list', 'read'].includes(request.argv[1]!))).toBe(true)
 })
 
-it('refuses missing versions without replacing the checkpoint or fabricating a successful baseline', async () => {
+it('protects senders found among all sent recipients', async () => {
   const f = await fixture()
-  f.messages.inbox.changeKey = ''
-  await expect(f.script.run(f.context)).rejects.toThrow('stable identity')
-  expect(f.context.progress.commit).not.toHaveBeenCalled()
-  expect(f.context.input.checkpoint).toEqual({})
+  f.add('sent-old', 60 * 24 * 20, { folder: 'sentitems', to: ['Friend <friend@example.invalid>'] })
+  f.add('from-friend', 10, { from: 'friend@example.invalid' })
+  f.add('from-stranger', 5)
+  await f.run()
+  const payload = (id: string) => f.emit.mock.calls.find(([event]) => event.sourceItemId === id)![0].payload
+  expect(payload('from-friend').knownContact).toBe(true)
+  expect(payload('from-stranger').knownContact).toBe(false)
+  expect(f.emit.mock.calls.some(([event]) => event.sourceItemId === 'sent-old')).toBe(false)
 })
 
-it('requires an existing reviewed network baseline and refuses standalone overwrites', async () => {
+it('asks again only after a real content change, never after a read or flag', async () => {
   const f = await fixture()
-  f.context.network = { emit: vi.fn() }
-  await expect(f.script.run(f.context)).rejects.toThrow('exact bounded provider baseline')
-  expect(f.context.tools.invoke).not.toHaveBeenCalled()
-  f.context.network = undefined
-  await f.script.run(f.context)
+  f.add('newsletter', 10)
+  await f.run()
+  expect(f.emit).toHaveBeenCalledTimes(1)
+  f.mails[0]!.changeKey = 'provider-v2'
+  await f.run()
+  expect(f.emit).toHaveBeenCalledTimes(1)
+  f.mails[0]!.body = 'Corrected body'
+  await f.run(); await f.run()
+  expect(f.emit).toHaveBeenCalledTimes(2)
+  const [first, second] = f.emit.mock.calls.map(([event]) => event)
+  expect(second).toMatchObject({ sourceItemId: 'newsletter', sourceVersion: expect.stringMatching(/^content:/) })
+  expect(second.sourceVersion).not.toBe(first.sourceVersion)
+  expect(JSON.parse(readFileSync(join(f.root, `${second.payload.evidence}.json`), 'utf8'))).toMatchObject({ messageId: 'newsletter', version: second.sourceVersion })
+})
+
+it('treats mail recorded before content versions as already received', async () => {
+  const f = await fixture()
+  f.add('legacy', 10)
+  writeFileSync(join(f.root, `${'a'.repeat(64)}.json`), JSON.stringify({ account, messageId: 'legacy', internetMessageId: '<legacy@example.invalid>', version: 'provider-v1' }))
+  await f.run()
+  expect(f.emit).not.toHaveBeenCalled()
+})
+
+it('refuses missing versions or an unreviewed baseline without replacing the checkpoint', async () => {
+  const f = await fixture()
+  f.add('broken', 5, { changeKey: '' })
   const original = structuredClone(f.context.input.checkpoint)
-  await expect(f.script.run(f.context)).rejects.toThrow('cannot overwrite')
-  expect(f.context.input.checkpoint).toEqual(original)
-})
-
-it('treats changeKey entries of an earlier checkpoint as seen and replaces them with content versions', async () => {
-  const f = await fixture()
-  const legacy = [{ channel: 'mail.open', id: 'immutable-inbox', version: 'provider-v1' }, { channel: 'mail.sent-raw', id: 'immutable-sent', version: 'provider-v1' }]
-  f.context.input = { checkpointRevision: 3, checkpoint: { version: 1, account: 'owner@example.invalid', scope: 'latest-three-inbox-and-sent', recordedAt: '2026-10-01T00:00:00Z', initial: legacy, observed: legacy }, eventIds: [] }
-  const emit = vi.fn()
-  f.context.network = { emit }
-  f.context.config = Object.fromEntries(Object.entries(f.context.variables).map(([name, value]) => [name, { value, origin: 'composition', kind: 'public' }]))
-  f.messages.inbox.changeKey = 'provider-v7'
-  await f.script.run(f.context)
-  expect(emit).not.toHaveBeenCalled()
-  expect(f.context.input.checkpoint.observed).toEqual([{ channel: 'mail.open', id: 'immutable-inbox', version: expect.stringMatching(/^content:/) }, { channel: 'mail.sent-raw', id: 'immutable-sent', version: expect.stringMatching(/^content:/) }])
-  f.messages.inbox.body = 'Corrected body'
-  await f.script.run(f.context)
-  expect(emit).toHaveBeenCalledTimes(1)
-})
-
-it('does not emit a mail again when it returns to the sample', async () => {
-  const f = await fixture()
-  await f.script.run(f.context)
-  const emit = vi.fn()
-  f.context.network = { emit }
-  f.context.config = Object.fromEntries(Object.entries(f.context.variables).map(([name, value]) => [name, { value, origin: 'composition', kind: 'public' }]))
-  const returning = { id: 'returning-inbox', changeKey: 'provider-v1', body: 'Returning body' }
-  f.messages.inbox = returning
-  await f.script.run(f.context)
-  expect(emit).toHaveBeenCalledTimes(1)
-  f.messages.inbox = { id: 'newer-inbox', changeKey: 'provider-v1', body: 'Newer body' }
-  await f.script.run(f.context)
-  expect(emit).toHaveBeenCalledTimes(2)
-  f.messages.inbox = { ...returning, changeKey: 'provider-v9' }
-  await f.script.run(f.context)
-  expect(emit).toHaveBeenCalledTimes(2)
-  expect(f.context.input.checkpoint.seen).toHaveLength(3)
+  await expect(f.run()).rejects.toThrow('stable identity')
+  f.context.input.checkpoint = {}
+  await expect(f.run()).rejects.toThrow('exact bounded provider baseline')
+  expect(f.context.progress.commit).not.toHaveBeenCalled()
+  expect(original).toMatchObject({ scope: 'latest-three-inbox-and-sent' })
+  f.context.network = undefined
+  expect((await f.run()).summary).toContain('nothing was read')
 })
