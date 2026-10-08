@@ -1,5 +1,13 @@
 # Active work
 
+## Pods Inbox app badge — issue 1452
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1452. Worktree `openape-monorepo.worktrees/pods-inbox-badge`, branch `feature/issue-1452-pods-inbox-badge`, base `dfa801791e31ff2567e57d6d576c2af0e818d401`.
+- The app icon counts open, unarchived decisions plus unread, unarchived messages. Foreground updates wait for a complete successful sync; reading, archiving and resolved decisions update the count, and sign-out/revocation clears it. Push handling refreshes the account total from an authenticated private/no-store endpoint while still displaying its notification.
+- Verification: full root lint and typecheck; relay production build; 85 relay unit/component tests; real DDISA/browser inbox acceptance with Badging API interception (6 before reading/resolution, 3 after, 0 on revocation), server count and anonymous 401. The two inspected mobile screenshots show the matching 4+2 and 2+1 tab counts.
+- Permanent tests protect the new counting, account isolation, pagination, logout and visible-push contracts. No dependency, database migration or test command changes.
+- Next: PR review and rollout. Real iOS home-screen rendering and APNs delivery remain unverified; the Inbox M5 push sender/subscription UI is separate pending work in issue 1446. Badge refresh on push does not introduce silent notifications.
+
 ## Pods mail network asks the same choice twice — issue 1451
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1451. Owner correction October 8: the problem is the repeated "newsletter?" choice for the same mail; the final IdP approval stays.
