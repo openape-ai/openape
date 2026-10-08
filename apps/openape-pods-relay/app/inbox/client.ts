@@ -286,10 +286,11 @@ export function createInbox(environment: InboxEnvironment) {
   const messages = computed(() => list.value.filter(item => item.kind === 'message' && !item.archived).sort((a, b) => b.created - a.created))
   const archivedMessages = computed(() => list.value.filter(item => item.kind === 'message' && item.archived).sort((a, b) => b.created - a.created))
   const unread = computed(() => messages.value.filter(item => !item.read).length)
+  const badgeCount = computed(() => openDecisions.value.length + unread.value)
   // Only answers to decisions that are still open hold back an app update; resolved ones need no reconciliation.
   const deciding = computed(() => Object.keys(state.pending).length > 0 || Object.entries(state.receipts).some(([itemId, receipt]) => running(receipt) && state.items[itemId]?.state === 'open'))
 
-  return { state, start, sync, load, mark, decide, answer, undo, check, login, logout, devices, revoke, openDecisions, completedDecisions, messages, archivedMessages, unread, deciding }
+  return { state, start, sync, load, mark, decide, answer, undo, check, login, logout, devices, revoke, openDecisions, completedDecisions, messages, archivedMessages, unread, badgeCount, deciding }
 }
 export type Inbox = ReturnType<typeof createInbox>
 

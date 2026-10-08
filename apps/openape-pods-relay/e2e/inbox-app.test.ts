@@ -81,6 +81,10 @@ async function desktop(email: string) {
 
 async function phone(email: string, storageState?: Awaited<ReturnType<BrowserContext['storageState']>>): Promise<{ context: BrowserContext, page: Page }> {
   const context = await browser.newContext({ viewport: { width: 375, height: 812 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'de-AT', storageState, serviceWorkers: 'allow' })
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, 'setAppBadge', { value: async (count: number) => { document.documentElement.dataset.appBadge = String(count) } })
+    Object.defineProperty(navigator, 'clearAppBadge', { value: async () => { document.documentElement.dataset.appBadge = '0' } })
+  })
   const page = await context.newPage()
   if (storageState) return { context, page }
   await page.goto(`${relay.url}/inbox/`)
@@ -118,6 +122,11 @@ it('decides, reads, survives restart and reinstall, works offline and never mixe
   // Sign-in inside the app lands on Decisions; both tabs carry separate counts.
   const { context, page } = await phone(owner)
   await expect.poll(() => page.getByRole('link', { name: /Entscheidungen/ }).textContent()).toContain('4')
+  await expect.poll(() => page.getAttribute('html', 'data-app-badge')).toBe('6')
+  const badge = await context.request.get(`${relay.url}/inbox/api/v1/badge`)
+  expect(badge.headers()['cache-control']).toBe('private, no-store')
+  expect(await badge.json()).toEqual({ count: 6 })
+  expect((await fetch(`${relay.url}/inbox/api/v1/badge`)).status).toBe(401)
   // A mail choice shows its sender first and classification hints instead of the raw field list.
   const mailCard = page.locator('li.inbox-card', { hasText: 'Ready to explore this?' })
   expect(await mailCard.locator('.sender').textContent()).toContain('news@example.com')
@@ -168,6 +177,8 @@ it('decides, reads, survives restart and reinstall, works offline and never mixe
   await page.getByRole('link', { name: /Monatsabschluss bereit/ }).click()
   expect(await page.getByRole('link', { name: 'Bericht öffnen' }).getAttribute('rel')).toBe('noopener noreferrer')
   await expect.poll(() => page.getByRole('link', { name: /Mitteilungen/ }).textContent()).toMatch(/Mitteilungen\s*1/)
+  await expect.poll(() => page.getAttribute('html', 'data-app-badge')).toBe('3')
+  expect(await (await context.request.get(`${relay.url}/inbox/api/v1/badge`)).json()).toEqual({ count: 3 })
   await shot(page, '07-message-detail')
 
   // Restart: the installed app reopens with the same session and read state.
@@ -240,6 +251,7 @@ it('decides, reads, survives restart and reinstall, works offline and never mixe
   await restarted.page.goto(`${relay.url}/inbox/`)
   await expect.poll(() => restarted.page.getByText('Dieses Gerät wurde abgemeldet. Gespeicherte Einträge wurden entfernt.').isVisible()).toBe(true)
   expect(await restarted.page.evaluate(() => localStorage.getItem('pods-inbox-cache-v1'))).toBeNull()
+  await expect.poll(() => restarted.page.getAttribute('html', 'data-app-badge')).toBe('0')
   expect(await restarted.page.locator('.inbox-card, section.decision').count()).toBe(0)
   await shot(restarted.page, '13-revoked')
 
