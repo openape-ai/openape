@@ -1,0 +1,380 @@
+{
+ "schema": "openape.plan/2",
+ "language": "en",
+ "project": "OpenApe Pods",
+ "owner": "Patrick Hofmann",
+ "date": "2026-10-08",
+ "revision": 3,
+ "status": "active",
+ "title": "Mail network: decide each mail only once",
+ "goal": "After the owner answers \"is this a newsletter?\" for a mail, the same question never comes back for that mail unless its content really changed.",
+ "summary": "The Intake treats every Outlook metadata change (read, flag, category) as a new mail version, so an unchanged mail runs through the network again and reaches the same choice twice. The Decisions tab then shows only the newest version; answering it leaves the older question open, and it reappears hours later. Fix the Intake to version mails by content, and let one owner decision close all open questions of the same mail.",
+ "problem": {
+  "statement": "The owner classifies a mail as a newsletter and is later asked the same question for the same mail again.",
+  "impact": "Repeated work and lost trust in the inbox; the duplicates also double the items in the IdP approval batch.",
+  "approach": "Version mails by content in the Intake and let a decision close older open questions of the same mail.",
+  "outcome": "One question per mail; an answered mail does not reappear."
+ },
+ "context": "Revision 1 described the wrong problem (the second IdP approval after the choice); the owner corrected this on October 8, 2026. Revision 2 replaces it completely. Evidence comes from a consistent read-only copy of the installed Pods database (October 8, 08:07) for Delta Mind mail network b95f1f8a revision 3, gate `uncertain-review`: 58 questions for 52 mail cases. Six cases received a second question through case revision 2, created by the Intake about 15 minutes after revision 1; between the two revisions only the `evidence` field differs, which hashes the Outlook `changeKey`. Subject, sender, date and body are unchanged. In all five decided cases the owner first answered revision 2, and revision 1 came back and was answered again hours later (for example ATS Convention: 08:25 and 13:44 on October 7). The installed Intake script (hash 55fc78ba) and apps/openape-pods/examples/network-mail-intake.mjs both use `changeKey` as the version. In the engine, every event on a choose gate's input creates its own `network_choices` row (network-events.ts `deliver`), and `choose` decides only that event. Separately, ATS Convention exists twice in the mailbox as two provider items; such genuine duplicate deliveries are separate mails and outside this plan.",
+ "scope": [
+  "Intake: version a mail by a fingerprint of its content (sender, recipients, subject, date, body, attachment flag) instead of the Outlook changeKey; existing checkpoint entries are carried over without emitting the sampled mails again.",
+  "Network engine: an owner decision at a choose gate also closes every older open question of the same case at that gate (recorded as superseded, not routed a second time); the Decisions tab then shows the case once and it does not return.",
+  "Rollout: update the installed Intake member through the existing member-script update (same contract, network keeps running) and install a signed desktop build for the engine change."
+ ],
+ "nonGoals": [
+  "Changing the approval gate, the network composition or the mail categories.",
+  "Merging genuinely duplicate deliveries (two provider items with the same content) or similar-looking but different mails.",
+  "Automatically reapplying an earlier decision to a mail whose content really changed; that case is still asked."
+ ],
+ "decisions": [
+  {
+   "title": "The problem is the repeated choice, not the IdP approval",
+   "description": "Owner correction of revision 1. The approval gate for newsletters stays as it is.",
+   "status": "accepted",
+   "by": "Patrick Hofmann",
+   "date": "2026-10-08",
+   "reference": "Mein eigentliches Problem ist aber, dass ich das erste Mal bestätige, dass ein Mail ein Newsletter ist und danach mir noch einmal die Entscheidung vorgelegt wird, ob dieses E-Mail ein Newsletter ist."
+  },
+  {
+   "title": "The final IdP approval stays",
+   "description": "The approval after the owner's choice is intended and remains; only the repeated choice for the same mail must go.",
+   "status": "accepted",
+   "by": "Patrick Hofmann",
+   "date": "2026-10-08",
+   "reference": "Die finale Freigabe neben der Entscheidung ist ok. Die darf bleiben. Nur die doppelentscheidung nicht"
+  },
+  {
+   "title": "Fix both the source and the decision surface",
+   "description": "The Intake fix removes the meaningless revisions for mail. The engine fix ensures that any source with case revisions can no longer leave a hidden older question behind an answered one. Either alone leaves a known way to be asked twice.",
+   "status": "proposed"
+  }
+ ],
+ "milestones": [
+  {
+   "id": "M1",
+   "status": "active",
+   "title": "Version mails by content in the Intake",
+   "goal": "A read, flagged or recategorised mail produces no new revision.",
+   "steps": [
+    "In examples/network-mail-intake.mjs compute the version as a prefixed fingerprint of the content fields; use it for the checkpoint comparison, the emit key, sourceVersion and the evidence record.",
+    "Treat a checkpoint entry with the old changeKey format and the same provider id as already seen and store the content version, so the update emits nothing for the six sampled mails.",
+    "Keep a bounded list of up to 400 digests of seen content versions in the checkpoint, so a mail that leaves the three-message sample and returns is not emitted again (its knownContact flag can differ, which the network refuses for an existing source identity).",
+    "After approval, apply the same change to the installed Intake member through networks updateMemberScript and verify the next Intake runs."
+   ],
+   "acceptance": [
+    "Focused test in the existing Intake suite: a changeKey-only change emits nothing; a changed body emits one new version; a legacy checkpoint emits nothing.",
+    "On the installed network, a read mail produces no case revision 2 over the following Intake runs."
+   ],
+   "proof": "Commits 11b6c4a1 and 65edc55d with focused tests that fail against the previous script. Installed Intake updated through networks updateMemberScript on October 8: 08:38:58 (5d3613d5, definition version 4) and, after review, 08:46:39 (30c13820, definition version 5).",
+   "rollback": "Reactivate the previous Intake script version through the same member-script update."
+  },
+  {
+   "id": "M2",
+   "status": "active",
+   "title": "One decision closes all open questions of a case",
+   "goal": "An answered case cannot come back from an older revision.",
+   "steps": [
+    "In the choose transaction remove older undecided questions of the same case and gate and record them as choice-superseded in the trace (the schema allows a decided row only with its own routed result); they are never routed. A stale surface repeating the same answer is accepted without effect.",
+    "Counts, the settlement check and the Decisions tab treat superseded questions as resolved."
+   ],
+   "acceptance": [
+    "Engine test: two revisions waiting, answering the newer routes once and leaves no open question; answering an older revision leaves a newer one, whose input differs, open; a revision arriving after the decision is still asked.",
+    "Pods unit/component suite, root lint and typecheck pass; signed desktop build installed with profile backup; the currently waiting double question (Imunify, case 7ce6bc47) disappears after one answer."
+   ],
+   "rollback": "Reinstall the previous signed desktop build; it reads the same schema."
+  }
+ ],
+ "risks": [
+  {
+   "title": "A content change is missed",
+   "mitigation": "The fingerprint covers every field the Intake passes on; a mail whose passed-on content is unchanged carries no new information for later steps."
+  },
+  {
+   "title": "A superseded question disappears from the choice table",
+   "mitigation": "No schema change; the input event and a choice-superseded trace entry remain; settlement and counts are covered by tests."
+  }
+ ],
+ "verification": [
+  "Plan authoring only: the evidence above comes from read-only queries on a database copy and from the code; no product change is claimed in this draft."
+ ],
+ "handoff": "M1 is live on the installed mail network; its acceptance waits for the next Intake runs. M2 is implemented on PR 307 (head 65edc55d; Pods 1,343 tests, root lint and typecheck pass) and needs merge plus a signed desktop installation.",
+ "changelog": [
+  {
+   "date": "2026-10-07",
+   "text": "Revision 1 proposed skipping the IdP approval for owner-chosen newsletters."
+  },
+  {
+   "date": "2026-10-08",
+   "text": "Revision 2 after the owner's correction: the problem is the repeated choice; root causes traced in the installed database and code."
+  },
+  {
+   "date": "2026-10-08",
+   "text": "Recorded the owner's confirmation that the final IdP approval stays; scope unchanged."
+  },
+  {
+   "date": "2026-10-08",
+   "text": "Revision 3 after implementation review: a decision closes only older revisions (newer revisions and sibling items keep their own question), superseded questions are removed with a trace entry instead of a schema change, and the Intake remembers seen content versions. Owner approval applies to revision 2; revision 3 narrows M2 within its stated non-goal."
+  }
+ ],
+ "links": [
+  {
+   "title": "Issue 1451",
+   "url": "https://repos.openape.ai/patrick/monorepo/issues/1451"
+  },
+  {
+   "title": "PR 307",
+   "url": "https://repos.openape.ai/patrick/monorepo/pulls/307"
+  }
+ ],
+ "approval": {
+  "by": "Patrick Hofmann",
+  "date": "2026-10-08",
+  "reference": "Go",
+  "target": {
+   "revision": 2,
+   "url": "https://report.openape.ai/d/01M4BXR6KG3WD5M1GM6CPRQ9N7",
+   "version": 3
+  },
+  "scope": "Plan revision 2 including the live Intake update after M1."
+ },
+ "translations": {
+  "defaultLanguage": "de",
+  "entries": [
+   {
+    "path": "title",
+    "source": "Mail network: decide each mail only once",
+    "text": "Mail-Netz: jede Mail nur einmal entscheiden"
+   },
+   {
+    "path": "goal",
+    "source": "After the owner answers \"is this a newsletter?\" for a mail, the same question never comes back for that mail unless its content really changed.",
+    "text": "Nachdem der Owner für eine Mail \"Ist das ein Newsletter?\" beantwortet hat, kommt dieselbe Frage für diese Mail nie wieder, außer ihr Inhalt hat sich tatsächlich geändert."
+   },
+   {
+    "path": "summary",
+    "source": "The Intake treats every Outlook metadata change (read, flag, category) as a new mail version, so an unchanged mail runs through the network again and reaches the same choice twice. The Decisions tab then shows only the newest version; answering it leaves the older question open, and it reappears hours later. Fix the Intake to version mails by content, and let one owner decision close all open questions of the same mail.",
+    "text": "Die Intake wertet jede Outlook-Metadatenänderung (gelesen, markiert, Kategorie) als neue Mail-Version. Eine unveränderte Mail läuft dadurch erneut durchs Netz und landet ein zweites Mal bei derselben Frage. Der Tab Entscheidungen zeigt dann nur die neueste Version; deren Beantwortung lässt die ältere Frage offen, die Stunden später wieder auftaucht. Lösung: Die Intake versioniert Mails nach Inhalt, und eine Owner-Entscheidung schließt alle offenen Fragen derselben Mail."
+   },
+   {
+    "path": "problem.statement",
+    "source": "The owner classifies a mail as a newsletter and is later asked the same question for the same mail again.",
+    "text": "Der Owner ordnet eine Mail als Newsletter ein und wird später für dieselbe Mail erneut dasselbe gefragt."
+   },
+   {
+    "path": "problem.impact",
+    "source": "Repeated work and lost trust in the inbox; the duplicates also double the items in the IdP approval batch.",
+    "text": "Doppelte Arbeit und weniger Vertrauen in die Entscheidungsliste; die Duplikate verdoppeln zudem die Einträge im IdP-Freigabe-Batch."
+   },
+   {
+    "path": "problem.approach",
+    "source": "Version mails by content in the Intake and let a decision close older open questions of the same mail.",
+    "text": "Mails in der Intake nach Inhalt versionieren und offene ältere Fragen derselben Mail mit der Entscheidung schließen."
+   },
+   {
+    "path": "problem.outcome",
+    "source": "One question per mail; an answered mail does not reappear.",
+    "text": "Eine Frage pro Mail; eine beantwortete Mail taucht nicht wieder auf."
+   },
+   {
+    "path": "context",
+    "source": "Revision 1 described the wrong problem (the second IdP approval after the choice); the owner corrected this on October 8, 2026. Revision 2 replaces it completely. Evidence comes from a consistent read-only copy of the installed Pods database (October 8, 08:07) for Delta Mind mail network b95f1f8a revision 3, gate `uncertain-review`: 58 questions for 52 mail cases. Six cases received a second question through case revision 2, created by the Intake about 15 minutes after revision 1; between the two revisions only the `evidence` field differs, which hashes the Outlook `changeKey`. Subject, sender, date and body are unchanged. In all five decided cases the owner first answered revision 2, and revision 1 came back and was answered again hours later (for example ATS Convention: 08:25 and 13:44 on October 7). The installed Intake script (hash 55fc78ba) and apps/openape-pods/examples/network-mail-intake.mjs both use `changeKey` as the version. In the engine, every event on a choose gate's input creates its own `network_choices` row (network-events.ts `deliver`), and `choose` decides only that event. Separately, ATS Convention exists twice in the mailbox as two provider items; such genuine duplicate deliveries are separate mails and outside this plan.",
+    "text": "Revision 1 beschrieb das falsche Problem (die zweite IdP-Freigabe nach der Auswahl); der Owner hat das am 8. Oktober 2026 korrigiert. Revision 2 ersetzt sie vollständig. Grundlage ist eine konsistente, lesende Kopie der installierten Pods-Datenbank (8. Oktober, 08:07) für das Delta-Mind-Mail-Netz b95f1f8a Revision 3, Gate `uncertain-review`: 58 Fragen zu 52 Mail-Fällen. Sechs Fälle bekamen eine zweite Frage über Fall-Revision 2, die die Intake etwa 15 Minuten nach Revision 1 erzeugt hat; zwischen beiden Revisionen unterscheidet sich nur das Feld `evidence`, das den Outlook-`changeKey` einschließt. Betreff, Absender, Datum und Inhalt sind gleich. In allen fünf entschiedenen Fällen hat der Owner zuerst Revision 2 beantwortet; Revision 1 kam Stunden später wieder und wurde erneut beantwortet (z. B. ATS Convention: 08:25 und 13:44 am 7. Oktober). Das installierte Intake-Skript (Hash 55fc78ba) und apps/openape-pods/examples/network-mail-intake.mjs verwenden beide `changeKey` als Version. In der Engine legt jedes Ereignis am Eingang eines Choose-Gates eine eigene Zeile in `network_choices` an (network-events.ts `deliver`), und `choose` entscheidet nur dieses Ereignis. Davon getrennt liegt ATS Convention zweimal als zwei Provider-Einträge im Postfach; solche echten Doppelzustellungen sind eigene Mails und nicht Teil dieses Plans."
+   },
+   {
+    "path": "scope.0",
+    "source": "Intake: version a mail by a fingerprint of its content (sender, recipients, subject, date, body, attachment flag) instead of the Outlook changeKey; existing checkpoint entries are carried over without emitting the sampled mails again.",
+    "text": "Intake: Eine Mail wird über einen Fingerabdruck ihres Inhalts (Absender, Empfänger, Betreff, Datum, Text, Anhang-Kennzeichen) statt über den Outlook-changeKey versioniert; bestehende Checkpoint-Einträge werden übernommen, ohne die beobachteten Mails erneut auszugeben."
+   },
+   {
+    "path": "scope.1",
+    "source": "Network engine: an owner decision at a choose gate also closes every older open question of the same case at that gate (recorded as superseded, not routed a second time); the Decisions tab then shows the case once and it does not return.",
+    "text": "Netz-Engine: Eine Owner-Entscheidung an einem Choose-Gate schließt auch alle älteren offenen Fragen desselben Falls an diesem Gate (als überholt vermerkt, nicht ein zweites Mal weitergeleitet); der Tab Entscheidungen zeigt den Fall dann einmal, und er kommt nicht wieder."
+   },
+   {
+    "path": "scope.2",
+    "source": "Rollout: update the installed Intake member through the existing member-script update (same contract, network keeps running) and install a signed desktop build for the engine change.",
+    "text": "Rollout: Das installierte Intake-Mitglied über das bestehende Member-Script-Update aktualisieren (gleicher Vertrag, Netz läuft weiter) und für die Engine-Änderung einen signierten Desktop-Build installieren."
+   },
+   {
+    "path": "nonGoals.0",
+    "source": "Changing the approval gate, the network composition or the mail categories.",
+    "text": "Änderungen am Freigabe-Gate, an der Zusammensetzung des Netzes oder an den Mail-Kategorien."
+   },
+   {
+    "path": "nonGoals.1",
+    "source": "Merging genuinely duplicate deliveries (two provider items with the same content) or similar-looking but different mails.",
+    "text": "Zusammenführen echter Doppelzustellungen (zwei Provider-Einträge mit gleichem Inhalt) oder ähnlich aussehender, aber verschiedener Mails."
+   },
+   {
+    "path": "nonGoals.2",
+    "source": "Automatically reapplying an earlier decision to a mail whose content really changed; that case is still asked.",
+    "text": "Eine frühere Entscheidung automatisch auf eine Mail anwenden, deren Inhalt sich wirklich geändert hat; dieser Fall wird weiterhin gefragt."
+   },
+   {
+    "path": "decisions.0.title",
+    "source": "The problem is the repeated choice, not the IdP approval",
+    "text": "Das Problem ist die wiederholte Auswahlfrage, nicht die IdP-Freigabe"
+   },
+   {
+    "path": "decisions.0.description",
+    "source": "Owner correction of revision 1. The approval gate for newsletters stays as it is.",
+    "text": "Korrektur des Owners zu Revision 1. Das Freigabe-Gate für Newsletter bleibt unverändert."
+   },
+   {
+    "path": "decisions.1.title",
+    "source": "The final IdP approval stays",
+    "text": "Die finale IdP-Freigabe bleibt"
+   },
+   {
+    "path": "decisions.1.description",
+    "source": "The approval after the owner's choice is intended and remains; only the repeated choice for the same mail must go.",
+    "text": "Die Freigabe nach der Auswahl des Owners ist gewollt und bleibt; nur die wiederholte Auswahlfrage für dieselbe Mail muss weg."
+   },
+   {
+    "path": "decisions.2.title",
+    "source": "Fix both the source and the decision surface",
+    "text": "Ursache und Entscheidungsfläche beheben"
+   },
+   {
+    "path": "decisions.2.description",
+    "source": "The Intake fix removes the meaningless revisions for mail. The engine fix ensures that any source with case revisions can no longer leave a hidden older question behind an answered one. Either alone leaves a known way to be asked twice.",
+    "text": "Die Intake-Korrektur entfernt die bedeutungslosen Revisionen bei Mails. Die Engine-Korrektur stellt sicher, dass bei keiner Quelle mit Fall-Revisionen eine ältere Frage versteckt hinter einer beantworteten offen bleibt. Jede Korrektur allein lässt einen bekannten Weg zur Doppelfrage offen."
+   },
+   {
+    "path": "milestones.0.title",
+    "source": "Version mails by content in the Intake",
+    "text": "Mails in der Intake nach Inhalt versionieren"
+   },
+   {
+    "path": "milestones.0.goal",
+    "source": "A read, flagged or recategorised mail produces no new revision.",
+    "text": "Eine gelesene, markierte oder neu kategorisierte Mail erzeugt keine neue Revision."
+   },
+   {
+    "path": "milestones.0.steps.0",
+    "source": "In examples/network-mail-intake.mjs compute the version as a prefixed fingerprint of the content fields; use it for the checkpoint comparison, the emit key, sourceVersion and the evidence record.",
+    "text": "In examples/network-mail-intake.mjs die Version als Fingerabdruck der Inhaltsfelder mit Präfix berechnen; ihn für den Checkpoint-Vergleich, den Emit-Schlüssel, sourceVersion und den Evidence-Datensatz verwenden."
+   },
+   {
+    "path": "milestones.0.steps.1",
+    "source": "Treat a checkpoint entry with the old changeKey format and the same provider id as already seen and store the content version, so the update emits nothing for the six sampled mails.",
+    "text": "Einen Checkpoint-Eintrag im alten changeKey-Format mit gleicher Provider-ID als bereits gesehen behandeln und die Inhaltsversion speichern, damit das Update für die sechs beobachteten Mails nichts ausgibt."
+   },
+   {
+    "path": "milestones.0.steps.2",
+    "source": "Keep a bounded list of up to 400 digests of seen content versions in the checkpoint, so a mail that leaves the three-message sample and returns is not emitted again (its knownContact flag can differ, which the network refuses for an existing source identity).",
+    "text": "Im Checkpoint eine begrenzte Liste von bis zu 400 Digests gesehener Inhaltsversionen führen, damit eine Mail, die die Dreier-Stichprobe verlässt und zurückkehrt, nicht erneut ausgegeben wird (ihr knownContact-Wert kann abweichen, was das Netz für eine bestehende Quell-Identität ablehnt)."
+   },
+   {
+    "path": "milestones.0.steps.3",
+    "source": "After approval, apply the same change to the installed Intake member through networks updateMemberScript and verify the next Intake runs.",
+    "text": "Nach Freigabe dieselbe Änderung über networks updateMemberScript auf das installierte Intake-Mitglied anwenden und die nächsten Intake-Läufe prüfen."
+   },
+   {
+    "path": "milestones.0.acceptance.0",
+    "source": "Focused test in the existing Intake suite: a changeKey-only change emits nothing; a changed body emits one new version; a legacy checkpoint emits nothing.",
+    "text": "Gezielter Test in der bestehenden Intake-Suite: Eine reine changeKey-Änderung gibt nichts aus; ein geänderter Text gibt eine neue Version aus; ein alter Checkpoint gibt nichts aus."
+   },
+   {
+    "path": "milestones.0.acceptance.1",
+    "source": "On the installed network, a read mail produces no case revision 2 over the following Intake runs.",
+    "text": "Im installierten Netz erzeugt eine gelesene Mail in den folgenden Intake-Läufen keine Fall-Revision 2."
+   },
+   {
+    "path": "milestones.0.proof",
+    "source": "Commits 11b6c4a1 and 65edc55d with focused tests that fail against the previous script. Installed Intake updated through networks updateMemberScript on October 8: 08:38:58 (5d3613d5, definition version 4) and, after review, 08:46:39 (30c13820, definition version 5).",
+    "text": "Commits 11b6c4a1 und 65edc55d mit gezielten Tests, die gegen das vorherige Skript fehlschlagen. Installierte Intake am 8. Oktober über networks updateMemberScript aktualisiert: 08:38:58 (5d3613d5, Definitionsversion 4) und nach dem Review 08:46:39 (30c13820, Definitionsversion 5)."
+   },
+   {
+    "path": "milestones.0.rollback",
+    "source": "Reactivate the previous Intake script version through the same member-script update.",
+    "text": "Die vorherige Intake-Skriptversion über dasselbe Member-Script-Update wieder aktivieren."
+   },
+   {
+    "path": "milestones.1.title",
+    "source": "One decision closes all open questions of a case",
+    "text": "Eine Entscheidung schließt alle offenen Fragen eines Falls"
+   },
+   {
+    "path": "milestones.1.goal",
+    "source": "An answered case cannot come back from an older revision.",
+    "text": "Ein beantworteter Fall kann nicht über eine ältere Revision zurückkommen."
+   },
+   {
+    "path": "milestones.1.steps.0",
+    "source": "In the choose transaction remove older undecided questions of the same case and gate and record them as choice-superseded in the trace (the schema allows a decided row only with its own routed result); they are never routed. A stale surface repeating the same answer is accepted without effect.",
+    "text": "In der Choose-Transaktion ältere unentschiedene Fragen desselben Falls und Gates entfernen und im Trace als choice-superseded festhalten (das Schema erlaubt eine entschiedene Zeile nur mit eigenem weitergeleitetem Ergebnis); sie werden nie weitergeleitet. Wiederholt eine veraltete Oberfläche dieselbe Antwort, wird sie ohne Wirkung angenommen."
+   },
+   {
+    "path": "milestones.1.steps.1",
+    "source": "Counts, the settlement check and the Decisions tab treat superseded questions as resolved.",
+    "text": "Zähler, Ruhezustandsprüfung und Tab Entscheidungen behandeln überholte Fragen als erledigt."
+   },
+   {
+    "path": "milestones.1.acceptance.0",
+    "source": "Engine test: two revisions waiting, answering the newer routes once and leaves no open question; answering an older revision leaves a newer one, whose input differs, open; a revision arriving after the decision is still asked.",
+    "text": "Engine-Test: Zwei Revisionen warten; die Beantwortung der neueren leitet einmal weiter und lässt keine offene Frage zurück; die Beantwortung einer älteren Revision lässt eine neuere mit abweichender Eingabe offen; eine nach der Entscheidung eintreffende Revision wird weiterhin gefragt."
+   },
+   {
+    "path": "milestones.1.acceptance.1",
+    "source": "Pods unit/component suite, root lint and typecheck pass; signed desktop build installed with profile backup; the currently waiting double question (Imunify, case 7ce6bc47) disappears after one answer.",
+    "text": "Pods-Unit-/Komponentensuite, Root-Lint und Typecheck grün; signierter Desktop-Build mit Profil-Backup installiert; die derzeit wartende Doppelfrage (Imunify, Fall 7ce6bc47) verschwindet nach einer Antwort."
+   },
+   {
+    "path": "milestones.1.rollback",
+    "source": "Reinstall the previous signed desktop build; it reads the same schema.",
+    "text": "Den vorherigen signierten Desktop-Build wieder installieren; er liest dasselbe Schema."
+   },
+   {
+    "path": "risks.0.title",
+    "source": "A content change is missed",
+    "text": "Eine Inhaltsänderung wird übersehen"
+   },
+   {
+    "path": "risks.0.mitigation",
+    "source": "The fingerprint covers every field the Intake passes on; a mail whose passed-on content is unchanged carries no new information for later steps.",
+    "text": "Der Fingerabdruck umfasst alle Felder, die die Intake weitergibt; eine Mail mit unverändertem weitergegebenem Inhalt bringt späteren Schritten keine neue Information."
+   },
+   {
+    "path": "risks.1.title",
+    "source": "A superseded question disappears from the choice table",
+    "text": "Eine überholte Frage verschwindet aus der Auswahltabelle"
+   },
+   {
+    "path": "risks.1.mitigation",
+    "source": "No schema change; the input event and a choice-superseded trace entry remain; settlement and counts are covered by tests.",
+    "text": "Keine Schemaänderung; das Eingangsereignis und ein choice-superseded-Trace-Eintrag bleiben erhalten; Ruhezustand und Zähler sind durch Tests abgedeckt."
+   },
+   {
+    "path": "verification.0",
+    "source": "Plan authoring only: the evidence above comes from read-only queries on a database copy and from the code; no product change is claimed in this draft.",
+    "text": "Nur Planerstellung: Die Belege oben stammen aus lesenden Abfragen auf einer Datenbankkopie und aus dem Code; dieser Entwurf behauptet keine Produktänderung."
+   },
+   {
+    "path": "handoff",
+    "source": "M1 is live on the installed mail network; its acceptance waits for the next Intake runs. M2 is implemented on PR 307 (head 65edc55d; Pods 1,343 tests, root lint and typecheck pass) and needs merge plus a signed desktop installation.",
+    "text": "M1 ist im installierten Mail-Netz aktiv; die Abnahme wartet auf die nächsten Intake-Läufe. M2 ist in PR 307 umgesetzt (Head 65edc55d; 1.343 Pods-Tests, Root-Lint und Typecheck grün) und braucht Merge und eine signierte Desktop-Installation."
+   },
+   {
+    "path": "changelog.0.text",
+    "source": "Revision 1 proposed skipping the IdP approval for owner-chosen newsletters.",
+    "text": "Revision 1 schlug vor, die IdP-Freigabe für selbst gewählte Newsletter zu überspringen."
+   },
+   {
+    "path": "changelog.1.text",
+    "source": "Revision 2 after the owner's correction: the problem is the repeated choice; root causes traced in the installed database and code.",
+    "text": "Revision 2 nach der Korrektur des Owners: Das Problem ist die wiederholte Auswahlfrage; Ursachen in der installierten Datenbank und im Code nachgewiesen."
+   },
+   {
+    "path": "changelog.3.text",
+    "source": "Revision 3 after implementation review: a decision closes only older revisions (newer revisions and sibling items keep their own question), superseded questions are removed with a trace entry instead of a schema change, and the Intake remembers seen content versions. Owner approval applies to revision 2; revision 3 narrows M2 within its stated non-goal.",
+    "text": "Revision 3 nach dem Implementierungs-Review: Eine Entscheidung schließt nur ältere Revisionen (neuere Revisionen und Geschwister-Einträge behalten ihre eigene Frage), überholte Fragen werden mit Trace-Eintrag entfernt statt per Schemaänderung markiert, und die Intake merkt sich gesehene Inhaltsversionen. Die Owner-Freigabe gilt für Revision 2; Revision 3 engt M2 innerhalb des genannten Nicht-Ziels ein."
+   },
+   {
+    "path": "changelog.2.text",
+    "source": "Recorded the owner's confirmation that the final IdP approval stays; scope unchanged.",
+    "text": "Bestätigung des Owners festgehalten, dass die finale IdP-Freigabe bleibt; Umfang unverändert."
+   }
+  ]
+ }
+}
