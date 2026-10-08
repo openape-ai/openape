@@ -55,6 +55,9 @@ import { existsSync } from 'node:fs'
 
 const fixture = !!process.env.OPENAPE_PODS_FIXTURE_DIR
 app.setName(fixture ? 'OpenApe Pods Fixture' : 'OpenApe Pods')
+// Chromium's mock keychain keeps safeStorage working with a fixed key and never
+// touches the login keychain, whose access prompts would wait for a person.
+if (fixture && process.env.NODE_ENV === 'test' && process.env.OPENAPE_PODS_TEST_REAL_KEYCHAIN !== '1') app.commandLine.appendSwitch('use-mock-keychain')
 app.enableSandbox()
 const profileBase = fixture ? fixtureDirectory(process.env.OPENAPE_PODS_FIXTURE_DIR) : localDirectory(join(app.getPath('appData'), 'OpenApe Pods'))
 const root = selectedProfile(profileBase)
