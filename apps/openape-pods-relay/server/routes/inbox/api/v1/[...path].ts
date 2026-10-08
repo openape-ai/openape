@@ -38,6 +38,7 @@ export default defineEventHandler(event => boundary(event, () => workspaceBounda
   if (path === 'items' && event.method === 'GET') return store.list(owner, { kind: String(query.kind ?? ''), archived: query.archived === '1', before: Number(query.before ?? 0) })
   // The device lets a client notice that another sign-in in this browser replaced its session (and maybe its account).
   if (path === 'changes' && event.method === 'GET') return { ...store.changes(owner, Number(query.after ?? 0) || 0), device: device.id }
+  if (path === 'badge' && event.method === 'GET') return { count: store.badgeCount(owner) }
   if (path === 'devices' && event.method === 'GET') return { current: device.id, devices: store.devices(owner) }
   if (path === 'logout' && event.method === 'POST') { await signOut(event); return { ok: true } }
   if (path === 'push/subscribe' && event.method === 'POST') { store.subscribe(owner, device.id, parseSubscription(centralObject(await workspaceBody(event, 4096)).subscription)); return { ok: true } }
