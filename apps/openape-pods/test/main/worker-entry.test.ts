@@ -83,6 +83,22 @@ afterAll(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
+it('holds the update fence across backup, blocks commands and resumes without editing saved schedules', async () => {
+  await send('suspend')
+  const store = new PodDatabase(root)
+  const before = store.db.prepare('SELECT * FROM schedules ORDER BY pod_id').all()
+  store.close()
+  await send({ id: 'update-freeze', command: { data: { type: 'prepareUpdate' } } })
+  expect(replies).toHaveBeenCalledWith({ id: 'update-freeze', state: true })
+  await send({ id: 'update-blocked', command: { type: 'pauseAll' } })
+  expect(replies).toHaveBeenCalledWith({ id: 'update-blocked', error: expect.stringContaining('maintained') })
+  await send({ id: 'update-release', command: { data: { type: 'releaseUpdate' } } })
+  expect(replies).toHaveBeenCalledWith({ id: 'update-release', state: true })
+  const after = new PodDatabase(root)
+  try { expect(after.db.prepare('SELECT * FROM schedules ORDER BY pod_id').all()).toEqual(before) }
+  finally { after.close() }
+})
+
 it('pauses scheduled intake while suspended and catches missed slots up once on resume', async () => {
   const podId = process.env.PODS_TEST_POD_ID!
   await send('suspend')

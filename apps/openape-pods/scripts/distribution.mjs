@@ -24,7 +24,7 @@ export function inventory() {
     for (const dependency of Object.keys(value.dependencies ?? {})) visit(dependency, file)
   }
   const parent = resolve('package.json')
-  for (const name of ['npm', 'vue', '@openai/codex-sdk', '@openai/codex', '@openape/apes', 'pdfjs-dist', 'html-to-text', 'fflate']) visit(name, parent)
+  for (const name of ['electron-updater', 'npm', 'vue', '@openai/codex-sdk', '@openai/codex', '@openape/apes', 'pdfjs-dist', 'html-to-text', 'fflate']) visit(name, parent)
   const apes = packageFile('@openape/apes', parent)
   const pty = packageFile('@lydell/node-pty', apes)
   visit(`@lydell/node-pty-${process.platform}-${process.arch}`, pty)
@@ -44,7 +44,7 @@ export function writeDistribution(releaseReady = false, review = null) {
   mkdirSync('dist/distribution', { recursive: true })
   if (review) { bom.licenseReview = review.gates.licenses; bom.supplementalNoticesHash = review.supplementalNoticesSha256 }
   writeFileSync('dist/distribution/bom.json', JSON.stringify(bom, null, 2)); writeFileSync('dist/distribution/THIRD-PARTY-NOTICES.txt', notices + (review ? `\n===== Reviewed native and supplemental notices =====\n${readFileSync('runtime-sources/licenses/REVIEWED-NOTICES.txt', 'utf8')}` : ''))
-  writeFileSync('dist/distribution/pods-distribution.json', JSON.stringify({ format: 'openape-pods-distribution', version, platform: 'darwin', architecture: process.arch, schema: { minimum: 1, current: schema }, releaseReady, bomHash: sha256('dist/distribution/bom.json') }, null, 2))
+  writeFileSync('dist/distribution/pods-distribution.json', JSON.stringify({ format: 'openape-pods-distribution', version, platform: 'darwin', architecture: process.arch, schema: { minimum: 1, current: schema }, releaseReady, ...(review ? { sourceRevision: review.sourceRevision, dependencyLockHash: review.dependencyLockHash } : {}), bomHash: sha256('dist/distribution/bom.json') }, null, 2))
   return bom
 }
 export function requireCleanBuild() {

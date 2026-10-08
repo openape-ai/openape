@@ -1,5 +1,14 @@
 # Active work
 
+## Pods Mac download, matching landing page and automatic updates — issue 1453
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1453. Approved proposal revision 2: https://report.openape.ai/d/01M4DBA7DBFCWAA21NSV1CMR1K?v=2; exact owner instruction: "Plan ist freigegeben, setz das um."
+- Worktree `openape-monorepo.worktrees/pods-auto-update-1453`, branch `feature/issue-1453-pods-auto-update`, base `e3fd9fa8d2ae384c37092884d7631c5f1d939f03`. The shared checkout and installed app are preserved.
+- Implemented: Claude Opus 5.5 landing page, release availability/download/feed, immutable verified artifacts with atomic promotion/retry, signed ZIP packaging and a guarded updater with worker fencing and paired profile/app backup. The actual CLI model identity is retained in the plan evidence.
+- Local checks: full lint/typecheck, both app builds, 1,354 Pods unit/component tests, 53 browser tests, 90 relay tests, documentation freshness and full `pnpm check:ci`. Actual Nuxt screenshots at 390/1440px and update component states were personally inspected. Fixtures use synthetic version 0.2.0; there is no public 0.2.0 release. The new updater's vulnerable runtime pin is replaced by 9.7.0 without adding an audit exception.
+- Release boundary: execution currently supports Darwin 25.6.0 / arm64 (verified macOS 26.6.2), not the entire macOS 14+ shell range. The exact-source distribution review and reviewed supplemental notices remain incomplete; the MacBook SSH route was unavailable.
+- Next: finish the isolated signed native lifecycle probe and PR review, then deploy the website using its dedicated read-only release directory and updated Traefik routes. Promote a public artifact only after the full product/device gates pass. Keep issue 1453 open until a real MacBook install and N-to-N+1 product update are accepted.
+
 ## Pods Inbox app badge — issue 1452
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1452. Worktree `openape-monorepo.worktrees/pods-inbox-badge`, branch `feature/issue-1452-pods-inbox-badge`, base `dfa801791e31ff2567e57d6d576c2af0e818d401`.

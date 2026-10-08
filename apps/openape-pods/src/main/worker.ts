@@ -266,6 +266,21 @@ export class FixtureWorker {
     for (const job of jobs) { await this.connections!.purgePodKeys(job.podId, job.keyIds); await this.dispatch({ data: { type: 'finishDeletion', podId: job.podId } }) }
   }
 
+  private updateFrozen = false
+
+  async prepareUpdate(): Promise<void> {
+    await this.setupReady
+    if (this.updateFrozen || this.pending.size || this.connections?.busy() || this.programs?.busy() || this.services.size) throw new Error('Finish active work and account setup before installing the update')
+    this.updateFrozen = true
+    try { await this.dispatch({ data: { type: 'prepareUpdate' } }) }
+    catch (error) { this.updateFrozen = false; throw error }
+  }
+
+  async releaseUpdate(): Promise<void> {
+    await this.dispatch({ data: { type: 'releaseUpdate' } })
+    this.updateFrozen = false
+  }
+
   async data(command: DataInternal): Promise<DataView> {
     const coordinatedDeletion = command.type === 'deletePod' && this.central?.executing
     if (this.central && !coordinatedDeletion && command.type !== 'status' && command.type !== 'backup') throw new Error('Central workspaces require coordinated backup and retention; local deletion and restore are disabled')
@@ -741,6 +756,7 @@ export class FixtureWorker {
   }
 
   private dispatch(command: { definitions: DefinitionCommand } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { networkGateCheck: { scope: ServiceScope, manifest: NetworkGateManifest, operation: string, grants?: { key: string, id: string }[] } } | { networks: NetworkCommand, ownerOperation?: boolean } | { central: { type: 'snapshot', owner: Owner, networkReads?: boolean } | { type: 'networkRead', owner: Owner, command: NetworkCommand } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+    if (this.updateFrozen && !('data' in command && ['prepareUpdate', 'releaseUpdate'].includes(command.data.type))) return Promise.reject(new Error('Pods is preparing an update; retry after restart'))
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()
