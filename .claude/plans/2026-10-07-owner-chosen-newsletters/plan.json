@@ -4,8 +4,8 @@
  "project": "OpenApe Pods",
  "owner": "Patrick Hofmann",
  "date": "2026-10-08",
- "revision": 2,
- "status": "draft",
+ "revision": 3,
+ "status": "active",
  "title": "Mail network: decide each mail only once",
  "goal": "After the owner answers \"is this a newsletter?\" for a mail, the same question never comes back for that mail unless its content really changed.",
  "summary": "The Intake treats every Outlook metadata change (read, flag, category) as a new mail version, so an unchanged mail runs through the network again and reaches the same choice twice. The Decisions tab then shows only the newest version; answering it leaves the older question open, and it reappears hours later. Fix the Intake to version mails by content, and let one owner decision close all open questions of the same mail.",
@@ -52,34 +52,36 @@
  "milestones": [
   {
    "id": "M1",
-   "status": "planned",
+   "status": "active",
    "title": "Version mails by content in the Intake",
    "goal": "A read, flagged or recategorised mail produces no new revision.",
    "steps": [
     "In examples/network-mail-intake.mjs compute the version as a prefixed fingerprint of the content fields; use it for the checkpoint comparison, the emit key, sourceVersion and the evidence record.",
     "Treat a checkpoint entry with the old changeKey format and the same provider id as already seen and store the content version, so the update emits nothing for the six sampled mails.",
+    "Keep a bounded list of up to 400 digests of seen content versions in the checkpoint, so a mail that leaves the three-message sample and returns is not emitted again (its knownContact flag can differ, which the network refuses for an existing source identity).",
     "After approval, apply the same change to the installed Intake member through networks updateMemberScript and verify the next Intake runs."
    ],
    "acceptance": [
     "Focused test in the existing Intake suite: a changeKey-only change emits nothing; a changed body emits one new version; a legacy checkpoint emits nothing.",
     "On the installed network, a read mail produces no case revision 2 over the following Intake runs."
    ],
+   "proof": "Commits 11b6c4a1 and 65edc55d with focused tests that fail against the previous script. Installed Intake updated through networks updateMemberScript on October 8: 08:38:58 (5d3613d5, definition version 4) and, after review, 08:46:39 (30c13820, definition version 5).",
    "rollback": "Reactivate the previous Intake script version through the same member-script update."
   },
   {
    "id": "M2",
-   "status": "planned",
+   "status": "active",
    "title": "One decision closes all open questions of a case",
    "goal": "An answered case cannot come back from an older revision.",
    "steps": [
-    "In the choose transaction mark older undecided questions of the same case and gate as superseded by the decided event, with a trace entry; they are never routed.",
+    "In the choose transaction remove older undecided questions of the same case and gate and record them as choice-superseded in the trace (the schema allows a decided row only with its own routed result); they are never routed. A stale surface repeating the same answer is accepted without effect.",
     "Counts, the settlement check and the Decisions tab treat superseded questions as resolved."
    ],
    "acceptance": [
-    "Engine test: two revisions waiting, answering the newer routes once and leaves no open question; answering the older first behaves the same; a revision arriving after the decision is still asked.",
+    "Engine test: two revisions waiting, answering the newer routes once and leaves no open question; answering an older revision leaves a newer one, whose input differs, open; a revision arriving after the decision is still asked.",
     "Pods unit/component suite, root lint and typecheck pass; signed desktop build installed with profile backup; the currently waiting double question (Imunify, case 7ce6bc47) disappears after one answer."
    ],
-   "rollback": "Reinstall the previous signed desktop build; superseded markers are additive and ignored by the old version."
+   "rollback": "Reinstall the previous signed desktop build; it reads the same schema."
   }
  ],
  "risks": [
@@ -88,14 +90,14 @@
    "mitigation": "The fingerprint covers every field the Intake passes on; a mail whose passed-on content is unchanged carries no new information for later steps."
   },
   {
-   "title": "Database schema change for the superseded marker",
-   "mitigation": "Additive column only; backup before install; settlement and counts are covered by tests."
+   "title": "A superseded question disappears from the choice table",
+   "mitigation": "No schema change; the input event and a choice-superseded trace entry remain; settlement and counts are covered by tests."
   }
  ],
  "verification": [
   "Plan authoring only: the evidence above comes from read-only queries on a database copy and from the code; no product change is claimed in this draft."
  ],
- "handoff": "Awaiting owner approval of revision 2. Branch feature/issue-1451-owner-chosen-newsletters (PR 307) holds only the plan; M1 starts after approval.",
+ "handoff": "M1 is live on the installed mail network; its acceptance waits for the next Intake runs. M2 is implemented on PR 307 (head 65edc55d; Pods 1,343 tests, root lint and typecheck pass) and needs merge plus a signed desktop installation.",
  "changelog": [
   {
    "date": "2026-10-07",
@@ -108,6 +110,10 @@
   {
    "date": "2026-10-08",
    "text": "Recorded the owner's confirmation that the final IdP approval stays; scope unchanged."
+  },
+  {
+   "date": "2026-10-08",
+   "text": "Revision 3 after implementation review: a decision closes only older revisions (newer revisions and sibling items keep their own question), superseded questions are removed with a trace entry instead of a schema change, and the Intake remembers seen content versions. Owner approval applies to revision 2; revision 3 narrows M2 within its stated non-goal."
   }
  ],
  "links": [
@@ -120,6 +126,17 @@
    "url": "https://repos.openape.ai/patrick/monorepo/pulls/307"
   }
  ],
+ "approval": {
+  "by": "Patrick Hofmann",
+  "date": "2026-10-08",
+  "reference": "Go",
+  "target": {
+   "revision": 2,
+   "url": "https://report.openape.ai/d/01M4BXR6KG3WD5M1GM6CPRQ9N7",
+   "version": 3
+  },
+  "scope": "Plan revision 2 including the live Intake update after M1."
+ },
  "translations": {
   "defaultLanguage": "de",
   "entries": [
@@ -245,6 +262,11 @@
    },
    {
     "path": "milestones.0.steps.2",
+    "source": "Keep a bounded list of up to 400 digests of seen content versions in the checkpoint, so a mail that leaves the three-message sample and returns is not emitted again (its knownContact flag can differ, which the network refuses for an existing source identity).",
+    "text": "Im Checkpoint eine begrenzte Liste von bis zu 400 Digests gesehener Inhaltsversionen führen, damit eine Mail, die die Dreier-Stichprobe verlässt und zurückkehrt, nicht erneut ausgegeben wird (ihr knownContact-Wert kann abweichen, was das Netz für eine bestehende Quell-Identität ablehnt)."
+   },
+   {
+    "path": "milestones.0.steps.3",
     "source": "After approval, apply the same change to the installed Intake member through networks updateMemberScript and verify the next Intake runs.",
     "text": "Nach Freigabe dieselbe Änderung über networks updateMemberScript auf das installierte Intake-Mitglied anwenden und die nächsten Intake-Läufe prüfen."
    },
@@ -257,6 +279,11 @@
     "path": "milestones.0.acceptance.1",
     "source": "On the installed network, a read mail produces no case revision 2 over the following Intake runs.",
     "text": "Im installierten Netz erzeugt eine gelesene Mail in den folgenden Intake-Läufen keine Fall-Revision 2."
+   },
+   {
+    "path": "milestones.0.proof",
+    "source": "Commits 11b6c4a1 and 65edc55d with focused tests that fail against the previous script. Installed Intake updated through networks updateMemberScript on October 8: 08:38:58 (5d3613d5, definition version 4) and, after review, 08:46:39 (30c13820, definition version 5).",
+    "text": "Commits 11b6c4a1 und 65edc55d mit gezielten Tests, die gegen das vorherige Skript fehlschlagen. Installierte Intake am 8. Oktober über networks updateMemberScript aktualisiert: 08:38:58 (5d3613d5, Definitionsversion 4) und nach dem Review 08:46:39 (30c13820, Definitionsversion 5)."
    },
    {
     "path": "milestones.0.rollback",
@@ -275,8 +302,8 @@
    },
    {
     "path": "milestones.1.steps.0",
-    "source": "In the choose transaction mark older undecided questions of the same case and gate as superseded by the decided event, with a trace entry; they are never routed.",
-    "text": "In der Choose-Transaktion ältere unentschiedene Fragen desselben Falls und Gates als durch das entschiedene Ereignis überholt markieren, mit Trace-Eintrag; sie werden nie weitergeleitet."
+    "source": "In the choose transaction remove older undecided questions of the same case and gate and record them as choice-superseded in the trace (the schema allows a decided row only with its own routed result); they are never routed. A stale surface repeating the same answer is accepted without effect.",
+    "text": "In der Choose-Transaktion ältere unentschiedene Fragen desselben Falls und Gates entfernen und im Trace als choice-superseded festhalten (das Schema erlaubt eine entschiedene Zeile nur mit eigenem weitergeleitetem Ergebnis); sie werden nie weitergeleitet. Wiederholt eine veraltete Oberfläche dieselbe Antwort, wird sie ohne Wirkung angenommen."
    },
    {
     "path": "milestones.1.steps.1",
@@ -285,8 +312,8 @@
    },
    {
     "path": "milestones.1.acceptance.0",
-    "source": "Engine test: two revisions waiting, answering the newer routes once and leaves no open question; answering the older first behaves the same; a revision arriving after the decision is still asked.",
-    "text": "Engine-Test: Zwei Revisionen warten; die Beantwortung der neueren leitet einmal weiter und lässt keine offene Frage zurück; die ältere zuerst zu beantworten verhält sich gleich; eine nach der Entscheidung eintreffende Revision wird weiterhin gefragt."
+    "source": "Engine test: two revisions waiting, answering the newer routes once and leaves no open question; answering an older revision leaves a newer one, whose input differs, open; a revision arriving after the decision is still asked.",
+    "text": "Engine-Test: Zwei Revisionen warten; die Beantwortung der neueren leitet einmal weiter und lässt keine offene Frage zurück; die Beantwortung einer älteren Revision lässt eine neuere mit abweichender Eingabe offen; eine nach der Entscheidung eintreffende Revision wird weiterhin gefragt."
    },
    {
     "path": "milestones.1.acceptance.1",
@@ -295,8 +322,8 @@
    },
    {
     "path": "milestones.1.rollback",
-    "source": "Reinstall the previous signed desktop build; superseded markers are additive and ignored by the old version.",
-    "text": "Den vorherigen signierten Desktop-Build wieder installieren; die Überholt-Markierungen sind additiv und werden von der alten Version ignoriert."
+    "source": "Reinstall the previous signed desktop build; it reads the same schema.",
+    "text": "Den vorherigen signierten Desktop-Build wieder installieren; er liest dasselbe Schema."
    },
    {
     "path": "risks.0.title",
@@ -310,13 +337,13 @@
    },
    {
     "path": "risks.1.title",
-    "source": "Database schema change for the superseded marker",
-    "text": "Datenbank-Schemaänderung für die Überholt-Markierung"
+    "source": "A superseded question disappears from the choice table",
+    "text": "Eine überholte Frage verschwindet aus der Auswahltabelle"
    },
    {
     "path": "risks.1.mitigation",
-    "source": "Additive column only; backup before install; settlement and counts are covered by tests.",
-    "text": "Nur eine zusätzliche Spalte; Backup vor der Installation; Ruhezustand und Zähler sind durch Tests abgedeckt."
+    "source": "No schema change; the input event and a choice-superseded trace entry remain; settlement and counts are covered by tests.",
+    "text": "Keine Schemaänderung; das Eingangsereignis und ein choice-superseded-Trace-Eintrag bleiben erhalten; Ruhezustand und Zähler sind durch Tests abgedeckt."
    },
    {
     "path": "verification.0",
@@ -325,8 +352,8 @@
    },
    {
     "path": "handoff",
-    "source": "Awaiting owner approval of revision 2. Branch feature/issue-1451-owner-chosen-newsletters (PR 307) holds only the plan; M1 starts after approval.",
-    "text": "Wartet auf Owner-Freigabe von Revision 2. Branch feature/issue-1451-owner-chosen-newsletters (PR 307) enthält nur den Plan; M1 beginnt nach Freigabe."
+    "source": "M1 is live on the installed mail network; its acceptance waits for the next Intake runs. M2 is implemented on PR 307 (head 65edc55d; Pods 1,343 tests, root lint and typecheck pass) and needs merge plus a signed desktop installation.",
+    "text": "M1 ist im installierten Mail-Netz aktiv; die Abnahme wartet auf die nächsten Intake-Läufe. M2 ist in PR 307 umgesetzt (Head 65edc55d; 1.343 Pods-Tests, Root-Lint und Typecheck grün) und braucht Merge und eine signierte Desktop-Installation."
    },
    {
     "path": "changelog.0.text",
@@ -337,6 +364,11 @@
     "path": "changelog.1.text",
     "source": "Revision 2 after the owner's correction: the problem is the repeated choice; root causes traced in the installed database and code.",
     "text": "Revision 2 nach der Korrektur des Owners: Das Problem ist die wiederholte Auswahlfrage; Ursachen in der installierten Datenbank und im Code nachgewiesen."
+   },
+   {
+    "path": "changelog.3.text",
+    "source": "Revision 3 after implementation review: a decision closes only older revisions (newer revisions and sibling items keep their own question), superseded questions are removed with a trace entry instead of a schema change, and the Intake remembers seen content versions. Owner approval applies to revision 2; revision 3 narrows M2 within its stated non-goal.",
+    "text": "Revision 3 nach dem Implementierungs-Review: Eine Entscheidung schließt nur ältere Revisionen (neuere Revisionen und Geschwister-Einträge behalten ihre eigene Frage), überholte Fragen werden mit Trace-Eintrag entfernt statt per Schemaänderung markiert, und die Intake merkt sich gesehene Inhaltsversionen. Die Owner-Freigabe gilt für Revision 2; Revision 3 engt M2 innerhalb des genannten Nicht-Ziels ein."
    },
    {
     "path": "changelog.2.text",
