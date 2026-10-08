@@ -122,7 +122,7 @@ it('shows a blocked schedule queue in the sidebar and the Pod overview', async (
 it('tells the owner why this desktop is offline and that schedules are paused', async () => {
   const fixture = centralFixture()
   const since = Date.now() - 10 * 60000
-  const status: CentralStatus = { state: 'offline', error: 'worker snapshot: Worker response timed out; reload state before retrying', since, lastOnlineAt: since, gateUntil: 0, lastTickAt: since, tickingSince: null, tickPhase: null, tickTimeout: null, format: 2, runtimeId: fixture.host.id, lastPublication: null }
+  const status: CentralStatus = { state: 'offline', error: 'worker snapshot: Worker response timed out; reload state before retrying', since, lastOnlineAt: since, gateUntil: 0, lastTickAt: since, tickingSince: null, tickPhase: null, tickTimeout: null, format: 2, runtimeId: fixture.host.id, lastPublication: null, uncertain: [] }
   wrapper = mount(CentralWorkspace, { props: { client: fixture.client, desktop: true, desktopStatus: status } })
   await flushPromises()
   expect(wrapper.find('[role="alert"]').text()).toMatch(/offline since .*Scheduled runs are paused.*worker snapshot: Worker response timed out/)
@@ -148,7 +148,7 @@ it('counts consecutive failures before calling the workspace unreachable', () =>
 it('warns when a scheduler step timed out although the desktop is online', async () => {
   const fixture = centralFixture()
   const at = Date.now() - 60000
-  const status: CentralStatus = { state: 'online', error: null, since: at, lastOnlineAt: at, gateUntil: at, lastTickAt: at, tickingSince: null, tickPhase: null, tickTimeout: { phase: 'storage inspection', at }, format: 2, runtimeId: fixture.host.id, lastPublication: null }
+  const status: CentralStatus = { state: 'online', error: null, since: at, lastOnlineAt: at, gateUntil: at, lastTickAt: at, tickingSince: null, tickPhase: null, tickTimeout: { phase: 'storage inspection', at }, format: 2, runtimeId: fixture.host.id, lastPublication: null, uncertain: [] }
   wrapper = mount(CentralWorkspace, { props: { client: fixture.client, desktop: true, desktopStatus: status } })
   await flushPromises()
   expect(wrapper.find('[role="alert"]').text()).toMatch(/storage inspection.*did not finish/)

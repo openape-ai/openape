@@ -1,5 +1,13 @@
 # Active work
 
+## Delta Mind mail network live: unblock, cursor, real archiving — issue 1454
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1454; approved plan revision 1 (owner: "Leg los mit dem Plan", October 8): https://report.openape.ai/d/01M4EDTC4JT3RPZRNJMT191EZM?v=2.
+- Worktree `openape-monorepo.worktrees/delta-mail-live`, branch `feature/issue-1454-delta-mail-live`, base `d65fa479`.
+- Cause of the October 8 stall (12:25 CEST): the relay marks a claimed command `unknown` when the desktop reconnects; `CentralController.connect` then refused every reconnect, and because worker scheduling follows the central lease (approved online-only design), all local schedules stopped. MCP could not name the command (`pod_offline`).
+- M0 change: `runtime.central.uncertain` (and inventory `desktop.uncertain`) lists unknown commands with `startedLocally` from `central/executing.json`. A command that never started locally is settled automatically as failed ("Not executed … Submit it again"). A started one stays blocking until MCP `workspace {type:reconcile,id,applied,evidence}` records the owner-confirmed outcome as its completion; nothing executes again. The relay accepts a completion while other unknown commands still wait.
+- Next: Pods unit suite, PR, relay deploy first (contract change), signed desktop install with paired backup, then reconcile the live stall and continue with M1.
+
 ## Pods Mac download, matching landing page and automatic updates — issue 1453
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1453; PR: https://repos.openape.ai/patrick/monorepo/pulls/310. Approved proposal revision 2: https://report.openape.ai/d/01M4DBA7DBFCWAA21NSV1CMR1K?v=2; exact owner instruction: "Plan ist freigegeben, setz das um."
