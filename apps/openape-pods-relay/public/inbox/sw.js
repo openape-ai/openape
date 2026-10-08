@@ -1,7 +1,7 @@
 // Pods Inbox service worker (plan issue 1446, M4).
 // Caches only the public app shell and versioned static assets; private API responses never enter a cache.
 // A new version waits until the page asks it to take over, so an update never reloads during a decision.
-const version = 'm4-1'
+const version = 'badge-1'
 const cacheName = `pods-inbox-${version}`
 const shell = '/inbox/'
 const precache = [shell, '/inbox/manifest.webmanifest', '/inbox/icon-180.png', '/inbox/icon-192.png', '/inbox/icon-512.png']
@@ -57,6 +57,20 @@ globalThis.addEventListener('fetch', (event) => {
   else if (precache.includes(url.pathname) && url.pathname !== shell) event.respondWith(caches.match(url.pathname).then(cached => cached ?? fetch(event.request)))
 })
 
+async function refreshBadge() {
+  if (typeof navigator.setAppBadge !== 'function') return
+  try {
+    const response = await fetch('/inbox/api/v1/badge', { credentials: 'same-origin', cache: 'no-store' })
+    if (response.status === 401) { await navigator.clearAppBadge(); return }
+    if (!response.ok) throw new Error(`Badge request failed: ${response.status}`)
+    const { count } = await response.json()
+    if (!Number.isSafeInteger(count) || count < 0) throw new Error('Invalid inbox badge count')
+    if (count === 0) await navigator.clearAppBadge()
+    else await navigator.setAppBadge(count)
+  }
+  catch (error) { console.error('Inbox badge refresh failed', error) }
+}
+
 // iOS revokes push permission when a push shows nothing, so every push displays a notification (M5 adds item routing).
 globalThis.addEventListener('push', (event) => {
   let message = {}
@@ -64,7 +78,10 @@ globalThis.addEventListener('push', (event) => {
   catch { message = {} }
   const notification = message.notification || {}
   const url = notification.navigate || notification.data?.url || shell
-  event.waitUntil(globalThis.registration.showNotification(notification.title || 'Pods', { body: notification.body || '', tag: notification.tag, icon: '/inbox/icon-192.png', data: { url } }))
+  event.waitUntil(Promise.all([
+    globalThis.registration.showNotification(notification.title || 'Pods', { body: notification.body || '', tag: notification.tag, icon: '/inbox/icon-192.png', data: { url } }),
+    refreshBadge(),
+  ]))
 })
 
 globalThis.addEventListener('notificationclick', (event) => {

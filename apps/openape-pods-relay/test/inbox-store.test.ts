@@ -115,3 +115,23 @@ it('keeps a deleted open decision deleted beyond tombstone purge and resolves de
   advance(inboxLimits.tombstoneMs + 1)
   expect(store.retain().purged).toBeGreaterThan(0)
 })
+
+it('counts all pending attention per owner, excluding archived, deleted and resolved items', () => {
+  const { store, advance } = setup()
+  for (let index = 0; index < 55; index++) store.publish(owner, runtime, message(`badge-${index}`))
+  store.publish(other, runtime, message('private'))
+  store.syncDecisions(owner, runtime, [decision('one'), decision('two')])
+  expect(store.badgeCount(owner)).toBe(57)
+  expect(store.badgeCount(other)).toBe(1)
+  const messages = store.list(owner, { kind: 'message' }).items
+  store.mark(owner, messages[0]!.id, { read: true })
+  store.mark(owner, messages[1]!.id, { archived: true })
+  store.mark(owner, messages[2]!.id, { deleted: true })
+  store.mark(owner, store.list(owner, { kind: 'decision' }).items[0]!.id, { read: true })
+  expect(store.badgeCount(owner)).toBe(54)
+  store.syncDecisions(owner, runtime, [decision('one')])
+  expect(store.badgeCount(owner)).toBe(53)
+  advance(inboxLimits.retentionMs + 1)
+  store.retain()
+  expect(store.badgeCount(owner)).toBe(1)
+})
