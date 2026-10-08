@@ -137,5 +137,6 @@ it('resolves the archive adapter only to the granted read and move operations', 
   assertArchiveMove(move)
   expect((await resolveCommand(adapter, ['o365-cli', ...move])).detail).toMatchObject({ action: 'move' })
   expect((await resolveCommand(adapter, ['o365-cli', 'workflow', 'read', '--account', mailbox, '--message', mail.id])).detail).toMatchObject({ action: 'read' })
+  expect((await resolveCommand(adapter, ['o365-cli', 'auth', 'login', '--account', mailbox])).detail).toMatchObject({ action: 'login' })
   await expect(resolveCommand(adapter, ['o365-cli', 'mail', 'trash', '--account', mailbox, '--message', mail.id])).rejects.toThrow()
 })
