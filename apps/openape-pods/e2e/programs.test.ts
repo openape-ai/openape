@@ -1,4 +1,5 @@
 import { fixtureShellIdentity } from './fixtures/shell-identity'
+import { failOnKeychainDialog } from './fixtures/keychain'
 import { executeHttp } from '../src/main/programs/http-service'
 import { _electron as electron } from 'playwright'
 import { fixtureDirectory } from '../src/main/fixture'
@@ -161,16 +162,17 @@ it('packaged program UI: exposes the external terminal and reuses application se
   store.db.prepare('INSERT INTO resources VALUES(?,?,1,\'tool\',\'ready\',?,?)').run(randomUUID(), f.podId, 'https://api.example.com', JSON.stringify({ type: 'http', origin: 'https://api.example.com', methods: ['GET', 'POST'], capability: 'tool.http_fixture.request', authority: f.assignment.grants[0]!.authority }))
   store.close()
   const app = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: homedir(), TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: f.root, NODE_ENV: 'test' } })
+  failOnKeychainDialog(app)
   console.info('Program UI: fixture launched')
   try {
     const records = await Promise.all([f.assignment.stateId, f.assignment.grants[0]!.authority.identity.connectionId].map(async id => ({ path: join(f.root, 'credentials', `${id}.encrypted`), value: await readFile(join(f.root, 'credentials', `${id}.encrypted`), 'utf8') })))
     await app.evaluate(({ safeStorage }, records) => {
       const { writeFileSync } = process.getBuiltinModule('node:fs') as typeof import('node:fs')
-      if (!safeStorage.isEncryptionAvailable()) throw new Error('macOS credential storage unavailable for program UI fixture')
+      if (!safeStorage.isEncryptionAvailable()) throw new Error('Credential storage unavailable for program UI fixture')
       for (const record of records) writeFileSync(record.path, safeStorage.encryptString(record.value), { mode: 0o600 })
     }, records)
     await shellIdentity.encrypt(app)
-    console.info('Program UI: synthetic records encrypted using macOS safeStorage')
+    console.info('Program UI: synthetic records encrypted using safeStorage with the mock keychain')
     const page = await app.firstWindow(); page.setDefaultTimeout(7000)
     await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
     console.info('Program UI: worker ready')
