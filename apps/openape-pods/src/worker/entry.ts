@@ -40,6 +40,7 @@ import { SharingService } from './sharing/service'
 import { parseSharingCommand } from '../contracts/sharing'
 import { DependencyStore } from './dependencies/store'
 import { programRequest } from '../main/programs/invoke'
+import { archiveRefusal } from '../contracts/network-capabilities'
 import { podDirectories } from '../runtime/environment'
 import { ProgramControl } from './resources/programs'
 import type { ProgramInternal } from './resources/programs'
@@ -109,7 +110,8 @@ const runServices: RunServices = { gate: async (body, signal, scope) => mailBrid
   if (typeof value !== 'string') throw new Error('Invalid credential broker response')
   return value
 }, mailMove: async (body, signal, scope) => {
-  programRequest(registry.list(scope.podId), scope.podId, scope.capabilities, body)
+  try { programRequest(registry.list(scope.podId), scope.podId, scope.capabilities, body); signal.throwIfAborted() }
+  catch (error) { throw archiveRefusal(error) }
   return mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'mailMove')
 }, tool: async (body, signal, scope) => {
   if (body && typeof body === 'object' && 'sshInventory' in body) {
