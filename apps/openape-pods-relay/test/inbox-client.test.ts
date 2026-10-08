@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
+import { watchInboxBadge } from '../app/inbox/badge'
 import { createInbox } from '../app/inbox/client'
 import { InboxStore, parsePublication } from '../server/utils/inbox-store'
 
@@ -235,4 +237,76 @@ it('sends a tapped answer only after the undo window, with the version that was 
   // The desktop checks the digest the owner saw, so a change during the window is refused instead of applied.
   expect(server.decide).toHaveLength(1)
   expect(server.decide[0]).toMatchObject({ option: 'yes', digest })
+})
+
+it('badges open decisions plus unread messages and clears on resolution or sign-out', async () => {
+  const { inbox, store, server, message, decision } = setup()
+  const navigator = { setAppBadge: vi.fn(async (_count: number) => {}), clearAppBadge: vi.fn(async () => {}) }
+  cleanup.push(watchInboxBadge(inbox, navigator))
+  const pending = decision(alice)
+  const unread = message(alice, 'unread')
+  const archived = message(alice, 'archived')
+  store.mark(alice, archived, { archived: true })
+  message(bob, 'private')
+  await inbox.start()
+  await nextTick()
+  expect(navigator.setAppBadge).toHaveBeenLastCalledWith(2)
+  expect(inbox.badgeCount.value).toBe(store.badgeCount(alice))
+
+  await inbox.mark(pending, { read: true })
+  await nextTick()
+  expect(inbox.badgeCount.value).toBe(2)
+  await inbox.mark(unread, { read: true })
+  await nextTick()
+  expect(navigator.setAppBadge).toHaveBeenLastCalledWith(1)
+  await inbox.mark(unread, { read: false })
+  await nextTick()
+  expect(navigator.setAppBadge).toHaveBeenLastCalledWith(2)
+  await inbox.mark(unread, { archived: true })
+  await nextTick()
+  expect(navigator.setAppBadge).toHaveBeenLastCalledWith(1)
+  store.syncDecisions(alice, runtime, [])
+  await inbox.sync()
+  await nextTick()
+  expect(inbox.badgeCount.value).toBe(store.badgeCount(alice))
+  expect(navigator.clearAppBadge).toHaveBeenCalledTimes(1)
+
+  message(alice, 'new')
+  await inbox.sync()
+  await nextTick()
+  server.revoked = true
+  await inbox.sync()
+  await nextTick()
+  expect(navigator.clearAppBadge).toHaveBeenCalledTimes(2)
+})
+
+it('waits for complete synchronization and never overwrites a badge from an offline cache', async () => {
+  const { inbox, server, message } = setup()
+  const navigator = { setAppBadge: vi.fn(async (_count: number) => {}), clearAppBadge: vi.fn(async () => {}) }
+  cleanup.push(watchInboxBadge(inbox, navigator))
+  for (let index = 0; index < 55; index++) message(alice, `message-${index}`)
+  await inbox.start()
+  await nextTick()
+  expect(navigator.setAppBadge.mock.calls).toEqual([[55]])
+  expect(navigator.clearAppBadge).not.toHaveBeenCalled()
+  server.offline = true
+  await inbox.sync()
+  await nextTick()
+  expect(navigator.setAppBadge.mock.calls).toEqual([[55]])
+})
+
+it('keeps inbox actions usable when badging is unsupported or rejected', async () => {
+  const { inbox, message } = setup()
+  cleanup.push(watchInboxBadge(inbox, {}))
+  const error = new Error('Not allowed')
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+  cleanup.push(() => log.mockRestore())
+  cleanup.push(watchInboxBadge(inbox, { setAppBadge: async () => { throw error }, clearAppBadge: async () => {} }))
+  const id = message(alice, 'unread')
+  await inbox.start()
+  await nextTick()
+  expect(log).toHaveBeenCalledWith('Inbox badge update failed', error)
+  await inbox.mark(id, { read: true })
+  expect(inbox.unread.value).toBe(0)
+  expect(inbox.state.phase).toBe('ready')
 })

@@ -233,6 +233,13 @@ export class InboxStore {
     })
   }
 
+  badgeCount(owner: Owner): number {
+    const row = this.db.prepare(`SELECT count(*) AS count FROM items
+      WHERE owner=? AND deleted IS NULL AND archived IS NULL
+      AND ((kind='decision' AND state='open') OR (kind='message' AND read IS NULL))`).get(key(owner))
+    return Number(row!.count)
+  }
+
   claimOutbox(limit = 20): OutboxEntry[] {
     return this.db.prepare('SELECT id,owner,item_id AS itemId,attempts,created FROM outbox WHERE state=\'pending\' AND next<=? ORDER BY next LIMIT ?').all(this.now(), limit) as unknown as OutboxEntry[]
   }
