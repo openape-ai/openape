@@ -47,3 +47,10 @@ it('leaves development builds disabled', async () => {
   expect(await controller.check()).toMatchObject({ state: 'disabled' })
   expect(await controller.install()).toMatchObject({ state: 'disabled' })
 })
+it('requires restart after a native handoff error without resuming potentially staged work', async () => {
+  const { operations, controller } = fixture(); await controller.check(); await controller.install()
+  controller.fail(new Error('Native installation failed'))
+  expect(await controller.check()).toMatchObject({ state: 'restart-required', error: 'Native installation failed' })
+  await controller.install()
+  expect(operations.install).toHaveBeenCalledOnce(); expect(operations.resume).not.toHaveBeenCalled()
+})

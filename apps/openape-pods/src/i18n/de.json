@@ -4365,5 +4365,6 @@
   "Database is busy; retry the update later": "Die Datenbank ist beschäftigt; versuche das Update später erneut",
   "Update failed": "Update fehlgeschlagen",
   "Application backup verification failed": "Die Prüfung der App-Sicherung ist fehlgeschlagen",
-  "Updates are checked automatically every six hours. Installation requires an idle workspace and creates a backup before restarting.": "Updates werden automatisch alle sechs Stunden geprüft. Die Installation erfordert einen ruhenden Workspace und erstellt vor dem Neustart eine Sicherung."
+  "Updates are checked automatically every six hours. Installation requires an idle workspace and creates a backup before restarting.": "Updates werden automatisch alle sechs Stunden geprüft. Die Installation erfordert einen ruhenden Workspace und erstellt vor dem Neustart eine Sicherung.",
+  "Quit and reopen Pods before trying again. Your workspace stays paused until restart because native installation has already started.": "Beende und öffne Pods erneut, bevor du es noch einmal versuchst. Dein Workspace bleibt bis zum Neustart angehalten, weil die native Installation bereits begonnen hat."
 }

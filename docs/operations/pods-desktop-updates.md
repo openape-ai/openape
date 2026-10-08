@@ -90,6 +90,11 @@ profile, encrypted secrets and runtime identity. Exercise offline, corrupt,
 busy-worker, external-MCP and backup-failure refusals. An isolated native fixture
 proves the updater lifecycle only; it does not replace the full product gates.
 
+Backups use Electron's original filesystem API so `app.asar` is copied as its
+exact signed archive bytes. A failure before native handoff releases the worker
+fence. After native handoff, a failure requires quitting and reopening Pods;
+the workspace stays paused to prevent writes during a possible replacement.
+
 Install a quarantined DMG on the target MacBook with a fresh profile, pass
 Gatekeeper and sign in independently. Confirm the actual OS/CPU matrix, provider
 refresh and physical sleep/wake. Do not duplicate the existing Mac's identity or
