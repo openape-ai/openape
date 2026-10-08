@@ -3,7 +3,9 @@ import { randomUUID } from 'node:crypto'
 import { RunCancellation, unresolvedOperation } from '../recovery/policy'
 import type { RecoveryFailure } from '../recovery/policy'
 import { programRequest } from '../../main/programs/invoke'
-import { supportedNetworkCapability } from '../../contracts/network-capabilities'
+import { supportedNetworkCapability, networkArchiveMember } from '../../contracts/network-capabilities'
+import { archiveApproved, parseArchiveTarget } from '../scheduling/network-archive'
+import type { NetworkGateCoverage } from '../../contracts/network-gates'
 import { boundedStep } from '../scheduling/tick-step'
 import type { NetworkGates, NetworkGateStep, NetworkGateService } from '../scheduling/network-gates'
 import { AuthorityError, InfrastructureError, retryInfrastructure } from '../../contracts/infrastructure'
@@ -79,6 +81,7 @@ export interface RunServices {
   credential?: (alias: string, signal: AbortSignal, scope: RunServiceScope) => Promise<string>
   provider?: AgentGatewayServices['provider']
   tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
+  mailMove?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
 }
 
 function archiveTarget(payload: unknown): { operation: 'process', target: unknown } {
@@ -226,6 +229,7 @@ export class RunDispatcher {
     let networkMailReads = 0
     let networkAgentCalls = 0
     let notifications = 0
+    let archiveCalls = 0
     let infrastructureFailure: RecoveryFailure | undefined
     const graph = graphRun(this.store, id); let delivered: DeliveredItem[] = []; const emits: (GraphEmit & { channel: string })[] = []
     const settle = (completed: boolean) => { if (graph) settleItems(this.store, graph, completed && this.runs.get(id).state === 'completed', delivered, emits, Date.now()) }
@@ -383,6 +387,33 @@ export class RunDispatcher {
               networkMailReads++
               appendEvent('network-mail-read', { operation: request.read.operation, count: networkMailReads })
               return invokeTool(payload, operationSignal)
+            }
+            if (operation === 'network.archive') {
+              const { row, definition, member } = network.invocations.events.authority(network.authority)
+              if (!networkArchiveMember(definition, member, manifest.capabilities)) throw new Error('Only a member behind an approval gate with one assigned mail application can archive')
+              if (!this.services?.mailMove || !this.services.gate || !network.invocations.gates) throw new Error('Mail archive service is unavailable')
+              if (archiveCalls++) throw new Error('A run can archive its approved mail only once')
+              const target = parseArchiveTarget(payload)
+              const coverage = network.invocations.gates.coverage(network.authority)
+              const body = (argv: string[]) => ({ application: target.application, argv })
+              const tools = {
+                read: async (argv: string[]) => invokeTool(body(argv), operationSignal),
+                move: async (argv: string[]) => { appendEvent('recovery-boundary', { kind: 'effect', operation: 'network.archive' }); return this.services!.mailMove!(body(argv), operationSignal, scope) },
+                approved: async (approval: NetworkGateCoverage, deliveryId: string) => {
+                  const item = approval.items.find(entry => entry.deliveryId === deliveryId)!
+                  if (await this.services!.gate!({ operation: 'assertActive', manifest: approval.manifest, grants: [{ key: item.deliveryId, id: item.grantId }] }, operationSignal, scope) !== true) throw new Error('Network approval is no longer active')
+                },
+              }
+              // Archive work pauses the script budget like other bounded service waits, and the run waits for it.
+              infrastructureWaiting++
+              const work = archiveApproved(this.store, { networkId: definition.id, runId: id, podId: pod.id, owner: { issuer: row.owner_issuer as string, subject: row.owner_subject as string } }, coverage, target, tools, assertCurrent)
+              pendingAgents.add(work)
+              try {
+                const outcomes = await work
+                appendEvent('network-archive', { outcomes: outcomes.map(({ deliveryId, outcome, reason }) => ({ deliveryId, outcome, reason })) })
+                return outcomes
+              }
+              finally { pendingAgents.delete(work); infrastructureWaiting-- }
             }
             if (!['graph.contract', 'graph.emit', 'network.emit', 'network.gateCoverage', 'data.get', 'data.put', 'data.delete', 'data.query', 'artifacts.create', 'artifacts.read', 'workflow.call', 'workflow.result', 'progress.commit'].includes(operation)) throw new Error('Network operation requires a declared runtime port')
             if (operation === 'data.get') return network.invocations.data.get(network.authority, payload)

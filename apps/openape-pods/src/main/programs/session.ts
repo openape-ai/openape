@@ -17,7 +17,7 @@ import { startMailProxy } from '../mail/proxy'
 import { inspectDomainRecords } from '../../worker/recovery/domains'
 import { ProgramState } from './state'
 
-export async function resolveProgram(assignment: ProgramAssignment, podId: string, argv: string[], readOnly = false) {
+export async function resolveProgram(assignment: ProgramAssignment, podId: string, argv: string[], readOnly = false, action?: 'move') {
   await verifyExecutable(assignment.executable, assignment.executableHash)
   await verifyProgramRuntime(assignment)
   await verifyExecutable(assignment.adapterPath, assignment.adapterHash)
@@ -28,10 +28,11 @@ export async function resolveProgram(assignment: ProgramAssignment, podId: strin
   const grant = assignment.grants.find(item => item.permission === resolved.permission)
   if (!grant || grant.authority.identity.podId !== podId) throw new Error('Approve this application command in Permissions first')
   if (readOnly && !['read', 'list', 'get'].includes(resolved.detail.action)) throw new Error('Only granted read operations are available to scripts; use the owner terminal for setup')
+  if (action && resolved.detail.action !== action) throw new Error('The archive port may only run the granted move operation')
   return { grant, authorization: { grantId: grant.authority.grantId, command: { cliId: assignment.cliId, adapterPath: assignment.adapterPath, adapterDigest: adapter.digest, argv: command, permission: resolved.permission } } }
 }
-export async function prepareProgramAuthorization(assignment: ProgramAssignment, podId: string, argv: string[], credentials: CredentialCache, readOnly = false, observe?: GrantObserver, previous?: GrantLookup) {
-  const { grant, authorization } = await resolveProgram(assignment, podId, argv, readOnly)
+export async function prepareProgramAuthorization(assignment: ProgramAssignment, podId: string, argv: string[], credentials: CredentialCache, readOnly = false, observe?: GrantObserver, previous?: GrantLookup, action?: 'move') {
+  const { grant, authorization } = await resolveProgram(assignment, podId, argv, readOnly, action)
   const authority = new AgentAuthority(new PodIdentityManager(credentials).connection(grant.authority.identity, `pods:${podId}`), observe, previous)
   return { authority, authorization }
 }
