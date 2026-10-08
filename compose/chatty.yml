@@ -83,8 +83,15 @@ services:
       NUXT_INBOX_DATABASE: /data/inbox.sqlite
       NUXT_RELAY_ORIGIN: https://pods.openape.ai
       NUXT_RELAY_FIXTURE: "false"
+      NUXT_PODS_RELEASE_DIRECTORY: /releases
     volumes:
       - /home/openape/projects/openape-pods-relay/shared/data:/data
+      - type: bind
+        source: /home/openape/projects/openape-pods-relay/shared/releases
+        target: /releases
+        read_only: true
+        bind:
+          create_host_path: false
     ports:
       - "127.0.0.1:3028:3028"
       - "10.0.1.1:3028:3028"

@@ -94,6 +94,8 @@ onlyBuiltDependencies:
   - vue-demi
 
 overrides:
+  # GHSA-p2f4-r6v6-j797: the pinned updater still requests the vulnerable 9.3.1.
+  'electron-updater@6.6.2>builder-util-runtime': 9.7.0
   '@nuxtjs/mdc': 0.22.1
   # Security fixes verified 2026-09-07; both versions exceed the 7-day quarantine.
   browserslist: ">=4.28.7 <5"

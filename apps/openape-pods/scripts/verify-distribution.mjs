@@ -14,7 +14,7 @@ if (process.argv.slice(2).some(argument => argument !== '--signed-local')) throw
 const version = JSON.parse(await readFile('package.json', 'utf8')).version
 const image = resolve(`release/distribution/OpenApe-Pods-${version}-arm64-${signedLocal ? 'signed-local' : 'unsigned'}.dmg`)
 const checksums = await readFile('release/distribution/SHA256SUMS', 'utf8')
-assert.equal(checksums.trim(), `${sha256(image)}  ${image.split('/').at(-1)}`)
+assert.ok(checksums.trim().split('\n').includes(`${sha256(image)}  ${image.split('/').at(-1)}`))
 const root = await realpath(await mkdtemp(join(tmpdir(), 'Pods DMG Müller '))); const mount = join(root, 'volume'); const profile = join(root, 'profile')
 await mkdir(mount); await mkdir(profile, { mode: 0o700 })
 let attached = false; let app; let identity

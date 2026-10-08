@@ -1,3 +1,4 @@
+import { parseUpdateCommand, parseUpdateView } from '../contracts/updates'
 import { parseSharingCommand } from '../contracts/sharing'
 import type { SharingState } from '../contracts/sharing'
 import { parseDefinitionCommand, parseDefinitionsView } from '../contracts/definitions'
@@ -26,6 +27,7 @@ import { channels, isPodStatus } from '../contracts/ipc'
 import type { PodsBridge } from '../contracts/ipc'
 
 const bridge: PodsBridge = {
+  async updates(command) { return parseUpdateView(await ipcRenderer.invoke(channels.updates, parseUpdateCommand(command))) },
   async mcpAccess(command) { return parseMcpAccess(await ipcRenderer.invoke(channels.mcpAccess, parseMcpAccessCommand(command))) },
   async runtimeApproval(command) { return parseRuntimeApprovalView(await ipcRenderer.invoke(channels.runtimeApproval, parseRuntimeApprovalCommand(command))) },
   async central(command) { return ipcRenderer.invoke(channels.central, command) },

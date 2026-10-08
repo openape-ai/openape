@@ -3,7 +3,7 @@ import { promisify } from 'node:util'
 import { lstat, readFile, realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 
-export interface DistributionManifest { format: 'openape-pods-distribution', version: string, platform: 'darwin', architecture: string, schema: { minimum: number, current: number }, releaseReady: boolean }
+export interface DistributionManifest { format: 'openape-pods-distribution', version: string, platform: 'darwin', architecture: string, schema: { minimum: number, current: number }, releaseReady: boolean, sourceRevision?: string, dependencyLockHash?: string }
 type Run = (binary: string, args: string[]) => Promise<{ stdout: string, stderr: string }>
 const execute = promisify(execFile)
 const runCommand: Run = (binary, args) => execute(binary, args, { encoding: 'utf8', timeout: 120000, maxBuffer: 1024 * 1024, env: { PATH: '/usr/bin:/bin' } })

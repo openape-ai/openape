@@ -1,3 +1,5 @@
+import { AutomaticUpdate } from './automatic-update'
+import { parseUpdateCommand } from '../contracts/updates'
 import { randomUUID } from 'node:crypto'
 import { sharingLimits } from '@openape/pods-protocol'
 import { parseSharingCommand } from '../contracts/sharing'
@@ -70,6 +72,8 @@ let window: BrowserWindow | null = null
 let tray: Tray | null = null
 let quitting = false
 let stopped = false
+let automaticUpdate: AutomaticUpdate
+let updateTimer: ReturnType<typeof setInterval> | undefined
 let preference: LanguagePreference
 function t(key: MessageKey, parameters?: Parameters): string { return translate(preference.language, key, parameters) }
 const status: PodStatus = { version: 1, mode: fixture ? 'fixture' : 'local', executionEnabled: true, worker: { state: 'starting', pid: null, error: null }, runtime: { electron: process.versions.electron, node: process.versions.node } }
@@ -182,7 +186,19 @@ function updateMenus(): void {
 }
 async function start(): Promise<void> {
   await app.whenReady()
+  automaticUpdate = new AutomaticUpdate(app.getVersion(), null)
   preference = new LanguagePreference(root, fixture ? 'en' : app.getPreferredSystemLanguages()[0] ?? app.getLocale())
+  ipcMain.handle(channels.updates, async (event, value: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    const command = parseUpdateCommand(value)
+    if (command.type === 'check') return automaticUpdate.check()
+    if (command.type === 'install') {
+      if (!window) throw new Error('Owner window is unavailable')
+      const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Install update'), message: t('Back up this workspace and restart to install the update?'), detail: t('Active work must finish first. Your Pods, credentials and schedules stay on this Mac.'), buttons: [t('Later'), t('Restart and install')], defaultId: 0, cancelId: 0 })
+      if (answer.response === 1) return automaticUpdate.install()
+    }
+    return { ...automaticUpdate.view }
+  })
   ipcMain.handle(channels.language, (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     const command = parseLanguageCommand(value)
@@ -522,6 +538,16 @@ async function start(): Promise<void> {
     void syncMcp().catch((error: unknown) => console.error('Could not stop MCP', error))
   }, 1000)
   mcpExpiry.unref()
+  if (app.isPackaged && !fixture && process.platform === 'darwin' && process.arch === 'arm64') {
+    try {
+      const { createAutomaticUpdate } = await import('./update-runtime')
+      automaticUpdate = await createAutomaticUpdate({ version: app.getVersion(), installed: dirname(dirname(dirname(process.execPath))), executable: process.execPath, profile: root, backups: join(app.getPath('appData'), 'OpenApe Pods Rollback'), freeze: () => worker.prepareUpdate(), resume: () => worker.releaseUpdate(), beforeQuit: () => { quitting = true } })
+      void automaticUpdate.check()
+      updateTimer = setInterval(() => { void automaticUpdate.check() }, 6 * 60 * 60 * 1000)
+      updateTimer.unref()
+    }
+    catch (error) { automaticUpdate.fail(error) }
+  }
 }
 // Tells the owner once when scheduling has been paused for five minutes, and again when it resumes.
 function watchCentral(controller: CentralController): void {
@@ -538,6 +564,7 @@ function watchCentral(controller: CentralController): void {
 }
 async function shutdown(): Promise<void> {
   clearInterval(mcpExpiry)
+  clearInterval(updateTimer)
   try { await mcpTransition; await codexServer.stop(); await central?.stop(); await remote.stop(); await worker.stop(); stopped = true; tray?.destroy(); app.quit() }
   catch (error) { console.error('Worker shutdown failed', error); app.exit(1) }
 }
