@@ -4,8 +4,17 @@
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1451. Owner correction October 8: the problem is the repeated "newsletter?" choice for the same mail, not the IdP approval.
 - Cause (read-only DB copy, October 8): the Intake versions mails by Outlook `changeKey`, so a read/flagged mail becomes case revision 2 and reaches `uncertain-review` again (6 of 52 cases; only `evidence` differs). The Decisions tab shows the newest revision; answering it leaves the older question open, which returns hours later (all 5 decided cases).
-- Draft plan revision 2 (awaiting owner approval): https://report.openape.ai/d/01M4BXR6KG3WD5M1GM6CPRQ9N7?v=2. M1 content version in the Intake, M2 one decision closes older open questions of the same case.
-- Worktree `openape-monorepo.worktrees/issue-1451`, branch `feature/issue-1451-owner-chosen-newsletters`, PR 307. No product code yet.
+- Plan revision 2 approved by the owner on October 8 ("Go"; publication v3): https://report.openape.ai/d/01M4BXR6KG3WD5M1GM6CPRQ9N7. M1 content version in the Intake, M2 one decision closes older open questions of the same case.
+- Worktree `openape-monorepo.worktrees/issue-1451`, branch `feature/issue-1451-owner-chosen-newsletters`, PR 307. Implementation in progress.
+
+## Pods fixture tests never wait for a keychain dialog — issue 1450
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1450. Owner rule October 7: every automated check runs without a person; `test:distribution --signed-local` for `c24af0e3` waited on a SecurityAgent keychain prompt.
+- Worktree `.claude/worktrees/issue-1450-pods-keychain-78e628`, branch `bugfix/issue-1450-pods-fixture-keychain`, PR 308 (https://repos.openape.ai/patrick/monorepo/pulls/308), base `930a8ee5`. Evidence: https://report.openape.ai/d/01M4BY5ENTTV3KCK3S33MDHN5Q.
+- Fixture launches with `NODE_ENV=test` append Chromium's `use-mock-keychain`; `OPENAPE_PODS_TEST_REAL_KEYCHAIN=1` opts `credentials.test.ts` into the login keychain. `e2e/fixtures/keychain.ts` stops the app as soon as a SecurityAgent window is on screen (`credentials`, `programs`, `test:distribution`).
+- Cause detail: local fixture builds are only linker-signed and share one cdhash, which the existing "OpenApe Pods Fixture Safe Storage" item trusts; only newly signed builds (Developer ID, re-signed) prompt.
+- Checks: Pods 1,340 unit tests (new main-process contract with counter-proof), root lint/typecheck, `credentials` E2E on a re-signed build (mock passes without dialog; opt-in fails after 2 s with the guard message), unsigned `test:distribution` passed. `programs` E2E still fails at stale navigation after the redesign (pre-existing, keychain part passed).
+- Next: owner review and merge; signed-local `test:distribution` with the next signed build.
 
 ## Pods mobile inbox PWA — issue 1446
 
