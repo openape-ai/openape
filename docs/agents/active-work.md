@@ -2,10 +2,12 @@
 
 ## Pods mail network asks the same choice twice — issue 1451
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1451. Owner correction October 8: the problem is the repeated "newsletter?" choice for the same mail, not the IdP approval.
-- Cause (read-only DB copy, October 8): the Intake versions mails by Outlook `changeKey`, so a read/flagged mail becomes case revision 2 and reaches `uncertain-review` again (6 of 52 cases; only `evidence` differs). The Decisions tab shows the newest revision; answering it leaves the older question open, which returns hours later (all 5 decided cases).
-- Plan revision 2 approved by the owner on October 8 ("Go"; publication v3): https://report.openape.ai/d/01M4BXR6KG3WD5M1GM6CPRQ9N7. M1 content version in the Intake, M2 one decision closes older open questions of the same case.
-- Worktree `openape-monorepo.worktrees/issue-1451`, branch `feature/issue-1451-owner-chosen-newsletters`, PR 307. Implementation in progress.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1451. Owner correction October 8: the problem is the repeated "newsletter?" choice for the same mail; the final IdP approval stays.
+- Cause (read-only DB copy, October 8): the Intake versioned mails by Outlook `changeKey`, so a read/flagged mail became case revision 2 and reached `uncertain-review` again; the Decisions tab shows the newest revision, and answering it left the older question open.
+- Plan revision 3 (owner approved revision 2 with "Go"): https://report.openape.ai/d/01M4BXR6KG3WD5M1GM6CPRQ9N7.
+- M1 (Intake content version + bounded seen digests) is live on the installed mail network since 08:46:39 (script `30c13820`, definition version 5). M2 (a choice closes older waiting revisions of the case, `choice-superseded` trace) is on PR 307.
+- Worktree `openape-monorepo.worktrees/issue-1451`, branch `feature/issue-1451-owner-chosen-newsletters`. Checks: Pods 1,343 tests, root lint/typecheck.
+- Next: merge PR 307, signed desktop build and installation with paired backup; observe the Intake runs.
 
 ## Pods fixture tests never wait for a keychain dialog — issue 1450
 
