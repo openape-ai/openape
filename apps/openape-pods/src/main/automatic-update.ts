@@ -32,7 +32,7 @@ export class AutomaticUpdate {
   }
 
   fail(error: unknown): void {
-    this.view.state = 'error'; this.view.error = error instanceof Error ? error.message : 'Update failed'
+    this.view.state = this.handedOff ? 'restart-required' : 'error'; this.view.error = error instanceof Error ? error.message : 'Update failed'
   }
 
   check(): Promise<UpdateView> {

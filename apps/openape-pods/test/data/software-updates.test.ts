@@ -21,6 +21,10 @@ it('shows discovered versions and errors and requests installation only when cli
     await wrapper.findAll('button').find(button => button.text() === 'Restart and install')!.trigger('click'); await flushPromises()
     expect(updates).toHaveBeenCalledWith({ type: 'install' })
     expect(wrapper.get('[role="alert"]').text()).toContain('Disk full')
+    view.state = 'restart-required'; view.error = 'Native installation failed'
+    await wrapper.vm.refresh()
+    expect(wrapper.text()).toContain('Quit and reopen Pods before trying again.')
+    expect(wrapper.findAll('button').every(button => (button.element as HTMLButtonElement).disabled)).toBe(true)
   }
   finally { wrapper.unmount() }
 })
