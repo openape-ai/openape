@@ -4,7 +4,7 @@ import { schemaVersion } from '../storage/database'
 import { assertDataIdle, createBackup, restoreBackup } from './backup'
 import { DataRetention } from './retention'
 
-export type DataInternal = Exclude<DataCommand, { type: 'status' | 'backup' | 'restore' | 'cleanup' | 'update' }> | { type: 'status' | 'cleanup' | 'jobs' } | { type: 'finishDeletion', podId: string } | { type: 'backup', parent: string } | { type: 'restore', source: string, parent: string }
+export type DataInternal = Exclude<DataCommand, { type: 'status' | 'backup' | 'restore' | 'cleanup' | 'update' }> | { type: 'status' | 'cleanup' | 'jobs' | 'prepareUpdate' | 'releaseUpdate' } | { type: 'finishDeletion', podId: string } | { type: 'backup', parent: string } | { type: 'restore', source: string, parent: string }
 export class DataControl {
   readonly retention: DataRetention
   private result?: DataView['result']

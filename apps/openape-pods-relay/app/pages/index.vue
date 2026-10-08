@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import WorkspaceWelcome from '../components/WorkspaceWelcome.vue'
 
-useSeoMeta({ title: 'OpenApe Pods — Your workspace', description: 'Manage your Pods, review runs and stay in control from one workspace. Sign in with your OpenApe identity.' })
+useSeoMeta({ title: 'OpenApe Pods — Automations on your Mac', description: 'Pods runs small scheduled automations on your Mac with only the access you assign and asks you when a decision is needed. Download for Mac or sign in to your workspace.' })
 </script>
 
 <template>
