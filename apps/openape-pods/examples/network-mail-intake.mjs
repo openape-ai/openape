@@ -10,6 +10,10 @@ const clean = (value, limit) => String(value ?? '').replace(/[\x00-\x1F\u202A-\u
 const address = value => value?.emailAddress?.address?.trim().toLowerCase() ?? ''
 // Outlook changes the changeKey when a mail is read, flagged or categorised; only a content change is a new version.
 const contentVersion = mail => `content:${fingerprint(JSON.stringify([address(mail.from), mail.toRecipients.map(address), mail.ccRecipients.map(address), mail.subject, mail.receivedDateTime, mail.body.content, mail.hasAttachments === true]))}`
+// A mail that leaves the three-message sample and returns must not be emitted again: its payload (knownContact) can
+// differ, which the network refuses for an existing source identity. 400 digests stay well below the checkpoint limit.
+const seenLimit = 400
+const seenKey = (channel, mail) => fingerprint(JSON.stringify([channel, mail.id, contentVersion(mail)]))
 // Checkpoints written before content versions hold changeKeys; such an entry with the same identity counts as seen.
 function seen(known, channel, mail) {
   const entries = known.filter(item => item.channel === channel && item.id === mail.id)
@@ -40,6 +44,7 @@ async function sample(context, account, folder) {
 
 function baseline(checkpoint, account) {
   if (checkpoint.version !== 1 || checkpoint.account !== account || checkpoint.scope !== 'latest-three-inbox-and-sent' || !Array.isArray(checkpoint.observed) || checkpoint.observed.length > 6 || !Array.isArray(checkpoint.initial) || checkpoint.initial.length > 6 || typeof checkpoint.recordedAt !== 'string' || !Number.isFinite(Date.parse(checkpoint.recordedAt))) throw new Error('Review the exact bounded provider baseline before network processing')
+  if (checkpoint.seen !== undefined && (!Array.isArray(checkpoint.seen) || checkpoint.seen.length > seenLimit || checkpoint.seen.some(key => typeof key !== 'string' || !/^[a-f0-9]{64}$/.test(key)))) throw new Error('Invalid provider baseline item')
   for (const item of [...checkpoint.observed, ...checkpoint.initial]) {
     if (!contract.gives.includes(item.channel) || typeof item.id !== 'string' || !item.id || typeof item.version !== 'string' || !item.version) throw new Error('Invalid provider baseline item')
   }
@@ -67,7 +72,7 @@ export async function run(context) {
   let emitted = 0
   for (const [channel, messages] of folders) {
     for (const mail of messages) {
-      if (seen([...previous.initial, ...previous.observed], channel, mail)) continue
+      if (previous.seen?.includes(seenKey(channel, mail)) || seen([...previous.initial, ...previous.observed], channel, mail)) continue
       const version = contentVersion(mail)
       const record = { account, messageId: mail.id, version, internetMessageId: mail.internetMessageId ?? '', sender: clean(address(mail.from), 300), subject: clean(mail.subject, 500), date: mail.receivedDateTime, to: mail.toRecipients.map(address), body: mail.body.content.slice(0, 6000), complete: mail.body.content.length <= 6000 && mail.hasAttachments !== true, knownContact: contacts.has(address(mail.from)), attachmentMetadata: [], hasAttachments: mail.hasAttachments === true, providerVersionAvailable: true }
       const raw = JSON.stringify(record)
@@ -78,6 +83,7 @@ export async function run(context) {
       emitted++
     }
   }
-  await context.progress.commit({ expectedRevision: context.input.checkpointRevision, checkpoint: { ...previous, observed }, sources: [], claims: [] })
+  const recent = folders.flatMap(([channel, messages]) => messages.map(mail => seenKey(channel, mail)))
+  await context.progress.commit({ expectedRevision: context.input.checkpointRevision, checkpoint: { ...previous, observed, seen: [...new Set([...recent, ...(previous.seen ?? [])])].slice(0, seenLimit) }, sources: [], claims: [] })
   return { status: 'completed', summary: `Read ${observed.length} sampled messages and emitted ${emitted} changed mail versions. No mailbox writes. Sent contacts remain a partial sample.`, completedInputIds: context.input.eventIds, gapIds: [] }
 }

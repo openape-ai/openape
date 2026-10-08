@@ -88,3 +88,22 @@ it('treats changeKey entries of an earlier checkpoint as seen and replaces them 
   await f.script.run(f.context)
   expect(emit).toHaveBeenCalledTimes(1)
 })
+
+it('does not emit a mail again when it returns to the sample', async () => {
+  const f = await fixture()
+  await f.script.run(f.context)
+  const emit = vi.fn()
+  f.context.network = { emit }
+  f.context.config = Object.fromEntries(Object.entries(f.context.variables).map(([name, value]) => [name, { value, origin: 'composition', kind: 'public' }]))
+  const returning = { id: 'returning-inbox', changeKey: 'provider-v1', body: 'Returning body' }
+  f.messages.inbox = returning
+  await f.script.run(f.context)
+  expect(emit).toHaveBeenCalledTimes(1)
+  f.messages.inbox = { id: 'newer-inbox', changeKey: 'provider-v1', body: 'Newer body' }
+  await f.script.run(f.context)
+  expect(emit).toHaveBeenCalledTimes(2)
+  f.messages.inbox = { ...returning, changeKey: 'provider-v9' }
+  await f.script.run(f.context)
+  expect(emit).toHaveBeenCalledTimes(2)
+  expect(f.context.input.checkpoint.seen).toHaveLength(3)
+})
