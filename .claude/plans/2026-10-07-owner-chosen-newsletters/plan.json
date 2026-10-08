@@ -36,6 +36,14 @@
    "reference": "Mein eigentliches Problem ist aber, dass ich das erste Mal bestätige, dass ein Mail ein Newsletter ist und danach mir noch einmal die Entscheidung vorgelegt wird, ob dieses E-Mail ein Newsletter ist."
   },
   {
+   "title": "The final IdP approval stays",
+   "description": "The approval after the owner's choice is intended and remains; only the repeated choice for the same mail must go.",
+   "status": "accepted",
+   "by": "Patrick Hofmann",
+   "date": "2026-10-08",
+   "reference": "Die finale Freigabe neben der Entscheidung ist ok. Die darf bleiben. Nur die doppelentscheidung nicht"
+  },
+  {
    "title": "Fix both the source and the decision surface",
    "description": "The Intake fix removes the meaningless revisions for mail. The engine fix ensures that any source with case revisions can no longer leave a hidden older question behind an answered one. Either alone leaves a known way to be asked twice.",
    "status": "proposed"
@@ -96,6 +104,10 @@
   {
    "date": "2026-10-08",
    "text": "Revision 2 after the owner's correction: the problem is the repeated choice; root causes traced in the installed database and code."
+  },
+  {
+   "date": "2026-10-08",
+   "text": "Recorded the owner's confirmation that the final IdP approval stays; scope unchanged."
   }
  ],
  "links": [
@@ -193,11 +205,21 @@
    },
    {
     "path": "decisions.1.title",
+    "source": "The final IdP approval stays",
+    "text": "Die finale IdP-Freigabe bleibt"
+   },
+   {
+    "path": "decisions.1.description",
+    "source": "The approval after the owner's choice is intended and remains; only the repeated choice for the same mail must go.",
+    "text": "Die Freigabe nach der Auswahl des Owners ist gewollt und bleibt; nur die wiederholte Auswahlfrage für dieselbe Mail muss weg."
+   },
+   {
+    "path": "decisions.2.title",
     "source": "Fix both the source and the decision surface",
     "text": "Ursache und Entscheidungsfläche beheben"
    },
    {
-    "path": "decisions.1.description",
+    "path": "decisions.2.description",
     "source": "The Intake fix removes the meaningless revisions for mail. The engine fix ensures that any source with case revisions can no longer leave a hidden older question behind an answered one. Either alone leaves a known way to be asked twice.",
     "text": "Die Intake-Korrektur entfernt die bedeutungslosen Revisionen bei Mails. Die Engine-Korrektur stellt sicher, dass bei keiner Quelle mit Fall-Revisionen eine ältere Frage versteckt hinter einer beantworteten offen bleibt. Jede Korrektur allein lässt einen bekannten Weg zur Doppelfrage offen."
    },
@@ -315,6 +337,11 @@
     "path": "changelog.1.text",
     "source": "Revision 2 after the owner's correction: the problem is the repeated choice; root causes traced in the installed database and code.",
     "text": "Revision 2 nach der Korrektur des Owners: Das Problem ist die wiederholte Auswahlfrage; Ursachen in der installierten Datenbank und im Code nachgewiesen."
+   },
+   {
+    "path": "changelog.2.text",
+    "source": "Recorded the owner's confirmation that the final IdP approval stays; scope unchanged.",
+    "text": "Bestätigung des Owners festgehalten, dass die finale IdP-Freigabe bleibt; Umfang unverändert."
    }
   ]
  }
