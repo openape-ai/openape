@@ -1,12 +1,11 @@
 # Active work
 
-## Pods owner-chosen newsletters skip the second approval — issue 1451
+## Pods mail network asks the same choice twice — issue 1451
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1451. Owner decision October 7: "Deine Wahl genügt" for mails he classified as newsletters himself.
-- Finding: the issue's direct route (choice `newsletter` → `mail.approved`) fails `validateNetworkRoutes` ("Approved output cannot have another producer"), and the gate-bound Archive preview subscribes to `mail.batch`, so it would not receive such events.
-- Draft plan revision 1 (awaiting owner approval and the option A/B choice): https://report.openape.ai/d/01M4BXR6KG3WD5M1GM6CPRQ9N7. Recommended: channel `mail.owner-newsletter` into a new Archive preview version; Codex prepares composition replacements, the owner applies them in the desktop Decisions tab.
-- Worktree `openape-monorepo.worktrees/issue-1451`, branch `feature/issue-1451-owner-chosen-newsletters`, base `930a8ee5`. No product code yet.
-- Next: owner approval, then M0 (synthetic composition test).
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1451. Owner correction October 8: the problem is the repeated "newsletter?" choice for the same mail, not the IdP approval.
+- Cause (read-only DB copy, October 8): the Intake versions mails by Outlook `changeKey`, so a read/flagged mail becomes case revision 2 and reaches `uncertain-review` again (6 of 52 cases; only `evidence` differs). The Decisions tab shows the newest revision; answering it leaves the older question open, which returns hours later (all 5 decided cases).
+- Draft plan revision 2 (awaiting owner approval): https://report.openape.ai/d/01M4BXR6KG3WD5M1GM6CPRQ9N7?v=2. M1 content version in the Intake, M2 one decision closes older open questions of the same case.
+- Worktree `openape-monorepo.worktrees/issue-1451`, branch `feature/issue-1451-owner-chosen-newsletters`, PR 307. No product code yet.
 
 ## Pods mobile inbox PWA — issue 1446
 
