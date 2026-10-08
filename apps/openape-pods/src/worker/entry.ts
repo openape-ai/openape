@@ -1,3 +1,4 @@
+import { assertDataIdle } from './data/backup'
 import { InboxOutbox, parseInboxOutboxCommand } from './inbox/outbox'
 import { recoverStoppedRuns } from './recovery/automatic'
 import { AsyncLocalStorage } from 'node:async_hooks'
@@ -153,6 +154,7 @@ let centralNetworkReads = false
 let centralUntil = process.env.PODS_CENTRAL_ENABLED === '1' ? 0 : Infinity
 let scanAt = 0
 let storageAt = 0
+let updateFrozen = false
 let maintenance = false
 let sharing: SharingService | null = null
 let preparing: Promise<unknown> | null = null
@@ -223,7 +225,7 @@ const timer = setInterval(() => {
       if (error) { for (const pod of store.listPods()) dispatcher.cancelPod(pod.id, String(error)); await tickStep('master stop', 60000, () => master.stop()); return }
       if (Date.now() >= scanAt) { await tickStep('reference scan', 120000, () => watcher.scan()); scanAt = Date.now() + 15000 }
       tickPhase = 'scheduling'
-      if (!suspended && Date.now() < centralUntil) {
+      if (!suspended && !maintenance && Date.now() < centralUntil) {
         scheduleDomains(store, [() => scheduler.tick(), () => workflows.tick(), () => { networks.invocations.calls!.tick(); networks.tick() }])
       }
     }
@@ -269,6 +271,21 @@ port.on('message', async (event) => {
     }
     if (request.command && typeof request.command === 'object' && 'data' in request.command) {
       const command = request.command.data as DataInternal
+      if (command.type === 'releaseUpdate') { if (updateFrozen) { updateFrozen = false; maintenance = false }; port.postMessage({ id: request.id, state: true }); return }
+      if (command.type === 'prepareUpdate') {
+        if (maintenance) throw new Error('Another data operation is in progress')
+        maintenance = true
+        try {
+          await ticking
+          assertDataIdle(store)
+          const checkpoint = store.db.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get()
+          if (checkpoint?.busy) throw new Error('Database is busy; retry the update later')
+          updateFrozen = true
+          port.postMessage({ id: request.id, state: true })
+        }
+        finally { if (!updateFrozen) maintenance = false }
+        return
+      }
       if (maintenance && command.type !== 'status') throw new Error('Another data operation is in progress')
       if (command.type === 'status') { const view = await data.execute(command) as import('../contracts/data').DataView; port.postMessage({ id: request.id, state: { ...view, busy: view.busy || maintenance } }); return }
       maintenance = true
