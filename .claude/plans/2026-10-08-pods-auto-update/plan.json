@@ -21,7 +21,7 @@
         "Prototype with disposable signed bundles and an isolated profile. Prove that closing a window, normal quit, restart and a busy worker cannot skip backup or compatibility checks. Do not assume autoInstallOnAppQuit alone controls Squirrel.Mac staging."
       ],
       "rollback": "Discard the isolated prototype; keep the installed app unchanged.",
-      "proof": "Pinned-library tests verify that electron-updater 6.6.2 does not ask native Squirrel.Mac to stage a download until explicit installation. builder-util-runtime is overridden to patched 9.7.0. A disposable signed native prototype is still being notarized; full product/device acceptance remains open."
+      "proof": "The isolated signed/notarized N-to-N+1 probe passes: ordinary quit after download retains N without native staging; explicit installation backs up before staging, replaces the app, resumes once and preserves the synthetic profile. Gatekeeper accepts the result. This is separate from full product/device acceptance."
     },
     {
       "id": "M1",
@@ -57,7 +57,7 @@
         "Reuse and preserve src/main/update.ts checks and worker backup semantics. Verify signed distribution metadata before accepting a release, prevent new run races and handle before-quit-for-update explicitly. Provide Later and Restart and install. Never kill unrelated MCP processes."
       ],
       "rollback": "Disable the feed; retain the old app and matched pre-update backup. Restore only after reconciling effects and remote sessions; never automatically roll back a migrated database.",
-      "proof": "The implementation checks at startup/every six hours, verifies hashes/signatures/source/schema, rejects active work and external MCP processes, fences new work, checkpoints SQLite and verifies the paired full-profile/app backup before native handoff. Pods test:fast passed 1,354 unit/component and 53 browser tests. The actual update controls and refusal state were inspected using synthetic IPC data."
+      "proof": "The guarded implementation and full local contract pass, including 1,355 Pods unit/component tests, 53 browser tests and a real-Electron archive backup regression. The native probe exposed Electron ASAR virtualization; backup now uses original-fs and preserves signed archive bytes. Post-handoff errors require a restart and keep writes fenced."
     },
     {
       "id": "M3",
@@ -435,8 +435,8 @@
       },
       {
         "path": "handoff",
-        "source": "Finish the isolated native lifecycle probe, review the implementation PR and retain its Test Runs evidence. Complete the exact-source distribution gates and reach the MacBook before promoting a public signed release.",
-        "text": "Den isolierten nativen Ablauf prüfen, den Umsetzungs-PR prüfen und seine Test-Runs-Nachweise erhalten. Vor Freigabe eines öffentlichen signierten Releases die Distributionsprüfungen für den exakten Quellstand abschließen und das MacBook erreichbar machen."
+        "source": "Review the final PR 310 source and target, merge and deploy the website. Complete exact-source distribution evidence and target MacBook acceptance before promoting public signed artifacts.",
+        "text": "Den abschließenden Quell- und Zielstand von PR 310 prüfen, zusammenführen und die Website ausrollen. Vor Freigabe öffentlicher signierter Artefakte die Distributionsnachweise für den exakten Quellstand und die Ziel-MacBook-Abnahme abschließen."
       },
       {
         "path": "completion.summary",
@@ -470,8 +470,8 @@
       },
       {
         "path": "milestones.0.proof",
-        "source": "Pinned-library tests verify that electron-updater 6.6.2 does not ask native Squirrel.Mac to stage a download until explicit installation. builder-util-runtime is overridden to patched 9.7.0. A disposable signed native prototype is still being notarized; full product/device acceptance remains open.",
-        "text": "Tests mit der festgelegten Bibliothek belegen, dass electron-updater 6.6.2 Squirrel.Mac erst nach ausdrücklicher Installation zur Vorbereitung auffordert. builder-util-runtime ist auf die korrigierte Version 9.7.0 festgelegt. Ein isolierter signierter nativer Prototyp wird noch notarisiert; die vollständige Produkt-/Geräteabnahme bleibt offen."
+        "source": "The isolated signed/notarized N-to-N+1 probe passes: ordinary quit after download retains N without native staging; explicit installation backs up before staging, replaces the app, resumes once and preserves the synthetic profile. Gatekeeper accepts the result. This is separate from full product/device acceptance.",
+        "text": "Die isolierte signierte/notarisierte N-auf-N+1-Prüfung besteht: Normales Beenden nach dem Download behält N ohne native Vorbereitung; ausdrückliche Installation sichert vor der Vorbereitung, ersetzt die App, startet einmal neu und erhält das synthetische Profil. Gatekeeper akzeptiert das Ergebnis. Dies bleibt von der vollständigen Produkt-/Geräteabnahme getrennt."
       },
       {
         "path": "milestones.1.proof",
@@ -480,8 +480,8 @@
       },
       {
         "path": "milestones.2.proof",
-        "source": "The implementation checks at startup/every six hours, verifies hashes/signatures/source/schema, rejects active work and external MCP processes, fences new work, checkpoints SQLite and verifies the paired full-profile/app backup before native handoff. Pods test:fast passed 1,354 unit/component and 53 browser tests. The actual update controls and refusal state were inspected using synthetic IPC data.",
-        "text": "Die Umsetzung prüft beim Start/alle sechs Stunden, verifiziert Hashes/Signaturen/Quellstand/Schema, lehnt aktive Arbeit und externe MCP-Prozesse ab, sperrt neue Arbeit, schreibt SQLite zurück und prüft die zugehörige vollständige Profil-/App-Sicherung vor nativer Übergabe. Pods test:fast bestand mit 1.354 Unit-/Komponenten- und 53 Browser-Tests. Die echten Update-Bedienelemente und der Ablehnungszustand wurden mit synthetischen IPC-Daten gesichtet."
+        "source": "The guarded implementation and full local contract pass, including 1,355 Pods unit/component tests, 53 browser tests and a real-Electron archive backup regression. The native probe exposed Electron ASAR virtualization; backup now uses original-fs and preserves signed archive bytes. Post-handoff errors require a restart and keep writes fenced.",
+        "text": "Die abgesicherte Umsetzung und der vollständige lokale Prüfvertrag bestehen, einschließlich 1.355 Pods-Unit-/Komponententests, 53 Browser-Tests und einer Archiv-Sicherungsprüfung in echtem Electron. Die native Prüfung deckte Electrons ASAR-Virtualisierung auf; die Sicherung verwendet jetzt original-fs und erhält die signierten Archivbytes. Fehler nach nativer Übergabe erfordern einen Neustart und halten Schreibzugriffe gesperrt."
       },
       {
         "path": "milestones.3.blocker",
@@ -502,6 +502,11 @@
         "path": "changelog.1.text",
         "source": "Implementation progress after the exact owner approval: Opus design, guarded updater, atomic feed and passing local checks. Public release and target-device acceptance remain incomplete; the proposal revision and its original approval are preserved.",
         "text": "Umsetzungsfortschritt nach der exakten Owner-Freigabe: Opus-Design, abgesicherter Updater, atomarer Feed und bestandene lokale Prüfungen. Öffentliche Freigabe und Zielgeräteabnahme bleiben unvollständig; Vorschlagsrevision und ursprüngliche Freigabe bleiben erhalten."
+      },
+      {
+        "path": "changelog.2.text",
+        "source": "Corrected the actual Electron archive-backup failure, proved the signed native lifecycle and retained the real-Electron regression. Public product and MacBook release gates remain open.",
+        "text": "Den tatsächlichen Electron-Archiv-Sicherungsfehler korrigiert, den signierten nativen Ablauf nachgewiesen und die Regression in echtem Electron abgesichert. Öffentliche Produkt- und MacBook-Freigabeprüfungen bleiben offen."
       }
     ]
   },
@@ -531,7 +536,7 @@
     "Use Pods test:fast, relevant existing Electron distribution acceptance and relay tests. Keep permanent tests for upgrade refusal, backup/start races, publication atomicity and visible update controls because these protect consequential release contracts.",
     "Inspect actual website and update screenshots and publish them with command results through ape-report-render test-run and ape-reports under Test Runs. A website HTTP 200 alone proves neither a visible download nor a successful update."
   ],
-  "handoff": "Finish the isolated native lifecycle probe, review the implementation PR and retain its Test Runs evidence. Complete the exact-source distribution gates and reach the MacBook before promoting a public signed release.",
+  "handoff": "Review the final PR 310 source and target, merge and deploy the website. Complete exact-source distribution evidence and target MacBook acceptance before promoting public signed artifacts.",
   "completion": {
     "result": "partial",
     "summary": "Product code and the local repository checks are implemented and passing; signed full-product upgrade, public artifact promotion and MacBook installation are not yet accepted."
@@ -564,6 +569,27 @@
       "role": "evidence",
       "title": "Actual Claude model identity",
       "text": "{\n  \"requestedModel\": \"claude-opus-5-5\",\n  \"canonicalModel\": \"claude-opus-5-5\",\n  \"provider\": \"firstParty\",\n  \"isError\": false,\n  \"files\": [\n    \"apps/openape-pods-relay/app/components/WorkspaceWelcome.vue\",\n    \"apps/openape-pods-relay/app/pages/index.vue\"\n  ],\n  \"verification\": \"Implementation was subsequently tested and visually inspected by Codex.\"\n}\n"
+    },
+    {
+      "id": "native-acceptance",
+      "kind": "text",
+      "role": "evidence",
+      "title": "Isolated native updater acceptance",
+      "text": "{\n  \"normalQuitRetainsN\": true,\n  \"backupBeforeNativeStaging\": true,\n  \"nativeReplacement\": \"0.1.0 → 0.1.1\",\n  \"restarts\": 1,\n  \"syntheticProfilePreserved\": true,\n  \"gatekeeperAccepted\": true,\n  \"scope\": \"Isolated signed/notarized fixture; not full Pods product acceptance\",\n  \"events\": [\n    {\n      \"type\": \"launch\",\n      \"version\": \"0.1.0\",\n      \"at\": \"2026-10-08T14:57:23.926Z\"\n    },\n    {\n      \"type\": \"checked\",\n      \"version\": \"0.1.0\",\n      \"at\": \"2026-10-08T14:57:23.973Z\"\n    },\n    {\n      \"type\": \"archive-downloaded\",\n      \"version\": \"0.1.0\",\n      \"at\": \"2026-10-08T14:57:24.089Z\"\n    },\n    {\n      \"type\": \"normal-quit\",\n      \"version\": \"0.1.0\",\n      \"at\": \"2026-10-08T14:57:24.089Z\"\n    },\n    {\n      \"type\": \"launch\",\n      \"version\": \"0.1.0\",\n      \"at\": \"2026-10-08T14:57:24.306Z\"\n    },\n    {\n      \"type\": \"checked\",\n      \"version\": \"0.1.0\",\n      \"at\": \"2026-10-08T14:57:24.324Z\"\n    },\n    {\n      \"type\": \"archive-downloaded\",\n      \"version\": \"0.1.0\",\n      \"at\": \"2026-10-08T14:57:24.431Z\"\n    },\n    {\n      \"type\": \"verified-library-checksum\",\n      \"version\": \"0.1.0\",\n      \"at\": \"2026-10-08T14:57:24.431Z\"\n    },\n    {\n      \"type\": \"frozen\",\n      \"version\": \"0.1.0\",\n      \"at\": \"2026-10-08T14:57:24.431Z\"\n    },\n    {\n      \"type\": \"backup\",\n      \"version\": \"0.1.0\",\n      \"at\": \"2026-10-08T14:57:26.386Z\",\n      \"path\": \"/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-auto-update-1453/.artifacts/auto-update/native-probe/backups/2026-10-08T14-57-26-385Z-c429a77c-2476-4d57-8e56-38a9a00b2125\"\n    },\n    {\n      \"type\": \"handoff\",\n      \"version\": \"0.1.0\",\n      \"at\": \"2026-10-08T14:57:26.386Z\"\n    },\n    {\n      \"type\": \"native-staging\",\n      \"version\": \"0.1.0\",\n      \"at\": \"2026-10-08T14:57:26.386Z\"\n    },\n    {\n      \"type\": \"controller-result\",\n      \"version\": \"0.1.0\",\n      \"at\": \"2026-10-08T14:57:26.386Z\",\n      \"view\": {\n        \"state\": \"installing\",\n        \"currentVersion\": \"0.1.0\",\n        \"version\": \"0.1.1\",\n        \"progress\": 0,\n        \"error\": null,\n        \"backup\": \"/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-auto-update-1453/.artifacts/auto-update/native-probe/backups/2026-10-08T14-57-26-385Z-c429a77c-2476-4d57-8e56-38a9a00b2125\"\n      }\n    },\n    {\n      \"type\": \"native-quit\",\n      \"version\": \"0.1.0\",\n      \"at\": \"2026-10-08T14:57:27.175Z\"\n    },\n    {\n      \"type\": \"launch\",\n      \"version\": \"0.1.1\",\n      \"at\": \"2026-10-08T14:57:31.346Z\"\n    },\n    {\n      \"type\": \"resumed\",\n      \"version\": \"0.1.1\",\n      \"at\": \"2026-10-08T14:57:31.347Z\",\n      \"profile\": {\n        \"runtimeIdentity\": \"synthetic-runtime-1453\",\n        \"selectedProfile\": \"acceptance\",\n        \"pods\": [\n          {\n            \"id\": \"fixture\",\n            \"schedule\": \"0 9 * * *\",\n            \"paused\": false\n          }\n        ],\n        \"encryptedSecret\": \"synthetic-ciphertext\"\n      }\n    }\n  ]\n}"
+    },
+    {
+      "id": "implementation-pr",
+      "kind": "link",
+      "role": "evidence",
+      "title": "Implementation PR 310",
+      "url": "https://repos.openape.ai/patrick/monorepo/pulls/310"
+    },
+    {
+      "id": "implementation-tests",
+      "kind": "link",
+      "role": "evidence",
+      "title": "Implementation and native acceptance Test Runs",
+      "url": "https://report.openape.ai/d/01M4E0B0K55MXYVP9E53Z67NNH?v=2"
     }
   ],
   "changelog": [
@@ -574,6 +600,10 @@
     {
       "date": "2026-10-08",
       "text": "Implementation progress after the exact owner approval: Opus design, guarded updater, atomic feed and passing local checks. Public release and target-device acceptance remain incomplete; the proposal revision and its original approval are preserved."
+    },
+    {
+      "date": "2026-10-08",
+      "text": "Corrected the actual Electron archive-backup failure, proved the signed native lifecycle and retained the real-Electron regression. Public product and MacBook release gates remain open."
     }
   ],
   "approval": {
