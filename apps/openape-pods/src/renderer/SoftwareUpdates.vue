@@ -6,7 +6,7 @@ import { t, diagnostic } from './i18n'
 export default defineComponent({
   data() { return { view: null as UpdateView | null, error: '', busy: false, timer: undefined as ReturnType<typeof setInterval> | undefined } },
   computed: {
-    working(): boolean { return this.busy || (!!this.view && ['checking', 'downloading', 'preparing', 'installing'].includes(this.view.state)) },
+    working(): boolean { return this.busy || (!!this.view && ['checking', 'downloading', 'preparing', 'installing', 'restart-required'].includes(this.view.state)) },
   },
   async mounted() { await this.refresh(); this.timer = setInterval(() => { void this.refresh() }, 1000) },
   beforeUnmount() { clearInterval(this.timer) },
@@ -53,6 +53,9 @@ export default defineComponent({
       </p>
       <p v-if="view.state === 'installing'" role="status">
         {{ t('Installing update…') }}
+      </p>
+      <p v-if="view.state === 'restart-required'" role="status">
+        {{ t('Quit and reopen Pods before trying again. Your workspace stays paused until restart because native installation has already started.') }}
       </p>
       <div class="actions">
         <button class="secondary" :disabled="working" @click="perform('check')">

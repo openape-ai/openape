@@ -1,7 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { createReadStream } from 'node:fs'
-import { chmod, cp, lstat, mkdir, readdir, readlink, rename, rm, writeFile } from 'node:fs/promises'
+import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import { join } from 'node:path'
+
+// Electron's regular fs exposes app.asar as a virtual directory instead of the signed archive bytes.
+const nativeFs: typeof fs = process.versions.electron ? createRequire(__filename)('original-fs') : fs
+const { createReadStream } = nativeFs
+const { chmod, cp, lstat, mkdir, readdir, readlink, rename, rm, writeFile } = nativeFs.promises
 
 async function hash(path: string): Promise<string> {
   const digest = createHash('sha256')
