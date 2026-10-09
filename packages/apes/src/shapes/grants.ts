@@ -1,6 +1,7 @@
 import type { BrokeredGrant, OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGrantSummary } from '@openape/core'
 import { computeCmdHash } from '@openape/core'
 import { cliAuthorizationDetailCovers, sameBrokeredGrant, verifyAuthzJWT } from '@openape/grants'
+import type { VerifyAuthzOptions } from '@openape/grants'
 import { execFileSync } from 'node:child_process'
 import { shellTargetHost } from '../shell/context.js'
 import consola from 'consola'
@@ -175,6 +176,10 @@ export interface AssignedGrantScope {
   runAs?: string
   signal?: AbortSignal
   fetch?: (url: string, options: RequestInit) => Promise<Response>
+  /** Key set already fetched from `jwksUri`; skips the key request. */
+  jwks?: VerifyAuthzOptions['jwks']
+  /** `false` re-verifies a reusable grant token that was consumed earlier; single-use grants are always consumed. */
+  consume?: false
 }
 export async function verifyAndConsume(token: string, resolved: ResolvedCommand, scope?: AssignedGrantScope): Promise<void> {
   const payload = decodePayload(token)
@@ -185,8 +190,8 @@ export async function verifyAndConsume(token: string, resolved: ResolvedCommand,
   const discovery = scope ? {} : await discoverEndpoints(issuer)
   const jwksUri = scope?.jwksUri ?? String(discovery.jwks_uri ?? `${issuer}/.well-known/jwks.json`)
   const transport = scope?.fetch ?? fetch
-  let jwks: Parameters<typeof verifyAuthzJWT>[1]['jwks']
-  if (scope?.fetch) {
+  let jwks = scope?.jwks
+  if (!jwks && scope?.fetch) {
     const response = await transport(jwksUri, { redirect: 'error', signal: AbortSignal.any([...(scope.signal ? [scope.signal] : []), AbortSignal.timeout(10000)]) })
     if (!response.ok) throw new Error(`JWKS request failed: ${response.status}`)
     jwks = await response.json() as typeof jwks
@@ -243,6 +248,11 @@ export async function verifyAndConsume(token: string, resolved: ResolvedCommand,
     if (enforceArgvHash && claims.execution_context?.argv_hash !== resolved.executionContext.argv_hash) {
       throw new Error('Granted command does not match current argv')
     }
+  }
+
+  if (scope?.consume === false) {
+    if (claims.grant_type === 'once' || claims.approval === 'once') throw new Error('A single-use grant must be consumed')
+    return
   }
 
   const grantsEndpoint = scope?.grantsEndpoint ?? await getGrantsEndpoint(issuer)

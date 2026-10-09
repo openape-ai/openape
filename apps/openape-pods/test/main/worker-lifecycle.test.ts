@@ -15,7 +15,7 @@ it.each([false, true])('keeps archive authority alive until its asynchronous ope
   const { FixtureWorker } = await import('../../src/main/worker')
   const worker = new FixtureWorker(() => {})
   const id = '00000000-0000-4000-8000-000000000001'
-  const dispatch = vi.fn(async (command: Record<string, unknown>) => 'runContext' in command ? { name: 'Mail review', reason: 'manual' } : { resources: [], epoch: 0 })
+  const dispatch = vi.fn(async (command: Record<string, unknown>) => 'runContext' in command ? { name: 'Mail review', reason: 'manual', runtime: false } : { resources: [], epoch: 0 })
   Object.assign(worker, { root: '/unused', credentials: {}, connections: {}, dispatch })
   let signal: AbortSignal | undefined
   vi.mocked(handleMailArchive).mockImplementationOnce(async (input) => {
