@@ -57,6 +57,14 @@ describe('assigned ape-shell authorization with signed grants', () => {
     await expect(authorizeAssignedCommand(command, await token(), { ...scope, grantsEndpoint: 'https://foreign.test/grants' })).rejects.toThrow('origin')
     expect(requests.filter(request => request.startsWith('POST'))).toHaveLength(1)
   })
+  it('re-verifies a consumed reusable token locally but always consumes a single-use grant', async () => {
+    const jwks = { keys: [{ ...keys.publicKey.export({ format: 'jwk' }), kid: 'fixture-key', alg: 'EdDSA', use: 'sig' }] }
+    await authorizeAssignedCommand(command, await token(), { ...scope, jwks, consume: false })
+    expect(requests).toEqual([])
+    await expect(authorizeAssignedCommand(command, await token({ exp: 1 }), { ...scope, jwks, consume: false })).rejects.toThrow()
+    await expect(authorizeAssignedCommand(command, await token({ grant_type: 'once', approval: 'once' }), { ...scope, jwks, consume: false })).rejects.toThrow('single-use')
+    expect(requests).toEqual([])
+  })
 })
 
 it('pins the owner decision issuer and every broker binding before authoritative consumption', async () => {

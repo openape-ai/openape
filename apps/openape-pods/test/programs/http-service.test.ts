@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, expect, it, vi } from 'vitest'
-import { InfrastructureError } from '../../src/contracts/infrastructure'
+import { AuthorityError, InfrastructureError } from '../../src/contracts/infrastructure'
 import type { PodResource } from '../../src/contracts/resources'
 import type { CredentialCache } from '../../src/main/connections/cache'
 import { executeHttp } from '../../src/main/programs/http-service'
@@ -17,35 +17,32 @@ const resources: PodResource[] = [{ id: podId, podId, revision: 1, kind: 'tool',
 const failure = () => new InfrastructureError({ phase: 'authorization', retryAfterMs: 0 })
 const execute = (method: string) => executeHttp(resources, scope, { url: 'https://example.com/send', method, headers: {}, ...(method === 'POST' ? { key: 'delivery:1' } : {}) }, '/unused', {} as CredentialCache, new AbortController().signal)
 
-it('reports authorization outages as retryable only before a mutating request was sent', async () => {
+it('sends nothing when the IdP grant is unavailable or refused', async () => {
   mocks.authorize.mockRejectedValueOnce(failure())
   await expect(execute('POST')).rejects.toBeInstanceOf(InfrastructureError)
+  mocks.authorize.mockRejectedValueOnce(new AuthorityError('Permission revoked; review this Pod\'s permissions before retrying'))
+  await expect(execute('POST')).rejects.toThrow('revoked')
+  mocks.authorize.mockRejectedValueOnce(new Error('Grant does not cover required permission: http'))
+  await expect(execute('GET')).rejects.toThrow('does not cover')
   expect(mocks.send).not.toHaveBeenCalled()
-  mocks.send.mockResolvedValue({ status: 200, headers: {}, body: '{}' })
-  mocks.assertActive.mockRejectedValueOnce(failure())
-  await expect(execute('POST')).rejects.toThrow('delivery may be uncertain')
-  expect(mocks.send).toHaveBeenCalledTimes(1)
-})
-it('permits a read retry after transient authority loss but never retries a revoked grant', async () => {
-  mocks.send.mockResolvedValue({ status: 200, headers: {}, body: '{}' })
-  mocks.assertActive.mockRejectedValueOnce(failure())
-  await expect(execute('GET')).rejects.toBeInstanceOf(InfrastructureError)
-  mocks.authorize.mockRejectedValueOnce(new Error('Permission revoked'))
-  await expect(execute('GET')).rejects.not.toBeInstanceOf(InfrastructureError)
-  expect(mocks.send).toHaveBeenCalledTimes(1)
 })
 
-it('keeps an authority failure during token minting retryable without marking a POST as sent', async () => {
+it('authorizes each request once and does not poll the grant while it is in flight', async () => {
   vi.useFakeTimers()
-  let release: (token: string) => void = () => {}
-  const token = new Promise<string>((resolve) => { release = resolve })
+  let respond: (reply: unknown) => void = () => {}
+  mocks.send.mockReturnValue(new Promise((resolve) => { respond = resolve }))
+  const work = execute('POST')
+  await vi.advanceTimersByTimeAsync(5000)
+  respond({ status: 200, headers: {}, body: '{}' })
+  await expect(work).resolves.toMatchObject({ status: 200 })
+  expect(mocks.authorize).toHaveBeenCalledTimes(1)
+  expect(mocks.assertActive).not.toHaveBeenCalled()
+})
+
+it('does not send a POST when the destination agent token cannot be minted', async () => {
   const authentication = { type: 'ddisaAgent', credential: 'agent_key', subject: 'agent@example.com', issuer: 'https://id.example.com' }
   const assigned = resources.map(resource => ({ ...resource, configuration: { ...resource.configuration, authentication } }))
-  mocks.assertActive.mockRejectedValue(failure())
-  const work = executeHttp(assigned, scope, { url: 'https://example.com/send', method: 'POST', headers: {}, key: 'delivery:1' }, '/unused', {} as CredentialCache, new AbortController().signal, undefined, undefined, { token: async () => token, reject: () => {} })
-  const outcome = expect(work).rejects.toBeInstanceOf(InfrastructureError)
-  await vi.advanceTimersByTimeAsync(1000)
-  release('synthetic-token')
-  await outcome
+  const work = executeHttp(assigned, scope, { url: 'https://example.com/send', method: 'POST', headers: {}, key: 'delivery:1' }, '/unused', {} as CredentialCache, new AbortController().signal, undefined, undefined, { token: async () => { throw failure() }, reject: () => {} })
+  await expect(work).rejects.toBeInstanceOf(InfrastructureError)
   expect(mocks.send).not.toHaveBeenCalled()
 })

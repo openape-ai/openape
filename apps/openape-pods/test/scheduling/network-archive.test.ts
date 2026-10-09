@@ -10,15 +10,17 @@ import { NonRetryableError } from '../../src/contracts/infrastructure'
 import { archiveApproved, mailContentVersion } from '../../src/worker/scheduling/network-archive'
 import { digest } from '../../src/worker/storage/database'
 import { closeNetworks, networkFixture } from './network-fixture'
+import { executeAgent } from '../../src/worker/agent/executor'
 
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
+vi.mock('../../src/worker/agent/executor', () => ({ executeAgent: vi.fn() }))
 afterEach(async () => { await closeNetworks(); vi.restoreAllMocks() })
 
 const mailbox = 'owner@example.invalid'
 const mail = { id: 'message-1', changeKey: 'change-1', parentFolderId: 'inbox-folder', from: { emailAddress: { address: 'news@example.invalid' } }, toRecipients: [{ emailAddress: { address: mailbox } }], ccRecipients: [], subject: 'Weekly news', receivedDateTime: '2026-10-08T08:00:00Z', body: { content: 'Synthetic newsletter', contentType: 'text' }, hasAttachments: false }
 const reply = (operation: 'read' | 'move', fields: Record<string, unknown>) => ({ exitCode: 0, stderr: '', stdout: JSON.stringify({ protocol: 'pods-mail/v1', account: mailbox, operation, ...fields }) })
 
-function archiveFixture(options: { current?: typeof mail, mails?: typeof mail[], move?: (message: string) => unknown, payload?: Record<string, string>, preview?: boolean, readFailure?: Error } = {}) {
+function archiveFixture(options: { agent?: boolean, current?: typeof mail, mails?: typeof mail[], move?: (message: string) => unknown, payload?: Record<string, string>, preview?: boolean, readFailure?: Error } = {}) {
   const approved = options.mails ?? [mail]; const current = options.mails ?? [options.current ?? mail]
   const moves: string[][] = []
   const decision = { state: 'approved' }
@@ -37,7 +39,7 @@ function archiveFixture(options: { current?: typeof mail, mails?: typeof mail[],
     return options.move?.(message) ?? reply('move', { outcome: 'confirmed', beforeId: message, afterId: `archived-${message}`, requestId: `request-${message}`, receipt: { id: `archived-${message}`, parentFolderId: 'archive-folder' } })
   })
   const gateCapabilities: string[][] = []
-  const f = networkFixture({ tool, mailMove, gate: async (value, _signal, scope) => {
+  const f = networkFixture({ tool, mailMove, provider: async () => new Response('{}'), gate: async (value, _signal, scope) => {
     scope.assertCurrent()
     gateCapabilities.push(scope.capabilities)
     const body = value as { operation: string, manifest: NetworkGateManifest, grants?: { key: string, id: string }[] }
@@ -53,6 +55,7 @@ function archiveFixture(options: { current?: typeof mail, mails?: typeof mail[],
   })
   const archive = f.pod('Archive', { takes: ['mail.approved'], gives: [], summary: 'Archives approved mail' }, async (_items, invoke) => {
     await invoke('tools.invoke', { application: 'mail', argv: ['workflow', 'read', '--account', mailbox, '--message', mail.id] }).catch((error: Error) => refusals.push(error.message))
+    if (options.agent) await invoke('agent.run', { prompt: 'Archive the approved newsletters', tools: ['ape_shell'] })
     outcomes.push(await invoke('network.archive', { application: 'mail', mailbox }))
   })
   const excluded = f.pod('Excluded', { takes: ['mail.excluded'], gives: [], summary: 'Keeps denied mail' }, async () => {})
@@ -106,6 +109,20 @@ it('moves an owner-approved message once into the Archive folder with a receipt'
   // Run services compare the gate step scope with the pinned consumer script, which holds the mail application.
   expect(f.gateCapabilities).toEqual(expect.arrayContaining([[expect.stringMatching(/^tool\.app_[a-f0-9]{32}\.invoke$/)]]))
   expect(f.gateCapabilities.every(item => item.length === 1)).toBe(true)
+})
+
+it('refuses mail application calls of an agent in an archive consumer; only the approved port moves mail', async () => {
+  const agentRefusals: string[] = []
+  vi.mocked(executeAgent).mockImplementation(async (_runtime, _directory, _prompt, _references, services, signal) => {
+    for (const argv of [['workflow', 'read', '--account', mailbox, '--message', mail.id], ['workflow', 'move', '--account', mailbox, '--message', mail.id, '--destination', 'archive']]) await services.tool!({ application: 'mail', argv }, signal).catch((error: Error) => agentRefusals.push(error.message))
+    return { threadId: 'synthetic', response: 'done' }
+  })
+  const f = archiveFixture({ agent: true })
+  await f.approve()
+  expect(executeAgent).toHaveBeenCalledTimes(1)
+  expect(agentRefusals).toEqual([expect.stringContaining('declared source'), expect.stringContaining('declared source')])
+  expect(f.tool.mock.calls.filter(([body]) => (body as { argv: string[] }).argv[1] === 'move')).toEqual([])
+  expect(f.moves).toEqual([['workflow', 'move', '--account', mailbox, '--message', mail.id, '--expected-version', mail.changeKey, '--source-folder', mail.parentFolderId, '--destination', 'archive']])
 })
 
 it('never moves a message twice for the same approved version', async () => {

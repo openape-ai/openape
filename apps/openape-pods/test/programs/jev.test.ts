@@ -91,15 +91,16 @@ it('requires explicit assignment and capability, rejects cross-Pod access, and k
   expect(() => assignedJev(f.registry.list(f.pod.id), f.pod.id, ['jev.evaluate'])).toThrow('not assigned')
 })
 
-it('cancels an in-flight evaluation when its grant is revoked', async () => {
+it('cancels an in-flight evaluation when its assignment is withdrawn, without polling the IdP grant', async () => {
   const f = fixture()
   vi.spyOn(AgentAuthority.prototype, 'authorize').mockResolvedValue({} as never)
   let active = true
-  vi.spyOn(AgentAuthority.prototype, 'assertActive').mockImplementation(async () => { if (!active) throw new Error('revoked') })
+  const assertActive = vi.spyOn(AgentAuthority.prototype, 'assertActive')
   const send = vi.fn(async (_body: string, attempt: AbortSignal): Promise<Response> => new Promise((_resolve, reject) => attempt.addEventListener('abort', () => reject(attempt.reason), { once: true })))
   const credentials = new CredentialCache(join(f.root, 'credentials'), { available: () => true, encrypt: value => Buffer.from(value), decrypt: value => value.toString() })
-  const pending = executeJev(f.assignment, request, { vendor: resolve('runtime-sources'), credentials, signal: signal(), observe: async () => {}, previous: async () => undefined, check: async () => {}, send, consumeAttempt: () => {} })
+  const pending = executeJev(f.assignment, request, { vendor: resolve('runtime-sources'), credentials, signal: signal(), observe: async () => {}, previous: async () => undefined, check: async () => { if (!active) throw new Error('withdrawn') }, send, consumeAttempt: () => {} })
   const rejected = expect(pending).rejects.toThrow('no longer active')
   await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1)); active = false
   await rejected
+  expect(assertActive).not.toHaveBeenCalled()
 })
