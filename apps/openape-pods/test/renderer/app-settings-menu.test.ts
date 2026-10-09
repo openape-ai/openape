@@ -9,18 +9,19 @@ import { applyLanguage } from '../../src/renderer/i18n'
 import { installWorkspace } from '../layout/workspace-fixture'
 import fixture from './map-view.json'
 
-// The gear menu: three account rows, two execution switches, language, backups and the grants link.
+// The gear menu: account rows, the execution switch, the MCP session, language, backups and the grants link.
 const view = parseMapView(fixture) as MapView
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; vi.unstubAllGlobals(); applyLanguage('en') })
 const account = (name: string) => wrapper!.find(`[data-account="${name}"]`)
 
 describe('Settings menu', () => {
-  it('shows the three accounts and both execution switches on the desktop and sends the switches as commands', async () => {
+  it('shows the accounts, the execution switch and the MCP session on the desktop and sends them as commands', async () => {
     const runtimeApproval = vi.fn(async (command: { type: string, enabled?: boolean }) => ({ enabled: command.type === 'set' ? !!command.enabled : true, standing: false, owner: 'patrick@example.invalid', scope: null }))
-    const mcpAccess = vi.fn(async (command: { type: string, mode?: string, duration?: string }) => ({ mode: command.type === 'set' ? command.mode! : 'off', duration: 'day', expiresAt: null }))
+    let expiresAt: number | null = new Date(2026, 9, 9, 16, 45).getTime()
+    const mcpSession = vi.fn(async (command: { type: string }) => { if (command.type === 'end') expiresAt = null; return { expiresAt, pending: false } })
     const onboarding = vi.fn(async () => ({ connections: [{ id: 'owner', provider: 'openape', account: 'patrick@example.invalid', state: 'ready' }, { id: 'jev', provider: 'typesafe', account: '', state: 'ready' }], complete: true, owner: 'owner', runtime: { ready: true, error: null } }))
-    installWorkspace({ runtimeApproval, mcpAccess, onboarding, codex: async () => ({ state: 'connected', home: '', manual: '' }) } as never)
+    installWorkspace({ runtimeApproval, mcpSession, onboarding, codex: async () => ({ state: 'connected', home: '', manual: '' }) } as never)
     applyLanguage('de')
     wrapper = mount(AppSettingsMenu, { attachTo: document.body }); await flushPromises()
     expect(account('ddisa').text()).toContain('DDISA-Konto')
@@ -31,15 +32,18 @@ describe('Settings menu', () => {
     expect(account('codex').text()).toContain('legt Automatisierungen an, schreibt Scripts')
     expect(account('jev').text()).toContain('TypeSafe Jev')
     expect(account('jev').text()).toContain('Entscheidungen in Scripts')
-    const approval = wrapper.find('[data-switch="approval"]'); const mcp = wrapper.find('[data-switch="mcp"]')
+    const approval = wrapper.find('[data-switch="approval"]')
     expect((approval.element as HTMLInputElement).checked).toBe(true)
-    expect((mcp.element as HTMLInputElement).checked).toBe(false)
+    expect(wrapper.find('[data-switch="mcp"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('Scripts aller meiner Pods auf diesem Mac immer ausführen lassen')
-    expect(wrapper.text()).toContain('Lokaler MCP-Zugriff für verbundene Werkzeuge')
+    expect(wrapper.get('[data-mcp]').text()).toContain('MCP-Sitzung')
+    expect(wrapper.get('[data-mcp]').text()).toContain('Codex angemeldet bis 16:45')
     await approval.setValue(false); await flushPromises()
     expect(runtimeApproval).toHaveBeenCalledWith({ type: 'set', enabled: false })
-    await mcp.setValue(true); await flushPromises()
-    expect(mcpAccess).toHaveBeenCalledWith({ type: 'set', mode: 'write', duration: 'day' })
+    await wrapper.get('[data-mcp] button').trigger('click'); await flushPromises()
+    expect(mcpSession).toHaveBeenCalledWith({ type: 'end' })
+    expect(wrapper.get('[data-mcp]').text()).toContain('Codex nicht angemeldet')
+    expect(wrapper.find('[data-mcp] button').exists()).toBe(false)
     await wrapper.findAll('button').find(item => item.text() === 'Bestehende Grants am IdP verwalten')!.trigger('click'); await flushPromises()
     expect(runtimeApproval).toHaveBeenCalledWith({ type: 'manage' })
     expect(wrapper.text()).toContain('Sprache')
@@ -55,7 +59,8 @@ describe('Settings menu', () => {
     expect(account('ddisa').text()).toContain('angemeldet')
     expect(account('codex').text()).toContain('am Desktop')
     expect(wrapper.find('[data-switch="approval"]').attributes('disabled')).toBeDefined()
-    expect(wrapper.find('[data-switch="mcp"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-mcp]').text()).toContain('am Desktop')
+    expect(wrapper.find('[data-mcp] button').exists()).toBe(false)
     expect(wrapper.find('a[href="https://id.openape.ai/grants"]').text()).toBe('Bestehende Grants am IdP verwalten')
     await wrapper.findAll('button').find(item => item.text() === 'Abmelden')!.trigger('click')
     expect(wrapper.emitted('logout')).toHaveLength(1)
