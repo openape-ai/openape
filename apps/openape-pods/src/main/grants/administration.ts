@@ -161,10 +161,19 @@ export async function administerSandbox(command: SandboxCommand, owner: OwnerSes
 /** Revokes, as each member Pod, the grants an archived network handed out and removes the sandbox resources it added. */
 export async function releaseArchivedNetworkGrants(dependencies: { grants: PodGrants, ledger: (command: GrantLedgerCommand) => Promise<unknown>, resources: (podId: string) => Promise<ResourceState>, revokeResource: (podId: string, id: string, revision: number) => Promise<void> }, signal: AbortSignal): Promise<void> {
   const released = await dependencies.ledger({ type: 'released' }) as { grants: PodGrant[], resources: { networkId: string, podId: string, resourceId: string }[] }
-  for (const grant of released.grants) await dependencies.grants.revoke(grant.podId, grant.id, signal)
-  for (const item of released.resources) {
-    const resource = (await dependencies.resources(item.podId)).resources.find(entry => entry.id === item.resourceId)
-    if (resource && resource.state !== 'revoked') await dependencies.revokeResource(item.podId, resource.id, resource.revision)
-    await dependencies.ledger({ type: 'resourceReleased', networkId: item.networkId, resourceId: item.resourceId })
+  // One failing item must not hold back the others; every failure is reported and retried on the next pass.
+  const failures: unknown[] = []
+  for (const grant of released.grants) {
+    try { await dependencies.grants.revoke(grant.podId, grant.id, signal) }
+    catch (error) { failures.push(error) }
   }
+  for (const item of released.resources) {
+    try {
+      const resource = (await dependencies.resources(item.podId)).resources.find(entry => entry.id === item.resourceId)
+      if (resource && resource.state !== 'revoked') await dependencies.revokeResource(item.podId, resource.id, resource.revision)
+      await dependencies.ledger({ type: 'resourceReleased', networkId: item.networkId, resourceId: item.resourceId })
+    }
+    catch (error) { failures.push(error) }
+  }
+  if (failures.length) throw new AggregateError(failures, `${failures.length} grants or sandbox entries of archived networks were not released`)
 }
