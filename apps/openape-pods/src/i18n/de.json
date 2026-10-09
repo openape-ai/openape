@@ -4378,12 +4378,16 @@
   "Archive needs the exact mailbox address": "Archivieren braucht die genaue Postfachadresse",
   "Mail application returned no valid workflow receipt": "Die Mail-Anwendung hat keinen gültigen Workflow-Beleg geliefert",
   "Approved delivery has no case": "Die freigegebene Zustellung hat keinen Fall",
-  "An earlier archive attempt of this message needs reconciliation": "Ein früherer Archivierungsversuch dieser Nachricht muss abgeglichen werden",
   "Mail preflight read did not return the approved message": "Das Vorab-Lesen hat nicht die freigegebene Nachricht geliefert",
   "A run can archive its approved mail only once": "Ein Lauf kann seine freigegebenen Mails nur einmal archivieren",
   "Archive outcome arrived after its attempt was settled": "Das Archiv-Ergebnis kam erst nach dem Abschluss des Versuchs",
   "Archive move not started: {p0}": "Archiv-Verschiebung nicht gestartet: {p0}",
   "{p0}; fresh approval refused: {p1}": "{p0}; neue Freigabe abgelehnt: {p1}",
   "Network members accept inspect, draft, validate, pause and resume, and application setup while paused; update their scripts with networks updateMemberScript": "Netz-Mitglieder erlauben inspect, draft, validate, pause und resume sowie im pausierten Zustand die Einrichtung von Anwendungen; Skripte werden mit networks updateMemberScript aktualisiert",
-  "Unsupported program operation": "Nicht unterstützte Programmoperation"
+  "Unsupported program operation": "Nicht unterstützte Programmoperation",
+  "Network member stopped after repeated unknown external outcomes; reconcile them first": "Netzwerkmitglied nach wiederholt unbekannten externen Ergebnissen gestoppt; gleiche sie zuerst ab",
+  "The assistant can only close failed runs whose external effects were all reconciled": "Der Assistent kann nur gescheiterte Läufe abschließen, deren externe Wirkungen alle abgeglichen sind",
+  "An earlier archive attempt of this message awaits reconciliation": "Ein früherer Archivierungsversuch dieser Nachricht wartet auf den Abgleich",
+  "External outcome is unknown; reconcile it": "Das externe Ergebnis ist unbekannt; gleiche es ab",
+  "A completed run holds back inputs whose external outcome is unknown; reconcile them": "Ein abgeschlossener Lauf hält Eingänge zurück, deren externes Ergebnis unbekannt ist; gleiche sie ab"
 }

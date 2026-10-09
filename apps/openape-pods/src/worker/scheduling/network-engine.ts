@@ -182,11 +182,16 @@ export class NetworkEngine {
     const command = parseNetworkCommand(value)
     if (command.type !== 'inspect' && command.type !== 'retry' && command.type !== 'reconcileEffect' && command.type !== 'resolveConflict' && command.type !== 'discardFailure') throw new Error('Unsupported network recovery command')
     const definition = this.definition(command.id, command.revision)
-    const invocation = this.store.db.prepare('SELECT pod_id,network_revision,execution_kind FROM network_invocations WHERE network_id=? AND run_id=?').get(command.id, command.runId)
+    const invocation = this.store.db.prepare('SELECT pod_id,network_revision,execution_kind,state FROM network_invocations WHERE network_id=? AND run_id=?').get(command.id, command.runId)
     if (!invocation || invocation.network_revision !== command.revision) throw new Error('Network recovery revision changed')
     if (command.type === 'discardFailure' && invocation.execution_kind === 'gate_maintenance') throw new Error('Grant maintenance must be resolved through its gate task')
     const assertCurrent = () => { this.definition(command.id, command.revision) }
     const recovery = new NetworkRecovery(this.store, this.helper)
+    // A completed script already settled and stopped; only its held tool outcome awaits the owner's evidence.
+    if (command.type === 'reconcileEffect' && invocation.state === 'completed') {
+      recovery.reconcileHeld(command.id, command.runId, command.generation, command, assertCurrent)
+      return this.view()
+    }
     await recovery.inspect(command.id, command.runId, command.generation, assertCurrent)
     if (command.type === 'discardFailure') recovery.discardFailure(command.id, command.runId, command.generation, command.evidence, assertCurrent)
     if (command.type === 'resolveConflict') recovery.resolveConflict(command.id, command.runId, command.generation, command.identityHash, command.decision, command.evidence, assertCurrent)
@@ -312,6 +317,13 @@ export class NetworkEngine {
     for (const batch of this.batches.values()) this.trace(batch.preview.networkId, 'process-now-stopped', { previewId: batch.preview.id, admitted: batch.preview.budget - batch.remaining, explicitResumeRequired: true })
     for (const id of this.batches.keys()) this.endBatch(id, 'stopped')
     await Promise.all(this.pendingSettlements.values())
+  }
+
+  /** The owner's assistant may close a failed run only after every external effect it attempted was reconciled. */
+  async agentDiscardFailure(command: Extract<NetworkCommand, { type: 'discardFailure' }>): Promise<NetworkView> {
+    const effects = this.store.db.prepare('SELECT count(*) AS count,sum(state IN (\'intent\',\'unknown\')) AS open FROM network_effect_attempts WHERE network_id=? AND run_id=?').get(command.id, command.runId)!
+    if (!Number(effects.count) || Number(effects.open)) throw new Error('The assistant can only close failed runs whose external effects were all reconciled')
+    return this.recover({ ...command, evidence: `Assistant request: ${command.evidence}`.slice(0, 4000) })
   }
 
   /** The owner's assistant may ask again only for obsolete or uncertain batches; an approval the owner gave stays the owner's to withdraw. */
