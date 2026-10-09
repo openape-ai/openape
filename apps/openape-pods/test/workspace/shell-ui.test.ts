@@ -46,7 +46,7 @@ describe('workspace shell', () => {
     await button('Results and sources').trigger('click'); await flushPromises()
     await button('Work from Codex').trigger('click'); await flushPromises()
     expect(wrapper!.get('h1').text()).toBe('App settings')
-    expect(wrapper!.text()).toContain('Codex uses the app-wide MCP access level')
+    expect(wrapper!.text()).toContain('Connecting Codex grants no access: each Codex session asks for your DDISA sign-in.')
     await wrapper!.get('.jev-account-row button').trigger('click'); await flushPromises()
     expect(wrapper!.get('.jev-connection label').text()).toBe('TypeSafe AI - Jev - API Key')
   })

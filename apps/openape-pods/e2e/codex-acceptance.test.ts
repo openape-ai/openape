@@ -82,15 +82,22 @@ it.each([false, true])('lets connected Codex configure and run an unrelated Pod 
   const identity = await fixtureShellIdentity(root, ['fixture.read']); cleanups.push(() => identity.close())
   const network = withNetwork ? await seedPausedNetwork(root, identity.owner) : null
   if (network) identity.attachPods()
-  const app: ElectronApplication = await electron.launch({ executablePath: join(bundle, 'MacOS/OpenApe Pods Fixture'), cwd: resolve('.'), env: { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, OPENAPE_PODS_FIXTURE_CODEX_HOME: home, NODE_ENV: 'test' }, timeout: 20000 })
+  const app: ElectronApplication = await electron.launch({ executablePath: join(bundle, 'MacOS/OpenApe Pods Fixture'), cwd: resolve('.'), env: { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, OPENAPE_PODS_FIXTURE_CODEX_HOME: home, OPENAPE_PODS_FIXTURE_MCP_OWNER: 'synthetic', NODE_ENV: 'test' }, timeout: 20000 })
   cleanups.push(() => app.close())
   await identity.encrypt(app, true)
   const page = await app.firstWindow()
   await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state, { timeout: 20000 }).toBe('ready')
   await page.evaluate(() => window.pods.onboarding({ type: 'finish' }))
 
-  // Owner enables MCP and connects in App settings; only one marked block is appended.
-  await page.evaluate(() => window.pods.mcpAccess({ type: 'set', mode: 'write', duration: 'hour' }))
+  // The owner connects Codex in App settings; only one marked block is appended.
+  // Fixture runs replace only the browser sign-in; the owner still confirms natively.
+  await app.evaluate(({ dialog }) => {
+    const original = dialog.showMessageBox.bind(dialog)
+    dialog.showMessageBox = (async (...args: Parameters<typeof dialog.showMessageBox>) => {
+      const options = args.at(-1) as { message?: string }
+      return options.message === 'Codex requests full Pods access for one hour' ? { response: 1, checkboxChecked: false } : original(...args)
+    }) as typeof dialog.showMessageBox
+  })
   expect(await page.evaluate(() => window.pods.codex({ type: 'connect' }))).toMatchObject({ state: 'connected', home })
   expect((await readFile(join(home, 'config.toml'), 'utf8')).startsWith(ownerConfig)).toBe(true)
 
@@ -105,6 +112,10 @@ it.each([false, true])('lets connected Codex configure and run an unrelated Pod 
     return { error: reply.result.isError === true, value: reply.result.isError ? text : JSON.parse(text) }
   }
 
+  const refused = await call({ action: 'list' })
+  expect(refused.error).toBe(true); expect(JSON.parse(refused.value as string)).toMatchObject({ error: 'login_required' })
+  await expect.poll(async () => (await call({ action: 'runtime' })).error, { timeout: 20000 }).toBe(false)
+  expect(await page.evaluate(() => window.pods.mcpSession({ type: 'get' }))).toMatchObject({ expiresAt: expect.any(Number) })
   const listed = await call({ action: 'list' })
   expect(listed, JSON.stringify(listed)).toMatchObject({ error: false })
   const pod = (listed.value.pods as { id: string, name: string, revision: number }[]).find(pod => pod.name === 'Invoices')
@@ -138,10 +149,7 @@ it.each([false, true])('lets connected Codex configure and run an unrelated Pod 
     const detail = await call({ action: 'networks', command: { type: 'detail', id: network.id, revision: 1 } })
     expect(detail.error).toBe(false); expect(detail.value.details.members).toHaveLength(2)
     expect((await call({ action: 'run', podId: network.source, revision: 1 })).value).toContain('bounded network MCP')
-    await page.evaluate(() => window.pods.mcpAccess({ type: 'set', mode: 'read', duration: 'hour' }))
     expect((await call({ action: 'networks', command: { type: 'list' } })).error).toBe(false)
-    expect((await call({ action: 'networks', command: { type: 'pause', id: network.id, revision: 1 } })).value).toContain('read-only')
-    await page.evaluate(() => window.pods.mcpAccess({ type: 'set', mode: 'write', duration: 'hour' }))
     const previewRequest = { action: 'networks', requestId: randomUUID(), command: { type: 'preview', id: network.id, revision: 1, podIds: [network.source], pausedPodIds: [network.source], budget: 1 } }
     const preview = await call(previewRequest)
     expect(preview.error).toBe(false); expect(await call(previewRequest)).toEqual(preview)
