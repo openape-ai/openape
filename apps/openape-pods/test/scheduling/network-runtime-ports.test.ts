@@ -75,15 +75,15 @@ it.each(['settle', 'cancel', 'revoke', 'failure'] as const)('fences Jev network 
   expect(JSON.stringify(f.engine.execute({ type: 'trace', id, revision: 1, before: null, caseId: null }))).not.toContain(request.state)
 })
 
-it('allows bounded text generation without tools and refuses tool authority or extra calls', async () => {
+it('applies the standalone agent rules in networks: opt-in tools and the generic timeout bound', async () => {
   vi.mocked(executeAgent).mockResolvedValue({ threadId: 'synthetic', response: '{"text":"Preview"}' })
   const f = networkFixture({ provider: async () => new Response('{}') })
   let checked = false
   const source = f.pod('Source', { takes: [], gives: ['input'], summary: 'Source' }, async (_items, invoke) => {
-    await expect(invoke('agent.run', { prompt: 'Synthetic preview', tools: ['ape_shell'] })).rejects.toThrow('no tools')
-    await expect(invoke('agent.run', { prompt: 'Synthetic preview', tools: [], timeoutSeconds: 121 })).rejects.toThrow('120 seconds')
-    for (let count = 0; count < 50; count++) await expect(invoke('agent.run', { prompt: 'Synthetic preview', tools: [], timeoutSeconds: 120 })).resolves.toMatchObject({ response: '{"text":"Preview"}' })
-    await expect(invoke('agent.run', { prompt: 'Synthetic preview', tools: [] })).rejects.toThrow('budget exceeded')
+    await expect(invoke('agent.run', { prompt: 'Synthetic preview', tools: ['shell'] })).rejects.toThrow('Agent tools must be')
+    await expect(invoke('agent.run', { prompt: 'Synthetic preview', tools: [], timeoutSeconds: 901 })).rejects.toThrow('from 30 to 900')
+    await expect(invoke('agent.run', { prompt: 'Synthetic preview', tools: ['ape_shell'], timeoutSeconds: 600 })).resolves.toMatchObject({ response: '{"text":"Preview"}' })
+    for (let count = 0; count < 60; count++) await expect(invoke('agent.run', { prompt: 'Synthetic preview', tools: [] })).resolves.toMatchObject({ response: '{"text":"Preview"}' })
     checked = true
   })
   const consumer = f.pod('Consumer', { takes: ['input'], gives: [], summary: 'Consumer' }, async () => {})
@@ -91,8 +91,8 @@ it('allows bounded text generation without tools and refuses tool authority or e
   f.process(id, [source], [], 1)
   await expect.poll(() => f.store.db.prepare('SELECT state FROM network_invocations WHERE pod_id=?').get(source)?.state).toBe('completed')
   expect(checked).toBe(true)
-  expect(executeAgent).toHaveBeenCalledTimes(50)
-  expect(vi.mocked(executeAgent).mock.calls.every(call => call[7]?.length === 0 && call[8] === 120)).toBe(true)
+  expect(executeAgent).toHaveBeenCalledTimes(61)
+  expect(vi.mocked(executeAgent).mock.calls[0]?.slice(7)).toEqual([['ape_shell'], 600])
   expect(f.engine.view().networks[0]!.state).toBe('paused')
 })
 
