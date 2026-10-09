@@ -85,17 +85,18 @@ legacy text until saved, reject stale revisions and take precedence over an
 in-flight legacy summary. Conversation bodies, creation aliases, drafts, prior
 reviews and run correlations are not deleted or replayed.
 
-`changes` returns legacy receipts. `retireChange` discards a specifically selected
-pending change after checking its revision and selected targets. `setup` can
-resolve a proposal against actual assigned resources or decline it. Neither
-operation creates an execution permission. New `requestAccess` proposals are
+The legacy change review (`changes`, `retireChange`, Apply changes and the
+pending-owner-review receipts) is removed (issue 1455). Every action applies
+directly; grants are decided only at the identity provider. Stored
+`control_changes` rows are no longer read or applied and remain until the
+baseline schema drops them. `setup` can resolve a proposal against actual
+assigned resources or decline it; it creates no execution permission. New `requestAccess` proposals are
 rejected on the Codex surface in favor of direct resource administration.
 
-The retained chat registry, master service and change coordinator support stored
-history and existing remote contracts. Their original conversation authority
-continues to prepare reviews; removing desktop UI does not promote remote model
-calls to owner administration. Backup/restore keeps history, clears authority and
-provider continuation and disables schedules through the existing contract.
+The retained chat registry and master service keep stored history and the hidden
+Codex selection context. The conversation authority that prepared reviews for
+remote and in-app chat is removed with its callers. Backup/restore keeps history,
+clears provider continuation and disables schedules through the existing contract.
 
 ## Verification
 
