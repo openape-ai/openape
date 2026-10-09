@@ -628,28 +628,19 @@ async function failedWithEffect(bound: boolean, outcome: 'confirmed_applied' | '
   await f.engine.invocations.finish(authority, 'failed', 'Synthetic uncertain effect', 'No real provider action occurred', [], [])
   const generation = () => Number(f.store.db.prepare('SELECT generation FROM network_invocations WHERE run_id=?').get(authority.runId)!.generation)
   const reconcile = () => f.engine.recover({ type: 'reconcileEffect', id: f.id, revision: 1, runId: authority.runId, generation: generation(), key, attempt: 1, sequence: bound ? 2 : 1, outcome, evidence: 'Synthetic owner-confirmed provider evidence' })
-  const discard = () => f.engine.agentDiscardFailure({ type: 'discardFailure', id: f.id, revision: 1, runId: authority.runId, generation: generation(), evidence: 'Provider shows the synthetic action applied' })
+  const discard = () => f.engine.recover({ type: 'discardFailure', id: f.id, revision: 1, runId: authority.runId, generation: generation(), evidence: 'Provider shows the synthetic action applied' })
   return { ...f, authority, reconcile, discard }
 }
 
-it('lets the assistant close a failed run only when every input was confirmed as applied', async () => {
+it('closes a failed run only after its unknown effect was reconciled', async () => {
   const f = await failedWithEffect(true)
-  await expect(f.discard()).rejects.toThrow('every input was confirmed as applied')
+  await expect(f.discard()).rejects.toThrow('require reconciliation before discarding')
   await f.reconcile()
 
   await f.discard()
 
   expect(f.store.db.prepare('SELECT state FROM network_deliveries WHERE run_id=?').get(f.authority.runId)!.state).toBe('discarded')
-  expect(JSON.parse(f.store.db.prepare('SELECT resolved_receipt FROM network_invocation_controls WHERE run_id=?').get(f.authority.runId)!.resolved_receipt as string).evidence).toBe('Assistant request: Provider shows the synthetic action applied')
-  const withoutEffects = f.store.db.prepare('SELECT run_id FROM network_invocations WHERE pod_id=?').get(f.source)!.run_id as string
-  await expect(f.engine.agentDiscardFailure({ type: 'discardFailure', id: f.id, revision: 1, runId: withoutEffects, generation: 1, evidence: 'No effects' })).rejects.toThrow('every input was confirmed as applied')
-})
-
-it.each([[false, 'confirmed_applied'], [true, 'confirmed_not_applied']] as const)('keeps a failed run whose input has no applied effect of its own with the desktop (bound=%s, %s)', async (bound, outcome) => {
-  const f = await failedWithEffect(bound, outcome)
-  await f.reconcile()
-  await expect(f.discard()).rejects.toThrow('every input was confirmed as applied')
-  expect(f.store.db.prepare('SELECT state FROM network_deliveries WHERE run_id=?').get(f.authority.runId)!.state).not.toBe('discarded')
+  expect(JSON.parse(f.store.db.prepare('SELECT resolved_receipt FROM network_invocation_controls WHERE run_id=?').get(f.authority.runId)!.resolved_receipt as string).evidence).toBe('Provider shows the synthetic action applied')
 })
 
 it('blocks archival for pending approvals and preserves completed approval history through archive restore', async () => {

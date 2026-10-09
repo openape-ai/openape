@@ -1,6 +1,32 @@
 import { centralId, centralObject, centralRevision, parseCentralCommand } from './central'
 import { administrationActions } from './codex-admin'
 import { masterTool } from './master'
+import { parseCommand } from './control'
+import type { WorkspaceCommand } from './control'
+import { parseDefinitionCommand } from './definitions'
+import type { DefinitionCommand } from './definitions'
+import { parseScheduleCommand } from './scheduling'
+import type { ScheduleCommand } from './scheduling'
+
+// The desktop channels whose commands need no native dialog; MCP sends them to the same producers as the desktop window.
+export const desktopChannels = ['definitions', 'scheduling', 'workspace'] as const
+export type DesktopAction = { channel: 'definitions', command: DefinitionCommand } | { channel: 'scheduling', command: ScheduleCommand } | { channel: 'workspace', command: WorkspaceCommand }
+
+export function parseDesktopAction(action: Record<string, unknown>): DesktopAction {
+  if (action.action !== 'desktop' || Object.keys(action).some(key => !['action', 'channel', 'command'].includes(key))) throw new Error('Invalid desktop MCP action fields')
+  if (action.channel === 'definitions') return { channel: 'definitions', command: parseDefinitionCommand(action.command) }
+  if (action.channel === 'scheduling') return { channel: 'scheduling', command: parseScheduleCommand(action.command) }
+  if (action.channel === 'workspace') return { channel: 'workspace', command: parseCommand(action.command) }
+  throw new Error('Unsupported desktop MCP channel')
+}
+
+export const desktopHelp = {
+  usage: 'Use action=desktop with channel and command for desktop settings that the other actions do not cover. The command is the same body the desktop window sends and runs through the same checks. Every command except list and map needs a stable requestId: the same requestId with the same arguments returns the recorded result without running again, different arguments are refused, and an interrupted request requires inspection before a new requestId.',
+  definitions: ['{type:list}', '{type:adopt}', '{type:prepareLocal,podId,expectedScript,name,defaults:{}} pins the paused instance\'s active script as its own local definition; on a network member it creates a new network revision and pauses the network', '{type:publish,podId,expectedScript,name,defaults:{}}', '{type:instantiate,requestId:UUID,definitionId,version,name,groupId} creates a fresh paused instance of a published definition', '{type:retryProvision,requestId}', '{type:previewUpdate|prepareUpdate,podId,definitionId,version,expectedBinding}', '{type:activateUpdate,draftId,podId,expectedBinding}'],
+  scheduling: ['{type:list,podId}', '{type:concurrency,podId,maximum:1..16}', '{type:save,podId,revision,spec,enabled}', '{type:lifecycle,podId,revision,lifecycle:active|paused}'],
+  workspace: ['{type:list}', '{type:map}', '{type:pauseAll} pauses every Pod', '{type:create,name}', '{type:update,id,revision,name,lifecycle:active|paused|archived}', '{type:organize,revision,action:create|rename|remove|collapse|move,...}', '{type:describeCollection,id,revision,text}'],
+  excluded: 'Runtime auto-approval, the MCP session itself, account sign-in, backups, restores, updates and file pickers stay in the desktop window.',
+}
 
 export const codexConversationId = '00000000-0000-4000-8000-00000000c0de'
 export interface CodexRequest { id: string, action: Record<string, unknown> }
@@ -13,20 +39,41 @@ export function parseCodexRequest(value: unknown): CodexRequest {
   return { id: item.id, action: structuredClone(item.action) as Record<string, unknown> }
 }
 
+export function boundedCodexResult<T>(result: T): T {
+  if (new TextEncoder().encode(JSON.stringify(result)).length > 256 * 1024) throw new Error('Action completed but its result is too large; inspect a smaller portion')
+  return result
+}
+
+export const assistantMarker = 'Assistant request: '
+/**
+ * Audit provenance for every MCP call: owner evidence in a command or query is recorded as an assistant
+ * request. It never refuses anything; a text close to the smallest evidence limit (2000) keeps its own length.
+ */
+export function assistantProvenance(request: CodexRequest): CodexRequest {
+  const mark = (value: unknown) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return value
+    const { evidence } = value as { evidence?: unknown }
+    if (typeof evidence !== 'string' || !evidence.trim() || evidence.startsWith(assistantMarker)) return value
+    return { ...value, evidence: `${assistantMarker}${evidence}`.slice(0, Math.max(evidence.length, 2000)) }
+  }
+  return { id: request.id, action: { ...request.action, ...('command' in request.action ? { command: mark(request.action.command) } : {}), ...('query' in request.action ? { query: mark(request.action.query) } : {}) } }
+}
+
 export const codexTool = {
   name: masterTool.name,
   title: 'OpenApe Pods',
-  description: 'Administers OpenApe Pods on this Mac through one action per call: runtime returns the versioned reference and Jev decision availability; list, select and inspect read local Pods; create, revise, draft, validate, activate and rollback change Pods and scripts; run, pause, resume and setSchedule control execution; resources, importSecret (by file path), program and recovery handle setup and recovery; workspace reads and commands the central inventory (inventory/read/submit/operation); networks provides bounded owner-scoped network reads and reviewed pause/preview/process operations. Returns JSON. Mutations require current revisions; secret values are never accepted or returned.',
+  description: 'Administers OpenApe Pods on this Mac as the signed-in owner through one action per call: runtime returns the versioned reference and Jev decision availability; list, select and inspect read local Pods; create, revise, draft, validate, activate and rollback change Pods and scripts; run, pause, resume and setSchedule control execution; resources, importSecret (by file path), program and recovery handle setup and recovery; workspace reads and commands the central inventory (inventory/read/submit/operation); networks creates, activates, pauses, archives, processes, recovers and routes networks; desktop sends the desktop definitions, scheduling and workspace commands. Returns JSON. Mutations require current revisions; secret values are never accepted or returned. Grant approvals and denials happen only at the identity provider.',
   inputSchema: {
     ...masterTool.inputSchema,
     properties: {
       ...masterTool.inputSchema.properties,
-      action: { type: 'string', enum: [...masterTool.inputSchema.properties.action.enum.filter(action => action !== 'requestAccess'), 'select', 'changes', 'retireChange', 'setSchedule', 'workspace', 'networks', ...administrationActions] },
+      action: { type: 'string', enum: [...masterTool.inputSchema.properties.action.enum.filter(action => action !== 'requestAccess'), 'select', 'changes', 'retireChange', 'setSchedule', 'workspace', 'networks', 'desktop', ...administrationActions] },
+      channel: { type: 'string', enum: [...desktopChannels], description: 'desktop: definitions (list/adopt/publish/prepareLocal/instantiate/retryProvision/previewUpdate/prepareUpdate/activateUpdate), scheduling (list/save/concurrency/lifecycle) or workspace (list/map/pauseAll/create/update/organize/describeCollection). command carries the same body the desktop sends; read runtime.desktop.' },
       requestId: { type: 'string', description: 'Stable UUID for a local administration request. Generate once and reuse unchanged after a lost response; never retry an uncertain effect with a new identity. Central workspace submit uses query.id instead.' },
       query: { type: 'object', description: 'workspace: {type: inventory} | {type: read, runtimeId, podId} | {type: submit, runtimeId, revision, id: stable UUID, command: {channel,body}} | {type: operation, id}. Read runtime for command formats. Poll operation until applied; accepted is not completion.' },
       id: { type: 'string', description: 'retireChange: legacy change ID; revision must match changes receipt. Select every affected Pod.' },
       packages: { type: 'object', description: 'Exact npm dependency versions; prepare through scripts prepareDependencies before validation.' },
-      command: { type: 'object', description: 'networks: list/detail/trace/records/legacyItems/pause/preview/process; read runtime.networks for exact fields and stable write requestId. description: list/describe(text,revision). setup: resolveSetup(id,podId,resourceId,epoch,request) or decline(id,podId) for old proposals only. resources: assignSsh(target:{alias,jumps:[outermostJump,...],profile:linde-server-v1},epoch)/importJev(podId,epoch; outer path to private owner key file; initial connection only)/list/assignJev(connectionId,model,maxAttempts,epoch)/assignHttp(permission, optional authentication {type:ddisaAgent, credential: assigned secret alias holding the agent private key PEM, subject: agent email, issuer: IdP https origin})/assignDirectory(path,access)/assignReference(name,path)/revoke(id,revision)/removeVariable(name,revision). scripts: list/prepareDependencies. Assigned Pod secrets need no script declaration or approval. recovery: list/recover/resolveHttp/retryQueue/cancel. program: add/replace/network/grant/importState/prepare(line), and the application terminal: start(applicationId,epoch,argv) runs one granted command with the private application state of the Pod and returns {sessionId,state,sequence,output,exitCode}; poll(sessionId,after) reads new output, input(sessionId,data) writes to its stdin, close(sessionId) ends it. The state is saved when the command ends, so a login (for example auth login) needs no external Terminal; send the device code to the owner. prepare only resolves command metadata; runtime has the complete CLI setup sequence. All commands include podId and relevant epoch/revisions. importSecret: {podId,alias,epoch}; use path outside command. Outer revision is the current Pod revision.' },
+      command: { type: 'object', description: 'networks: every network command in runtime.networks (create, activate, pause, archiveNetwork, preview, process, recovery, choose, gate routing and reads); stable write requestId. desktop: the desktop command body for channel. description: list/describe(text,revision). setup: resolveSetup(id,podId,resourceId,epoch,request) or decline(id,podId) for old proposals only. resources: assignSsh(target:{alias,jumps:[outermostJump,...],profile:linde-server-v1},epoch)/importJev(podId,epoch; outer path to private owner key file; initial connection only)/list/assignJev(connectionId,model,maxAttempts,epoch)/assignHttp(permission, optional authentication {type:ddisaAgent, credential: assigned secret alias holding the agent private key PEM, subject: agent email, issuer: IdP https origin})/assignDirectory(path,access)/assignReference(name,path)/revoke(id,revision)/removeVariable(name,revision). scripts: list/prepareDependencies. Assigned Pod secrets need no script declaration or approval. recovery: list/recover/resolveHttp/retryQueue/cancel/openApproval(podId,runId,grantId: opens the IdP page of a pending run grant on this Mac; the owner decides there). program: add/replace/network/grant/importState/prepare(line), and the application terminal: start(applicationId,epoch,argv) runs one granted command with the private application state of the Pod and returns {sessionId,state,sequence,output,exitCode}; poll(sessionId,after) reads new output, input(sessionId,data) writes to its stdin, close(sessionId) ends it. The state is saved when the command ends, so a login (for example auth login) needs no external Terminal; send the device code to the owner. prepare only resolves command metadata; runtime has the complete CLI setup sequence. All commands include podId and relevant epoch/revisions. importSecret: {podId,alias,epoch}; use path outside command. Outer revision is the current Pod revision.' },
       path: { type: 'string', description: 'importSecret/resources importJev: private owner file, never its content. program add/replace/importState: absolute source path.' },
       adapterPath: { type: 'string', description: 'program add/replace: optional Shapes adapter path.' },
       runtimePath: { type: 'string', description: 'program add/replace: optional owner-controlled JSON runtime descriptor (interpreter, fixed arguments, read-only package directories, non-secret environment). See runtime help.' },
