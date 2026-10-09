@@ -4,6 +4,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { parseNetworkCommand, parseNetworkView } from '../../src/contracts/networks'
 import { NetworkEngine } from '../../src/worker/scheduling/network-engine'
 import { closeNetworks, networkFixture } from './network-fixture'
+import { parseMailRequest } from '../../src/main/mail/contract'
+import { assignedMail } from '../../src/main/mail/assigned'
 
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
 afterEach(async () => { await closeNetworks(); vi.restoreAllMocks() })
@@ -117,41 +119,48 @@ it('refuses a shared value whose type differs from one declaring definition with
   expect(f.engine.view().networks).toEqual([])
 })
 
-it('allows only the assigned source mail read and refuses mutating or foreign tool requests', async () => {
-  const tool = vi.fn(async () => ({ messages: [] }))
-  const f = networkFixture({ tool }); const account = 'synthetic@example.invalid'
-  const request = { toolId: 'o365-mail', argv: ['o365-cli', 'pods', 'read', '--operation', 'messages', '--account', account, '--folder', 'inbox'] }
-  let checked = false
-  const source = f.pod('Mailbox source', { takes: [], gives: ['input'], summary: 'Assigned source' }, async (_items, invoke) => {
-    for (const argv of [request.argv.map(value => value === account ? 'foreign@example.invalid' : value), request.argv.map(value => value === 'messages' ? 'send' : value), request.argv.map(value => value === 'inbox' ? 'unassigned' : value)]) await expect(invoke('tools.invoke', { ...request, argv })).rejects.toThrow()
-    await expect(invoke('tools.invoke', request)).resolves.toEqual({ messages: [] })
-    expect(tool).toHaveBeenCalledTimes(1)
-    for (let index = 1; index < 100; index++) await invoke('tools.invoke', request)
-    await expect(invoke('tools.invoke', request)).rejects.toThrow('read budget exceeded')
-    checked = true
+it('lets source and consumer members read their own assigned mailbox and refuses mutating or foreign requests', async () => {
+  let f!: ReturnType<typeof networkFixture>
+  // Like the worker's mail service, each request is checked against the calling Pod's own assigned mailbox.
+  const tool = vi.fn(async (body: unknown, _signal: AbortSignal, scope: { podId: string }) => {
+    parseMailRequest(body, assignedMail(f.resources.list(scope.podId)).mail)
+    return { messages: [] }
   })
-  const consumer = f.pod('Consumer', { takes: ['input'], gives: [], summary: 'No mail rights' }, async () => {})
-  const connectionId = randomUUID()
-  f.resources.replaceMail(source, [
-    { kind: 'tool', name: 'Assigned mailbox', configuration: { capability: 'mail.read', account, folders: ['inbox'], attachments: false, connectionId, grants: {} } },
-    { kind: 'connection', name: 'Microsoft', configuration: { provider: 'microsoft', connectionId, account } },
-    { kind: 'connection', name: 'Pod identity', configuration: { provider: 'openape', identity: { connectionId: randomUUID(), podId: source, issuer: f.owner.issuer, owner: f.owner.subject, subject: 'synthetic-source', keyId: 'synthetic-key' } } },
-  ])
-  for (const podId of [source, consumer]) {
+  f = networkFixture({ tool })
+  const request = (account: string) => ({ toolId: 'o365-mail', argv: ['o365-cli', 'pods', 'read', '--operation', 'messages', '--account', account, '--folder', 'inbox'] })
+  const accounts = { source: 'source@example.invalid', consumer: 'consumer@example.invalid' }
+  const reads: string[] = []
+  const source = f.pod('Mailbox source', { takes: [], gives: ['input'], summary: 'Assigned source' }, async (_items, invoke) => {
+    const argv = request(accounts.source).argv
+    for (const changed of [argv.map(value => value === accounts.source ? accounts.consumer : value), argv.map(value => value === 'messages' ? 'send' : value), argv.map(value => value === 'inbox' ? 'unassigned' : value)]) await expect(invoke('tools.invoke', { toolId: 'o365-mail', argv: changed })).rejects.toThrow()
+    for (let index = 0; index < 101; index++) await invoke('tools.invoke', request(accounts.source))
+    reads.push('source')
+  })
+  const consumer = f.pod('Mailbox consumer', { takes: ['input'], gives: [], summary: 'Reads its own mailbox' }, async (_items, invoke) => {
+    await expect(invoke('tools.invoke', request(accounts.source))).rejects.toThrow()
+    await expect(invoke('tools.invoke', request(accounts.consumer))).resolves.toEqual({ messages: [] })
+    reads.push('consumer')
+  })
+  for (const [podId, account] of [[source, accounts.source], [consumer, accounts.consumer]] as const) {
+    const connectionId = randomUUID()
+    f.resources.replaceMail(podId, [
+      { kind: 'tool', name: 'Assigned mailbox', configuration: { capability: 'mail.read', account, folders: ['inbox'], attachments: false, connectionId, grants: {} } },
+      { kind: 'connection', name: 'Microsoft', configuration: { provider: 'microsoft', connectionId, account } },
+      { kind: 'connection', name: 'Pod identity', configuration: { provider: 'openape', identity: { connectionId: randomUUID(), podId, issuer: f.owner.issuer, owner: f.owner.subject, subject: `synthetic-${podId}`, keyId: 'synthetic-key' } } },
+    ])
     const pod = f.store.getPod(podId)
     const row = f.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(podId, pod.activeScript!)!
     const manifest = JSON.parse(row.manifest as string); manifest.capabilities = ['mail.read']
     f.store.db.prepare('UPDATE scripts SET manifest=? WHERE pod_id=? AND hash=?').run(JSON.stringify(manifest), podId, pod.activeScript!)
     f.store.db.prepare('INSERT OR REPLACE INTO validations VALUES(?,?,?,?,?)').run(podId, pod.activeScript!, pod.bindingRevision, f.resources.epoch(podId), '{}')
   }
-  const members = [{ podId: source, source: { schedule: null }, serialCase: false }, { podId: consumer, source: null, serialCase: false }]
-  expect(() => f.create(members, ['input'])).toThrow('mail reads require a declared source')
-  f.store.db.prepare('UPDATE scripts SET manifest=json_set(manifest,\'$.capabilities\',json(\'[]\')) WHERE pod_id=?').run(consumer)
-  const id = f.create(members, ['input'])
-  f.process(id, [source], [source], 1); f.engine.tick()
-  await expect.poll(() => checked).toBe(true)
-  await expect.poll(() => f.store.db.prepare('SELECT state FROM network_invocations WHERE pod_id=?').get(source)?.state).toBe('completed')
-  expect(tool).toHaveBeenCalledTimes(100)
-  expect(f.engine.execute({ type: 'trace', id, revision: 1, before: null, caseId: null }).trace!.events.find(event => event.kind === 'network-mail-read')!.body).toContain('messages')
+  const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, { podId: consumer, source: null, serialCase: false }], ['input'])
+  const authority = f.engine.invocations.reserve(id, source, f.resources.epoch(source), 'manual', true)!
+  await f.engine.invocations.finish(authority, 'completed', 'Source', null, [], [{ channel: 'input', key: 'one', sourceItemId: 'one', sourceVersion: 'provider-v1', payload: { subject: 'Synthetic' } }])
+  f.process(id, [source, consumer], [source, consumer], 2); f.engine.tick()
+  await expect.poll(() => f.store.db.prepare('SELECT count(*) AS count FROM network_invocations WHERE state=\'completed\' AND execution_kind=\'script\'').get()!.count).toBe(3)
+  expect(reads.sort()).toEqual(['consumer', 'source'])
+  expect(tool.mock.settledResults.filter(result => result.type === 'fulfilled')).toHaveLength(102)
+  expect(f.engine.execute({ type: 'trace', id, revision: 1, before: null, caseId: null }).trace!.events.some(event => event.kind === 'recovery-boundary' && event.body.includes('tools.invoke'))).toBe(true)
   await f.engine.stop(); await f.dispatcher.stop()
 })
