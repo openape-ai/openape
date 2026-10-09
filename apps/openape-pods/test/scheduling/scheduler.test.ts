@@ -291,3 +291,19 @@ it('keeps legacy processes without termination evidence fenced', async () => {
   expect(f.store.db.prepare('SELECT run_id FROM run_leases WHERE pod_id=?').get(pod)?.run_id).toBe(id)
   expect(f.scheduler.view(pod)).toMatchObject({ blocked: 1, error: expect.stringContaining('termination evidence') })
 })
+
+it('frees the execution slot of a run while it waits for an IdP decision and takes it back afterwards', () => {
+  const f = fixture(); const pods = [f.pod(), f.pod(), f.pod()]
+  f.scheduler.concurrency(1)
+  for (const pod of pods) f.scheduler.save(pod, 0, { kind: 'interval', seconds: 60 }, true)
+  const approval = (state: string) => ({ grantId: 'grant-1', issuer: 'https://id.example.test', title: 'Run the Pod', state })
+  f.time(61000); f.scheduler.tick()
+  expect(f.started).toHaveLength(1)
+  f.runs.append(f.started[0]!.id, 'approval', approval('pending'))
+  f.scheduler.tick()
+  expect(f.started).toHaveLength(2)
+  expect(f.started[1]!.podId).not.toBe(f.started[0]!.podId)
+  f.runs.append(f.started[0]!.id, 'approval', approval('approved'))
+  f.scheduler.tick()
+  expect(f.started).toHaveLength(2)
+})

@@ -11,7 +11,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 export type GrantProgress = RunApproval
 export type GrantObserver = (progress: GrantProgress) => Promise<void>
 export type GrantLookup = (permission: string, connection: AgentConnection) => Promise<string | undefined>
-interface Grant { brokered?: BrokeredGrant, id: string, status: string, request: { requester: string, audience: string, target_host: string, grant_type: string } }
+interface Grant { brokered?: BrokeredGrant, id: string, status: string, request: { requester: string, audience: string, target_host: string, grant_type: string, waits_until?: number } }
 
 export interface AgentConnection {
   decisionIssuer?: string
@@ -121,6 +121,9 @@ export class AgentAuthority {
       const previousId = await this.previous?.(resolved.permission, this.connection)
       if (previousId && previousId !== grant?.id) grant = await this.grant(previousId, signal)
     }
+    // A pending request is reused, so an interrupted wait never asks again; a single-use request whose caller
+    // stopped waiting can no longer run anything (DDISA grants §3.4) and is replaced.
+    if (grant?.status === 'pending' && grant.request.grant_type === 'once' && (grant.request.waits_until ?? 0) * 1000 <= Date.now()) grant = undefined
     if (grant && ['denied', 'revoked'].includes(grant.status)) throw new AuthorityError(`Permission ${grant.status}; review this Pod's permissions before retrying`)
     if (!grant || grant.status === 'used' || grant.status === 'expired') {
       // The runtime and owner assignments ask for a continuing grant; the owner chooses its scope at the IdP.

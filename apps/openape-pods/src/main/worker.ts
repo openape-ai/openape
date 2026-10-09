@@ -102,6 +102,14 @@ const secretsOrigin = 'https://secrets.openape.ai'
 // A fixed record id in the encrypted store for this Mac's consumer key at OpenApe Secrets.
 const secretsConsumerRecord = '6f0c2d2e-5b1a-4f0e-9c7d-3a2b1c0d9e8f'
 
+/**
+ * The Pod name as the owner reads it in the runtime grant at the IdP: one line without control or
+ * format characters and at most 100 characters. The Pod id stays in the structured authorization.
+ */
+export function grantPodName(name: string): string {
+  return name.replace(/[\p{Cc}\p{Cf}\s]+/gu, ' ').trim().slice(0, 100) || 'Pod'
+}
+
 function redactTerminalInput(action: Record<string, unknown>): Record<string, unknown> {
   const command = action.command as { type?: string, data?: unknown }
   if (command?.type !== 'input' || typeof command.data !== 'string') return action
@@ -133,6 +141,8 @@ export class FixtureWorker {
   private credentials: CredentialCache | null = null
   private readonly agentTokens = new DdisaAgentTokens()
   private services = new Map<string, AbortController>()
+  // Service calls of runs that wait for the owner's IdP decision; they execute nothing and hold no slot.
+  private parked = new Set<string>()
   private pending = new Map<string, { resolve: (state: unknown) => void, reject: (error: Error) => void, timer: ReturnType<typeof setTimeout> }>()
   private state: WorkerStatus = { state: 'starting', pid: null, error: null }
   private centralAction(type: string): CentralController | null {
@@ -254,7 +264,7 @@ export class FixtureWorker {
 
   async prepareUpdate(): Promise<void> {
     await this.setupReady
-    if (this.updateFrozen || this.pending.size || this.connections?.busy() || this.programs?.busy() || this.services.size) throw new Error('Finish active work and account setup before installing the update')
+    if (this.updateFrozen || this.pending.size || this.connections?.busy() || this.programs?.busy() || this.services.size > this.parked.size) throw new Error('Finish active work and account setup before installing the update')
     this.updateFrozen = true
     try { await this.dispatch({ data: { type: 'prepareUpdate' } }) }
     catch (error) { this.updateFrozen = false; throw error }
@@ -447,7 +457,7 @@ export class FixtureWorker {
     }
     if (action.kind === 'recovery') {
       const view = await this.runs(action.command)
-      // openApproval has just opened this IdP page on the Mac; the owner decides there.
+      // runs() opened the IdP page on this Mac; approvalLink only returns that verified address for the result.
       const opened = action.command.type === 'openApproval' ? await this.approvalLink(action.command.podId, action.command.runId, action.command.grantId) : null
       return { runs: view.runs.map(({ id, state, scriptHash, startedAt, finishedAt, recovery }) => ({ id, state, scriptHash, startedAt, finishedAt, recovery: recovery?.state ?? null })), effects: view.effects?.map(({ key, runId }) => ({ key, runId })) ?? [], approvals: view.approvals?.map(({ runId, grantId, state }) => ({ runId, grantId, state })) ?? [], ...(opened ? { opened } : {}) }
     }
@@ -753,8 +763,16 @@ export class FixtureWorker {
     return tokens
   }
 
+  /** Parks a service call while its run waits for an IdP decision, here and in the worker's bridge. */
+  private park(id: string, parked: boolean): void {
+    if (parked === this.parked.has(id)) return
+    if (parked) this.parked.add(id)
+    else this.parked.delete(id)
+    this.child?.postMessage({ serviceParked: { id, parked } })
+  }
+
   private async executeService(request: ServiceRequest): Promise<unknown> {
-    if (!request || typeof request.id !== 'string' || !/^[a-f0-9-]{36}$/.test(request.id) || this.services.has(request.id) || this.services.size >= 16) throw new Error('Invalid or excessive broker request')
+    if (!request || typeof request.id !== 'string' || !/^[a-f0-9-]{36}$/.test(request.id) || this.services.has(request.id) || this.services.size - this.parked.size >= 16) throw new Error('Invalid or excessive broker request')
     if (request.kind !== undefined && request.kind !== 'gate' && request.kind !== 'mailArchive' && request.kind !== 'mailMove' && request.kind !== 'credential' && request.kind !== 'jev' && request.kind !== 'http' && request.kind !== 'shell' && request.kind !== 'shellClose') throw new Error('Unsupported broker service')
     const scope = parseServiceScope(request.scope)
     const controller = new AbortController(); this.services.set(request.id, controller)
@@ -767,10 +785,12 @@ export class FixtureWorker {
       const context = parseRunContext(await this.dispatch({ runContext: { scope } }))
       const previous = async (permission: string, connection: { issuer: string, decisionIssuer?: string, subject: string }) => {
         const grant = await this.dispatch({ runContext: { scope, grant: { permission, issuer: connection.decisionIssuer ?? connection.issuer, subject: connection.subject } } }) as RunApproval | null
-        return grant && !['cancelled', 'expired'].includes(grant.state) ? grant.grantId : undefined
+        // A wait that ended locally (cancelled run, timeout, outage) keeps its request; the IdP status decides reuse.
+        return grant && grant.state !== 'expired' ? grant.grantId : undefined
       }
       const observe = async (approval: RunApproval) => {
         await this.dispatch({ serviceCheck: { scope, approval } })
+        this.park(request.id, approval.state === 'pending')
         if (approval.state !== 'pending' || context.reason !== 'manual' || this.openedApprovals.has(approval.grantId)) return
         this.openedApprovals.add(approval.grantId)
         try { await shell.openExternal(approvalURL(approval)) }
@@ -788,10 +808,11 @@ export class FixtureWorker {
         const authority = new AgentAuthority(connection, observe, previous, tokens)
         const adapterPath = join(dist, 'vendor/pod-runtime-shapes.toml')
         const adapter = loadAdapter('pod-runtime', adapterPath)
-        const argv = ['pod-runtime', 'run', '--pod', scope.podId, '--name', context.name, '--script', join(this.root, 'runs', scope.runId, 'run.mjs'), '--workspace', environment.workspace, '--home', environment.home, '--environment', JSON.stringify(visibleEnvironment(environment.environment))]
+        const name = grantPodName(context.name)
+        const argv = ['pod-runtime', 'run', '--pod', scope.podId, '--name', name, '--script', join(this.root, 'runs', scope.runId, 'run.mjs'), '--workspace', environment.workspace, '--home', environment.home, '--environment', JSON.stringify(visibleEnvironment(environment.environment))]
         const resolved = await resolveCommand(adapter, argv)
         const assignment = { grantId: '', command: { cliId: 'pod-runtime', adapterPath, adapterDigest: adapter.digest, argv, permission: resolved.permission } }
-        await authority.authorize(assignment, controller.signal, `Pod: ${context.name}\nRun the stored script inside this Pod's managed runtime. Script changes remain within separately assigned permissions. This approval does not enable a schedule.\nScript: ${join(this.root, 'runs', scope.runId, 'run.mjs')}\nWorkspace: ${environment.workspace}\nHOME: ${environment.home}`)
+        await authority.authorize(assignment, controller.signal, `Pod: ${name} (${scope.podId})\nRun the stored script inside this Pod's managed runtime. Script changes remain within separately assigned permissions. This approval does not enable a schedule.\nScript: ${join(this.root, 'runs', scope.runId, 'run.mjs')}\nWorkspace: ${environment.workspace}\nHOME: ${environment.home}`)
         await check(); controller.signal.throwIfAborted()
         const monitoring = new AbortController()
         const monitor = (async () => {
@@ -908,7 +929,7 @@ export class FixtureWorker {
       await check(); controller.signal.throwIfAborted()
       return value
     }
-    finally { controller.abort(); this.services.delete(request.id) }
+    finally { controller.abort(); this.services.delete(request.id); this.parked.delete(request.id) }
   }
 
   lifecycle(event: 'suspend' | 'resume'): void { if (this.state.state === 'ready' && !this.stopping) this.child?.postMessage(event) }
