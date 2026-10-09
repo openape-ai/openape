@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Outbound desktop mediation for native OpenApe Pods clients",
+  "description": "Desktop registration, central workspace and inbox for OpenApe Pods",
   "scripts": {
     "dev": "nuxt dev --port 3028",
     "build": "nuxt build",
