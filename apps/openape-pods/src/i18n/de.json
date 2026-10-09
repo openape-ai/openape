@@ -487,6 +487,7 @@
   "Missing assigned grant token": "Zugewiesenes Berechtigungstoken fehlt",
   "Grant token has no expiry": "Das Berechtigungstoken hat kein Ablaufdatum",
   "Invalid run context": "Ungültiger Laufkontext",
+  "A run can start at most 50 agent calls": "Ein Lauf kann höchstens 50 Agentenaufrufe starten",
   "Pod execution authority is not active for this run": "Die Ausführungsberechtigung des Pods ist für diesen Lauf nicht aktiv",
   "The identity service did not return its signing keys": "Der Identitätsdienst hat seine Signaturschlüssel nicht geliefert",
   "Command is outside the assigned tool call": "Der Befehl liegt außerhalb des zugewiesenen Werkzeugaufrufs",
