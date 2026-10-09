@@ -63,10 +63,9 @@ export class ProgramManager {
     return resolveCommand(adapter, [assignment.cliId, ...argv])
   }
 
-  /** Requests one command of an assigned application as a continuing Pod grant; the grant is recorded apart from the application. */
-  async grant(command: Extract<ProgramCommand, { type: 'grant' }>) {
-    const assignment = await this.assignment(command.podId, command.applicationId, command.epoch)
-    return this.grants.request(command.podId, await programSpec(assignment, command.argv), null, AbortSignal.timeout(120000))
+  /** What a grant for one command of an assigned application asks for; the grant is recorded apart from the application. */
+  async grantSpec(command: Extract<ProgramCommand, { type: 'grant' }>) {
+    return programSpec(await this.assignment(command.podId, command.applicationId, command.epoch), command.argv)
   }
 
   async importFile(podId: string, applicationId: string, epoch: number, source: string): Promise<void> {
