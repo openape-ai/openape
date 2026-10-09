@@ -4389,5 +4389,5 @@
   "An earlier archive attempt of this message awaits reconciliation": "Ein früherer Archivierungsversuch dieser Nachricht wartet auf den Abgleich",
   "External outcome is unknown; reconcile it": "Das externe Ergebnis ist unbekannt; gleiche es ab",
   "A completed run holds back inputs whose external outcome is unknown; reconcile them": "Ein abgeschlossener Lauf hält Eingänge zurück, deren externes Ergebnis unbekannt ist; gleiche sie ab",
-  "The assistant can only close failed runs whose every input has a reconciled external effect": "Der Assistent kann nur gescheiterte Läufe abschließen, bei denen jeder Eingang eine abgeglichene externe Wirkung hat"
+  "The assistant can only close failed runs whose every input was confirmed as applied": "Der Assistent kann nur gescheiterte Läufe abschließen, bei denen jeder Eingang als ausgeführt bestätigt ist"
 }
