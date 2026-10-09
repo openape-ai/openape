@@ -485,6 +485,8 @@
   "Oversized identity response": "Identitätsantwort zu groß",
   "Pod identity, key or grant is no longer active": "Pod-Identität, Schlüssel oder Berechtigung ist nicht mehr aktiv",
   "Missing assigned grant token": "Zugewiesenes Berechtigungstoken fehlt",
+  "Grant token has no expiry": "Das Berechtigungstoken hat kein Ablaufdatum",
+  "The identity service did not return its signing keys": "Der Identitätsdienst hat seine Signaturschlüssel nicht geliefert",
   "Command is outside the assigned tool call": "Der Befehl liegt außerhalb des zugewiesenen Werkzeugaufrufs",
   "Script does not declare this capability": "Das Skript deklariert diese Fähigkeit nicht",
   "Tool call cancelled": "Werkzeugaufruf abgebrochen",

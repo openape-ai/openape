@@ -99,15 +99,19 @@ describe('ape-shell broker native boundary', () => {
     await expect(fixture.broker.execute(fixture.assignment, fixture.request, fixture.lease)).rejects.toThrow('integrity')
     expect(fixture.state.executions).toBe(0)
   })
-  it('stops an active tool after identity revocation and removes its plaintext cache', async () => {
+  it('removes the plaintext cache of a cancelled tool and refuses the next call after identity revocation', async () => {
     const fixture = await setup(false, true)
-    const execution = fixture.broker.execute(fixture.assignment, fixture.request, fixture.lease)
-    const assertion = expect(execution).rejects.toThrow('no longer active')
+    const run = new AbortController()
+    const execution = fixture.broker.execute(fixture.assignment, fixture.request, { ...fixture.lease, signal: run.signal })
+    const assertion = expect(execution).rejects.toThrow()
     await expect.poll(() => fixture.state.executions).toBe(1)
     await expect.poll(async () => (await readdir(join(fixture.credentialRoot, 'temporary'))).length).toBe(1)
     fixture.state.active = false
+    run.abort()
     await assertion
     expect(await readdir(join(fixture.credentialRoot, 'temporary'))).toEqual([])
+    await expect(fixture.broker.execute(fixture.assignment, fixture.request, fixture.lease)).rejects.toThrow('no longer active')
+    expect(fixture.state.executions).toBe(1)
   })
 })
 
