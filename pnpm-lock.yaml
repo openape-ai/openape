@@ -944,15 +944,6 @@ importers:
         specifier: 'catalog:'
         version: 3.3.5(typescript@5.9.3)
 
-  apps/openape-pods-ios:
-    devDependencies:
-      openape-e2e:
-        specifier: workspace:*
-        version: link:../../examples/e2e
-      playwright:
-        specifier: 'catalog:'
-        version: 1.62.1
-
   apps/openape-pods-relay:
     dependencies:
       '@openape/auth':
