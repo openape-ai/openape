@@ -107,6 +107,16 @@ const secretsOrigin = 'https://secrets.openape.ai'
 // A fixed record id in the encrypted store for this Mac's consumer key at OpenApe Secrets.
 const secretsConsumerRecord = '6f0c2d2e-5b1a-4f0e-9c7d-3a2b1c0d9e8f'
 
+function redactTerminalInput(action: Record<string, unknown>): Record<string, unknown> {
+  const command = action.command as { type?: string, data?: unknown }
+  if (command?.type !== 'input' || typeof command.data !== 'string') return action
+  return { ...action, command: { ...command, data: `sha256:${createHash('sha256').update(command.data).digest('hex')}` } }
+}
+function redactTerminalView(result: unknown): unknown {
+  const view = result as { sessionId?: unknown, state?: unknown, sequence?: unknown, exitCode?: unknown, error?: unknown } | null
+  return view && typeof view === 'object' ? { sessionId: view.sessionId, state: view.state, sequence: view.sequence, exitCode: view.exitCode, error: view.error } : null
+}
+
 export class FixtureWorker {
   central: CentralController | null = null
   inbox: InboxDecisions | null = null
@@ -445,6 +455,8 @@ export class FixtureWorker {
     }
     if (!reading && this.central && !this.central.executing) return this.central.local(() => this.codex(request))
     if (!administrationActions.includes(String(request.action.action))) {
+      // A resumed Pod must not keep an application terminal that was opened for its paused setup.
+      if (request.action.action === 'resume' && typeof request.action.podId === 'string') this.programs?.cancelPod(request.action.podId)
       const result = await this.dispatch({ codex: request, ownerOperation: this.central?.executing === true })
       if (request.action.action === 'create') {
         const podId = centralId((result as { id: string }).id)
@@ -454,15 +466,18 @@ export class FixtureWorker {
       return result
     }
     const action = parseAdministration(request.action)
-    const receipt = await this.dispatch({ codexAdministration: { type: 'begin', request } }) as AdministrationReceipt
+    // Terminal output and input can hold device codes or typed secrets; the receipt keeps only their shape.
+    const terminal = action.kind === 'program' && ['start', 'poll', 'input', 'close'].includes(action.command.type)
+    const journaled = terminal ? { ...request, action: redactTerminalInput(request.action) } : request
+    const receipt = await this.dispatch({ codexAdministration: { type: 'begin', request: journaled } }) as AdministrationReceipt
     if (receipt.completed) return receipt.result
     try {
       const result = await this.administer(action)
-      await this.dispatch({ codexAdministration: { type: 'complete', request, result } })
+      await this.dispatch({ codexAdministration: { type: 'complete', request: journaled, result: terminal ? redactTerminalView(result) : result } })
       return result
     }
     catch (error) {
-      await this.dispatch({ codexAdministration: { type: 'failed', request } })
+      await this.dispatch({ codexAdministration: { type: 'failed', request: journaled } })
       if (action.kind === 'importSecret' || action.kind === 'importJev') throw new Error('Secret import failed; inspect the private file, current Pod revision and resource epoch before retrying')
       throw error
     }
