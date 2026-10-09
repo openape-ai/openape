@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import { AgentAuthority, grantTokenReuseMs, RunGrantTokens } from '../src/main/broker/authorization'
-import { InfrastructureError, retryInfrastructure } from '../src/contracts/infrastructure'
+import { AuthorityError, InfrastructureError, retryInfrastructure } from '../src/contracts/infrastructure'
 import type { RunApproval } from '../src/contracts/activity'
 
 const cleanup: (() => Promise<void>)[] = []
@@ -266,5 +266,31 @@ it('rejects a reused token for another Pod without contacting the identity servi
   const otherId = randomUUID()
   const other = { ...f.command, argv: f.command.argv.map(arg => arg === f.connection.targetHost.slice(5) ? otherId : arg) }
   await expect(run.authorize({ command: other, grantId: 'old' }, signal())).rejects.toThrow()
+  expect(f.state.tokens).toEqual(['old']); expect(f.state.consumes).toEqual(['old'])
+})
+
+it('refreshes a runtime grant mid-run only while it stays approved and never creates or approves a replacement', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  const f = await fixture('used', 'approved'); f.state.grantType = 'always'; f.state.lifetime = 3600
+  const approve = vi.fn(async () => true)
+  const run = new AgentAuthority(f.connection, undefined, async () => undefined, approve, new RunGrantTokens())
+  const assignment = { command: f.command, grantId: '' }
+  await run.authorize(assignment, signal())
+  expect(assignment.grantId).toBe('fresh-1'); expect(f.state.creates).toBe(1)
+  vi.setSystemTime(Date.now() + grantTokenReuseMs + 1000)
+  await run.refresh(assignment, signal())
+  expect(f.state.tokens).toEqual(['fresh-1', 'fresh-1']); expect(f.state.checks).toBe(2)
+  f.state.grants.set('fresh-1', 'expired')
+  vi.setSystemTime(Date.now() + grantTokenReuseMs + 1000)
+  await expect(run.refresh(assignment, signal())).rejects.toThrow(AuthorityError)
+  expect(f.state.creates).toBe(1); expect(approve).not.toHaveBeenCalled(); expect(f.state.tokens).toHaveLength(2)
+})
+
+it('never lets a second application run on the token of another application with the same permission', async () => {
+  const f = await fixture('approved'); f.state.grantType = 'always'; f.state.lifetime = 3600
+  f.state.grants.set('other-app', 'denied')
+  const run = runAuthority(f)
+  await run.authorize({ command: f.command, grantId: 'old' }, signal())
+  await expect(run.authorize({ command: f.command, grantId: 'other-app' }, signal())).rejects.toThrow('denied')
   expect(f.state.tokens).toEqual(['old']); expect(f.state.consumes).toEqual(['old'])
 })
