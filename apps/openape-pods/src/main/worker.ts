@@ -3,7 +3,7 @@ import type { DecisionSources, InboxDecisions } from './inbox/decisions'
 import { parseInboxDecide } from '../contracts/inbox'
 import type { AgentConnection } from './broker/authorization'
 import type { RuntimeApprovalBinding, RuntimeApprovalCommand, RuntimeApprovalView } from '../contracts/runtime-approval'
-import { readOnlyAction } from './codex/access'
+import { readOnlyAction } from './codex/routing'
 import { codexNetworkRead, parseCodexNetworkAction } from '../contracts/codex-networks'
 import { applicationBundle, applicationDefinition } from './programs/application'
 import { parseSharingCommand } from '../contracts/sharing'
@@ -340,6 +340,12 @@ export class FixtureWorker {
     await this.setupReady
     if (!this.connections) throw new Error('Connection service unavailable')
     return this.connections.remoteOwner()
+  }
+
+  async verifyMcpOwner(signal: AbortSignal, present: (value: { url: string }) => void): Promise<void> {
+    await this.setupReady
+    if (!this.connections) throw new Error('Connection service unavailable')
+    await this.connections.verifyOwner(signal, present)
   }
 
   private async runtimeApprovalBinding(): Promise<RuntimeApprovalBinding | null> {
