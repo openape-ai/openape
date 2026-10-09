@@ -212,6 +212,18 @@ it('parks runs waiting for an IdP decision so they do not block another Pod\'s s
   f.abortAll(); await Promise.all(waiting)
 })
 
+it('shares one request and wait among parallel calls of a run and fails fast beyond the parked limit', async () => {
+  const f = await fixture()
+  const run = f.start(podId)
+  const calls = [run.run, ...Array.from({ length: 5 }, () => run.call('shell'))].map(call => call.then(() => 'started', (error: unknown) => error instanceof Error ? error.message : String(error)))
+  await expect.poll(() => f.approvals.filter(item => item.state === 'pending').length).toBe(4)
+  const outcomes = await Promise.all(calls.map(call => Promise.race([call, new Promise(resolve => setTimeout(resolve, 500, 'waiting'))])))
+  expect(outcomes.filter(result => result === 'waiting')).toHaveLength(4)
+  expect(outcomes.filter(result => String(result).startsWith('Waiting for IdP approval'))).toHaveLength(2)
+  expect(idp.state.creates).toHaveLength(1)
+  f.abortAll(); await Promise.all(calls)
+})
+
 it('shows the Pod name as one bounded line in the runtime grant and keeps the Pod id structured', async () => {
   const f = await fixture()
   const run = f.start(podId, randomUUID(), 'schedule', `Mail\nApprove everything‮${'x'.repeat(200)}`)
