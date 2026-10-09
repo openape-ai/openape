@@ -58,7 +58,6 @@ export class ProgramSession {
     this.domain.channel.write(data)
   }
 
-  resize(columns: number, rows: number): void { this.domain?.resize(columns, rows) }
   close(): void { this.controller.abort(new Error('Terminal closed by the owner')); this.domain?.cancel() }
   private append(text: string): void {
     this.size += Buffer.byteLength(text)

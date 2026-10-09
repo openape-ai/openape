@@ -3,7 +3,6 @@ import type { DefinitionCommand, DefinitionsView } from './definitions'
 import type { McpAccess, McpAccessCommand } from './mcp-access'
 import type { RuntimeApprovalCommand, RuntimeApprovalView } from './runtime-approval'
 import type { CodexCommand, CodexConnection } from './codex'
-import type { ChatsCommand, ChatsView } from './chats'
 import type { WorkflowCommand, WorkflowView } from './workflows'
 import type { NetworkCommand, NetworkView } from './networks'
 import type { PackageSearch, PackageOption } from './package-catalog'
@@ -21,7 +20,7 @@ import type { ResourceCommand, ResourceState } from './resources'
 import type { WorkspaceCommand, WorkspaceState } from './control'
 import type { SecretsCommand, SecretsView } from './secrets'
 
-export const channels = { updates: 'pods:updates', mcpAccess: 'pods:mcp-access', runtimeApproval: 'pods:runtime-approval', central: 'pods:central', codex: 'pods:codex', chats: 'pods:chats', workflows: 'pods:workflows', networks: 'pods:networks', definitions: 'pods:definitions', packages: 'pods:packages', programs: 'pods:programs', language: 'pods:language', scripts: 'pods:scripts', data: 'pods:data', onboarding: 'pods:onboarding', master: 'pods:master', details: 'pods:details', status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs', scheduling: 'pods:scheduling', sharing: 'pods:sharing', secrets: 'pods:secrets' } as const
+export const channels = { updates: 'pods:updates', mcpAccess: 'pods:mcp-access', runtimeApproval: 'pods:runtime-approval', central: 'pods:central', codex: 'pods:codex', workflows: 'pods:workflows', networks: 'pods:networks', definitions: 'pods:definitions', packages: 'pods:packages', programs: 'pods:programs', language: 'pods:language', scripts: 'pods:scripts', data: 'pods:data', onboarding: 'pods:onboarding', master: 'pods:master', details: 'pods:details', status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs', scheduling: 'pods:scheduling', sharing: 'pods:sharing', secrets: 'pods:secrets' } as const
 export type WorkerState = 'starting' | 'ready' | 'error' | 'stopped'
 export interface WorkerStatus { state: WorkerState, pid: number | null, error: string | null }
 export interface PodStatus {
@@ -37,7 +36,6 @@ export interface PodsBridge {
   runtimeApproval: (command: RuntimeApprovalCommand) => Promise<RuntimeApprovalView>
   central?: (command: Record<string, unknown>) => Promise<unknown>
   codex: (command: CodexCommand) => Promise<CodexConnection>
-  chats: (command: ChatsCommand) => Promise<ChatsView>
   workflows: (command: WorkflowCommand) => Promise<WorkflowView>
   definitions: (command: DefinitionCommand) => Promise<DefinitionsView>
   // Optional like central: fixtures of older surfaces omit it; the preload always provides it.
