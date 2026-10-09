@@ -152,7 +152,7 @@ it('creates, activates and changes a joined network with a daily source through 
   expect(await send({ type: 'create', draft }, requestId)).toEqual(created)
   expect(f.store.db.prepare('SELECT count(*) AS n FROM networks').get()!.n).toBe(1)
   const { details } = await send({ type: 'detail', id, revision: 1 })
-  expect(details!.definition).toMatchObject({ formatVersion: 3, joins: [{ id: 'morning', podId: editor, channels: ['calendar.digest', 'mail.digest'] }] })
+  expect(details!.definition).toMatchObject({ formatVersion: 6, routes: [], feedback: [], joins: [{ id: 'morning', podId: editor, channels: ['calendar.digest', 'mail.digest'] }] })
   expect(details!.definition.members.find(member => member.podId === source)!.source!.schedule).toEqual(daily)
 
   expect((await send({ type: 'activate', id, revision: 1 })).networks).toMatchObject([{ id, state: 'active' }])
@@ -207,8 +207,8 @@ it('leaves every grant decision of an approval batch to the identity provider', 
     throw new Error('Unexpected synthetic gate operation')
   } })
   const source = f.pod('Source', { takes: [], gives: ['test.input'], summary: 'Source' }, async () => {})
-  const consumer = f.pod('Gated consumer', { takes: ['test.input'], gives: [], summary: 'Consumer' }, async () => {})
-  const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, { podId: consumer, source: null, serialCase: false }], ['test.input'], [{ key: 'review', kind: 'approve', title: 'Review exact input', podId: consumer, channel: 'test.input' }])
+  const consumer = f.pod('Gated consumer', { takes: ['test.approved'], gives: [], summary: 'Consumer' }, async () => {})
+  const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, { podId: consumer, source: null, serialCase: false }], ['test.input', 'test.approved'], [{ key: 'review', kind: 'approve', title: 'Review exact input', takes: 'test.input', gives: 'test.approved', excluded: null }])
   const send = ownerSession(f)
   await send({ type: 'activate', id, revision: 1 })
   const authority = f.engine.invocations.reserve(id, source, f.resources.epoch(source), 'manual')!

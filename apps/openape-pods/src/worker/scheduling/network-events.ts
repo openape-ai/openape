@@ -164,7 +164,7 @@ export class NetworkEvents {
 
   // The runtime, not the script, decides whether an emission is a declared feedback transition, how it is identified and how many hops it has.
   feedbackPlan(definition: NetworkDefinition, podId: string, channel: string, inputIds: string[], key: string, inputHop: number): FeedbackPlan {
-    const transition = definition.feedback?.find(item => item.podId === podId && item.channel === channel) ?? null
+    const transition = definition.feedback.find(item => item.podId === podId && item.channel === channel) ?? null
     const transitionId = transition ? digest(canonicalNetworkJson([transition.id, inputIds])) : null
     if (transitionId) {
       // One transition per declaration and input set: a second emission with another key is refused instead of scheduled again.
@@ -193,7 +193,7 @@ export class NetworkEvents {
     this.store.db.prepare('INSERT INTO network_trace_events(network_id,case_id,run_id,event_id,kind,body,created_at) VALUES(?,?,?,?,?,?,?)').run(definition.id, caseRef.caseId, runId, review ? eventId : null, review ? 'feedback-review' : 'event-accepted', canonicalNetworkJson({ channel: channel.name, caseRevision: caseRef.caseRevision, ...feedbackTrace, ...(review ? { reason: review, eventId } : {}) }), now)
     if (!review) {
       this.joins.record(eventId)
-      for (const gate of definition.routes ?? []) {
+      for (const gate of definition.routes) {
         if (gate.kind !== 'choose' || gate.takes !== channel.name) continue
         this.store.db.prepare('INSERT INTO network_choices(network_id,network_revision,event_id,gate_key) VALUES(?,?,?,?)').run(definition.id, definition.revision, eventId, gate.key)
       }
@@ -201,7 +201,7 @@ export class NetworkEvents {
   }
 
   routeGate(definition: NetworkDefinition, gateKey: string, eventId: string, channelName: string, decision: string): string {
-    const gate = definition.routes?.find(gate => gate.key === gateKey)
+    const gate = definition.routes.find(gate => gate.key === gateKey)
     const permitted = gate?.kind === 'choose' ? gate.options.some(option => option.key === decision && option.channel === channelName) : gate?.kind === 'approve' && decision === 'excluded' && gate.excluded === channelName
     if (!permitted || !gate) throw new Error('Gate route is not declared')
     const input = this.store.db.prepare('SELECT * FROM network_events WHERE network_id=? AND id=? AND network_revision=? AND channel=?').get(definition.id, eventId, definition.revision, gate.takes)
@@ -230,7 +230,7 @@ export class NetworkEvents {
 
   choose(definition: NetworkDefinition, eventId: string, gateKey: string, optionKey: string): void {
     this.store.transaction(() => {
-      const gate = definition.routes?.find(gate => gate.key === gateKey)
+      const gate = definition.routes.find(gate => gate.key === gateKey)
       const option = gate?.kind === 'choose' ? gate.options.find(option => option.key === optionKey) : undefined
       if (!option) throw new Error('Choice is not declared')
       const choice = this.store.db.prepare('SELECT * FROM network_choices WHERE network_id=? AND network_revision=? AND event_id=? AND gate_key=?').get(definition.id, definition.revision, eventId, gateKey)

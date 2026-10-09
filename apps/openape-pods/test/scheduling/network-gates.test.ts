@@ -15,7 +15,9 @@ import { networkGateActionHash, networkGateDigest, networkGateItemCommand, netwo
 import type { NetworkGateManifest } from '../../src/contracts/network-gates'
 import { parseNetworkDefinition } from '../../src/contracts/networks'
 import { canonicalNetworkJson } from '../../src/worker/scheduling/network-events'
-import { digest } from '../../src/worker/storage/database'
+import { digest, PodDatabase } from '../../src/worker/storage/database'
+import { upgradeNetworkDefinition } from '../../src/worker/storage/network-format-migration'
+import { assertNetworkStorage } from '../../src/worker/storage/network-schema'
 import { closeNetworks, networkFixture } from './network-fixture'
 
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
@@ -71,7 +73,7 @@ describe('versioned gate authority', () => {
 })
 
 /** `status` decides each input by its manifest index, as the owner would at the identity provider. */
-function runtimeFixture(status: (index: number) => string = () => 'pending', consume: (grants: { key: string, id: string }[]) => Promise<unknown> = async () => true, routed = false) {
+function runtimeFixture(status: (index: number) => string = () => 'pending', consume: (grants: { key: string, id: string }[]) => Promise<unknown> = async () => true, excludes = false) {
   const calls: string[] = []
   const f = networkFixture({ gate: async (value, _signal, scope) => {
     scope.assertCurrent()
@@ -85,9 +87,9 @@ function runtimeFixture(status: (index: number) => string = () => 'pending', con
     throw new Error('Unexpected synthetic gate operation')
   } })
   const source = f.pod('Source', { takes: [], gives: ['test.input', 'test.other'], summary: 'Source' }, async () => {})
-  const consumer = f.pod('Gated consumer', { takes: [routed ? 'test.approved' : 'test.input', 'test.other'], gives: [], summary: 'Consumer' }, async () => {})
+  const consumer = f.pod('Gated consumer', { takes: ['test.approved', 'test.other'], gives: [], summary: 'Consumer' }, async () => {})
   const independent = f.pod('Independent consumer', { takes: ['test.input'], gives: [], summary: 'Independent' }, async () => {})
-  const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, ...[consumer, independent].map(podId => ({ podId, source: null, serialCase: false }))], ['test.input', 'test.other', ...(routed ? ['test.approved'] : [])], [{ key: 'review', kind: 'approve', title: 'Review exact input', podId: consumer, channel: 'test.input' }], routed ? [{ key: 'review', kind: 'approve', title: 'Review exact input', takes: 'test.input', gives: 'test.approved', excluded: 'test.other' }] : undefined)
+  const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, ...[consumer, independent].map(podId => ({ podId, source: null, serialCase: false }))], ['test.input', 'test.other', 'test.approved'], [{ key: 'review', kind: 'approve', title: 'Review exact input', takes: 'test.input', gives: 'test.approved', excluded: excludes ? 'test.other' : null }])
   f.engine.execute({ type: 'activate', id, revision: 1 })
   const settle = async () => { await expect.poll(() => f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0) }
   const due = () => f.store.db.prepare('UPDATE network_gate_controls SET next_poll_at=0').run()
@@ -722,4 +724,63 @@ it('routes a denied input once to the excluded channel and retains its receipt',
   expect(f.store.db.prepare('SELECT count(*) AS n FROM network_events WHERE channel=\'test.other\'').get()!.n).toBe(1)
   expect(f.store.db.prepare('SELECT outcome,receipt FROM network_gate_items WHERE task_id=?').get(task.id)).toMatchObject({ outcome: 'denied', receipt: expect.stringContaining('Owner approval denied') })
   expect(f.engine.view().gates!.find(gate => gate.id === task.id)!.state).toBe('denied')
+})
+
+it('upgrades a schema-41 network with approval bindings and keeps its pending batch and open choice decidable', async () => {
+  let status = 'pending'; const calls: string[] = []
+  const f = networkFixture({ gate: async (value, _signal, scope) => {
+    scope.assertCurrent()
+    const body = value as { operation: string, manifest: NetworkGateManifest, grants?: { key: string, id: string }[] }
+    f.engine.gates.authorizeService(scope, body.manifest, body.operation, body.grants)
+    calls.push(body.operation)
+    if (body.operation === 'create') return { id: body.manifest.id, url: 'https://identity.example.invalid/decision', grants: body.manifest.items.map(item => ({ key: item.deliveryId, id: `synthetic-once-grant-${item.deliveryId}` })) }
+    if (body.operation === 'status') return Object.fromEntries(body.grants!.map(grant => [grant.key, status]))
+    return true
+  } })
+  const source = f.pod('Intake', { takes: [], gives: ['mail.unsure', 'mail.batch'], summary: 'Reads mail' }, async () => {})
+  const selected = f.pod('Selected', { takes: ['mail.selected'], gives: [], summary: 'Keeps mail' }, async () => {})
+  const archive = f.pod('Archive', { takes: ['mail.approved'], gives: [], summary: 'Archives approved mail' }, async () => {})
+  const routes = [
+    { key: 'uncertain-review', title: 'Review uncertain mail', kind: 'choose' as const, takes: 'mail.unsure', options: [{ key: 'keep', title: 'Keep', channel: 'mail.selected' }, { key: 'other', title: 'Other', channel: 'mail.selected' }] },
+    { key: 'newsletter-approval', title: 'Approve newsletter preview', kind: 'approve' as const, takes: 'mail.batch', gives: 'mail.approved', excluded: null },
+  ]
+  const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, ...[selected, archive].map(podId => ({ podId, source: null, serialCase: false }))], ['mail.unsure', 'mail.selected', 'mail.batch', 'mail.approved'], routes)
+  f.engine.execute({ type: 'activate', id, revision: 1 })
+  const authority = f.engine.invocations.reserve(id, source, f.resources.epoch(source), 'manual')!
+  await f.engine.invocations.finish(authority, 'completed', 'Synthetic intake', null, [], ['mail.unsure', 'mail.batch'].map(channel => ({ channel, key: channel, sourceItemId: channel, sourceVersion: 'v1', payload: { subject: channel } })))
+  const settle = async () => { await expect.poll(() => f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0) }
+  f.engine.tick(); await settle()
+  expect(calls).toEqual(['create'])
+  const retained = () => ({ tasks: f.store.db.prepare('SELECT * FROM network_gate_tasks').all(), choices: f.store.db.prepare('SELECT * FROM network_choices').all(), traces: f.store.db.prepare('SELECT * FROM network_trace_events').all() })
+  const before = retained()
+
+  // Store the definition as the schema-41 build did: format 5 with each approve route duplicated as a gate binding.
+  const current = JSON.parse(f.store.db.prepare('SELECT contract FROM network_revisions WHERE network_id=?').get(id)!.contract as string)
+  const legacy = canonicalNetworkJson({ ...current, formatVersion: 5, gates: [{ key: 'newsletter-approval', title: 'Approve newsletter preview', kind: 'approve', podId: archive, channel: 'mail.batch' }] })
+  f.store.db.prepare('UPDATE network_revisions SET contract=?,content_hash=? WHERE network_id=?').run(legacy, digest(legacy), id)
+  f.store.db.exec('PRAGMA user_version=41')
+  new PodDatabase(f.store.root).close()
+
+  const upgraded = f.store.db.prepare('SELECT contract,content_hash FROM network_revisions WHERE network_id=?').get(id)!
+  expect(JSON.parse(upgraded.contract as string)).toEqual({ ...current, formatVersion: 6 })
+  expect(upgraded.content_hash).toBe(digest(upgraded.contract as string))
+  expect(() => assertNetworkStorage(f.store.db, true)).not.toThrow()
+  expect(retained()).toEqual(before)
+  const view = f.engine.execute({ type: 'list' })
+  expect(view.gates).toMatchObject([{ gate: 'newsletter-approval', podId: archive, state: 'pending' }])
+  expect(view.choices).toMatchObject([{ gate: 'uncertain-review', networkId: id, revision: 1 }])
+
+  f.engine.execute({ type: 'choose', id, revision: 1, eventId: view.choices![0]!.eventId, gate: 'uncertain-review', option: 'keep' })
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM network_events WHERE channel=\'mail.selected\'').get()!.n).toBe(1)
+  status = 'approved'
+  f.store.db.prepare('UPDATE network_gate_controls SET next_poll_at=0').run(); f.engine.tick(); await settle()
+  f.engine.tick(); await settle()
+  expect(calls).toEqual(['create', 'status', 'consume', 'assertActive'])
+  expect(f.started).toEqual(expect.arrayContaining([selected, archive]))
+})
+
+it('refuses to upgrade an approval binding that no route expresses', () => {
+  const definition = { formatVersion: 2, id: randomUUID(), revision: 1, members: [{ podId: randomUUID(), contract: { takes: ['mail.batch'] } }], gates: [{ key: 'direct', title: 'Direct approval', podId: randomUUID(), channel: 'mail.batch' }] }
+  expect(() => upgradeNetworkDefinition(definition)).toThrow('approval gate without its route')
+  expect(upgradeNetworkDefinition({ ...definition, gates: [] })).toEqual({ formatVersion: 6, id: definition.id, revision: 1, members: definition.members, routes: [], joins: [], feedback: [] })
 })
