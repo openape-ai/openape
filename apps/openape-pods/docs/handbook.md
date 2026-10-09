@@ -35,7 +35,7 @@ Stand HH:MM marks a published snapshot in the browser; Live · HH:MM means the d
 
 ## Decisions: everything that waits for you
 
-The Decisions tab lists five kinds of owner decisions: Questions from choose gates, Approvals of batches at the identity provider, Rights a Pod is missing, Unknown deliveries whose result is unclear and Setup proposals including secret requests. The number in the tab is the count of open items.
+The Decisions tab lists five kinds of owner decisions: Questions from choose routes of a network, Approvals of batches at the identity provider, Rights a Pod is missing, Unknown deliveries whose result is unclear and Secrets requested through OpenApe Secrets. The number in the tab is the count of open items.
 
 Questions show the recorded fields of each case and the options of the gate with their exact titles; Group by bundles cases by one field so a single choice applies to the whole group. Approvals link to the identity provider, which shows a batch as one list with a checkbox per item: approve the selected items and the others are denied. Each item has its own single-use grant, so only approved items continue and a denied item goes to the gate's excluded channel if it has one; rights open the approval; unknown deliveries need your observation at the destination before Delivered or Not delivered, send again.
 
@@ -44,7 +44,7 @@ Pods never decides for you: no model and no schedule chooses, approves, excludes
 1. Open Decisions; the tab shows how many items wait.
 2. Read the case, then choose an option; Group by decides many cases with the same field at once. For an approval batch, open the identity provider, select the items to approve and confirm.
 3. For unknown deliveries check the destination first, note what you saw and record it.
-4. Setup lists Codex proposals and open secret requests; Set up in the Pod opens the Pod editor.
+4. Secrets lists open secret requests with the link to fill them in at secrets.openape.ai.
 
 ![Decisions: everything that waits for you](images/handbook-decisions.png)
 
@@ -93,7 +93,7 @@ Connected Codex can configure access, save and validate a script, activate it an
 
 In the gear menu, “Always let the scripts of all my Pods run on this Mac” covers existing and future Pods for the signed-in owner on this connected runtime. Manual, scheduled and repeated runs receive exact reusable runtime grants. The option neither starts schedules nor grants mail, folder, program, network or secret permissions. Denied or revoked grants remain blocked. Turn it off to stop new automatic approvals. The MCP session row shows until when Codex is signed in; End session revokes its access immediately. Use “Manage existing grants at the IdP” to open the owner identity provider and revoke existing grants separately. MCP and the central web interface cannot change these settings.
 
-1. Hand the brief to Codex; it creates the Pod, its script and the access proposals.
+1. Hand the brief to Codex; it creates the Pod and its script and configures the access it needs.
 2. Provide ordinary settings in Codex; transfer secrets through OpenApe Secrets or enter them on the detail page under Secrets.
 3. Ask Codex to configure the required access and validate the saved script.
 4. Inspect the actual saved script, assignments and schedule in Pods.
@@ -133,7 +133,7 @@ Use Variables and secrets for this Pod. Ordinary variables are visible to the as
 
 Codex can ask for a secret by name and purpose but cannot read its stored value. On the detail page under Secrets choose + Secret: type the value, read a private file on this Mac, or request it through OpenApe Secrets. Never paste it in conversation, source, screenshots or support messages.
 
-A request through OpenApe Secrets registers this Mac once as a consumer with its own key and lists the request under Decisions → Setup. You fill it in at secrets.openape.ai in the browser; the value is sealed against the key of this Mac, Pods collects it once and the request is destroyed. The gear menu shows the registration with Revoke. Codex can raise the same request with requestSecret; it sees only the alias.
+A request through OpenApe Secrets registers this Mac once as a consumer with its own key and lists the request under Decisions → Secrets. You fill it in at secrets.openape.ai in the browser; the value is sealed against the key of this Mac, Pods collects it once and the request is destroyed. The gear menu shows the registration with Revoke. Codex can raise the same request with requestSecret; it sees only the alias.
 
 Assigning a secret lets this Pod’s validated scripts read that alias. Review the source: a script can deliberately copy a secret into a prompt, file or log. Secret storage does not make arbitrary code safe. Managed secret values are encrypted locally and excluded from backup exports.
 
@@ -277,7 +277,7 @@ Under Dependencies, the list shows each package and its fixed version. Click + t
 
 Ordinary variables are named strings stored in SQLite for this pod. Use context.variables["name"] in scripts. Up to 32 variables are supported, with values up to 2,048 characters. Values are captured for each run; later edits apply to future runs. These values are not encrypted. Store sensitive values as secrets.
 
-The dedicated tab shows all stored variables and secrets for this pod. Empty variables are marked Not set. Secrets required by the saved script or requested in retained setup requests also appear before a value has been assigned; choose Set secret to prefill the alias. Assigning a secret authorizes this Pod to read that alias from its validated scripts; removing the assignment revokes access.
+The dedicated tab shows all stored variables and secrets for this pod. Empty variables are marked Not set. Secrets required by the saved script also appear before a value has been assigned; choose Set secret to prefill the alias. Assigning a secret authorizes this Pod to read that alias from its validated scripts; removing the assignment revokes access.
 
 Each pod owns its script versions, workspace, persistent checkpoint and credential assignments. Under Variables and secrets, enter a Credential alias and a masked Credential value, then choose Save or replace credential. An alias starts with a lowercase letter and contains at most 64 lowercase letters, digits, underscores or hyphens. Values contain 1–16,384 characters without null bytes. Each pod supports 32 current aliases; a script can declare up to 16 capabilities including assigned application and HTTP capabilities.
 

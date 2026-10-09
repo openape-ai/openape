@@ -21,9 +21,7 @@ export default defineComponent({
         const [resources, script] = await Promise.all([this.access.api.resources({ type: 'list', podId: this.podId }), this.access.api.scripts({ type: 'list', podId: this.podId })])
         this.variables = resources.variables ?? []
         const scriptAliases = script.source?.capabilities.filter(item => item.startsWith('credential.')).map(item => item.slice(11)) ?? []
-        const chat = this.access.remote ? null : await window.pods.master({ type: 'list', podId: this.podId })
-        const chatAliases = chat?.proposals.flatMap(proposal => proposal.podId === this.podId && proposal.state === 'pending' && proposal.body.provider === 'credential' && typeof proposal.body.alias === 'string' ? [proposal.body.alias] : []) ?? []
-        this.requiredAliases = [...new Set([...scriptAliases, ...chatAliases])]
+        this.requiredAliases = [...new Set(scriptAliases)]
       }
       catch (error) { this.error = error instanceof Error ? error.message : 'Could not load variables' }
     },

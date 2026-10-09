@@ -22,50 +22,16 @@ function fixture() {
   const propose = (request: SetupRequest) => { const id = randomUUID(); store.db.prepare('INSERT INTO access_proposals VALUES(?,?,?,?)').run(id, pod.id, JSON.stringify(request), 'pending'); return id }
   return { store, pod, resources, setup, propose }
 }
-it('accepts concrete owner proposals without granting model access or accepting secret values', () => {
+it('refuses access proposals and setup answers: access is configured directly or requested through OpenApe Secrets', () => {
   const podId = randomUUID()
   for (const request of [
     { provider: 'http', origin: 'https://api.telegram.org', methods: ['POST'], description: 'Notify after filing' },
-    { provider: 'directory', path: '/Invoices', access: 'readWrite', description: 'Save invoice files' },
-    { provider: 'application', application: 'o365-cli', argv: ['mail', 'list'], networkHosts: ['graph.microsoft.com'], description: 'Read new mail' },
-    { provider: 'credential', alias: 'telegram_bot_token', description: 'Bot token', instructions: 'Obtain it from BotFather; use Variables and secrets.' },
+    { provider: 'credential', alias: 'telegram_bot_token', description: 'Bot token' },
     { provider: 'variable', alias: 'telegram_chat_id', description: 'Which chat receives notifications?' },
-  ]) expect(parseMasterAction({ action: 'requestAccess', podId, revision: 1, request })).toMatchObject({ request })
-  expect(() => parseMasterAction({ action: 'resolveSetup', podId, revision: 1 })).toThrow()
-  expect(() => parseMasterAction({ action: 'requestAccess', podId, revision: 1, request: { provider: 'credential', alias: 'token', description: 'Token', value: 'never-send-this' } })).toThrow()
-  expect(() => parseMasterAction({ action: 'requestAccess', podId, revision: 1, request: { provider: 'http', origin: 'https://api.telegram.org/path', methods: ['POST'], description: 'Wrong scope' } })).toThrow()
+  ]) expect(() => parseMasterAction({ action: 'requestAccess', podId, revision: 1, request })).toThrow('not allowed')
+  for (const type of ['answerSetup', 'resolveSetup', 'decline']) expect(() => parseMasterCommand({ type, id: randomUUID(), podId })).toThrow('Unsupported master request')
   expect(() => parseResourceCommand({ type: 'assignDirectory', podId, epoch: 0, path: '/Invoices', access: 'readWrite' })).toThrow()
   expect(parseResourceCommand({ type: 'reviewDirectory', podId, epoch: 0, path: '/Invoices', access: 'readWrite' }).type).toBe('reviewDirectory')
-})
-it('requires actual current resources before resolving an HTTP proposal and rejects foreign resources', async () => {
-  const { store, pod, resources, setup, propose } = fixture()
-  const request: SetupRequest = { provider: 'http', origin: 'https://api.telegram.org', methods: ['POST'], description: 'Notify' }
-  const id = propose(request); const resourceId = randomUUID()
-  const command = { type: 'resolveSetup' as const, id, podId: pod.id, resourceId, epoch: 0, request }
-  await expect(setup.resolve(command)).rejects.toThrow('Resources changed')
-  const other = store.createPod({ name: 'Other' })
-  store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(resourceId, other.id, 'tool', 'ready', 'Telegram', JSON.stringify({ type: 'http', origin: request.origin, methods: ['POST'] }))
-  await expect(setup.resolve(command)).rejects.toThrow('Resources changed')
-  store.db.prepare('UPDATE resources SET pod_id=?,configuration=? WHERE id=?').run(pod.id, JSON.stringify({ type: 'http', origin: request.origin, methods: ['GET'] }), resourceId)
-  await expect(setup.resolve(command)).rejects.toThrow('not configured')
-  store.db.prepare('UPDATE resources SET configuration=? WHERE id=?').run(JSON.stringify({ type: 'http', origin: request.origin, methods: ['POST'] }), resourceId)
-  await expect(setup.resolve({ ...command, epoch: 1 })).rejects.toThrow('Resources changed')
-  await setup.resolve(command)
-  expect(setup.proposals(pod.id)[0]?.state).toBe('approved')
-  expect(store.getPod(pod.id).lifecycle).toBe('paused'); expect(resources.epoch(pod.id)).toBe(0)
-})
-it('saves ordinary follow-up answers atomically and cannot use that route for credentials', () => {
-  const { pod, setup, propose, store } = fixture()
-  const id = propose({ provider: 'variable', alias: 'telegram_chat_id', description: 'Which chat?' })
-  const command = { type: 'answerSetup' as const, id, podId: pod.id, value: '123456', revision: 0 }
-  expect(parseMasterCommand(command)).toEqual(command)
-  expect(() => setup.answer({ ...command, revision: 1 })).toThrow('Variable changed')
-  expect(setup.proposals(pod.id)[0]?.state).toBe('pending')
-  setup.answer(command)
-  expect(store.db.prepare('SELECT name,value FROM pod_variables WHERE pod_id=?').all(pod.id)).toEqual([{ name: 'telegram_chat_id', value: '123456' }])
-  const credential = propose({ provider: 'credential', alias: 'bot_token', description: 'Secret' })
-  expect(() => setup.answer({ ...command, id: credential, value: 'a-secret' })).toThrow('Variables and secrets')
-  expect(store.db.prepare('SELECT COUNT(*) AS count FROM pod_variables').get()?.count).toBe(1)
 })
 it('reports secret presence from encrypted resource metadata and reopens the need after revocation', () => {
   const { pod, setup, propose, resources, store } = fixture()

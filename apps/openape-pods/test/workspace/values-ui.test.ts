@@ -61,15 +61,12 @@ it('marks empty variables and exposes required secrets without inventing their v
   wrapper.unmount()
 })
 
-it('includes pending chat secrets and excludes declined proposals', async () => {
+it('requires the secret aliases the active script declares, never legacy chat proposals', async () => {
   const podId = crypto.randomUUID()
-  const master = vi.fn().mockResolvedValue({ proposals: [
-    { podId, state: 'pending', body: { provider: 'credential', alias: 'chat_token' } },
-    { podId, state: 'declined', body: { provider: 'credential', alias: 'declined_token' } },
-  ] })
-  window.pods = { master, resources: async () => ({ variables: [] }), scripts: async () => ({ source: null }) } as unknown as typeof window.pods
+  const master = vi.fn()
+  window.pods = { master, resources: async () => ({ variables: [] }), scripts: async () => ({ source: { capabilities: ['credential.chat_token', 'mail.read'] } }) } as unknown as typeof window.pods
   const wrapper = mount(PodValues, { props: { podId }, global: { stubs: { PodResources: true } } }); await flushPromises()
   expect(wrapper.getComponent({ name: 'PodResources' }).props('requiredAliases')).toEqual(['chat_token'])
-  expect(master).toHaveBeenCalledWith({ type: 'list', podId })
+  expect(master).not.toHaveBeenCalled()
   wrapper.unmount()
 })

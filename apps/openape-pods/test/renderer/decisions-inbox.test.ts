@@ -6,7 +6,6 @@ import type { MapView } from '../../src/contracts/map-view'
 import { parseMapView } from '../../src/contracts/map-view'
 import type { NetworkGateView } from '../../src/contracts/network-gate-view'
 import type { NetworkChoiceView } from '../../src/contracts/networks'
-import type { AccessProposal } from '../../src/contracts/master'
 import AutomationsShell from '../../src/renderer/central/AutomationsShell.vue'
 import DecisionsInbox from '../../src/renderer/central/DecisionsInbox.vue'
 import { applyLanguage } from '../../src/renderer/i18n'
@@ -19,12 +18,11 @@ const network = view.collections.find(collection => collection.kind === 'network
 /** The 17 events as the network engine lists them: ordered by acceptance, two cases carry a second version. */
 export const choices: NetworkChoiceView[] = [...choiceEvents].sort((a, b) => Date.parse(a[6]) - Date.parse(b[6])).map(recorded => ({ networkId: network.id, revision: network.revision, eventId: recorded[0], caseId: `${recorded[1]}-0000-4000-8000-000000000000`.slice(0, 36), gate: chooseGate.key, title: chooseGate.title, payload: JSON.stringify(choicePayload(recorded)), truncated: false, options: chooseGate.options.map(({ key, title }) => ({ key, title })) }))
 const batch: NetworkGateView = { id: '00000000-0000-4000-8000-0000000000b1', networkId: network.id, gate: 'newsletter-approval', podId: network.members[9]!, generation: 1, state: 'pending', expiresAt: view.at + 3600000, url: 'https://id.openape.ai/grant-approval?grant_id=batch-1', error: null, items: [{ deliveryId: '00000000-0000-4000-8000-0000000000d1', title: 'Nur heute: 20 % · news@shop.example', outcome: 'held' }, { deliveryId: '00000000-0000-4000-8000-0000000000d2', title: 'Neu im Oktober · hello@saas.example', outcome: 'held' }] }
-const proposal: AccessProposal = { id: '00000000-0000-4000-8000-0000000000a1', podId: view.pods.find(pod => pod.name === 'zaz Service-Agent')!.id, body: { provider: 'http', description: 'Reach https://zaz.delta-mind.at with GET and POST', origin: 'https://zaz.delta-mind.at', methods: ['GET', 'POST'] }, state: 'pending' }
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; applyLanguage('en') })
 async function mountInbox(props: Record<string, unknown> = {}) {
   applyLanguage('de')
-  wrapper = mount(DecisionsInbox, { attachTo: document.body, props: { view, choices, gates: [], graphGates: null, proposals: [], desktop: true, ...props } })
+  wrapper = mount(DecisionsInbox, { attachTo: document.body, props: { view, choices, gates: [], graphGates: null, desktop: true, ...props } })
   await flushPromises()
   return wrapper
 }
@@ -38,7 +36,7 @@ describe('Entscheidungen', () => {
       ['0', 'Freigaben', 'keine wartenden Batches'],
       ['1', 'Rechte', '1 Laufzeit-Anfragen'],
       ['1', 'unklare Zustellungen', '1 Zustellungen abzugleichen'],
-      ['0', 'Einrichtung', 'keine Vorschläge'],
+      ['0', 'Geheimnisse', 'keine Anfragen nach Geheimnissen'],
     ])
     const cards = wrapper!.findAll('[data-testid="choices"] .item')
     expect(cards).toHaveLength(15)
@@ -106,10 +104,10 @@ describe('Entscheidungen', () => {
     expect(wrapper!.find('[data-testid="choices"] .item:not(.done) .raw').text()).toContain('"gate": "uncertain-review"')
   })
 
-  it('lists approval batches with the IdP action, rights with the approval command, unknown deliveries and setup proposals', async () => {
+  it('lists approval batches with the IdP action, rights with the approval command and unknown deliveries', async () => {
     const monitor = view.pods.find(pod => pod.name === 'IURIO PR monitor')!
     const bot = view.pods.find(pod => pod.unknown.length)!
-    await mountInbox({ gates: [batch], proposals: [proposal] })
+    await mountInbox({ gates: [batch] })
     const batches = wrapper!.find('[data-testid="batches"]')
     expect(batches.text()).toContain('Freigabe-Batch · newsletter-approval')
     expect(batches.text()).toContain('2 Items')
@@ -129,14 +127,7 @@ describe('Entscheidungen', () => {
     await deliveries.find('label input').setValue('Nachricht 245 ist im Kanal angekommen')
     await deliveries.findAll('button')[0]!.trigger('click')
     expect(wrapper!.emitted('command')!.at(-1)).toEqual([{ channel: 'runs', body: { type: 'resolveHttp', podId: bot.id, runId: bot.unknown[0]!.runId, key: bot.unknown[0]!.key, applied: true, evidence: 'Nachricht 245 ist im Kanal angekommen' } }])
-    const setup = wrapper!.find('[data-testid="setup"]')
-    expect(setup.text()).toContain('zaz Service-Agent')
-    expect(setup.text()).toContain('Reach https://zaz.delta-mind.at with GET and POST')
-    await setup.findAll('button').find(item => item.text() === 'Im Pod einrichten')!.trigger('click')
-    expect(wrapper!.emitted('open')).toEqual([[proposal.podId]])
-    await setup.findAll('button').find(item => item.text() === 'Ablehnen')!.trigger('click')
-    expect(wrapper!.emitted('master')).toEqual([[{ type: 'decline', id: proposal.id, podId: proposal.podId }]])
-    expect(wrapper!.findAll('.kpi').map(item => item.find('b').text())).toEqual(['17', '1', '1', '1', '1'])
+    expect(wrapper!.findAll('.kpi').map(item => item.find('b').text())).toEqual(['17', '1', '1', '1', '0'])
   })
 
   it.each([true, false])('opens network and graph approvals on the correct host (desktop: %s)', async (desktop) => {
@@ -158,19 +149,17 @@ describe('Entscheidungen', () => {
     expect(wrapper!.emitted('workflow')).toEqual([[{ type: 'gateOpen', batchId: graphBatch.id }]])
   })
 
-  it('shows the inbox on the second tab of the shell with the count in the tab and opens a Pod from a proposal', async () => {
+  it('shows the inbox on the second tab of the shell with the count in the tab', async () => {
     applyLanguage('de')
-    wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: true, now: view.at, desktop: true, tab: 'decisions', inbox: { choices, gates: [], graphGates: null, proposals: [proposal] } } })
+    wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: true, now: view.at, desktop: true, tab: 'decisions', inbox: { choices, gates: [], graphGates: null } } })
     await flushPromises()
-    expect(wrapper.find('[role="tablist"]').text()).toContain('Entscheidungen 20')
+    expect(wrapper.find('[role="tablist"]').text()).toContain('Entscheidungen 19')
     expect(wrapper.find('.decisions-inbox h1').text()).toBe('Entscheidungen')
     await wrapper.findAll('[data-testid="choices"] .opts button')[0]!.trigger('click')
     expect(wrapper.emitted('networkCommand')).toHaveLength(1)
-    await wrapper.findAll('button').find(item => item.text() === 'Im Pod einrichten')!.trigger('click')
-    expect(wrapper.emitted('update:tab')).toEqual([['automations']])
   })
 
-  it('lists open secret requests under setup with the fill link, cancels them on the desktop and hides settled ones', async () => {
+  it('lists open secret requests with the fill link, cancels them on the desktop and hides settled ones', async () => {
     const bot = view.pods.find(pod => pod.name === 'Morgenbriefing · Calendar-Bot')!
     const row = { podId: bot.id, alias: 'calendar_bot_token', purpose: '', expiresAt: view.at + 86400000, createdAt: view.at, updatedAt: view.at, error: null }
     await mountInbox({ requests: [{ ...row, id: '01REQ0', status: 'requested' }, { ...row, id: '01REQ1', status: 'failed', error: 'The envelope was collected elsewhere' }, { ...row, id: '01REQ2', status: 'collected' }, { ...row, id: '01REQ3', status: 'expired' }], secretsOrigin: 'https://secrets.openape.ai' })

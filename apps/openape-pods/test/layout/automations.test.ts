@@ -106,7 +106,7 @@ describe('Automatisierungen layout', () => {
     await mountShell(1440, 1000)
     wrapper!.unmount()
     applyLanguage('de')
-    wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, desktop: true, tab: 'decisions', inbox: { choices, gates: [], graphGates: null, proposals: [] } } })
+    wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, desktop: true, tab: 'decisions', inbox: { choices, gates: [], graphGates: null } } })
     await flushPromises(); await frames(2)
     const card = document.querySelector('[data-testid="choices"] .item')!.getBoundingClientRect()
     expect(card.width).toBeGreaterThan(1200)
