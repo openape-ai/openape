@@ -14,7 +14,7 @@ import type { DefinitionCommand, DefinitionsView } from '../contracts/definition
 import type { NetworkGateManifest } from '../contracts/network-gates'
 import { resolveSshTarget, sshGrantArgv } from './ssh/configuration'
 import { invokeSsh } from './ssh/invoke'
-import { AuthorityError, InfrastructureError, NonRetryableError, retryInfrastructure } from '../contracts/infrastructure'
+import { AuthorityError, InfrastructureError, NonRetryableError } from '../contracts/infrastructure'
 import type { InfrastructureFailure } from '../contracts/infrastructure'
 import { MailArchiveService } from './mail/archive/service'
 import { ArchiveStore } from './mail/archive/store'
@@ -45,7 +45,6 @@ import type { NetworkCommand, NetworkView } from '../contracts/networks'
 import type { WorkflowCommand, WorkflowView } from '../contracts/workflows'
 import type { ServiceScope, RunContextRequest, ServiceCheck, ServiceRequest  } from '../contracts/services'
 import { loadAdapter, resolveCommand } from '@openape/apes'
-import { setTimeout as delay } from 'node:timers/promises'
 import { approvalURL } from '../contracts/activity'
 import type { RunApproval } from '../contracts/activity'
 import { assignedDirectories, directoryPolicy } from '../runtime/directories'
@@ -81,7 +80,7 @@ import { parseServiceScope } from '../contracts/services'
 import type { CredentialCache } from './connections/cache'
 import { createMacOSCredentialCache } from './connections/macos'
 import { PodIdentityManager } from './connections/agent'
-import { AgentAuthority } from './broker/authorization'
+import { AgentAuthority, RunGrantTokens } from './broker/authorization'
 import { MailService } from './mail/service'
 import { assignedMail } from './mail/assigned'
 import { parsePodDetails } from '../contracts/details'
@@ -117,7 +116,9 @@ function redactTerminalView(result: unknown): unknown {
 export class FixtureWorker {
   central: CentralController | null = null
   inbox: InboxDecisions | null = null
-  private shellIdentities = new Map<string, { close: () => Promise<void> }>()
+  // The runtime grant is checked at run start and again when its reused token nears expiry.
+  private shellIdentities = new Map<string, { authorize: (signal: AbortSignal) => Promise<void> }>()
+  private runTokens = new Map<string, RunGrantTokens>()
   private openedApprovals = new Set<string>()
   private archiveService?: MailArchiveService
   private programs: ProgramManager | null = null
@@ -182,7 +183,7 @@ export class FixtureWorker {
     })
     child.on('exit', (code) => {
       this.programs?.cancelAll()
-      void this.closeShellIdentities().catch((error: unknown) => { console.error('Pod shell credential cleanup failed', error) })
+      this.clearRunAuthorizations()
       for (const service of this.services.values()) service.abort(new Error('Owning worker stopped'))
       this.state = this.stopping ? { state: 'stopped', pid: null, error: null } : { state: 'error', pid: null, error: `Worker exited (${code}). Quit and reopen Pods to recover.` }
       for (const request of this.pending.values()) { clearTimeout(request.timer); request.reject(new Error('Worker stopped before replying')) }
@@ -277,9 +278,8 @@ export class FixtureWorker {
 
   cancelProgram(podId: string): void { this.programs?.cancelPod(podId) }
 
-  private async closeShellIdentities(): Promise<void> {
-    const identities = [...this.shellIdentities.values()]; this.shellIdentities.clear(); this.jevAttempts.clear()
-    await Promise.all(identities.map(identity => identity.close()))
+  private clearRunAuthorizations(): void {
+    this.shellIdentities.clear(); this.runTokens.clear(); this.jevAttempts.clear()
   }
 
   async program(command: ProgramCommand, definition?: ProgramDefinition, file?: string): Promise<Awaited<ReturnType<ProgramManager['terminal']>> | Awaited<ReturnType<ProgramManager['prepare']>> | ResourceState | string | null> {
@@ -755,6 +755,15 @@ export class FixtureWorker {
     })
   }
 
+  private grantTokens(runId: string): RunGrantTokens {
+    for (const [id, tokens] of this.runTokens) {
+      if (id !== runId && tokens.expired()) this.runTokens.delete(id)
+    }
+    const tokens = this.runTokens.get(runId) ?? new RunGrantTokens()
+    this.runTokens.set(runId, tokens)
+    return tokens
+  }
+
   private async executeService(request: ServiceRequest): Promise<unknown> {
     if (!request || typeof request.id !== 'string' || !/^[a-f0-9-]{36}$/.test(request.id) || this.services.has(request.id) || this.services.size >= 16) throw new Error('Invalid or excessive broker request')
     if (request.kind !== undefined && request.kind !== 'gate' && request.kind !== 'mailArchive' && request.kind !== 'mailMove' && request.kind !== 'credential' && request.kind !== 'jev' && request.kind !== 'http' && request.kind !== 'shell' && request.kind !== 'shellClose') throw new Error('Unsupported broker service')
@@ -764,8 +773,9 @@ export class FixtureWorker {
     try {
       if (request.kind === 'shellClose') {
         this.jevAttempts.delete(scope.runId)
-        await this.shellIdentities.get(scope.runId)?.close(); this.shellIdentities.delete(scope.runId); return true
+        this.shellIdentities.delete(scope.runId); this.runTokens.delete(scope.runId); return true
       }
+      const tokens = this.grantTokens(scope.runId)
       const context = await this.dispatch({ runContext: { scope } }) as { name: string, reason: string }
       const previous = async (permission: string, connection: { issuer: string, decisionIssuer?: string, subject: string }) => {
         const grant = await this.dispatch({ runContext: { scope, grant: { permission, issuer: connection.decisionIssuer ?? connection.issuer, subject: connection.subject } } }) as RunApproval | null
@@ -785,7 +795,7 @@ export class FixtureWorker {
         const runtime = { executable: process.execPath, cli: app.isPackaged ? join(process.resourcesPath, 'apes/ape-shell.mjs') : join(dist, 'vendor/apes/ape-shell.mjs'), client: join(dist, 'runtime/shell-client.mjs') }
         const environment = await podEnvironment(this.root, scope.podId, runtime)
         const connection = await this.connections.podConnection(scope.podId)
-        const authority = new AgentAuthority(connection, observe, previous, (grantId, signal) => this.approveStandingRuntime(connection, scope.podId, grantId, signal))
+        const authority = new AgentAuthority(connection, observe, previous, (grantId, signal) => this.approveStandingRuntime(connection, scope.podId, grantId, signal), tokens)
         const adapterPath = join(dist, 'vendor/pod-runtime-shapes.toml')
         const adapter = loadAdapter('pod-runtime', adapterPath)
         const argv = ['pod-runtime', 'run', '--pod', scope.podId, '--name', context.name, '--script', join(this.root, 'runs', scope.runId, 'run.mjs'), '--workspace', environment.workspace, '--home', environment.home, '--environment', JSON.stringify(visibleEnvironment(environment.environment))]
@@ -793,18 +803,7 @@ export class FixtureWorker {
         const assignment = { grantId: '', command: { cliId: 'pod-runtime', adapterPath, adapterDigest: adapter.digest, argv, permission: resolved.permission } }
         await authority.authorize(assignment, controller.signal, `Pod: ${context.name}\nRun the stored script inside this Pod's managed runtime. Script changes remain within separately assigned permissions. This approval does not enable a schedule.\nScript: ${join(this.root, 'runs', scope.runId, 'run.mjs')}\nWorkspace: ${environment.workspace}\nHOME: ${environment.home}`)
         await check(); controller.signal.throwIfAborted()
-        const monitoring = new AbortController()
-        const monitor = (async () => {
-          try { while (!monitoring.signal.aborted) { await delay(1000, undefined, { signal: monitoring.signal }); await retryInfrastructure(() => authority.assertActive(assignment.grantId, monitoring.signal), monitoring.signal, async (retry) => { if (!monitoring.signal.aborted) await this.dispatch({ serviceCheck: { scope, infrastructure: retry } }) }) } }
-          catch (error) {
-            if (!monitoring.signal.aborted) {
-              console.error('Pod execution authority lost', error)
-              try { await this.dispatch({ serviceCheck: { scope, authorityLost: true } }) }
-              catch (cancelError) { console.error('Could not cancel the revoked Pod run', cancelError) }
-            }
-          }
-        })()
-        this.shellIdentities.set(scope.runId, { close: async () => { monitoring.abort(); await monitor } })
+        this.shellIdentities.set(scope.runId, { authorize: signal => authority.authorize(assignment, signal) })
         return { home: environment.home, environment: environment.environment }
       }
       if (request.kind === 'credential') {
@@ -819,6 +818,7 @@ export class FixtureWorker {
         if (current !== id) throw new Error('Credential changed during access')
         return value
       }
+      await this.shellIdentities.get(scope.runId)?.authorize(controller.signal)
       const state = await check()
       if (request.kind === 'gate') {
         if (!this.connections) throw new Error('Connection service unavailable')
@@ -837,7 +837,7 @@ export class FixtureWorker {
         const assignment = assignedJev(state.resources, scope.podId, scope.capabilities)
         const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
         const result = await executeJev(assignment, parseJevRequest(request.body), {
-          vendor, credentials: this.credentials, signal: controller.signal, observe, previous, check,
+          vendor, credentials: this.credentials, signal: controller.signal, observe, previous, check, tokens,
           send: (body, signal) => this.connections!.typesafeRequest(assignment.connectionId, body, signal),
           consumeAttempt: () => {
             const count = this.jevAttempts.get(scope.runId) ?? 0
@@ -859,13 +859,13 @@ export class FixtureWorker {
           },
           reject: authentication => this.agentTokens.reject(scope.podId, authentication),
         }
-        const result = await executeHttp(state.resources, scope, parseHttpRequest(request.body), vendor, credentials, controller.signal, observe, previous, bearer)
+        const result = await executeHttp(state.resources, scope, parseHttpRequest(request.body), vendor, credentials, controller.signal, observe, previous, bearer, tokens)
         await check(); controller.signal.throwIfAborted(); return result
       }
       if (request.kind === undefined && request.body && typeof request.body === 'object' && 'sshInventory' in request.body) {
         if (!this.credentials) throw new Error('Credential store is unavailable')
         const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
-        return await invokeSsh({ resources: state.resources, scope, body: request.body, dist, root: join(this.root, 'runs', scope.runId), credentials: this.credentials, signal: controller.signal, check, observe, previous })
+        return await invokeSsh({ resources: state.resources, scope, body: request.body, dist, root: join(this.root, 'runs', scope.runId), credentials: this.credentials, signal: controller.signal, check, observe, previous, tokens })
       }
       if (request.kind === 'mailMove' || (request.body && typeof request.body === 'object' && ('applicationId' in request.body || 'application' in request.body))) {
         if (!this.credentials) throw new Error('Credential store is unavailable')
@@ -881,7 +881,7 @@ export class FixtureWorker {
         const resources = state.resources.map(item => item.id === requested.id ? { ...item, configuration: { ...item.configuration, grants: [...requested.assignment.grants.filter(item => item.permission !== grant.permission), grant] } } : item)
         const workspace = await podWorkspace(this.root, scope.podId)
         const directories = directoryPolicy(await assignedDirectories(this.root, scope.podId, resources))
-        const result = await invokeProgram(resources, scope.podId, request.body, join(dist, 'native/pods-helper'), join(this.root, 'runs', scope.runId), this.credentials, { ...directories, workspace, capabilities: scope.capabilities, signal: controller.signal, assertCurrent: () => controller.signal.throwIfAborted(), registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } }, observe, previous, request.kind === 'mailMove' ? 'move' : undefined)
+        const result = await invokeProgram(resources, scope.podId, request.body, join(dist, 'native/pods-helper'), join(this.root, 'runs', scope.runId), this.credentials, { ...directories, workspace, capabilities: scope.capabilities, signal: controller.signal, assertCurrent: () => controller.signal.throwIfAborted(), registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } }, observe, previous, request.kind === 'mailMove' ? 'move' : undefined, tokens)
         await check(); controller.signal.throwIfAborted(); return result
       }
       const assignment = assignedMail(state.resources)
@@ -889,7 +889,7 @@ export class FixtureWorker {
       const credentials = this.credentials
       if (!credentials) throw new Error('Credential store is unavailable')
       const identity = new PodIdentityManager(credentials)
-      const authority = new AgentAuthority(identity.connection(assignment.identity, `pods:${scope.podId}`), observe, previous)
+      const authority = new AgentAuthority(identity.connection(assignment.identity, `pods:${scope.podId}`), observe, previous, undefined, tokens)
       const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
       const service = new MailService(join(dist, 'native/pods-helper'), join(dist, 'vendor'), authority, credentials)
       const value = await service.execute(assignment.mail, request.body, join(this.root, 'runs', scope.runId), { capabilities: scope.capabilities, assertCurrent: () => controller.signal.throwIfAborted(), signal: controller.signal, registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } })
@@ -904,7 +904,7 @@ export class FixtureWorker {
   async stop(): Promise<void> {
     await this.setupReady
     await this.programs?.stop()
-    await this.closeShellIdentities()
+    this.clearRunAuthorizations()
     await this.secretsGate?.stop()
     await this.connections?.stop()
     this.providerAbort.abort()

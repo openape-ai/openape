@@ -3,7 +3,7 @@ import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { JevAssignment, JevEvaluation, JevRequest } from '../../contracts/jev'
 import { typesafeOrigin } from '../../contracts/jev'
 import { AgentAuthority } from '../broker/authorization'
-import type { GrantLookup, GrantObserver } from '../broker/authorization'
+import type { GrantLookup, GrantObserver, RunGrantTokens } from '../broker/authorization'
 import { PodIdentityManager } from './agent'
 import type { CredentialCache } from './cache'
 import { evaluateTypesafe } from './typesafe'
@@ -14,12 +14,13 @@ export async function executeJev(assignment: JevAssignment, request: JevRequest,
   signal: AbortSignal
   observe: GrantObserver
   previous: GrantLookup
+  tokens?: RunGrantTokens
   check: () => Promise<unknown>
   send: (body: string, signal: AbortSignal) => Promise<Response>
   consumeAttempt: () => void
 }): Promise<JevEvaluation> {
   const identity = new PodIdentityManager(options.credentials)
-  const authority = new AgentAuthority(identity.connection(assignment.authority.identity, `pods:${assignment.authority.identity.podId}`), options.observe, options.previous)
+  const authority = new AgentAuthority(identity.connection(assignment.authority.identity, `pods:${assignment.authority.identity.podId}`), options.observe, options.previous, undefined, options.tokens)
   const adapterPath = join(options.vendor, 'pod-http-shapes.toml')
   const adapter = loadAdapter('pod-http', adapterPath)
   const argv = ['pod-http', 'request', '--origin', typesafeOrigin, '--method', 'POST']
@@ -29,7 +30,7 @@ export async function executeJev(assignment: JevAssignment, request: JevRequest,
   const revoked = new AbortController()
   const signal = AbortSignal.any([options.signal, revoked.signal])
   let checking: Promise<void> | undefined
-  const inspect = async () => { await options.check(); await authority.assertActive(authorization.grantId, signal) }
+  const inspect = async () => { await options.check() }
   const monitor = async () => {
     try { await inspect() }
     catch { revoked.abort(new Error('Jev permission is no longer active')) }

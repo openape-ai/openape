@@ -8,7 +8,7 @@ import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { ProgramAssignment, TerminalView } from '../../contracts/programs'
 import { launchTerminal } from '../../worker/runtime/terminal'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
-import type { GrantObserver, GrantLookup } from '../broker/authorization'
+import type { GrantObserver, GrantLookup, RunGrantTokens } from '../broker/authorization'
 import { AgentAuthority } from '../broker/authorization'
 import { PodIdentityManager } from '../connections/agent'
 import type { CredentialCache } from '../connections/cache'
@@ -31,9 +31,9 @@ export async function resolveProgram(assignment: ProgramAssignment, podId: strin
   if (action && resolved.detail.action !== action) throw new Error('The archive port may only run the granted move operation')
   return { grant, authorization: { grantId: grant.authority.grantId, command: { cliId: assignment.cliId, adapterPath: assignment.adapterPath, adapterDigest: adapter.digest, argv: command, permission: resolved.permission } } }
 }
-export async function prepareProgramAuthorization(assignment: ProgramAssignment, podId: string, argv: string[], credentials: CredentialCache, readOnly = false, observe?: GrantObserver, previous?: GrantLookup, action?: 'move') {
+export async function prepareProgramAuthorization(assignment: ProgramAssignment, podId: string, argv: string[], credentials: CredentialCache, readOnly = false, observe?: GrantObserver, previous?: GrantLookup, action?: 'move', tokens?: RunGrantTokens) {
   const { grant, authorization } = await resolveProgram(assignment, podId, argv, readOnly, action)
-  const authority = new AgentAuthority(new PodIdentityManager(credentials).connection(grant.authority.identity, `pods:${podId}`), observe, previous)
+  const authority = new AgentAuthority(new PodIdentityManager(credentials).connection(grant.authority.identity, `pods:${podId}`), observe, previous, undefined, tokens)
   return { authority, authorization }
 }
 

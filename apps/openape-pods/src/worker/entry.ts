@@ -420,8 +420,6 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'serviceCheck' in request.command) {
       const check = request.command.serviceCheck as ServiceCheck
       const state = authorizeRunService(store, registry, dispatcher.runs, check)
-      if (check.infrastructure !== undefined) dispatcher.runs.append(check.scope.runId, 'infrastructure', { operation: 'authority monitor', ...(check.infrastructure ?? { state: 'restored' }) })
-      if (check.authorityLost) dispatcher.cancelPod(check.scope.podId, 'Pod execution permission is no longer active; review the Pod permissions before retrying', 'authority')
       port.postMessage({ id: request.id, state }); return
     }
     if (request.command && typeof request.command === 'object' && 'scripts' in request.command) {
