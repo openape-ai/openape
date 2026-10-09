@@ -170,7 +170,11 @@ export class RunDispatcher {
     const { manifest } = gates.assertStep(step)
     if (this.active.has(manifest.podId)) throw new Error('Network gate instance already has an active execution')
     const controller = new AbortController()
-    const scope: RunServiceScope = { podId: manifest.podId, runId: step.authority.runId, epoch: manifest.resourceEpoch, assignmentRevision: manifest.assignmentRevision, capabilities: [], root: join(this.store.root, 'runs', step.authority.runId), assertCurrent: () => { gates.assertStep(step); controller.signal.throwIfAborted() }, registerDomain: (path, ownerPid) => this.runs.registerDomain(step.authority.runId, path, ownerPid) }
+    // Run services authorize against the pinned script's declared capabilities, also for a gate step that launches no script.
+    const pinned = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(manifest.podId, manifest.scriptHash)
+    if (!pinned) throw new Error('Pinned service script is missing')
+    const capabilities = parseManifest(JSON.parse(pinned.manifest as string)).capabilities
+    const scope: RunServiceScope = { podId: manifest.podId, runId: step.authority.runId, epoch: manifest.resourceEpoch, assignmentRevision: manifest.assignmentRevision, capabilities, root: join(this.store.root, 'runs', step.authority.runId), assertCurrent: () => { gates.assertStep(step); controller.signal.throwIfAborted() }, registerDomain: (path, ownerPid) => this.runs.registerDomain(step.authority.runId, path, ownerPid) }
     const service: NetworkGateService = async (body) => {
       scope.assertCurrent()
       if (!this.services?.gate) throw new Error('Network gate service is unavailable')
