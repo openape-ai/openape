@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { expect, it, vi } from 'vitest'
+import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -190,16 +191,27 @@ it('sends desktop commands and approval page opening through the producers of th
   const request = vi.spyOn(worker, 'request').mockResolvedValue({} as never)
   const health = { oldestPendingAt: null, nextRetryAt: null, lastDispatchAt: null, lastSchedulerProgressAt: null, lastSchedulerError: null, intakeError: null, lastFailure: null }
   const networks = vi.spyOn(worker, 'networks').mockResolvedValue({ networks: [{ id, revision: 1, groupId: id, name: 'Morning briefing', state: 'active', counts: {}, health }] })
+  // The worker's administration journal: a completed request id returns its recorded result.
+  const receipts = new Map<string, unknown>()
+  const dispatch = vi.fn(async ({ codexAdministration: entry }: { codexAdministration: { type: string, request: { id: string }, result?: unknown } }) => {
+    if (entry.type === 'complete') receipts.set(entry.request.id, entry.result)
+    return receipts.has(entry.request.id) ? { completed: true, result: receipts.get(entry.request.id) } : { completed: false }
+  })
+  Object.assign(worker, { dispatch })
   const prepare = { type: 'prepareLocal', podId: id, expectedScript: 'a'.repeat(64), name: 'Editor', defaults: {} }
+  const pauseAll = { id: randomUUID(), action: { action: 'desktop', channel: 'workspace', command: { type: 'pauseAll' } } }
 
-  await worker.codex({ id, action: { action: 'desktop', channel: 'definitions', command: prepare } })
-  await worker.codex({ id, action: { action: 'desktop', channel: 'scheduling', command: { type: 'concurrency', podId: id, maximum: 2 } } })
-  await worker.codex({ id, action: { action: 'desktop', channel: 'workspace', command: { type: 'pauseAll' } } })
+  await worker.codex({ id: randomUUID(), action: { action: 'desktop', channel: 'definitions', command: prepare } })
+  await worker.codex({ id: randomUUID(), action: { action: 'desktop', channel: 'scheduling', command: { type: 'concurrency', podId: id, maximum: 2 } } })
+  await worker.codex(pauseAll)
+  await worker.codex(pauseAll)
+  await worker.codex({ id: randomUUID(), action: { action: 'desktop', channel: 'workspace', command: { type: 'list' } } })
   const opened = await worker.codex({ id, action: { action: 'networks', command: { type: 'gateOpen', id, revision: 1, taskId: id, generation: 1 } } })
 
   expect(definitions).toHaveBeenCalledWith(prepare)
   expect(scheduling).toHaveBeenCalledWith({ type: 'concurrency', podId: id, maximum: 2 })
-  expect(request).toHaveBeenCalledWith({ type: 'pauseAll' })
+  expect(request.mock.calls).toEqual([[{ type: 'pauseAll' }], [{ type: 'list' }]])
+  expect(dispatch.mock.calls.filter(([command]) => command.codexAdministration.type === 'begin')).toHaveLength(4)
   expect(networks).toHaveBeenCalledWith({ type: 'gateOpen', id, revision: 1, taskId: id, generation: 1 })
   expect(opened).toMatchObject({ networks: [{ id, state: 'active' }] })
   await expect(worker.codex({ id, action: { action: 'desktop', channel: 'runtimeApproval', command: { type: 'set', enabled: true } } })).rejects.toThrow('Unsupported desktop MCP channel')

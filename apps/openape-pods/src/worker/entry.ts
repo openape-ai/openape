@@ -88,6 +88,7 @@ if (!port) throw new Error('Pods worker requires its owning Electron process')
 const store = new PodDatabase(process.cwd())
 const mailBridge = new MailBridge(value => port.postMessage(value))
 let dispatcher: RunDispatcher
+store.onActivated = podId => port.postMessage({ programCancel: podId })
 const registry = new ResourceRegistry(store, (podId) => { dispatcher.cancelPod(podId, 'Resource permissions changed', 'authority'); port.postMessage({ programCancel: podId }) })
 const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
 const executable = process.env.PODS_RUNTIME_EXECUTABLE
