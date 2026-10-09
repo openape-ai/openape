@@ -1,11 +1,10 @@
-import { InfrastructureError } from '../../contracts/infrastructure'
-import type { GrantObserver, GrantLookup } from '../broker/authorization'
+import type { GrantObserver, GrantLookup, RunGrantTokens } from '../broker/authorization'
 import { join } from 'node:path'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { PodResource } from '../../contracts/resources'
 import type { ServiceScope } from '../../contracts/services'
 import type { HttpAuthentication, HttpRequest, HttpReply } from '../../contracts/http'
-import { isHttpEffect, parseHttpAuthentication, parseHttpPermission, parseHttpRequest } from '../../contracts/http'
+import { parseHttpAuthentication, parseHttpPermission, parseHttpRequest } from '../../contracts/http'
 import { AgentAuthority } from '../broker/authorization'
 import { PodIdentityManager } from '../connections/agent'
 import type { CredentialCache } from '../connections/cache'
@@ -31,45 +30,27 @@ export function assignedHttp(resources: PodResource[], scope: Pick<ServiceScope,
   return authority
 }
 
-export async function executeHttp(resources: PodResource[], scope: ServiceScope, request: HttpRequest, vendor: string, credentials: CredentialCache, signal: AbortSignal, observe?: GrantObserver, previous?: GrantLookup, bearer?: AgentBearer): Promise<HttpReply> {
+export async function executeHttp(resources: PodResource[], scope: ServiceScope, request: HttpRequest, vendor: string, credentials: CredentialCache, signal: AbortSignal, observe?: GrantObserver, previous?: GrantLookup, bearer?: AgentBearer, tokens?: RunGrantTokens): Promise<HttpReply> {
   const assignment = assignedHttp(resources, scope, request)
   const configured = httpResource(resources, scope, request).configuration.authentication
   const authentication = configured === undefined ? undefined : parseHttpAuthentication(configured)
   if (authentication && Object.keys(request.headers).some(name => name.toLowerCase() === 'authorization')) throw new Error('This HTTP destination authenticates as its assigned DDISA agent; remove the Authorization header')
   if (authentication && !bearer) throw new Error('DDISA agent authentication is unavailable')
   const identity = new PodIdentityManager(credentials)
-  const authority = new AgentAuthority(identity.connection(assignment.identity, `pods:${scope.podId}`), observe, previous)
+  const authority = new AgentAuthority(identity.connection(assignment.identity, `pods:${scope.podId}`), observe, previous, undefined, tokens)
   const adapterPath = join(vendor, 'pod-http-shapes.toml')
   const adapter = loadAdapter('pod-http', adapterPath)
   const argv = ['pod-http', 'request', '--origin', new URL(request.url).origin, '--method', request.method]
   const resolved = await resolveCommand(adapter, argv)
   const authorization = { grantId: assignment.grantId, command: { cliId: 'pod-http', adapterPath, adapterDigest: adapter.digest, argv, permission: resolved.permission } }
   await authority.authorize(authorization, signal)
-  const controller = new AbortController()
-  const combined = AbortSignal.any([signal, controller.signal])
-  let checking: Promise<void> | undefined
-  const timer = setInterval(() => {
-    if (checking) return
-    checking = authority.assertActive(authorization.grantId, combined).catch((error: unknown) => { controller.abort(error) }).finally(() => { checking = undefined })
-  }, 1000)
-  let sent = false
-  try {
-    const token = authentication ? await bearer!.token(authentication) : undefined
-    const outgoing = token ? { ...request, headers: { ...request.headers, authorization: `Bearer ${token}` } } : request
-    combined.throwIfAborted()
-    sent = true
-    let reply = await requestHttp(outgoing, combined)
-    if (token) reply = redact(reply, token)
-    if (authentication && reply.status === 401) bearer!.reject(authentication)
-    await authority.assertActive(authorization.grantId, combined)
-    combined.throwIfAborted()
-    return reply
-  }
-  catch (error) {
-    if (sent && isHttpEffect(request.method) && error instanceof InfrastructureError) throw new Error('HTTP delivery may be uncertain; permission service became unavailable after sending')
-    throw error
-  }
-  finally { clearInterval(timer); controller.abort(); await checking }
+  const token = authentication ? await bearer!.token(authentication) : undefined
+  const outgoing = token ? { ...request, headers: { ...request.headers, authorization: `Bearer ${token}` } } : request
+  signal.throwIfAborted()
+  let reply = await requestHttp(outgoing, signal)
+  if (token) reply = redact(reply, token)
+  if (authentication && reply.status === 401) bearer!.reject(authentication)
+  return reply
 }
 
 // A destination may echo request headers; the injected token must not reach the script.
