@@ -8,7 +8,7 @@ import { archiveApproved, parseArchiveTarget } from '../scheduling/network-archi
 import type { NetworkGateCoverage } from '../../contracts/network-gates'
 import { boundedStep } from '../scheduling/tick-step'
 import type { NetworkGates, NetworkGateStep, NetworkGateService } from '../scheduling/network-gates'
-import { AuthorityError, InfrastructureError, retryInfrastructure } from '../../contracts/infrastructure'
+import { AuthorityError, InfrastructureError, NonRetryableError, retryInfrastructure } from '../../contracts/infrastructure'
 import { assignedJev, parseJevRequest, parseJevResult } from '../../contracts/jev'
 import type { JevRequest, JevEvaluation } from '../../contracts/jev'
 import { MailWorkflow } from '../mail/workflow'
@@ -247,7 +247,7 @@ export class RunDispatcher {
             signal.throwIfAborted()
           }
           try { return await work() }
-          catch (error) { if (error instanceof AuthorityError) infrastructureFailure = { cause: 'authority' }; if (error instanceof InfrastructureError) infrastructureFailure = { cause: 'infrastructure', retryAfterMs: error.failure.retryAfterMs }; throw error }
+          catch (error) { if (error instanceof AuthorityError) infrastructureFailure = { cause: 'authority' }; if (error instanceof NonRetryableError) infrastructureFailure = { cause: 'non-retryable' }; if (error instanceof InfrastructureError) infrastructureFailure = { cause: 'infrastructure', retryAfterMs: error.failure.retryAfterMs }; throw error }
         }, signal, (retry) => {
           if (retry && !waiting) { waiting = true; infrastructureWaiting++ }
           appendEvent('infrastructure', { operation, ...(retry ?? { state: 'restored' }) })
