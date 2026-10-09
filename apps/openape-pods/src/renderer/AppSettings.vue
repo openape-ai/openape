@@ -1,14 +1,20 @@
 <script setup lang="ts">
-import { t } from './i18n'
+import { ref } from 'vue'
+import { diagnostic, t } from './i18n'
 import Onboarding from './Onboarding.vue'
 import JevConnection from './JevConnection.vue'
 import LanguageSwitcher from './LanguageSwitcher.vue'
 import McpSession from './McpSession.vue'
-import RuntimeApprovalSettings from './RuntimeApprovalSettings.vue'
 import DataManagement from './DataManagement.vue'
 
 defineProps<{ browser?: boolean, subject?: string }>()
 defineEmits<{ logout: [] }>()
+const grantsError = ref('')
+async function openGrants() {
+  grantsError.value = ''
+  try { await window.pods.onboarding({ type: 'openGrants' }) }
+  catch (error) { grantsError.value = error instanceof Error ? error.message : String(error) }
+}
 </script>
 
 <template>
@@ -39,8 +45,17 @@ defineEmits<{ logout: [] }>()
       </p>
     </section>
     <McpSession v-else />
-    <section v-if="!browser" class="card">
-      <RuntimeApprovalSettings />
+    <section v-if="!browser" class="card rights-settings">
+      <h2>{{ t('Rights') }}</h2>
+      <p class="muted">
+        {{ t('Pods requests every permission from your DDISA account, once per Pod and command. You approve it at the IdP; approvals stay valid until you revoke them there.') }}
+      </p>
+      <button class="secondary manage-grants" @click="openGrants">
+        {{ t('Manage existing grants at the IdP') }}
+      </button>
+      <p v-if="grantsError" role="alert" class="error-message">
+        {{ diagnostic(grantsError) }}
+      </p>
     </section>
     <section class="card">
       <h2>{{ t('App settings') }}</h2><LanguageSwitcher :browser="browser" /><slot name="connection" />

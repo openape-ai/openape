@@ -1,3 +1,4 @@
+import { occupiedRunSlots } from '../runs/slots'
 import { recoveryDecision, recoveryHold } from '../recovery/policy'
 import type { RecoveryFailure } from '../recovery/policy'
 import { NetworkData } from './network-data'
@@ -73,7 +74,7 @@ export class NetworkInvocations {
       if (this.store.db.prepare('SELECT 1 FROM network_invocations WHERE pod_id=? AND state IN (\'running\',\'stopping\',\'interrupted\',\'unknown\') LIMIT 1').get(podId)) throw new Error('Network instance requires recovery before another invocation')
       if (this.store.db.prepare('SELECT 1 FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.pod_id=? AND c.review_required=1 LIMIT 1').get(podId)) throw new Error('Network source identity conflict requires owner review')
       const maximum = this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency as number
-      if ((this.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count as number) >= maximum) return null
+      if (occupiedRunSlots(this.store) >= maximum) return null
       const pin = this.store.db.prepare('SELECT content_hash FROM pod_definition_versions WHERE definition_id=? AND version=?').get(member.definitionId, member.definitionVersion)
       if (!pin || pin.content_hash !== pod.activeScript) throw new Error('Network instance no longer matches its pinned script')
       const sourceRetry = member.source ? this.store.db.prepare('SELECT i.run_id,i.manifest,c.attempt FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.network_id=? AND i.pod_id=? AND i.state=\'blocked\' AND c.retry_at<=? AND (json_extract(i.manifest,\'$.reason\')!=\'manual\' OR ?=1) ORDER BY c.retry_at,i.rowid LIMIT 1').get(networkId, podId, Date.now(), reason === 'manual' ? 1 : 0) : null

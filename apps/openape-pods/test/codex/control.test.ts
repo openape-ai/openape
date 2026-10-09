@@ -133,7 +133,7 @@ it('returns no owner connection, grant, credential record or run content', async
   resources.assignHttp(pod.id, { origin: 'https://api.example.com', methods: ['POST'] }, { identity: { podId: pod.id, connectionId: markers.connection, issuer: 'https://id.example.invalid', owner: 'owner@example.invalid', subject: 'pod@example.invalid', keyId: markers.key }, ownerConnection: markers.connection, grantId: markers.grant } as never, resources.epoch(pod.id))
   await send({ action: 'select', podIds: [pod.id] })
   const revision = (await send({ action: 'list' }) as { pods: { revision: number }[] }).pods[0]!.revision
-  const output = JSON.stringify(await Promise.all([send({ action: 'list' }), send({ action: 'runtime' }), send({ action: 'inspect', podId: pod.id, revision }), send({ action: 'changes' })]))
+  const output = JSON.stringify(await Promise.all([send({ action: 'list' }), send({ action: 'runtime' }), send({ action: 'inspect', podId: pod.id, revision })]))
   expect(output).toContain('mail_token'); expect(output).toContain('"state":"failed"')
   for (const marker of Object.values(markers)) expect(output).not.toContain(marker)
 })
@@ -153,14 +153,12 @@ it('saves and starts the selected workflow directly while refusing an unselected
   expect(count(store, 'SELECT count(*) AS count FROM control_changes')).toBe(0)
 })
 
-it('creates a workflow only with local owner authority and all members selected, and replays its receipt', async () => {
-  const { store, pod, send, codex, master, workflows } = fixture()
+it('creates a workflow only with all members selected and replays its receipt', async () => {
+  const { pod, send, codex, workflows } = fixture()
   const definition = { type: 'save' as const, id: randomUUID(), revision: 0, name: 'Morning review', nodes: [{ podId: pod.id, after: [], handoff: true }], schedule: null, enabled: false }
   const action = { action: 'saveWorkflow', definition }
   await expect(send(action)).rejects.toThrow('Select every')
   await send({ action: 'select', podIds: [pod.id] })
-  const context = new ChatRegistry(store).get(codexConversationId)
-  await expect(master.execute(randomUUID(), action, new AbortController().signal, null, null, context)).rejects.toThrow('Select a workflow')
   const request = { id: randomUUID(), action }
   const result = { workflowId: definition.id, revision: 1 }
   expect(await codex.execute(request, new AbortController().signal)).toEqual(result)
@@ -182,19 +180,12 @@ it('activates a validated retained version and resumes without creating a review
   expect(count(store, 'SELECT count(*) AS count FROM control_changes')).toBe(0)
 })
 
-it('keeps a legacy pending proposal inert until explicitly retired', async () => {
-  const { store, pod, master, send } = fixture()
+it('offers no legacy change review actions', async () => {
+  const { store, pod, send } = fixture()
   await send({ action: 'select', podIds: [pod.id] })
-  await master.execute(randomUUID(), { action: 'setVariable', podId: pod.id, revision: pod.revision, name: 'old', value: 'never apply', variableRevision: 0 }, new AbortController().signal, null, null, new ChatRegistry(store).get(codexConversationId))
-  const { changes } = await send({ action: 'changes' }) as { changes: { id: string, revision: number }[] }
-  expect(count(store, 'SELECT count(*) AS count FROM pod_variables')).toBe(0)
-  const action = { action: 'retireChange', id: changes[0]!.id, revision: changes[0]!.revision }
-  await send({ action: 'select', podIds: [] })
-  await expect(send(action)).rejects.toThrow('Select all')
-  await send({ action: 'select', podIds: [pod.id] })
-  expect(await send(action)).toMatchObject({ state: 'discarded' })
-  expect(await send(action)).toMatchObject({ state: 'discarded' })
-  expect(count(store, 'SELECT count(*) AS count FROM pod_variables')).toBe(0)
+  await expect(send({ action: 'changes' })).rejects.toThrow()
+  await expect(send({ action: 'retireChange', id: randomUUID(), revision: 1 })).rejects.toThrow()
+  expect(count(store, 'SELECT count(*) AS count FROM control_changes')).toBe(0)
 })
 
 it('offers CLI setup help and resolves only metadata for assigned commands', async () => {

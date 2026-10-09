@@ -1,4 +1,4 @@
-import { mkdtemp, realpath, rm, access, writeFile } from 'node:fs/promises'
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { randomUUID, createHash } from 'node:crypto'
@@ -58,93 +58,14 @@ describe('master actions and actual app-server', () => {
     await expect(control.execute('check', { action: 'validate', podId: pod.id, revision: 1, draftId: draft.draftId, draftRevision: draft.draftRevision }, signal)).rejects.toThrow()
     expect(store.getPod(pod.id).activeScript).toBe(active); expect(master.view(pod.id).drafts[0]?.validation).toBeNull()
   })
-  it('streams a dynamic action through confined app-server and resumes the same thread (packaged)', async () => {
-    let calls = 0; const requests: unknown[] = []
-    await setup(async (body) => { requests.push(body); return ++calls === 1 ? recordedResponse({ type: 'function_call', id: 'item-1', call_id: 'call-1', name: 'pods_control', arguments: JSON.stringify({ action: 'create', name: 'Created by master' }) }) : recordedResponse() }, true)
-    const command = { type: 'send' as const, id: randomUUID(), text: 'Create a synthetic pod.', podId: null }
-    await master.execute(command)
-    await expect.poll(() => master.view().state, { timeout: 20000 }).toBe('idle')
-    expect(store.listPods()).toHaveLength(1); expect(master.view().messages.some(message => message.text === 'SYNTHETIC_RESPONSE_COMPLETE')).toBe(true)
-    const thread = store.db.prepare('SELECT thread_id FROM master_session').get()?.thread_id
-    await master.execute(command); expect(calls).toBe(2)
-    await master.execute({ ...command, id: randomUUID(), text: 'Confirm the earlier result.' })
-    await expect.poll(() => master.view().state, { timeout: 20000 }).toBe('idle')
-    expect(store.db.prepare('SELECT thread_id FROM master_session').get()?.thread_id).toBe(thread)
-    expect(store.listPods()).toHaveLength(1); expect(JSON.stringify(requests[2])).toContain('Create a synthetic pod')
-  })
-  it('denies a model-forced built-in command and reports provider disconnection visibly', async () => {
-    let calls = 0; const requests: unknown[] = []
-    await setup(async (body) => {
-      requests.push(body)
-      if (++calls === 1) return recordedResponse({ type: 'function_call', id: 'escape', call_id: 'escape', namespace: 'functions', name: 'exec_command', arguments: JSON.stringify({ cmd: `touch ${join(root, 'unassigned')}` }) })
-      throw new Error('Synthetic provider disconnected')
-    })
-    await master.execute({ type: 'send', id: randomUUID(), text: 'Synthetic adversarial transport', podId: null })
-    await expect.poll(() => master.view().state, { timeout: 20000 }).toBe('failed')
-    expect(JSON.stringify(requests[1])).toMatch(/unknown|unsupported|not available|not found/i)
-    expect(master.view().error).toBeTruthy(); expect(store.listPods()).toHaveLength(0)
-    await expect(access(join(root, 'unassigned'))).rejects.toThrow()
-    expect(store.db.prepare('SELECT count(*) AS count FROM master_actions').get()?.count).toBe(0)
-  })
-  it('cancels a stalled provider and records an interrupted turn without replay on restart', async () => {
-    let called = false
-    const { control, runtime } = await setup(async (_body, signal) => { called = true; return new Promise<Response>((_resolve, reject) => { signal.addEventListener('abort', () => reject(signal.reason), { once: true }) }) })
-    await master.execute({ type: 'send', id: randomUUID(), text: 'Wait for synthetic service', podId: null })
-    await expect.poll(() => called).toBe(true)
-    await master.execute({ type: 'steer', id: randomUUID(), text: 'Only inspect; do not create anything.', podId: null })
-    expect(master.view().messages.at(-1)?.state).toBe('sent')
-    await master.execute({ type: 'cancel' }); expect(master.view().state).toBe('interrupted')
-    master = new MasterService(store, runtime, control)
-    expect(master.view().messages).toHaveLength(2); expect(master.view().state).toBe('interrupted'); expect(master.view().connected).toBe(false)
-  })
 })
-it('keeps model conversation history and continuation threads separate for each pod', async () => {
-  const requests: unknown[] = []
-  await setup(async (body) => { if (!JSON.stringify(body).includes('previousDescription')) requests.push(body); return recordedResponse() }, true)
-  const one = store.createPod({ name: 'One' }); const two = store.createPod({ name: 'Two' })
-  for (const [podId, text] of [[one.id, 'ONLY_FIRST_POD_CONTEXT'], [two.id, 'ONLY_SECOND_POD_CONTEXT'], [one.id, 'Continue first']]) {
-    await master.execute({ type: 'send', podId, text, id: randomUUID() })
-    await expect.poll(() => master.view(podId).state, { timeout: 20000 }).toBe('idle')
-  }
-  expect(JSON.stringify(requests[1])).not.toContain('ONLY_FIRST_POD_CONTEXT')
-  expect(JSON.stringify(requests[2])).toContain('ONLY_FIRST_POD_CONTEXT')
-  expect(JSON.stringify(requests[2])).not.toContain('ONLY_SECOND_POD_CONTEXT')
-  expect(master.view(one.id).messages.filter(message => message.role === 'user').map(message => message.text)).toEqual(['ONLY_FIRST_POD_CONTEXT', 'Continue first'])
-  expect(master.view(two.id).messages.filter(message => message.role === 'user').map(message => message.text)).toEqual(['ONLY_SECOND_POD_CONTEXT'])
-  const threads = store.db.prepare('SELECT thread_id FROM master_contexts WHERE scope IN (?,?)').all(one.id, two.id).map(row => row.thread_id)
-  expect(new Set(threads).size).toBe(2)
-  const proposal = randomUUID(); store.db.prepare('INSERT INTO access_proposals VALUES(?,?,?,?)').run(proposal, two.id, JSON.stringify({ provider: 'reference', description: 'Read an assigned file' }), 'pending')
-  const response = await master.execute({ type: 'decline', id: proposal, podId: two.id })
-  expect(response.messages.filter(message => message.role === 'user').map(message => message.text)).toEqual(['ONLY_SECOND_POD_CONTEXT'])
-})
-
-it('denies a model-forced read of another pod from a selected pod chat', async () => {
-  let target = ''; let calls = 0; const requests: unknown[] = []
-  await setup(async (body) => {
-    requests.push(body)
-    return ++calls === 1 ? recordedResponse({ type: 'function_call', id: 'cross-pod', call_id: 'cross-pod', name: 'pods_control', arguments: JSON.stringify({ action: 'inspect', podId: target, revision: 1 }) }) : recordedResponse()
-  })
-  const selected = store.createPod({ name: 'Selected' })
-  target = store.createPod({ name: 'Private other pod' }).id
-  await master.execute({ type: 'send', podId: selected.id, text: 'Inspect my configuration', id: randomUUID() })
-  await expect.poll(() => master.view(selected.id).state, { timeout: 20000 }).toBe('idle')
-  expect(JSON.stringify(requests[1])).not.toContain('CROSS_POD_PRIVATE_ASSIGNMENT')
-  expect(master.view(selected.id).messages.some(message => message.text.includes('context_required'))).toBe(true)
-})
-
-it('persists ordinary setup, keeps automation disabled and enforces revisions and scope before replay', async () => {
+it('persists ordinary setup, keeps automation disabled and enforces revisions before replay', async () => {
   const { control, registry, scheduler } = await setup(); const signal = new AbortController().signal
   const pod = store.createPod({ name: 'Setup' }); const other = store.createPod({ name: 'Other' })
   const scope = { podId: pod.id, revision: pod.revision }; let key = 0
-  const action = (value: Record<string, unknown>) => control.execute(`setup-${++key}`, { ...scope, ...value }, signal, pod.id)
-  const list = { action: 'list' }
-  expect(await control.execute('scoped-list', list, signal, pod.id)).toEqual({ pods: [pod] })
-  await expect(control.execute('scoped-list', list, signal, other.id)).rejects.toThrow('reused')
-  const inspectOther = { action: 'inspect', podId: other.id, revision: 1 }
-  await control.execute('other-inspection', inspectOther, signal)
-  await expect(control.execute('other-inspection', inspectOther, signal, pod.id)).rejects.toThrow('outside the selected pod')
-  await expect(action({ action: 'setVariable', podId: other.id, name: 'target', value: 'changed', variableRevision: 0 })).rejects.toThrow('outside the selected pod')
-  await expect(control.execute('scoped-create', { action: 'create', name: 'Wrong' }, signal, pod.id)).rejects.toThrow('outside the selected pod')
+  const action = (value: Record<string, unknown>) => control.execute(`setup-${++key}`, { ...scope, ...value }, signal)
+  await control.execute('replayed', { action: 'list' }, signal)
+  await expect(control.execute('replayed', { action: 'inspect', podId: other.id, revision: 1 }, signal)).rejects.toThrow('reused')
   await action({ action: 'setVariable', name: 'greeting', value: 'Hello from chat', variableRevision: 0 })
   await expect(action({ action: 'setVariable', name: 'greeting', value: 'Stale', variableRevision: 0 })).rejects.toThrow('Variable changed')
   scheduler.save(pod.id, 0, { kind: 'interval', seconds: 60 }, true); scheduler.lifecycle(pod.id, 1, 'active')
@@ -202,22 +123,9 @@ it('executes the model-facing runtime example and preserves files and progress a
   expect(active.script.kind).toBe('version'); expect(active.script.code).toContain(reference.example)
   const editedCode = reference.example.replace('Hello', 'Saved owner edit')
   await new ScriptWorkspace(store, registry, control).execute({ type: 'save', ...scope, draftId: draft.draftId, draftRevision: draft.draftRevision, code: editedCode, capabilities: [] }, signal)
-  const edited = await control.execute('inspect-owner-edit', { action: 'inspect', ...scope }, signal, pod.id) as { script: unknown }
+  const edited = await control.execute('inspect-owner-edit', { action: 'inspect', ...scope }, signal) as { script: unknown }
   expect(edited.script).toMatchObject({ kind: 'draft', id: draft.draftId, revision: 2, code: editedCode })
   expect(store.getPod(pod.id).activeScript).toBe(activeHash)
-})
-
-it('adopts a creation turn atomically and scopes later tool calls and replay to its new pod', async () => {
-  const { control } = await setup(); const creationId = randomUUID(); const conversations = new (await import('../src/worker/master/conversations')).MasterConversations(store)
-  const scope = conversations.begin(creationId)
-  store.db.prepare('INSERT INTO master_messages VALUES(?,?,?,?,?)').run('initial', 'user', 'Create a pod', 'sent', 1); conversations.assign('initial', scope)
-  const signal = new AbortController().signal; const action = { action: 'create', name: 'Owned' }
-  const pod = await control.execute('creation', action, signal, null, creationId) as { id: string }
-  expect(await control.execute('creation', action, signal, null, creationId)).toEqual(pod)
-  await expect(control.execute('second', action, signal, null, creationId)).rejects.toThrow('already')
-  const other = store.createPod({ name: 'Other' })
-  await expect(control.execute('cross', { action: 'inspect', podId: other.id, revision: 1 }, signal, null, creationId)).rejects.toThrow('outside')
-  expect(master.view(pod.id).initialRequest?.text).toBe('Create a pod')
 })
 
 it('generates a bounded structured description through actual app-server without control tools', async () => {

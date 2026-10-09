@@ -34,7 +34,7 @@ export async function summarizeConversation(store: PodDatabase, runtime: AgentRu
         output = item.text
       }
     })
-    threadId = await transport.thread(runtime, root, null, true)
+    threadId = await transport.thread(runtime, root)
     activeSignal.throwIfAborted()
     await transport.request('turn/start', { threadId, input: [{ type: 'text', text: input }], outputSchema: { type: 'object', properties: { description: { type: 'string' } }, required: ['description'], additionalProperties: false } })
     await completed
