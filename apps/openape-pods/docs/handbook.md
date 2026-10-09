@@ -20,7 +20,7 @@ For a first task, use a small folder of non-sensitive sample files and read-only
 
 Automations is the landing tab. The five counters at the top are system counts: active, paused, degraded, decisions waiting for you and unknown deliveries. Their subtitles come from your data, for example the name of a degraded Pod and its reason.
 
-The map shows your Pods in the middle, the services, applications and folders they read on the left, pure destinations on the right and the authorities above: your decisions, the identity provider and the AI. Dotted lines carry the recorded reads and writes of the last 24 hours; networks and chains appear as groups with their members. List shows the same Pods as a table. Filter by group and hide layers with the chips Channels, Read, Write, Approvals and Paused.
+The map shows your Pods in the middle, the services, applications and folders they read on the left, pure destinations on the right and the authorities above: your decisions, the identity provider and the AI. Dotted lines carry the recorded reads and writes of the last 24 hours; networks appear as groups with their members. List shows the same Pods as a table. Filter by group and hide layers with the chips Channels, Read, Write, Approvals and Paused.
 
 Select a node to read its facts in the info panel. Open details opens the detail page with schedule, members, decision points, numbers, access by kind, secrets as aliases, channels, the developer section and the latest run. Pause, Resume and Run now are the owner commands on this page; nothing here writes to your accounts.
 
@@ -28,7 +28,7 @@ Stand HH:MM marks a published snapshot in the browser; Live · HH:MM means the d
 
 1. Open Pods; Automations is the landing page.
 2. Switch between Map and List, choose a group and toggle the layers.
-3. Select a Pod, chain or network and choose Open details.
+3. Select a Pod or network and choose Open details.
 4. Use Pause, Resume or Run now on the detail page. Details öffnen in the developer section opens the Pod editor for permissions, variables and secrets, history and identity.
 
 ![Automations: map, list and detail](images/handbook-automations.png)
@@ -431,17 +431,17 @@ Use examples/mail-notification.mjs from the source checkout. The first successfu
 
 Validate and run manually before enabling a 15-minute interval in Settings. Review the secrets assigned to this Pod. The recipe records a pending notification before sending it and stores the receipt before acknowledging progress. When delivery is uncertain, inspect the destination and resolve the outcome in History before retrying.
 
-## Networks and chains on the map
+## Networks on the map
 
-Networks and chains appear on the Automations map as groups with their members: a network exchanges items through the declared channels of its Pods, a chain runs its Pods in order. Codex creates and changes them; the detail page shows members, decision points, numbers, schedule and the latest run and offers Pause, Resume and Run now. Connecting Pods keeps their rights and independent schedules unchanged.
+Networks appear on the Automations map as groups with their members: a network exchanges items through the declared channels of its Pods. Codex creates and changes them; the detail page shows members, decision points, numbers, schedule and the latest run and offers Pause and Resume. Connecting Pods keeps their rights unchanged.
 
 Codex can also correct the script of a network member while the network keeps running, as long as its channels, rights and dependencies stay the same and that Pod has no running or uncertain work. Open questions of other Pods remain unaffected. The Pod’s detail page shows the update under Script changes; failed runs of that Pod can then start over under the corrected script, unless they attempted an external effect.
 
 Dotted lines show the recorded deliveries of the last 24 hours. A count does not confirm an external action succeeded: inspect the Pod’s history and the actual result. Channel titles keep their exact technical names. Open questions and pending approvals of a network are counted on the Decisions tab.
 
-Prompt engineering defines one bounded task and its result criteria inside a Pod. Loop engineering uses finite attempts and time limits inside a script, with a visible failure or review result at the limit. Graph engineering coordinates validated handoffs and human gates. A model never grants rights or approves a gate. Network executions remain bounded manual or scheduled runs; cross-Pod feedback cycles are unsupported.
+Prompt engineering defines one bounded task and its result criteria inside a Pod. Loop engineering uses finite attempts and time limits inside a script, with a visible failure or review result at the limit. Network engineering connects validated outputs through declared channels and owner routes. A model never grants rights or approves a route. Network executions remain bounded manual or scheduled runs; a cycle between Pods needs a declared, bounded feedback transition.
 
-A chain has its own interval, daily, one-time or cron schedule. New schedules are off. Run now also works when the chain or member Pods are paused. Pause stops new node starts, while already running nodes finish. The history explains waiting and blocked states. Retry keeps completed nodes and requires reconciliation of uncertain effects.
+Networks are the only way to connect Pods. The update to schema 43 archived the earlier workflows and chains together with the Pods only they used; their history stays in the backup made before the update. Rebuild a workflow you still need as a network with Codex.
 
 Mail handling runs as a network with approve gates: nothing is archived without an approved batch, and uncertain mail waits as a question on the Decisions tab. The first run establishes a quiet baseline; protected senders, recipients and known conversations remain for human review.
 
@@ -471,15 +471,15 @@ Disconnect under the desktop settings → Work from Codex (gear menu → More se
 
 ## Share and import portable packages
 
-Share packs one Pod or a complete workflow or network into an .openape file: the selected scripts, their dependency locks, declared inputs and access, and the files you explicitly include. Credentials, run history, private folders, account state and local identities never leave your device, and the review shows the exact files before anything is written.
+Share packs one Pod or a complete network into an .openape file: the selected scripts, their dependency locks, declared inputs and access, and the files you explicitly include. Credentials, run history, private folders, account state and local identities never leave your device, and the review shows the exact files before anything is written.
 
 Every file reference needs an include or omit decision, every assigned folder, HTTP destination or application gets a portable alias, and your values stay private unless you include one as a public default. A privacy scan flags local identities, paths and likely credentials; blocking findings must be parameterized, review findings must be acknowledged. The scan is a heuristic, so read your source before sharing it.
 
-Import creates paused copies with fresh identities. Nothing runs until you assign your own folders, destinations, applications and secrets on each Pod, finish setup, and validate and activate the scripts yourself. Workflows are created disabled; networks, called workflows and mail policies are created only after their member scripts are approved.
+Import creates paused copies with fresh identities. Nothing runs until you assign your own folders, destinations, applications and secrets on each Pod, finish setup, and validate and activate the scripts yourself. Networks are created paused, and only after their member scripts are approved.
 
 In the browser you can review and configure an import on the connected desktop; opening the package file and saving an exported one happen on the desktop. Cancelling before the paused copy exists discards everything; afterwards the Pods are yours to delete individually.
 
-1. Open the detail page of a Pod, chain or network and choose Export…; set the package title, keys, aliases, included files and public defaults.
+1. Open the detail page of a Pod or network and choose Export…; set the package title, keys, aliases, included files and public defaults.
 2. Review the exact package and its privacy findings, acknowledge what you checked, then save the .openape file.
 3. On the receiving device open the gear menu → Portable Pods → Import… and open the package file.
 4. Enter the required values, create the paused copy, then bind folders, destinations and applications on each Pod and add secrets.

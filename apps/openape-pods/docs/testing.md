@@ -67,7 +67,6 @@ These are the questions no lower level can answer. `handbook.test.ts` also stays
 | `values-tab.test.ts` | `test/workspace/values-tab.test.ts` (empty variables and a declared secret assign nothing, real SQLite; German tab; no secret form in Settings), existing `test/workspace/values-ui.test.ts`, `test/credentials/ui.test.ts`, `test/layout/pod-tabs.test.ts` (560 dark, row width, long alias with counter-check) |
 | `script-editor.test.ts` | `test/workspace/script-run-ui.test.ts` (save → validate → activate → start with the validated hash; a failed check starts nothing; draft message and references; sidebar keyboard resize, remembered width, collapse), existing `test/workspace/script-ui.test.ts`, `test/workspace/scripts.test.ts`, `test/layout/pod-tabs.test.ts` (bounded editor, 560 dark) |
 | `terminal-feedback.test.ts` | `test/main/app.test.ts` (Terminal.app opens only with a prepared launcher, never after a failed preparation — the old test never checked this; a failed open releases the reservation), existing `test/programs/ui.test.ts`, `test/layout/pod-tabs.test.ts` (feedback directly below the button) |
-| `workflows.test.ts` | `test/scheduling/workflow-graph-ui.test.ts` (graph saved by the real `WorkflowEngine`, layers, German mail policy), existing `test/scheduling/workflows.test.ts` (order, unchanged members, pause/one-shot), `test/layout/workflows.test.ts` (node widths at 1060/760/560, keyboard cycle refusal) |
 | `dependencies.test.ts` (packaged editor case) | Node import case above, `test/main/app.test.ts` (preparation dialog), existing `test/workspace/script-ui.test.ts` (search/add/remove), `test/layout/pod-tabs.test.ts` (`.http-heading` spacing) |
 | `credentials.test.ts`, `programs.test.ts` (UI and layout parts) | `test/layout/pod-tabs.test.ts`, existing `test/credentials/ui.test.ts`, `test/programs/ui.test.ts`, `test/main/app.test.ts` (program picker) |
 | `onboarding.test.ts` (packaged cases) | `test/onboarding/setup-state.test.ts` (incomplete until the explicit finish, consent kept across a restart, continue only after the worker accepted, avatar in the collapsed sidebar), existing `test/onboarding/ui.test.ts`, `test/onboarding/control.test.ts`, `test/onboarding/reconcile.test.ts`, `test/onboarding/auth.test.ts`, `test/layout/onboarding.test.ts` (560 dark en/de, collapsed avatar) |
@@ -110,6 +109,6 @@ and **Test Runs** category before sharing it. Live sign-in, native execution,
 installed distribution and release signing are separate acceptance boundaries.
 
 Retained feature tests cover MCP mode/expiry/IPC denial, socket revocation,
-workflow graph editing, standalone/archive navigation, editor routing by runtime,
+standalone/archive navigation, editor routing by runtime,
 script validation before execution, and the production UI at desktop/narrow
 widths. They protect consequential behavior rather than matching markup.

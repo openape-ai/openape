@@ -571,8 +571,7 @@ all referenced evidence and pending events are retained.
 Each Pod retains its newest 50 runs, ordered by start time (insertion order breaks
 ties). Older finished runs disappear from local and central run history and their
 execution folders are removed. Leased or unfinished runs, unresolved effects,
-pending approvals/inputs, open recovery reviews and every attempt of an unfinished
-workflow remain protected beyond this limit. A queued recovery review settles when
+pending approvals/inputs and open recovery reviews remain protected beyond this limit. A queued recovery review settles when
 its retry input is processed. Completed effect receipts survive independently of
 their old runs, so repeating an effect key returns the original result instead of
 delivering twice. Processed input identities also survive for deduplication.
@@ -601,8 +600,8 @@ Read current revisions first and poll the same operation ID until applied; delet
 receipts remain readable after the Pod disappears, and identical retries do not repeat
 cleanup. Archive through `channel: workspace`, `type: update`, `lifecycle: archived`.
 
-Deletion requires an idle runtime and rejects Pods referenced by workflow configuration
-or history. It journals filesystem/key cleanup and removes the current central copies
+Deletion requires an idle runtime and rejects Pods referenced by network or data state.
+It journals filesystem/key cleanup and removes the current central copies
 through the coordinated publication. Shared accounts, original files, backups and
 shared chat history remain. Remote OpenApe identities/grants are not revoked. The legacy
 local workspace retains its native confirmation; uncoordinated central deletion and
@@ -773,9 +772,9 @@ A creation conversation has its own persisted identity. Its first successful cre
 
 Overview's description is derived from completed owner/assistant exchanges by a separate, tool-free Codex app-server request. SQLite stores source boundaries, partial progress and the last successful description. Long histories and oversized messages are processed in ordered, bounded segments; interrupted updates can retry. Stale results cannot replace a newer requested description. Generation failures remain visible and preserve the last successful text. The description does not change script execution, invalidate scripts, grant access or enable schedules. Script execution and AI prompts are defined by the script; there is no separate execution assignment.
 
-The Pod inventory and the standalone cards of Networks & workflows show a one-line summary of that description (first full sentence, at most 160 characters), published with the workspace Pod list. The Pod overview states the last run's own summary below its headline. The description explains a Pod; saving it never changes the script, its validation or its hash.
+The Pod inventory and the standalone cards of Networks show a one-line summary of that description (first full sentence, at most 160 characters), published with the workspace Pod list. The Pod overview states the last run's own summary below its headline. The description explains a Pod; saving it never changes the script, its validation or its hash.
 
-Networks and workflows have their own owner-written description (schema 38, local table `collection_descriptions`, at most 1000 characters). The desktop owner adds or edits it under the title of the network or workflow; the overview card shows its one-line summary and the browser workspace shows it read-only. It is published with the workspace state, not as a table and not inside any definition, so it never changes a network or workflow revision, pin or hash, and an older relay passes it through. MCP clients and the central workspace can write it with the workspace command `describeAutomation` (`describeCollection` before issue 1455: networks and workflows are automations, and collection names network data only), and `details describe` is accepted for network member Pods as well; these two are the only network member changes that do not need desktop review. The browser workspace offers no edit control for it.
+Networks have their own owner-written description (schema 38, local table `collection_descriptions`, at most 1000 characters). The desktop owner adds or edits it under the title of the network; the overview card shows its one-line summary and the browser workspace shows it read-only. It is published with the workspace state, not as a table and not inside any definition, so it never changes a network revision, pin or hash, and an older relay passes it through. MCP clients and the central workspace can write it with the workspace command `describeAutomation` (`describeCollection` before issue 1455: networks are automations, and collection names network data only), and `details describe` is accepted for network member Pods as well; these two are the only network member changes that do not need desktop review. The browser workspace offers no edit control for it.
 
 Schema 15 preserves existing data and adds creation bindings, original-request provenance, description progress and summary process ownership. Older unlinked creation history has an explicit, fingerprint-checked recovery preview. Recovery verifies the stored create result and rejects mixed-Pod, changed or active history. A recovered original request retains its identity and timestamp. Do not hand-edit the profile database to migrate a conversation.
 
@@ -787,14 +786,13 @@ Pod creation requires a name. Chat and the original request guide script creatio
 
 Schema 16 adds `pods.metadata_revision` for optimistic metadata updates. The historical `pods.revision` is retained as an immutable execution binding, exposed internally as `bindingRevision`. Existing manifest, run, validation and credential-approval fields named `assignmentRevision` or `assignment_revision` remain byte-compatible with their original bindings. They are not instructions and do not follow name edits. Old assignment text is retained only in historical storage, excluded from current Pod/tool responses and the legacy mail-knowledge analysis context. Permission epochs, exact-source validation, lease checks and revocation still apply. Migration does not revive artifacts invalidated before upgrade or rewrite script hashes.
 
-## Workflow graphs and mail filtering
+## Networks
 
-Workflows connect unchanged Pods in an ALL-success dependency graph with their own
-schedules, shared reservations, durable handoff and recovery. The optional mail
-integration provides a frozen batch, protected partners and a receipt-backed
-outbox. Production autonomous moves remain blocked pending a verified provider
-concurrency guarantee. See [execution contract and disabled pilot](docs/workflows.md)
-and the workflow chapter in the shared handbook.
+Networks are the only way to connect Pods: members declare the channels they take
+and give, routes hold items for owner decisions and approvals stay at the identity
+provider. Workflows and their conversion were removed in issue 1455 (M4); schema 43
+archives the remaining workflows and the Pods only they used. See
+[networks](docs/networks.md) and the network chapter in the shared handbook.
 
 ## Claude Code
 
