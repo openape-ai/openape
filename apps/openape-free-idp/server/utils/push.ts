@@ -105,7 +105,7 @@ export async function sendRecoveryWarningPush(email: string, opts: { cancelUrl: 
  * Endpoints that come back 404 or 410 are pruned — those are dead and
  * the browser/PWA is gone for good.
  */
-export async function notifyApproverOfPendingGrant(grant: OpenApeGrant): Promise<void> {
+export async function notifyApproverOfPendingGrant(grant: OpenApeGrant, waiting = 1): Promise<void> {
   if (!ensureVapidConfigured()) return
 
   const db = useDb()
@@ -129,12 +129,15 @@ export async function notifyApproverOfPendingGrant(grant: OpenApeGrant): Promise
   if (subs.length === 0) return
 
   const summary = summarizeRequest(grant.request)
+  // Several grants of this approver fell due together: one push names the
+  // first and opens the overview instead of one push per grant.
+  const others = waiting > 1 ? ` (+${waiting - 1} more)` : ''
   const payload = JSON.stringify({
     type: 'grant-pending',
     grant_id: grant.id,
     title: 'Approval needed',
-    body: `${grant.request.requester}: ${summary}`,
-    deep_link: grantApprovalPath(grant),
+    body: `${grant.request.requester}: ${summary}${others}`,
+    deep_link: waiting > 1 ? '/grants' : grantApprovalPath(grant),
   })
 
   await deliverToSubscriptions(subs, payload, 'approver')
