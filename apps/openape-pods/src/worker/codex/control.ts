@@ -41,14 +41,23 @@ export class CodexControl {
     return result
   }
 
-  private assertLegacyAccess(action: Record<string, unknown>): void {
-    if (typeof action.podId === 'string' && !['inspect', 'draft', 'validate'].includes(String(action.action)) && podNetwork(this.store, action.podId)) throw new Error('Network members accept inspect, draft and validate; update their scripts with networks updateMemberScript')
+  private assertLegacyAccess(action: Record<string, unknown>, program?: string): void {
+    if (typeof action.podId === 'string' && podNetwork(this.store, action.podId) && !this.networkMemberAction(action.podId, String(action.action), program)) throw new Error('Network members accept inspect, draft, validate, pause and resume, and application setup while paused; update their scripts with networks updateMemberScript')
     if (!['inspectWorkflow', 'saveWorkflow', 'runWorkflow', 'setGraphValue'].includes(String(action.action))) return
     const parsed = parseMasterAction(action)
     if (parsed.action === 'saveWorkflow' && parsed.definition.nodes.some(node => podNetwork(this.store, node.podId))) throw new Error('Network members require bounded network MCP operations or desktop review')
     const selected = this.conversation().context.workflow
     if (!selected) return
     if (selected.nodes.some(node => podNetwork(this.store, node.podId)) || this.store.db.prepare('SELECT 1 FROM networks WHERE ancestor_workflow_id=?').get(selected.id)) throw new Error('Retained network workflows require bounded network MCP operations or desktop review')
+  }
+
+  /**
+   * Owner decision (issue 1454): a network member can be paused and resumed, and while it is paused its application, hosts and
+   * command grants can be prepared. The network uses new rights only after the owner activates a reviewed revision.
+   */
+  private networkMemberAction(podId: string, action: string, program?: string): boolean {
+    if (['inspect', 'draft', 'validate', 'pause', 'resume'].includes(action)) return true
+    return action === 'program' && program !== 'importState' && this.store.getPod(podId).lifecycle === 'paused'
   }
 
   private retire(action: Record<string, unknown>) {
@@ -79,7 +88,7 @@ export class CodexControl {
   administration(command: AdministrationJournal): AdministrationReceipt {
     const { request } = command
     const action = parseAdministration(request.action)
-    if (command.type === 'begin') this.assertLegacyAccess({ podId: action.command.podId })
+    if (command.type === 'begin') this.assertLegacyAccess({ podId: action.command.podId, action: action.kind }, action.kind === 'program' ? action.command.type : undefined)
     const id = `codex-admin:${request.id}`
     const requestHash = digest(JSON.stringify(request.action))
     return this.store.transaction(() => {
