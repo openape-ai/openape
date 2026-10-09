@@ -63,7 +63,8 @@ export function parseAdministration(action: Record<string, unknown>) {
     return { kind, revision: Number(revision), command: parsed } as const
   }
   const parsed = parseProgramCommand(command)
-  if (!['add', 'replace', 'network', 'grant', 'importState', 'prepare'].includes(parsed.type)) throw new Error('Use Pod scripts to execute assigned programs')
+  // Owner decision (issue 1454): the owner's assistant may run granted commands in the Pod's application terminal.
+  if (!['add', 'replace', 'network', 'grant', 'importState', 'prepare', 'start', 'poll', 'input', 'close'].includes(parsed.type)) throw new Error('Unsupported program operation')
   if (['add', 'replace', 'importState'].includes(parsed.type)) {
     absolutePath(path)
     if (adapterPath !== undefined) absolutePath(adapterPath)
