@@ -7,7 +7,7 @@ import type { GateBatchState } from '../../contracts/gates'
 import { InfrastructureError } from '../../contracts/infrastructure'
 import { networkGateActionHash, networkGateDigest, networkGatePayloadHash, parseNetworkGateCoverage, parseNetworkGateManifest, parseNetworkGateView } from '../../contracts/network-gates'
 import type { NetworkGateCoverage, NetworkGateManifest, NetworkGateView } from '../../contracts/network-gates'
-import { parseNetworkDefinition } from '../../contracts/networks'
+import { networkApprovals, parseNetworkDefinition } from '../../contracts/networks'
 import type { NetworkCommand, NetworkDefinition } from '../../contracts/networks'
 import type { ServiceScope } from '../../contracts/services'
 import type { ResourceRegistry } from '../resources/registry'
@@ -35,10 +35,11 @@ export class NetworkGates {
   constructor(private readonly store: PodDatabase, private readonly invocations: NetworkInvocations, private readonly resources: ResourceRegistry) {}
 
   prepare(definition: NetworkDefinition, podId: string): void {
-    if (!definition.gates?.some(gate => gate.podId === podId)) return
+    const approvals = networkApprovals(definition).filter(approval => approval.podId === podId)
+    if (!approvals.length) return
     this.store.assertStorage()
     this.refresh(definition.id, podId)
-    for (const gate of definition.gates?.filter(gate => gate.podId === podId) ?? []) {
+    for (const gate of approvals) {
       this.store.transaction(() => {
         const count = Number(this.store.db.prepare(`SELECT count(*) AS count FROM network_gate_tasks task JOIN network_gate_controls control ON control.task_id=task.id
           WHERE task.network_id=? AND task.pod_id=? AND control.gate_key=? AND (task.state IN ('preparing','pending','consuming','unknown') OR (task.state='approved' AND EXISTS(SELECT 1 FROM network_gate_items item JOIN network_deliveries delivery ON delivery.id=item.delivery_id WHERE item.task_id=task.id AND delivery.state IN ('pending','claimed','retry_wait','unknown'))))`).get(definition.id, podId, gate.key)!.count)
@@ -47,7 +48,7 @@ export class NetworkGates {
           FROM network_deliveries delivery JOIN network_subscriptions subscription ON subscription.id=delivery.subscription_id JOIN network_events event ON event.id=delivery.event_id
           WHERE delivery.network_id=? AND subscription.network_revision=? AND subscription.pod_id=? AND subscription.channel=?
             AND delivery.state='pending' AND delivery.run_id IS NULL AND NOT EXISTS(SELECT 1 FROM network_gate_items item WHERE item.delivery_id=delivery.id AND item.outcome IN ('held','released','unknown'))
-          ORDER BY delivery.accepted_at,delivery.id LIMIT ?`).all(definition.id, definition.revision, podId, gate.channel, gateLimits.batchItems)
+          ORDER BY delivery.accepted_at,delivery.id LIMIT ?`).all(definition.id, definition.revision, podId, gate.takes, gateLimits.batchItems)
         if (!rows.length || this.collecting(rows.map(row => Number(row.accepted_at)))) return
         const member = definition.members.find(member => member.podId === podId)!
         const pod = this.store.getPod(podId)
@@ -320,7 +321,7 @@ export class NetworkGates {
       }
       return parseNetworkGateCoverage({ manifest, grantId: task.grant_id, items })
     })
-    const channels = definition.gates?.filter(gate => gate.podId === member.podId).map(gate => gate.channel) ?? []
+    const channels = networkApprovals(definition).filter(approval => approval.podId === member.podId).map(approval => approval.takes)
     const inputs = this.store.db.prepare(`SELECT delivery.id FROM network_deliveries delivery JOIN network_subscriptions subscription ON subscription.id=delivery.subscription_id
       WHERE delivery.run_id=? AND delivery.state='claimed' AND subscription.channel IN (SELECT value FROM json_each(?))`).all(authority.runId, JSON.stringify(channels))
     if (inputs.some(input => !coverage.some(approval => approval.items.some(item => item.deliveryId === input.id)))) throw new Error('Network invocation has a gated input without exact approval coverage')
@@ -450,7 +451,7 @@ export class NetworkGates {
     if ((manifest.version === 3 && manifest.dataPin !== dataPin) || (manifest.version === 2 && dataPin !== emptyNetworkDataPin)) throw new Error('Network gate data authority changed; request a fresh approval')
     const revision = this.store.db.prepare('SELECT contract FROM network_revisions WHERE network_id=? AND revision=?').get(manifest.networkId, manifest.networkRevision)!
     const definition = parseNetworkDefinition(JSON.parse(revision.contract as string))
-    if (!definition.gates?.some(gate => gate.key === manifest.gate && gate.podId === manifest.podId && manifest.items.every(item => item.channel === gate.channel))) throw new Error('Network approval gate definition changed')
+    if (!networkApprovals(definition).some(approval => approval.key === manifest.gate && approval.podId === manifest.podId && manifest.items.every(item => item.channel === approval.takes))) throw new Error('Network approval gate definition changed')
   }
 
   private assertItems(manifest: NetworkGateManifest, released = false): void {
@@ -558,7 +559,7 @@ export class NetworkGates {
     const receipt = canonicalNetworkJson({ taskId: task.id, outcome, reason, at: Date.now(), priorTaskState: task.state, nothingReleasedByThisResolution: true })
     const manifest = parseNetworkGateManifest(JSON.parse(task.manifest))
     const definition = outcome === 'denied' ? parseNetworkDefinition(JSON.parse(this.store.db.prepare('SELECT contract FROM network_revisions WHERE network_id=? AND revision=?').get(task.network_id, manifest.networkRevision)!.contract as string)) : null
-    const route = definition?.routes?.find(route => route.key === manifest.gate)
+    const route = definition?.routes.find(route => route.key === manifest.gate)
     for (const item of this.store.db.prepare('SELECT delivery_id,event_id FROM network_gate_items WHERE task_id=? AND outcome IN (\'held\',\'released\',\'unknown\')').all(task.id)) {
       if (deliveryIds && !deliveryIds.includes(item.delivery_id as string)) continue
       const delivery = this.store.db.prepare('SELECT state,run_id FROM network_deliveries WHERE id=?').get(item.delivery_id!)!
