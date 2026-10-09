@@ -28,7 +28,7 @@ describe('Automatisierungen', () => {
     await mountShell()
     const kpis = wrapper!.findAll('.kpi').map(item => [item.find('b').text(), item.find('span').text(), item.find('small').text()])
     expect(kpis).toEqual([
-      ['5', 'aktiv', 'Pods, Ketten und Netze mit laufendem Zeitplan'],
+      ['5', 'aktiv', 'Pods und Netze mit laufendem Zeitplan'],
       ['6', 'pausiert', 'davon 2 Netze, 1 Entwürfe, 1 archiviert'],
       ['1', 'gestört', 'IURIO PR monitor · mit Lücken abgeschlossen'],
       ['17', 'Entscheidungen warten auf dich', 'Review uncertain mail · Delta Mind'],
@@ -82,8 +82,8 @@ describe('Automatisierungen', () => {
     expect(cells('zaz Service-Agent')).toEqual(['zaz Service-Agent', 'ohne Gruppe', 'Regeln', 'alle 1 min', 'zaz.delta-mind.at', 'zaz.delta-mind.at', '–', 'vor 11 min · abgeschlossen'])
     expect(cells('DOCPIT')).toEqual(['IURIO · DOCPIT mail management', 'iurio', 'eingeklappt', '–', 'patrick@docpit.eu', 'patrick@docpit.eu', '–', 'pausiert'])
     await button('Linde').trigger('click')
-    expect(wrapper!.findAll('tbody tr').map(row => row.find('td').text())).toEqual(['Linde · Server report', 'Linde · Portal development and systems'])
-    await wrapper!.findAll('tbody tr')[0]!.trigger('click')
+    expect(wrapper!.findAll('tbody tr').map(row => row.find('td').text())).toEqual(['Linde · Portal development and systems', 'Linde · Server report'])
+    await wrapper!.findAll('tbody tr')[1]!.trigger('click')
     expect(wrapper!.find('.automation-detail .dhead b').text()).toBe('Linde · Server report')
   })
 

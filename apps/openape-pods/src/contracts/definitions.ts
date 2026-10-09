@@ -1,7 +1,6 @@
 import { parseGraphContract } from './graphs'
 import { parsePackages } from './dependencies'
-import { dataFields, dataKey, publicConfiguration } from './network-data'
-import { workflowIdentity } from './workflow-ports'
+import { dataFields, dataIdentity, dataKey, publicConfiguration } from './network-data'
 import type { GraphContract } from './graphs'
 import type { PackageManifest } from './dependencies'
 
@@ -39,23 +38,23 @@ export function parseDefinitionCommand(value: unknown): DefinitionCommand {
   if (kind === 'publish' || kind === 'prepareLocal') {
     const input = dataFields(value, ['type', 'podId', 'expectedScript', 'name', 'defaults'])
     if (typeof input.expectedScript !== 'string' || !/^[a-f0-9]{64}$/.test(input.expectedScript)) throw new Error('Invalid published script hash')
-    return { type: kind, podId: workflowIdentity(input.podId), expectedScript: input.expectedScript, name: name(input.name), defaults: definitionDefaults(input.defaults) }
+    return { type: kind, podId: dataIdentity(input.podId), expectedScript: input.expectedScript, name: name(input.name), defaults: definitionDefaults(input.defaults) }
   }
   if (kind === 'instantiate') {
     const input = dataFields(value, ['type', 'requestId', 'definitionId', 'version', 'name', 'groupId'])
-    return { type: kind, requestId: workflowIdentity(input.requestId), definitionId: workflowIdentity(input.definitionId), version: revision(input.version), name: name(input.name), groupId: workflowIdentity(input.groupId) }
+    return { type: kind, requestId: dataIdentity(input.requestId), definitionId: dataIdentity(input.definitionId), version: revision(input.version), name: name(input.name), groupId: dataIdentity(input.groupId) }
   }
   if (kind === 'retryProvision') {
     const input = dataFields(value, ['type', 'requestId'])
-    return { type: kind, requestId: workflowIdentity(input.requestId) }
+    return { type: kind, requestId: dataIdentity(input.requestId) }
   }
   if (kind === 'previewUpdate' || kind === 'prepareUpdate') {
     const input = dataFields(value, ['type', 'podId', 'definitionId', 'version', 'expectedBinding'])
-    return { type: kind, podId: workflowIdentity(input.podId), definitionId: workflowIdentity(input.definitionId), version: revision(input.version), expectedBinding: revision(input.expectedBinding) }
+    return { type: kind, podId: dataIdentity(input.podId), definitionId: dataIdentity(input.definitionId), version: revision(input.version), expectedBinding: revision(input.expectedBinding) }
   }
   if (kind === 'activateUpdate') {
     const input = dataFields(value, ['type', 'draftId', 'podId', 'expectedBinding'])
-    return { type: kind, draftId: workflowIdentity(input.draftId), podId: workflowIdentity(input.podId), expectedBinding: revision(input.expectedBinding) }
+    return { type: kind, draftId: dataIdentity(input.draftId), podId: dataIdentity(input.podId), expectedBinding: revision(input.expectedBinding) }
   }
   throw new Error('Unsupported definition command')
 }
@@ -73,30 +72,30 @@ export function parseDefinitionsView(value: unknown): DefinitionsView {
   }
   for (const item of input.definitions) {
     const definition = dataFields(item, ['id', 'name', 'versions'])
-    workflowIdentity(definition.id); name(definition.name)
+    dataIdentity(definition.id); name(definition.name)
     if (!Array.isArray(definition.versions)) throw new Error('Invalid definition versions')
     definition.versions.forEach(version)
   }
   for (const item of input.instances) {
     const instance = dataFields(item, ['podId', 'definitionId', 'version', 'bindingRevision', 'diverged', 'groupId'])
-    workflowIdentity(instance.podId); workflowIdentity(instance.definitionId); revision(instance.version); revision(instance.bindingRevision)
+    dataIdentity(instance.podId); dataIdentity(instance.definitionId); revision(instance.version); revision(instance.bindingRevision)
     if (typeof instance.diverged !== 'boolean') throw new Error('Invalid instance divergence state')
-    if (instance.groupId !== null) workflowIdentity(instance.groupId)
+    if (instance.groupId !== null) dataIdentity(instance.groupId)
   }
   for (const item of input.provisioning) {
     const pending = dataFields(item, ['requestId', 'podId', 'state', 'error'])
-    workflowIdentity(pending.requestId); workflowIdentity(pending.podId)
+    dataIdentity(pending.requestId); dataIdentity(pending.podId)
     if (!['pending', 'ready', 'failed'].includes(String(pending.state)) || (pending.error !== null && (typeof pending.error !== 'string' || pending.error.length > 2000))) throw new Error('Invalid instance provisioning state')
   }
   if (input.unavailableReason !== undefined && (typeof input.unavailableReason !== 'string' || input.unavailableReason.length > 2000)) throw new Error('Invalid definition availability')
-  if (input.createdPodId !== undefined) workflowIdentity(input.createdPodId)
+  if (input.createdPodId !== undefined) dataIdentity(input.createdPodId)
   if (input.update !== undefined) {
     const update = dataFields(input.update, ['podId', 'before', 'after', 'beforeCode', 'afterCode', 'changed'], ['draftId'])
-    workflowIdentity(update.podId); version(update.before); version(update.after)
+    dataIdentity(update.podId); version(update.before); version(update.after)
     for (const code of [update.beforeCode, update.afterCode]) {
       if (typeof code !== 'string' || code.length > 200000) throw new Error('Invalid definition source preview')
     }
-    if (update.draftId !== undefined) workflowIdentity(update.draftId)
+    if (update.draftId !== undefined) dataIdentity(update.draftId)
     if (!Array.isArray(update.changed) || update.changed.some(field => !['code', 'contract', 'dependencies', 'defaults', 'rights'].includes(String(field)))) throw new Error('Invalid definition differences')
   }
   return structuredClone(input) as unknown as DefinitionsView
@@ -105,5 +104,5 @@ export function parseDefinitionsView(value: unknown): DefinitionsView {
 export function parseDefinitionProvision(value: unknown): { requestId: string, error: string | null } {
   const input = dataFields(value, ['requestId', 'error'])
   if (input.error !== null && (typeof input.error !== 'string' || !input.error || input.error.length > 2000)) throw new Error('Invalid definition provisioning receipt')
-  return { requestId: workflowIdentity(input.requestId), error: input.error as string | null }
+  return { requestId: dataIdentity(input.requestId), error: input.error as string | null }
 }

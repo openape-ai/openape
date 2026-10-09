@@ -264,74 +264,18 @@ it('removes deleted Pod artifacts and keeps its owner receipt available without 
   expect(() => store.read(actor.owner, actor.id, pod.id)).toThrow('pod_not_found')
 })
 
-it('projects owner-scoped workflow summaries without exposing the archive or mail configuration', () => {
-  const { store, actor, other, state, lease, advance } = setup()
-  const id = randomUUID(); const runId = randomUUID(); const podId = state.pods[0]!.id
-  const nodes = [{ podId, after: [], handoff: false }]
-  state.archive.tables = {
-    workflows: [{ id, revision: 2, name: 'Morning review', nodes: JSON.stringify(nodes), schedule: null, enabled: 0, paused: 0, next_at: null, archived: 0, mail: '{"private":"must not be projected"}' }],
-    workflow_runs: [{ id: runId, workflow_id: id, revision: 2, definition: JSON.stringify({ nodes }), paused: 0, state: 'completed', reason: null, started_at: 100, finished_at: 200 }],
-    workflow_nodes: [{ workflow_run_id: runId, pod_id: podId, state: 'completed', reason: null, run_id: randomUUID(), script_hash: 'a'.repeat(64) }],
-  }
-  store.publish(actor, lease, randomUUID(), 1, state)
-  const view = store.inventory(actor.owner)[0]!.workflows!
-  expect(view.workflows).toEqual([{ mode: 'sequence', groupId: null, channels: [], gates: [], values: [], id, revision: 2, name: 'Morning review', nodes, schedule: null, enabled: false, paused: false, nextAt: null }])
-  expect(view.runs[0]).toMatchObject({ id: runId, workflowId: id, nodes: [{ podId, state: 'completed' }] })
-  expect(JSON.stringify(view)).not.toContain('private')
-  expect(store.inventory(other)).toEqual([])
-  advance(31000)
-  expect(store.inventory(actor.owner)[0]).toMatchObject({ online: false, workflows: view })
-})
-
-it('projects a published graph with its derived edges, counts, one item trace and the pending approval', () => {
-  const { store, actor, other, state, lease } = setup()
-  const id = randomUUID(); const runId = randomUUID(); const podId = state.pods[0]!.id; const batchId = randomUUID()
-  const hash = 'a'.repeat(64); const [first, second] = [randomUUID(), randomUUID()]
-  const gate = { key: 'batch', title: 'Newsletter batch', kind: 'approve', takes: 'mail.newsletter', gives: 'mail.approved', excluded: null }
-  const payload = JSON.stringify({ id: 'message-1', version: 'v1', subject: 'Only today: 20 % off', sender: 'news@shop.example' })
-  state.archive.tables = {
-    workflows: [{ id, revision: 1, name: 'Email management', nodes: JSON.stringify([{ podId, after: [], handoff: false }]), schedule: null, enabled: 0, paused: 0, next_at: null, archived: 0, mail: null, mode: 'channels', group_id: null }],
-    workflow_channels: [{ workflow_id: id, name: 'mail.newsletter', title: 'Newsletter', fields: '["subject"]' }, { workflow_id: id, name: 'mail.approved', title: 'Approved', fields: '[]' }],
-    workflow_gates: [{ workflow_id: id, key: 'batch', definition: JSON.stringify(gate) }],
-    workflow_values: [{ workflow_id: id, name: 'threshold', value: '0.8', revision: 1 }],
-    workflow_runs: [{ id: runId, workflow_id: id, revision: 1, definition: JSON.stringify({ nodes: [{ podId, after: [], handoff: false }] }), paused: 0, state: 'completed', reason: null, started_at: 100, finished_at: 200 }],
-    workflow_nodes: [{ workflow_run_id: runId, pod_id: podId, state: 'completed', reason: null, run_id: randomUUID(), script_hash: hash }],
-    workflow_members: [{ workflow_id: id, pod_id: podId }],
-    pods: [{ id: podId, active_script: hash }],
-    scripts: [{ pod_id: podId, hash, manifest: JSON.stringify({ capabilities: ['jev.evaluate'], contract: { takes: [], gives: ['mail.newsletter'], summary: 'Sorts mail' } }) }],
-    resources: [], pod_memberships: [], pod_variables: [],
-    graph_items: [{ id: first, workflow_id: id, workflow_run_id: runId, key: 'mail-1', channel: 'mail.newsletter', node: podId, payload, created_at: 110 }, { id: second, workflow_id: id, workflow_run_id: runId, key: 'mail-2', channel: 'mail.newsletter', node: podId, payload: '{}', created_at: 111 }],
-    graph_deliveries: [{ item_id: first, node: 'gate:batch', state: 'pending', workflow_run_id: null, updated_at: 110 }, { item_id: second, node: 'gate:batch', state: 'pending', workflow_run_id: null, updated_at: 111 }],
-    graph_item_events: [{ id: 1, workflow_id: id, workflow_run_id: runId, key: 'mail-1', node: podId, outcome: 'emitted', channel: 'mail.newsletter', reason: 'Bulk sender', confidence: 0.93, at: 110 }, { id: 2, workflow_id: id, workflow_run_id: runId, key: 'mail-1', node: 'gate:batch', outcome: 'held', channel: 'mail.newsletter', reason: null, confidence: null, at: 120 }],
-    graph_gate_batches: [{ id: batchId, workflow_id: id, gate: 'batch', pod_id: podId, state: 'pending', grant_id: 'grant-must-stay-private', url: 'https://id.example.test/grant-approval?grant_id=one', title: 'Newsletter batch', digest: 'b'.repeat(64), expires_at: 5000, items: JSON.stringify([{ itemId: first, key: 'mail-1', hash: 'c'.repeat(64), title: 'Only today: 20 % off · news@shop.example', excluded: false, emittedId: null }]), error: null, created_at: 120, updated_at: 120 }],
-  }
-  store.publish(actor, lease, randomUUID(), 1, state)
-  const view = store.inventory(actor.owner)[0]!.workflows!
-  expect(view.workflows[0]).toMatchObject({ mode: 'channels', channels: [{ name: 'mail.newsletter', title: 'Newsletter', fields: ['subject'] }, { name: 'mail.approved' }], gates: [gate], values: [{ name: 'threshold', value: '0.8', revision: 1 }] })
-  const graph = view.graphs![id]!
-  expect(graph.edges).toEqual([{ from: podId, to: 'gate:batch', channel: 'mail.newsletter' }])
-  expect(graph.nodeKinds).toEqual({ 'gate:batch': 'gate', [podId]: 'decision' })
-  expect(graph.diagnostics.map(item => item.code)).toEqual(['gate-consumer', 'channel-without-consumer'])
-  expect(graph.counts).toEqual([{ from: podId, to: 'gate:batch', channel: 'mail.newsletter', count: 2 }])
-  expect(graph.waiting).toEqual({ 'gate:batch': 2 })
-  expect(graph.items).toEqual([{ key: 'mail-1', title: 'Only today: 20 % off · news@shop.example', outcome: 'held', node: 'gate:batch' }])
-  expect(graph.traces!['mail-1']!.map(event => [event.outcome, event.reason, event.confidence])).toEqual([['emitted', 'Bulk sender', 0.93], ['held', null, null]])
-  expect(view.contracts).toEqual({ [podId]: { takes: [], gives: ['mail.newsletter'], summary: 'Sorts mail' } })
-  expect(view.gates!.batches).toEqual([{ id: batchId, workflowId: id, gate: 'batch', podId, state: 'pending', url: 'https://id.example.test/grant-approval?grant_id=one', expiresAt: 5000, error: null, items: [{ itemId: first, key: 'mail-1', title: 'Only today: 20 % off · news@shop.example', excluded: false }] }])
-  expect(JSON.stringify(view)).not.toContain('grant-must-stay-private')
-  expect(JSON.stringify(view)).not.toContain('message-1')
-  expect(store.inventory(other)).toEqual([])
-})
-
-it('distinguishes unavailable workflow data from an empty synchronized inventory', () => {
+it('accepts and ignores the workflow tables of desktops before issue 1455 (M4)', () => {
   const { store, actor, state, lease } = setup()
-  expect(store.inventory(actor.owner)[0]!.workflows).toBeUndefined()
-  state.archive.tables = { workflows: [], workflow_runs: [], workflow_nodes: [] }
+  const id = randomUUID(); const podId = state.pods[0]!.id
+  state.archive.tables = {
+    workflows: [{ id, revision: 2, name: 'Morning review', nodes: 'not-json', schedule: null, enabled: 1, paused: 0, next_at: null, archived: 0, mail: '{"private":"must not be projected"}' }],
+    workflow_members: [{ workflow_id: id, pod_id: podId }],
+    graph_gate_batches: [{ id: randomUUID(), workflow_id: id, gate: 'batch', pod_id: podId, state: 'pending', grant_id: 'grant-must-stay-private' }],
+  }
   store.publish(actor, lease, randomUUID(), 1, state)
-  expect(store.inventory(actor.owner)[0]!.workflows).toEqual({ workflows: [], runs: [] })
-  state.archive.tables.workflows = [{ id: randomUUID(), archived: 0, nodes: 'not-json' }]
-  store.publish(actor, lease, randomUUID(), 2, state)
-  expect(() => store.inventory(actor.owner)).toThrow()
+  const runtime = store.inventory(actor.owner)[0]!
+  expect(runtime).not.toHaveProperty('workflows')
+  expect(JSON.stringify(runtime)).not.toContain('private')
 })
 
 it('keeps network reads owner scoped, ephemeral, bounded and separate from owner operations', () => {
@@ -422,6 +366,11 @@ it('serves the published map read model through view=map without naming a Pod', 
   publishV2(store, actor, lease, {}, { ...state, workspace: { ...state.workspace, map: legacy as never } }, 2)
   expect(store.view(actor.owner, actor.id, null, { view: 'map' })).toEqual({ revision: 3, map })
   expect(store.inventory(actor.owner)[0]!.workspace.map).toEqual(map)
+  // Before M4 it also publishes workflows as chains and bounded networks; the relay shows its persistent networks only.
+  const chain = { id: randomUUID(), revision: 1, kind: 'chain', bounded: false, name: 'Morning review', group: null, groupId: null, state: 'active', members: [state.pods[0]!.id], schedule: null, counts: {}, flows: {}, gates: [{ key: 'review', kind: 'choose', title: 'Review', takes: 'mail.open', options: [], open: 1, batches: {} }], lastRun: null }
+  const workflows = { ...map, pods: map.pods.map(pod => ({ ...pod, automation: chain.id })), automations: [chain], edges: [{ from: 'gate:review', to: state.pods[0]!.id, type: 'channel', channel: 'mail.open', flow: 1 }] }
+  publishV2(store, actor, lease, {}, { ...state, workspace: { ...state.workspace, map: workflows as never } }, 3)
+  expect(store.view(actor.owner, actor.id, null, { view: 'map' })).toEqual({ revision: 4, map })
   expect(() => store.view(other, actor.id, null, { view: 'map' })).toThrow()
   expect(() => store.view(actor.owner, actor.id, null, { view: 'summary' })).toThrow('invalid_workspace_request')
 })

@@ -2,10 +2,19 @@ import { parseGraphChannels } from './graphs'
 import { createHash } from 'node:crypto'
 import { parseOwner } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
-import { gateLimits } from './gates'
+import { gateLimits } from './gate-limits'
 import { canonicalNetworkJson } from './network-json'
 import { networkDataObject } from './network-payload'
 
+/** The grant audience and command name of approve routes; unchanged since graph gates so existing grants stay valid. */
+export const gateAudience = 'pods-graph-gate'
+export type GateBatchState = 'preparing' | 'pending' | 'consuming' | 'approved' | 'denied' | 'expired' | 'superseded' | 'unknown'
+/** A readable, single-line title of one item: its subject and sender when present, otherwise its key. */
+export function itemTitle(key: string, data: Record<string, unknown>): string {
+  const parts = [data.subject, data.sender].filter((part): part is string => typeof part === 'string' && !!part.trim())
+  // eslint-disable-next-line no-control-regex
+  return (parts.length ? parts.join(' · ') : key).replace(/[\u0000-\u001F\u007F]+/g, ' ').trim().slice(0, 120)
+}
 export interface NetworkGateItem { deliveryId: string, eventId: string, generation: number, key: string, hash: string, channel: string, title: string }
 export interface NetworkGateManifest {
   version: 2 | 3
@@ -71,7 +80,7 @@ export function parseNetworkGateManifest(value: unknown): NetworkGateManifest {
 export function networkGateItemCommand(manifest: NetworkGateManifest, item: NetworkGateItem): string[] {
   const { items, title: _title, owner: _owner, ...authority } = manifest
   const { deliveryId, eventId, generation, hash, channel } = item
-  return ['pods-graph-gate', 'approve', canonicalNetworkJson({ ...authority, count: items.length, item: { deliveryId, eventId, generation, hash, channel } })]
+  return [gateAudience, 'approve', canonicalNetworkJson({ ...authority, count: items.length, item: { deliveryId, eventId, generation, hash, channel } })]
 }
 
 export const networkGateItemSummary = (item: NetworkGateItem): string => item.title || item.key

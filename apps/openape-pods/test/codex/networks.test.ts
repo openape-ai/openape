@@ -31,7 +31,7 @@ it('reads bounded owned network details and rejects unowned networks and forged 
   expect(await f.send({ type: 'detail', id: f.id, revision: 1 })).toMatchObject({ details: { members: expect.arrayContaining([expect.objectContaining({ podId: f.source }), expect.objectContaining({ podId: f.consumer })]) } })
   await expect(f.send({ type: 'detail', id: f.id, revision: 2 })).rejects.toThrow()
   expect(() => parseCodexNetworkAction({ action: 'networks', command: { type: 'detail', id: f.id, revision: 1, ownerOperation: true } })).toThrow()
-  expect(() => parseCodexNetworkAction({ action: 'networks', command: { type: 'replacementSetup', id: f.id, revision: 1 } })).toThrow('create a new network')
+  expect(() => parseCodexNetworkAction({ action: 'networks', command: { type: 'replacementSetup', id: f.id, revision: 1 } })).toThrow('Unsupported network command')
   f.store.db.prepare('INSERT INTO network_owners VALUES(?,?)').run(f.owner.issuer, 'another-owner')
   f.store.db.prepare('UPDATE networks SET owner_subject=? WHERE id=?').run('another-owner', f.id)
   expect(await f.send({ type: 'list' })).toEqual({ networks: [] })

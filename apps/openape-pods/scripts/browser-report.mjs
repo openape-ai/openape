@@ -12,8 +12,7 @@ const reviewed = args.includes('--reviewed')
 if (reviewed && assemble < 0) throw new Error('Inspect the captured images first, then use --assemble DIRECTORY --reviewed')
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
 const shots = [
-  ['variant-a-workflow.png', 'Workflow and dependencies'],
-  ['variant-a-pods.png', 'Standalone Pods and workflow membership'],
+  ['variant-a-pods.png', 'Standalone Pods and network membership'],
   ['variant-a-archive.png', 'Archived Pods'],
   ['variant-a-script.png', 'Editable script with syntax highlighting'],
   ['variant-a-permissions.png', 'Assigned permissions and folders'],
@@ -21,7 +20,6 @@ const shots = [
   ['variant-a-history.png', 'Execution history'],
   ['variant-a-settings.png', 'Personal accounts and the owner MCP session'],
   ['variant-a-mcp-dark.png', 'MCP session status in a narrow dark window'],
-  ['workflows-560.png', 'Workflow graph in a narrow dark window'],
   ['workspace-source.png', 'Retained source evidence'],
   ['central-unsaved-edits.png', 'Remote edits require explicit discard before leaving'],
 ]

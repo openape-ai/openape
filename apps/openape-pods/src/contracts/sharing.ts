@@ -2,7 +2,7 @@ import { sharingLimits } from '@openape/pods-protocol'
 import type { PortableManifest } from '@openape/pods-protocol'
 
 // Export choices and findings are plain data shared by the worker, the main process and both workspaces.
-export interface PortableSourceSelection { kind: 'pod' | 'workflow' | 'network', id: string }
+export interface PortableSourceSelection { kind: 'pod' | 'network', id: string }
 export interface PortableAssetSelection { resourceId: string, path: string, mediaType: string }
 export interface PortablePodChoices { podId: string, key: string, title?: string, description: string, defaults: string[], aliases: { resourceId: string, alias: string }[], assets: PortableAssetSelection[], omittedReferences?: string[] }
 export interface PortableCompositionChoices { id: string, key: string, title?: string, defaults: string[] }
@@ -20,7 +20,7 @@ export interface PortableImportView {
   transferSha256: string
   manifest: PortableManifest
   pods: { key: string, podId: string }[]
-  compositions: { key: string, workflowId: string | null, networkId: string | null }[]
+  compositions: { key: string, networkId: string | null }[]
   // Compositions created only after Pod setup and member approval.
   deferred: string[]
   values: PortableImportValues
@@ -74,7 +74,7 @@ export function parsePortableImportCommand(value: unknown): PortableImportComman
 export interface PortableSourceView {
   selection: PortableSourceSelection
   pods: { podId: string, name: string, references: { id: string, name: string }[], aliasable: { id: string, kind: string, name: string }[], variables: string[], configuration: string[] }[]
-  compositions: { id: string, kind: 'sequence' | 'channels' | 'network', name: string }[]
+  compositions: { id: string, kind: 'network', name: string }[]
 }
 export interface PortableExportReviewView { id: string, manifest: PortableManifest, findings: PortableScanFinding[], expiresAt: number }
 export type PortableExportCommand =
@@ -86,7 +86,7 @@ export type PortableExportCommand =
 export type SharingCommand = ({ scope: 'import' } & (PortableImportCommand | { type: 'pickFile' })) | ({ scope: 'export' } & PortableExportCommand)
 export interface SharingState { imports: PortableImportView[], current?: PortableImportView, inspected?: { manifest: PortableManifest, transferSha256: string }, source?: PortableSourceView, review?: PortableExportReviewView, archive?: Uint8Array, saved?: string | null }
 
-const selection = (value: unknown): value is PortableSourceSelection => plain(value) && Object.keys(value).length === 2 && ['pod', 'workflow', 'network'].includes(String(value.kind)) && identity(value.id)
+const selection = (value: unknown): value is PortableSourceSelection => plain(value) && Object.keys(value).length === 2 && ['pod', 'network'].includes(String(value.kind)) && identity(value.id)
 function choices(value: unknown): value is PortableExportChoices {
   if (!plain(value) || Object.keys(value).length !== 3 || !plain(value.package) || !Array.isArray(value.pods) || !Array.isArray(value.compositions) || value.pods.length > sharingLimits.pods || value.compositions.length > 64) return false
   const text = (item: unknown, limit: number) => typeof item === 'string' && item.length <= limit

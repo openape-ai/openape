@@ -1,7 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { GateBatchView } from '../../src/contracts/gates'
 import type { MapView } from '../../src/contracts/map-view'
 import { parseMapView } from '../../src/contracts/map-view'
 import type { NetworkGateView } from '../../src/contracts/network-gate-view'
@@ -14,7 +13,7 @@ import fixture from './map-view.json'
 
 // The Entscheidungen surface from the 17 recorded choice events of the installed app and the fixture's rights and deliveries.
 const view = parseMapView(fixture) as MapView
-const network = view.automations.find(automation => automation.kind === 'network' && !automation.bounded)!
+const network = view.automations[0]!
 /** The 17 events as the network engine lists them: ordered by acceptance, two cases carry a second version. */
 export const choices: NetworkChoiceView[] = [...choiceEvents].sort((a, b) => Date.parse(a[6]) - Date.parse(b[6])).map(recorded => ({ networkId: network.id, revision: network.revision, eventId: recorded[0], caseId: `${recorded[1]}-0000-4000-8000-000000000000`.slice(0, 36), gate: chooseGate.key, title: chooseGate.title, payload: JSON.stringify(choicePayload(recorded)), truncated: false, options: chooseGate.options.map(({ key, title }) => ({ key, title })) }))
 const batch: NetworkGateView = { id: '00000000-0000-4000-8000-0000000000b1', networkId: network.id, gate: 'newsletter-approval', podId: network.members[9]!, generation: 1, state: 'pending', expiresAt: view.at + 3600000, url: 'https://id.openape.ai/grant-approval?grant_id=batch-1', error: null, items: [{ deliveryId: '00000000-0000-4000-8000-0000000000d1', title: 'Nur heute: 20 % · news@shop.example', outcome: 'held' }, { deliveryId: '00000000-0000-4000-8000-0000000000d2', title: 'Neu im Oktober · hello@saas.example', outcome: 'held' }] }
@@ -22,7 +21,7 @@ let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; applyLanguage('en') })
 async function mountInbox(props: Record<string, unknown> = {}) {
   applyLanguage('de')
-  wrapper = mount(DecisionsInbox, { attachTo: document.body, props: { view, choices, gates: [], graphGates: null, desktop: true, ...props } })
+  wrapper = mount(DecisionsInbox, { attachTo: document.body, props: { view, choices, gates: [], desktop: true, ...props } })
   await flushPromises()
   return wrapper
 }
@@ -130,28 +129,23 @@ describe('Entscheidungen', () => {
     expect(wrapper!.findAll('.kpi').map(item => item.find('b').text())).toEqual(['17', '1', '1', '1', '0'])
   })
 
-  it.each([true, false])('opens network and graph approvals on the correct host (desktop: %s)', async (desktop) => {
-    const graphBatch: GateBatchView = { id: '00000000-0000-4000-8000-0000000000b2', workflowId: '00000000-0000-4000-8000-0000000000f1', gate: 'review', podId: batch.podId, state: 'pending', url: 'https://id.openape.ai/grant-approval?grant_id=graph-batch', expiresAt: batch.expiresAt, error: null, items: [] }
-    await mountInbox({ desktop, gates: [batch], graphGates: { batches: [graphBatch], held: [] } })
+  it.each([true, false])('opens network approvals on the correct host (desktop: %s)', async (desktop) => {
+    await mountInbox({ desktop, gates: [batch] })
     const actions = wrapper!.findAll('[data-testid="batches"] .opts .idp')
-    expect(actions).toHaveLength(2)
+    expect(actions).toHaveLength(1)
     if (!desktop) {
-      for (const [index, url] of [batch.url, graphBatch.url].entries()) {
-        expect(actions[index]!.element.tagName).toBe('A')
-        expect(actions[index]!.attributes()).toMatchObject({ href: url, target: '_blank', rel: 'noopener' })
-      }
+      expect(actions[0]!.element.tagName).toBe('A')
+      expect(actions[0]!.attributes()).toMatchObject({ href: batch.url, target: '_blank', rel: 'noopener' })
       expect(wrapper!.emitted('network')).toBeUndefined()
-      expect(wrapper!.emitted('workflow')).toBeUndefined()
       return
     }
-    for (const action of actions) { expect(action.element.tagName).toBe('BUTTON'); await action.trigger('click') }
+    expect(actions[0]!.element.tagName).toBe('BUTTON'); await actions[0]!.trigger('click')
     expect(wrapper!.emitted('network')).toEqual([[{ type: 'gateOpen', id: network.id, revision: network.revision, taskId: batch.id, generation: batch.generation }]])
-    expect(wrapper!.emitted('workflow')).toEqual([[{ type: 'gateOpen', batchId: graphBatch.id }]])
   })
 
   it('shows the inbox on the second tab of the shell with the count in the tab', async () => {
     applyLanguage('de')
-    wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: true, now: view.at, desktop: true, tab: 'decisions', inbox: { choices, gates: [], graphGates: null } } })
+    wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: true, now: view.at, desktop: true, tab: 'decisions', inbox: { choices, gates: [] } } })
     await flushPromises()
     expect(wrapper.find('[role="tablist"]').text()).toContain('Entscheidungen 19')
     expect(wrapper.find('.decisions-inbox h1').text()).toBe('Entscheidungen')

@@ -8,7 +8,7 @@ import type { RunEvent, RunRecord, RunView } from './runs'
 import { parseScheduleView } from './scheduling'
 import { parseScriptView } from './scripts'
 import type { ScriptView } from './scripts'
-import { centralId, centralMaxBytes, centralObject, centralRevision, centralTables } from './central'
+import { acceptedCentralTables, centralId, centralMaxBytes, centralObject, centralRevision } from './central'
 import type { CentralPod, CentralSnapshot } from './central'
 
 // Format 2 publishes a snapshot as content-addressed parts. Only parts whose hash
@@ -75,7 +75,7 @@ export function assembleSnapshot(read: (key: string) => unknown, keys: string[])
 
 export function parsePartKey(key: string): { podId?: string, kind?: string, id?: string, table?: string } {
   const match = keyPattern.exec(key)
-  if (!match || (match[4] && !(centralTables as readonly string[]).includes(match[4]))) throw new Error('Invalid workspace part key')
+  if (!match || (match[4] && !acceptedCentralTables.includes(match[4]))) throw new Error('Invalid workspace part key')
   return { podId: match[1], kind: match[2] ?? (match[1] ? 'pod' : undefined), id: match[3], table: match[4] }
 }
 

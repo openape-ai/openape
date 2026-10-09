@@ -337,13 +337,13 @@ it('publishes the description summary with the workspace inventory', () => {
   expect(restored.workspace.pods.find(item => item.id === pod.id)?.description).toBe('Watches the task board and reports changes by Telegram.')
 })
 
-it('publishes network and workflow descriptions with the workspace inventory', async () => {
+it('publishes network descriptions with the workspace inventory', async () => {
   const { store, projection, actor } = fixture()
   const { AutomationDescriptions } = await import('../src/worker/workspace/automation-descriptions')
-  const id = randomUUID()
-  store.db.prepare('INSERT INTO workflows(id,revision,name,nodes) VALUES(?,1,\'Morning briefing\',\'[]\')').run(id)
+  const { networkId: id, pod } = seedNetwork(store)
+  store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,?,?,NULL)').run(pod.id, JSON.stringify(actor.owner), actor.id, actor.generation, 'ready', '{}')
   new AutomationDescriptions(store).execute({ type: 'describeAutomation', id, revision: 0, text: 'Sends one morning briefing by Telegram.' })
-  const parts = splitSnapshot(projection.snapshot(actor.owner))
+  const parts = splitSnapshot(projection.snapshot(actor.owner, true))
   expect(assembleSnapshot(key => parts.get(key), [...parts.keys()]).workspace.descriptions).toEqual([{ id, text: 'Sends one morning briefing by Telegram.', revision: 1 }])
 })
 

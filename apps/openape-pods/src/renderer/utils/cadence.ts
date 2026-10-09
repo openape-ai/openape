@@ -1,14 +1,12 @@
 import type { MapSchedule } from '../../contracts/map-view'
 import { t } from '../i18n'
 
-/** The schedule of a Pod or collection as the owner reads it. */
+/** The schedule of a Pod or network as the owner reads it. */
 export function cadence(schedule: MapSchedule | null, takes: string[] = []): string {
   const spec = schedule?.spec
   if (!spec) return takes.length ? t('on items') : '–'
   if (spec.kind === 'interval') return spec.seconds % 3600 === 0 ? t('every {count} h', { count: spec.seconds / 3600 }) : spec.seconds % 60 === 0 ? t('every {count} min', { count: spec.seconds / 60 }) : t('every {count} s', { count: spec.seconds })
-  if (spec.kind === 'daily') return t('daily {time}', { time: spec.time })
-  if (spec.kind === 'cron') return spec.expression
-  return new Date(spec.at).toLocaleString()
+  return t('daily {time}', { time: spec.time })
 }
 
 export function ago(at: number, now: number): string {

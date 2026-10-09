@@ -3,11 +3,10 @@ import { emptyNetworkDataPin, networkDataPin } from './network-config'
 import { abandonNetworkData } from './network-data-recovery'
 import { randomUUID } from 'node:crypto'
 import { sameOwner } from '@openape/pods-protocol'
-import { gateLimits, itemTitle } from '../../contracts/gates'
-import type { GateBatchState } from '../../contracts/gates'
+import { gateLimits } from '../../contracts/gate-limits'
 import { InfrastructureError } from '../../contracts/infrastructure'
-import { networkGateActionHash, networkGateDigest, networkGatePayloadHash, parseNetworkGateCoverage, parseNetworkGateManifest, parseNetworkGateView } from '../../contracts/network-gates'
-import type { NetworkGateCoverage, NetworkGateManifest, NetworkGateRelease, NetworkGateView } from '../../contracts/network-gates'
+import { itemTitle, networkGateActionHash, networkGateDigest, networkGatePayloadHash, parseNetworkGateCoverage, parseNetworkGateManifest, parseNetworkGateView } from '../../contracts/network-gates'
+import type { GateBatchState, NetworkGateCoverage, NetworkGateManifest, NetworkGateRelease, NetworkGateView } from '../../contracts/network-gates'
 import { networkApprovals, parseNetworkDefinition } from '../../contracts/networks'
 import type { NetworkCommand, NetworkDefinition } from '../../contracts/networks'
 import type { ServiceScope } from '../../contracts/services'
@@ -408,8 +407,6 @@ export class NetworkGates {
         AND NOT EXISTS(SELECT 1 FROM accepted_events WHERE run_id=attempt.run_id)
         AND NOT EXISTS(SELECT 1 FROM run_inputs WHERE run_id=attempt.run_id AND event_ids!='[]')
         AND NOT EXISTS(SELECT 1 FROM recovery_reviews WHERE run_id=attempt.run_id)
-        AND NOT EXISTS(SELECT 1 FROM workflow_attempts WHERE run_id=attempt.run_id)
-        AND NOT EXISTS(SELECT 1 FROM workflow_nodes WHERE run_id=attempt.run_id)
         AND NOT EXISTS(SELECT 1 FROM control_runs WHERE run_id=attempt.run_id AND kind='pod')
         ORDER BY attempt.attempt DESC LIMIT 128 OFFSET 4`).all(taskId)
       for (const attempt of old) {

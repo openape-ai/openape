@@ -36,7 +36,7 @@ describe('Automatisierungen layout', () => {
   it('sizes the canvas from its content and relays out a filtered group', async () => {
     await mountShell(1440, 1000)
     const full = canvas().height
-    expect(full).toBeGreaterThan(geometry.firstRow + geometry.cluster.h + geometry.chain.h + geometry.single.h + geometry.collapsed.h)
+    expect(full).toBeGreaterThan(geometry.firstRow + geometry.cluster.h + geometry.single.h + geometry.collapsed.h)
     expect(canvas().getBoundingClientRect().width).toBeGreaterThan(700)
     const info = document.querySelector('.automation-info')!.getBoundingClientRect()
     expect(info.width).toBe(300)
@@ -106,7 +106,7 @@ describe('Automatisierungen layout', () => {
     await mountShell(1440, 1000)
     wrapper!.unmount()
     applyLanguage('de')
-    wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, desktop: true, tab: 'decisions', inbox: { choices, gates: [], graphGates: null } } })
+    wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, desktop: true, tab: 'decisions', inbox: { choices, gates: [] } } })
     await flushPromises(); await frames(2)
     const card = document.querySelector('[data-testid="choices"] .item')!.getBoundingClientRect()
     expect(card.width).toBeGreaterThan(1200)

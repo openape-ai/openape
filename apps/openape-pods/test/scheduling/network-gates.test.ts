@@ -10,7 +10,7 @@ import { NetworkEngine } from '../../src/worker/scheduling/network-engine'
 import type { AgentRuntime } from '../../src/worker/agent/executor'
 import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { gateDigest, gateItemCommand, gateItemSummary, gateLimits, parseGateManifest, payloadHash } from '../../src/contracts/gates'
+import { gateLimits } from '../../src/contracts/gate-limits'
 import { networkGateActionHash, networkGateDigest, networkGateItemCommand, networkGatePayloadHash, parseNetworkGateCoverage, parseNetworkGateManifest, parseNetworkGateReleases } from '../../src/contracts/network-gates'
 import type { NetworkGateManifest } from '../../src/contracts/network-gates'
 import { parseNetworkDefinition } from '../../src/contracts/networks'
@@ -30,15 +30,6 @@ function manifest(): NetworkGateManifest {
 }
 
 describe('versioned gate authority', () => {
-  it('binds each workflow item grant to the frozen batch and exactly that item', () => {
-    const items = [{ key: 'one', hash: payloadHash({ subject: 'One' }), title: 'One' }, { key: 'two', hash: payloadHash({ subject: 'Two' }), title: '' }]
-    const legacy = { version: 1 as const, id: randomUUID(), workflowId: randomUUID(), gate: 'review', title: 'Review input', podId: randomUUID(), expiresAt: Date.UTC(2026, 9, 1, 10), digest: gateDigest(items), items }
-    expect(parseGateManifest(legacy)).toEqual(legacy)
-    expect(gateItemCommand(legacy, items[0]!)).toEqual(['pods-graph-gate', 'approve', JSON.stringify({ version: 1, id: legacy.id, workflowId: legacy.workflowId, gate: 'review', podId: legacy.podId, expiresAt: legacy.expiresAt, digest: legacy.digest, count: 2, item: { key: 'one', hash: items[0]!.hash } })])
-    expect(gateItemCommand(legacy, items[1]!)).not.toEqual(gateItemCommand(legacy, items[0]!))
-    expect(items.map(gateItemSummary)).toEqual(['One', 'two'])
-  })
-
   it('binds network inputs and all consumer authority pins to the grant command', () => {
     const frozen = manifest()
     expect(parseNetworkGateManifest(frozen)).toEqual(frozen)
@@ -672,29 +663,6 @@ it('blocks archival for pending approvals and preserves completed approval histo
   expect(f.store.db.prepare('SELECT * FROM network_gate_items').all()).toEqual(itemsBefore)
   expect(f.store.db.prepare('SELECT * FROM network_gate_controls').all()).toEqual(controlsBefore)
   expect(f.engine.view().networks[0]!.decisions).toBe(0)
-})
-
-it('retains completed approval evidence without offering historical decisions after composition replacement', async () => {
-  const f = runtimeFixture(() => 'approved')
-  await f.emit('test.input')
-  await vi.waitFor(async () => {
-    f.due(); await f.engine.tick(); await f.settle()
-    expect(f.store.db.prepare('SELECT count(*) AS n FROM network_deliveries WHERE state!=\'done\'').get()!.n).toBe(0)
-  })
-  f.engine.execute({ type: 'pause', id: f.id, revision: 1 })
-  const tasks = f.store.db.prepare('SELECT * FROM network_gate_tasks').all()
-  expect(tasks).toHaveLength(1)
-  const items = f.store.db.prepare('SELECT * FROM network_gate_items').all()
-  const setup = f.engine.execute({ type: 'replacementSetup', id: f.id, revision: 1 }).replacement!
-  const draft = { ...setup.draft, name: 'Reviewed next revision' }
-  const review = f.engine.execute({ type: 'replacementPreview', id: f.id, revision: 1, draft }).replacement!
-  expect(review.issues).toEqual([])
-  f.engine.execute({ type: 'replaceComposition', id: f.id, revision: 1, draft, expectedFingerprint: review.fingerprint })
-  expect(f.store.db.prepare('SELECT * FROM network_gate_tasks').all()).toEqual(tasks)
-  expect(f.store.db.prepare('SELECT * FROM network_gate_items').all()).toEqual(items)
-  expect(f.engine.gates.views(f.owner)).toEqual([])
-  expect(f.engine.view().networks[0]!.decisions).toBe(0)
-  expect(() => f.engine.execute({ type: 'gateReview', id: f.id, revision: 2, taskId: tasks[0]!.id as string, generation: Number(tasks[0]!.generation), evidence: 'Cannot reuse old grant' })).toThrow('Historical approval evidence')
 })
 
 it('maps the approved channel only after the exact retained input receives approval', async () => {
