@@ -4,7 +4,7 @@ import { seedNetwork } from '../storage/network-fixture'
 import { appendFile, chmod, mkdtemp, mkdir, lstat, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { randomBytes, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import { PodDatabase, digest, schemaVersion } from '../../src/worker/storage/database'
 import { createBackup, restoreBackup } from '../../src/worker/data/backup'
@@ -16,7 +16,7 @@ import { MasterConversations } from '../../src/worker/master/conversations'
 import { ControlChanges } from '../../src/worker/control/changes'
 import { Scheduler } from '../../src/worker/scheduling/scheduler'
 import { DatabaseSync } from 'node:sqlite'
-import { cleanupEncryptedBackupStaging, createEncryptedBackup, encryptedBackupStaging, restoreEncryptedBackup } from '../../src/worker/data/encrypted-backup'
+import { cleanupEncryptedBackupStaging, encryptedBackupStaging } from '../../src/worker/data/encrypted-backup'
 import { restoreNetworkStorage } from '../../src/worker/storage/network-restore'
 import { RunRetention } from '../../src/worker/data/run-retention'
 import { DataRetention } from '../../src/worker/data/retention'
@@ -466,39 +466,6 @@ it('includes private retained artifacts and rejects a missing artifact instead o
   expect((await readdir(exports)).filter(name => name.startsWith('.partial'))).toEqual([])
 })
 
-it('encrypts the manifest and all profile bytes and restores into a fresh paused incarnation', async () => {
-  const { store, exports, pod } = await fixture(); const f = seedNetwork(store)
-  const encryption = { keyId: 'synthetic-test-key', key: randomBytes(32) }; const originalKey = Buffer.from(encryption.key)
-  const backup = await createEncryptedBackup(store, exports, encryption)
-  expect(encryption.key).toEqual(originalKey)
-  expect((await lstat(backup)).mode & 0o777).toBe(0o700)
-  expect((await readdir(exports)).filter(name => name.startsWith('.'))).toEqual([])
-  expect((await readdir(backup)).sort()).toEqual(['backup.encrypted.json', 'files', 'manifest.enc'])
-  for (const file of await readdir(join(backup, 'files'))) {
-    const bytes = await readFile(join(backup, 'files', file))
-    expect(bytes.includes(Buffer.from('private-network-business'))).toBe(false)
-    expect(bytes.includes(Buffer.from('SQLite format 3'))).toBe(false)
-    expect((await lstat(join(backup, 'files', file))).mode & 0o777).toBe(0o600)
-  }
-  expect((await readFile(join(backup, 'manifest.enc'))).includes(Buffer.from(store.root))).toBe(false)
-  const restored = new PodDatabase(await restoreEncryptedBackup(backup, exports, schemaVersion, encryption, store.root)); stores.push(restored)
-  expect(restored.getPod(pod.id).lifecycle).toBe('paused')
-  expect(restored.db.prepare('SELECT state,baseline_state,restore_nonce FROM networks').get()).toEqual({ state: 'paused', baseline_state: 'review_required', restore_nonce: expect.not.stringMatching(f.restoreNonce) })
-  expect(restored.db.prepare('SELECT state FROM network_effect_attempts').get()?.state).toBe('unknown')
-  await expect(readFile(join(restored.root, 'credentials/synthetic.encrypted'))).rejects.toMatchObject({ code: 'ENOENT' })
-})
-
-it('rejects wrong keys, unsupported schema and modified ciphertext without publishing restored data', async () => {
-  const { store, exports } = await fixture(); seedNetwork(store)
-  const encryption = { keyId: 'synthetic-test-key', key: randomBytes(32) }
-  const backup = await createEncryptedBackup(store, exports, encryption); const before = await readdir(exports)
-  await expect(restoreEncryptedBackup(backup, exports, schemaVersion, { ...encryption, key: randomBytes(32) }, store.root)).rejects.toThrow()
-  await expect(restoreEncryptedBackup(backup, exports, schemaVersion - 1, encryption, store.root)).rejects.toThrow('newer application')
-  const file = join(backup, 'files', (await readdir(join(backup, 'files')))[0]!); const bytes = await readFile(file); bytes[0] = bytes[0]! ^ 1; await writeFile(file, bytes)
-  await expect(restoreEncryptedBackup(backup, exports, schemaVersion, encryption, store.root)).rejects.toThrow()
-  expect(await readdir(exports)).toEqual(before)
-})
-
 it('revokes interrupted authority, retains decisions and staged evidence, and keeps archives archived', async () => {
   const { store } = await fixture(); const f = seedNetwork(store)
   store.db.prepare('UPDATE networks SET state=\'archived\'').run()
@@ -621,24 +588,6 @@ it('preserves pinned historical events and record authors after a current defini
   expect(restored.db.prepare('SELECT definition_version,body FROM data_record_revisions').get()).toEqual({ definition_version: 1, body: '{"value":"retained"}' })
 })
 
-it.each(['manifest', 'truncated', 'swapped', 'symlink', 'key-reference'])('rejects encrypted archive tampering without published plaintext: %s', async (kind) => {
-  const { store, exports } = await fixture(); const encryption = { keyId: 'synthetic-test-key', key: randomBytes(32) }
-  const backup = await createEncryptedBackup(store, exports, encryption); const before = await readdir(exports)
-  const names = await readdir(join(backup, 'files')); const first = join(backup, 'files', names[0]!); const second = join(backup, 'files', names[1]!)
-  if (kind === 'manifest') {
-    const path = join(backup, 'manifest.enc'); const bytes = await readFile(path); bytes[0] = bytes[0]! ^ 1; await writeFile(path, bytes)
-  }
-  if (kind === 'truncated') { const bytes = await readFile(first); await writeFile(first, bytes.subarray(0, bytes.length - 1)) }
-  if (kind === 'swapped') { const a = await readFile(first); const b = await readFile(second); await writeFile(first, b); await writeFile(second, a) }
-  if (kind === 'symlink') { await rm(first); await symlink(second, first) }
-  if (kind === 'key-reference') {
-    const path = join(backup, 'backup.encrypted.json'); const header = JSON.parse(await readFile(path, 'utf8')); header.keyId = 'another-key'; await writeFile(path, JSON.stringify(header))
-  }
-  await expect(restoreEncryptedBackup(backup, exports, schemaVersion, encryption, store.root)).rejects.toThrow()
-  expect(await readdir(exports)).toEqual(before)
-  expect(await readdir(await encryptedBackupStaging(store.root))).toEqual([])
-})
-
 it('removes all recognized plaintext stages before reporting foreign staging entries', async () => {
   const { store } = await fixture(); const staging = await encryptedBackupStaging(store.root)
   await writeFile(join(staging, '.DS_Store'), 'synthetic Finder metadata')
@@ -659,13 +608,12 @@ it('preserves unknown invocation authority even when recorded effects have been 
   expect(store.db.prepare('SELECT state FROM network_deliveries').get()?.state).toBe('unknown')
 })
 
-it('restores a schema-28 encrypted archive through its historical boundary before adding current controls', async () => {
+it('restores a schema-28 archive through its historical boundary before adding current controls', async () => {
   const { store, exports } = await fixture(); const f = seedNetwork(store)
   removeNetworkControls(store.db)
   store.db.exec('PRAGMA user_version=28')
-  const encryption = { keyId: 'synthetic-v28', key: randomBytes(32) }
-  const archive = await createEncryptedBackup(store, exports, encryption)
-  const target = await restoreEncryptedBackup(archive, exports, schemaVersion, encryption, store.root)
+  const archive = await createBackup(store, exports)
+  const target = await restoreBackup(archive, exports, schemaVersion)
   const restored = new PodDatabase(target); stores.push(restored)
   expect(restored.db.prepare('PRAGMA user_version').get()?.user_version).toBe(schemaVersion)
   expect(restored.db.prepare('SELECT baseline_state,state FROM networks WHERE id=?').get(f.networkId)).toEqual({ baseline_state: 'review_required', state: 'paused' })
