@@ -79,7 +79,7 @@ export function installWorkspace(overrides: Partial<PodsBridge> = {}): PodsBridg
     master: async () => ({ connected: true, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }),
     mcpAccess: async () => ({ mode: 'off', duration: 'hour', expiresAt: null }),
     runtimeApproval: async () => ({ enabled: false, standing: false, owner: null, scope: null }),
-    codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }), chats: async () => ({ conversations: [], activeConversationId: null }),
+    codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }),
     networks: async () => ({ networks: [] }),
     definitions: async () => ({ definitions: [], instances: [], provisioning: [] }),
     workflows: async () => ({ workflows: [], runs: [] }),

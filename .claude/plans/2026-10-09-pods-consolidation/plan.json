@@ -1,0 +1,878 @@
+{
+  "schema": "openape.plan/2",
+  "language": "en",
+  "project": "OpenApe Pods",
+  "owner": "Patrick Hofmann",
+  "date": "2026-10-09",
+  "status": "draft",
+  "revision": 1,
+  "title": "Consolidate Pods: one model, less code, a simpler database",
+  "summary": "Pods carries two orchestration models, two mobile channels, six decision sources and 158 tables from earlier experiments. This plan removes the unused paths, keeps networks as the only model, gives MCP full access through the owner's DDISA login and leaves every approval at the IdP.",
+  "problem": {
+    "statement": "The same information exists in several diverging forms: workflows and networks, two chat models, two inbox channels, five configuration stores.",
+    "impact": "Every change needs several producers, templates and guards, and safety rules built for abandoned paths block real work.",
+    "approach": "Delete dead code, migrate live workflows to networks, collapse decisions and storage, and replace MCP access modes with an owner login.",
+    "outcome": "One network model, one decision path, one baseline schema, and an MCP that can do everything except approve grants."
+  },
+  "goal": "Reduce Pods to the model that is actually used, without interrupting the live Delta Mind mail network and the active monitors.",
+  "context": "Audit of main ca1e917d on October 9, 2026: 158 desktop tables over 41 migration steps, 25 relay tables in three databases, about 70 network tables beside 22 workflow/graph tables, three mail pipelines, decisions from six sources, about 1.6k LOC of unmounted UI and about 700 unused i18n keys. Pods has no prompt-injection detector or taint tracking, but several structural rules encode that reasoning. Live state: one active network (Delta Mind mail, 750 done), one active workflow (Morgenbriefing · Mail-Prüfung) and three paused workflows (IURIO DOCPIT, Linde portal, Linde server report). Tracking issue: https://repos.openape.ai/patrick/monorepo/issues/1455.",
+  "scope": [
+    "apps/openape-pods (desktop, worker, renderer, MCP), apps/openape-pods-relay, packages/pods-protocol.",
+    "Removal of apps/openape-pods-ios and the encrypted pods-mobile channel.",
+    "Migration of the live workflows: convert Morgenbriefing, archive the three paused ones.",
+    "MCP authentication through the owner's DDISA account and the move of desktop self-approvals to the IdP."
+  ],
+  "nonGoals": [
+    "No new product features and no UI redesign beyond removing dead paths.",
+    "No change to IdP grant semantics; Pods never approves a grant.",
+    "packages/prompt-injection-detector, troop and ape-agent stay untouched.",
+    "No restore support for backups older than schema 41."
+  ],
+  "milestones": [
+    {
+      "id": "m1-dead-code",
+      "status": "active",
+      "title": "Remove dead code",
+      "goal": "Delete code that no live entry point reaches, without behaviour change.",
+      "steps": [
+        "Delete the unmounted chat, console and review components with their tests, and the unreachable Data/Setup branches in App.vue.",
+        "Delete orphaned modules (connections/microsoft.ts, connections/grants.ts, utils/network-replacement.ts), experiments, unreferenced scripts and images.",
+        "Drop @xterm/* from the desktop and web-push from the relay; remove unused i18n keys in a separate commit."
+      ],
+      "acceptance": [
+        "lint, typecheck, both builds, Pods test:fast and relay unit tests pass.",
+        "No schema, contract or domain change in the diff."
+      ],
+      "rollback": "Revert the PR."
+    },
+    {
+      "id": "m2-mobile",
+      "status": "planned",
+      "title": "Remove the iOS app and the encrypted mobile channel",
+      "goal": "The inbox PWA is the only phone surface.",
+      "steps": [
+        "Delete apps/openape-pods-ios, the relay mobile API (server/api/mobile, routes/mobile-auth, APNs notifications, registrations/push_tokens/events/operations store) and the protocol envelope plus seal/open.",
+        "Delete worker/remote, the pairing half of main/remote/controller.ts, the Mobile access menu and OPENAPE_PODS_REMOTE_ENABLED; keep the session part that carries inbox and central traffic.",
+        "Mark the 2026-10-07 iOS inbox plan as superseded by this plan."
+      ],
+      "acceptance": [
+        "Inbox decisions and central workspace still reach the phone and browser after a relay deploy.",
+        "No remaining importer of the removed protocol exports."
+      ],
+      "rollback": "Redeploy the previous relay image; the desktop never enabled the remote path in production."
+    },
+    {
+      "id": "m3-live-workflows",
+      "status": "planned",
+      "title": "Move live workflows onto networks",
+      "goal": "No owner data depends on the workflow model before its code is removed.",
+      "steps": [
+        "Take a paired backup of the installed profile.",
+        "Convert Morgenbriefing · Mail-Prüfung: use conversionPreview/convert if it is a channel graph, otherwise rebuild it as a linear network through MCP with the same four Pods and schedule.",
+        "Export IURIO · DOCPIT mail management, Linde · Portal development and systems and Linde · Server report as portable packages, then archive the workflows and their Pods."
+      ],
+      "acceptance": [
+        "The workflow list is empty; the Morgenbriefing network delivers its next scheduled briefing.",
+        "The three exported packages are stored with the backup."
+      ],
+      "rollback": "Restore the paired backup with the installed build."
+    },
+    {
+      "id": "m4-networks-only",
+      "status": "planned",
+      "title": "Networks as the only orchestration model",
+      "goal": "Remove workflows, graphs and their conversion code.",
+      "steps": [
+        "Remove contracts/workflows, graphs, graph-projection and gates v1, worker/workflows, workflow mail (mail/workflow*), WorkflowSchedule and the version-1 branch of gateRound.",
+        "Remove network migration, retirement and replacement code, the legacy main/mail/archive script service and the legacyItems/legacyVariables/legacySchema adapters.",
+        "Remove the MCP actions inspectWorkflow, saveWorkflow, setGraphValue and runWorkflow, the workflow branches in DecisionsInbox and decisions.ts, the graph half of relay workspace-workflows and the sequence/channels portable kinds.",
+        "Rename one meaning of collection so data collections and Pod groupings no longer share the word."
+      ],
+      "acceptance": [
+        "No source file outside migrations references workflow or graph tables.",
+        "Delta Mind and Morgenbriefing networks keep processing on the installed build."
+      ],
+      "rollback": "Reinstall the previous signed build; tables are only dropped in M8."
+    },
+    {
+      "id": "m5-decisions",
+      "status": "planned",
+      "title": "One decision model",
+      "goal": "Decisions come from network routes and secret requests only.",
+      "steps": [
+        "Fold approve gates (formatVersion 2) into routes (formatVersion 5) and migrate stored definitions; one current network format, also for portable packages.",
+        "Remove access_proposals and the setup-resource decision source; inbox projection reads routes and secret requests.",
+        "Decide each network command that has no caller: expose it through MCP if it is useful, otherwise delete it."
+      ],
+      "acceptance": [
+        "The Delta Mind archive gate and newsletter choices still appear in the inbox and resolve."
+      ],
+      "rollback": "Restore the paired backup with the previous build."
+    },
+    {
+      "id": "m6-safety",
+      "status": "planned",
+      "title": "Safety rules for real effects only; approvals at the IdP",
+      "goal": "Keep authorization of external effects and drop rules that only react to content provenance.",
+      "steps": [
+        "Remove the network agent limits (no tools, 120 s, 50 calls), the archive-behind-gate topology rule and the legacy conversation-authority and change-review machinery (master/control, control/changes, MCP changes/retireChange).",
+        "Hold the affected item instead of the whole Pod for an unknown effect; drop the untracked hold for legacy mail.archive.",
+        "Mint and verify one grant token per run instead of per call plus per-second assertActive polling.",
+        "Replace desktop assignment self-approvals and runtime auto-approval with IdP grant requests the owner approves at the IdP; gate grants accept once and always."
+      ],
+      "acceptance": [
+        "No code path in Pods approves a grant with the owner bearer.",
+        "A new Pod runs after one owner approval at the IdP; HTTP writes still need their IdP grant and idempotency key.",
+        "The refusal path is tested: without an approved grant the run stays held and nothing is sent."
+      ],
+      "rollback": "Reinstall the previous signed build."
+    },
+    {
+      "id": "m7-mcp",
+      "status": "planned",
+      "title": "MCP with full access through the owner's DDISA login",
+      "goal": "Codex signs in as the owner for about one hour and can then do everything except approve grants.",
+      "steps": [
+        "Prototype: check whether Codex's MCP OAuth login works against id.openape.ai (PKCE, client metadata document) for a local HTTP MCP endpoint; otherwise the stdio shim runs the PKCE browser login itself.",
+        "Pods verifies the IdP token (owner issuer and subject, act human) and issues a one-hour local MCP session; expiry asks Codex to sign in again.",
+        "Remove the off/read/write access modes and the MCP-only restrictions: creation, settings, network activation and composition, recovery mutations and member changes become MCP actions."
+      ],
+      "acceptance": [
+        "Without a valid owner session every MCP call is refused; a foreign DDISA subject is refused.",
+        "No MCP action approves, denies or chooses at an IdP grant."
+      ],
+      "rollback": "Reinstall the previous signed build; the access mode setting returns with it."
+    },
+    {
+      "id": "m8-baseline",
+      "status": "planned",
+      "title": "Baseline schema and single stores",
+      "goal": "One readable schema instead of 41 migration steps, and each fact stored once.",
+      "steps": [
+        "Write one baseline schema; a single migration moves schema 41 profiles to it and drops workflow, graph, chat, mobile and unused tables and columns; older profiles and backups are refused with a clear message.",
+        "Store the binding revision once, reduce the configuration stores, and remove the version branches in network-schema, network-restore and data/backup.",
+        "Relay: publish central data either as rows or as views, drop format 1, the archive call, runtimes.snapshot and the networkReads gating, and keep one device registry and one operations table."
+      ],
+      "acceptance": [
+        "A copy of the installed schema 41 profile migrates, and all live networks, Pods, secrets and pending decisions are present afterwards.",
+        "A fresh profile and the migrated profile produce the same schema."
+      ],
+      "rollback": "Restore the paired backup with the previous signed build; the migration is one-way."
+    },
+    {
+      "id": "m9-rollout",
+      "status": "planned",
+      "title": "Docs, rollout and acceptance",
+      "goal": "The installed app and relay run the consolidated model and the docs describe only it.",
+      "steps": [
+        "Rewrite docs/graphs.md, docs/chats.md, the handbook and the runtime help for networks, IdP approvals and MCP login.",
+        "Deploy the relay first, then install the signed desktop build with a paired backup.",
+        "Publish the acceptance as a Test Run with inspected screenshots."
+      ],
+      "acceptance": [
+        "Delta Mind, Morgenbriefing and the monitors run for 24 hours without new holds caused by the change.",
+        "A Codex session signs in, administers a Pod end to end and is refused after expiry."
+      ],
+      "rollback": "Previous relay image plus previous signed build plus paired backup."
+    }
+  ],
+  "decisions": [
+    {
+      "title": "Networks are the only orchestration model",
+      "description": "Morgenbriefing is converted; the paused workflows IURIO DOCPIT and both Linde workflows are archived.",
+      "status": "accepted",
+      "by": "Patrick Hofmann",
+      "date": "2026-10-09",
+      "reference": "1 ja, pausierte archivieren"
+    },
+    {
+      "title": "Remove the iOS app now",
+      "description": "The iOS app and the encrypted mobile channel go without waiting for the M7 PWA pilot.",
+      "status": "accepted",
+      "by": "Patrick Hofmann",
+      "date": "2026-10-09",
+      "reference": "2 ja"
+    },
+    {
+      "title": "Old backups are not restorable",
+      "description": "Backups older than schema 41 may become unrestorable through the baseline schema.",
+      "status": "accepted",
+      "by": "Patrick Hofmann",
+      "date": "2026-10-09",
+      "reference": "3 ok"
+    },
+    {
+      "title": "Approvals stay at the IdP",
+      "description": "MCP may do everything else. Desktop self-approvals also move to the IdP.",
+      "status": "accepted",
+      "by": "Patrick Hofmann",
+      "date": "2026-10-09",
+      "reference": "Freigaben bleiben beim IdP, MCP darf alles andere; 4 IdP"
+    },
+    {
+      "title": "Tables are dropped once, at the end",
+      "description": "M2 to M7 stop using tables; M8 drops them in one migration so earlier builds stay restorable until then.",
+      "status": "proposed"
+    }
+  ],
+  "risks": [
+    {
+      "title": "Interrupting the live mail network",
+      "mitigation": "Paired backup before each install, relay first, and a check of Delta Mind processing after every milestone."
+    },
+    {
+      "title": "Codex cannot run an OAuth login for MCP",
+      "mitigation": "M7 starts with a prototype; the fallback is a PKCE browser login in the stdio shim."
+    },
+    {
+      "title": "More IdP prompts after removing self-approvals",
+      "mitigation": "Request always grants once per Pod and command; reuse tokens per run to stay below the IdP rate limit."
+    },
+    {
+      "title": "Collision with the running issue 1454 archive work",
+      "mitigation": "Issue 1454 adds a network archive port behind an approve gate; M4 and M6 start only after its branches are merged and build on that port instead of removing it."
+    },
+    {
+      "title": "The one-way baseline migration fails on real data",
+      "mitigation": "Rehearse on a copy of the installed profile before release; refuse to start instead of partially migrating."
+    }
+  ],
+  "verification": [
+    "Per milestone: pnpm lint, pnpm typecheck, build of desktop and relay, Pods test:fast, relay unit tests and pnpm check:affected --suite unit.",
+    "Refusal checks for M6 and M7: no grant, foreign subject and expired session are measured, not only the happy path.",
+    "Migration rehearsal on a copy of the installed profile for M3 and M8.",
+    "Installed-app acceptance with inspected screenshots, published as a Test Run."
+  ],
+  "sections": [
+    {
+      "id": "audit",
+      "placement": "after-details",
+      "title": "Audit findings in numbers",
+      "body": "- Desktop: 158 tables, 41 migration steps, about 65k LOC.\n- Relay: 25 tables in three databases, two operations tables, two device registries.\n- Duplicates: workflows vs networks, two chat models, binding revision stored three times, five configuration stores, decisions from six sources, snapshot as rows and views.\n- Dead code: about 1.6k LOC unmounted UI, about 700 unused i18n keys, unused commands and dependencies.\n- Self-approvals today: main/programs/grants.ts and connections/runtime-grant.ts approve with the owner bearer."
+    },
+    {
+      "id": "keep",
+      "placement": "after-details",
+      "title": "Safety mechanisms that stay",
+      "body": "IdP grants for CLI and HTTP commands and HTTPS destinations, owner-decided grants for mail moves, the effect ledger with idempotency keys, hash-bound executables, secret isolation and redaction, and the owner identity check at run start."
+    }
+  ],
+  "handoff": "M1 runs on branch feature/issue-1455-pods-dead-code. Next: owner approval of this plan, then M2 and M3 can start in parallel.",
+  "links": [
+    {
+      "title": "Issue 1455",
+      "url": "https://repos.openape.ai/patrick/monorepo/issues/1455"
+    }
+  ],
+  "changelog": [
+    {
+      "date": "2026-10-09",
+      "text": "Revision 1 drafted from the audit of main ca1e917d and the owner's four decisions."
+    }
+  ],
+  "translations": {
+    "defaultLanguage": "de",
+    "entries": [
+      {
+        "path": "title",
+        "source": "Consolidate Pods: one model, less code, a simpler database",
+        "text": "Pods konsolidieren: ein Modell, weniger Code, eine einfachere Datenbank"
+      },
+      {
+        "path": "summary",
+        "source": "Pods carries two orchestration models, two mobile channels, six decision sources and 158 tables from earlier experiments. This plan removes the unused paths, keeps networks as the only model, gives MCP full access through the owner's DDISA login and leaves every approval at the IdP.",
+        "text": "Pods schleppt aus früheren Experimenten zwei Orchestrierungsmodelle, zwei Mobilkanäle, sechs Entscheidungsquellen und 158 Tabellen mit. Dieser Plan entfernt die ungenutzten Pfade, behält Networks als einziges Modell, gibt MCP über den DDISA-Login des Owners vollen Zugriff und lässt jede Freigabe beim IdP."
+      },
+      {
+        "path": "problem.statement",
+        "source": "The same information exists in several diverging forms: workflows and networks, two chat models, two inbox channels, five configuration stores.",
+        "text": "Dieselbe Information existiert in mehreren auseinanderlaufenden Formen: Workflows und Networks, zwei Chat-Modelle, zwei Inbox-Kanäle, fünf Konfigurationsspeicher."
+      },
+      {
+        "path": "problem.impact",
+        "source": "Every change needs several producers, templates and guards, and safety rules built for abandoned paths block real work.",
+        "text": "Jede Änderung braucht mehrere Erzeuger, Vorlagen und Prüfungen, und Sicherheitsregeln für aufgegebene Pfade blockieren echte Arbeit."
+      },
+      {
+        "path": "problem.approach",
+        "source": "Delete dead code, migrate live workflows to networks, collapse decisions and storage, and replace MCP access modes with an owner login.",
+        "text": "Toten Code löschen, laufende Workflows auf Networks umstellen, Entscheidungen und Speicher zusammenführen und die MCP-Zugriffsmodi durch einen Owner-Login ersetzen."
+      },
+      {
+        "path": "problem.outcome",
+        "source": "One network model, one decision path, one baseline schema, and an MCP that can do everything except approve grants.",
+        "text": "Ein Network-Modell, ein Entscheidungspfad, ein Basisschema und ein MCP, das alles kann außer Grants freizugeben."
+      },
+      {
+        "path": "goal",
+        "source": "Reduce Pods to the model that is actually used, without interrupting the live Delta Mind mail network and the active monitors.",
+        "text": "Pods auf das tatsächlich genutzte Modell reduzieren, ohne das laufende Delta-Mind-Mail-Network und die aktiven Monitore zu unterbrechen."
+      },
+      {
+        "path": "context",
+        "source": "Audit of main ca1e917d on October 9, 2026: 158 desktop tables over 41 migration steps, 25 relay tables in three databases, about 70 network tables beside 22 workflow/graph tables, three mail pipelines, decisions from six sources, about 1.6k LOC of unmounted UI and about 700 unused i18n keys. Pods has no prompt-injection detector or taint tracking, but several structural rules encode that reasoning. Live state: one active network (Delta Mind mail, 750 done), one active workflow (Morgenbriefing · Mail-Prüfung) and three paused workflows (IURIO DOCPIT, Linde portal, Linde server report). Tracking issue: https://repos.openape.ai/patrick/monorepo/issues/1455.",
+        "text": "Prüfung von main ca1e917d am 9. Oktober 2026: 158 Desktop-Tabellen über 41 Migrationsschritte, 25 Relay-Tabellen in drei Datenbanken, rund 70 Network-Tabellen neben 22 Workflow-/Graph-Tabellen, drei Mail-Pipelines, Entscheidungen aus sechs Quellen, rund 1,6k LOC nicht eingebundene UI und rund 700 ungenutzte i18n-Keys. Pods hat weder Prompt-Injection-Erkennung noch Taint-Tracking, aber mehrere strukturelle Regeln bilden genau diese Logik ab. Live-Stand: ein aktives Network (Delta Mind Mail, 750 erledigt), ein aktiver Workflow (Morgenbriefing · Mail-Prüfung) und drei pausierte Workflows (IURIO DOCPIT, Linde Portal, Linde Server-Report). Tracking-Issue: https://repos.openape.ai/patrick/monorepo/issues/1455."
+      },
+      {
+        "path": "scope.0",
+        "source": "apps/openape-pods (desktop, worker, renderer, MCP), apps/openape-pods-relay, packages/pods-protocol.",
+        "text": "apps/openape-pods (Desktop, Worker, Renderer, MCP), apps/openape-pods-relay, packages/pods-protocol."
+      },
+      {
+        "path": "scope.1",
+        "source": "Removal of apps/openape-pods-ios and the encrypted pods-mobile channel.",
+        "text": "Entfernen von apps/openape-pods-ios und dem verschlüsselten pods-mobile-Kanal."
+      },
+      {
+        "path": "scope.2",
+        "source": "Migration of the live workflows: convert Morgenbriefing, archive the three paused ones.",
+        "text": "Migration der laufenden Workflows: Morgenbriefing umstellen, die drei pausierten archivieren."
+      },
+      {
+        "path": "scope.3",
+        "source": "MCP authentication through the owner's DDISA account and the move of desktop self-approvals to the IdP.",
+        "text": "MCP-Authentifizierung über das DDISA-Konto des Owners und die Verlagerung der Desktop-Selbstfreigaben zum IdP."
+      },
+      {
+        "path": "nonGoals.0",
+        "source": "No new product features and no UI redesign beyond removing dead paths.",
+        "text": "Keine neuen Produktfunktionen und kein UI-Redesign über das Entfernen toter Pfade hinaus."
+      },
+      {
+        "path": "nonGoals.1",
+        "source": "No change to IdP grant semantics; Pods never approves a grant.",
+        "text": "Keine Änderung der IdP-Grant-Semantik; Pods gibt nie einen Grant frei."
+      },
+      {
+        "path": "nonGoals.2",
+        "source": "packages/prompt-injection-detector, troop and ape-agent stay untouched.",
+        "text": "packages/prompt-injection-detector, troop und ape-agent bleiben unverändert."
+      },
+      {
+        "path": "nonGoals.3",
+        "source": "No restore support for backups older than schema 41.",
+        "text": "Keine Wiederherstellung von Backups älter als Schema 41."
+      },
+      {
+        "path": "milestones.0.title",
+        "source": "Remove dead code",
+        "text": "Toten Code entfernen"
+      },
+      {
+        "path": "milestones.0.goal",
+        "source": "Delete code that no live entry point reaches, without behaviour change.",
+        "text": "Code löschen, den kein lebender Einstiegspunkt erreicht, ohne Verhaltensänderung."
+      },
+      {
+        "path": "milestones.0.steps.0",
+        "source": "Delete the unmounted chat, console and review components with their tests, and the unreachable Data/Setup branches in App.vue.",
+        "text": "Die nicht eingebundenen Chat-, Console- und Review-Komponenten samt Tests sowie die unerreichbaren Data/Setup-Zweige in App.vue löschen."
+      },
+      {
+        "path": "milestones.0.steps.1",
+        "source": "Delete orphaned modules (connections/microsoft.ts, connections/grants.ts, utils/network-replacement.ts), experiments, unreferenced scripts and images.",
+        "text": "Verwaiste Module (connections/microsoft.ts, connections/grants.ts, utils/network-replacement.ts), Experimente sowie unreferenzierte Skripte und Bilder löschen."
+      },
+      {
+        "path": "milestones.0.steps.2",
+        "source": "Drop @xterm/* from the desktop and web-push from the relay; remove unused i18n keys in a separate commit.",
+        "text": "@xterm/* aus dem Desktop und web-push aus dem Relay entfernen; ungenutzte i18n-Keys in einem eigenen Commit entfernen."
+      },
+      {
+        "path": "milestones.0.acceptance.0",
+        "source": "lint, typecheck, both builds, Pods test:fast and relay unit tests pass.",
+        "text": "lint, typecheck, beide Builds, Pods test:fast und Relay-Unit-Tests sind grün."
+      },
+      {
+        "path": "milestones.0.acceptance.1",
+        "source": "No schema, contract or domain change in the diff.",
+        "text": "Der Diff enthält keine Schema-, Vertrags- oder Domänenänderung."
+      },
+      {
+        "path": "milestones.0.rollback",
+        "source": "Revert the PR.",
+        "text": "Den PR zurücknehmen."
+      },
+      {
+        "path": "milestones.1.title",
+        "source": "Remove the iOS app and the encrypted mobile channel",
+        "text": "iOS-App und verschlüsselten Mobilkanal entfernen"
+      },
+      {
+        "path": "milestones.1.goal",
+        "source": "The inbox PWA is the only phone surface.",
+        "text": "Die Inbox-PWA ist die einzige Oberfläche am Telefon."
+      },
+      {
+        "path": "milestones.1.steps.0",
+        "source": "Delete apps/openape-pods-ios, the relay mobile API (server/api/mobile, routes/mobile-auth, APNs notifications, registrations/push_tokens/events/operations store) and the protocol envelope plus seal/open.",
+        "text": "apps/openape-pods-ios, die Relay-Mobile-API (server/api/mobile, routes/mobile-auth, APNs-Benachrichtigungen, Store für registrations/push_tokens/events/operations) sowie Envelope und seal/open im Protokoll löschen."
+      },
+      {
+        "path": "milestones.1.steps.1",
+        "source": "Delete worker/remote, the pairing half of main/remote/controller.ts, the Mobile access menu and OPENAPE_PODS_REMOTE_ENABLED; keep the session part that carries inbox and central traffic.",
+        "text": "worker/remote, die Pairing-Hälfte von main/remote/controller.ts, das Menü Mobile access und OPENAPE_PODS_REMOTE_ENABLED löschen; den Session-Teil für Inbox- und Central-Verkehr behalten."
+      },
+      {
+        "path": "milestones.1.steps.2",
+        "source": "Mark the 2026-10-07 iOS inbox plan as superseded by this plan.",
+        "text": "Den iOS-Inbox-Plan vom 7. Oktober 2026 als durch diesen Plan abgelöst markieren."
+      },
+      {
+        "path": "milestones.1.acceptance.0",
+        "source": "Inbox decisions and central workspace still reach the phone and browser after a relay deploy.",
+        "text": "Inbox-Entscheidungen und der zentrale Workspace erreichen Telefon und Browser auch nach einem Relay-Deploy."
+      },
+      {
+        "path": "milestones.1.acceptance.1",
+        "source": "No remaining importer of the removed protocol exports.",
+        "text": "Kein verbleibender Importeur der entfernten Protokoll-Exporte."
+      },
+      {
+        "path": "milestones.1.rollback",
+        "source": "Redeploy the previous relay image; the desktop never enabled the remote path in production.",
+        "text": "Das vorherige Relay-Image erneut ausrollen; der Desktop hatte den Remote-Pfad in Produktion nie aktiviert."
+      },
+      {
+        "path": "milestones.2.title",
+        "source": "Move live workflows onto networks",
+        "text": "Laufende Workflows auf Networks umstellen"
+      },
+      {
+        "path": "milestones.2.goal",
+        "source": "No owner data depends on the workflow model before its code is removed.",
+        "text": "Keine Owner-Daten hängen mehr am Workflow-Modell, bevor dessen Code entfernt wird."
+      },
+      {
+        "path": "milestones.2.steps.0",
+        "source": "Take a paired backup of the installed profile.",
+        "text": "Ein gekoppeltes Backup des installierten Profils anlegen."
+      },
+      {
+        "path": "milestones.2.steps.1",
+        "source": "Convert Morgenbriefing · Mail-Prüfung: use conversionPreview/convert if it is a channel graph, otherwise rebuild it as a linear network through MCP with the same four Pods and schedule.",
+        "text": "Morgenbriefing · Mail-Prüfung umstellen: bei einem Channel-Graph conversionPreview/convert nutzen, sonst über MCP als lineares Network mit denselben vier Pods und demselben Zeitplan neu anlegen."
+      },
+      {
+        "path": "milestones.2.steps.2",
+        "source": "Export IURIO · DOCPIT mail management, Linde · Portal development and systems and Linde · Server report as portable packages, then archive the workflows and their Pods.",
+        "text": "IURIO · DOCPIT mail management, Linde · Portal development and systems und Linde · Server report als portable Pakete exportieren, dann die Workflows und ihre Pods archivieren."
+      },
+      {
+        "path": "milestones.2.acceptance.0",
+        "source": "The workflow list is empty; the Morgenbriefing network delivers its next scheduled briefing.",
+        "text": "Die Workflow-Liste ist leer; das Morgenbriefing-Network liefert sein nächstes geplantes Briefing."
+      },
+      {
+        "path": "milestones.2.acceptance.1",
+        "source": "The three exported packages are stored with the backup.",
+        "text": "Die drei exportierten Pakete liegen beim Backup."
+      },
+      {
+        "path": "milestones.2.rollback",
+        "source": "Restore the paired backup with the installed build.",
+        "text": "Das gekoppelte Backup mit dem installierten Build wiederherstellen."
+      },
+      {
+        "path": "milestones.3.title",
+        "source": "Networks as the only orchestration model",
+        "text": "Networks als einziges Orchestrierungsmodell"
+      },
+      {
+        "path": "milestones.3.goal",
+        "source": "Remove workflows, graphs and their conversion code.",
+        "text": "Workflows, Graphs und ihren Konvertierungscode entfernen."
+      },
+      {
+        "path": "milestones.3.steps.0",
+        "source": "Remove contracts/workflows, graphs, graph-projection and gates v1, worker/workflows, workflow mail (mail/workflow*), WorkflowSchedule and the version-1 branch of gateRound.",
+        "text": "contracts/workflows, graphs, graph-projection und Gates v1, worker/workflows, Workflow-Mail (mail/workflow*), WorkflowSchedule und den Version-1-Zweig von gateRound entfernen."
+      },
+      {
+        "path": "milestones.3.steps.1",
+        "source": "Remove network migration, retirement and replacement code, the legacy main/mail/archive script service and the legacyItems/legacyVariables/legacySchema adapters.",
+        "text": "Network-Migration, -Retirement und -Replacement, den alten Skriptdienst main/mail/archive und die Adapter legacyItems/legacyVariables/legacySchema entfernen."
+      },
+      {
+        "path": "milestones.3.steps.2",
+        "source": "Remove the MCP actions inspectWorkflow, saveWorkflow, setGraphValue and runWorkflow, the workflow branches in DecisionsInbox and decisions.ts, the graph half of relay workspace-workflows and the sequence/channels portable kinds.",
+        "text": "Die MCP-Aktionen inspectWorkflow, saveWorkflow, setGraphValue und runWorkflow, die Workflow-Zweige in DecisionsInbox und decisions.ts, die Graph-Hälfte von Relay workspace-workflows und die portablen Arten sequence/channels entfernen."
+      },
+      {
+        "path": "milestones.3.steps.3",
+        "source": "Rename one meaning of collection so data collections and Pod groupings no longer share the word.",
+        "text": "Eine Bedeutung von Collection umbenennen, damit Datensammlungen und Pod-Gruppierungen nicht mehr dasselbe Wort teilen."
+      },
+      {
+        "path": "milestones.3.acceptance.0",
+        "source": "No source file outside migrations references workflow or graph tables.",
+        "text": "Keine Quelldatei außerhalb der Migrationen verweist auf Workflow- oder Graph-Tabellen."
+      },
+      {
+        "path": "milestones.3.acceptance.1",
+        "source": "Delta Mind and Morgenbriefing networks keep processing on the installed build.",
+        "text": "Die Networks Delta Mind und Morgenbriefing verarbeiten auf dem installierten Build weiter."
+      },
+      {
+        "path": "milestones.3.rollback",
+        "source": "Reinstall the previous signed build; tables are only dropped in M8.",
+        "text": "Den vorherigen signierten Build wieder installieren; Tabellen werden erst in M8 gelöscht."
+      },
+      {
+        "path": "milestones.4.title",
+        "source": "One decision model",
+        "text": "Ein Entscheidungsmodell"
+      },
+      {
+        "path": "milestones.4.goal",
+        "source": "Decisions come from network routes and secret requests only.",
+        "text": "Entscheidungen kommen nur noch aus Network-Routes und Secret-Requests."
+      },
+      {
+        "path": "milestones.4.steps.0",
+        "source": "Fold approve gates (formatVersion 2) into routes (formatVersion 5) and migrate stored definitions; one current network format, also for portable packages.",
+        "text": "Approve-Gates (formatVersion 2) in Routes (formatVersion 5) aufgehen lassen und gespeicherte Definitionen migrieren; ein aktuelles Network-Format, auch für portable Pakete."
+      },
+      {
+        "path": "milestones.4.steps.1",
+        "source": "Remove access_proposals and the setup-resource decision source; inbox projection reads routes and secret requests.",
+        "text": "access_proposals und die Setup-Ressourcen als Entscheidungsquelle entfernen; die Inbox-Projektion liest Routes und Secret-Requests."
+      },
+      {
+        "path": "milestones.4.steps.2",
+        "source": "Decide each network command that has no caller: expose it through MCP if it is useful, otherwise delete it.",
+        "text": "Für jeden Network-Befehl ohne Aufrufer entscheiden: über MCP anbieten, wenn er nützlich ist, sonst löschen."
+      },
+      {
+        "path": "milestones.4.acceptance.0",
+        "source": "The Delta Mind archive gate and newsletter choices still appear in the inbox and resolve.",
+        "text": "Das Delta-Mind-Archiv-Gate und die Newsletter-Auswahl erscheinen weiterhin in der Inbox und lassen sich entscheiden."
+      },
+      {
+        "path": "milestones.4.rollback",
+        "source": "Restore the paired backup with the previous build.",
+        "text": "Das gekoppelte Backup mit dem vorherigen Build wiederherstellen."
+      },
+      {
+        "path": "milestones.5.title",
+        "source": "Safety rules for real effects only; approvals at the IdP",
+        "text": "Sicherheitsregeln nur für echte Wirkungen; Freigaben beim IdP"
+      },
+      {
+        "path": "milestones.5.goal",
+        "source": "Keep authorization of external effects and drop rules that only react to content provenance.",
+        "text": "Die Autorisierung externer Wirkungen behalten und Regeln streichen, die nur auf die Herkunft von Inhalten reagieren."
+      },
+      {
+        "path": "milestones.5.steps.0",
+        "source": "Remove the network agent limits (no tools, 120 s, 50 calls), the archive-behind-gate topology rule and the legacy conversation-authority and change-review machinery (master/control, control/changes, MCP changes/retireChange).",
+        "text": "Die Agent-Grenzen in Networks (keine Tools, 120 s, 50 Aufrufe), die Topologieregel Archiv-hinter-Gate und die alte Konversations-Autorität samt Change-Review (master/control, control/changes, MCP changes/retireChange) entfernen."
+      },
+      {
+        "path": "milestones.5.steps.1",
+        "source": "Hold the affected item instead of the whole Pod for an unknown effect; drop the untracked hold for legacy mail.archive.",
+        "text": "Bei einem unbekannten Effekt das betroffene Element statt des ganzen Pods anhalten; den untracked-Hold für das alte mail.archive streichen."
+      },
+      {
+        "path": "milestones.5.steps.2",
+        "source": "Mint and verify one grant token per run instead of per call plus per-second assertActive polling.",
+        "text": "Ein Grant-Token pro Lauf ausstellen und prüfen statt pro Aufruf plus sekündlichem assertActive-Polling."
+      },
+      {
+        "path": "milestones.5.steps.3",
+        "source": "Replace desktop assignment self-approvals and runtime auto-approval with IdP grant requests the owner approves at the IdP; gate grants accept once and always.",
+        "text": "Desktop-Selbstfreigaben bei der Zuweisung und die automatische Laufzeit-Freigabe durch IdP-Grant-Anfragen ersetzen, die der Owner beim IdP freigibt; Gate-Grants akzeptieren once und always."
+      },
+      {
+        "path": "milestones.5.acceptance.0",
+        "source": "No code path in Pods approves a grant with the owner bearer.",
+        "text": "Kein Codepfad in Pods gibt einen Grant mit dem Owner-Bearer frei."
+      },
+      {
+        "path": "milestones.5.acceptance.1",
+        "source": "A new Pod runs after one owner approval at the IdP; HTTP writes still need their IdP grant and idempotency key.",
+        "text": "Ein neuer Pod läuft nach einer Owner-Freigabe beim IdP; HTTP-Schreibzugriffe brauchen weiterhin ihren IdP-Grant und Idempotenzschlüssel."
+      },
+      {
+        "path": "milestones.5.acceptance.2",
+        "source": "The refusal path is tested: without an approved grant the run stays held and nothing is sent.",
+        "text": "Der Verweigerungspfad ist getestet: ohne freigegebenen Grant bleibt der Lauf angehalten und nichts wird gesendet."
+      },
+      {
+        "path": "milestones.5.rollback",
+        "source": "Reinstall the previous signed build.",
+        "text": "Den vorherigen signierten Build wieder installieren."
+      },
+      {
+        "path": "milestones.6.title",
+        "source": "MCP with full access through the owner's DDISA login",
+        "text": "MCP mit vollem Zugriff über den DDISA-Login des Owners"
+      },
+      {
+        "path": "milestones.6.goal",
+        "source": "Codex signs in as the owner for about one hour and can then do everything except approve grants.",
+        "text": "Codex meldet sich für etwa eine Stunde als Owner an und kann dann alles außer Grants freigeben."
+      },
+      {
+        "path": "milestones.6.steps.0",
+        "source": "Prototype: check whether Codex's MCP OAuth login works against id.openape.ai (PKCE, client metadata document) for a local HTTP MCP endpoint; otherwise the stdio shim runs the PKCE browser login itself.",
+        "text": "Prototyp: prüfen, ob der MCP-OAuth-Login von Codex gegen id.openape.ai (PKCE, Client-Metadata-Dokument) für einen lokalen HTTP-MCP-Endpunkt funktioniert; sonst führt der stdio-Shim den PKCE-Browser-Login selbst aus."
+      },
+      {
+        "path": "milestones.6.steps.1",
+        "source": "Pods verifies the IdP token (owner issuer and subject, act human) and issues a one-hour local MCP session; expiry asks Codex to sign in again.",
+        "text": "Pods prüft das IdP-Token (Owner-Issuer und -Subject, act human) und stellt eine einstündige lokale MCP-Session aus; nach Ablauf fordert Codex einen neuen Login an."
+      },
+      {
+        "path": "milestones.6.steps.2",
+        "source": "Remove the off/read/write access modes and the MCP-only restrictions: creation, settings, network activation and composition, recovery mutations and member changes become MCP actions.",
+        "text": "Die Zugriffsmodi off/read/write und die MCP-spezifischen Einschränkungen entfernen: Anlegen, Einstellungen, Network-Aktivierung und -Komposition, Recovery-Änderungen und Member-Änderungen werden MCP-Aktionen."
+      },
+      {
+        "path": "milestones.6.acceptance.0",
+        "source": "Without a valid owner session every MCP call is refused; a foreign DDISA subject is refused.",
+        "text": "Ohne gültige Owner-Session wird jeder MCP-Aufruf abgelehnt; ein fremdes DDISA-Subject wird abgelehnt."
+      },
+      {
+        "path": "milestones.6.acceptance.1",
+        "source": "No MCP action approves, denies or chooses at an IdP grant.",
+        "text": "Keine MCP-Aktion gibt einen IdP-Grant frei, lehnt ihn ab oder wählt dabei aus."
+      },
+      {
+        "path": "milestones.6.rollback",
+        "source": "Reinstall the previous signed build; the access mode setting returns with it.",
+        "text": "Den vorherigen signierten Build wieder installieren; die Zugriffsmodus-Einstellung kommt damit zurück."
+      },
+      {
+        "path": "milestones.7.title",
+        "source": "Baseline schema and single stores",
+        "text": "Basisschema und einfache Speicher"
+      },
+      {
+        "path": "milestones.7.goal",
+        "source": "One readable schema instead of 41 migration steps, and each fact stored once.",
+        "text": "Ein lesbares Schema statt 41 Migrationsschritten, und jede Tatsache nur einmal gespeichert."
+      },
+      {
+        "path": "milestones.7.steps.0",
+        "source": "Write one baseline schema; a single migration moves schema 41 profiles to it and drops workflow, graph, chat, mobile and unused tables and columns; older profiles and backups are refused with a clear message.",
+        "text": "Ein Basisschema schreiben; eine einzige Migration bringt Profile mit Schema 41 dorthin und löscht Workflow-, Graph-, Chat-, Mobil- und ungenutzte Tabellen und Spalten; ältere Profile und Backups werden mit klarer Meldung abgelehnt."
+      },
+      {
+        "path": "milestones.7.steps.1",
+        "source": "Store the binding revision once, reduce the configuration stores, and remove the version branches in network-schema, network-restore and data/backup.",
+        "text": "Die Binding-Revision nur einmal speichern, die Konfigurationsspeicher reduzieren und die Versionszweige in network-schema, network-restore und data/backup entfernen."
+      },
+      {
+        "path": "milestones.7.steps.2",
+        "source": "Relay: publish central data either as rows or as views, drop format 1, the archive call, runtimes.snapshot and the networkReads gating, and keep one device registry and one operations table.",
+        "text": "Relay: zentrale Daten entweder als Zeilen oder als Views veröffentlichen, Format 1, den archive-Aufruf, runtimes.snapshot und die networkReads-Prüfung streichen und je eine Geräteliste und eine Operations-Tabelle behalten."
+      },
+      {
+        "path": "milestones.7.acceptance.0",
+        "source": "A copy of the installed schema 41 profile migrates, and all live networks, Pods, secrets and pending decisions are present afterwards.",
+        "text": "Eine Kopie des installierten Profils mit Schema 41 migriert, und danach sind alle laufenden Networks, Pods, Secrets und offenen Entscheidungen vorhanden."
+      },
+      {
+        "path": "milestones.7.acceptance.1",
+        "source": "A fresh profile and the migrated profile produce the same schema.",
+        "text": "Ein frisches Profil und das migrierte Profil ergeben dasselbe Schema."
+      },
+      {
+        "path": "milestones.7.rollback",
+        "source": "Restore the paired backup with the previous signed build; the migration is one-way.",
+        "text": "Das gekoppelte Backup mit dem vorherigen signierten Build wiederherstellen; die Migration ist einseitig."
+      },
+      {
+        "path": "milestones.8.title",
+        "source": "Docs, rollout and acceptance",
+        "text": "Doku, Rollout und Abnahme"
+      },
+      {
+        "path": "milestones.8.goal",
+        "source": "The installed app and relay run the consolidated model and the docs describe only it.",
+        "text": "Installierte App und Relay laufen mit dem konsolidierten Modell, und die Doku beschreibt nur noch dieses."
+      },
+      {
+        "path": "milestones.8.steps.0",
+        "source": "Rewrite docs/graphs.md, docs/chats.md, the handbook and the runtime help for networks, IdP approvals and MCP login.",
+        "text": "docs/graphs.md, docs/chats.md, das Handbuch und die Runtime-Hilfe für Networks, IdP-Freigaben und MCP-Login neu schreiben."
+      },
+      {
+        "path": "milestones.8.steps.1",
+        "source": "Deploy the relay first, then install the signed desktop build with a paired backup.",
+        "text": "Zuerst das Relay ausrollen, dann den signierten Desktop-Build mit gekoppeltem Backup installieren."
+      },
+      {
+        "path": "milestones.8.steps.2",
+        "source": "Publish the acceptance as a Test Run with inspected screenshots.",
+        "text": "Die Abnahme als Test Run mit geprüften Screenshots veröffentlichen."
+      },
+      {
+        "path": "milestones.8.acceptance.0",
+        "source": "Delta Mind, Morgenbriefing and the monitors run for 24 hours without new holds caused by the change.",
+        "text": "Delta Mind, Morgenbriefing und die Monitore laufen 24 Stunden ohne neue, durch die Änderung verursachte Holds."
+      },
+      {
+        "path": "milestones.8.acceptance.1",
+        "source": "A Codex session signs in, administers a Pod end to end and is refused after expiry.",
+        "text": "Eine Codex-Session meldet sich an, verwaltet einen Pod vollständig und wird nach Ablauf abgelehnt."
+      },
+      {
+        "path": "milestones.8.rollback",
+        "source": "Previous relay image plus previous signed build plus paired backup.",
+        "text": "Vorheriges Relay-Image plus vorheriger signierter Build plus gekoppeltes Backup."
+      },
+      {
+        "path": "decisions.0.title",
+        "source": "Networks are the only orchestration model",
+        "text": "Networks sind das einzige Orchestrierungsmodell"
+      },
+      {
+        "path": "decisions.0.description",
+        "source": "Morgenbriefing is converted; the paused workflows IURIO DOCPIT and both Linde workflows are archived.",
+        "text": "Morgenbriefing wird umgestellt; die pausierten Workflows IURIO DOCPIT und beide Linde-Workflows werden archiviert."
+      },
+      {
+        "path": "decisions.1.title",
+        "source": "Remove the iOS app now",
+        "text": "iOS-App jetzt entfernen"
+      },
+      {
+        "path": "decisions.1.description",
+        "source": "The iOS app and the encrypted mobile channel go without waiting for the M7 PWA pilot.",
+        "text": "iOS-App und verschlüsselter Mobilkanal entfallen, ohne den PWA-Pilot M7 abzuwarten."
+      },
+      {
+        "path": "decisions.2.title",
+        "source": "Old backups are not restorable",
+        "text": "Alte Backups sind nicht wiederherstellbar"
+      },
+      {
+        "path": "decisions.2.description",
+        "source": "Backups older than schema 41 may become unrestorable through the baseline schema.",
+        "text": "Backups älter als Schema 41 dürfen durch das Basisschema nicht mehr wiederherstellbar sein."
+      },
+      {
+        "path": "decisions.3.title",
+        "source": "Approvals stay at the IdP",
+        "text": "Freigaben bleiben beim IdP"
+      },
+      {
+        "path": "decisions.3.description",
+        "source": "MCP may do everything else. Desktop self-approvals also move to the IdP.",
+        "text": "MCP darf alles andere. Auch die Desktop-Selbstfreigaben wandern zum IdP."
+      },
+      {
+        "path": "decisions.4.title",
+        "source": "Tables are dropped once, at the end",
+        "text": "Tabellen werden einmal, am Ende, gelöscht"
+      },
+      {
+        "path": "decisions.4.description",
+        "source": "M2 to M7 stop using tables; M8 drops them in one migration so earlier builds stay restorable until then.",
+        "text": "M2 bis M7 hören auf, Tabellen zu nutzen; M8 löscht sie in einer Migration, damit frühere Builds bis dahin wiederherstellbar bleiben."
+      },
+      {
+        "path": "risks.0.title",
+        "source": "Interrupting the live mail network",
+        "text": "Unterbrechung des laufenden Mail-Networks"
+      },
+      {
+        "path": "risks.0.mitigation",
+        "source": "Paired backup before each install, relay first, and a check of Delta Mind processing after every milestone.",
+        "text": "Gekoppeltes Backup vor jeder Installation, Relay zuerst und Prüfung der Delta-Mind-Verarbeitung nach jedem Meilenstein."
+      },
+      {
+        "path": "risks.1.title",
+        "source": "Codex cannot run an OAuth login for MCP",
+        "text": "Codex kann keinen OAuth-Login für MCP"
+      },
+      {
+        "path": "risks.1.mitigation",
+        "source": "M7 starts with a prototype; the fallback is a PKCE browser login in the stdio shim.",
+        "text": "M7 beginnt mit einem Prototyp; die Rückfallebene ist ein PKCE-Browser-Login im stdio-Shim."
+      },
+      {
+        "path": "risks.2.title",
+        "source": "More IdP prompts after removing self-approvals",
+        "text": "Mehr IdP-Anfragen nach Wegfall der Selbstfreigaben"
+      },
+      {
+        "path": "risks.2.mitigation",
+        "source": "Request always grants once per Pod and command; reuse tokens per run to stay below the IdP rate limit.",
+        "text": "always-Grants einmal pro Pod und Befehl anfordern; Tokens pro Lauf wiederverwenden, um unter dem IdP-Rate-Limit zu bleiben."
+      },
+      {
+        "path": "risks.3.title",
+        "source": "Collision with the running issue 1454 archive work",
+        "text": "Kollision mit der laufenden Archiv-Arbeit aus Issue 1454"
+      },
+      {
+        "path": "risks.3.mitigation",
+        "source": "Issue 1454 adds a network archive port behind an approve gate; M4 and M6 start only after its branches are merged and build on that port instead of removing it.",
+        "text": "Issue 1454 baut einen Network-Archiv-Port hinter einem Approve-Gate; M4 und M6 starten erst nach dem Merge dieser Branches und bauen auf diesem Port auf, statt ihn zu entfernen."
+      },
+      {
+        "path": "risks.4.title",
+        "source": "The one-way baseline migration fails on real data",
+        "text": "Die einseitige Basis-Migration scheitert an echten Daten"
+      },
+      {
+        "path": "risks.4.mitigation",
+        "source": "Rehearse on a copy of the installed profile before release; refuse to start instead of partially migrating.",
+        "text": "Vor dem Release an einer Kopie des installierten Profils proben; lieber den Start verweigern als teilweise migrieren."
+      },
+      {
+        "path": "verification.0",
+        "source": "Per milestone: pnpm lint, pnpm typecheck, build of desktop and relay, Pods test:fast, relay unit tests and pnpm check:affected --suite unit.",
+        "text": "Pro Meilenstein: pnpm lint, pnpm typecheck, Build von Desktop und Relay, Pods test:fast, Relay-Unit-Tests und pnpm check:affected --suite unit."
+      },
+      {
+        "path": "verification.1",
+        "source": "Refusal checks for M6 and M7: no grant, foreign subject and expired session are measured, not only the happy path.",
+        "text": "Verweigerungsprüfungen für M6 und M7: fehlender Grant, fremdes Subject und abgelaufene Session werden gemessen, nicht nur der Erfolgsfall."
+      },
+      {
+        "path": "verification.2",
+        "source": "Migration rehearsal on a copy of the installed profile for M3 and M8.",
+        "text": "Migrationsprobe an einer Kopie des installierten Profils für M3 und M8."
+      },
+      {
+        "path": "verification.3",
+        "source": "Installed-app acceptance with inspected screenshots, published as a Test Run.",
+        "text": "Abnahme an der installierten App mit geprüften Screenshots, veröffentlicht als Test Run."
+      },
+      {
+        "path": "sections.0.title",
+        "source": "Audit findings in numbers",
+        "text": "Befunde in Zahlen"
+      },
+      {
+        "path": "sections.0.body",
+        "source": "- Desktop: 158 tables, 41 migration steps, about 65k LOC.\n- Relay: 25 tables in three databases, two operations tables, two device registries.\n- Duplicates: workflows vs networks, two chat models, binding revision stored three times, five configuration stores, decisions from six sources, snapshot as rows and views.\n- Dead code: about 1.6k LOC unmounted UI, about 700 unused i18n keys, unused commands and dependencies.\n- Self-approvals today: main/programs/grants.ts and connections/runtime-grant.ts approve with the owner bearer.",
+        "text": "- Desktop: 158 Tabellen, 41 Migrationsschritte, rund 65k LOC.\n- Relay: 25 Tabellen in drei Datenbanken, zwei Operations-Tabellen, zwei Gerätelisten.\n- Doppelungen: Workflows und Networks, zwei Chat-Modelle, Binding-Revision dreifach, fünf Konfigurationsspeicher, Entscheidungen aus sechs Quellen, Snapshot als Zeilen und Views.\n- Toter Code: rund 1,6k LOC nicht eingebundene UI, rund 700 ungenutzte i18n-Keys, ungenutzte Befehle und Abhängigkeiten.\n- Selbstfreigaben heute: main/programs/grants.ts und connections/runtime-grant.ts geben mit dem Owner-Bearer frei."
+      },
+      {
+        "path": "sections.1.title",
+        "source": "Safety mechanisms that stay",
+        "text": "Sicherheitsmechanismen, die bleiben"
+      },
+      {
+        "path": "sections.1.body",
+        "source": "IdP grants for CLI and HTTP commands and HTTPS destinations, owner-decided grants for mail moves, the effect ledger with idempotency keys, hash-bound executables, secret isolation and redaction, and the owner identity check at run start.",
+        "text": "IdP-Grants für CLI- und HTTP-Befehle und HTTPS-Ziele, vom Owner entschiedene Grants für Mail-Verschiebungen, das Effect-Ledger mit Idempotenzschlüsseln, hash-gebundene Programme, Secret-Isolation und -Schwärzung sowie die Owner-Identitätsprüfung beim Laufstart."
+      },
+      {
+        "path": "handoff",
+        "source": "M1 runs on branch feature/issue-1455-pods-dead-code. Next: owner approval of this plan, then M2 and M3 can start in parallel.",
+        "text": "M1 läuft auf dem Branch feature/issue-1455-pods-dead-code. Als Nächstes: Freigabe dieses Plans durch den Owner, danach können M2 und M3 parallel starten."
+      },
+      {
+        "path": "changelog.0.text",
+        "source": "Revision 1 drafted from the audit of main ca1e917d and the owner's four decisions.",
+        "text": "Revision 1 aus der Prüfung von main ca1e917d und den vier Owner-Entscheidungen erstellt."
+      }
+    ]
+  }
+}

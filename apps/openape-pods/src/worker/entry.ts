@@ -24,8 +24,6 @@ import { parseNetworkCommand } from '../contracts/networks'
 import type { AdministrationJournal } from '../contracts/codex-admin'
 import { RemoteControl } from './remote/control'
 import type { RemoteInternal } from './remote/control'
-import { ChatRegistry } from './master/chat-registry'
-import { parseChatsCommand } from '../contracts/chats'
 import { reviewMailBatch, reconcileMailEffect } from './mail/workflow'
 import { confirmDomainsStopped } from './recovery/domains'
 import { parseWorkflowCommand } from '../contracts/workflows'
@@ -384,9 +382,6 @@ port.on('message', async (event) => {
     }
     if (request.command && typeof request.command === 'object' && 'remote' in request.command) {
       port.postMessage({ id: request.id, state: await remote.execute(request.command.remote as RemoteInternal) }); return
-    }
-    if (request.command && typeof request.command === 'object' && 'chats' in request.command) {
-      port.postMessage({ id: request.id, state: new ChatRegistry(store).execute(parseChatsCommand(request.command.chats)) }); return
     }
     if (request.command && typeof request.command === 'object' && 'codexAdministration' in request.command) {
       port.postMessage({ id: request.id, state: codex.administration(request.command.codexAdministration as AdministrationJournal) }); return

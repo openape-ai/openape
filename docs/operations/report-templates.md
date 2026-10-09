@@ -19,7 +19,7 @@ image limits, evidence requirements and replacement behavior.
 
 | Owner / surface | Evidence | Action |
 | --- | --- | --- |
-| OpenApe Pods evidence scripts | `apps/openape-pods/scripts/browser-report.mjs`, `redesign-evidence.mjs` | Suggested publication now renders the existing manifest, then publishes one private HTML file; no tests or notifications are triggered by this migration. |
+| OpenApe Pods evidence scripts | `apps/openape-pods/scripts/browser-report.mjs` | Suggested publication now renders the existing manifest, then publishes one private HTML file; no tests or notifications are triggered by this migration. |
 | IURIO PR monitor | Active hash `158083853caa5f07eec600317cc194afd2a058a99eac123d3a0fb6307e9b6df8` | Already uses schema-1 `/api/reports` and receipt recovery. Preserved. |
 | Morning briefing sender | Active hash `ce3ac5cbfc2b8e0f910dd036a8a4a23b62d42833797c0e25cac19c443e4c1009` | Already uses the supported briefing API. Preserved. |
 | Linde server report | Paused hash `be3ba0bcbfb31c55b1a085a2187c8863b867dba9233f12bdc697159136365373` | Already uses schema-1 `/api/reports`. Preserved paused state and delivery checkpoint. |

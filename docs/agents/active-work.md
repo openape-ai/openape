@@ -1,5 +1,12 @@
 # Active work
 
+## Pods consolidation — issue 1455
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1455. Plan revision 1 (draft, awaiting owner approval): https://report.openape.ai/d/01M4GPV3M6H73QA4PTCEHTR0DN?v=2; source `.claude/plans/2026-10-09-pods-consolidation/plan.json`.
+- Owner decisions October 9: networks only (convert Morgenbriefing, archive paused workflows), remove the iOS app and encrypted mobile channel now, backups older than schema 41 may become unrestorable, approvals stay at the IdP and MCP may do everything else (desktop self-approvals move to the IdP).
+- M1 dead code: branch `feature/issue-1455-pods-dead-code` from `ca1e917d`, behaviour-neutral (unmounted chat/console/review UI, orphaned modules, experiments, `@xterm/*`, `web-push`, 837 unused German catalog entries). Checks: root lint and typecheck, both app builds, Pods test:fast 1,342 + 52 browser tests, relay 90 tests, `check:affected --suite unit` SUCCESS, `docs:check`.
+- Next: PR review/merge of M1; M2 and M3 after plan approval; M4/M6 wait for the issue 1454 archive branches.
+
 ## Delta Mind mail network live: unblock, cursor, real archiving — issue 1454
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1454; approved plan revision 1 (owner: "Leg los mit dem Plan", October 8): https://report.openape.ai/d/01M4EDTC4JT3RPZRNJMT191EZM?v=2.

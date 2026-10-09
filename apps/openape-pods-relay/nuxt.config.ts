@@ -27,7 +27,6 @@ export default defineNuxtConfig({
     inboxEnabled: false,
     inboxDatabase: './.data/inbox.sqlite',
     inboxVapidPublicKey: '',
-    inboxVapidPrivateKey: '',
   },
   nitro: { preset: 'node-server', experimental: { websocket: true } },
 })
