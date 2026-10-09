@@ -581,6 +581,77 @@ it('requires confirmed non-application and fresh owner approval before an uncert
   expect(f.started).not.toContain(f.consumer)
 })
 
+// With a deliveryId the effect records an intent naming that input first, as the archive port does.
+function syntheticUnknownEffect(f: ReturnType<typeof runtimeFixture>, runId: string, caseId: string, action: string, deliveryId?: string) {
+  const key = networkGatePayloadHash({ action })
+  f.store.transaction(() => {
+    f.store.db.prepare(`INSERT INTO network_effect_attempts VALUES(?,1,?,?,1,?,?,'unknown',1,?)`).run(key, runId, caseId, 'a'.repeat(64), 'b'.repeat(64), f.id)
+    if (deliveryId) f.store.db.prepare(`INSERT INTO network_effect_receipts VALUES(?,1,1,'intent',?,1)`).run(key, JSON.stringify({ deliveryId, synthetic: true }))
+    f.store.db.prepare(`INSERT INTO network_effect_receipts VALUES(?,1,?,'unknown','{"synthetic":true,"noProviderAction":true}',1)`).run(key, deliveryId ? 2 : 1)
+  })
+  return key
+}
+
+it('asks again for the safe inputs of a batch and keeps only the uncertain one back for review', async () => {
+  const f = runtimeFixture(() => 'approved')
+  await f.emit('test.input', 'test.input', 'test.input')
+  f.engine.tick(); await f.settle()
+  f.due(); f.engine.tick(); await f.settle()
+  const authority = f.engine.invocations.reserve(f.id, f.consumer, f.resources.epoch(f.consumer), 'event')!
+  const item = f.engine.invocations.input(authority).items[0]!
+  syntheticUnknownEffect(f, authority.runId, item.caseId, 'synthetic-uncertain-action')
+  await f.engine.invocations.finish(authority, 'failed', 'Synthetic uncertain effect', 'No real provider action occurred', [], [])
+  const uncertain = f.store.db.prepare('SELECT id FROM network_deliveries WHERE run_id=?').get(authority.runId)!.id as string
+  const task = f.engine.view().gates![0]!
+  expect(task.items).toHaveLength(3)
+
+  f.engine.execute({ type: 'gateReview', id: f.id, revision: 1, taskId: task.id, generation: task.generation, evidence: 'Synthetic owner asks again after an authority change' })
+
+  const states = Object.fromEntries(task.items.map(entry => [entry.deliveryId, f.store.db.prepare('SELECT state FROM network_deliveries WHERE id=?').get(entry.deliveryId)!.state]))
+  expect(states).toEqual(Object.fromEntries(task.items.map(entry => [entry.deliveryId, entry.deliveryId === uncertain ? 'unknown' : 'pending'])))
+  const superseded = f.engine.view().gates!.find(gate => gate.id === task.id)!
+  expect(superseded.state).toBe('superseded')
+  expect(superseded.items.find(entry => entry.deliveryId === uncertain)!.outcome).toBe('released')
+  expect(JSON.parse(f.store.db.prepare('SELECT body FROM network_trace_events WHERE kind=\'gate-owner-fresh-approval\'').get()!.body as string)).toMatchObject({ resumed: 2, held: 1 })
+  expect(f.store.db.prepare('SELECT state FROM network_effect_attempts').get()!.state).toBe('unknown')
+})
+
+async function failedWithEffect(bound: boolean, outcome: 'confirmed_applied' | 'confirmed_not_applied' = 'confirmed_applied') {
+  const f = runtimeFixture(() => 'approved')
+  await f.emit('test.input')
+  f.engine.tick(); await f.settle()
+  f.due(); f.engine.tick(); await f.settle()
+  const authority = f.engine.invocations.reserve(f.id, f.consumer, f.resources.epoch(f.consumer), 'event')!
+  const item = f.engine.invocations.input(authority).items[0]!
+  const deliveryId = f.store.db.prepare('SELECT id FROM network_deliveries WHERE run_id=?').get(authority.runId)!.id as string
+  const key = syntheticUnknownEffect(f, authority.runId, item.caseId, 'synthetic-uncertain-action', bound ? deliveryId : undefined)
+  await f.engine.invocations.finish(authority, 'failed', 'Synthetic uncertain effect', 'No real provider action occurred', [], [])
+  const generation = () => Number(f.store.db.prepare('SELECT generation FROM network_invocations WHERE run_id=?').get(authority.runId)!.generation)
+  const reconcile = () => f.engine.recover({ type: 'reconcileEffect', id: f.id, revision: 1, runId: authority.runId, generation: generation(), key, attempt: 1, sequence: bound ? 2 : 1, outcome, evidence: 'Synthetic owner-confirmed provider evidence' })
+  const discard = () => f.engine.agentDiscardFailure({ type: 'discardFailure', id: f.id, revision: 1, runId: authority.runId, generation: generation(), evidence: 'Provider shows the synthetic action applied' })
+  return { ...f, authority, reconcile, discard }
+}
+
+it('lets the assistant close a failed run only when every input was confirmed as applied', async () => {
+  const f = await failedWithEffect(true)
+  await expect(f.discard()).rejects.toThrow('every input was confirmed as applied')
+  await f.reconcile()
+
+  await f.discard()
+
+  expect(f.store.db.prepare('SELECT state FROM network_deliveries WHERE run_id=?').get(f.authority.runId)!.state).toBe('discarded')
+  expect(JSON.parse(f.store.db.prepare('SELECT resolved_receipt FROM network_invocation_controls WHERE run_id=?').get(f.authority.runId)!.resolved_receipt as string).evidence).toBe('Assistant request: Provider shows the synthetic action applied')
+  const withoutEffects = f.store.db.prepare('SELECT run_id FROM network_invocations WHERE pod_id=?').get(f.source)!.run_id as string
+  await expect(f.engine.agentDiscardFailure({ type: 'discardFailure', id: f.id, revision: 1, runId: withoutEffects, generation: 1, evidence: 'No effects' })).rejects.toThrow('every input was confirmed as applied')
+})
+
+it.each([[false, 'confirmed_applied'], [true, 'confirmed_not_applied']] as const)('keeps a failed run whose input has no applied effect of its own with the desktop (bound=%s, %s)', async (bound, outcome) => {
+  const f = await failedWithEffect(bound, outcome)
+  await f.reconcile()
+  await expect(f.discard()).rejects.toThrow('every input was confirmed as applied')
+  expect(f.store.db.prepare('SELECT state FROM network_deliveries WHERE run_id=?').get(f.authority.runId)!.state).not.toBe('discarded')
+})
+
 it('blocks archival for pending approvals and preserves completed approval history through archive restore', async () => {
   const f = runtimeFixture(() => 'approved')
   await f.emit('test.input')

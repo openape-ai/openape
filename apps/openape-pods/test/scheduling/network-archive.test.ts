@@ -17,19 +17,22 @@ const mailbox = 'owner@example.invalid'
 const mail = { id: 'message-1', changeKey: 'change-1', parentFolderId: 'inbox-folder', from: { emailAddress: { address: 'news@example.invalid' } }, toRecipients: [{ emailAddress: { address: mailbox } }], ccRecipients: [], subject: 'Weekly news', receivedDateTime: '2026-10-08T08:00:00Z', body: { content: 'Synthetic newsletter', contentType: 'text' }, hasAttachments: false }
 const reply = (operation: 'read' | 'move', fields: Record<string, unknown>) => ({ exitCode: 0, stderr: '', stdout: JSON.stringify({ protocol: 'pods-mail/v1', account: mailbox, operation, ...fields }) })
 
-function archiveFixture(options: { current?: typeof mail, move?: () => unknown, payload?: Record<string, string>, preview?: boolean } = {}) {
+function archiveFixture(options: { current?: typeof mail, mails?: typeof mail[], move?: (message: string) => unknown, payload?: Record<string, string>, preview?: boolean } = {}) {
+  const approved = options.mails ?? [mail]; const current = options.mails ?? [options.current ?? mail]
   const moves: string[][] = []
   const decision = { state: 'approved' }
   const tool = vi.fn(async (body: unknown, _signal: AbortSignal, scope: { assertCurrent: () => void }) => {
     scope.assertCurrent()
     const argv = (body as { argv: string[] }).argv
     if (argv[1] !== 'read') throw new Error('Scripts and the port may only read through the tool service')
-    return reply('read', { outcome: 'confirmed', items: [options.current ?? mail] })
+    const message = argv[argv.indexOf('--message') + 1]
+    return reply('read', { outcome: 'confirmed', items: [current.find(item => item.id === message) ?? mail] })
   })
   const mailMove = vi.fn(async (body: unknown) => {
     const argv = (body as { argv: string[] }).argv
     assertArchiveMove(argv); moves.push(argv)
-    return options.move?.() ?? reply('move', { outcome: 'confirmed', beforeId: mail.id, afterId: 'archived-1', requestId: 'request-1', receipt: { id: 'archived-1', parentFolderId: 'archive-folder' } })
+    const message = argv[argv.indexOf('--message') + 1]!
+    return options.move?.(message) ?? reply('move', { outcome: 'confirmed', beforeId: message, afterId: `archived-${message}`, requestId: `request-${message}`, receipt: { id: `archived-${message}`, parentFolderId: 'archive-folder' } })
   })
   const gateCapabilities: string[][] = []
   const f = networkFixture({ tool, mailMove, gate: async (value, _signal, scope) => {
@@ -77,10 +80,10 @@ function archiveFixture(options: { current?: typeof mail, move?: () => unknown, 
   const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, ...[archive, excluded].map(podId => ({ podId, source: null, serialCase: false }))], ['mail.batch', 'mail.approved', 'mail.excluded'], [{ key: 'newsletter', kind: 'approve', title: 'Archive newsletters', podId: archive, channel: 'mail.batch' }], [{ key: 'newsletter', kind: 'approve', title: 'Archive newsletters', takes: 'mail.batch', gives: 'mail.approved', excluded: 'mail.excluded' }])
   f.engine.execute({ type: 'activate', id, revision: 1 })
   const settle = async () => { await expect.poll(() => f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0) }
-  const rounds = async () => { for (let round = 0; round < 4; round++) { f.store.db.prepare('UPDATE network_gate_controls SET next_poll_at=0').run(); f.engine.tick(); await settle() } }
+  const rounds = async () => { for (let round = 0; round < 4 + approved.length; round++) { f.store.db.prepare('UPDATE network_gate_controls SET next_poll_at=0').run(); f.engine.tick(); await settle() } }
   const approve = async () => {
     const authority = f.engine.invocations.reserve(id, source, f.resources.epoch(source), 'manual')!
-    await f.engine.invocations.finish(authority, 'completed', 'Synthetic intake', null, [], [{ channel: 'mail.batch', key: 'message-1', sourceItemId: mail.id, sourceVersion: mailContentVersion(mail), payload: options.payload ?? { subject: mail.subject } }])
+    await f.engine.invocations.finish(authority, 'completed', 'Synthetic intake', null, [], approved.map(item => ({ channel: 'mail.batch', key: item.id, sourceItemId: item.id, sourceVersion: mailContentVersion(item), payload: options.payload ?? { subject: item.subject } })))
     await rounds()
   }
   const gates = () => f.store.db.prepare('SELECT state FROM network_gate_tasks ORDER BY created_at,rowid').all().map(row => row.state)
@@ -121,12 +124,47 @@ it('leaves a message in place when its content changed after approval', async ()
   expect(f.effects()).toEqual([{ state: 'confirmed_not_applied', receipts: 'intent,confirmed_not_applied' }])
 })
 
-it('keeps an unbound move receipt unknown and blocks the member until reconciliation', async () => {
-  const f = archiveFixture({ move: () => reply('move', { outcome: 'confirmed', beforeId: mail.id, afterId: 'archived-1', requestId: 'request-1', receipt: { id: 'archived-1', parentFolderId: mail.parentFolderId } }) })
+const unbound = (message: string) => reply('move', { outcome: 'confirmed', beforeId: message, afterId: `archived-${message}`, requestId: `request-${message}`, receipt: { id: `archived-${message}`, parentFolderId: mail.parentFolderId } })
+const second = { ...mail, id: 'message-2', changeKey: 'change-2', subject: 'Monthly news' }
+const third = { ...mail, id: 'message-3', changeKey: 'change-3', subject: 'Product news' }
+
+it('holds back only the mail with an unknown move and keeps archiving the others', async () => {
+  const f = archiveFixture({ mails: [mail, second], move: message => message === mail.id ? unbound(message) : undefined })
   await f.approve()
-  expect(f.outcomes).toEqual([[expect.objectContaining({ outcome: 'unknown' })]])
-  expect(f.effects()).toEqual([{ state: 'unknown', receipts: 'intent,unknown' }])
-  expect(f.store.db.prepare('SELECT state FROM network_invocations WHERE pod_id=? AND execution_kind=\'script\'').get(f.archive)!.state).toBe('unknown')
+  expect(f.moves.map(argv => argv[5]).sort()).toEqual([mail.id, second.id])
+  expect(f.outcomes.flat()).toEqual(expect.arrayContaining([expect.objectContaining({ messageId: mail.id, outcome: 'unknown' }), expect.objectContaining({ messageId: second.id, outcome: 'archived' })]))
+  expect(f.store.db.prepare('SELECT state FROM network_invocations WHERE pod_id=? AND execution_kind=\'script\' ORDER BY rowid').all(f.archive).map(row => row.state)).toEqual(['completed', 'completed'])
+  expect(f.deliveries().sort()).toEqual(['done', 'unknown'])
+  const held = f.engine.execute({ type: 'detail', id: f.id, revision: 1 }).details!.failures.find(failure => failure.kind === 'uncertain')!
+  expect(held.effects).toEqual([expect.objectContaining({ state: 'unknown', sequence: 2 })])
+
+  const effect = held.effects[0]!
+  await f.engine.recover({ type: 'reconcileEffect', id: f.id, revision: 1, runId: held.runId, generation: held.generation, key: effect.key, attempt: effect.attempt, sequence: effect.sequence, outcome: 'confirmed_applied', evidence: 'Synthetic provider evidence: the message is in the Archive folder' })
+
+  expect(f.deliveries()).toEqual(['done', 'done'])
+  expect(f.engine.execute({ type: 'detail', id: f.id, revision: 1 }).details!.failures).toEqual([])
+  expect(f.moves).toHaveLength(2)
+  f.store.assertStorage()
+})
+
+it('stops the member after a second unresolved unknown move', async () => {
+  const f = archiveFixture({ mails: [mail, second, third], move: unbound })
+  await f.approve()
+  expect(f.moves).toHaveLength(2)
+  expect(f.deliveries().sort()).toEqual(['pending', 'unknown', 'unknown'])
+  expect(f.store.db.prepare('SELECT body FROM network_trace_events WHERE kind=\'instance-attention\' ORDER BY id DESC').get()!.body).toContain('Network member stopped after repeated unknown external outcomes')
+})
+
+it('never moves a message again while an earlier attempt of another version is unresolved', async () => {
+  const f = archiveFixture({ move: unbound })
+  await f.approve()
+  const run = f.store.db.prepare('SELECT run_id,network_id FROM network_invocations WHERE pod_id=? AND execution_kind=\'script\'').get(f.archive)!
+  const delivery = f.store.db.prepare('SELECT d.id FROM network_deliveries d JOIN network_subscriptions s ON s.id=d.subscription_id WHERE s.pod_id=?').get(f.archive)!
+  f.store.db.prepare('UPDATE network_case_revisions SET source_mapping=json_set(source_mapping,\'$.sourceVersion\',\'content:changed\')').run()
+  const coverage = [{ manifest: JSON.parse(f.store.db.prepare('SELECT manifest FROM network_gate_tasks').get()!.manifest as string), grantId: 'once', items: [{ deliveryId: delivery.id as string, eventId: randomUUID(), key: mail.id, grantId: 'once', data: {} }] }]
+  const again = await archiveApproved(f.store, { networkId: run.network_id as string, runId: run.run_id as string, podId: f.archive, owner: f.owner }, coverage, { application: 'mail', mailbox }, { read: async () => { throw new Error('No read expected') }, move: async () => { throw new Error('No move expected') }, approved: async () => {} }, () => {})
+  expect(again).toEqual([expect.objectContaining({ outcome: 'skipped', reason: 'An earlier archive attempt of this message awaits reconciliation' })])
+  expect(f.moves).toHaveLength(1)
 })
 
 it('records a broker refusal before sending as not applied and keeps the member usable', async () => {
