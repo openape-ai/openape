@@ -5,8 +5,12 @@ import type { DatabaseSync } from 'node:sqlite'
  * and so is every Pod that only workflows used: no network member and no own enabled schedule. Workflow history
  * is detached from Pods, runs and networks, so retention and deletion never need the workflow tables again.
  * The tables themselves stay until the baseline schema (M8); the pre-upgrade backup keeps every row.
+ * Pods of workflows that a network called stayed out of central publication; local_only_pods keeps that
+ * before the call rows are deleted, also for such a Pod that stays active through its own schedule.
  */
 export function retireWorkflows(database: DatabaseSync, now: number): void {
+  database.exec(`CREATE TABLE IF NOT EXISTS local_only_pods(pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DELETE CASCADE);
+INSERT OR IGNORE INTO local_only_pods SELECT DISTINCT m.pod_id FROM workflow_members m JOIN workflow_call_requests c ON c.workflow_id=m.workflow_id;`)
   database.prepare(`UPDATE pods SET lifecycle='archived',metadata_revision=metadata_revision+1
     WHERE lifecycle!='archived'
       AND id IN (SELECT m.pod_id FROM workflow_members m JOIN workflows w ON w.id=m.workflow_id WHERE w.archived=0
