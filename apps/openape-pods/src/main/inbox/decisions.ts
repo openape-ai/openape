@@ -93,12 +93,12 @@ export class InboxDecisions {
   }
 
   // Network members change only through desktop review; the phone may still take route decisions for the network.
-  private members(sources: DecisionSources): Set<string> { return new Set((sources.map?.collections ?? []).filter(collection => collection.kind === 'network').flatMap(collection => collection.members)) }
+  private members(sources: DecisionSources): Set<string> { return new Set((sources.map?.automations ?? []).filter(automation => automation.kind === 'network').flatMap(automation => automation.members)) }
   private podName(sources: DecisionSources, podId: string): string | null { return sources.map?.pods.find(pod => pod.id === podId)?.name ?? null }
 
   /** Owner decisions of network routes: an open item of a choose route, or a batch of an approve route waiting at the IdP. */
   private networkRoutes(sources: DecisionSources): DecisionEntry[] {
-    const network = (id: string) => sources.map?.collections.find(collection => collection.id === id)
+    const network = (id: string) => sources.map?.automations.find(automation => automation.id === id)
     // Only the latest event of a case is open; an earlier event is superseded, as on the desktop.
     const latest = new Map<string, NetworkChoiceView>()
     for (const choice of sources.networks.choices ?? []) latest.set(`${choice.networkId}:${choice.gate}:${choice.caseId}`, choice)

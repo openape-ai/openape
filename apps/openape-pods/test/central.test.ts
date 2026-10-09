@@ -339,10 +339,10 @@ it('publishes the description summary with the workspace inventory', () => {
 
 it('publishes network and workflow descriptions with the workspace inventory', async () => {
   const { store, projection, actor } = fixture()
-  const { CollectionDescriptions } = await import('../src/worker/workspace/collection-descriptions')
+  const { AutomationDescriptions } = await import('../src/worker/workspace/automation-descriptions')
   const id = randomUUID()
   store.db.prepare('INSERT INTO workflows(id,revision,name,nodes) VALUES(?,1,\'Morning briefing\',\'[]\')').run(id)
-  new CollectionDescriptions(store).execute({ type: 'describeCollection', id, revision: 0, text: 'Sends one morning briefing by Telegram.' })
+  new AutomationDescriptions(store).execute({ type: 'describeAutomation', id, revision: 0, text: 'Sends one morning briefing by Telegram.' })
   const parts = splitSnapshot(projection.snapshot(actor.owner))
   expect(assembleSnapshot(key => parts.get(key), [...parts.keys()]).workspace.descriptions).toEqual([{ id, text: 'Sends one morning briefing by Telegram.', revision: 1 }])
 })
@@ -419,13 +419,13 @@ it('deletes through MCP with coordinated cleanup and keeps an owner-scoped recei
 
 it('accepts descriptions through the central workspace while other network member changes stay desktop-only', () => {
   const id = randomUUID()
-  const collection = parseCentralCommand({ channel: 'workspace', body: { type: 'describeCollection', id, revision: 0, text: 'Sorts incoming mail.' } })
+  const collection = parseCentralCommand({ channel: 'workspace', body: { type: 'describeAutomation', id, revision: 0, text: 'Sorts incoming mail.' } })
   expect(commandPodIds(collection, { workspace: { pods: [{ id: randomUUID() }, { id: randomUUID() }] } })).toEqual([])
   expect(networkBrowserMutationAllowed(collection)).toBe(true)
   expect(networkBrowserMutationAllowed(parseCentralCommand({ channel: 'details', body: { type: 'describe', podId: id, revision: 0, text: 'Reads the mailbox.' } }))).toBe(true)
   expect(networkBrowserMutationAllowed(parseCentralCommand({ channel: 'runs', body: { type: 'start', podId: id } }))).toBe(false)
   expect(networkBrowserMutationAllowed({ channel: 'details', body: { type: 'activate', podId: id } })).toBe(false)
-  expect(() => parseCentralCommand({ channel: 'workspace', body: { type: 'describeCollection', id, revision: 0, text: 'x'.repeat(1001) } })).toThrow()
+  expect(() => parseCentralCommand({ channel: 'workspace', body: { type: 'describeAutomation', id, revision: 0, text: 'x'.repeat(1001) } })).toThrow()
   expect(() => parseCentralCommand({ channel: 'workspace', body: { type: 'pauseAll' } })).toThrow()
 })
 

@@ -42,7 +42,7 @@ const secretForm = ref<{ podId: string, alias: string | null } | null>(null)
 const inboxView = ref<InstanceType<typeof DecisionsInbox> | null>(null)
 const waiting = computed(() => props.decisions ?? inboxView.value?.total ?? 0)
 const current = computed(() => props.tab ?? 'automations')
-const groups = computed(() => [...new Set([...props.view?.pods.map(pod => pod.group) ?? [], ...props.view?.collections.map(collection => collection.group) ?? []].filter((name): name is string => !!name))])
+const groups = computed(() => [...new Set([...props.view?.pods.map(pod => pod.group) ?? [], ...props.view?.automations.map(automation => automation.group) ?? []].filter((name): name is string => !!name))])
 const chips: { key: keyof Layers, label: string, color: string }[] = [{ key: 'channel', label: 'Channels', color: 'var(--accent)' }, { key: 'read', label: 'Read', color: 'var(--read)' }, { key: 'write', label: 'Write', color: 'var(--warn)' }, { key: 'auth', label: 'Approvals', color: 'var(--idp)' }, { key: 'paused', label: 'Paused', color: 'var(--muted)' }]
 function selectGroup(value: string) { group.value = value; pinned.value = null; hovered.value = null }
 function openCodex() { handoff.value = true; emit('codex', pinned.value, group.value === 'all' ? null : group.value === ungrouped ? t('without group') : group.value) }

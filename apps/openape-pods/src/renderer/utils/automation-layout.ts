@@ -1,4 +1,4 @@
-import type { MapCollection, MapSystemKind, MapView } from '../../contracts/map-view'
+import type { MapAutomation, MapSystemKind, MapView } from '../../contracts/map-view'
 import { graphLayers } from './graph-layout'
 
 /**
@@ -14,7 +14,7 @@ export interface MapNode {
   name: string
   sub: string
   group: string | null
-  collection: string | null
+  automation: string | null
   paused: boolean
   ai: boolean
   degraded: boolean
@@ -41,25 +41,25 @@ export const IDP = 'auth:idp'
 export const YOU = 'auth:you'
 export const ungrouped = '__none__'
 
-const node = (id: string, kind: NodeKind, name: string, extra: Partial<MapNode> = {}): MapNode => ({ id, kind, name, sub: '', group: null, collection: null, paused: false, ai: false, degraded: false, blocked: false, running: false, rk: null, both: false, badge: 0, secrets: false, labelWidth: 150, x: 0, y: 0, tx: 0, ty: 0, ...extra })
+const node = (id: string, kind: NodeKind, name: string, extra: Partial<MapNode> = {}): MapNode => ({ id, kind, name, sub: '', group: null, automation: null, paused: false, ai: false, degraded: false, blocked: false, running: false, rk: null, both: false, badge: 0, secrets: false, labelWidth: 150, x: 0, y: 0, tx: 0, ty: 0, ...extra })
 
-/** Nodes and links of the read model. Paused collections collapse into one node; gates become the owner or the identity provider. */
+/** Nodes and links of the read model. Paused automations collapse into one node; gates become the owner or the identity provider. */
 export function buildModel(view: MapView, previous?: MapModel): MapModel {
   const nodes: MapNode[] = []
   const links: MapLink[] = []
   const collapsed = new Map<string, string>()
   const degraded = new Set(view.kpis.degraded.map(item => item.podId))
-  const gates = new Map<string, { kind: 'choose' | 'approve', title: string }>(view.collections.flatMap(collection => collection.gates.map(gate => [`gate:${gate.key}`, { kind: gate.kind, title: gate.title }])))
-  for (const collection of view.collections) {
-    if (collection.state === 'archived') continue
-    if (collection.state !== 'active') {
-      nodes.push(node(collection.id, 'collapsed', collection.name, { sub: `${collection.members.length}`, group: collection.group ?? ungrouped, paused: true }))
-      for (const member of collection.members) collapsed.set(member, collection.id)
+  const gates = new Map<string, { kind: 'choose' | 'approve', title: string }>(view.automations.flatMap(automation => automation.gates.map(gate => [`gate:${gate.key}`, { kind: gate.kind, title: gate.title }])))
+  for (const automation of view.automations) {
+    if (automation.state === 'archived') continue
+    if (automation.state !== 'active') {
+      nodes.push(node(automation.id, 'collapsed', automation.name, { sub: `${automation.members.length}`, group: automation.group ?? ungrouped, paused: true }))
+      for (const member of automation.members) collapsed.set(member, automation.id)
     }
   }
   for (const pod of view.pods) {
     if (pod.lifecycle === 'archived' || collapsed.has(pod.id)) continue
-    nodes.push(node(pod.id, 'pod', pod.name, { group: pod.group ?? ungrouped, collection: pod.collection, paused: pod.lifecycle === 'paused', ai: pod.ai, degraded: degraded.has(pod.id), blocked: pod.queue.blocked > 0, running: pod.lastRun?.state === 'running', secrets: pod.secrets.length > 0 }))
+    nodes.push(node(pod.id, 'pod', pod.name, { group: pod.group ?? ungrouped, automation: pod.automation, paused: pod.lifecycle === 'paused', ai: pod.ai, degraded: degraded.has(pod.id), blocked: pod.queue.blocked > 0, running: pod.lastRun?.state === 'running', secrets: pod.secrets.length > 0 }))
     for (const approval of pod.approvals) links.push({ from: pod.id, to: IDP, type: 'auth', label: approval.title, flow: 1 })
   }
   const reads = new Set(view.edges.filter(edge => edge.type === 'read').map(edge => edge.from))
@@ -119,30 +119,30 @@ export function relayout(model: MapModel, view: MapView, group: string, layers: 
   row(shown.filter(item => item.kind === 'auth' || item.kind === 'ai'), g.topY, g.topGap)
   const clusters: MapCluster[] = []
   let y = g.firstRow
-  const byCollection = new Map<string, MapNode[]>()
-  for (const item of shown.filter(item => item.kind === 'pod' && item.collection)) (byCollection.get(item.collection!) ?? byCollection.set(item.collection!, []).get(item.collection!)!).push(item)
-  for (const collection of view.collections) {
-    const members = byCollection.get(collection.id)
+  const byAutomation = new Map<string, MapNode[]>()
+  for (const item of shown.filter(item => item.kind === 'pod' && item.automation)) (byAutomation.get(item.automation!) ?? byAutomation.set(item.automation!, []).get(item.automation!)!).push(item)
+  for (const automation of view.automations) {
+    const members = byAutomation.get(automation.id)
     if (!members?.length) continue
-    if (collection.kind === 'network') {
+    if (automation.kind === 'network') {
       const ids = members.map(item => item.id)
       const layers = graphLayers(ids, view.edges.filter(edge => edge.type === 'channel' && ids.includes(edge.from) && ids.includes(edge.to)).map(edge => ({ from: edge.from, to: edge.to, channel: edge.channel ?? '' })))
       const x0 = g.cluster.x + 50; const x1 = g.cluster.x + g.cluster.w - 50; const y0 = y + 50; const y1 = y + g.cluster.h - 50
       for (const item of members) item.labelWidth = 110
       layers.forEach((layer, index) => layer.forEach((id, position) => { const item = members.find(member => member.id === id)!; item.tx = layers.length === 1 ? (x0 + x1) / 2 : x0 + (x1 - x0) * index / (layers.length - 1); item.ty = layer.length === 1 ? (y0 + y1) / 2 : y0 + (y1 - y0) * position / (layer.length - 1) }))
-      clusters.push({ id: collection.id, name: collection.name, kind: 'network', x: g.cluster.x, y, w: g.cluster.w, h: g.cluster.h })
+      clusters.push({ id: automation.id, name: automation.name, kind: 'network', x: g.cluster.x, y, w: g.cluster.w, h: g.cluster.h })
       y += g.cluster.h + g.rowGap
     }
     else {
-      const ordered = collection.members.map(id => members.find(item => item.id === id)).filter((item): item is MapNode => !!item)
+      const ordered = automation.members.map(id => members.find(item => item.id === id)).filter((item): item is MapNode => !!item)
       for (const item of ordered) item.labelWidth = g.chain.gap - 10
       row(ordered, y + g.chain.h / 2 - 10, g.chain.gap)
       const w = (ordered.length - 1) * g.chain.gap + 100
-      clusters.push({ id: collection.id, name: collection.name, kind: 'chain', x: 600 - w / 2, y, w, h: g.chain.h })
+      clusters.push({ id: automation.id, name: automation.name, kind: 'chain', x: 600 - w / 2, y, w, h: g.chain.h })
       y += g.chain.h + g.rowGap
     }
   }
-  const singles = shown.filter(item => item.kind === 'pod' && !item.collection)
+  const singles = shown.filter(item => item.kind === 'pod' && !item.automation)
   if (singles.length) { for (const item of singles) item.labelWidth = g.single.gap - 10; row(singles, y + g.single.h / 2 - 10, g.single.gap); y += g.single.h + g.rowGap }
   const ghosts = shown.filter(item => item.kind === 'collapsed')
   if (ghosts.length) { row(ghosts, y + g.collapsed.h / 2 - 10, g.collapsed.gap); y += g.collapsed.h + g.rowGap }
@@ -197,12 +197,12 @@ export function hitTest(model: MapModel, visible: Set<string>, x: number, y: num
   return null
 }
 
-/** The collection a cluster label belongs to when the owner clicks it. */
+/** The automation a cluster label belongs to when the owner clicks it. */
 export function clusterAt(model: MapModel, x: number, y: number): MapCluster | null {
   return model.clusters.find(cluster => x > cluster.x && x < cluster.x + cluster.w && y > cluster.y && y < cluster.y + 30) ?? null
 }
 
-export const collectionOf = (view: MapView, id: string): MapCollection | undefined => view.collections.find(item => item.id === id)
+export const automationOf = (view: MapView, id: string): MapAutomation | undefined => view.automations.find(item => item.id === id)
 
 export interface NodeFacts { reads: { name: string, flow: number }[], writes: { name: string, flow: number }[], channels: { direction: 'gives' | 'takes', channel: string, flow: number }[] }
 /** What one node reads, writes and exchanges, with the measured flows of the window. */

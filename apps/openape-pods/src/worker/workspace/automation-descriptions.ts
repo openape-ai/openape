@@ -1,15 +1,15 @@
-import type { CollectionDescription, WorkspaceCommand } from '../../contracts/control'
+import type { AutomationDescription, WorkspaceCommand } from '../../contracts/control'
 import type { PodDatabase } from '../storage/database'
 
-/** Owner-written descriptions of networks and workflows. They explain; nothing that executes reads them. */
-export class CollectionDescriptions {
+/** Owner-written descriptions of networks and workflows (automations). They explain; nothing that executes reads them. The table keeps its old name until the baseline schema (issue 1455, M8). */
+export class AutomationDescriptions {
   constructor(private readonly store: PodDatabase) {}
 
-  view(): CollectionDescription[] {
-    return this.store.db.prepare('SELECT id,body AS text,revision FROM collection_descriptions WHERE id IN (SELECT id FROM workflows UNION ALL SELECT id FROM networks) ORDER BY rowid').all() as unknown as CollectionDescription[]
+  view(): AutomationDescription[] {
+    return this.store.db.prepare('SELECT id,body AS text,revision FROM collection_descriptions WHERE id IN (SELECT id FROM workflows UNION ALL SELECT id FROM networks) ORDER BY rowid').all() as unknown as AutomationDescription[]
   }
 
-  execute(command: Extract<WorkspaceCommand, { type: 'describeCollection' }>): void {
+  execute(command: Extract<WorkspaceCommand, { type: 'describeAutomation' }>): void {
     this.store.transaction(() => {
       if (!this.store.db.prepare('SELECT 1 FROM workflows WHERE id=? UNION ALL SELECT 1 FROM networks WHERE id=?').get(command.id, command.id)) throw new Error('Network or workflow not found')
       const current = this.store.db.prepare('SELECT revision FROM collection_descriptions WHERE id=?').get(command.id)?.revision as number | undefined

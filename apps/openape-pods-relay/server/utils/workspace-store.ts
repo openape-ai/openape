@@ -13,9 +13,13 @@ import type { CentralCommand, CentralOperation, CentralPod, CentralRuntime, Cent
 import { assemblePod, assembleSnapshot, centralFormat, encodeParts, manifestDigest, parsePartKey, partHash, podRuns, splitSnapshot, validateManifest, validatePart } from '../../../openape-pods/src/contracts/central-parts'
 import type { CentralManifest } from '../../../openape-pods/src/contracts/central-parts'
 import type { WorkspaceState } from '../../../openape-pods/src/contracts/control'
+import { parseMapView } from '../../../openape-pods/src/contracts/map-view'
 import type { RunEvent, RunRecord } from '../../../openape-pods/src/contracts/runs'
 import type { ScheduleView } from '../../../openape-pods/src/contracts/scheduling'
 import type { ScriptView } from '../../../openape-pods/src/contracts/scripts'
+
+// A map published by a desktop before issue 1455 (M5) still names automations `collections`; readers get the current names.
+const currentMap = (map: unknown) => map === undefined ? null : parseMapView(map)
 
 export interface WorkspaceActor { id: string, generation: string, owner: Owner }
 interface RuntimeRow { id: string, owner: string, generation: string, lease: string, heartbeat: number, revision: number, hash: string, snapshot: string | null, previous_hash: string, seen_at: number, parts_hash: string, networks: string | null }
@@ -316,7 +320,7 @@ export class WorkspaceStore {
       if (!this.hasData(row)) return { id: row.id, revision: row.revision, online, lastSeenAt, workspace: { pods: [], organization: { revision: 1, groups: [] } } }
       const read = this.reader(row.id)
       const workspace = read('workspace') as WorkspaceState
-      return { id: row.id, revision: row.revision, online, lastSeenAt, workflows: workspaceWorkflows(read, Object.keys(this.manifest(row.id))), ...(row.networks ? { networks: parseNetworkView(JSON.parse(row.networks)) } : {}), workspace: { ...workspace, pods: workspace.pods.map((pod) => {
+      return { id: row.id, revision: row.revision, online, lastSeenAt, workflows: workspaceWorkflows(read, Object.keys(this.manifest(row.id))), ...(row.networks ? { networks: parseNetworkView(JSON.parse(row.networks)) } : {}), workspace: { ...workspace, ...(workspace.map ? { map: currentMap(workspace.map)! } : {}), pods: workspace.pods.map((pod) => {
         const view = read(`pod/${pod.id}`) as PodView
         if (!online || !view.ready) return { id: pod.id, name: pod.name, online: false, revision: 1, lifecycle: pod.lifecycle === 'archived' ? 'archived' as const : 'paused' as const, activeScript: null }
         const { blocked, blockedSince = null, error } = view.scheduling
@@ -335,7 +339,7 @@ export class WorkspaceStore {
   view(owner: Owner, runtimeId: string, podId: string | null, query: WorkspaceView): unknown {
     if (query.view === 'map') {
       const row = this.ready(owner, runtimeId)
-      return { revision: row.revision, map: (this.reader(row.id)('workspace') as WorkspaceState).map ?? null }
+      return { revision: row.revision, map: currentMap((this.reader(row.id)('workspace') as WorkspaceState).map) }
     }
     if (podId === null) throw new ProtocolError('invalid_workspace_request')
     const row = this.ready(owner, runtimeId, [centralId(podId)])

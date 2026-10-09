@@ -27,7 +27,7 @@ const evidence = ref<Record<string, string>>({})
 const openBatch = ['preparing', 'pending', 'consuming', 'unknown', 'superseded']
 
 interface Case { id: string, networkId: string, revision: number, gate: string, title: string, event: NetworkChoiceView, payload: Record<string, unknown>, versions: number, options: { key: string, title: string, channel: string }[] }
-const gateDefinition = (networkId: string, key: string) => props.view.collections.find(collection => collection.id === networkId)?.gates.find(gate => gate.key === key)
+const gateDefinition = (networkId: string, key: string) => props.view.automations.find(automation => automation.id === networkId)?.gates.find(gate => gate.key === key)
 function parse(payload: string): Record<string, unknown> {
   try { const value = JSON.parse(payload); return value && typeof value === 'object' && !Array.isArray(value) ? value : { payload } }
   catch { return { payload } }
@@ -53,7 +53,7 @@ const gateHeads = computed(() => {
     const key = `${item.networkId}:${item.gate}`
     if (keys.has(key)) continue
     const definition = gateDefinition(item.networkId, item.gate)
-    keys.set(key, { networkId: item.networkId, gate: item.gate, title: item.title, takes: definition?.takes ?? '', options: item.options.map(option => option.title), network: props.view.collections.find(collection => collection.id === item.networkId)?.name ?? '' })
+    keys.set(key, { networkId: item.networkId, gate: item.gate, title: item.title, takes: definition?.takes ?? '', options: item.options.map(option => option.title), network: props.view.automations.find(automation => automation.id === item.networkId)?.name ?? '' })
   }
   return [...keys.values()]
 })
@@ -94,7 +94,7 @@ function chooseAll(items: Case[], key: string) { for (const item of open(items))
 const batches = computed(() => props.gates.filter(gate => openBatch.includes(gate.state)))
 const graphBatches = computed(() => (props.graphGates?.batches ?? []).filter(batch => openBatch.includes(batch.state)))
 const held = computed(() => props.graphGates?.held ?? [])
-const approveGates = computed(() => props.view.collections.flatMap(collection => collection.gates.filter(gate => gate.kind === 'approve').map(gate => ({ ...gate, collection }))))
+const approveGates = computed(() => props.view.automations.flatMap(automation => automation.gates.filter(gate => gate.kind === 'approve').map(gate => ({ ...gate, automation }))))
 const podName = (id: string) => props.view.pods.find(pod => pod.id === id)?.name ?? id
 const rights = computed(() => props.view.pods.flatMap(pod => [...pod.approvals.map(approval => ({ pod, approval, error: null as string | null })), ...(pod.queue.blocked && !pod.approvals.length ? [{ pod, approval: null, error: pod.queue.error }] : [])]))
 const unknown = computed(() => props.view.pods.flatMap(pod => pod.unknown.map(item => ({ pod, ...item }))))
@@ -180,7 +180,7 @@ defineExpose({ total })
           <div class="row">
             <span class="subj">{{ item.title }}</span><span class="pill pods">{{ item.gate }}</span>
           </div><div class="opts">
-            <button v-for="option in (view.collections.find(collection => collection.id === item.workflowId)?.gates.find(gate => gate.key === item.gate)?.options ?? [])" :key="option.key" class="secondary" type="button" @click="emit('workflow', { type: 'gateChoose', id: item.workflowId, gate: item.gate, itemId: item.itemId, option: option.key })">
+            <button v-for="option in (view.automations.find(automation => automation.id === item.workflowId)?.gates.find(gate => gate.key === item.gate)?.options ?? [])" :key="option.key" class="secondary" type="button" @click="emit('workflow', { type: 'gateChoose', id: item.workflowId, gate: item.gate, itemId: item.itemId, option: option.key })">
               {{ option.title }}
             </button>
           </div>
@@ -213,10 +213,10 @@ defineExpose({ total })
         <label v-else class="meta">{{ t('Evidence') }} <input v-model="evidence[batch.id]" maxlength="4000"></label>
         <div class="opts">
           <template v-if="batch.url">
-            <button v-if="desktop" class="secondary idp" type="button" @click="emit('network', { type: 'gateOpen', id: batch.networkId, revision: view.collections.find(collection => collection.id === batch.networkId)?.revision ?? 1, taskId: batch.id, generation: batch.generation })">{{ t('Decide at the IdP') }}</button>
+            <button v-if="desktop" class="secondary idp" type="button" @click="emit('network', { type: 'gateOpen', id: batch.networkId, revision: view.automations.find(automation => automation.id === batch.networkId)?.revision ?? 1, taskId: batch.id, generation: batch.generation })">{{ t('Decide at the IdP') }}</button>
             <a v-else class="secondary idp" :href="batch.url" target="_blank" rel="noopener">{{ t('Decide at the IdP') }}</a>
           </template>
-          <button v-if="batch.state === 'unknown'" class="secondary" type="button" :disabled="!desktop || !evidence[batch.id]?.trim()" @click="emit('network', { type: 'gateDiscard', id: batch.networkId, revision: view.collections.find(collection => collection.id === batch.networkId)?.revision ?? 1, taskId: batch.id, generation: batch.generation, evidence: evidence[batch.id] ?? '' })">
+          <button v-if="batch.state === 'unknown'" class="secondary" type="button" :disabled="!desktop || !evidence[batch.id]?.trim()" @click="emit('network', { type: 'gateDiscard', id: batch.networkId, revision: view.automations.find(automation => automation.id === batch.networkId)?.revision ?? 1, taskId: batch.id, generation: batch.generation, evidence: evidence[batch.id] ?? '' })">
             {{ t('Discard batch') }}
           </button>
         </div>

@@ -24,7 +24,7 @@ function sources(): DecisionSources {
       { id: pod, name: 'Belege', approvals: [{ grantId: 'grant-1', title: 'Mail lesen', runId: run }], unknown: [{ key: 'invoice-7', runId: run }] },
       { id: member, name: 'Mailnetz-Mitglied', approvals: [], unknown: [{ key: 'reply-1', runId: run }] },
     ],
-    collections: [
+    automations: [
       { id: network, kind: 'network', members: [member], name: 'Mailnetz', revision: 3, gates: [] },
       { id: workflow, name: 'Ablage', revision: 1, gates: [{ key: 'review', kind: 'choose', title: 'Prüfen', options: [{ key: 'keep', title: 'Behalten' }, { key: 'drop', title: 'Verwerfen' }] }] },
     ],
