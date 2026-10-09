@@ -61,7 +61,7 @@ function archiveFixture(options: { agent?: boolean, current?: typeof mail, mails
   const excluded = f.pod('Excluded', { takes: ['mail.excluded'], gives: [], summary: 'Keeps denied mail' }, async () => {})
   const assign = (podId = archive) => {
     const applicationId = randomUUID(); const capability = `tool.app_${applicationId.replaceAll('-', '')}.invoke`
-    f.resources.assignProgram(podId, applicationId, { type: 'program', name: 'mail', capability } as ProgramAssignment, f.resources.epoch(podId))
+    f.resources.assignProgram(podId, applicationId, { type: 'program', name: 'mail', cliId: 'o365-cli', adapterPath: resolve('examples/network-mail-archive-shapes.toml'), capability } as ProgramAssignment, f.resources.epoch(podId))
     return capability
   }
   // Stores and validates a member script version with the archive capability, as validation would.

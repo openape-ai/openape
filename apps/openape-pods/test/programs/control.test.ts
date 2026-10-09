@@ -21,7 +21,7 @@ function fixture() {
   const resources = new ResourceRegistry(store, () => {})
   const pod = store.createPod({ name: 'Application fixture' })
   const id = randomUUID()
-  const configuration: ProgramAssignment = { type: 'program', name: 'fixture', executable: '/fixture', executableHash: 'a'.repeat(64), cliId: 'fixture', adapterPath: '/fixture.toml', adapterHash: 'b'.repeat(64), entryFiles: [], environment: {}, networkHosts: [], stateId: randomUUID(), capability: `tool.app_${id.replaceAll('-', '')}.invoke`, grants: [] }
+  const configuration: ProgramAssignment = { type: 'program', name: 'fixture', executable: '/fixture', executableHash: 'a'.repeat(64), cliId: 'fixture', adapterPath: '/fixture.toml', adapterHash: 'b'.repeat(64), entryFiles: [], environment: {}, networkHosts: [], stateId: randomUUID(), capability: `tool.app_${id.replaceAll('-', '')}.invoke` }
   const control = new ProgramControl(store, resources)
   control.execute({ type: 'save', podId: pod.id, id, epoch: 0, configuration })
   installExample(store, resources, pod.id, 'deterministic', 'c'.repeat(64))
@@ -54,12 +54,13 @@ it('bounds terminal commands and parses quotes without executing shell interpola
   expect(() => parseProgramCommand({ ...base, data: 'x'.repeat(8193) })).toThrow('limit')
   expect(() => parseProgramCommand({ ...base, shell: '/bin/sh' })).toThrow('Unsupported')
 })
-it('keeps HTTP origin, method and pod identity checks independent of declared capability', () => {
-  const f = fixture(); const authority = { identity: { podId: f.pod.id, connectionId: randomUUID(), issuer: 'https://id.example.invalid', owner: 'owner@example.invalid', subject: 'pod@example.invalid', keyId: 'key' }, ownerConnection: randomUUID(), grantId: 'http-grant' }
-  f.resources.assignHttp(f.pod.id, { origin: 'https://api.example.com', methods: ['POST'] }, authority, f.resources.epoch(f.pod.id))
+it('keeps the HTTP sandbox (origin, method, Pod) independent of declared capability and of any grant', () => {
+  const f = fixture()
+  const id = f.resources.assignHttp(f.pod.id, { origin: 'https://api.example.com', methods: ['POST'] }, f.resources.epoch(f.pod.id))
   const resources = f.resources.list(f.pod.id); const capability = resources.find(item => item.configuration.type === 'http')!.configuration.capability as string
   const scope = { podId: f.pod.id, capabilities: [capability] }; const request = { url: 'https://api.example.com/send', method: 'POST', key: 'mail:1', headers: {} }
-  expect(assignedHttp(resources, scope, request)).toEqual(authority)
+  expect(assignedHttp(resources, scope, request).id).toBe(id)
+  expect(resources.find(item => item.id === id)!.configuration).not.toHaveProperty('authority')
   expect(() => assignedHttp(resources, { ...scope, podId: randomUUID() }, request)).toThrow('not assigned')
   expect(() => assignedHttp(resources, scope, { ...request, method: 'DELETE' })).toThrow('assigned origin or methods')
   expect(() => assignedHttp(resources, { ...scope, capabilities: [] }, request)).toThrow('not assigned')

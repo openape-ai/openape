@@ -81,6 +81,8 @@ import { parseRunCommand } from '../contracts/runs'
 import { join, dirname } from 'node:path'
 import { parseResourceCommand } from '../contracts/resources'
 import { ResourceRegistry } from './resources/registry'
+import { GrantLedger } from './resources/grants'
+import type { GrantLedgerCommand } from './resources/grants'
 import { parseCommand } from '../contracts/control'
 import { PodDatabase } from './storage/database'
 
@@ -404,11 +406,6 @@ port.on('message', async (event) => {
       authorizeRunService(store, registry, dispatcher.runs, check)
       const events = dispatcher.runs.events(check.scope.podId, check.scope.runId)
       const reason = (events.find(item => item.type === 'started')?.data as { reason?: string } | undefined)?.reason ?? 'manual'
-      if (check.grant) {
-        const { permission, issuer, subject } = check.grant
-        const previous = store.db.prepare('SELECT data FROM run_events JOIN runs ON runs.id=run_events.run_id WHERE runs.pod_id=? AND run_events.type=\'approval\' AND json_extract(data,\'$.permission\')=? AND json_extract(data,\'$.issuer\')=? AND json_extract(data,\'$.subject\')=? ORDER BY run_events.at DESC,sequence DESC LIMIT 1').get(check.scope.podId, permission, issuer, subject)
-        port.postMessage({ id: request.id, state: previous ? JSON.parse(previous.data as string) : null }); return
-      }
       const network = store.db.prepare('SELECT 1 FROM network_invocations WHERE run_id=?').get(check.scope.runId)
       const maintenance = store.db.prepare('SELECT 1 FROM workflow_gate_attempts WHERE run_id=?').get(check.scope.runId)
       port.postMessage({ id: request.id, state: { name: store.getPod(check.scope.podId).name, reason, runtime: !network && !maintenance } }); return
@@ -445,6 +442,9 @@ port.on('message', async (event) => {
       }
       finally { preparing = null; maintenance = false }
       return
+    }
+    if (request.command && typeof request.command === 'object' && 'grants' in request.command) {
+      port.postMessage({ id: request.id, state: new GrantLedger(store).execute(request.command.grants as GrantLedgerCommand) }); return
     }
     if (request.command && typeof request.command === 'object' && 'secrets' in request.command) {
       port.postMessage({ id: request.id, state: new SecretRequests(store).execute(request.command.secrets as SecretRowCommand) }); return
@@ -508,7 +508,7 @@ port.on('message', async (event) => {
       if (resource.type === 'assignJev') throw new Error('Jev permissions require owner approval')
       if (resource.type === 'bindJev') registry.assignJev(resource.podId, resource.connectionId, resource.model, resource.maxAttempts, resource.authority, resource.epoch)
       if (resource.type === 'bindSsh') registry.assignSsh(resource.podId, resource.binding, resource.authority, resource.epoch)
-      if (resource.type === 'bindHttp') registry.assignHttp(resource.podId, resource.permission, resource.authority, resource.epoch, resource.authentication)
+      if (resource.type === 'bindHttp') registry.assignHttp(resource.podId, resource.permission, resource.epoch, resource.authentication)
       if (resource.type === 'assignHttp') throw new Error('HTTP permissions require owner approval')
       if (resource.type === 'saveCredential') throw new Error('Credential values must be stored by the owning main process')
       const variables = new PodVariables(store)

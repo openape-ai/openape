@@ -7,8 +7,9 @@ import { gateAudience, gateItemCommand, gateItemSummary, parseGateCoverage } fro
 import { createGrantAuthority } from '../../gates/authority'
 import type { CredentialCache } from '../../connections/cache'
 import type { ConnectionManager } from '../../connections/manager'
-import type { GrantLookup, GrantObserver } from '../../broker/authorization'
+import type { GrantLedgerPort, GrantObserver } from '../../broker/authorization'
 import { invokeProgram } from '../../programs/invoke'
+import type { SandboxLevel } from '../../../contracts/sandbox'
 import { podWorkspace } from '../../programs/console'
 import { assignedDirectories, directoryPolicy } from '../../../runtime/directories'
 import { archiveApplication, archiveProvider, moveApprovedMail } from './program'
@@ -26,7 +27,8 @@ interface Request {
   check: (domain?: { path: string, ownerPid: number }) => Promise<ResourceState>
   signal: AbortSignal
   observe: GrantObserver
-  previous: GrantLookup
+  ledger?: GrantLedgerPort
+  level: () => Promise<SandboxLevel>
 }
 export async function handleMailArchive(input: Request): Promise<unknown> {
   const { scope, signal, check, service } = input
@@ -45,9 +47,7 @@ export async function handleMailArchive(input: Request): Promise<unknown> {
       return archiveProvider(selected.id, selected.assignment, mailbox, {
         read: async (argv) => {
           const current = await check()
-          const grant = await input.connections.existingProgramGrant(scope.podId, selected.assignment, argv)
-          const resources = current.resources.map(item => item.id === selected.id ? { ...item, configuration: { ...item.configuration, grants: [...selected.assignment.grants.filter(item => item.permission !== grant.permission), grant] } } : item)
-          return invokeProgram(resources, scope.podId, { applicationId: selected.id, argv }, input.helper, root, input.credentials, lease, input.observe, input.previous)
+          return invokeProgram(current.resources, scope.podId, { applicationId: selected.id, argv }, input.helper, root, input.credentials, lease, { connection, ledger: input.ledger, level: await input.level(), observe: input.observe })
         },
         move: async (argv) => {
           if (!record) throw new Error('Preparation cannot move mail')

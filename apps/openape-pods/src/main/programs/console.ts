@@ -1,5 +1,6 @@
 import { podDirectories } from '../../runtime/environment'
 import { loadAdapter, resolveCommand } from '@openape/apes'
+import type { OpenApeCliAuthorizationDetail } from '@openape/core'
 import type { ConsoleView, ProgramAssignment } from '../../contracts/programs'
 import { parseCommandLine } from '../../contracts/programs'
 import type { ResourceState } from '../../contracts/resources'
@@ -9,7 +10,8 @@ export async function podWorkspace(root: string, podId: string): Promise<string>
   return (await podDirectories(root, podId)).workspace
 }
 
-export async function prepareConsole(root: string, podId: string, state: ResourceState, line: string): Promise<ConsoleView> {
+/** Resolves a terminal line; `covered` tells whether a recorded Pod grant covers the command. */
+export async function prepareConsole(root: string, podId: string, state: ResourceState, line: string, covered: (detail: OpenApeCliAuthorizationDetail) => Promise<boolean>): Promise<ConsoleView> {
   const workspace = await podWorkspace(root, podId)
   const result: ConsoleView = { workspace, output: '', command: null, needsGrant: false, permission: null }
   const applications = state.resources.filter(item => item.podId === podId && item.kind === 'tool' && item.state === 'ready' && item.configuration.type === 'program')
@@ -27,5 +29,5 @@ export async function prepareConsole(root: string, podId: string, state: Resourc
     return { ...result, output: adapter.adapter.operations.map(operation => [name, ...operation.command, ...(operation.required_options ?? []).flatMap(option => [`--${option.replace(/^--/, '')}`, `<${option.replace(/^--/, '')}>`])].join(' ')).join('\n') }
   }
   const resolved = await resolveCommand(adapter, [assignment.cliId, ...argv])
-  return { ...result, command: { type: 'start', podId, applicationId: resource.id, epoch: state.epoch, argv }, needsGrant: !assignment.grants.some(grant => grant.permission === resolved.permission), permission: resolved.permission }
+  return { ...result, command: { type: 'start', podId, applicationId: resource.id, epoch: state.epoch, argv }, needsGrant: !await covered(resolved.detail), permission: resolved.permission }
 }
