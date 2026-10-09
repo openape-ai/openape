@@ -33,7 +33,7 @@ export async function resolveProgram(assignment: ProgramAssignment, podId: strin
 }
 export async function prepareProgramAuthorization(assignment: ProgramAssignment, podId: string, argv: string[], credentials: CredentialCache, readOnly = false, observe?: GrantObserver, previous?: GrantLookup, action?: 'move', tokens?: RunGrantTokens) {
   const { grant, authorization } = await resolveProgram(assignment, podId, argv, readOnly, action)
-  const authority = new AgentAuthority(new PodIdentityManager(credentials).connection(grant.authority.identity, `pods:${podId}`), observe, previous, undefined, tokens)
+  const authority = new AgentAuthority(new PodIdentityManager(credentials).connection(grant.authority.identity, `pods:${podId}`), observe, previous, tokens)
   return { authority, authorization }
 }
 

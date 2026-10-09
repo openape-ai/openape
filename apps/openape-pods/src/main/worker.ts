@@ -1,8 +1,6 @@
 import type { InboxOutboxCommand } from '../worker/inbox/outbox'
 import type { DecisionSources, InboxDecisions } from './inbox/decisions'
 import { parseInboxDecide } from '../contracts/inbox'
-import type { AgentConnection } from './broker/authorization'
-import type { RuntimeApprovalBinding, RuntimeApprovalCommand, RuntimeApprovalView } from '../contracts/runtime-approval'
 import { readOnlyAction } from './codex/routing'
 import { boundedCodexNetworkResult, codexNetworkRead, parseCodexNetworkAction } from '../contracts/codex-networks'
 import { applicationBundle, applicationDefinition } from './programs/application'
@@ -20,7 +18,6 @@ import { MailArchiveService } from './mail/archive/service'
 import { ArchiveStore } from './mail/archive/store'
 import { handleMailArchive } from './mail/archive/handler'
 import { handleGate } from './gates/handler'
-import type { RuntimeApprovalPolicy } from './codex/runtime-approval'
 import { assignedJev, parseJevRequest, typesafeOrigin } from '../contracts/jev'
 import { executeJev } from './connections/jev-service'
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
@@ -53,6 +50,7 @@ import { podWorkspace } from './programs/console'
 import { invokeProgram, programRequest } from './programs/invoke'
 import { archiveRefusal, assertArchiveMove } from '../contracts/network-capabilities'
 import { ProgramManager } from './programs/manager'
+import type { GrantRequest } from './programs/grants'
 import type { ProgramDefinition, ProgramCommand } from '../contracts/programs'
 import type { ProgramInternal } from '../worker/resources/programs'
 import { parseHttpPermission, parseHttpRequest } from '../contracts/http'
@@ -143,7 +141,7 @@ export class FixtureWorker {
     return ['list', 'graph', 'gateOpen'].includes(type) ? null : this.central
   }
 
-  constructor(private readonly publish: (status: WorkerStatus) => void, private readonly runtimeApproval: RuntimeApprovalPolicy | null = null) {}
+  constructor(private readonly publish: (status: WorkerStatus) => void) {}
   start(root: string): void {
     try { assertPilotRuntime() }
     catch (error) { this.state = { state: 'error', pid: null, error: error instanceof Error ? error.message : 'Unsupported Mac' }; this.publish(this.state); return }
@@ -312,7 +310,7 @@ export class FixtureWorker {
       await this.programs.network(command.podId, command.applicationId, command.epoch, command.hosts)
     }
     else if (command.type === 'grant') {
-      await this.programs.grant(command)
+      await this.grantProgram(command)
     }
     else if (command.type === 'importState') {
       if (!file) throw new Error('Choose an application state file in the owner window')
@@ -324,10 +322,12 @@ export class FixtureWorker {
     return this.resources({ type: 'list', podId: command.podId })
   }
 
-  async programPreview(command: Extract<ProgramCommand, { type: 'grant' | 'start' }>) {
+  private async grantProgram(command: Extract<ProgramCommand, { type: 'grant' }>): Promise<string | null> {
     await this.setupReady
     if (!this.programs) throw new Error('Program service is not ready')
-    return this.programs.preview(command.podId, command.applicationId, command.epoch, command.argv)
+    const approval = await this.programs.grant(command)
+    if (approval) await shell.openExternal(approval)
+    return approval
   }
 
   async onboarding(command: OnboardingCommand): Promise<OnboardingView> {
@@ -348,53 +348,6 @@ export class FixtureWorker {
     await this.setupReady
     if (!this.connections) throw new Error('Connection service unavailable')
     await this.connections.verifyOwner(signal, present)
-  }
-
-  private async runtimeApprovalBinding(): Promise<RuntimeApprovalBinding | null> {
-    await this.setupReady
-    if (!this.connections) return null
-    const view = await this.connections.view()
-    const owner = view.connections.find(item => item.id === view.owner)
-    const runtimeId = this.central?.status().runtimeId
-    if (!owner || owner.state !== 'ready' || !runtimeId) return null
-    const current = await this.connections.remoteOwner()
-    return { ...current.owner, account: current.email, runtimeId }
-  }
-
-  async runtimeApprovalCommand(command: RuntimeApprovalCommand): Promise<RuntimeApprovalView> {
-    const policy = this.runtimeApproval
-    if (!policy) throw new Error('Runtime approval settings are unavailable')
-    return policy.exclusive(async () => {
-      const binding = await this.runtimeApprovalBinding()
-      const scope = binding ? createHash('sha256').update(JSON.stringify(binding)).digest('hex') : null
-      if (command.type === 'set') policy.setEnabled(command.enabled)
-      if (command.type === 'setStanding') {
-        if (command.enabled && !binding) throw new Error('Connect this runtime and sign in with your DDISA account first')
-        if (command.enabled && command.scope !== scope) throw new Error('The account or runtime changed; reopen App settings before granting approval')
-        policy.setStanding(command.enabled ? binding : null)
-      }
-      if (command.type === 'manage') {
-        if (!binding) throw new Error('Connect this runtime and sign in with your DDISA account first')
-        await shell.openExternal(new URL('/grants', binding.issuer).href)
-      }
-      return { enabled: policy.enabled, standing: policy.standingAllows(binding), owner: binding?.account ?? null, scope }
-    })
-  }
-
-  private async approveStandingRuntime(connection: AgentConnection & { ownerConnection: string }, podId: string, grantId: string, signal: AbortSignal): Promise<boolean> {
-    const policy = this.runtimeApproval
-    const connections = this.connections
-    if (!policy || !connections) return false
-    return policy.exclusive(async () => {
-      const allowed = async () => {
-        const binding = await this.runtimeApprovalBinding()
-        const current = binding ? { email: binding.account, owner: { issuer: binding.issuer } } : await connections.remoteOwner()
-        return current.email === connection.owner && current.owner.issuer === (connection.decisionIssuer ?? connection.issuer) && policy.allows(podId, binding)
-      }
-      if (!await allowed()) return false
-      await connections.approveRuntimeGrant(connection, podId, grantId, signal, allowed)
-      return true
-    })
   }
 
   async indexRemotePods(owner: Owner): Promise<void> {
@@ -422,10 +375,6 @@ export class FixtureWorker {
       const query = parseWorkspaceAction(request.action)
       if (!this.central) throw new Error('Connect the central workspace in the desktop app first')
       if (query.type === 'reconcile') return this.central.reconcile(query.id as string, query.applied as boolean, query.evidence as string)
-      if (this.runtimeApproval && query.type === 'submit' && query.runtimeId === this.central.status().runtimeId) {
-        const command = parseCentralCommand(query.command)
-        if (command.channel === 'workspace' && command.body.type === 'create') this.runtimeApproval.recordCreation(centralId(query.id), centralId(query.runtimeId), command)
-      }
       return this.central.query(query)
     }
     if (request.action.action === 'runtime') return { ...await this.dispatch({ codex: request }) as object, workspace: workspaceHelp, ...(this.central ? { central: this.central.status() } : {}) }
@@ -445,7 +394,6 @@ export class FixtureWorker {
       const result = await this.dispatch({ codex: request, ownerOperation: this.central?.executing === true })
       if (request.action.action === 'create') {
         const podId = centralId((result as { id: string }).id)
-        this.runtimeApproval?.recordPod(podId)
         if (this.central) await this.centralProvision(podId, (await this.remoteOwner()).owner)
       }
       return result
@@ -499,14 +447,18 @@ export class FixtureWorker {
     }
     if (action.kind === 'recovery') {
       const view = await this.runs(action.command)
-      return { runs: view.runs.map(({ id, state, scriptHash, startedAt, finishedAt, recovery }) => ({ id, state, scriptHash, startedAt, finishedAt, recovery: recovery?.state ?? null })), effects: view.effects?.map(({ key, runId }) => ({ key, runId })) ?? [], approvals: view.approvals?.map(({ runId, grantId, state }) => ({ runId, grantId, state })) ?? [] }
+      // openApproval has just opened this IdP page on the Mac; the owner decides there.
+      const opened = action.command.type === 'openApproval' ? await this.approvalLink(action.command.podId, action.command.runId, action.command.grantId) : null
+      return { runs: view.runs.map(({ id, state, scriptHash, startedAt, finishedAt, recovery }) => ({ id, state, scriptHash, startedAt, finishedAt, recovery: recovery?.state ?? null })), effects: view.effects?.map(({ key, runId }) => ({ key, runId })) ?? [], approvals: view.approvals?.map(({ runId, grantId, state }) => ({ runId, grantId, state })) ?? [], ...(opened ? { opened } : {}) }
     }
+    let approval: string | null = null
     if (action.kind === 'program') {
       if (['prepare', 'start', 'poll', 'input', 'close'].includes(action.command.type)) return this.program(action.command)
       const definition = action.command.type === 'add' || action.command.type === 'replace'
         ? action.path!.endsWith('.app') ? await applicationDefinition(action.path!, join(this.root, 'applications')) : await programDefinition(action.path!, action.adapterPath, action.commandName, action.runtimePath)
         : undefined
-      await this.program(action.command, definition, action.path)
+      if (action.command.type === 'grant') approval = await this.grantProgram(action.command)
+      else await this.program(action.command, definition, action.path)
     }
     else if (action.kind === 'importSecret') {
       await importPrivateSecret(action.path, value => this.resources({ type: 'saveCredential', ...action.command, value }))
@@ -518,11 +470,15 @@ export class FixtureWorker {
       const row = await this.secretsGate.request(action.command.podId, action.command.alias, action.command.purpose)
       return { requestId: row.id, status: row.status, expiresAt: row.expiresAt }
     }
+    else if (action.command.type === 'assignJev' || action.command.type === 'assignSsh' || action.command.type === 'assignHttp') {
+      approval = (await this.assign(action.command)).approval
+    }
     else {
       await this.resources(action.command)
     }
     const view = await this.resources({ type: 'list', podId: command.podId })
-    return { resources: modelResources(view.resources, true), variables: view.variables, epoch: view.epoch }
+    // A pending request is approved by the owner at the IdP; Pods has opened that page on this Mac.
+    return { resources: modelResources(view.resources, true), variables: view.variables, epoch: view.epoch, ...(approval ? { approval: { state: 'pending', url: approval } } : {}) }
   }
 
   async master(command: MasterCommand): Promise<MasterView> { const central = this.centralAction(command.type); if (central) return central.local(() => this.master(command)); return parseMasterView(await this.dispatch({ master: command })) }
@@ -540,35 +496,7 @@ export class FixtureWorker {
   async resources(command: InternalResourceCommand): Promise<ResourceState> {
     const central = this.centralAction(command.type); if (central) return central.local(() => this.resources(command))
     await this.setupReady
-    if (command.type === 'assignJev') {
-      if (!this.connections) throw new Error('Connection setup is not ready')
-      const before = parseResourceState(await this.dispatch({ resource: { type: 'list', podId: command.podId } }))
-      if (before.epoch !== command.epoch) throw new Error('Pod or Jev permissions changed; reload before assigning access')
-      if (before.jev?.id !== command.connectionId || before.jev.state !== 'ready') throw new Error('TypeSafe is not connected; reconnect in App settings')
-      const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
-      const authority = await this.connections.approve(command.podId, join(vendor, 'pod-http-shapes.toml'), [['pod-http', 'request', '--origin', typesafeOrigin, '--method', 'POST']])
-      return parseResourceState(await this.dispatch({ resource: { ...command, type: 'approveJev', authority } }))
-    }
-    if (command.type === 'assignSsh') {
-      if (!this.connections) throw new Error('Connection setup is not ready')
-      const before = parseResourceState(await this.dispatch({ resource: { type: 'list', podId: command.podId } }))
-      if (before.epoch !== command.epoch) throw new Error('Pod or SSH permissions changed; reload before assigning access')
-      const binding = await resolveSshTarget(command.target)
-      const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
-      const authority = await this.connections.approve(command.podId, join(vendor, 'pod-ssh-shapes.toml'), [sshGrantArgv(binding)])
-      return parseResourceState(await this.dispatch({ resource: { type: 'approveSsh', podId: command.podId, epoch: command.epoch, binding, authority } }))
-    }
-    if (command.type === 'assignHttp') {
-      if (!this.connections) throw new Error('Connection setup is not ready')
-      const before = parseResourceState(await this.dispatch({ resource: { type: 'list', podId: command.podId } }))
-      if (before.epoch !== command.epoch) throw new Error('Pod or HTTP permissions changed; reload before assigning access')
-      const permission = parseHttpPermission(command.permission)
-      const current = before.resources.filter(item => item.kind === 'tool' && item.state === 'ready')
-      if (!current.some(item => item.configuration.type === 'http' && item.configuration.origin === permission.origin) && current.length >= 16) throw new Error('This pod already has 16 tools')
-      const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
-      const authority = await this.connections.approve(command.podId, join(vendor, 'pod-http-shapes.toml'), permission.methods.map(method => ['pod-http', 'request', '--origin', permission.origin, '--method', method]))
-      return parseResourceState(await this.dispatch({ resource: { type: 'approveHttp', podId: command.podId, epoch: command.epoch, permission, authority, ...(command.authentication ? { authentication: command.authentication } : {}) } }))
-    }
+    if (command.type === 'assignJev' || command.type === 'assignSsh' || command.type === 'assignHttp') return (await this.assign(command)).view
     if (command.type === 'saveCredential') {
       if (!this.credentials) throw new Error('Credential store is unavailable')
       const before = parseResourceState(await this.dispatch({ resource: { type: 'list', podId: command.podId } }))
@@ -591,6 +519,42 @@ export class FixtureWorker {
       await this.credentials.erasePodKey((before.configuration.credentialId ?? before.configuration.stateId) as string, command.podId)
     }
     return view
+  }
+
+  /**
+   * Stores an assignment with its grant request. The owner approves the request at the IdP: Pods opens that
+   * page right away, and a run that needs the assignment before then waits for the decision.
+   */
+  private async assign(command: Extract<InternalResourceCommand, { type: 'assignJev' | 'assignSsh' | 'assignHttp' }>): Promise<{ view: ResourceState, approval: string | null }> {
+    await this.setupReady
+    if (!this.connections) throw new Error('Connection setup is not ready')
+    const before = parseResourceState(await this.dispatch({ resource: { type: 'list', podId: command.podId } }))
+    const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
+    let requested: GrantRequest
+    let bound: InternalResourceCommand
+    if (command.type === 'assignJev') {
+      if (before.epoch !== command.epoch) throw new Error('Pod or Jev permissions changed; reload before assigning access')
+      if (before.jev?.id !== command.connectionId || before.jev.state !== 'ready') throw new Error('TypeSafe is not connected; reconnect in App settings')
+      requested = await this.connections.request(command.podId, join(vendor, 'pod-http-shapes.toml'), [['pod-http', 'request', '--origin', typesafeOrigin, '--method', 'POST']])
+      bound = { ...command, type: 'bindJev', authority: requested.authority }
+    }
+    else if (command.type === 'assignSsh') {
+      if (before.epoch !== command.epoch) throw new Error('Pod or SSH permissions changed; reload before assigning access')
+      const binding = await resolveSshTarget(command.target)
+      requested = await this.connections.request(command.podId, join(vendor, 'pod-ssh-shapes.toml'), [sshGrantArgv(binding)])
+      bound = { type: 'bindSsh', podId: command.podId, epoch: command.epoch, binding, authority: requested.authority }
+    }
+    else {
+      if (before.epoch !== command.epoch) throw new Error('Pod or HTTP permissions changed; reload before assigning access')
+      const permission = parseHttpPermission(command.permission)
+      const current = before.resources.filter(item => item.kind === 'tool' && item.state === 'ready')
+      if (!current.some(item => item.configuration.type === 'http' && item.configuration.origin === permission.origin) && current.length >= 16) throw new Error('This pod already has 16 tools')
+      requested = await this.connections.request(command.podId, join(vendor, 'pod-http-shapes.toml'), permission.methods.map(method => ['pod-http', 'request', '--origin', permission.origin, '--method', method]))
+      bound = { type: 'bindHttp', podId: command.podId, epoch: command.epoch, permission, authority: requested.authority, ...(command.authentication ? { authentication: command.authentication } : {}) }
+    }
+    const view = parseResourceState(await this.dispatch({ resource: bound }))
+    if (requested.approval) await shell.openExternal(requested.approval)
+    return { view, approval: requested.approval }
   }
 
   async runs(command: RunCommand): Promise<RunView> {
@@ -738,7 +702,7 @@ export class FixtureWorker {
   async centralGate(until: number): Promise<CentralGate> { return await this.dispatch({ central: { type: 'gate', until } }) as CentralGate }
   async centralVersion(): Promise<number> { return Number(await this.dispatch({ central: { type: 'version' } })) }
 
-  async centralExecute(value: CentralCommand, operationId?: string): Promise<unknown> {
+  async centralExecute(value: CentralCommand): Promise<unknown> {
     if (value.channel === 'inbox') {
       if (!this.inbox) throw new Error('Inbox decisions are unavailable on this desktop')
       return this.inbox.decide(parseInboxDecide(parseInboxCentralCommand(value).body))
@@ -753,7 +717,6 @@ export class FixtureWorker {
       const { owner } = await this.remoteOwner()
       if (body.type === 'create') {
         for (const pod of result.pods.filter(pod => !before.includes(pod.id))) {
-          if (this.runtimeApproval?.createdLocally(operationId, this.central?.status().runtimeId ?? null, parsed)) this.runtimeApproval.recordPod(pod.id)
           await this.centralProvision(pod.id, owner)
         }
         await this.indexRemotePods(owner)
@@ -806,9 +769,9 @@ export class FixtureWorker {
         const grant = await this.dispatch({ runContext: { scope, grant: { permission, issuer: connection.decisionIssuer ?? connection.issuer, subject: connection.subject } } }) as RunApproval | null
         return grant && !['cancelled', 'expired'].includes(grant.state) ? grant.grantId : undefined
       }
-      const observe = async (approval: RunApproval, automatic = false) => {
+      const observe = async (approval: RunApproval) => {
         await this.dispatch({ serviceCheck: { scope, approval } })
-        if (automatic || approval.state !== 'pending' || context.reason !== 'manual' || this.openedApprovals.has(approval.grantId)) return
+        if (approval.state !== 'pending' || context.reason !== 'manual' || this.openedApprovals.has(approval.grantId)) return
         this.openedApprovals.add(approval.grantId)
         try { await shell.openExternal(approvalURL(approval)) }
         catch { await this.dispatch({ serviceCheck: { scope, approval: { ...approval, openError: 'The browser could not be opened; use Open approval to try again' } } }) }
@@ -822,7 +785,7 @@ export class FixtureWorker {
         const runtime = { executable: process.execPath, cli: app.isPackaged ? join(process.resourcesPath, 'apes/ape-shell.mjs') : join(dist, 'vendor/apes/ape-shell.mjs'), client: join(dist, 'runtime/shell-client.mjs') }
         const environment = await podEnvironment(this.root, scope.podId, runtime)
         const connection = await this.connections.podConnection(scope.podId)
-        const authority = new AgentAuthority(connection, observe, previous, (grantId, signal) => this.approveStandingRuntime(connection, scope.podId, grantId, signal), tokens)
+        const authority = new AgentAuthority(connection, observe, previous, tokens)
         const adapterPath = join(dist, 'vendor/pod-runtime-shapes.toml')
         const adapter = loadAdapter('pod-runtime', adapterPath)
         const argv = ['pod-runtime', 'run', '--pod', scope.podId, '--name', context.name, '--script', join(this.root, 'runs', scope.runId, 'run.mjs'), '--workspace', environment.workspace, '--home', environment.home, '--environment', JSON.stringify(visibleEnvironment(environment.environment))]
@@ -938,7 +901,7 @@ export class FixtureWorker {
       const credentials = this.credentials
       if (!credentials) throw new Error('Credential store is unavailable')
       const identity = new PodIdentityManager(credentials)
-      const authority = new AgentAuthority(identity.connection(assignment.identity, `pods:${scope.podId}`), observe, previous, undefined, tokens)
+      const authority = new AgentAuthority(identity.connection(assignment.identity, `pods:${scope.podId}`), observe, previous, tokens)
       const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
       const service = new MailService(join(dist, 'native/pods-helper'), join(dist, 'vendor'), authority, credentials)
       const value = await service.execute(assignment.mail, request.body, join(this.root, 'runs', scope.runId), { capabilities: scope.capabilities, assertCurrent: () => controller.signal.throwIfAborted(), signal: controller.signal, registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } })

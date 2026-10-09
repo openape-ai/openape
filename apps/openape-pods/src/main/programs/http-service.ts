@@ -37,7 +37,7 @@ export async function executeHttp(resources: PodResource[], scope: ServiceScope,
   if (authentication && Object.keys(request.headers).some(name => name.toLowerCase() === 'authorization')) throw new Error('This HTTP destination authenticates as its assigned DDISA agent; remove the Authorization header')
   if (authentication && !bearer) throw new Error('DDISA agent authentication is unavailable')
   const identity = new PodIdentityManager(credentials)
-  const authority = new AgentAuthority(identity.connection(assignment.identity, `pods:${scope.podId}`), observe, previous, undefined, tokens)
+  const authority = new AgentAuthority(identity.connection(assignment.identity, `pods:${scope.podId}`), observe, previous, tokens)
   const adapterPath = join(vendor, 'pod-http-shapes.toml')
   const adapter = loadAdapter('pod-http', adapterPath)
   const argv = ['pod-http', 'request', '--origin', new URL(request.url).origin, '--method', request.method]
