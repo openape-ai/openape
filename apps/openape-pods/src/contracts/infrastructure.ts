@@ -1,6 +1,8 @@
 import { setTimeout as delay } from 'node:timers/promises'
 
 export class AuthorityError extends Error {}
+/** A failure that would repeat with the same input, so retrying the run cannot help. */
+export class NonRetryableError extends Error {}
 
 export interface InfrastructureFailure { phase: 'authorization' | 'read', retryAfterMs: number }
 export class InfrastructureError extends Error {
