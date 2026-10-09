@@ -5,8 +5,8 @@ import { sharingLimits } from '@openape/pods-protocol'
 import { parseSharingCommand } from '../contracts/sharing'
 import { parseDefinitionCommand } from '../contracts/definitions'
 import { resolveSshTarget } from './ssh/configuration'
-import { McpAccessPolicy } from './codex/access'
-import { parseMcpAccessCommand } from '../contracts/mcp-access'
+import { McpOwnerSessions } from './codex/session'
+import { parseMcpSessionCommand } from '../contracts/mcp-session'
 import { RuntimeApprovalPolicy } from './codex/runtime-approval'
 import { parseRuntimeApprovalCommand } from '../contracts/runtime-approval'
 import { CentralController, offlineAlert } from './central/controller'
@@ -55,6 +55,9 @@ import { homedir } from 'node:os'
 import { existsSync } from 'node:fs'
 
 const fixture = !!process.env.OPENAPE_PODS_FIXTURE_DIR
+// Fixture runs keep their windows hidden so test suites do not interrupt the
+// developer; set OPENAPE_PODS_FIXTURE_SHOW=1 to watch a fixture run.
+const hiddenFixture = fixture && process.env.OPENAPE_PODS_FIXTURE_SHOW !== '1'
 app.setName(fixture ? 'OpenApe Pods Fixture' : 'OpenApe Pods')
 // Chromium's mock keychain keeps safeStorage working with a fixed key and never
 // touches the login keychain, whose access prompts would wait for a person.
@@ -90,23 +93,21 @@ if (process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1') {
 }
 const codexDirectory = join(profileBase, 'codex')
 const codexTarget = { executable: process.execPath, script: join(__dirname, '../runtime/codex-mcp.mjs').replace('/app.asar/', '/app.asar.unpacked/'), socket: join(codexDirectory, 'control.sock') }
-const mcpAccess = new McpAccessPolicy(profileBase)
-const codexServer = new CodexControlServer(codexTarget.socket, async (request) => { mcpAccess.assert(request); return worker.codex(request) })
-let mcpTransition = Promise.resolve()
-let mcpExpiry: ReturnType<typeof setInterval> | undefined
-let mcpRunning: boolean | undefined
-function syncMcp(): Promise<void> {
-  const previous = mcpTransition
-  mcpTransition = (async () => {
-    try { await previous }
-    catch (error) { console.error('Previous MCP transition failed', error) }
-    const shouldRun = mcpAccess.get().mode !== 'off'
-    if (shouldRun === mcpRunning) return
-    if (shouldRun) await codexServer.start()
-    else await codexServer.stop()
-    mcpRunning = shouldRun
-  })()
-  return mcpTransition
+// Acceptance runs of the fixture app have no reachable identity provider; they
+// replace only the browser sign-in and still need the native confirmation.
+const syntheticMcpOwner = fixture && process.env.NODE_ENV === 'test' && process.env.OPENAPE_PODS_FIXTURE_MCP_OWNER === 'synthetic'
+const mcpSessions = new McpOwnerSessions({
+  login: signal => syntheticMcpOwner ? Promise.resolve() : worker.verifyMcpOwner(signal, ({ url }) => { void shell.openExternal(url).catch((error: unknown) => console.error('Could not open the MCP sign-in', error)) }),
+  confirm: confirmMcpSession,
+})
+const codexServer = new CodexControlServer(codexTarget.socket, request => worker.codex(request), mcpSessions)
+// The IdP answers a signed-in browser without a prompt, so the owner confirms here
+// that this sign-in belongs to a request he just made.
+async function confirmMcpSession(signal: AbortSignal): Promise<boolean> {
+  if (!window) return false
+  if (!hiddenFixture) { showWindow(); app.focus({ steal: true }) }
+  const answer = await dialog.showMessageBox(window, { type: 'warning', title: t('MCP session'), message: t('Codex requests full Pods access for one hour'), detail: t('Allow only if you just asked Codex or another MCP client to work with Pods. It can then change Pods, scripts, resources and schedules and start runs. Grants are still decided only at your identity provider. End the session in App settings at any time.'), buttons: [t('Cancel'), t('Allow for one hour')], defaultId: 0, cancelId: 0, signal })
+  return answer.response === 1
 }
 // Fixture runs must name an isolated Codex home; they never touch the owner's.
 const codexHome = fixture ? process.env.OPENAPE_PODS_FIXTURE_CODEX_HOME : process.env.CODEX_HOME || join(homedir(), '.codex')
@@ -128,10 +129,7 @@ function createWindow(): BrowserWindow {
   view.webContents.on('will-frame-navigate', event => event.preventDefault())
   view.webContents.on('will-attach-webview', event => event.preventDefault())
   view.on('close', (event) => { if (!quitting) { event.preventDefault(); view.hide() } })
-  // Fixture runs keep their windows hidden so test suites do not interrupt the
-  // developer; set OPENAPE_PODS_FIXTURE_SHOW=1 to watch a fixture run.
-  const hidden = fixture && process.env.OPENAPE_PODS_FIXTURE_SHOW !== '1'
-  view.once('ready-to-show', () => { if (!hidden) view.show() })
+  view.once('ready-to-show', () => { if (!hiddenFixture) view.show() })
   view.webContents.on('render-process-gone', (_event, details) => { console.error('Pods renderer stopped', details.reason); app.quit() })
   void view.loadURL(rendererURL).catch((error: unknown) => { console.error('Pods UI failed to load', error); app.quit() })
   return view
@@ -287,13 +285,10 @@ async function start(): Promise<void> {
     }
     return worker.onboarding(command)
   })
-  ipcMain.handle(channels.mcpAccess, async (event, value: unknown, ...extra: unknown[]) => {
+  ipcMain.handle(channels.mcpSession, (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
-    const command = parseMcpAccessCommand(value)
-    if (command.type === 'set') mcpAccess.set(command.mode, command.duration)
-    try { await syncMcp() }
-    catch (error) { mcpAccess.set('off', mcpAccess.get().duration); throw error }
-    return mcpAccess.get()
+    if (parseMcpSessionCommand(value).type === 'end') mcpSessions.end()
+    return mcpSessions.view()
   })
   ipcMain.handle(channels.runtimeApproval, (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
@@ -307,11 +302,7 @@ async function start(): Promise<void> {
     if (command.type === 'status' && !existsSync(join(codexDirectory, 'openape-pods-mcp'))) return { state: 'disconnected', home: codexHome ?? '', manual: 'codex mcp remove openape-pods' }
     const registration = await codexRegistration()
     if (command.type === 'status') return registration.status()
-    if (command.type === 'connect') {
-      const connection = await registration.connect()
-      if (connection.state === 'connected') await syncMcp()
-      return connection
-    }
+    if (command.type === 'connect') return registration.connect()
     return registration.disconnect()
   })
   ipcMain.handle(channels.master, (event, command: unknown, ...extra: unknown[]) => {
@@ -486,11 +477,7 @@ async function start(): Promise<void> {
     remote.publishDecisions(() => inbox.collect()).catch((error: unknown) => console.error('Could not publish owner decisions', error))
   }, 10000).unref()
   await refreshLauncher(join(codexDirectory, 'openape-pods-mcp'), codexTarget)
-  await syncMcp()
-  mcpExpiry = setInterval(() => {
-    void syncMcp().catch((error: unknown) => console.error('Could not stop MCP', error))
-  }, 1000)
-  mcpExpiry.unref()
+  await codexServer.start()
   if (app.isPackaged && !fixture && process.platform === 'darwin' && process.arch === 'arm64') {
     try {
       const { createAutomaticUpdate } = await import('./update-runtime')
@@ -516,9 +503,8 @@ function watchCentral(controller: CentralController): void {
   }, 30000).unref()
 }
 async function shutdown(): Promise<void> {
-  clearInterval(mcpExpiry)
   clearInterval(updateTimer)
-  try { await mcpTransition; await codexServer.stop(); await central?.stop(); remote.stop(); await worker.stop(); stopped = true; tray?.destroy(); app.quit() }
+  try { mcpSessions.end(); await codexServer.stop(); await central?.stop(); remote.stop(); await worker.stop(); stopped = true; tray?.destroy(); app.quit() }
   catch (error) { console.error('Worker shutdown failed', error); app.exit(1) }
 }
 if (!app.requestSingleInstanceLock()) {

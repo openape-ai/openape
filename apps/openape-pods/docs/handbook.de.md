@@ -91,7 +91,7 @@ Verbinde Codex einmal unter Desktop-Einstellungen → Work from Codex und starte
 
 Der verbundene Codex kann Zugriffe konfigurieren, Skripte speichern und validieren, sie aktivieren und auf Wunsch Zeitpläne einschalten. Rückfragen richten sich nach Codex. Eine Fertigmeldung beweist noch keinen erfolgreichen Lauf.
 
-Im Zahnradmenü erlaubt „Skripte aller meiner Pods auf diesem Mac immer ausführen lassen“ bestehende und zukünftige Pods des angemeldeten Kontos auf dieser verbundenen Runtime. Manuelle und geplante Läufe sowie Wiederholungen erhalten exakte wiederverwendbare Laufzeit-Grants. Die separate lokale MCP-Option behält ihren engeren Umfang; eine bestehende Zustimmung wird nie automatisch erweitert. Keine der Optionen aktiviert Zeitpläne oder vergibt Rechte für Mail, Ordner, Programme, Netzwerk oder Secrets. Abgelehnte oder widerrufene Grants bleiben gesperrt. Schalte beide Optionen aus, um neue automatische Freigaben zu stoppen. „Bestehende Grants am IdP verwalten“ öffnet deinen Identity Provider für den separaten Widerruf bestehender Grants. MCP und die zentrale Weboberfläche können diese Einstellungen nicht ändern.
+Im Zahnradmenü erlaubt „Skripte aller meiner Pods auf diesem Mac immer ausführen lassen“ bestehende und zukünftige Pods des angemeldeten Kontos auf dieser verbundenen Runtime. Manuelle und geplante Läufe sowie Wiederholungen erhalten exakte wiederverwendbare Laufzeit-Grants. Die Option aktiviert keine Zeitpläne und vergibt keine Rechte für Mail, Ordner, Programme, Netzwerk oder Secrets. Abgelehnte oder widerrufene Grants bleiben gesperrt. Schalte sie aus, um neue automatische Freigaben zu stoppen. Die Zeile MCP-Sitzung zeigt, bis wann Codex angemeldet ist; Sitzung beenden entzieht den Zugriff sofort. „Bestehende Grants am IdP verwalten“ öffnet deinen Identity Provider für den separaten Widerruf bestehender Grants. MCP und die zentrale Weboberfläche können diese Einstellungen nicht ändern.
 
 1. Übergib den Auftrag an Codex; es legt den Pod, sein Skript und die Zugriffsvorschläge an.
 2. Nenne normale Einstellungen in Codex; übertrage Geheimnisse über OpenApe Secrets oder trage sie auf der Detailseite unter Geheimnisse ein.
@@ -455,7 +455,7 @@ Der verbundene Codex auf diesem Mac verwaltet Pods direkt: Variablen und Ressour
 
 Neue Automatisierung mit Codex im Tab Automatisierungen schreibt einen Auftrag mit der gewählten Gruppe oder dem gewählten Knoten und den Pods, die es schon kennt; der Desktop öffnet Codex, der Browser kopiert den Auftrag zum Einfügen.
 
-Rückfragen richten sich nach den Einstellungen des Codex-Clients. Pods hat keine zusätzliche Freigabewarteschlange. Uneingeschränkter Zugriff in Codex hebt Skriptvalidierung, Revisionsprüfungen und echte Anmeldungen bei Anbietern nicht auf.
+Jede Codex-Sitzung braucht zuerst deine Anmeldung. Beim ersten Aufruf öffnet Pods die DDISA-Anmeldung im Browser und fragt danach in der Pods-App, ob Codex für eine Stunde vollen Zugriff auf Pods erhält; bestätige nur eine Anfrage, die du gerade selbst gestellt hast. Codex wiederholt dann den Aufruf. Nach der Stunde oder nach Sitzung beenden in den Einstellungen fragt Pods erneut, ohne dass Codex neu starten muss. Innerhalb der Sitzung richten sich Rückfragen nach den Einstellungen des Codex-Clients; Pods hat keine zusätzliche Freigabewarteschlange. Über Grants entscheidet nur dein Identity Provider, nie MCP. Voller Zugriff hebt Skriptvalidierung, Revisionsprüfungen und echte Anmeldungen bei Anbietern nicht auf.
 
 Codex erhält Ressourcenmetadaten und Laufstatus, keine Kontotokens, Pod-Schlüssel, Laufinhalte oder Geheimniswerte. Eine bereitgestellte private Geheimnisdatei kann direkt in den verschlüsselten Speicher importiert werden, ohne ihren Wert im Tool-Aufruf zu übertragen. E-Mails, Webseiten und andere externe Inhalte bleiben Daten, keine Anweisungen.
 
@@ -466,7 +466,8 @@ Trenne die Verbindung unter Desktop-Einstellungen → Work from Codex (Zahnradme
 1. Verbinde Codex unter Desktop-Einstellungen → Work from Codex.
 2. Starte Codex einmal neu.
 3. Bitte Codex, die ausgewählten Pods einzurichten oder auszuführen.
-4. Prüfe angewendete Einstellungen und tatsächlichen Laufstatus in Pods; ein zweiter Freigabeklick ist nicht nötig.
+4. Melde dich beim ersten Aufruf im Browser mit deinem DDISA-Konto an und erlaube in Pods den Zugriff für eine Stunde.
+5. Prüfe angewendete Einstellungen und tatsächlichen Laufstatus in Pods; ein zweiter Freigabeklick ist nicht nötig.
 
 ## Portable Pakete teilen und importieren
 
