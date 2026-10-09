@@ -470,6 +470,8 @@ async function start(): Promise<void> {
   if (central) watchCentral(central)
   // Pod notifications wait in the worker outbox until the account inbox acknowledges them.
   setInterval(() => { remote.deliverInbox().catch((error: unknown) => console.error('Could not deliver Pod notifications', error)) }, 15000).unref()
+  // Always grants of finished network approval batches would stay active at the IdP; a few batches are released per minute.
+  setInterval(() => { worker.releaseNetworkGrants(AbortSignal.timeout(50000)).catch((error: unknown) => console.error('Could not release network approval grants', error)) }, 60000).unref()
   // Decisions are taken through the central workspace, so they are published only while it is online.
   setInterval(() => {
     const inbox = worker.inbox

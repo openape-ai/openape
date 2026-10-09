@@ -1,5 +1,5 @@
 import { networkGateItemCommand, networkGateItemSummary, parseNetworkGateManifest } from '../../contracts/network-gates'
-import type { NetworkGateManifest } from '../../contracts/network-gates'
+import type { NetworkGateManifest, NetworkGateRelease } from '../../contracts/network-gates'
 import { gateAudience, gateItemCommand, gateItemSummary, parseGateManifest } from '../../contracts/gates'
 import type { GateManifest } from '../../contracts/gates'
 import type { ServiceScope } from '../../contracts/services'
@@ -61,4 +61,16 @@ export async function handleGate(input: Request): Promise<unknown> {
     else await authority.consume(binding)
   }
   return true
+}
+
+/**
+ * Revokes, as the requesting Pod, the grants of a finished network batch that the owner approved as always,
+ * so they do not stay active at the IdP. It only reduces authority; once grants are already used up.
+ */
+export async function releaseNetworkGrants(release: NetworkGateRelease, connections: ConnectionManager, signal: AbortSignal): Promise<number> {
+  const connection = await connections.podConnection(release.podId, release.owner, true)
+  const authority = createGrantAuthority(connection, signal, async () => {}, gateAudience, ['once', 'always'])
+  const members = gateMembers(release.manifest)
+  const bindings = release.grants.map(grant => ({ ...members.find(member => member.key === grant.key)!, grantId: grant.id, expiresAt: release.manifest.expiresAt }))
+  return authority.release(release.manifest.id, bindings)
 }

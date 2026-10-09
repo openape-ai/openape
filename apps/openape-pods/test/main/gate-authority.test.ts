@@ -23,12 +23,13 @@ async function fixture(type: 'once' | 'always' | 'timed') {
   const binding: GrantBinding & { key: string } = { key: 'delivery-1', grantId: 'grant-1', expiresAt: Date.now() + 60000, command: ['pods', 'network-gate', 'archive one message'], summary: 'Newsletter 1' }
   const grant = { id: 'grant-1', status: 'approved', decided_by: connection.owner, request: { requester: connection.subject, target_host: connection.targetHost, audience, grant_type: type, waits_until: Math.floor(binding.expiresAt / 1000), command: binding.command, summary: { text: binding.summary } } }
   Object.assign(claims, { sub: connection.subject, target_host: connection.targetHost, grant_id: 'grant-1', grant_type: type, decided_by: connection.owner, cmd_hash: await computeCmdHash(binding.command.join(' ')), command: binding.command })
-  const consumed: string[] = []
+  const consumed: string[] = []; const revoked: string[] = []
   vi.stubGlobal('fetch', vi.fn(async (url: unknown) => {
     const path = new URL(String(url)).pathname
     if (path === '/.well-known/openid-configuration') return Response.json({ openape_grant_batch_supported: false })
     if (path === '/api/grants/grant-1') return Response.json(grant)
     if (path === '/api/grants/grant-1/token') return Response.json({ authz_jwt: 'synthetic.jwt' })
+    if (path === '/api/grants/grant-1/revoke') { if (grant.status !== 'approved') return Response.json({ title: 'Grant cannot be revoked' }, { status: 400 }); revoked.push(grant.id); grant.status = 'revoked'; return Response.json(grant) }
     if (path === '/api/grants/grant-1/consume') {
       if (grant.status !== 'approved') return Response.json({ error: grant.status, status: grant.status })
       consumed.push(grant.request.grant_type)
@@ -40,7 +41,7 @@ async function fixture(type: 'once' | 'always' | 'timed') {
   }))
   const authority = createGrantAuthority(connection as never, new AbortController().signal, async () => {}, audience, ['once', 'always'])
   const legacy = createGrantAuthority(connection as never, new AbortController().signal, async () => {}, audience)
-  return { authority, legacy, binding, grant, consumed }
+  return { authority, legacy, binding, grant, consumed, revoked }
 }
 
 describe('approve-route grants decided as once or always', () => {
@@ -78,5 +79,19 @@ describe('approve-route grants decided as once or always', () => {
     await expect(once.authority.assertActive(once.binding)).resolves.toBeUndefined()
     const timed = await fixture('timed')
     await expect(timed.authority.statuses('batch', [timed.binding])).rejects.toThrow('differs from the reviewed item')
+  })
+
+  it('revokes an always grant once its batch is finished and leaves used once grants alone', async () => {
+    const always = await fixture('always')
+    await always.authority.consume(always.binding)
+    expect(await always.authority.release('batch', [always.binding])).toBe(1)
+    expect(always.revoked).toEqual(['grant-1'])
+    expect(always.grant.status).toBe('revoked')
+    // A repeated sweep finds nothing left to revoke.
+    expect(await always.authority.release('batch', [always.binding])).toBe(0)
+    const once = await fixture('once')
+    await once.authority.consume(once.binding)
+    expect(await once.authority.release('batch', [once.binding])).toBe(0)
+    expect(once.revoked).toEqual([])
   })
 })
