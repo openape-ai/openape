@@ -15,7 +15,7 @@ import { McpOwnerSessions } from '../../src/main/codex/session'
 // owner's session secret that was sent on that same connection.
 let server: CodexControlServer | undefined; let root = ''
 afterEach(async () => { await server?.stop(); server = undefined; if (root) await rm(root, { recursive: true, force: true }) })
-const open: McpSessionGate = { authorize: () => {}, disconnect: () => {} }
+const open: McpSessionGate = { authorize: () => {}, owner: () => null, disconnect: () => {} }
 async function start(execute: (request: CodexRequest) => Promise<unknown> = vi.fn(async request => ({ echoed: request.id })), sessions: McpSessionGate = open) {
   root = await mkdtemp(join(tmpdir(), 'pods-codex-socket-'))
   const endpoint = join(root, 'codex', 'control.sock')
@@ -59,7 +59,7 @@ function owner(confirmations: boolean[] = []) {
   let now = 1_000_000
   const logins: AbortSignal[] = []
   let finish: () => void = () => {}
-  const login = vi.fn((signal: AbortSignal) => { logins.push(signal); return new Promise<void>((resolve, reject) => { finish = resolve; signal.addEventListener('abort', () => reject(new Error('Sign-in aborted')), { once: true }) }) })
+  const login = vi.fn((_endsAt: number, signal: AbortSignal) => { logins.push(signal); return new Promise<null>((resolve, reject) => { finish = () => resolve(null); signal.addEventListener('abort', () => reject(new Error('Sign-in aborted')), { once: true }) }) })
   const confirm = vi.fn(async () => confirmations.shift() ?? true)
   const sessions = new McpOwnerSessions({ login, confirm, now: () => now })
   return { sessions, login, confirm, logins, signIn: () => finish(), advance: (ms: number) => { now += ms } }
@@ -74,7 +74,7 @@ it('is reachable only by the owner account', async () => {
 it('forwards exactly one pods_control request and returns its result', async () => {
   const { endpoint, execute } = await start(); const id = randomUUID()
   expect((await exchange(endpoint, `${JSON.stringify({ id, action: { action: 'list' } })}\n`)).lines).toEqual([{ id, result: { echoed: id } }])
-  expect(execute).toHaveBeenCalledWith({ id, action: { action: 'list' } })
+  expect(execute).toHaveBeenCalledWith({ id, action: { action: 'list' } }, null)
 })
 
 it('records owner evidence of every MCP call as an assistant request without refusing it', async () => {

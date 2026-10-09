@@ -32,7 +32,7 @@ export class MailService {
     const proxy = await this.network(lease.signal)
     try {
       const broker = new PodToolBroker(this.helper, root, this.authority, this.credentials)
-      const reply = await broker.execute({ id: 'o365-mail', capability: 'mail.read', executable: join(this.vendor, 'o365-cli'), executableHash: manifest.binaryHash, entryFiles: [{ path: roots, hash: manifest.rootsHash }], prefix: [], connectionId: assignment.connectionId, cacheArgument: '--cache-dir', maxOutputBytes: 32 * 1024 * 1024, runtimeDirectories: [], environment: { ...proxy.environment, PODS_CA_FILE: roots }, networkPorts: [proxy.port], grantId, command: { cliId: 'o365-cli', adapterPath, adapterDigest: adapter.digest, argv, permission: resolved.permission } }, request, lease)
+      const reply = await broker.execute({ id: 'o365-mail', capability: 'mail.read', executable: join(this.vendor, 'o365-cli'), executableHash: manifest.binaryHash, entryFiles: [{ path: roots, hash: manifest.rootsHash }], prefix: [], connectionId: assignment.connectionId, cacheArgument: '--cache-dir', maxOutputBytes: 32 * 1024 * 1024, runtimeDirectories: [], environment: { ...proxy.environment, PODS_CA_FILE: roots }, networkPorts: [proxy.port], grantId, command: { cliId: 'o365-cli', adapterPath, adapterDigest: adapter.digest, argv, coverage: [resolved.detail] } }, request, lease)
       if (reply.exitCode !== 0) throw new Error(`Mail read failed (${reply.exitCode}): ${reply.stderr.slice(0, 2000)}`)
       lease.assertCurrent(); lease.signal.throwIfAborted()
       const path = join(root, `mail-${randomUUID()}.json`)

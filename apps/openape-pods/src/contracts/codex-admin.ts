@@ -5,11 +5,17 @@ import { parseRunCommand } from './runs'
 import { parseProgramCommand } from './programs'
 import { parseCredentialAlias } from './credentials'
 import type { CodexRequest } from './codex'
+import { parseGrantsCommand } from './grants'
+import { parseSandboxCommand } from './sandbox'
 
-export const administrationActions = ['resources', 'scripts', 'recovery', 'program', 'importSecret', 'requestSecret', 'description']
+export const administrationActions = ['resources', 'scripts', 'recovery', 'program', 'importSecret', 'requestSecret', 'description', 'grants', 'sandbox']
 
 export function parseAdministration(action: Record<string, unknown>) {
   const { action: kind, command, revision, path, adapterPath, commandName, runtimePath } = action
+  if (kind === 'grants' || kind === 'sandbox') {
+    if (Object.keys(action).some(key => !['action', 'command'].includes(key))) throw new Error(`Invalid ${kind} action fields; send action and command only`)
+    return kind === 'grants' ? { kind, command: parseGrantsCommand(command) } as const : { kind, command: parseSandboxCommand(command) } as const
+  }
   if (!administrationActions.includes(String(kind)) || Object.keys(action).some(key => !['action', 'command', 'revision', 'path', 'adapterPath', 'commandName', 'runtimePath'].includes(key))) throw new Error('Invalid administration action')
   if (!Number.isSafeInteger(revision) || Number(revision) < 1) throw new Error('Current Pod revision required')
   if (kind === 'description') {
