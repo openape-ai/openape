@@ -75,25 +75,39 @@ it.each(['settle', 'cancel', 'revoke', 'failure'] as const)('fences Jev network 
   expect(JSON.stringify(f.engine.execute({ type: 'trace', id, revision: 1, before: null, caseId: null }))).not.toContain(request.state)
 })
 
-it('allows bounded text generation without tools and refuses tool authority or extra calls', async () => {
-  vi.mocked(executeAgent).mockResolvedValue({ threadId: 'synthetic', response: '{"text":"Preview"}' })
-  const f = networkFixture({ provider: async () => new Response('{}') })
+it('applies the standalone agent rules in networks and routes agent tools through the network read port', async () => {
+  const tool = vi.fn(async () => ({ stdout: '[]', stderr: '', exitCode: 0 }))
+  const applicationId = randomUUID()
+  const capability = `tool.app_${applicationId.replaceAll('-', '')}.invoke`
+  const agentReads: unknown[] = []
+  vi.mocked(executeAgent).mockImplementation(async (_runtime, _directory, _prompt, _references, services, signal, _event, tools = []) => {
+    if (tools.length) {
+      agentReads.push(await services.tool!({ application: 'mail', argv: ['list'] }, signal))
+      agentReads.push(await services.tool!({ application: 'foreign', argv: ['list'] }, signal).catch((error: Error) => error.message))
+    }
+    return { threadId: 'synthetic', response: '{"text":"Preview"}' }
+  })
+  const f = networkFixture({ tool, provider: async () => new Response('{}') })
   let checked = false
   const source = f.pod('Source', { takes: [], gives: ['input'], summary: 'Source' }, async (_items, invoke) => {
-    await expect(invoke('agent.run', { prompt: 'Synthetic preview', tools: ['ape_shell'] })).rejects.toThrow('no tools')
-    await expect(invoke('agent.run', { prompt: 'Synthetic preview', tools: [], timeoutSeconds: 121 })).rejects.toThrow('120 seconds')
-    for (let count = 0; count < 50; count++) await expect(invoke('agent.run', { prompt: 'Synthetic preview', tools: [], timeoutSeconds: 120 })).resolves.toMatchObject({ response: '{"text":"Preview"}' })
-    await expect(invoke('agent.run', { prompt: 'Synthetic preview', tools: [] })).rejects.toThrow('budget exceeded')
+    await expect(invoke('agent.run', { prompt: 'Synthetic preview', tools: ['shell'] })).rejects.toThrow('Agent tools must be')
+    await expect(invoke('agent.run', { prompt: 'Synthetic preview', tools: [], timeoutSeconds: 901 })).rejects.toThrow('from 30 to 900')
+    await expect(invoke('agent.run', { prompt: 'Synthetic preview', tools: ['ape_shell'], timeoutSeconds: 600 })).resolves.toMatchObject({ response: '{"text":"Preview"}' })
+    for (let count = 1; count < 50; count++) await expect(invoke('agent.run', { prompt: 'Synthetic preview', tools: [] })).resolves.toMatchObject({ response: '{"text":"Preview"}' })
+    await expect(invoke('agent.run', { prompt: 'Synthetic preview', tools: [] })).rejects.toThrow('at most 50 agent calls')
     checked = true
   })
   const consumer = f.pod('Consumer', { takes: ['input'], gives: [], summary: 'Consumer' }, async () => {})
+  f.resources.assignProgram(source, applicationId, { type: 'program', name: 'mail', capability } as ProgramAssignment, f.resources.epoch(source))
+  validateCapabilities(f, source, [capability])
   const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, { podId: consumer, source: null, serialCase: false }], ['input'])
-  f.process(id, [source], [], 1)
+  f.process(id, [source], [source], 1); f.engine.tick()
   await expect.poll(() => f.store.db.prepare('SELECT state FROM network_invocations WHERE pod_id=?').get(source)?.state).toBe('completed')
   expect(checked).toBe(true)
   expect(executeAgent).toHaveBeenCalledTimes(50)
-  expect(vi.mocked(executeAgent).mock.calls.every(call => call[7]?.length === 0 && call[8] === 120)).toBe(true)
-  expect(f.engine.view().networks[0]!.state).toBe('paused')
+  expect(vi.mocked(executeAgent).mock.calls[0]?.slice(7)).toEqual([['ape_shell'], 600])
+  expect(agentReads).toEqual([{ stdout: '[]', stderr: '', exitCode: 0 }, expect.stringContaining('not declared and assigned')])
+  expect(tool).toHaveBeenCalledTimes(1)
 })
 
 it('refuses assigned program reads on consumer members before creating the network', () => {

@@ -215,7 +215,7 @@ it('packaged program UI: exposes the external terminal and reuses application se
   finally { await app.close(); await shellIdentity.close(); await f.close(); await rm(folder, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })
 
-it('HTTP grant boundary: verifies the signed origin and method before transport and cancels on remote revocation', async () => {
+it('HTTP grant boundary: verifies the signed origin and method before transport and refuses a revoked grant without sending', async () => {
   const f = await fixture(); sendHttp.mockClear()
   const vendor = resolve('dist/vendor'); const adapter = loadAdapter('pod-http', join(vendor, 'pod-http-shapes.toml'))
   f.state.signedCommand = await resolveCommand(adapter, ['pod-http', 'request', '--origin', 'https://api.example.com', '--method', 'POST'])
@@ -234,12 +234,9 @@ it('HTTP grant boundary: verifies the signed origin and method before transport 
     await expect(executeHttp(resources, scope, request, vendor, f.cache, signal)).rejects.toThrow('does not cover')
     expect(sendHttp).toHaveBeenCalledTimes(1)
     f.state.signedCommand = await resolveCommand(adapter, ['pod-http', 'request', '--origin', 'https://api.example.com', '--method', 'POST'])
-    sendHttp.mockImplementationOnce(async (_request, activeSignal) => {
-      f.state.active = false
-      return new Promise((_resolve, reject) => activeSignal.addEventListener('abort', () => reject(new Error('Synthetic transport cancelled')), { once: true }))
-    })
-    await expect(executeHttp(resources, scope, request, vendor, f.cache, signal)).rejects.toThrow('Synthetic transport cancelled')
-    expect(sendHttp).toHaveBeenCalledTimes(2)
+    f.state.active = false
+    await expect(executeHttp(resources, scope, request, vendor, f.cache, signal)).rejects.toThrow('Permission revoked')
+    expect(sendHttp).toHaveBeenCalledTimes(1)
   }
   finally { await f.close() }
 })

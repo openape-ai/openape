@@ -45,7 +45,6 @@ import type { NetworkCommand, NetworkView } from '../contracts/networks'
 import type { WorkflowCommand, WorkflowView } from '../contracts/workflows'
 import type { ServiceScope, RunContextRequest, ServiceCheck, ServiceRequest  } from '../contracts/services'
 import { loadAdapter, resolveCommand } from '@openape/apes'
-import { setTimeout as delay } from 'node:timers/promises'
 import { approvalURL } from '../contracts/activity'
 import type { RunApproval } from '../contracts/activity'
 import { assignedDirectories, directoryPolicy } from '../runtime/directories'
@@ -77,11 +76,12 @@ import { boundedCodexResult, parseDesktopAction, parseWorkspaceAction, workspace
 import type { CodexRequest, DesktopAction } from '../contracts/codex'
 import type { MasterCommand, MasterView } from '../contracts/master'
 import { realpathSync } from 'node:fs'
-import { parseServiceScope } from '../contracts/services'
+import { parseRunContext, parseServiceScope, runAuthorityWatchMs } from '../contracts/services'
 import type { CredentialCache } from './connections/cache'
 import { createMacOSCredentialCache } from './connections/macos'
 import { PodIdentityManager } from './connections/agent'
-import { AgentAuthority } from './broker/authorization'
+import { AgentAuthority, RunGrantTokens } from './broker/authorization'
+import { setTimeout as delay } from 'node:timers/promises'
 import { MailService } from './mail/service'
 import { assignedMail } from './mail/assigned'
 import { parsePodDetails } from '../contracts/details'
@@ -117,7 +117,9 @@ function redactTerminalView(result: unknown): unknown {
 export class FixtureWorker {
   central: CentralController | null = null
   inbox: InboxDecisions | null = null
-  private shellIdentities = new Map<string, { close: () => Promise<void> }>()
+  // The runtime grant is checked at run start, watched at a low frequency, and re-verified before each service call.
+  private shellIdentities = new Map<string, { refresh: (signal: AbortSignal) => Promise<void>, close: () => Promise<void> }>()
+  private runTokens = new Map<string, RunGrantTokens>()
   private openedApprovals = new Set<string>()
   private archiveService?: MailArchiveService
   private programs: ProgramManager | null = null
@@ -278,7 +280,7 @@ export class FixtureWorker {
   cancelProgram(podId: string): void { this.programs?.cancelPod(podId) }
 
   private async closeShellIdentities(): Promise<void> {
-    const identities = [...this.shellIdentities.values()]; this.shellIdentities.clear(); this.jevAttempts.clear()
+    const identities = [...this.shellIdentities.values()]; this.shellIdentities.clear(); this.runTokens.clear(); this.jevAttempts.clear()
     await Promise.all(identities.map(identity => identity.close()))
   }
 
@@ -779,6 +781,15 @@ export class FixtureWorker {
     })
   }
 
+  private grantTokens(runId: string): RunGrantTokens {
+    for (const [id, tokens] of this.runTokens) {
+      if (id !== runId && tokens.expired()) this.runTokens.delete(id)
+    }
+    const tokens = this.runTokens.get(runId) ?? new RunGrantTokens()
+    this.runTokens.set(runId, tokens)
+    return tokens
+  }
+
   private async executeService(request: ServiceRequest): Promise<unknown> {
     if (!request || typeof request.id !== 'string' || !/^[a-f0-9-]{36}$/.test(request.id) || this.services.has(request.id) || this.services.size >= 16) throw new Error('Invalid or excessive broker request')
     if (request.kind !== undefined && request.kind !== 'gate' && request.kind !== 'mailArchive' && request.kind !== 'mailMove' && request.kind !== 'credential' && request.kind !== 'jev' && request.kind !== 'http' && request.kind !== 'shell' && request.kind !== 'shellClose') throw new Error('Unsupported broker service')
@@ -788,9 +799,9 @@ export class FixtureWorker {
     try {
       if (request.kind === 'shellClose') {
         this.jevAttempts.delete(scope.runId)
-        await this.shellIdentities.get(scope.runId)?.close(); this.shellIdentities.delete(scope.runId); return true
+        await this.shellIdentities.get(scope.runId)?.close(); this.shellIdentities.delete(scope.runId); this.runTokens.delete(scope.runId); return true
       }
-      const context = await this.dispatch({ runContext: { scope } }) as { name: string, reason: string }
+      const context = parseRunContext(await this.dispatch({ runContext: { scope } }))
       const previous = async (permission: string, connection: { issuer: string, decisionIssuer?: string, subject: string }) => {
         const grant = await this.dispatch({ runContext: { scope, grant: { permission, issuer: connection.decisionIssuer ?? connection.issuer, subject: connection.subject } } }) as RunApproval | null
         return grant && !['cancelled', 'expired'].includes(grant.state) ? grant.grantId : undefined
@@ -804,12 +815,14 @@ export class FixtureWorker {
       }
       if (request.kind === 'shell') {
         await check()
-        if (!this.connections || this.shellIdentities.has(scope.runId)) throw new Error('Pod execution authority is unavailable or already in use')
+        if (!this.connections || !context.runtime || this.shellIdentities.has(scope.runId)) throw new Error('Pod execution authority is unavailable or already in use')
+        // A run starts with no reused tokens, so the runtime grant, owner, identity and key are checked at the IdP.
+        const tokens = new RunGrantTokens(); this.runTokens.set(scope.runId, tokens)
         const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
         const runtime = { executable: process.execPath, cli: app.isPackaged ? join(process.resourcesPath, 'apes/ape-shell.mjs') : join(dist, 'vendor/apes/ape-shell.mjs'), client: join(dist, 'runtime/shell-client.mjs') }
         const environment = await podEnvironment(this.root, scope.podId, runtime)
         const connection = await this.connections.podConnection(scope.podId)
-        const authority = new AgentAuthority(connection, observe, previous, (grantId, signal) => this.approveStandingRuntime(connection, scope.podId, grantId, signal))
+        const authority = new AgentAuthority(connection, observe, previous, (grantId, signal) => this.approveStandingRuntime(connection, scope.podId, grantId, signal), tokens)
         const adapterPath = join(dist, 'vendor/pod-runtime-shapes.toml')
         const adapter = loadAdapter('pod-runtime', adapterPath)
         const argv = ['pod-runtime', 'run', '--pod', scope.podId, '--name', context.name, '--script', join(this.root, 'runs', scope.runId, 'run.mjs'), '--workspace', environment.workspace, '--home', environment.home, '--environment', JSON.stringify(visibleEnvironment(environment.environment))]
@@ -819,7 +832,7 @@ export class FixtureWorker {
         await check(); controller.signal.throwIfAborted()
         const monitoring = new AbortController()
         const monitor = (async () => {
-          try { while (!monitoring.signal.aborted) { await delay(1000, undefined, { signal: monitoring.signal }); await retryInfrastructure(() => authority.assertActive(assignment.grantId, monitoring.signal), monitoring.signal, async (retry) => { if (!monitoring.signal.aborted) await this.dispatch({ serviceCheck: { scope, infrastructure: retry } }) }) } }
+          try { while (!monitoring.signal.aborted) { await delay(runAuthorityWatchMs, undefined, { signal: monitoring.signal }); await retryInfrastructure(() => authority.assertActive(assignment.grantId, monitoring.signal), monitoring.signal, async (retry) => { if (!monitoring.signal.aborted) await this.dispatch({ serviceCheck: { scope, infrastructure: retry } }) }) } }
           catch (error) {
             if (!monitoring.signal.aborted) {
               console.error('Pod execution authority lost', error)
@@ -828,9 +841,21 @@ export class FixtureWorker {
             }
           }
         })()
-        this.shellIdentities.set(scope.runId, { close: async () => { monitoring.abort(); await monitor } })
+        this.shellIdentities.set(scope.runId, { refresh: signal => authority.refresh(assignment, signal), close: async () => { monitoring.abort(); await monitor } })
         return { home: environment.home, environment: environment.environment }
       }
+      // Every other service needs the run's active runtime authority; network and decision-maintenance runs execute no runtime.
+      const runtime = this.shellIdentities.get(scope.runId)
+      if (context.runtime && !runtime) throw new AuthorityError('Pod execution authority is not active for this run')
+      if (runtime) {
+        try { await runtime.refresh(controller.signal) }
+        catch (error) {
+          if (error instanceof InfrastructureError) throw error
+          await this.dispatch({ serviceCheck: { scope, authorityLost: true } })
+          throw error instanceof AuthorityError ? error : new AuthorityError('Pod execution permission is no longer active; review the Pod permissions before retrying')
+        }
+      }
+      const tokens = this.grantTokens(scope.runId)
       if (request.kind === 'credential') {
         const alias = parseCredentialRead(request.body)
         if (!this.credentials) throw new Error('Credential store is unavailable')
@@ -861,7 +886,7 @@ export class FixtureWorker {
         const assignment = assignedJev(state.resources, scope.podId, scope.capabilities)
         const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
         const result = await executeJev(assignment, parseJevRequest(request.body), {
-          vendor, credentials: this.credentials, signal: controller.signal, observe, previous, check,
+          vendor, credentials: this.credentials, signal: controller.signal, observe, previous, check, tokens,
           send: (body, signal) => this.connections!.typesafeRequest(assignment.connectionId, body, signal),
           consumeAttempt: () => {
             const count = this.jevAttempts.get(scope.runId) ?? 0
@@ -883,13 +908,13 @@ export class FixtureWorker {
           },
           reject: authentication => this.agentTokens.reject(scope.podId, authentication),
         }
-        const result = await executeHttp(state.resources, scope, parseHttpRequest(request.body), vendor, credentials, controller.signal, observe, previous, bearer)
+        const result = await executeHttp(state.resources, scope, parseHttpRequest(request.body), vendor, credentials, controller.signal, observe, previous, bearer, tokens)
         await check(); controller.signal.throwIfAborted(); return result
       }
       if (request.kind === undefined && request.body && typeof request.body === 'object' && 'sshInventory' in request.body) {
         if (!this.credentials) throw new Error('Credential store is unavailable')
         const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
-        return await invokeSsh({ resources: state.resources, scope, body: request.body, dist, root: join(this.root, 'runs', scope.runId), credentials: this.credentials, signal: controller.signal, check, observe, previous })
+        return await invokeSsh({ resources: state.resources, scope, body: request.body, dist, root: join(this.root, 'runs', scope.runId), credentials: this.credentials, signal: controller.signal, check, observe, previous, tokens })
       }
       if (request.kind === 'mailMove' || (request.body && typeof request.body === 'object' && ('applicationId' in request.body || 'application' in request.body))) {
         if (!this.credentials) throw new Error('Credential store is unavailable')
@@ -905,7 +930,7 @@ export class FixtureWorker {
         const resources = state.resources.map(item => item.id === requested.id ? { ...item, configuration: { ...item.configuration, grants: [...requested.assignment.grants.filter(item => item.permission !== grant.permission), grant] } } : item)
         const workspace = await podWorkspace(this.root, scope.podId)
         const directories = directoryPolicy(await assignedDirectories(this.root, scope.podId, resources))
-        const result = await invokeProgram(resources, scope.podId, request.body, join(dist, 'native/pods-helper'), join(this.root, 'runs', scope.runId), this.credentials, { ...directories, workspace, capabilities: scope.capabilities, signal: controller.signal, assertCurrent: () => controller.signal.throwIfAborted(), registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } }, observe, previous, request.kind === 'mailMove' ? 'move' : undefined)
+        const result = await invokeProgram(resources, scope.podId, request.body, join(dist, 'native/pods-helper'), join(this.root, 'runs', scope.runId), this.credentials, { ...directories, workspace, capabilities: scope.capabilities, signal: controller.signal, assertCurrent: () => controller.signal.throwIfAborted(), registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } }, observe, previous, request.kind === 'mailMove' ? 'move' : undefined, tokens)
         await check(); controller.signal.throwIfAborted(); return result
       }
       const assignment = assignedMail(state.resources)
@@ -913,7 +938,7 @@ export class FixtureWorker {
       const credentials = this.credentials
       if (!credentials) throw new Error('Credential store is unavailable')
       const identity = new PodIdentityManager(credentials)
-      const authority = new AgentAuthority(identity.connection(assignment.identity, `pods:${scope.podId}`), observe, previous)
+      const authority = new AgentAuthority(identity.connection(assignment.identity, `pods:${scope.podId}`), observe, previous, undefined, tokens)
       const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
       const service = new MailService(join(dist, 'native/pods-helper'), join(dist, 'vendor'), authority, credentials)
       const value = await service.execute(assignment.mail, request.body, join(this.root, 'runs', scope.runId), { capabilities: scope.capabilities, assertCurrent: () => controller.signal.throwIfAborted(), signal: controller.signal, registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } })

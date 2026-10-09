@@ -8,7 +8,7 @@ import type { ServiceScope } from '../../contracts/services'
 import type { CredentialCache } from '../connections/cache'
 import { PodIdentityManager } from '../connections/agent'
 import { AgentAuthority } from '../broker/authorization'
-import type { GrantObserver, GrantLookup } from '../broker/authorization'
+import type { GrantObserver, GrantLookup, RunGrantTokens } from '../broker/authorization'
 import { superviseProcess } from '../../worker/runtime/sandbox'
 import type { ProcessDomain } from '../../worker/runtime/sandbox'
 import { resolveSshTarget, sshConfiguration, sshGrantArgv } from './configuration'
@@ -49,18 +49,18 @@ export async function collectInventory(domain: ProcessDomain, signal: AbortSigna
   }
 }
 
-export async function invokeSsh(input: { resources: PodResource[], scope: ServiceScope, body: unknown, dist: string, root: string, credentials: CredentialCache, signal: AbortSignal, check: (domain?: { path: string, ownerPid: number }) => Promise<unknown>, observe?: GrantObserver, previous?: GrantLookup }) {
+export async function invokeSsh(input: { resources: PodResource[], scope: ServiceScope, body: unknown, dist: string, root: string, credentials: CredentialCache, signal: AbortSignal, check: (domain?: { path: string, ownerPid: number }) => Promise<unknown>, observe?: GrantObserver, previous?: GrantLookup, tokens?: RunGrantTokens }) {
   const { resources, scope, body, dist, credentials, signal, check, observe, previous } = input
   const assignment = assignedSsh(resources, scope.podId, scope.capabilities, body)
   const binding = await resolveSshTarget(assignment.target)
   if (JSON.stringify(binding) !== JSON.stringify({ profileHash: assignment.profileHash, target: assignment.target, hosts: assignment.hosts, knownHosts: assignment.knownHosts })) throw new Error('SSH configuration changed; review and reassign this target')
-  const authority = new AgentAuthority(new PodIdentityManager(credentials).connection(assignment.authority.identity, `pods:${scope.podId}`), observe, previous)
+  const authority = new AgentAuthority(new PodIdentityManager(credentials).connection(assignment.authority.identity, `pods:${scope.podId}`), observe, previous, undefined, input.tokens)
   const adapterPath = join(dist, 'vendor/pod-ssh-shapes.toml')
   const adapter = loadAdapter('pod-ssh', adapterPath); const argv = sshGrantArgv(binding)
   const resolved = await resolveCommand(adapter, argv)
   const authorization = { grantId: assignment.authority.grantId, command: { cliId: 'pod-ssh', adapterPath, adapterDigest: adapter.digest, argv, permission: resolved.permission } }
   await authority.authorize(authorization, signal)
-  const current = async () => { await check(); await authority.assertActive(authorization.grantId, signal); signal.throwIfAborted() }
+  const current = async () => { await check(); signal.throwIfAborted() }
   await current()
   await mkdir(input.root, { recursive: true, mode: 0o700 })
   const workspace = await mkdtemp(join(input.root, 'ssh-'))

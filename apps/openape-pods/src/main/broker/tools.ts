@@ -1,8 +1,7 @@
-import { InfrastructureError, NonRetryableError } from '../../contracts/infrastructure'
+import { NonRetryableError } from '../../contracts/infrastructure'
 import { ProgramState } from '../programs/state'
 import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { setTimeout as delay } from 'node:timers/promises'
 import { StringDecoder } from 'node:string_decoder'
 import { parseCredentialJSON } from '../connections/cache'
 import type { CredentialCache } from '../connections/cache'
@@ -43,7 +42,7 @@ function secretStrings(value: unknown, key = ''): string[] {
 }
 
 export class PodToolBroker {
-  constructor(private readonly helper: string, private readonly root: string, private readonly authority: Pick<AgentAuthority, 'authorize' | 'assertActive'>, private readonly credentials: CredentialCache) {}
+  constructor(private readonly helper: string, private readonly root: string, private readonly authority: Pick<AgentAuthority, 'authorize'>, private readonly credentials: CredentialCache) {}
   async execute(assignment: ToolAssignment, request: unknown, lease: BrokerLease): Promise<ToolReply> {
     if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('Invalid ape-shell request')
     const value = request as Record<string, unknown>
@@ -71,7 +70,6 @@ export class PodToolBroker {
   }
 
   private async run(assignment: ToolAssignment, lease: BrokerLease, workspace: string, cache?: string): Promise<ToolReply> {
-    await this.authority.assertActive(assignment.grantId, lease.signal)
     lease.assertCurrent(); lease.signal.throwIfAborted()
     const secrets = [...Object.values(assignment.environment).filter(Boolean), ...[assignment.environment.HTTPS_PROXY, assignment.environment.HTTP_PROXY].filter(Boolean).flatMap(url => new URL(url).password ? [new URL(url).password] : []), ...(cache ? secretStrings(parseCredentialJSON(await readFile(cache, 'utf8'))) : [])]
     const args = [...assignment.prefix, ...assignment.command.argv.slice(1), ...(cache && assignment.cacheArgument ? [assignment.cacheArgument, dirname(cache)] : [])]
@@ -91,40 +89,20 @@ export class PodToolBroker {
       else stderr += errDecoder.write(bytes)
     }
     domain.stdout.on('data', bytes => append('stdout', bytes)); domain.stderr.on('data', bytes => append('stderr', bytes))
-    const monitoring = new AbortController()
-    const poll = async () => {
-      try {
-        while (!monitoring.signal.aborted) {
-          await delay(1000, undefined, { signal: monitoring.signal })
-          lease.assertCurrent()
-          await this.authority.assertActive(assignment.grantId, AbortSignal.any([lease.signal, monitoring.signal]))
-        }
-      }
-      catch (error) {
-        if (monitoring.signal.aborted) return
-        failure = error instanceof Error ? error : new Error('Tool authority lost'); domain.cancel()
-      }
-    }
-    const monitor = poll()
     const deadline = setTimeout(() => { failure = new Error('Tool call exceeded its time limit'); domain.cancel() }, 60000)
     try {
       await domain.processId
       const exitCode = await domain.completed
       stdout += outDecoder.end(); stderr += errDecoder.end()
       if (failure) throw failure
-      await this.authority.assertActive(assignment.grantId, lease.signal)
       lease.assertCurrent(); lease.signal.throwIfAborted()
       if (cache) secrets.push(...secretStrings(parseCredentialJSON(await readFile(cache, 'utf8'))))
       for (const secret of secrets) { stdout = stdout.replaceAll(secret, '[REDACTED]'); stderr = stderr.replaceAll(secret, '[REDACTED]') }
       return { exitCode, stdout, stderr }
     }
-    catch (error) {
-      if (error instanceof InfrastructureError) throw new Error('Tool execution was interrupted by a permission service outage; review before retrying')
-      throw error
-    }
     finally {
-      clearTimeout(deadline); monitoring.abort(); lease.signal.removeEventListener('abort', stop)
-      domain.cancel(); await domain.completed; await monitor
+      clearTimeout(deadline); lease.signal.removeEventListener('abort', stop)
+      domain.cancel(); await domain.completed
     }
   }
 }

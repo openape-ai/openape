@@ -91,6 +91,7 @@ function archiveTarget(payload: unknown): { operation: 'process', target: unknow
 }
 
 const maxAgentPauseMs = 2 * maxAgentTimeoutSeconds * 1000
+const maxAgentCallsPerRun = 50
 
 export class RunDispatcher {
   readonly runs: RunStore
@@ -231,7 +232,7 @@ export class RunDispatcher {
     let shellScope: RunServiceScope | undefined
     let infrastructureWaiting = 0
     let networkMailReads = 0
-    let networkAgentCalls = 0
+    let agentCalls = 0
     let notifications = 0
     let archiveCalls = 0
     let infrastructureFailure: RecoveryFailure | undefined
@@ -329,6 +330,26 @@ export class RunDispatcher {
         try { const reply = await operation; assertCurrent(); return reply }
         finally { pendingAgents.delete(operation) }
       }
+      // Script and agent tool calls of a network member share one port: declared source, assigned reads and one read budget.
+      const networkTool = async (payload: unknown, toolSignal: AbortSignal) => {
+        if (payload !== null && typeof payload === 'object' && ('application' in payload || 'applicationId' in payload) && manifest.capabilities.some(capability => capability.startsWith('tool.app_'))) {
+          if (!input.network!.source) throw new Error('Network mail reads require a declared source')
+          programRequest(this.resources.list(pod.id), pod.id, manifest.capabilities, payload)
+          if (networkMailReads >= 100) throw new Error('Network read budget exceeded')
+          networkMailReads++
+          appendEvent('network-program-read', { count: networkMailReads })
+          return invokeTool(payload, toolSignal)
+        }
+        if (manifest.capabilities.includes('mail.read')) {
+          if (!input.network!.source) throw new Error('Network mail reads require a declared source')
+          const request = parseMailRequest(payload, assignedMail(this.resources.list(pod.id)).mail)
+          if (networkMailReads >= 100) throw new Error('Network mail read budget exceeded')
+          networkMailReads++
+          appendEvent('network-mail-read', { operation: request.read.operation, count: networkMailReads })
+          return invokeTool(payload, toolSignal)
+        }
+        throw new Error('Network operation requires a declared runtime port')
+      }
       if (this.services?.shell && !network) {
         const environment = await retryService('runtime authorization', () => this.services!.shell!(scope, signal), signal, 30000)
         Object.assign(runtime, { home: environment.home, shell: environment.shell, environment: { ...environment.environment, ...runtime.environment } })
@@ -363,9 +384,8 @@ export class RunDispatcher {
           if (operation === 'agent.run') {
             if (!this.services?.provider) throw new Error('Codex is not connected; connect the pod provider before using this script')
             const request = parseAgentRequest(payload)
-            if (network && (request.tools.length || request.timeoutSeconds > 120)) throw new Error('Network text generation requires no tools and a timeout of at most 120 seconds')
-            if (network && networkAgentCalls++ >= 50) throw new Error('Network text generation budget exceeded')
-            const operation = executeAgent(runtime, directory, request.prompt, input.references.map(file => file.path), { provider: this.services.provider, tool: invokeTool }, operationSignal, (event) => { assertCurrent(); appendEvent('agent', event) }, request.tools, request.timeoutSeconds)
+            if (agentCalls++ >= maxAgentCallsPerRun) throw new Error('A run can start at most 50 agent calls')
+            const operation = executeAgent(runtime, directory, request.prompt, input.references.map(file => file.path), { provider: this.services.provider, tool: network ? networkTool : invokeTool }, operationSignal, (event) => { assertCurrent(); appendEvent('agent', event) }, request.tools, request.timeoutSeconds)
             pendingAgents.add(operation); if (activeAgentCalls++ === 0) agentSince = Date.now()
             try { const reply = await operation; assertCurrent(); operationSignal.throwIfAborted(); return reply }
             finally { pendingAgents.delete(operation); if (--activeAgentCalls === 0) agentPausedMs += Date.now() - agentSince }
@@ -376,22 +396,7 @@ export class RunDispatcher {
             appendEvent('notify', receipt); return receipt
           }
           if (network) {
-            if (operation === 'tools.invoke' && payload !== null && typeof payload === 'object' && ('application' in payload || 'applicationId' in payload) && manifest.capabilities.some(capability => capability.startsWith('tool.app_'))) {
-              if (!input.network!.source) throw new Error('Network mail reads require a declared source')
-              programRequest(this.resources.list(pod.id), pod.id, manifest.capabilities, payload)
-              if (networkMailReads >= 100) throw new Error('Network read budget exceeded')
-              networkMailReads++
-              appendEvent('network-program-read', { count: networkMailReads })
-              return invokeTool(payload, operationSignal)
-            }
-            if (operation === 'tools.invoke' && manifest.capabilities.includes('mail.read')) {
-              if (!input.network!.source) throw new Error('Network mail reads require a declared source')
-              const request = parseMailRequest(payload, assignedMail(this.resources.list(pod.id)).mail)
-              if (networkMailReads >= 100) throw new Error('Network mail read budget exceeded')
-              networkMailReads++
-              appendEvent('network-mail-read', { operation: request.read.operation, count: networkMailReads })
-              return invokeTool(payload, operationSignal)
-            }
+            if (operation === 'tools.invoke') return networkTool(payload, operationSignal)
             if (operation === 'network.archive') {
               const { row, definition, member } = network.invocations.events.authority(network.authority)
               if (!networkArchiveMember(definition, member, manifest.capabilities)) throw new Error('Only a member behind an approval gate with one assigned mail application can archive')
@@ -453,14 +458,16 @@ export class RunDispatcher {
             if (!this.services?.mailArchive) throw new Error('Mail archive service is unavailable')
             // In a graph the script never names what may move; the consumed gate batches do.
             const request = graph ? { ...archiveTarget(payload), gate: gateCoverage(this.store, graph, delivered) } : payload
+            // Standalone archives record each move in the archive store, which holds only its own unresolved batch.
+            // Workflow gate batches (removed with workflow mail) still hold the Pod until their outcome is confirmed.
             const boundaryId = randomUUID()
-            appendEvent('recovery-boundary', { id: boundaryId, kind: 'untracked', operation })
+            appendEvent('recovery-boundary', graph ? { id: boundaryId, kind: 'untracked', operation } : { kind: 'effect', operation })
             const work = this.services.mailArchive(request, operationSignal, scope)
             pendingAgents.add(work)
             try {
               const result = await work
               const views = Array.isArray(result) ? result : [result]
-              if (views.every(value => value && typeof value === 'object' && 'state' in value && ['completed', 'pending', 'denied', 'expired'].includes(String(value.state)))) appendEvent('recovery-boundary-result', { id: boundaryId, state: 'confirmed' })
+              if (graph && views.every(value => value && typeof value === 'object' && 'state' in value && ['completed', 'pending', 'denied', 'expired'].includes(String(value.state)))) appendEvent('recovery-boundary-result', { id: boundaryId, state: 'confirmed' })
               assertCurrent(); return result
             }
             finally { pendingAgents.delete(work) }

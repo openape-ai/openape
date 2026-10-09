@@ -1,6 +1,7 @@
 import { AuthorityError, transientNetwork, transientResponse  } from '../../contracts/infrastructure'
 import type { BrokeredGrant } from '@openape/core'
 import { sameBrokeredGrant } from '@openape/grants'
+import type { VerifyAuthzOptions } from '@openape/grants'
 import { authorizeAssignedCommand } from '@openape/apes/assigned'
 import type { AssignedCommand } from '@openape/apes/assigned'
 import type { RunApproval } from '../../contracts/activity'
@@ -27,8 +28,40 @@ export interface AssignedAuthorization {
   command: AssignedCommand
   grantId: string
 }
+interface MintedGrant { grantId: string, token: string, jwks: VerifyAuthzOptions['jwks'], reusableUntil: number }
+export const grantTokenReuseMs = 60 * 1000
+const expiryMarginMs = 10 * 1000
+
+/**
+ * Grant tokens minted during one run. A reusable (non-single-use) token is
+ * re-verified locally for later calls for at most one minute, and never past
+ * shortly before its own expiry, so a run contacts the identity provider at
+ * most once per grant and minute instead of once per call.
+ */
+export class RunGrantTokens {
+  private readonly minted = new Map<string, MintedGrant>()
+  reusable(key: string, now = Date.now()): MintedGrant | undefined {
+    const entry = this.minted.get(key)
+    if (entry && now < entry.reusableUntil) return entry
+    this.minted.delete(key)
+    return undefined
+  }
+
+  remember(key: string, grant: { grantId: string, token: string, jwks: VerifyAuthzOptions['jwks'], expiresAt: number }, now = Date.now()): void {
+    this.minted.set(key, { grantId: grant.grantId, token: grant.token, jwks: grant.jwks, reusableUntil: Math.min(now + grantTokenReuseMs, grant.expiresAt - expiryMarginMs) })
+  }
+
+  expired(now = Date.now()): boolean { return [...this.minted.keys()].every(key => !this.reusable(key, now)) }
+}
+
+function tokenClaims(token: string): { exp: number, grantType: string } {
+  const claims = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8')) as { exp?: unknown, grant_type?: unknown, approval?: unknown }
+  if (typeof claims.exp !== 'number') throw new Error('Grant token has no expiry')
+  return { exp: claims.exp, grantType: claims.grant_type === 'once' || claims.approval === 'once' ? 'once' : String(claims.grant_type) }
+}
+
 export class AgentAuthority {
-  constructor(private readonly connection: AgentConnection, private readonly observe?: GrantObserver, private readonly previous?: GrantLookup, private readonly approve?: GrantApproval) {
+  constructor(private readonly connection: AgentConnection, private readonly observe?: GrantObserver, private readonly previous?: GrantLookup, private readonly approve?: GrantApproval, private readonly tokens?: RunGrantTokens) {
     const url = new URL(connection.issuer)
     if ((url.protocol !== 'https:' && !(url.protocol === 'http:' && url.hostname === '127.0.0.1')) || url.pathname !== '/' || url.search || url.hash || url.username || url.password) throw new Error('Invalid assigned identity origin')
   }
@@ -124,18 +157,65 @@ export class AgentAuthority {
   }
 
   async authorize(assignment: AssignedAuthorization, signal: AbortSignal, summary?: string): Promise<void> {
+    if (await this.reuse(assignment, signal)) return
     assignment.grantId = await this.acquire(assignment, signal, summary)
+    await this.mint(assignment, signal)
+  }
+
+  /**
+   * Re-checks an already acquired grant during a run. It never looks up a previous grant, never creates
+   * one and never approves one: a grant that is no longer approved ends the run's authority.
+   */
+  async refresh(assignment: AssignedAuthorization, signal: AbortSignal): Promise<void> {
+    if (await this.reuse(assignment, signal)) return
+    const grant = await this.grant(assignment.grantId, signal)
+    if (grant.status !== 'approved') throw new AuthorityError(`Pod execution permission is ${grant.status}; review the Pod permissions before retrying`)
+    await this.mint(assignment, signal)
+  }
+
+  // The key includes the grant, so a token is only reused for the very grant it was minted for.
+  private tokenKey(assignment: AssignedAuthorization): string {
+    return [this.connection.subject, this.connection.targetHost, this.connection.keyId, assignment.grantId, assignment.command.cliId, assignment.command.adapterDigest, assignment.command.permission].join('\n')
+  }
+
+  private async reuse(assignment: AssignedAuthorization, signal: AbortSignal): Promise<boolean> {
+    if (!assignment.grantId) return false
+    const minted = this.tokens?.reusable(this.tokenKey(assignment))
+    if (!minted || minted.grantId !== assignment.grantId) return false
+    await authorizeAssignedCommand(assignment.command, minted.token, { ...this.scope(minted.grantId, signal), jwks: minted.jwks, consume: false })
+    return true
+  }
+
+  private async mint(assignment: AssignedAuthorization, signal: AbortSignal): Promise<void> {
     await this.assertActive(assignment.grantId, signal)
     const reply = await this.request(`/api/grants/${encodeURIComponent(assignment.grantId)}/token`, 'POST', signal) as { authz_jwt?: unknown }
     if (!reply || typeof reply.authz_jwt !== 'string') throw new Error('Missing assigned grant token')
+    const scope = this.scope(assignment.grantId, signal)
+    const jwks = await this.keySet(scope.jwksUri, signal)
+    await authorizeAssignedCommand(assignment.command, reply.authz_jwt, { ...scope, jwks })
+    const claims = tokenClaims(reply.authz_jwt)
+    if (claims.grantType !== 'once') this.tokens?.remember(this.tokenKey(assignment), { grantId: assignment.grantId, token: reply.authz_jwt, jwks, expiresAt: claims.exp * 1000 })
+  }
+
+  private scope(grantId: string, signal: AbortSignal) {
     const issuer = (this.connection.decisionIssuer ?? this.connection.issuer).replace(/\/$/, '')
-    await authorizeAssignedCommand(assignment.command, reply.authz_jwt, { issuer, brokered: this.connection.brokered, subject: this.connection.subject, targetHost: this.connection.targetHost, grantId: assignment.grantId, jwksUri: `${issuer}/.well-known/jwks.json`, grantsEndpoint: `${issuer}/api/grants`, signal, fetch: async (url, options) => {
-      let response: Response
-      try { response = await fetch(url, options) }
-      catch (error) { transientNetwork(error, 'authorization', signal) }
-      try { transientResponse(response, 'authorization') }
-      catch (error) { await response.body?.cancel(); throw error }
-      return response
-    } })
+    return { issuer, brokered: this.connection.brokered, subject: this.connection.subject, targetHost: this.connection.targetHost, grantId, jwksUri: `${issuer}/.well-known/jwks.json`, grantsEndpoint: `${issuer}/api/grants`, signal, fetch: identityFetch(signal) }
+  }
+
+  private async keySet(jwksUri: string, signal: AbortSignal): Promise<VerifyAuthzOptions['jwks']> {
+    const response = await identityFetch(signal)(jwksUri, { redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]) })
+    if (!response.ok) { await response.body?.cancel(); throw new Error('The identity service did not return its signing keys') }
+    return await response.json() as VerifyAuthzOptions['jwks']
+  }
+}
+
+function identityFetch(signal: AbortSignal) {
+  return async (url: string, options: RequestInit): Promise<Response> => {
+    let response: Response
+    try { response = await fetch(url, options) }
+    catch (error) { transientNetwork(error, 'authorization', signal) }
+    try { transientResponse(response, 'authorization') }
+    catch (error) { await response.body?.cancel(); throw error }
+    return response
   }
 }

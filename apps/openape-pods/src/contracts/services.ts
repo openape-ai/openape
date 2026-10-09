@@ -14,3 +14,13 @@ export function parseServiceScope(value: unknown): ServiceScope {
 }
 
 export interface RunContextRequest extends ServiceCheck { grant?: { permission: string, issuer: string, subject: string } }
+
+/** Interval at which a running Pod's runtime grant, owner, identity and key are re-checked at the IdP. */
+export const runAuthorityWatchMs = 60 * 1000
+/** `runtime` is false for network and decision-maintenance runs, which execute no runtime and hold no runtime grant. */
+export interface RunContext { name: string, reason: string, runtime: boolean }
+export function parseRunContext(value: unknown): RunContext {
+  const context = value as RunContext | null
+  if (!context || typeof context !== 'object' || typeof context.name !== 'string' || typeof context.reason !== 'string' || typeof context.runtime !== 'boolean') throw new Error('Invalid run context')
+  return context
+}
