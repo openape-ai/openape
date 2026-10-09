@@ -88,7 +88,8 @@ describe('Automatisierungen layout', () => {
     expect(menu.width).toBe(380)
     expect(menu.right).toBe(1440 - 16)
     expect(document.querySelectorAll('.app-settings-menu [data-account]')).toHaveLength(3)
-    expect(document.querySelectorAll('.app-settings-menu [data-switch]')).toHaveLength(2)
+    expect(document.querySelectorAll('.app-settings-menu [data-switch]')).toHaveLength(1)
+    expect(document.querySelector('.app-settings-menu [data-mcp]')!.getBoundingClientRect().right).toBeLessThanOrEqual(1440 - 16)
     await shot('09-einstellungen')
   })
 

@@ -24,7 +24,7 @@ onMounted(() => request('status'))
   <section class="codex-settings" :aria-label="t('Work from Codex')">
     <h3>{{ t('Work from Codex') }}</h3>
     <p class="muted">
-      {{ t('Codex uses the app-wide MCP access level above. Connecting Codex does not enable access. Conversations stay in Codex.') }}
+      {{ t('Connecting Codex grants no access: each Codex session asks for your DDISA sign-in. Conversations stay in Codex.') }}
     </p>
     <template v-if="connection">
       <p role="status">

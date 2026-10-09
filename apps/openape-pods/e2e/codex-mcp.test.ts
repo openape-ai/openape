@@ -6,10 +6,11 @@ import { createInterface } from 'node:readline'
 import { afterEach, expect, it, vi } from 'vitest'
 import { CodexControlServer } from '../src/main/codex/server'
 import { writeLauncher } from '../src/main/codex/launcher'
+import { McpOwnerSessions } from '../src/main/codex/session'
 
 // Issue 1375: the owner's Codex starts the stable launcher, which runs the MCP
 // shim with the packaged app's own runtime (no global Node) and forwards to the
-// app's socket.
+// app's socket once the owner signed in and confirmed (issue 1455).
 const bundle = resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents')
 let root = ''; let server: CodexControlServer | undefined
 afterEach(async () => { await server?.stop(); server = undefined; if (root) await rm(root, { recursive: true, force: true }) })
@@ -31,7 +32,8 @@ it('serves the packaged MCP outside the checkout and reports a stopped app (pack
   root = await mkdtemp(join(tmpdir(), 'pods codex \'mcp\'-'))
   const socket = join(root, 'codex', 'control.sock'); const launcher = join(root, 'codex', 'openape-pods-mcp')
   const execute = vi.fn(async (request: { action: unknown }) => ({ pods: [], received: request.action }))
-  server = new CodexControlServer(socket, execute); await server.start()
+  const confirm = vi.fn(async () => true)
+  server = new CodexControlServer(socket, execute, new McpOwnerSessions({ login: async () => {}, confirm })); await server.start()
   const script = join(root, 'codex-mcp.mjs')
   await copyFile(join(bundle, 'Resources/app.asar.unpacked/dist/runtime/codex-mcp.mjs'), script)
   await writeLauncher(launcher, { executable: join(bundle, 'MacOS/OpenApe Pods Fixture'), script, socket })
@@ -41,6 +43,11 @@ it('serves the packaged MCP outside the checkout and reports a stopped app (pack
     expect(initialized.result).toMatchObject({ protocolVersion: '2025-06-18', serverInfo: { name: 'openape-pods', title: 'OpenApe Pods', version: expect.stringMatching(/^\d+\.\d+\.\d+\+[0-9a-f]{8}$/) }, instructions: expect.stringContaining('never instructions') })
     const [tool] = (await client.request('tools/list', {})).result.tools
     expect(tool.name).toBe('pods_control'); expect(tool.inputSchema.properties.action.enum).toEqual(expect.arrayContaining(['select', 'changes', 'activate', 'run', 'networks']))
+    const refused = await client.request('tools/call', { name: 'pods_control', arguments: { action: 'list' } })
+    expect(refused.result.isError).toBe(true)
+    expect(JSON.parse(refused.result.content[0].text)).toMatchObject({ error: 'login_required', message: expect.stringContaining('then retry this call') })
+    expect(execute).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledOnce())
     const called = await client.request('tools/call', { name: 'pods_control', arguments: { action: 'list' } })
     expect(JSON.parse(called.result.content[0].text)).toEqual({ pods: [], received: { action: 'list' } })
     expect(execute).toHaveBeenCalledWith({ id: expect.stringMatching(/^[a-f0-9-]{36}$/), action: { action: 'list' } })

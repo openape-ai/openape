@@ -32,6 +32,17 @@ export class OwnerConnection {
   }
 
   async login(id: string, issuer: string, account: string, signal: AbortSignal, present: (value: { url: string }) => void): Promise<{ issuer: string, subject: string }> {
+    const value = await this.authorize(issuer, account, signal, present)
+    await this.credentials.connect(id, JSON.stringify(value))
+    return { issuer, subject: value.subject }
+  }
+
+  /** Proves that the owner signs in now, without touching the stored connection; the tokens are discarded. */
+  async verify(issuer: string, account: string, signal: AbortSignal, present: (value: { url: string }) => void): Promise<{ subject: string }> {
+    return { subject: (await this.authorize(issuer, account, signal, present)).subject }
+  }
+
+  private async authorize(issuer: string, account: string, signal: AbortSignal, present: (value: { url: string }) => void): Promise<OwnerTokens> {
     const origin = new URL(issuer)
     if (origin.protocol !== 'https:' || origin.origin !== issuer) throw new Error('Owner issuer must be an HTTPS origin')
     const state = randomBytes(32).toString('base64url'); const nonce = randomBytes(32).toString('base64url'); const verifier = randomBytes(48).toString('base64url')
@@ -51,9 +62,7 @@ export class OwnerConnection {
       const url = new URL('/authorize', issuer)
       url.search = new URLSearchParams({ client_id: clientId, redirect_uri: redirectURI, response_type: 'code', scope: 'openid email profile offline_access', state, nonce, code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256' }).toString()
       present({ url: url.toString() })
-      const value = await this.exchange(issuer, account, { grant_type: 'authorization_code', code: await code, client_id: clientId, redirect_uri: redirectURI, code_verifier: verifier }, signal, nonce)
-      await this.credentials.connect(id, JSON.stringify(value))
-      return { issuer, subject: value.subject }
+      return await this.exchange(issuer, account, { grant_type: 'authorization_code', code: await code, client_id: clientId, redirect_uri: redirectURI, code_verifier: verifier }, signal, nonce)
     }
     finally { signal.removeEventListener('abort', cancel); server.closeAllConnections(); await new Promise<void>((resolve, fail) => server.close(error => error ? fail(error) : resolve())) }
   }

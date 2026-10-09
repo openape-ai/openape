@@ -1,6 +1,6 @@
 import type { UpdateCommand, UpdateView } from './updates'
 import type { DefinitionCommand, DefinitionsView } from './definitions'
-import type { McpAccess, McpAccessCommand } from './mcp-access'
+import type { McpSessionCommand, McpSessionView } from './mcp-session'
 import type { RuntimeApprovalCommand, RuntimeApprovalView } from './runtime-approval'
 import type { CodexCommand, CodexConnection } from './codex'
 import type { WorkflowCommand, WorkflowView } from './workflows'
@@ -20,7 +20,7 @@ import type { ResourceCommand, ResourceState } from './resources'
 import type { WorkspaceCommand, WorkspaceState } from './control'
 import type { SecretsCommand, SecretsView } from './secrets'
 
-export const channels = { updates: 'pods:updates', mcpAccess: 'pods:mcp-access', runtimeApproval: 'pods:runtime-approval', central: 'pods:central', codex: 'pods:codex', workflows: 'pods:workflows', networks: 'pods:networks', definitions: 'pods:definitions', packages: 'pods:packages', programs: 'pods:programs', language: 'pods:language', scripts: 'pods:scripts', data: 'pods:data', onboarding: 'pods:onboarding', master: 'pods:master', details: 'pods:details', status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs', scheduling: 'pods:scheduling', sharing: 'pods:sharing', secrets: 'pods:secrets' } as const
+export const channels = { updates: 'pods:updates', mcpSession: 'pods:mcp-session', runtimeApproval: 'pods:runtime-approval', central: 'pods:central', codex: 'pods:codex', workflows: 'pods:workflows', networks: 'pods:networks', definitions: 'pods:definitions', packages: 'pods:packages', programs: 'pods:programs', language: 'pods:language', scripts: 'pods:scripts', data: 'pods:data', onboarding: 'pods:onboarding', master: 'pods:master', details: 'pods:details', status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs', scheduling: 'pods:scheduling', sharing: 'pods:sharing', secrets: 'pods:secrets' } as const
 export type WorkerState = 'starting' | 'ready' | 'error' | 'stopped'
 export interface WorkerStatus { state: WorkerState, pid: number | null, error: string | null }
 export interface PodStatus {
@@ -32,7 +32,7 @@ export interface PodStatus {
 }
 export interface PodsBridge {
   updates?: (command: UpdateCommand) => Promise<UpdateView>
-  mcpAccess: (command: McpAccessCommand) => Promise<McpAccess>
+  mcpSession: (command: McpSessionCommand) => Promise<McpSessionView>
   runtimeApproval: (command: RuntimeApprovalCommand) => Promise<RuntimeApprovalView>
   central?: (command: Record<string, unknown>) => Promise<unknown>
   codex: (command: CodexCommand) => Promise<CodexConnection>
