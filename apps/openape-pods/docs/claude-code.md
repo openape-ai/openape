@@ -46,27 +46,72 @@ provider can complete the sign-in silently while its browser session lasts.
 Then retry the call. The session is bound to that one MCP connection and ends
 after one hour, with **End session** in App settings, when the app quits or when
 the client disconnects; the next call returns `login_required` again without a
-client restart. The session secret stays in memory and is never written to disk.
+client restart. The session secret and the owner's tokens of this sign-in stay in
+main-process memory, are never written to disk or handed to the worker, and are
+discarded (the refresh token is revoked at the identity provider) when the
+session ends. The identity provider issues five-minute access tokens; the
+session renews them in memory, never past its one-hour end. The persisted owner
+login used for Pod setup is a different login and never decides a grant.
 
 Within a session MCP acts as the owner and may use every action the tool offers,
 including network creation, activation, pause, archive, member changes and
 recovery, owner routing (a `choose` option, opening an approval batch at the
 identity provider, asking it again or discarding an uncertain batch) and the
-desktop `definitions`, `scheduling` and `workspace` commands. Approving or
-denying a grant stays at the identity provider; no MCP action and no code path
-in Pods can decide it (DDISA: the requester never approves its own request).
-`resources` assignments (`assignHttp`, `assignSsh`, `assignJev`) and `program`
-`grant` request a continuing grant for the Pod identity, open its IdP page on
-this Mac and return `approval: { state: "pending", url }` until the owner
-decides. A run that needs a pending grant, including the first run of a new Pod,
-waits for that decision; `recovery` `openApproval` opens its IdP page again and
-returns it as `opened`. The session itself remains an App setting.
+desktop `definitions`, `scheduling` and `workspace` commands.
+
+The session is the owner's own DDISA login, like a signed-in CLI used together
+with Codex, so it also decides grants with the owner's identity (owner decision
+October 10, 2026, issue 1455). Every grant is still requested by the Pod
+identity; the session approves, denies or revokes it. Before deciding, Pods
+reads the grant with the owner's token and checks that a Pod of this owner
+requested it for itself (requester, target host and broker binding); other
+grants are decided at the identity provider only. Pods approves nothing outside
+an active owner session: the single approve path refuses without it, and after
+the session ends approvals fail and pending grants wait for the IdP page.
+
+| `grants` command | Effect |
+| --- | --- |
+| `{ "type": "list", "podId": "…" }` or `{ "networkId": "…" }` | Recorded grants with state, origin network and `approvedInSession` |
+| `{ "type": "request", "target": { "podId": "…" } \| { "networkId": "…", "revision": 3 }, "grants": { "runtime": true, "programs": [{ "application": "gh" }], "http": [{ "origin": "https://api.example.com", "methods": ["POST"] }] } }` | Requests each grant as the Pod and approves it as `always`; `"approve": false` only requests |
+| `{ "type": "approve", "podId": "…", "grantId": "…", "grantType": "once" }` | Approves one pending grant, also a waiting runtime or network approval item |
+| `{ "type": "deny", … }`, `{ "type": "revoke", … }` | Denies a pending grant or revokes a grant as the requesting Pod |
+
+A program without `argv` is the whole program: one detail per action and first
+resource, so a new command of that program is covered without another request;
+operations the adapter marks as exact commands keep needing their own grant, and
+generic execution is never granted. An origin without methods covers every
+method of that origin. `runtime` is the grant to run the Pod's stored script, so
+the first run does not wait. Repeating a request reuses the pending or approved
+grant instead of asking again.
+
+`sandbox` sets what a Pod can reach, independently of its grants:
+`{ "type": "apply", "target": …, "sandbox": { "level": "owner", "programs":
+[{ "path": "/opt/homebrew/bin/gh" }], "http": [{ "origin": "…", "methods":
+["GET"] }], "directories": [{ "path": "…", "access": "read" }], "secrets":
+[{ "alias": "bot_token", "path": "/private/owner/file" }] }, "grants": "sandbox" }`.
+`grants: "sandbox"` requests and approves exactly what the declaration makes
+reachable plus the runtime grant. A network target applies to every member of
+that revision with the network as origin; archiving the network revokes those
+grants and removes what it added. Level `owner` runs the Pod's programs with the
+owner's file and network reach instead of the isolated profile; the Pod's DDISA
+identity does not change. `{ "type": "show", "target": … }` reads both.
+
+`resources` `assignHttp` and `program` `grant` request their grant and approve it
+in the session; `assignSsh` and `assignJev` still open the IdP page and return
+`approval: { state: "pending", url }`. A run that needs a pending grant waits
+for the decision; `recovery` `openApproval` opens its IdP page again and returns
+it as `opened`, and `grants` `approve` decides it from the session. Approvals
+made in the session are marked in the run activity and in `grants` `list`. The
+session itself remains an App setting.
 Versions before issue 1455 stored off/read/write access modes in
 `mcp-access.json` in the profile folder. Current versions ignore that file; it
 grants nothing and may be deleted.
 Likewise, `mcp-runtime-approval.json` held the removed runtime auto-approval
 setting; current versions ignore it. Grants that Pods approved before remain
-valid at the identity provider until the owner revokes them there.
+valid at the identity provider until the owner revokes them there. Until schema
+43 an application or HTTP assignment stored its grant inside the assignment;
+the upgrade removes that copy, and the next call requests the same details as
+the Pod, which the identity provider answers with the existing approved grant.
 
 ## Work with Pods
 
@@ -137,10 +182,13 @@ a join correlates inputs of the same source item, so the joined channels come
 from one source. The result's `createdId` names the paused network;
 `{ "type": "activate", "id": "…", "revision": 1 }` starts its source schedules.
 
-Every member, source or consumer, uses its own assigned applications, HTTP
-destinations, secrets and folders exactly like a standalone Pod; assign them on
-the member Pod before pinning its definition. Each application command and HTTP
-destination still needs its grant at the identity provider. The only exception
+Every member, source or consumer, uses its own sandbox and grants exactly like a
+standalone Pod, plus what a `sandbox` or `grants` declaration for the network
+gave every member. Each application command and HTTP destination still needs a
+covering grant. A morning briefing therefore needs, during one session:
+`networks` `create`, one `sandbox` `apply` for the network with `grants:
+"sandbox"` (each member gets its runtime, application and HTTP grants, approved
+as `always`) and `networks` `activate`; nobody opens an IdP page. The only exception
 is the archive member behind an approve route: it moves approved mail solely
 through `context.network.archive`.
 
