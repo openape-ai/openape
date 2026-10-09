@@ -28,24 +28,29 @@ export interface AssignedAuthorization {
   command: AssignedCommand
   grantId: string
 }
-interface MintedGrant { grantId: string, token: string, jwks: VerifyAuthzOptions['jwks'], expiresAt: number }
-const reuseMarginMs = 60 * 1000
+interface MintedGrant { grantId: string, token: string, jwks: VerifyAuthzOptions['jwks'], reusableUntil: number }
+export const grantTokenReuseMs = 60 * 1000
+const expiryMarginMs = 10 * 1000
 
 /**
  * Grant tokens minted during one run. A reusable (non-single-use) token is
- * re-verified locally for later calls until shortly before it expires, so a
- * run contacts the identity provider once per grant instead of once per call.
+ * re-verified locally for later calls for at most one minute, and never past
+ * shortly before its own expiry, so a run contacts the identity provider at
+ * most once per grant and minute instead of once per call.
  */
 export class RunGrantTokens {
   private readonly minted = new Map<string, MintedGrant>()
   reusable(key: string, now = Date.now()): MintedGrant | undefined {
     const entry = this.minted.get(key)
-    if (entry && entry.expiresAt - reuseMarginMs > now) return entry
+    if (entry && now < entry.reusableUntil) return entry
     this.minted.delete(key)
     return undefined
   }
 
-  remember(key: string, entry: MintedGrant): void { this.minted.set(key, entry) }
+  remember(key: string, grant: { grantId: string, token: string, jwks: VerifyAuthzOptions['jwks'], expiresAt: number }, now = Date.now()): void {
+    this.minted.set(key, { grantId: grant.grantId, token: grant.token, jwks: grant.jwks, reusableUntil: Math.min(now + grantTokenReuseMs, grant.expiresAt - expiryMarginMs) })
+  }
+
   expired(now = Date.now()): boolean { return [...this.minted.keys()].every(key => !this.reusable(key, now)) }
 }
 

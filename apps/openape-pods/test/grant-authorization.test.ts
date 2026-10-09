@@ -4,7 +4,7 @@ import { generateKeyPairSync, randomUUID, sign } from 'node:crypto'
 import { resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { loadAdapter, resolveCommand } from '@openape/apes'
-import { AgentAuthority, RunGrantTokens } from '../src/main/broker/authorization'
+import { AgentAuthority, grantTokenReuseMs, RunGrantTokens } from '../src/main/broker/authorization'
 import { InfrastructureError, retryInfrastructure } from '../src/contracts/infrastructure'
 import type { RunApproval } from '../src/contracts/activity'
 
@@ -237,17 +237,18 @@ it('refuses the next run after the owner revokes the grant and mints no token fo
   expect(f.state.tokens).toEqual(['old']); expect(f.state.consumes).toEqual(['old']); expect(f.state.creates).toBe(0)
 })
 
-it('re-checks a revoked grant once the reused token is about to expire', async () => {
+it('reuses a token for at most 60 seconds even when it is valid much longer, then refuses a revoked grant', async () => {
   vi.useFakeTimers({ toFake: ['Date'] })
-  const f = await fixture('approved'); f.state.grantType = 'always'; f.state.lifetime = 3600
+  const f = await fixture('approved'); f.state.grantType = 'timed'; f.state.lifetime = 24 * 3600
   const run = runAuthority(f)
   await run.authorize({ command: f.command, grantId: 'old' }, signal())
   f.state.initial = 'revoked'
-  vi.setSystemTime(Date.now() + 10 * 60 * 1000)
+  vi.setSystemTime(Date.now() + grantTokenReuseMs - 1000)
   await run.authorize({ command: f.command, grantId: 'old' }, signal())
-  vi.setSystemTime(Date.now() + 50 * 60 * 1000 - 30 * 1000)
+  vi.setSystemTime(Date.now() + 2000)
   await expect(run.authorize({ command: f.command, grantId: 'old' }, signal())).rejects.toThrow('revoked')
-  expect(f.state.tokens).toEqual(['old'])
+  expect(f.state.tokens).toEqual(['old']); expect(f.state.checks).toBe(1)
+  expect(grantTokenReuseMs).toBe(60 * 1000)
 })
 
 it('never reuses a single-use grant token within a run', async () => {

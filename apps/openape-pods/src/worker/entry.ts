@@ -409,7 +409,9 @@ port.on('message', async (event) => {
         const previous = store.db.prepare('SELECT data FROM run_events JOIN runs ON runs.id=run_events.run_id WHERE runs.pod_id=? AND run_events.type=\'approval\' AND json_extract(data,\'$.permission\')=? AND json_extract(data,\'$.issuer\')=? AND json_extract(data,\'$.subject\')=? ORDER BY run_events.at DESC,sequence DESC LIMIT 1').get(check.scope.podId, permission, issuer, subject)
         port.postMessage({ id: request.id, state: previous ? JSON.parse(previous.data as string) : null }); return
       }
-      port.postMessage({ id: request.id, state: { name: store.getPod(check.scope.podId).name, reason } }); return
+      const network = store.db.prepare('SELECT 1 FROM network_invocations WHERE run_id=?').get(check.scope.runId)
+      const maintenance = store.db.prepare('SELECT 1 FROM workflow_gate_attempts WHERE run_id=?').get(check.scope.runId)
+      port.postMessage({ id: request.id, state: { name: store.getPod(check.scope.podId).name, reason, runtime: !network && !maintenance } }); return
     }
     if (request.command && typeof request.command === 'object' && 'networkGateCheck' in request.command) {
       const check = request.command.networkGateCheck as ServiceCheck & { manifest: unknown, operation: string, grants?: unknown }
@@ -420,6 +422,8 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'serviceCheck' in request.command) {
       const check = request.command.serviceCheck as ServiceCheck
       const state = authorizeRunService(store, registry, dispatcher.runs, check)
+      if (check.infrastructure !== undefined) dispatcher.runs.append(check.scope.runId, 'infrastructure', { operation: 'authority monitor', ...(check.infrastructure ?? { state: 'restored' }) })
+      if (check.authorityLost) dispatcher.cancelPod(check.scope.podId, 'Pod execution permission is no longer active; review the Pod permissions before retrying', 'authority')
       port.postMessage({ id: request.id, state }); return
     }
     if (request.command && typeof request.command === 'object' && 'scripts' in request.command) {
