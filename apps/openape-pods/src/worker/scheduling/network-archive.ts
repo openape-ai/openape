@@ -57,7 +57,7 @@ function receipt(store: PodDatabase, key: string, attempt: number, outcome: stri
 // Mailbox-wide, so another network archiving the same mailbox cannot repeat an unresolved move either.
 function unresolvedMove(store: PodDatabase, mailbox: string, messageId: string): boolean {
   return Boolean(store.db.prepare(`SELECT 1 FROM network_effect_attempts attempt JOIN network_effect_receipts intent ON intent.logical_action_key=attempt.logical_action_key AND intent.attempt=attempt.attempt AND intent.outcome='intent'
-    WHERE attempt.state IN ('intent','unknown') AND json_extract(intent.body,'$.mailbox')=? AND json_extract(intent.body,'$.messageId')=? LIMIT 1`).get(mailbox, messageId))
+    WHERE attempt.state IN ('intent','unknown') AND lower(json_extract(intent.body,'$.mailbox'))=lower(?) AND json_extract(intent.body,'$.messageId')=? LIMIT 1`).get(mailbox, messageId))
 }
 
 function settle(store: PodDatabase, key: string, attempt: number, state: Settled, body: Record<string, unknown>): void {
