@@ -1,6 +1,6 @@
 import type { PodDatabase } from '../storage/database'
 
-export type RecoveryCause = 'failure' | 'infrastructure' | 'shutdown' | 'owner-cancelled' | 'authority'
+export type RecoveryCause = 'failure' | 'infrastructure' | 'shutdown' | 'owner-cancelled' | 'authority' | 'non-retryable'
 export interface RecoveryFailure { cause: RecoveryCause, retryAfterMs?: number }
 export interface RecoveryDecision { disposition: 'retry' | 'isolated' | 'hold', reason: string, nextAt: number | null, attempt: number }
 export class RunCancellation extends Error {
@@ -11,6 +11,7 @@ export function recoveryDecision(failure: RecoveryFailure, previousAttempts: num
   const attempt = previousAttempts + 1
   if (hold) return { disposition: 'hold', reason: hold, nextAt: null, attempt }
   if (failure.cause === 'authority') return { disposition: 'hold', reason: 'Execution permission requires owner review', nextAt: null, attempt }
+  if (failure.cause === 'non-retryable') return { disposition: 'isolated', reason: 'The same input would fail again; future schedules remain eligible', nextAt: null, attempt }
   if (failure.cause === 'owner-cancelled') return { disposition: 'isolated', reason: 'Attempt cancelled by the owner; future schedules remain eligible', nextAt: null, attempt }
   if (attempt >= maximumAttempts) return { disposition: 'isolated', reason: 'Automatic attempts exhausted; future schedules remain eligible', nextAt: null, attempt }
   const wait = Math.max(failure.retryAfterMs ?? 0, Math.min(60000, 2000 * 2 ** (attempt - 1)))
