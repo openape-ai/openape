@@ -9,12 +9,12 @@ import { nodeFacts, YOU } from '../utils/automation-layout'
 const props = defineProps<{ view: MapView, id: string | null, pinned: boolean, now: number }>()
 defineEmits<{ open: [id: string] }>()
 const pod = computed(() => props.view.pods.find(item => item.id === props.id) ?? null)
-const collection = computed(() => props.view.collections.find(item => item.id === props.id) ?? null)
+const automation = computed(() => props.view.automations.find(item => item.id === props.id) ?? null)
 const system = computed(() => props.view.systems.find(item => item.id === props.id) ?? null)
 const facts = computed(() => props.id ? nodeFacts(props.view, props.id) : null)
-const title = computed(() => props.id === YOU ? t('You · Pods inbox') : props.id === 'auth:idp' ? 'id.openape.ai' : pod.value?.name ?? collection.value?.name ?? system.value?.name ?? props.id ?? '')
+const title = computed(() => props.id === YOU ? t('You · Pods inbox') : props.id === 'auth:idp' ? 'id.openape.ai' : pod.value?.name ?? automation.value?.name ?? system.value?.name ?? props.id ?? '')
 const how = computed(() => system.value ? (system.value.kind === 'application' ? `${system.value.how} · ${t('installed')}` : system.value.kind === 'service' ? `${t('https')} · ${system.value.how}` : system.value.how) : props.id === YOU ? t('questions, rules') : props.id === 'auth:idp' ? t('Identity provider. Decides execution rights and approval batches.') : '')
-const run = computed(() => pod.value?.lastRun ?? collection.value?.lastRun ?? null)
+const run = computed(() => pod.value?.lastRun ?? automation.value?.lastRun ?? null)
 const list = (items: { name: string, flow: number }[]) => items.map(item => `${item.name} (${item.flow})`).join(', ')
 </script>
 
@@ -40,9 +40,9 @@ const list = (items: { name: string, flow: number }[]) => items.map(item => `${i
       <div v-else-if="pod" class="k">
         {{ t('no own run in the window (only on items)') }}
       </div>
-      <div v-if="collection" class="k">
-        {{ t('{count} members', { count: collection.members.length }) }} · {{ collection.state === 'active' ? t('active') : t('paused') }}<template v-if="collection.lastRun">
-          · {{ ago(collection.lastRun.at, now) }}
+      <div v-if="automation" class="k">
+        {{ t('{count} members', { count: automation.members.length }) }} · {{ automation.state === 'active' ? t('active') : t('paused') }}<template v-if="automation.lastRun">
+          · {{ ago(automation.lastRun.at, now) }}
         </template>
       </div>
       <div v-if="facts?.channels.length" class="k">
@@ -54,7 +54,7 @@ const list = (items: { name: string, flow: number }[]) => items.map(item => `${i
       <div v-if="facts?.writes.length" class="k">
         {{ t('writes') }}: {{ list(facts.writes) }}
       </div>
-      <div v-if="pinned && (pod || collection)" class="opts">
+      <div v-if="pinned && (pod || automation)" class="opts">
         <button class="primary" type="button" @click="$emit('open', id!)">
           {{ t('Open details') }}
         </button>

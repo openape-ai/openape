@@ -22,7 +22,7 @@ function document(kind: PortableComposition['kind']) {
   if (kind === 'sequence') return { version: 1, kind, schedule: null, ports: null, mail: null }
   const channels = [1, 2].map(index => ({ name: `step.${index === 1 ? 'one' : 'two'}`, title: `Step ${index}`, ...(kind === 'network' ? { schemaVersion: 1, schema } : { fields: ['subject'] }) }))
   if (kind === 'channels') return { version: 1, kind, schedule: null, channels, gates: [], values: [], ports: null }
-  return { version: 1, kind, formatVersion: 3, channels, members: ['read', 'summarize', 'send'].map((pod, index) => ({ pod, source: index ? null : { schedule: null }, serialCase: true })), gates: [], joins: [], values: [], legacyVariables: [], collections: [], artifacts: [], calls: [] }
+  return { version: 1, kind, formatVersion: 6, channels, members: ['read', 'summarize', 'send'].map((pod, index) => ({ pod, source: index ? null : { schedule: null }, serialCase: true })), routes: [], joins: [], feedback: [] as unknown[], values: [], legacyVariables: [], collections: [], artifacts: [], calls: [] }
 }
 function validate(value: unknown, fixture: { manifest: PortableManifest, composition: PortableComposition }) {
   return validatePortableCompositionDocument(value, fixture.composition, fixture.manifest)
@@ -56,14 +56,15 @@ describe('portable composition documents', () => {
     expect(() => validate(document('channels'), value)).toThrow('contract-missing')
   })
 
-  it('carries bounded feedback only in format version 4 and keeps undeclared loops invalid', () => {
+  it('carries bounded feedback in the current format, refuses older formats and keeps undeclared loops invalid', () => {
     const value = fixture('network'); value.manifest.pods[2]!.contract!.gives = ['step.one']
     expect(() => validate(document('network'), value)).toThrow('cycle')
     const feedback = [{ id: 'again', pod: 'send', channel: 'step.one', delayMs: 1000, maxHops: 2, maxCaseAgeMs: 3600000 }]
-    const source = { ...document('network'), formatVersion: 4, feedback }
+    const source = { ...document('network'), feedback }
     expect(validate(source, value)).toEqual(source)
-    expect(() => validate({ ...document('network'), feedback }, value)).toThrow('native format version')
-    expect(() => validate({ ...document('network'), formatVersion: 4 }, value)).toThrow('native format version')
+    const { routes: _routes, ...legacy } = source
+    expect(() => validate({ ...legacy, formatVersion: 4, gates: [] }, value)).toThrow('fields')
+    expect(() => validate({ ...source, formatVersion: 5 }, value)).toThrow('older format')
     expect(() => validate({ ...source, feedback: [{ ...feedback[0]!, pod: 'read' }] }, value)).toThrow('consumer output channel')
     expect(() => validate({ ...source, feedback: [{ ...feedback[0]!, maxHops: 4 }] }, value)).toThrow('Invalid bounded feedback')
   })

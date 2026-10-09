@@ -182,7 +182,7 @@
     "summary": "Read 6 sampled messages and emitted 0 changed provider versions. No mailbox writes."
    },
    "runs": 10,
-   "collection": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
+   "automation": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
    "queue": {
     "blocked": 0,
     "error": null
@@ -215,7 +215,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
+   "automation": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
    "queue": {
     "blocked": 0,
     "error": null
@@ -252,7 +252,7 @@
     "summary": "List filter completed"
    },
    "runs": 10,
-   "collection": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
+   "automation": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
    "queue": {
     "blocked": 0,
     "error": null
@@ -302,7 +302,7 @@
     "summary": "Triage completed"
    },
    "runs": 10,
-   "collection": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
+   "automation": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
    "queue": {
     "blocked": 0,
     "error": null
@@ -343,7 +343,7 @@
     "summary": "Categorisation completed"
    },
    "runs": 10,
-   "collection": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
+   "automation": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
    "queue": {
     "blocked": 0,
     "error": null
@@ -376,7 +376,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
+   "automation": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
    "queue": {
     "blocked": 0,
     "error": null
@@ -409,7 +409,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
+   "automation": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
    "queue": {
     "blocked": 0,
     "error": null
@@ -442,7 +442,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
+   "automation": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
    "queue": {
     "blocked": 0,
     "error": null
@@ -475,7 +475,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
+   "automation": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
    "queue": {
     "blocked": 0,
     "error": null
@@ -513,7 +513,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
+   "automation": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
    "queue": {
     "blocked": 0,
     "error": null
@@ -549,7 +549,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
+   "automation": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
    "queue": {
     "blocked": 0,
     "error": null
@@ -601,7 +601,7 @@
     "summary": "No pending mail archive decisions"
    },
    "runs": 50,
-   "collection": "b7b6df51-5651-4d82-a79f-960dc84f5087",
+   "automation": "b7b6df51-5651-4d82-a79f-960dc84f5087",
    "queue": {
     "blocked": 0,
     "error": null
@@ -647,7 +647,7 @@
     "summary": "Calendar and issue sources collected for 2026-10-06"
    },
    "runs": 1,
-   "collection": "b7b6df51-5651-4d82-a79f-960dc84f5087",
+   "automation": "b7b6df51-5651-4d82-a79f-960dc84f5087",
    "queue": {
     "blocked": 0,
     "error": null
@@ -687,7 +687,7 @@
     "summary": "German editorial report ready for 2026-10-06"
    },
    "runs": 1,
-   "collection": "b7b6df51-5651-4d82-a79f-960dc84f5087",
+   "automation": "b7b6df51-5651-4d82-a79f-960dc84f5087",
    "queue": {
     "blocked": 0,
     "error": null
@@ -748,7 +748,7 @@
     "summary": "Telegram delivery confirmed for 2026-10-06; message 245"
    },
    "runs": 1,
-   "collection": "b7b6df51-5651-4d82-a79f-960dc84f5087",
+   "automation": "b7b6df51-5651-4d82-a79f-960dc84f5087",
    "queue": {
     "blocked": 0,
     "error": null
@@ -819,7 +819,7 @@
     "summary": "Läuft seit 13:01"
    },
    "runs": 6,
-   "collection": null,
+   "automation": null,
    "queue": {
     "blocked": 0,
     "error": null
@@ -885,7 +885,7 @@
     "summary": "Unchanged: 204 tasks. No model call or Telegram message."
    },
    "runs": 30,
-   "collection": null,
+   "automation": null,
    "queue": {
     "blocked": 0,
     "error": null
@@ -939,7 +939,7 @@
     "summary": "zaz queue empty; no model call"
    },
    "runs": 150,
-   "collection": null,
+   "automation": null,
    "queue": {
     "blocked": 0,
     "error": null
@@ -974,7 +974,7 @@
    },
    "lastRun": null,
    "runs": 0,
-   "collection": null,
+   "automation": null,
    "queue": {
     "blocked": 0,
     "error": null
@@ -1003,7 +1003,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": null,
+   "automation": null,
    "queue": {
     "blocked": 0,
     "error": null
@@ -1032,7 +1032,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": null,
+   "automation": null,
    "queue": {
     "blocked": 0,
     "error": null
@@ -1071,7 +1071,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
+   "automation": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1104,7 +1104,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
+   "automation": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1137,7 +1137,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
+   "automation": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1170,7 +1170,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
+   "automation": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1207,7 +1207,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
+   "automation": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1240,7 +1240,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
+   "automation": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1273,7 +1273,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
+   "automation": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1306,7 +1306,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
+   "automation": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1339,7 +1339,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
+   "automation": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1370,7 +1370,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
+   "automation": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1406,7 +1406,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
+   "automation": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1472,7 +1472,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "2742bcf6-0606-414a-975f-e71e3cf4d9ad",
+   "automation": "2742bcf6-0606-414a-975f-e71e3cf4d9ad",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1503,7 +1503,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "1dba7a24-54ec-4c55-aef1-3a94696d19d3",
+   "automation": "1dba7a24-54ec-4c55-aef1-3a94696d19d3",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1536,7 +1536,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "1dba7a24-54ec-4c55-aef1-3a94696d19d3",
+   "automation": "1dba7a24-54ec-4c55-aef1-3a94696d19d3",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1567,7 +1567,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "1dba7a24-54ec-4c55-aef1-3a94696d19d3",
+   "automation": "1dba7a24-54ec-4c55-aef1-3a94696d19d3",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1598,7 +1598,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "1dba7a24-54ec-4c55-aef1-3a94696d19d3",
+   "automation": "1dba7a24-54ec-4c55-aef1-3a94696d19d3",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1629,7 +1629,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "collection": "1dba7a24-54ec-4c55-aef1-3a94696d19d3",
+   "automation": "1dba7a24-54ec-4c55-aef1-3a94696d19d3",
    "queue": {
     "blocked": 0,
     "error": null
@@ -1638,7 +1638,7 @@
    "approvals": []
   }
  ],
- "collections": [
+ "automations": [
   {
    "id": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
    "revision": 1,

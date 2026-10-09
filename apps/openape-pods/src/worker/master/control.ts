@@ -28,7 +28,7 @@ import { inspectGraph } from '../workflows/items'
 import type { WorkflowDefinition } from '../../contracts/workflows'
 
 export class MasterControl {
-  setup(): MasterSetup { return new MasterSetup(this.store, this.resources) }
+  setup(): MasterSetup { return new MasterSetup(this.store) }
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly dispatcher: RunDispatcher, private readonly scheduler: Scheduler, private readonly runtime: AgentRuntime, private readonly workflows?: WorkflowEngine, private readonly startRun: (podId: string, operationId: string) => string = (podId, operationId) => dispatcher.start(podId, { reason: 'manual', eventIds: [], operationId })) {}
   async execute(key: string, value: unknown, signal: AbortSignal, context?: Conversation): Promise<unknown> {
     if (!key || key.length > 300) throw new Error('Invalid master operation identity')
@@ -162,7 +162,7 @@ export class MasterControl {
     const pod = this.store.getPod(action.podId)
     if (action.action === 'inspect') {
       const scripts = new ScriptWorkspace(this.store, this.resources, this).view(pod.id)
-      return { jev: jevAvailability(this.store), pod, script: scripts.source, resources: modelResources(this.resources.list(pod.id), true), variables: new PodVariables(this.store).list(pod.id), schedule: this.scheduler.view(pod.id), organization: this.organization(pod.id), versions: scripts.versions, runs: this.dispatcher.view(pod.id).runs, checkpoint: this.store.checkpoint(pod.id), setup: this.setup().proposals(pod.id) }
+      return { jev: jevAvailability(this.store), pod, script: scripts.source, resources: modelResources(this.resources.list(pod.id), true), variables: new PodVariables(this.store).list(pod.id), schedule: this.scheduler.view(pod.id), organization: this.organization(pod.id), versions: scripts.versions, runs: this.dispatcher.view(pod.id).runs, checkpoint: this.store.checkpoint(pod.id) }
     }
     if (action.action === 'setVariable') {
       new PodVariables(this.store).save(pod.id, action.name, action.value, action.variableRevision)
@@ -213,13 +213,6 @@ export class MasterControl {
       const hash = action.action === 'rollback' ? action.hash : draft?.script_hash as string
       new WorkspaceDetails(this.store, this.resources).execute({ type: 'activate', podId: pod.id, hash, expectedActive: action.action === 'rollback' ? action.expectedActive : pod.activeScript, assignmentRevision: pod.bindingRevision })
       return { activeScript: hash, previousScript: pod.activeScript }
-    }
-    if (action.action === 'requestAccess') {
-      const existing = this.store.db.prepare('SELECT id FROM access_proposals WHERE pod_id=? AND body=? AND state=\'pending\'').get(pod.id, JSON.stringify(action.request))
-      if (existing) return { id: existing.id, status: 'pending-owner-review', request: action.request }
-      const id = randomUUID()
-      this.store.db.prepare('INSERT INTO access_proposals VALUES(?,?,?,\'pending\')').run(id, pod.id, JSON.stringify(action.request))
-      return { id, status: 'pending-owner-review', request: action.request }
     }
     throw new Error('Master action has no implementation')
   }

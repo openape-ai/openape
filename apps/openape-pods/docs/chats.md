@@ -89,12 +89,12 @@ The legacy change review (`changes`, `retireChange`, Apply changes and the
 pending-owner-review receipts) is removed (issue 1455). Every action applies
 directly; grants are decided only at the identity provider. Stored
 `control_changes` rows are no longer read or applied and remain until the
-baseline schema drops them. `setup` can resolve a proposal against actual
-assigned resources or decline it; it creates no execution permission. New `requestAccess` proposals are
-rejected on the Codex surface in favor of direct resource administration.
+baseline schema drops them. Access proposals are gone as well: `requestAccess`
+is refused, and Codex configures access directly through resources, program,
+importSecret and requestSecret. Retained proposal rows are history only.
 
-The retained chat registry and master service keep stored history, setup
-proposals, descriptions and the hidden Codex selection context. There is no
+The retained chat registry and master service keep stored history,
+descriptions and the hidden Codex selection context. There is no
 in-app model turn any more: `send`, `steer`, `begin` and `cancel`, the in-app
 `pods_control` tool and the conversation authority are removed, so every
 assistant mutation enters through the MCP server and its owner session. Backup/restore keeps history,

@@ -1,7 +1,7 @@
 import { descriptionSummary } from '../../contracts/description'
 import { deriveEdges } from '../../contracts/graphs'
 import type { GraphContract, GraphGate } from '../../contracts/graphs'
-import type { MapCollection, MapEdge, MapGate, MapPod, MapResource, MapRun, MapSchedule, MapSystem, MapView } from '../../contracts/map-view'
+import type { MapAutomation, MapEdge, MapGate, MapPod, MapResource, MapRun, MapSchedule, MapSystem, MapView } from '../../contracts/map-view'
 import { parseRunApproval } from '../../contracts/activity'
 import { parseManifest } from '../storage/database'
 import type { PodDatabase } from '../storage/database'
@@ -48,9 +48,9 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
   const systems = new Map<string, MapSystem & { methods?: Set<string> }>()
   const edges: MapEdge[] = []
   const pods: MapPod[] = []
-  const collectionOf = new Map<string, string>()
+  const automationOf = new Map<string, string>()
   const sourceSchedules = new Map<string, MapSchedule>()
-  const collections: MapCollection[] = []
+  const automations: MapAutomation[] = []
 
   // Persistent networks: definition from the current revision, flows from accepted events, choices and gate tasks.
   for (const row of db.prepare('SELECT n.id,n.name,n.state,n.group_id,n.revision,r.contract FROM networks n JOIN network_revisions r ON r.network_id=n.id AND r.revision=n.revision ORDER BY n.created_at,n.id').all()) {
@@ -58,7 +58,7 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
     // A revision written before member contracts were pinned lists its members only in the table.
     const definition = { routes: stored.routes ?? [], members: stored.members ?? db.prepare('SELECT pod_id FROM network_members WHERE network_id=? ORDER BY rowid').all(row.id!).map(member => ({ podId: member.pod_id as string, contract: contractOf(member.pod_id as string) ?? { takes: [], gives: [], summary: '' }, source: null })) }
     const members = definition.members.map(member => member.podId)
-    for (const member of members) collectionOf.set(member, row.id as string)
+    for (const member of members) automationOf.set(member, row.id as string)
     const flows = counter(db.prepare('SELECT channel,count(*) AS count FROM network_events WHERE network_id=? AND accepted_at>=? GROUP BY channel').all(row.id!, from), 'channel')
     const open = counter(db.prepare('SELECT gate_key,count(*) AS count FROM network_choices WHERE network_id=? AND network_revision=? AND decided_at IS NULL GROUP BY gate_key').all(row.id!, row.revision!), 'gate_key')
     const batches = db.prepare('SELECT c.gate_key,t.state,count(*) AS count FROM network_gate_tasks t JOIN network_gate_controls c ON c.task_id=t.id WHERE t.network_id=? AND t.network_revision=? GROUP BY c.gate_key,t.state').all(row.id!, row.revision!)
@@ -68,7 +68,7 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
       if (member.source?.schedule) sourceSchedules.set(member.podId, { spec: member.source.schedule, enabled: row.state === 'active' })
     }
     const latest = db.prepare('SELECT r.state,r.started_at,r.finished_at,r.summary FROM network_invocations i JOIN runs r ON r.id=i.run_id WHERE i.network_id=? ORDER BY r.started_at DESC LIMIT 1').get(row.id!)
-    collections.push({ id: row.id as string, revision: Number(row.revision), kind: 'network', bounded: false, name: row.name as string, group: groupName(row.group_id), groupId: row.group_id as string, state: row.state as MapCollection['state'], members, schedule: source ? { spec: source.source!.schedule, enabled: row.state === 'active' } : null, counts: counter(db.prepare('SELECT state,count FROM network_queue_counts WHERE network_id=?').all(row.id!), 'state', 'count'), flows, gates, lastRun: latest && !published ? run(latest) : null })
+    automations.push({ id: row.id as string, revision: Number(row.revision), kind: 'network', bounded: false, name: row.name as string, group: groupName(row.group_id), groupId: row.group_id as string, state: row.state as MapAutomation['state'], members, schedule: source ? { spec: source.source!.schedule, enabled: row.state === 'active' } : null, counts: counter(db.prepare('SELECT state,count FROM network_queue_counts WHERE network_id=?').all(row.id!), 'state', 'count'), flows, gates, lastRun: latest && !published ? run(latest) : null })
     for (const edge of deriveEdges(definition.members.map(member => ({ podId: member.podId, contract: member.contract })), definition.routes)) edges.push({ from: edge.from, to: edge.to, type: 'channel', channel: edge.channel, flow: flows[edge.channel] ?? 0 })
   }
 
@@ -76,7 +76,7 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
   for (const row of db.prepare('SELECT id,revision,name,nodes,schedule,enabled,paused,mode,group_id FROM workflows WHERE archived=0 ORDER BY rowid').all()) {
     const nodes = JSON.parse(row.nodes as string) as { podId: string, after: string[] }[]
     const members = nodes.map(node => node.podId)
-    for (const member of members) collectionOf.set(member, row.id as string)
+    for (const member of members) automationOf.set(member, row.id as string)
     const bounded = row.mode === 'channels'
     const runs = db.prepare('SELECT count(*) AS count FROM workflow_runs WHERE workflow_id=? AND started_at>=?').get(row.id!, from)!.count as number
     const latest = db.prepare('SELECT state,started_at,finished_at,reason AS summary FROM workflow_runs WHERE workflow_id=? ORDER BY started_at DESC LIMIT 1').get(row.id!)
@@ -84,7 +84,7 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
     const gateRows = db.prepare('SELECT definition FROM workflow_gates WHERE workflow_id=? ORDER BY rowid').all(row.id!).map(gate => JSON.parse(gate.definition as string) as GraphGate)
     const gates = gateRows.map(gate => mapGate(gate, Number(db.prepare('SELECT count(*) AS count FROM graph_deliveries d JOIN graph_items i ON i.id=d.item_id WHERE i.workflow_id=? AND d.node=? AND d.state=\'pending\'').get(row.id!, `gate:${gate.key}`)!.count), counter(db.prepare('SELECT state,count(*) AS count FROM graph_gate_batches WHERE workflow_id=? AND gate=? GROUP BY state').all(row.id!, gate.key), 'state')))
     const active = row.enabled === 1 && row.paused === 0
-    collections.push({ id: row.id as string, revision: Number(row.revision), kind: bounded ? 'network' : 'chain', bounded, name: row.name as string, group: groupName(row.group_id), groupId: row.group_id as string | null, state: active ? 'active' : 'paused', members, schedule: row.schedule ? { spec: JSON.parse(row.schedule as string), enabled: active } : null, counts: {}, flows, gates, lastRun: latest ? run(latest) : null })
+    automations.push({ id: row.id as string, revision: Number(row.revision), kind: bounded ? 'network' : 'chain', bounded, name: row.name as string, group: groupName(row.group_id), groupId: row.group_id as string | null, state: active ? 'active' : 'paused', members, schedule: row.schedule ? { spec: JSON.parse(row.schedule as string), enabled: active } : null, counts: {}, flows, gates, lastRun: latest ? run(latest) : null })
     if (bounded) {
       const contracts = members.flatMap(podId => contractOf(podId) ? [{ podId, contract: contractOf(podId)! }] : [])
       for (const edge of deriveEdges(contracts, gateRows)) edges.push({ from: edge.from, to: edge.to, type: 'channel', channel: edge.channel, flow: flows[edge.channel] ?? 0 })
@@ -159,29 +159,29 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
       id: pod.id, name: pod.name, revision: pod.revision, script: pod.activeScript, description: descriptions.get(pod.id) || null, group: membership?.name as string ?? null, groupId: membership?.id as string ?? null, lifecycle: pod.lifecycle, draft: pod.activeScript === null,
       kind, ai, channels: { takes: contract?.takes ?? [], gives: contract?.gives ?? [] }, resources: mapped, secrets,
       schedule: schedules.get(pod.id) ?? sourceSchedules.get(pod.id) ?? null, lastRun: local ? lastRuns.get(pod.id) ?? null : null, runs: local ? runTotals[pod.id] ?? 0 : 0,
-      collection: collectionOf.get(pod.id) ?? null, queue: local ? { blocked: Number(queue?.count ?? 0), error: (queue?.error as string | null) ?? null } : { blocked: 0, error: null },
+      automation: automationOf.get(pod.id) ?? null, queue: local ? { blocked: Number(queue?.count ?? 0), error: (queue?.error as string | null) ?? null } : { blocked: 0, error: null },
       ...(local && scriptUpdates.get(pod.id)?.script === pod.activeScript ? { scriptUpdate: scriptUpdates.get(pod.id) } : {}),
       unknown: unknownEffects.filter(row => local && row.pod_id === pod.id).map(row => ({ key: String(row.effect_key), runId: String(row.run_id) })),
       approvals: approvals.filter(row => local && row.pod_id === pod.id).map(row => parseRunApproval(JSON.parse(row.data as string))).map((approval, index) => ({ grantId: approval.grantId, title: approval.title, runId: String(approvals.filter(row => row.pod_id === pod.id)[index]!.run_id) })),
     })
   }
 
-  const standalone = pods.filter(pod => !pod.collection)
-  const active = collections.filter(collection => collection.state === 'active').length + standalone.filter(pod => pod.lifecycle === 'active' && pod.schedule?.enabled).length
+  const standalone = pods.filter(pod => !pod.automation)
+  const active = automations.filter(automation => automation.state === 'active').length + standalone.filter(pod => pod.lifecycle === 'active' && pod.schedule?.enabled).length
   const degraded = pods.filter(pod => pod.lifecycle !== 'archived' && !hidden.has(pod.id) && (pod.queue.blocked > 0 || ['failed', 'completedWithGaps'].includes(settled.get(pod.id) ?? ''))).map(pod => ({ podId: pod.id, reason: pod.queue.blocked > 0 ? pod.queue.error ?? 'blocked' : settled.get(pod.id)! }))
   const decisions: MapView['kpis']['decisions'] = []
-  for (const collection of collections) {
-    for (const gate of collection.gates) {
+  for (const automation of automations) {
+    for (const gate of automation.gates) {
       const count = gate.kind === 'choose' ? gate.open : gate.batches.pending ?? 0
-      if (count) decisions.push({ networkId: collection.id, gate: gate.key, title: gate.title, kind: gate.kind, count })
+      if (count) decisions.push({ networkId: automation.id, gate: gate.key, title: gate.title, kind: gate.kind, count })
     }
   }
   const unknownDeliveries = Number(db.prepare('SELECT count(*) AS count FROM effect_ledger WHERE operation=\'http.request\' AND state=\'unknown\'').get()!.count) + Number(db.prepare('SELECT count(*) AS count FROM network_deliveries WHERE state=\'unknown\'').get()!.count)
   return {
     at, window: { from, to: at },
-    kpis: { active, paused: collections.length + standalone.length - active, degraded, decisions, unknownDeliveries },
+    kpis: { active, paused: automations.length + standalone.length - active, degraded, decisions, unknownDeliveries },
     systems: Array.from(systems.values(), ({ methods, ...item }) => ({ ...item, how: methods ? [...methods].sort().join(', ') : item.how })),
-    pods, collections, edges,
+    pods, automations, edges,
   }
 }
 

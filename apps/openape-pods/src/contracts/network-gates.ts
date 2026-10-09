@@ -90,3 +90,21 @@ export function parseNetworkGateCoverage(value: unknown): NetworkGateCoverage {
   if (new Set(items.map(item => item.deliveryId)).size !== items.length) throw new Error('Duplicate network gate coverage item')
   return { manifest, grantId: input.grantId, items }
 }
+
+/** A finished batch whose item grants the desktop releases at the IdP; only grants the owner approved as always are still active there. */
+export interface NetworkGateRelease { taskId: string, podId: string, owner: Owner, manifest: NetworkGateManifest, grants: { key: string, id: string }[] }
+export function parseNetworkGateReleases(value: unknown): NetworkGateRelease[] {
+  if (!Array.isArray(value) || value.length > 16) throw new Error('Invalid network gate release list')
+  return value.map((entry) => {
+    const input = networkDataObject(entry)
+    if (Object.keys(input).some(key => !['taskId', 'podId', 'owner', 'manifest', 'grants'].includes(key))) throw new Error('Invalid network gate release fields')
+    const manifest = parseNetworkGateManifest(input.manifest)
+    if (input.taskId !== manifest.id || input.podId !== manifest.podId || !Array.isArray(input.grants) || !input.grants.length || input.grants.length > manifest.items.length) throw new Error('Invalid network gate release')
+    const grants = input.grants.map((value) => {
+      const grant = networkDataObject(value)
+      if (Object.keys(grant).length !== 2 || !manifest.items.some(item => item.deliveryId === grant.key) || typeof grant.id !== 'string' || !/^[\w-]{1,128}$/.test(grant.id)) throw new Error('Invalid network gate release grant')
+      return { key: grant.key as string, id: grant.id }
+    })
+    return { taskId: manifest.id, podId: manifest.podId, owner: parseOwner(input.owner), manifest, grants }
+  })
+}

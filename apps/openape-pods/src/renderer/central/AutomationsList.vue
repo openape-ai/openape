@@ -14,7 +14,7 @@ const rows = computed(() => {
   const visible = visibleNodes(model, props.group, props.layers)
   return model.nodes.filter(item => (item.kind === 'pod' || item.kind === 'collapsed') && visible.has(item.id)).map((item) => {
     const pod = props.view.pods.find(pod => pod.id === item.id)
-    const collection = props.view.collections.find(collection => collection.id === item.id)
+    const automation = props.view.automations.find(automation => automation.id === item.id)
     const name = (id: string) => model.nodes.find(node => node.id === id)?.name ?? id
     const facts = {
       reads: model.links.filter(link => link.type === 'read' && link.to === item.id).map(link => ({ name: name(link.from) })),
@@ -24,7 +24,7 @@ const rows = computed(() => {
     return {
       id: item.id, name: item.name, description: pod?.description ?? '', group: item.group === ungrouped ? t('without group') : item.group ?? '',
       kind: item.kind === 'collapsed' ? t('collapsed') : item.ai ? t('AI') : t('rules'),
-      cadence: item.kind === 'collapsed' ? cadence(collection?.schedule ?? null) : cadence(pod?.schedule ?? null, pod?.channels.takes),
+      cadence: item.kind === 'collapsed' ? cadence(automation?.schedule ?? null) : cadence(pod?.schedule ?? null, pod?.channels.takes),
       reads: facts.reads.map(fact => fact.name).join(', ') || '–', writes: facts.writes.map(fact => fact.name).join(', ') || '–',
       channels: facts.channels.map(fact => `${fact.direction === 'gives' ? '→' : '←'} ${fact.channel}`),
       last: item.paused ? t('paused') : pod?.lastRun ? (pod.lastRun.state === 'running' ? t('running') : `${ago(pod.lastRun.at, props.now)} · ${diagnostic(pod.lastRun.state)}`) : '–',

@@ -12,6 +12,8 @@ export const diagnosticPatterns = [
   'Portable network diagnostics: {p0}',
   'Portable graph diagnostics: {p0}',
   'Feedback exceeded {p0} hops',
+  'Unsupported stored network format {p0}',
+  'Network {p0} revision {p1} holds an approval gate without its route; restore the previous version of OpenApe Pods',
   'Tool output exceeded {p0} bytes; read smaller pages, for example with --limit',
   'Feedback case is older than {p0} ms',
   'Definition update blocked: {p0}. The current version remains pinned.',

@@ -1,4 +1,5 @@
 import { inboxOutboxSchema } from './inbox-outbox-schema.ts'
+import { upgradeStoredNetworkDefinitions } from './network-format-migration.ts'
 import { networkRoutingSchema } from './network-routing-schema.ts'
 import { definitionSchema } from './definition-schema.ts'
 import { aliasSchema, sharingSchema } from './sharing-schema.ts'
@@ -48,7 +49,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 41
+export const schemaVersion = 42
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -358,6 +359,7 @@ PRAGMA user_version=27;`)
       if (version < 39) this.db.exec('CREATE TABLE secret_requests(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE, alias TEXT NOT NULL, purpose TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN (\'requested\',\'filled\',\'collected\',\'expired\',\'failed\')), expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, error TEXT); PRAGMA user_version=39;')
       if (version < 40) this.db.exec(`${networkGateGrantSchema} ${migrateNetworkGateGrants} PRAGMA user_version=40;`)
       if (version < 41) this.db.exec(`${inboxOutboxSchema} PRAGMA user_version=41;`)
+      if (version < 42) { upgradeStoredNetworkDefinitions(this.db); this.db.exec('PRAGMA user_version=42;') }
     })
   }
 

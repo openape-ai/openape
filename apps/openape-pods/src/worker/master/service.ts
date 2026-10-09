@@ -10,7 +10,7 @@ import type { AgentGatewayServices } from '../agent/gateway'
 import type { MasterControl } from './control'
 
 /**
- * Retained conversation records, setup proposals and Pod descriptions. There is no in-app model turn:
+ * Retained conversation records and Pod descriptions. There is no in-app model turn:
  * every Pod mutation by an assistant enters through the MCP server and its owner session.
  */
 export class MasterService {
@@ -43,26 +43,16 @@ export class MasterService {
     return { conversation, activeConversationId: new ChatRegistry(this.store).view().activeConversationId, nextBefore: messages.length === 100 ? messages[0]!.sequence : null, adoption: boundPodId ? new LegacyChatAdoption(this.store).preview(boundPodId) : null, ...(requested.startsWith('creation:') ? { creationId: requested.slice(9), boundPodId } : {}), description: boundPodId ? this.descriptions.view(boundPodId) : null, initialRequest: boundPodId ? conversations.initial(boundPodId) : null, ...(boundPodId ? { scriptState: this.control.setup().scriptState(boundPodId) } : {}), connected: !!this.provider, state: session.state as MasterView['state'], error: session.error as string | null,
       messages,
       drafts: this.store.db.prepare('SELECT d.*,p.name FROM script_drafts d JOIN pods p ON p.id=d.pod_id WHERE d.pod_id IN (SELECT value FROM json_each(?)) ORDER BY d.rowid DESC LIMIT 20').all(JSON.stringify(podIds)).map(row => ({ validationError: this.store.db.prepare('SELECT error FROM master_actions WHERE json_extract(request,\'$.action\')=\'validate\' AND json_extract(request,\'$.draftId\')=? AND json_extract(request,\'$.draftRevision\')=? ORDER BY rowid DESC LIMIT 1').get(row.id, row.revision)?.error as string | null ?? null, id: row.id as string, podId: row.pod_id as string, name: row.name as string, revision: row.revision as number, code: row.code as string, capabilities: JSON.parse(row.capabilities as string) as string[], validation: row.validation as string | null, hash: row.script_hash as string | null })),
-      proposals: podIds.flatMap(id => this.control.setup().proposals(id)).slice(0, 100),
     }
   }
 
   async execute(command: MasterCommand): Promise<MasterView> {
-    const conversations = new MasterConversations(this.store)
     const registry = new ChatRegistry(this.store)
     const selected = command.conversationId ? command.type === 'list' ? registry.get(command.conversationId) : registry.assertRevision(command.conversationId, command.contextRevision!) : null
-    if (selected && 'podId' in command && ['answerSetup', 'resolveSetup', 'adopt', 'summarize'].includes(command.type) && !selected.context.pods.some(pod => pod.id === command.podId)) throw new Error('Setup action is outside the conversation context')
-    if (command.type === 'answerSetup') { this.control.setup().answer(command); return this.view(selected?.scope ?? command.podId) }
-    if (command.type === 'resolveSetup') { await this.control.setup().resolve(command); return this.view(selected?.scope ?? command.podId) }
+    if (selected && 'podId' in command && ['adopt', 'summarize'].includes(command.type) && !selected.context.pods.some(pod => pod.id === command.podId)) throw new Error('Setup action is outside the conversation context')
     if (command.type === 'adopt') { new LegacyChatAdoption(this.store).adopt(command.podId, command.hash); this.descriptions.request(command.podId); this.descriptions.start(); return this.view(selected?.scope ?? command.podId) }
     if (command.type === 'summarize') { this.descriptions.request(command.podId, true); this.descriptions.start(); return this.view(selected?.scope ?? command.podId) }
-    if (command.type === 'list') return this.view(selected?.scope ?? command.podId ?? '', command.creationId, command.before)
-    const scope = conversations.resolve(selected?.scope ?? (command.creationId ? `creation:${command.creationId}` : command.podId ?? ''))
-    const conversation = registry.ensure(scope)
-    const proposal = this.store.db.prepare('SELECT pod_id FROM access_proposals WHERE id=?').get(command.id)
-    if (!proposal || !conversation.context.pods.some(pod => pod.id === proposal.pod_id)) throw new Error('Access proposal is outside the conversation context')
-    this.store.db.prepare('UPDATE access_proposals SET state=\'declined\' WHERE id=? AND state=\'pending\'').run(command.id)
-    return this.view(scope)
+    return this.view(selected?.scope ?? command.podId ?? '', command.creationId, command.before)
   }
 
   async stop(): Promise<void> { await this.descriptions.stop() }

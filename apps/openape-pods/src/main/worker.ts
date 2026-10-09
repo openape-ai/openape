@@ -10,6 +10,7 @@ import { parseCentralNetworkRead } from '../contracts/central-networks'
 import { parseDefinitionCommand, parseDefinitionsView } from '../contracts/definitions'
 import type { DefinitionCommand, DefinitionsView } from '../contracts/definitions'
 import type { NetworkGateManifest } from '../contracts/network-gates'
+import { parseNetworkGateReleases } from '../contracts/network-gates'
 import { resolveSshTarget, sshGrantArgv } from './ssh/configuration'
 import { invokeSsh } from './ssh/invoke'
 import { AuthorityError, InfrastructureError, NonRetryableError, retryInfrastructure } from '../contracts/infrastructure'
@@ -17,7 +18,7 @@ import type { InfrastructureFailure } from '../contracts/infrastructure'
 import { MailArchiveService } from './mail/archive/service'
 import { ArchiveStore } from './mail/archive/store'
 import { handleMailArchive } from './mail/archive/handler'
-import { handleGate } from './gates/handler'
+import { handleGate, releaseNetworkGrants } from './gates/handler'
 import { assignedJev, parseJevRequest, typesafeOrigin } from '../contracts/jev'
 import { executeJev } from './connections/jev-service'
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
@@ -134,6 +135,8 @@ export class FixtureWorker {
   private programs: ProgramManager | null = null
   private connections: ConnectionManager | null = null
   private secretsGate: SecretsGate | null = null
+  // When a failed grant release may be tried again; failures never block processing.
+  private readonly releaseRetry = new Map<string, { at: number, failures: number }>()
   private providerGateway: Awaited<ReturnType<typeof startAgentGateway>> | null = null
   private providerAbort = new AbortController()
   private jevAttempts = new Map<string, number>()
@@ -350,6 +353,26 @@ export class FixtureWorker {
   }
 
   inboxOutbox(command: InboxOutboxCommand): Promise<unknown> { return this.dispatch({ inboxOutbox: command }) }
+
+  /** Revokes always grants of finished network approval batches at the IdP; a failure is logged and retried later with backoff. */
+  async releaseNetworkGrants(signal: AbortSignal): Promise<void> {
+    if (!this.connections) return
+    for (const release of parseNetworkGateReleases(await this.dispatch({ networkGateRelease: { type: 'list' } }))) {
+      const retry = this.releaseRetry.get(release.taskId)
+      if (retry && retry.at > Date.now()) continue
+      try {
+        await releaseNetworkGrants(release, this.connections, signal)
+        await this.dispatch({ networkGateRelease: { type: 'released', taskId: release.taskId } })
+        this.releaseRetry.delete(release.taskId)
+      }
+      catch (error) {
+        const failures = (retry?.failures ?? 0) + 1
+        this.releaseRetry.set(release.taskId, { at: Date.now() + Math.min(60 * 60000, 60000 * 2 ** failures), failures })
+        console.error(`Could not release the approval grants of network gate batch ${release.taskId}`, error)
+      }
+    }
+  }
+
   async remote(command: RemoteInternal): Promise<unknown> { return this.dispatch({ remote: command }) }
   async remoteOwner(): Promise<{ owner: Owner, email: string }> {
     await this.setupReady
@@ -453,7 +476,6 @@ export class FixtureWorker {
       return { jev: (await this.resources({ type: 'list', podId: command.podId })).jev }
     }
     if (action.kind === 'description') return { description: (await this.details(action.command)).description }
-    if (action.kind === 'setup') { await this.master(action.command); return { status: 'applied' } }
     if (action.kind === 'scripts') {
       const view = await this.scripts(action.command)
       return { pod: view.pod, resourceEpoch: view.resourceEpoch, credentialAliases: view.credentialAliases, drafts: view.drafts, versions: view.versions, source: view.source && { ...view.source, evidence: null } }
@@ -595,11 +617,8 @@ export class FixtureWorker {
 
   // Direct reads for the inbox projection: reading never becomes a workspace operation.
   async inboxSources(): Promise<DecisionSources> {
-    const [workspace, networks, workflows, master] = await Promise.all([this.dispatch({ type: 'map' }), this.dispatch({ networks: { type: 'list' } }), this.dispatch({ workflow: { type: 'list' } }), this.dispatch({ master: { type: 'list' } })])
-    const proposals = parseMasterView(master).proposals
-    const podIds = [...new Set(proposals.filter(proposal => proposal.state === 'pending').map(proposal => proposal.podId))]
-    const resources = await Promise.all(podIds.map(async podId => [podId, parseResourceState(await this.dispatch({ resource: { type: 'list', podId } }))] as const))
-    return { map: parseWorkspace(workspace).map ?? null, networks: parseNetworkView(networks), workflows: parseWorkflowView(workflows), proposals, resources: Object.fromEntries(resources), secrets: this.secretsGate ? await this.secretsGate.view() : null }
+    const [workspace, networks, workflows, secrets] = await Promise.all([this.dispatch({ type: 'map' }), this.dispatch({ networks: { type: 'list' } }), this.dispatch({ workflow: { type: 'list' } }), this.secretsGate?.view() ?? null])
+    return { map: parseWorkspace(workspace).map ?? null, networks: parseNetworkView(networks), workflows: parseWorkflowView(workflows), secrets }
   }
 
   // Imported Pods are ordinary local Pods: a connected workspace gives each its own identity as soon as the paused copy exists.
@@ -746,7 +765,7 @@ export class FixtureWorker {
     throw new Error('Unsupported central execution')
   }
 
-  private dispatch(command: { definitions: DefinitionCommand } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { networkGateCheck: { scope: ServiceScope, manifest: NetworkGateManifest, operation: string, grants?: { key: string, id: string }[] } } | { networks: NetworkCommand, ownerOperation?: boolean } | { central: { type: 'snapshot', owner: Owner, networkReads?: boolean } | { type: 'networkRead', owner: Owner, command: NetworkCommand } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { definitions: DefinitionCommand } | { networkGateRelease: { type: 'list' } | { type: 'released', taskId: string } } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { networkGateCheck: { scope: ServiceScope, manifest: NetworkGateManifest, operation: string, grants?: { key: string, id: string }[] } } | { networks: NetworkCommand, ownerOperation?: boolean } | { central: { type: 'snapshot', owner: Owner, networkReads?: boolean } | { type: 'networkRead', owner: Owner, command: NetworkCommand } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     if (this.updateFrozen && !('data' in command && ['prepareUpdate', 'releaseUpdate'].includes(command.data.type))) return Promise.reject(new Error('Pods is preparing an update; retry after restart'))
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
