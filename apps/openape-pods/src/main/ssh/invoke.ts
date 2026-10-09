@@ -54,7 +54,7 @@ export async function invokeSsh(input: { resources: PodResource[], scope: Servic
   const assignment = assignedSsh(resources, scope.podId, scope.capabilities, body)
   const binding = await resolveSshTarget(assignment.target)
   if (JSON.stringify(binding) !== JSON.stringify({ profileHash: assignment.profileHash, target: assignment.target, hosts: assignment.hosts, knownHosts: assignment.knownHosts })) throw new Error('SSH configuration changed; review and reassign this target')
-  const authority = new AgentAuthority(new PodIdentityManager(credentials).connection(assignment.authority.identity, `pods:${scope.podId}`), observe, previous, undefined, input.tokens)
+  const authority = new AgentAuthority(new PodIdentityManager(credentials).connection(assignment.authority.identity, `pods:${scope.podId}`), observe, previous, input.tokens)
   const adapterPath = join(dist, 'vendor/pod-ssh-shapes.toml')
   const adapter = loadAdapter('pod-ssh', adapterPath); const argv = sshGrantArgv(binding)
   const resolved = await resolveCommand(adapter, argv)

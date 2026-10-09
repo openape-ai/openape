@@ -497,9 +497,9 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'resource' in request.command) {
       const resource = parseResourceCommand(request.command.resource, true)
       if (resource.type === 'assignJev') throw new Error('Jev permissions require owner approval')
-      if (resource.type === 'approveJev') registry.assignJev(resource.podId, resource.connectionId, resource.model, resource.maxAttempts, resource.authority, resource.epoch)
-      if (resource.type === 'approveSsh') registry.assignSsh(resource.podId, resource.binding, resource.authority, resource.epoch)
-      if (resource.type === 'approveHttp') registry.assignHttp(resource.podId, resource.permission, resource.authority, resource.epoch, resource.authentication)
+      if (resource.type === 'bindJev') registry.assignJev(resource.podId, resource.connectionId, resource.model, resource.maxAttempts, resource.authority, resource.epoch)
+      if (resource.type === 'bindSsh') registry.assignSsh(resource.podId, resource.binding, resource.authority, resource.epoch)
+      if (resource.type === 'bindHttp') registry.assignHttp(resource.podId, resource.permission, resource.authority, resource.epoch, resource.authentication)
       if (resource.type === 'assignHttp') throw new Error('HTTP permissions require owner approval')
       if (resource.type === 'saveCredential') throw new Error('Credential values must be stored by the owning main process')
       const variables = new PodVariables(store)

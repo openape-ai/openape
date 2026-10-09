@@ -1,5 +1,3 @@
-import { approveRuntimeGrant } from './runtime-grant'
-import type { AgentConnection } from '../broker/authorization'
 import { parseTypesafeKey, typesafeOrigin } from '../../contracts/jev'
 import { typesafeJSON, verifyTypesafe } from './typesafe'
 import type { Owner } from '@openape/pods-protocol'
@@ -21,9 +19,9 @@ import { PodIdentityManager } from './agent'
 import type { PodIdentityReference } from './agent'
 import { recoverAuthDomains } from './ledger'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
-import { approveCommands } from '../programs/grants'
+import { requestCommands } from '../programs/grants'
 import type { AccountCleanup } from '../../worker/onboarding/reconcile'
-import type { ProgramAuthority } from '../programs/grants'
+import type { GrantRequest } from '../programs/grants'
 
 interface SetupState { connections: ConnectionView[], owner: string | null, complete: boolean }
 interface PodEntry { connectionId: string, prepared: boolean, broker?: PodBrokerConnection, identity?: PodIdentityReference }
@@ -285,22 +283,10 @@ export class ConnectionManager {
     return { permission: resolved.permission, display: resolved.detail.display, authority: { identity: connection.identity, ownerConnection: connection.ownerConnection, grantId: '' } }
   }
 
-  async approveRuntimeGrant(connection: AgentConnection & { ownerConnection: string }, podId: string, grantId: string, signal: AbortSignal, allowed: () => boolean | Promise<boolean>): Promise<void> {
-    const bearer = await this.owner.bearer(connection.ownerConnection, connection.decisionIssuer ?? connection.issuer, connection.owner, signal)
-    await approveRuntimeGrant(connection, podId, grantId, bearer, signal, allowed)
-  }
-
-  async approve(podId: string, adapterPath: string, commands: string[][]): Promise<ProgramAuthority> {
+  /** Requests the assigned commands as the Pod identity; the owner approves at the IdP. */
+  async request(podId: string, adapterPath: string, commands: string[][]): Promise<GrantRequest> {
     const connection = await this.podConnection(podId)
-    if (this.assigning) throw new Error('Another permission review is in progress')
-    this.assigning = true
-    try {
-      const signal = AbortSignal.timeout(120000)
-      const bearer = await this.owner.bearer(connection.ownerConnection, connection.decisionIssuer ?? connection.issuer, connection.owner, signal)
-      const grantId = await approveCommands(connection.identity, new PodIdentityManager(this.credentials), bearer, adapterPath, commands, signal)
-      return { identity: connection.identity, ownerConnection: connection.ownerConnection, grantId }
-    }
-    finally { this.assigning = false }
+    return requestCommands(connection, adapterPath, commands, AbortSignal.timeout(120000))
   }
 
   busy(): boolean { return this.jobs.size > 0 || this.assigning || this.typesafeChanging }
