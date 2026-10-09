@@ -57,7 +57,9 @@ import { PodGrants, commandSpec, httpSpec } from './grants/pod-grants'
 import type { GrantSpec } from './grants/pod-grants'
 import type { OwnerSession } from './connections/owner-session'
 import type { GrantLedgerCommand } from '../worker/resources/grants'
-import type { SandboxLevel, SandboxView } from '../contracts/sandbox'
+import type { SandboxReach, SandboxView } from '../contracts/sandbox'
+import { ownerProtectedPaths } from '../worker/runtime/sandbox'
+import { homedir } from 'node:os'
 import type { ProgramDefinition, ProgramCommand } from '../contracts/programs'
 import type { ProgramInternal } from '../worker/resources/programs'
 import { parseHttpPermission, parseHttpRequest } from '../contracts/http'
@@ -226,7 +228,7 @@ export class FixtureWorker {
     this.providerGateway = await startAgentGateway({ provider: (body, signal) => this.connections!.provider(body, signal), tool: async () => { throw new Error('Model credential gateway has no tools') } }, this.providerAbort.signal)
     const connections = this.connections
     const grants = this.podGrants()!
-    this.programs = new ProgramManager(join(this.root, 'authentication'), runtime.helper, this.credentials!, this.connections, podId => this.resources({ type: 'list', podId }), command => this.dispatch({ program: command }), grants, podId => ({ connection: () => connections.podConnection(podId), ledger: grants.port(podId), level: () => this.sandboxLevel(podId) }))
+    this.programs = new ProgramManager(join(this.root, 'authentication'), runtime.helper, this.credentials!, this.connections, podId => this.resources({ type: 'list', podId }), command => this.dispatch({ program: command }), grants, podId => ({ connection: () => connections.podConnection(podId), ledger: grants.port(podId), reach: () => this.sandboxReach(podId) }))
     await this.connections.initialize(async () => { await this.dispatch({ inspectCredentials: true }); await this.credentials!.reconcileScriptSecrets(await this.dispatch({ credentialInventory: true }) as { id: string, podId: string }[]); await this.finishDeletions() })
     this.secretsGate = new SecretsGate({
       origin: secretsOrigin,
@@ -363,9 +365,9 @@ export class FixtureWorker {
     return this.grants
   }
 
-  /** The effective sandbox level of a Pod: its own and, for a network member, the network's; the more permissive wins. */
-  async sandboxLevel(podId: string): Promise<SandboxLevel> {
-    return (await this.dispatch({ grants: { type: 'sandbox', podId } }) as SandboxView).level
+  /** The effective sandbox reach of a Pod: its own level and, for a network member, the network's (the more permissive wins). */
+  async sandboxReach(podId: string): Promise<SandboxReach> {
+    return { level: (await this.dispatch({ grants: { type: 'sandbox', podId } }) as SandboxView).level, protectedPaths: ownerProtectedPaths(this.root, homedir()) }
   }
 
   async onboarding(command: OnboardingCommand): Promise<OnboardingView> {
@@ -952,7 +954,7 @@ export class FixtureWorker {
         if (!this.credentials || !this.connections) throw new Error('Connection service unavailable')
         this.archiveService ??= new MailArchiveService(new ArchiveStore(join(this.root, 'mail-archive')))
         const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
-        const result = await handleMailArchive({ service: this.archiveService, body: request.body, scope, root: this.root, helper: join(dist, 'native/pods-helper'), credentials: this.credentials, connections: this.connections, check, signal: controller.signal, observe, ledger, level: () => this.sandboxLevel(scope.podId) })
+        const result = await handleMailArchive({ service: this.archiveService, body: request.body, scope, root: this.root, helper: join(dist, 'native/pods-helper'), credentials: this.credentials, connections: this.connections, check, signal: controller.signal, observe, ledger, reach: () => this.sandboxReach(scope.podId) })
         await check(); controller.signal.throwIfAborted(); return result
       }
       if (request.kind === 'jev') {
@@ -1003,7 +1005,7 @@ export class FixtureWorker {
         const connection = await this.connections.podConnection(scope.podId).catch((error: unknown) => { throw notStarted(error) })
         const workspace = await podWorkspace(this.root, scope.podId)
         const directories = directoryPolicy(await assignedDirectories(this.root, scope.podId, state.resources))
-        const result = await invokeProgram(state.resources, scope.podId, request.body, join(dist, 'native/pods-helper'), join(this.root, 'runs', scope.runId), this.credentials, { ...directories, workspace, capabilities: scope.capabilities, signal: controller.signal, assertCurrent: () => controller.signal.throwIfAborted(), registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } }, { connection, ledger, level: await this.sandboxLevel(scope.podId), observe, tokens }, request.kind === 'mailMove' ? 'move' : undefined)
+        const result = await invokeProgram(state.resources, scope.podId, request.body, join(dist, 'native/pods-helper'), join(this.root, 'runs', scope.runId), this.credentials, { ...directories, workspace, capabilities: scope.capabilities, signal: controller.signal, assertCurrent: () => controller.signal.throwIfAborted(), registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } }, { connection, ledger, reach: await this.sandboxReach(scope.podId), observe, tokens }, request.kind === 'mailMove' ? 'move' : undefined)
         await check(); controller.signal.throwIfAborted(); return result
       }
       const assignment = assignedMail(state.resources)

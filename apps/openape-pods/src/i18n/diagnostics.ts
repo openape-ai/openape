@@ -1,6 +1,7 @@
 import type { MessageKey } from './index'
 
 export const diagnosticPatterns = [
+  'Unexpected grant type {p0}',
   'Invalid {p0} action fields; send action and command only',
   'Declare at most {p0} program grants',
   'Declare at most {p0} HTTP grants',

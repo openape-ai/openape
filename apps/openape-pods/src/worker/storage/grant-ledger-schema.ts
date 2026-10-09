@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 /** Pod grants (MAY) recorded apart from the sandbox resources (CAN); see worker/resources/grants.ts. */
 export const grantLedgerSchema = `
-CREATE TABLE IF NOT EXISTS pod_grants(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE, issuer TEXT NOT NULL, subject TEXT NOT NULL, cli_id TEXT NOT NULL, details TEXT NOT NULL, display TEXT NOT NULL, grant_type TEXT NOT NULL CHECK(grant_type IN ('once','always')), state TEXT NOT NULL CHECK(state IN ('pending','approved','denied','revoked','expired','used')), network_id TEXT, network_revision INTEGER, approved_in_session INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS pod_grants(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE, issuer TEXT NOT NULL, subject TEXT NOT NULL, cli_id TEXT NOT NULL, details TEXT NOT NULL, display TEXT NOT NULL, grant_type TEXT NOT NULL CHECK(grant_type IN ('once','timed','always')), state TEXT NOT NULL CHECK(state IN ('pending','approved','denied','revoked','expired','used')), network_id TEXT, network_revision INTEGER, approved_in_session INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS pod_grants_coverage ON pod_grants(pod_id, cli_id, state);
 CREATE INDEX IF NOT EXISTS pod_grants_network ON pod_grants(network_id, state);
 CREATE TABLE IF NOT EXISTS pod_sandbox(pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE, source TEXT NOT NULL, network_revision INTEGER, level TEXT NOT NULL CHECK(level IN ('isolated','owner')), PRIMARY KEY(pod_id, source));

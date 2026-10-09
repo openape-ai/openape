@@ -98,7 +98,8 @@ export async function administerGrants(command: GrantsCommand, owner: OwnerSessi
 }
 
 /** Applies a sandbox declaration to one Pod; entries it already has are kept, so a repeated declaration changes nothing. */
-async function applySandbox(podId: string, declaration: SandboxDeclaration, origin: GrantOrigin | null, admin: Administration): Promise<{ applications: string[] }> {
+async function applySandbox(podId: string, declaration: SandboxDeclaration, origin: GrantOrigin | null, admin: Administration): Promise<{ applications: string[], kept: string[] }> {
+  const kept: string[] = []
   if (declaration.level) await admin.ledger({ type: 'level', podId, source: origin ? `network:${origin.networkId}` : 'pod', revision: origin?.revision ?? null, level: declaration.level })
   const applications: string[] = []
   const track = async (change: () => Promise<void>) => {
@@ -117,8 +118,12 @@ async function applySandbox(podId: string, declaration: SandboxDeclaration, orig
   }
   for (const permission of declaration.http ?? []) {
     const existing = ready((await admin.resources(podId)).resources).find(item => item.configuration.type === 'http' && item.configuration.origin === permission.origin)
-    if (existing && permission.methods.every(method => (existing.configuration.methods as string[]).includes(method))) continue
-    await track(() => admin.assignHttp(podId, existing ? { origin: permission.origin, methods: [...new Set([...(existing.configuration.methods as string[]), ...permission.methods])] } : permission))
+    // An origin the Pod already reaches keeps its own assignment (methods, capability and authentication); it is never replaced.
+    if (existing) {
+      if (!permission.methods.every(method => (existing.configuration.methods as string[]).includes(method))) kept.push(`${permission.origin} keeps its existing methods ${(existing.configuration.methods as string[]).join(', ')}`)
+      continue
+    }
+    await track(() => admin.assignHttp(podId, permission))
   }
   for (const directory of declaration.directories ?? []) {
     if (ready((await admin.resources(podId)).resources).some(item => item.kind === 'directory' && item.configuration.path === directory.path && item.configuration.access === directory.access)) continue
@@ -128,7 +133,7 @@ async function applySandbox(podId: string, declaration: SandboxDeclaration, orig
     if (ready((await admin.resources(podId)).resources).some(item => item.kind === 'credential' && item.configuration.alias === secret.alias)) continue
     await track(() => admin.importSecret(podId, secret.alias, secret.path))
   }
-  return { applications }
+  return { applications, kept }
 }
 
 async function show(podId: string, admin: Administration) {
@@ -145,8 +150,13 @@ export async function administerSandbox(command: SandboxCommand, owner: OwnerSes
   const { podIds, origin } = await targetPods(command.target, admin)
   if (command.type === 'show') return { pods: await Promise.all(podIds.map(async podId => show(podId, admin))) }
   const applied: Record<string, string[]> = {}
-  for (const podId of podIds) applied[podId] = (await applySandbox(podId, command.sandbox, origin, admin)).applications
-  if (!command.grants) return { pods: await Promise.all(podIds.map(async podId => show(podId, admin))) }
+  const kept: { podId: string, entry: string }[] = []
+  for (const podId of podIds) {
+    const result = await applySandbox(podId, command.sandbox, origin, admin)
+    applied[podId] = result.applications
+    kept.push(...result.kept.map(entry => ({ podId, entry })))
+  }
+  if (!command.grants) return { pods: await Promise.all(podIds.map(async podId => show(podId, admin))), kept }
   const signal = AbortSignal.timeout(170000)
   const outcomes: Outcome[] = []
   for (const podId of podIds) {
@@ -155,7 +165,7 @@ export async function administerSandbox(command: SandboxCommand, owner: OwnerSes
       : command.grants
     outcomes.push(...await requestGrants([podId], origin, declaration, command.approve !== false, owner, admin, signal))
   }
-  return { pods: await Promise.all(podIds.map(async podId => show(podId, admin))), outcomes }
+  return { pods: await Promise.all(podIds.map(async podId => show(podId, admin))), kept, outcomes }
 }
 
 /** Revokes, as each member Pod, the grants an archived network handed out and removes the sandbox resources it added. */

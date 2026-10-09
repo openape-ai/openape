@@ -9,7 +9,7 @@ import type { CredentialCache } from '../../connections/cache'
 import type { ConnectionManager } from '../../connections/manager'
 import type { GrantLedgerPort, GrantObserver } from '../../broker/authorization'
 import { invokeProgram } from '../../programs/invoke'
-import type { SandboxLevel } from '../../../contracts/sandbox'
+import type { SandboxReach } from '../../../contracts/sandbox'
 import { podWorkspace } from '../../programs/console'
 import { assignedDirectories, directoryPolicy } from '../../../runtime/directories'
 import { archiveApplication, archiveProvider, moveApprovedMail } from './program'
@@ -28,7 +28,7 @@ interface Request {
   signal: AbortSignal
   observe: GrantObserver
   ledger?: GrantLedgerPort
-  level: () => Promise<SandboxLevel>
+  reach: () => Promise<SandboxReach>
 }
 export async function handleMailArchive(input: Request): Promise<unknown> {
   const { scope, signal, check, service } = input
@@ -47,7 +47,7 @@ export async function handleMailArchive(input: Request): Promise<unknown> {
       return archiveProvider(selected.id, selected.assignment, mailbox, {
         read: async (argv) => {
           const current = await check()
-          return invokeProgram(current.resources, scope.podId, { applicationId: selected.id, argv }, input.helper, root, input.credentials, lease, { connection, ledger: input.ledger, level: await input.level(), observe: input.observe })
+          return invokeProgram(current.resources, scope.podId, { applicationId: selected.id, argv }, input.helper, root, input.credentials, lease, { connection, ledger: input.ledger, reach: await input.reach(), observe: input.observe })
         },
         move: async (argv) => {
           if (!record) throw new Error('Preparation cannot move mail')
