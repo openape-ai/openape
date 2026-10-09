@@ -22,7 +22,9 @@ export function parseSubscription(input: unknown): InboxSubscription {
   return { endpoint: endpoint.href, p256dh, auth }
 }
 
-export const inboxLimits = { bodyBytes: 64 * 1024, retentionMs: 90 * 86400000, tombstoneMs: 30 * 86400000, itemsPerOwner: 10000, page: 50, pushAgeMs: 86400000 }
+// `idpPushDelayMs`: an IdP approval is often granted at once by the owner's own session (issue 1455); its push
+// waits this long, and a decision that resolves meanwhile drops the pending push without notifying.
+export const inboxLimits = { bodyBytes: 64 * 1024, retentionMs: 90 * 86400000, tombstoneMs: 30 * 86400000, itemsPerOwner: 10000, page: 50, pushAgeMs: 86400000, idpPushDelayMs: 60000 }
 const key = (owner: Owner) => JSON.stringify([owner.issuer, owner.subject])
 const id = /^[0-9a-f-]{36}$/
 const eventKey = /^[\w.:-]{1,200}$/
@@ -172,7 +174,8 @@ export class InboxStore {
         const itemId = randomUUID()
         this.db.prepare('INSERT INTO items(id,owner,runtime_id,event_id,digest,kind,state,title,body,pod_id,pod_name,run_id,links,created,sequence,decision) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
           .run(itemId, key(owner), runtimeId, decision.sourceId, decision.digest, 'decision', 'open', decision.title, decision.body, decision.podId, decision.podName, null, links, this.now(), this.nextSequence(), JSON.stringify(data))
-        this.db.prepare('INSERT INTO outbox(id,owner,item_id,created,state,next) VALUES(?,?,?,?,?,?)').run(randomUUID(), key(owner), itemId, this.now(), 'pending', this.now())
+        const due = this.now() + (decision.authority === 'idp' ? inboxLimits.idpPushDelayMs : 0)
+        this.db.prepare('INSERT INTO outbox(id,owner,item_id,created,state,next) VALUES(?,?,?,?,?,?)').run(randomUUID(), key(owner), itemId, this.now(), 'pending', due)
         counts.created++
       }
       const current = new Set(decisions.map(decision => decision.sourceId))
