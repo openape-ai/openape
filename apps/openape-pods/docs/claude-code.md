@@ -53,11 +53,20 @@ including network creation, activation, pause, archive, member changes and
 recovery, owner routing (a `choose` option, opening an approval batch at the
 identity provider, asking it again or discarding an uncertain batch) and the
 desktop `definitions`, `scheduling` and `workspace` commands. Approving or
-denying a grant stays at the identity provider; no MCP action can decide it.
-Runtime auto-approval and the session itself remain App settings.
+denying a grant stays at the identity provider; no MCP action and no code path
+in Pods can decide it (DDISA: the requester never approves its own request).
+`resources` assignments (`assignHttp`, `assignSsh`, `assignJev`) and `program`
+`grant` request a continuing grant for the Pod identity, open its IdP page on
+this Mac and return `approval: { state: "pending", url }` until the owner
+decides. A run that needs a pending grant, including the first run of a new Pod,
+waits for that decision; `recovery` `openApproval` opens its IdP page again and
+returns it as `opened`. The session itself remains an App setting.
 Versions before issue 1455 stored off/read/write access modes in
 `mcp-access.json` in the profile folder. Current versions ignore that file; it
 grants nothing and may be deleted.
+Likewise, `mcp-runtime-approval.json` held the removed runtime auto-approval
+setting; current versions ignore it. Grants that Pods approved before remain
+valid at the identity provider until the owner revokes them there.
 
 ## Work with Pods
 
