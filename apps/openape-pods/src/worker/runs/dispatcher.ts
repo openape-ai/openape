@@ -458,14 +458,16 @@ export class RunDispatcher {
             if (!this.services?.mailArchive) throw new Error('Mail archive service is unavailable')
             // In a graph the script never names what may move; the consumed gate batches do.
             const request = graph ? { ...archiveTarget(payload), gate: gateCoverage(this.store, graph, delivered) } : payload
+            // Standalone archives record each move in the archive store, which holds only its own unresolved batch.
+            // Workflow gate batches (removed with workflow mail) still hold the Pod until their outcome is confirmed.
             const boundaryId = randomUUID()
-            appendEvent('recovery-boundary', { id: boundaryId, kind: 'untracked', operation })
+            appendEvent('recovery-boundary', graph ? { id: boundaryId, kind: 'untracked', operation } : { kind: 'effect', operation })
             const work = this.services.mailArchive(request, operationSignal, scope)
             pendingAgents.add(work)
             try {
               const result = await work
               const views = Array.isArray(result) ? result : [result]
-              if (views.every(value => value && typeof value === 'object' && 'state' in value && ['completed', 'pending', 'denied', 'expired'].includes(String(value.state)))) appendEvent('recovery-boundary-result', { id: boundaryId, state: 'confirmed' })
+              if (graph && views.every(value => value && typeof value === 'object' && 'state' in value && ['completed', 'pending', 'denied', 'expired'].includes(String(value.state)))) appendEvent('recovery-boundary-result', { id: boundaryId, state: 'confirmed' })
               assertCurrent(); return result
             }
             finally { pendingAgents.delete(work) }

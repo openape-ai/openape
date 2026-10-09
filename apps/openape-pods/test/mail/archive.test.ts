@@ -89,6 +89,15 @@ it('retains an uncertain move across restart and never retries it', async () => 
   expect(f.provider.move).toHaveBeenCalledTimes(1)
   await expect(f.service.prepare(f.podId, f.proposal, f.provider, f.authority)).rejects.toThrow('reconciliation')
 })
+it('holds an archive batch interrupted mid-move and never moves it again', async () => {
+  const f = await fixture(); await f.service.prepare(f.podId, f.proposal, f.provider, f.authority)
+  const [record] = await f.store.list(f.podId)
+  await f.store.save({ ...record!, state: 'executing' })
+  f.decide('approved')
+  expect(await f.service.process(f.podId, async () => f.provider, f.authority)).toEqual([expect.objectContaining({ state: 'unknown' })])
+  expect(f.provider.move).not.toHaveBeenCalled()
+  await expect(f.service.prepare(f.podId, f.proposal, f.provider, f.authority)).rejects.toThrow('reconciliation')
+})
 it('refuses changed program bindings and expired approved batches', async () => {
   const f = await fixture(); await f.service.prepare(f.podId, f.proposal, f.provider, f.authority); f.decide('approved')
   expect((await f.service.process(f.podId, async () => ({ ...f.provider, applicationHash: 'changed' }), f.authority))[0]).toMatchObject({ state: 'expired', error: expect.stringContaining('application changed') })
