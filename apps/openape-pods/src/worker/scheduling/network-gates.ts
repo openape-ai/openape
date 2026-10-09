@@ -1,3 +1,4 @@
+import { occupiedRunSlots } from '../runs/slots'
 import { emptyNetworkDataPin, networkDataPin } from './network-config'
 import { abandonNetworkData } from './network-data-recovery'
 import { randomUUID } from 'node:crypto'
@@ -96,7 +97,7 @@ export class NetworkGates {
         UNION ALL SELECT 1 FROM network_invocations WHERE pod_id=? AND state IN ('running','stopping','interrupted','unknown') LIMIT 1`).get(podId, podId, podId)) {
         return null
       }
-      const count = Number(this.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count)
+      const count = occupiedRunSlots(this.store)
       if (count >= Number(this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency)) return null
       assertNetworkQuota(this.store, 16384)
       const run = this.invocations.reserveGate(manifest, reason, processPreviewId)

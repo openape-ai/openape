@@ -32,16 +32,18 @@ it('keeps fixture test launches off the login keychain unless a real-keychain ch
 })
 
 describe('main process owner dialogs', () => {
-  it('assigns an HTTP destination only after the owner confirms the native dialog', async () => {
+  it('requests HTTP, SSH and program permissions without a local approval dialog; the owner decides at the IdP', async () => {
     main = await startMain()
     const permission = { origin: 'https://api.telegram.org', methods: ['POST'] }
-    main.dialog.showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false })
-    await main.invoke(channels.resources, { type: 'assignHttp', podId, epoch: 1, permission })
-    expect(main.worker.resources).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'assignHttp' }))
-    main.dialog.showMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false })
     await main.invoke(channels.resources, { type: 'assignHttp', podId, epoch: 1, permission })
     expect(main.worker.resources).toHaveBeenCalledWith({ type: 'assignHttp', podId, epoch: 1, permission })
-    expect(main.dialog.showMessageBox.mock.calls[0]![1]).toMatchObject({ message: 'https://api.telegram.org', buttons: ['Cancel', 'Allow HTTP destination'], cancelId: 0 })
+    const target = { alias: 'fixture.example', jumps: [], profile: 'linde-server-v1' }
+    await main.invoke(channels.resources, { type: 'assignSsh', podId, epoch: 1, target })
+    expect(main.worker.resources).toHaveBeenCalledWith({ type: 'assignSsh', podId, epoch: 1, target })
+    const grant = { type: 'grant', podId, applicationId: randomUUID(), epoch: 1, argv: ['read'] }
+    await main.invoke(channels.programs, grant)
+    expect(main.worker.program).toHaveBeenCalledWith(grant)
+    expect(main.dialog.showMessageBox).not.toHaveBeenCalled()
   })
 
   it('adds an installed program only from the files the owner picks, asking for its descriptor when none is registered', async () => {
@@ -142,19 +144,16 @@ it('forwards macOS suspend and resume to the worker', async () => {
   expect(main.worker.lifecycle.mock.calls).toEqual([['suspend'], ['resume']])
 })
 
-it('exposes automatic runtime approval only through the validated desktop preference channel', async () => {
+it('opens grant management at the owner IdP only for the trusted renderer', async () => {
   main = await startMain()
-  const view = { enabled: false, standing: false, owner: 'owner@example.test', scope: 'a'.repeat(64) }
-  main.worker.runtimeApprovalCommand.mockResolvedValue(view)
-  expect(await main.invoke(channels.runtimeApproval, { type: 'get' })).toEqual(view)
-  for (const command of [{ type: 'set', enabled: true }, { type: 'setStanding', enabled: true, scope: 'a'.repeat(64) }, { type: 'manage' }]) {
-    await expect(main.invoke(channels.runtimeApproval, command, true)).rejects.toThrow()
-    expect(await main.invoke(channels.runtimeApproval, command)).toEqual(view)
-    expect(main.worker.runtimeApprovalCommand).toHaveBeenLastCalledWith(command)
-  }
-  await expect(main.invoke(channels.runtimeApproval, { type: 'set', enabled: 'true' })).rejects.toThrow()
-  await expect(main.invoke(channels.runtimeApproval, { type: 'setStanding', enabled: true, owner: 'foreign' })).rejects.toThrow()
-  await expect(main.invoke(channels.runtimeApproval, { type: 'manage', issuer: 'https://foreign.test' })).rejects.toThrow()
+  main.worker.remoteOwner.mockResolvedValue({ owner: { issuer: 'https://owner.example.test', subject: 'owner' }, email: 'owner@example.test' })
+  main.worker.onboarding.mockResolvedValue({ connections: [] })
+  await expect(main.invoke(channels.onboarding, { type: 'openGrants' }, true)).rejects.toThrow()
+  await expect(main.invoke(channels.onboarding, { type: 'openGrants', issuer: 'https://foreign.test' })).rejects.toThrow()
+  expect(main.shell.openExternal).not.toHaveBeenCalled()
+  await main.invoke(channels.onboarding, { type: 'openGrants' })
+  expect(main.shell.openExternal).toHaveBeenCalledWith('https://owner.example.test/grants')
+  expect(main.worker.onboarding).toHaveBeenLastCalledWith({ type: 'list' })
 })
 
 it('opens an MCP session only after the owner signs in and confirms natively, and ends it from the trusted renderer', async () => {

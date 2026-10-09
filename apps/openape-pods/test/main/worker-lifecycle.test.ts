@@ -4,7 +4,6 @@ import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { RuntimeApprovalPolicy } from '../../src/main/codex/runtime-approval'
 import { handleMailArchive } from '../../src/main/mail/archive/handler'
 import type { ServiceRequest } from '../../src/contracts/services'
 
@@ -110,32 +109,6 @@ it('rejects MCP attempts to override leases, submit local closures or bypass cen
   await expect(worker.codex({ id, action: { action: 'workspace', query: { type: 'inventory' } } })).rejects.toThrow('Connect the central workspace')
 })
 
-it('records only local MCP creation, including a queued central creation on this runtime', async () => {
-  const { FixtureWorker } = await import('../../src/main/worker')
-  const root = mkdtempSync(join(tmpdir(), 'pods-provenance-'))
-  try {
-    const policy = new RuntimeApprovalPolicy(root); policy.setEnabled(true)
-    const worker = new FixtureWorker(() => {}, policy)
-    const ids = [1, 2, 3, 4].map(n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`)
-    const runtimeId = ids[3]!
-    const owner = { issuer: 'https://owner.example', subject: 'owner' }
-    const central = { executing: true, status: () => ({ runtimeId }), query: vi.fn(async () => ({})) }
-    Object.assign(worker, { central, remoteOwner: async () => ({ owner }), centralProvision: vi.fn(), indexRemotePods: vi.fn(), dispatch: vi.fn(async () => ({ id: ids[0] })) })
-    await worker.codex({ id: ids[0]!, action: { action: 'create', name: 'Direct' } })
-    expect(policy.allows(ids[0]!)).toBe(true)
-    const command = { channel: 'workspace' as const, body: { type: 'create' as const, name: 'Queued' } }
-    await worker.codex({ id: ids[1]!, action: { action: 'workspace', query: { type: 'submit', runtimeId, revision: 1, id: ids[1], command } } })
-    const workspace = (id: string) => ({ pods: [{ id, name: 'Queued', revision: 1, lifecycle: 'paused', activeScript: null }], organization: { revision: 1, groups: [] } })
-    Object.assign(worker, { dispatch: async () => ({ pods: [], organization: { revision: 1, groups: [] } }), request: async () => workspace(ids[1]!) })
-    await worker.centralExecute(command, ids[1])
-    expect(policy.allows(ids[1]!)).toBe(true)
-    Object.assign(worker, { request: async () => workspace(ids[2]!) })
-    await worker.centralExecute(command, ids[2])
-    expect(policy.allows(ids[2]!)).toBe(false)
-  }
-  finally { rmSync(root, { recursive: true, force: true }) }
-})
-
 it('imports an initial Jev connection from a private file and refuses replacement or stale resources', async () => {
   const { FixtureWorker } = await import('../../src/main/worker')
   const root = mkdtempSync(join(tmpdir(), 'pods-jev-import-'))
@@ -215,50 +188,4 @@ it('sends desktop commands and approval page opening through the producers of th
   expect(networks).toHaveBeenCalledWith({ type: 'gateOpen', id, revision: 1, taskId: id, generation: 1 })
   expect(opened).toMatchObject({ networks: [{ id, state: 'active' }] })
   await expect(worker.codex({ id, action: { action: 'desktop', channel: 'runtimeApproval', command: { type: 'set', enabled: true } } })).rejects.toThrow('Unsupported desktop MCP channel')
-})
-
-it('binds standing approval to the live owner/runtime and keeps legacy local execution working', async () => {
-  const { FixtureWorker } = await import('../../src/main/worker')
-  const { shell } = await import('electron')
-  const root = mkdtempSync(join(tmpdir(), 'pods-standing-'))
-  try {
-    const policy = new RuntimeApprovalPolicy(root)
-    const worker = new FixtureWorker(() => {}, policy)
-    const podId = '00000000-0000-4000-8000-000000000001'
-    let runtimeId = '00000000-0000-4000-8000-000000000002'
-    let account = 'owner@example.test'
-    const issuer = 'https://owner.example.test'
-    const approveRuntimeGrant = vi.fn(async (_connection, _podId, _grantId, _signal, allowed) => { expect(await allowed()).toBe(true) })
-    const connections = {
-      view: async () => ({ owner: 'connection', connections: [{ id: 'connection', state: 'ready', account }] }),
-      remoteOwner: async () => ({ owner: { issuer, subject: account }, email: account }),
-      approveRuntimeGrant,
-    }
-    Object.assign(worker, { connections, central: { status: () => ({ runtimeId }) } })
-    const connection = { issuer, owner: account, subject: 'pod@example.test', keyId: 'key', targetHost: `pods:${podId}`, ownerConnection: 'connection', accessToken: async () => 'SYNTHETIC' }
-    const service = worker as unknown as { approveStandingRuntime: (value: typeof connection, podId: string, grantId: string, signal: AbortSignal) => Promise<boolean> }
-    const approve = () => service.approveStandingRuntime(connection, podId, 'grant', new AbortController().signal)
-    expect(await approve()).toBe(false)
-    const { scope } = await worker.runtimeApprovalCommand({ type: 'get' })
-    expect(await worker.runtimeApprovalCommand({ type: 'setStanding', enabled: true, scope })).toEqual({ enabled: false, standing: true, owner: account, scope })
-    expect(await approve()).toBe(true)
-    account = 'another@example.test'
-    await expect(worker.runtimeApprovalCommand({ type: 'setStanding', enabled: true, scope })).rejects.toThrow('account or runtime changed')
-    expect(await approve()).toBe(false)
-    expect((await worker.runtimeApprovalCommand({ type: 'get' })).standing).toBe(false)
-    account = connection.owner
-    runtimeId = podId
-    expect(await approve()).toBe(false)
-    runtimeId = '00000000-0000-4000-8000-000000000002'
-    await worker.runtimeApprovalCommand({ type: 'manage' })
-    expect(shell.openExternal).toHaveBeenLastCalledWith(`${issuer}/grants`)
-    await worker.runtimeApprovalCommand({ type: 'setStanding', enabled: false, scope })
-    expect(await approve()).toBe(false)
-    expect(approveRuntimeGrant).toHaveBeenCalledTimes(1)
-    policy.recordPod(podId); policy.setEnabled(true)
-    Object.assign(worker, { central: null })
-    expect(await approve()).toBe(true)
-    await expect(worker.runtimeApprovalCommand({ type: 'setStanding', enabled: true, scope })).rejects.toThrow('Connect this runtime')
-  }
-  finally { rmSync(root, { recursive: true, force: true }) }
 })

@@ -6,7 +6,6 @@ import { runtimeReference } from '../master/reference'
 import { parseAdministration } from '../../contracts/codex-admin'
 import type { AdministrationJournal, AdministrationReceipt } from '../../contracts/codex-admin'
 import { digest } from '../storage/database'
-import type { ChangeSet } from '../../contracts/control-api'
 import type { RunRecord } from '../../contracts/runs'
 import type { Conversation } from '../../contracts/chats'
 import { parseChatsCommand } from '../../contracts/chats'
@@ -28,17 +27,10 @@ export class CodexControl {
     let result: unknown
     switch (action.action) {
       case 'runtime': result = this.runtime(action); break
-      case 'retireChange': result = this.retire(action); break
       case 'select': result = this.select(action); break
-      case 'changes': result = this.changes(action); break
-      default: result = withoutRunContent(await this.master.execute(`codex:${request.id}`, action, signal, null, null, this.conversation(), 'owner'))
+      default: result = withoutRunContent(await this.master.execute(`codex:${request.id}`, action, signal, this.conversation()))
     }
     return boundedCodexResult(result)
-  }
-
-  private retire(action: Record<string, unknown>) {
-    if (Object.keys(action).some(key => !['action', 'id', 'revision'].includes(key)) || typeof action.id !== 'string' || !Number.isSafeInteger(action.revision)) throw new Error('Invalid legacy change identity')
-    return receipt(this.master.changes().retire(action.id, Number(action.revision), this.conversation().context.podIds))
   }
 
   private runtime(action: Record<string, unknown>) {
@@ -56,7 +48,7 @@ export class CodexControl {
         'Save drafts and ordinary variables directly. Configure resources before validation. Import secrets by a private owner file path, never by their values. Do not copy owner login stores into Pods.',
         'Use scripts prepareDependencies when packages change. Validate the draft with current resources. Every assigned Pod secret is available to its scripts without declarations or approval. Then activate, resume and setSchedule with enabled=true as requested.',
         'run returns the actual runId. recovery list returns status and unresolved effect keys without run contents. Resolve uncertain delivery only with real external evidence; never guess that an effect failed.',
-        'Old pending changes are history and never automatically execute. Synthetic validation does not prove live provider behavior or delivery.',
+        'Synthetic validation does not prove live provider behavior or delivery.',
       ],
       actions: { ...actions, saveWorkflow: { definition: 'Save a workflow with explicitly selected members. To create: select member podIds without a workflow, then send type:save, a new UUID id, revision:0, name, nodes, schedule and enabled. To update: select the existing workflow and its current revision first.' }, setSchedule: { ...actions.prepareSchedule, enabled: 'boolean; resume separately to allow scheduled execution' }, administration: 'resources/scripts/recovery/program/importSecret/requestSecret: see tool command schema. Include outer revision and command.podId. resources list returns epoch and safe assignment metadata. requestSecret {podId,alias,purpose,epoch} raises a request at OpenApe Secrets as the owner and returns {requestId,status,expiresAt}; the desktop collects the sealed value once and stores it under the alias.' },
       script: { ...runtimeReference.script, files: runtimeReference.script.files.replace('Only the owner can assign/change directory access in Permissions.', 'Connected Codex can assign directory access through resources.') },
@@ -110,15 +102,6 @@ export class CodexControl {
     const next = this.conversation()
     return { contextRevision: next.revision, pods: next.context.pods, workflow: next.context.workflow && { id: next.context.workflow.id, name: next.context.workflow.name, revision: next.context.workflow.revision } }
   }
-
-  private changes(action: Record<string, unknown>) {
-    if (Object.keys(action).length !== 1) throw new Error('Invalid changes fields')
-    return { changes: this.master.changes().list(codexConversationId).slice(0, 20).map(receipt), approval: 'Legacy proposals are not applied automatically. New Codex actions apply directly.' }
-  }
-}
-
-function receipt(set: ChangeSet) {
-  return { id: set.id, revision: set.revision, kind: set.kind, state: set.state, error: set.error, targets: set.targets.map(target => ({ podId: target.podId, name: target.name, actions: target.actions.map(action => action.action), changedSinceApply: target.changedSinceApply ?? false })), execution: set.execution?.map(({ podId, runId, state }) => ({ podId, runId, state })) ?? null }
 }
 
 // Run summaries, run errors and checkpoints are written by scripts during runs
