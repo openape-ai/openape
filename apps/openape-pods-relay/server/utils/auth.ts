@@ -12,7 +12,6 @@ import { publicJson } from './public-json'
 
 interface Flow {
   deviceId: string
-  kind: 'mobile' | 'runtime'
   keys: DeviceKeys
   challenge: string
   email: string
@@ -27,10 +26,10 @@ export class RelayAuth {
 
   begin(value: unknown) {
     const item = object(value, ['deviceId', 'kind', 'keys', 'challenge', 'email'])
-    if (item.kind !== 'mobile' && item.kind !== 'runtime') throw new ProtocolError('invalid_device_kind')
+    if (item.kind !== 'runtime') throw new ProtocolError('invalid_device_kind')
     const email = text(item.email, 320)
     if (!/^[^@\s]+@[^@\s]+$/.test(email)) throw new ProtocolError('invalid_email')
-    const flow: Flow = { deviceId: uuid(item.deviceId), kind: item.kind, keys: parseKeys(item.keys), challenge: base64url(item.challenge, 32), email }
+    const flow: Flow = { deviceId: uuid(item.deviceId), keys: parseKeys(item.keys), challenge: base64url(item.challenge, 32), email }
     if (Number(this.store.db.prepare('SELECT count(*) AS count FROM auth_flows WHERE expires>?').get(this.store.now())?.count) >= 1000) throw new ProtocolError('login_capacity', 503)
     const id = randomUUID()
     this.store.db.prepare('INSERT INTO auth_flows VALUES(?,NULL,?,?,NULL)').run(id, JSON.stringify(flow), this.store.now() + 300000)
@@ -77,21 +76,18 @@ export class RelayAuth {
     transaction.owner = parseOwner({ issuer: claims.iss, subject: claims.sub })
     if (!this.ownerAllowed(transaction.owner)) throw new ProtocolError('enrollment_closed', 403)
     delete transaction.flow; delete transaction.browserHash
-    const handoff = randomBytes(32).toString('base64url')
-    this.store.db.prepare('UPDATE auth_flows SET body=?,code_hash=?,expires=? WHERE id=?').run(JSON.stringify(transaction), sha256(handoff), this.store.now() + 60000, id)
-    return { id, code: handoff, kind: transaction.kind }
+    this.store.db.prepare('UPDATE auth_flows SET body=?,expires=? WHERE id=?').run(JSON.stringify(transaction), this.store.now() + 60000, id)
+    return { id }
   }
 
   exchange(value: unknown) {
-    const item = object(value, ['id', 'code', 'verifier', 'signature'])
+    const item = object(value, ['id', 'verifier', 'signature'])
     const id = uuid(item.id); const flow = this.read(id)
     this.store.verifyPkce(text(item.verifier, 128), flow.challenge)
     if (!verifyBytes(proofBytes('session-exchange', id, flow.challenge), text(item.signature, 128), flow.keys.signing)) throw new ProtocolError('invalid_device_proof', 401)
     if (!flow.owner) throw new ProtocolError('login_pending', 409)
-    const row = this.store.db.prepare('SELECT code_hash FROM auth_flows WHERE id=?').get(id)!
-    if (flow.kind === 'mobile' && sha256(text(item.code, 128)) !== row.code_hash) throw new ProtocolError('invalid_handoff', 401)
     return this.store.transaction(() => {
-      const registration = this.store.register(flow.deviceId, flow.owner!, flow.kind, flow.keys)
+      const registration = this.store.register(flow.deviceId, flow.owner!, flow.keys)
       this.store.db.prepare('DELETE FROM auth_flows WHERE id=?').run(id)
       return this.store.issue(registration.id)
     })

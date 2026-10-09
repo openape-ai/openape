@@ -2,10 +2,12 @@
 
 ## Pods consolidation — issue 1455
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1455. Plan revision 1 (draft, awaiting owner approval): https://report.openape.ai/d/01M4GPV3M6H73QA4PTCEHTR0DN?v=2; source `.claude/plans/2026-10-09-pods-consolidation/plan.json`.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1455. Plan revision 1, approved by the owner: https://report.openape.ai/d/01M4GPV3M6H73QA4PTCEHTR0DN; source `.claude/plans/2026-10-09-pods-consolidation/plan.json`.
 - Owner decisions October 9: networks only (convert Morgenbriefing, archive paused workflows), remove the iOS app and encrypted mobile channel now, backups older than schema 41 may become unrestorable, approvals stay at the IdP and MCP may do everything else (desktop self-approvals move to the IdP).
 - M1 dead code: branch `feature/issue-1455-pods-dead-code` from `ca1e917d`, behaviour-neutral (unmounted chat/console/review UI, orphaned modules, experiments, `@xterm/*`, `web-push`, 837 unused German catalog entries). Checks: root lint and typecheck, both app builds, Pods test:fast 1,342 + 52 browser tests, relay 90 tests, `check:affected --suite unit` SUCCESS, `docs:check`.
-- Next: PR review/merge of M1; M2 and M3 after plan approval; M4/M6 wait for the issue 1454 archive branches.
+- M1 merged as `b757dafc`.
+- M2 mobile removal: branch `feature/issue-1455-remove-pods-mobile` from `b757dafc`. Removes `apps/openape-pods-ios`, the relay mobile API/APNs/hub and mobile store tables, the protocol envelope and seal/open, the desktop pairing/remote command path and Mobile access menu, and the native-app docs. Kept: relay desktop registration endpoints under `/api/mobile/v1/session/{begin,exchange,refresh}`, `/mobile-auth/{start,callback}` and `/api/mobile/v1/health` (installed desktops and the deploy gate call them), relay tables `registrations`, `sessions`, `used_refresh`, `request_proofs`, `auth_flows`, `audit`, and the desktop `remote_registration`/`remote_pods` binding (`src/worker/remote/registration.ts`). Desktop SQLite schema unchanged.
+- Next: PR review/merge of M2, then relay deploy; M3 runs on the installed app; M4/M6 wait for the issue 1454 archive branches.
 
 ## Delta Mind mail network live: unblock, cursor, real archiving — issue 1454
 
@@ -1540,6 +1542,8 @@ Reuse group `iurio` and Pod `98c32f74-ffaf-4628-bd41-95cea821572f`. Private Azur
 "Your accounts" shows exactly Codex / GPT and the DDISA owner. Startup reconciliation keeps one row per provider, merges duplicate rows of the owner identity without re-provisioning and releases bindings of other identities. Mobile access and new Pods use the owner implicitly. Native [PR 96](https://repos.openape.ai/patrick/monorepo/pulls/96). Local evidence: 362 Pods unit/component tests, 8 packaged Electron onboarding/handbook E2E tests, lint and typecheck green. Installation on Patrick's Mac is a separate decision.
 
 ## Native mobile Pods (September 21, 2026)
+
+Superseded on October 9, 2026: issue 1455 M2 removed the native app, the encrypted mobile channel and their documents (`pods-mobile-release.md`, the protocol contract). The history below is kept as written.
 
 [Issue 1362](https://repos.openape.ai/patrick/monorepo/issues/1362), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2ZQTVS90HK79ZWQW973Y8HP).
 Installed desktop (October 6, 12:30 CEST): signed-local 0.1.2 from clean main `288918f9e340609325384af5733a451bc8a2fc24` (DMG SHA256 `a0a7f4d78e52f92efca07513807764c2d9d0cf033c1603ecf7bf2670ad6ea1b6`), notarized and stapled, mounted synthetic acceptance passed (`pnpm test:distribution --signed-local`), installed bundle byte-identical to the DMG, Gatekeeper `Notarized Developer ID`, schema 38 unchanged. Paired rollback: `/Users/patrickhofmann/Library/Application Support/OpenApe Pods Rollback/20261006-native-mobile-1362` (previous app and profile copy). The previous GUI had already quit; the 21 remaining `codex-mcp.mjs` processes of agent sessions kept the old bundle through a move instead of a delete. Relay stays `prod-42541063`.

@@ -22,8 +22,8 @@ import { scheduleDomains } from './scheduling/fair-scheduler'
 import { NetworkEngine } from './scheduling/network-engine'
 import { parseNetworkCommand } from '../contracts/networks'
 import type { AdministrationJournal } from '../contracts/codex-admin'
-import { RemoteControl } from './remote/control'
-import type { RemoteInternal } from './remote/control'
+import { DesktopRegistration } from './remote/registration'
+import type { RemoteInternal } from './remote/registration'
 import { reviewMailBatch, reconcileMailEffect } from './mail/workflow'
 import { confirmDomainsStopped } from './recovery/domains'
 import { parseWorkflowCommand } from '../contracts/workflows'
@@ -143,7 +143,7 @@ const master = new MasterService(store, runtime, masterControl, fixtureProvider)
 const ownerOperations = new AsyncLocalStorage<boolean>()
 const codex = new CodexControl(store, masterControl, new CodexNetworks(store, networkOwner, executeCodexNetwork))
 
-const remote = new RemoteControl(store, master, dispatcher, registry, scheduler, Date.now, { create: async (podId, applicationId) => String(await mailBridge.remoteProgramState({ operation: 'create', podId, applicationId })), discard: async (podId, stateId) => { await mailBridge.remoteProgramState({ operation: 'discard', podId, stateId }) } }, startControlledRun)
+const remote = new DesktopRegistration(store)
 function networkOwner() {
   const row = store.db.prepare('SELECT body FROM remote_registration WHERE id=1').get()
   if (!row) throw new Error('Persistent networks require an initialized owner identity')
@@ -381,7 +381,7 @@ port.on('message', async (event) => {
       port.postMessage({ id: request.id, state: new InboxOutbox(store).execute(parseInboxOutboxCommand(request.command.inboxOutbox)) }); return
     }
     if (request.command && typeof request.command === 'object' && 'remote' in request.command) {
-      port.postMessage({ id: request.id, state: await remote.execute(request.command.remote as RemoteInternal) }); return
+      port.postMessage({ id: request.id, state: remote.execute(request.command.remote as RemoteInternal) }); return
     }
     if (request.command && typeof request.command === 'object' && 'codexAdministration' in request.command) {
       port.postMessage({ id: request.id, state: codex.administration(request.command.codexAdministration as AdministrationJournal) }); return

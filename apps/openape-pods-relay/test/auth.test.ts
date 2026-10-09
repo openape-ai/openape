@@ -20,7 +20,7 @@ it('uses signed issuer and opaque subject as owner and applies the allowlist to 
   try {
     for (const subject of [owner.subject, 'different-owner-id']) {
       vi.mocked(publicJson).mockResolvedValue(jwks)
-      const flow = auth.begin({ deviceId: randomUUID(), kind: 'mobile', email: 'hint@example.test', keys: { signing: deviceKey, agreement: deviceKey }, challenge: challenge('synthetic-verifier') })
+      const flow = auth.begin({ deviceId: randomUUID(), kind: 'runtime', email: 'hint@example.test', keys: { signing: deviceKey, agreement: deviceKey }, challenge: challenge('synthetic-verifier') })
       const browser = await auth.start(flow.id)
       const url = new URL(browser.url)
       const now = Math.floor(Date.now() / 1000)
@@ -28,7 +28,7 @@ it('uses signed issuer and opaque subject as owner and applies the allowlist to 
       vi.mocked(publicJson).mockImplementation(async endpoint => endpoint.pathname === '/token' ? { assertion } : jwks)
       const callback = auth.callback(url.searchParams.get('state')!, 'synthetic-code', browser.browserSecret)
       if (subject === owner.subject) {
-        await expect(callback).resolves.toMatchObject({ id: flow.id, kind: 'mobile' })
+        await expect(callback).resolves.toEqual({ id: flow.id })
         expect(JSON.parse(String(store.db.prepare('SELECT body FROM auth_flows WHERE id=?').get(flow.id)?.body)).owner).toEqual(owner)
       }
       else { await expect(callback).rejects.toThrow('enrollment_closed') }

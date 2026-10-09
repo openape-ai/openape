@@ -52,6 +52,5 @@
   "packages/ape-crm": "Kommandozeile und Client für crm.",
   "packages/pods-protocol": "Versioned native Pods envelopes, validation and cross-language encryption contracts.",
   "apps/openape-pods-relay": "Owner-authenticated central Pods workspace, browser UI and existing encrypted native delivery.",
-  "apps/openape-pods-ios": "Native SwiftUI client for shared desktop Pods on iPhone and iPad.",
   "packages/report-contracts": "Single-HTML validation, isolation policy and legacy Plans compatibility shared by Reports, Plans and the publishing CLI."
 }
