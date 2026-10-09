@@ -53,6 +53,8 @@ it('keeps unrelated Pod access available while refusing legacy network member by
   await send({ action: 'pause', podId: network.pod.id, revision: store.getPod(network.pod.id).revision })
   expect(store.getPod(network.pod.id).lifecycle).toBe('paused')
   expect(program({ type: 'prepare', line: 'o365-cli --help' })).toEqual({ completed: false })
+  expect(program({ type: 'start', applicationId: randomUUID(), epoch: 0, argv: ['auth', 'login', '--account', 'owner@example.invalid'] })).toEqual({ completed: false })
+  expect(program({ type: 'poll', sessionId: randomUUID(), after: 0 })).toEqual({ completed: false })
   expect(() => program({ type: 'importState', applicationId: randomUUID(), epoch: 0 }, { path: '/tmp/state.json' })).toThrow('application setup while paused')
   await send({ action: 'resume', podId: network.pod.id, revision: store.getPod(network.pod.id).revision }).catch((error: Error) => expect(error.message).not.toContain('updateMemberScript'))
   const pinned = store.getPod(network.pod.id).activeScript
