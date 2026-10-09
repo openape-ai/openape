@@ -148,7 +148,8 @@ it.each([false, true])('lets connected Codex configure and run an unrelated Pod 
     expect((await call({ action: 'networks', command: { type: 'list' } })).value.networks).toMatchObject([{ id: network.id, state: 'paused' }])
     const detail = await call({ action: 'networks', command: { type: 'detail', id: network.id, revision: 1 } })
     expect(detail.error).toBe(false); expect(detail.value.details.members).toHaveLength(2)
-    expect((await call({ action: 'run', podId: network.source, revision: 1 })).value).toContain('networks updateMemberScript')
+    await call({ action: 'select', podIds: [pod!.id, network.source] })
+    expect((await call({ action: 'run', podId: network.source, revision: 1 })).value).toContain('Network instances require network intake and dispatch')
     expect((await call({ action: 'networks', command: { type: 'list' } })).error).toBe(false)
     const previewRequest = { action: 'networks', requestId: randomUUID(), command: { type: 'preview', id: network.id, revision: 1, podIds: [network.source], pausedPodIds: [network.source], budget: 1 } }
     const preview = await call(previewRequest)

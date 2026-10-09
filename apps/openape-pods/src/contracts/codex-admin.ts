@@ -58,7 +58,7 @@ export function parseAdministration(action: Record<string, unknown>) {
   }
   if (kind === 'recovery') {
     const parsed = parseRunCommand(command)
-    if (!['list', 'recover', 'resolveHttp', 'retryQueue', 'cancel'].includes(parsed.type)) throw new Error('Unsupported Codex recovery operation')
+    if (!['list', 'recover', 'resolveHttp', 'retryQueue', 'cancel', 'openApproval'].includes(parsed.type)) throw new Error('Unsupported Codex recovery operation')
     noPaths(action)
     return { kind, revision: Number(revision), command: parsed } as const
   }
