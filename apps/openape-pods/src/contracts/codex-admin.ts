@@ -1,5 +1,4 @@
 import { parseDetailsCommand } from './details'
-import { parseMasterCommand } from './master'
 import { parseResourceCommand } from './resources'
 import { parseScriptCommand } from './scripts'
 import { parseRunCommand } from './runs'
@@ -7,7 +6,7 @@ import { parseProgramCommand } from './programs'
 import { parseCredentialAlias } from './credentials'
 import type { CodexRequest } from './codex'
 
-export const administrationActions = ['resources', 'scripts', 'recovery', 'program', 'importSecret', 'requestSecret', 'description', 'setup']
+export const administrationActions = ['resources', 'scripts', 'recovery', 'program', 'importSecret', 'requestSecret', 'description']
 
 export function parseAdministration(action: Record<string, unknown>) {
   const { action: kind, command, revision, path, adapterPath, commandName, runtimePath } = action
@@ -18,12 +17,6 @@ export function parseAdministration(action: Record<string, unknown>) {
     if (parsed.type !== 'describe' && parsed.type !== 'list') throw new Error('Unsupported description operation')
     noPaths(action)
     return { kind, revision: Number(revision), command: parsed } as const
-  }
-  if (kind === 'setup') {
-    const parsed = parseMasterCommand(command)
-    if ((parsed.type !== 'decline' && parsed.type !== 'resolveSetup') || !parsed.podId || ['creationId', 'conversationId', 'contextRevision', 'before'].some(key => key in parsed)) throw new Error('Unsupported legacy setup operation')
-    noPaths(action)
-    return { kind, revision: Number(revision), command: { ...parsed, podId: parsed.podId } } as const
   }
   if (kind === 'importSecret') {
     const value = command as { podId: string, alias: string, epoch: number }

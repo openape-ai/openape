@@ -86,10 +86,10 @@ in-flight legacy summary. Conversation bodies, creation aliases, drafts, prior
 reviews and run correlations are not deleted or replayed.
 
 `changes` returns legacy receipts. `retireChange` discards a specifically selected
-pending change after checking its revision and selected targets. `setup` can
-resolve a proposal against actual assigned resources or decline it. Neither
-operation creates an execution permission. New `requestAccess` proposals are
-rejected on the Codex surface in favor of direct resource administration.
+pending change after checking its revision and selected targets; it creates no
+execution permission. Access proposals are gone (issue 1455): `requestAccess` is
+refused, and Codex configures access directly through resources, program,
+importSecret and requestSecret. Retained proposal rows are history only.
 
 The retained chat registry, master service and change coordinator support stored
 history and existing remote contracts. Their original conversation authority

@@ -3,6 +3,7 @@
  * The desktop stays the authority: the inbox shows a decision and returns the chosen option,
  * and the desktop maps it back to the same owner command its own Decisions view would send.
  */
+// Desktops before issue 1455 (M5) also publish setup `proposal` decisions; the relay accepts them until those builds are replaced.
 export type InboxDecisionType = 'network-choice' | 'network-batch' | 'workflow-held' | 'workflow-batch' | 'approval' | 'effect' | 'secret' | 'proposal'
 /** Who settles the decision: Pods itself, the owner's identity provider, or OpenApe Secrets. */
 export type InboxAuthority = 'pods' | 'idp' | 'secrets'

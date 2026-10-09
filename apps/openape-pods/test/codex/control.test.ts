@@ -103,7 +103,7 @@ it('journals administration without accepting unselected Pods, raw secrets or du
   codex.administration({ type: 'complete', request, result: { epoch: 1 } })
   expect(codex.administration({ type: 'begin', request })).toEqual({ completed: true, result: { epoch: 1 } })
   expect(() => codex.administration({ type: 'begin', request: { ...request, action: { ...request.action, value: 'never-a-secret' } } })).toThrow('Invalid')
-  await expect(send({ action: 'requestAccess', podId: pod.id, revision: pod.revision, request: {} })).rejects.toThrow('directly')
+  await expect(send({ action: 'requestAccess', podId: pod.id, revision: pod.revision, request: {} })).rejects.toThrow('not allowed')
   await expect(send({ action: 'list', fullAccess: true })).rejects.toThrow('fields')
 })
 
