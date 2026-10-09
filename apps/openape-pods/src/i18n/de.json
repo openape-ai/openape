@@ -3450,5 +3450,6 @@
   "Pods requests every permission from your DDISA account, once per Pod and command. You approve it at the IdP; approvals stay valid until you revoke them there.": "Pods fragt jede Berechtigung über dein DDISA-Konto an, einmal pro Pod und Befehl. Du gibst sie beim IdP frei; Freigaben bleiben gültig, bis du sie dort widerrufst.",
   "Permission needs owner approval at the IdP; open this Pod in OpenApe Pods": "Die Berechtigung braucht deine Freigabe beim IdP; öffne diesen Pod in OpenApe Pods",
   "Permission was not decided while this command waited; start it again and approve at the IdP": "Über die Berechtigung wurde nicht entschieden, solange dieser Befehl gewartet hat; starte ihn erneut und gib ihn beim IdP frei",
-  "Permission request expired at the IdP; start a new run to request it again": "Die Berechtigungsanfrage ist beim IdP abgelaufen; starte einen neuen Lauf, um sie erneut anzufragen"
+  "Permission request expired at the IdP; start a new run to request it again": "Die Berechtigungsanfrage ist beim IdP abgelaufen; starte einen neuen Lauf, um sie erneut anzufragen",
+  "Waiting for IdP approval: too many calls already wait for the owner's decision; retry after it": "Warten auf Freigabe beim IdP: Zu viele Aufrufe warten bereits auf deine Entscheidung; versuche es danach erneut"
 }
