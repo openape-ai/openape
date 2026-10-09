@@ -205,3 +205,31 @@ it('ends every session and a waiting sign-in immediately on End session', async 
   expect(execute).toHaveBeenCalledOnce()
   await shim.end()
 })
+
+it('hands the owner identity only to calls of its own session and discards it when the session ends', async () => {
+  let now = 1_000_000
+  const tokens = () => ({ active: true, close: vi.fn() })
+  const issued: ReturnType<typeof tokens>[] = []
+  const login = async () => { const owner = tokens(); issued.push(owner); return owner as never }
+  const sessions = new McpOwnerSessions({ login, confirm: vi.fn(async () => true), now: () => now })
+  const peer = { closed: false, send: vi.fn() }; const other = { closed: false, send: vi.fn() }
+  expect(() => sessions.authorize(peer, undefined)).toThrow('login_required')
+  await vi.waitFor(() => expect(peer.send).toHaveBeenCalledOnce())
+  const secret = (peer.send.mock.calls[0]![0] as { session: string }).session
+  sessions.authorize(peer, secret)
+  expect(sessions.owner(peer)).toBe(issued[0])
+  expect(sessions.owner(other)).toBeNull()
+  // The hard end of the hour ends the session and discards the owner tokens.
+  now += 3600000
+  expect(sessions.owner(peer)).toBeNull()
+  expect(() => sessions.authorize(peer, secret)).toThrow('login_required')
+  expect(issued[0]!.close).toHaveBeenCalledOnce()
+  await vi.waitFor(() => expect(peer.send).toHaveBeenCalledTimes(2))
+  sessions.disconnect(peer)
+  expect(issued[1]!.close).toHaveBeenCalledOnce()
+  // A declined confirmation discards the tokens of that sign-in at once.
+  const declined = new McpOwnerSessions({ login, confirm: async () => false })
+  expect(() => declined.authorize(other, undefined)).toThrow('login_required')
+  await vi.waitFor(() => expect(issued[2]?.close).toHaveBeenCalledOnce())
+  expect(declined.owner(other)).toBeNull()
+})
