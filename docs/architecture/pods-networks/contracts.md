@@ -1257,9 +1257,21 @@ paused, settled compatibility transaction as other definition updates.
 
 ## Local owner MCP access
 
-Local MCP requires the owner's one-hour MCP session and uses the current network
-owner. The `networks` action accepts only list/detail/trace/records/legacyItems
-and pause/preview/process.
+Local MCP requires the owner's one-hour MCP session and acts as the current
+network owner (owner decision October 9, 2026: approvals stay at the IdP, MCP may
+do everything else). The `networks` action accepts every network command the
+desktop uses except workflow conversion and composition replacement
+(`conversionPreview`, `convert`, `replacementSetup`, `replacementPreview`,
+`replaceComposition`), which leave with the workflow model. It runs them through
+the same worker entry point as the desktop window: create (with the reviewed
+setup fingerprint), activate, pause, archive, preview/process, member script
+updates, recovery (`inspect`, `retry`, `reconcileEffect`, `resolveConflict`,
+`discardFailure`, `discardFeedback`) and owner routing (`choose`, `gateReview`,
+`gateDiscard`). `gateOpen` opens the IdP approval page in the owner's browser
+through the desktop producer. No MCP action approves or denies a grant; the
+identity provider decides every grant. The `desktop` action forwards the
+dialog-free desktop `definitions`, `scheduling` and `workspace` commands to the
+producers of the desktop window.
 Reads reuse existing bounded views (2 MiB total); explicit network reads filter
 other network summaries, gates and choices. Secret values and approval URLs are
 not returned.
@@ -1268,16 +1280,12 @@ Network mutation receipts bind a stable request UUID to canonical arguments and
 owner identity in the existing action journal. An exact retry returns the original
 receipt; an interrupted/failed request requires inspection. Preview expiry,
 paused-member acknowledgement, resource/definition fingerprints, process budget,
-execution grants and restart recovery still apply. Activation, composition and
-owner gate/recovery decisions remain desktop operations. The local assistant may
-additionally request fresh approval for superseded or uncertain gate batches
-(`gateReview`), record owner-confirmed outcomes of unknown effects
-(`reconcileEffect`) and close stopped failed runs in which every input's effect was
-reconciled as applied (`discardFailure`; not for capacity holds or owner cancellations); each receipt is marked as an assistant request.
-Fresh approval skips individual inputs with applied or uncertain effects or an
-uninspected attempt; they stay in their superseded batch for review. Legacy inspection and
-administration cannot bypass network ownership, including retained invocations,
-called workflows and archived ancestor workflows. Unrelated Pods remain available.
+execution grants and restart recovery still apply. Fresh approval skips individual
+inputs with applied or uncertain effects or an uninspected attempt; they stay in
+their superseded batch for review. Network members accept ordinary Pod actions;
+the shared engine still refuses their direct runs and Pod schedules, and a member
+whose active script no longer matches its pin blocks network activation and
+processing until it matches again. Unrelated Pods remain available.
 
 A centrally serialized local owner start carries trusted operation context from
 the main process. The closed automatic scheduler gate does not reject that one
