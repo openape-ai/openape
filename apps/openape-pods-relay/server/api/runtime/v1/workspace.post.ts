@@ -4,7 +4,7 @@ import { actor, boundary } from '../../../utils/service'
 import { waitForChange, workspace, workspaceBody, workspaceBoundary, workspaceView } from '../../../utils/workspace'
 
 export default defineEventHandler(event => boundary(event, () => workspaceBoundary(async () => {
-  const runtime = actor(event, 'runtime')
+  const runtime = actor(event)
   const body = centralObject(await workspaceBody(event, 48 * 1024 * 1024))
   const store = workspace()
   if (body.type === 'begin') return store.begin(runtime)

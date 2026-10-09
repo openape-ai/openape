@@ -36,9 +36,8 @@ import type { SecretRequestRow, SecretsCommand, SecretsView } from '../contracts
 import type { SecretRowCommand } from '../worker/secrets/store'
 import { programDefinition } from './programs/definition'
 import { modelResources } from '../worker/master/resources'
-import { object as remoteObject, uuid as remoteUuid, sameOwner } from '@openape/pods-protocol'
-import { ProgramState } from './programs/state'
-import type { RemoteInternal } from '../worker/remote/control'
+import { sameOwner } from '@openape/pods-protocol'
+import type { RemoteInternal } from '../worker/remote/registration'
 import type { Owner } from '@openape/pods-protocol'
 import { parseWorkflowView } from '../contracts/workflows'
 import { parseNetworkCommand, parseNetworkView } from '../contracts/networks'
@@ -150,38 +149,14 @@ export class FixtureWorker {
     this.credentials = createMacOSCredentialCache(join(this.root, 'credentials'))
     const fixturePort = process.env.NODE_ENV === 'test' ? process.env.OPENAPE_PODS_FIXTURE_MODEL_PORT : undefined
     if (fixturePort && (!/^\d+$/.test(fixturePort) || Number(fixturePort) < 1024 || Number(fixturePort) > 65535)) throw new Error('Invalid synthetic model port')
-    const fixtureHold = process.env.NODE_ENV === 'test' ? process.env.OPENAPE_PODS_FIXTURE_HOLD_REMOTE : undefined
-    if (fixtureHold && !['after-journal', 'after-reservation'].includes(fixtureHold)) throw new Error('Invalid remote hold point')
     // Synthetic fixtures freeze gate batches at once instead of collecting inputs for two minutes.
     const fixtureGates = process.env.NODE_ENV === 'test' && !!process.env.OPENAPE_PODS_FIXTURE_DIR
-    this.child = utilityProcess.fork(join(__dirname, '../worker/entry.cjs'), [], { cwd: root, env: { HOME: root, TMPDIR: root, PATH: '/usr/bin:/bin', PODS_RUNTIME_EXECUTABLE: process.execPath, ...(process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1' ? { PODS_CENTRAL_ENABLED: '1' } : {}), ...(fixturePort ? { PODS_FIXTURE_MODEL_PORT: fixturePort } : {}), ...(fixtureHold ? { PODS_FIXTURE_HOLD_REMOTE: fixtureHold } : {}), ...(fixtureGates ? { PODS_FIXTURE_GATE_COLLECT: '0' } : {}) }, serviceName: 'OpenApe Pods Fixture Worker', stdio: 'pipe' })
+    this.child = utilityProcess.fork(join(__dirname, '../worker/entry.cjs'), [], { cwd: root, env: { HOME: root, TMPDIR: root, PATH: '/usr/bin:/bin', PODS_RUNTIME_EXECUTABLE: process.execPath, ...(process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1' ? { PODS_CENTRAL_ENABLED: '1' } : {}), ...(fixturePort ? { PODS_FIXTURE_MODEL_PORT: fixturePort } : {}), ...(fixtureGates ? { PODS_FIXTURE_GATE_COLLECT: '0' } : {}) }, serviceName: 'OpenApe Pods Fixture Worker', stdio: 'pipe' })
     const child = this.child
     const reportError = (error: string) => { this.state = { state: 'error', pid: child.pid ?? null, error }; this.publish(this.state) }
     child.on('message', (message: unknown) => {
       if (message && typeof message === 'object' && 'programCancel' in message) { this.programs?.cancelPod(String(message.programCancel)); return }
       if (message && typeof message === 'object' && 'serviceCancel' in message) { this.services.get(String(message.serviceCancel))?.abort(new Error('Pod tool call cancelled')); return }
-      if (message && typeof message === 'object' && 'remoteProgramState' in message) {
-        const respond = async () => {
-          const request = remoteObject(message.remoteProgramState, ['id', 'operation', 'podId', 'applicationId', 'stateId'])
-          const id = remoteUuid(request.id)
-          let reply: { id: string, value?: unknown, error?: string }
-          try {
-            if (!this.credentials) throw new Error('Connection service unavailable')
-            const podId = remoteUuid(request.podId)
-            if (request.operation === 'create') {
-              reply = { id, value: await new ProgramState(this.credentials).create({ podId, applicationId: remoteUuid(request.applicationId) }) }
-            }
-            else if (request.operation === 'discard') { await this.credentials.erasePodKey(remoteUuid(request.stateId), podId); reply = { id, value: true } }
-            else {
-              throw new Error('Unsupported broker service')
-            }
-          }
-          catch (error) { reply = { id, error: error instanceof Error ? error.message : 'Connection service unavailable' } }
-          if (this.child === child) child.postMessage({ serviceReply: reply })
-        }
-        void respond().catch((error: unknown) => { console.error('Remote program state failed', error); child.kill() })
-        return
-      }
       if (message && typeof message === 'object' && 'service' in message) {
         const request = message.service as ServiceRequest
         const respond = async () => {
@@ -360,7 +335,7 @@ export class FixtureWorker {
   }
 
   inboxOutbox(command: InboxOutboxCommand): Promise<unknown> { return this.dispatch({ inboxOutbox: command }) }
-  async remote(command: RemoteInternal): Promise<unknown> { if (this.central && command.type === 'execute') throw new Error('Use the central workspace to control this Pod'); return this.dispatch({ remote: command }) }
+  async remote(command: RemoteInternal): Promise<unknown> { return this.dispatch({ remote: command }) }
   async remoteOwner(): Promise<{ owner: Owner, email: string }> {
     await this.setupReady
     if (!this.connections) throw new Error('Connection service unavailable')

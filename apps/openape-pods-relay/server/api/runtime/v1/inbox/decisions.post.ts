@@ -6,7 +6,7 @@ import { inboxStore } from '../../../../utils/inbox-service'
 
 // A signed-in runtime replaces its own open decision set; the owner always comes from the runtime registration.
 export default defineEventHandler(event => boundary(event, () => workspaceBoundary(async () => {
-  const runtime = actor(event, 'runtime')
+  const runtime = actor(event)
   const body = await workspaceBody(event, inboxDecisionLimits.publicationBytes)
   let decisions
   try { decisions = parseInboxDecisions(body) }
