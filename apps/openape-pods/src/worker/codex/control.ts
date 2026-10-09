@@ -75,6 +75,7 @@ export class CodexControl {
       networks: codexNetworkHelp,
       workflow: [
         'Connected local Codex administers Pods directly. Codex governs any confirmation. Call list, then select with exact podIds and optionally workflowId/workflowRevision. Reinspect current revisions after changes.',
+        'Access: each MCP connection needs a session from the owner. A login_required error means Pods opened the owner\'s DDISA sign-in in the browser; ask the owner to complete it and confirm the request in the Pods app, then retry the same call. A session allows every action here for one hour, then login_required returns; no restart is needed. No action approves, denies or chooses grants; the owner decides them at the identity provider.',
         'Save drafts and ordinary variables directly. Configure resources before validation. Import secrets by a private owner file path, never by their values. Do not copy owner login stores into Pods.',
         'Use scripts prepareDependencies when packages change. Validate the draft with current resources. Every assigned Pod secret is available to its scripts without declarations or approval. Then activate, resume and setSchedule with enabled=true as requested.',
         'run returns the actual runId. recovery list returns status and unresolved effect keys without run contents. Resolve uncertain delivery only with real external evidence; never guess that an effect failed.',

@@ -236,7 +236,7 @@ it('mounts native editors only for this desktop and never sends another runtime 
   expect(details).not.toHaveBeenCalled()
   expect(wrapper.find('#panel-Overview').exists()).toBe(false)
   fixture.host.workspace.pods[0]!.id = podId
-  expect(wrapper.find('.mcp-access').exists()).toBe(false)
+  expect(wrapper.find('.mcp-session').exists()).toBe(false)
 })
 
 it('keeps remote edits until navigation is explicitly confirmed', async () => {
