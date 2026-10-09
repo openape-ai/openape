@@ -35,7 +35,13 @@ it('proves the MCP owner sign-in only for a human token of the registered accoun
     const query = new URLSearchParams({ state: target.get('state')!, code: 'synthetic-code' })
     request({ host: '127.0.0.1', port: 9876, path: `/callback?${query}`, headers: { host: 'localhost:9876' } }, (response) => { response.resume(); response.on('end', resolve) }).on('error', reject).end()
   })
-  const verify = () => owner.verify(issuer, account, new AbortController().signal, ({ url }) => { void callback(url) })
+  // Like a browser, the callback is answered while the sign-in continues; its delivery is awaited, never dropped.
+  const verify = async () => {
+    let delivered = Promise.resolve()
+    const result = owner.verify(issuer, account, new AbortController().signal, ({ url }) => { delivered = callback(url) })
+    try { return await result }
+    finally { await delivered }
+  }
   const human = (value: string) => ({ iss: issuer, aud: 'apes-cli', act: 'human', sub: 'owner-subject', email: account, nonce: value, exp: Math.floor(Date.now() / 1000) + 300 })
   claims = human
   expect(await verify()).toEqual({ subject: 'owner-subject' })

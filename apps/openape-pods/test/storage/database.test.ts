@@ -173,3 +173,17 @@ it('upgrades a version 25 database and loads its workflows as sequence', () => {
   finally { backup.close() }
   expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
 })
+
+it('reports every transition of a Pod to active, whichever write makes it', () => {
+  const store = fixture()
+  const activated: string[] = []
+  store.onActivated = podId => activated.push(podId)
+  const pod = store.createPod({ name: 'Setup' })
+  const lifecycle = (value: string) => store.db.prepare('UPDATE pods SET lifecycle=? WHERE id=?').run(value, pod.id)
+  lifecycle('paused')
+  store.updatePod(pod.id, store.getPod(pod.id).revision, { name: 'Setup', lifecycle: 'active' })
+  lifecycle('active')
+  lifecycle('paused'); lifecycle('archived')
+  lifecycle('active')
+  expect(activated).toEqual([pod.id, pod.id])
+})

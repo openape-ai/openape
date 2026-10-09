@@ -4,7 +4,7 @@ import { parseInboxDecide } from '../contracts/inbox'
 import type { AgentConnection } from './broker/authorization'
 import type { RuntimeApprovalBinding, RuntimeApprovalCommand, RuntimeApprovalView } from '../contracts/runtime-approval'
 import { readOnlyAction } from './codex/routing'
-import { codexNetworkRead, parseCodexNetworkAction } from '../contracts/codex-networks'
+import { boundedCodexNetworkResult, codexNetworkRead, parseCodexNetworkAction } from '../contracts/codex-networks'
 import { applicationBundle, applicationDefinition } from './programs/application'
 import { parseSharingCommand } from '../contracts/sharing'
 import type { PortableImportCommand, SharingCommand, SharingState } from '../contracts/sharing'
@@ -73,8 +73,8 @@ import type { SetupInternal } from '../worker/onboarding/control'
 import { startAgentGateway } from '../worker/agent/gateway'
 import type { OnboardingCommand, OnboardingView } from '../contracts/onboarding'
 import { parseMasterView } from '../contracts/master'
-import { parseWorkspaceAction, workspaceHelp } from '../contracts/codex'
-import type { CodexRequest } from '../contracts/codex'
+import { boundedCodexResult, parseDesktopAction, parseWorkspaceAction, workspaceHelp } from '../contracts/codex'
+import type { CodexRequest, DesktopAction } from '../contracts/codex'
 import type { MasterCommand, MasterView } from '../contracts/master'
 import { realpathSync } from 'node:fs'
 import { parseServiceScope } from '../contracts/services'
@@ -430,12 +430,16 @@ export class FixtureWorker {
     const reading = readOnlyAction(request.action)
     if (request.action.action === 'networks') {
       const command = parseCodexNetworkAction(request.action)
+      // Opens the approval page in the owner's browser like the desktop button; the owner decides there.
+      if (command.type === 'gateOpen') return boundedCodexNetworkResult(command, await this.networks(command))
       if (!codexNetworkRead(command) && this.central && !this.central.networkReads) throw new Error('Network actions require bounded relay publication support')
     }
     if (!reading && this.central && !this.central.executing) return this.central.local(() => this.codex(request))
+    if (request.action.action === 'desktop') {
+      const action = parseDesktopAction(request.action)
+      return boundedCodexResult(reading ? await this.desktop(action) : await this.journal(request, () => this.desktop(action)))
+    }
     if (!administrationActions.includes(String(request.action.action))) {
-      // A resumed Pod must not keep an application terminal that was opened for its paused setup.
-      if (request.action.action === 'resume' && typeof request.action.podId === 'string') this.programs?.cancelPod(request.action.podId)
       const result = await this.dispatch({ codex: request, ownerOperation: this.central?.executing === true })
       if (request.action.action === 'create') {
         const podId = centralId((result as { id: string }).id)
@@ -448,18 +452,32 @@ export class FixtureWorker {
     // Terminal output and input can hold device codes or typed secrets; the receipt keeps only their shape.
     const terminal = action.kind === 'program' && ['start', 'poll', 'input', 'close'].includes(action.command.type)
     const journaled = terminal ? { ...request, action: redactTerminalInput(request.action) } : request
-    const receipt = await this.dispatch({ codexAdministration: { type: 'begin', request: journaled } }) as AdministrationReceipt
-    if (receipt.completed) return receipt.result
-    try {
-      const result = await this.administer(action)
-      await this.dispatch({ codexAdministration: { type: 'complete', request: journaled, result: terminal ? redactTerminalView(result) : result } })
-      return result
-    }
+    try { return await this.journal(journaled, () => this.administer(action), result => terminal ? redactTerminalView(result) : result) }
     catch (error) {
-      await this.dispatch({ codexAdministration: { type: 'failed', request: journaled } })
       if (action.kind === 'importSecret' || action.kind === 'importJev') throw new Error('Secret import failed; inspect the private file, current Pod revision and resource epoch before retrying')
       throw error
     }
+  }
+
+  /** Same requestId and arguments return the recorded result; an interrupted or failed request is never repeated. */
+  private async journal(request: CodexRequest, work: () => Promise<unknown>, stored: (result: unknown) => unknown = result => result): Promise<unknown> {
+    const receipt = await this.dispatch({ codexAdministration: { type: 'begin', request } }) as AdministrationReceipt
+    if (receipt.completed) return receipt.result
+    try {
+      const result = await work()
+      await this.dispatch({ codexAdministration: { type: 'complete', request, result: stored(result) } })
+      return result
+    }
+    catch (error) {
+      await this.dispatch({ codexAdministration: { type: 'failed', request } })
+      throw error
+    }
+  }
+
+  private desktop(action: DesktopAction): Promise<unknown> {
+    if (action.channel === 'definitions') return this.definitions(action.command)
+    if (action.channel === 'scheduling') return this.scheduling(action.command)
+    return this.request(action.command)
   }
 
   private async administer(action: ReturnType<typeof parseAdministration>): Promise<unknown> {
@@ -479,7 +497,7 @@ export class FixtureWorker {
     }
     if (action.kind === 'recovery') {
       const view = await this.runs(action.command)
-      return { runs: view.runs.map(({ id, state, scriptHash, startedAt, finishedAt, recovery }) => ({ id, state, scriptHash, startedAt, finishedAt, recovery: recovery?.state ?? null })), effects: view.effects?.map(({ key, runId }) => ({ key, runId })) ?? [] }
+      return { runs: view.runs.map(({ id, state, scriptHash, startedAt, finishedAt, recovery }) => ({ id, state, scriptHash, startedAt, finishedAt, recovery: recovery?.state ?? null })), effects: view.effects?.map(({ key, runId }) => ({ key, runId })) ?? [], approvals: view.approvals?.map(({ runId, grantId, state }) => ({ runId, grantId, state })) ?? [] }
     }
     if (action.kind === 'program') {
       if (['prepare', 'start', 'poll', 'input', 'close'].includes(action.command.type)) return this.program(action.command)
