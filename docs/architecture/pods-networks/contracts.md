@@ -500,7 +500,11 @@ The owner decides each item grant of an approve route at the IdP as `once` or
 batch expiry. Release consumes a `once` grant; an `always` grant is confirmed as
 valid instead, and every archive move still requires it to be approved at that
 moment. A denied or revoked grant releases and moves nothing; `timed` decisions
-are refused.
+are refused. Once every input of a batch is done or discarded, or the batch was
+denied, expired or superseded, the desktop revokes its still approved `always`
+grants as the requesting Pod (`/api/grants/:id/revoke`, a few batches per minute)
+and records `gate-grants-released`. A failed revocation is logged and retried with
+backoff and never blocks processing.
 
 ## Diagnostic changes and UI review
 

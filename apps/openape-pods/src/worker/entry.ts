@@ -411,6 +411,13 @@ port.on('message', async (event) => {
       const maintenance = store.db.prepare('SELECT 1 FROM workflow_gate_attempts WHERE run_id=?').get(check.scope.runId)
       port.postMessage({ id: request.id, state: { name: store.getPod(check.scope.podId).name, reason, runtime: !network && !maintenance } }); return
     }
+    if (request.command && typeof request.command === 'object' && 'networkGateRelease' in request.command) {
+      const release = request.command.networkGateRelease as { type?: unknown, taskId?: unknown }
+      if (release?.type === 'list') { port.postMessage({ id: request.id, state: networks.gates.releasable() }); return }
+      if (release?.type !== 'released' || typeof release.taskId !== 'string') throw new Error('Invalid network gate release')
+      networks.gates.released(release.taskId)
+      port.postMessage({ id: request.id, state: true }); return
+    }
     if (request.command && typeof request.command === 'object' && 'networkGateCheck' in request.command) {
       const check = request.command.networkGateCheck as ServiceCheck & { manifest: unknown, operation: string, grants?: unknown }
       authorizeRunService(store, registry, dispatcher.runs, check)
