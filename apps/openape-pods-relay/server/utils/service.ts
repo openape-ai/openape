@@ -34,14 +34,14 @@ export function auth() {
   const owners = allowlist.map(parseOwner)
   return new RelayAuth(relay(), String(config.relayOrigin), fixture ? String(config.relayIdpUrl) : '', owner => config.relayEnrollment === 'public' || (config.relayEnrollment === 'pilot' && owners.some(allowed => sameOwner(owner, allowed))))
 }
-export function actor(event: H3Event, kind: Registration['kind'] = 'mobile') {
+export function actor(event: H3Event): Registration {
   setHeader(event, 'cache-control', 'no-store')
   const authorization = getHeader(event, 'authorization') ?? ''
   if (!authorization.startsWith('Bearer ')) throw new ProtocolError('authentication_required', 401)
   const url = getRequestURL(event)
   const proof = { id: getHeader(event, 'x-pods-request-id') ?? '', at: getHeader(event, 'x-pods-request-at') ?? '', digest: getHeader(event, 'x-pods-body-digest') ?? '', signature: getHeader(event, 'x-pods-proof') ?? '' }
   if (['GET', 'DELETE'].includes(event.method) && proof.digest !== sha256('')) throw new ProtocolError('invalid_request_proof', 401)
-  const caller = relay().authenticateRequest(authorization.slice(7), kind, event.method, url.pathname + url.search, proof)
+  const caller = relay().authenticateRequest(authorization.slice(7), event.method, url.pathname + url.search, proof)
   event.context.podsBodyDigest = proof.digest
   return caller
 }

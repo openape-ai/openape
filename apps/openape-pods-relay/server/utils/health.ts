@@ -7,5 +7,5 @@ export function health() {
   const workspaceEnabled = !!useRuntimeConfig().workspaceEnabled
   if (workspaceEnabled) workspace().db.prepare('SELECT 1').get()
   if (enabled) relay().db.prepare('SELECT 1').get()
-  return { ok: true, service: 'openape-pods-relay', protocol: 1, enabled, workspaceEnabled, notifications: enabled && !!useRuntimeConfig().relayApnsEnabled }
+  return { ok: true, service: 'openape-pods-relay', protocol: 1, enabled, workspaceEnabled }
 }
