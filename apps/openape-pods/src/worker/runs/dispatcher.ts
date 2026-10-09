@@ -247,7 +247,7 @@ export class RunDispatcher {
             signal.throwIfAborted()
           }
           try { return await work() }
-          catch (error) { if (error instanceof AuthorityError) infrastructureFailure = { cause: 'authority' }; if (error instanceof NonRetryableError) infrastructureFailure = { cause: 'non-retryable' }; if (error instanceof InfrastructureError) infrastructureFailure = { cause: 'infrastructure', retryAfterMs: error.failure.retryAfterMs }; throw error }
+          catch (error) { if (error instanceof AuthorityError) infrastructureFailure = { cause: 'authority' }; if (error instanceof NonRetryableError && infrastructureFailure?.cause !== 'authority') infrastructureFailure = { cause: 'non-retryable' }; if (error instanceof InfrastructureError) infrastructureFailure = { cause: 'infrastructure', retryAfterMs: error.failure.retryAfterMs }; throw error }
         }, signal, (retry) => {
           if (retry && !waiting) { waiting = true; infrastructureWaiting++ }
           appendEvent('infrastructure', { operation, ...(retry ?? { state: 'restored' }) })
