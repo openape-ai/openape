@@ -231,7 +231,6 @@ export class RunDispatcher {
     let shellScope: RunServiceScope | undefined
     let infrastructureWaiting = 0
     let networkMailReads = 0
-    let networkAgentCalls = 0
     let notifications = 0
     let archiveCalls = 0
     let infrastructureFailure: RecoveryFailure | undefined
@@ -363,8 +362,6 @@ export class RunDispatcher {
           if (operation === 'agent.run') {
             if (!this.services?.provider) throw new Error('Codex is not connected; connect the pod provider before using this script')
             const request = parseAgentRequest(payload)
-            if (network && (request.tools.length || request.timeoutSeconds > 120)) throw new Error('Network text generation requires no tools and a timeout of at most 120 seconds')
-            if (network && networkAgentCalls++ >= 50) throw new Error('Network text generation budget exceeded')
             const operation = executeAgent(runtime, directory, request.prompt, input.references.map(file => file.path), { provider: this.services.provider, tool: invokeTool }, operationSignal, (event) => { assertCurrent(); appendEvent('agent', event) }, request.tools, request.timeoutSeconds)
             pendingAgents.add(operation); if (activeAgentCalls++ === 0) agentSince = Date.now()
             try { const reply = await operation; assertCurrent(); operationSignal.throwIfAborted(); return reply }
