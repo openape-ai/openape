@@ -48,7 +48,8 @@ export async function handleGate(input: Request): Promise<unknown> {
   if (manifest.version !== 1) await check()
   const connection = manifest.version !== 1 ? await input.connections.podConnection(input.scope.podId, manifest.owner, true) : await input.connections.podConnection(input.scope.podId)
   if (manifest.version !== 1) await check()
-  const authority = createGrantAuthority(connection, input.signal, check, gateAudience)
+  // Network approve routes accept the owner's once or always decision; legacy workflow gates keep once grants until they leave (issue 1455, M4).
+  const authority = createGrantAuthority(connection, input.signal, check, gateAudience, manifest.version !== 1 ? ['once', 'always'] : ['once'])
   if (body.operation === 'create') {
     const reply = await authority.createBatch({ id: manifest.id, title: manifest.title, expiresAt: manifest.expiresAt, reason: manifest.version !== 1 ? `${manifest.title}: approve this item` : `${manifest.title}: diesen Eintrag freigeben`, permissions: [`graph.gate:${manifest.id}`], members })
     return { id: manifest.id, ...reply }
