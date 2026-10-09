@@ -26,15 +26,15 @@ graph LR
     w32["@openape/core"]
     w33["@openape/grants"]
     w37["@openape/openclaw-grant-gate"]
-    w40["@openape/pods-protocol"]
-    w41["@openape/prompt-injection-detector"]
-    w42["@openape/proof-cli"]
-    w43["@openape/protocol-conformance"]
-    w44["@openape/proxy"]
-    w45["@openape/report-contracts"]
-    w46["@openape/shapes"]
-    w47["@openape/sp-tasks"]
-    w49["@openape/unstorage-s3-driver"]
+    w39["@openape/pods-protocol"]
+    w40["@openape/prompt-injection-detector"]
+    w41["@openape/proof-cli"]
+    w42["@openape/protocol-conformance"]
+    w43["@openape/proxy"]
+    w44["@openape/report-contracts"]
+    w45["@openape/shapes"]
+    w46["@openape/sp-tasks"]
+    w48["@openape/unstorage-s3-driver"]
   end
   subgraph modules
     w35["@openape/nuxt-auth-idp"]
@@ -58,15 +58,14 @@ graph LR
     w29["@openape/chat"]
     w34["@openape/nest"]
     w38["@openape/pods"]
-    w39["@openape/pods-ios"]
-    w48["@openape/troop"]
-    w50["docs"]
-    w52["openape-free-idp"]
+    w47["@openape/troop"]
+    w49["docs"]
+    w51["openape-free-idp"]
   end
   subgraph examples
-    w51["openape-e2e"]
-    w53["openape-idp-example"]
-    w54["openape-sp-example"]
+    w50["openape-e2e"]
+    w52["openape-idp-example"]
+    w53["openape-sp-example"]
   end
   w0 --> w32
   w0 --> w36
@@ -74,69 +73,69 @@ graph LR
   w2 --> w32
   w2 --> w33
   w2 --> w36
-  w2 --> w51
+  w2 --> w50
   w3 --> w32
   w3 --> w36
   w4 --> w18
   w4 --> w36
-  w4 --> w45
-  w4 --> w51
+  w4 --> w44
+  w4 --> w50
   w5 --> w28
   w5 --> w32
   w5 --> w36
   w5 --> w38
-  w5 --> w40
-  w5 --> w51
+  w5 --> w39
+  w5 --> w50
   w6 --> w36
-  w6 --> w51
+  w6 --> w50
   w7 --> w36
-  w7 --> w47
-  w7 --> w51
+  w7 --> w46
+  w7 --> w50
   w8 --> w32
   w8 --> w36
   w9 --> w36
   w10 --> w36
-  w10 --> w45
-  w10 --> w51
+  w10 --> w44
+  w10 --> w50
   w11 --> w36
   w12 --> w30
   w12 --> w32
   w13 --> w25
   w13 --> w30
-  w13 --> w41
-  w13 --> w47
+  w13 --> w40
+  w13 --> w46
   w14 --> w30
-  w14 --> w42
+  w14 --> w41
   w15 --> w30
   w16 --> w30
-  w16 --> w42
+  w16 --> w41
   w17 --> w30
-  w17 --> w42
+  w17 --> w41
   w18 --> w30
-  w18 --> w42
+  w18 --> w41
   w19 --> w30
-  w19 --> w42
+  w19 --> w41
   w20 --> w30
-  w20 --> w42
+  w20 --> w41
   w21 --> w30
-  w21 --> w42
+  w21 --> w41
   w22 --> w30
-  w22 --> w42
-  w22 --> w45
+  w22 --> w41
+  w22 --> w44
   w23 --> w30
-  w23 --> w42
+  w23 --> w41
   w24 --> w30
   w25 --> w12
   w25 --> w30
   w25 --> w32
   w25 --> w33
-  w25 --> w44
-  w25 --> w46
-  w25 --> w51
+  w25 --> w43
+  w25 --> w45
+  w25 --> w50
   w28 --> w32
   w29 --> w32
   w29 --> w36
-  w29 --> w51
+  w29 --> w50
   w33 --> w32
   w34 --> w13
   w34 --> w30
@@ -146,35 +145,34 @@ graph LR
   w36 --> w28
   w36 --> w32
   w37 --> w30
-  w37 --> w46
+  w37 --> w45
   w38 --> w25
   w38 --> w32
   w38 --> w33
-  w38 --> w40
-  w39 --> w51
-  w42 --> w30
+  w38 --> w39
+  w41 --> w30
+  w42 --> w32
+  w42 --> w33
   w43 --> w32
-  w43 --> w33
-  w44 --> w32
-  w46 --> w32
-  w46 --> w33
-  w48 --> w27
-  w48 --> w32
-  w48 --> w36
-  w48 --> w41
-  w48 --> w51
+  w45 --> w32
+  w45 --> w33
+  w47 --> w27
+  w47 --> w32
+  w47 --> w36
+  w47 --> w40
+  w47 --> w50
+  w50 --> w35
+  w50 --> w36
+  w51 --> w28
+  w51 --> w32
+  w51 --> w33
   w51 --> w35
-  w51 --> w36
-  w52 --> w28
-  w52 --> w32
-  w52 --> w33
+  w51 --> w50
   w52 --> w35
-  w52 --> w51
-  w53 --> w35
-  w53 --> w49
-  w53 --> w51
-  w54 --> w28
-  w54 --> w32
-  w54 --> w33
-  w54 --> w36
+  w52 --> w48
+  w52 --> w50
+  w53 --> w28
+  w53 --> w32
+  w53 --> w33
+  w53 --> w36
 ```
