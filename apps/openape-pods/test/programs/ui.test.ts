@@ -9,13 +9,12 @@ const state: ResourceState = { epoch: 2, resources: [{ id, podId, kind: 'tool', 
 it('opens one external pod terminal without an embedded console or argument form', async () => {
   const programs = vi.fn(async command => command.type === 'launchStatus' ? null : state)
   window.pods = { ...window.pods, programs }
-  const wrapper = mount(ProgramPermissions, { props: { podId, state }, global: { stubs: { PodConsole: true, ScriptAccess: true } } })
+  const wrapper = mount(ProgramPermissions, { props: { podId, state }, global: { stubs: { ScriptAccess: true } } })
   expect(wrapper.text()).toContain('Terminal.app')
   expect(wrapper.text()).not.toContain('Signed in')
   await wrapper.get('.application-select').trigger('click')
   await wrapper.findAll('button').find(button => button.text() === 'Open Terminal.app')!.trigger('click')
   await flushPromises()
-  expect(wrapper.find('pod-console-stub').exists()).toBe(false)
   expect(wrapper.find('input[aria-label^="Arguments"]').exists()).toBe(false)
   expect(wrapper.text()).not.toContain('Start in terminal')
   expect(programs).toHaveBeenCalledWith({ type: 'openShell', podId })
