@@ -60,8 +60,8 @@ function draw(now: number) {
   for (const cluster of model.value.clusters) {
     ctx.globalAlpha = 0.45; ctx.beginPath(); ctx.roundRect(cluster.x, cluster.y, cluster.w, cluster.h, 16); ctx.fill(); ctx.globalAlpha = 1
     ctx.fillStyle = muted; ctx.font = font(12, 600); ctx.textAlign = 'left'
-    const collection = props.view.collections.find(item => item.id === cluster.id)
-    const facts = collection ? [collection.name.toUpperCase(), collection.schedule?.spec?.kind === 'interval' ? t('every {count} min', { count: collection.schedule.spec.seconds / 60 }) : collection.schedule?.spec?.kind === 'daily' ? t('daily {time}', { time: collection.schedule.spec.time }) : '', collection.counts.done ? t('{count} deliveries', { count: collection.counts.done }) : '', collection.lastRun ? `${t('last')} ${ago(collection.lastRun.at, props.now)}` : ''].filter(Boolean) : [cluster.name]
+    const automation = props.view.automations.find(item => item.id === cluster.id)
+    const facts = automation ? [automation.name.toUpperCase(), automation.schedule?.spec?.kind === 'interval' ? t('every {count} min', { count: automation.schedule.spec.seconds / 60 }) : automation.schedule?.spec?.kind === 'daily' ? t('daily {time}', { time: automation.schedule.spec.time }) : '', automation.counts.done ? t('{count} deliveries', { count: automation.counts.done }) : '', automation.lastRun ? `${t('last')} ${ago(automation.lastRun.at, props.now)}` : ''].filter(Boolean) : [cluster.name]
     ctx.fillText(fit(ctx, facts.join(' · '), cluster.w - 24), cluster.x + 12, cluster.y + 18)
     ctx.fillStyle = g('--tint')
   }

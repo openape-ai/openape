@@ -81,7 +81,7 @@ export function mapFixture() {
   for (const [name, contract] of Object.entries(mailContracts)) pods[name] = f.pod(name, contract, async () => {})
   store.db.prepare('UPDATE scripts SET manifest=json_set(manifest,\'$.capabilities\',json(\'["jev.evaluate"]\')) WHERE pod_id=?').run(pods.Triage!)
   const members = Object.keys(mailContracts).map(name => ({ podId: pods[name]!, source: name === 'Intake' ? { schedule: { kind: 'interval' as const, seconds: 900 } } : null, serialCase: false }))
-  const network = f.engine.execute({ type: 'create', draft: { name: 'Delta Mind · Mail-Netzwerk', groupId: deltaMind, members, channels: mailChannels.map(name => ({ name, title: name, schemaVersion: 1, schema: { type: 'object', properties: { subject: { type: 'string' } }, required: ['subject'], additionalProperties: false } })), routes: [chooseGate, approveGate], gates: [{ key: approveGate.key, title: approveGate.title, kind: 'approve', podId: pods['Archive preview']!, channel: 'mail.batch' }] } }).createdId!
+  const network = f.engine.execute({ type: 'create', draft: { name: 'Delta Mind · Mail-Netzwerk', groupId: deltaMind, members, channels: mailChannels.map(name => ({ name, title: name, schemaVersion: 1, schema: { type: 'object', properties: { subject: { type: 'string' } }, required: ['subject'], additionalProperties: false } })), routes: [chooseGate, approveGate] } }).createdId!
   store.db.prepare('UPDATE networks SET state=\'active\' WHERE id=?').run(network)
   store.db.prepare('INSERT INTO network_queue_counts VALUES(?,\'done\',80)').run(network)
   resource(pods.Intake!, 'tool', 'o365-cli', o365('phofmann@delta-mind.at', ['List emails in inbox for phofmann@delta-mind.at', 'Read email from account phofmann@delta-mind.at']))

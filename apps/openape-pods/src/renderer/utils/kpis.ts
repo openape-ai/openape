@@ -14,20 +14,20 @@ export interface KpiFacts {
 
 export function kpiFacts(view: MapView): KpiFacts {
   const { kpis } = view
-  const standalone = view.pods.filter(pod => !pod.collection)
+  const standalone = view.pods.filter(pod => !pod.automation)
   const first = kpis.degraded[0]
   return {
     active: kpis.active,
     paused: {
       total: kpis.paused,
-      networks: view.collections.filter(collection => collection.kind === 'network' && collection.state !== 'active').length,
+      networks: view.automations.filter(automation => automation.kind === 'network' && automation.state !== 'active').length,
       drafts: standalone.filter(pod => pod.draft && pod.lifecycle !== 'archived').length,
       archived: standalone.filter(pod => pod.lifecycle === 'archived').length,
     },
     degraded: { count: kpis.degraded.length, name: first ? view.pods.find(pod => pod.id === first.podId)?.name ?? null : null, reason: first?.reason ?? null },
     decisions: {
       count: kpis.decisions.reduce((sum, item) => sum + item.count, 0),
-      gates: kpis.decisions.map(item => ({ title: item.title, group: view.collections.find(collection => collection.id === item.networkId)?.group ?? null })),
+      gates: kpis.decisions.map(item => ({ title: item.title, group: view.automations.find(automation => automation.id === item.networkId)?.group ?? null })),
     },
     unknownDeliveries: kpis.unknownDeliveries,
   }

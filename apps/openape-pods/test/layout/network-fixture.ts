@@ -14,9 +14,9 @@ export function operationalFixture() {
     instances: pods.map((pod, index) => ({ podId: pod.id, definitionId: id(index + 10), version: 1, bindingRevision: 1, diverged: false, groupId })), provisioning: [],
   }
   const definition: NetworkDefinition = {
-    formatVersion: 3, kind: 'network', semantics: 'persistent-network-v1', id: networkId, revision: 1, groupId, name: 'Synthetic operational network',
+    formatVersion: 6, kind: 'network', semantics: 'persistent-network-v1', id: networkId, revision: 1, groupId, name: 'Synthetic operational network',
     members: pods.map((pod, index) => ({ podId: pod.id, definitionId: id(index + 10), definitionVersion: 1, bindingRevision: 1, contract: contracts[index]!, source: index < 2 ? { bindingId: id(index + 30), schedule: { kind: 'interval', seconds: (index + 1) * 60 } } : null, serialCase: false })),
-    channels: [{ name: 'mail.input', title: 'Mail input', schemaVersion: 1, schema: { type: 'object', properties: { subject: { type: 'string' } }, required: ['subject'], additionalProperties: false } }], gates: [], joins: [],
+    channels: [{ name: 'mail.input', title: 'Mail input', schemaVersion: 1, schema: { type: 'object', properties: { subject: { type: 'string' } }, required: ['subject'], additionalProperties: false } }], routes: [], joins: [], feedback: [],
   }
   const setup: NetworkSetup = { fingerprint: 'c'.repeat(64), groupId, members: pods.map((pod, index) => ({ podId: pod.id, name: pod.name, lifecycle: pod.lifecycle, capabilities: index === 0 ? ['mail.read'] : [], triggers: ['manual', 'schedule', 'event'], resourcesMore: false, resources: index === 0 ? [{ name: 'Synthetic mailbox · read only', kind: 'tool', state: 'ready' }] : [], values: index < 2 ? [{ name: 'mailbox', kind: 'public', origin: 'definition', value: 'synthetic@example.invalid' }] : [] })) }
   const view: NetworkView = {

@@ -30,7 +30,7 @@ function fixture() {
   const seed = seedNetwork(store)
   const binding = store.db.prepare('SELECT source_binding_id FROM network_members WHERE pod_id=?').get(seed.pod.id)!.source_binding_id as string
   const definition = parseNetworkDefinition({
-    formatVersion: 1, kind: 'network', semantics: 'persistent-network-v1', id: seed.networkId, revision: 1, groupId: seed.groupId, name: 'Synthetic source',
+    formatVersion: 6, kind: 'network', semantics: 'persistent-network-v1', id: seed.networkId, revision: 1, groupId: seed.groupId, name: 'Synthetic source', routes: [], joins: [], feedback: [],
     channels: ['input', 'other'].map(name => ({ name, title: name, schemaVersion: 1, schema: { type: 'object', properties: { value: { type: 'string' }, count: { type: 'integer' } }, required: ['value'], additionalProperties: false } })),
     members: [{ podId: seed.pod.id, definitionId: seed.definitionId, definitionVersion: 1, bindingRevision: 1, source: { bindingId: binding, schedule: null }, serialCase: false, contract: { takes: [], gives: ['input', 'other'], summary: 'Synthetic source' } }],
   })

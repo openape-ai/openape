@@ -97,11 +97,10 @@ export async function mapPortableSource(root: string, source: PortableSource, ch
       }
       return { name: value.name, input }
     })
-    if (definition.routes?.length) throw new Error('Portable export of routed networks requires routing format support')
     const document = { version: 1, kind: 'network', formatVersion: definition.formatVersion, channels: definition.channels,
       members: definition.members.map(member => ({ pod: podKey(member.podId), source: member.source ? { schedule: member.source.schedule } : null, serialCase: member.serialCase })),
-      gates: (definition.gates ?? []).map(({ podId, ...gate }) => ({ ...gate, pod: podKey(podId) })), joins: (definition.joins ?? []).map(({ podId, ...join }) => ({ ...join, pod: podKey(podId) })),
-      ...(definition.feedback ? { feedback: definition.feedback.map(({ podId, ...item }) => ({ ...item, pod: podKey(podId) })) } : {}),
+      routes: definition.routes, joins: definition.joins.map(({ podId, ...join }) => ({ ...join, pod: podKey(podId) })),
+      feedback: definition.feedback.map(({ podId, ...item }) => ({ ...item, pod: podKey(podId) })),
       values, legacyVariables: Object.keys(network.legacyVariables).sort(), collections, artifacts, calls: network.calls.map(call => ({ pod: podKey(String(call.pod_id)), workflow: choiceFor(String(call.workflow_id)).key })) }
     composition.inputs = inputs.finish()
     compositions.push(composition); payloads.push(jsonPayload(composition.document, 'composition', document))

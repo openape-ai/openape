@@ -7,7 +7,7 @@ import type { NetworkGates } from './network-gates'
 import type { NetworkGateManifest } from '../../contracts/network-gates'
 import { assertNetworkQuota, NetworkQuotaError } from './network-quota'
 import { randomUUID } from 'node:crypto'
-import { networkGateOutput, parseNetworkDefinition, networkLimits  } from '../../contracts/networks'
+import { networkApprovals, parseNetworkDefinition, networkLimits } from '../../contracts/networks'
 import type { RunState } from '../../contracts/runs'
 import type { RunStore } from '../runs/store'
 import { parseProgress } from '../runs/progress'
@@ -78,12 +78,12 @@ export class NetworkInvocations {
       const pin = this.store.db.prepare('SELECT content_hash FROM pod_definition_versions WHERE definition_id=? AND version=?').get(member.definitionId, member.definitionVersion)
       if (!pin || pin.content_hash !== pod.activeScript) throw new Error('Network instance no longer matches its pinned script')
       const sourceRetry = member.source ? this.store.db.prepare('SELECT i.run_id,i.manifest,c.attempt FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.network_id=? AND i.pod_id=? AND i.state=\'blocked\' AND c.retry_at<=? AND (json_extract(i.manifest,\'$.reason\')!=\'manual\' OR ?=1) ORDER BY c.retry_at,i.rowid LIMIT 1').get(networkId, podId, Date.now(), reason === 'manual' ? 1 : 0) : null
-      const join = definition.joins?.find(join => join.podId === podId)
-      const gatedInputs = definition.gates?.filter(gate => gate.podId === podId).map(gate => gate.channel) ?? []
+      const join = definition.joins.find(join => join.podId === podId)
+      const gatedInputs = networkApprovals(definition).filter(approval => approval.podId === podId).map(approval => approval.takes)
       const ready = member.source ? [] : join ? this.events.joins.ready(networkId, definition.revision, join, reason === 'manual', gatedInputs) : this.ready(networkId, definition.revision, podId, reason === 'manual', gatedInputs)
       if (!member.source && !ready.length) return null
       const gateBindings: { taskId: string, grantId: string, manifestHash: string }[] = []
-      const gatedChannels = new Set(definition.gates?.filter(gate => gate.podId === podId).map(gate => gate.channel) ?? [])
+      const gatedChannels = new Set(gatedInputs)
       for (const input of ready) {
         if (!gatedChannels.has(input.channel as string)) continue
         const binding = this.gates?.binding(input.id as string)
@@ -135,7 +135,7 @@ export class NetworkInvocations {
     const { row, definition, member } = this.data.authority(authority)
     const checkpoint = this.store.db.prepare('SELECT revision,body FROM network_checkpoints WHERE network_id=? AND pod_id=?').get(definition.id, member.podId)!
     const items = this.store.db.prepare(`SELECT e.id,e.item_key,e.channel,e.payload,e.case_id,e.case_revision FROM network_deliveries d JOIN network_events e ON e.id=d.event_id
-      WHERE d.run_id=? AND d.state='claimed' ORDER BY d.accepted_at,d.id`).all(authority.runId).map(item => ({ eventId: item.id as string, key: item.item_key as string, channel: networkGateOutput(definition, definition.gates?.find(gate => gate.podId === member.podId && gate.channel === item.channel)?.key ?? '', item.channel as string), data: JSON.parse(item.payload as string) as Record<string, unknown>, artifacts: this.events.references(item.id as string), caseId: item.case_id as string, caseRevision: item.case_revision as number }))
+      WHERE d.run_id=? AND d.state='claimed' ORDER BY d.accepted_at,d.id`).all(authority.runId).map(item => ({ eventId: item.id as string, key: item.item_key as string, channel: networkApprovals(definition).find(approval => approval.podId === member.podId && approval.takes === item.channel)?.gives ?? item.channel as string, data: JSON.parse(item.payload as string) as Record<string, unknown>, artifacts: this.events.references(item.id as string), caseId: item.case_id as string, caseRevision: item.case_revision as number }))
     return { variables: networkLegacyVariables(this.store, definition.id), config: networkConfiguration(this.store, definition.id, member.podId), network: { id: definition.id, revision: definition.revision, source: member.source !== null }, items, checkpoint: { revision: checkpoint.revision as number, body: JSON.parse(checkpoint.body as string) as Record<string, unknown> }, resourceEpoch: (JSON.parse(row.manifest as string) as { resourceEpoch: number }).resourceEpoch }
   }
 
