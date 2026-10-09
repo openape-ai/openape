@@ -3,14 +3,14 @@
 Claude Code and Codex share the installed Pods MCP server and central workspace.
 The desktop app must be running on this Mac and connected to the central service.
 Changes appear automatically at https://pods.openape.ai/workspace and in the
-same desktop workspace. Claude does not need an additional OpenApe login or key.
+same desktop workspace. Claude needs no separate key: each session signs in with
+the owner's DDISA account (see [Sign in per session](#sign-in-per-session)).
 
 ## Connect once
 
-If the local MCP connection has never been enabled, enable **Work from Codex**
-in Pods App settings once. That existing switch starts the shared local server;
-Claude uses the same server. Do not disconnect that switch while using Claude.
-Then register its stable launcher with Claude Code:
+The running app always serves the local MCP socket. If the launcher has never
+been written, choose **Connect Codex** under App settings → Work from Codex once;
+Claude uses the same launcher. Then register it with Claude Code:
 
 ```sh
 claude mcp add --transport stdio --scope user openape-pods -- \
@@ -33,6 +33,26 @@ The launcher uses the app's bundled runtime, so no global Node or extra npm
 package is needed. App updates refresh the same launcher. To disconnect only
 Claude, run `claude mcp remove openape-pods --scope user` and remove only its
 exact allow rule. The Codex connection can remain enabled.
+
+## Sign in per session
+
+Every MCP server process (one per Claude or Codex session) starts without access.
+Its first `pods_control` call returns `{"error":"login_required", ...}` and Pods
+opens the owner's DDISA sign-in in the browser (the same PKCE login as the
+desktop owner account; only a human token of the registered owner is accepted).
+After the sign-in, Pods asks in a native dialog whether this client may have full
+Pods access for one hour. Confirm only a request you just made: the identity
+provider can complete the sign-in silently while its browser session lasts.
+Then retry the call. The session is bound to that one MCP connection and ends
+after one hour, with **End session** in App settings, when the app quits or when
+the client disconnects; the next call returns `login_required` again without a
+client restart. The session secret stays in memory and is never written to disk.
+
+Within a session MCP may use every action the tool offers. Grant approvals,
+denials and choices stay at the identity provider; no MCP action can decide them.
+Versions before issue 1455 stored off/read/write access modes in
+`mcp-access.json` in the profile folder. Current versions ignore that file; it
+grants nothing and may be deleted.
 
 ## Work with Pods
 

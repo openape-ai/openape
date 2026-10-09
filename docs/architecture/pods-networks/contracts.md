@@ -1257,11 +1257,12 @@ paused, settled compatibility transaction as other definition updates.
 
 ## Local owner MCP access
 
-Local MCP uses the desktop access policy and current network owner. The `networks`
-action accepts only list/detail/trace/records/legacyItems and pause/preview/process.
+Local MCP requires the owner's one-hour MCP session and uses the current network
+owner. The `networks` action accepts only list/detail/trace/records/legacyItems
+and pause/preview/process.
 Reads reuse existing bounded views (2 MiB total); explicit network reads filter
 other network summaries, gates and choices. Secret values and approval URLs are
-not returned. Read-only MCP cannot create processing previews or start work.
+not returned.
 
 Network mutation receipts bind a stable request UUID to canonical arguments and
 owner identity in the existing action journal. An exact retry returns the original
