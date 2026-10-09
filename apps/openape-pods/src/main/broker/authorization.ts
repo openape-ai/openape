@@ -11,7 +11,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 export type GrantProgress = RunApproval
 export type GrantObserver = (progress: GrantProgress) => Promise<void>
 export type GrantLookup = (permission: string, connection: AgentConnection) => Promise<string | undefined>
-interface Grant { brokered?: BrokeredGrant, id: string, status: string, request: { requester: string, audience: string, target_host: string, grant_type: string, waits_until?: number } }
+interface Grant { brokered?: BrokeredGrant, id: string, status: string, request: { requester: string, audience: string, target_host: string, grant_type: string, waits_until?: number }, created_at?: number }
 
 export interface AgentConnection {
   decisionIssuer?: string
@@ -32,6 +32,8 @@ export const grantTokenReuseMs = 60 * 1000
 const expiryMarginMs = 10 * 1000
 // A single-use request is useless once its caller stopped waiting (DDISA grants §3.4).
 const onceWaitMs = 15 * 60 * 1000
+// The IdP turns a request nobody answered into expired after 48 hours (nuxt-auth-idp grant store).
+const pendingRequestTtlMs = 48 * 60 * 60 * 1000
 
 /** Polls quickly while the owner is likely deciding, then slowly so a long wait stays below the IdP rate limit. */
 export function decisionPollMs(waitedMs: number): number { return waitedMs < 5 * 60 * 1000 ? 2000 : 30000 }
@@ -44,6 +46,16 @@ export function decisionPollMs(waitedMs: number): number { return waitedMs < 5 *
  */
 export class RunGrantTokens {
   private readonly minted = new Map<string, MintedGrant>()
+  private readonly inflight = new Map<string, Promise<unknown>>()
+  /** One in-flight grant request or decision wait per key and run; concurrent calls share its result. */
+  shared<T>(key: string, work: () => Promise<T>): Promise<T> {
+    const existing = this.inflight.get(key) as Promise<T> | undefined
+    if (existing) return existing
+    const promise = work().finally(() => this.inflight.delete(key))
+    this.inflight.set(key, promise)
+    return promise
+  }
+
   reusable(key: string, now = Date.now()): MintedGrant | undefined {
     const entry = this.minted.get(key)
     if (entry && now < entry.reusableUntil) return entry
@@ -55,7 +67,16 @@ export class RunGrantTokens {
     this.minted.set(key, { grantId: grant.grantId, token: grant.token, jwks: grant.jwks, reusableUntil: Math.min(now + grantTokenReuseMs, grant.expiresAt - expiryMarginMs) })
   }
 
-  expired(now = Date.now()): boolean { return [...this.minted.keys()].every(key => !this.reusable(key, now)) }
+  expired(now = Date.now()): boolean { return this.inflight.size === 0 && [...this.minted.keys()].every(key => !this.reusable(key, now)) }
+}
+
+/** Awaits a shared operation but leaves as soon as this caller is cancelled. */
+async function abortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted()
+  let leave!: () => void
+  const left = new Promise<never>((_, reject) => { leave = () => reject(signal.reason); signal.addEventListener('abort', leave, { once: true }) })
+  try { return await Promise.race([work, left]) }
+  finally { signal.removeEventListener('abort', leave) }
 }
 
 function tokenClaims(token: string): { exp: number, grantType: string } {
@@ -128,7 +149,9 @@ export class AgentAuthority {
     if (!grant || grant.status === 'used' || grant.status === 'expired') {
       // The runtime and owner assignments ask for a continuing grant; the owner chooses its scope at the IdP.
       const grantType = assignment.command.cliId === 'pod-runtime' || assignment.grantId ? 'always' : 'once'
-      const created = await this.request('/api/grants', 'POST', signal, { requester: this.connection.subject, target_host: this.connection.targetHost, audience: 'shapes', grant_type: grantType, ...(grantType === 'once' ? { waits_until: Math.floor((Date.now() + onceWaitMs) / 1000) } : {}), command: assignment.command.argv, permissions: [resolved.permission], authorization_details: [resolved.detail], execution_context: resolved.executionContext, reason: resolved.detail.display, ...(summary ? { summary: { text: summary } } : {}) }) as { id?: unknown }
+      const create = async () => await this.request('/api/grants', 'POST', signal, { requester: this.connection.subject, target_host: this.connection.targetHost, audience: 'shapes', grant_type: grantType, ...(grantType === 'once' ? { waits_until: Math.floor((Date.now() + onceWaitMs) / 1000) } : {}), command: assignment.command.argv, permissions: [resolved.permission], authorization_details: [resolved.detail], execution_context: resolved.executionContext, reason: resolved.detail.display, ...(summary ? { summary: { text: summary } } : {}) }) as { id?: unknown }
+      // Parallel calls of one run ask once for a continuing grant; each single-use call has its own request.
+      const created = grantType === 'always' ? await this.share(`request:${resolved.permission}`, create, signal) : await create()
       if (typeof created?.id !== 'string') throw new Error('Permission service returned an invalid grant')
       grant = await this.grant(created.id, signal)
     }
@@ -148,18 +171,28 @@ export class AgentAuthority {
   private async decision(pending: Grant, publish: (state: GrantProgress['state']) => Promise<void>, signal: AbortSignal): Promise<Grant> {
     if (!this.observe) throw new Error('Permission needs owner approval at the IdP; open this Pod in OpenApe Pods')
     await publish('pending')
-    const started = Date.now()
-    const deadline = pending.request.grant_type === 'always' ? Number.POSITIVE_INFINITY : started + onceWaitMs
-    let grant = pending
-    try {
-      while (grant.status === 'pending' && Date.now() < deadline) {
-        await delay(decisionPollMs(Date.now() - started), undefined, { signal })
-        grant = await this.grant(grant.id, signal)
-      }
-    }
+    let grant: Grant
+    // Calls of the same run that need this grant share one wait instead of polling the IdP separately.
+    try { grant = await this.share(`decision:${pending.id}`, () => this.poll(pending, signal), signal) }
     catch (error) { await publish('cancelled'); throw error }
     if (grant.status !== 'approved') await publish(grant.status === 'denied' ? 'denied' : grant.status === 'revoked' ? 'revoked' : 'expired')
     return grant
+  }
+
+  /** Polls until the owner decides; a continuing request at most until the IdP expires it, a single-use one while its caller waits. */
+  private async poll(pending: Grant, signal: AbortSignal): Promise<Grant> {
+    const started = Date.now()
+    const deadline = pending.request.grant_type === 'always' ? (typeof pending.created_at === 'number' ? pending.created_at * 1000 : started) + pendingRequestTtlMs : started + onceWaitMs
+    let grant = pending
+    while (grant.status === 'pending' && Date.now() < deadline) {
+      await delay(decisionPollMs(Date.now() - started), undefined, { signal })
+      grant = await this.grant(grant.id, signal)
+    }
+    return grant
+  }
+
+  private share<T>(key: string, work: () => Promise<T>, signal: AbortSignal): Promise<T> {
+    return this.tokens ? abortable(this.tokens.shared(`${this.connection.subject}\n${key}`, work), signal) : work()
   }
 
   async assertActive(grantId: string, signal: AbortSignal): Promise<void> {

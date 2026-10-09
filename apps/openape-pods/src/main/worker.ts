@@ -99,6 +99,9 @@ import { dirname, join } from 'node:path'
 import type { WorkerStatus } from '../contracts/ipc'
 
 const secretsOrigin = 'https://secrets.openape.ai'
+// Waiting calls are parked outside the service limit, but bounded per run and in total.
+const parkedPerRun = 4
+const parkedTotal = 64
 // A fixed record id in the encrypted store for this Mac's consumer key at OpenApe Secrets.
 const secretsConsumerRecord = '6f0c2d2e-5b1a-4f0e-9c7d-3a2b1c0d9e8f'
 
@@ -141,8 +144,8 @@ export class FixtureWorker {
   private credentials: CredentialCache | null = null
   private readonly agentTokens = new DdisaAgentTokens()
   private services = new Map<string, AbortController>()
-  // Service calls of runs that wait for the owner's IdP decision; they execute nothing and hold no slot.
-  private parked = new Set<string>()
+  // Service calls (id → run) that wait for the owner's IdP decision; they execute nothing and hold no slot.
+  private parked = new Map<string, string>()
   private pending = new Map<string, { resolve: (state: unknown) => void, reject: (error: Error) => void, timer: ReturnType<typeof setTimeout> }>()
   private state: WorkerStatus = { state: 'starting', pid: null, error: null }
   private centralAction(type: string): CentralController | null {
@@ -764,10 +767,16 @@ export class FixtureWorker {
   }
 
   /** Parks a service call while its run waits for an IdP decision, here and in the worker's bridge. */
-  private park(id: string, parked: boolean): void {
+  private park(id: string, runId: string, parked: boolean): void {
     if (parked === this.parked.has(id)) return
-    if (parked) this.parked.add(id)
-    else this.parked.delete(id)
+    if (parked) {
+      const ofRun = [...this.parked.values()].filter(run => run === runId).length
+      if (ofRun >= parkedPerRun || this.parked.size >= parkedTotal) throw new Error('Waiting for IdP approval: too many calls already wait for the owner\'s decision; retry after it')
+      this.parked.set(id, runId)
+    }
+    else {
+      this.parked.delete(id)
+    }
     this.child?.postMessage({ serviceParked: { id, parked } })
   }
 
@@ -789,8 +798,10 @@ export class FixtureWorker {
         return grant && grant.state !== 'expired' ? grant.grantId : undefined
       }
       const observe = async (approval: RunApproval) => {
+        // Parking first enforces its limits before the wait is recorded.
+        if (approval.state === 'pending') this.park(request.id, scope.runId, true)
         await this.dispatch({ serviceCheck: { scope, approval } })
-        this.park(request.id, approval.state === 'pending')
+        if (approval.state !== 'pending') this.park(request.id, scope.runId, false)
         if (approval.state !== 'pending' || context.reason !== 'manual' || this.openedApprovals.has(approval.grantId)) return
         this.openedApprovals.add(approval.grantId)
         try { await shell.openExternal(approvalURL(approval)) }

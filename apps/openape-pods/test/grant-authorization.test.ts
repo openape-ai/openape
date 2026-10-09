@@ -18,7 +18,7 @@ async function fixture(initial = 'used', decision = 'approved') {
   const resolved = await resolveCommand(adapter, argv)
   const command = { cliId: 'pod-runtime', adapterPath, adapterDigest: adapter.digest, argv, permission: resolved.permission }
   const keys = generateKeyPairSync('ed25519')
-  const state = { checks: 0, lifetime: 60, unavailablePath: '', unavailable: 0, grantType: 'once', initial, decision, creates: 0, consumes: [] as string[], tokens: [] as string[], bodies: [] as Record<string, unknown>[], active: true, tokenError: false, subject: 'pod@example.test', progress: [] as RunApproval[], grants: new Map<string, string>(), types: new Map<string, string>(), approvals: [] as string[], staleAdapters: new Set<string>() }
+  const state = { checks: 0, lifetime: 60, unavailablePath: '', unavailable: 0, grantType: 'once', initial, decision, creates: 0, consumes: [] as string[], tokens: [] as string[], bodies: [] as Record<string, unknown>[], active: true, tokenError: false, subject: 'pod@example.test', progress: [] as RunApproval[], grants: new Map<string, string>(), types: new Map<string, string>(), approvals: [] as string[], reads: 0, staleAdapters: new Set<string>() }
   let origin = ''
   const server = createServer(async (request, response) => {
     response.setHeader('Content-Type', 'application/json')
@@ -44,7 +44,7 @@ async function fixture(initial = 'used', decision = 'approved') {
       reply({ authz_jwt: `${head}.${payload}.${sign(null, Buffer.from(`${head}.${payload}`), keys.privateKey).toString('base64url')}` }); return
     }
     if (request.url?.endsWith('/consume')) { state.consumes.push(id); if (state.grantType === 'once') state.grants.set(id, 'used'); reply({ status: 'valid' }); return }
-    if (request.method === 'GET' && request.url?.startsWith('/api/grants/')) { reply({ id, status: id === 'old' ? state.initial : state.grants.get(id), request: { requester: 'pod@example.test', audience: 'shapes', target_host: `pods:${podId}`, grant_type: state.types.get(id) ?? 'once' } }); return }
+    if (request.method === 'GET' && request.url?.startsWith('/api/grants/')) { state.reads++; reply({ id, status: id === 'old' ? state.initial : state.grants.get(id), request: { requester: 'pod@example.test', audience: 'shapes', target_host: `pods:${podId}`, grant_type: state.types.get(id) ?? 'once' } }); return }
     response.statusCode = 404; reply({})
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -144,6 +144,19 @@ it('requests the runtime at the IdP, waits for the owner and reuses the approved
   expect(progress).toEqual(['pending', 'approved', 'approved'])
   expect(f.state.approvals).toEqual([])
 })
+
+it('lets parallel calls of one run share one grant request and one decision wait', async () => {
+  const f = await fixture('used', 'pending'); f.state.grantType = 'always'
+  const tokens = new RunGrantTokens(); const progress: string[] = []
+  const calls = Array.from({ length: 5 }, () => new AgentAuthority(f.connection, async (item) => { progress.push(item.state) }, undefined, tokens).authorize({ command: f.command, grantId: '' }, new AbortController().signal))
+  await expect.poll(() => progress.filter(state => state === 'pending').length).toBe(5)
+  const reads = f.state.reads
+  await new Promise(resolve => setTimeout(resolve, 4500))
+  // One shared wait polls about every two seconds; five separate waits would read the grant about ten times.
+  expect(f.state.reads - reads).toBeLessThanOrEqual(3)
+  f.state.grants.set('fresh-1', 'approved'); await Promise.all(calls)
+  expect(f.state.creates).toBe(1); expect(f.state.approvals).toEqual([])
+}, 15000)
 
 it('polls quickly while the owner is likely deciding and slowly during a long wait', () => {
   expect(decisionPollMs(0)).toBe(2000)
