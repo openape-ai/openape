@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { setTimeout as delay } from 'node:timers/promises'
 import { afterEach, expect, it, vi } from 'vitest'
-import { InfrastructureError, retryInfrastructure, transientNetwork, transientResponse } from '../src/contracts/infrastructure'
+import { InfrastructureError, NonRetryableError, retryInfrastructure, transientNetwork, transientResponse } from '../src/contracts/infrastructure'
+import { recoveryDecision } from '../src/worker/recovery/policy'
 import { MailBridge } from '../src/worker/mail/bridge'
 
 vi.mock('node:timers/promises', () => ({ setTimeout: vi.fn() }))
@@ -63,4 +64,16 @@ it('preserves trusted retry metadata through broker IPC without interpreting err
   const ordinary = expect(plain).rejects.not.toBeInstanceOf(InfrastructureError)
   bridge.accept({ id: send.mock.calls[1]![0].service.id, error: 'Permission service temporarily unavailable' })
   await ordinary
+})
+
+it('carries a non-retryable tool failure through broker IPC and never schedules a retry for it', async () => {
+  const send = vi.fn()
+  const bridge = new MailBridge(send)
+  const scope = { podId: 'pod', runId: 'run', epoch: 0, assignmentRevision: 1, capabilities: [] }
+  const work = bridge.execute(scope, {}, new AbortController().signal)
+  const rejected = expect(work).rejects.toBeInstanceOf(NonRetryableError)
+  bridge.accept({ id: send.mock.calls[0]![0].service.id, error: 'Tool output exceeded 200000 bytes; read smaller pages, for example with --limit', nonRetryable: true })
+  await rejected
+  expect(recoveryDecision({ cause: 'non-retryable' }, 0, null, 1000)).toMatchObject({ disposition: 'isolated', nextAt: null })
+  expect(recoveryDecision({ cause: 'failure' }, 0, null, 1000)).toMatchObject({ disposition: 'retry' })
 })
