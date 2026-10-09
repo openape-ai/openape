@@ -5,7 +5,6 @@ import { ChatRegistry } from './chat-registry'
 import { MasterSetup } from './setup'
 import { DependencyStore } from '../dependencies/store'
 import { emptyPackages } from '../../contracts/dependencies'
-import { MasterConversations } from './conversations'
 import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { parseMasterAction } from '../../contracts/master'
@@ -31,7 +30,7 @@ import type { WorkflowDefinition } from '../../contracts/workflows'
 export class MasterControl {
   setup(): MasterSetup { return new MasterSetup(this.store, this.resources) }
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly dispatcher: RunDispatcher, private readonly scheduler: Scheduler, private readonly runtime: AgentRuntime, private readonly workflows?: WorkflowEngine, private readonly startRun: (podId: string, operationId: string) => string = (podId, operationId) => dispatcher.start(podId, { reason: 'manual', eventIds: [], operationId })) {}
-  async execute(key: string, value: unknown, signal: AbortSignal, selectedPod: string | null = null, creationId: string | null = null, context?: Conversation): Promise<unknown> {
+  async execute(key: string, value: unknown, signal: AbortSignal, context?: Conversation): Promise<unknown> {
     if (!key || key.length > 300) throw new Error('Invalid master operation identity')
     const requested = parseMasterAction(value)
     if (context) context = new ChatRegistry(this.store).assertRevision(context.id, context.revision)
@@ -39,18 +38,13 @@ export class MasterControl {
     if (context) {
       if ('podId' in action && !context.context.pods.some(pod => pod.id === action.podId)) throw new Error('context_required: select this Pod with + before inspecting or changing it')
     }
-    const conversations = new MasterConversations(this.store)
-    const boundPod = creationId ? conversations.bound(creationId) : null
-    const effectivePod = selectedPod ?? boundPod
-    if (effectivePod && ((action.action === 'create' && !creationId) || ('podId' in action && action.podId !== effectivePod))) throw new Error('Action is outside the selected pod; use its own chat or the workspace chat')
-    const request = JSON.stringify(action); const hash = digest(JSON.stringify({ selectedPod, action, ...(creationId ? { creationId } : {}), ...(context ? { conversationId: context.id, contextRevision: context.revision } : {}) }))
+    const request = JSON.stringify(action); const hash = digest(JSON.stringify({ action, ...(context ? { conversationId: context.id, contextRevision: context.revision } : {}) }))
     const prior = this.store.db.prepare('SELECT * FROM master_actions WHERE id=?').get(key)
     if (prior) {
       if (prior.request_hash !== hash) throw new Error('Master operation identity was reused with different arguments')
       if (prior.state === 'completed') return JSON.parse(prior.result as string) as unknown
       throw new Error(prior.error as string || 'Master action is already running or interrupted; inspect before retrying')
     }
-    if (action.action === 'create' && boundPod) throw new Error('Creation conversation already has a pod')
     signal.throwIfAborted()
     if ('podId' in action) this.assertPod(action.podId, action.revision, action.action === 'inspect')
     if (action.action === 'saveWorkflow' && action.definition.revision === 0) {
@@ -105,8 +99,7 @@ export class MasterControl {
     signal.throwIfAborted()
     return this.store.transaction(() => {
       if ('podId' in action) this.assertPod(action.podId, action.revision, action.action === 'inspect')
-      const result = this.apply(action, dependencyLockHash, effectivePod, context)
-      if (action.action === 'create' && creationId) conversations.bind(creationId, (result as { id: string }).id)
+      const result = this.apply(action, dependencyLockHash, context)
       this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'completed\',?,NULL)').run(key, hash, request, JSON.stringify(result))
       return result
     })
@@ -158,9 +151,9 @@ export class MasterControl {
     return draft
   }
 
-  private apply(action: MasterAction, lock: string, selectedPod: string | null, context?: Conversation): unknown {
+  private apply(action: MasterAction, lock: string, context?: Conversation): unknown {
     if (action.action === 'runtime') return { ...runtimeReference, jevConnection: jevAvailability(this.store) }
-    if (action.action === 'list') return { jev: jevAvailability(this.store), pods: (selectedPod ? [this.store.getPod(selectedPod)] : this.store.listPods()).map(pod => context ? { id: pod.id, name: pod.name, revision: pod.revision, lifecycle: pod.lifecycle, selected: context.context.pods.some(item => item.id === pod.id) } : pod), ...(context ? { workflows: this.store.db.prepare('SELECT id,name,revision,nodes FROM workflows WHERE archived=0').all().map(row => ({ id: row.id, name: row.name, revision: row.revision, podIds: (JSON.parse(row.nodes as string) as { podId: string }[]).map(node => node.podId) })) } : {}) }
+    if (action.action === 'list') return { jev: jevAvailability(this.store), pods: this.store.listPods().map(pod => context ? { id: pod.id, name: pod.name, revision: pod.revision, lifecycle: pod.lifecycle, selected: context.context.pods.some(item => item.id === pod.id) } : pod), ...(context ? { workflows: this.store.db.prepare('SELECT id,name,revision,nodes FROM workflows WHERE archived=0').all().map(row => ({ id: row.id, name: row.name, revision: row.revision, podIds: (JSON.parse(row.nodes as string) as { podId: string }[]).map(node => node.podId) })) } : {}) }
     if (action.action === 'create') {
       if (this.store.listPods().length >= 100) throw new Error('Local pod limit reached')
       return this.store.createPod({ name: action.name })
