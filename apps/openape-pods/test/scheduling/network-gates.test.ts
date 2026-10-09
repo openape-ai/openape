@@ -581,11 +581,13 @@ it('requires confirmed non-application and fresh owner approval before an uncert
   expect(f.started).not.toContain(f.consumer)
 })
 
-function syntheticUnknownEffect(f: ReturnType<typeof runtimeFixture>, runId: string, caseId: string, action: string) {
+// With a deliveryId the effect records an intent naming that input first, as the archive port does.
+function syntheticUnknownEffect(f: ReturnType<typeof runtimeFixture>, runId: string, caseId: string, action: string, deliveryId?: string) {
   const key = networkGatePayloadHash({ action })
   f.store.transaction(() => {
     f.store.db.prepare(`INSERT INTO network_effect_attempts VALUES(?,1,?,?,1,?,?,'unknown',1,?)`).run(key, runId, caseId, 'a'.repeat(64), 'b'.repeat(64), f.id)
-    f.store.db.prepare(`INSERT INTO network_effect_receipts VALUES(?,1,1,'unknown','{"synthetic":true,"noProviderAction":true}',1)`).run(key)
+    if (deliveryId) f.store.db.prepare(`INSERT INTO network_effect_receipts VALUES(?,1,1,'intent',?,1)`).run(key, JSON.stringify({ deliveryId, synthetic: true }))
+    f.store.db.prepare(`INSERT INTO network_effect_receipts VALUES(?,1,?,'unknown','{"synthetic":true,"noProviderAction":true}',1)`).run(key, deliveryId ? 2 : 1)
   })
   return key
 }
@@ -614,26 +616,40 @@ it('asks again for the safe inputs of a batch and keeps only the uncertain one b
   expect(f.store.db.prepare('SELECT state FROM network_effect_attempts').get()!.state).toBe('unknown')
 })
 
-it('lets the assistant close a failed run only after all its external effects were reconciled', async () => {
+async function failedWithEffect(bound: boolean) {
   const f = runtimeFixture(() => 'approved')
   await f.emit('test.input')
   f.engine.tick(); await f.settle()
   f.due(); f.engine.tick(); await f.settle()
   const authority = f.engine.invocations.reserve(f.id, f.consumer, f.resources.epoch(f.consumer), 'event')!
   const item = f.engine.invocations.input(authority).items[0]!
-  const key = syntheticUnknownEffect(f, authority.runId, item.caseId, 'synthetic-uncertain-action')
+  const deliveryId = f.store.db.prepare('SELECT id FROM network_deliveries WHERE run_id=?').get(authority.runId)!.id as string
+  const key = syntheticUnknownEffect(f, authority.runId, item.caseId, 'synthetic-uncertain-action', bound ? deliveryId : undefined)
   await f.engine.invocations.finish(authority, 'failed', 'Synthetic uncertain effect', 'No real provider action occurred', [], [])
   const generation = () => Number(f.store.db.prepare('SELECT generation FROM network_invocations WHERE run_id=?').get(authority.runId)!.generation)
+  const reconcile = () => f.engine.recover({ type: 'reconcileEffect', id: f.id, revision: 1, runId: authority.runId, generation: generation(), key, attempt: 1, sequence: bound ? 2 : 1, outcome: 'confirmed_applied', evidence: 'Synthetic owner-confirmed provider evidence' })
   const discard = () => f.engine.agentDiscardFailure({ type: 'discardFailure', id: f.id, revision: 1, runId: authority.runId, generation: generation(), evidence: 'Provider shows the synthetic action applied' })
-  await expect(discard()).rejects.toThrow('external effects were all reconciled')
-  await f.engine.recover({ type: 'reconcileEffect', id: f.id, revision: 1, runId: authority.runId, generation: generation(), key, attempt: 1, sequence: 1, outcome: 'confirmed_applied', evidence: 'Synthetic owner-confirmed provider evidence' })
+  return { ...f, authority, reconcile, discard }
+}
 
-  await discard()
+it('lets the assistant close a failed run only when every input has a reconciled external effect', async () => {
+  const f = await failedWithEffect(true)
+  await expect(f.discard()).rejects.toThrow('every input has a reconciled external effect')
+  await f.reconcile()
 
-  expect(f.store.db.prepare('SELECT state FROM network_deliveries WHERE run_id=?').get(authority.runId)!.state).toBe('discarded')
-  expect(JSON.parse(f.store.db.prepare('SELECT resolved_receipt FROM network_invocation_controls WHERE run_id=?').get(authority.runId)!.resolved_receipt as string).evidence).toBe('Assistant request: Provider shows the synthetic action applied')
+  await f.discard()
+
+  expect(f.store.db.prepare('SELECT state FROM network_deliveries WHERE run_id=?').get(f.authority.runId)!.state).toBe('discarded')
+  expect(JSON.parse(f.store.db.prepare('SELECT resolved_receipt FROM network_invocation_controls WHERE run_id=?').get(f.authority.runId)!.resolved_receipt as string).evidence).toBe('Assistant request: Provider shows the synthetic action applied')
   const withoutEffects = f.store.db.prepare('SELECT run_id FROM network_invocations WHERE pod_id=?').get(f.source)!.run_id as string
-  await expect(f.engine.agentDiscardFailure({ type: 'discardFailure', id: f.id, revision: 1, runId: withoutEffects, generation: 1, evidence: 'No effects' })).rejects.toThrow('external effects were all reconciled')
+  await expect(f.engine.agentDiscardFailure({ type: 'discardFailure', id: f.id, revision: 1, runId: withoutEffects, generation: 1, evidence: 'No effects' })).rejects.toThrow('every input has a reconciled external effect')
+})
+
+it('keeps a failed run whose input has no reconciled effect of its own with the desktop', async () => {
+  const f = await failedWithEffect(false)
+  await f.reconcile()
+  await expect(f.discard()).rejects.toThrow('every input has a reconciled external effect')
+  expect(f.store.db.prepare('SELECT state FROM network_deliveries WHERE run_id=?').get(f.authority.runId)!.state).not.toBe('discarded')
 })
 
 it('blocks archival for pending approvals and preserves completed approval history through archive restore', async () => {
