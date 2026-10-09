@@ -31,8 +31,10 @@ function archiveFixture(options: { current?: typeof mail, move?: () => unknown, 
     assertArchiveMove(argv); moves.push(argv)
     return options.move?.() ?? reply('move', { outcome: 'confirmed', beforeId: mail.id, afterId: 'archived-1', requestId: 'request-1', receipt: { id: 'archived-1', parentFolderId: 'archive-folder' } })
   })
+  const gateCapabilities: string[][] = []
   const f = networkFixture({ tool, mailMove, gate: async (value, _signal, scope) => {
     scope.assertCurrent()
+    gateCapabilities.push(scope.capabilities)
     const body = value as { operation: string, manifest: NetworkGateManifest, grants?: { key: string, id: string }[] }
     f.engine.gates.authorizeService(scope, body.manifest, body.operation, body.grants)
     if (body.operation === 'create') return { id: body.manifest.id, url: 'https://identity.example.invalid/decision', grants: body.manifest.items.map(item => ({ key: item.deliveryId, id: `once-${item.deliveryId}` })) }
@@ -84,7 +86,7 @@ function archiveFixture(options: { current?: typeof mail, move?: () => unknown, 
   const gates = () => f.store.db.prepare('SELECT state FROM network_gate_tasks ORDER BY created_at,rowid').all().map(row => row.state)
   const deliveries = () => f.store.db.prepare('SELECT d.state FROM network_deliveries d JOIN network_subscriptions s ON s.id=d.subscription_id WHERE s.pod_id=?').all(archive).map(row => row.state)
   const effects = () => f.store.db.prepare('SELECT a.state, group_concat(r.outcome) AS receipts FROM network_effect_attempts a JOIN network_effect_receipts r ON r.logical_action_key=a.logical_action_key AND r.attempt=a.attempt GROUP BY a.logical_action_key,a.attempt').all()
-  return { ...f, id, source, archive, tool, mailMove, moves, outcomes, refusals, approve, rounds, settle, effects, decision, assign, archiveScript, gates, deliveries }
+  return { ...f, id, source, archive, tool, mailMove, moves, outcomes, refusals, approve, rounds, settle, effects, decision, assign, archiveScript, gates, deliveries, gateCapabilities }
 }
 
 it('moves an owner-approved message once into the Archive folder with a receipt', async () => {
@@ -95,6 +97,9 @@ it('moves an owner-approved message once into the Archive folder with a receipt'
   expect(f.effects()).toEqual([{ state: 'confirmed_applied', receipts: 'intent,confirmed_applied' }])
   expect(f.refusals).toEqual([expect.stringContaining('declared source')])
   expect(f.store.db.prepare('SELECT state FROM network_invocations WHERE pod_id=? AND execution_kind=\'script\'').get(f.archive)!.state).toBe('completed')
+  // Run services compare the gate step scope with the pinned consumer script, which holds the mail application.
+  expect(f.gateCapabilities).toEqual(expect.arrayContaining([[expect.stringMatching(/^tool\.app_[a-f0-9]{32}\.invoke$/)]]))
+  expect(f.gateCapabilities.every(item => item.length === 1)).toBe(true)
 })
 
 it('never moves a message twice for the same approved version', async () => {
