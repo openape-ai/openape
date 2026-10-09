@@ -281,9 +281,9 @@ async function start(): Promise<void> {
     }
     return worker.onboarding(command)
   })
-  ipcMain.handle(channels.mcpSession, (event, value: unknown, ...extra: unknown[]) => {
+  ipcMain.handle(channels.mcpSession, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
-    if (parseMcpSessionCommand(value).type === 'end') mcpSessions.end()
+    if (parseMcpSessionCommand(value).type === 'end') await mcpSessions.end()
     return mcpSessions.view()
   })
   ipcMain.handle(channels.codex, async (event, value: unknown, ...extra: unknown[]) => {
@@ -485,7 +485,8 @@ function watchCentral(controller: CentralController): void {
 }
 async function shutdown(): Promise<void> {
   clearInterval(updateTimer)
-  try { mcpSessions.end(); await codexServer.stop(); await central?.stop(); remote.stop(); await worker.stop(); stopped = true; tray?.destroy(); app.quit() }
+  // Quitting revokes the owner tokens of open MCP sessions before the process ends, waiting at most a few seconds.
+  try { await Promise.race([mcpSessions.end(), new Promise(resolve => setTimeout(resolve, 3000))]); await codexServer.stop(); await central?.stop(); remote.stop(); await worker.stop(); stopped = true; tray?.destroy(); app.quit() }
   catch (error) { console.error('Worker shutdown failed', error); app.exit(1) }
 }
 if (!app.requestSingleInstanceLock()) {

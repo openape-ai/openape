@@ -26,6 +26,12 @@ export type SandboxCommand
   = | { type: 'show', target: GrantTarget }
     | { type: 'apply', target: GrantTarget, sandbox: SandboxDeclaration, grants?: GrantDeclaration | 'sandbox', approve?: boolean }
 export interface SandboxView { level: SandboxLevel, sources: { source: string, level: SandboxLevel }[] }
+/**
+ * How far a Pod's programs reach on this Mac. At `owner` level they reach what the owner reaches, except
+ * `protectedPaths`: the Pods profile, the owner's apes login and the keychains stay closed, so a Pod program can never
+ * take the owner identity or change Pods state.
+ */
+export interface SandboxReach { level: SandboxLevel, protectedPaths: string[] }
 
 const limit = 16
 function object(value: unknown, keys: string[], message: string): Record<string, unknown> {

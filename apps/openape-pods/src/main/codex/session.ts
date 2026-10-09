@@ -40,7 +40,7 @@ export class McpOwnerSessions {
   authorize(peer: McpPeer, secret: string | undefined): void {
     const session = this.sessions.get(peer)
     if (session && this.now() < session.expiresAt && secret !== undefined && same(secret, session.secret)) return
-    this.remove(peer)
+    void this.remove(peer)
     if (this.pending && this.pending.peer !== peer) throw new LoginRequiredError(waiting)
     if (!this.pending) this.start(peer)
     throw new LoginRequiredError(started)
@@ -54,19 +54,21 @@ export class McpOwnerSessions {
   }
 
   disconnect(peer: McpPeer): void {
-    this.remove(peer)
+    void this.remove(peer)
     if (this.pending?.peer === peer) this.pending.controller.abort(new Error('The MCP connection closed during sign-in'))
   }
 
-  end(): void {
-    for (const peer of [...this.sessions.keys()]) this.remove(peer)
+  /** Ends every session; the returned promise settles when their owner tokens are revoked at the IdP. */
+  end(): Promise<void> {
+    const closing = Array.from(this.sessions.keys(), peer => this.remove(peer))
     this.pending?.controller.abort(new Error('The owner ended the MCP session'))
+    return Promise.all(closing).then(() => undefined)
   }
 
   view(): McpSessionView {
     const now = this.now()
     for (const [peer, session] of this.sessions) {
-      if (now >= session.expiresAt) this.remove(peer)
+      if (now >= session.expiresAt) void this.remove(peer)
     }
     const ends = Array.from(this.sessions.values(), session => session.expiresAt)
     return { expiresAt: ends.length ? Math.max(...ends) : null, pending: !!this.pending }
@@ -83,9 +85,11 @@ export class McpOwnerSessions {
       .finally(() => { clearTimeout(timer); if (this.pending === pending) this.pending = null })
   }
 
-  private remove(peer: McpPeer): void {
-    this.sessions.get(peer)?.owner?.close()
+  // Closing never rejects: a failed revocation is logged by the session itself.
+  private remove(peer: McpPeer): Promise<void> {
+    const owner = this.sessions.get(peer)?.owner
     this.sessions.delete(peer)
+    return owner ? owner.close() : Promise.resolve()
   }
 
   private async activate(peer: McpPeer, signal: AbortSignal): Promise<void> {
@@ -93,10 +97,10 @@ export class McpOwnerSessions {
     const owner = await this.dependencies.login(expiresAt, signal)
     let accepted = false
     try { accepted = !peer.closed && !signal.aborted && await this.dependencies.confirm(signal) && !peer.closed && !signal.aborted }
-    finally { if (!accepted) owner?.close() }
+    finally { if (!accepted && owner) await owner.close() }
     if (!accepted) return
     const secret = randomBytes(32)
-    this.remove(peer)
+    await this.remove(peer)
     this.sessions.set(peer, { secret, expiresAt, owner })
     peer.send({ session: secret.toString('base64url'), expiresAt })
   }

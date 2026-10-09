@@ -1,5 +1,6 @@
 import { quoteShell } from '../../runtime/environment'
-import type { SandboxLevel } from '../../contracts/sandbox'
+import type { SandboxReach } from '../../contracts/sandbox'
+import { existsSync, realpathSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
@@ -8,8 +9,8 @@ import { isAbsolute, join } from 'node:path'
 import type { Duplex, Readable, Writable } from 'node:stream'
 
 export interface RuntimePolicy {
-  /** `owner` keeps supervision but gives the program the owner's file and network reach; the Pod identity is unchanged. */
-  level?: SandboxLevel
+  /** `owner` keeps supervision but gives the program the owner's file and network reach except its protected paths; the Pod identity is unchanged. */
+  reach?: SandboxReach
   executable: string
   workspace: string
   readFiles: string[]
@@ -25,7 +26,7 @@ function literal(path: string): string {
 }
 export function sandboxPolicy(policy: RuntimePolicy): string {
   const executable = literal(policy.executable)
-  if (policy.level === 'owner') return '(version 1)\n(allow default)\n'
+  if (policy.reach?.level === 'owner') return ownerPolicy(policy, executable)
   const readFiles = policy.readFiles.map(path => `(literal ${literal(path)})`).join(' ')
   const runtime = policy.runtimeDirectories.map(path => `(subpath ${literal(path)})`).join(' ')
   const reads = (policy.readDirectories ?? []).map(path => `(subpath ${literal(path)})`).join(' ')
@@ -48,6 +49,34 @@ export function sandboxPolicy(policy: RuntimePolicy): string {
 ${network ? `(allow network-outbound ${network})` : ''}
 `
 }
+/**
+ * The owner level: everything the owner can do, then the protected paths denied, then the program's own workspace,
+ * state and runtime allowed again (the last matching rule wins). Network reach is the owner's as well, so the
+ * application network hosts and their proxy only apply at the isolated level.
+ */
+function ownerPolicy(policy: RuntimePolicy, executable: string): string {
+  const protectedPaths = policy.reach?.protectedPaths ?? []
+  if (!protectedPaths.length) throw new Error('The owner sandbox level needs its protected paths')
+  const denied = protectedPaths.map(path => `(subpath ${literal(path)})`).join(' ')
+  const writes = [policy.workspace, ...(policy.writeDirectories ?? [])].map(path => `(subpath ${literal(path)})`).join(' ')
+  const reads = [...(policy.readDirectories ?? []), ...policy.runtimeDirectories].map(path => `(subpath ${literal(path)})`).join(' ')
+  const files = [executable, ...policy.readFiles.map(literal)].map(path => `(literal ${path})`).join(' ')
+  return `(version 1)
+(allow default)
+(deny file-read* file-write* ${denied})
+(allow file-read* file-write* ${writes})
+(allow file-read* file-map-executable ${files} ${reads})
+`
+}
+
+/** What the owner level never reaches: this Pods profile (and the base that holds all profiles), the owner's apes login and the keychains. */
+export function ownerProtectedPaths(profileRoot: string, home: string): string[] {
+  const canonical = (path: string) => existsSync(path) ? realpathSync(path) : path
+  const root = canonical(profileRoot)
+  const base = join(root, '..')
+  return [root, ...(existsSync(join(base, 'selected-profile.json')) ? [canonical(base)] : []), canonical(join(home, '.config/apes')), canonical(join(home, 'Library/Keychains'))]
+}
+
 export interface ProcessDomain {
   recordPath: string
   guardian: ChildProcess

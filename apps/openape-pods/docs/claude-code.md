@@ -48,8 +48,8 @@ after one hour, with **End session** in App settings, when the app quits or when
 the client disconnects; the next call returns `login_required` again without a
 client restart. The session secret and the owner's tokens of this sign-in stay in
 main-process memory, are never written to disk or handed to the worker, and are
-discarded (the refresh token is revoked at the identity provider) when the
-session ends. The identity provider issues five-minute access tokens; the
+discarded (the refresh token is revoked at the identity provider, also one a
+racing renewal returned) when the session ends; a timer ends it at the hour. The identity provider issues five-minute access tokens; the
 session renews them in memory, never past its one-hour end. The persisted owner
 login used for Pod setup is a different login and never decides a grant.
 
@@ -73,13 +73,15 @@ the session ends approvals fail and pending grants wait for the IdP page.
 | --- | --- |
 | `{ "type": "list", "podId": "…" }` or `{ "networkId": "…" }` | Recorded grants with state, origin network and `approvedInSession` |
 | `{ "type": "request", "target": { "podId": "…" } \| { "networkId": "…", "revision": 3 }, "grants": { "runtime": true, "programs": [{ "application": "gh" }], "http": [{ "origin": "https://api.example.com", "methods": ["POST"] }] } }` | Requests each grant as the Pod and approves it as `always`; `"approve": false` only requests |
-| `{ "type": "approve", "podId": "…", "grantId": "…", "grantType": "once" }` | Approves one pending grant, also a waiting runtime or network approval item |
+| `{ "type": "approve", "podId": "…", "grantId": "…" }` | Approves one pending grant as the type the Pod requested (a timed grant with its duration), also a waiting runtime, network or mail archive approval item; an explicit `"grantType": "once"` or `"always"` is your choice and the result reports `widened` |
 | `{ "type": "deny", … }`, `{ "type": "revoke", … }` | Denies a pending grant or revokes a grant as the requesting Pod |
 
 A program without `argv` is the whole program: one detail per action and first
 resource, so a new command of that program is covered without another request;
-operations the adapter marks as exact commands keep needing their own grant, and
-generic execution is never granted. An origin without methods covers every
+operations the adapter marks as exact commands keep needing their own grant (bound
+to their argv), and generic execution is never granted. Moving or archiving mail
+is never part of a whole-program grant and never callable from a script, agent
+or terminal; it runs only through the archive port with its approved batch. An origin without methods covers every
 method of that origin. `runtime` is the grant to run the Pod's stored script, so
 the first run does not wait. Repeating a request reuses the pending or approved
 grant instead of asking again.
@@ -93,8 +95,12 @@ grant instead of asking again.
 reachable plus the runtime grant. A network target applies to every member of
 that revision with the network as origin; archiving the network revokes those
 grants and removes what it added. Level `owner` runs the Pod's programs with the
-owner's file and network reach instead of the isolated profile; the Pod's DDISA
-identity does not change. `{ "type": "show", "target": … }` reads both.
+owner's file and network reach instead of the isolated profile, except the Pods
+profile, `~/.config/apes` and `~/Library/Keychains`, so a Pod program never gets
+the owner identity or Pods state; application network hosts and their proxy apply
+only at the isolated level. The Pod's DDISA identity does not change. A network
+declaration never replaces a member's own HTTP destination, and a grant the
+identity provider returns as already existing stays the member's own. `{ "type": "show", "target": … }` reads both.
 
 `resources` assignments (`assignHttp`, `assignSsh`, `assignJev`) and `program`
 `grant` request their grant and approve it in the session; without a session they

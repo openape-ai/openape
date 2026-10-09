@@ -8,7 +8,8 @@ import { parseProgramArgv } from './programs'
  * call is matched to any grant whose authorization details cover it.
  */
 export type GrantState = 'pending' | 'approved' | 'denied' | 'revoked' | 'expired' | 'used'
-export type GrantType = 'once' | 'always'
+export type GrantType = 'once' | 'timed' | 'always'
+export const grantTypes: readonly GrantType[] = ['once', 'timed', 'always']
 export interface GrantOrigin { networkId: string, revision: number }
 export interface PodGrant {
   id: string
@@ -39,7 +40,7 @@ export type GrantTarget = { podId: string } | { networkId: string, revision: num
 export type GrantsCommand
   = | { type: 'list', podId?: string, networkId?: string }
     | { type: 'request', target: GrantTarget, grants: GrantDeclaration, approve?: boolean }
-    | { type: 'approve', podId: string, grantId: string, grantType?: GrantType }
+    | { type: 'approve', podId: string, grantId: string, grantType?: Exclude<GrantType, 'timed'> }
     | { type: 'deny', podId: string, grantId: string }
     | { type: 'revoke', podId: string, grantId: string }
 
@@ -102,15 +103,16 @@ export function parseGrantsCommand(value: unknown): GrantsCommand {
   }
   if (typeof command.podId !== 'string' || !uuid.test(command.podId) || typeof command.grantId !== 'string' || !grantId.test(command.grantId)) throw new Error('A grant decision names its podId and grantId')
   if (type === 'approve') {
+    // An explicit type is the owner's choice for this grant; without it the requested type is approved.
     if (command.grantType !== undefined && command.grantType !== 'once' && command.grantType !== 'always') throw new Error('grantType is once or always')
-    return { type, podId: command.podId, grantId: command.grantId, ...(command.grantType ? { grantType: command.grantType as GrantType } : {}) }
+    return { type, podId: command.podId, grantId: command.grantId, ...(command.grantType ? { grantType: command.grantType as 'once' | 'always' } : {}) }
   }
   return { type, podId: command.podId, grantId: command.grantId }
 }
 
 export function parsePodGrant(value: unknown): PodGrant {
   const grant = object(value, ['id', 'podId', 'issuer', 'subject', 'cliId', 'details', 'display', 'grantType', 'state', 'origin', 'approvedInSession', 'createdAt', 'updatedAt'], 'Invalid Pod grant') as unknown as PodGrant
-  if (!grantId.test(grant.id) || !uuid.test(grant.podId) || typeof grant.issuer !== 'string' || typeof grant.subject !== 'string' || typeof grant.cliId !== 'string' || !Array.isArray(grant.details) || grant.details.length < 1 || grant.details.length > grantLimits.details || typeof grant.display !== 'string' || grant.display.length > 4096 || !['once', 'always'].includes(grant.grantType) || !['pending', 'approved', 'denied', 'revoked', 'expired', 'used'].includes(grant.state) || typeof grant.approvedInSession !== 'boolean' || !Number.isSafeInteger(grant.createdAt) || !Number.isSafeInteger(grant.updatedAt)) throw new Error('Invalid Pod grant')
+  if (!grantId.test(grant.id) || !uuid.test(grant.podId) || typeof grant.issuer !== 'string' || typeof grant.subject !== 'string' || typeof grant.cliId !== 'string' || !Array.isArray(grant.details) || grant.details.length < 1 || grant.details.length > grantLimits.details || typeof grant.display !== 'string' || grant.display.length > 4096 || !grantTypes.includes(grant.grantType) || !['pending', 'approved', 'denied', 'revoked', 'expired', 'used'].includes(grant.state) || typeof grant.approvedInSession !== 'boolean' || !Number.isSafeInteger(grant.createdAt) || !Number.isSafeInteger(grant.updatedAt)) throw new Error('Invalid Pod grant')
   if (grant.details.some(detail => !detail || typeof detail !== 'object' || detail.type !== 'openape_cli' || detail.cli_id !== grant.cliId)) throw new Error('Pod grant details must belong to its program')
   if (grant.origin !== null && (!grant.origin || typeof grant.origin.networkId !== 'string' || !uuid.test(grant.origin.networkId) || !Number.isSafeInteger(grant.origin.revision) || grant.origin.revision < 1)) throw new Error('Invalid Pod grant origin')
   return grant
