@@ -20,7 +20,7 @@ export async function executeJev(assignment: JevAssignment, request: JevRequest,
   consumeAttempt: () => void
 }): Promise<JevEvaluation> {
   const identity = new PodIdentityManager(options.credentials)
-  const authority = new AgentAuthority(identity.connection(assignment.authority.identity, `pods:${assignment.authority.identity.podId}`), options.observe, options.previous, undefined, options.tokens)
+  const authority = new AgentAuthority(identity.connection(assignment.authority.identity, `pods:${assignment.authority.identity.podId}`), options.observe, options.previous, options.tokens)
   const adapterPath = join(options.vendor, 'pod-http-shapes.toml')
   const adapter = loadAdapter('pod-http', adapterPath)
   const argv = ['pod-http', 'request', '--origin', typesafeOrigin, '--method', 'POST']

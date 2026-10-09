@@ -85,17 +85,20 @@ legacy text until saved, reject stale revisions and take precedence over an
 in-flight legacy summary. Conversation bodies, creation aliases, drafts, prior
 reviews and run correlations are not deleted or replayed.
 
-`changes` returns legacy receipts. `retireChange` discards a specifically selected
-pending change after checking its revision and selected targets; it creates no
-execution permission. Access proposals are gone (issue 1455): `requestAccess` is
-refused, and Codex configures access directly through resources, program,
+The legacy change review (`changes`, `retireChange`, Apply changes and the
+pending-owner-review receipts) is removed (issue 1455). Every action applies
+directly; grants are decided only at the identity provider. Stored
+`control_changes` rows are no longer read or applied and remain until the
+baseline schema drops them. Access proposals are gone as well: `requestAccess`
+is refused, and Codex configures access directly through resources, program,
 importSecret and requestSecret. Retained proposal rows are history only.
 
-The retained chat registry, master service and change coordinator support stored
-history and existing remote contracts. Their original conversation authority
-continues to prepare reviews; removing desktop UI does not promote remote model
-calls to owner administration. Backup/restore keeps history, clears authority and
-provider continuation and disables schedules through the existing contract.
+The retained chat registry and master service keep stored history,
+descriptions and the hidden Codex selection context. There is no
+in-app model turn any more: `send`, `steer`, `begin` and `cancel`, the in-app
+`pods_control` tool and the conversation authority are removed, so every
+assistant mutation enters through the MCP server and its owner session. Backup/restore keeps history,
+clears provider continuation and disables schedules through the existing contract.
 
 ## Verification
 

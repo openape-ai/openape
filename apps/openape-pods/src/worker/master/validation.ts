@@ -28,12 +28,12 @@ import { parseMailRequest } from '../../main/mail/contract'
 import { graphEmitter, parseGraphContract, syntheticGraphItems } from '../../contracts/graphs'
 import type { GraphContract } from '../../contracts/graphs'
 
-export async function validateDraft(store: PodDatabase, resources: ResourceRegistry, runtime: AgentRuntime, draftId: string, revision: number, signal: AbortSignal, proposedVariables?: Record<string, string>): Promise<{ hash: string, evidence: string }> {
+export async function validateDraft(store: PodDatabase, resources: ResourceRegistry, runtime: AgentRuntime, draftId: string, revision: number, signal: AbortSignal): Promise<{ hash: string, evidence: string }> {
   const draft = store.db.prepare('SELECT * FROM script_drafts WHERE id=? AND revision=?').get(draftId, revision)
   if (!draft) throw new Error('Draft changed; reload before validation')
   assertImportSetupFinished(store, draft.pod_id as string)
   const variableState = JSON.stringify(new PodVariables(store).list(draft.pod_id as string))
-  const variables = proposedVariables ?? new PodVariables(store).values(draft.pod_id as string)
+  const variables = new PodVariables(store).values(draft.pod_id as string)
   const variablesHash = digest(JSON.stringify(Object.entries(variables).sort()))
   const pod = store.getPod(draft.pod_id as string); const epoch = resources.epoch(pod.id)
   if (draft.assignment_revision !== pod.bindingRevision) throw new Error('Script binding changed; save a new draft revision')

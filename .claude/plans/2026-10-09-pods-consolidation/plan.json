@@ -4,8 +4,17 @@
   "project": "OpenApe Pods",
   "owner": "Patrick Hofmann",
   "date": "2026-10-09",
-  "status": "draft",
-  "revision": 1,
+  "status": "active",
+  "revision": 2,
+  "approval": {
+    "by": "Patrick Hofmann",
+    "date": "2026-10-09",
+    "reference": "Go (revision 1, Reports version 2); revision 2 order: \"Ja, M7 vor M3\"; MCP login: \"Pods macht Login\"",
+    "target": {
+      "revision": 2
+    },
+    "scope": "Plan revision 2 as published in Reports version 4, including merging milestone PRs after local checks."
+  },
   "title": "Consolidate Pods: one model, less code, a simpler database",
   "summary": "Pods carries two orchestration models, two mobile channels, six decision sources and 158 tables from earlier experiments. This plan removes the unused paths, keeps networks as the only model, gives MCP full access through the owner's DDISA login and leaves every approval at the IdP.",
   "problem": {
@@ -31,7 +40,8 @@
   "milestones": [
     {
       "id": "m1-dead-code",
-      "status": "active",
+      "status": "done",
+      "proof": "PR 327 merged as b757dafc on October 9, 2026: 71 files, +44/-3,378 lines; lint, typecheck, both builds, Pods 1,342 + 52 browser tests, relay 90 tests and check:affected passed locally.",
       "title": "Remove dead code",
       "goal": "Delete code that no live entry point reaches, without behaviour change.",
       "steps": [
@@ -47,7 +57,8 @@
     },
     {
       "id": "m2-mobile",
-      "status": "planned",
+      "status": "done",
+      "proof": "PR 328 merged as 26532557: 98 files, +399/-7,486 lines; installed desktops keep their session endpoints. Relay deploy pending.",
       "title": "Remove the iOS app and the encrypted mobile channel",
       "goal": "The inbox PWA is the only phone surface.",
       "steps": [
@@ -63,19 +74,20 @@
     },
     {
       "id": "m3-live-workflows",
-      "status": "planned",
+      "status": "blocked",
       "title": "Move live workflows onto networks",
       "goal": "No owner data depends on the workflow model before its code is removed.",
+      "blocker": "Morgenbriefing is a sequence workflow, which the existing conversion does not support, and MCP cannot create networks yet; M7 provides network creation through MCP.",
       "steps": [
-        "Take a paired backup of the installed profile.",
-        "Convert Morgenbriefing · Mail-Prüfung: use conversionPreview/convert if it is a channel graph, otherwise rebuild it as a linear network through MCP with the same four Pods and schedule.",
-        "Export IURIO · DOCPIT mail management, Linde · Portal development and systems and Linde · Server report as portable packages, then archive the workflows and their Pods."
+        "Paired backup of the installed profile (done October 9, 18:40, schema 41, integrity ok).",
+        "After M7: rebuild Morgenbriefing · Mail-Prüfung through MCP as a network with two daily 07:00 sources (Mail-Prüfung, Kalender und Issues), a join at Redaktion and Calendar-Bot as consumer.",
+        "Run the network beside the workflow until it delivers one correct briefing, then pause the workflow.",
+        "The paused workflows (IURIO DOCPIT, Linde portal, Linde server report) are archived by the one-time migration in M4, because neither MCP nor the UI can archive workflows; their rows stay in the backup."
       ],
       "acceptance": [
-        "The workflow list is empty; the Morgenbriefing network delivers its next scheduled briefing.",
-        "The three exported packages are stored with the backup."
+        "The Morgenbriefing network delivers a correct briefing and the workflow is paused."
       ],
-      "rollback": "Restore the paired backup with the installed build."
+      "rollback": "Pause the new network and resume the workflow; the paired backup restores everything else."
     },
     {
       "id": "m4-networks-only",
@@ -86,6 +98,7 @@
         "Remove contracts/workflows, graphs, graph-projection and gates v1, worker/workflows, workflow mail (mail/workflow*), WorkflowSchedule and the version-1 branch of gateRound.",
         "Remove network migration, retirement and replacement code, the legacy main/mail/archive script service and the legacyItems/legacyVariables/legacySchema adapters.",
         "Remove the MCP actions inspectWorkflow, saveWorkflow, setGraphValue and runWorkflow, the workflow branches in DecisionsInbox and decisions.ts, the graph half of relay workspace-workflows and the sequence/channels portable kinds.",
+        "A one-time migration archives the remaining workflows and the Pods that only they used.",
         "Rename one meaning of collection so data collections and Pod groupings no longer share the word."
       ],
       "acceptance": [
@@ -111,12 +124,13 @@
     },
     {
       "id": "m6-safety",
-      "status": "planned",
+      "status": "active",
       "title": "Safety rules for real effects only; approvals at the IdP",
       "goal": "Keep authorization of external effects and drop rules that only react to content provenance.",
       "steps": [
-        "Remove the network agent limits (no tools, 120 s, 50 calls), the archive-behind-gate topology rule and the legacy conversation-authority and change-review machinery (master/control, control/changes, MCP changes/retireChange).",
-        "Hold the affected item instead of the whole Pod for an unknown effect; drop the untracked hold for legacy mail.archive.",
+        "Part A: remove the network-only agent limits (no tools, 120 s, 50 calls) so networks follow the standalone Pod rules. The archive behind an approve gate stays, because that gate is the owner approval.",
+        "Part B, after M7: remove the legacy conversation-authority and change-review machinery (master/control, control/changes, MCP changes/retireChange).",
+        "Drop the untracked whole-Pod hold for standalone legacy mail.archive. Per-item holds for unknown HTTP effects are deferred: they need input-derived idempotency keys (proposal recorded).",
         "Mint and verify one grant token per run instead of per call plus per-second assertActive polling.",
         "Replace desktop assignment self-approvals and runtime auto-approval with IdP grant requests the owner approves at the IdP; gate grants accept once and always."
       ],
@@ -129,15 +143,18 @@
     },
     {
       "id": "m7-mcp",
-      "status": "planned",
+      "status": "done",
+      "proof": "PR 329 (owner session, 0c103e78) and PR 330 (full access, ab2b4934) merged on October 9 after independent security review; installed-app sign-in against id.openape.ai is part of M9. Until M6 part B, program grant and resources assign* still self-approve, as on the desktop.",
       "title": "MCP with full access through the owner's DDISA login",
       "goal": "Codex signs in as the owner for about one hour and can then do everything except approve grants.",
       "steps": [
-        "Prototype: check whether Codex's MCP OAuth login works against id.openape.ai (PKCE, client metadata document) for a local HTTP MCP endpoint; otherwise the stdio shim runs the PKCE browser login itself.",
-        "Pods verifies the IdP token (owner issuer and subject, act human) and issues a one-hour local MCP session; expiry asks Codex to sign in again.",
+        "Prototype result: codex mcp login needs streamable HTTP plus client registration (CIMD or DCR) that the IdP lacks; owner chose the Pods-driven login instead.",
+        "Pods main runs the existing owner PKCE login (apes-cli client, act human, owner email) when a shim connection has no session, asks for a native confirmation in the app, and binds a random one-hour session secret to that shim connection only.",
+        "After expiry the next tool call answers login required and starts the login again; no Codex restart.",
         "Remove the off/read/write access modes and the MCP-only restrictions: creation, settings, network activation and composition, recovery mutations and member changes become MCP actions."
       ],
       "acceptance": [
+        "Network creation through MCP works, which unblocks M3.",
         "Without a valid owner session every MCP call is refused; a foreign DDISA subject is refused.",
         "No MCP action approves, denies or chooses at an IdP grant."
       ],
@@ -257,7 +274,7 @@
       "body": "IdP grants for CLI and HTTP commands and HTTPS destinations, owner-decided grants for mail moves, the effect ledger with idempotency keys, hash-bound executables, secret isolation and redaction, and the owner identity check at run start."
     }
   ],
-  "handoff": "M1 runs on branch feature/issue-1455-pods-dead-code. Next: owner approval of this plan, then M2 and M3 can start in parallel.",
+  "handoff": "M1, M2, M6 part A (PR 331, 8193cad0) and M7 are merged; next M6 part B and M5 in parallel, then a signed build so M3 can rebuild Morgenbriefing over MCP with the owner present. Order: M1 done, M2 merged (relay deploy pending), M7 done (MCP can create networks), then M3, M4 to M6, M8, M9. The issue 1454 branches are merged; M6 part A runs in parallel to M7.",
   "links": [
     {
       "title": "Issue 1455",
@@ -268,6 +285,26 @@
     {
       "date": "2026-10-09",
       "text": "Revision 1 drafted from the audit of main ca1e917d and the owner's four decisions."
+    },
+    {
+      "date": "2026-10-09",
+      "text": "Owner approved revision 1 with \"Go\"; M1 merged as b757dafc; M2 and M3 started."
+    },
+    {
+      "date": "2026-10-09",
+      "text": "Revision 2: M3 found that Morgenbriefing is a sequence workflow and MCP cannot create networks, so M7 moves before M3 and the paused workflows are archived by the M4 migration."
+    },
+    {
+      "date": "2026-10-09",
+      "text": "Owner confirmed revision 2 and chose the Pods-driven MCP login; M2 merged as 26532557."
+    },
+    {
+      "date": "2026-10-09",
+      "text": "M6 narrowed: the archive-behind-approve-gate rule stays because the gate is the owner approval (issue 1454); M6 split into part A (parallel to M7) and part B (after M7)."
+    },
+    {
+      "date": "2026-10-09",
+      "text": "M7 merged as PR 329 and PR 330; M6 part A merged as PR 331 after five security findings were fixed with refusal tests. A Morgenbriefing network needs fresh Pods and a ported script API, and a join only merges inputs of the same source item."
     }
   ],
   "translations": {
@@ -354,6 +391,11 @@
         "text": "Keine Wiederherstellung von Backups älter als Schema 41."
       },
       {
+        "path": "milestones.0.proof",
+        "source": "PR 327 merged as b757dafc on October 9, 2026: 71 files, +44/-3,378 lines; lint, typecheck, both builds, Pods 1,342 + 52 browser tests, relay 90 tests and check:affected passed locally.",
+        "text": "PR 327 am 9. Oktober 2026 als b757dafc gemerged: 71 Dateien, +44/-3.378 Zeilen; lint, typecheck, beide Builds, Pods 1.342 + 52 Browser-Tests, Relay 90 Tests und check:affected lokal grün."
+      },
+      {
         "path": "milestones.0.title",
         "source": "Remove dead code",
         "text": "Toten Code entfernen"
@@ -392,6 +434,11 @@
         "path": "milestones.0.rollback",
         "source": "Revert the PR.",
         "text": "Den PR zurücknehmen."
+      },
+      {
+        "path": "milestones.1.proof",
+        "source": "PR 328 merged as 26532557: 98 files, +399/-7,486 lines; installed desktops keep their session endpoints. Relay deploy pending.",
+        "text": "PR 328 als 26532557 gemerged: 98 Dateien, +399/-7.486 Zeilen; installierte Desktops behalten ihre Session-Endpunkte. Relay-Deploy steht aus."
       },
       {
         "path": "milestones.1.title",
@@ -444,34 +491,39 @@
         "text": "Keine Owner-Daten hängen mehr am Workflow-Modell, bevor dessen Code entfernt wird."
       },
       {
+        "path": "milestones.2.blocker",
+        "source": "Morgenbriefing is a sequence workflow, which the existing conversion does not support, and MCP cannot create networks yet; M7 provides network creation through MCP.",
+        "text": "Morgenbriefing ist ein Sequenz-Workflow, den die bestehende Konvertierung nicht unterstützt, und MCP kann noch keine Networks anlegen; M7 liefert das Anlegen von Networks über MCP."
+      },
+      {
         "path": "milestones.2.steps.0",
-        "source": "Take a paired backup of the installed profile.",
-        "text": "Ein gekoppeltes Backup des installierten Profils anlegen."
+        "source": "Paired backup of the installed profile (done October 9, 18:40, schema 41, integrity ok).",
+        "text": "Gekoppeltes Backup des installierten Profils (erledigt am 9. Oktober, 18:40, Schema 41, Integrität ok)."
       },
       {
         "path": "milestones.2.steps.1",
-        "source": "Convert Morgenbriefing · Mail-Prüfung: use conversionPreview/convert if it is a channel graph, otherwise rebuild it as a linear network through MCP with the same four Pods and schedule.",
-        "text": "Morgenbriefing · Mail-Prüfung umstellen: bei einem Channel-Graph conversionPreview/convert nutzen, sonst über MCP als lineares Network mit denselben vier Pods und demselben Zeitplan neu anlegen."
+        "source": "After M7: rebuild Morgenbriefing · Mail-Prüfung through MCP as a network with two daily 07:00 sources (Mail-Prüfung, Kalender und Issues), a join at Redaktion and Calendar-Bot as consumer.",
+        "text": "Nach M7: Morgenbriefing · Mail-Prüfung über MCP als Network neu aufbauen, mit zwei täglichen Quellen um 07:00 (Mail-Prüfung, Kalender und Issues), einem Join bei Redaktion und Calendar-Bot als Consumer."
       },
       {
         "path": "milestones.2.steps.2",
-        "source": "Export IURIO · DOCPIT mail management, Linde · Portal development and systems and Linde · Server report as portable packages, then archive the workflows and their Pods.",
-        "text": "IURIO · DOCPIT mail management, Linde · Portal development and systems und Linde · Server report als portable Pakete exportieren, dann die Workflows und ihre Pods archivieren."
+        "source": "Run the network beside the workflow until it delivers one correct briefing, then pause the workflow.",
+        "text": "Das Network neben dem Workflow laufen lassen, bis es ein korrektes Briefing liefert, dann den Workflow pausieren."
+      },
+      {
+        "path": "milestones.2.steps.3",
+        "source": "The paused workflows (IURIO DOCPIT, Linde portal, Linde server report) are archived by the one-time migration in M4, because neither MCP nor the UI can archive workflows; their rows stay in the backup.",
+        "text": "Die pausierten Workflows (IURIO DOCPIT, Linde Portal, Linde Server-Report) archiviert die einmalige Migration in M4, weil weder MCP noch die UI Workflows archivieren können; ihre Daten bleiben im Backup."
       },
       {
         "path": "milestones.2.acceptance.0",
-        "source": "The workflow list is empty; the Morgenbriefing network delivers its next scheduled briefing.",
-        "text": "Die Workflow-Liste ist leer; das Morgenbriefing-Network liefert sein nächstes geplantes Briefing."
-      },
-      {
-        "path": "milestones.2.acceptance.1",
-        "source": "The three exported packages are stored with the backup.",
-        "text": "Die drei exportierten Pakete liegen beim Backup."
+        "source": "The Morgenbriefing network delivers a correct briefing and the workflow is paused.",
+        "text": "Das Morgenbriefing-Network liefert ein korrektes Briefing und der Workflow ist pausiert."
       },
       {
         "path": "milestones.2.rollback",
-        "source": "Restore the paired backup with the installed build.",
-        "text": "Das gekoppelte Backup mit dem installierten Build wiederherstellen."
+        "source": "Pause the new network and resume the workflow; the paired backup restores everything else.",
+        "text": "Das neue Network pausieren und den Workflow fortsetzen; alles Weitere stellt das gekoppelte Backup wieder her."
       },
       {
         "path": "milestones.3.title",
@@ -500,6 +552,11 @@
       },
       {
         "path": "milestones.3.steps.3",
+        "source": "A one-time migration archives the remaining workflows and the Pods that only they used.",
+        "text": "Eine einmalige Migration archiviert die restlichen Workflows und die Pods, die nur sie genutzt haben."
+      },
+      {
+        "path": "milestones.3.steps.4",
         "source": "Rename one meaning of collection so data collections and Pod groupings no longer share the word.",
         "text": "Eine Bedeutung von Collection umbenennen, damit Datensammlungen und Pod-Gruppierungen nicht mehr dasselbe Wort teilen."
       },
@@ -565,21 +622,26 @@
       },
       {
         "path": "milestones.5.steps.0",
-        "source": "Remove the network agent limits (no tools, 120 s, 50 calls), the archive-behind-gate topology rule and the legacy conversation-authority and change-review machinery (master/control, control/changes, MCP changes/retireChange).",
-        "text": "Die Agent-Grenzen in Networks (keine Tools, 120 s, 50 Aufrufe), die Topologieregel Archiv-hinter-Gate und die alte Konversations-Autorität samt Change-Review (master/control, control/changes, MCP changes/retireChange) entfernen."
+        "source": "Part A: remove the network-only agent limits (no tools, 120 s, 50 calls) so networks follow the standalone Pod rules. The archive behind an approve gate stays, because that gate is the owner approval.",
+        "text": "Teil A: die nur für Networks geltenden Agent-Grenzen (keine Tools, 120 s, 50 Aufrufe) entfernen, damit Networks den Regeln für einzelne Pods folgen. Das Archiv hinter einem Approve-Gate bleibt, weil dieses Gate die Owner-Freigabe ist."
       },
       {
         "path": "milestones.5.steps.1",
-        "source": "Hold the affected item instead of the whole Pod for an unknown effect; drop the untracked hold for legacy mail.archive.",
-        "text": "Bei einem unbekannten Effekt das betroffene Element statt des ganzen Pods anhalten; den untracked-Hold für das alte mail.archive streichen."
+        "source": "Part B, after M7: remove the legacy conversation-authority and change-review machinery (master/control, control/changes, MCP changes/retireChange).",
+        "text": "Teil B, nach M7: die alte Konversations-Autorität samt Change-Review (master/control, control/changes, MCP changes/retireChange) entfernen."
       },
       {
         "path": "milestones.5.steps.2",
+        "source": "Drop the untracked whole-Pod hold for standalone legacy mail.archive. Per-item holds for unknown HTTP effects are deferred: they need input-derived idempotency keys (proposal recorded).",
+        "text": "Den untracked-Hold auf den ganzen Pod für das alte eigenständige mail.archive streichen. Holds pro Element bei unbekannten HTTP-Effekten sind zurückgestellt: Sie brauchen aus dem Input abgeleitete Idempotenzschlüssel (Vorschlag festgehalten)."
+      },
+      {
+        "path": "milestones.5.steps.3",
         "source": "Mint and verify one grant token per run instead of per call plus per-second assertActive polling.",
         "text": "Ein Grant-Token pro Lauf ausstellen und prüfen statt pro Aufruf plus sekündlichem assertActive-Polling."
       },
       {
-        "path": "milestones.5.steps.3",
+        "path": "milestones.5.steps.4",
         "source": "Replace desktop assignment self-approvals and runtime auto-approval with IdP grant requests the owner approves at the IdP; gate grants accept once and always.",
         "text": "Desktop-Selbstfreigaben bei der Zuweisung und die automatische Laufzeit-Freigabe durch IdP-Grant-Anfragen ersetzen, die der Owner beim IdP freigibt; Gate-Grants akzeptieren once und always."
       },
@@ -604,6 +666,11 @@
         "text": "Den vorherigen signierten Build wieder installieren."
       },
       {
+        "path": "milestones.6.proof",
+        "source": "PR 329 (owner session, 0c103e78) and PR 330 (full access, ab2b4934) merged on October 9 after independent security review; installed-app sign-in against id.openape.ai is part of M9. Until M6 part B, program grant and resources assign* still self-approve, as on the desktop.",
+        "text": "PR 329 (Owner-Session, 0c103e78) und PR 330 (voller Zugriff, ab2b4934) am 9. Oktober nach unabhängigem Security-Review gemerged; der Login an der installierten App gegen id.openape.ai gehört zu M9. Bis M6 Teil B geben program grant und resources assign* weiterhin selbst frei, wie am Desktop."
+      },
+      {
         "path": "milestones.6.title",
         "source": "MCP with full access through the owner's DDISA login",
         "text": "MCP mit vollem Zugriff über den DDISA-Login des Owners"
@@ -615,26 +682,36 @@
       },
       {
         "path": "milestones.6.steps.0",
-        "source": "Prototype: check whether Codex's MCP OAuth login works against id.openape.ai (PKCE, client metadata document) for a local HTTP MCP endpoint; otherwise the stdio shim runs the PKCE browser login itself.",
-        "text": "Prototyp: prüfen, ob der MCP-OAuth-Login von Codex gegen id.openape.ai (PKCE, Client-Metadata-Dokument) für einen lokalen HTTP-MCP-Endpunkt funktioniert; sonst führt der stdio-Shim den PKCE-Browser-Login selbst aus."
+        "source": "Prototype result: codex mcp login needs streamable HTTP plus client registration (CIMD or DCR) that the IdP lacks; owner chose the Pods-driven login instead.",
+        "text": "Ergebnis des Prototyps: codex mcp login braucht Streamable HTTP und eine Client-Registrierung (CIMD oder DCR), die der IdP nicht hat; der Owner hat den Login durch Pods gewählt."
       },
       {
         "path": "milestones.6.steps.1",
-        "source": "Pods verifies the IdP token (owner issuer and subject, act human) and issues a one-hour local MCP session; expiry asks Codex to sign in again.",
-        "text": "Pods prüft das IdP-Token (Owner-Issuer und -Subject, act human) und stellt eine einstündige lokale MCP-Session aus; nach Ablauf fordert Codex einen neuen Login an."
+        "source": "Pods main runs the existing owner PKCE login (apes-cli client, act human, owner email) when a shim connection has no session, asks for a native confirmation in the app, and binds a random one-hour session secret to that shim connection only.",
+        "text": "Pods main führt den bestehenden Owner-PKCE-Login (Client apes-cli, act human, Owner-E-Mail) aus, wenn eine Shim-Verbindung keine Session hat, fragt in der App nativ nach Bestätigung und bindet ein zufälliges Session-Secret für eine Stunde nur an diese Shim-Verbindung."
       },
       {
         "path": "milestones.6.steps.2",
+        "source": "After expiry the next tool call answers login required and starts the login again; no Codex restart.",
+        "text": "Nach Ablauf meldet der nächste Tool-Aufruf, dass eine Anmeldung nötig ist, und startet den Login erneut; Codex muss nicht neu starten."
+      },
+      {
+        "path": "milestones.6.steps.3",
         "source": "Remove the off/read/write access modes and the MCP-only restrictions: creation, settings, network activation and composition, recovery mutations and member changes become MCP actions.",
         "text": "Die Zugriffsmodi off/read/write und die MCP-spezifischen Einschränkungen entfernen: Anlegen, Einstellungen, Network-Aktivierung und -Komposition, Recovery-Änderungen und Member-Änderungen werden MCP-Aktionen."
       },
       {
         "path": "milestones.6.acceptance.0",
+        "source": "Network creation through MCP works, which unblocks M3.",
+        "text": "Networks lassen sich über MCP anlegen, was M3 freigibt."
+      },
+      {
+        "path": "milestones.6.acceptance.1",
         "source": "Without a valid owner session every MCP call is refused; a foreign DDISA subject is refused.",
         "text": "Ohne gültige Owner-Session wird jeder MCP-Aufruf abgelehnt; ein fremdes DDISA-Subject wird abgelehnt."
       },
       {
-        "path": "milestones.6.acceptance.1",
+        "path": "milestones.6.acceptance.2",
         "source": "No MCP action approves, denies or chooses at an IdP grant.",
         "text": "Keine MCP-Aktion gibt einen IdP-Grant frei, lehnt ihn ab oder wählt dabei aus."
       },
@@ -865,13 +942,38 @@
       },
       {
         "path": "handoff",
-        "source": "M1 runs on branch feature/issue-1455-pods-dead-code. Next: owner approval of this plan, then M2 and M3 can start in parallel.",
-        "text": "M1 läuft auf dem Branch feature/issue-1455-pods-dead-code. Als Nächstes: Freigabe dieses Plans durch den Owner, danach können M2 und M3 parallel starten."
+        "source": "M1, M2, M6 part A (PR 331, 8193cad0) and M7 are merged; next M6 part B and M5 in parallel, then a signed build so M3 can rebuild Morgenbriefing over MCP with the owner present. Order: M1 done, M2 merged (relay deploy pending), M7 done (MCP can create networks), then M3, M4 to M6, M8, M9. The issue 1454 branches are merged; M6 part A runs in parallel to M7.",
+        "text": "M1, M2, M6 Teil A (PR 331, 8193cad0) und M7 sind gemerged; als Nächstes M6 Teil B und M5 parallel, danach ein signierter Build, damit M3 das Morgenbriefing über MCP mit dem Owner neu aufbaut. Reihenfolge: M1 erledigt, M2 gemerged (Relay-Deploy ausstehend), M7 erledigt (MCP kann Networks anlegen), danach M3, M4 bis M6, M8, M9. Die Branches aus Issue 1454 sind gemerged; M6 Teil A läuft parallel zu M7."
       },
       {
         "path": "changelog.0.text",
         "source": "Revision 1 drafted from the audit of main ca1e917d and the owner's four decisions.",
         "text": "Revision 1 aus der Prüfung von main ca1e917d und den vier Owner-Entscheidungen erstellt."
+      },
+      {
+        "path": "changelog.1.text",
+        "source": "Owner approved revision 1 with \"Go\"; M1 merged as b757dafc; M2 and M3 started.",
+        "text": "Owner hat Revision 1 mit \"Go\" freigegeben; M1 als b757dafc gemerged; M2 und M3 gestartet."
+      },
+      {
+        "path": "changelog.2.text",
+        "source": "Revision 2: M3 found that Morgenbriefing is a sequence workflow and MCP cannot create networks, so M7 moves before M3 and the paused workflows are archived by the M4 migration.",
+        "text": "Revision 2: M3 hat ergeben, dass Morgenbriefing ein Sequenz-Workflow ist und MCP keine Networks anlegen kann; daher kommt M7 vor M3, und die pausierten Workflows archiviert die Migration in M4."
+      },
+      {
+        "path": "changelog.3.text",
+        "source": "Owner confirmed revision 2 and chose the Pods-driven MCP login; M2 merged as 26532557.",
+        "text": "Owner hat Revision 2 bestätigt und den MCP-Login durch Pods gewählt; M2 als 26532557 gemerged."
+      },
+      {
+        "path": "changelog.4.text",
+        "source": "M6 narrowed: the archive-behind-approve-gate rule stays because the gate is the owner approval (issue 1454); M6 split into part A (parallel to M7) and part B (after M7).",
+        "text": "M6 eingegrenzt: Die Regel Archiv-hinter-Approve-Gate bleibt, weil das Gate die Owner-Freigabe ist (Issue 1454); M6 aufgeteilt in Teil A (parallel zu M7) und Teil B (nach M7)."
+      },
+      {
+        "path": "changelog.5.text",
+        "source": "M7 merged as PR 329 and PR 330; M6 part A merged as PR 331 after five security findings were fixed with refusal tests. A Morgenbriefing network needs fresh Pods and a ported script API, and a join only merges inputs of the same source item.",
+        "text": "M7 als PR 329 und PR 330 gemerged; M6 Teil A als PR 331 gemerged, nachdem fünf Sicherheitsbefunde mit Ablehnungstests behoben waren. Ein Morgenbriefing-Network braucht frische Pods und eine portierte Skript-API, und ein Join führt nur Eingänge desselben Quell-Items zusammen."
       }
     ]
   }
