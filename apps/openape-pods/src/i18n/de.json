@@ -2962,7 +2962,7 @@
   "Approved inputs and grant maintenance cannot be replayed": "Freigegebene Eingaben und Grant-Wartung können nicht wiederholt werden",
   "Inspect the stopped failed invocation before replaying it": "Den gestoppten fehlgeschlagenen Lauf vor der Wiederholung prüfen",
   "The failed invocation was already resolved, retried or needs identity review": "Der fehlgeschlagene Lauf wurde bereits aufgelöst, wiederholt oder braucht eine Identitätsprüfung",
-  "Runs with external effects or workflow calls cannot be replayed": "Läufe mit externen Wirkungen oder Workflow-Aufrufen können nicht wiederholt werden",
+  "Runs with external effects cannot be replayed": "Läufe mit externen Wirkungen können nicht wiederholt werden",
   "The failed run already used the current script": "Der fehlgeschlagene Lauf verwendete bereits das aktuelle Skript",
   "Adopt the existing instance before updating its script": "Die bestehende Instanz zuerst übernehmen, bevor ihr Skript aktualisiert wird",
   "Wait for this Pod's network executions to settle": "Warten, bis die Netzwerkläufe dieses Pods abgeschlossen sind",
