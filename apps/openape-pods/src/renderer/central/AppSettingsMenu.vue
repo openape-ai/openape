@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import type { McpAccess } from '../../contracts/mcp-access'
+import type { McpSessionView } from '../../contracts/mcp-session'
 import type { ConnectionView } from '../../contracts/onboarding'
 import type { RuntimeApprovalView } from '../../contracts/runtime-approval'
-import { diagnostic, t } from '../i18n'
+import { diagnostic, t, time } from '../i18n'
 import LanguageSwitcher from '../LanguageSwitcher.vue'
 import type { SecretsView } from '../../contracts/secrets'
 
 /**
- * Settings as a gear menu: the three accounts, the two execution switches, language, backups and
+ * Settings as a gear menu: the accounts, the execution switch, the MCP session, language, backups and
  * the link to the grants at the identity provider. Rights are decided at the identity provider;
  * this menu only shows status and switches that the desktop already offers. The browser shows
  * status and sign-out and points to the desktop for everything native.
@@ -20,7 +20,7 @@ const owner = ref<ConnectionView | null>(null)
 const jev = ref<ConnectionView | null>(null)
 const codex = ref<'connected' | 'disconnected' | 'foreign' | 'edited' | null>(null)
 const approval = ref<RuntimeApprovalView | null>(null)
-const mcp = ref<McpAccess | null>(null)
+const mcp = ref<McpSessionView | null>(null)
 const busy = ref(false)
 const error = ref('')
 const grants = 'https://id.openape.ai/grants'
@@ -28,7 +28,7 @@ let closed = false
 async function load() {
   if (!native) return
   try {
-    const [onboarding, connection, runtime, access] = await Promise.all([window.pods.onboarding({ type: 'list' }), window.pods.codex({ type: 'status' }), window.pods.runtimeApproval({ type: 'get' }), window.pods.mcpAccess({ type: 'get' })])
+    const [onboarding, connection, runtime, access] = await Promise.all([window.pods.onboarding({ type: 'list' }), window.pods.codex({ type: 'status' }), window.pods.runtimeApproval({ type: 'get' }), window.pods.mcpSession({ type: 'get' })])
     if (closed) return
     owner.value = onboarding.connections.find(item => item.id === onboarding.owner) ?? null
     jev.value = onboarding.connections.find(item => item.provider === 'typesafe') ?? null
@@ -43,8 +43,7 @@ async function act(action: () => Promise<void>) {
   finally { busy.value = false; await load() }
 }
 const setApproval = (event: Event) => act(async () => { approval.value = await window.pods.runtimeApproval({ type: 'set', enabled: (event.target as HTMLInputElement).checked }) })
-// On means read and write with the duration already chosen; off stops MCP. The scope never widens on its own.
-const setMcp = (event: Event) => act(async () => { mcp.value = await window.pods.mcpAccess({ type: 'set', mode: (event.target as HTMLInputElement).checked ? 'write' : 'off', duration: mcp.value?.duration ?? 'hour' }) })
+const endMcp = () => act(async () => { mcp.value = await window.pods.mcpSession({ type: 'end' }) })
 const backup = () => act(async () => { await window.pods.data({ type: 'backup' }) })
 const manageGrants = () => act(async () => { await window.pods.runtimeApproval({ type: 'manage' }) })
 onMounted(load)
@@ -78,7 +77,9 @@ defineExpose({ load })
       {{ t('Execution') }}
     </div>
     <label class="sw"><input type="checkbox" data-switch="approval" :checked="!!approval?.enabled" :disabled="browser || busy || !approval" @change="setApproval"> {{ t('Always let the scripts of all my Pods run on this Mac') }} <span class="meta">({{ t('runtime grants at the IdP, revocable at any time') }})</span></label>
-    <label class="sw"><input type="checkbox" data-switch="mcp" :checked="!!mcp && mcp.mode !== 'off'" :disabled="browser || busy || !mcp" @change="setMcp"> {{ t('Local MCP access for connected tools') }} <span class="meta">({{ t('narrow scope, never widened on its own') }})</span></label>
+    <div class="acct" data-mcp>
+      <span>{{ t('MCP session') }}</span><span class="pill" :class="mcp?.expiresAt ? 'ok' : 'off'">{{ browser ? t('on the desktop') : mcp?.expiresAt ? t('Codex signed in until {time}', { time: time(mcp.expiresAt) }) : t('Codex not signed in') }}</span><span class="meta">{{ t('one hour after your DDISA sign-in and confirmation') }}<button v-if="!browser && (mcp?.expiresAt || mcp?.pending)" class="secondary small" type="button" :disabled="busy" @click="endMcp">{{ t('End session') }}</button></span>
+    </div>
     <p v-if="browser" class="meta">
       {{ t('Manage execution on the desktop.') }}
     </p>
@@ -101,7 +102,7 @@ defineExpose({ load })
     <div class="acct" data-advanced>
       <span>{{ t('More settings') }}</span><button v-if="!browser" class="secondary small" type="button" :disabled="busy" @click="emit('advanced')">
         {{ t('Open desktop settings…') }}
-      </button><span v-else class="meta">{{ t('on the desktop') }}</span><span class="meta">{{ t('sign-in flows, Jev key, MCP duration, data and backups') }}</span>
+      </button><span v-else class="meta">{{ t('on the desktop') }}</span><span class="meta">{{ t('sign-in flows, Jev key, Codex connection, data and backups') }}</span>
     </div>
     <div class="acct">
       <span>{{ t('Rights') }}</span><a v-if="browser" :href="grants" target="_blank" rel="noopener">{{ t('Manage existing grants at the IdP') }}</a><button v-else class="secondary small" type="button" :disabled="busy || !approval?.owner" @click="manageGrants">

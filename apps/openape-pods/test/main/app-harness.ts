@@ -66,7 +66,7 @@ export async function startMain(env: Record<string, string> = {}, prepare: (root
     app: {
       getVersion: () => '0.1.2', isPackaged: false, setName: () => {}, enableSandbox: () => {}, commandLine: { appendSwitch: (name: string) => switches.push(name) }, setPath: (name: string, path: string) => paths.set(name, path), getPath: (name: string) => join(root, name), getAppPath: () => root,
       requestSingleInstanceLock: () => true, on: () => {}, whenReady: () => Promise.resolve(), getPreferredSystemLanguages: () => ['en'], getLocale: () => 'en',
-      getFileIcon: async () => ({ resize: () => ({ toDataURL: () => 'data:image/png;base64,' }) }), ...lifecycle,
+      getFileIcon: async () => ({ resize: () => ({ toDataURL: () => 'data:image/png;base64,' }) }), focus: () => {}, ...lifecycle,
     },
     BrowserWindow: FakeWindow,
     dialog,
