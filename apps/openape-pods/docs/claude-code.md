@@ -137,6 +137,13 @@ a join correlates inputs of the same source item, so the joined channels come
 from one source. The result's `createdId` names the paused network;
 `{ "type": "activate", "id": "…", "revision": 1 }` starts its source schedules.
 
+Every member, source or consumer, uses its own assigned applications, HTTP
+destinations, secrets and folders exactly like a standalone Pod; assign them on
+the member Pod before pinning its definition. Each application command and HTTP
+destination still needs its grant at the identity provider. The only exception
+is the archive member behind an approve route: it moves approved mail solely
+through `context.network.archive`.
+
 ## What stays on the desktop
 
 The Mac executes scripts and schedules, provides the existing native sandbox and

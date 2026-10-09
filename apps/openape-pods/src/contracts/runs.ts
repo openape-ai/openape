@@ -49,6 +49,9 @@ export function parseRunView(value: unknown): RunView {
 }
 export interface RunAliases { applications: Record<string, string>, http: Record<string, string>, directories: Record<string, string>, references: Record<string, { id: string, hash: string, path: string }> }
 // Script-facing names for ready local resources, so shared source needs no local identity, path or origin.
+/** Script time limit of one run, excluding paused service and agent waits. */
+export const scriptTimeLimitMs = 300000
+
 export function runAliases(aliases: { alias: string, resource: import('./resources').PodResource }[], references: RunInput['references']): RunAliases {
   const result: RunAliases = { applications: {}, http: {}, directories: {}, references: {} }
   for (const { alias, resource } of aliases) {

@@ -1249,13 +1249,23 @@ excluded channel. Routed gates cannot combine with joins on their inputs or
 outputs, or bounded feedback. Portable export of routed networks is refused until
 its document format supports routes.
 
-Persistent source scripts may invoke their assigned CLI program read/list/get operations.
-Sources and consumers may invoke assigned Jev evaluations through the existing native services. Program and
-Jev identity/grant checks, executable/adapter integrity, resource epochs,
-cancellation and timeouts remain in force. Program reads share the existing
-100-call network read budget. Text generation reuses the assigned provider with no tools, at most 50
-calls per invocation and at most 120 seconds per call. No shell, HTTP or mail
-mutation port is added.
+Network members use their own assigned resources exactly like standalone Pods
+(owner decision October 9, 2026, issue 1455): sources and consumers invoke granted
+application commands and mail reads (`tools.invoke`, also from the agent's
+`ape_shell` tool), assigned HTTP destinations (`http.request`), their secrets
+(`credentials.get`), assigned folders, Jev evaluations and `agent.run` through the
+same dispatcher code path, with the same limits. There is no network read budget,
+no source-only rule and no network-specific capability list. Authorization of
+real effects is unchanged: every application command and HTTP destination needs
+its IdP grant (with the existing 60-second per-run token reuse; changing or revoking a resource cancels the run),
+executables and adapters stay hash-bound, effect keys keep HTTP writes idempotent
+in the effect ledger, an unknown outcome holds the member until owner review, a
+DDISA destination token is redacted from replies, and resources of another Pod
+are never reachable. Network runs hold no per-run Pod runtime grant; the owner
+activates the network instead. A member script's deadline is the standalone
+script time limit plus the agent pause allowance plus one minute. The one
+structural rule is the archive member below: its application is reachable only
+through the approved archive port.
 
 Conversion preserves every legacy route exactly. A terminal unsuccessful member
 run is acceptable only after a successful recovery inspection and a terminal
@@ -1322,8 +1332,9 @@ remain required. Client-supplied authority fields are rejected.
 ## Mail archive port
 
 The first external action port (issue 1454). A consumer whose every subscribed
-input is the output of an approve gate may hold exactly one assigned mail
-application (`tool.app_*`); its script still cannot invoke it.
+input is the output of an approve gate and that holds exactly one assigned mail
+application (`tool.app_*`) is the archive member; neither its script nor its agent
+can invoke that application directly.
 `context.network.archive({application, mailbox})` processes the invocation's gate
 coverage: per approved item it resolves the message id and version from the case
 `source_mapping`, computes the logical action key

@@ -74,7 +74,7 @@ export class NetworkViews {
       WHERE network_id=? AND kind NOT IN ('environment','operation','log','snapshot','process','infrastructure') AND id<? AND (? IS NULL OR case_id=?) ORDER BY id DESC LIMIT 51`).all(networkId, before ?? Number.MAX_SAFE_INTEGER, caseId, caseId)
     const events = rows.slice(0, 50).map((row) => {
       const receipt = JSON.parse(row.body as string) as Record<string, unknown>
-      const source = row.kind === 'network-mail-read' ? receipt.data as Record<string, unknown> : receipt
+      const source = ['network-mail-read', 'recovery-boundary'].includes(row.kind as string) ? receipt.data as Record<string, unknown> : receipt
       const visible = Object.fromEntries(['operation', 'count', 'message', 'gate', 'decision', 'inputEventId', 'podId', 'admitted', 'expired', 'explicitResumeRequired', 'activeInvocationsMaySettle', 'state', 'summary', 'error', 'reason', 'taskId', 'generation', 'itemCount', 'channel', 'caseRevision', 'feedback', 'hop', 'delayMs', 'eventId', 'noScriptLaunched', 'explicitInspectionRequired', 'automaticRepeatDenied'].filter(key => Object.hasOwn(source, key) && (source[key] === null || ['string', 'number', 'boolean'].includes(typeof source[key]))).map(key => [key, source[key]]))
       const body = JSON.stringify(visible)
       return { id: Number(row.id), caseId: row.case_id as string | null, runId: row.run_id as string | null, kind: row.kind as string, body: body.slice(0, 8192), truncated: body.length > 8192, at: Number(row.created_at) }
