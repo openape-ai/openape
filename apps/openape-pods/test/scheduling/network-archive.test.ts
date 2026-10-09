@@ -6,6 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { NetworkGateManifest } from '../../src/contracts/network-gates'
 import type { ProgramAssignment } from '../../src/contracts/programs'
 import { archiveNotStarted, assertArchiveMove } from '../../src/contracts/network-capabilities'
+import { NonRetryableError } from '../../src/contracts/infrastructure'
 import { archiveApproved, mailContentVersion } from '../../src/worker/scheduling/network-archive'
 import { digest } from '../../src/worker/storage/database'
 import { closeNetworks, networkFixture } from './network-fixture'
@@ -17,7 +18,7 @@ const mailbox = 'owner@example.invalid'
 const mail = { id: 'message-1', changeKey: 'change-1', parentFolderId: 'inbox-folder', from: { emailAddress: { address: 'news@example.invalid' } }, toRecipients: [{ emailAddress: { address: mailbox } }], ccRecipients: [], subject: 'Weekly news', receivedDateTime: '2026-10-08T08:00:00Z', body: { content: 'Synthetic newsletter', contentType: 'text' }, hasAttachments: false }
 const reply = (operation: 'read' | 'move', fields: Record<string, unknown>) => ({ exitCode: 0, stderr: '', stdout: JSON.stringify({ protocol: 'pods-mail/v1', account: mailbox, operation, ...fields }) })
 
-function archiveFixture(options: { current?: typeof mail, mails?: typeof mail[], move?: (message: string) => unknown, payload?: Record<string, string>, preview?: boolean } = {}) {
+function archiveFixture(options: { current?: typeof mail, mails?: typeof mail[], move?: (message: string) => unknown, payload?: Record<string, string>, preview?: boolean, readFailure?: Error } = {}) {
   const approved = options.mails ?? [mail]; const current = options.mails ?? [options.current ?? mail]
   const moves: string[][] = []
   const decision = { state: 'approved' }
@@ -25,6 +26,7 @@ function archiveFixture(options: { current?: typeof mail, mails?: typeof mail[],
     scope.assertCurrent()
     const argv = (body as { argv: string[] }).argv
     if (argv[1] !== 'read') throw new Error('Scripts and the port may only read through the tool service')
+    if (options.readFailure) throw options.readFailure
     const message = argv[argv.indexOf('--message') + 1]
     return reply('read', { outcome: 'confirmed', items: [current.find(item => item.id === message) ?? mail] })
   })
@@ -46,6 +48,7 @@ function archiveFixture(options: { current?: typeof mail, mails?: typeof mail[],
   } })
   const outcomes: unknown[] = []; const refusals: string[] = []
   const source = f.pod('Intake', { takes: [], gives: ['mail.batch'], summary: 'Reads mail' }, async (_items, invoke) => {
+    if (options.readFailure) await invoke('tools.invoke', { application: 'mail', argv: ['workflow', 'read', '--account', mailbox, '--message', mail.id] })
     await invoke('network.archive', { application: 'mail', mailbox }).catch((error: Error) => refusals.push(error.message))
   })
   const archive = f.pod('Archive', { takes: ['mail.approved'], gives: [], summary: 'Archives approved mail' }, async (_items, invoke) => {
@@ -53,9 +56,9 @@ function archiveFixture(options: { current?: typeof mail, mails?: typeof mail[],
     outcomes.push(await invoke('network.archive', { application: 'mail', mailbox }))
   })
   const excluded = f.pod('Excluded', { takes: ['mail.excluded'], gives: [], summary: 'Keeps denied mail' }, async () => {})
-  const assign = () => {
+  const assign = (podId = archive) => {
     const applicationId = randomUUID(); const capability = `tool.app_${applicationId.replaceAll('-', '')}.invoke`
-    f.resources.assignProgram(archive, applicationId, { type: 'program', name: 'mail', capability } as ProgramAssignment, f.resources.epoch(archive))
+    f.resources.assignProgram(podId, applicationId, { type: 'program', name: 'mail', capability } as ProgramAssignment, f.resources.epoch(podId))
     return capability
   }
   // Stores and validates a member script version with the archive capability, as validation would.
@@ -68,14 +71,14 @@ function archiveFixture(options: { current?: typeof mail, mails?: typeof mail[],
     f.store.db.prepare('INSERT OR REPLACE INTO validations VALUES(?,?,?,?,?)').run(archive, hash, pod.bindingRevision, f.resources.epoch(archive), '{}')
     return hash
   }
-  if (!options.preview) {
-    const capability = assign()
-    const pod = f.store.getPod(archive)
-    const row = f.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(archive, pod.activeScript!)!
-    f.store.db.prepare('UPDATE scripts SET manifest=? WHERE pod_id=? AND hash=?').run(JSON.stringify({ ...JSON.parse(row.manifest as string), capabilities: [capability] }), archive, pod.activeScript!)
-    f.store.db.prepare('INSERT OR REPLACE INTO validations VALUES(?,?,?,?,?)').run(archive, pod.activeScript!, pod.bindingRevision, f.resources.epoch(archive), '{}')
+  for (const podId of [...(options.preview ? [] : [archive]), ...(options.readFailure ? [source] : [])]) {
+    const capability = assign(podId)
+    const pod = f.store.getPod(podId)
+    const row = f.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(podId, pod.activeScript!)!
+    f.store.db.prepare('UPDATE scripts SET manifest=? WHERE pod_id=? AND hash=?').run(JSON.stringify({ ...JSON.parse(row.manifest as string), capabilities: [capability] }), podId, pod.activeScript!)
+    f.store.db.prepare('INSERT OR REPLACE INTO validations VALUES(?,?,?,?,?)').run(podId, pod.activeScript!, pod.bindingRevision, f.resources.epoch(podId), '{}')
     // Assigning the application pauses the Pod, as for any rights change.
-    f.store.db.prepare('UPDATE pods SET lifecycle=\'active\' WHERE id=?').run(archive)
+    f.store.db.prepare('UPDATE pods SET lifecycle=\'active\' WHERE id=?').run(podId)
   }
   const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, ...[archive, excluded].map(podId => ({ podId, source: null, serialCase: false }))], ['mail.batch', 'mail.approved', 'mail.excluded'], [{ key: 'newsletter', kind: 'approve', title: 'Archive newsletters', podId: archive, channel: 'mail.batch' }], [{ key: 'newsletter', kind: 'approve', title: 'Archive newsletters', takes: 'mail.batch', gives: 'mail.approved', excluded: 'mail.excluded' }])
   f.engine.execute({ type: 'activate', id, revision: 1 })
@@ -165,6 +168,13 @@ it('never moves a message again while an earlier attempt of another version is u
   const again = await archiveApproved(f.store, { networkId: run.network_id as string, runId: run.run_id as string, podId: f.archive, owner: f.owner }, coverage, { application: 'mail', mailbox }, { read: async () => { throw new Error('No read expected') }, move: async () => { throw new Error('No move expected') }, approved: async () => {} }, () => {})
   expect(again).toEqual([expect.objectContaining({ outcome: 'skipped', reason: 'An earlier archive attempt of this message awaits reconciliation' })])
   expect(f.moves).toHaveLength(1)
+})
+
+it('does not retry a run whose tool output exceeded its limit', async () => {
+  const f = archiveFixture({ readFailure: new NonRetryableError('Tool output exceeded 200000 bytes; read smaller pages, for example with --limit') })
+  f.process(f.id, [f.source], [], 1); await f.settle()
+  expect(f.store.db.prepare('SELECT i.state,c.retry_at,c.failure_kind,c.diagnostic FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.pod_id=?').all(f.source))
+    .toEqual([{ state: 'blocked', retry_at: null, failure_kind: 'exhausted', diagnostic: expect.stringContaining('Tool output exceeded 200000 bytes') }])
 })
 
 it('records a broker refusal before sending as not applied and keeps the member usable', async () => {
