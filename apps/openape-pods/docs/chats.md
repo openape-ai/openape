@@ -93,9 +93,11 @@ baseline schema drops them. `setup` can resolve a proposal against actual
 assigned resources or decline it; it creates no execution permission. New `requestAccess` proposals are
 rejected on the Codex surface in favor of direct resource administration.
 
-The retained chat registry and master service keep stored history and the hidden
-Codex selection context. The conversation authority that prepared reviews for
-remote and in-app chat is removed with its callers. Backup/restore keeps history,
+The retained chat registry and master service keep stored history, setup
+proposals, descriptions and the hidden Codex selection context. There is no
+in-app model turn any more: `send`, `steer`, `begin` and `cancel`, the in-app
+`pods_control` tool and the conversation authority are removed, so every
+assistant mutation enters through the MCP server and its owner session. Backup/restore keeps history,
 clears provider continuation and disables schedules through the existing contract.
 
 ## Verification
