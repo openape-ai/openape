@@ -16,7 +16,7 @@ import type { NetworkGateStep } from './network-gates'
 import { randomUUID } from 'node:crypto'
 import { parseOwner, sameOwner } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
-import { networkLimits, networkSubscriptionChannel, diagnoseNetwork, draftControls, draftFormatVersion, parseNetworkCommand, parseNetworkDefinition } from '../../contracts/networks'
+import { networkLimits, networkSubscriptionChannel, diagnoseNetwork, networkDefinitionFromDraft, parseNetworkCommand, parseNetworkDefinition } from '../../contracts/networks'
 import type { NetworkCommand, NetworkReplay, NetworkDefinition, NetworkDraft, NetworkHealth, NetworkPreview, NetworkView } from '../../contracts/networks'
 import { parseGraphContract } from '../../contracts/graphs'
 import { nextDue } from '../../contracts/clock'
@@ -284,7 +284,7 @@ export class NetworkEngine {
       WHERE n.owner_issuer=? AND n.owner_subject=? AND n.state!='archived' AND c.decided_at IS NULL
       ORDER BY e.accepted_at,c.event_id,c.gate_key LIMIT 256`).all(owner.issuer, owner.subject).map((row) => {
       const definition = parseNetworkDefinition(JSON.parse(row.contract as string))
-      const gate = definition.routes!.find(gate => gate.key === row.gate_key)!
+      const gate = definition.routes.find(gate => gate.key === row.gate_key)!
       if (gate.kind !== 'choose') throw new Error('Stored choice has no declared routing gate')
       const payload = row.payload as string
       return { networkId: definition.id, revision: definition.revision, eventId: row.event_id as string, caseId: row.case_id as string, gate: gate.key, title: gate.title, payload: payload.slice(0, 4096), truncated: payload.length > 4096, options: gate.options.map(({ key, title }) => ({ key, title })) }
@@ -367,7 +367,7 @@ export class NetworkEngine {
     const { id: networkId, podId } = command
     const definition = this.definition(networkId, command.revision)
     if (!definition.members.some(member => member.podId === podId)) throw new Error('Pod is not a member of this network revision')
-    if (definition.joins?.some(join => join.podId === podId)) throw new Error('Join members cannot be replayed; review their held inputs in the desktop workspace')
+    if (definition.joins.some(join => join.podId === podId)) throw new Error('Join members cannot be replayed; review their held inputs in the desktop workspace')
     if (this.store.db.prepare('SELECT baseline_state FROM networks WHERE id=?').get(networkId)!.baseline_state !== 'ready') throw new Error('Restored networks require review before replay')
     const script = this.store.getPod(podId).activeScript
     if (!script) throw new Error('The Pod has no active script')
@@ -497,8 +497,7 @@ export class NetworkEngine {
         if (this.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=?').get(selection.podId) || (!convertedPods?.has(selection.podId) && (legacy || this.store.checkpoint(selection.podId).revision !== 0 || canonicalNetworkJson(this.store.checkpoint(selection.podId).body) !== '{}'))) throw new Error('Network creation requires a separate fresh instance; use reviewed conversion for legacy state')
         return { podId: selection.podId, definitionId: binding.definition_id as string, definitionVersion: binding.definition_version as number, bindingRevision: binding.binding_revision as number, contract: parseGraphContract(JSON.parse(binding.contract as string)), source: selection.source ? { bindingId: randomUUID(), schedule: selection.source.schedule } : null, serialCase: selection.serialCase }
       })
-      const { sharedValues: _sharedValues, expectedSetup: _expectedSetup, ...composition } = draft
-      const definition = parseNetworkDefinition({ formatVersion: draftFormatVersion(draft), kind: 'network', semantics: 'persistent-network-v1', id, revision: 1, ...composition, ...draftControls(draft), members })
+      const definition = networkDefinitionFromDraft(draft, { id, revision: 1 }, members)
       const sharedValues = validateNetworkComposition(this.store, this.resources, owner, draft, definition)
       this.validate(definition)
       const body = canonicalNetworkJson(definition)

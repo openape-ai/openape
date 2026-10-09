@@ -1,5 +1,5 @@
 import type { NetworkDefinition, NetworkMember } from './networks'
-import { networkGateOutput } from './networks'
+import { networkApprovals } from './networks'
 
 export function supportedNetworkCapability(capability: string): boolean {
   return capability === 'mail.read' || capability === 'jev.evaluate' || /^tool\.app_[a-f0-9]{32}\.invoke$/.test(capability)
@@ -16,7 +16,7 @@ export function networkSourceCapability(capability: string): boolean {
 export function networkArchiveMember(definition: NetworkDefinition, member: NetworkMember, capabilities: string[]): boolean {
   const applications = capabilities.filter(networkSourceCapability)
   return !member.source && member.contract.takes.length > 0 && applications.length === 1 && applications[0]!.startsWith('tool.app_')
-    && member.contract.takes.every(channel => definition.gates?.some(gate => gate.podId === member.podId && networkGateOutput(definition, gate.key, gate.channel) === channel))
+    && member.contract.takes.every(channel => networkApprovals(definition).some(approval => approval.podId === member.podId && approval.gives === channel))
 }
 
 /** The archive port's only write: one approved message from its current folder into the mailbox Archive folder. */

@@ -18,7 +18,9 @@ export function seedNetwork(store: PodDatabase) {
     store.db.prepare('INSERT INTO pod_definition_versions VALUES(?,1,?,?,?,?)').run(definitionId, hash, digest('lock'), '{}', Date.now())
     store.db.prepare('INSERT INTO instance_definition_bindings VALUES(?,?,1,1)').run(pod.id, definitionId)
     store.db.prepare('INSERT INTO networks(id,owner_issuer,owner_subject,group_id,name,revision,restore_nonce,created_at) VALUES(?,?,?,?,?,1,?,?)').run(networkId, owner.issuer, owner.subject, groupId, 'Synthetic network', restoreNonce, Date.now())
-    store.db.prepare('INSERT INTO network_revisions VALUES(?,1,?,?,?)').run(networkId, '{}', digest('{}'), Date.now())
+    // A format-1 definition as schema 28 stored it; reopening an older schema upgrades it to the current format.
+    const definition = JSON.stringify({ formatVersion: 1, kind: 'network', semantics: 'persistent-network-v1', id: networkId, revision: 1, groupId, name: 'Synthetic network', channels: [{ name: 'input', title: 'Input', schemaVersion: 1, schema: { type: 'object', properties: { value: { type: 'string' } }, required: ['value'], additionalProperties: false } }], members: [{ podId: pod.id, definitionId, definitionVersion: 1, bindingRevision: 1, contract: { takes: ['input'], gives: [], summary: 'Synthetic consumer' }, source: null, serialCase: false }] })
+    store.db.prepare('INSERT INTO network_revisions VALUES(?,1,?,?,?)').run(networkId, definition, digest(definition), Date.now())
     store.db.prepare('INSERT INTO network_members VALUES(?,?,1,?,1,?)').run(networkId, pod.id, definitionId, randomUUID())
     store.db.prepare('INSERT INTO network_subscriptions VALUES(?,?,1,?,?,?,0)').run(subscriptionId, networkId, pod.id, 'input', digest('schema'))
     store.db.prepare('INSERT INTO network_checkpoints VALUES(?,?,1,?)').run(networkId, pod.id, '{"cursor":"retained"}')
