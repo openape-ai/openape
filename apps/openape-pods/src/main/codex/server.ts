@@ -2,7 +2,7 @@ import { createServer } from 'node:net'
 import type { Server, Socket } from 'node:net'
 import { chmod, mkdir, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { parseCodexRequest } from '../../contracts/codex'
+import { assistantProvenance, parseCodexRequest } from '../../contracts/codex'
 import type { CodexRequest } from '../../contracts/codex'
 import { LoginRequiredError } from './session'
 import type { McpPeer } from './session'
@@ -72,7 +72,7 @@ export class CodexControlServer {
         try { this.sessions.authorize(peer, secret) }
         catch (error) { write({ id: request.id, error: error instanceof Error ? error.message : 'Sign-in required', ...(error instanceof LoginRequiredError ? { code: error.code } : {}) }); continue }
         inFlight.add(request.id)
-        void this.execute(request)
+        void this.execute(assistantProvenance(request))
           .then(result => ({ id: request.id, result }), (error: unknown) => ({ id: request.id, error: error instanceof Error ? error.message : 'Codex action failed' }))
           .then((reply) => { inFlight.delete(request.id); write(reply) })
       }

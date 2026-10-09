@@ -107,6 +107,16 @@ it('journals administration without accepting unselected Pods, raw secrets or du
   await expect(send({ action: 'list', fullAccess: true })).rejects.toThrow('fields')
 })
 
+it('journals desktop commands by request id without Pod selection', () => {
+  const { codex } = fixture()
+  const request = { id: randomUUID(), action: { action: 'desktop', channel: 'workspace', command: { type: 'pauseAll' } } }
+  expect(codex.administration({ type: 'begin', request })).toEqual({ completed: false })
+  codex.administration({ type: 'complete', request, result: { pods: [] } })
+  expect(codex.administration({ type: 'begin', request })).toEqual({ completed: true, result: { pods: [] } })
+  expect(() => codex.administration({ type: 'begin', request: { ...request, action: { ...request.action, command: { type: 'list' } } } })).toThrow('reused with different arguments')
+  expect(() => codex.administration({ type: 'begin', request: { id: randomUUID(), action: { ...request.action, channel: 'runtimeApproval' } } })).toThrow('Unsupported desktop MCP channel')
+})
+
 it('keeps the Codex scope out of the chat list', async () => {
   const { store, pod, send } = fixture()
   await send({ action: 'select', podIds: [pod.id] })

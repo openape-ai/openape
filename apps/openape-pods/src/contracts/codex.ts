@@ -21,7 +21,7 @@ export function parseDesktopAction(action: Record<string, unknown>): DesktopActi
 }
 
 export const desktopHelp = {
-  usage: 'Use action=desktop with channel and command for desktop settings that the other actions do not cover. The command is the same body the desktop window sends and runs through the same checks.',
+  usage: 'Use action=desktop with channel and command for desktop settings that the other actions do not cover. The command is the same body the desktop window sends and runs through the same checks. Every command except list and map needs a stable requestId: the same requestId with the same arguments returns the recorded result without running again, different arguments are refused, and an interrupted request requires inspection before a new requestId.',
   definitions: ['{type:list}', '{type:adopt}', '{type:prepareLocal,podId,expectedScript,name,defaults:{}} pins the paused instance\'s active script as its own local definition; on a network member it creates a new network revision and pauses the network', '{type:publish,podId,expectedScript,name,defaults:{}}', '{type:instantiate,requestId:UUID,definitionId,version,name,groupId} creates a fresh paused instance of a published definition', '{type:retryProvision,requestId}', '{type:previewUpdate|prepareUpdate,podId,definitionId,version,expectedBinding}', '{type:activateUpdate,draftId,podId,expectedBinding}'],
   scheduling: ['{type:list,podId}', '{type:concurrency,podId,maximum:1..16}', '{type:save,podId,revision,spec,enabled}', '{type:lifecycle,podId,revision,lifecycle:active|paused}'],
   workspace: ['{type:list}', '{type:map}', '{type:pauseAll} pauses every Pod', '{type:create,name}', '{type:update,id,revision,name,lifecycle:active|paused|archived}', '{type:organize,revision,action:create|rename|remove|collapse|move,...}', '{type:describeCollection,id,revision,text}'],
@@ -37,6 +37,26 @@ export function parseCodexRequest(value: unknown): CodexRequest {
   if (Object.keys(item).some(key => key !== 'id' && key !== 'action') || typeof item.id !== 'string' || !/^[a-f0-9-]{36}$/.test(item.id)) throw new Error('Invalid Codex request')
   if (!item.action || typeof item.action !== 'object' || Array.isArray(item.action)) throw new Error('Invalid Codex action')
   return { id: item.id, action: structuredClone(item.action) as Record<string, unknown> }
+}
+
+export function boundedCodexResult<T>(result: T): T {
+  if (new TextEncoder().encode(JSON.stringify(result)).length > 256 * 1024) throw new Error('Action completed but its result is too large; inspect a smaller portion')
+  return result
+}
+
+export const assistantMarker = 'Assistant request: '
+/**
+ * Audit provenance for every MCP call: owner evidence in a command or query is recorded as an assistant
+ * request. It never refuses anything; a text close to the smallest evidence limit (2000) keeps its own length.
+ */
+export function assistantProvenance(request: CodexRequest): CodexRequest {
+  const mark = (value: unknown) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return value
+    const { evidence } = value as { evidence?: unknown }
+    if (typeof evidence !== 'string' || !evidence.trim() || evidence.startsWith(assistantMarker)) return value
+    return { ...value, evidence: `${assistantMarker}${evidence}`.slice(0, Math.max(evidence.length, 2000)) }
+  }
+  return { id: request.id, action: { ...request.action, ...('command' in request.action ? { command: mark(request.action.command) } : {}), ...('query' in request.action ? { query: mark(request.action.query) } : {}) } }
 }
 
 export const codexTool = {

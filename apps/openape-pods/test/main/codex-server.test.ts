@@ -77,6 +77,19 @@ it('forwards exactly one pods_control request and returns its result', async () 
   expect(execute).toHaveBeenCalledWith({ id, action: { action: 'list' } })
 })
 
+it('records owner evidence of every MCP call as an assistant request without refusing it', async () => {
+  const { endpoint, execute } = await start()
+  const networkId = randomUUID(); const reconcile = randomUUID()
+  const near = 'x'.repeat(1995)
+  for (const action of [
+    { action: 'networks', command: { type: 'gateReview', id: networkId, revision: 1, taskId: networkId, generation: 1, evidence: 'Failed before the IdP was contacted' } },
+    { action: 'workspace', query: { type: 'reconcile', id: reconcile, applied: true, evidence: near } },
+    { action: 'recovery', revision: 1, command: { type: 'resolveHttp', podId: networkId, runId: networkId, key: 'send', applied: false, evidence: '' } },
+  ]) await exchange(endpoint, `${JSON.stringify({ id: randomUUID(), action })}\n`)
+  const sent = vi.mocked(execute).mock.calls.map(([request]) => (request.action.command ?? request.action.query) as { evidence: string })
+  expect(sent.map(item => item.evidence)).toEqual(['Assistant request: Failed before the IdP was contacted', `Assistant request: ${near}`.slice(0, 2000), ''])
+})
+
 it('rejects review decisions, extra fields, malformed secrets and oversized input before the worker', async () => {
   const { endpoint, execute } = await start(); const id = randomUUID()
   for (const frame of [{ type: 'applyChanges', id, revision: 1 }, { id, action: { action: 'list' }, conversationId: id }, { id: 'not-a-uuid', action: { action: 'list' } }, { id, action: 'list' }, { id, action: { action: 'list' }, session: 7 }, { id, action: { action: 'list' }, session: 'x'.repeat(129) }]) {
