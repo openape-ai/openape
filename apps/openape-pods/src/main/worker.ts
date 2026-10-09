@@ -118,7 +118,7 @@ export class FixtureWorker {
   central: CentralController | null = null
   inbox: InboxDecisions | null = null
   // The runtime grant is checked at run start, watched at a low frequency, and re-verified before each service call.
-  private shellIdentities = new Map<string, { authorize: (signal: AbortSignal) => Promise<void>, close: () => Promise<void> }>()
+  private shellIdentities = new Map<string, { refresh: (signal: AbortSignal) => Promise<void>, close: () => Promise<void> }>()
   private runTokens = new Map<string, RunGrantTokens>()
   private openedApprovals = new Set<string>()
   private archiveService?: MailArchiveService
@@ -817,13 +817,20 @@ export class FixtureWorker {
             }
           }
         })()
-        this.shellIdentities.set(scope.runId, { authorize: signal => authority.authorize(assignment, signal), close: async () => { monitoring.abort(); await monitor } })
+        this.shellIdentities.set(scope.runId, { refresh: signal => authority.refresh(assignment, signal), close: async () => { monitoring.abort(); await monitor } })
         return { home: environment.home, environment: environment.environment }
       }
       // Every other service needs the run's active runtime authority; network and decision-maintenance runs execute no runtime.
       const runtime = this.shellIdentities.get(scope.runId)
       if (context.runtime && !runtime) throw new AuthorityError('Pod execution authority is not active for this run')
-      if (runtime) await runtime.authorize(controller.signal)
+      if (runtime) {
+        try { await runtime.refresh(controller.signal) }
+        catch (error) {
+          if (error instanceof InfrastructureError) throw error
+          await this.dispatch({ serviceCheck: { scope, authorityLost: true } })
+          throw error instanceof AuthorityError ? error : new AuthorityError('Pod execution permission is no longer active; review the Pod permissions before retrying')
+        }
+      }
       const tokens = this.grantTokens(scope.runId)
       if (request.kind === 'credential') {
         const alias = parseCredentialRead(request.body)

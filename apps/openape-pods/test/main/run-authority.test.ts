@@ -4,9 +4,9 @@ import { AuthorityError } from '../../src/contracts/infrastructure'
 import { runAuthorityWatchMs } from '../../src/contracts/services'
 import type { ServiceRequest } from '../../src/contracts/services'
 
-const mocks = vi.hoisted(() => ({ authorize: vi.fn(), assertActive: vi.fn() }))
+const mocks = vi.hoisted(() => ({ authorize: vi.fn(), refresh: vi.fn(), assertActive: vi.fn() }))
 vi.mock('electron', () => ({ utilityProcess: { fork: vi.fn() }, safeStorage: {}, app: { getPath: () => '/nonexistent', isPackaged: false }, shell: { openExternal: vi.fn(async () => {}) } }))
-vi.mock('../../src/main/broker/authorization', async importOriginal => ({ ...await importOriginal<object>(), AgentAuthority: class { authorize = mocks.authorize; assertActive = mocks.assertActive } }))
+vi.mock('../../src/main/broker/authorization', async importOriginal => ({ ...await importOriginal<object>(), AgentAuthority: class { authorize = mocks.authorize; refresh = mocks.refresh; assertActive = mocks.assertActive } }))
 // The watch waits with timers/promises, which fake timers do not replace on their own.
 vi.mock('node:timers/promises', () => ({ setTimeout: async (ms: number, value: unknown, options?: { signal?: AbortSignal }) => new Promise((resolve, reject) => {
   const timer = setTimeout(resolve, ms, value)
@@ -45,13 +45,16 @@ it('refuses a credential read of a run whose runtime authority is not active and
   expect(f.dispatched.some(command => 'credentialCheck' in command)).toBe(false)
 })
 
-it('re-verifies the runtime grant before a credential read and refuses it once the grant is revoked', async () => {
+it('re-checks the runtime grant before a credential read and cancels the run once it is no longer approved', async () => {
   const f = await fixture()
   await f.service.executeService(request('shell'))
   await expect(f.service.executeService(request('credential', { alias: 'api_key' }))).resolves.toBe('SYNTHETIC_SECRET')
-  mocks.authorize.mockRejectedValueOnce(new AuthorityError('Permission revoked; review this Pod\'s permissions before retrying'))
-  await expect(f.service.executeService(request('credential', { alias: 'api_key' }))).rejects.toThrow('revoked')
+  expect(mocks.authorize).toHaveBeenCalledTimes(1); expect(mocks.refresh).toHaveBeenCalledTimes(1)
+  mocks.refresh.mockRejectedValueOnce(new AuthorityError('Pod execution permission is expired; review the Pod permissions before retrying'))
+  await expect(f.service.executeService(request('credential', { alias: 'api_key' }))).rejects.toThrow('expired')
   expect(f.credentials.readScriptSecret).toHaveBeenCalledTimes(1)
+  expect(mocks.authorize).toHaveBeenCalledTimes(1)
+  expect(f.dispatched.some(command => (command.serviceCheck as { authorityLost?: true } | undefined)?.authorityLost)).toBe(true)
   await f.service.executeService(request('shellClose'))
 })
 
