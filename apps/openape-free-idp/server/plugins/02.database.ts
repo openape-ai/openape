@@ -194,6 +194,14 @@ export default defineNitroPlugin(async () => {
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_push_subs_user_email ON push_subscriptions(user_email)`)
 
+    // Owner notifications for pending grants wait out a quiet window (#1455);
+    // see server/utils/grant-notifications.ts.
+    await db.run(sql`CREATE TABLE IF NOT EXISTS grant_notifications (
+      grant_id TEXT PRIMARY KEY,
+      notify_after INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_grant_notifications_notify_after ON grant_notifications(notify_after)`)
+
     // DDISA allowlist-user consents (#301). One row per (user, SP)
     // pair the user has approved on the consent screen. PK is
     // composite — re-approval is an upsert on grantedAt; revocation
