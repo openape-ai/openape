@@ -104,7 +104,7 @@ it('moves an owner-approved message once into the Archive folder with a receipt'
   expect(f.outcomes).toEqual([[expect.objectContaining({ messageId: mail.id, outcome: 'archived', reason: 'Moved to the Archive folder' })]])
   expect(f.moves).toEqual([['workflow', 'move', '--account', mailbox, '--message', mail.id, '--expected-version', mail.changeKey, '--source-folder', mail.parentFolderId, '--destination', 'archive']])
   expect(f.effects()).toEqual([{ state: 'confirmed_applied', receipts: 'intent,confirmed_applied' }])
-  expect(f.refusals).toEqual([expect.stringContaining('declared source')])
+  expect(f.refusals).toEqual([expect.stringContaining('only through network.archive')])
   expect(f.store.db.prepare('SELECT state FROM network_invocations WHERE pod_id=? AND execution_kind=\'script\'').get(f.archive)!.state).toBe('completed')
   // Run services compare the gate step scope with the pinned consumer script, which holds the mail application.
   expect(f.gateCapabilities).toEqual(expect.arrayContaining([[expect.stringMatching(/^tool\.app_[a-f0-9]{32}\.invoke$/)]]))
@@ -120,7 +120,7 @@ it('refuses mail application calls of an agent in an archive consumer; only the 
   const f = archiveFixture({ agent: true })
   await f.approve()
   expect(executeAgent).toHaveBeenCalledTimes(1)
-  expect(agentRefusals).toEqual([expect.stringContaining('declared source'), expect.stringContaining('declared source')])
+  expect(agentRefusals).toEqual([expect.stringContaining('only through network.archive'), expect.stringContaining('only through network.archive')])
   expect(f.tool.mock.calls.filter(([body]) => (body as { argv: string[] }).argv[1] === 'move')).toEqual([])
   expect(f.moves).toEqual([['workflow', 'move', '--account', mailbox, '--message', mail.id, '--expected-version', mail.changeKey, '--source-folder', mail.parentFolderId, '--destination', 'archive']])
 })

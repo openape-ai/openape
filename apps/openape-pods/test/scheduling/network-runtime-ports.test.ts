@@ -6,6 +6,7 @@ import { closeNetworks, networkFixture } from './network-fixture'
 import { defaultJevModel, parseJevRequest, syntheticJevResult } from '../../src/contracts/jev'
 import { SetupControl } from '../../src/worker/onboarding/control'
 import type { ProgramAssignment } from '../../src/contracts/programs'
+import { programRequest } from '../../src/main/programs/invoke'
 
 vi.mock('../../src/worker/agent/executor', () => ({ executeAgent: vi.fn() }))
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
@@ -19,18 +20,29 @@ function validateCapabilities(f: ReturnType<typeof networkFixture>, podId: strin
   f.store.db.prepare('INSERT OR REPLACE INTO validations VALUES(?,?,?,?,?)').run(podId, pod.activeScript!, pod.bindingRevision, f.resources.epoch(podId), '{}')
 }
 
-it('executes assigned program reads within the network authority and read budget', async () => {
-  const tool = vi.fn(async (_body: unknown, _signal: AbortSignal, scope: { assertCurrent: () => void }) => { scope.assertCurrent(); return { stdout: '[]', stderr: '', exitCode: 0 } })
-  const f = networkFixture({ tool })
+/** Like the worker's tool service, resolve the declared and assigned application of the calling Pod before it runs. */
+function assignedTool(resources: () => ReturnType<typeof networkFixture>['resources'], calls: unknown[]) {
+  return vi.fn(async (body: unknown, _signal: AbortSignal, scope: { podId: string, capabilities: string[], assertCurrent: () => void }) => {
+    scope.assertCurrent()
+    calls.push(programRequest(resources().list(scope.podId), scope.podId, scope.capabilities, body).argv)
+    return { stdout: '[]', stderr: '', exitCode: 0 }
+  })
+}
+
+it('executes assigned program reads through the standalone tool path without a network read budget', async () => {
+  const calls: unknown[] = []
+  let f!: ReturnType<typeof networkFixture>
+  const tool = assignedTool(() => f.resources, calls)
+  f = networkFixture({ tool, http: async () => { throw new Error('No HTTP request expected') } })
   const applicationId = randomUUID()
   const capability = `tool.app_${applicationId.replaceAll('-', '')}.invoke`
   let checked = false
   const source = f.pod('Assigned CLI source', { takes: [], gives: ['input'], summary: 'Read source' }, async (_items, invoke) => {
     await expect(invoke('tools.invoke', { application: 'foreign', argv: ['list'] })).rejects.toThrow('not declared and assigned')
     await expect(invoke('tools.invoke', { application: 'mail', argv: ['list'], untrusted: true })).rejects.toThrow('Invalid application')
-    await expect(invoke('http.request', { url: 'https://example.invalid' })).rejects.toThrow('runtime port')
-    for (let count = 0; count < 100; count++) await expect(invoke('tools.invoke', { application: 'mail', argv: ['list'] })).resolves.toMatchObject({ exitCode: 0 })
-    await expect(invoke('tools.invoke', { application: 'mail', argv: ['list'] })).rejects.toThrow('read budget')
+    await expect(invoke('http.request', { url: 'https://example.com/', method: 'GET', headers: {} })).rejects.toThrow('HTTP destination is not assigned')
+    await expect(invoke('mail.next', {})).rejects.toThrow('runtime port')
+    for (let count = 0; count < 101; count++) await expect(invoke('tools.invoke', { application: 'mail', argv: ['list'] })).resolves.toMatchObject({ exitCode: 0 })
     checked = true
   })
   const consumer = f.pod('Consumer', { takes: ['input'], gives: [], summary: 'Consume' }, async () => {})
@@ -40,7 +52,7 @@ it('executes assigned program reads within the network authority and read budget
   f.process(id, [source], [source], 1); f.engine.tick()
   await expect.poll(() => f.store.db.prepare('SELECT state FROM network_invocations WHERE pod_id=?').get(source)?.state).toBe('completed')
   expect(checked).toBe(true)
-  expect(tool).toHaveBeenCalledTimes(100)
+  expect(calls).toHaveLength(101)
   expect(f.engine.view().networks[0]!.state).toBe('paused')
 })
 
@@ -75,8 +87,9 @@ it.each(['settle', 'cancel', 'revoke', 'failure'] as const)('fences Jev network 
   expect(JSON.stringify(f.engine.execute({ type: 'trace', id, revision: 1, before: null, caseId: null }))).not.toContain(request.state)
 })
 
-it('applies the standalone agent rules in networks and routes agent tools through the network read port', async () => {
-  const tool = vi.fn(async () => ({ stdout: '[]', stderr: '', exitCode: 0 }))
+it('applies the standalone agent rules and agent tool path in networks', async () => {
+  let f!: ReturnType<typeof networkFixture>
+  const tool = assignedTool(() => f.resources, [])
   const applicationId = randomUUID()
   const capability = `tool.app_${applicationId.replaceAll('-', '')}.invoke`
   const agentReads: unknown[] = []
@@ -87,7 +100,7 @@ it('applies the standalone agent rules in networks and routes agent tools throug
     }
     return { threadId: 'synthetic', response: '{"text":"Preview"}' }
   })
-  const f = networkFixture({ tool, provider: async () => new Response('{}') })
+  f = networkFixture({ tool, provider: async () => new Response('{}') })
   let checked = false
   const source = f.pod('Source', { takes: [], gives: ['input'], summary: 'Source' }, async (_items, invoke) => {
     await expect(invoke('agent.run', { prompt: 'Synthetic preview', tools: ['shell'] })).rejects.toThrow('Agent tools must be')
@@ -107,16 +120,6 @@ it('applies the standalone agent rules in networks and routes agent tools throug
   expect(executeAgent).toHaveBeenCalledTimes(50)
   expect(vi.mocked(executeAgent).mock.calls[0]?.slice(7)).toEqual([['ape_shell'], 600])
   expect(agentReads).toEqual([{ stdout: '[]', stderr: '', exitCode: 0 }, expect.stringContaining('not declared and assigned')])
-  expect(tool).toHaveBeenCalledTimes(1)
-})
-
-it('refuses assigned program reads on consumer members before creating the network', () => {
-  const f = networkFixture()
-  const source = f.pod('Source', { takes: [], gives: ['input'], summary: 'Read' }, async () => {})
-  const consumer = f.pod('Consumer', { takes: ['input'], gives: [], summary: 'Consume' }, async () => {})
-  const applicationId = randomUUID(); const capability = `tool.app_${applicationId.replaceAll('-', '')}.invoke`
-  f.resources.assignProgram(consumer, applicationId, { type: 'program', name: 'mail', capability } as ProgramAssignment, f.resources.epoch(consumer))
-  validateCapabilities(f, consumer, [capability])
-  expect(() => f.create([{ podId: source, source: { schedule: null }, serialCase: false }, { podId: consumer, source: null, serialCase: false }], ['input'])).toThrow('declared source')
-  expect(f.engine.view().networks).toEqual([])
+  // The foreign application reaches the worker tool service, which refuses it before anything runs.
+  expect(tool).toHaveBeenCalledTimes(2)
 })

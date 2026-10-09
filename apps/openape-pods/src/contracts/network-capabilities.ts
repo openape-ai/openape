@@ -1,20 +1,13 @@
 import type { NetworkDefinition, NetworkMember } from './networks'
 import { networkApprovals } from './networks'
 
-export function supportedNetworkCapability(capability: string): boolean {
-  return capability === 'mail.read' || capability === 'jev.evaluate' || /^tool\.app_[a-f0-9]{32}\.invoke$/.test(capability)
-}
-
-export function networkSourceCapability(capability: string): boolean {
-  return capability === 'mail.read' || /^tool\.app_[a-f0-9]{32}\.invoke$/.test(capability)
-}
-
 /**
- * A consumer that receives only owner-approved gate outputs may hold exactly one assigned mail application. Its script
- * cannot invoke it; only the archive port uses it for each approved item.
+ * A consumer that receives only owner-approved gate outputs and holds exactly one mail application (and no mailbox read)
+ * is the archive member. Its script and agent cannot invoke that application; only the archive port uses it for each
+ * approved item.
  */
 export function networkArchiveMember(definition: NetworkDefinition, member: NetworkMember, capabilities: string[]): boolean {
-  const applications = capabilities.filter(networkSourceCapability)
+  const applications = capabilities.filter(capability => capability === 'mail.read' || /^tool\.app_[a-f0-9]{32}\.invoke$/.test(capability))
   return !member.source && member.contract.takes.length > 0 && applications.length === 1 && applications[0]!.startsWith('tool.app_')
     && member.contract.takes.every(channel => networkApprovals(definition).some(approval => approval.podId === member.podId && approval.gives === channel))
 }
