@@ -33,7 +33,7 @@ export interface MapPod {
   schedule: MapSchedule | null
   lastRun: MapRun | null
   runs: number
-  collection: string | null
+  automation: string | null
   queue: { blocked: number, error: string | null }
   approvals: MapApproval[]
   unknown: { key: string, runId: string }[]
@@ -42,7 +42,7 @@ export interface MapPod {
 }
 export interface MapGateOption { key: string, title: string, channel: string }
 export interface MapGate { key: string, kind: 'choose' | 'approve', title: string, takes: string, options: MapGateOption[], open: number, batches: Record<string, number> }
-export interface MapCollection {
+export interface MapAutomation {
   id: string
   revision: number
   kind: 'network' | 'chain'
@@ -66,9 +66,9 @@ export interface MapKpis {
   decisions: { networkId: string, gate: string, title: string, kind: 'choose' | 'approve', count: number }[]
   unknownDeliveries: number
 }
-export interface MapView { at: number, window: { from: number, to: number }, kpis: MapKpis, systems: MapSystem[], pods: MapPod[], collections: MapCollection[], edges: MapEdge[] }
+export interface MapView { at: number, window: { from: number, to: number }, kpis: MapKpis, systems: MapSystem[], pods: MapPod[], automations: MapAutomation[], edges: MapEdge[] }
 
-export const mapLimits = { pods: 100, collections: 64, systems: 400, edges: 4000 } as const
+export const mapLimits = { pods: 100, automations: 64, systems: 400, edges: 4000 } as const
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid map view')
   return value as Record<string, unknown>
@@ -86,10 +86,17 @@ function text(value: unknown, maximum = 4096): string {
   return value
 }
 
+// Desktops before issue 1455 (M5) publish automations as `collections` and each Pod's as `collection`; the relay reads both until those builds are replaced.
+function currentNames(view: Record<string, unknown>): Record<string, unknown> {
+  if (!Object.hasOwn(view, 'collections')) return view
+  const { collections, pods, ...rest } = view
+  return { ...rest, automations: collections, pods: list(pods, mapLimits.pods).map((pod) => { const { collection, ...fields } = object(pod); return { ...fields, automation: collection ?? null } }) }
+}
+
 /** Shape check for what crosses the relay and MCP; the content stays the worker's. */
 export function parseMapView(value: unknown): MapView {
-  const view = object(value)
-  if (Object.keys(view).some(key => !['at', 'window', 'kpis', 'systems', 'pods', 'collections', 'edges'].includes(key))) throw new Error('Invalid map view fields')
+  const view = currentNames(object(value))
+  if (Object.keys(view).some(key => !['at', 'window', 'kpis', 'systems', 'pods', 'automations', 'edges'].includes(key))) throw new Error('Invalid map view fields')
   integer(view.at); const window = object(view.window); integer(window.from); integer(window.to)
   const kpis = object(view.kpis); integer(kpis.active); integer(kpis.paused); integer(kpis.unknownDeliveries)
   for (const item of list(kpis.degraded, mapLimits.pods)) { const row = object(item); text(row.podId, 36); text(row.reason) }
@@ -115,11 +122,11 @@ export function parseMapView(value: unknown): MapView {
     }
     nodes.add(id)
   }
-  for (const item of list(view.collections, mapLimits.collections)) {
-    const collection = object(item); const id = text(collection.id, 36); text(collection.name, 200)
-    if (!['network', 'chain'].includes(String(collection.kind)) || !['active', 'paused', 'archived'].includes(String(collection.state))) throw new Error('Invalid map collection')
-    for (const member of list(collection.members, 64)) { if (!nodes.has(text(member, 36))) throw new Error('Invalid map collection member') }
-    for (const gate of list(collection.gates, 32)) { const row = object(gate); text(row.key, 64); text(row.title, 120); integer(row.open); nodes.add(`gate:${text(row.key, 64)}`) }
+  for (const item of list(view.automations, mapLimits.automations)) {
+    const automation = object(item); const id = text(automation.id, 36); text(automation.name, 200)
+    if (!['network', 'chain'].includes(String(automation.kind)) || !['active', 'paused', 'archived'].includes(String(automation.state))) throw new Error('Invalid map automation')
+    for (const member of list(automation.members, 64)) { if (!nodes.has(text(member, 36))) throw new Error('Invalid map automation member') }
+    for (const gate of list(automation.gates, 32)) { const row = object(gate); text(row.key, 64); text(row.title, 120); integer(row.open); nodes.add(`gate:${text(row.key, 64)}`) }
     nodes.add(id)
   }
   for (const item of list(view.edges, mapLimits.edges)) {

@@ -14,7 +14,7 @@ import fixture from './map-view.json'
 
 // The Entscheidungen surface from the 17 recorded choice events of the installed app and the fixture's rights and deliveries.
 const view = parseMapView(fixture) as MapView
-const network = view.collections.find(collection => collection.kind === 'network' && !collection.bounded)!
+const network = view.automations.find(automation => automation.kind === 'network' && !automation.bounded)!
 /** The 17 events as the network engine lists them: ordered by acceptance, two cases carry a second version. */
 export const choices: NetworkChoiceView[] = [...choiceEvents].sort((a, b) => Date.parse(a[6]) - Date.parse(b[6])).map(recorded => ({ networkId: network.id, revision: network.revision, eventId: recorded[0], caseId: `${recorded[1]}-0000-4000-8000-000000000000`.slice(0, 36), gate: chooseGate.key, title: chooseGate.title, payload: JSON.stringify(choicePayload(recorded)), truncated: false, options: chooseGate.options.map(({ key, title }) => ({ key, title })) }))
 const batch: NetworkGateView = { id: '00000000-0000-4000-8000-0000000000b1', networkId: network.id, gate: 'newsletter-approval', podId: network.members[9]!, generation: 1, state: 'pending', expiresAt: view.at + 3600000, url: 'https://id.openape.ai/grant-approval?grant_id=batch-1', error: null, items: [{ deliveryId: '00000000-0000-4000-8000-0000000000d1', title: 'Nur heute: 20 % · news@shop.example', outcome: 'held' }, { deliveryId: '00000000-0000-4000-8000-0000000000d2', title: 'Neu im Oktober · hello@saas.example', outcome: 'held' }] }

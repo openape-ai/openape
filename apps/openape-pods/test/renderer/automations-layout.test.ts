@@ -10,7 +10,7 @@ const view = parseMapView(fixture) as MapView
 const all = { channel: true, read: true, write: true, auth: true, paused: true }
 const byName = (name: string) => view.pods.find(pod => pod.name === name)!
 
-it('turns the read model into columns: systems, pods, sinks, authorities; paused collections collapse and gates become you or the identity provider', () => {
+it('turns the read model into columns: systems, pods, sinks, authorities; paused automations collapse and gates become you or the identity provider', () => {
   const model = buildModel(view)
   const kind = (id: string) => model.nodes.find(node => node.id === id)?.kind
   expect(kind('app:o365-cli:phofmann@delta-mind.at')).toBe('system')
@@ -22,7 +22,7 @@ it('turns the read model into columns: systems, pods, sinks, authorities; paused
   expect(kind('ai:jev')).toBe('ai')
   expect(kind(YOU)).toBe('auth'); expect(kind(IDP)).toBe('auth')
   expect(model.nodes.find(node => node.id === YOU)!.badge).toBe(17)
-  const docpit = view.collections.find(collection => collection.name.startsWith('IURIO'))!
+  const docpit = view.automations.find(automation => automation.name.startsWith('IURIO'))!
   expect(model.nodes.find(node => node.id === docpit.id)).toMatchObject({ kind: 'collapsed', sub: '11', paused: true, group: 'iurio' })
   expect(model.nodes.some(node => node.id === docpit.members[0])).toBe(false)
   expect(model.nodes.some(node => node.name === 'Archived research')).toBe(false)
@@ -42,7 +42,7 @@ it('lays rows out from the top and lets the canvas height follow the content; a 
   expect(network).toMatchObject({ x: geometry.cluster.x, y: geometry.firstRow, w: geometry.cluster.w, h: geometry.cluster.h })
   const chain = full.clusters.find(cluster => cluster.kind === 'chain')!
   expect(chain.y).toBe(geometry.firstRow + geometry.cluster.h + geometry.rowGap)
-  const chainMembers = view.collections.find(collection => collection.kind === 'chain' && collection.state === 'active')!.members.map(id => full.nodes.find(node => node.id === id)!)
+  const chainMembers = view.automations.find(automation => automation.kind === 'chain' && automation.state === 'active')!.members.map(id => full.nodes.find(node => node.id === id)!)
   expect(chainMembers.map(node => node.tx)).toEqual(chainMembers.map((_, index) => 600 - (chainMembers.length - 1) * geometry.chain.gap / 2 + index * geometry.chain.gap))
   expect(full.height).toBeGreaterThan(geometry.cluster.h + geometry.chain.h + geometry.single.h + geometry.collapsed.h + geometry.firstRow)
   const systems = full.nodes.filter(node => node.kind === 'system' && visibleNodes(full, 'all', all).has(node.id))

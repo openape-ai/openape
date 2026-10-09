@@ -118,7 +118,7 @@ export function parseCentralCommand(value: unknown): CentralCommand {
   const body = centralObject(item.body)
   const parsers = { workspace: parseCommand, details: parseDetailsCommand, scripts: parseScriptCommand, scheduling: parseScheduleCommand, runs: parseRunCommand, resources: parseResourceCommand, data: parseDataCommand, sharing: parseSharingCommand }
   const allowed: Record<Exclude<CentralChannel, 'local' | 'inbox'>, string[]> = {
-    data: ['deletePod'], workspace: ['create', 'update', 'organize', 'describeCollection'], details: ['describe', 'activate'],
+    data: ['deletePod'], workspace: ['create', 'update', 'organize', 'describeAutomation'], details: ['describe', 'activate'],
     scripts: ['save', 'validate', 'activate', 'prepareDependencies'], scheduling: ['save', 'lifecycle'],
     runs: ['start', 'cancel', 'recover', 'retryQueue', 'resolveHttp'], resources: ['saveVariable', 'removeVariable', 'revoke'],
     // Package files travel only through the desktop; a browser reviews and configures an import. Export stays on the desktop.
@@ -155,7 +155,7 @@ export function commandPodIds(command: CentralCommand, snapshot: { workspace: { 
   if (command.channel === 'inbox') return []
   if (typeof body.podId === 'string') return [centralId(body.podId)]
   if (command.channel === 'workspace' && body.type === 'update') return [centralId(body.id)]
-  if (command.channel === 'workspace' && body.type === 'describeCollection') return []
+  if (command.channel === 'workspace' && body.type === 'describeAutomation') return []
   return snapshot.workspace.pods.map(pod => pod.id)
 }
 

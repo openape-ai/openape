@@ -15,7 +15,7 @@ const NOW = view.at + 11 * 60000
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; applyLanguage('en') })
 const pod = (name: string) => view.pods.find(item => item.name === name)!
-const collection = (name: string) => view.collections.find(item => item.name === name)!
+const automation = (name: string) => view.automations.find(item => item.name === name)!
 async function mountDetail(id: string, desktop = true) {
   applyLanguage('de')
   wrapper = mount(AutomationDetail, { attachTo: document.body, props: { view, id, now: NOW, desktop } })
@@ -59,7 +59,7 @@ describe('AutomationDetail', () => {
     expect(section('Letzter Lauf').text()).toContain('10 Läufe gesamt')
     expect(JSON.stringify(wrapper!.html())).not.toMatch(/credentialId|"value"/)
     await section('Teil von').find('button').trigger('click')
-    expect(wrapper!.emitted('open')).toEqual([[collection('Delta Mind · Mail-Netzwerk').id]])
+    expect(wrapper!.emitted('open')).toEqual([[automation('Delta Mind · Mail-Netzwerk').id]])
   })
 
   it('emits the exact lifecycle, run, secret and folder commands of a Pod', async () => {
@@ -91,7 +91,7 @@ describe('AutomationDetail', () => {
   })
 
   it('shows a network with members, decision points and numbers and pauses it only on the desktop', async () => {
-    const network = collection('Delta Mind · Mail-Netzwerk')
+    const network = automation('Delta Mind · Mail-Netzwerk')
     await mountDetail(network.id)
     expect(wrapper!.findAll('.row .pill').map(item => item.text())).toEqual(['aktiv', 'Netzwerk', 'Delta Mind'])
     expect(section('Zeitplan').text()).toBe('Zeitplanalle 15 min')
@@ -111,7 +111,7 @@ describe('AutomationDetail', () => {
   })
 
   it('controls a chain and a bounded graph through workflow commands', async () => {
-    const chain = collection('Morgenbriefing')
+    const chain = automation('Morgenbriefing')
     await mountDetail(chain.id)
     expect(wrapper!.findAll('.row .pill').map(item => item.text())).toEqual(['aktiv', 'Kette', 'ohne Gruppe'])
     expect(section('Zeitplan').text()).toBe('Zeitplantäglich 07:00')
@@ -120,7 +120,7 @@ describe('AutomationDetail', () => {
     await button('Pausieren').trigger('click')
     expect(wrapper!.emitted('workflow')!.at(-1)).toEqual([{ type: 'pause', id: chain.id, revision: chain.revision, paused: true }])
     wrapper!.unmount()
-    const graph = collection('IURIO · DOCPIT mail management')
+    const graph = automation('IURIO · DOCPIT mail management')
     await mountDetail(graph.id)
     expect(wrapper!.findAll('.row .pill').map(item => item.text())).toEqual(['pausiert', 'Netzwerk', 'iurio'])
     await button('Fortsetzen').trigger('click')
