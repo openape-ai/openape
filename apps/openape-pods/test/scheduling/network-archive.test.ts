@@ -241,3 +241,22 @@ it('never asks again for an input the owner refused', async () => {
   expect(f.deliveries()).toEqual(['blocked'])
   expect(JSON.parse(f.store.db.prepare('SELECT body FROM network_trace_events WHERE kind=\'member-script-updated\'').get()!.body as string)).toMatchObject({ renewedApprovals: 0 })
 })
+
+it('lets the assistant ask again only for obsolete or uncertain batches', async () => {
+  const f = archiveFixture()
+  await f.approve()
+  const approved = f.store.db.prepare('SELECT id,generation FROM network_gate_tasks').get()!
+  const review = (taskId: string, generation: number) => f.engine.agentGateReview({ type: 'gateReview', id: f.id, revision: 1, taskId, generation, evidence: 'Failed before the identity provider was contacted' })
+  expect(() => review(approved.id as string, Number(approved.generation))).toThrow('only ask again for obsolete or uncertain')
+
+  const g = archiveFixture({ preview: true })
+  g.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(g.archive)
+  await g.approve()
+  const task = g.store.db.prepare('SELECT * FROM network_gate_tasks').get()!
+  const legacy = g.engine.gates as unknown as { obsolete: (task: unknown, failure: Error) => void }
+  g.store.transaction(() => legacy.obsolete(task, new Error('Network gate consumer or definition authority changed')))
+  const current = g.store.db.prepare('SELECT generation FROM network_gate_tasks WHERE id=?').get(task.id as string)!
+  g.engine.agentGateReview({ type: 'gateReview', id: g.id, revision: 1, taskId: task.id as string, generation: Number(current.generation), evidence: 'Blocked by an earlier release' })
+  expect(g.deliveries()).toEqual(['pending'])
+  expect(JSON.parse(g.store.db.prepare('SELECT body FROM network_trace_events WHERE kind=\'gate-owner-fresh-approval\'').get()!.body as string).receipt.ownerEvidence).toBe('Assistant request: Blocked by an earlier release')
+})
