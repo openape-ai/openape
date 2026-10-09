@@ -11,7 +11,7 @@ import type { AgentRuntime } from '../../src/worker/agent/executor'
 import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { gateDigest, gateItemCommand, gateItemSummary, gateLimits, parseGateManifest, payloadHash } from '../../src/contracts/gates'
-import { networkGateActionHash, networkGateDigest, networkGateItemCommand, networkGatePayloadHash, parseNetworkGateCoverage, parseNetworkGateManifest } from '../../src/contracts/network-gates'
+import { networkGateActionHash, networkGateDigest, networkGateItemCommand, networkGatePayloadHash, parseNetworkGateCoverage, parseNetworkGateManifest, parseNetworkGateReleases } from '../../src/contracts/network-gates'
 import type { NetworkGateManifest } from '../../src/contracts/network-gates'
 import { parseNetworkDefinition } from '../../src/contracts/networks'
 import { canonicalNetworkJson } from '../../src/worker/scheduling/network-events'
@@ -777,6 +777,27 @@ it('upgrades a schema-41 network with approval bindings and keeps its pending ba
   f.engine.tick(); await settle()
   expect(calls).toEqual(['create', 'status', 'consume', 'assertActive'])
   expect(f.started).toEqual(expect.arrayContaining([selected, archive]))
+})
+
+it('offers a batch for grant release only after every approved input settled, once', async () => {
+  const f = runtimeFixture(() => 'approved')
+  await f.emit('test.input')
+  f.engine.tick(); await f.settle()
+  expect(f.engine.gates.releasable()).toEqual([])
+  f.due(); f.engine.tick(); await f.settle()
+  // Released to the consumer but not yet processed: an always grant must stay active for the archive moves.
+  expect(f.calls).toContain('consume')
+  expect(f.engine.gates.releasable()).toEqual([])
+  f.engine.tick(); await f.settle()
+  expect(f.started).toContain(f.consumer)
+  const [release] = f.engine.gates.releasable()
+  const task = f.store.db.prepare('SELECT id FROM network_gate_tasks').get()!
+  expect(release).toMatchObject({ taskId: task.id, podId: f.consumer, owner: f.owner, grants: [{ key: release!.manifest.items[0]!.deliveryId, id: expect.stringMatching(/^synthetic-once-grant-/) }] })
+  expect(parseNetworkGateReleases(JSON.parse(JSON.stringify([release])))).toEqual([release])
+  f.engine.gates.released(release!.taskId)
+  f.engine.gates.released(release!.taskId)
+  expect(f.engine.gates.releasable()).toEqual([])
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM network_trace_events WHERE kind=\'gate-grants-released\'').get()!.n).toBe(1)
 })
 
 it('refuses to upgrade an approval binding that no route expresses', () => {

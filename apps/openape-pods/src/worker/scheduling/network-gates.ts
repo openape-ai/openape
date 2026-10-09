@@ -6,7 +6,7 @@ import { gateLimits, itemTitle } from '../../contracts/gates'
 import type { GateBatchState } from '../../contracts/gates'
 import { InfrastructureError } from '../../contracts/infrastructure'
 import { networkGateActionHash, networkGateDigest, networkGatePayloadHash, parseNetworkGateCoverage, parseNetworkGateManifest, parseNetworkGateView } from '../../contracts/network-gates'
-import type { NetworkGateCoverage, NetworkGateManifest, NetworkGateView } from '../../contracts/network-gates'
+import type { NetworkGateCoverage, NetworkGateManifest, NetworkGateRelease, NetworkGateView } from '../../contracts/network-gates'
 import { networkApprovals, parseNetworkDefinition } from '../../contracts/networks'
 import type { NetworkCommand, NetworkDefinition } from '../../contracts/networks'
 import type { ServiceScope } from '../../contracts/services'
@@ -207,6 +207,31 @@ export class NetworkGates {
       this.trace(manifest, 'gate-step-settled', { receipt: JSON.parse(receipt), error: result.error ?? null, noScriptLaunched: true })
     }, result.state === 'unknown' || result.error !== undefined)
     this.pruneStatusSteps(step.taskId)
+  }
+
+  /**
+   * Finished batches whose item grants the desktop may release at the IdP: every input is settled (done or
+   * discarded), or the batch was refused, expired or superseded. An uncertain batch waits for the owner.
+   */
+  releasable(limit = 4): NetworkGateRelease[] {
+    return this.store.db.prepare(`SELECT task.id,task.pod_id,task.manifest,network.owner_issuer,network.owner_subject FROM network_gate_tasks task JOIN networks network ON network.id=task.network_id
+      WHERE task.state IN ('approved','denied','expired','superseded') AND EXISTS(SELECT 1 FROM network_gate_item_grants WHERE task_id=task.id)
+        AND NOT EXISTS(SELECT 1 FROM network_trace_events WHERE network_id=task.network_id AND kind='gate-grants-released' AND json_extract(body,'$.taskId')=task.id)
+        AND NOT EXISTS(SELECT 1 FROM network_gate_items item JOIN network_deliveries delivery ON delivery.id=item.delivery_id WHERE item.task_id=task.id AND delivery.state NOT IN ('done','discarded'))
+      ORDER BY task.created_at,task.id LIMIT ?`).all(limit).map((row) => {
+      const manifest = parseNetworkGateManifest(JSON.parse(row.manifest as string))
+      return { taskId: row.id as string, podId: row.pod_id as string, owner: { issuer: row.owner_issuer as string, subject: row.owner_subject as string }, manifest, grants: this.itemGrants(manifest.id, manifest) }
+    })
+  }
+
+  /** Records that the desktop released the grants of a finished batch; a later sweep skips it. */
+  released(taskId: string): void {
+    this.store.transaction(() => {
+      const task = this.task(taskId)
+      if (!['approved', 'denied', 'expired', 'superseded'].includes(task.state)) throw new Error('Only a finished network gate batch can release its grants')
+      if (this.store.db.prepare('SELECT 1 FROM network_trace_events WHERE network_id=? AND kind=\'gate-grants-released\' AND json_extract(body,\'$.taskId\')=?').get(task.network_id, taskId)) return
+      this.store.db.prepare('INSERT INTO network_trace_events(network_id,kind,body,created_at) VALUES(?,\'gate-grants-released\',?,?)').run(task.network_id, canonicalNetworkJson({ taskId, state: task.state }), Date.now())
+    })
   }
 
   /** The per-item grant identities recorded at creation, in manifest order. */
