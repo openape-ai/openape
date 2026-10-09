@@ -1,5 +1,9 @@
 # Morning briefing workflow
 
+Workflows were removed in issue 1455 (M4): rebuild this briefing as a network
+(see `../docs/networks.md`). The description below documents the former workflow
+that the scripts were written for.
+
 Four Pods share one daily workflow schedule:
 
 ```mermaid

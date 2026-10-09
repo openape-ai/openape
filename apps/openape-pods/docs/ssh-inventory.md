@@ -54,9 +54,10 @@ and private report URL, then sends the link. It preserves publication receipts
 when notification fails. Stable effect keys use the existing effect ledger;
 unknown deliveries require owner reconciliation and cannot automatically resend.
 Healthy and partially observed runs both produce German technical prose reports.
-Confirmed report and notification delivery completes the workflow even when the
+Confirmed report and notification delivery completes the run even when the
 report records observation gaps. Those gaps remain committed claims. Delivery
 failure still blocks completion and requires recovery before another attempt.
-A one-node sequence workflow supplies `0 8 * * 1,4` in `Europe/Vienna`; the other
-Linde graph members are not prerequisites. Only enable it after an installed
-live report and notification have been verified.
+The former one-node sequence workflow with `0 8 * * 1,4` in `Europe/Vienna` was
+archived with the other workflows (issue 1455, M4); rebuild the schedule as a
+network source or the Pod's own schedule. Only enable it after an installed live
+report and notification have been verified.
