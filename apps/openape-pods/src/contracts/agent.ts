@@ -1,6 +1,8 @@
 export interface AgentRequest { prompt: string, tools: [] | ['ape_shell'], timeoutSeconds: number }
 export const defaultAgentTimeoutSeconds = 120
 export const maxAgentTimeoutSeconds = 900
+/** Agent calls pause a run's script time limit, up to this total per run so unawaited calls cannot extend it indefinitely. */
+export const maxAgentPauseMs = 2 * maxAgentTimeoutSeconds * 1000
 
 export function parseAgentRequest(value: unknown): AgentRequest {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !['prompt', 'tools', 'timeoutSeconds'].includes(key))) throw new Error('Invalid agent request')

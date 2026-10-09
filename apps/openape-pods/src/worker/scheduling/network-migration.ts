@@ -1,4 +1,3 @@
-import { supportedNetworkCapability, networkSourceCapability } from '../../contracts/network-capabilities'
 import { parseSchedule } from '../../contracts/scheduling'
 import { parseConversionSelection } from '../../contracts/network-migration'
 import type { ConversionSelection, ConversionPreview } from '../../contracts/network-migration'
@@ -57,8 +56,7 @@ export function previewNetworkConversion(store: PodDatabase, resources: Resource
     const contract = parseGraphContract(manifest.contract)
     const chosen = draft.members.find(member => member.podId === podId)!
     if (pod.lifecycle === 'archived' || pod.activeScript !== binding.content_hash || manifest.dependencyLockHash !== binding.lock_hash || canonicalNetworkJson(contract) !== canonicalNetworkJson(JSON.parse(binding.contract as string))) issues.push(`${pod.name}: active script differs from its adopted definition`)
-    if (manifest.capabilities.some(capability => !supportedNetworkCapability(capability))) issues.push(`${pod.name}: rights need a supported persistent runtime port`)
-    if (!chosen.source && (!manifest.triggers.includes('event') || manifest.capabilities.some(networkSourceCapability))) issues.push(`${pod.name}: consumer requires an event trigger and cannot perform source mail intake`)
+    if (!chosen.source && !manifest.triggers.includes('event')) issues.push(`${pod.name}: consumer requires an event trigger`)
     if (chosen.source?.schedule && !manifest.triggers.includes('schedule')) issues.push(`${pod.name}: source script does not allow scheduled execution`)
     if (!has('SELECT 1 FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?', podId, pod.activeScript!, pod.bindingRevision, resources.epoch(podId))) issues.push(`${pod.name}: validate the current script and local rights first`)
     for (const value of legacy.values) {
