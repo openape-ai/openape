@@ -81,7 +81,7 @@ export async function startMain(env: Record<string, string> = {}, prepare: (root
   }))
   vi.doMock('node:child_process', async original => ({ ...await original<typeof import('node:child_process')>(), execFile }))
   vi.doMock('../../src/main/worker', () => ({ FixtureWorker: class { constructor(callback: typeof publish) { publish = callback; return worker } } }))
-  vi.doMock('../../src/main/remote/controller', () => ({ RemoteController: class { error = '' } }))
+  vi.doMock('../../src/main/remote/controller', () => ({ RemoteController: class {} }))
   const previous = { ...process.env }
   Object.assign(process.env, { OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' }, env)
   await import('../../src/main/app')

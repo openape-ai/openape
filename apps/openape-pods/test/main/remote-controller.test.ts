@@ -16,13 +16,8 @@ import { parseInboxDecisions } from '../../src/contracts/inbox'
 import type { InboxDecision } from '../../src/contracts/inbox'
 import type { FixtureWorker } from '../../src/main/worker'
 import { PodDatabase } from '../../src/worker/storage/database'
-import { RemoteControl } from '../../src/worker/remote/control'
-import { ResourceRegistry } from '../../src/worker/resources/registry'
-import { RunDispatcher } from '../../src/worker/runs/dispatcher'
-import { Scheduler } from '../../src/worker/scheduling/scheduler'
-import { MasterControl } from '../../src/worker/master/control'
-import { MasterService } from '../../src/worker/master/service'
-import type { AgentRuntime } from '../../src/worker/agent/executor'
+import { DesktopRegistration } from '../../src/worker/remote/registration'
+import type { RemoteInternal } from '../../src/worker/remote/registration'
 
 const browser = vi.hoisted(() => vi.fn())
 vi.mock('electron', () => ({ safeStorage: { isEncryptionAvailable: () => true, encryptString: (text: string) => Buffer.from(text), decryptString: (bytes: Buffer) => bytes.toString() }, shell: { openExternal: browser } }))
@@ -30,16 +25,10 @@ const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); browser.mockReset() })
 
 async function fixture() {
-  vi.stubEnv('OPENAPE_PODS_CENTRAL_ENABLED', '1')
   const root = await mkdtemp(join(tmpdir(), 'pods-reauth-'))
   const relay = new RelayStore(':memory:')
   const store = new PodDatabase(root)
-  const resources = new ResourceRegistry(store, () => {})
-  const runtime = {} as AgentRuntime
-  const runs = new RunDispatcher(store, resources, runtime)
-  const scheduler = new Scheduler(store, runs)
-  const master = new MasterService(store, runtime, new MasterControl(store, resources, runs, scheduler, runtime))
-  const remote = new RemoteControl(store, master, runs, resources, scheduler)
+  const remote = new DesktopRegistration(store)
   const owner = { issuer: 'https://id.example.test', subject: 'owner@example.test' }
   const signing = generateKey(); const agreement = generateKey()
   const registration = relay.register(randomUUID(), owner, { signing: publicKey(signing), agreement: publicKey(agreement) })
@@ -51,12 +40,10 @@ async function fixture() {
   await mkdir(join(root, 'remote'), { recursive: true }); await writeFile(join(root, 'remote/registration.enc'), JSON.stringify(saved))
   await mkdir(join(root, 'central')); await writeFile(join(root, 'central/state.json'), '{"revision":17,"hash":"retained"}')
   await writeFile(join(root, 'central/publication.json'), '{"pending":"retained"}')
-  await remote.execute({ type: 'configure', registration })
-  const device = { id: randomUUID(), owner, keys: { signing: publicKey(generateKey()), agreement: publicKey(generateKey()) }, epoch: 1 }
-  await remote.execute({ type: 'pair', device })
+  remote.execute({ type: 'configure', registration })
   const outbox = new InboxOutbox(store)
   const inbox = new InboxStore(':memory:')
-  const worker = { inboxOutbox: vi.fn(async (command: InboxOutboxCommand) => outbox.execute(command)), remote: vi.fn(remote.execute.bind(remote)), remoteOwner: async () => ({ owner, email: owner.subject }), indexRemotePods: vi.fn(async () => {}) }
+  const worker = { inboxOutbox: vi.fn(async (command: InboxOutboxCommand) => outbox.execute(command)), remote: vi.fn(async (command: RemoteInternal) => remote.execute(command)), remoteOwner: async () => ({ owner, email: owner.subject }), indexRemotePods: vi.fn(async () => {}) }
   const auth = new RelayAuth(relay, 'https://pods.example.test')
   browser.mockImplementation(async (url: string) => {
     const id = new URL(url).searchParams.get('id')!
@@ -93,15 +80,14 @@ async function fixture() {
   })
   vi.stubGlobal('fetch', fetcher)
   const controller = new RemoteController(root, worker as unknown as FixtureWorker, 'https://pods.example.test')
-  cleanups.push(async () => { await controller.stop(); relay.close(); inbox.close(); store.close(); await rm(root, { recursive: true, force: true }) })
+  cleanups.push(async () => { controller.stop(); relay.close(); inbox.close(); store.close(); await rm(root, { recursive: true, force: true }) })
   const readSaved = async () => JSON.parse(await readFile(join(root, 'remote/registration.enc'), 'utf8')) as typeof saved
   const revoke = () => { relay.db.prepare('UPDATE registrations SET revoked=1 WHERE id=?').run(registration.id) }
   return { root, relay, store, remote, outbox, inbox, owner, registration, saved, rotated, worker, controller, requests, fetcher, readSaved, revoke, enable: () => controller.enable({ owner, email: owner.subject }) }
 }
 
-it('reauthenticates a replay-revoked session with the same runtime, keys, generation and pairing', async () => {
+it('reauthenticates a replay-revoked session with the same runtime, keys and generation', async () => {
   const f = await fixture()
-  const devices = f.store.db.prepare('SELECT * FROM remote_devices').all()
   const registration = f.relay.registration(f.registration.id)
   await f.enable()
   const saved = await f.readSaved()
@@ -109,7 +95,6 @@ it('reauthenticates a replay-revoked session with the same runtime, keys, genera
   expect(saved.tokens.registration).toEqual({ id: registration.id, generation: registration.generation, owner: f.owner })
   expect(f.relay.authenticate(saved.tokens.accessToken)).toEqual(registration)
   expect(() => f.relay.authenticate(f.rotated.accessToken)).toThrow('authentication_required')
-  expect(f.store.db.prepare('SELECT * FROM remote_devices').all()).toEqual(devices)
   expect(await readFile(join(f.root, 'central/state.json'), 'utf8')).toBe('{"revision":17,"hash":"retained"}')
   expect(await readFile(join(f.root, 'central/publication.json'), 'utf8')).toBe('{"pending":"retained"}')
   expect(f.requests).not.toContain('/api/runtime/v1/rotate')
