@@ -58,13 +58,15 @@ export class ProgramManager {
     return resolveCommand(adapter, [assignment.cliId, ...argv])
   }
 
-  async grant(command: Extract<ProgramCommand, { type: 'grant' | 'start' }>): Promise<void> {
+  /** Requests the command at the IdP and assigns it; returns the IdP approval page while the owner has not decided. */
+  async grant(command: Extract<ProgramCommand, { type: 'grant' | 'start' }>): Promise<string | null> {
     const assignment = await this.assignment(command.podId, command.applicationId, command.epoch)
     const resolved = await this.preview(command.podId, command.applicationId, command.epoch, command.argv)
     if (!assignment.grants.some(item => item.permission === resolved.permission) && assignment.grants.length >= 32) throw new Error('This application already has 32 command permissions')
-    const authority = await this.connections.approve(command.podId, assignment.adapterPath, [[assignment.cliId, ...command.argv]])
+    const { authority, approval } = await this.connections.request(command.podId, assignment.adapterPath, [[assignment.cliId, ...command.argv]])
     const grants = [...assignment.grants.filter(item => item.permission !== resolved.permission), { permission: resolved.permission, display: resolved.detail.display, authority }]
     await this.dispatch({ type: 'save', podId: command.podId, id: command.applicationId, epoch: command.epoch, configuration: { ...assignment, grants } })
+    return approval
   }
 
   async importFile(podId: string, applicationId: string, epoch: number, source: string): Promise<void> {

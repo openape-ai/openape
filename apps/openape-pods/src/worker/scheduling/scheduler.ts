@@ -1,3 +1,4 @@
+import { occupiedRunSlots } from '../runs/slots'
 import { infrastructureRetry, retryReady } from './retry'
 import { randomUUID } from 'node:crypto'
 import { parseSchedule } from '../../contracts/scheduling'
@@ -67,7 +68,7 @@ export class Scheduler {
       if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=?').get(podId)) throw new Error('No execution slot available; try again after the active run')
       if (this.store.db.prepare('SELECT 1 FROM accepted_events WHERE pod_id=? AND state IN (\'blocked\',\'claimed\',\'pending\')').get(podId)) throw new Error('Review pending inputs before running this script')
       this.drain()
-      const active = this.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count as number
+      const active = occupiedRunSlots(this.store)
       const maximum = this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency as number
       if (active >= maximum) throw new Error('No execution slot available; try again after the active run')
     }
@@ -92,7 +93,7 @@ export class Scheduler {
 
   drain(scheduled = false): void {
     if (!scheduled && !this.immediateDispatch) return
-    const available = () => (this.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count as number) < (this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency as number)
+    const available = () => occupiedRunSlots(this.store) < (this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency as number)
     const ready = this.store.db.prepare('SELECT e.pod_id,min(e.sequence) AS first FROM accepted_events e JOIN pods p ON p.id=e.pod_id WHERE e.state=\'pending\' AND p.lifecycle!=\'archived\' AND (p.lifecycle=\'active\' OR e.source=\'manual\') AND NOT EXISTS(SELECT 1 FROM network_members n WHERE n.pod_id=e.pod_id) AND NOT EXISTS(SELECT 1 FROM workflow_reservations w WHERE w.pod_id=e.pod_id) AND NOT EXISTS(SELECT 1 FROM run_leases l WHERE l.pod_id=e.pod_id) AND NOT EXISTS(SELECT 1 FROM accepted_events b WHERE b.pod_id=e.pod_id AND b.state IN (\'blocked\',\'claimed\')) GROUP BY e.pod_id ORDER BY first').all()
     for (const row of ready) {
       if (!available()) break

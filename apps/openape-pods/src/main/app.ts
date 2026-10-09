@@ -4,11 +4,8 @@ import { randomUUID } from 'node:crypto'
 import { sharingLimits } from '@openape/pods-protocol'
 import { parseSharingCommand } from '../contracts/sharing'
 import { parseDefinitionCommand } from '../contracts/definitions'
-import { resolveSshTarget } from './ssh/configuration'
 import { McpOwnerSessions } from './codex/session'
 import { parseMcpSessionCommand } from '../contracts/mcp-session'
-import { RuntimeApprovalPolicy } from './codex/runtime-approval'
-import { parseRuntimeApprovalCommand } from '../contracts/runtime-approval'
 import { CentralController, offlineAlert } from './central/controller'
 import { centralObject } from '../contracts/central'
 import { RemoteController, RemoteServiceError } from './remote/controller'
@@ -65,7 +62,6 @@ if (fixture && process.env.NODE_ENV === 'test' && process.env.OPENAPE_PODS_TEST_
 app.enableSandbox()
 const profileBase = fixture ? fixtureDirectory(process.env.OPENAPE_PODS_FIXTURE_DIR) : localDirectory(join(app.getPath('appData'), 'OpenApe Pods'))
 const root = selectedProfile(profileBase)
-const runtimeApproval = new RuntimeApprovalPolicy(root)
 if (existsSync(join(root, 'central'))) process.env.OPENAPE_PODS_CENTRAL_ENABLED = '1'
 app.setPath('userData', root)
 app.setPath('sessionData', join(root, 'chromium'))
@@ -84,10 +80,10 @@ const worker = new FixtureWorker((next) => {
   status.worker = next
   if (next.state === 'ready') central?.start()
   if (window && !window.isDestroyed()) window.webContents.send(channels.changed, status)
-}, runtimeApproval)
+})
 const remote = new RemoteController(root, worker)
 if (process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1') {
-  central = new CentralController(root, body => remote.workspaceRequest(body), { snapshot: format => worker.centralSnapshot(format), networkRead: command => worker.centralNetworkRead(command), version: () => worker.centralVersion(), execute: (command, id) => worker.centralExecute(command, id), gate: until => worker.centralGate(until) }, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/'))
+  central = new CentralController(root, body => remote.workspaceRequest(body), { snapshot: format => worker.centralSnapshot(format), networkRead: command => worker.centralNetworkRead(command), version: () => worker.centralVersion(), execute: command => worker.centralExecute(command), gate: until => worker.centralGate(until) }, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/'))
   worker.central = central
   worker.inbox = new InboxDecisions(worker, t)
 }
@@ -261,11 +257,6 @@ async function start(): Promise<void> {
       if (adapter.canceled || adapter.filePaths.length !== 1) return unchanged()
       return worker.program(command, { ...await programDefinition(path, adapter.filePaths[0]), icon })
     }
-    if (command.type === 'grant') {
-      const resolved = await worker.programPreview(command)
-      const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Allow application command'), message: resolved.detail.display, detail: t('Permission: {permission}\n\nThis permission is assigned to this pod’s OpenApe agent. The pod stays paused.', { permission: resolved.permission }), buttons: [t('Cancel'), t('Allow command')], defaultId: 0, cancelId: 0 })
-      if (answer.response !== 1) return unchanged()
-    }
     if (command.type === 'importState') {
       const selected = await dialog.showOpenDialog(window, { title: t('Import an existing application state file'), properties: ['openFile', 'showHiddenFiles'] })
       if (selected.canceled || selected.filePaths.length !== 1) return unchanged()
@@ -283,17 +274,17 @@ async function start(): Promise<void> {
       if (!login) throw new Error('Sign-in expired; start again')
       await shell.openExternal(login.url); return state
     }
+    if (command.type === 'openGrants') {
+      const { owner } = await worker.remoteOwner()
+      await shell.openExternal(new URL('/grants', owner.issuer).href)
+      return worker.onboarding({ type: 'list' })
+    }
     return worker.onboarding(command)
   })
   ipcMain.handle(channels.mcpSession, (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     if (parseMcpSessionCommand(value).type === 'end') mcpSessions.end()
     return mcpSessions.view()
-  })
-  ipcMain.handle(channels.runtimeApproval, (event, value: unknown, ...extra: unknown[]) => {
-    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
-    const command = parseRuntimeApprovalCommand(value)
-    return worker.runtimeApprovalCommand(command)
   })
   ipcMain.handle(channels.codex, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
@@ -413,18 +404,6 @@ async function start(): Promise<void> {
   ipcMain.handle(channels.resources, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     const command = parseResourceCommand(value)
-    if (command.type === 'assignSsh') {
-      if (!window) throw new Error('Owner window is unavailable')
-      const binding = await resolveSshTarget(command.target)
-      const answer = await dialog.showMessageBox(window, { type: 'question', title: 'Allow fixed SSH inventory', message: binding.target.alias, detail: `${binding.hosts.map(host => `${host.user}@${host.hostname}:${host.port}`).join(' → ')}\n\nProfile: ${binding.target.profile}\nOnly fixed server observations. Keys remain on this Mac. The Pod stays paused.`, buttons: ['Cancel', 'Allow fixed inventory'], defaultId: 0, cancelId: 0 })
-      if (answer.response !== 1) return worker.resources({ type: 'list', podId: command.podId })
-      if (JSON.stringify(binding) !== JSON.stringify(await resolveSshTarget(command.target))) throw new Error('SSH configuration changed during review; try again')
-    }
-    if (command.type === 'assignHttp') {
-      if (!window) throw new Error('Owner window is unavailable')
-      const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Allow HTTP destination'), message: command.permission.origin, detail: t('Allowed methods: {methods}\n\nScripts with this permission can send data to this destination. Token values remain in Variables and secrets. The pod stays paused.', { methods: command.permission.methods.join(', ') }), buttons: [t('Cancel'), t('Allow HTTP destination')], defaultId: 0, cancelId: 0 })
-      if (answer.response !== 1) return worker.resources({ type: 'list', podId: command.podId })
-    }
     if (command.type === 'pickDirectory' || command.type === 'changeDirectory' || command.type === 'reviewDirectory') {
       if (!window) throw new Error('Owner window is unavailable')
       const state = await worker.resources({ type: 'list', podId: command.podId })

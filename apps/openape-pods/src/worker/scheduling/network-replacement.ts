@@ -82,8 +82,7 @@ export class NetworkReplacement {
     const occupied = this.store.db.prepare(`SELECT 1 FROM network_members WHERE pod_id=? UNION ALL SELECT 1 FROM workflow_members WHERE pod_id=?
       UNION ALL SELECT 1 FROM schedules WHERE pod_id=? UNION ALL SELECT 1 FROM runs WHERE pod_id=? UNION ALL SELECT 1 FROM accepted_events WHERE pod_id=?
       UNION ALL SELECT 1 FROM run_leases WHERE pod_id=? UNION ALL SELECT 1 FROM program_leases WHERE pod_id=?
-      UNION ALL SELECT 1 FROM effect_ledger WHERE pod_id=?
-      UNION ALL SELECT 1 FROM control_changes c,json_each(c.body,'$.targets') t WHERE json_extract(c.body,'$.state') IN ('pending','running') AND json_extract(t.value,'$.podId')=? LIMIT 1`).get(...Array.from({ length: 9 }, () => podId))
+      UNION ALL SELECT 1 FROM effect_ledger WHERE pod_id=? LIMIT 1`).get(...Array.from({ length: 8 }, () => podId))
     const checkpoint = this.store.checkpoint(podId)
     if (occupied || checkpoint.revision !== 0 || canonicalNetworkJson(checkpoint.body) !== '{}') throw new Error('Added members must be separate fresh instances; historical members remain reserved')
   }

@@ -28,7 +28,7 @@ it('creates and renames without a second instruction, retaining active script va
   installExample(store, resources, pod.id, 'deterministic', 'a'.repeat(64))
   const hash = store.getPod(pod.id).activeScript!
   const validations = store.db.prepare('SELECT * FROM validations').all()
-  await control.execute('rename', { action: 'revise', podId: pod.id, revision: pod.revision, name: 'Inbox alerts' }, new AbortController().signal, pod.id)
+  await control.execute('rename', { action: 'revise', podId: pod.id, revision: pod.revision, name: 'Inbox alerts' }, new AbortController().signal)
   const renamed = store.getPod(pod.id)
   expect(renamed).toMatchObject({ name: 'Inbox alerts', revision: 2, activeScript: hash, lifecycle: 'paused' })
   expect(store.db.prepare('SELECT * FROM validations').all()).toEqual(validations)

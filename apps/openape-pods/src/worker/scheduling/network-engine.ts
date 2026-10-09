@@ -1,3 +1,4 @@
+import { occupiedRunSlots } from '../runs/slots'
 import { supportedNetworkCapability, networkSourceCapability, networkArchiveMember } from '../../contracts/network-capabilities'
 import { currentCompositionDraft, NetworkReplacement } from './network-replacement'
 import { memberScriptIssues, networkSettlementIssues, previewNetworkArchive, retainedLegacyItems } from './network-retirement'
@@ -231,7 +232,7 @@ export class NetworkEngine {
         this.attention(batch.preview.networkId, 'process-now-stopped', { previewId: id, explicitResumeRequired: true }, failure)
         this.endBatch(id, 'stopped'); continue
       }
-      const occupied = Number(this.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count)
+      const occupied = occupiedRunSlots(this.store)
       const maximum = Number(this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency)
       let active = batch.remaining > 0 && occupied >= maximum; let started = false
       for (const member of definition.members.filter(item => batch.preview.podIds.includes(item.podId))) {
@@ -492,8 +493,7 @@ export class NetworkEngine {
       const members = draft.members.map((selection) => {
         const binding = this.binding(selection.podId, owner, draft.groupId)
         const legacy = this.store.db.prepare(`SELECT 1 FROM workflow_members WHERE pod_id=? UNION ALL SELECT 1 FROM schedules WHERE pod_id=?
-          UNION ALL SELECT 1 FROM runs WHERE pod_id=? UNION ALL SELECT 1 FROM accepted_events WHERE pod_id=?
-          UNION ALL SELECT 1 FROM control_changes c,json_each(c.body,'$.targets') t WHERE json_extract(c.body,'$.state') IN ('pending','running') AND json_extract(t.value,'$.podId')=? LIMIT 1`).get(selection.podId, selection.podId, selection.podId, selection.podId, selection.podId)
+          UNION ALL SELECT 1 FROM runs WHERE pod_id=? UNION ALL SELECT 1 FROM accepted_events WHERE pod_id=? LIMIT 1`).get(selection.podId, selection.podId, selection.podId, selection.podId)
         if (this.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=?').get(selection.podId) || (!convertedPods?.has(selection.podId) && (legacy || this.store.checkpoint(selection.podId).revision !== 0 || canonicalNetworkJson(this.store.checkpoint(selection.podId).body) !== '{}'))) throw new Error('Network creation requires a separate fresh instance; use reviewed conversion for legacy state')
         return { podId: selection.podId, definitionId: binding.definition_id as string, definitionVersion: binding.definition_version as number, bindingRevision: binding.binding_revision as number, contract: parseGraphContract(JSON.parse(binding.contract as string)), source: selection.source ? { bindingId: randomUUID(), schedule: selection.source.schedule } : null, serialCase: selection.serialCase }
       })
