@@ -69,19 +69,42 @@ export class NetworkRecovery {
       this.invocation(networkId, runId, generation)
       const control = this.store.db.prepare('SELECT stopped_receipt FROM network_invocation_controls WHERE run_id=?').get(runId)
       if (!control?.stopped_receipt || JSON.parse(control.stopped_receipt as string).generation !== generation || this.store.db.prepare('SELECT 1 FROM run_leases WHERE run_id=?').get(runId)) throw new Error('Inspect the stopped process before effect reconciliation')
-      const attempt = this.store.db.prepare('SELECT state FROM network_effect_attempts WHERE network_id=? AND run_id=? AND logical_action_key=? AND attempt=?').get(networkId, runId, effect.key, effect.attempt)
-      const sequence = Number(this.store.db.prepare('SELECT coalesce(max(sequence),0) AS sequence FROM network_effect_receipts WHERE logical_action_key=? AND attempt=?').get(effect.key, effect.attempt)!.sequence)
-      if (attempt?.state !== 'unknown' || sequence !== effect.sequence) throw new Error('Network effect reconciliation state changed')
-      if (effect.outcome === 'confirmed_not_applied' && this.store.db.prepare('SELECT 1 FROM network_effect_receipts WHERE logical_action_key=? AND outcome=\'confirmed_applied\'').get(effect.key)) throw new Error('Confirmed applied effect evidence cannot be contradicted')
-      const receipt = canonicalNetworkJson({ ownerEvidence: effect.evidence, reviewedAt: Date.now(), runId, generation, processesStopped: true })
-      this.store.db.prepare('INSERT INTO network_effect_receipts VALUES(?,?,?,?,?,?)').run(effect.key, effect.attempt, sequence + 1, effect.outcome, receipt, Date.now())
-      this.store.db.prepare('UPDATE network_effect_attempts SET state=? WHERE logical_action_key=? AND attempt=?').run(effect.outcome, effect.key, effect.attempt)
+      const sequence = this.recordOutcome(networkId, runId, generation, effect)
       if (!this.unsafe(runId)) {
         this.store.db.prepare('UPDATE network_invocations SET state=\'blocked\' WHERE run_id=?').run(runId)
         this.store.db.prepare('UPDATE network_invocation_controls SET failure_kind=\'recovery\',diagnostic=? WHERE run_id=?').run('External effects reconciled; explicit retry remains required', runId)
       }
-      this.trace(networkId, runId, 'owner-effect-reconciled', { key: effect.key, attempt: effect.attempt, sequence: sequence + 1, outcome: effect.outcome, ownerEvidence: effect.evidence, automaticRetryPermitted: false })
+      this.trace(networkId, runId, 'owner-effect-reconciled', { key: effect.key, attempt: effect.attempt, sequence, outcome: effect.outcome, ownerEvidence: effect.evidence, automaticRetryPermitted: false })
     })
+  }
+
+  /** A completed script held back the input of an unknown tool outcome; once reconciled that input is done like any reported outcome. */
+  reconcileHeld(networkId: string, runId: string, generation: number, effect: { key: string, attempt: number, sequence: number, outcome: 'confirmed_applied' | 'confirmed_not_applied', evidence: string }, assertCurrent: () => void): void {
+    this.store.transaction(() => {
+      assertCurrent()
+      if (!this.store.db.prepare('SELECT 1 FROM network_invocations WHERE network_id=? AND run_id=? AND generation=? AND state=\'completed\' AND NOT EXISTS(SELECT 1 FROM run_leases WHERE run_id=?)').get(networkId, runId, generation, runId)) throw new Error('Network recovery state changed or is not awaiting review')
+      const deliveryId = this.store.db.prepare('SELECT json_extract(body,\'$.deliveryId\') AS id FROM network_effect_receipts WHERE logical_action_key=? AND attempt=? AND outcome=\'intent\'').get(effect.key, effect.attempt)?.id as string | undefined
+      const sequence = this.recordOutcome(networkId, runId, generation, effect)
+      const pending = this.store.db.prepare(`SELECT 1 FROM network_effect_attempts e JOIN network_effect_receipts intent ON intent.logical_action_key=e.logical_action_key AND intent.attempt=e.attempt AND intent.outcome='intent'
+        WHERE e.run_id=? AND e.state='unknown' AND json_extract(intent.body,'$.deliveryId')=?`).get(runId, deliveryId ?? null)
+      const released = Boolean(deliveryId && !pending && this.store.db.prepare('UPDATE network_deliveries SET state=\'done\',reason=NULL,review_receipt=? WHERE id=? AND run_id=? AND state=\'unknown\'').run(canonicalNetworkJson({ key: effect.key, attempt: effect.attempt, sequence, outcome: effect.outcome, evidence: effect.evidence }), deliveryId, runId).changes)
+      if (released) {
+        if (this.store.db.prepare('UPDATE network_queue_counts SET count=count-1 WHERE network_id=? AND state=\'unknown\' AND count>0').run(networkId).changes !== 1) throw new Error('Network queue projection is inconsistent')
+        this.store.db.prepare('INSERT INTO network_queue_counts VALUES(?,\'done\',1) ON CONFLICT(network_id,state) DO UPDATE SET count=count+1').run(networkId)
+      }
+      this.trace(networkId, runId, 'owner-effect-reconciled', { key: effect.key, attempt: effect.attempt, sequence, outcome: effect.outcome, ownerEvidence: effect.evidence, heldInputReleased: released, automaticRetryPermitted: false })
+    })
+  }
+
+  private recordOutcome(networkId: string, runId: string, generation: number, effect: { key: string, attempt: number, sequence: number, outcome: 'confirmed_applied' | 'confirmed_not_applied', evidence: string }): number {
+    const attempt = this.store.db.prepare('SELECT state FROM network_effect_attempts WHERE network_id=? AND run_id=? AND logical_action_key=? AND attempt=?').get(networkId, runId, effect.key, effect.attempt)
+    const sequence = Number(this.store.db.prepare('SELECT coalesce(max(sequence),0) AS sequence FROM network_effect_receipts WHERE logical_action_key=? AND attempt=?').get(effect.key, effect.attempt)!.sequence)
+    if (attempt?.state !== 'unknown' || sequence !== effect.sequence) throw new Error('Network effect reconciliation state changed')
+    if (effect.outcome === 'confirmed_not_applied' && this.store.db.prepare('SELECT 1 FROM network_effect_receipts WHERE logical_action_key=? AND outcome=\'confirmed_applied\'').get(effect.key)) throw new Error('Confirmed applied effect evidence cannot be contradicted')
+    const receipt = canonicalNetworkJson({ ownerEvidence: effect.evidence, reviewedAt: Date.now(), runId, generation, processesStopped: true })
+    this.store.db.prepare('INSERT INTO network_effect_receipts VALUES(?,?,?,?,?,?)').run(effect.key, effect.attempt, sequence + 1, effect.outcome, receipt, Date.now())
+    this.store.db.prepare('UPDATE network_effect_attempts SET state=? WHERE logical_action_key=? AND attempt=?').run(effect.outcome, effect.key, effect.attempt)
+    return sequence + 1
   }
 
   resolveConflict(networkId: string, runId: string, generation: number, identityHash: string, decision: 'retainOriginal' | 'discardBatch', evidence: string, assertCurrent: () => void): void {
