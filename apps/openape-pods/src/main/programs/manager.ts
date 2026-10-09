@@ -107,9 +107,8 @@ export class ProgramManager {
     }
     const session = this.sessions.get(command.sessionId)
     if (!session || session.podId !== command.podId) throw new Error('Terminal does not belong to this pod or has expired')
-    if (command.type === 'input' || command.type === 'resize') await this.dispatch({ type: 'check', podId: command.podId, sessionId: command.sessionId })
+    if (command.type === 'input') await this.dispatch({ type: 'check', podId: command.podId, sessionId: command.sessionId })
     if (command.type === 'input') session.input(command.data)
-    if (command.type === 'resize') session.resize(command.columns, command.rows)
     if (command.type === 'close') { session.close(); await session.completed }
     return session.view(command.type === 'poll' ? command.after : Number.MAX_SAFE_INTEGER)
   }

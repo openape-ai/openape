@@ -13,7 +13,6 @@ import { CentralController, offlineAlert } from './central/controller'
 import { centralObject } from '../contracts/central'
 import { RemoteController, RemoteServiceError } from './remote/controller'
 import { InboxDecisions } from './inbox/decisions'
-import { parseChatsCommand } from '../contracts/chats'
 import { parseWorkflowCommand } from '../contracts/workflows'
 import { parseNetworkCommand } from '../contracts/networks'
 import { searchPackages } from './package-catalog'
@@ -356,10 +355,6 @@ async function start(): Promise<void> {
       return connection
     }
     return registration.disconnect()
-  })
-  ipcMain.handle(channels.chats, (event, command: unknown, ...extra: unknown[]) => {
-    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
-    return worker.chats(parseChatsCommand(command))
   })
   ipcMain.handle(channels.master, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)

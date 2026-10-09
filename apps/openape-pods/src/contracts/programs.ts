@@ -45,13 +45,12 @@ export type ProgramCommand =
   | { type: 'importState', podId: string, applicationId: string, epoch: number }
   | { type: 'poll', podId: string, sessionId: string, after: number }
   | { type: 'input', podId: string, sessionId: string, data: string }
-  | { type: 'resize', podId: string, sessionId: string, columns: number, rows: number }
   | { type: 'close', podId: string, sessionId: string }
 export interface TerminalView { sessionId: string, podId: string, state: 'starting' | 'running' | 'closed', sequence: number, output: string, exitCode: number | null, error: string | null }
 export function parseProgramCommand(value: unknown): ProgramCommand {
   const command = value as ProgramCommand
   if (!command || typeof command !== 'object' || Array.isArray(command) || !/^[a-f0-9-]{36}$/.test(command.podId)) throw new Error('Invalid program command')
-  const keys: Record<ProgramCommand['type'], string[]> = { network: ['applicationId', 'epoch', 'hosts'], openShell: [], openFolder: [], launchStatus: [], prepare: ['line'], add: ['epoch', 'suggestedName'], replace: ['applicationId', 'epoch'], launch: ['applicationId', 'epoch'], grant: ['applicationId', 'epoch', 'argv'], start: ['applicationId', 'epoch', 'argv'], importState: ['applicationId', 'epoch'], poll: ['sessionId', 'after'], input: ['sessionId', 'data'], resize: ['sessionId', 'columns', 'rows'], close: ['sessionId'] }
+  const keys: Record<ProgramCommand['type'], string[]> = { network: ['applicationId', 'epoch', 'hosts'], openShell: [], openFolder: [], launchStatus: [], prepare: ['line'], add: ['epoch', 'suggestedName'], replace: ['applicationId', 'epoch'], launch: ['applicationId', 'epoch'], grant: ['applicationId', 'epoch', 'argv'], start: ['applicationId', 'epoch', 'argv'], importState: ['applicationId', 'epoch'], poll: ['sessionId', 'after'], input: ['sessionId', 'data'], close: ['sessionId'] }
   if (!Object.hasOwn(keys, command.type) || Object.keys(command).some(key => !['type', 'podId', ...keys[command.type]].includes(key))) throw new Error('Unsupported program command')
   if (command.type === 'add' && command.suggestedName !== undefined && (typeof command.suggestedName !== 'string' || command.suggestedName.length > 255 || /[\0\r\n]/.test(command.suggestedName))) throw new Error('Invalid application name')
   if (command.type === 'prepare' && (typeof command.line !== 'string' || command.line.length > 16000 || /[\0\r\n]/.test(command.line))) throw new Error('Invalid terminal command')
@@ -61,7 +60,6 @@ export function parseProgramCommand(value: unknown): ProgramCommand {
   if (command.type === 'start' || command.type === 'grant') parseProgramArgv(command.argv)
   if (command.type === 'poll' && (!Number.isSafeInteger(command.after) || command.after < 0)) throw new Error('Invalid terminal cursor')
   if (command.type === 'input' && (typeof command.data !== 'string' || new TextEncoder().encode(command.data).length > 8192)) throw new Error('Terminal input exceeds its limit')
-  if (command.type === 'resize' && (!Number.isInteger(command.columns) || command.columns < 20 || command.columns > 500 || !Number.isInteger(command.rows) || command.rows < 5 || command.rows > 300)) throw new Error('Invalid terminal dimensions')
   if (command.type === 'network') return { ...command, hosts: parseNetworkHosts(command.hosts) }
   return structuredClone(command)
 }

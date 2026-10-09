@@ -4,7 +4,6 @@ import type { SharingState } from '../contracts/sharing'
 import { parseDefinitionCommand, parseDefinitionsView } from '../contracts/definitions'
 import { parseMcpAccess, parseMcpAccessCommand } from '../contracts/mcp-access'
 import { parseRuntimeApprovalCommand, parseRuntimeApprovalView } from '../contracts/runtime-approval'
-import { parseChatsCommand, parseChatsView } from '../contracts/chats'
 import { parseCodexCommand, parseCodexConnection } from '../contracts/codex'
 import { parseWorkflowCommand, parseWorkflowView } from '../contracts/workflows'
 import { parseNetworkCommand, parseNetworkView } from '../contracts/networks'
@@ -32,7 +31,6 @@ const bridge: PodsBridge = {
   async runtimeApproval(command) { return parseRuntimeApprovalView(await ipcRenderer.invoke(channels.runtimeApproval, parseRuntimeApprovalCommand(command))) },
   async central(command) { return ipcRenderer.invoke(channels.central, command) },
   async codex(command) { return parseCodexConnection(await ipcRenderer.invoke(channels.codex, parseCodexCommand(command))) },
-  async chats(command) { return parseChatsView(await ipcRenderer.invoke(channels.chats, parseChatsCommand(command))) },
   async definitions(command) { return parseDefinitionsView(await ipcRenderer.invoke(channels.definitions, parseDefinitionCommand(command))) },
   async sharing(command) { return ipcRenderer.invoke(channels.sharing, parseSharingCommand(command)) as Promise<SharingState> },
   async networks(command) { return parseNetworkView(await ipcRenderer.invoke(channels.networks, parseNetworkCommand(command))) },
