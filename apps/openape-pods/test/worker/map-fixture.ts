@@ -113,7 +113,7 @@ export function mapFixture() {
   }
   store.db.prepare('UPDATE runs SET summary=\'Read 6 sampled messages and emitted 0 changed provider versions. No mailbox writes.\' WHERE pod_id=? AND started_at=(SELECT max(started_at) FROM runs WHERE pod_id=?)').run(pods.Intake!, pods.Intake!)
 
-  // Morgenbriefing: an active daily chain of four Pods without a group.
+  // Morgenbriefing: four Pods without a group; since workflows left (issue 1455) only the mail check runs on its own schedule.
   const mp = scripted('Mail-Prüfung · Morgenbriefing', null, { capabilities: ['jev.evaluate'] })
   resource(mp, 'tool', 'pods-mail', program('pods-mail', [{ permission: 'pods-mail.account[email=phofmann@delta-mind.at].mail[*]#list', display: 'List mail for phofmann@delta-mind.at' }, { permission: 'pods-mail.account[email=patrick@docpit.eu].mail[*]#list', display: 'List mail for patrick@docpit.eu' }]))
   resource(mp, 'directory', 'mail', directory('/Users/fixture/Briefing Evidence/mail', 'readWrite'))
@@ -128,10 +128,6 @@ export function mapFixture() {
   resource(bot, 'tool', 'https://report.openape.ai', http('https://report.openape.ai', ['GET', 'POST']))
   resource(bot, 'credential', 'calendar_bot_token', credential('calendar_bot_token'))
   resource(bot, 'credential', 'reports_publisher_key', credential('reports_publisher_key'))
-  const briefing = uuid()
-  store.db.prepare('INSERT INTO workflows(id,revision,name,nodes,schedule,enabled,paused,mode,group_id) VALUES(?,3,?,?,?,1,0,\'sequence\',NULL)').run(briefing, 'Morgenbriefing', JSON.stringify([{ podId: mp, after: [], handoff: false }, { podId: ki, after: [mp], handoff: true }, { podId: red, after: [ki], handoff: true }, { podId: bot, after: [red], handoff: true }]), JSON.stringify({ kind: 'daily', time: '07:00', timezone: 'Europe/Vienna' }))
-  for (const podId of [mp, ki, red, bot]) store.db.prepare('INSERT INTO workflow_members VALUES(?,?)').run(briefing, podId)
-  store.db.prepare('INSERT INTO workflow_runs(id,workflow_id,revision,definition,trigger,state,reason,started_at,finished_at) VALUES(?,?,3,?,\'schedule\',\'completed\',NULL,?,?)').run(uuid(), briefing, JSON.stringify({ nodes: [] }), NOW - 6 * HOUR, NOW - 6 * HOUR + 60000)
   for (let index = 0; index < 50; index++) run(mp, NOW - index * 60000 - 60000, 'completed', 'No pending mail archive decisions')
   for (const [podId, summary] of [[ki, 'Calendar and issue sources collected for 2026-10-06'], [red, 'German editorial report ready for 2026-10-06'], [bot, 'Telegram delivery confirmed for 2026-10-06; message 245']] as const) run(podId, NOW - 6 * HOUR, 'completed', summary, podId === bot ? 2 : 0)
   // One Telegram delivery of the bot never got its answer: the owner reconciles it in Entscheidungen.
@@ -163,28 +159,16 @@ export function mapFixture() {
   scripted('Daily action website', null, { lifecycle: 'paused', draft: true })
   scripted('Archived research', null, { lifecycle: 'archived' })
 
-  // IURIO · DOCPIT mail: a paused bounded graph mirroring the Delta Mind network.
-  const docpit = uuid()
+  // IURIO · DOCPIT mail: paused Pods mirroring the Delta Mind network members, no longer connected.
   const docpitMembers = Object.entries(mailContracts).map(([name, contract]) => scripted(`IURIO · ${name}`, iurio, { contract, capabilities: name === 'Triage' ? ['jev.evaluate'] : [], lifecycle: 'paused' }))
   resource(docpitMembers[0]!, 'tool', 'pods-mail', program('pods-mail', [{ permission: 'pods-mail.account[email=patrick@docpit.eu].mail[*]#list', display: 'List mail for patrick@docpit.eu' }]))
-  store.db.prepare('INSERT INTO workflows(id,revision,name,nodes,schedule,enabled,paused,mode,group_id) VALUES(?,1,?,?,NULL,0,1,\'channels\',?)').run(docpit, 'IURIO · DOCPIT mail management', JSON.stringify(docpitMembers.map(podId => ({ podId, after: [], handoff: false }))), iurio)
-  for (const podId of docpitMembers) store.db.prepare('INSERT INTO workflow_members VALUES(?,?)').run(docpit, podId)
-  for (const name of mailChannels) store.db.prepare('INSERT INTO workflow_channels VALUES(?,?,?,\'[]\')').run(docpit, name, name)
-  for (const gate of [chooseGate, approveGate]) store.db.prepare('INSERT INTO workflow_gates VALUES(?,?,?)').run(docpit, gate.key, JSON.stringify(gate))
 
-  // Linde: a paused cron chain reading five hosts and a paused bounded graph of five Pods.
+  // Linde: a paused Pod reading five hosts and five paused Pods with contracts, no longer connected.
   const report = scripted('Linde · Server report', linde, { lifecycle: 'paused' })
   for (const host of ['dev-portal.lindeverlag.at', 'portal-staging.lindeverlag.at', 'portal.lindeverlag.at', 'db.lindeverlag.at', 'weiloner.at']) resource(report, 'tool', host, ssh(host))
   resource(report, 'tool', 'https://api.telegram.org', http('https://api.telegram.org', ['POST']))
-  const serverReport = uuid()
-  store.db.prepare('INSERT INTO workflows(id,revision,name,nodes,schedule,enabled,paused,mode,group_id) VALUES(?,1,?,?,?,0,1,\'sequence\',?)').run(serverReport, 'Linde · Server report', JSON.stringify([{ podId: report, after: [], handoff: false }]), JSON.stringify({ kind: 'cron', expression: '0 8 * * 1,4', timezone: 'Europe/Vienna' }), linde)
-  store.db.prepare('INSERT INTO workflow_members VALUES(?,?)').run(serverReport, report)
-  const portal = uuid()
   const portalMembers = [['Portal · Issues', { takes: [], gives: ['portal.issue'], summary: 'Reads portal issues' }], ['Portal · Triage', { takes: ['portal.issue'], gives: ['portal.ready'], summary: 'Sorts portal issues' }], ['Portal · Report', { takes: ['portal.ready'], gives: [], summary: 'Reports portal work' }], ['Portal · Deploy check', { takes: [], gives: ['deploy.state'], summary: 'Reads deploy state' }], ['Portal · Deploy report', { takes: ['deploy.state'], gives: [], summary: 'Reports deploys' }]] as const
-  const portalIds = portalMembers.map(([name, contract]) => scripted(name, linde, { contract: { ...contract, takes: [...contract.takes], gives: [...contract.gives] }, lifecycle: 'paused' }))
-  store.db.prepare('INSERT INTO workflows(id,revision,name,nodes,schedule,enabled,paused,mode,group_id) VALUES(?,1,?,?,NULL,0,1,\'channels\',?)').run(portal, 'Linde · Portal development and systems', JSON.stringify(portalIds.map(podId => ({ podId, after: [], handoff: false }))), linde)
-  for (const podId of portalIds) store.db.prepare('INSERT INTO workflow_members VALUES(?,?)').run(portal, podId)
-  for (const name of ['portal.issue', 'portal.ready', 'deploy.state']) store.db.prepare('INSERT INTO workflow_channels VALUES(?,?,?,\'[]\')').run(portal, name, name)
+  for (const [name, contract] of portalMembers) scripted(name, linde, { contract: { ...contract, takes: [...contract.takes], gives: [...contract.gives] }, lifecycle: 'paused' })
 
-  return { ...f, pods, network, briefing, docpit, serverReport, portal, groups: { deltaMind, iurio, linde } }
+  return { ...f, pods, network, groups: { deltaMind, iurio, linde } }
 }

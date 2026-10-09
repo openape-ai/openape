@@ -10,7 +10,6 @@ export const diagnosticPatterns = [
   'Collection {p0} has a different schema; a reused collection must match exactly',
   'Value does not match the declared input {p0}',
   'Portable network diagnostics: {p0}',
-  'Portable graph diagnostics: {p0}',
   'Feedback exceeded {p0} hops',
   'Unsupported stored network format {p0}',
   'Network {p0} revision {p1} holds an approval gate without its route; restore the previous version of OpenApe Pods',

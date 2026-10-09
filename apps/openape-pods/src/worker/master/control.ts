@@ -1,5 +1,4 @@
 import { jevAvailability } from '../onboarding/store'
-import type { WorkflowEngine } from '../workflows/engine'
 import type { Conversation } from '../../contracts/chats'
 import { ChatRegistry } from './chat-registry'
 import { MasterSetup } from './setup'
@@ -24,17 +23,14 @@ import { runtimeReference } from './reference'
 import { PodVariables } from '../resources/variables'
 import { PodGroups } from '../workspace/groups'
 import { modelResources } from './resources'
-import { inspectGraph } from '../workflows/items'
-import type { WorkflowDefinition } from '../../contracts/workflows'
 
 export class MasterControl {
   setup(): MasterSetup { return new MasterSetup(this.store) }
-  constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly dispatcher: RunDispatcher, private readonly scheduler: Scheduler, private readonly runtime: AgentRuntime, private readonly workflows?: WorkflowEngine, private readonly startRun: (podId: string, operationId: string) => string = (podId, operationId) => dispatcher.start(podId, { reason: 'manual', eventIds: [], operationId })) {}
+  constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly dispatcher: RunDispatcher, private readonly scheduler: Scheduler, private readonly runtime: AgentRuntime, private readonly startRun: (podId: string, operationId: string) => string = (podId, operationId) => dispatcher.start(podId, { reason: 'manual', eventIds: [], operationId })) {}
   async execute(key: string, value: unknown, signal: AbortSignal, context?: Conversation): Promise<unknown> {
     if (!key || key.length > 300) throw new Error('Invalid master operation identity')
-    const requested = parseMasterAction(value)
+    const action = parseMasterAction(value)
     if (context) context = new ChatRegistry(this.store).assertRevision(context.id, context.revision)
-    const action = requested.action === 'setGraphValue' ? this.graphValue(requested, context) : requested
     if (context) {
       if ('podId' in action && !context.context.pods.some(pod => pod.id === action.podId)) throw new Error('context_required: select this Pod with + before inspecting or changing it')
     }
@@ -47,24 +43,6 @@ export class MasterControl {
     }
     signal.throwIfAborted()
     if ('podId' in action) this.assertPod(action.podId, action.revision, action.action === 'inspect')
-    if (action.action === 'saveWorkflow' && action.definition.revision === 0) {
-      if (!this.workflows || !context || context.context.workflow) throw new Error('Select only the member Pods before creating a workflow')
-      if (action.definition.nodes.some(node => !context.context.pods.some(pod => pod.id === node.podId))) throw new Error('Select every workflow Pod before saving')
-      return this.store.transaction(() => {
-        this.workflows!.save(action.definition)
-        const result = { workflowId: action.definition.id, revision: 1 }
-        this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'completed\',?,NULL)').run(key, hash, request, JSON.stringify(result))
-        return result
-      })
-    }
-    if (action.action === 'inspectWorkflow' || action.action === 'runWorkflow' || action.action === 'saveWorkflow') {
-      if (!context?.context.workflow) throw new Error('Select a workflow before using this action')
-      const workflow = context.context.workflow
-      return this.store.transaction(() => {
-        const result = action.action === 'inspectWorkflow' ? this.inspectWorkflow(workflow, context.workflowChanged) : this.executeWorkflow(action, context, key)
-        this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'completed\',?,NULL)').run(key, hash, request, JSON.stringify(result)); return result
-      })
-    }
     if (action.action === 'validate') {
       this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'running\',NULL,NULL)').run(key, hash, request)
       try {
@@ -105,35 +83,6 @@ export class MasterControl {
     })
   }
 
-  /** A graph value is one field of the definition, so setting it is a save of the selected graph. */
-  private graphValue(action: Extract<MasterAction, { action: 'setGraphValue' }>, context?: Conversation | null): Extract<MasterAction, { action: 'saveWorkflow' }> {
-    const selected = context?.context.workflow
-    if (!selected) throw new Error('Select a workflow before using this action')
-    if (selected.mode !== 'channels') throw new Error('Channels, gates and graph values need channel mode')
-    if ((selected.values.find(value => value.name === action.name)?.revision ?? 0) !== action.valueRevision) throw new Error('Graph value changed; inspect the workflow again')
-    const { paused: _paused, nextAt: _nextAt, ...saved } = selected
-    return { action: 'saveWorkflow', definition: { ...saved, type: 'save', values: [...selected.values.filter(value => value.name !== action.name), { name: action.name, value: action.value, revision: action.valueRevision }] } }
-  }
-
-  /** The contract and rights of the member Pods are read now, so the diagnostics describe the graph as it would run. */
-  private inspectWorkflow(definition: WorkflowDefinition, changed: boolean) {
-    if (definition.mode !== 'channels') return { definition, changed }
-    const { contracts, edges, nodeKinds, diagnostics } = inspectGraph(this.store, definition)
-    return { definition, changed, contracts, edges, nodeKinds, diagnostics }
-  }
-
-  private executeWorkflow(action: Extract<MasterAction, { action: 'saveWorkflow' | 'runWorkflow' | 'inspectWorkflow' }>, context: Conversation, key: string) {
-    const selected = context.context.workflow
-    if (!this.workflows || !selected || context.workflowChanged) throw new Error('Select the current workflow revision before changing it')
-    if (selected.nodes.some(node => !context.context.pods.some(pod => pod.id === node.podId))) throw new Error('Select every workflow Pod before saving')
-    if (action.action === 'runWorkflow') return { workflowRunId: this.workflows.start(selected.id, selected.revision, 'manual', key) }
-    if (action.action !== 'saveWorkflow') throw new Error('Unsupported workflow operation')
-    if (action.definition.id !== selected.id || action.definition.revision !== selected.revision) throw new Error('Workflow changed; select its current revision')
-    if (action.definition.nodes.some(node => !context.context.pods.some(pod => pod.id === node.podId))) throw new Error('Select every workflow Pod before saving')
-    this.workflows.save(action.definition)
-    return { workflowId: selected.id, revision: selected.revision + 1 }
-  }
-
   private organization(podId: string) {
     const state = new PodGroups(this.store).view()
     return { revision: state.revision, groups: state.groups.map(({ id, name, podIds }) => ({ id, name, selected: podIds.includes(podId) })) }
@@ -153,7 +102,7 @@ export class MasterControl {
 
   private apply(action: MasterAction, lock: string, context?: Conversation): unknown {
     if (action.action === 'runtime') return { ...runtimeReference, jevConnection: jevAvailability(this.store) }
-    if (action.action === 'list') return { jev: jevAvailability(this.store), pods: this.store.listPods().map(pod => context ? { id: pod.id, name: pod.name, revision: pod.revision, lifecycle: pod.lifecycle, selected: context.context.pods.some(item => item.id === pod.id) } : pod), ...(context ? { workflows: this.store.db.prepare('SELECT id,name,revision,nodes FROM workflows WHERE archived=0').all().map(row => ({ id: row.id, name: row.name, revision: row.revision, podIds: (JSON.parse(row.nodes as string) as { podId: string }[]).map(node => node.podId) })) } : {}) }
+    if (action.action === 'list') return { jev: jevAvailability(this.store), pods: this.store.listPods().map(pod => context ? { id: pod.id, name: pod.name, revision: pod.revision, lifecycle: pod.lifecycle, selected: context.context.pods.some(item => item.id === pod.id) } : pod) }
     if (action.action === 'create') {
       if (this.store.listPods().length >= 100) throw new Error('Local pod limit reached')
       return this.store.createPod({ name: action.name })

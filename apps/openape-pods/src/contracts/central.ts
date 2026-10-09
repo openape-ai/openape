@@ -1,7 +1,6 @@
 import { parseSharingCommand } from './sharing'
 import { parseInboxDecide } from './inbox'
 import type { NetworkView } from './networks'
-import type { WorkflowView } from './workflows'
 import { parseDataCommand } from './data'
 import { parseCommand, parseWorkspace } from './control'
 import type { WorkspaceState } from './control'
@@ -23,11 +22,15 @@ export const centralTables = [
   'mail_inventory', 'mail_items', 'mail_receipts', 'mail_extractions', 'mail_contexts', 'source_derivations',
   'master_messages', 'script_drafts', 'access_proposals', 'pod_organization', 'pod_groups', 'pod_memberships',
   'pod_variables', 'master_message_scopes', 'pod_chat_origins', 'pod_descriptions', 'draft_packages', 'dependency_sets', 'script_dependencies',
+  'chat_conversations', 'chat_contexts', 'chat_members', 'chat_message_context', 'control_runs', 'control_changes',
+] as const
+/** Workflow and graph tables that desktops before issue 1455 (M4) still publish; the relay accepts and ignores them. */
+export const retiredCentralTables = [
   'workflow_channels', 'workflow_gates', 'workflow_values', 'graph_items', 'graph_deliveries', 'graph_item_events', 'graph_gate_batches',
   'workflows', 'workflow_members', 'workflow_runs', 'workflow_nodes', 'workflow_attempts', 'workflow_mail_scopes',
   'workflow_mail_pending', 'workflow_mail_processed', 'workflow_mail_participants', 'workflow_mail_batches', 'workflow_mail_audit',
-  'chat_conversations', 'chat_contexts', 'chat_members', 'chat_message_context', 'control_runs', 'control_changes',
 ] as const
+export const acceptedCentralTables: readonly string[] = [...centralTables, ...retiredCentralTables]
 
 export const centralHeartbeatMs = 10000
 export const centralLeaseMs = 30000
@@ -73,7 +76,7 @@ export interface CentralStatus {
 /** A central command whose outcome the service marked unknown; it blocks this desktop until reconciled. */
 export interface UncertainOperation { id: string, channel: string, type: string | null, podId: string | null, error: string | null, startedLocally: boolean }
 export interface CentralQueue { blocked: number, since: number | null, error: string | null }
-export interface CentralRuntime { networks?: NetworkView, workflows?: WorkflowView, id: string, revision: number, online: boolean, lastSeenAt?: number | null, workspace: Omit<WorkspaceState, 'pods'> & { pods: (WorkspaceState['pods'][number] & { online: boolean, queue?: CentralQueue })[] } }
+export interface CentralRuntime { networks?: NetworkView, id: string, revision: number, online: boolean, lastSeenAt?: number | null, workspace: Omit<WorkspaceState, 'pods'> & { pods: (WorkspaceState['pods'][number] & { online: boolean, queue?: CentralQueue })[] } }
 export interface CentralSummary { revision: number, total: number, pod: CentralPod }
 export interface CentralRunDetail { revision: number, run: RunRecord, events: RunEvent[] }
 export interface CentralOperation {
@@ -185,7 +188,7 @@ export function parseCentralSnapshot(value: unknown): CentralSnapshot {
   const archive = centralObject(item.archive)
   centralRevision(archive.schema)
   for (const [name, rows] of Object.entries(centralObject(archive.tables))) {
-    if (!(centralTables as readonly string[]).includes(name) || !Array.isArray(rows) || rows.some(row => !row || typeof row !== 'object' || Array.isArray(row))) throw new Error('Invalid workspace archive')
+    if (!acceptedCentralTables.includes(name) || !Array.isArray(rows) || rows.some(row => !row || typeof row !== 'object' || Array.isArray(row))) throw new Error('Invalid workspace archive')
   }
   if (!Array.isArray(item.artifacts) || item.artifacts.length > 100000) throw new Error('Invalid workspace artifacts')
   const paths = new Set<string>()

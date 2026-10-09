@@ -25,7 +25,7 @@ function fixture() {
   const dispatcher = new RunDispatcher(store, resources, runtime); const scheduler = new Scheduler(store, dispatcher)
   const control = new MasterControl(store, resources, dispatcher, scheduler, runtime)
   const chats = new ChatRegistry(store); const id = randomUUID()
-  chats.execute({ type: 'create', id, title: 'Together', podIds: pods.map(pod => pod.id), workflowId: null, workflowRevision: null })
+  chats.execute({ type: 'create', id, title: 'Together', podIds: pods.map(pod => pod.id) })
   return { store, pods, resources, control, chats, context: chats.get(id) }
 }
 
@@ -53,7 +53,7 @@ it('keeps unrelated scheduler reservations when an owner control start is refuse
   const f = fixture(); const other = f.pods[1]!.id
   installExample(f.store, f.resources, other, 'deterministic', 'a'.repeat(64))
   const runs = new RunStore(f.store); let calls = 0; let admitted = ''
-  const control = new MasterControl(f.store, f.resources, {} as RunDispatcher, {} as Scheduler, {} as AgentRuntime, undefined, () => {
+  const control = new MasterControl(f.store, f.resources, {} as RunDispatcher, {} as Scheduler, {} as AgentRuntime, () => {
     calls++
     admitted = runs.reserve(other, f.store.getPod(other).activeScript!, f.resources.epoch(other), { reason: 'manual', eventIds: [] }).run.id
     throw new Error('Synthetic fair slot refusal after another domain reserved work')
@@ -72,7 +72,7 @@ it('retains the durable owner run identity when scheduling throws after admissio
   const f = fixture(); const podId = f.pods[0]!.id
   installExample(f.store, f.resources, podId, 'deterministic', 'a'.repeat(64))
   const runs = new RunStore(f.store); let calls = 0; let admitted = ''
-  const control = new MasterControl(f.store, f.resources, {} as RunDispatcher, {} as Scheduler, {} as AgentRuntime, undefined, (id, operationId) => {
+  const control = new MasterControl(f.store, f.resources, {} as RunDispatcher, {} as Scheduler, {} as AgentRuntime, (id, operationId) => {
     calls++
     admitted = runs.reserve(id, f.store.getPod(id).activeScript!, f.resources.epoch(id), { reason: 'manual', eventIds: [], operationId }).run.id
     throw new Error('Synthetic scheduler receipt failure after admission')

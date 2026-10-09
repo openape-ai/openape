@@ -1,4 +1,3 @@
-import { WorkflowEngine } from '../../src/worker/workflows/engine'
 import { installExample } from '../../src/worker/runs/examples'
 // @vitest-environment node
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -26,12 +25,11 @@ function fixture() {
   const pod = store.createPod({ name: 'Invoices' })
   const resources = new ResourceRegistry(store, () => {}); const runtime = {} as AgentRuntime
   const dispatcher = new RunDispatcher(store, resources, runtime); const scheduler = new Scheduler(store, dispatcher)
-  const workflows = new WorkflowEngine(store, dispatcher, { inspect: async () => {} })
-  const master = new MasterControl(store, resources, dispatcher, scheduler, runtime, workflows)
+  const master = new MasterControl(store, resources, dispatcher, scheduler, runtime)
   const codex = new CodexControl(store, master)
   const send = (action: Record<string, unknown>) => codex.execute(parseCodexRequest({ id: randomUUID(), action }), new AbortController().signal)
   const current = () => store.getPod(pod.id)
-  return { store, pod, resources, master, codex, send, current, dispatcher, workflows }
+  return { store, pod, resources, master, codex, send, current, dispatcher }
 }
 const count = (store: PodDatabase, sql: string) => Number(store.db.prepare(sql).get()!.count)
 
@@ -50,7 +48,6 @@ it('administers network members as the owner while the shared engine keeps their
   expect(program({ type: 'importState', applicationId: randomUUID(), epoch: 0 }, { path: '/tmp/state.json' })).toEqual({ completed: false })
   await expect(send({ action: 'run', podId: network.pod.id, revision: revision() })).rejects.toThrow('Network instances require network intake and dispatch')
   await expect(send({ action: 'setSchedule', podId: network.pod.id, revision: revision(), spec: { kind: 'interval', seconds: 900 }, scheduleRevision: 0, enabled: true })).rejects.toThrow('network')
-  await expect(send({ action: 'saveWorkflow', definition: { type: 'save', id: randomUUID(), revision: 0, name: 'Bypass', nodes: [{ podId: network.pod.id, after: [], handoff: false }], schedule: null, enabled: false } })).rejects.toThrow('Network instances cannot join legacy workflows')
   await send({ action: 'pause', podId: network.pod.id, revision: revision() })
   expect(store.getPod(network.pod.id).lifecycle).toBe('paused')
   expect(store.db.prepare('SELECT count(*) AS count FROM runs WHERE pod_id=?').get(network.pod.id)?.count).toBe(1)
@@ -138,37 +135,6 @@ it('returns no owner connection, grant, credential record or run content', async
   for (const marker of Object.values(markers)) expect(output).not.toContain(marker)
 })
 
-it('saves and starts the selected workflow directly while refusing an unselected member', async () => {
-  const { store, pod, send, workflows } = fixture()
-  const id = randomUUID(); const definition = { type: 'save' as const, id, revision: 0, name: 'Monitor workflow', nodes: [{ podId: pod.id, after: [], handoff: false }], schedule: null, enabled: false }
-  workflows.save(definition)
-  await send({ action: 'select', podIds: [pod.id], workflowId: id, workflowRevision: 1 })
-  const other = store.createPod({ name: 'Unselected' })
-  await expect(send({ action: 'saveWorkflow', definition: { ...definition, revision: 1, nodes: [...definition.nodes, { podId: other.id, after: [], handoff: false }] } })).rejects.toThrow('Select every')
-  expect(await send({ action: 'saveWorkflow', definition: { ...definition, revision: 1, name: 'Updated' } })).toEqual({ workflowId: id, revision: 2 })
-  await expect(send({ action: 'runWorkflow' })).rejects.toThrow('current workflow')
-  await send({ action: 'select', podIds: [pod.id], workflowId: id, workflowRevision: 2 })
-  const result = await send({ action: 'runWorkflow' }) as { workflowRunId: string }
-  expect(workflows.view().runs[0]?.id).toBe(result.workflowRunId)
-  expect(count(store, 'SELECT count(*) AS count FROM control_changes')).toBe(0)
-})
-
-it('creates a workflow only with all members selected and replays its receipt', async () => {
-  const { pod, send, codex, workflows } = fixture()
-  const definition = { type: 'save' as const, id: randomUUID(), revision: 0, name: 'Morning review', nodes: [{ podId: pod.id, after: [], handoff: true }], schedule: null, enabled: false }
-  const action = { action: 'saveWorkflow', definition }
-  await expect(send(action)).rejects.toThrow('Select every')
-  await send({ action: 'select', podIds: [pod.id] })
-  const request = { id: randomUUID(), action }
-  const result = { workflowId: definition.id, revision: 1 }
-  expect(await codex.execute(request, new AbortController().signal)).toEqual(result)
-  expect(await codex.execute(request, new AbortController().signal)).toEqual(result)
-  expect(workflows.view().workflows).toHaveLength(1)
-  await expect(send(action)).rejects.toThrow('Workflow changed')
-  await send({ action: 'select', podIds: [pod.id], workflowId: definition.id, workflowRevision: 1 })
-  await expect(send({ ...action, definition: { ...definition, id: randomUUID() } })).rejects.toThrow('Select only')
-})
-
 it('activates a validated retained version and resumes without creating a review', async () => {
   const { store, pod, resources, send, current } = fixture()
   installExample(store, resources, pod.id, 'deterministic', 'a'.repeat(64))
@@ -226,52 +192,11 @@ it('journals a local private Jev import without accepting a raw key or unselecte
   expect(codex.administration({ type: 'begin', request })).toEqual({ completed: true, result: { jev: { state: 'ready' } } })
 })
 
-it('creates a graph of three Pods and one gate, reads its derived edges and receives the diagnostic of an orphan channel', async () => {
-  const { store, pod, resources, send } = fixture()
-  const contracts = [{ takes: [], gives: ['mail.newsletter'], summary: 'Reads mail' }, { takes: ['mail.approved'], gives: ['mail.archived'], summary: 'Archives mail' }, { takes: ['mail.archived'], gives: [], summary: 'Remembers mail' }]
-  const pods = [pod.id, store.createPod({ name: 'Archive' }).id, store.createPod({ name: 'Memory' }).id]
-  for (const [index, id] of pods.entries()) {
-    installExample(store, resources, id, 'deterministic', 'a'.repeat(64))
-    const row = store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=?').get(id)!
-    store.db.prepare('UPDATE scripts SET manifest=? WHERE pod_id=?').run(JSON.stringify({ ...JSON.parse(String(row.manifest)), contract: contracts[index] }), id)
-  }
-  const channel = (name: string) => ({ name, title: name, fields: ['subject'] })
-  const gate = { key: 'batch', title: 'Newsletter batch', kind: 'approve', takes: 'mail.newsletter', gives: 'mail.approved', excluded: null }
-  const definition = { type: 'save' as const, id: randomUUID(), revision: 0, name: 'Mail', nodes: pods.map(podId => ({ podId, after: [], handoff: false })), schedule: null, enabled: false, mode: 'channels', groupId: null, channels: ['mail.newsletter', 'mail.approved', 'mail.archived'].map(channel), gates: [gate], values: [{ name: 'threshold', value: '0.8', revision: 0 }] }
-  await send({ action: 'select', podIds: pods })
-  expect(await send({ action: 'saveWorkflow', definition })).toEqual({ workflowId: definition.id, revision: 1 })
-  await send({ action: 'select', podIds: pods, workflowId: definition.id, workflowRevision: 1 })
-  const inspected = await send({ action: 'inspectWorkflow' }) as { edges: unknown[], nodeKinds: Record<string, string>, diagnostics: { code: string }[], contracts: Record<string, unknown> }
-  expect(inspected.edges).toEqual([{ from: pods[0], to: 'gate:batch', channel: 'mail.newsletter' }, { from: pods[1], to: pods[2], channel: 'mail.archived' }, { from: 'gate:batch', to: pods[1], channel: 'mail.approved' }])
-  expect(inspected.nodeKinds).toEqual({ 'gate:batch': 'gate', [pods[0]!]: 'code', [pods[1]!]: 'code', [pods[2]!]: 'code' })
-  expect(inspected.contracts[pods[0]!]).toEqual(contracts[0])
-  expect(inspected.diagnostics).toEqual([])
-
-  expect(await send({ action: 'setGraphValue', name: 'threshold', value: '0.9', valueRevision: 1 })).toEqual({ workflowId: definition.id, revision: 2 })
-  await expect(send({ action: 'setGraphValue', name: 'threshold', value: '0.7', valueRevision: 1 })).rejects.toThrow('current workflow')
-  await send({ action: 'select', podIds: pods, workflowId: definition.id, workflowRevision: 2 })
-  await expect(send({ action: 'setGraphValue', name: 'threshold', value: '0.7', valueRevision: 1 })).rejects.toThrow('Graph value changed')
-  expect(((await send({ action: 'inspectWorkflow' })) as { definition: { values: unknown[] } }).definition.values).toEqual([{ name: 'threshold', value: '0.9', revision: 2 }])
-
-  expect(await send({ action: 'saveWorkflow', definition: { ...definition, revision: 2, channels: [...definition.channels, channel('mail.orphan')], gates: [{ ...gate, excluded: 'mail.orphan' }], values: [] } })).toEqual({ workflowId: definition.id, revision: 3 })
-  await send({ action: 'select', podIds: pods, workflowId: definition.id, workflowRevision: 3 })
-  const orphan = await send({ action: 'inspectWorkflow' }) as { diagnostics: unknown[] }
-  expect(orphan.diagnostics).toEqual([{ level: 'error', code: 'channel-without-consumer', message: 'A given channel has no node that takes it', node: 'gate:batch', channel: 'mail.orphan' }])
-  await expect(send({ action: 'runWorkflow' })).rejects.toThrow('A given channel has no node that takes it')
-  for (const action of ['approveGate', 'gateExclude', 'gateChoose', 'gateDiscard']) await expect(send({ action, batchId: randomUUID() })).rejects.toThrow()
-})
-
-it('keeps managing a sequence workflow exactly as under contract version 2', async () => {
-  const { pod, send, workflows } = fixture()
-  const definition = { type: 'save' as const, id: randomUUID(), revision: 0, name: 'Morning review', nodes: [{ podId: pod.id, after: [], handoff: false }], schedule: null, enabled: false }
-  await send({ action: 'select', podIds: [pod.id] })
-  await send({ action: 'saveWorkflow', definition })
-  await send({ action: 'select', podIds: [pod.id], workflowId: definition.id, workflowRevision: 1 })
-  expect(Object.keys(await send({ action: 'inspectWorkflow' }) as object)).toEqual(['definition', 'changed'])
-  await expect(send({ action: 'setGraphValue', name: 'threshold', value: '0.9', valueRevision: 0 })).rejects.toThrow('need channel mode')
-  expect(workflows.view().workflows[0]).toMatchObject({ mode: 'sequence', channels: [], gates: [], values: [] })
-  const reference = await send({ action: 'runtime' }) as { contractVersion: number, graphs: Record<string, string>, actions: Record<string, unknown> }
+it('describes networks as the only way to connect Pods and offers no workflow or gate actions', async () => {
+  const { send } = fixture()
+  const reference = await send({ action: 'runtime' }) as { contractVersion: number, channels: Record<string, string>, actions: Record<string, unknown> }
   expect(reference.contractVersion).toBe(3)
-  expect(Object.keys(reference.graphs)).toEqual(['persistentRuntime', 'conversion', 'purpose', 'engineering', 'presentation', 'order', 'definition', 'contract', 'items', 'emit', 'gates', 'archive', 'values', 'diagnostics', 'example'])
-  expect(Object.keys(reference.actions).filter(action => /gate|approve/i.test(action))).toEqual([])
+  expect(Object.keys(reference.channels)).toEqual(['purpose', 'persistentRuntime', 'engineering', 'presentation', 'contract', 'items', 'emit', 'routes', 'archive', 'values', 'example'])
+  expect(Object.keys(reference.actions).filter(action => /workflow|graph|gate|approve/i.test(action))).toEqual([])
+  await expect(send({ action: 'saveWorkflow', definition: {} })).rejects.toThrow()
 })

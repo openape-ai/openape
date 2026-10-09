@@ -16,6 +16,6 @@ export function codexBrief(view: MapView, pinned: string | null, group: string |
     parts.push(t('Starting point: {name} ({direction}).', { name: system.name, direction: t(writes ? 'write' : 'read') }))
   }
   if (pod) parts.push(t('Like {name}, but with another source.', { name: pod.name }))
-  parts.push(t('Show me first the shape (Pod, chain or network), the map, the access it needs and the examples you use as checks. Create only afterwards, activate only as a preview, and request rights exclusively through Permissions and the identity provider.'))
+  parts.push(t('Show me first the shape (Pod or network), the map, the access it needs and the examples you use as checks. Create only afterwards, activate only as a preview, and request rights exclusively through Permissions and the identity provider.'))
   return parts.join(' ')
 }

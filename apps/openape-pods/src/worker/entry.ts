@@ -25,13 +25,6 @@ import { parseNetworkCommand } from '../contracts/networks'
 import type { AdministrationJournal } from '../contracts/codex-admin'
 import { DesktopRegistration } from './remote/registration'
 import type { RemoteInternal } from './remote/registration'
-import { reviewMailBatch, reconcileMailEffect } from './mail/workflow'
-import { confirmDomainsStopped } from './recovery/domains'
-import { parseWorkflowCommand } from '../contracts/workflows'
-import { WorkflowEngine } from './workflows/engine'
-import { WorkflowCalls } from './workflows/calls'
-import { chooseGateItem, discardGateBatch } from './workflows/gates'
-import { graphDetail } from './workflows/detail'
 import type { RunContextRequest, ServiceCheck  } from '../contracts/services'
 import { DefinitionCatalog } from './workspace/definition-catalog'
 import { recoverPortableImports } from './sharing/import'
@@ -137,8 +130,7 @@ const scheduler = new Scheduler(store, dispatcher, Date.now, false)
 const fixtureProvider = process.env.PODS_FIXTURE_MODEL_PORT ? async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${process.env.PODS_FIXTURE_MODEL_PORT}/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }) : undefined
 runServices.provider = fixtureProvider
 const recovery = new Recovery(store, registry, scheduler, join(dist, 'native/pods-helper'))
-const workflows = new WorkflowEngine(store, dispatcher, recovery, Date.now, false)
-const masterControl = new MasterControl(store, registry, dispatcher, scheduler, runtime, workflows, startControlledRun)
+const masterControl = new MasterControl(store, registry, dispatcher, scheduler, runtime, startControlledRun)
 const scripts = new ScriptWorkspace(store, registry, masterControl, runtime)
 const scriptController = new AbortController()
 const master = new MasterService(store, runtime, masterControl, fixtureProvider)
@@ -153,7 +145,6 @@ function networkOwner() {
 }
 const networks = new NetworkEngine(store, dispatcher, registry, runtime.helper, networkOwner, false)
 if (process.env.PODS_FIXTURE_GATE_COLLECT === '0') networks.gates.collect = { quietMs: 0, maxMs: 0 }
-networks.invocations.calls = new WorkflowCalls(store, networks.invocations.events, workflows)
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
 let centralNetworkReads = false
 let centralUntil = process.env.PODS_CENTRAL_ENABLED === '1' ? 0 : Infinity
@@ -184,11 +175,11 @@ async function executeCodexNetwork(command: CodexNetworkCommand): Promise<Networ
 }
 async function executeNetwork(command: NetworkCommand, ownerOperation: boolean): Promise<NetworkView> {
   if (command.type === 'create' && !command.draft.expectedSetup) throw new Error('Network creation requires a reviewed setup fingerprint')
-  if ((command.type === 'create' || command.type === 'convert') && process.env.PODS_CENTRAL_ENABLED === '1' && !centralNetworkReads) throw new Error('Network creation requires bounded central publication support')
+  if (command.type === 'create' && process.env.PODS_CENTRAL_ENABLED === '1' && !centralNetworkReads) throw new Error('Network creation requires bounded central publication support')
   if ((command.type === 'activate' || command.type === 'process') && (!startupReady || (Date.now() >= centralUntil && !ownerOperation) || suspended || maintenance)) throw new Error('Network execution requires a ready local runtime')
   const result = command.type === 'inspect' || command.type === 'retry' || command.type === 'reconcileEffect' || command.type === 'resolveConflict' || command.type === 'discardFailure' ? await networks.recover(command) : networks.execute(command)
   if (process.env.PODS_CENTRAL_ENABLED === '1' && !centralNetworkReads) result.unavailableReason = 'Network creation requires bounded central publication support'
-  if (command.type === 'process' && Date.now() < centralUntil) scheduleDomains(store, [() => scheduler.tick(), () => workflows.tick(), () => { networks.invocations.calls!.tick(); networks.tick() }])
+  if (command.type === 'process' && Date.now() < centralUntil) scheduleDomains(store, [() => scheduler.tick(), () => networks.tick()])
   return result
 }
 
@@ -204,7 +195,7 @@ function startControlledRun(podId: string, operationId: string, accepted?: (runI
     try { runId = dispatcher.start(podId, { reason: 'manual', eventIds: [], operationId }, accepted) }
     catch (error) { failure = error }
     if (schedulingAllowed) scheduler.tick()
-  }, () => { if (schedulingAllowed) workflows.tick() }, () => { if (schedulingAllowed) { networks.invocations.calls!.tick(); networks.tick() } }])
+  }, () => { if (schedulingAllowed) networks.tick() }])
   if (failure) throw failure
   if (!runId) throw new Error('No fair execution slot available; retry after pending work progresses')
   return runId
@@ -217,7 +208,6 @@ const timer = setInterval(() => {
     try {
       try {
         await tickStep('automatic recovery', 15000, () => recoverStoppedRuns(store, runtime.helper, 1))
-        await tickStep('workflow cancellations', 20000, () => networks.invocations.calls!.reconcileCancellations())
         await tickStep('run retention', 1000, () => data.retention.runs.prune())
         // The full inventory lstats every profile entry (~1 s on a real profile), so it runs every minute unless a limit is already near.
         if (Date.now() >= storageAt || await data.retention.inspectionDue()) {
@@ -231,7 +221,7 @@ const timer = setInterval(() => {
       if (Date.now() >= scanAt) { await tickStep('reference scan', 120000, () => watcher.scan()); scanAt = Date.now() + 15000 }
       tickPhase = 'scheduling'
       if (!suspended && !maintenance && Date.now() < centralUntil) {
-        scheduleDomains(store, [() => scheduler.tick(), () => workflows.tick(), () => { networks.invocations.calls!.tick(); networks.tick() }])
+        scheduleDomains(store, [() => scheduler.tick(), () => networks.tick()])
       }
     }
     catch (error) { console.error('Scheduler stopped', error); process.exit(1) }
@@ -356,7 +346,7 @@ port.on('message', async (event) => {
       if (!store.db.prepare('SELECT 1 FROM remote_registration WHERE id=1').get()) throw new Error('Finish desktop identity setup before sharing packages')
       // Imported compositions follow the native network creation guard for connected workspaces.
       if (command.scope === 'import' && command.type === 'finalize' && process.env.PODS_CENTRAL_ENABLED === '1' && !centralNetworkReads) throw new Error('Network creation requires bounded central publication support')
-      sharing ??= new SharingService(store, registry, networkOwner(), join(dirname(runtime.entry), '../vendor/npm'), { workflows, networks, catalog: new DefinitionCatalog(store, registry, networkOwner()) })
+      sharing ??= new SharingService(store, registry, networkOwner(), join(dirname(runtime.entry), '../vendor/npm'), { networks, catalog: new DefinitionCatalog(store, registry, networkOwner()) })
       const slow = (command.scope === 'export' && (command.type === 'review' || command.type === 'download')) || (command.scope === 'import' && command.type === 'prepareDependencies')
       if (!slow) { port.postMessage({ id: request.id, state: await sharing.execute(command, runtime, scriptController.signal) }); return }
       maintenance = true
@@ -410,8 +400,7 @@ port.on('message', async (event) => {
         port.postMessage({ id: request.id, state: previous ? JSON.parse(previous.data as string) : null }); return
       }
       const network = store.db.prepare('SELECT 1 FROM network_invocations WHERE run_id=?').get(check.scope.runId)
-      const maintenance = store.db.prepare('SELECT 1 FROM workflow_gate_attempts WHERE run_id=?').get(check.scope.runId)
-      port.postMessage({ id: request.id, state: { name: store.getPod(check.scope.podId).name, reason, runtime: !network && !maintenance } }); return
+      port.postMessage({ id: request.id, state: { name: store.getPod(check.scope.podId).name, reason, runtime: !network } }); return
     }
     if (request.command && typeof request.command === 'object' && 'networkGateRelease' in request.command) {
       const release = request.command.networkGateRelease as { type?: unknown, taskId?: unknown }
@@ -452,35 +441,6 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'details' in request.command) {
       port.postMessage({ id: request.id, state: details.execute(parseDetailsCommand(request.command.details)) }); return
     }
-    if (request.command && typeof request.command === 'object' && 'workflow' in request.command) {
-      const command = parseWorkflowCommand(request.command.workflow)
-      if (command.type === 'graph') { port.postMessage({ id: request.id, state: { ...workflows.view(), graph: graphDetail(store, workflows.view().workflows.find(item => item.id === command.id), command.key) } }); return }
-      if (command.type !== 'list' && command.type !== 'gateOpen') store.assertStorage()
-      if (command.type === 'mailReview') { port.postMessage({ id: request.id, state: { ...workflows.view(), mailReview: reviewMailBatch(store, command.batchId) } }); return }
-      if (command.type === 'mailResolve') {
-        const review = reviewMailBatch(store, command.resolution.batchId)
-        const effect = review?.effects.find(item => item.key === command.resolution.key)
-        if (!effect) throw new Error('Mail effect is not awaiting owner reconciliation')
-        await confirmDomainsStopped(store, effect.runId, runtime.helper)
-        reconcileMailEffect(store, command.resolution)
-        port.postMessage({ id: request.id, state: { ...workflows.view(), mailReview: reviewMailBatch(store, command.resolution.batchId) } }); return
-      }
-      if (command.type === 'publishRevision') workflows.publishRevision(command.id, command.revision, command.ports)
-      if (command.type === 'cancelCall') await networks.invocations.calls!.cancel(command.requestId, networkOwner(), command.evidence)
-      if (command.type === 'resumeCall') await networks.invocations.calls!.resume(command.requestId, networkOwner(), command.evidence)
-      if (command.type === 'resolveCall') await networks.invocations.calls!.resolveIncompleteResult(command.requestId, networkOwner(), command.evidence)
-      if (command.type === 'save') workflows.save(command)
-      if (command.type === 'delete') workflows.delete(command.id, command.revision)
-      if (command.type === 'start') workflows.start(command.id, command.revision)
-      if (command.type === 'pause') workflows.pause(command.id, command.revision, command.paused)
-      if (command.type === 'retry') await workflows.retry(command.runId, command.podId)
-      if (command.type === 'cancel') await workflows.cancel(command.runId)
-      if (command.type === 'gateChoose') chooseGateItem(store, command.id, command.gate, command.itemId, command.option, Date.now())
-      if (command.type === 'gateDiscard') discardGateBatch(store, command.batchId, Date.now())
-      if (command.type !== 'list' && command.type !== 'gateOpen' && startupReady && !suspended && Date.now() < centralUntil) scheduleDomains(store, [() => scheduler.tick(), () => workflows.tick(), () => { networks.invocations.calls!.tick(); networks.tick() }])
-      port.postMessage({ id: request.id, state: workflows.view() })
-      return
-    }
     if (request.command && typeof request.command === 'object' && 'schedule' in request.command) {
       const command = parseScheduleCommand(request.command.schedule)
       store.getPod(command.podId)
@@ -497,7 +457,7 @@ port.on('message', async (event) => {
       if (command.type === 'recover') { if (command.action === 'inspect') await recovery.inspect(command.podId, command.runId); else await recovery.retry(command.podId, command.runId) }
       if (command.type === 'retryQueue') recovery.retryQueue(command.podId)
       if (command.type === 'start') scheduler.requestManual(command.podId, command.expectedScript)
-      if (['start', 'recover', 'retryQueue'].includes(command.type) && startupReady && !suspended && Date.now() < centralUntil) scheduleDomains(store, [() => scheduler.tick(), () => workflows.tick(), () => { networks.invocations.calls!.tick(); networks.tick() }])
+      if (['start', 'recover', 'retryQueue'].includes(command.type) && startupReady && !suspended && Date.now() < centralUntil) scheduleDomains(store, [() => scheduler.tick(), () => networks.tick()])
       const id = 'runId' in command ? command.runId : undefined
       if (command.type === 'cancel') dispatcher.cancel(command.podId, command.runId)
       port.postMessage({ id: request.id, state: dispatcher.view(command.podId, id, command.type === 'list' ? command.after : undefined) })

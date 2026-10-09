@@ -37,26 +37,23 @@ it('derives systems, pods, automations, measured edges and KPIs from the stored 
   expect(intake).toMatchObject({ kind: 'source', schedule: { spec: { kind: 'interval', seconds: 900 }, enabled: true }, lastRun: { state: 'completed', summary: 'Read 6 sampled messages and emitted 0 changed provider versions. No mailbox writes.' } })
   expect(intake.resources.find(resource => resource.kind === 'application')).toEqual({ kind: 'application', name: 'o365-cli', how: 'List emails in inbox for phofmann@delta-mind.at; Read email from account phofmann@delta-mind.at', system: 'app:o365-cli:phofmann@delta-mind.at' })
   const bot = view.pods.find(pod => pod.name === 'Morgenbriefing · Calendar-Bot')!
-  expect(bot).toMatchObject({ kind: 'effect', ai: false, group: null, automation: f.briefing, secrets: ['calendar_bot_token', 'reports_publisher_key'], schedule: null })
+  expect(bot).toMatchObject({ kind: 'effect', ai: false, group: null, automation: null, secrets: ['calendar_bot_token', 'reports_publisher_key'], schedule: null })
   expect(JSON.stringify(view)).not.toMatch(/credentialId|"value"/)
   const monitor = view.pods.find(pod => pod.name === 'IURIO PR monitor')!
   expect(monitor).toMatchObject({ group: 'iurio', automation: null, lastRun: { state: 'running' }, approvals: [{ grantId: 'grant-pr-monitor', title: 'Execution permission for IURIO PR monitor' }], schedule: { spec: { kind: 'interval', seconds: 900 }, enabled: true } })
   expect(view.pods.find(pod => pod.name === 'Daily action website')).toMatchObject({ draft: true, lifecycle: 'paused', kind: 'code' })
   expect(view.pods.find(pod => pod.name === 'Archived research')).toMatchObject({ lifecycle: 'archived', group: null })
 
-  // Collections: the persistent network with its gates, the daily chain, the paused bounded graphs and the cron chain.
+  // Automations: the persistent network with its gates; the retired workflows of this profile are no automations.
   const network = view.automations.find(automation => automation.id === f.network)!
-  expect(network).toMatchObject({ kind: 'network', bounded: false, name: 'Delta Mind · Mail-Netzwerk', group: 'Delta Mind', state: 'active', schedule: { spec: { kind: 'interval', seconds: 900 }, enabled: true }, counts: { done: 80 } })
+  expect(network).toMatchObject({ kind: 'network', name: 'Delta Mind · Mail-Netzwerk', group: 'Delta Mind', state: 'active', schedule: { spec: { kind: 'interval', seconds: 900 }, enabled: true }, counts: { done: 80 } })
   expect(network.members).toHaveLength(11)
   expect(network.flows).toEqual({ 'mail.open': 3, 'mail.filtered': 7, 'mail.triaged': 8, 'mail.useful': 1, 'mail.reply': 1, 'mail.reviewed': 1, 'draft.candidate': 1, 'mail.unsure': 14 })
   expect(network.gates).toEqual([
     { key: 'uncertain-review', kind: 'choose', title: 'Review uncertain mail', takes: 'mail.unsure', options: [{ key: 'keep', title: 'Keep for review', channel: 'mail.useful' }, { key: 'newsletter', title: 'Newsletter candidate', channel: 'mail.newsletter' }, { key: 'invoice', title: 'Invoice review', channel: 'mail.invoice' }, { key: 'reply', title: 'Reply preview', channel: 'mail.reply' }], open: 17, batches: {} },
     { key: 'newsletter-approval', kind: 'approve', title: 'Approve newsletter preview (no move)', takes: 'mail.batch', options: [{ key: 'approve', title: 'Approve newsletter preview (no move)', channel: 'mail.approved' }], open: 0, batches: {} },
   ])
-  expect(view.automations.find(automation => automation.id === f.briefing)).toMatchObject({ kind: 'chain', state: 'active', group: null, members: [f.pods['Mail-Prüfung · Morgenbriefing'], expect.any(String), expect.any(String), bot.id], schedule: { spec: { kind: 'daily', time: '07:00', timezone: 'Europe/Vienna' }, enabled: true }, lastRun: { state: 'completed' } })
-  expect(view.automations.find(automation => automation.id === f.docpit)).toMatchObject({ kind: 'network', bounded: true, state: 'paused', group: 'iurio', flows: {}, gates: [expect.objectContaining({ key: 'uncertain-review', open: 0 }), expect.objectContaining({ key: 'newsletter-approval' })] })
-  expect(view.automations.find(automation => automation.id === f.serverReport)).toMatchObject({ kind: 'chain', state: 'paused', group: 'Linde', schedule: { spec: { kind: 'cron', expression: '0 8 * * 1,4', timezone: 'Europe/Vienna' }, enabled: false } })
-  expect(view.automations.map(automation => automation.name).sort()).toEqual(['Delta Mind · Mail-Netzwerk', 'IURIO · DOCPIT mail management', 'Linde · Portal development and systems', 'Linde · Server report', 'Morgenbriefing'])
+  expect(view.automations.map(automation => automation.name)).toEqual(['Delta Mind · Mail-Netzwerk'])
 
   // Edges: channel flows from accepted events, reads counted by runs, writes by ledger entries; a mailbox read and written is one node with two edges.
   const edge = (from: string, to: string, type: string) => view.edges.find(item => item.from === from && item.to === to && item.type === type)
@@ -68,12 +65,10 @@ it('derives systems, pods, automations, measured edges and KPIs from the stored 
   expect(edge('svc:https://zaz.delta-mind.at', view.pods.find(pod => pod.name === 'zaz Service-Agent')!.id, 'read')).toMatchObject({ flow: 150 })
   expect(edge(monitor.id, 'svc:https://api.telegram.org', 'write')).toMatchObject({ flow: 5 })
   expect(edge('svc:https://api.telegram.org', monitor.id, 'read')).toBeUndefined()
-  expect(edge(f.pods['Mail-Prüfung · Morgenbriefing']!, view.pods.find(pod => pod.name === 'Morgenbriefing · Kalender und Issues')!.id, 'channel')).toMatchObject({ channel: 'handoff', flow: 1 })
-  expect(view.edges.filter(item => item.type === 'channel' && view.automations.find(automation => automation.id === f.docpit)!.members.includes(item.from)).length).toBeGreaterThan(8)
 
-  // KPIs: top-level automations (five automations, six standalone Pods), the degraded monitor that is running again, the open gate and nothing to reconcile.
+  // KPIs: the network and the standalone Pods, the degraded monitor that is running again, the open gate and nothing to reconcile.
   expect(view.kpis).toEqual({
-    active: 5, paused: 6,
+    active: 5, paused: 23,
     degraded: [{ podId: monitor.id, reason: 'completedWithGaps' }],
     decisions: [{ networkId: f.network, gate: 'uncertain-review', title: 'Review uncertain mail', kind: 'choose', count: 17 }],
     unknownDeliveries: 1,

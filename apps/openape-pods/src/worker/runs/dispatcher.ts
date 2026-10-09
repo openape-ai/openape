@@ -1,5 +1,4 @@
 import { InboxOutbox, parseNotify } from '../inbox/outbox'
-import { randomUUID } from 'node:crypto'
 import { RunCancellation, unresolvedOperation } from '../recovery/policy'
 import type { RecoveryFailure } from '../recovery/policy'
 import { programRequest } from '../../main/programs/invoke'
@@ -11,10 +10,6 @@ import type { NetworkGates, NetworkGateStep, NetworkGateService } from '../sched
 import { AuthorityError, InfrastructureError, NonRetryableError, retryInfrastructure } from '../../contracts/infrastructure'
 import { assignedJev, parseJevRequest, parseJevResult } from '../../contracts/jev'
 import type { JevRequest, JevEvaluation } from '../../contracts/jev'
-import { MailWorkflow } from '../mail/workflow'
-import { createWorkflowMailTransport } from '../mail/workflow-transport'
-import type { WorkflowDefinition } from '../../contracts/workflows'
-import { workflowInput, publishWorkflowOutput } from '../workflows/handoff'
 import { maxAgentTimeoutSeconds, parseAgentRequest } from '../../contracts/agent'
 import { DependencyStore } from '../dependencies/store'
 import { assignedDirectories } from '../../runtime/directories'
@@ -48,10 +43,6 @@ import type { AgentRuntime } from '../agent/executor'
 import type { AgentGatewayServices } from '../agent/gateway'
 import { parseProgress } from './progress'
 import { graphEmitter, parseGraphContract } from '../../contracts/graphs'
-import type { GraphEmit } from '../../contracts/graphs'
-import { graphRun, pendingItems, settleItems } from '../workflows/items'
-import type { DeliveredItem } from '../workflows/items'
-import { gateCoverage, gateDecisionUnknown, gateNeedsRound, gateRound } from '../workflows/gates'
 import { installExample } from './examples'
 import type { NetworkInvocations } from '../scheduling/network-invocations'
 import type { NetworkAuthority, NetworkEmission } from '../scheduling/network-events'
@@ -82,12 +73,6 @@ export interface RunServices {
   provider?: AgentGatewayServices['provider']
   tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
   mailMove?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
-}
-
-function archiveTarget(payload: unknown): { operation: 'process', target: unknown } {
-  const request = payload as { operation?: unknown, target?: unknown } | null
-  if (!request || typeof request !== 'object' || request.operation !== 'process' || Object.keys(request).some(key => !['operation', 'target'].includes(key))) throw new Error('Channel graphs archive only through an approval gate')
-  return { operation: 'process', target: request.target }
 }
 
 const maxAgentPauseMs = 2 * maxAgentTimeoutSeconds * 1000
@@ -186,7 +171,7 @@ export class RunDispatcher {
       if (reply === undefined) { controller.signal.throwIfAborted(); throw new Error('Network gate service returned no result') }
       return reply
     }
-    const work = gateRound(this.store, { version: 2, network: gates, step, signal: controller.signal }, service).catch(async (failure: unknown) => {
+    const work = gates.round(step, service, controller.signal).catch(async (failure: unknown) => {
       console.error('Network gate maintenance requires inspection', failure instanceof Error ? failure.message : 'Maintenance failed')
       controller.abort(failure)
       try { await gates.failStep(step, failure) }
@@ -236,14 +221,12 @@ export class RunDispatcher {
     let notifications = 0
     let archiveCalls = 0
     let infrastructureFailure: RecoveryFailure | undefined
-    const graph = graphRun(this.store, id); let delivered: DeliveredItem[] = []; const emits: (GraphEmit & { channel: string })[] = []
-    const settle = (completed: boolean) => { if (graph) settleItems(this.store, graph, completed && this.runs.get(id).state === 'completed', delivered, emits, Date.now()) }
     const retryService = async <T>(operation: string, work: () => Promise<T>, signal: AbortSignal, budgetMs = 30000) => {
       let waiting = false
       try {
         return await retryInfrastructure(async () => {
           assertCurrent()
-          if (waiting && ((pod.lifecycle === 'active' && this.store.getPod(pod.id).lifecycle !== 'active') || this.store.db.prepare('SELECT 1 FROM workflow_attempts a JOIN workflow_runs w ON w.id=a.workflow_run_id WHERE a.run_id=? AND w.paused=1').get(id))) {
+          if (waiting && pod.lifecycle === 'active' && this.store.getPod(pod.id).lifecycle !== 'active') {
             this.cancelPod(pod.id, 'Infrastructure retry cancelled because the owner paused execution')
             signal.throwIfAborted()
           }
@@ -275,7 +258,7 @@ export class RunDispatcher {
       const folders = await podDirectories(this.store.root, pod.id)
       const directories = await assignedDirectories(this.store.root, pod.id, this.resources.list(pod.id))
       assertCurrent()
-      const input: RunInput = { workflow: workflowInput(this.store, id), home: folders.home, directories: directories.map(({ path, access }) => ({ path, access })), variables: { ...Object.fromEntries((graph?.definition.values ?? []).map(value => [value.name, value.value])), ...networkInput?.variables, ...new PodVariables(this.store).values(pod.id) }, version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.bindingRevision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: folders.workspace, references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: 300000, frameBytes: 256 * 1024 } }
+      const input: RunInput = { home: folders.home, directories: directories.map(({ path, access }) => ({ path, access })), variables: { ...networkInput?.variables, ...new PodVariables(this.store).values(pod.id) }, version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.bindingRevision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: folders.workspace, references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: 300000, frameBytes: 256 * 1024 } }
       const aliases = this.resources.aliases(pod.id)
       if (aliases.length) input.aliases = runAliases(aliases, input.references)
       if (networkInput) { input.config = networkInput.config; input.network = networkInput.network; input.eventIds = networkInput.items.map(item => item.eventId) }
@@ -284,31 +267,10 @@ export class RunDispatcher {
       const dependencyRoot = dependencyHash ? await dependencies.verify(pod.id, dependencyHash) : undefined
       const runtime = { ...this.runtime, dependencyRoot, registerDomain: (path: string, ownerPid: number) => this.runs.registerDomain(id, path, ownerPid) }
       const scope: RunServiceScope = { podId: pod.id, runId: id, epoch, assignmentRevision: pod.bindingRevision, capabilities: manifest.capabilities, root: directory, assertCurrent, registerDomain: runtime.registerDomain }
-      const decision = this.store.db.prepare('SELECT request_id,gates FROM workflow_gate_attempts WHERE run_id=?').get(id)
-      if (decision) {
-        if (network || !graph || !this.services?.gate) throw new Error('Workflow decision maintenance authority is unavailable')
-        const keys = JSON.parse(decision.gates as string) as string[]
-        const call = this.store.db.prepare('SELECT workflow_id,workflow_revision FROM workflow_call_requests WHERE id=? AND workflow_run_id=? AND state=\'running\'').get(decision.request_id!, graph.workflowRunId)
-        if (!call) throw new Error('Workflow decision maintenance call changed')
-        await boundedStep(30000, async () => {
-          await gateRound(this.store, graph, async body => this.services!.gate!(body, signal, scope))
-          assertCurrent()
-        }, () => this.cancelPod(pod.id, 'Workflow decision maintenance exceeded its deadline'))
-        signal.throwIfAborted()
-        if (gateDecisionUnknown(this.store, graph)) throw new Error('Workflow decision outcome requires owner reconciliation')
-        const pending = keys.some(key => gateNeedsRound(this.store, graph.workflowId, key, graph.workflowRunId))
-        await this.finish(id, 'completed', 'Workflow decision maintenance completed without executing the script', null, [], undefined, () => {
-          if (this.runs.get(id).state !== 'completed') return
-          this.store.db.prepare('UPDATE workflow_nodes SET state=\'waiting\',reason=? WHERE workflow_run_id=? AND pod_id=? AND run_id=? AND state=\'completed\'').run(pending ? 'Waiting for required owner decisions' : null, graph.workflowRunId, pod.id, id)
-          this.store.db.prepare('INSERT INTO workflow_gate_poll_clocks VALUES(?,?,?) ON CONFLICT(request_id,pod_id) DO UPDATE SET next_poll_at=excluded.next_poll_at').run(decision.request_id!, pod.id, pending ? Date.now() + 5000 : 0)
-          appendEvent('workflow-decision-maintenance', { requestId: decision.request_id, gates: keys, pending, scriptExecuted: false })
-        })
-        return
-      }
       if (network) {
         const gates = network.invocations.gates
         if (!gates) throw new Error('Network gate authority is unavailable')
-        const coverage = gateCoverage(this.store, { version: 2, network: gates, authority: network.authority })
+        const coverage = gates.coverage(network.authority)
         for (const approval of coverage) {
           if (!this.services?.gate) throw new Error('Network approval service is unavailable')
           const reply = await boundedStep(30000, async () => {
@@ -357,7 +319,6 @@ export class RunDispatcher {
       }
       const contract = manifest.contract === undefined ? undefined : parseGraphContract(manifest.contract)
       const checkEmit = graphEmitter(contract)
-      let mailWorkflow: MailWorkflow | undefined
       let mail: MailRecipeSession | undefined
       appendEvent('environment', { script: artifact, workspace: input.workspace, values: Object.fromEntries(Object.entries(runtime.environment).filter(([key]) => ['HOME', 'TMPDIR', 'PATH', 'SHELL', 'PODS_POD_ID', 'LANG', 'TERM'].includes(key))) })
       const result = await executeScript(runtime, directory, artifact, input, signal, {
@@ -424,17 +385,13 @@ export class RunDispatcher {
               }
               finally { pendingAgents.delete(work); infrastructureWaiting-- }
             }
-            if (!['graph.contract', 'graph.emit', 'network.emit', 'network.gateCoverage', 'data.get', 'data.put', 'data.delete', 'data.query', 'artifacts.create', 'artifacts.read', 'workflow.call', 'workflow.result', 'progress.commit'].includes(operation)) throw new Error('Network operation requires a declared runtime port')
+            if (!['graph.contract', 'graph.emit', 'network.emit', 'network.gateCoverage', 'data.get', 'data.put', 'data.delete', 'data.query', 'artifacts.create', 'artifacts.read', 'progress.commit'].includes(operation)) throw new Error('Network operation requires a declared runtime port')
             if (operation === 'data.get') return network.invocations.data.get(network.authority, payload)
             if (operation === 'data.put') return network.invocations.data.put(network.authority, payload)
             if (operation === 'data.delete') return network.invocations.data.put(network.authority, payload, true)
             if (operation === 'data.query') return network.invocations.data.query(network.authority, payload)
             if (operation === 'artifacts.create') return network.invocations.data.artifacts.create(network.authority, payload)
             if (operation === 'artifacts.read') return network.invocations.data.artifacts.read(network.authority, payload)
-            if (operation === 'workflow.call' || operation === 'workflow.result') {
-              if (!network.invocations.calls) throw new Error('Workflow call coordinator is unavailable')
-              return operation === 'workflow.call' ? network.invocations.calls.stage(network.authority, payload) : network.invocations.calls.result(network.authority, payload)
-            }
             if (operation === 'network.gateCoverage') return network.invocations.gates!.scriptCoverage(network.authority)
             if (operation === 'progress.commit') return network.invocations.stageProgress(network.authority, payload)
             if (operation === 'graph.contract') {
@@ -456,72 +413,22 @@ export class RunDispatcher {
           if (operation === 'network.emit') throw new Error('Network emission requires a network invocation')
           if (operation === 'mail.archive') {
             if (!this.services?.mailArchive) throw new Error('Mail archive service is unavailable')
-            // In a graph the script never names what may move; the consumed gate batches do.
-            const request = graph ? { ...archiveTarget(payload), gate: gateCoverage(this.store, graph, delivered) } : payload
             // Standalone archives record each move in the archive store, which holds only its own unresolved batch.
-            // Workflow gate batches (removed with workflow mail) still hold the Pod until their outcome is confirmed.
-            const boundaryId = randomUUID()
-            appendEvent('recovery-boundary', graph ? { id: boundaryId, kind: 'untracked', operation } : { kind: 'effect', operation })
-            const work = this.services.mailArchive(request, operationSignal, scope)
+            appendEvent('recovery-boundary', { kind: 'effect', operation })
+            const work = this.services.mailArchive(payload, operationSignal, scope)
             pendingAgents.add(work)
-            try {
-              const result = await work
-              const views = Array.isArray(result) ? result : [result]
-              if (graph && views.every(value => value && typeof value === 'object' && 'state' in value && ['completed', 'pending', 'denied', 'expired'].includes(String(value.state)))) appendEvent('recovery-boundary-result', { id: boundaryId, state: 'confirmed' })
-              assertCurrent(); return result
-            }
+            try { const result = await work; assertCurrent(); return result }
             finally { pendingAgents.delete(work) }
           }
-          if (operation.startsWith('mail.workflow.')) {
-            const attempt = this.store.db.prepare('SELECT w.definition,w.id FROM workflow_attempts a JOIN workflow_runs w ON w.id=a.workflow_run_id WHERE a.run_id=?').get(id)
-            const configuration = attempt ? (JSON.parse(attempt.definition as string) as WorkflowDefinition).mail : null
-            if (!configuration || ![configuration.filterPodId, configuration.notifyPodId].includes(pod.id)) throw new Error('Mail integration is not assigned to this workflow node')
-            if (!mailWorkflow) {
-              mailWorkflow = new MailWorkflow(this.store, attempt!.id as string, pod.id, id, configuration, createWorkflowMailTransport(configuration, {
-                assertCurrent,
-                tool: body => invokeTool(body, signal),
-                credential: async (alias) => {
-                  if (!this.services?.credential) throw new Error('Script credential service is unavailable')
-                  new ScriptCredentials(this.store, this.resources).readable(pod.id, alias)
-                  return this.services.credential(alias, operationSignal, scope)
-                },
-                http: async (request) => {
-                  if (!this.services?.http) throw new Error('HTTP service is unavailable')
-                  assignedHttp(this.resources.list(pod.id), scope, request)
-                  return this.services.http(request, operationSignal, scope)
-                },
-              }))
-            }
-            const request = payload as { offset?: number, summary?: string }
-            if (!request || typeof request !== 'object' || Array.isArray(request) || Object.keys(request).some(key => !['offset', 'summary'].includes(key))) throw new Error('Invalid mail workflow request')
-            if (operation === 'mail.workflow.remaining') return mailWorkflow.remaining(request.offset)
-            const work = operation === 'mail.workflow.filter' ? mailWorkflow.filter() : mailWorkflow.notify(request.summary!)
-            pendingAgents.add(work)
-            try { return await work }
-            finally { pendingAgents.delete(work) }
-          }
+          // A standalone run of a network script receives no items and its emits go nowhere.
           if (operation === 'graph.contract') {
             if (!contract || JSON.stringify(parseGraphContract(payload)) !== JSON.stringify(contract)) throw new Error('Script contract changed since validation')
-            if (!graph) return []
-            await gateRound(this.store, graph, async (body) => {
-              if (!this.services?.gate) throw new Error('Approval service is unavailable')
-              return retryService('approval', async () => { assertCurrent(); return this.services!.gate!(body, operationSignal, scope) }, operationSignal)
-            })
-            assertCurrent()
-            delivered = pendingItems(this.store, graph.workflowId, graph.node, graph.workflowRunId)
-            if (this.store.db.prepare('SELECT 1 FROM workflow_call_requests WHERE workflow_run_id=?').get(graph.workflowRunId)) {
-              const remaining = Number(this.store.db.prepare('SELECT count(*) AS count FROM graph_deliveries d JOIN graph_items i ON i.id=d.item_id WHERE i.workflow_run_id=? AND d.node=? AND d.state=\'pending\'').get(graph.workflowRunId, graph.node)!.count)
-              if (remaining !== delivered.length) throw new Error('Called workflow input exceeds one finite step; review its definition before execution')
-            }
-            return delivered.map(({ key, channel, data }) => ({ key, channel, data }))
+            return []
           }
           if (operation === 'graph.emit') {
             const emit = checkEmit(payload)
-            // Emits become items only when the run completes, so a failed run hands nothing on.
-            emits.push(emit)
             appendEvent('emit', { channel: emit.channel, key: emit.key }); return { emitted: true }
           }
-          if (operation === 'workflow.publish') { publishWorkflowOutput(this.store, id, payload); return { published: true } }
           if (operation === 'mail.next' || operation === 'mail.commit') {
             if (!manifest.capabilities.includes('mail.read')) throw new Error('Mail recipe permission is not assigned')
             if (!mail) {
@@ -577,13 +484,13 @@ export class RunDispatcher {
         if (!this.store.db.prepare('SELECT 1 FROM claims WHERE pod_id=? AND id=? AND kind=\'gap\'').get(pod.id, gap)) throw new Error('Result references an uncommitted gap')
       }
       if (shellScope) { await this.services?.closeShell?.(shellScope); shellScope = undefined }
-      await this.finish(id, result.status, result.summary, result.status === 'failed' || result.status === 'blocked' ? result.summary : null, result.completedInputIds, epoch, () => settle(true), network, infrastructureFailure ?? { cause: 'failure' })
+      await this.finish(id, result.status, result.summary, result.status === 'failed' || result.status === 'blocked' ? result.summary : null, result.completedInputIds, epoch, network, infrastructureFailure ?? { cause: 'failure' })
     }
     catch (error) {
       if (network) network.invocations.recordConflict(network.authority, error)
       const message = (error instanceof Error ? error.message : 'Run failed').slice(0, 10000)
       await Promise.allSettled(pendingAgents)
-      await this.finish(id, signal.aborted ? 'cancelled' : 'failed', signal.aborted ? 'Run cancelled' : 'Run failed', message, [], epoch, () => settle(false), network, signal.aborted ? { cause: signal.reason instanceof RunCancellation ? signal.reason.cause : 'owner-cancelled' } : infrastructureFailure ?? { cause: error instanceof AuthorityError ? 'authority' : error instanceof InfrastructureError ? 'infrastructure' : 'failure', ...(error instanceof InfrastructureError ? { retryAfterMs: error.failure.retryAfterMs } : {}) })
+      await this.finish(id, signal.aborted ? 'cancelled' : 'failed', signal.aborted ? 'Run cancelled' : 'Run failed', message, [], epoch, network, signal.aborted ? { cause: signal.reason instanceof RunCancellation ? signal.reason.cause : 'owner-cancelled' } : infrastructureFailure ?? { cause: error instanceof AuthorityError ? 'authority' : error instanceof InfrastructureError ? 'infrastructure' : 'failure', ...(error instanceof InfrastructureError ? { retryAfterMs: error.failure.retryAfterMs } : {}) })
     }
     finally {
       try { if (shellScope) await this.services?.closeShell?.(shellScope) }
@@ -592,14 +499,14 @@ export class RunDispatcher {
     }
   }
 
-  private async finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = [], retryEpoch?: number, settle: () => void = () => {}, network?: NetworkExecution, failure?: RecoveryFailure): Promise<void> {
+  private async finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = [], retryEpoch?: number, network?: NetworkExecution, failure?: RecoveryFailure): Promise<void> {
     if (network) { await network.invocations.finish(network.authority, state, summary, error, completedInputIds, network.emissions, failure ?? { cause: 'failure' }); return }
     try { await confirmDomainsStopped(this.store, id, this.runtime.helper) }
     catch (failure) {
       this.runs.interrupt(id, failure instanceof Error ? failure.message : 'Execution cleanup is unverified')
       return
     }
-    this.store.transaction(() => { this.runs.finish(id, state, summary, error, completedInputIds, retryEpoch, failure); settle() })
+    this.runs.finish(id, state, summary, error, completedInputIds, retryEpoch, failure)
   }
 
 }

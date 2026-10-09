@@ -40,11 +40,8 @@ it('lays rows out from the top and lets the canvas height follow the content; a 
   const full = relayout(buildModel(view), view, 'all', all)
   const network = full.clusters.find(cluster => cluster.kind === 'network')!
   expect(network).toMatchObject({ x: geometry.cluster.x, y: geometry.firstRow, w: geometry.cluster.w, h: geometry.cluster.h })
-  const chain = full.clusters.find(cluster => cluster.kind === 'chain')!
-  expect(chain.y).toBe(geometry.firstRow + geometry.cluster.h + geometry.rowGap)
-  const chainMembers = view.automations.find(automation => automation.kind === 'chain' && automation.state === 'active')!.members.map(id => full.nodes.find(node => node.id === id)!)
-  expect(chainMembers.map(node => node.tx)).toEqual(chainMembers.map((_, index) => 600 - (chainMembers.length - 1) * geometry.chain.gap / 2 + index * geometry.chain.gap))
-  expect(full.height).toBeGreaterThan(geometry.cluster.h + geometry.chain.h + geometry.single.h + geometry.collapsed.h + geometry.firstRow)
+  expect(full.clusters).toHaveLength(1)
+  expect(full.height).toBeGreaterThan(geometry.cluster.h + geometry.single.h + geometry.collapsed.h + geometry.firstRow)
   const systems = full.nodes.filter(node => node.kind === 'system' && visibleNodes(full, 'all', all).has(node.id))
   expect(systems.every(node => node.tx === geometry.systemX)).toBe(true)
   expect(Math.max(...systems.map(node => node.ty))).toBeLessThanOrEqual(full.height - 60)

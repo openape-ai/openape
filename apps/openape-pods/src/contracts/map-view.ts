@@ -1,8 +1,7 @@
 import type { ScheduleSpec } from './scheduling'
-import type { WorkflowSchedule } from './workflows'
 
 /**
- * The read model behind the Automatisierungen surface: every Pod, chain and network of the owner
+ * The read model behind the Automatisierungen surface: every Pod and network of the owner
  * with the systems they read and write, measured flows of the last 24 hours and the five system
  * KPIs. Derived in the worker from existing tables, never stored; desktop, browser and MCP read
  * the same JSON. Secrets appear as aliases only.
@@ -13,7 +12,7 @@ export type MapResourceKind = MapSystemKind | 'secret' | 'reference'
 export interface MapSystem { id: string, kind: MapSystemKind, name: string, how: string }
 export interface MapResource { kind: MapResourceKind, name: string, how: string, system: string | null }
 export interface MapRun { at: number, state: string, summary: string }
-export interface MapSchedule { spec: ScheduleSpec | WorkflowSchedule | null, enabled: boolean }
+export interface MapSchedule { spec: ScheduleSpec | null, enabled: boolean }
 export interface MapApproval { grantId: string, title: string, runId: string }
 export interface MapPod {
   id: string
@@ -45,8 +44,7 @@ export interface MapGate { key: string, kind: 'choose' | 'approve', title: strin
 export interface MapAutomation {
   id: string
   revision: number
-  kind: 'network' | 'chain'
-  bounded: boolean
+  kind: 'network'
   name: string
   group: string | null
   groupId: string | null
@@ -93,9 +91,25 @@ function currentNames(view: Record<string, unknown>): Record<string, unknown> {
   return { ...rest, automations: collections, pods: list(pods, mapLimits.pods).map((pod) => { const { collection, ...fields } = object(pod); return { ...fields, automation: collection ?? null } }) }
 }
 
+// Desktops before issue 1455 (M4) also publish workflows as chains and bounded networks; the relay shows persistent networks only.
+function networksOnly(view: Record<string, unknown>): Record<string, unknown> {
+  const automations = list(view.automations, mapLimits.automations).map(object)
+  const retired = new Set(automations.filter(item => item.kind !== 'network' || item.bounded === true).map(item => item.id))
+  if (!retired.size && !automations.some(item => Object.hasOwn(item, 'bounded'))) return view
+  const kept = automations.filter(item => !retired.has(item.id)).map(({ bounded: _bounded, ...item }) => item)
+  const gates = new Set(kept.flatMap(item => list(item.gates, 32).map(gate => `gate:${String(object(gate).key)}`)))
+  const retiredGate = (node: unknown) => typeof node === 'string' && node.startsWith('gate:') && !gates.has(node)
+  return {
+    ...view,
+    automations: kept,
+    pods: list(view.pods, mapLimits.pods).map((pod) => { const item = object(pod); return retired.has(item.automation) ? { ...item, automation: null } : item }),
+    edges: list(view.edges, mapLimits.edges).map(object).filter(edge => !retiredGate(edge.from) && !retiredGate(edge.to)),
+  }
+}
+
 /** Shape check for what crosses the relay and MCP; the content stays the worker's. */
 export function parseMapView(value: unknown): MapView {
-  const view = currentNames(object(value))
+  const view = networksOnly(currentNames(object(value)))
   if (Object.keys(view).some(key => !['at', 'window', 'kpis', 'systems', 'pods', 'automations', 'edges'].includes(key))) throw new Error('Invalid map view fields')
   integer(view.at); const window = object(view.window); integer(window.from); integer(window.to)
   const kpis = object(view.kpis); integer(kpis.active); integer(kpis.paused); integer(kpis.unknownDeliveries)
@@ -124,7 +138,7 @@ export function parseMapView(value: unknown): MapView {
   }
   for (const item of list(view.automations, mapLimits.automations)) {
     const automation = object(item); const id = text(automation.id, 36); text(automation.name, 200)
-    if (!['network', 'chain'].includes(String(automation.kind)) || !['active', 'paused', 'archived'].includes(String(automation.state))) throw new Error('Invalid map automation')
+    if (automation.kind !== 'network' || !['active', 'paused', 'archived'].includes(String(automation.state))) throw new Error('Invalid map automation')
     for (const member of list(automation.members, 64)) { if (!nodes.has(text(member, 36))) throw new Error('Invalid map automation member') }
     for (const gate of list(automation.gates, 32)) { const row = object(gate); text(row.key, 64); text(row.title, 120); integer(row.open); nodes.add(`gate:${text(row.key, 64)}`) }
     nodes.add(id)

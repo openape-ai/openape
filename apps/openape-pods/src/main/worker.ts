@@ -37,10 +37,8 @@ import { modelResources } from '../worker/master/resources'
 import { sameOwner } from '@openape/pods-protocol'
 import type { RemoteInternal } from '../worker/remote/registration'
 import type { Owner } from '@openape/pods-protocol'
-import { parseWorkflowView } from '../contracts/workflows'
 import { parseNetworkCommand, parseNetworkView } from '../contracts/networks'
 import type { NetworkCommand, NetworkView } from '../contracts/networks'
-import type { WorkflowCommand, WorkflowView } from '../contracts/workflows'
 import type { ServiceScope, RunContextRequest, ServiceCheck, ServiceRequest  } from '../contracts/services'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import { approvalURL } from '../contracts/activity'
@@ -154,7 +152,7 @@ export class FixtureWorker {
   private centralAction(type: string): CentralController | null {
     if (!this.central || this.central.executing) return null
     if (!this.central.available) throw new Error(this.central.offlineMessage())
-    return ['list', 'graph', 'gateOpen'].includes(type) ? null : this.central
+    return ['list', 'gateOpen'].includes(type) ? null : this.central
   }
 
   constructor(private readonly publish: (status: WorkerStatus) => void) {}
@@ -617,8 +615,8 @@ export class FixtureWorker {
 
   // Direct reads for the inbox projection: reading never becomes a workspace operation.
   async inboxSources(): Promise<DecisionSources> {
-    const [workspace, networks, workflows, secrets] = await Promise.all([this.dispatch({ type: 'map' }), this.dispatch({ networks: { type: 'list' } }), this.dispatch({ workflow: { type: 'list' } }), this.secretsGate?.view() ?? null])
-    return { map: parseWorkspace(workspace).map ?? null, networks: parseNetworkView(networks), workflows: parseWorkflowView(workflows), secrets }
+    const [workspace, networks, secrets] = await Promise.all([this.dispatch({ type: 'map' }), this.dispatch({ networks: { type: 'list' } }), this.secretsGate?.view() ?? null])
+    return { map: parseWorkspace(workspace).map ?? null, networks: parseNetworkView(networks), secrets }
   }
 
   // Imported Pods are ordinary local Pods: a connected workspace gives each its own identity as soon as the paused copy exists.
@@ -674,8 +672,8 @@ export class FixtureWorker {
 
   async networks(command: NetworkCommand): Promise<NetworkView> {
     const parsed = parseNetworkCommand(command)
-    if (this.central && !this.central.networkReads && !['list', 'detail', 'trace', 'records', 'archivePreview', 'legacyItems', 'conversionPreview', 'replacementSetup', 'replacementPreview'].includes(parsed.type)) throw new Error('Network actions require bounded relay publication support')
-    const central = this.centralAction(['detail', 'setup', 'trace', 'records', 'archivePreview', 'legacyItems', 'conversionPreview', 'replacementSetup', 'replacementPreview'].includes(parsed.type) ? 'list' : parsed.type)
+    if (this.central && !this.central.networkReads && !['list', 'detail', 'trace', 'records', 'archivePreview'].includes(parsed.type)) throw new Error('Network actions require bounded relay publication support')
+    const central = this.centralAction(['detail', 'setup', 'trace', 'records', 'archivePreview'].includes(parsed.type) ? 'list' : parsed.type)
     if (central) return central.local(() => this.networks(parsed))
     const view = parseNetworkView(await this.dispatch({ networks: parsed, ownerOperation: this.central?.executing === true }))
     if (parsed.type === 'gateOpen') {
@@ -684,18 +682,6 @@ export class FixtureWorker {
       await shell.openExternal(url)
     }
     return view
-  }
-
-  async workflows(command: WorkflowCommand): Promise<WorkflowView> {
-    if (command.type === 'gateOpen') {
-      const view = parseWorkflowView(await this.dispatch({ workflow: { type: 'list' } }))
-      const url = view.gates?.batches.find(batch => batch.id === command.batchId && batch.state === 'pending')?.url
-      // The address was built by the app from the issuer of the Pod identity, never from item data.
-      if (!url || new URL(url).protocol !== 'https:') throw new Error('No approval is waiting for this batch')
-      await shell.openExternal(url)
-      return view
-    }
-    const central = this.centralAction(command.type); if (central) return central.local(() => this.workflows(command)); return parseWorkflowView(await this.dispatch({ workflow: command }))
   }
 
   async scheduling(command: ScheduleCommand): Promise<ScheduleView> { const central = this.centralAction(command.type); if (central) return central.local(() => this.scheduling(command)); return parseScheduleView(await this.dispatch({ schedule: command })) }
@@ -765,7 +751,7 @@ export class FixtureWorker {
     throw new Error('Unsupported central execution')
   }
 
-  private dispatch(command: { definitions: DefinitionCommand } | { networkGateRelease: { type: 'list' } | { type: 'released', taskId: string } } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { networkGateCheck: { scope: ServiceScope, manifest: NetworkGateManifest, operation: string, grants?: { key: string, id: string }[] } } | { networks: NetworkCommand, ownerOperation?: boolean } | { central: { type: 'snapshot', owner: Owner, networkReads?: boolean } | { type: 'networkRead', owner: Owner, command: NetworkCommand } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { definitions: DefinitionCommand } | { networkGateRelease: { type: 'list' } | { type: 'released', taskId: string } } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { networkGateCheck: { scope: ServiceScope, manifest: NetworkGateManifest, operation: string, grants?: { key: string, id: string }[] } } | { networks: NetworkCommand, ownerOperation?: boolean } | { central: { type: 'snapshot', owner: Owner, networkReads?: boolean } | { type: 'networkRead', owner: Owner, command: NetworkCommand } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     if (this.updateFrozen && !('data' in command && ['prepareUpdate', 'releaseUpdate'].includes(command.data.type))) return Promise.reject(new Error('Pods is preparing an update; retry after restart'))
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))

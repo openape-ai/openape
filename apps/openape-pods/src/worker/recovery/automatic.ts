@@ -10,8 +10,7 @@ export async function recoverStoppedRuns(store: PodDatabase, helper: string, lim
       AND NOT EXISTS(SELECT 1 FROM recovery_reviews review WHERE review.run_id=r.id)
       AND NOT EXISTS(SELECT 1 FROM run_events e WHERE e.run_id=r.id AND e.type='recovery')
       AND (EXISTS(SELECT 1 FROM accepted_events e WHERE e.run_id=r.id AND e.state IN ('blocked','claimed'))
-        OR EXISTS(SELECT 1 FROM run_leases l WHERE l.run_id=r.id)
-        OR EXISTS(SELECT 1 FROM workflow_nodes n WHERE n.run_id=r.id AND n.state IN ('running','blocked')))
+        OR EXISTS(SELECT 1 FROM run_leases l WHERE l.run_id=r.id))
     ORDER BY r.started_at DESC LIMIT ?`).all(limit)
   const runs = new RunStore(store)
   for (const run of candidates) {

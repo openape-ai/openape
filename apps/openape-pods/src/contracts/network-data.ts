@@ -17,6 +17,11 @@ export function dataKey(value: unknown): string {
   return value
 }
 
+export function dataIdentity(value: unknown): string {
+  if (typeof value !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value)) throw new Error('Invalid identity')
+  return value
+}
+
 export function dataRevision(value: unknown): number {
   if (!Number.isSafeInteger(value) || Number(value) < 0 || Number(value) >= Number.MAX_SAFE_INTEGER) throw new Error('Invalid record revision')
   return value as number

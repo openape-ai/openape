@@ -2,7 +2,7 @@ import { inject, onBeforeUnmount, reactive } from 'vue'
 import type { InjectionKey, Ref } from 'vue'
 import type { PodsBridge } from '../contracts/ipc'
 
-export type PodApi = Pick<PodsBridge, 'workspace' | 'details' | 'scripts' | 'resources' | 'scheduling' | 'runs' | 'data' | 'workflows'>
+export type PodApi = Pick<PodsBridge, 'workspace' | 'details' | 'scripts' | 'resources' | 'scheduling' | 'runs' | 'data'>
 export interface PodAccess {
   api: PodApi
   revision?: Readonly<Ref<number>>
@@ -17,7 +17,7 @@ export function usePodAccess(): PodAccess {
       workspace: command => window.pods.workspace(command), details: command => window.pods.details(command),
       scripts: command => window.pods.scripts(command), resources: command => window.pods.resources(command),
       scheduling: command => window.pods.scheduling(command), runs: command => window.pods.runs(command),
-      data: command => window.pods.data(command), workflows: command => window.pods.workflows(command),
+      data: command => window.pods.data(command),
     },
     remote: false, key: id => id, edits: reactive(new Map()),
   }

@@ -2,24 +2,15 @@ import { randomUUID } from 'node:crypto'
 import type { ChatsCommand, ChatsView, Conversation, ChatContext } from '../../contracts/chats'
 import { parseChatsCommand } from '../../contracts/chats'
 import { codexConversationId } from '../../contracts/codex'
-import type { WorkflowDefinition } from '../../contracts/workflows'
-import { workflowDefinitions } from '../workflows/engine'
 import type { PodDatabase } from '../storage/database'
 
 export class ChatRegistry {
   constructor(private readonly store: PodDatabase) {}
 
-  private snapshot(podIds: string[], workflowId: string | null, revision: number | null): ChatContext {
-    let workflow: WorkflowDefinition | null = null
-    if (workflowId) {
-      workflow = workflowDefinitions(this.store).find(item => item.id === workflowId) ?? null
-      if (workflow?.revision !== revision) throw new Error('Workflow changed; review its current members')
-    }
-    const ids = [...new Set([...podIds, ...workflow?.nodes.map(node => node.podId) ?? []])]
-    if (ids.length > 32) throw new Error('Select at most 32 Pods including workflow members')
-    const pods = ids.map(id => this.store.getPod(id))
+  private snapshot(podIds: string[]): ChatContext {
+    const pods = podIds.map(id => this.store.getPod(id))
     if (pods.some(pod => pod.lifecycle === 'archived')) throw new Error('Archived Pods cannot be added to a chat')
-    return { podIds, pods: pods.map(({ id, name }) => ({ id, name })), workflow }
+    return { podIds, pods: pods.map(({ id, name }) => ({ id, name })) }
   }
 
   ensure(scope: string): Conversation {
@@ -28,7 +19,7 @@ export class ChatRegistry {
     if (scope.startsWith('chat:')) throw new Error('Conversation not found')
     const pod = scope && !scope.startsWith('creation:') ? this.store.getPod(scope) : null
     const id = randomUUID(); const now = Date.now()
-    const context: ChatContext = { podIds: pod ? [pod.id] : [], pods: pod ? [{ id: pod.id, name: pod.name }] : [], workflow: null }
+    const context: ChatContext = { podIds: pod ? [pod.id] : [], pods: pod ? [{ id: pod.id, name: pod.name }] : [] }
     this.store.transaction(() => {
       this.store.db.prepare('INSERT INTO chat_conversations VALUES(?,?,?,?,1,?,?)').run(id, scope, pod ? `${pod.name} conversation` : scope ? 'New Pod' : 'Workspace chat', pod?.id ?? null, now, now)
       this.saveContext(id, 1, context)
@@ -40,10 +31,11 @@ export class ChatRegistry {
   get(id: string): Conversation {
     const row = this.store.db.prepare('SELECT c.*,x.body FROM chat_conversations c JOIN chat_contexts x ON x.conversation_id=c.id AND x.revision=c.revision WHERE c.id=?').get(id)
     if (!row) throw new Error('Conversation not found')
-    const context = JSON.parse(row.body as string) as ChatContext
-    const currentWorkflow = context.workflow ? this.store.db.prepare('SELECT revision,archived FROM workflows WHERE id=?').get(context.workflow.id) : null
+    // Contexts saved before issue 1455 (M4) may also name a workflow, which no longer exists.
+    const { podIds, pods } = JSON.parse(row.body as string) as ChatContext
+    const context: ChatContext = { podIds, pods }
     const available = this.store.listPods().filter(pod => pod.lifecycle !== 'archived').map(pod => pod.id)
-    return { relatedWorkflowIds: this.store.db.prepare('SELECT DISTINCT json_extract(body,\'$.workflow.id\') AS id FROM chat_contexts WHERE conversation_id=? AND json_extract(body,\'$.workflow.id\') IS NOT NULL').all(id).map(row => row.id as string), id, scope: row.scope as string, title: row.title as string, revision: row.revision as number, originPodId: row.origin_pod as string | null, updatedAt: row.updated_at as number, context, workflowChanged: !!context.workflow && (!currentWorkflow || currentWorkflow.archived === 1 || currentWorkflow.revision !== context.workflow.revision), unavailablePodIds: context.pods.filter(pod => !available.includes(pod.id)).map(pod => pod.id), relatedPodIds: this.store.db.prepare('SELECT pod_id FROM chat_members WHERE conversation_id=?').all(id).map(item => item.pod_id as string) }
+    return { id, scope: row.scope as string, title: row.title as string, revision: row.revision as number, originPodId: row.origin_pod as string | null, updatedAt: row.updated_at as number, context, unavailablePodIds: context.pods.filter(pod => !available.includes(pod.id)).map(pod => pod.id), relatedPodIds: this.store.db.prepare('SELECT pod_id FROM chat_members WHERE conversation_id=?').all(id).map(item => item.pod_id as string) }
   }
 
   assertRevision(id: string, revision: number): Conversation {
@@ -60,7 +52,7 @@ export class ChatRegistry {
   bind(scope: string, podId: string): void {
     const conversation = this.ensure(scope); const pod = this.store.getPod(podId)
     this.store.db.prepare('UPDATE chat_conversations SET scope=?,origin_pod=?,title=? WHERE id=?').run(podId, podId, `${pod.name} conversation`, conversation.id)
-    this.store.db.prepare('UPDATE chat_contexts SET body=? WHERE conversation_id=? AND revision=?').run(JSON.stringify({ podIds: [podId], pods: [{ id: podId, name: pod.name }], workflow: null }), conversation.id, conversation.revision)
+    this.store.db.prepare('UPDATE chat_contexts SET body=? WHERE conversation_id=? AND revision=?').run(JSON.stringify({ podIds: [podId], pods: [{ id: podId, name: pod.name }] }), conversation.id, conversation.revision)
     this.store.db.prepare('INSERT OR IGNORE INTO chat_members VALUES(?,?,?)').run(conversation.id, podId, pod.name)
   }
 
@@ -83,7 +75,7 @@ export class ChatRegistry {
     if (command.type === 'list') return this.view()
     this.store.transaction(() => {
       if (command.type === 'create') {
-        const context = this.snapshot(command.podIds, command.workflowId, command.workflowRevision)
+        const context = this.snapshot(command.podIds)
         const existing = this.store.db.prepare('SELECT id FROM chat_conversations WHERE id=?').get(command.id)
         if (existing) {
           const before = this.get(command.id)
@@ -102,7 +94,7 @@ export class ChatRegistry {
         return
       }
       if (this.store.db.prepare('SELECT 1 FROM master_session WHERE state=\'running\'').get()) throw new Error('Finish or stop the active response before changing context')
-      const context = this.snapshot(command.podIds, command.workflowId, command.workflowRevision)
+      const context = this.snapshot(command.podIds)
       this.store.db.prepare('UPDATE chat_contexts SET retired_thread=(SELECT thread_id FROM master_contexts WHERE scope=?) WHERE conversation_id=? AND revision=?').run(conversation.scope, command.id, command.revision)
       this.saveContext(command.id, command.revision + 1, context)
       const eventId = `context:${command.id}:${command.revision + 1}`

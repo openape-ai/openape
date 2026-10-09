@@ -21,7 +21,6 @@ export function recoveryDecision(failure: RecoveryFailure, previousAttempts: num
 export function recoveryHold(store: PodDatabase, podId: string, runId?: string): string | null {
   const effect = store.db.prepare('SELECT operation,effect_key FROM effect_ledger WHERE pod_id=? AND state IN (\'intent\',\'unknown\') LIMIT 1').get(podId)
   if (effect) return `External outcome requires review: ${effect.operation} (${effect.effect_key})`
-  if (store.db.prepare('SELECT 1 FROM graph_gate_batches WHERE pod_id=? AND state IN (\'consuming\',\'unknown\') LIMIT 1').get(podId)) return 'An approval action has an unresolved outcome'
   if (runId && store.db.prepare('SELECT 1 FROM run_events WHERE run_id=? AND type=\'approval\' AND json_extract(data,\'$.state\') IN (\'denied\',\'revoked\') LIMIT 1').get(runId)) return 'Execution permission was refused or revoked; review before retrying'
   if (unresolvedOperation(store, podId)) return 'An operation without replay evidence requires review'
   return null

@@ -1,8 +1,6 @@
 // @vitest-environment node
-import { randomUUID } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import { Scheduler } from '../../src/worker/scheduling/scheduler'
-import { WorkflowEngine } from '../../src/worker/workflows/engine'
 import { scheduleDomains } from '../../src/worker/scheduling/fair-scheduler'
 import { executeScript } from '../../src/worker/runs/runner'
 import { spawnSync } from 'node:child_process'
@@ -130,39 +128,34 @@ it('does not replay a consumed source retry from its original failed invocation'
 
 it.each([1, 2, 4, 8])('admits every backlogged production domain with %i global slots', async (concurrency) => {
   const f = networkFixture()
-  const { standalone, workflow, id } = f.store.transaction(() => {
+  const { standalone, id } = f.store.transaction(() => {
     const standalone = Array.from({ length: 8 }, () => f.pod('Standalone', { takes: [], gives: [], summary: 'Synthetic standalone' }, async () => {}))
-    const workflow = Array.from({ length: 8 }, () => f.pod('Workflow', { takes: [], gives: [], summary: 'Synthetic workflow' }, async () => {}))
     const channels = Array.from({ length: 8 }, (_, index) => `test.input${index}`)
     const sources = channels.map(channel => f.pod('Network', { takes: [], gives: [channel], summary: 'Synthetic source' }, async () => {}))
     const consumer = f.pod('Network consumer', { takes: channels, gives: [], summary: 'Synthetic consumer' }, async () => {})
     const id = f.create([...sources.map(podId => ({ podId, source: { schedule: { kind: 'interval' as const, seconds: 60 } }, serialCase: false })), { podId: consumer, source: null, serialCase: false }], channels)
-    return { standalone, workflow, id }
+    return { standalone, id }
   })
   f.engine.execute({ type: 'activate', id, revision: 1 })
   f.store.db.prepare('UPDATE network_source_clocks SET next_at=0').run()
   f.store.db.prepare('UPDATE settings SET concurrency=? WHERE id=1').run(concurrency)
   const scheduler = new Scheduler(f.store, f.dispatcher, Date.now, false)
-  const workflows = new WorkflowEngine(f.store, f.dispatcher, { inspect: async () => {} }, Date.now, false)
   const networks = new NetworkEngine(f.store, f.dispatcher, f.resources, '/unused', () => f.owner, false)
-  const workflowId = randomUUID()
-  workflows.save({ type: 'save', id: workflowId, revision: 0, name: 'Fair dispatch fixture', nodes: workflow.map(podId => ({ podId, after: [], handoff: false })), schedule: null, enabled: false })
-  workflows.start(workflowId, 1)
   for (const podId of standalone) scheduler.requestManual(podId)
   const admissions: { domain: number, delayMs: number }[] = []
   let readyAt = performance.now()
   vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input) => {
-    admissions.push({ domain: input.network ? 2 : workflow.includes(input.podId) ? 1 : 0, delayMs: performance.now() - readyAt })
+    admissions.push({ domain: input.network ? 1 : 0, delayMs: performance.now() - readyAt })
     return { status: 'completed', summary: 'Synthetic fair dispatch', completedInputIds: input.eventIds, gapIds: [] }
   })
   try {
     for (let turn = 0; turn < 3; turn++) {
       readyAt = performance.now()
-      scheduleDomains(f.store, [() => scheduler.tick(), () => workflows.tick(), () => networks.tick()])
+      scheduleDomains(f.store, [() => scheduler.tick(), () => networks.tick()])
       expect(Number(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count)).toBeLessThanOrEqual(concurrency)
       await expect.poll(() => f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0)
     }
-    expect(new Set(admissions.map(item => item.domain))).toEqual(new Set([0, 1, 2]))
+    expect(new Set(admissions.map(item => item.domain))).toEqual(new Set([0, 1]))
     expect(Math.max(...admissions.map(item => item.delayMs))).toBeLessThan(2000)
     console.info(JSON.stringify({ measurement: 'production-domain-admission', concurrency, admissions, processMocked: true }))
   }

@@ -31,11 +31,11 @@ export interface MapNode {
   ty: number
 }
 export interface MapLink { from: string, to: string, type: LinkType, label: string, flow: number }
-export interface MapCluster { id: string, name: string, kind: 'network' | 'chain', x: number, y: number, w: number, h: number }
+export interface MapCluster { id: string, name: string, kind: 'network', x: number, y: number, w: number, h: number }
 export interface MapModel { nodes: MapNode[], links: MapLink[], clusters: MapCluster[], height: number }
 export interface Layers { channel: boolean, read: boolean, write: boolean, auth: boolean, paused: boolean }
 export const canvasWidth = 1200
-export const geometry = { systemX: 100, sinkX: 1095, topY: 56, topGap: 270, firstRow: 150, rowGap: 30, cluster: { x: 250, w: 660, h: 310 }, chain: { h: 80, gap: 140 }, single: { h: 80, gap: 170 }, collapsed: { h: 70, gap: 300 }, podRadius: 18, columnStart: 200, columnStep: 90, minimumHeight: 420 } as const
+export const geometry = { systemX: 100, sinkX: 1095, topY: 56, topGap: 270, firstRow: 150, rowGap: 30, cluster: { x: 250, w: 660, h: 310 }, single: { h: 80, gap: 170 }, collapsed: { h: 70, gap: 300 }, podRadius: 18, columnStart: 200, columnStep: 90, minimumHeight: 420 } as const
 export const boxSize = (kind: NodeKind): { w: number, h: number } => kind === 'collapsed' ? { w: 220, h: 36 } : kind === 'sink' ? { w: 190, h: 40 } : kind === 'auth' || kind === 'ai' ? { w: 160, h: 40 } : kind === 'pod' ? { w: 36, h: 36 } : { w: 160, h: 40 }
 export const IDP = 'auth:idp'
 export const YOU = 'auth:you'
@@ -124,23 +124,13 @@ export function relayout(model: MapModel, view: MapView, group: string, layers: 
   for (const automation of view.automations) {
     const members = byAutomation.get(automation.id)
     if (!members?.length) continue
-    if (automation.kind === 'network') {
-      const ids = members.map(item => item.id)
-      const layers = graphLayers(ids, view.edges.filter(edge => edge.type === 'channel' && ids.includes(edge.from) && ids.includes(edge.to)).map(edge => ({ from: edge.from, to: edge.to, channel: edge.channel ?? '' })))
-      const x0 = g.cluster.x + 50; const x1 = g.cluster.x + g.cluster.w - 50; const y0 = y + 50; const y1 = y + g.cluster.h - 50
-      for (const item of members) item.labelWidth = 110
-      layers.forEach((layer, index) => layer.forEach((id, position) => { const item = members.find(member => member.id === id)!; item.tx = layers.length === 1 ? (x0 + x1) / 2 : x0 + (x1 - x0) * index / (layers.length - 1); item.ty = layer.length === 1 ? (y0 + y1) / 2 : y0 + (y1 - y0) * position / (layer.length - 1) }))
-      clusters.push({ id: automation.id, name: automation.name, kind: 'network', x: g.cluster.x, y, w: g.cluster.w, h: g.cluster.h })
-      y += g.cluster.h + g.rowGap
-    }
-    else {
-      const ordered = automation.members.map(id => members.find(item => item.id === id)).filter((item): item is MapNode => !!item)
-      for (const item of ordered) item.labelWidth = g.chain.gap - 10
-      row(ordered, y + g.chain.h / 2 - 10, g.chain.gap)
-      const w = (ordered.length - 1) * g.chain.gap + 100
-      clusters.push({ id: automation.id, name: automation.name, kind: 'chain', x: 600 - w / 2, y, w, h: g.chain.h })
-      y += g.chain.h + g.rowGap
-    }
+    const ids = members.map(item => item.id)
+    const layers = graphLayers(ids, view.edges.filter(edge => edge.type === 'channel' && ids.includes(edge.from) && ids.includes(edge.to)).map(edge => ({ from: edge.from, to: edge.to, channel: edge.channel ?? '' })))
+    const x0 = g.cluster.x + 50; const x1 = g.cluster.x + g.cluster.w - 50; const y0 = y + 50; const y1 = y + g.cluster.h - 50
+    for (const item of members) item.labelWidth = 110
+    layers.forEach((layer, index) => layer.forEach((id, position) => { const item = members.find(member => member.id === id)!; item.tx = layers.length === 1 ? (x0 + x1) / 2 : x0 + (x1 - x0) * index / (layers.length - 1); item.ty = layer.length === 1 ? (y0 + y1) / 2 : y0 + (y1 - y0) * position / (layer.length - 1) }))
+    clusters.push({ id: automation.id, name: automation.name, kind: 'network', x: g.cluster.x, y, w: g.cluster.w, h: g.cluster.h })
+    y += g.cluster.h + g.rowGap
   }
   const singles = shown.filter(item => item.kind === 'pod' && !item.automation)
   if (singles.length) { for (const item of singles) item.labelWidth = g.single.gap - 10; row(singles, y + g.single.h / 2 - 10, g.single.gap); y += g.single.h + g.rowGap }

@@ -8,8 +8,6 @@ import { DatabaseSync } from 'node:sqlite'
 import { afterEach, describe, expect, it } from 'vitest'
 import { digest, parseManifest, PodDatabase, schemaVersion } from '../../src/worker/storage/database'
 import type { CommitPoint, ProgressInput, ScriptManifest } from '../../src/worker/storage/database'
-import { workflowDefinitions } from '../../src/worker/workflows/engine'
-import { sequenceParts } from '../../src/contracts/workflows'
 
 const roots: string[] = []; const stores: PodDatabase[] = []
 function fixture(): PodDatabase {
@@ -157,14 +155,14 @@ it('upgrades a version 26 database with the table for gate batches and keeps its
   expect(readdirSync(store.root).filter(file => file.startsWith('before-v26-'))).toHaveLength(1)
 })
 
-it('upgrades a version 25 database and loads its workflows as sequence', () => {
+it('upgrades a version 25 database and keeps its workflow rows', () => {
   let store = fixture(); const pod = store.createPod({ name: 'Member' })
   const id = '00000000-0000-4000-8000-0000000000a0'; const nodes = [{ podId: pod.id, after: [], handoff: false }]
   removeGraphSchema(store.db); store.db.exec('PRAGMA user_version=25')
   store.db.prepare('INSERT INTO workflows(id,revision,name,nodes,schedule,enabled,next_at,mail) VALUES(?,3,?,?,NULL,0,NULL,NULL)').run(id, 'Morgenbriefing', JSON.stringify(nodes))
   store = reopen(store)
   expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(schemaVersion)
-  expect(workflowDefinitions(store)).toEqual([{ id, revision: 3, name: 'Morgenbriefing', nodes, schedule: null, enabled: false, paused: true, nextAt: null, ...sequenceParts }])
+  expect(store.db.prepare('SELECT id,revision,name,nodes,mode FROM workflows').all()).toEqual([{ id, revision: 3, name: 'Morgenbriefing', nodes: JSON.stringify(nodes), mode: 'sequence' }])
   for (const table of ['workflow_channels', 'workflow_gates', 'workflow_values', 'graph_items', 'graph_deliveries', 'graph_item_events']) expect(store.db.prepare(`SELECT count(*) AS count FROM ${table}`).get()?.count, table).toBe(0)
   const backups = readdirSync(store.root).filter(file => file.startsWith('before-v25-'))
   expect(backups).toHaveLength(1)
