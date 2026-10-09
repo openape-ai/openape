@@ -493,7 +493,9 @@ export class NetworkGates {
     for (const item of manifest.items) {
       const delivery = this.store.db.prepare('SELECT * FROM network_deliveries WHERE id=?').get(item.deliveryId)!
       if (!['blocked', 'pending', 'unknown'].includes(delivery.state as string)) continue
+      // An owner refusal is final; only held, released, uncertain or authority-obsoleted inputs are asked again.
       if (this.store.db.prepare(`SELECT 1 FROM network_gate_items WHERE delivery_id=? AND task_id!=? AND outcome IN ('held','released','unknown')`).get(item.deliveryId, task.id)) continue
+      if (this.store.db.prepare(`SELECT 1 FROM network_gate_items WHERE delivery_id=? AND outcome IN ('denied','excluded','expired')`).get(item.deliveryId)) continue
       if (delivery.run_id) {
         const invocation = this.store.db.prepare('SELECT i.state,i.generation,c.stopped_receipt FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.run_id=?').get(delivery.run_id)!
         if (!invocation.stopped_receipt || JSON.parse(invocation.stopped_receipt as string).generation !== invocation.generation || this.store.db.prepare('SELECT 1 FROM run_leases WHERE run_id=?').get(delivery.run_id)) throw new Error('Inspect the stopped input attempt before requesting fresh approval')

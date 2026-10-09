@@ -220,3 +220,19 @@ it('returns inputs an earlier release blocked as obsolete to a fresh approval wh
   expect(JSON.parse(f.store.db.prepare('SELECT body FROM network_trace_events WHERE kind=\'member-script-updated\'').get()!.body as string)).toMatchObject({ rightsChanged: true, renewedApprovals: 1 })
   f.store.assertStorage()
 })
+
+it('never asks again for an input the owner refused', async () => {
+  const f = archiveFixture({ preview: true })
+  f.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(f.archive)
+  await f.approve()
+  const task = f.store.db.prepare('SELECT * FROM network_gate_tasks').get()!
+  const legacy = f.engine.gates as unknown as { obsolete: (task: unknown, failure: Error) => void }
+  f.store.transaction(() => legacy.obsolete(task, new Error('Network gate consumer or definition authority changed')))
+  f.store.db.prepare('UPDATE network_gate_items SET outcome=\'denied\'').run()
+  const hash = f.archiveScript(f.assign(), 'archive')
+
+  f.engine.updateMemberScript({ type: 'updateMemberScript', id: f.id, revision: 1, podId: f.archive, hash })
+
+  expect(f.deliveries()).toEqual(['blocked'])
+  expect(JSON.parse(f.store.db.prepare('SELECT body FROM network_trace_events WHERE kind=\'member-script-updated\'').get()!.body as string)).toMatchObject({ renewedApprovals: 0 })
+})
