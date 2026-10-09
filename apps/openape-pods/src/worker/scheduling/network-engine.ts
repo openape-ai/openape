@@ -314,7 +314,7 @@ export class NetworkEngine {
     await Promise.all(this.pendingSettlements.values())
   }
 
-  // Script-only change: the contract, rights and dependencies stay pinned, so open work of other members keeps its revision.
+  // The contract and dependencies stay pinned, so open work of other members keeps its revision. Rights change only on a paused member.
   updateMemberScript(command: Extract<NetworkCommand, { type: 'updateMemberScript' }>): NetworkView {
     const { id: networkId, podId, hash } = command
     this.store.transaction(() => {
@@ -323,8 +323,6 @@ export class NetworkEngine {
       if (network.baseline_state !== 'ready') throw new Error('Restored networks require review before script updates')
       const member = definition.members.find(item => item.podId === podId)
       if (!member) throw new Error('Pod is not a member of this network revision')
-      const issues = memberScriptIssues(this.store, networkId, podId)
-      if (issues.length) throw new Error(`Member script update blocked: ${issues.join('; ')}. The current version remains pinned.`)
       const pod = this.store.getPod(podId)
       if (pod.lifecycle === 'archived' || !pod.activeScript) throw new Error('Archived Pods cannot be updated')
       if (pod.activeScript === hash) throw new Error('This script version is already active')
@@ -336,10 +334,15 @@ export class NetworkEngine {
       const previous = manifest(pod.activeScript); const next = manifest(hash)
       if (!this.store.db.prepare('SELECT 1 FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(podId, hash, pod.bindingRevision, this.resources.epoch(podId))) throw new Error('Validate this script for the current permissions first')
       if (next.contract === undefined || canonicalNetworkJson(parseGraphContract(next.contract)) !== canonicalNetworkJson(member.contract)) throw new Error('Contract changes require a reviewed composition change')
-      if (canonicalNetworkJson([...next.capabilities].sort()) !== canonicalNetworkJson([...previous.capabilities].sort()) || next.effects !== previous.effects) throw new Error('Rights changes require owner review')
+      const rightsChanged = canonicalNetworkJson([...next.capabilities].sort()) !== canonicalNetworkJson([...previous.capabilities].sort()) || next.effects !== previous.effects
+      if (rightsChanged && pod.lifecycle !== 'paused') throw new Error('Rights changes require pausing the member first')
       // The runtime part of the lock hash changes with every app release; only the script's own package set must stay the same.
       if (new DependencyStore(this.store).scriptSet(podId, hash) !== new DependencyStore(this.store).scriptSet(podId, pod.activeScript)) throw new Error('Dependency changes require owner review')
       if (next.checkpointSchemaVersion !== previous.checkpointSchemaVersion || canonicalNetworkJson([...next.triggers].sort()) !== canonicalNetworkJson([...previous.triggers].sort())) throw new Error('Checkpoint or trigger changes require owner review')
+      // Approvals were given for the previous script and rights; a paused member asks for them again.
+      const renewed = pod.lifecycle === 'paused' ? this.gates.renewMember(networkId, podId, 'Member script or rights changed; fresh approval required') : 0
+      const issues = memberScriptIssues(this.store, networkId, podId)
+      if (issues.length) throw new Error(`Member script update blocked: ${issues.join('; ')}. The current version remains pinned.`)
       new WorkspaceDetails(this.store, this.resources).execute({ type: 'activate', podId, hash, expectedActive: pod.activeScript, assignmentRevision: pod.bindingRevision }, true)
       new DefinitionCatalog(this.store, this.resources, parseOwner(this.currentOwner())).appendScriptVersion(podId, next)
       const binding = this.binding(podId, parseOwner(this.currentOwner()), definition.groupId)
@@ -350,7 +353,7 @@ export class NetworkEngine {
       const body = canonicalNetworkJson(amended)
       const prior = this.store.db.prepare('SELECT content_hash FROM network_revisions WHERE network_id=? AND revision=?').get(networkId, definition.revision)!
       this.store.db.prepare('UPDATE network_revisions SET contract=?,content_hash=? WHERE network_id=? AND revision=?').run(body, digest(body), networkId, definition.revision)
-      this.trace(networkId, 'member-script-updated', { podId, revision: definition.revision, previousScript: pod.activeScript, script: hash, definitionVersion: version, previousContentHash: prior.content_hash, contentHash: digest(body), via: 'mcp' })
+      this.trace(networkId, 'member-script-updated', { podId, revision: definition.revision, previousScript: pod.activeScript, script: hash, definitionVersion: version, previousContentHash: prior.content_hash, contentHash: digest(body), rightsChanged, renewedApprovals: renewed, via: 'mcp' })
     })
     return this.view()
   }
