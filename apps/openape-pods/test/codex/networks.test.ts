@@ -92,6 +92,7 @@ it('accepts member script maintenance only through the local assistant connectio
   const hash = 'a'.repeat(64)
   expect(parseCodexNetworkAction({ action: 'networks', command: { type: 'updateMemberScript', id: f.id, revision: 1, podId: f.consumer, hash } })).toEqual({ type: 'updateMemberScript', id: f.id, revision: 1, podId: f.consumer, hash })
   expect(parseCodexNetworkAction({ action: 'networks', command: { type: 'replayFailed', id: f.id, revision: 1, podId: f.consumer } })).toMatchObject({ type: 'replayFailed' })
+  expect(parseCodexNetworkAction({ action: 'networks', command: { type: 'reconcileEffect', id: f.id, revision: 1, runId: f.id, generation: 1, key: 'b'.repeat(64), attempt: 1, sequence: 2, outcome: 'confirmed_not_applied', evidence: 'Refused before dispatch' } })).toMatchObject({ type: 'reconcileEffect', outcome: 'confirmed_not_applied' })
   expect(() => parseCodexNetworkAction({ action: 'networks', command: { type: 'updateMemberScript', id: f.id, revision: 1, podId: f.consumer, hash: 'not-a-hash' } })).toThrow('hash')
   expect(() => f.engine.execute({ type: 'updateMemberScript', id: f.id, revision: 1, podId: f.consumer, hash })).toThrow('local assistant connection')
   expect(() => f.engine.execute({ type: 'replayFailed', id: f.id, revision: 1, podId: f.consumer })).toThrow('local assistant connection')
