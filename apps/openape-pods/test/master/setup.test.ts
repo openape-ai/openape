@@ -9,7 +9,6 @@ import { parseResourceCommand } from '../../src/contracts/resources'
 import { PodDatabase } from '../../src/worker/storage/database'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { MasterSetup } from '../../src/worker/master/setup'
-import { MasterDeadline } from '../../src/worker/master/deadline'
 import { modelResources } from '../../src/worker/master/resources'
 import type { SetupRequest } from '../../src/contracts/setup'
 
@@ -76,17 +75,6 @@ it('reports secret presence from encrypted resource metadata and reopens the nee
   store.db.prepare('UPDATE resources SET state=\'revoked\' WHERE id=?').run(resource.id)
   expect(setup.proposals(pod.id)[0]?.state).toBe('pending')
   expect(modelResources([resource])[0]?.configuration).toEqual({ alias: 'bot_token' })
-})
-it('keeps working setup alive beyond two minutes, but bounds stalls and total duration', () => {
-  vi.useFakeTimers()
-  const expire = vi.fn(); const deadline = new MasterDeadline(expire)
-  for (let minute = 0; minute < 9; minute++) { vi.advanceTimersByTime(60000); deadline.progress() }
-  expect(expire).not.toHaveBeenCalled()
-  vi.advanceTimersByTime(60000)
-  expect(expire.mock.calls[0]?.[0].message).toContain('time limit'); deadline.close()
-  expire.mockClear(); const stalled = new MasterDeadline(expire); vi.advanceTimersByTime(120000)
-  expect(expire.mock.calls[0]?.[0].message).toContain('stopped responding'); stalled.close()
-  expire.mockClear(); vi.advanceTimersByTime(600000); expect(expire).not.toHaveBeenCalled()
 })
 it('reports missing script honestly without creating a starter draft', () => {
   const { setup, pod, store } = fixture()

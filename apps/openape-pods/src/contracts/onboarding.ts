@@ -5,7 +5,7 @@ export interface ConnectionView { id: string, provider: ConnectionProvider, acco
 export interface MailSetup { podId: string, revision: number, ownerConnection: string, mailConnection: string, account: string, folders: { id: string, name: string }[], since: string | null, attachments: boolean }
 export interface PodIdentityView { podId: string, bound: boolean, ownerConnection: string | null, issuer: string | null, decisionIssuer: string | null, subject: string | null, brokerConnectionId: string | null }
 export interface OnboardingView { podIdentity?: PodIdentityView, connections: ConnectionView[], owner: string | null, runtime: { ready: boolean, error: string | null }, complete: boolean, folders?: { connectionId: string, items: { id: string, name: string }[] } }
-export type OnboardingCommand = { type: 'saveTypesafe', key: string } | { type: 'enableBroker', id: string, issuer: string, domain: string } | { type: 'revokeBroker', id: string } | { type: 'list', podId?: string } | { type: 'connect', provider: ConnectionProvider, account: string, switchAccount?: boolean } | { type: 'cancel' | 'disconnect' | 'openLogin', id: string } | { type: 'folders', id: string } | { type: 'assign', setup: MailSetup } | { type: 'finish' }
+export type OnboardingCommand = { type: 'saveTypesafe', key: string } | { type: 'enableBroker', id: string, issuer: string, domain: string } | { type: 'revokeBroker', id: string } | { type: 'list', podId?: string } | { type: 'connect', provider: ConnectionProvider, account: string, switchAccount?: boolean } | { type: 'cancel' | 'disconnect' | 'openLogin', id: string } | { type: 'folders', id: string } | { type: 'assign', setup: MailSetup } | { type: 'finish' | 'openGrants' }
 export function parseSince(value: unknown): string | null {
   if (value === null) return null
   if (typeof value !== 'string' || !/^\d{4}-\d\d-\d\dT00:00:00Z$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().replace('.000Z', 'Z') !== value) throw new Error('Choose a valid UTC start date or all history')
@@ -15,7 +15,7 @@ const uuid = (value: unknown): value is string => typeof value === 'string' && /
 export function parseOnboardingCommand(value: unknown): OnboardingCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid setup request')
   const item = value as Record<string, unknown>
-  const fields: Record<string, string[]> = { saveTypesafe: ['key'], enableBroker: ['id', 'issuer', 'domain'], revokeBroker: ['id'], list: ['podId'], connect: ['provider', 'account', 'switchAccount'], openLogin: ['id'], cancel: ['id'], disconnect: ['id'], folders: ['id'], assign: ['setup'], finish: [] }
+  const fields: Record<string, string[]> = { saveTypesafe: ['key'], enableBroker: ['id', 'issuer', 'domain'], revokeBroker: ['id'], list: ['podId'], connect: ['provider', 'account', 'switchAccount'], openLogin: ['id'], cancel: ['id'], disconnect: ['id'], folders: ['id'], assign: ['setup'], finish: [], openGrants: [] }
   if (typeof item.type !== 'string' || !Object.hasOwn(fields, item.type) || Object.keys(item).some(key => key !== 'type' && !fields[item.type as string]?.includes(key))) throw new Error('Unsupported setup request')
   if (item.type === 'saveTypesafe') parseTypesafeKey(item.key)
   if (item.type === 'assign' || item.type === 'folders' || (item.type === 'connect' && item.provider === 'microsoft')) throw new Error('Configure application accounts in the pod Permissions tab')

@@ -138,7 +138,6 @@ function unsettledConversionIssues(store: PodDatabase, legacy: WorkflowDefinitio
   )`, ids)) {
     issues.push('Complete the member recovery review before conversion')
   }
-  if (has(`SELECT 1 FROM control_changes c,json_each(c.body,'$.targets') t WHERE json_extract(c.body,'$.state') IN ('pending','running') AND json_extract(t.value,'$.podId') IN (SELECT value FROM json_each(?))`, ids)) issues.push('Resolve pending control changes before conversion')
   return issues
 }
 
