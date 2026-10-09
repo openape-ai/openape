@@ -86,7 +86,7 @@ export class PodToolBroker {
     if (lease.signal.aborted) stop()
     const append = (which: 'stdout' | 'stderr', bytes: Buffer) => {
       outputBytes += bytes.length
-      if (outputBytes > limit) { failure = new NonRetryableError(`Tool output exceeded ${limit} bytes; read smaller pages, for example with --limit`); domain.cancel(); return }
+      if (outputBytes > limit) { failure ??= new NonRetryableError(`Tool output exceeded ${limit} bytes; read smaller pages, for example with --limit`); domain.cancel(); return }
       if (which === 'stdout') stdout += outDecoder.write(bytes)
       else stderr += errDecoder.write(bytes)
     }
