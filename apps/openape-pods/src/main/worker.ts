@@ -14,7 +14,7 @@ import type { DefinitionCommand, DefinitionsView } from '../contracts/definition
 import type { NetworkGateManifest } from '../contracts/network-gates'
 import { resolveSshTarget, sshGrantArgv } from './ssh/configuration'
 import { invokeSsh } from './ssh/invoke'
-import { AuthorityError, InfrastructureError, NonRetryableError } from '../contracts/infrastructure'
+import { AuthorityError, InfrastructureError, NonRetryableError, retryInfrastructure } from '../contracts/infrastructure'
 import type { InfrastructureFailure } from '../contracts/infrastructure'
 import { MailArchiveService } from './mail/archive/service'
 import { ArchiveStore } from './mail/archive/store'
@@ -76,11 +76,12 @@ import { parseWorkspaceAction, workspaceHelp } from '../contracts/codex'
 import type { CodexRequest } from '../contracts/codex'
 import type { MasterCommand, MasterView } from '../contracts/master'
 import { realpathSync } from 'node:fs'
-import { parseServiceScope } from '../contracts/services'
+import { parseRunContext, parseServiceScope, runAuthorityWatchMs } from '../contracts/services'
 import type { CredentialCache } from './connections/cache'
 import { createMacOSCredentialCache } from './connections/macos'
 import { PodIdentityManager } from './connections/agent'
 import { AgentAuthority, RunGrantTokens } from './broker/authorization'
+import { setTimeout as delay } from 'node:timers/promises'
 import { MailService } from './mail/service'
 import { assignedMail } from './mail/assigned'
 import { parsePodDetails } from '../contracts/details'
@@ -116,8 +117,8 @@ function redactTerminalView(result: unknown): unknown {
 export class FixtureWorker {
   central: CentralController | null = null
   inbox: InboxDecisions | null = null
-  // The runtime grant is checked at run start and again when its reused token nears expiry.
-  private shellIdentities = new Map<string, { authorize: (signal: AbortSignal) => Promise<void> }>()
+  // The runtime grant is checked at run start, watched at a low frequency, and re-verified before each service call.
+  private shellIdentities = new Map<string, { authorize: (signal: AbortSignal) => Promise<void>, close: () => Promise<void> }>()
   private runTokens = new Map<string, RunGrantTokens>()
   private openedApprovals = new Set<string>()
   private archiveService?: MailArchiveService
@@ -183,7 +184,7 @@ export class FixtureWorker {
     })
     child.on('exit', (code) => {
       this.programs?.cancelAll()
-      this.clearRunAuthorizations()
+      void this.closeShellIdentities().catch((error: unknown) => { console.error('Pod shell credential cleanup failed', error) })
       for (const service of this.services.values()) service.abort(new Error('Owning worker stopped'))
       this.state = this.stopping ? { state: 'stopped', pid: null, error: null } : { state: 'error', pid: null, error: `Worker exited (${code}). Quit and reopen Pods to recover.` }
       for (const request of this.pending.values()) { clearTimeout(request.timer); request.reject(new Error('Worker stopped before replying')) }
@@ -278,8 +279,9 @@ export class FixtureWorker {
 
   cancelProgram(podId: string): void { this.programs?.cancelPod(podId) }
 
-  private clearRunAuthorizations(): void {
-    this.shellIdentities.clear(); this.runTokens.clear(); this.jevAttempts.clear()
+  private async closeShellIdentities(): Promise<void> {
+    const identities = [...this.shellIdentities.values()]; this.shellIdentities.clear(); this.runTokens.clear(); this.jevAttempts.clear()
+    await Promise.all(identities.map(identity => identity.close()))
   }
 
   async program(command: ProgramCommand, definition?: ProgramDefinition, file?: string): Promise<Awaited<ReturnType<ProgramManager['terminal']>> | Awaited<ReturnType<ProgramManager['prepare']>> | ResourceState | string | null> {
@@ -773,10 +775,9 @@ export class FixtureWorker {
     try {
       if (request.kind === 'shellClose') {
         this.jevAttempts.delete(scope.runId)
-        this.shellIdentities.delete(scope.runId); this.runTokens.delete(scope.runId); return true
+        await this.shellIdentities.get(scope.runId)?.close(); this.shellIdentities.delete(scope.runId); this.runTokens.delete(scope.runId); return true
       }
-      const tokens = this.grantTokens(scope.runId)
-      const context = await this.dispatch({ runContext: { scope } }) as { name: string, reason: string }
+      const context = parseRunContext(await this.dispatch({ runContext: { scope } }))
       const previous = async (permission: string, connection: { issuer: string, decisionIssuer?: string, subject: string }) => {
         const grant = await this.dispatch({ runContext: { scope, grant: { permission, issuer: connection.decisionIssuer ?? connection.issuer, subject: connection.subject } } }) as RunApproval | null
         return grant && !['cancelled', 'expired'].includes(grant.state) ? grant.grantId : undefined
@@ -790,7 +791,9 @@ export class FixtureWorker {
       }
       if (request.kind === 'shell') {
         await check()
-        if (!this.connections || this.shellIdentities.has(scope.runId)) throw new Error('Pod execution authority is unavailable or already in use')
+        if (!this.connections || !context.runtime || this.shellIdentities.has(scope.runId)) throw new Error('Pod execution authority is unavailable or already in use')
+        // A run starts with no reused tokens, so the runtime grant, owner, identity and key are checked at the IdP.
+        const tokens = new RunGrantTokens(); this.runTokens.set(scope.runId, tokens)
         const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
         const runtime = { executable: process.execPath, cli: app.isPackaged ? join(process.resourcesPath, 'apes/ape-shell.mjs') : join(dist, 'vendor/apes/ape-shell.mjs'), client: join(dist, 'runtime/shell-client.mjs') }
         const environment = await podEnvironment(this.root, scope.podId, runtime)
@@ -803,9 +806,25 @@ export class FixtureWorker {
         const assignment = { grantId: '', command: { cliId: 'pod-runtime', adapterPath, adapterDigest: adapter.digest, argv, permission: resolved.permission } }
         await authority.authorize(assignment, controller.signal, `Pod: ${context.name}\nRun the stored script inside this Pod's managed runtime. Script changes remain within separately assigned permissions. This approval does not enable a schedule.\nScript: ${join(this.root, 'runs', scope.runId, 'run.mjs')}\nWorkspace: ${environment.workspace}\nHOME: ${environment.home}`)
         await check(); controller.signal.throwIfAborted()
-        this.shellIdentities.set(scope.runId, { authorize: signal => authority.authorize(assignment, signal) })
+        const monitoring = new AbortController()
+        const monitor = (async () => {
+          try { while (!monitoring.signal.aborted) { await delay(runAuthorityWatchMs, undefined, { signal: monitoring.signal }); await retryInfrastructure(() => authority.assertActive(assignment.grantId, monitoring.signal), monitoring.signal, async (retry) => { if (!monitoring.signal.aborted) await this.dispatch({ serviceCheck: { scope, infrastructure: retry } }) }) } }
+          catch (error) {
+            if (!monitoring.signal.aborted) {
+              console.error('Pod execution authority lost', error)
+              try { await this.dispatch({ serviceCheck: { scope, authorityLost: true } }) }
+              catch (cancelError) { console.error('Could not cancel the revoked Pod run', cancelError) }
+            }
+          }
+        })()
+        this.shellIdentities.set(scope.runId, { authorize: signal => authority.authorize(assignment, signal), close: async () => { monitoring.abort(); await monitor } })
         return { home: environment.home, environment: environment.environment }
       }
+      // Every other service needs the run's active runtime authority; network and decision-maintenance runs execute no runtime.
+      const runtime = this.shellIdentities.get(scope.runId)
+      if (context.runtime && !runtime) throw new AuthorityError('Pod execution authority is not active for this run')
+      if (runtime) await runtime.authorize(controller.signal)
+      const tokens = this.grantTokens(scope.runId)
       if (request.kind === 'credential') {
         const alias = parseCredentialRead(request.body)
         if (!this.credentials) throw new Error('Credential store is unavailable')
@@ -818,7 +837,6 @@ export class FixtureWorker {
         if (current !== id) throw new Error('Credential changed during access')
         return value
       }
-      await this.shellIdentities.get(scope.runId)?.authorize(controller.signal)
       const state = await check()
       if (request.kind === 'gate') {
         if (!this.connections) throw new Error('Connection service unavailable')
@@ -904,7 +922,7 @@ export class FixtureWorker {
   async stop(): Promise<void> {
     await this.setupReady
     await this.programs?.stop()
-    this.clearRunAuthorizations()
+    await this.closeShellIdentities()
     await this.secretsGate?.stop()
     await this.connections?.stop()
     this.providerAbort.abort()
