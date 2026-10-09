@@ -420,7 +420,12 @@ superseded and unknown distinguishable; excluded is a retained per-item outcome.
 definition/binding/resource revisions and manifest digest before requesting a
 grant. Exclusion supersedes the batch and requests fresh approval. Changed payload
 or authority invalidates release; old evidence is viewable but cannot authorize
-new work. Persist consuming before one-time grant consumption. An interruption
+new work. When only the consumer authority changed (definition, binding, resources
+or configuration), undecided and not yet consumed inputs return to a fresh approval
+instead of blocking; the earlier grant is never reused. A paused member may change
+its script and rights through `updateMemberScript`; that update supersedes the
+member's remaining approvals the same way, because they covered the earlier
+script. Persist consuming before one-time grant consumption. An interruption
 between consumption and local settlement becomes unknown, never another consume.
 Owner decisions remain owner-only; scripts/model MCP tools cannot make them.
 

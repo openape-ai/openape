@@ -53,7 +53,7 @@ export class CodexControl {
 
   /**
    * Owner decision (issue 1454): a network member can be paused and resumed, and while it is paused its application, hosts and
-   * command grants can be prepared. The network uses new rights only after the owner activates a reviewed revision.
+   * command grants can be prepared. The member uses new rights once a script validated for them is pinned.
    */
   private networkMemberAction(podId: string, action: string, program?: string): boolean {
     if (['inspect', 'draft', 'validate', 'pause', 'resume'].includes(action)) return true

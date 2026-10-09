@@ -175,15 +175,16 @@ it('holds an uncertain consume without repeating it and lets unrelated consumers
   expect(f.started).toContain(f.independent)
 })
 
-it('invalidates the frozen approval after the consumer permissions change', async () => {
+it('never releases a frozen approval after the consumer permissions change', async () => {
   const f = runtimeFixture(() => 'approved')
   await f.emit('test.input')
   f.engine.tick(); await f.settle()
   f.store.db.prepare('UPDATE pods SET revision=revision+1 WHERE id=?').run(f.consumer)
   f.due(); f.engine.tick(); await f.settle()
+  // Until the consumer is validated for its new permissions, admission stops before any status poll or release.
   expect(f.calls).toEqual(['create'])
-  expect(f.store.db.prepare('SELECT state FROM network_gate_tasks').get()!.state).toBe('superseded')
-  expect(f.store.db.prepare('SELECT outcome FROM network_gate_items').get()!.outcome).toBe('obsolete')
+  expect(f.store.db.prepare('SELECT state FROM network_gate_tasks').all().map(row => row.state)).toEqual(['pending'])
+  expect(f.store.db.prepare('SELECT body FROM network_trace_events WHERE kind=\'instance-attention\'').get()!.body).toContain('needs validation')
   expect(f.started).not.toContain(f.consumer)
 })
 
@@ -196,8 +197,8 @@ it('invalidates a frozen v3 approval after configuration changes without releasi
   const binding = f.store.db.prepare('SELECT definition_id FROM network_members WHERE pod_id=?').get(f.consumer)!
   f.store.db.prepare('INSERT INTO definition_config VALUES(?,1,\'region\',\'public\',?)').run(binding.definition_id!, JSON.stringify('changed region'))
   f.due(); f.engine.tick(); await f.settle()
-  expect(f.calls).toEqual(['create'])
-  expect(f.store.db.prepare('SELECT state FROM network_gate_tasks').get()!.state).toBe('superseded')
+  expect(f.calls).toEqual(['create', 'create'])
+  expect(f.store.db.prepare('SELECT state FROM network_gate_tasks ORDER BY created_at,rowid').all().map(row => row.state)).toEqual(['superseded', 'pending'])
   expect(f.started).not.toContain(f.consumer)
 })
 
