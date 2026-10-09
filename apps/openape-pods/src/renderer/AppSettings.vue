@@ -3,7 +3,7 @@ import { t } from './i18n'
 import Onboarding from './Onboarding.vue'
 import JevConnection from './JevConnection.vue'
 import LanguageSwitcher from './LanguageSwitcher.vue'
-import McpAccess from './McpAccess.vue'
+import McpSession from './McpSession.vue'
 import RuntimeApprovalSettings from './RuntimeApprovalSettings.vue'
 import DataManagement from './DataManagement.vue'
 
@@ -38,7 +38,7 @@ defineEmits<{ logout: [] }>()
         {{ t('Manage agent access on the desktop.') }}
       </p>
     </section>
-    <McpAccess v-else />
+    <McpSession v-else />
     <section v-if="!browser" class="card">
       <RuntimeApprovalSettings />
     </section>

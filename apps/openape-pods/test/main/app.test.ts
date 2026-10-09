@@ -1,7 +1,9 @@
 // @vitest-environment node
 import { access, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { connect } from 'node:net'
+import { randomUUID } from 'node:crypto'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { channels } from '../../src/contracts/ipc'
 import { startMain } from './app-harness'
 import type { MainHarness } from './app-harness'
@@ -155,13 +157,36 @@ it('exposes automatic runtime approval only through the validated desktop prefer
   await expect(main.invoke(channels.runtimeApproval, { type: 'manage', issuer: 'https://foreign.test' })).rejects.toThrow()
 })
 
-it('restricts MCP grants to the trusted renderer and never accepts an agent-provided expiry', async () => {
+it('opens an MCP session only after the owner signs in and confirms natively, and ends it from the trusted renderer', async () => {
   main = await startMain()
-  expect(await main.invoke(channels.mcpAccess, { type: 'get' })).toEqual({ mode: 'off', duration: 'hour', expiresAt: null })
-  await expect(main.invoke(channels.mcpAccess, { type: 'set', mode: 'read', duration: 'hour' }, true)).rejects.toThrow()
-  await expect(main.invoke(channels.mcpAccess, { type: 'set', mode: 'write', duration: 'hour', expiresAt: null })).rejects.toThrow()
-  expect(await main.invoke(channels.mcpAccess, { type: 'set', mode: 'read', duration: 'hour' })).toMatchObject({ mode: 'read', duration: 'hour', expiresAt: expect.any(Number) })
-  await expect(access(join(main.root, 'codex/control.sock'))).resolves.toBeUndefined()
-  expect(await main.invoke(channels.mcpAccess, { type: 'set', mode: 'off', duration: 'day' })).toEqual({ mode: 'off', duration: 'day', expiresAt: null })
-  await expect(access(join(main.root, 'codex/control.sock'))).rejects.toThrow()
+  const endpoint = join(main.root, 'codex/control.sock')
+  await vi.waitFor(() => access(endpoint))
+  expect(await main.invoke(channels.mcpSession, { type: 'get' })).toEqual({ expiresAt: null, pending: false })
+  await expect(main.invoke(channels.mcpSession, { type: 'end' }, true)).rejects.toThrow()
+  for (const command of [{ type: 'start' }, { type: 'get', expiresAt: 1 }, null]) await expect(main.invoke(channels.mcpSession, command)).rejects.toThrow()
+  const socket = connect(endpoint); const frames: Record<string, unknown>[] = []; let buffer = ''
+  socket.on('data', (bytes) => { buffer += bytes.toString(); for (let index = buffer.indexOf('\n'); index >= 0; index = buffer.indexOf('\n')) { frames.push(JSON.parse(buffer.slice(0, index)) as Record<string, unknown>); buffer = buffer.slice(index + 1) } })
+  const call = async (session?: string) => {
+    const id = randomUUID(); socket.write(`${JSON.stringify({ id, action: { action: 'list' }, ...(session ? { session } : {}) })}\n`)
+    return vi.waitFor(() => { const frame = frames.find(item => item.id === id); if (!frame) throw new Error('No reply yet'); return frame })
+  }
+  // Declining the native confirmation after a valid sign-in leaves no session.
+  main.dialog.showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false })
+  expect(await call()).toMatchObject({ code: 'login_required' })
+  await vi.waitFor(() => expect(main!.dialog.showMessageBox).toHaveBeenCalledOnce())
+  expect(main.worker.verifyMcpOwner).toHaveBeenCalledWith(expect.any(AbortSignal), expect.any(Function))
+  expect(main.dialog.showMessageBox.mock.calls[0]![1]).toMatchObject({ message: 'Codex requests full Pods access for one hour', buttons: ['Cancel', 'Allow for one hour'], cancelId: 0, defaultId: 0 })
+  await vi.waitFor(async () => expect(await main!.invoke(channels.mcpSession, { type: 'get' })).toEqual({ expiresAt: null, pending: false }))
+  expect(frames.some(frame => 'session' in frame)).toBe(false)
+  main.dialog.showMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false })
+  expect(await call()).toMatchObject({ code: 'login_required' })
+  const session = await vi.waitFor(() => { const frame = frames.find(item => 'session' in item); if (!frame) throw new Error('No session yet'); return frame.session as string })
+  expect(await call(session)).toMatchObject({ result: { resources: [], epoch: 0 } })
+  expect(main.worker.codex).toHaveBeenCalledOnce()
+  expect(await main.invoke(channels.mcpSession, { type: 'get' })).toEqual({ expiresAt: expect.any(Number), pending: false })
+  expect(await main.invoke(channels.mcpSession, { type: 'end' })).toEqual({ expiresAt: null, pending: false })
+  main.dialog.showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false })
+  expect(await call(session)).toMatchObject({ code: 'login_required' })
+  expect(main.worker.codex).toHaveBeenCalledOnce()
+  socket.destroy()
 })
