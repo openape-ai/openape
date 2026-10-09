@@ -433,7 +433,7 @@ Validate and run manually before enabling a 15-minute interval in Settings. Revi
 
 ## Networks and chains on the map
 
-Networks and chains appear on the Automations map as groups with their members: a network exchanges items through the declared channels of its Pods, a chain runs its Pods in order. Codex creates and changes them; the detail page shows members, decision points, numbers, schedule and the latest run and offers Pause, Resume and Run now. Connecting Pods keeps their rights and independent schedules unchanged.
+Networks and chains appear on the Automations map as groups with their members: a network exchanges items through the declared channels of its Pods, a chain runs its Pods in order. Codex creates and changes them; the detail page shows members, decision points, numbers, schedule and the latest run and offers Pause, Resume and Run now. Connecting Pods keeps their rights and independent schedules unchanged. Each member uses its own applications, HTTP destinations, secrets and folders exactly like a standalone Pod, and every command and destination still needs its approval at the identity provider; only the archive member behind an approve route moves mail solely through the approved batch.
 
 Codex can also correct the script of a network member while the network keeps running, as long as its channels, rights and dependencies stay the same and that Pod has no running or uncertain work. Open questions of other Pods remain unaffected. The Pod’s detail page shows the update under Script changes; failed runs of that Pod can then start over under the corrected script, unless they attempted an external effect.
 
