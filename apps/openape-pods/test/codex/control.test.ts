@@ -35,33 +35,24 @@ function fixture() {
 }
 const count = (store: PodDatabase, sql: string) => Number(store.db.prepare(sql).get()!.count)
 
-it('keeps unrelated Pod access available while refusing legacy network member bypasses', async () => {
+it('administers network members as the owner while the shared engine keeps their execution in the network', async () => {
   const { store, send, codex, pod } = fixture()
   const network = seedNetwork(store)
   await expect(send({ action: 'runtime' })).resolves.toHaveProperty('networks')
   expect(await send({ action: 'list' })).toMatchObject({ pods: expect.arrayContaining([expect.objectContaining({ id: pod.id }), expect.objectContaining({ id: network.pod.id })]) })
   await send({ action: 'select', podIds: [pod.id, network.pod.id] })
-  await expect(send({ action: 'inspect', podId: pod.id, revision: 1 })).resolves.toHaveProperty('pod.id', pod.id)
-  await expect(send({ action: 'setVariable', podId: pod.id, revision: 1, name: 'mode', value: 'preview', variableRevision: 0 })).resolves.toHaveProperty('variables')
-  const request = { id: randomUUID(), action: { action: 'resources', revision: 1, command: { type: 'list', podId: pod.id } } }
-  expect(codex.administration({ type: 'begin', request })).toEqual({ completed: false })
-  for (const action of ['run', 'activate', 'rollback', 'setVariable', 'setSchedule']) await expect(send({ action, podId: network.pod.id, revision: 1 })).rejects.toThrow('update their scripts with networks updateMemberScript')
-  expect(() => codex.administration({ type: 'begin', request: { ...request, id: randomUUID(), action: { ...request.action, command: { type: 'list', podId: network.pod.id } } } })).toThrow('update their scripts with networks updateMemberScript')
-  const program = (command: Record<string, unknown>, extra: Record<string, unknown> = {}) => codex.administration({ type: 'begin', request: { id: randomUUID(), action: { action: 'program', revision: store.getPod(network.pod.id).revision, command: { podId: network.pod.id, ...command }, ...extra } } })
+  const revision = () => store.getPod(network.pod.id).revision
+  const program = (command: Record<string, unknown>, extra: Record<string, unknown> = {}) => codex.administration({ type: 'begin', request: { id: randomUUID(), action: { action: 'program', revision: revision(), command: { podId: network.pod.id, ...command }, ...extra } } })
   store.db.prepare('UPDATE pods SET lifecycle=\'active\' WHERE id=?').run(network.pod.id)
-  expect(() => program({ type: 'prepare', line: 'o365-cli --help' })).toThrow('application setup while paused')
-  await send({ action: 'pause', podId: network.pod.id, revision: store.getPod(network.pod.id).revision })
-  expect(store.getPod(network.pod.id).lifecycle).toBe('paused')
+  await expect(send({ action: 'setVariable', podId: network.pod.id, revision: revision(), name: 'mode', value: 'preview', variableRevision: 0 })).resolves.toHaveProperty('variables')
+  expect(codex.administration({ type: 'begin', request: { id: randomUUID(), action: { action: 'resources', revision: revision(), command: { type: 'list', podId: network.pod.id } } } })).toEqual({ completed: false })
   expect(program({ type: 'prepare', line: 'o365-cli --help' })).toEqual({ completed: false })
-  expect(program({ type: 'start', applicationId: randomUUID(), epoch: 0, argv: ['auth', 'login', '--account', 'owner@example.invalid'] })).toEqual({ completed: false })
-  expect(program({ type: 'poll', sessionId: randomUUID(), after: 0 })).toEqual({ completed: false })
-  expect(() => program({ type: 'importState', applicationId: randomUUID(), epoch: 0 }, { path: '/tmp/state.json' })).toThrow('application setup while paused')
-  await send({ action: 'resume', podId: network.pod.id, revision: store.getPod(network.pod.id).revision }).catch((error: Error) => expect(error.message).not.toContain('updateMemberScript'))
-  const pinned = store.getPod(network.pod.id).activeScript
-  await expect(send({ action: 'inspect', podId: network.pod.id, revision: store.getPod(network.pod.id).bindingRevision })).resolves.toHaveProperty('pod.id', network.pod.id)
-  await expect(send({ action: 'draft', podId: network.pod.id, revision: store.getPod(network.pod.id).bindingRevision, draftId: null, draftRevision: 0, code: 'export async function run() {}', capabilities: [] })).resolves.toHaveProperty('status', 'draft')
-  expect(store.getPod(network.pod.id).activeScript).toBe(pinned)
-  await expect(send({ action: 'saveWorkflow', definition: { type: 'save', id: randomUUID(), revision: 0, name: 'Bypass', nodes: [{ podId: network.pod.id, after: [], handoff: false }], schedule: null, enabled: false } })).rejects.toThrow('bounded network MCP')
+  expect(program({ type: 'importState', applicationId: randomUUID(), epoch: 0 }, { path: '/tmp/state.json' })).toEqual({ completed: false })
+  await expect(send({ action: 'run', podId: network.pod.id, revision: revision() })).rejects.toThrow('Network instances require network intake and dispatch')
+  await expect(send({ action: 'setSchedule', podId: network.pod.id, revision: revision(), spec: { kind: 'interval', seconds: 900 }, scheduleRevision: 0, enabled: true })).rejects.toThrow('network')
+  await expect(send({ action: 'saveWorkflow', definition: { type: 'save', id: randomUUID(), revision: 0, name: 'Bypass', nodes: [{ podId: network.pod.id, after: [], handoff: false }], schedule: null, enabled: false } })).rejects.toThrow('Network instances cannot join legacy workflows')
+  await send({ action: 'pause', podId: network.pod.id, revision: revision() })
+  expect(store.getPod(network.pod.id).lifecycle).toBe('paused')
   expect(store.db.prepare('SELECT count(*) AS count FROM runs WHERE pod_id=?').get(network.pod.id)?.count).toBe(1)
 })
 
