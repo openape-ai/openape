@@ -5,7 +5,7 @@ import type { DecisionEntry, DecisionProjection } from './decisions'
 
 // Graph workflow gates leave with the workflow model (issue 1455, M4): this module, its source and its worker call go together.
 export function workflowDecisions(view: WorkflowView, map: MapView | null, workflows: (command: WorkflowCommand) => Promise<unknown>, projection: DecisionProjection): DecisionEntry[] {
-  const automation = (id: string) => map?.collections.find(item => item.id === id)
+  const automation = (id: string) => map?.automations.find(item => item.id === id)
   const held = (view.gates?.held ?? []).flatMap((item) => {
     const workflow = automation(item.workflowId)
     const gate = workflow?.gates.find(entry => entry.key === item.gate)

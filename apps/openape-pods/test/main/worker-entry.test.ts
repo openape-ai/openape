@@ -138,9 +138,9 @@ it('routes assigned SSH observations through the real worker entry without requi
 it('lists descriptions with the workspace and routes a description command through the real worker', async () => {
   await send({ id: 'workspace-list', command: { type: 'list' } })
   expect(replies).toHaveBeenCalledWith({ id: 'workspace-list', state: expect.objectContaining({ descriptions: [], pods: expect.arrayContaining([expect.objectContaining({ name: 'Scheduled example' })]) }) })
-  await send({ id: 'describe-unknown', command: { type: 'describeCollection', id: randomUUID(), revision: 0, text: 'Nothing to describe' } })
+  await send({ id: 'describe-unknown', command: { type: 'describeAutomation', id: randomUUID(), revision: 0, text: 'Nothing to describe' } })
   expect(replies).toHaveBeenCalledWith({ id: 'describe-unknown', error: 'Network or workflow not found' })
-  await send({ id: 'describe-forged', command: { type: 'describeCollection', id: randomUUID(), revision: 0, text: 'Purpose', owner: 'forged' } })
+  await send({ id: 'describe-forged', command: { type: 'describeAutomation', id: randomUUID(), revision: 0, text: 'Purpose', owner: 'forged' } })
   expect(replies).toHaveBeenCalledWith({ id: 'describe-forged', error: 'Unsupported workspace command' })
 })
 
@@ -226,7 +226,7 @@ it('rechecks network browser mutation authority in the real worker when an older
   expect(replies).toHaveBeenCalledWith({ id: 'network-safe-pause', state: true })
   await send({ id: 'network-describe', command: { central: { type: 'assertCommand', command: { channel: 'details', body: { type: 'describe', podId: network.pod.id, revision: 0, text: 'Explains this member' } } } } })
   expect(replies).toHaveBeenCalledWith({ id: 'network-describe', state: true })
-  await send({ id: 'network-describe-collection', command: { central: { type: 'assertCommand', command: { channel: 'workspace', body: { type: 'describeCollection', id: network.networkId, revision: 0, text: 'Explains this network' } } } } })
+  await send({ id: 'network-describe-collection', command: { central: { type: 'assertCommand', command: { channel: 'workspace', body: { type: 'describeAutomation', id: network.networkId, revision: 0, text: 'Explains this network' } } } } })
   expect(replies).toHaveBeenCalledWith({ id: 'network-describe-collection', state: true })
   await send({ id: 'network-activate', command: { central: { type: 'assertCommand', command: { channel: 'details', body: { type: 'activate', podId: network.pod.id, hash: 'a'.repeat(64), expectedActive: null, assignmentRevision: 1 } } } } })
   expect(replies).toHaveBeenCalledWith({ id: 'network-activate', error: expect.stringContaining('desktop review') })

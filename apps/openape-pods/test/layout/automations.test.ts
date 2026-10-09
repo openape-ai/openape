@@ -64,7 +64,7 @@ describe('Automatisierungen layout', () => {
     expect(drawer.right).toBe(1440 - 16)
     expect(drawer.bottom).toBeLessThanOrEqual(1000)
     await shot('05-pod-detail-triage')
-    shell.open(triage.collection!); await flushPromises(); await frames(5)
+    shell.open(triage.automation!); await flushPromises(); await frames(5)
     expect(document.querySelectorAll('.automation-detail .members button')).toHaveLength(11)
     await shot('06-netz-detail')
   })
