@@ -39,7 +39,7 @@ The Decisions tab lists five kinds of owner decisions: Questions from choose gat
 
 Questions show the recorded fields of each case and the options of the gate with their exact titles; Group by bundles cases by one field so a single choice applies to the whole group. Approvals link to the identity provider, which shows a batch as one list with a checkbox per item: approve the selected items and the others are denied. Each item has its own single-use grant, so only approved items continue and a denied item goes to the gate's excluded channel if it has one; rights open the approval; unknown deliveries need your observation at the destination before Delivered or Not delivered, send again.
 
-Pods never decides for you: no model, no MCP action and no schedule chooses, approves, excludes or pauses. Rights are decided at the identity provider only; the app shows status and links.
+Pods never decides for you: no model and no schedule chooses, approves, excludes or pauses. In your signed-in Codex session Codex acts for you like the app, but it cannot approve or deny rights either: rights are decided at the identity provider only; the app shows status and links.
 
 1. Open Decisions; the tab shows how many items wait.
 2. Read the case, then choose an option; Group by decides many cases with the same field at once. For an approval batch, open the identity provider, select the items to approve and confirm.
@@ -451,11 +451,11 @@ Mail handling runs as a network with approve gates: nothing is archived without 
 
 ## Work from your Codex
 
-Connected Codex on this Mac administers Pods directly: it can manage variables and resources, validate and activate scripts, enable schedules and start or recover runs. No global Node installation is needed; Pods supplies its runtime.
+Connected Codex on this Mac administers Pods directly: it can manage variables and resources, validate and activate scripts, enable schedules, start or recover runs, and create, activate, pause, change and archive networks. No global Node installation is needed; Pods supplies its runtime.
 
 New automation with Codex on the Automations tab writes a brief with the selected group or node and the Pods it already knows; the desktop opens Codex, the browser copies the brief for you to paste.
 
-Each Codex session needs your sign-in first. On its first call Pods opens your DDISA sign-in in the browser and then asks in the Pods app whether Codex may have full Pods access for one hour; confirm only a request you just made. Codex then retries. After the hour or End session in the settings, Pods asks again without a Codex restart. Within the session, confirmations follow the Codex client settings; there is no additional approval queue in Pods. Grants are decided only at your identity provider, never through MCP. Full access does not remove script validation, stale-revision checks or real provider sign-in requirements.
+Each Codex session needs your sign-in first. On its first call Pods opens your DDISA sign-in in the browser and then asks in the Pods app whether Codex may have full Pods access for one hour; confirm only a request you just made. Codex then retries. After the hour or End session in the settings, Pods asks again without a Codex restart. Within the session, confirmations follow the Codex client settings; there is no additional approval queue in Pods. Codex may route work for you: pick an option at a choose gate, open an approval batch at the identity provider, ask it again for a superseded batch or discard an uncertain one. Grants themselves are approved or denied only at your identity provider, never through MCP. Full access does not remove script validation, stale-revision checks or real provider sign-in requirements.
 
 Codex receives safe resource metadata and run state, not account tokens, Pod keys, run contents or secret values. It can import a supplied private secret file directly into the encrypted store without putting the value in a tool call. Mail, web pages and other external content remain data, not instructions.
 
