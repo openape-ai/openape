@@ -157,14 +157,36 @@ export class AgentAuthority {
   }
 
   async authorize(assignment: AssignedAuthorization, signal: AbortSignal, summary?: string): Promise<void> {
-    const key = [this.connection.subject, this.connection.targetHost, this.connection.keyId, assignment.command.cliId, assignment.command.adapterDigest, assignment.command.permission].join('\n')
-    const minted = this.tokens?.reusable(key)
-    if (minted) {
-      await authorizeAssignedCommand(assignment.command, minted.token, { ...this.scope(minted.grantId, signal), jwks: minted.jwks, consume: false })
-      assignment.grantId = minted.grantId
-      return
-    }
+    if (await this.reuse(assignment, signal)) return
     assignment.grantId = await this.acquire(assignment, signal, summary)
+    await this.mint(assignment, signal)
+  }
+
+  /**
+   * Re-checks an already acquired grant during a run. It never looks up a previous grant, never creates
+   * one and never approves one: a grant that is no longer approved ends the run's authority.
+   */
+  async refresh(assignment: AssignedAuthorization, signal: AbortSignal): Promise<void> {
+    if (await this.reuse(assignment, signal)) return
+    const grant = await this.grant(assignment.grantId, signal)
+    if (grant.status !== 'approved') throw new AuthorityError(`Pod execution permission is ${grant.status}; review the Pod permissions before retrying`)
+    await this.mint(assignment, signal)
+  }
+
+  // The key includes the grant, so a token is only reused for the very grant it was minted for.
+  private tokenKey(assignment: AssignedAuthorization): string {
+    return [this.connection.subject, this.connection.targetHost, this.connection.keyId, assignment.grantId, assignment.command.cliId, assignment.command.adapterDigest, assignment.command.permission].join('\n')
+  }
+
+  private async reuse(assignment: AssignedAuthorization, signal: AbortSignal): Promise<boolean> {
+    if (!assignment.grantId) return false
+    const minted = this.tokens?.reusable(this.tokenKey(assignment))
+    if (!minted || minted.grantId !== assignment.grantId) return false
+    await authorizeAssignedCommand(assignment.command, minted.token, { ...this.scope(minted.grantId, signal), jwks: minted.jwks, consume: false })
+    return true
+  }
+
+  private async mint(assignment: AssignedAuthorization, signal: AbortSignal): Promise<void> {
     await this.assertActive(assignment.grantId, signal)
     const reply = await this.request(`/api/grants/${encodeURIComponent(assignment.grantId)}/token`, 'POST', signal) as { authz_jwt?: unknown }
     if (!reply || typeof reply.authz_jwt !== 'string') throw new Error('Missing assigned grant token')
@@ -172,7 +194,7 @@ export class AgentAuthority {
     const jwks = await this.keySet(scope.jwksUri, signal)
     await authorizeAssignedCommand(assignment.command, reply.authz_jwt, { ...scope, jwks })
     const claims = tokenClaims(reply.authz_jwt)
-    if (claims.grantType !== 'once') this.tokens?.remember(key, { grantId: assignment.grantId, token: reply.authz_jwt, jwks, expiresAt: claims.exp * 1000 })
+    if (claims.grantType !== 'once') this.tokens?.remember(this.tokenKey(assignment), { grantId: assignment.grantId, token: reply.authz_jwt, jwks, expiresAt: claims.exp * 1000 })
   }
 
   private scope(grantId: string, signal: AbortSignal) {
