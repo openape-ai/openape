@@ -86,6 +86,8 @@ export class PodDatabase {
   readonly blobs: string
   readonly path: string
   private transactionDepth = 0
+  /** Runs after any write makes a Pod active; its paused-setup application terminal must end then (issue 1454). */
+  onActivated: (podId: string) => void = () => {}
   constructor(readonly root: string) {
     this.path = join(root, 'control.sqlite')
     if (existsSync(this.path)) {
@@ -105,6 +107,8 @@ export class PodDatabase {
       this.migrate()
       assertNetworkStorage(this.db)
       this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;')
+      this.db.function('pod_activated', (podId) => { this.onActivated(String(podId)); return null })
+      this.db.exec('CREATE TEMP TRIGGER pod_activated AFTER UPDATE OF lifecycle ON pods WHEN NEW.lifecycle=\'active\' AND OLD.lifecycle<>\'active\' BEGIN SELECT pod_activated(NEW.id); END')
       mkdirSync(this.blobs, { recursive: true, mode: 0o700 })
     }
     catch (error) { this.db.close(); throw error }

@@ -88,6 +88,7 @@ if (!port) throw new Error('Pods worker requires its owning Electron process')
 const store = new PodDatabase(process.cwd())
 const mailBridge = new MailBridge(value => port.postMessage(value))
 let dispatcher: RunDispatcher
+store.onActivated = podId => port.postMessage({ programCancel: podId })
 const registry = new ResourceRegistry(store, (podId) => { dispatcher.cancelPod(podId, 'Resource permissions changed', 'authority'); port.postMessage({ programCancel: podId }) })
 const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
 const executable = process.env.PODS_RUNTIME_EXECUTABLE
@@ -178,9 +179,6 @@ async function executeCodexNetwork(command: CodexNetworkCommand): Promise<Networ
   if ((command.type === 'updateMemberScript' || command.type === 'replayFailed') && (!startupReady || (Date.now() >= centralUntil && ownerOperations.getStore() !== true) || suspended || maintenance)) throw new Error('Network execution requires a ready local runtime')
   if (command.type === 'updateMemberScript') return networks.updateMemberScript(command)
   if (command.type === 'replayFailed') return networks.replayFailed(command)
-  if (command.type === 'gateReview') return networks.agentGateReview(command)
-  if (command.type === 'discardFailure') return networks.agentDiscardFailure(command)
-  if (command.type === 'reconcileEffect') return executeNetwork({ ...command, evidence: `Assistant request after owner confirmation: ${command.evidence}`.slice(0, 4000) }, ownerOperations.getStore() === true)
   return executeNetwork(command, ownerOperations.getStore() === true)
 }
 async function executeNetwork(command: NetworkCommand, ownerOperation: boolean): Promise<NetworkView> {
