@@ -23,6 +23,8 @@ export function recoveryHold(store: PodDatabase, podId: string, runId?: string):
   if (effect) return `External outcome requires review: ${effect.operation} (${effect.effect_key})`
   if (store.db.prepare('SELECT 1 FROM graph_gate_batches WHERE pod_id=? AND state IN (\'consuming\',\'unknown\') LIMIT 1').get(podId)) return 'An approval action has an unresolved outcome'
   if (runId && store.db.prepare('SELECT 1 FROM run_events WHERE run_id=? AND type=\'approval\' AND json_extract(data,\'$.state\') IN (\'denied\',\'revoked\') LIMIT 1').get(runId)) return 'Execution permission was refused or revoked; review before retrying'
+  // A run that sent an HTTP write or ran an application write is never replayed automatically; the owner reviews it.
+  if (runId && store.db.prepare('SELECT 1 FROM effect_ledger WHERE run_id=? LIMIT 1').get(runId)) return 'This run already wrote externally; review its effects before retrying'
   if (unresolvedOperation(store, podId)) return 'An operation without replay evidence requires review'
   return null
 }

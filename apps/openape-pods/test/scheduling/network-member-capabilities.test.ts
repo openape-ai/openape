@@ -3,11 +3,10 @@ import { randomUUID } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AuthorityError } from '../../src/contracts/infrastructure'
 import type { HttpRequest } from '../../src/contracts/http'
-import type { CredentialCache } from '../../src/main/connections/cache'
+import type { AgentConnection } from '../../src/main/broker/authorization'
 import { executeHttp } from '../../src/main/programs/http-service'
-import type { ProgramAuthority } from '../../src/main/programs/grants'
 import { programRequest } from '../../src/main/programs/invoke'
-import { resolveProgram } from '../../src/main/programs/session'
+import { prepareProgramAuthorization } from '../../src/main/programs/session'
 import { authorizeCredentialService } from '../../src/worker/mail/authorization'
 import type { RunServiceScope } from '../../src/worker/runs/dispatcher'
 import { closeNetworks, networkFixture } from './network-fixture'
@@ -36,14 +35,15 @@ function chain() {
   const secrets = new Map<string, string>()
   const serviceScope = ({ podId, runId, epoch, assignmentRevision, capabilities }: RunServiceScope) => ({ podId, runId, epoch, assignmentRevision, capabilities })
   const f: ReturnType<typeof networkFixture> = networkFixture({
-    // Worker tool service resolves the Pod's declared application; the desktop then requires a recorded grant before launch.
-    tool: async (body, _signal, scope) => {
+    // Worker tool service resolves the Pod's sandboxed application; the desktop then requires a covering grant before launch.
+    tool: async (body, signal, scope) => {
       const { assignment, argv } = programRequest(f.resources.list(scope.podId), scope.podId, scope.capabilities, body)
-      await resolveProgram(assignment, scope.podId, argv, true)
+      const { authority, authorization } = await prepareProgramAuthorization(assignment, {} as AgentConnection, argv)
+      await authority.authorize(authorization, signal)
       launched.push({ podId: scope.podId, argv })
       return { exitCode: 0, stderr: '', stdout: JSON.stringify({ events: ['Standup 09:00'] }) }
     },
-    http: async (request: HttpRequest, signal, scope) => executeHttp(f.resources.list(scope.podId), serviceScope(scope), request, '/unused', {} as CredentialCache, signal),
+    http: async (request: HttpRequest, signal, scope) => executeHttp(f.resources.list(scope.podId), serviceScope(scope), request, '/unused', {} as AgentConnection, signal),
     credential: async (alias, _signal, scope) => secrets.get(authorizeCredentialService(f.store, f.resources, f.dispatcher.runs, { scope: serviceScope(scope) }, alias))!,
   })
   const items: string[] = []
@@ -63,15 +63,14 @@ function chain() {
       items.push(item.key)
     }
   })
-  const authority = (podId: string, grantId: string): ProgramAuthority => ({ identity: { connectionId: randomUUID(), podId, issuer: f.owner.issuer, owner: f.owner.subject, subject: `pod-${podId}`, keyId: 'synthetic' }, ownerConnection: randomUUID(), grantId })
-  const assignCalendar = (podId: string, permissions: string[]) => {
+  const assignCalendar = (podId: string) => {
     const id = randomUUID()
     const capability = `tool.app_${id.replaceAll('-', '')}.invoke`
-    f.resources.assignProgram(podId, id, { type: 'program', name: 'calendar', capability, stateId: randomUUID(), executable: '/synthetic/o365-cli', executableHash: 'a'.repeat(64), cliId: 'o365-cli', adapterPath: '/synthetic/o365.toml', adapterHash: 'b'.repeat(64), networkHosts: [], entryFiles: [], environment: {}, grants: permissions.map(permission => ({ permission, display: permission, authority: authority(podId, `grant-${permission}`) })) }, f.resources.epoch(podId))
+    f.resources.assignProgram(podId, id, { type: 'program', name: 'calendar', capability, stateId: randomUUID(), executable: '/synthetic/o365-cli', executableHash: 'a'.repeat(64), cliId: 'o365-cli', adapterPath: '/synthetic/o365.toml', adapterHash: 'b'.repeat(64), networkHosts: [], entryFiles: [], environment: {} }, f.resources.epoch(podId))
     return capability
   }
   const assignBot = (podId: string) => {
-    f.resources.assignHttp(podId, { origin, methods: ['POST'] }, authority(podId, 'http-grant'), f.resources.epoch(podId))
+    f.resources.assignHttp(podId, { origin, methods: ['POST'] }, f.resources.epoch(podId))
     const credentialId = randomUUID()
     f.resources.assignCredential(podId, 'bot_token', credentialId, f.resources.epoch(podId))
     secrets.set(credentialId, secret)
@@ -106,14 +105,14 @@ it('processes one item through a source, a program-reading consumer and a consum
   idp.authorize.mockResolvedValue(undefined)
   idp.send.mockResolvedValue({ status: 201, headers: {}, body: '{"id":"message-1"}' })
   const c = chain()
-  c.declare(c.calendar, [c.assignCalendar(c.calendar, ['calendar:list'])])
+  c.declare(c.calendar, [c.assignCalendar(c.calendar)])
   c.declare(c.bot, c.assignBot(c.bot))
   const id = c.create()
   await c.run(id)
   expect([c.state(c.source), c.state(c.calendar), c.state(c.bot)]).toEqual(['completed', 'completed', 'completed'])
   expect(c.launched).toEqual([{ podId: c.calendar, argv: ['list', '--day', 'today'] }])
   expect(c.items).toEqual(['m1'])
-  expect(idp.authorize).toHaveBeenCalledTimes(1)
+  expect(idp.authorize).toHaveBeenCalledTimes(2)
   expect(idp.send).toHaveBeenCalledTimes(1)
   const sent = idp.send.mock.calls[0]![0] as HttpRequest
   expect(sent).toMatchObject({ url: `${origin}/messages`, method: 'POST', headers: { authorization: `Bearer ${secret}` } })
@@ -135,10 +134,10 @@ it('refuses a program command and an HTTP request without their IdP grant and se
   c.f.behaviours.set(c.bot, async (received, invoke) => {
     for (const item of received) await invoke('http.request', { url: `${origin}/messages`, method: 'POST', headers: {}, body: '{}', key: `briefing:${item.key}` }).catch((error: Error) => refusals.push(error.message))
   })
-  c.declare(c.calendar, [c.assignCalendar(c.calendar, [])])
+  c.declare(c.calendar, [c.assignCalendar(c.calendar)])
   c.declare(c.bot, c.assignBot(c.bot))
   await c.run(c.create())
-  expect(refusals).toEqual([expect.stringContaining('Approve this application command'), expect.stringContaining('Grant does not cover')])
+  expect(refusals).toEqual([expect.stringContaining('Grant does not cover'), expect.stringContaining('Grant does not cover')])
   expect(c.launched).toEqual([])
   expect(idp.send).not.toHaveBeenCalled()
   // An effect whose request was refused is held for owner review like in a standalone Pod; nothing is retried.
@@ -163,7 +162,7 @@ it('refuses programs, HTTP destinations and secrets assigned to another member',
   })
   c.f.behaviours.set(c.bot, async (_received, invoke) => { await invoke('tools.invoke', { application: 'calendar', argv: ['list', '--day', 'today'] }).catch((error: Error) => refusals.push(error.message)) })
   // The calendar belongs to the first consumer, the destination and secret to the bot; the source declares neither.
-  c.declare(c.calendar, [c.assignCalendar(c.calendar, ['calendar:list'])])
+  c.declare(c.calendar, [c.assignCalendar(c.calendar)])
   c.declare(c.bot, c.assignBot(c.bot))
   await c.run(c.create())
   expect(refusals).toEqual([

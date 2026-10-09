@@ -58,7 +58,8 @@ export class CodexControl {
   administration(command: AdministrationJournal): AdministrationReceipt {
     const { request } = command
     // Desktop commands are not Pod-scoped; they share only the receipt.
-    const action = request.action.action === 'desktop' ? (parseDesktopAction(request.action), null) : parseAdministration(request.action)
+    const parsed = request.action.action === 'desktop' ? (parseDesktopAction(request.action), null) : parseAdministration(request.action)
+    const action = parsed && parsed.kind !== 'grants' && parsed.kind !== 'sandbox' ? parsed : null
     const id = `codex-admin:${request.id}`
     const requestHash = digest(JSON.stringify(request.action))
     return this.store.transaction(() => {

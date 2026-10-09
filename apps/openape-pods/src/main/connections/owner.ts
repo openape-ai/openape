@@ -3,6 +3,7 @@ import { createServer } from 'node:http'
 import { readFile, writeFile } from 'node:fs/promises'
 import type { CredentialCache } from './cache'
 import { connectionRequest, readJSON } from './http'
+import { OwnerSession } from './owner-session'
 
 const clientId = 'apes-cli'
 const redirectURI = 'http://localhost:9876/callback'
@@ -37,9 +38,20 @@ export class OwnerConnection {
     return { issuer, subject: value.subject }
   }
 
-  /** Proves that the owner signs in now, without touching the stored connection; the tokens are discarded. */
-  async verify(issuer: string, account: string, signal: AbortSignal, present: (value: { url: string }) => void): Promise<{ subject: string }> {
-    return { subject: (await this.authorize(issuer, account, signal, present)).subject }
+  /**
+   * Signs the owner in now for one MCP session without touching the stored connection. The tokens stay in the
+   * returned session in memory and end with it at `endsAt` at the latest.
+   */
+  async session(issuer: string, account: string, endsAt: number, signal: AbortSignal, present: (value: { url: string }) => void): Promise<OwnerSession> {
+    const tokens = await this.authorize(issuer, account, signal, present)
+    return new OwnerSession(tokens, endsAt, {
+      refresh: async (current, renewal) => {
+        const refreshed = await this.exchange(issuer, account, { grant_type: 'refresh_token', refresh_token: current.refreshToken, client_id: clientId }, renewal)
+        if (refreshed.subject !== current.subject) throw new Error('Refreshed owner identity changed; sign in again')
+        return refreshed
+      },
+      revoke: async (current) => { await connectionRequest(issuer, '/revoke', { token: current.refreshToken }, AbortSignal.timeout(10000)) },
+    })
   }
 
   private async authorize(issuer: string, account: string, signal: AbortSignal, present: (value: { url: string }) => void): Promise<OwnerTokens> {

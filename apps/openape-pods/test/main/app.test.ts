@@ -170,10 +170,11 @@ it('opens an MCP session only after the owner signs in and confirms natively, an
     return vi.waitFor(() => { const frame = frames.find(item => item.id === id); if (!frame) throw new Error('No reply yet'); return frame })
   }
   // Declining the native confirmation after a valid sign-in leaves no session.
+  main.worker.mcpOwnerSession.mockResolvedValue(null)
   main.dialog.showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false })
   expect(await call()).toMatchObject({ code: 'login_required' })
   await vi.waitFor(() => expect(main!.dialog.showMessageBox).toHaveBeenCalledOnce())
-  expect(main.worker.verifyMcpOwner).toHaveBeenCalledWith(expect.any(AbortSignal), expect.any(Function))
+  expect(main.worker.mcpOwnerSession).toHaveBeenCalledWith(expect.any(Number), expect.any(AbortSignal), expect.any(Function))
   expect(main.dialog.showMessageBox.mock.calls[0]![1]).toMatchObject({ message: 'Codex requests full Pods access for one hour', buttons: ['Cancel', 'Allow for one hour'], cancelId: 0, defaultId: 0 })
   await vi.waitFor(async () => expect(await main!.invoke(channels.mcpSession, { type: 'get' })).toEqual({ expiresAt: null, pending: false }))
   expect(frames.some(frame => 'session' in frame)).toBe(false)

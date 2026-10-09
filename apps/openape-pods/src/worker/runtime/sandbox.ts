@@ -1,4 +1,5 @@
 import { quoteShell } from '../../runtime/environment'
+import type { SandboxLevel } from '../../contracts/sandbox'
 import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
@@ -7,6 +8,8 @@ import { isAbsolute, join } from 'node:path'
 import type { Duplex, Readable, Writable } from 'node:stream'
 
 export interface RuntimePolicy {
+  /** `owner` keeps supervision but gives the program the owner's file and network reach; the Pod identity is unchanged. */
+  level?: SandboxLevel
   executable: string
   workspace: string
   readFiles: string[]
@@ -22,6 +25,7 @@ function literal(path: string): string {
 }
 export function sandboxPolicy(policy: RuntimePolicy): string {
   const executable = literal(policy.executable)
+  if (policy.level === 'owner') return '(version 1)\n(allow default)\n'
   const readFiles = policy.readFiles.map(path => `(literal ${literal(path)})`).join(' ')
   const runtime = policy.runtimeDirectories.map(path => `(subpath ${literal(path)})`).join(' ')
   const reads = (policy.readDirectories ?? []).map(path => `(subpath ${literal(path)})`).join(' ')

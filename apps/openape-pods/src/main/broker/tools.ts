@@ -7,8 +7,10 @@ import { parseCredentialJSON } from '../connections/cache'
 import type { CredentialCache } from '../connections/cache'
 import { launchSandbox, verifyExecutable } from '../../worker/runtime/sandbox'
 import type { AgentAuthority, AssignedAuthorization } from './authorization'
+import type { SandboxLevel } from '../../contracts/sandbox'
 
 export interface ToolAssignment extends AssignedAuthorization {
+  level?: SandboxLevel
   id: string
   programState?: { id: string, podId: string, applicationId: string }
   capability: string
@@ -75,7 +77,7 @@ export class PodToolBroker {
     const args = [...assignment.prefix, ...assignment.command.argv.slice(1), ...(cache && assignment.cacheArgument ? [assignment.cacheArgument, dirname(cache)] : [])]
     const limit = assignment.maxOutputBytes ?? 256 * 1024
     if (!Number.isSafeInteger(limit) || limit < 1024 || limit > 32 * 1024 * 1024) throw new Error('Invalid tool output bound')
-    const domain = await launchSandbox(this.helper, this.root, { executable: assignment.executable, workspace: await realpath(lease.workspace ?? workspace), readDirectories: lease.readDirectories, writeDirectories: [...(lease.workspace ? [await realpath(workspace)] : []), ...lease.writeDirectories ?? []], readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: assignment.runtimeDirectories, networkPorts: assignment.networkPorts, systemTrust: assignment.networkPorts.length > 0 }, args, { ...assignment.runtimeEnvironment, ...assignment.environment, HOME: workspace, TMPDIR: workspace, ...(cache ? { POD_TOOL_AUTH_FILE: cache } : {}) }, lease.registerDomain)
+    const domain = await launchSandbox(this.helper, this.root, { level: assignment.level, executable: assignment.executable, workspace: await realpath(lease.workspace ?? workspace), readDirectories: lease.readDirectories, writeDirectories: [...(lease.workspace ? [await realpath(workspace)] : []), ...lease.writeDirectories ?? []], readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: assignment.runtimeDirectories, networkPorts: assignment.networkPorts, systemTrust: assignment.networkPorts.length > 0 }, args, { ...assignment.runtimeEnvironment, ...assignment.environment, HOME: workspace, TMPDIR: workspace, ...(cache ? { POD_TOOL_AUTH_FILE: cache } : {}) }, lease.registerDomain)
     let stdout = ''; let stderr = ''; let failure: Error | undefined
     let outputBytes = 0
     const outDecoder = new StringDecoder('utf8'); const errDecoder = new StringDecoder('utf8')

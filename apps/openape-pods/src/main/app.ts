@@ -93,16 +93,16 @@ const codexTarget = { executable: process.execPath, script: join(__dirname, '../
 // replace only the browser sign-in and still need the native confirmation.
 const syntheticMcpOwner = fixture && process.env.NODE_ENV === 'test' && process.env.OPENAPE_PODS_FIXTURE_MCP_OWNER === 'synthetic'
 const mcpSessions = new McpOwnerSessions({
-  login: signal => syntheticMcpOwner ? Promise.resolve() : worker.verifyMcpOwner(signal, ({ url }) => { void shell.openExternal(url).catch((error: unknown) => console.error('Could not open the MCP sign-in', error)) }),
+  login: (endsAt, signal) => syntheticMcpOwner ? Promise.resolve(null) : worker.mcpOwnerSession(endsAt, signal, ({ url }) => { void shell.openExternal(url).catch((error: unknown) => console.error('Could not open the MCP sign-in', error)) }),
   confirm: confirmMcpSession,
 })
-const codexServer = new CodexControlServer(codexTarget.socket, request => worker.codex(request), mcpSessions)
+const codexServer = new CodexControlServer(codexTarget.socket, (request, owner) => worker.codex(request, owner), mcpSessions)
 // The IdP answers a signed-in browser without a prompt, so the owner confirms here
 // that this sign-in belongs to a request he just made.
 async function confirmMcpSession(signal: AbortSignal): Promise<boolean> {
   if (!window) return false
   if (!hiddenFixture) { showWindow(); app.focus({ steal: true }) }
-  const answer = await dialog.showMessageBox(window, { type: 'warning', title: t('MCP session'), message: t('Codex requests full Pods access for one hour'), detail: t('Allow only if you just asked Codex or another MCP client to work with Pods. It can then change Pods, scripts, resources and schedules and start runs. Grants are still decided only at your identity provider. End the session in App settings at any time.'), buttons: [t('Cancel'), t('Allow for one hour')], defaultId: 0, cancelId: 0, signal })
+  const answer = await dialog.showMessageBox(window, { type: 'warning', title: t('MCP session'), message: t('Codex requests full Pods access for one hour'), detail: t('Allow only if you just asked Codex or another MCP client to work with Pods. For this hour it acts with your identity: it can change Pods, scripts, sandboxes and schedules, start runs and approve, deny or revoke the grants your Pods request. End the session in App settings at any time.'), buttons: [t('Cancel'), t('Allow for one hour')], defaultId: 0, cancelId: 0, signal })
   return answer.response === 1
 }
 // Fixture runs must name an isolated Codex home; they never touch the owner's.
