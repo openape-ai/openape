@@ -50,9 +50,11 @@ export class NetworkViews {
   }
 
   detail(definition: NetworkDefinition): NetworkDetails {
-    const failures = this.store.db.prepare(`SELECT i.run_id,i.generation,i.pod_id,c.failure_kind,c.diagnostic,c.stopped_receipt,c.review_required FROM network_invocations i
-      LEFT JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.network_id=? AND i.state IN ('interrupted','blocked','unknown')
-      AND c.retry_consumed_at IS NULL AND c.resolved_receipt IS NULL ORDER BY i.rowid DESC LIMIT 50`).all(definition.id)
+    // A completed script with a held unknown tool outcome is listed so its effect can be reconciled.
+    const failures = this.store.db.prepare(`SELECT i.run_id,i.generation,i.pod_id,CASE WHEN i.state='completed' THEN 'uncertain' ELSE c.failure_kind END AS failure_kind,
+      CASE WHEN i.state='completed' THEN 'A completed run holds back inputs whose external outcome is unknown; reconcile them' ELSE c.diagnostic END AS diagnostic,c.stopped_receipt,c.review_required FROM network_invocations i
+      LEFT JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.network_id=? AND ((i.state IN ('interrupted','blocked','unknown')
+      AND c.retry_consumed_at IS NULL AND c.resolved_receipt IS NULL) OR (i.state='completed' AND EXISTS(SELECT 1 FROM network_effect_attempts e WHERE e.run_id=i.run_id AND e.state='unknown'))) ORDER BY i.rowid DESC LIMIT 50`).all(definition.id)
     const collections = this.store.db.prepare(`SELECT DISTINCT c.id,c.name,c.current_version FROM data_collections c
       JOIN data_permissions p ON p.collection_id=c.id JOIN networks n ON n.id=p.network_id WHERE p.network_id=? AND c.owner_issuer=n.owner_issuer AND c.owner_subject=n.owner_subject AND c.group_id=n.group_id ORDER BY c.id LIMIT 65`).all(definition.id)
     return {

@@ -151,7 +151,16 @@ describe('network invocation transactions', () => {
     expect(store.db.prepare('SELECT state FROM network_invocations WHERE run_id=?').get(authority.runId)!.state).toBe('unknown')
     expect(store.db.prepare('SELECT outcome FROM network_effect_receipts WHERE logical_action_key=? ORDER BY sequence DESC LIMIT 1').get(key)!.outcome).toBe('unknown')
     expect(runs.get(authority.runId).state).toBe('blocked')
-    expect(() => reserve()).toThrow('external effect requiring review')
+    // A failed script stays a run failure that blocks its member until recovery.
+    expect(() => reserve()).toThrow('requires recovery')
+  })
+
+  it('completes a run only when every unknown effect names one of its inputs', async () => {
+    const { store, seed, invocations, reserve } = invocationFixture()
+    const authority = reserve(); const key = digest('synthetic-unbound-effect')
+    store.db.prepare('INSERT INTO network_effect_attempts VALUES(?,1,?,?,1,?,?,\'unknown\',1,?)').run(key, authority.runId, seed.caseId, digest('input'), digest('manifest'), seed.networkId)
+    store.db.prepare('INSERT INTO network_effect_receipts VALUES(?,1,1,\'unknown\',\'{}\',1)').run(key)
+    await expect(invocations.finish(authority, 'completed', 'Done', null, [], [])).rejects.toThrow('reconciliation')
   })
 
   it('rejects legacy completion/interruption and fences an unfinished network boot without releasing its lease', () => {

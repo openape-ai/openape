@@ -15,6 +15,7 @@ import { digest } from '../storage/database'
 import type { PodDatabase } from '../storage/database'
 import { canonicalNetworkJson } from './network-events'
 import type { NetworkAuthority } from './network-events'
+import { memberEffectHold } from './network-invocations'
 import type { NetworkInvocations } from './network-invocations'
 import { assertNetworkQuota } from './network-quota'
 
@@ -90,10 +91,8 @@ export class NetworkGates {
       const network = this.store.db.prepare('SELECT state FROM networks WHERE id=?').get(definition.id)!
       if (network.state !== 'active' && reason !== 'manual') return null
       if (pod.lifecycle !== 'active' && !(reason === 'manual' && allowPaused)) return null
-      if (this.store.db.prepare(`SELECT 1 FROM run_leases WHERE pod_id=? UNION ALL SELECT 1 FROM program_leases WHERE pod_id=?
-        UNION ALL SELECT 1 FROM network_effect_attempts effect JOIN network_invocations invocation ON invocation.run_id=effect.run_id WHERE invocation.pod_id=? AND effect.state IN ('intent','unknown')
-        UNION ALL SELECT 1 FROM effect_ledger WHERE pod_id=? AND state IN ('intent','unknown')
-        UNION ALL SELECT 1 FROM network_invocations WHERE pod_id=? AND state IN ('running','stopping','interrupted','unknown') LIMIT 1`).get(podId, podId, podId, podId, podId)) {
+      if (memberEffectHold(this.store, podId) || this.store.db.prepare(`SELECT 1 FROM run_leases WHERE pod_id=? UNION ALL SELECT 1 FROM program_leases WHERE pod_id=?
+        UNION ALL SELECT 1 FROM network_invocations WHERE pod_id=? AND state IN ('running','stopping','interrupted','unknown') LIMIT 1`).get(podId, podId, podId)) {
         return null
       }
       const count = Number(this.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count)
@@ -273,9 +272,10 @@ export class NetworkGates {
         if (!['superseded', 'approved', 'unknown'].includes(task.state)) throw new Error('Only obsolete, uncertain or previously consumed gate work can request fresh approval')
         if (task.state === 'unknown') this.assertStoppedTask(task)
         const receipt = canonicalNetworkJson({ taskId: task.id, generation: task.generation, priorGrantOutcome: task.state === 'unknown' ? 'unknown-retained' : task.state, priorGrantId: task.grant_id, priorTaskState: task.state, ownerEvidence: command.evidence, at: Date.now(), priorGrantCannotBeReused: true })
-        const resumed = this.renew(task, manifest, receipt, 'Owner requested fresh gate approval')
-        if (!resumed) throw new Error('Network gate has no safe input awaiting fresh approval')
-        this.trace(manifest, 'gate-owner-fresh-approval', { receipt: JSON.parse(receipt), resumed, noApprovalReleased: true })
+        const held: string[] = []
+        const resumed = this.renew(task, manifest, receipt, 'Owner requested fresh gate approval', held)
+        if (!resumed) throw new Error(held[0] ?? 'Network gate has no safe input awaiting fresh approval')
+        this.trace(manifest, 'gate-owner-fresh-approval', { receipt: JSON.parse(receipt), resumed, held: held.length, noApprovalReleased: true })
         return
       }
       if (task.state !== 'unknown') throw new Error('Only uncertain network gate work can be discarded')
@@ -488,7 +488,7 @@ export class NetworkGates {
   }
 
   /** Returns the inputs of a batch for a fresh approval; the prior grant can never be reused. */
-  private renew(task: Task, manifest: NetworkGateManifest, receipt: string, reason: string): number {
+  private renew(task: Task, manifest: NetworkGateManifest, receipt: string, reason: string, held: string[] = []): number {
     let resumed = 0
     for (const item of manifest.items) {
       const delivery = this.store.db.prepare('SELECT * FROM network_deliveries WHERE id=?').get(item.deliveryId)!
@@ -498,8 +498,9 @@ export class NetworkGates {
       if (this.store.db.prepare(`SELECT 1 FROM network_gate_items WHERE delivery_id=? AND outcome IN ('denied','excluded','expired')`).get(item.deliveryId)) continue
       if (delivery.run_id) {
         const invocation = this.store.db.prepare('SELECT i.state,i.generation,c.stopped_receipt FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.run_id=?').get(delivery.run_id)!
-        if (!invocation.stopped_receipt || JSON.parse(invocation.stopped_receipt as string).generation !== invocation.generation || this.store.db.prepare('SELECT 1 FROM run_leases WHERE run_id=?').get(delivery.run_id)) throw new Error('Inspect the stopped input attempt before requesting fresh approval')
-        if (this.store.db.prepare(`SELECT 1 FROM network_effect_attempts WHERE run_id=? AND state!='confirmed_not_applied' UNION ALL SELECT 1 FROM effect_ledger WHERE run_id=? AND state!='confirmed_not_applied' LIMIT 1`).get(delivery.run_id, delivery.run_id)) throw new Error('Applied or uncertain external actions cannot be repeated through gate review')
+        // An uninspected attempt or an applied or uncertain action keeps only this input back; it stays visible in its batch for review.
+        if (!invocation.stopped_receipt || JSON.parse(invocation.stopped_receipt as string).generation !== invocation.generation || this.store.db.prepare('SELECT 1 FROM run_leases WHERE run_id=?').get(delivery.run_id)) { held.push('Inspect the stopped input attempt before requesting fresh approval'); continue }
+        if (this.store.db.prepare(`SELECT 1 FROM network_effect_attempts WHERE run_id=? AND state!='confirmed_not_applied' UNION ALL SELECT 1 FROM effect_ledger WHERE run_id=? AND state!='confirmed_not_applied' LIMIT 1`).get(delivery.run_id, delivery.run_id)) { held.push('Applied or uncertain external actions cannot be repeated through gate review'); continue }
         abandonNetworkData(this.store, delivery.run_id as string, 'owner-gate-review')
         this.store.db.prepare(`UPDATE network_invocation_controls SET retry_at=NULL,resolved_receipt=json_object('decision',json(?),'priorResolution',json(resolved_receipt)) WHERE run_id=?`).run(receipt, delivery.run_id)
       }
