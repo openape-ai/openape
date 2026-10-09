@@ -181,6 +181,30 @@ it('keeps bounded local reads outside central mutation serialization and attests
   await expect(worker.codex({ id, action: { action: 'networks', command: { type: 'pause', id, revision: 1 } } })).rejects.toThrow('bounded relay')
 })
 
+it('sends desktop commands and approval page opening through the producers of the desktop window', async () => {
+  const { FixtureWorker } = await import('../../src/main/worker')
+  const worker = new FixtureWorker(() => {})
+  const id = '00000000-0000-4000-8000-000000000001'
+  const definitions = vi.spyOn(worker, 'definitions').mockResolvedValue({ definitions: [], instances: [], provisioning: [] })
+  const scheduling = vi.spyOn(worker, 'scheduling').mockResolvedValue({} as never)
+  const request = vi.spyOn(worker, 'request').mockResolvedValue({} as never)
+  const health = { oldestPendingAt: null, nextRetryAt: null, lastDispatchAt: null, lastSchedulerProgressAt: null, lastSchedulerError: null, intakeError: null, lastFailure: null }
+  const networks = vi.spyOn(worker, 'networks').mockResolvedValue({ networks: [{ id, revision: 1, groupId: id, name: 'Morning briefing', state: 'active', counts: {}, health }] })
+  const prepare = { type: 'prepareLocal', podId: id, expectedScript: 'a'.repeat(64), name: 'Editor', defaults: {} }
+
+  await worker.codex({ id, action: { action: 'desktop', channel: 'definitions', command: prepare } })
+  await worker.codex({ id, action: { action: 'desktop', channel: 'scheduling', command: { type: 'concurrency', podId: id, maximum: 2 } } })
+  await worker.codex({ id, action: { action: 'desktop', channel: 'workspace', command: { type: 'pauseAll' } } })
+  const opened = await worker.codex({ id, action: { action: 'networks', command: { type: 'gateOpen', id, revision: 1, taskId: id, generation: 1 } } })
+
+  expect(definitions).toHaveBeenCalledWith(prepare)
+  expect(scheduling).toHaveBeenCalledWith({ type: 'concurrency', podId: id, maximum: 2 })
+  expect(request).toHaveBeenCalledWith({ type: 'pauseAll' })
+  expect(networks).toHaveBeenCalledWith({ type: 'gateOpen', id, revision: 1, taskId: id, generation: 1 })
+  expect(opened).toMatchObject({ networks: [{ id, state: 'active' }] })
+  await expect(worker.codex({ id, action: { action: 'desktop', channel: 'runtimeApproval', command: { type: 'set', enabled: true } } })).rejects.toThrow('Unsupported desktop MCP channel')
+})
+
 it('binds standing approval to the live owner/runtime and keeps legacy local execution working', async () => {
   const { FixtureWorker } = await import('../../src/main/worker')
   const { shell } = await import('electron')

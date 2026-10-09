@@ -4,7 +4,7 @@ import { parseInboxDecide } from '../contracts/inbox'
 import type { AgentConnection } from './broker/authorization'
 import type { RuntimeApprovalBinding, RuntimeApprovalCommand, RuntimeApprovalView } from '../contracts/runtime-approval'
 import { readOnlyAction } from './codex/routing'
-import { codexNetworkRead, parseCodexNetworkAction } from '../contracts/codex-networks'
+import { codexNetworkRead, codexNetworkResult, parseCodexNetworkAction } from '../contracts/codex-networks'
 import { applicationBundle, applicationDefinition } from './programs/application'
 import { parseSharingCommand } from '../contracts/sharing'
 import type { PortableImportCommand, SharingCommand, SharingState } from '../contracts/sharing'
@@ -73,8 +73,8 @@ import type { SetupInternal } from '../worker/onboarding/control'
 import { startAgentGateway } from '../worker/agent/gateway'
 import type { OnboardingCommand, OnboardingView } from '../contracts/onboarding'
 import { parseMasterView } from '../contracts/master'
-import { parseWorkspaceAction, workspaceHelp } from '../contracts/codex'
-import type { CodexRequest } from '../contracts/codex'
+import { parseDesktopAction, parseWorkspaceAction, workspaceHelp } from '../contracts/codex'
+import type { CodexRequest, DesktopAction } from '../contracts/codex'
 import type { MasterCommand, MasterView } from '../contracts/master'
 import { realpathSync } from 'node:fs'
 import { parseServiceScope } from '../contracts/services'
@@ -427,9 +427,12 @@ export class FixtureWorker {
       return this.central.query(query)
     }
     if (request.action.action === 'runtime') return { ...await this.dispatch({ codex: request }) as object, workspace: workspaceHelp, ...(this.central ? { central: this.central.status() } : {}) }
+    if (request.action.action === 'desktop') return this.desktop(parseDesktopAction(request.action))
     const reading = readOnlyAction(request.action)
     if (request.action.action === 'networks') {
       const command = parseCodexNetworkAction(request.action)
+      // Opens the approval page in the owner's browser like the desktop button; the owner decides there.
+      if (command.type === 'gateOpen') return codexNetworkResult(command, await this.networks(command))
       if (!codexNetworkRead(command) && this.central && !this.central.networkReads) throw new Error('Network actions require bounded relay publication support')
     }
     if (!reading && this.central && !this.central.executing) return this.central.local(() => this.codex(request))
@@ -462,6 +465,12 @@ export class FixtureWorker {
     }
   }
 
+  private desktop(action: DesktopAction): Promise<unknown> {
+    if (action.channel === 'definitions') return this.definitions(action.command)
+    if (action.channel === 'scheduling') return this.scheduling(action.command)
+    return this.request(action.command)
+  }
+
   private async administer(action: ReturnType<typeof parseAdministration>): Promise<unknown> {
     const { command } = action
     if (action.kind === 'importJev') {
@@ -479,7 +488,7 @@ export class FixtureWorker {
     }
     if (action.kind === 'recovery') {
       const view = await this.runs(action.command)
-      return { runs: view.runs.map(({ id, state, scriptHash, startedAt, finishedAt, recovery }) => ({ id, state, scriptHash, startedAt, finishedAt, recovery: recovery?.state ?? null })), effects: view.effects?.map(({ key, runId }) => ({ key, runId })) ?? [] }
+      return { runs: view.runs.map(({ id, state, scriptHash, startedAt, finishedAt, recovery }) => ({ id, state, scriptHash, startedAt, finishedAt, recovery: recovery?.state ?? null })), effects: view.effects?.map(({ key, runId }) => ({ key, runId })) ?? [], approvals: view.approvals?.map(({ runId, grantId, state }) => ({ runId, grantId, state })) ?? [] }
     }
     if (action.kind === 'program') {
       if (['prepare', 'start', 'poll', 'input', 'close'].includes(action.command.type)) return this.program(action.command)
