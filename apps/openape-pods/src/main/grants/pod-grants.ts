@@ -51,15 +51,18 @@ export function programCoverage(adapter: LoadedAdapter): OpenApeCliAuthorization
   })
 }
 
+/** One exact command of an adapter, including its executable name. */
+export async function commandSpec(adapter: LoadedAdapter, argv: string[]): Promise<GrantSpec> {
+  const resolved = await resolveCommand(adapter, argv)
+  if (resolved.detail.operation_id === '_generic.exec') throw new Error('Generic program execution cannot be granted')
+  return { cliId: adapter.adapter.cli.id, details: [resolved.detail], executionContext: context(adapter), display: resolved.detail.display }
+}
+
 /** A whole program, or one command when `argv` is given, of an application assigned to the Pod. */
 export async function programSpec(assignment: Pick<ProgramAssignment, 'cliId' | 'adapterPath' | 'adapterHash'>, argv?: string[]): Promise<GrantSpec> {
   await verifyExecutable(assignment.adapterPath, assignment.adapterHash)
   const adapter = loadAdapter(assignment.cliId, assignment.adapterPath)
-  if (argv) {
-    const resolved = await resolveCommand(adapter, [assignment.cliId, ...argv])
-    if (resolved.detail.operation_id === '_generic.exec') throw new Error('Generic program execution cannot be granted')
-    return { cliId: assignment.cliId, details: [resolved.detail], executionContext: context(adapter), display: resolved.detail.display }
-  }
+  if (argv) return commandSpec(adapter, [assignment.cliId, ...argv])
   const details = programCoverage(adapter)
   if (!details.length) throw new Error(`${assignment.cliId} has no operations a whole-program grant can cover; grant single commands`)
   return { cliId: assignment.cliId, details, executionContext: context(adapter), display: `All ${assignment.cliId} operations: ${details.map(detail => `${detail.action} on ${detail.resource_chain[0]!.resource}`).join(', ')}` }

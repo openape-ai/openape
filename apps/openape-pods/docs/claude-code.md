@@ -96,9 +96,9 @@ grants and removes what it added. Level `owner` runs the Pod's programs with the
 owner's file and network reach instead of the isolated profile; the Pod's DDISA
 identity does not change. `{ "type": "show", "target": … }` reads both.
 
-`resources` `assignHttp` and `program` `grant` request their grant and approve it
-in the session; `assignSsh` and `assignJev` still open the IdP page and return
-`approval: { state: "pending", url }`. A run that needs a pending grant waits
+`resources` assignments (`assignHttp`, `assignSsh`, `assignJev`) and `program`
+`grant` request their grant and approve it in the session; without a session they
+open the IdP page and return `approval: { state: "pending", url }`. A run that needs a pending grant waits
 for the decision; `recovery` `openApproval` opens its IdP page again and returns
 it as `opened`, and `grants` `approve` decides it from the session. Approvals
 made in the session are marked in the run activity and in `grants` `list`. The

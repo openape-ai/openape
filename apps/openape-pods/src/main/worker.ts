@@ -53,8 +53,7 @@ import { administerGrants, administerSandbox, releaseArchivedNetworkGrants } fro
 import type { Administration } from './grants/administration'
 import { archiveRefusal, assertArchiveMove } from '../contracts/network-capabilities'
 import { ProgramManager } from './programs/manager'
-import type { GrantRequest } from './programs/grants'
-import { PodGrants, httpSpec } from './grants/pod-grants'
+import { PodGrants, commandSpec, httpSpec } from './grants/pod-grants'
 import type { GrantSpec } from './grants/pod-grants'
 import type { OwnerSession } from './connections/owner-session'
 import type { GrantLedgerCommand } from '../worker/resources/grants'
@@ -352,12 +351,8 @@ export class FixtureWorker {
   /** Requests the command grant as the Pod; in an owner session it is approved right away, otherwise the IdP page opens. */
   private async grantProgram(command: Extract<ProgramCommand, { type: 'grant' }>, owner: OwnerSession | null): Promise<string | null> {
     await this.setupReady
-    const grants = this.podGrants()
-    if (!this.programs || !grants) throw new Error('Program service is not ready')
-    const { grant, approval } = await this.programs.grant(command)
-    if (approval && owner) { await grants.approve(owner, command.podId, grant.id, 'always', AbortSignal.timeout(60000)); return null }
-    if (approval) await shell.openExternal(approval)
-    return approval
+    if (!this.programs || !this.podGrants()) throw new Error('Program service is not ready')
+    return (await this.provisionGrant(command.podId, await this.programs.grantSpec(command), owner)).approval
   }
 
   /** The Pod grants of the connected owner; null until the connection service is set up. */
@@ -599,49 +594,44 @@ export class FixtureWorker {
   }
 
   /**
-   * Stores an assignment with its grant request. The owner approves the request at the IdP: Pods opens that
-   * page right away, and a run that needs the assignment before then waits for the decision.
+   * Stores an assignment and requests its grant as the Pod. In an owner session the grant is approved right away;
+   * otherwise Pods opens its IdP page, and a run that needs the assignment before then waits for the decision.
    */
   private async assign(command: Extract<InternalResourceCommand, { type: 'assignJev' | 'assignSsh' | 'assignHttp' }>, owner: OwnerSession | null): Promise<{ view: ResourceState, approval: string | null }> {
     await this.setupReady
     if (!this.connections) throw new Error('Connection setup is not ready')
     const before = parseResourceState(await this.dispatch({ resource: { type: 'list', podId: command.podId } }))
     const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
-    let requested: GrantRequest
-    let bound: InternalResourceCommand
+    // Jev and SSH keep the grant they were assigned with; it is a recorded Pod grant like any other.
+    const authority = async (grantId: string) => { const connection = await this.connections!.podConnection(command.podId); return { identity: connection.identity, ownerConnection: connection.ownerConnection, grantId } }
     if (command.type === 'assignJev') {
       if (before.epoch !== command.epoch) throw new Error('Pod or Jev permissions changed; reload before assigning access')
       if (before.jev?.id !== command.connectionId || before.jev.state !== 'ready') throw new Error('TypeSafe is not connected; reconnect in App settings')
-      requested = await this.connections.request(command.podId, join(vendor, 'pod-http-shapes.toml'), [['pod-http', 'request', '--origin', typesafeOrigin, '--method', 'POST']])
-      bound = { ...command, type: 'bindJev', authority: requested.authority }
+      const { grantId, approval } = await this.provisionGrant(command.podId, await httpSpec(join(vendor, 'pod-http-shapes.toml'), typesafeOrigin, ['POST']), owner)
+      return { view: parseResourceState(await this.dispatch({ resource: { ...command, type: 'bindJev', authority: await authority(grantId) } })), approval }
     }
-    else if (command.type === 'assignSsh') {
+    if (command.type === 'assignSsh') {
       if (before.epoch !== command.epoch) throw new Error('Pod or SSH permissions changed; reload before assigning access')
       const binding = await resolveSshTarget(command.target)
-      requested = await this.connections.request(command.podId, join(vendor, 'pod-ssh-shapes.toml'), [sshGrantArgv(binding)])
-      bound = { type: 'bindSsh', podId: command.podId, epoch: command.epoch, binding, authority: requested.authority }
+      const { grantId, approval } = await this.provisionGrant(command.podId, await commandSpec(loadAdapter('pod-ssh', join(vendor, 'pod-ssh-shapes.toml')), sshGrantArgv(binding)), owner)
+      return { view: parseResourceState(await this.dispatch({ resource: { type: 'bindSsh', podId: command.podId, epoch: command.epoch, binding, authority: await authority(grantId) } })), approval }
     }
-    else {
-      // The sandbox entry and its grant are separate: the destination becomes reachable, and the same origin and
-      // methods are requested as a Pod grant (approved right away in an owner session).
-      if (before.epoch !== command.epoch) throw new Error('Pod or HTTP permissions changed; reload before assigning access')
-      const permission = parseHttpPermission(command.permission)
-      const view = parseResourceState(await this.dispatch({ resource: { type: 'bindHttp', podId: command.podId, epoch: command.epoch, permission, ...(command.authentication ? { authentication: command.authentication } : {}) } }))
-      const approval = await this.provisionGrant(command.podId, await httpSpec(join(vendor, 'pod-http-shapes.toml'), permission.origin, permission.methods), owner)
-      return { view, approval }
-    }
-    const view = parseResourceState(await this.dispatch({ resource: bound }))
-    if (requested.approval) await shell.openExternal(requested.approval)
-    return { view, approval: requested.approval }
+    // The sandbox entry and its grant are separate: the destination becomes reachable, and the same origin and
+    // methods are requested as a Pod grant.
+    if (before.epoch !== command.epoch) throw new Error('Pod or HTTP permissions changed; reload before assigning access')
+    const permission = parseHttpPermission(command.permission)
+    const view = parseResourceState(await this.dispatch({ resource: { type: 'bindHttp', podId: command.podId, epoch: command.epoch, permission, ...(command.authentication ? { authentication: command.authentication } : {}) } }))
+    const { approval } = await this.provisionGrant(command.podId, await httpSpec(join(vendor, 'pod-http-shapes.toml'), permission.origin, permission.methods), owner)
+    return { view, approval }
   }
 
   /** Requests a grant as the Pod; in an owner session approves it as continuing, otherwise opens and returns its IdP page. */
-  private async provisionGrant(podId: string, spec: GrantSpec, owner: OwnerSession | null): Promise<string | null> {
+  private async provisionGrant(podId: string, spec: GrantSpec, owner: OwnerSession | null): Promise<{ grantId: string, approval: string | null }> {
     const { grant, approval } = await this.podGrants()!.request(podId, spec, null, AbortSignal.timeout(120000))
-    if (!approval) return null
-    if (owner) { await this.podGrants()!.approve(owner, podId, grant.id, 'always', AbortSignal.timeout(60000)); return null }
+    if (!approval) return { grantId: grant.id, approval: null }
+    if (owner) { await this.podGrants()!.approve(owner, podId, grant.id, 'always', AbortSignal.timeout(60000)); return { grantId: grant.id, approval: null } }
     await shell.openExternal(approval)
-    return approval
+    return { grantId: grant.id, approval }
   }
 
   private administration(): Administration {
