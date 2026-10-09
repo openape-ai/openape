@@ -91,7 +91,7 @@ Connect Codex once under the desktop settings → Work from Codex and restart Co
 
 Connected Codex can configure access, save and validate a script, activate it and enable a schedule when requested. Its confirmation policy belongs to Codex. A response saying ready is not evidence of a completed run.
 
-In the gear menu, “Always let the scripts of all my Pods run on this Mac” covers existing and future Pods for the signed-in owner on this connected runtime. Manual, scheduled and repeated runs receive exact reusable runtime grants. The separate local MCP option retains its narrower scope; an existing opt-in is never automatically expanded. Neither option starts schedules or grants mail, folder, program, network or secret permissions. Denied or revoked grants remain blocked. Turn off both options to stop new automatic approvals. Use “Manage existing grants at the IdP” to open the owner identity provider and revoke existing grants separately. MCP and the central web interface cannot change these settings.
+In the gear menu, “Always let the scripts of all my Pods run on this Mac” covers existing and future Pods for the signed-in owner on this connected runtime. Manual, scheduled and repeated runs receive exact reusable runtime grants. The option neither starts schedules nor grants mail, folder, program, network or secret permissions. Denied or revoked grants remain blocked. Turn it off to stop new automatic approvals. The MCP session row shows until when Codex is signed in; End session revokes its access immediately. Use “Manage existing grants at the IdP” to open the owner identity provider and revoke existing grants separately. MCP and the central web interface cannot change these settings.
 
 1. Hand the brief to Codex; it creates the Pod, its script and the access proposals.
 2. Provide ordinary settings in Codex; transfer secrets through OpenApe Secrets or enter them on the detail page under Secrets.
@@ -455,7 +455,7 @@ Connected Codex on this Mac administers Pods directly: it can manage variables a
 
 New automation with Codex on the Automations tab writes a brief with the selected group or node and the Pods it already knows; the desktop opens Codex, the browser copies the brief for you to paste.
 
-Any confirmation follows the Codex client settings. There is no additional approval queue in Pods. Full access in Codex does not remove script validation, stale-revision checks or real provider sign-in requirements.
+Each Codex session needs your sign-in first. On its first call Pods opens your DDISA sign-in in the browser and then asks in the Pods app whether Codex may have full Pods access for one hour; confirm only a request you just made. Codex then retries. After the hour or End session in the settings, Pods asks again without a Codex restart. Within the session, confirmations follow the Codex client settings; there is no additional approval queue in Pods. Grants are decided only at your identity provider, never through MCP. Full access does not remove script validation, stale-revision checks or real provider sign-in requirements.
 
 Codex receives safe resource metadata and run state, not account tokens, Pod keys, run contents or secret values. It can import a supplied private secret file directly into the encrypted store without putting the value in a tool call. Mail, web pages and other external content remain data, not instructions.
 
@@ -466,7 +466,8 @@ Disconnect under the desktop settings → Work from Codex (gear menu → More se
 1. Connect Codex under the desktop settings → Work from Codex.
 2. Restart Codex once.
 3. Ask Codex to configure or run the selected Pods.
-4. Check the applied settings and actual run status in Pods; no second approval click is required.
+4. On the first call, sign in with your DDISA account in the browser and allow one hour of access in Pods.
+5. Check the applied settings and actual run status in Pods; no second approval click is required.
 
 ## Share and import portable packages
 
