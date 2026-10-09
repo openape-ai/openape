@@ -230,6 +230,16 @@ export const pushSubscriptions = sqliteTable('push_subscriptions', {
   index('idx_push_subs_user_email').on(table.userEmail),
 ])
 
+// Pending grants whose owner notification waits for the quiet window (#1455).
+// A row is claimed (deleted) when it falls due, so it survives a restart
+// inside the window and is delivered at most once.
+export const grantNotifications = sqliteTable('grant_notifications', {
+  grantId: text('grant_id').primaryKey(),
+  notifyAfter: integer('notify_after').notNull(),
+}, table => [
+  index('idx_grant_notifications_notify_after').on(table.notifyAfter),
+])
+
 // --- DDISA allowlist-user consents (#301) ---
 // One row per (user, SP) pair the user has approved via the consent
 // screen. PK is composite — re-approving the same SP just refreshes
