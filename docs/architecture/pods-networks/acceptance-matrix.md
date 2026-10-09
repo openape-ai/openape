@@ -26,9 +26,13 @@ Native checks on the installed candidate that no retained case covers: a real `.
 
 ### Delta Mind correction: additional retained cases
 
-- `network-runtime-ports.test.ts`: assigned CLI dispatch and read budget, foreign
-  assignment refusal, unavailable ports, Jev failure/cancellation/revocation,
-  paused processing, consumer intake refusal and empty-input behavior.
+- `network-runtime-ports.test.ts`: assigned CLI dispatch without a network read
+  budget, foreign assignment refusal, unavailable ports, Jev
+  failure/cancellation/revocation, paused processing and empty-input behavior.
+- `network-member-capabilities.test.ts`: a source → program-reading consumer →
+  HTTP-posting consumer chain with its secret processes one item end to end;
+  missing IdP grants refuse program and HTTP calls without sending anything;
+  programs, destinations and secrets of another member stay unreachable.
 - `network-routing.test.ts`: owner choice identity, duplicate decision, original
   case and independent delivery preservation, unresolved retirement guards,
   restart/restore fencing and incompatible gate schema rejection.
