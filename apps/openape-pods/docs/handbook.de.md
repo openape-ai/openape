@@ -35,7 +35,7 @@ Stand HH:MM kennzeichnet im Browser einen veröffentlichten Schnappschuss; Live 
 
 ## Entscheidungen: alles, was auf dich wartet
 
-Der Tab Entscheidungen listet fünf Arten von Owner-Entscheidungen: Rückfragen aus Wahl-Gates, Freigaben von Bündeln beim Identity Provider, Rechte, die einem Pod fehlen, Unklare Zustellungen mit unklarem Ergebnis und Einrichtung mit Vorschlägen und Geheimnis-Anfragen. Die Zahl im Tab ist die Anzahl offener Einträge.
+Der Tab Entscheidungen listet fünf Arten von Owner-Entscheidungen: Rückfragen aus Wahlrouten eines Netzwerks, Freigaben von Bündeln beim Identity Provider, Rechte, die einem Pod fehlen, Unklare Zustellungen mit unklarem Ergebnis und Geheimnisse, die über OpenApe Secrets angefragt sind. Die Zahl im Tab ist die Anzahl offener Einträge.
 
 Rückfragen zeigen die aufgezeichneten Felder jedes Falls und die Optionen des Gates mit ihren genauen Titeln; Bündeln nach fasst Fälle nach einem Feld zusammen, sodass eine Wahl für die ganze Gruppe gilt. Freigaben verlinken zum Identity Provider, der ein Bündel als Liste mit einem Häkchen pro Eintrag zeigt: Die ausgewählten Einträge werden freigegeben, die übrigen abgelehnt. Jeder Eintrag hat einen eigenen einmaligen Grant; nur freigegebene Einträge laufen weiter, ein abgelehnter Eintrag geht in den Ausschluss-Kanal des Gates, falls es einen gibt. Rechte öffnen die Freigabe; unklare Zustellungen brauchen deine Beobachtung am Ziel, bevor du Zugestellt oder Nicht zugestellt, erneut senden wählst.
 
@@ -44,7 +44,7 @@ Pods entscheidet nie für dich: kein Modell und kein Zeitplan wählt, genehmigt,
 1. Öffne Entscheidungen; der Tab zeigt, wie viele Einträge warten.
 2. Lies den Fall und wähle eine Option; Bündeln nach entscheidet viele Fälle mit demselben Feld auf einmal. Öffne bei einem Freigabe-Bündel den Identity Provider, wähle die freizugebenden Einträge und bestätige.
 3. Prüfe bei unklaren Zustellungen zuerst das Ziel, notiere deine Beobachtung und halte sie fest.
-4. Einrichtung listet Codex-Vorschläge und offene Geheimnis-Anfragen; Im Pod einrichten öffnet den Pod-Editor.
+4. Geheimnisse listet offene Anfragen mit dem Link zum Ausfüllen auf secrets.openape.ai.
 
 ![Entscheidungen: alles, was auf dich wartet](images/handbook-decisions-de.png)
 
@@ -93,7 +93,7 @@ Der verbundene Codex kann Zugriffe konfigurieren, Skripte speichern und validier
 
 Im Zahnradmenü erlaubt „Skripte aller meiner Pods auf diesem Mac immer ausführen lassen“ bestehende und zukünftige Pods des angemeldeten Kontos auf dieser verbundenen Runtime. Manuelle und geplante Läufe sowie Wiederholungen erhalten exakte wiederverwendbare Laufzeit-Grants. Die Option aktiviert keine Zeitpläne und vergibt keine Rechte für Mail, Ordner, Programme, Netzwerk oder Secrets. Abgelehnte oder widerrufene Grants bleiben gesperrt. Schalte sie aus, um neue automatische Freigaben zu stoppen. Die Zeile MCP-Sitzung zeigt, bis wann Codex angemeldet ist; Sitzung beenden entzieht den Zugriff sofort. „Bestehende Grants am IdP verwalten“ öffnet deinen Identity Provider für den separaten Widerruf bestehender Grants. MCP und die zentrale Weboberfläche können diese Einstellungen nicht ändern.
 
-1. Übergib den Auftrag an Codex; es legt den Pod, sein Skript und die Zugriffsvorschläge an.
+1. Übergib den Auftrag an Codex; es legt den Pod und sein Skript an und richtet die nötigen Zugriffe ein.
 2. Nenne normale Einstellungen in Codex; übertrage Geheimnisse über OpenApe Secrets oder trage sie auf der Detailseite unter Geheimnisse ein.
 3. Lass Codex die benötigten Zugriffe konfigurieren und das gespeicherte Skript validieren.
 4. Prüfe gespeichertes Skript, Zuweisungen und Zeitplan in Pods.
@@ -133,7 +133,7 @@ Nutze Variablen und Geheimnisse des jeweiligen Pods. Normale Variablen sind für
 
 Codex kann nach Name und Zweck eines Geheimnisses fragen, aber den gespeicherten Wert nicht lesen. Wähle auf der Detailseite unter Geheimnisse + Geheimnis: Eintippen, eine private Datei auf diesem Mac lesen oder über OpenApe Secrets anfragen. Füge den Wert nie in Gespräche, Quelltext, Screenshots oder Supportnachrichten ein.
 
-Eine Anfrage über OpenApe Secrets registriert diesen Mac einmalig als Consumer mit eigenem Schlüssel und listet die Anfrage unter Entscheidungen → Einrichtung. Du füllst sie auf secrets.openape.ai im Browser aus; der Wert wird gegen den Schlüssel dieses Macs versiegelt, Pods holt ihn einmalig ab und die Anfrage wird gelöscht. Das Zahnradmenü zeigt die Registrierung mit Widerrufen. Codex kann dieselbe Anfrage mit requestSecret stellen; es sieht nur den Alias.
+Eine Anfrage über OpenApe Secrets registriert diesen Mac einmalig als Consumer mit eigenem Schlüssel und listet die Anfrage unter Entscheidungen → Geheimnisse. Du füllst sie auf secrets.openape.ai im Browser aus; der Wert wird gegen den Schlüssel dieses Macs versiegelt, Pods holt ihn einmalig ab und die Anfrage wird gelöscht. Das Zahnradmenü zeigt die Registrierung mit Widerrufen. Codex kann dieselbe Anfrage mit requestSecret stellen; es sieht nur den Alias.
 
 Die Zuweisung erlaubt den validierten Skripten dieses Pods, den Alias zu lesen. Prüfe den Quelltext: Ein Skript kann ein Geheimnis absichtlich in einen Prompt, eine Datei oder ein Protokoll kopieren. Sichere Speicherung macht beliebigen Code nicht sicher. Verwaltete Geheimnisse werden lokal verschlüsselt und nicht in Sicherungen exportiert.
 
@@ -277,7 +277,7 @@ Unter Abhängigkeiten zeigt die Liste jedes Paket mit seiner festen Version. Kli
 
 Normale Variablen sind benannte Zeichenketten in der SQLite-Datenbank dieses Pods. Skripte verwenden context.variables["name"]. Unterstützt werden bis zu 32 Variablen mit jeweils 2.048 Zeichen. Die Werte werden für jeden Lauf festgehalten; spätere Änderungen gelten für kommende Läufe. Diese Werte sind unverschlüsselt. Vertrauliche Werte gehören zu den Geheimnissen.
 
-Der eigene Tab zeigt alle gespeicherten Variablen und Geheimnisse dieses Pods. Leere Variablen sind mit Nicht hinterlegt gekennzeichnet. Vom gespeicherten Skript benötigte oder in gespeicherten Einrichtungsvorschlägen angefragte Geheimnisse erscheinen bereits ohne zugewiesenen Wert; Geheimnis hinterlegen übernimmt den Alias ins Formular. Mit der Zuweisung darf dieser Pod den Alias in seinen geprüften Skripten lesen. Entfernen der Zuweisung widerruft den Zugriff.
+Der eigene Tab zeigt alle gespeicherten Variablen und Geheimnisse dieses Pods. Leere Variablen sind mit Nicht hinterlegt gekennzeichnet. Vom gespeicherten Skript benötigte Geheimnisse erscheinen bereits ohne zugewiesenen Wert; Geheimnis hinterlegen übernimmt den Alias ins Formular. Mit der Zuweisung darf dieser Pod den Alias in seinen geprüften Skripten lesen. Entfernen der Zuweisung widerruft den Zugriff.
 
 Jeder Pod besitzt eigene Skriptversionen, einen Arbeitsbereich, einen dauerhaften Checkpoint und eigene Zugangsdaten-Zuweisungen. Gib unter Variablen und Geheimnisse einen Zugangsdaten-Alias und den verdeckten geheimen Wert ein und wähle Zugangsdaten speichern oder ersetzen. Ein Alias beginnt mit einem Kleinbuchstaben und enthält höchstens 64 Kleinbuchstaben, Ziffern, Unterstriche oder Bindestriche. Werte enthalten 1–16.384 Zeichen ohne Nullbytes. Pro Pod sind 32 aktuelle Aliase möglich; ein Skript darf insgesamt 16 Berechtigungen einschließlich zugewiesener Anwendungs- und HTTP-Berechtigungen deklarieren.
 

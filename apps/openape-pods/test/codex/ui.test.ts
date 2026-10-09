@@ -15,7 +15,7 @@ afterEach(() => { document.body.innerHTML = ''; applyLanguage('en') })
 const connection = (state: CodexConnection['state']): CodexConnection => ({ state, home: '/Users/owner/.codex', manual: 'codex mcp remove openape-pods' })
 const pending: ChangeSet = { id: '00000000-0000-4000-8000-0000000000c1', conversationId: codexConversationId, contextRevision: 2, revision: 3, kind: 'changes', state: 'pending', error: null, results: [], targets: [{ podId, name: 'Mail knowledge', base: 'x', before: {}, draftHashes: {}, actions: [{ action: 'setVariable', podId, revision: 2, name: 'recipient', value: 'ops@example.invalid', variableRevision: 0 }], review: [{ action: 'setVariable: recipient', before: '', after: 'ops@example.invalid', evidence: null }] }] }
 function review(changes: ChangeSet[]): MasterView {
-  return { changes, conversation: { id: codexConversationId, revision: 2 } as MasterView['conversation'], activeConversationId: null, connected: true, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }
+  return { changes, conversation: { id: codexConversationId, revision: 2 } as MasterView['conversation'], activeConversationId: null, connected: true, state: 'idle', error: null, messages: [], drafts: [] }
 }
 
 it('connects and disconnects Codex and explains every registration state', async () => {

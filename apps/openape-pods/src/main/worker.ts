@@ -492,7 +492,6 @@ export class FixtureWorker {
       return { jev: (await this.resources({ type: 'list', podId: command.podId })).jev }
     }
     if (action.kind === 'description') return { description: (await this.details(action.command)).description }
-    if (action.kind === 'setup') { await this.master(action.command); return { status: 'applied' } }
     if (action.kind === 'scripts') {
       const view = await this.scripts(action.command)
       return { pod: view.pod, resourceEpoch: view.resourceEpoch, credentialAliases: view.credentialAliases, drafts: view.drafts, versions: view.versions, source: view.source && { ...view.source, evidence: null } }
@@ -618,11 +617,8 @@ export class FixtureWorker {
 
   // Direct reads for the inbox projection: reading never becomes a workspace operation.
   async inboxSources(): Promise<DecisionSources> {
-    const [workspace, networks, workflows, master] = await Promise.all([this.dispatch({ type: 'map' }), this.dispatch({ networks: { type: 'list' } }), this.dispatch({ workflow: { type: 'list' } }), this.dispatch({ master: { type: 'list' } })])
-    const proposals = parseMasterView(master).proposals
-    const podIds = [...new Set(proposals.filter(proposal => proposal.state === 'pending').map(proposal => proposal.podId))]
-    const resources = await Promise.all(podIds.map(async podId => [podId, parseResourceState(await this.dispatch({ resource: { type: 'list', podId } }))] as const))
-    return { map: parseWorkspace(workspace).map ?? null, networks: parseNetworkView(networks), workflows: parseWorkflowView(workflows), proposals, resources: Object.fromEntries(resources), secrets: this.secretsGate ? await this.secretsGate.view() : null }
+    const [workspace, networks, workflows, secrets] = await Promise.all([this.dispatch({ type: 'map' }), this.dispatch({ networks: { type: 'list' } }), this.dispatch({ workflow: { type: 'list' } }), this.secretsGate?.view() ?? null])
+    return { map: parseWorkspace(workspace).map ?? null, networks: parseNetworkView(networks), workflows: parseWorkflowView(workflows), secrets }
   }
 
   // Imported Pods are ordinary local Pods: a connected workspace gives each its own identity as soon as the paused copy exists.
