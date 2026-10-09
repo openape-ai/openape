@@ -4274,6 +4274,7 @@
   "Validate this script for the Pod before updating the network member": "Dieses Skript zuerst für den Pod validieren, bevor das Netzwerkmitglied aktualisiert wird",
   "Validate this script for the current permissions first": "Dieses Skript zuerst für die aktuellen Berechtigungen validieren",
   "Contract changes require a reviewed composition change": "Vertragsänderungen erfordern eine geprüfte Änderung der Zusammensetzung",
+  "The assistant can only ask again for obsolete or uncertain approval batches": "Der Assistent kann nur überholte oder unsichere Freigabe-Batches neu anfragen",
   "Rights changes require pausing the member first": "Rechteänderungen erfordern, dass das Mitglied zuerst pausiert wird",
   "Dependency changes require owner review": "Abhängigkeitsänderungen erfordern eine Prüfung durch den Owner",
   "The Pod has no active script": "Der Pod hat kein aktives Skript",
