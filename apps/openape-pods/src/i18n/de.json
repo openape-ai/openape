@@ -2326,7 +2326,6 @@
   "Unsupported Codex resource operation; import secrets by private file": "Nicht unterstützte Ressourcenaktion; Geheimnisse über eine private Datei importieren",
   "Use draft, validate and activate actions for scripts": "Für Skripte die Aktionen draft, validate und activate verwenden",
   "Unsupported Codex recovery operation": "Nicht unterstützte Wiederherstellungsaktion",
-  "Use Pod scripts to execute assigned programs": "Zugewiesene Programme über Pod-Skripte ausführen",
   "Invalid command name": "Ungültiger Befehlsname",
   "Invalid state import fields": "Ungültige Felder beim Zustandsimport",
   "Absolute local file path required": "Ein absoluter lokaler Dateipfad wird benötigt",
@@ -4383,5 +4382,6 @@
   "A run can archive its approved mail only once": "Ein Lauf kann seine freigegebenen Mails nur einmal archivieren",
   "Archive outcome arrived after its attempt was settled": "Das Archiv-Ergebnis kam erst nach dem Abschluss des Versuchs",
   "Archive move not started: {p0}": "Archiv-Verschiebung nicht gestartet: {p0}",
-  "Network members accept inspect, draft, validate, pause and resume, and application setup while paused; update their scripts with networks updateMemberScript": "Netz-Mitglieder erlauben inspect, draft, validate, pause und resume sowie im pausierten Zustand die Einrichtung von Anwendungen; Skripte werden mit networks updateMemberScript aktualisiert"
+  "Network members accept inspect, draft, validate, pause and resume, and application setup while paused; update their scripts with networks updateMemberScript": "Netz-Mitglieder erlauben inspect, draft, validate, pause und resume sowie im pausierten Zustand die Einrichtung von Anwendungen; Skripte werden mit networks updateMemberScript aktualisiert",
+  "Unsupported program operation": "Nicht unterstützte Programmoperation"
 }
