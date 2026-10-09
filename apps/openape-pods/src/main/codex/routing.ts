@@ -9,5 +9,6 @@ export function readOnlyAction(action: Record<string, unknown>): boolean {
   const query = action.query as Record<string, unknown> | undefined
   if (action.action === 'workspace') return !!query && typeof query.type === 'string' && ['inventory', 'read', 'operation'].includes(query.type)
   const command = action.command as Record<string, unknown> | undefined
+  if (action.action === 'desktop') return command?.type === 'list' || command?.type === 'map'
   return ['resources', 'scripts', 'description', 'recovery', 'program'].includes(action.action) && command?.type === 'list'
 }

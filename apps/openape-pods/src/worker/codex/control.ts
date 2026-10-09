@@ -1,5 +1,3 @@
-import { parseMasterAction } from '../../contracts/master'
-import { podNetwork } from '../central/network-projection'
 import { codexNetworkHelp } from '../../contracts/codex-networks'
 import type { CodexNetworks } from './networks'
 import { jevAvailability } from '../onboarding/store'
@@ -12,7 +10,7 @@ import type { ChangeSet } from '../../contracts/control-api'
 import type { RunRecord } from '../../contracts/runs'
 import type { Conversation } from '../../contracts/chats'
 import { parseChatsCommand } from '../../contracts/chats'
-import { codexConversationId } from '../../contracts/codex'
+import { boundedCodexResult, codexConversationId, desktopHelp, parseDesktopAction } from '../../contracts/codex'
 import type { CodexRequest } from '../../contracts/codex'
 import type { PodDatabase } from '../storage/database'
 import { ChatRegistry } from '../master/chat-registry'
@@ -27,7 +25,6 @@ export class CodexControl {
       if (!this.networks) throw new Error('Network MCP is unavailable in this runtime')
       return this.networks.request(request)
     }
-    this.assertLegacyAccess(action)
     if (action.action === 'requestAccess') throw new Error('Use resources, program or importSecret to configure access directly')
     let result: unknown
     switch (action.action) {
@@ -37,27 +34,7 @@ export class CodexControl {
       case 'changes': result = this.changes(action); break
       default: result = withoutRunContent(await this.master.execute(`codex:${request.id}`, action, signal, null, null, this.conversation(), 'owner'))
     }
-    if (Buffer.byteLength(JSON.stringify(result)) > 256 * 1024) throw new Error('Action completed but its result is too large; inspect a smaller portion')
-    return result
-  }
-
-  private assertLegacyAccess(action: Record<string, unknown>, program?: string): void {
-    if (typeof action.podId === 'string' && podNetwork(this.store, action.podId) && !this.networkMemberAction(action.podId, String(action.action), program)) throw new Error('Network members accept inspect, draft, validate, pause and resume, and application setup while paused; update their scripts with networks updateMemberScript')
-    if (!['inspectWorkflow', 'saveWorkflow', 'runWorkflow', 'setGraphValue'].includes(String(action.action))) return
-    const parsed = parseMasterAction(action)
-    if (parsed.action === 'saveWorkflow' && parsed.definition.nodes.some(node => podNetwork(this.store, node.podId))) throw new Error('Network members require bounded network MCP operations or desktop review')
-    const selected = this.conversation().context.workflow
-    if (!selected) return
-    if (selected.nodes.some(node => podNetwork(this.store, node.podId)) || this.store.db.prepare('SELECT 1 FROM networks WHERE ancestor_workflow_id=?').get(selected.id)) throw new Error('Retained network workflows require bounded network MCP operations or desktop review')
-  }
-
-  /**
-   * Owner decision (issue 1454): a network member can be paused and resumed, and while it is paused its application, hosts and
-   * command grants can be prepared. The member uses new rights once a script validated for them is pinned.
-   */
-  private networkMemberAction(podId: string, action: string, program?: string): boolean {
-    if (['inspect', 'draft', 'validate', 'pause', 'resume'].includes(action)) return true
-    return action === 'program' && program !== 'importState' && this.store.getPod(podId).lifecycle === 'paused'
+    return boundedCodexResult(result)
   }
 
   private retire(action: Record<string, unknown>) {
@@ -73,9 +50,10 @@ export class CodexControl {
       jevConnection: jevAvailability(this.store),
       programHelp,
       networks: codexNetworkHelp,
+      desktop: desktopHelp,
       workflow: [
         'Connected local Codex administers Pods directly. Codex governs any confirmation. Call list, then select with exact podIds and optionally workflowId/workflowRevision. Reinspect current revisions after changes.',
-        'Access: each MCP connection needs a session from the owner. A login_required error means Pods opened the owner\'s DDISA sign-in in the browser; ask the owner to complete it and confirm the request in the Pods app, then retry the same call. A session allows every action here for one hour, then login_required returns; no restart is needed. No action approves, denies or chooses grants; the owner decides them at the identity provider.',
+        'Access: each MCP connection needs a session from the owner. A login_required error means Pods opened the owner\'s DDISA sign-in in the browser; ask the owner to complete it and confirm the request in the Pods app, then retry the same call. A session acts as the owner and allows every action here for one hour, then login_required returns; no restart is needed. That includes network creation, activation and archive, member changes, recovery and owner routing (choose gates, opening, re-requesting or discarding approval batches). No action approves or denies a grant: the owner decides every grant at the identity provider. Pods records evidence sent through MCP with the prefix "Assistant request: " in receipts and traces.',
         'Save drafts and ordinary variables directly. Configure resources before validation. Import secrets by a private owner file path, never by their values. Do not copy owner login stores into Pods.',
         'Use scripts prepareDependencies when packages change. Validate the draft with current resources. Every assigned Pod secret is available to its scripts without declarations or approval. Then activate, resume and setSchedule with enabled=true as requested.',
         'run returns the actual runId. recovery list returns status and unresolved effect keys without run contents. Resolve uncertain delivery only with real external evidence; never guess that an effect failed.',
@@ -88,8 +66,8 @@ export class CodexControl {
 
   administration(command: AdministrationJournal): AdministrationReceipt {
     const { request } = command
-    const action = parseAdministration(request.action)
-    if (command.type === 'begin') this.assertLegacyAccess({ podId: action.command.podId, action: action.kind }, action.kind === 'program' ? action.command.type : undefined)
+    // Desktop commands are not Pod-scoped; they share only the receipt.
+    const action = request.action.action === 'desktop' ? (parseDesktopAction(request.action), null) : parseAdministration(request.action)
     const id = `codex-admin:${request.id}`
     const requestHash = digest(JSON.stringify(request.action))
     return this.store.transaction(() => {
@@ -98,10 +76,12 @@ export class CodexControl {
       if (command.type === 'begin') {
         if (prior?.state === 'completed') return { completed: true, result: JSON.parse(prior.result as string) }
         if (prior) throw new Error('Administration interrupted or already running; inspect state before a new request')
-        const podId = action.command.podId
-        if (!this.conversation().context.pods.some(pod => pod.id === podId)) throw new Error('context_required: select this Pod before administration')
-        const pod = this.store.getPod(podId)
-        if (pod.revision !== action.revision || pod.lifecycle === 'archived') throw new Error('Pod changed or is archived; inspect its current revision')
+        if (action) {
+          const podId = action.command.podId
+          if (!this.conversation().context.pods.some(pod => pod.id === podId)) throw new Error('context_required: select this Pod before administration')
+          const pod = this.store.getPod(podId)
+          if (pod.revision !== action.revision || pod.lifecycle === 'archived') throw new Error('Pod changed or is archived; inspect its current revision')
+        }
         this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'running\',NULL,NULL)').run(id, requestHash, JSON.stringify(request.action))
         return { completed: false }
       }
