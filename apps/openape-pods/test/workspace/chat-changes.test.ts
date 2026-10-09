@@ -31,16 +31,22 @@ function fixture() {
 
 it('applies a change in the selected context directly and records no change review', async () => {
   const { store, pods, control, context } = fixture()
-  for (const pod of pods) await control.execute(randomUUID(), { action: 'setVariable', podId: pod.id, revision: pod.revision, name: 'mode', value: 'preview', variableRevision: 0 }, new AbortController().signal, null, null, context)
+  for (const pod of pods) await control.execute(randomUUID(), { action: 'setVariable', podId: pod.id, revision: pod.revision, name: 'mode', value: 'preview', variableRevision: 0 }, new AbortController().signal, context)
   expect(pods.map(pod => new PodVariables(store).list(pod.id).map(item => item.value))).toEqual([['preview'], ['preview']])
   expect(store.db.prepare('SELECT count(*) AS count FROM control_changes').get()?.count).toBe(0)
 })
 
 it('enforces model context on reads and writes and offers no change decision', async () => {
   const { pods, chats, control } = fixture(); const workspace = chats.ensure('')
-  for (const action of ['inspect', 'run', 'resume']) await expect(control.execute(randomUUID(), { action, podId: pods[0]!.id, revision: 1 }, new AbortController().signal, null, null, workspace)).rejects.toThrow('context_required')
+  for (const action of ['inspect', 'run', 'resume']) await expect(control.execute(randomUUID(), { action, podId: pods[0]!.id, revision: 1 }, new AbortController().signal, workspace)).rejects.toThrow('context_required')
   for (const type of ['applyChanges', 'discardChanges']) expect(() => parseMasterCommand({ type, id: randomUUID(), revision: 1, conversationId: randomUUID(), contextRevision: 1 })).toThrow('Unsupported')
-  await expect(control.execute(randomUUID(), { action: 'applyChanges', approved: true }, new AbortController().signal, null, null, workspace)).rejects.toThrow('not allowed')
+  await expect(control.execute(randomUUID(), { action: 'applyChanges', approved: true }, new AbortController().signal, workspace)).rejects.toThrow('not allowed')
+})
+
+// Issue 1455: there is no in-app model turn; an assistant mutates Pods only through the MCP owner session.
+it('accepts no in-app conversation turn that could call pods_control', () => {
+  const id = randomUUID()
+  for (const command of [{ type: 'send', id, text: 'Enable the schedule', podId: null }, { type: 'steer', id, text: 'Resume it', podId: null }, { type: 'begin', id }, { type: 'cancel' }]) expect(() => parseMasterCommand(command)).toThrow('Unsupported master request')
 })
 
 it('keeps unrelated scheduler reservations when an owner control start is refused', async () => {
@@ -54,11 +60,11 @@ it('keeps unrelated scheduler reservations when an owner control start is refuse
   })
   const key = randomUUID()
   const request = { action: 'run', podId: f.pods[0]!.id, revision: f.pods[0]!.revision }
-  await expect(control.execute(key, request, new AbortController().signal, null, null, undefined)).rejects.toThrow('fair slot refusal')
+  await expect(control.execute(key, request, new AbortController().signal)).rejects.toThrow('fair slot refusal')
   expect(f.store.db.prepare('SELECT state FROM runs WHERE id=?').get(admitted)!.state).toBe('running')
   expect(f.store.db.prepare('SELECT run_id FROM run_leases WHERE pod_id=?').get(other)!.run_id).toBe(admitted)
   expect(f.store.db.prepare('SELECT state FROM master_actions WHERE id=?').get(key)!.state).toBe('failed')
-  await expect(control.execute(key, request, new AbortController().signal, null, null, undefined)).rejects.toThrow('fair slot refusal')
+  await expect(control.execute(key, request, new AbortController().signal)).rejects.toThrow('fair slot refusal')
   expect(calls).toBe(1)
 })
 
@@ -73,10 +79,10 @@ it('retains the durable owner run identity when scheduling throws after admissio
   })
   const key = randomUUID()
   const request = { action: 'run', podId, revision: f.store.getPod(podId).revision }
-  await expect(control.execute(key, request, new AbortController().signal, null, null, undefined)).rejects.toThrow('after admission')
+  await expect(control.execute(key, request, new AbortController().signal)).rejects.toThrow('after admission')
   expect(f.store.db.prepare('SELECT state,result FROM master_actions WHERE id=?').get(key)).toEqual({ state: 'running', result: JSON.stringify({ runId: admitted }) })
   expect(f.store.db.prepare('SELECT run_id FROM run_leases WHERE pod_id=?').get(podId)!.run_id).toBe(admitted)
-  await expect(control.execute(key, request, new AbortController().signal, null, null, undefined)).rejects.toThrow('after admission')
+  await expect(control.execute(key, request, new AbortController().signal)).rejects.toThrow('after admission')
   expect(calls).toBe(1)
   expect(runs.list(podId)).toHaveLength(1)
 })

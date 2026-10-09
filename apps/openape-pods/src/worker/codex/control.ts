@@ -29,7 +29,7 @@ export class CodexControl {
     switch (action.action) {
       case 'runtime': result = this.runtime(action); break
       case 'select': result = this.select(action); break
-      default: result = withoutRunContent(await this.master.execute(`codex:${request.id}`, action, signal, null, null, this.conversation()))
+      default: result = withoutRunContent(await this.master.execute(`codex:${request.id}`, action, signal, this.conversation()))
     }
     return boundedCodexResult(result)
   }

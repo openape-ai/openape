@@ -3,8 +3,6 @@ import { parseGraphValues } from './graphs'
 import type { WorkflowCommand } from './workflows'
 import { chatId } from './chats'
 import type { Conversation } from './chats'
-import { parseChatModel } from './models'
-import type { ChatModel } from './models'
 import { parseSetupRequest } from './setup'
 import type { SetupRequest } from './setup'
 import { parsePackages } from './dependencies'
@@ -20,11 +18,11 @@ export interface MasterMessage { sequence?: number, contextRevision?: number, id
 export interface MasterDraft { validationError?: string | null, id: string, podId: string, name: string, revision: number, code: string, capabilities: string[], validation: string | null, hash: string | null }
 export interface AccessProposal { id: string, podId: string, body: SetupRequest, state: 'pending' | 'declined' | 'approved' }
 export interface MasterView { conversation?: Conversation, nextBefore?: number | null, activeConversationId?: string | null, scriptState?: 'missing' | 'draft' | 'active', adoption?: AdoptionPreview | null, description?: PodDescription | null, creationId?: string, boundPodId?: string | null, initialRequest?: MasterMessage | null, connected: boolean, state: 'idle' | 'running' | 'interrupted' | 'failed', error: string | null, messages: MasterMessage[], drafts: MasterDraft[], proposals: AccessProposal[] }
-export type MasterCommand = ({ type: 'resolveSetup', id: string, podId: string, resourceId: string, epoch: number, request: SetupRequest } | { type: 'answerSetup', id: string, podId: string, value: string, revision: number } | { type: 'adopt', podId: string, hash: string } | { type: 'summarize', podId: string } | { type: 'begin', id: string } | { type: 'list', podId?: string | null } | { type: 'send' | 'steer', id: string, text: string, podId: string | null, model?: ChatModel } | { type: 'cancel', podId?: string | null } | { type: 'decline', id: string, podId?: string | null }) & { creationId?: string, conversationId?: string, contextRevision?: number, before?: number }
+export type MasterCommand = ({ type: 'resolveSetup', id: string, podId: string, resourceId: string, epoch: number, request: SetupRequest } | { type: 'answerSetup', id: string, podId: string, value: string, revision: number } | { type: 'adopt', podId: string, hash: string } | { type: 'summarize', podId: string } | { type: 'list', podId?: string | null } | { type: 'decline', id: string, podId?: string | null }) & { creationId?: string, conversationId?: string, contextRevision?: number, before?: number }
 export function parseMasterCommand(value: unknown): MasterCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid master request')
   const item = value as Record<string, unknown>
-  const fields = item.type === 'resolveSetup' ? ['type', 'id', 'podId', 'resourceId', 'epoch', 'request'] : item.type === 'answerSetup' ? ['type', 'id', 'podId', 'value', 'revision'] : item.type === 'adopt' ? ['type', 'podId', 'hash'] : item.type === 'summarize' ? ['type', 'podId'] : item.type === 'begin' ? ['type', 'id'] : item.type === 'list' || item.type === 'cancel' ? ['type', 'podId'] : item.type === 'decline' ? ['type', 'id', 'podId'] : item.type === 'send' || item.type === 'steer' ? ['type', 'id', 'text', 'podId', 'model'] : []
+  const fields = item.type === 'resolveSetup' ? ['type', 'id', 'podId', 'resourceId', 'epoch', 'request'] : item.type === 'answerSetup' ? ['type', 'id', 'podId', 'value', 'revision'] : item.type === 'adopt' ? ['type', 'podId', 'hash'] : item.type === 'summarize' ? ['type', 'podId'] : item.type === 'list' ? ['type', 'podId'] : item.type === 'decline' ? ['type', 'id', 'podId'] : []
   if (!fields.length || Object.keys(item).some(key => !fields.includes(key) && !['creationId', 'conversationId', 'contextRevision', 'before'].includes(key))) throw new Error('Unsupported master request')
   if (['summarize', 'adopt'].includes(item.type as string) && (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId))) throw new Error('Invalid description pod')
   if (item.type === 'adopt' && (typeof item.hash !== 'string' || !/^[a-f0-9]{64}$/.test(item.hash))) throw new Error('Invalid history review hash')
@@ -40,7 +38,6 @@ export function parseMasterCommand(value: unknown): MasterCommand {
   if (item.before !== undefined && (item.type !== 'list' || !Number.isSafeInteger(item.before) || Number(item.before) < 1)) throw new Error('Invalid history cursor')
   if (item.podId !== undefined && item.podId !== null && (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId))) throw new Error('Invalid chat pod context')
   if (fields.includes('id') && (typeof item.id !== 'string' || !/^[a-f0-9-]{36}$/.test(item.id))) throw new Error('Invalid master request identity')
-  if (fields.includes('text') && (typeof item.text !== 'string' || !item.text.trim() || item.text.length > 20000 || (item.podId !== null && (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId))))) throw new Error('Invalid master input')
   if (item.type === 'resolveSetup' || item.type === 'answerSetup') {
     if (typeof item.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.podId) || item.creationId !== undefined) throw new Error('Invalid setup pod')
     if (item.type === 'resolveSetup') {
@@ -51,7 +48,6 @@ export function parseMasterCommand(value: unknown): MasterCommand {
       parseVariable({ name: 'answer', value: item.value as string, revision: item.revision as number })
     }
   }
-  if (item.model !== undefined) parseChatModel(item.model)
   return structuredClone(item) as MasterCommand
 }
 export function parseMasterView(value: unknown): MasterView {
