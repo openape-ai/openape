@@ -1,3 +1,4 @@
+import { occupiedRunSlots } from '../runs/slots'
 import { retryReady } from '../scheduling/retry'
 import { randomUUID } from 'node:crypto'
 import type { WorkflowCommand, WorkflowDefinition, WorkflowRunView, WorkflowView } from '../../contracts/workflows'
@@ -281,7 +282,7 @@ export class WorkflowEngine {
         this.store.db.prepare('UPDATE workflow_nodes SET state=\'completed\',reason=\'No items to process\' WHERE workflow_run_id=? AND pod_id=? AND state=\'waiting\'').run(id, node.pod_id)
         continue
       }
-      const count = this.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count as number
+      const count = occupiedRunSlots(this.store)
       const maximum = this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency as number
       if (count >= maximum) { this.store.db.prepare('UPDATE workflow_nodes SET reason=? WHERE workflow_run_id=? AND pod_id=?').run('Waiting for an execution slot', id, node.pod_id); continue }
       try {

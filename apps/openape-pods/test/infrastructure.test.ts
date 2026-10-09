@@ -77,3 +77,26 @@ it('carries a non-retryable tool failure through broker IPC and never schedules 
   expect(recoveryDecision({ cause: 'non-retryable' }, 0, null, 1000)).toMatchObject({ disposition: 'isolated', nextAt: null })
   expect(recoveryDecision({ cause: 'failure' }, 0, null, 1000)).toMatchObject({ disposition: 'retry' })
 })
+
+it('parks broker calls that wait for an IdP decision outside the queue limit and the call timeout', async () => {
+  vi.useFakeTimers()
+  try {
+    const send = vi.fn()
+    const bridge = new MailBridge(send)
+    const scope = { podId: 'pod', runId: 'run', epoch: 0, assignmentRevision: 1, capabilities: [] }
+    const serviceIds = () => send.mock.calls.filter(([message]) => 'service' in message).map(([message]) => message.service.id as string)
+    const cancelled = () => send.mock.calls.filter(([message]) => 'serviceCancel' in message).map(([message]) => message.serviceCancel as string)
+    const waiting = Array.from({ length: 16 }, () => bridge.execute(scope, {}, new AbortController().signal, 'shell'))
+    const ids = serviceIds()
+    await expect(bridge.execute(scope, {}, new AbortController().signal, 'http')).rejects.toThrow('queue is full')
+    for (const id of ids) bridge.park(id, true)
+    const other = bridge.execute(scope, {}, new AbortController().signal, 'http')
+    vi.advanceTimersByTime(60 * 60 * 1000)
+    expect(cancelled()).toEqual([serviceIds().at(-1)])
+    bridge.park(ids[0]!, false); vi.advanceTimersByTime(16 * 60 * 1000)
+    expect(cancelled()).toEqual([serviceIds().at(-1), ids[0]])
+    for (const id of serviceIds()) bridge.accept({ id, value: true })
+    await Promise.all([...waiting, other])
+  }
+  finally { vi.useRealTimers() }
+})

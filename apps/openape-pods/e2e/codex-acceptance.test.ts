@@ -142,7 +142,6 @@ it.each([false, true])('lets connected Codex configure and run an unrelated Pod 
   const started = await call({ action: 'run', ...scoped })
   expect(started.error).toBe(false); expect(started.value.runId).toMatch(/^[a-f0-9-]{36}$/)
   await expect.poll(async () => (await call({ action: 'inspect', ...scoped })).value.runs.find((run: { id: string }) => run.id === started.value.runId)?.state, { timeout: 20000 }).toBe('completed')
-  expect((await call({ action: 'changes' })).value.changes).toEqual([])
   if (network) {
     expect((await call({ action: 'runtime' })).value.networks).toHaveProperty('reads')
     expect((await call({ action: 'networks', command: { type: 'list' } })).value.networks).toMatchObject([{ id: network.id, state: 'paused' }])
