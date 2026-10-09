@@ -18,9 +18,7 @@ import { PodIdentityManager } from './agent'
 import type { PodIdentityReference } from './agent'
 import { recoverAuthDomains } from './ledger'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
-import { requestCommands } from '../programs/grants'
 import type { AccountCleanup } from '../../worker/onboarding/reconcile'
-import type { GrantRequest } from '../programs/grants'
 
 interface SetupState { connections: ConnectionView[], owner: string | null, complete: boolean }
 interface PodEntry { connectionId: string, prepared: boolean, broker?: PodBrokerConnection, identity?: PodIdentityReference }
@@ -272,12 +270,6 @@ export class ConnectionManager {
       entry.identity = await identities.provision(entry.connectionId, `Pod ${podId}`, bearer, receipt); await this.save(owner, metadata)
     }
     return { ...identities.connection(entry.identity, `pods:${podId}`), identity: entry.identity, ownerConnection: owner.id }
-  }
-
-  /** Requests the assigned commands as the Pod identity; the owner approves at the IdP. */
-  async request(podId: string, adapterPath: string, commands: string[][]): Promise<GrantRequest> {
-    const connection = await this.podConnection(podId)
-    return requestCommands(connection, adapterPath, commands, AbortSignal.timeout(120000))
   }
 
   busy(): boolean { return this.jobs.size > 0 || this.assigning || this.typesafeChanging }
