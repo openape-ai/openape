@@ -55,6 +55,20 @@ it('keeps an opaque owner subject separate from its discovery email when enrolli
   expect(await manager.existingRemotePods(owner)).toEqual([{ podId: pod.id, identity }])
   expect(await manager.existingRemotePods({ ...owner, subject: account })).toEqual([])
 })
+it('opens an MCP session sign-in only for the registered owner subject and never changes the stored connection', async () => {
+  const { manager, control } = await fixture()
+  const signal = new AbortController().signal; const present = vi.fn()
+  await expect(manager.verifyOwner(signal, present)).rejects.toThrow('Sign in with your DDISA account on desktop first')
+  const id = randomUUID(); const owner = { issuer: 'https://id.example.invalid', subject: 'stable-owner' }
+  control.execute({ type: 'save', connection: { id, provider: 'openape', account: 'owner@example.invalid', state: 'ready', error: null }, metadata: owner })
+  const verify = vi.spyOn(OwnerConnection.prototype, 'verify').mockResolvedValueOnce({ subject: 'another-subject' }).mockResolvedValueOnce({ subject: 'stable-owner' })
+  const login = vi.spyOn(OwnerConnection.prototype, 'login')
+  await expect(manager.verifyOwner(signal, present)).rejects.toThrow('not the registered owner')
+  await expect(manager.verifyOwner(signal, present)).resolves.toBeUndefined()
+  expect(verify).toHaveBeenCalledWith(owner.issuer, 'owner@example.invalid', signal, present)
+  expect(login).not.toHaveBeenCalled()
+  expect(control.connections.metadata(id)).toEqual(owner)
+})
 it('rejects global Microsoft setup without touching its cache or starting login', async () => {
   const { manager } = await fixture()
   await expect(manager.execute({ type: 'connect', provider: 'microsoft', account: 'mail@example.invalid' })).rejects.toThrow('Permissions')

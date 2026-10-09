@@ -123,6 +123,13 @@ export class ConnectionManager {
     return { owner: { issuer: metadata.issuer, subject: metadata.subject }, email: owner.account }
   }
 
+  /** Signs the registered owner in again in the browser for an MCP session; nothing is stored. */
+  async verifyOwner(signal: AbortSignal, present: (value: { url: string }) => void): Promise<void> {
+    const { owner, email } = await this.remoteOwner()
+    const verified = await this.owner.verify(owner.issuer, email, signal, present)
+    if (verified.subject !== owner.subject) throw new Error('The signed-in account is not the registered owner')
+  }
+
   async view(podId?: string): Promise<OnboardingView> {
     const state = await this.state()
     const connections = await Promise.all(state.connections.map(async (item) => {
