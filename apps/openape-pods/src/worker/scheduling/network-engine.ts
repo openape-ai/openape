@@ -314,6 +314,13 @@ export class NetworkEngine {
     await Promise.all(this.pendingSettlements.values())
   }
 
+  /** The owner's assistant may ask again only for obsolete or uncertain batches; an approval the owner gave stays the owner's to withdraw. */
+  agentGateReview(command: Extract<NetworkCommand, { type: 'gateReview' }>): NetworkView {
+    const task = this.store.db.prepare('SELECT state FROM network_gate_tasks WHERE id=? AND network_id=?').get(command.taskId, command.id)
+    if (!task || !['superseded', 'unknown'].includes(task.state as string)) throw new Error('The assistant can only ask again for obsolete or uncertain approval batches')
+    return this.execute({ ...command, evidence: `Assistant request: ${command.evidence}`.slice(0, 4000) })
+  }
+
   // The contract and dependencies stay pinned, so open work of other members keeps its revision. Rights change only on a paused member.
   updateMemberScript(command: Extract<NetworkCommand, { type: 'updateMemberScript' }>): NetworkView {
     const { id: networkId, podId, hash } = command
