@@ -48,9 +48,9 @@ recorded real acceptance before claiming completion.
 
 ## Bounded local MCP correction
 
-- `codex/control.test.ts`: ordinary Pod reads/changes remain available beside a network; direct member and workflow bypasses are refused.
-- `codex/networks.test.ts`: owner-scoped bounded reads, explicit paused selection, stable preview/process receipts, owner/argument mismatch and failed-operation refusal.
-- `main/codex-routing.test.ts`: network reads and mutations are routed and validated before the worker; `main/codex-server.test.ts` refuses every route without the owner session.
+- `codex/control.test.ts`: the owner session administers network members like other Pods; the shared engine still refuses their direct runs, Pod schedules and workflow membership.
+- `codex/networks.test.ts`: owner-scoped bounded reads, explicit paused selection, stable preview/process receipts, owner/argument mismatch and failed-operation refusal; creation, activation and a member script change of a joined network with a daily source, a choose decision, and no MCP command that approves or denies a pending IdP batch.
+- `main/codex-routing.test.ts`: network reads and mutations are routed and validated before the worker; `main/codex-server.test.ts` refuses every route without the owner session; `main/worker-lifecycle.test.ts` sends desktop commands and `gateOpen` to the desktop producers.
 - `main/worker-lifecycle.test.ts` and `main/worker-entry.test.ts`: trusted owner-operation propagation, actual closed-gate start dispatch, duplicate run identity, suspended denial and no unrelated scheduler tick.
 - Manual `e2e/codex-acceptance.test.ts`: packaged Codex app-server and MCP socket manage an unrelated Pod beside a real synthetic network, then admit one native network invocation while preserving pause and replaying the same receipts. `e2e/codex-mcp.test.ts` verifies packaged tool discovery.
 

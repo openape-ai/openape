@@ -49,6 +49,8 @@ export class OwnerConnection {
     let accept: (code: string) => void = () => {}; let reject: (error: Error) => void = () => {}
     const code = new Promise<string>((resolve, fail) => { accept = resolve; reject = fail })
     const server = createServer((request, response) => {
+      // The listener is gone after this sign-in, so a client must not keep the connection for its next request.
+      response.setHeader('Connection', 'close')
       const url = new URL(request.url ?? '/', redirectURI)
       if (request.method !== 'GET' || request.headers.host !== 'localhost:9876' || url.pathname !== '/callback' || url.searchParams.getAll('state').length !== 1 || !equal(url.searchParams.get('state') ?? '', state)) { response.writeHead(400); response.end('Sign-in callback rejected.'); return }
       const value = url.searchParams.get('code')
@@ -64,7 +66,7 @@ export class OwnerConnection {
       present({ url: url.toString() })
       return await this.exchange(issuer, account, { grant_type: 'authorization_code', code: await code, client_id: clientId, redirect_uri: redirectURI, code_verifier: verifier }, signal, nonce)
     }
-    finally { signal.removeEventListener('abort', cancel); server.closeAllConnections(); await new Promise<void>((resolve, fail) => server.close(error => error ? fail(error) : resolve())) }
+    finally { signal.removeEventListener('abort', cancel); server.closeIdleConnections(); await new Promise<void>((resolve, fail) => server.close(error => error ? fail(error) : resolve())) }
   }
 
   async bearer(id: string, issuer: string, account: string, signal: AbortSignal): Promise<string> {
