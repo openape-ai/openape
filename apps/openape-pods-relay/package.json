@@ -21,8 +21,7 @@
     "jose": "catalog:",
     "nuxt": "catalog:",
     "@openape/nuxt-auth-sp": "workspace:*",
-    "vue": "catalog:",
-    "web-push": "catalog:"
+    "vue": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
@@ -30,7 +29,6 @@
     "vitest": "catalog:",
     "openape-e2e": "workspace:*",
     "@openape/pods": "workspace:*",
-    "@types/web-push": "catalog:",
     "@vitejs/plugin-vue": "catalog:",
     "@vue/test-utils": "catalog:",
     "happy-dom": "catalog:",

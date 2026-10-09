@@ -40,8 +40,6 @@ import { object as remoteObject, uuid as remoteUuid, sameOwner } from '@openape/
 import { ProgramState } from './programs/state'
 import type { RemoteInternal } from '../worker/remote/control'
 import type { Owner } from '@openape/pods-protocol'
-import { parseChatsView } from '../contracts/chats'
-import type { ChatsCommand, ChatsView } from '../contracts/chats'
 import { parseWorkflowView } from '../contracts/workflows'
 import { parseNetworkCommand, parseNetworkView } from '../contracts/networks'
 import type { NetworkCommand, NetworkView } from '../contracts/networks'
@@ -310,7 +308,7 @@ export class FixtureWorker {
   }
 
   async program(command: ProgramCommand, definition?: ProgramDefinition, file?: string): Promise<Awaited<ReturnType<ProgramManager['terminal']>> | Awaited<ReturnType<ProgramManager['prepare']>> | ResourceState | string | null> {
-    const central = this.centralAction(['launchStatus', 'prepare', 'poll', 'input', 'resize', 'close'].includes(command.type) ? 'list' : command.type)
+    const central = this.centralAction(['launchStatus', 'prepare', 'poll', 'input', 'close'].includes(command.type) ? 'list' : command.type)
     if (central) return central.local(() => this.program(command, definition, file))
     await this.setupReady
     if (!this.programs) throw new Error('Program service is not ready')
@@ -526,7 +524,6 @@ export class FixtureWorker {
     return { resources: modelResources(view.resources, true), variables: view.variables, epoch: view.epoch }
   }
 
-  async chats(command: ChatsCommand): Promise<ChatsView> { const central = this.centralAction(command.type); if (central) return central.local(() => this.chats(command)); return parseChatsView(await this.dispatch({ chats: command })) }
   async master(command: MasterCommand): Promise<MasterView> { const central = this.centralAction(command.type); if (central) return central.local(() => this.master(command)); return parseMasterView(await this.dispatch({ master: command })) }
 
   async scripts(command: ScriptCommand): Promise<ScriptView> {
@@ -772,7 +769,7 @@ export class FixtureWorker {
     throw new Error('Unsupported central execution')
   }
 
-  private dispatch(command: { definitions: DefinitionCommand } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { networkGateCheck: { scope: ServiceScope, manifest: NetworkGateManifest, operation: string, grants?: { key: string, id: string }[] } } | { networks: NetworkCommand, ownerOperation?: boolean } | { central: { type: 'snapshot', owner: Owner, networkReads?: boolean } | { type: 'networkRead', owner: Owner, command: NetworkCommand } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { chats: ChatsCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { definitions: DefinitionCommand } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { networkGateCheck: { scope: ServiceScope, manifest: NetworkGateManifest, operation: string, grants?: { key: string, id: string }[] } } | { networks: NetworkCommand, ownerOperation?: boolean } | { central: { type: 'snapshot', owner: Owner, networkReads?: boolean } | { type: 'networkRead', owner: Owner, command: NetworkCommand } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { workflow: WorkflowCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     if (this.updateFrozen && !('data' in command && ['prepareUpdate', 'releaseUpdate'].includes(command.data.type))) return Promise.reject(new Error('Pods is preparing an update; retry after restart'))
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
