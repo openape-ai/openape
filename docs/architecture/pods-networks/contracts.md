@@ -477,8 +477,34 @@ apply to every subscriber of the feedback channel; a fresh gate approval resets
 `ready_at`; a workflow-call result inherits the highest hop of its whole case
 revision rather than of its causal chain, which can hold a parallel branch early;
 Structure lists declarations as text without marking graph edges.
-Portable network documents carry `feedback` only at format version 4. There is no
-unrestricted LLM-controlled loop.
+Portable network documents use the current definition format (see below) and always
+carry `routes`, `joins` and `feedback`. There is no unrestricted LLM-controlled loop.
+
+### One network format (issue 1455)
+
+Definition format 6 is the only stored and portable network format:
+`{ formatVersion: 6, …, channels, members, routes, joins, feedback }`. Owner
+decisions exist once, as routes: a choose route picks one output per item, and an
+approve route `{ key, title, kind: approve, takes, gives, excluded }` holds items in
+front of exactly one consumer, which takes `gives` and never `takes` directly. The
+runtime derives the held consumer and its subscription channel (`takes`) from the
+route; formats 2 to 5 stored the same facts a second time as a gate binding
+`{ key, title, podId, channel }`. Schema 42 rewrites every stored revision once and
+recomputes its content hash. Gate tasks, items, choices and traces keep their keys
+and stay decidable. A binding without a matching route cannot be expressed and stops
+the upgrade instead of dropping an approval. Older portable network documents are
+refused; export them again from the current version.
+
+The owner decides each item grant of an approve route at the IdP as `once` or
+`always`. Both stay bound to the item's exact command, audience, Pod identity and
+batch expiry. Release consumes a `once` grant; an `always` grant is confirmed as
+valid instead, and every archive move still requires it to be approved at that
+moment. A denied or revoked grant releases and moves nothing; `timed` decisions
+are refused. Once every input of a batch is done or discarded, or the batch was
+denied, expired or superseded, the desktop revokes its still approved `always`
+grants as the requesting Pod (`/api/grants/:id/revoke`, a few batches per minute)
+and records `gate-grants-released`. A failed revocation is logged and retried with
+backoff and never blocks processing.
 
 ## Diagnostic changes and UI review
 

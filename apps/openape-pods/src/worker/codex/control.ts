@@ -24,7 +24,6 @@ export class CodexControl {
       if (!this.networks) throw new Error('Network MCP is unavailable in this runtime')
       return this.networks.request(request)
     }
-    if (action.action === 'requestAccess') throw new Error('Use resources, program or importSecret to configure access directly')
     let result: unknown
     switch (action.action) {
       case 'runtime': result = this.runtime(action); break
@@ -36,7 +35,7 @@ export class CodexControl {
 
   private runtime(action: Record<string, unknown>) {
     if (Object.keys(action).length !== 1) throw new Error('Invalid runtime fields')
-    const { requestAccess: _proposal, ...actions } = runtimeReference.actions
+    const { actions } = runtimeReference
     return {
       ...runtimeReference,
       jevConnection: jevAvailability(this.store),

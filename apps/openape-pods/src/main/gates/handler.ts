@@ -1,5 +1,5 @@
 import { networkGateItemCommand, networkGateItemSummary, parseNetworkGateManifest } from '../../contracts/network-gates'
-import type { NetworkGateManifest } from '../../contracts/network-gates'
+import type { NetworkGateManifest, NetworkGateRelease } from '../../contracts/network-gates'
 import { gateAudience, gateItemCommand, gateItemSummary, parseGateManifest } from '../../contracts/gates'
 import type { GateManifest } from '../../contracts/gates'
 import type { ServiceScope } from '../../contracts/services'
@@ -48,7 +48,8 @@ export async function handleGate(input: Request): Promise<unknown> {
   if (manifest.version !== 1) await check()
   const connection = manifest.version !== 1 ? await input.connections.podConnection(input.scope.podId, manifest.owner, true) : await input.connections.podConnection(input.scope.podId)
   if (manifest.version !== 1) await check()
-  const authority = createGrantAuthority(connection, input.signal, check, gateAudience)
+  // Network approve routes accept the owner's once or always decision; legacy workflow gates keep once grants until they leave (issue 1455, M4).
+  const authority = createGrantAuthority(connection, input.signal, check, gateAudience, manifest.version !== 1 ? ['once', 'always'] : ['once'])
   if (body.operation === 'create') {
     const reply = await authority.createBatch({ id: manifest.id, title: manifest.title, expiresAt: manifest.expiresAt, reason: manifest.version !== 1 ? `${manifest.title}: approve this item` : `${manifest.title}: diesen Eintrag freigeben`, permissions: [`graph.gate:${manifest.id}`], members })
     return { id: manifest.id, ...reply }
@@ -60,4 +61,16 @@ export async function handleGate(input: Request): Promise<unknown> {
     else await authority.consume(binding)
   }
   return true
+}
+
+/**
+ * Revokes, as the requesting Pod, the grants of a finished network batch that the owner approved as always,
+ * so they do not stay active at the IdP. It only reduces authority; once grants are already used up.
+ */
+export async function releaseNetworkGrants(release: NetworkGateRelease, connections: ConnectionManager, signal: AbortSignal): Promise<number> {
+  const connection = await connections.podConnection(release.podId, release.owner, true)
+  const authority = createGrantAuthority(connection, signal, async () => {}, gateAudience, ['once', 'always'])
+  const members = gateMembers(release.manifest)
+  const bindings = release.grants.map(grant => ({ ...members.find(member => member.key === grant.key)!, grantId: grant.id, expiresAt: release.manifest.expiresAt }))
+  return authority.release(release.manifest.id, bindings)
 }

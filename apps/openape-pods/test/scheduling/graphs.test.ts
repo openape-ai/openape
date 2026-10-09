@@ -6,7 +6,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { deriveEdges, diagnoseGraph } from '../../src/contracts/graphs'
 import type { GraphContract, GraphGate, GraphMemberFacts } from '../../src/contracts/graphs'
-import { diagnoseNetwork, parseNetworkDefinition } from '../../src/contracts/networks'
+import { diagnoseNetwork, networkApprovals, networkSubscriptionChannel, parseNetworkDefinition } from '../../src/contracts/networks'
+import type { NetworkFeedback, NetworkJoin } from '../../src/contracts/networks'
 import { parseWorkflowCommand, parseWorkflowView, sequenceParts } from '../../src/contracts/workflows'
 import type { WorkflowDefinition } from '../../src/contracts/workflows'
 import { PodVariables } from '../../src/worker/resources/variables'
@@ -30,8 +31,8 @@ const codes = (definition: WorkflowDefinition, known = contracts as Record<strin
 function persistentNetwork() {
   const payload = { type: 'object', properties: { subject: { type: 'string' } }, required: ['subject'], additionalProperties: false }
   return {
-    formatVersion: 1, kind: 'network', semantics: 'persistent-network-v1', id: '00000000-0000-4000-8000-0000000000a0', revision: 1,
-    groupId: '00000000-0000-4000-8000-0000000000b0', name: 'Persistent mail',
+    formatVersion: 6 as const, kind: 'network', semantics: 'persistent-network-v1', id: '00000000-0000-4000-8000-0000000000a0', revision: 1,
+    groupId: '00000000-0000-4000-8000-0000000000b0', name: 'Persistent mail', routes: [] as GraphGate[], joins: [] as NetworkJoin[], feedback: [] as NetworkFeedback[],
     channels: ['mail.open', 'mail.sorted'].map(name => ({ name, title: name, schemaVersion: 1, schema: payload })),
     members: [intake, sorter, archive].map((podId, index) => ({
       podId, definitionId: podId, definitionVersion: 1, bindingRevision: 1, serialCase: true,
@@ -60,7 +61,7 @@ describe('persistent network definitions', () => {
     const definition = parseNetworkDefinition(persistentNetwork())
     definition.members[2]!.contract.gives = ['mail.open']
     expect(diagnoseNetwork(definition).filter(item => item.code === 'cycle').map(item => item.podId)).toEqual([sorter, archive])
-    const looped = { ...persistentNetwork(), formatVersion: 4, gates: [], joins: [], feedback: [{ id: 'recheck', podId: archive, channel: 'mail.open', delayMs: 1000, maxHops: 3, maxCaseAgeMs: 86400000 }] }
+    const looped = { ...persistentNetwork(), feedback: [{ id: 'recheck', podId: archive, channel: 'mail.open', delayMs: 1000, maxHops: 3, maxCaseAgeMs: 86400000 }] }
     looped.members[2]!.contract = { ...looped.members[2]!.contract, gives: ['mail.open'] }
     const bounded = parseNetworkDefinition(looped)
     expect(bounded.feedback).toEqual(looped.feedback)
@@ -72,7 +73,6 @@ describe('persistent network definitions', () => {
     for (const change of [{ podId: intake }, { channel: 'mail.sorted' }, { delayMs: 999 }, { maxHops: 4 }, { maxHops: 0 }, { maxCaseAgeMs: 86400001 }, { delayMs: 5000, maxCaseAgeMs: 4999 }]) {
       expect(() => parseNetworkDefinition({ ...looped, feedback: [{ ...looped.feedback[0]!, ...change }] })).toThrow(/feedback/)
     }
-    expect(() => parseNetworkDefinition({ ...persistentNetwork(), feedback: looped.feedback })).toThrow('Invalid network definition fields')
     // A join waits for every input of one case revision, so a joined channel cannot be fed back.
     const joinedSorter = looped.members.map((member, index) => index === 1 ? { ...member, contract: { ...member.contract, takes: ['mail.open', 'mail.sorted'] } } : member)
     expect(() => parseNetworkDefinition({ ...looped, members: joinedSorter, joins: [{ id: 'both', podId: sorter, channels: ['mail.open', 'mail.sorted'], deadlineMs: 60000, reviewDestination: 'owner' }] })).toThrow('explicitly joined channel')
@@ -87,6 +87,26 @@ describe('persistent network definitions', () => {
     expect(() => parseNetworkDefinition({ ...persistentNetwork(), permissions: ['mail.send'] })).toThrow('fields')
     const duplicate = persistentNetwork(); duplicate.members.push(duplicate.members[0]!)
     expect(() => parseNetworkDefinition(duplicate)).toThrow('unique')
+  })
+
+  it('accepts only the current format, where approvals exist once as routes', () => {
+    const { feedback: _feedback, ...missing } = persistentNetwork()
+    expect(() => parseNetworkDefinition(missing)).toThrow('fields')
+    expect(() => parseNetworkDefinition({ ...persistentNetwork(), formatVersion: 5 })).toThrow('version')
+    expect(() => parseNetworkDefinition({ ...persistentNetwork(), gates: [] })).toThrow('fields')
+    const routed = persistentNetwork()
+    routed.channels.push({ ...routed.channels[1]!, name: 'mail.approved', title: 'mail.approved' })
+    routed.members[2]!.contract.takes = ['mail.approved']
+    routed.routes = [{ key: 'archive', title: 'Archive sorted mail', kind: 'approve', takes: 'mail.sorted', gives: 'mail.approved', excluded: null }]
+    const definition = parseNetworkDefinition(routed)
+    expect(networkApprovals(definition)).toEqual([{ key: 'archive', title: 'Archive sorted mail', podId: archive, takes: 'mail.sorted', gives: 'mail.approved', excluded: null }])
+    expect(networkSubscriptionChannel(definition, archive, 'mail.approved')).toBe('mail.sorted')
+    expect(networkSubscriptionChannel(definition, sorter, 'mail.open')).toBe('mail.open')
+    // The held consumer is exactly one Pod that takes the approved output and never the held input directly.
+    routed.members[1]!.contract.takes = ['mail.open', 'mail.approved']
+    expect(() => parseNetworkDefinition(routed)).toThrow('exactly one downstream consumer')
+    routed.members[1]!.contract.takes = ['mail.open']; routed.members[2]!.contract.takes = ['mail.approved', 'mail.sorted']
+    expect(() => parseNetworkDefinition(routed)).toThrow('exactly one downstream consumer')
   })
 
   it('keeps source and consumer activation policies distinct', () => {

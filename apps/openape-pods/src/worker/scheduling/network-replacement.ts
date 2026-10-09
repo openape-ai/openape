@@ -1,7 +1,7 @@
 import type { Owner } from '@openape/pods-protocol'
 import { randomUUID } from 'node:crypto'
 import type { NetworkDefinition, NetworkDraft } from '../../contracts/networks'
-import { networkSubscriptionChannel, draftControls, draftFormatVersion, parseNetworkDefinition } from '../../contracts/networks'
+import { networkDefinitionFromDraft, networkSubscriptionChannel } from '../../contracts/networks'
 import type { ReplacementPreview } from '../../contracts/network-replacement'
 import { parseGraphContract } from '../../contracts/graphs'
 import { canonicalNetworkJson } from '../../contracts/network-json'
@@ -16,7 +16,7 @@ import { NetworkViews } from './network-views'
 export function currentCompositionDraft(store: PodDatabase, definition: NetworkDefinition): NetworkDraft {
   return {
     name: definition.name, groupId: definition.groupId,
-    channels: definition.channels, ...(definition.routes ? { routes: definition.routes } : {}), ...(definition.gates ? { gates: definition.gates } : {}), ...(definition.joins ? { joins: definition.joins } : {}), ...(definition.feedback ? { feedback: definition.feedback } : {}),
+    channels: definition.channels, routes: definition.routes, joins: definition.joins, feedback: definition.feedback,
     members: definition.members.map(member => ({ podId: member.podId, serialCase: member.serialCase, source: member.source ? { schedule: member.source.schedule } : null })),
     sharedValues: Object.fromEntries(store.db.prepare('SELECT name,value FROM composition_config WHERE network_id=? ORDER BY name').all(definition.id).map(row => [row.name as string, JSON.parse(row.value as string)])),
   }
@@ -48,8 +48,7 @@ export class NetworkReplacement {
         const binding = this.store.db.prepare(`SELECT b.*,v.contract FROM instance_definition_bindings b JOIN pod_definition_versions v ON v.definition_id=b.definition_id AND v.version=b.definition_version WHERE b.pod_id=?`).get(selection.podId)!
         return { podId: selection.podId, definitionId: binding.definition_id as string, definitionVersion: Number(binding.definition_version), bindingRevision: Number(binding.binding_revision), contract: parseGraphContract(JSON.parse(binding.contract as string)), serialCase: selection.serialCase, source: selection.source ? { bindingId: selection.podId, schedule: selection.source.schedule } : null }
       })
-      const { sharedValues: _values, expectedSetup: _setup, ...composition } = draft
-      const next = parseNetworkDefinition({ ...composition, formatVersion: draftFormatVersion(draft), kind: 'network', semantics: 'persistent-network-v1', id: current.id, revision: current.revision + 1, ...draftControls(draft), members })
+      const next = networkDefinitionFromDraft(draft, { id: current.id, revision: current.revision + 1 }, members)
       this.validate(next)
       validateNetworkCompositionValues(this.store, next, draft.sharedValues ?? {})
       for (const legacy of this.store.db.prepare('SELECT v.name FROM networks n JOIN workflow_values v ON v.workflow_id=n.ancestor_workflow_id WHERE n.id=?').all(current.id)) {

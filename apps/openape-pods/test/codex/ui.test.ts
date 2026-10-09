@@ -12,7 +12,7 @@ import { installWorkspace } from '../layout/workspace-fixture'
 afterEach(() => { document.body.innerHTML = ''; applyLanguage('en') })
 const connection = (state: CodexConnection['state']): CodexConnection => ({ state, home: '/Users/owner/.codex', manual: 'codex mcp remove openape-pods' })
 function review(): MasterView {
-  return { conversation: { id: codexConversationId, revision: 2 } as MasterView['conversation'], activeConversationId: null, connected: true, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }
+  return { conversation: { id: codexConversationId, revision: 2 } as MasterView['conversation'], activeConversationId: null, connected: true, state: 'idle', error: null, messages: [], drafts: [] }
 }
 
 it('connects and disconnects Codex and explains every registration state', async () => {

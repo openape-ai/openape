@@ -48,7 +48,7 @@ import { PodVariables } from './resources/variables'
 import { PodGroups } from './workspace/groups'
 import { listedPods } from './workspace/pod-list'
 import { mapView } from './workspace/map-view'
-import { CollectionDescriptions } from './workspace/collection-descriptions'
+import { AutomationDescriptions } from './workspace/automation-descriptions'
 import { SecretRequests } from './secrets/store'
 import type { SecretRowCommand } from './secrets/store'
 import { ScriptWorkspace } from './workspace/scripts'
@@ -413,6 +413,13 @@ port.on('message', async (event) => {
       const maintenance = store.db.prepare('SELECT 1 FROM workflow_gate_attempts WHERE run_id=?').get(check.scope.runId)
       port.postMessage({ id: request.id, state: { name: store.getPod(check.scope.podId).name, reason, runtime: !network && !maintenance } }); return
     }
+    if (request.command && typeof request.command === 'object' && 'networkGateRelease' in request.command) {
+      const release = request.command.networkGateRelease as { type?: unknown, taskId?: unknown }
+      if (release?.type === 'list') { port.postMessage({ id: request.id, state: networks.gates.releasable() }); return }
+      if (release?.type !== 'released' || typeof release.taskId !== 'string') throw new Error('Invalid network gate release')
+      networks.gates.released(release.taskId)
+      port.postMessage({ id: request.id, state: true }); return
+    }
     if (request.command && typeof request.command === 'object' && 'networkGateCheck' in request.command) {
       const check = request.command.networkGateCheck as ServiceCheck & { manifest: unknown, operation: string, grants?: unknown }
       authorizeRunService(store, registry, dispatcher.runs, check)
@@ -521,11 +528,11 @@ port.on('message', async (event) => {
     }
     const command = parseCommand(request.command)
     if (command.type === 'organize') new PodGroups(store).execute(command)
-    if (command.type === 'describeCollection') new CollectionDescriptions(store).execute(command)
+    if (command.type === 'describeAutomation') new AutomationDescriptions(store).execute(command)
     if (command.type === 'pauseAll') store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE lifecycle=\'active\'').run()
     if (command.type === 'create') store.createPod({ name: command.name })
     if (command.type === 'update') { store.updatePod(command.id, command.revision, { name: command.name, lifecycle: command.lifecycle }); if (command.lifecycle === 'archived') dispatcher.cancelPod(command.id, 'Pod archived') }
-    port.postMessage({ id: request.id, state: { jev: jevAvailability(store), pods: listedPods(store), organization: new PodGroups(store).view(), descriptions: new CollectionDescriptions(store).view(), ...(command.type === 'map' ? { map: mapView(store) } : {}) } })
+    port.postMessage({ id: request.id, state: { jev: jevAvailability(store), pods: listedPods(store), organization: new PodGroups(store).view(), descriptions: new AutomationDescriptions(store).view(), ...(command.type === 'map' ? { map: mapView(store) } : {}) } })
   }
   catch (error) { port.postMessage({ id: request.id, error: error instanceof Error ? error.message : 'Workspace operation failed' }) }
 })

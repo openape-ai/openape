@@ -95,7 +95,6 @@ export const runtimeReference = {
     pause: { podId: 'UUID', revision: 'current pod settings revision' },
     resume: { podId: 'UUID', revision: 'current pod settings revision; requires current validated active script and never enables a disabled schedule' },
     rollback: { podId: 'UUID', revision: 'current pod settings revision', hash: 'existing validated SHA256', expectedActive: 'current active SHA256 or null' },
-    requestAccess: { podId: 'UUID', revision: 'current pod settings revision', request: '{provider:"application",application:"name",argv:["exact","arguments"],networkHosts:["api.example.com"],description:"reason"} (omit argv until assigned and inspect includes its command reference), {provider:"http",origin:"https://api.example.org",methods:["POST"],description:"reason"}, {provider:"directory",path:"/absolute/folder",access:"readWrite",description:"reason"}, {provider:"reference",path:"/absolute/file",description:"required snapshot"}, {provider:"credential",alias:"bot_token",description:"purpose",instructions:"How to obtain the token and save it in Variables and secrets; never paste it into chat"}, or {provider:"variable",alias:"chat_id",description:"Which chat should receive notifications?",instructions:"Explain how to find this non-secret value"}. Never include secret values.' },
     installMailRecipe: 'Legacy mail pods only; new pods use assigned applications and HTTP requests.',
   },
   script: {

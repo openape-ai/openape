@@ -3,7 +3,6 @@ import { computed, ref } from 'vue'
 import type { CentralCommand } from '../../contracts/central'
 import type { GateBatchView, GateHeldItem } from '../../contracts/gates'
 import type { MapView } from '../../contracts/map-view'
-import type { AccessProposal, MasterCommand } from '../../contracts/master'
 import type { NetworkGateView } from '../../contracts/network-gate-view'
 import type { NetworkChoiceView, NetworkCommand } from '../../contracts/networks'
 import type { WorkflowCommand } from '../../contracts/workflows'
@@ -12,12 +11,12 @@ import { diagnostic, label, language, t } from '../i18n'
 import { clock, stamp } from '../utils/cadence'
 
 /**
- * Everything that waits for the owner, in five sections: questions per choose gate, approval
- * batches decided at the identity provider, runtime rights, unknown deliveries and setup
- * proposals. Every decision leaves as an existing owner command; nothing here approves on its own.
+ * Everything that waits for the owner, in five sections: questions per choose route, approval
+ * batches decided at the identity provider, runtime rights, unknown deliveries and secret
+ * requests. Every decision leaves as an existing owner command; nothing here approves on its own.
  */
-const props = defineProps<{ view: MapView, choices: NetworkChoiceView[], gates: NetworkGateView[], graphGates: { batches: GateBatchView[], held: GateHeldItem[] } | null, proposals: AccessProposal[], desktop: boolean, requests?: SecretRequestRow[], secretsOrigin?: string }>()
-const emit = defineEmits<{ network: [command: NetworkCommand, settle?: (error: string | null) => void], workflow: [command: WorkflowCommand], command: [command: CentralCommand], master: [command: MasterCommand], open: [id: string], secrets: [command: SecretsCommand] }>()
+const props = defineProps<{ view: MapView, choices: NetworkChoiceView[], gates: NetworkGateView[], graphGates: { batches: GateBatchView[], held: GateHeldItem[] } | null, desktop: boolean, requests?: SecretRequestRow[], secretsOrigin?: string }>()
+const emit = defineEmits<{ network: [command: NetworkCommand, settle?: (error: string | null) => void], workflow: [command: WorkflowCommand], command: [command: CentralCommand], secrets: [command: SecretsCommand] }>()
 const headline = ['subject', 'title', 'name']
 const groupBy = ref('')
 const raw = ref(false)
@@ -28,7 +27,7 @@ const evidence = ref<Record<string, string>>({})
 const openBatch = ['preparing', 'pending', 'consuming', 'unknown', 'superseded']
 
 interface Case { id: string, networkId: string, revision: number, gate: string, title: string, event: NetworkChoiceView, payload: Record<string, unknown>, versions: number, options: { key: string, title: string, channel: string }[] }
-const gateDefinition = (networkId: string, key: string) => props.view.collections.find(collection => collection.id === networkId)?.gates.find(gate => gate.key === key)
+const gateDefinition = (networkId: string, key: string) => props.view.automations.find(automation => automation.id === networkId)?.gates.find(gate => gate.key === key)
 function parse(payload: string): Record<string, unknown> {
   try { const value = JSON.parse(payload); return value && typeof value === 'object' && !Array.isArray(value) ? value : { payload } }
   catch { return { payload } }
@@ -54,7 +53,7 @@ const gateHeads = computed(() => {
     const key = `${item.networkId}:${item.gate}`
     if (keys.has(key)) continue
     const definition = gateDefinition(item.networkId, item.gate)
-    keys.set(key, { networkId: item.networkId, gate: item.gate, title: item.title, takes: definition?.takes ?? '', options: item.options.map(option => option.title), network: props.view.collections.find(collection => collection.id === item.networkId)?.name ?? '' })
+    keys.set(key, { networkId: item.networkId, gate: item.gate, title: item.title, takes: definition?.takes ?? '', options: item.options.map(option => option.title), network: props.view.automations.find(automation => automation.id === item.networkId)?.name ?? '' })
   }
   return [...keys.values()]
 })
@@ -95,15 +94,13 @@ function chooseAll(items: Case[], key: string) { for (const item of open(items))
 const batches = computed(() => props.gates.filter(gate => openBatch.includes(gate.state)))
 const graphBatches = computed(() => (props.graphGates?.batches ?? []).filter(batch => openBatch.includes(batch.state)))
 const held = computed(() => props.graphGates?.held ?? [])
-const approveGates = computed(() => props.view.collections.flatMap(collection => collection.gates.filter(gate => gate.kind === 'approve').map(gate => ({ ...gate, collection }))))
+const approveGates = computed(() => props.view.automations.flatMap(automation => automation.gates.filter(gate => gate.kind === 'approve').map(gate => ({ ...gate, automation }))))
 const podName = (id: string) => props.view.pods.find(pod => pod.id === id)?.name ?? id
 const rights = computed(() => props.view.pods.flatMap(pod => [...pod.approvals.map(approval => ({ pod, approval, error: null as string | null })), ...(pod.queue.blocked && !pod.approvals.length ? [{ pod, approval: null, error: pod.queue.error }] : [])]))
 const unknown = computed(() => props.view.pods.flatMap(pod => pod.unknown.map(item => ({ pod, ...item }))))
-const pending = computed(() => props.proposals.filter(proposal => proposal.state === 'pending'))
 const requests = computed(() => (props.requests ?? []).filter(row => row.status !== 'collected' && row.status !== 'expired'))
 const requestState = (status: SecretRequestRow['status']) => status === 'failed' ? t('failed') : status === 'filled' ? t('filled') : t('requested')
-const total = computed(() => openEvents.value + batches.value.length + graphBatches.value.length + held.value.length + rights.value.length + unknown.value.length + pending.value.length + requests.value.length)
-const provider = (proposal: AccessProposal) => proposal.body.provider === 'credential' ? t('Secrets') : proposal.body.provider === 'directory' ? t('Folders and files') : proposal.body.provider === 'http' ? t('Services, via HTTPS') : proposal.body.provider === 'variable' ? t('Variables') : t('Applications, installed')
+const total = computed(() => openEvents.value + batches.value.length + graphBatches.value.length + held.value.length + rights.value.length + unknown.value.length + requests.value.length)
 defineExpose({ total })
 </script>
 
@@ -124,7 +121,7 @@ defineExpose({ total })
         <b>{{ unknown.length }}</b><span>{{ t('unknown deliveries') }}</span><small>{{ unknown.length ? t('{count} deliveries to reconcile', { count: unknown.length }) : t('nothing to reconcile') }}</small>
       </div>
       <div class="kpi" role="listitem">
-        <b>{{ pending.length }}</b><span>{{ t('Setup') }}</span><small>{{ pending.length ? t('{count} proposals', { count: pending.length }) : t('no proposals') }}</small>
+        <b>{{ requests.length }}</b><span>{{ t('Secrets') }}</span><small>{{ requests.length ? t('{count} secret requests', { count: requests.length }) : t('no secret requests') }}</small>
       </div>
     </div>
 
@@ -183,7 +180,7 @@ defineExpose({ total })
           <div class="row">
             <span class="subj">{{ item.title }}</span><span class="pill pods">{{ item.gate }}</span>
           </div><div class="opts">
-            <button v-for="option in (view.collections.find(collection => collection.id === item.workflowId)?.gates.find(gate => gate.key === item.gate)?.options ?? [])" :key="option.key" class="secondary" type="button" @click="emit('workflow', { type: 'gateChoose', id: item.workflowId, gate: item.gate, itemId: item.itemId, option: option.key })">
+            <button v-for="option in (view.automations.find(automation => automation.id === item.workflowId)?.gates.find(gate => gate.key === item.gate)?.options ?? [])" :key="option.key" class="secondary" type="button" @click="emit('workflow', { type: 'gateChoose', id: item.workflowId, gate: item.gate, itemId: item.itemId, option: option.key })">
               {{ option.title }}
             </button>
           </div>
@@ -216,10 +213,10 @@ defineExpose({ total })
         <label v-else class="meta">{{ t('Evidence') }} <input v-model="evidence[batch.id]" maxlength="4000"></label>
         <div class="opts">
           <template v-if="batch.url">
-            <button v-if="desktop" class="secondary idp" type="button" @click="emit('network', { type: 'gateOpen', id: batch.networkId, revision: view.collections.find(collection => collection.id === batch.networkId)?.revision ?? 1, taskId: batch.id, generation: batch.generation })">{{ t('Decide at the IdP') }}</button>
+            <button v-if="desktop" class="secondary idp" type="button" @click="emit('network', { type: 'gateOpen', id: batch.networkId, revision: view.automations.find(automation => automation.id === batch.networkId)?.revision ?? 1, taskId: batch.id, generation: batch.generation })">{{ t('Decide at the IdP') }}</button>
             <a v-else class="secondary idp" :href="batch.url" target="_blank" rel="noopener">{{ t('Decide at the IdP') }}</a>
           </template>
-          <button v-if="batch.state === 'unknown'" class="secondary" type="button" :disabled="!desktop || !evidence[batch.id]?.trim()" @click="emit('network', { type: 'gateDiscard', id: batch.networkId, revision: view.collections.find(collection => collection.id === batch.networkId)?.revision ?? 1, taskId: batch.id, generation: batch.generation, evidence: evidence[batch.id] ?? '' })">
+          <button v-if="batch.state === 'unknown'" class="secondary" type="button" :disabled="!desktop || !evidence[batch.id]?.trim()" @click="emit('network', { type: 'gateDiscard', id: batch.networkId, revision: view.automations.find(automation => automation.id === batch.networkId)?.revision ?? 1, taskId: batch.id, generation: batch.generation, evidence: evidence[batch.id] ?? '' })">
             {{ t('Discard batch') }}
           </button>
         </div>
@@ -287,9 +284,8 @@ defineExpose({ total })
       </div>
     </div>
 
-    <h2>{{ t('Setup') }} <span class="meta">· {{ t('proposals for access a script needs') }}</span></h2>
-    <div class="inbox" data-testid="setup">
-      <slot name="setup" />
+    <h2>{{ t('Secrets') }} <span class="meta">· {{ t('requests through OpenApe Secrets') }}</span></h2>
+    <div class="inbox" data-testid="secrets">
       <div v-for="row in requests" :key="row.id" class="item" data-testid="secret-request">
         <div class="row">
           <span class="pill" :class="row.status === 'failed' ? 'warn' : row.status === 'filled' ? 'pods' : 'warn'">{{ requestState(row.status) }}</span><span class="subj">{{ t('Secret {alias} for {pod}', { alias: row.alias, pod: podName(row.podId) }) }}</span>
@@ -306,21 +302,9 @@ defineExpose({ total })
           </button>
         </div>
       </div>
-      <div v-if="!pending.length && !requests.length" class="item">
+      <div v-if="!requests.length" class="item">
         <div class="row">
-          <span class="pill off">{{ t('none') }}</span><span class="meta">{{ t('Appears when Codex proposes a folder, an application, an HTTPS destination, a secret or a setting for a script, or when Pods requests a secret through OpenApe Secrets.') }}</span>
-        </div>
-      </div>
-      <div v-for="proposal in pending" :key="proposal.id" class="item">
-        <div class="row">
-          <span class="pill pods">{{ provider(proposal) }}</span><span class="subj">{{ podName(proposal.podId) }}</span><span class="meta">{{ proposal.body.description }}</span>
-        </div>
-        <div class="opts">
-          <button class="secondary" type="button" @click="emit('open', proposal.podId)">
-            {{ t('Set up in the Pod') }}
-          </button><button class="secondary" type="button" :disabled="!desktop" @click="emit('master', { type: 'decline', id: proposal.id, podId: proposal.podId })">
-            {{ t('Decline') }}
-          </button>
+          <span class="pill off">{{ t('none') }}</span><span class="meta">{{ t('Appears when Pods requests a secret through OpenApe Secrets.') }}</span>
         </div>
       </div>
     </div>

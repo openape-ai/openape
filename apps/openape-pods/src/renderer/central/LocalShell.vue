@@ -3,7 +3,6 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { diagnostic } from '../i18n'
 import type { CentralCommand } from '../../contracts/central'
 import type { NetworkCommand, NetworkView } from '../../contracts/networks'
-import type { AccessProposal, MasterCommand } from '../../contracts/master'
 import type { WorkflowCommand, WorkflowView } from '../../contracts/workflows'
 import type { ScheduleCommand } from '../../contracts/scheduling'
 import type { RunCommand } from '../../contracts/runs'
@@ -23,7 +22,6 @@ const emit = defineEmits<{ openPod: [id: string], share: [selection: PortableSou
 const map = ref<MapView | null>(null)
 const networks = ref<NetworkView>({ networks: [] })
 const workflows = ref<WorkflowView>({ workflows: [], runs: [] })
-const proposals = ref<AccessProposal[]>([])
 const codexConnected = ref<boolean | null>(null)
 const secrets = ref<SecretsView | null>(null)
 const tab = ref<'automations' | 'decisions'>('automations')
@@ -38,8 +36,8 @@ async function poll() {
   try {
     const [inventory, networkView, workflowView] = await Promise.all([window.pods.workspace({ type: 'map' }), window.pods.networks({ type: 'list' }), window.pods.workflows({ type: 'list' })])
     map.value = inventory.map ?? null; networks.value = networkView; workflows.value = workflowView; now.value = Date.now(); error.value = ''
-    // Setup proposals, the Codex connection and secret requests change rarely; they are read every tenth poll.
-    if (polls++ % 10 === 0) { proposals.value = (await window.pods.master({ type: 'list' })).proposals; codexConnected.value = (await window.pods.codex({ type: 'status' })).state === 'connected'; secrets.value = window.pods.secrets ? await window.pods.secrets({ type: 'list' }) : null }
+    // The Codex connection and secret requests change rarely; they are read every tenth poll.
+    if (polls++ % 10 === 0) { codexConnected.value = (await window.pods.codex({ type: 'status' })).state === 'connected'; secrets.value = window.pods.secrets ? await window.pods.secrets({ type: 'list' }) : null }
   }
   catch (cause) { error.value = String(cause) }
   if (!closed) timer = setTimeout(() => { void poll() }, 1000)
@@ -57,7 +55,6 @@ function localCommand(command: CentralCommand) {
 }
 const networkCommand = (command: NetworkCommand, settle?: (error: string | null) => void) => void run(() => window.pods.networks(command), settle)
 const workflowCommand = (command: WorkflowCommand) => void run(() => window.pods.workflows(command))
-const masterCommand = (command: MasterCommand) => void run(async () => { await window.pods.master(command); proposals.value = (await window.pods.master({ type: 'list' })).proposals })
 const networkControl = (control: NetworkControl) => void run(() => window.pods.networks(control))
 const workflowControl = (control: WorkflowControl) => void run(() => window.pods.workflows(control))
 const openFolder = (podId: string) => void run(() => window.pods.programs({ type: 'openFolder', podId }))
@@ -73,5 +70,5 @@ const secretSave = (podId: string, alias: string, value: string) => void run(asy
   <p v-if="actionError" role="alert" class="error-message" data-action-error>
     {{ diagnostic(actionError) }}
   </p>
-  <AutomationsShell :view="map" :live="true" :now="now" :decisions="map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" desktop :sharing="sharing" :codex="codexConnected === null ? undefined : codexConnected ? 'connected' : 'disconnected'" :tab="tab" :inbox="{ choices: networks.choices ?? [], gates: networks.gates ?? [], graphGates: workflows.gates ?? null, proposals }" :secrets="secrets" @update:tab="tab = $event" @network-command="networkCommand" @workflow-command="workflowCommand" @master="masterCommand" @command="localCommand" @network="networkControl" @workflow="workflowControl" @folder="openFolder" @secrets="secretsCommand" @secret-save="secretSave" @open-pod="emit('openPod', $event)" @share="emit('share', $event)" @advanced="emit('advanced')" @import="emit('import')" />
+  <AutomationsShell :view="map" :live="true" :now="now" :decisions="map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" desktop :sharing="sharing" :codex="codexConnected === null ? undefined : codexConnected ? 'connected' : 'disconnected'" :tab="tab" :inbox="{ choices: networks.choices ?? [], gates: networks.gates ?? [], graphGates: workflows.gates ?? null }" :secrets="secrets" @update:tab="tab = $event" @network-command="networkCommand" @workflow-command="workflowCommand" @command="localCommand" @network="networkControl" @workflow="workflowControl" @folder="openFolder" @secrets="secretsCommand" @secret-save="secretSave" @open-pod="emit('openPod', $event)" @share="emit('share', $event)" @advanced="emit('advanced')" @import="emit('import')" />
 </template>

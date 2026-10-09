@@ -72,8 +72,8 @@ describe('Automatisierungen', () => {
     await mountShell()
     await button('Liste').trigger('click')
     const rows = wrapper!.findAll('tbody tr')
-    const activeCollections = new Set(view.collections.filter(collection => collection.state === 'active').map(collection => collection.id))
-    const expected = view.pods.filter(pod => pod.lifecycle !== 'archived' && (!pod.collection || activeCollections.has(pod.collection))).length + view.collections.filter(collection => collection.state === 'paused').length
+    const activeCollections = new Set(view.automations.filter(automation => automation.state === 'active').map(automation => automation.id))
+    const expected = view.pods.filter(pod => pod.lifecycle !== 'archived' && (!pod.automation || activeCollections.has(pod.automation))).length + view.automations.filter(automation => automation.state === 'paused').length
     expect(rows).toHaveLength(expected)
     expect(expected).toBe(23)
     expect(wrapper!.findAll('thead th').map(item => item.text())).toEqual(['Pod', 'Gruppe', 'Art', 'Läuft', 'Liest', 'Schreibt', 'Kanäle', 'Zuletzt'])
@@ -109,7 +109,7 @@ describe('Automatisierungen', () => {
     expect(wrapper!.find('.automation-info').text()).toContain('phofmann@delta-mind.at')
     expect(wrapper!.find('.automation-info').text()).toContain('o365-cli · installiert')
     expect(wrapper!.findAll('.automation-info button')).toHaveLength(0)
-    shell.pin(view.collections[0]!.id); await flushPromises()
+    shell.pin(view.automations[0]!.id); await flushPromises()
     expect(wrapper!.find('.automation-info').text()).toContain('11 Mitglieder · aktiv')
   })
 
