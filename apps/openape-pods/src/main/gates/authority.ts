@@ -5,13 +5,15 @@ import { AgentAuthority } from '../broker/authorization'
 import type { AgentConnection } from '../broker/authorization'
 import { connectionRequest, readJSON } from '../connections/http'
 
-/** What one once-grant is bound to: one item of a reviewed batch. */
+/** What one item grant (once or always) is bound to: one item of a reviewed batch. */
 export interface GrantBinding { grantId?: string, expiresAt: number, command: string[], summary: string }
 /** One item of a batch, identified by a key that is unique within the batch. */
 export interface BatchMember { key: string, command: string[], summary: string }
 export interface BatchRequest { id: string, title: string, expiresAt: number, reason: string, permissions: string[], members: BatchMember[] }
 export interface BatchGrant { key: string, id: string }
 export type MemberState = 'pending' | 'approved' | 'denied' | 'expired'
+/** How the owner may decide an item at the IdP: once is consumed on release, always stays valid while approved; both stay bound to the item's exact command. */
+export type GrantDecision = 'once' | 'always'
 export interface GrantAuthority {
   createBatch: (request: BatchRequest) => Promise<{ url: string, grants: BatchGrant[] }>
   statuses: (batchId: string, members: (GrantBinding & { key: string })[]) => Promise<Record<string, MemberState>>
@@ -21,13 +23,13 @@ export interface GrantAuthority {
 
 const grantIdPattern = /^[\w-]{1,128}$/
 
-export function createGrantAuthority(connection: AgentConnection, signal: AbortSignal, check: () => Promise<unknown>, audience: string): GrantAuthority {
+export function createGrantAuthority(connection: AgentConnection, signal: AbortSignal, check: () => Promise<unknown>, audience: string, grantTypes: readonly GrantDecision[] = ['once']): GrantAuthority {
   const decisionIssuer = connection.decisionIssuer ?? connection.issuer
   const headers = async () => ({ Authorization: `Bearer ${await connection.accessToken()}` })
   const timeout = () => AbortSignal.any([signal, AbortSignal.timeout(10000)])
   function verify(grant: OpenApeGrant, binding: GrantBinding): OpenApeGrant {
     const request = grant.request
-    if (grant.id !== binding.grantId || request?.requester !== connection.subject || request.audience !== audience || request.target_host !== connection.targetHost || request.grant_type !== 'once' || request.waits_until !== Math.floor(binding.expiresAt / 1000) || JSON.stringify(request.command) !== JSON.stringify(binding.command) || request.summary?.text !== binding.summary || !sameBrokeredGrant(grant.brokered, connection.brokered)) throw new Error('Approval grant differs from the reviewed item or Pod identity')
+    if (grant.id !== binding.grantId || request?.requester !== connection.subject || request.audience !== audience || request.target_host !== connection.targetHost || !grantTypes.includes(request.grant_type as GrantDecision) || request.waits_until !== Math.floor(binding.expiresAt / 1000) || JSON.stringify(request.command) !== JSON.stringify(binding.command) || request.summary?.text !== binding.summary || !sameBrokeredGrant(grant.brokered, connection.brokered)) throw new Error('Approval grant differs from the reviewed item or Pod identity')
     return grant
   }
   async function get(binding: GrantBinding): Promise<OpenApeGrant> {
@@ -94,15 +96,16 @@ export function createGrantAuthority(connection: AgentConnection, signal: AbortS
       const token = response.authz_jwt
       const verification = await verifyAuthzJWT(token, { expectedIss: decisionIssuer, expectedAud: audience, jwksUri: `${decisionIssuer}/.well-known/jwks.json` })
       const claims = verification.claims
-      if (!verification.valid || !claims || claims.sub !== connection.subject || claims.target_host !== connection.targetHost || claims.grant_id !== binding.grantId || claims.grant_type !== 'once' || claims.decided_by !== connection.owner || claims.cmd_hash !== await computeCmdHash(binding.command.join(' ')) || JSON.stringify(claims.command) !== JSON.stringify(binding.command) || !sameBrokeredGrant(claims.brokered, connection.brokered)) throw new Error('Approval token does not authorize this exact item')
+      if (!verification.valid || !claims || claims.sub !== connection.subject || claims.target_host !== connection.targetHost || claims.grant_id !== binding.grantId || claims.grant_type !== grant.request.grant_type || claims.decided_by !== connection.owner || claims.cmd_hash !== await computeCmdHash(binding.command.join(' ')) || JSON.stringify(claims.command) !== JSON.stringify(binding.command) || !sameBrokeredGrant(claims.brokered, connection.brokered)) throw new Error('Approval token does not authorize this exact item')
       await check(); signal.throwIfAborted()
       const consumed = await connectionRequest(decisionIssuer, `/api/grants/${binding.grantId}/consume`, {}, signal, token)
-      if (consumed.status !== 'consumed' || consumed.error) throw new Error('Approval grant was not consumed; nothing may move')
+      // A once grant is used up here; the IdP confirms an always grant as still valid instead.
+      if (consumed.status !== (grant.request.grant_type === 'once' ? 'consumed' : 'valid') || consumed.error) throw new Error('Approval grant was not consumed; nothing may move')
     },
     async assertActive(binding) {
       const grant = await get(binding); manual(grant)
       await new AgentAuthority(connection).assertActive(binding.grantId!, signal)
-      if (grant.status !== 'used' || binding.expiresAt <= Date.now()) throw new Error('Consumed approval is no longer valid')
+      if (grant.status !== (grant.request.grant_type === 'once' ? 'used' : 'approved') || binding.expiresAt <= Date.now()) throw new Error('Consumed approval is no longer valid')
       await check(); signal.throwIfAborted()
     },
   }
