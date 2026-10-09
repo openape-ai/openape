@@ -1,7 +1,5 @@
 import { jevAvailability } from '../onboarding/store'
-import type { ChangeSet } from '../../contracts/control-api'
 import type { WorkflowEngine } from '../workflows/engine'
-import { ControlChanges } from '../control/changes'
 import type { Conversation } from '../../contracts/chats'
 import { ChatRegistry } from './chat-registry'
 import { MasterSetup } from './setup'
@@ -31,61 +29,31 @@ import { inspectGraph } from '../workflows/items'
 import type { WorkflowDefinition } from '../../contracts/workflows'
 
 export class MasterControl {
-  private receipt(set: ChangeSet) { return { changeSetId: set.id, revision: set.revision, state: set.state, targets: set.targets.map(target => ({ podId: target.podId, name: target.name, actions: target.actions.map(action => action.action) })), workflowId: set.workflow?.before.id ?? null } }
-  changes(): ControlChanges { return new ControlChanges(this.store, this.resources) }
-  decide(context: Conversation, id: string, revision: number, decision: 'applyChanges' | 'discardChanges') {
-    return this.changes().execute(context, id, revision, decision, (action) => {
-      if (!('podId' in action)) throw new Error('Change requires a selected Pod')
-      const current = { ...action, revision: this.store.getPod(action.podId).revision }
-      if (current.action === 'setGroup') current.organizationRevision = new PodGroups(this.store).view().revision
-      if (current.action === 'prepareSchedule') {
-        if (this.scheduler.view(current.podId).enabled) throw new Error('Review an enabled schedule in Pod settings before replacing it')
-        this.scheduler.save(current.podId, current.scheduleRevision, current.spec, false)
-        return { schedule: this.scheduler.view(current.podId), activation: 'owner-only-in-settings' }
-      }
-      return this.apply(current, '', null)
-    }, (podId, operationId) => this.startRun(podId, operationId), (command, operationId) => {
-      if (!this.workflows) throw new Error('Workflow operation unavailable')
-      if (command.type === 'start') return { workflowRunId: this.workflows.start(command.id, command.revision, 'manual', operationId) }
-      this.workflows.save(command); return { workflowId: command.id, revision: command.revision + 1 }
-    })
-  }
-
   setup(): MasterSetup { return new MasterSetup(this.store, this.resources) }
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly dispatcher: RunDispatcher, private readonly scheduler: Scheduler, private readonly runtime: AgentRuntime, private readonly workflows?: WorkflowEngine, private readonly startRun: (podId: string, operationId: string) => string = (podId, operationId) => dispatcher.start(podId, { reason: 'manual', eventIds: [], operationId })) {}
-  async execute(key: string, value: unknown, signal: AbortSignal, selectedPod: string | null = null, creationId: string | null = null, context?: Conversation, authority: 'conversation' | 'owner' = 'conversation'): Promise<unknown> {
+  async execute(key: string, value: unknown, signal: AbortSignal, selectedPod: string | null = null, creationId: string | null = null, context?: Conversation): Promise<unknown> {
     if (!key || key.length > 300) throw new Error('Invalid master operation identity')
     const requested = parseMasterAction(value)
-    if (requested.action === 'setSchedule' && authority !== 'owner') throw new Error('Schedule activation requires owner authority')
     if (context) context = new ChatRegistry(this.store).assertRevision(context.id, context.revision)
     const action = requested.action === 'setGraphValue' ? this.graphValue(requested, context) : requested
     if (context) {
       if ('podId' in action && !context.context.pods.some(pod => pod.id === action.podId)) throw new Error('context_required: select this Pod with + before inspecting or changing it')
     }
-    const remoteOwner = context ? this.store.db.prepare('SELECT owner FROM remote_conversations WHERE conversation_id=?').get(context.id)?.owner as string | undefined : undefined
-    if (remoteOwner && authority === 'owner') throw new Error('Local owner authority cannot be used for a remote conversation')
-    if (remoteOwner) {
-      if (['create', 'setGroup', 'inspectWorkflow', 'runWorkflow', 'saveWorkflow', 'setGraphValue'].includes(action.action)) throw new Error('This operation requires the desktop workspace')
-      for (const pod of context!.context.pods) {
-        if (this.store.db.prepare('SELECT owner FROM remote_pods WHERE pod_id=?').get(pod.id)?.owner !== remoteOwner) throw new Error('Conversation contains another owner’s Pod')
-      }
-    }
     const conversations = new MasterConversations(this.store)
     const boundPod = creationId ? conversations.bound(creationId) : null
     const effectivePod = selectedPod ?? boundPod
     if (effectivePod && ((action.action === 'create' && !creationId) || ('podId' in action && action.podId !== effectivePod))) throw new Error('Action is outside the selected pod; use its own chat or the workspace chat')
-    const request = JSON.stringify(action); const hash = digest(JSON.stringify({ selectedPod, action, ...(creationId ? { creationId } : {}), ...(context ? { conversationId: context.id, contextRevision: context.revision } : {}), authority }))
+    const request = JSON.stringify(action); const hash = digest(JSON.stringify({ selectedPod, action, ...(creationId ? { creationId } : {}), ...(context ? { conversationId: context.id, contextRevision: context.revision } : {}) }))
     const prior = this.store.db.prepare('SELECT * FROM master_actions WHERE id=?').get(key)
     if (prior) {
       if (prior.request_hash !== hash) throw new Error('Master operation identity was reused with different arguments')
       if (prior.state === 'completed') return JSON.parse(prior.result as string) as unknown
       throw new Error(prior.error as string || 'Master action is already running or interrupted; inspect before retrying')
     }
-    if (context && authority !== 'owner' && ['resume', 'installMailRecipe'].includes(action.action)) throw new Error('This action requires owner review in Pod settings')
     if (action.action === 'create' && boundPod) throw new Error('Creation conversation already has a pod')
     signal.throwIfAborted()
     if ('podId' in action) this.assertPod(action.podId, action.revision, action.action === 'inspect')
-    if (action.action === 'saveWorkflow' && action.definition.revision === 0 && authority === 'owner') {
+    if (action.action === 'saveWorkflow' && action.definition.revision === 0) {
       if (!this.workflows || !context || context.context.workflow) throw new Error('Select only the member Pods before creating a workflow')
       if (action.definition.nodes.some(node => !context.context.pods.some(pod => pod.id === node.podId))) throw new Error('Select every workflow Pod before saving')
       return this.store.transaction(() => {
@@ -99,7 +67,7 @@ export class MasterControl {
       if (!context?.context.workflow) throw new Error('Select a workflow before using this action')
       const workflow = context.context.workflow
       return this.store.transaction(() => {
-        const result = authority === 'owner' && action.action !== 'inspectWorkflow' ? this.executeWorkflow(action, context, key) : action.action === 'inspectWorkflow' ? this.inspectWorkflow(workflow, context.workflowChanged) : this.receipt(this.changes().prepareWorkflow(context, action.action === 'saveWorkflow' ? action.definition : { type: 'start', id: workflow.id, revision: workflow.revision }))
+        const result = action.action === 'inspectWorkflow' ? this.inspectWorkflow(workflow, context.workflowChanged) : this.executeWorkflow(action, context, key)
         this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'completed\',?,NULL)').run(key, hash, request, JSON.stringify(result)); return result
       })
     }
@@ -107,13 +75,13 @@ export class MasterControl {
       this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'running\',NULL,NULL)').run(key, hash, request)
       try {
         this.assertDraft(action.podId, action.draftId, action.draftRevision)
-        const result = await validateDraft(this.store, this.resources, this.runtime, action.draftId, action.draftRevision, signal, context && authority !== 'owner' ? this.changes().variables(context, action.podId) : undefined)
+        const result = await validateDraft(this.store, this.resources, this.runtime, action.draftId, action.draftRevision, signal)
         this.store.db.prepare('UPDATE master_actions SET state=\'completed\',result=? WHERE id=?').run(JSON.stringify(result), key)
         return result
       }
       catch (error) { this.store.db.prepare('UPDATE master_actions SET state=\'failed\',error=? WHERE id=?').run(error instanceof Error ? error.message : 'Validation failed', key); throw error }
     }
-    if (action.action === 'run' && authority === 'owner') {
+    if (action.action === 'run') {
       this.store.transaction(() => {
         this.assertPod(action.podId, action.revision, false)
         this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'running\',NULL,NULL)').run(key, hash, request)
@@ -137,9 +105,7 @@ export class MasterControl {
     signal.throwIfAborted()
     return this.store.transaction(() => {
       if ('podId' in action) this.assertPod(action.podId, action.revision, action.action === 'inspect')
-      let result: unknown
-      if (context && authority !== 'owner' && ['activate', 'rollback', 'setVariable', 'prepareSchedule', 'setGroup', 'revise', 'pause', 'run'].includes(action.action)) result = { status: 'pending-owner-review', changeSet: this.receipt(this.changes().prepare(context, action)) }
-      else result = this.apply(action, dependencyLockHash, effectivePod, context)
+      const result = this.apply(action, dependencyLockHash, effectivePod, context)
       if (action.action === 'create' && creationId) conversations.bind(creationId, (result as { id: string }).id)
       this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'completed\',?,NULL)').run(key, hash, request, JSON.stringify(result))
       return result
@@ -194,8 +160,6 @@ export class MasterControl {
 
   private apply(action: MasterAction, lock: string, selectedPod: string | null, context?: Conversation): unknown {
     if (action.action === 'runtime') return { ...runtimeReference, jevConnection: jevAvailability(this.store) }
-    const remoteOwner = context ? this.store.db.prepare('SELECT owner FROM remote_conversations WHERE conversation_id=?').get(context.id)?.owner as string | undefined : undefined
-    if (action.action === 'list' && remoteOwner) return { jev: jevAvailability(this.store), pods: this.store.listPods().filter(pod => this.store.db.prepare('SELECT owner FROM remote_pods WHERE pod_id=?').get(pod.id)?.owner === remoteOwner).map(pod => ({ id: pod.id, name: pod.name, revision: pod.revision, lifecycle: pod.lifecycle, selected: context!.context.pods.some(item => item.id === pod.id) })), workflows: [] }
     if (action.action === 'list') return { jev: jevAvailability(this.store), pods: (selectedPod ? [this.store.getPod(selectedPod)] : this.store.listPods()).map(pod => context ? { id: pod.id, name: pod.name, revision: pod.revision, lifecycle: pod.lifecycle, selected: context.context.pods.some(item => item.id === pod.id) } : pod), ...(context ? { workflows: this.store.db.prepare('SELECT id,name,revision,nodes FROM workflows WHERE archived=0').all().map(row => ({ id: row.id, name: row.name, revision: row.revision, podIds: (JSON.parse(row.nodes as string) as { podId: string }[]).map(node => node.podId) })) } : {}) }
     if (action.action === 'create') {
       if (this.store.listPods().length >= 100) throw new Error('Local pod limit reached')
@@ -205,7 +169,7 @@ export class MasterControl {
     const pod = this.store.getPod(action.podId)
     if (action.action === 'inspect') {
       const scripts = new ScriptWorkspace(this.store, this.resources, this).view(pod.id)
-      return { jev: jevAvailability(this.store), pod, script: scripts.source, resources: modelResources(this.resources.list(pod.id), true), variables: new PodVariables(this.store).list(pod.id), schedule: this.scheduler.view(pod.id), organization: remoteOwner ? undefined : this.organization(pod.id), versions: scripts.versions, runs: this.dispatcher.view(pod.id).runs, checkpoint: this.store.checkpoint(pod.id), setup: this.setup().proposals(pod.id) }
+      return { jev: jevAvailability(this.store), pod, script: scripts.source, resources: modelResources(this.resources.list(pod.id), true), variables: new PodVariables(this.store).list(pod.id), schedule: this.scheduler.view(pod.id), organization: this.organization(pod.id), versions: scripts.versions, runs: this.dispatcher.view(pod.id).runs, checkpoint: this.store.checkpoint(pod.id), setup: this.setup().proposals(pod.id) }
     }
     if (action.action === 'setVariable') {
       new PodVariables(this.store).save(pod.id, action.name, action.value, action.variableRevision)
@@ -232,7 +196,6 @@ export class MasterControl {
       return this.organization(pod.id)
     }
     if (action.action === 'revise') { this.store.updatePod(pod.id, action.revision, { name: action.name, lifecycle: pod.lifecycle }); return this.store.getPod(pod.id) }
-    if (action.action === 'run') { this.scheduler.requestManual(pod.id); return { accepted: true, runs: this.dispatcher.view(pod.id).runs } }
     if (action.action === 'resume') {
       if (!pod.activeScript || !this.store.db.prepare('SELECT 1 FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(pod.id, pod.activeScript, pod.bindingRevision, this.resources.epoch(pod.id))) throw new Error('Validate and activate a script for the current script and permissions before resuming')
       const version = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(pod.id, pod.activeScript)
