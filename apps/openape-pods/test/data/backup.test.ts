@@ -13,7 +13,6 @@ import { PodGroups } from '../../src/worker/workspace/groups'
 import { storageBytes } from '../../src/worker/data/files'
 import { ChatRegistry } from '../../src/worker/master/chat-registry'
 import { MasterConversations } from '../../src/worker/master/conversations'
-import { ControlChanges } from '../../src/worker/control/changes'
 import { Scheduler } from '../../src/worker/scheduling/scheduler'
 import { DatabaseSync } from 'node:sqlite'
 import { cleanupEncryptedBackupStaging, encryptedBackupStaging } from '../../src/worker/data/encrypted-backup'
@@ -241,18 +240,15 @@ it('retains original and shared conversations after Pod deletion with an unavail
   }
 })
 
-it('restores chat history while discarding pending changes and every provider continuation', async () => {
+it('restores chat history while discarding every provider continuation', async () => {
   const { store, pod, exports } = await fixture(); const registry = new ChatRegistry(store); const chat = registry.ensure(pod.id)
   const messageId = randomUUID(); store.db.prepare('INSERT INTO master_messages VALUES(?,?,?,?,?)').run(messageId, 'user', 'Saved history', 'sent', 1)
   new MasterConversations(store).assign(messageId, chat.scope)
   store.db.prepare('INSERT OR REPLACE INTO master_contexts VALUES(?,?,?,?)').run(chat.scope, 'old-provider-thread', 'idle', null)
-  const changes = new ControlChanges(store, new ResourceRegistry(store, () => {}))
-  changes.prepare(chat, { action: 'setVariable', podId: pod.id, revision: 1, name: 'topic', value: 'new', variableRevision: 0 })
   const backup = await createBackup(store, exports); const target = await restoreBackup(backup, exports, schemaVersion)
   const restored = new PodDatabase(target); stores.push(restored)
   expect(new MasterConversations(restored).messages(chat.scope)[0]?.text).toBe('Saved history')
   expect(new MasterConversations(restored).session(chat.scope).threadId).toBeNull()
-  expect(new ControlChanges(restored, new ResourceRegistry(restored, () => {})).list(chat.id)[0]?.state).toBe('discarded')
 })
 
 async function retentionFixture(count = 55) {

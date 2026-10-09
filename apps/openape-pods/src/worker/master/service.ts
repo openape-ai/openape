@@ -29,7 +29,6 @@ export class MasterService {
   constructor(private readonly store: PodDatabase, private readonly runtime: AgentRuntime, private readonly control: MasterControl, private provider?: AgentGatewayServices['provider']) {
     this.descriptions = new PodDescriptions(store, (input, signal) => summarizeConversation(store, runtime, this.provider, input, signal))
     store.transaction(() => {
-      store.db.prepare('UPDATE control_changes SET body=json_set(body,\'$.state\',\'failed\',\'$.error\',\'Run was interrupted; inspect run history before preparing another request\') WHERE json_extract(body,\'$.state\')=\'running\'').run()
       store.db.prepare('UPDATE master_contexts SET state=\'interrupted\',error=\'Previous chat was interrupted.\' WHERE state=\'running\'').run()
       store.db.prepare('UPDATE master_session SET state=\'interrupted\',error=\'Previous chat was interrupted. Inspect its actions before continuing.\',active_turn=NULL WHERE state=\'running\'').run()
       store.db.prepare('UPDATE master_messages SET state=\'interrupted\' WHERE state=\'streaming\'').run()
@@ -53,7 +52,7 @@ export class MasterService {
     const boundPodId = conversation.originPodId && podIds.includes(conversation.originPodId) && !conversation.unavailablePodIds.includes(conversation.originPodId) ? conversation.originPodId : null
     const messages = conversations.messages(scope, before)
     const session = scope === conversations.resolve(this.context) && this.active ? this.store.db.prepare('SELECT * FROM master_session WHERE id=1').get()! : conversations.session(scope)
-    return { changes: this.control.changes().list(conversation.id), conversation, activeConversationId: new ChatRegistry(this.store).view().activeConversationId, nextBefore: messages.length === 100 ? messages[0]!.sequence : null, adoption: boundPodId ? new LegacyChatAdoption(this.store).preview(boundPodId) : null, ...(requested.startsWith('creation:') ? { creationId: requested.slice(9), boundPodId } : {}), description: boundPodId ? this.descriptions.view(boundPodId) : null, initialRequest: boundPodId ? conversations.initial(boundPodId) : null, ...(boundPodId ? { scriptState: this.control.setup().scriptState(boundPodId) } : {}), connected: !!this.provider, state: session.state as MasterView['state'], error: session.error as string | null,
+    return { conversation, activeConversationId: new ChatRegistry(this.store).view().activeConversationId, nextBefore: messages.length === 100 ? messages[0]!.sequence : null, adoption: boundPodId ? new LegacyChatAdoption(this.store).preview(boundPodId) : null, ...(requested.startsWith('creation:') ? { creationId: requested.slice(9), boundPodId } : {}), description: boundPodId ? this.descriptions.view(boundPodId) : null, initialRequest: boundPodId ? conversations.initial(boundPodId) : null, ...(boundPodId ? { scriptState: this.control.setup().scriptState(boundPodId) } : {}), connected: !!this.provider, state: session.state as MasterView['state'], error: session.error as string | null,
       messages,
       drafts: this.store.db.prepare('SELECT d.*,p.name FROM script_drafts d JOIN pods p ON p.id=d.pod_id WHERE d.pod_id IN (SELECT value FROM json_each(?)) ORDER BY d.rowid DESC LIMIT 20').all(JSON.stringify(podIds)).map(row => ({ validationError: this.store.db.prepare('SELECT error FROM master_actions WHERE json_extract(request,\'$.action\')=\'validate\' AND json_extract(request,\'$.draftId\')=? AND json_extract(request,\'$.draftRevision\')=? ORDER BY rowid DESC LIMIT 1').get(row.id, row.revision)?.error as string | null ?? null, id: row.id as string, podId: row.pod_id as string, name: row.name as string, revision: row.revision as number, code: row.code as string, capabilities: JSON.parse(row.capabilities as string) as string[], validation: row.validation as string | null, hash: row.script_hash as string | null })),
       proposals: podIds.flatMap(id => this.control.setup().proposals(id)).slice(0, 100),
@@ -64,10 +63,6 @@ export class MasterService {
     const conversations = new MasterConversations(this.store)
     const registry = new ChatRegistry(this.store)
     const selected = command.conversationId ? command.type === 'list' ? registry.get(command.conversationId) : registry.assertRevision(command.conversationId, command.contextRevision!) : null
-    if (command.type === 'applyChanges' || command.type === 'discardChanges') {
-      if (!selected) throw new Error('Current change review required')
-      this.control.decide(selected, command.id, command.revision, command.type); return this.view(selected.scope)
-    }
     if (selected && 'podId' in command && ['answerSetup', 'resolveSetup', 'adopt', 'summarize'].includes(command.type) && !selected.context.pods.some(pod => pod.id === command.podId)) throw new Error('Setup action is outside the conversation context')
     if (command.type === 'answerSetup') { this.control.setup().answer(command); return this.view(selected?.scope ?? command.podId) }
     if (command.type === 'resolveSetup') { await this.control.setup().resolve(command); return this.view(selected?.scope ?? command.podId) }

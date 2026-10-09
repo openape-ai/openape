@@ -36,7 +36,7 @@ const idle = (scope: { podId?: string, conversationId?: string } = {}) => expect
 const answer = (text: string) => recordedResponse({ type: 'message', id: randomUUID(), role: 'assistant', status: 'completed', content: [{ type: 'output_text', text, annotations: [] }] })
 
 describe('chat through the confined app-server', () => {
-  it('repairs a draft from native validation feedback, stages every change and runs the reviewed script', async () => {
+  it('repairs a draft from native validation feedback, applies every change and runs the activated script', async () => {
     const model = new PromptModel()
     await setup(async body => model.reply(body))
     const creationId = randomUUID()
@@ -52,16 +52,10 @@ describe('chat through the confined app-server', () => {
     expect(String(model.results.get(7)?.error)).toContain('Invalid checkpoint fields')
     expect(view.messages.filter(message => message.role === 'tool' && message.state === 'failed')).toHaveLength(1)
     expect(view.drafts[0]).toMatchObject({ podId: pod.id, revision: 2, validation: expect.stringContaining('native-synthetic-contract') })
-    // Chat changes stay staged until the owner applies them; the model's run request starts nothing.
-    expect(pod.activeScript).toBeNull()
-    expect(dispatcher.view(pod.id).runs).toHaveLength(0)
-    const change = view.changes!.find(item => item.kind === 'changes' && item.state === 'pending')!
-    await master.execute({ type: 'applyChanges', id: change.id, revision: change.revision, conversationId: view.conversation!.id, contextRevision: view.conversation!.revision })
+    // Chat changes apply directly; the prepared schedule stays disabled and the model's run request starts one run.
     const applied = store.getPod(pod.id)
     expect(applied).toMatchObject({ lifecycle: 'paused', activeScript: expect.stringMatching(/^[a-f0-9]{64}$/) })
-    expect(dispatcher.view(pod.id).runs).toHaveLength(0)
     expect(new Scheduler(store, dispatcher).view(pod.id)).toMatchObject({ enabled: false, spec: { kind: 'interval', seconds: 900 } })
-    dispatcher.start(pod.id)
     await expect.poll(() => dispatcher.view(pod.id).runs[0]?.state, { timeout: 30000 }).toBe('completed')
     expect(dispatcher.view(pod.id).runs[0]).toMatchObject({ scriptHash: applied.activeScript, summary: 'Hello from my pod (1)' })
     expect(store.checkpoint(pod.id).body).toEqual({ count: 1 })
