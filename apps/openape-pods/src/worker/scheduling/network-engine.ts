@@ -1,3 +1,4 @@
+import { occupiedRunSlots } from '../runs/slots'
 import { supportedNetworkCapability, networkSourceCapability, networkArchiveMember } from '../../contracts/network-capabilities'
 import { currentCompositionDraft, NetworkReplacement } from './network-replacement'
 import { memberScriptIssues, networkSettlementIssues, previewNetworkArchive, retainedLegacyItems } from './network-retirement'
@@ -231,7 +232,7 @@ export class NetworkEngine {
         this.attention(batch.preview.networkId, 'process-now-stopped', { previewId: id, explicitResumeRequired: true }, failure)
         this.endBatch(id, 'stopped'); continue
       }
-      const occupied = Number(this.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count)
+      const occupied = occupiedRunSlots(this.store)
       const maximum = Number(this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency)
       let active = batch.remaining > 0 && occupied >= maximum; let started = false
       for (const member of definition.members.filter(item => batch.preview.podIds.includes(item.podId))) {

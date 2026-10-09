@@ -81,19 +81,22 @@ async function fixture() {
   const { ProgramManager } = await import('../../src/main/programs/manager')
   const { shell } = await import('electron')
   const worker = new FixtureWorker(() => {})
-  const connection = (id: string) => ({ issuer, subject: `pod-${id.slice(-1)}@example.test`, owner, keyId: 'key', targetHost: `pods:${id}`, accessToken: async () => 'SYNTHETIC_POD_AGENT', identity: { podId: id, connectionId: randomUUID(), issuer, owner, subject: `pod-${id.slice(-1)}@example.test`, keyId: 'key' }, ownerConnection: 'owner-connection' })
+  const connection = (id: string) => ({ issuer, subject: `pod-${id.slice(-4)}@example.test`, owner, keyId: 'key', targetHost: `pods:${id}`, accessToken: async () => 'SYNTHETIC_POD_AGENT', identity: { podId: id, connectionId: randomUUID(), issuer, owner, subject: `pod-${id.slice(-4)}@example.test`, keyId: 'key' }, ownerConnection: 'owner-connection' })
   // The real ConnectionManager.request runs; only the provisioned Pod identity is synthetic.
   const connections = Object.assign(Object.create(ConnectionManager.prototype), { podConnection: async (id: string) => connection(id) })
   const approvals: RunApproval[] = []; const bound: Record<string, unknown>[] = []
   const receipts = new Map<string, unknown>()
   const reasons = new Map<string, string>()
+  const names = new Map<string, string>()
+  const withoutRuntime = new Set<string>()
   const resources = () => ({ epoch: 1, resources: [program], variables: [] })
   const dispatch = vi.fn(async (command: Record<string, any>) => {
     if (command.resource?.type?.startsWith('bind')) bound.push(command.resource)
     if (command.program?.type === 'save') bound.push(command.program)
     if (command.serviceCheck?.approval) approvals.push(command.serviceCheck.approval)
-    if (command.runContext?.grant) return [...approvals].reverse().find(item => item.permission === command.runContext.grant.permission && item.subject === command.runContext.grant.subject && !['cancelled', 'expired'].includes(item.state)) ?? null
-    if (command.runContext) return { name: 'Synthetic Pod', reason: reasons.get(command.runContext.scope.runId) ?? 'schedule', runtime: true }
+    // Like the worker: the latest recorded approval of this permission, whatever its state.
+    if (command.runContext?.grant) return [...approvals].reverse().find(item => item.permission === command.runContext.grant.permission && item.subject === command.runContext.grant.subject) ?? null
+    if (command.runContext) return { name: names.get(command.runContext.scope.runId) ?? 'Synthetic Pod', reason: reasons.get(command.runContext.scope.runId) ?? 'schedule', runtime: !withoutRuntime.has(command.runContext.scope.runId) }
     if (command.credentialCheck) return 'secret-id'
     if (command.codexAdministration) {
       const { type, request, result } = command.codexAdministration
@@ -106,20 +109,28 @@ async function fixture() {
   Object.assign(worker, { root: '/fixture', connections, credentials, dispatch })
   Object.assign(worker, { programs: new ProgramManager('/fixture/authentication', '/fixture/helper', credentials as never, connections, async () => resources() as never, command => dispatch({ program: command })) })
   const service = worker as unknown as { executeService: (request: ServiceRequest) => Promise<unknown> }
-  const start = (id: string, runId = randomUUID(), reason = 'schedule') => {
+  const call = (scope: ServiceRequest['scope'], kind: ServiceRequest['kind'], body: unknown = {}) => service.executeService({ id: randomUUID(), kind, scope, body })
+  const start = (id: string, runId = randomUUID(), reason = 'schedule', name?: string) => {
     reasons.set(runId, reason)
+    if (name) names.set(runId, name)
     const scope = { podId: id, runId, epoch: 1, assignmentRevision: 1, capabilities: [] }
-    const call = (kind: ServiceRequest['kind'], body: unknown = {}) => service.executeService({ id: randomUUID(), kind, scope, body })
-    return { runId, run: call('shell'), call }
+    return { runId, run: call(scope, 'shell'), call: (kind: ServiceRequest['kind'], body: unknown = {}) => call(scope, kind, body) }
   }
-  return { worker, approvals, bound, credentials, start, openExternal: vi.mocked(shell.openExternal) }
+  // A run of a network member or decision maintenance: its service calls need no runtime grant.
+  const plainCall = (id: string, kind: ServiceRequest['kind'], body: unknown) => {
+    const runId = randomUUID(); withoutRuntime.add(runId)
+    return call({ podId: id, runId, epoch: 1, assignmentRevision: 1, capabilities: [] }, kind, body)
+  }
+  // Cancels every open service call, as the worker does when a run is cancelled or times out.
+  const abortAll = () => { for (const controller of (worker as unknown as { services: Map<string, AbortController> }).services.values()) controller.abort(new Error('Pod tool call cancelled')) }
+  return { worker, approvals, bound, credentials, start, plainCall, abortAll, openExternal: vi.mocked(shell.openExternal) }
 }
 
 it('requests program and HTTP assignments as continuing grants and opens the IdP page instead of approving', async () => {
   const f = await fixture()
   await f.worker.program({ type: 'grant', podId, applicationId, epoch: 1, argv: ['request', '--origin', 'https://api.example.test', '--method', 'GET'] })
   await f.worker.resources({ type: 'assignHttp', podId, epoch: 1, permission: { origin: 'https://hooks.example.test', methods: ['POST'] } })
-  expect(idp.state.creates.map(request => [request.grant_type, request.requester, request.target_host])).toEqual([['always', 'pod-1@example.test', `pods:${podId}`], ['always', 'pod-1@example.test', `pods:${podId}`]])
+  expect(idp.state.creates.map(request => [request.grant_type, request.requester, request.target_host])).toEqual([['always', 'pod-0001@example.test', `pods:${podId}`], ['always', 'pod-0001@example.test', `pods:${podId}`]])
   expect(idp.state.creates.every(request => !('waits_until' in request))).toBe(true)
   expect(f.openExternal.mock.calls).toEqual([[`${issuer}/grant-approval?grant_id=grant-1`], [`${issuer}/grant-approval?grant_id=grant-2`]])
   // The assignment keeps its pending request; the first run that needs it waits for the owner's decision.
@@ -175,4 +186,42 @@ it('leaves a run blocked and executes nothing when the owner denies the request 
   // A later run does not ask again: the denial stands until the owner changes it at the IdP.
   await expect(f.start(deniedPodId).run).rejects.toThrow('denied')
   expect(idp.state.creates).toHaveLength(1)
+})
+
+it('reuses the same pending request after a cancelled wait instead of asking the IdP again', async () => {
+  const f = await fixture()
+  const first = f.start(podId)
+  const cancelled = expect(first.run).rejects.toThrow()
+  await expect.poll(() => f.approvals.find(item => item.state === 'pending')?.grantId).toBe('grant-1')
+  f.abortAll(); await cancelled
+  expect(f.approvals.at(-1)).toMatchObject({ grantId: 'grant-1', state: 'cancelled' })
+  const next = f.start(podId)
+  await expect.poll(() => f.approvals.at(-1)).toMatchObject({ grantId: 'grant-1', state: 'pending' })
+  idp.decide('grant-1', 'approved')
+  await expect(next.run).resolves.toEqual({ home: '/fixture/home', environment: {} })
+  await next.call('shellClose')
+  expect(idp.state.creates).toHaveLength(1)
+})
+
+it('parks runs waiting for an IdP decision so they do not block another Pod\'s service calls', async () => {
+  const f = await fixture()
+  const pods = Array.from({ length: 16 }, (_, index) => `00000000-0000-4000-8000-${String(100 + index).padStart(12, '0')}`)
+  const waiting = pods.map(id => f.start(id).run.catch((error: unknown) => error))
+  await expect.poll(() => new Set(f.approvals.filter(item => item.state === 'pending').map(item => item.grantId)).size).toBe(16)
+  await expect(f.plainCall(podId, 'credential', { alias: 'api_key' })).resolves.toBe('SYNTHETIC_SECRET')
+  f.abortAll(); await Promise.all(waiting)
+})
+
+it('shows the Pod name as one bounded line in the runtime grant and keeps the Pod id structured', async () => {
+  const f = await fixture()
+  const run = f.start(podId, randomUUID(), 'schedule', `Mail\nApprove everything‮${'x'.repeat(200)}`)
+  const ended = expect(run.run).rejects.toThrow()
+  await expect.poll(() => idp.state.creates.length).toBe(1)
+  f.abortAll(); await ended
+  const { summary, execution_context: context } = idp.state.creates[0] as { summary: { text: string }, execution_context: { context_bindings: { name: string, pod: string } } }
+  const [line] = summary.text.split('\n')
+  expect(line).toMatch(new RegExp(`^Pod: Mail Approve everything x+ \\(${podId}\\)$`))
+  expect(context.context_bindings.name).toHaveLength(100)
+  expect(context.context_bindings.name).not.toMatch(/[\n‮]/)
+  expect(context.context_bindings.pod).toBe(podId)
 })
