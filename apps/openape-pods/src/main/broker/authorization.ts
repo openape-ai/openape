@@ -9,8 +9,7 @@ import { loadAdapter, resolveCommand } from '@openape/apes'
 import { setTimeout as delay } from 'node:timers/promises'
 
 export type GrantProgress = RunApproval
-export type GrantObserver = (progress: GrantProgress, automatic?: boolean) => Promise<void>
-export type GrantApproval = (grantId: string, signal: AbortSignal) => Promise<boolean>
+export type GrantObserver = (progress: GrantProgress) => Promise<void>
 export type GrantLookup = (permission: string, connection: AgentConnection) => Promise<string | undefined>
 interface Grant { brokered?: BrokeredGrant, id: string, status: string, request: { requester: string, audience: string, target_host: string, grant_type: string } }
 
@@ -31,6 +30,11 @@ export interface AssignedAuthorization {
 interface MintedGrant { grantId: string, token: string, jwks: VerifyAuthzOptions['jwks'], reusableUntil: number }
 export const grantTokenReuseMs = 60 * 1000
 const expiryMarginMs = 10 * 1000
+// A single-use request is useless once its caller stopped waiting (DDISA grants §3.4).
+const onceWaitMs = 15 * 60 * 1000
+
+/** Polls quickly while the owner is likely deciding, then slowly so a long wait stays below the IdP rate limit. */
+export function decisionPollMs(waitedMs: number): number { return waitedMs < 5 * 60 * 1000 ? 2000 : 30000 }
 
 /**
  * Grant tokens minted during one run. A reusable (non-single-use) token is
@@ -61,7 +65,7 @@ function tokenClaims(token: string): { exp: number, grantType: string } {
 }
 
 export class AgentAuthority {
-  constructor(private readonly connection: AgentConnection, private readonly observe?: GrantObserver, private readonly previous?: GrantLookup, private readonly approve?: GrantApproval, private readonly tokens?: RunGrantTokens) {
+  constructor(private readonly connection: AgentConnection, private readonly observe?: GrantObserver, private readonly previous?: GrantLookup, private readonly tokens?: RunGrantTokens) {
     const url = new URL(connection.issuer)
     if ((url.protocol !== 'https:' && !(url.protocol === 'http:' && url.hostname === '127.0.0.1')) || url.pathname !== '/' || url.search || url.hash || url.username || url.password) throw new Error('Invalid assigned identity origin')
   }
@@ -119,35 +123,40 @@ export class AgentAuthority {
     }
     if (grant && ['denied', 'revoked'].includes(grant.status)) throw new AuthorityError(`Permission ${grant.status}; review this Pod's permissions before retrying`)
     if (!grant || grant.status === 'used' || grant.status === 'expired') {
-      const created = await this.request('/api/grants', 'POST', signal, { requester: this.connection.subject, target_host: this.connection.targetHost, audience: 'shapes', grant_type: assignment.command.cliId === 'pod-runtime' ? 'always' : 'once', waits_until: Math.floor(Date.now() / 1000) + 15 * 60, command: assignment.command.argv, permissions: [resolved.permission], authorization_details: [resolved.detail], execution_context: resolved.executionContext, reason: resolved.detail.display, ...(summary ? { summary: { text: summary } } : {}) }) as { id?: unknown }
+      // The runtime and owner assignments ask for a continuing grant; the owner chooses its scope at the IdP.
+      const grantType = assignment.command.cliId === 'pod-runtime' || assignment.grantId ? 'always' : 'once'
+      const created = await this.request('/api/grants', 'POST', signal, { requester: this.connection.subject, target_host: this.connection.targetHost, audience: 'shapes', grant_type: grantType, ...(grantType === 'once' ? { waits_until: Math.floor((Date.now() + onceWaitMs) / 1000) } : {}), command: assignment.command.argv, permissions: [resolved.permission], authorization_details: [resolved.detail], execution_context: resolved.executionContext, reason: resolved.detail.display, ...(summary ? { summary: { text: summary } } : {}) }) as { id?: unknown }
       if (typeof created?.id !== 'string') throw new Error('Permission service returned an invalid grant')
       grant = await this.grant(created.id, signal)
     }
     const current = grant
-    const publish = async (state: GrantProgress['state'], automatic = false) => this.observe?.({ grantId: current.id, issuer: this.connection.decisionIssuer ?? this.connection.issuer, title: resolved.detail.display, permission: resolved.permission, subject: this.connection.subject, state }, automatic)
-    if (grant.status === 'pending' && assignment.command.cliId === 'pod-runtime' && this.approve) {
-      await publish('pending', true)
-      if (await this.approve(grant.id, signal)) {
-        grant = await this.grant(grant.id, signal)
-        if (grant.status !== 'approved') throw new Error(`Automatic runtime permission approval failed (${grant.status})`)
-      }
-    }
-    if (grant.status === 'pending') {
-      if (!this.observe) throw new Error('Permission needs owner approval; open this Pod in OpenApe Pods')
-      await publish('pending')
-      const deadline = Date.now() + 15 * 60 * 1000
-      try {
-        while (grant.status === 'pending' && Date.now() < deadline) {
-          await delay(1000, undefined, { signal })
-          grant = await this.grant(grant.id, signal)
-        }
-      }
-      catch (error) { await publish('cancelled'); throw error }
-      if (grant.status !== 'approved') await publish(grant.status === 'denied' ? 'denied' : grant.status === 'revoked' ? 'revoked' : 'expired')
-    }
-    if (grant.status !== 'approved') throw new AuthorityError(grant.status === 'pending' || grant.status === 'expired' ? 'Permission approval expired; start a new run when you are ready to approve it' : `Permission ${grant.status}; review this Pod's permissions before retrying`)
+    const publish = async (state: GrantProgress['state']) => this.observe?.({ grantId: current.id, issuer: this.connection.decisionIssuer ?? this.connection.issuer, title: resolved.detail.display, permission: resolved.permission, subject: this.connection.subject, state })
+    if (grant.status === 'pending') grant = await this.decision(grant, publish, signal)
+    if (grant.status !== 'approved') throw new AuthorityError(grant.status === 'pending' ? 'Permission was not decided while this command waited; start it again and approve at the IdP' : grant.status === 'expired' ? 'Permission request expired at the IdP; start a new run to request it again' : `Permission ${grant.status}; review this Pod's permissions before retrying`)
     await publish('approved')
     return grant.id
+  }
+
+  /**
+   * Waits for the owner's decision at the IdP; Pods never decides itself. The run shows the pending approval
+   * (desktop, inbox and MCP open the IdP page). A continuing grant is awaited until the owner decides or the
+   * IdP expires the request; a single-use request only while its caller waits.
+   */
+  private async decision(pending: Grant, publish: (state: GrantProgress['state']) => Promise<void>, signal: AbortSignal): Promise<Grant> {
+    if (!this.observe) throw new Error('Permission needs owner approval at the IdP; open this Pod in OpenApe Pods')
+    await publish('pending')
+    const started = Date.now()
+    const deadline = pending.request.grant_type === 'always' ? Number.POSITIVE_INFINITY : started + onceWaitMs
+    let grant = pending
+    try {
+      while (grant.status === 'pending' && Date.now() < deadline) {
+        await delay(decisionPollMs(Date.now() - started), undefined, { signal })
+        grant = await this.grant(grant.id, signal)
+      }
+    }
+    catch (error) { await publish('cancelled'); throw error }
+    if (grant.status !== 'approved') await publish(grant.status === 'denied' ? 'denied' : grant.status === 'revoked' ? 'revoked' : 'expired')
+    return grant
   }
 
   async assertActive(grantId: string, signal: AbortSignal): Promise<void> {

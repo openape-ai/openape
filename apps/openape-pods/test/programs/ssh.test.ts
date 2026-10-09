@@ -43,7 +43,7 @@ it('rejects arbitrary commands, injected aliases, unassigned targets and undecla
   for (const body of [{ sshInventory: podId, command: 'id' }, { sshInventory: 'other' }, { sshInventory: podId, argv: [] }]) expect(() => assignedSsh(resources, podId, scope.capabilities, body)).toThrow()
   expect(() => assignedSsh(resources, podId, [], { sshInventory: podId })).toThrow()
   expect(() => assignedSsh(resources.map(item => ({ ...item, state: 'revoked' })), podId, scope.capabilities, { sshInventory: podId })).toThrow()
-  expect(() => parseResourceCommand({ type: 'approveSsh', podId, epoch: 1, binding, authority })).toThrow()
+  expect(() => parseResourceCommand({ type: 'bindSsh', podId, epoch: 1, binding, authority })).toThrow()
 })
 it('refuses changed route metadata, stale assignment and revoked grants before starting SSH', async () => {
   const input = { resources, scope, body: { sshInventory: podId }, dist: '/unused', root: '/unused', credentials: {} as CredentialCache, signal: new AbortController().signal, check: vi.fn() }
