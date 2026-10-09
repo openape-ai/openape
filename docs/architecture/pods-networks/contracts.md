@@ -495,6 +495,13 @@ and stay decidable. A binding without a matching route cannot be expressed and s
 the upgrade instead of dropping an approval. Older portable network documents are
 refused; export them again from the current version.
 
+The owner decides each item grant of an approve route at the IdP as `once` or
+`always`. Both stay bound to the item's exact command, audience, Pod identity and
+batch expiry. Release consumes a `once` grant; an `always` grant is confirmed as
+valid instead, and every archive move still requires it to be approved at that
+moment. A denied or revoked grant releases and moves nothing; `timed` decisions
+are refused.
+
 ## Diagnostic changes and UI review
 
 Current GraphOverview/Panel/Inspector, WorkspaceFrame and shared desktop/browser
