@@ -273,30 +273,8 @@ export class NetworkGates {
         if (!['superseded', 'approved', 'unknown'].includes(task.state)) throw new Error('Only obsolete, uncertain or previously consumed gate work can request fresh approval')
         if (task.state === 'unknown') this.assertStoppedTask(task)
         const receipt = canonicalNetworkJson({ taskId: task.id, generation: task.generation, priorGrantOutcome: task.state === 'unknown' ? 'unknown-retained' : task.state, priorGrantId: task.grant_id, priorTaskState: task.state, ownerEvidence: command.evidence, at: Date.now(), priorGrantCannotBeReused: true })
-        let resumed = 0
-        for (const item of manifest.items) {
-          const delivery = this.store.db.prepare('SELECT * FROM network_deliveries WHERE id=?').get(item.deliveryId)!
-          if (!['blocked', 'pending', 'unknown'].includes(delivery.state as string)) continue
-          if (this.store.db.prepare(`SELECT 1 FROM network_gate_items WHERE delivery_id=? AND task_id!=? AND outcome IN ('held','released','unknown')`).get(item.deliveryId, task.id)) continue
-          if (delivery.run_id) {
-            const invocation = this.store.db.prepare('SELECT i.state,i.generation,c.stopped_receipt FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.run_id=?').get(delivery.run_id)!
-            if (!invocation.stopped_receipt || JSON.parse(invocation.stopped_receipt as string).generation !== invocation.generation || this.store.db.prepare('SELECT 1 FROM run_leases WHERE run_id=?').get(delivery.run_id)) throw new Error('Inspect the stopped input attempt before requesting fresh approval')
-            if (this.store.db.prepare(`SELECT 1 FROM network_effect_attempts WHERE run_id=? AND state!='confirmed_not_applied' UNION ALL SELECT 1 FROM effect_ledger WHERE run_id=? AND state!='confirmed_not_applied' LIMIT 1`).get(delivery.run_id, delivery.run_id)) throw new Error('Applied or uncertain external actions cannot be repeated through gate review')
-            abandonNetworkData(this.store, delivery.run_id as string, 'owner-gate-review')
-            this.store.db.prepare(`UPDATE network_invocation_controls SET retry_at=NULL,resolved_receipt=json_object('decision',json(?),'priorResolution',json(resolved_receipt)) WHERE run_id=?`).run(receipt, delivery.run_id)
-          }
-          if (delivery.state !== 'pending') {
-            const counted = this.store.db.prepare(`UPDATE network_queue_counts SET count=count-1 WHERE network_id=? AND state=? AND count>0`).run(networkId, delivery.state!)
-            if (counted.changes !== 1) throw new Error('Network gate queue projection is inconsistent')
-            this.store.db.prepare(`INSERT INTO network_queue_counts VALUES(?,'pending',1) ON CONFLICT(network_id,state) DO UPDATE SET count=count+1`).run(networkId)
-          }
-          this.store.db.prepare(`UPDATE network_deliveries SET state='pending',run_id=NULL,claim_token=NULL,boot_nonce=NULL,generation=generation+1,attempt=0,ready_at=?,reason='Owner requested fresh gate approval',review_receipt=? WHERE id=?`).run(Date.now(), receipt, item.deliveryId)
-          this.store.db.prepare(`UPDATE network_gate_items SET outcome='obsolete',receipt=json_object('decision',json(?),'priorReceipt',json(receipt)) WHERE task_id=? AND delivery_id=?`).run(receipt, task.id, item.deliveryId)
-          resumed++
-        }
+        const resumed = this.renew(task, manifest, receipt, 'Owner requested fresh gate approval')
         if (!resumed) throw new Error('Network gate has no safe input awaiting fresh approval')
-        this.store.db.prepare(`UPDATE network_gate_tasks SET state='superseded',generation=generation+1 WHERE id=?`).run(task.id)
-        this.store.db.prepare(`UPDATE network_gate_controls SET resolution=json_object('decision',json(?),'priorResolution',json(resolution)) WHERE task_id=?`).run(receipt, task.id)
         this.trace(manifest, 'gate-owner-fresh-approval', { receipt: JSON.parse(receipt), resumed, noApprovalReleased: true })
         return
       }
@@ -494,8 +472,12 @@ export class NetworkGates {
       for (const row of tasks) {
         const task = row as unknown as Task
         const manifest = parseNetworkGateManifest(JSON.parse(task.manifest))
+        try { this.assertPinned(manifest) }
+        catch (failure) {
+          this.renewAfterAuthorityChange(task, manifest, failure)
+          continue
+        }
         try {
-          this.assertPinned(manifest)
           const pending = task.state === 'approved' ? { ...manifest, items: manifest.items.filter(item => this.store.db.prepare('SELECT state FROM network_deliveries WHERE id=?').get(item.deliveryId)?.state === 'pending') } : manifest
           this.assertItems(pending, task.state === 'approved')
           if (manifest.expiresAt <= Date.now()) throw new Error('Network approval expired before dispatch')
@@ -503,6 +485,62 @@ export class NetworkGates {
         catch (failure) { this.obsolete(task, failure) }
       }
     })
+  }
+
+  /** Returns the inputs of a batch for a fresh approval; the prior grant can never be reused. */
+  private renew(task: Task, manifest: NetworkGateManifest, receipt: string, reason: string): number {
+    let resumed = 0
+    for (const item of manifest.items) {
+      const delivery = this.store.db.prepare('SELECT * FROM network_deliveries WHERE id=?').get(item.deliveryId)!
+      if (!['blocked', 'pending', 'unknown'].includes(delivery.state as string)) continue
+      if (this.store.db.prepare(`SELECT 1 FROM network_gate_items WHERE delivery_id=? AND task_id!=? AND outcome IN ('held','released','unknown')`).get(item.deliveryId, task.id)) continue
+      if (delivery.run_id) {
+        const invocation = this.store.db.prepare('SELECT i.state,i.generation,c.stopped_receipt FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.run_id=?').get(delivery.run_id)!
+        if (!invocation.stopped_receipt || JSON.parse(invocation.stopped_receipt as string).generation !== invocation.generation || this.store.db.prepare('SELECT 1 FROM run_leases WHERE run_id=?').get(delivery.run_id)) throw new Error('Inspect the stopped input attempt before requesting fresh approval')
+        if (this.store.db.prepare(`SELECT 1 FROM network_effect_attempts WHERE run_id=? AND state!='confirmed_not_applied' UNION ALL SELECT 1 FROM effect_ledger WHERE run_id=? AND state!='confirmed_not_applied' LIMIT 1`).get(delivery.run_id, delivery.run_id)) throw new Error('Applied or uncertain external actions cannot be repeated through gate review')
+        abandonNetworkData(this.store, delivery.run_id as string, 'owner-gate-review')
+        this.store.db.prepare(`UPDATE network_invocation_controls SET retry_at=NULL,resolved_receipt=json_object('decision',json(?),'priorResolution',json(resolved_receipt)) WHERE run_id=?`).run(receipt, delivery.run_id)
+      }
+      if (delivery.state !== 'pending') {
+        const counted = this.store.db.prepare(`UPDATE network_queue_counts SET count=count-1 WHERE network_id=? AND state=? AND count>0`).run(task.network_id, delivery.state!)
+        if (counted.changes !== 1) throw new Error('Network gate queue projection is inconsistent')
+        this.store.db.prepare(`INSERT INTO network_queue_counts VALUES(?,'pending',1) ON CONFLICT(network_id,state) DO UPDATE SET count=count+1`).run(task.network_id)
+      }
+      this.store.db.prepare(`UPDATE network_deliveries SET state='pending',run_id=NULL,claim_token=NULL,boot_nonce=NULL,generation=generation+1,attempt=0,ready_at=?,reason=?,review_receipt=? WHERE id=?`).run(Date.now(), reason, receipt, item.deliveryId)
+      this.store.db.prepare(`UPDATE network_gate_items SET outcome='obsolete',receipt=json_object('decision',json(?),'priorReceipt',json(receipt)) WHERE task_id=? AND delivery_id=?`).run(receipt, task.id, item.deliveryId)
+      resumed++
+    }
+    if (!resumed) return 0
+    this.store.db.prepare(`UPDATE network_gate_tasks SET state='superseded',generation=generation+1 WHERE id=?`).run(task.id)
+    this.store.db.prepare(`UPDATE network_gate_controls SET resolution=json_object('decision',json(?),'priorResolution',json(resolution)) WHERE task_id=?`).run(receipt, task.id)
+    return resumed
+  }
+
+  /** A paused member whose rights or script change asks again for approvals that were not yet consumed. */
+  renewMember(networkId: string, podId: string, reason: string): number {
+    const tasks = this.store.db.prepare(`SELECT task.* FROM network_gate_tasks task JOIN network_gate_controls control ON control.task_id=task.id WHERE task.network_id=? AND task.pod_id=?
+      AND (task.state IN ('preparing','pending','approved') OR (task.state='superseded' AND ${supersededNeedsReview})) ORDER BY task.created_at`).all(networkId, podId)
+    let renewed = 0
+    for (const row of tasks) {
+      const task = row as unknown as Task
+      const manifest = parseNetworkGateManifest(JSON.parse(task.manifest))
+      const count = this.renew(task, manifest, canonicalNetworkJson({ taskId: task.id, generation: task.generation, priorTaskState: task.state, priorGrantId: task.grant_id, reason, at: Date.now(), priorGrantCannotBeReused: true }), reason)
+      if (count) this.trace(manifest, 'gate-fresh-approval', { taskId: task.id, reason, resumed: count, noApprovalReleased: true })
+      renewed += count
+    }
+    return renewed
+  }
+
+  /** Undecided or unconsumed approvals of a changed consumer return to a fresh approval; unsafe inputs stay blocked for owner review. */
+  private renewAfterAuthorityChange(task: Task, manifest: NetworkGateManifest, failure: unknown): void {
+    const changed = failure instanceof Error ? failure.message : 'Network approval authority changed'
+    const reason = `${changed}; fresh approval required`.slice(0, 10000)
+    try {
+      const resumed = this.store.transaction(() => this.renew(task, manifest, canonicalNetworkJson({ taskId: task.id, generation: task.generation, priorTaskState: task.state, priorGrantId: task.grant_id, reason, at: Date.now(), priorGrantCannotBeReused: true }), reason))
+      if (resumed) this.trace(manifest, 'gate-fresh-approval', { taskId: task.id, reason, resumed, noApprovalReleased: true })
+      else this.obsolete(task, failure)
+    }
+    catch (renewal) { this.obsolete(task, new Error(`${changed}; fresh approval refused: ${renewal instanceof Error ? renewal.message : 'unknown reason'}`)) }
   }
 
   private obsolete(task: Task, failure: unknown): void {

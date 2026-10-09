@@ -4274,7 +4274,7 @@
   "Validate this script for the Pod before updating the network member": "Dieses Skript zuerst für den Pod validieren, bevor das Netzwerkmitglied aktualisiert wird",
   "Validate this script for the current permissions first": "Dieses Skript zuerst für die aktuellen Berechtigungen validieren",
   "Contract changes require a reviewed composition change": "Vertragsänderungen erfordern eine geprüfte Änderung der Zusammensetzung",
-  "Rights changes require owner review": "Rechteänderungen erfordern eine Prüfung durch den Owner",
+  "Rights changes require pausing the member first": "Rechteänderungen erfordern, dass das Mitglied zuerst pausiert wird",
   "Dependency changes require owner review": "Abhängigkeitsänderungen erfordern eine Prüfung durch den Owner",
   "The Pod has no active script": "Der Pod hat kein aktives Skript",
   "The Pod script changed during replay": "Das Skript des Pods hat sich während der Wiederholung geändert",
@@ -4382,6 +4382,7 @@
   "A run can archive its approved mail only once": "Ein Lauf kann seine freigegebenen Mails nur einmal archivieren",
   "Archive outcome arrived after its attempt was settled": "Das Archiv-Ergebnis kam erst nach dem Abschluss des Versuchs",
   "Archive move not started: {p0}": "Archiv-Verschiebung nicht gestartet: {p0}",
+  "{p0}; fresh approval refused: {p1}": "{p0}; neue Freigabe abgelehnt: {p1}",
   "Network members accept inspect, draft, validate, pause and resume, and application setup while paused; update their scripts with networks updateMemberScript": "Netz-Mitglieder erlauben inspect, draft, validate, pause und resume sowie im pausierten Zustand die Einrichtung von Anwendungen; Skripte werden mit networks updateMemberScript aktualisiert",
   "Unsupported program operation": "Nicht unterstützte Programmoperation"
 }
