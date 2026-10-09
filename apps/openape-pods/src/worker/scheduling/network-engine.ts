@@ -319,16 +319,16 @@ export class NetworkEngine {
     await Promise.all(this.pendingSettlements.values())
   }
 
-  /** The owner's assistant may close a failed run only when every input has a reconciled external effect, so no approved but unattempted work is dropped. */
+  /** The owner's assistant may close a failed run only when every input's action was applied, so no approved but unfinished work is dropped. */
   async agentDiscardFailure(command: Extract<NetworkCommand, { type: 'discardFailure' }>): Promise<NetworkView> {
     const run = this.store.db.prepare(`SELECT c.failure_kind,json_extract(c.settlement_receipt,'$.state') AS settled,
       (SELECT count(*) FROM network_effect_attempts e WHERE e.run_id=i.run_id AND e.state IN ('intent','unknown')) AS open,
       (SELECT count(*) FROM network_deliveries d WHERE d.run_id=i.run_id) AS inputs,
       (SELECT count(*) FROM network_deliveries d WHERE d.run_id=i.run_id AND NOT EXISTS(SELECT 1 FROM network_effect_attempts e
         JOIN network_effect_receipts intent ON intent.logical_action_key=e.logical_action_key AND intent.attempt=e.attempt AND intent.outcome='intent'
-        WHERE e.run_id=i.run_id AND e.state IN ('confirmed_applied','confirmed_not_applied') AND json_extract(intent.body,'$.deliveryId')=d.id)) AS uncovered
+        WHERE e.run_id=i.run_id AND e.state='confirmed_applied' AND json_extract(intent.body,'$.deliveryId')=d.id)) AS uncovered
       FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.network_id=? AND i.run_id=?`).get(command.id, command.runId)
-    if (!run || Number(run.open) || !Number(run.inputs) || Number(run.uncovered) || run.failure_kind === 'quota' || run.settled === 'cancelled') throw new Error('The assistant can only close failed runs whose every input has a reconciled external effect')
+    if (!run || Number(run.open) || !Number(run.inputs) || Number(run.uncovered) || run.failure_kind === 'quota' || run.settled === 'cancelled') throw new Error('The assistant can only close failed runs whose every input was confirmed as applied')
     return this.recover({ ...command, evidence: `Assistant request: ${command.evidence}`.slice(0, 4000) })
   }
 

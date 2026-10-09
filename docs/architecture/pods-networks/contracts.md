@@ -1271,8 +1271,8 @@ execution grants and restart recovery still apply. Activation, composition and
 owner gate/recovery decisions remain desktop operations. The local assistant may
 additionally request fresh approval for superseded or uncertain gate batches
 (`gateReview`), record owner-confirmed outcomes of unknown effects
-(`reconcileEffect`) and close stopped failed runs in which every input has a reconciled
-effect (`discardFailure`; not for capacity holds or owner cancellations); each receipt is marked as an assistant request.
+(`reconcileEffect`) and close stopped failed runs in which every input's effect was
+reconciled as applied (`discardFailure`; not for capacity holds or owner cancellations); each receipt is marked as an assistant request.
 Fresh approval skips individual inputs with applied or uncertain effects or an
 uninspected attempt; they stay in their superseded batch for review. Legacy inspection and
 administration cannot bypass network ownership, including retained invocations,
@@ -1314,7 +1314,8 @@ effect does not block the member, but two unresolved unknown effects of one memb
 stop its admission and gate maintenance ("Network member stopped after repeated
 unknown external outcomes") until they are reconciled. The port also reports a
 message as `skipped`, without any provider call, while any earlier attempt of any
-version of that message in the same mailbox is unresolved, in any network. Microsoft Graph
+version of that message in the same mailbox (case-insensitive) is unresolved, in
+any network. Microsoft Graph
 offers no atomic conditional move, so this port is the owner-confirmed operation
 `docs/workflows.md` requires: every move is bound to one owner once-grant and to a
 fresh read immediately before it.
