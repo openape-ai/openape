@@ -16,6 +16,19 @@ import { NetworkEvents, NetworkEventConflict, canonicalNetworkJson } from './net
 import type { NetworkAuthority, NetworkEmission } from './network-events'
 import type { WorkflowCalls } from '../workflows/calls'
 
+/** Unresolved unknown effects of one member that stop it, even when each holds back only its own input. */
+const memberStopThreshold = 2
+
+/** Why a member may not start new work because of its external effects, or null. A held unknown effect blocks only its own input. */
+export function memberEffectHold(store: PodDatabase, podId: string): string | null {
+  if (store.db.prepare(`SELECT 1 FROM network_effect_attempts e JOIN network_invocations i ON i.run_id=e.run_id WHERE i.pod_id=? AND e.state='intent'
+    UNION ALL SELECT 1 FROM effect_ledger WHERE pod_id=? AND state IN ('intent','unknown') LIMIT 1`).get(podId, podId)) {
+    return 'Network instance has an external effect requiring review'
+  }
+  const unknown = Number(store.db.prepare(`SELECT count(*) AS count FROM network_effect_attempts e JOIN network_invocations i ON i.run_id=e.run_id WHERE i.pod_id=? AND e.state='unknown'`).get(podId)!.count)
+  return unknown >= memberStopThreshold ? 'Network member stopped after repeated unknown external outcomes; reconcile them first' : null
+}
+
 export class NetworkInvocations {
   gates?: NetworkGates
   calls?: WorkflowCalls
@@ -54,11 +67,8 @@ export class NetworkInvocations {
       if (!member) throw new Error('Pod is not a member of this network revision')
       const pod = this.store.getPod(podId)
       if (pod.lifecycle === 'archived' || (pod.lifecycle !== 'active' && !(reason === 'manual' && allowPaused))) return null
-      if (this.store.db.prepare(`SELECT 1 FROM network_effect_attempts e JOIN network_invocations i ON i.run_id=e.run_id
-        WHERE i.pod_id=? AND e.state IN ('intent','unknown') UNION ALL
-        SELECT 1 FROM effect_ledger WHERE pod_id=? AND state IN ('intent','unknown') LIMIT 1`).get(podId, podId)) {
-        throw new Error('Network instance has an external effect requiring review')
-      }
+      const hold = memberEffectHold(this.store, podId)
+      if (hold) throw new Error(hold)
       if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=? UNION ALL SELECT 1 FROM program_leases WHERE pod_id=?').get(podId, podId)) return null
       if (this.store.db.prepare('SELECT 1 FROM network_invocations WHERE pod_id=? AND state IN (\'running\',\'stopping\',\'interrupted\',\'unknown\') LIMIT 1').get(podId)) throw new Error('Network instance requires recovery before another invocation')
       if (this.store.db.prepare('SELECT 1 FROM network_invocations i JOIN network_invocation_controls c ON c.run_id=i.run_id WHERE i.pod_id=? AND c.review_required=1 LIMIT 1').get(podId)) throw new Error('Network source identity conflict requires owner review')
@@ -251,7 +261,12 @@ export class NetworkInvocations {
       const effects = this.store.db.prepare(`SELECT e.logical_action_key,e.attempt,e.state,
         (SELECT max(sequence) FROM network_effect_receipts r WHERE r.logical_action_key=e.logical_action_key AND r.attempt=e.attempt AND r.outcome=e.state) AS receipt
         FROM network_effect_attempts e WHERE e.run_id=? ORDER BY e.logical_action_key,e.attempt`).all(authority.runId)
-      const unsafe = effects.some(effect => effect.state === 'intent' || effect.state === 'unknown' || effect.receipt === null)
+      // A completed script reported each tool outcome; an unknown one holds back only the input it belongs to. Open effects or a failed script stay run failures.
+      const open = effects.some(effect => effect.state === 'intent' || effect.receipt === null)
+      const unknownInputs = completed && !open ? this.unknownEffectInputs(authority.runId) : []
+      const held = [...new Set(unknownInputs)].filter(id => id !== null)
+      const isolated = !open && unknownInputs.every(id => id !== null && inputs.some(input => input.id === id))
+      const unsafe = open || (effects.some(effect => effect.state === 'unknown') && !(completed && isolated))
       if (completed && unsafe) throw new Error('Network effects require reconciliation before successful settlement')
       if (completed && (new Set(completedInputIds).size !== inputs.length || inputs.some(input => !completedInputIds.includes(input.event_id as string)))) throw new Error('Network completion must acknowledge every claimed input')
       if (emissions.length > 500) throw new Error('Network invocation exceeds 500 emissions')
@@ -281,19 +296,30 @@ export class NetworkInvocations {
       const nextState = unsafe ? 'unknown' : completed ? 'done' : retry ? 'retry_wait' : 'blocked'
       this.store.db.prepare('UPDATE network_invocation_controls SET deadline=NULL,retry_at=?,failure_kind=?,diagnostic=?,stopped_receipt=? WHERE run_id=?').run(retryAt, completed ? null : unsafe ? 'uncertain' : control.failure_kind === 'quota' ? 'quota' : requiresFreshGate ? 'recovery' : decision.disposition === 'hold' ? 'recovery' : retry ? 'transient' : 'exhausted', error, canonicalNetworkJson({ processesStopped: true, generation: row.generation, inspectedAt: Date.now() }), authority.runId)
       if (retryAt !== null) this.store.db.prepare('UPDATE network_deliveries SET ready_at=? WHERE run_id=? AND state=\'claimed\'').run(retryAt, authority.runId)
+      if (held.length) {
+        this.store.db.prepare('UPDATE network_deliveries SET state=\'unknown\',claim_token=NULL,reason=? WHERE run_id=? AND state=\'claimed\' AND id IN (SELECT value FROM json_each(?))').run('External outcome is unknown; reconcile it', authority.runId, JSON.stringify(held))
+        this.count(definition.id, 'claimed', -held.length); this.count(definition.id, 'unknown', held.length)
+      }
       this.store.db.prepare('UPDATE network_deliveries SET state=?,claim_token=NULL,reason=? WHERE run_id=? AND state=\'claimed\'').run(nextState, completed ? null : error ?? summary, authority.runId)
-      if (inputs.length) { this.count(definition.id, 'claimed', -inputs.length); this.count(definition.id, nextState, inputs.length) }
+      if (inputs.length > held.length) { this.count(definition.id, 'claimed', held.length - inputs.length); this.count(definition.id, nextState, inputs.length - held.length) }
       if (!unsafe) this.data.clear(authority.runId)
       this.store.db.prepare('UPDATE network_invocations SET state=?,staged_checkpoint=NULL WHERE run_id=?').run(unsafe ? 'unknown' : completed ? 'completed' : 'blocked', authority.runId)
       const effectReceipts = this.store.db.prepare('SELECT r.logical_action_key,r.attempt,max(r.sequence) AS sequence FROM network_effect_receipts r JOIN network_effect_attempts e ON e.logical_action_key=r.logical_action_key AND e.attempt=r.attempt WHERE e.run_id=? GROUP BY r.logical_action_key,r.attempt').all(authority.runId)
       const process = this.store.db.prepare('SELECT p.preview,p.fingerprint,p.consumed_at FROM network_process_previews p JOIN network_invocation_controls c ON c.process_preview_id=p.id WHERE c.run_id=?').get(authority.runId)
-      const receipt = canonicalNetworkJson({ state: unsafe ? 'unknown' : state, summary, error, effectReceipts, processPreview: process ? { ...JSON.parse(process.preview as string), fingerprint: process.fingerprint, consumedAt: process.consumed_at } : null, settledAt: Date.now() })
+      const receipt = canonicalNetworkJson({ state: unsafe ? 'unknown' : state, summary, error, effectReceipts, ...(held.length ? { heldInputIds: held } : {}), processPreview: process ? { ...JSON.parse(process.preview as string), fingerprint: process.fingerprint, consumedAt: process.consumed_at } : null, settledAt: Date.now() })
       this.store.db.prepare('UPDATE network_invocation_controls SET settlement_receipt=? WHERE run_id=?').run(receipt, authority.runId)
       const cases = this.store.db.prepare(`SELECT DISTINCT case_id FROM network_deliveries WHERE network_id=? AND run_id=?
         UNION SELECT case_id FROM network_events WHERE network_id=? AND json_extract(origin,'$.invocationId')=?`).all(definition.id, authority.runId, definition.id, authority.runId)
       for (const caseId of cases.length ? cases.map(row => row.case_id!) : [null]) this.store.db.prepare('INSERT INTO network_trace_events(network_id,case_id,run_id,event_id,kind,body,created_at) VALUES(?,?,?,NULL,?,?,?)').run(definition.id, caseId, authority.runId, 'invocation-settled', receipt, Date.now())
       this.runs.finishNetwork(authority.runId, authority.claimToken, unsafe ? 'blocked' : state, unsafe ? 'Network effect outcome is unknown' : error)
     })
+  }
+
+  /** For each unknown effect of a run, the input named in its intent, or null when it names none. */
+  private unknownEffectInputs(runId: string): (string | null)[] {
+    return this.store.db.prepare(`SELECT json_extract(intent.body,'$.deliveryId') AS delivery_id FROM network_effect_attempts e
+      LEFT JOIN network_effect_receipts intent ON intent.logical_action_key=e.logical_action_key AND intent.attempt=e.attempt AND intent.outcome='intent'
+      WHERE e.run_id=? AND e.state='unknown'`).all(runId).map(row => typeof row.delivery_id === 'string' ? row.delivery_id : null)
   }
 
   private ready(networkId: string, revision: number, podId: string, manual: boolean, gatedChannels: string[]) {

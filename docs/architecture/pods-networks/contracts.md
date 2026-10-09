@@ -1268,7 +1268,13 @@ owner identity in the existing action journal. An exact retry returns the origin
 receipt; an interrupted/failed request requires inspection. Preview expiry,
 paused-member acknowledgement, resource/definition fingerprints, process budget,
 execution grants and restart recovery still apply. Activation, composition and
-owner gate/recovery decisions remain desktop operations. Legacy inspection and
+owner gate/recovery decisions remain desktop operations. The local assistant may
+additionally request fresh approval for superseded or uncertain gate batches
+(`gateReview`), record owner-confirmed outcomes of unknown effects
+(`reconcileEffect`) and close stopped failed runs in which every input's effect was
+reconciled as applied (`discardFailure`; not for capacity holds or owner cancellations); each receipt is marked as an assistant request.
+Fresh approval skips individual inputs with applied or uncertain effects or an
+uninspected attempt; they stay in their superseded batch for review. Legacy inspection and
 administration cannot bypass network ownership, including retained invocations,
 called workflows and archived ancestor workflows. Unrelated Pods remain available.
 
@@ -1296,7 +1302,20 @@ folder through the separate `mailMove` broker service, which accepts exactly tha
 argv and the adapter action `move`. A bound receipt (before/after id, changed
 folder, request id) records `confirmed_applied`; a provider refusal records
 `confirmed_not_applied`; anything after dispatch without a bound receipt records
-`unknown`, which fails settlement and requires `reconcileEffect`. Microsoft Graph
+`unknown`. Each item's outcome is returned to the script, so one uncertain move
+never fails the script. When the script completes and no effect is still in
+`intent`, settlement completes the run, marks every other input `done` and holds
+back only the inputs whose effect is `unknown` (delivery state `unknown`, listed as
+an `uncertain` failure in network detail). `reconcileEffect` on such a completed
+run records the owner-confirmed outcome without process inspection and marks the
+held input `done`. A failed or stopped script, or an effect still in `intent`,
+remains a run-level failure that blocks its member until recovery. A held unknown
+effect does not block the member, but two unresolved unknown effects of one member
+stop its admission and gate maintenance ("Network member stopped after repeated
+unknown external outcomes") until they are reconciled. The port also reports a
+message as `skipped`, without any provider call, while any earlier attempt of any
+version of that message in the same mailbox (case-insensitive) is unresolved, in
+any network. Microsoft Graph
 offers no atomic conditional move, so this port is the owner-confirmed operation
 `docs/workflows.md` requires: every move is bound to one owner once-grant and to a
 fresh read immediately before it.

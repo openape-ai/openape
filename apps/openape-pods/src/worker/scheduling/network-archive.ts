@@ -54,6 +54,12 @@ function receipt(store: PodDatabase, key: string, attempt: number, outcome: stri
   store.db.prepare('INSERT INTO network_effect_receipts VALUES(?,?,?,?,?,?)').run(key, attempt, sequence, outcome, JSON.stringify(body), Date.now())
 }
 
+// Mailbox-wide, so another network archiving the same mailbox cannot repeat an unresolved move either.
+function unresolvedMove(store: PodDatabase, mailbox: string, messageId: string): boolean {
+  return Boolean(store.db.prepare(`SELECT 1 FROM network_effect_attempts attempt JOIN network_effect_receipts intent ON intent.logical_action_key=attempt.logical_action_key AND intent.attempt=attempt.attempt AND intent.outcome='intent'
+    WHERE attempt.state IN ('intent','unknown') AND lower(json_extract(intent.body,'$.mailbox'))=lower(?) AND json_extract(intent.body,'$.messageId')=? LIMIT 1`).get(mailbox, messageId))
+}
+
 function settle(store: PodDatabase, key: string, attempt: number, state: Settled, body: Record<string, unknown>): void {
   store.transaction(() => {
     // Settlement may already have marked a stopped attempt unknown; its late outcome is left to owner reconciliation.
@@ -78,7 +84,8 @@ export async function archiveApproved(store: PodDatabase, scope: ArchiveScope, c
       const key = digest(canonicalNetworkJson([scope.owner.issuer, scope.owner.subject, scope.podId, source.caseId, 'mail.archive', source.messageId, source.version]))
       const previous = store.db.prepare('SELECT attempt,state FROM network_effect_attempts WHERE logical_action_key=? ORDER BY attempt DESC').all(key)
       if (previous.some(row => row.state === 'confirmed_applied')) { outcomes.push({ deliveryId: item.deliveryId, messageId: source.messageId, outcome: 'archived', reason: 'Already archived' }); continue }
-      if (previous.some(row => row.state === 'intent' || row.state === 'unknown')) throw new Error('An earlier archive attempt of this message needs reconciliation')
+      // An unresolved move of any version of this message may have happened; only this mail waits for reconciliation.
+      if (unresolvedMove(store, target.mailbox, source.messageId)) { outcomes.push({ deliveryId: item.deliveryId, messageId: source.messageId, outcome: 'skipped', reason: 'An earlier archive attempt of this message awaits reconciliation' }); continue }
       const attempt = Number(previous[0]?.attempt ?? 0) + 1
       const input = { messageId: source.messageId, version: source.version, mailbox: target.mailbox, deliveryId: item.deliveryId }
       store.transaction(() => {
