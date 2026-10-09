@@ -24,8 +24,6 @@ export class SharingService {
   source(selection: PortableSourceSelection): PortableSourceView {
     const source = capturePortableSource(this.store, this.owner, selection)
     const compositions: PortableSourceView['compositions'] = [
-      ...(source.workflow ? [{ id: source.workflow.id, kind: source.workflow.mode, name: source.workflow.name }] : []),
-      ...source.calls.map(call => ({ id: call.published.definition.id, kind: call.published.definition.mode, name: call.published.definition.name })),
       ...(source.network ? [{ id: source.network.definition.id, kind: 'network' as const, name: source.network.definition.name }] : []),
     ]
     return {

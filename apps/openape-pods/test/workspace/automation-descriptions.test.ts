@@ -13,15 +13,12 @@ const root = mkdtempSync(join(tmpdir(), 'pods-automation-descriptions-'))
 let store = new PodDatabase(root)
 afterEach(() => { store.db.prepare('DELETE FROM collection_descriptions').run() })
 afterAll(() => { store.close(); rmSync(root, { recursive: true, force: true }) })
-function workflow(): string {
-  const id = randomUUID()
-  store.db.prepare('INSERT INTO workflows(id,revision,name,nodes) VALUES(?,1,\'Morning briefing\',\'[]\')').run(id)
-  return id
-}
+let seeded: string | undefined
+const network = (): string => seeded ??= seedNetwork(store).networkId
 const describe = (id: string, revision: number, text: string) => new AutomationDescriptions(store).execute({ type: 'describeAutomation', id, revision, text })
 
-it('saves, replaces and clears the description of a workflow', () => {
-  const id = workflow()
+it('saves, replaces and clears the description of a network', () => {
+  const id = network()
   describe(id, 0, 'Collects calendar, mail and open issues every morning.')
   expect(new AutomationDescriptions(store).view()).toEqual([{ id, text: 'Collects calendar, mail and open issues every morning.', revision: 1 }])
   describe(id, 1, 'Sends one morning briefing by Telegram.')
@@ -31,26 +28,19 @@ it('saves, replaces and clears the description of a workflow', () => {
 })
 
 it('describes a persistent network without changing the network revision', () => {
-  const { networkId } = seedNetwork(store)
+  const networkId = network()
   const before = store.db.prepare('SELECT revision FROM networks WHERE id=?').get(networkId)
   describe(networkId, 0, 'Sorts incoming mail and asks before archiving.')
   expect(new AutomationDescriptions(store).view()).toEqual([{ id: networkId, text: 'Sorts incoming mail and asks before archiving.', revision: 1 }])
   expect(store.db.prepare('SELECT revision FROM networks WHERE id=?').get(networkId)).toEqual(before)
 })
 
-it('refuses a stale revision and an unknown network or workflow', () => {
-  const id = workflow()
+it('refuses a stale revision and an unknown network', () => {
+  const id = network()
   describe(id, 0, 'First text.')
   expect(() => describe(id, 0, 'Concurrent text.')).toThrow('Description changed; reload before saving')
-  expect(() => describe(randomUUID(), 0, 'Nothing to describe.')).toThrow('Network or workflow not found')
+  expect(() => describe(randomUUID(), 0, 'Nothing to describe.')).toThrow('Network not found')
   expect(new AutomationDescriptions(store).view()).toEqual([{ id, text: 'First text.', revision: 1 }])
-})
-
-it('does not list the description of a removed workflow', () => {
-  const id = workflow()
-  describe(id, 0, 'Temporary.')
-  store.db.prepare('DELETE FROM workflows WHERE id=?').run(id)
-  expect(new AutomationDescriptions(store).view()).toEqual([])
 })
 
 it('validates the command and the listed descriptions', () => {
@@ -66,10 +56,10 @@ it('validates the command and the listed descriptions', () => {
 })
 
 it('adds description storage to an existing schema-37 profile without touching its data', () => {
-  const id = workflow()
+  const id = store.createPod({ name: 'Morning briefing' }).id
   store.db.exec('DROP TABLE network_gate_item_grants; DROP TABLE secret_requests; DROP TABLE collection_descriptions; PRAGMA user_version=37')
   store.close(); store = new PodDatabase(root)
   expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(schemaVersion)
-  expect(store.db.prepare('SELECT name FROM workflows WHERE id=?').get(id)?.name).toBe('Morning briefing')
+  expect(store.getPod(id).name).toBe('Morning briefing')
   expect(new AutomationDescriptions(store).view()).toEqual([])
 })

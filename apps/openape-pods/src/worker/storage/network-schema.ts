@@ -2,7 +2,7 @@ import { networkRoutingSchema, networkRoutingTables } from './network-routing-sc
 import { definitionSchema, definitionTables } from './definition-schema.ts'
 import { aliasSchema, aliasTables, sharingSchema, sharingTables } from './sharing-schema.ts'
 import { networkDataSchema, networkDataTables } from './network-data-schema.ts'
-import { networkWorkflowSchema, networkWorkflowTables } from './network-workflow-schema.ts'
+import { networkWorkflowSchema } from './network-workflow-schema.ts'
 import { networkGateGrantSchema, networkGateGrantTables, networkGateSchema, networkGateTables } from './network-gate-schema.ts'
 import { networkControlSchema, networkControlTables } from './network-control-schema.ts'
 import { createHash } from 'node:crypto'
@@ -480,8 +480,7 @@ function schemaObjects(version: number): { type: string, name: string, sql: stri
 
 const networkBoundaryChecks = {
   membership: `SELECT 1 FROM network_members m JOIN networks n ON n.id=m.network_id LEFT JOIN pod_memberships p ON p.pod_id=m.pod_id JOIN pod_definitions d ON d.id=m.definition_id
-    WHERE p.group_id IS NOT n.group_id OR d.owner_issuer!=n.owner_issuer OR d.owner_subject!=n.owner_subject
-    OR EXISTS(SELECT 1 FROM workflow_members w WHERE w.pod_id=m.pod_id) LIMIT 1`,
+    WHERE p.group_id IS NOT n.group_id OR d.owner_issuer!=n.owner_issuer OR d.owner_subject!=n.owner_subject LIMIT 1`,
   instanceBinding: `SELECT 1 FROM network_members m LEFT JOIN instance_definition_bindings b ON b.pod_id=m.pod_id
     WHERE b.pod_id IS NULL OR b.definition_id!=m.definition_id OR b.definition_version!=m.definition_version OR b.binding_revision!=m.binding_revision LIMIT 1`,
   invocationPod: `SELECT 1 FROM network_invocations i JOIN runs r ON r.id=i.run_id WHERE r.pod_id!=i.pod_id LIMIT 1`,
@@ -502,11 +501,12 @@ export function assertNetworkStorage(database: DatabaseSync, references = false)
     if (actual?.sql !== expected.sql) throw new Error(`Incomplete or altered network storage: ${expected.name}`)
   }
   if (!references) return
-  for (const table of [...networkTables, ...(controls ? networkControlTables : []), ...(version >= 30 ? networkGateTables : []), ...(version >= 31 ? networkDataTables : []), ...(version >= 32 ? networkWorkflowTables : []), ...(version >= 33 ? definitionTables : []), ...(version >= 34 ? sharingTables : []), ...(version >= 35 ? aliasTables : []), ...(version >= 36 ? networkRoutingTables : []), ...(version >= 40 ? networkGateGrantTables : [])]) {
+  // Workflow tables stay only until the baseline schema (issue 1455, M8); no runtime code reads them.
+  for (const table of [...networkTables.filter(table => !table.startsWith('workflow_')), ...(controls ? networkControlTables : []), ...(version >= 30 ? networkGateTables : []), ...(version >= 31 ? networkDataTables : []), ...(version >= 33 ? definitionTables : []), ...(version >= 34 ? sharingTables : []), ...(version >= 35 ? aliasTables : []), ...(version >= 36 ? networkRoutingTables : []), ...(version >= 40 ? networkGateGrantTables : [])]) {
     if (database.prepare(`PRAGMA foreign_key_check(${table})`).get()) throw new Error(`Invalid network references: ${table}`)
   }
   for (const owner of database.prepare('SELECT issuer,subject FROM network_owners').all()) parseOwner(owner)
-  for (const [table, body, hash] of [['network_revisions', 'contract', 'content_hash'], ['network_events', 'payload', 'payload_hash'], ['workflow_revisions', 'definition', 'content_hash'], ['network_gate_tasks', 'manifest', 'manifest_hash'], ['workflow_call_requests', 'request', 'request_hash']]) {
+  for (const [table, body, hash] of [['network_revisions', 'contract', 'content_hash'], ['network_events', 'payload', 'payload_hash'], ['network_gate_tasks', 'manifest', 'manifest_hash']]) {
     for (const row of database.prepare(`SELECT ${body} AS body,${hash} AS hash FROM ${table}`).iterate()) {
       if (createHash('sha256').update(String(row.body)).digest('hex') !== row.hash) throw new Error(`Invalid network content digest: ${table}`)
     }
@@ -524,13 +524,6 @@ export function assertNetworkStorage(database: DatabaseSync, references = false)
       WHERE delivery.network_id!=task.network_id OR event.network_id!=task.network_id OR delivery.event_id!=item.event_id
         OR subscription.pod_id!=task.pod_id OR subscription.network_revision!=task.network_revision LIMIT 1`).get()
     if (gateItems) throw new Error('Invalid network gate item scope')
-  }
-  if (version >= 32) {
-    for (const row of database.prepare('SELECT request,request_hash FROM workflow_call_staging').iterate()) {
-      if (createHash('sha256').update(String(row.request)).digest('hex') !== row.request_hash) throw new Error('Invalid staged workflow call digest')
-    }
-    const permission = database.prepare('SELECT 1 FROM workflow_call_permissions p JOIN networks n ON n.id=p.network_id WHERE p.owner_issuer!=n.owner_issuer OR p.owner_subject!=n.owner_subject OR p.group_id!=n.group_id LIMIT 1').get()
-    if (permission) throw new Error('Invalid workflow call permission scope')
   }
   if (version >= 36) {
     const choice = database.prepare(`SELECT 1 FROM network_choices c

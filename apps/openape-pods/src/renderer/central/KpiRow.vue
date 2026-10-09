@@ -18,7 +18,7 @@ const decisionDetail = computed(() => facts.value.decisions.gates.length ? facts
 <template>
   <div class="kpi-row" role="list">
     <div class="kpi" role="listitem">
-      <b>{{ facts.active }}</b><span>{{ t('active') }}</span><small>{{ t('Pods, chains and networks with a running schedule') }}</small>
+      <b>{{ facts.active }}</b><span>{{ t('active') }}</span><small>{{ t('Pods and networks with a running schedule') }}</small>
     </div>
     <div class="kpi" role="listitem">
       <b>{{ facts.paused.total }}</b><span>{{ t('paused') }}</span><small>{{ pausedDetail }}</small>

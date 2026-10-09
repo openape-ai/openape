@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { CentralCommand } from '../../contracts/central'
-import type { GateBatchView, GateHeldItem } from '../../contracts/gates'
 import type { MapView } from '../../contracts/map-view'
 import type { NetworkGateView } from '../../contracts/network-gate-view'
 import type { NetworkChoiceView, NetworkCommand } from '../../contracts/networks'
-import type { WorkflowCommand } from '../../contracts/workflows'
 import type { SecretRequestRow, SecretsCommand } from '../../contracts/secrets'
 import { diagnostic, label, language, t } from '../i18n'
 import { clock, stamp } from '../utils/cadence'
@@ -15,8 +13,8 @@ import { clock, stamp } from '../utils/cadence'
  * batches decided at the identity provider, runtime rights, unknown deliveries and secret
  * requests. Every decision leaves as an existing owner command; nothing here approves on its own.
  */
-const props = defineProps<{ view: MapView, choices: NetworkChoiceView[], gates: NetworkGateView[], graphGates: { batches: GateBatchView[], held: GateHeldItem[] } | null, desktop: boolean, requests?: SecretRequestRow[], secretsOrigin?: string }>()
-const emit = defineEmits<{ network: [command: NetworkCommand, settle?: (error: string | null) => void], workflow: [command: WorkflowCommand], command: [command: CentralCommand], secrets: [command: SecretsCommand] }>()
+const props = defineProps<{ view: MapView, choices: NetworkChoiceView[], gates: NetworkGateView[], desktop: boolean, requests?: SecretRequestRow[], secretsOrigin?: string }>()
+const emit = defineEmits<{ network: [command: NetworkCommand, settle?: (error: string | null) => void], command: [command: CentralCommand], secrets: [command: SecretsCommand] }>()
 const headline = ['subject', 'title', 'name']
 const groupBy = ref('')
 const raw = ref(false)
@@ -92,15 +90,13 @@ function choose(item: Case, key: string) {
 function chooseAll(items: Case[], key: string) { for (const item of open(items)) choose(item, key) }
 
 const batches = computed(() => props.gates.filter(gate => openBatch.includes(gate.state)))
-const graphBatches = computed(() => (props.graphGates?.batches ?? []).filter(batch => openBatch.includes(batch.state)))
-const held = computed(() => props.graphGates?.held ?? [])
 const approveGates = computed(() => props.view.automations.flatMap(automation => automation.gates.filter(gate => gate.kind === 'approve').map(gate => ({ ...gate, automation }))))
 const podName = (id: string) => props.view.pods.find(pod => pod.id === id)?.name ?? id
 const rights = computed(() => props.view.pods.flatMap(pod => [...pod.approvals.map(approval => ({ pod, approval, error: null as string | null })), ...(pod.queue.blocked && !pod.approvals.length ? [{ pod, approval: null, error: pod.queue.error }] : [])]))
 const unknown = computed(() => props.view.pods.flatMap(pod => pod.unknown.map(item => ({ pod, ...item }))))
 const requests = computed(() => (props.requests ?? []).filter(row => row.status !== 'collected' && row.status !== 'expired'))
 const requestState = (status: SecretRequestRow['status']) => status === 'failed' ? t('failed') : status === 'filled' ? t('filled') : t('requested')
-const total = computed(() => openEvents.value + batches.value.length + graphBatches.value.length + held.value.length + rights.value.length + unknown.value.length + requests.value.length)
+const total = computed(() => openEvents.value + batches.value.length + rights.value.length + unknown.value.length + requests.value.length)
 defineExpose({ total })
 </script>
 
@@ -112,7 +108,7 @@ defineExpose({ total })
         <b>{{ openEvents }}</b><span>{{ t('Questions') }}</span><small>{{ openEvents ? `${t('in {count} cases', { count: open(cases).length })} · ${gateHeads.map(head => head.network).join(', ')}` : t('no questions') }}</small>
       </div>
       <div class="kpi" role="listitem">
-        <b>{{ batches.length + graphBatches.length }}</b><span>{{ t('Approvals waiting') }}</span><small>{{ batches.length + graphBatches.length ? t('batches decided at the IdP') : t('no waiting batches') }}</small>
+        <b>{{ batches.length }}</b><span>{{ t('Approvals waiting') }}</span><small>{{ batches.length ? t('batches decided at the IdP') : t('no waiting batches') }}</small>
       </div>
       <div class="kpi" role="listitem">
         <b>{{ rights.length }}</b><span>{{ t('Rights') }}</span><small>{{ rights.length ? t('{count} runtime requests', { count: rights.length }) : t('no open runtime request') }}</small>
@@ -175,22 +171,11 @@ defineExpose({ total })
           </div>
         </template>
       </template>
-      <template v-for="item in held" :key="item.itemId">
-        <div class="item">
-          <div class="row">
-            <span class="subj">{{ item.title }}</span><span class="pill pods">{{ item.gate }}</span>
-          </div><div class="opts">
-            <button v-for="option in (view.automations.find(automation => automation.id === item.workflowId)?.gates.find(gate => gate.key === item.gate)?.options ?? [])" :key="option.key" class="secondary" type="button" @click="emit('workflow', { type: 'gateChoose', id: item.workflowId, gate: item.gate, itemId: item.itemId, option: option.key })">
-              {{ option.title }}
-            </button>
-          </div>
-        </div>
-      </template>
     </div>
 
     <h2>{{ t('Approvals waiting') }} <span class="meta">· {{ t('batches decided at the IdP') }}</span></h2>
     <div class="inbox" data-testid="batches">
-      <div v-if="!batches.length && !graphBatches.length" class="item">
+      <div v-if="!batches.length" class="item">
         <div class="row">
           <span class="pill off">{{ t('none') }}</span><span class="meta">{{ approveGates.length ? approveGates.map(gate => t('Gate "{title}" has no frozen batch. A batch forms as soon as candidates arrive; at most 30 items, valid for 12 hours.', { title: gate.title })).join(' ') : t('no waiting batches') }}</span>
         </div>
@@ -213,29 +198,12 @@ defineExpose({ total })
         <label v-else class="meta">{{ t('Evidence') }} <input v-model="evidence[batch.id]" maxlength="4000"></label>
         <div class="opts">
           <template v-if="batch.url">
-            <button v-if="desktop" class="secondary idp" type="button" @click="emit('network', { type: 'gateOpen', id: batch.networkId, revision: view.automations.find(automation => automation.id === batch.networkId)?.revision ?? 1, taskId: batch.id, generation: batch.generation })">{{ t('Decide at the IdP') }}</button>
+            <button v-if="desktop" class="secondary idp" type="button" @click="emit('network', { type: 'gateOpen', id: batch.networkId, revision: view.automations.find(automation => automation.id === batch.networkId)?.revision ?? 1, taskId: batch.id, generation: batch.generation })">
+              {{ t('Decide at the IdP') }}
+            </button>
             <a v-else class="secondary idp" :href="batch.url" target="_blank" rel="noopener">{{ t('Decide at the IdP') }}</a>
           </template>
           <button v-if="batch.state === 'unknown'" class="secondary" type="button" :disabled="!desktop || !evidence[batch.id]?.trim()" @click="emit('network', { type: 'gateDiscard', id: batch.networkId, revision: view.automations.find(automation => automation.id === batch.networkId)?.revision ?? 1, taskId: batch.id, generation: batch.generation, evidence: evidence[batch.id] ?? '' })">
-            {{ t('Discard batch') }}
-          </button>
-        </div>
-      </div>
-      <div v-for="batch in graphBatches" :key="batch.id" class="item">
-        <div class="row">
-          <span class="pill" :class="batch.state === 'unknown' ? 'warn' : 'idp'">{{ label(batch.state) }}</span><span class="subj">{{ t('Approval batch') }} · {{ batch.gate }}</span><span class="meta">{{ podName(batch.podId) }} · {{ t('{count} items', { count: batch.items.length }) }} · {{ t('expires {time}', { time: stamp(batch.expiresAt, language) }) }}</span>
-        </div>
-        <ul class="plainlist">
-          <li v-for="item in batch.items" :key="item.itemId">
-            {{ item.title }}
-          </li>
-        </ul>
-        <div class="opts">
-          <template v-if="batch.url">
-            <button v-if="desktop" class="secondary idp" type="button" @click="emit('workflow', { type: 'gateOpen', batchId: batch.id })">{{ t('Decide at the IdP') }}</button>
-            <a v-else class="secondary idp" :href="batch.url" target="_blank" rel="noopener">{{ t('Decide at the IdP') }}</a>
-          </template>
-          <button v-if="batch.state === 'unknown'" class="secondary" type="button" :disabled="!desktop" @click="emit('workflow', { type: 'gateDiscard', batchId: batch.id })">
             {{ t('Discard batch') }}
           </button>
         </div>

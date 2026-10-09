@@ -12,9 +12,7 @@ import { PodVariables } from '../resources/variables'
 import { DefinitionCatalog } from '../workspace/definition-catalog'
 import { digest, parseManifest } from '../storage/database'
 import type { PodDatabase } from '../storage/database'
-import { workflowDefinitions } from '../workflows/engine'
-import { loadWorkflowRevision } from '../workflows/revisions'
-import { networkConfiguration, networkLegacyVariables } from '../scheduling/network-config'
+import { networkConfiguration } from '../scheduling/network-config'
 
 export type { PortableSourceSelection } from '../../contracts/sharing'
 
@@ -58,10 +56,9 @@ function networkSource(store: PodDatabase, owner: Owner, id: string) {
   const scopes = store.db.prepare(`SELECT DISTINCT s.id,s.collection_id,s.private_network_id FROM artifact_permissions p JOIN artifact_scopes s ON s.id=p.scope_id WHERE p.network_id=? ORDER BY s.id`).all(id)
   if (scopes.some(scope => scope.private_network_id !== null && scope.private_network_id !== id)) throw new Error('Portable artifact scope belongs to another private network')
   const artifactPermissions = store.db.prepare('SELECT pod_id,scope_id,operation,revision FROM artifact_permissions WHERE network_id=? ORDER BY pod_id,scope_id,operation').all(id)
-  const calls = store.db.prepare('SELECT pod_id,workflow_id,workflow_revision,revision FROM workflow_call_permissions WHERE network_id=? AND enabled=1 ORDER BY workflow_id,workflow_revision,pod_id').all(id)
   const configuration = definition.members.map(member => ({ podId: member.podId, fields: networkConfiguration(store, id, member.podId) }))
   const sharedValues = store.db.prepare('SELECT name,value FROM composition_config WHERE network_id=? ORDER BY name').all(id).map(row => ({ name: String(row.name), value: JSON.parse(String(row.value)) as unknown }))
-  return { definition, state: String(row.state), collections, dataPermissions, scopes, artifactPermissions, calls, configuration, sharedValues, legacyVariables: networkLegacyVariables(store, id) }
+  return { definition, state: String(row.state), collections, dataPermissions, scopes, artifactPermissions, configuration, sharedValues }
 }
 
 function localReferences(value: unknown, references: Set<string>): void {
@@ -80,44 +77,20 @@ function localReferences(value: unknown, references: Set<string>): void {
 
 export function capturePortableSource(store: PodDatabase, ownerValue: Owner, selection: PortableSourceSelection) {
   const owner = parseOwner(ownerValue)
-  if (!['pod', 'workflow', 'network'].includes(selection.kind) || !/^[a-f0-9-]{36}$/.test(selection.id)) throw new Error('Invalid portable source selection')
+  if (!['pod', 'network'].includes(selection.kind) || !/^[a-f0-9-]{36}$/.test(selection.id)) throw new Error('Invalid portable source selection')
   return store.transaction(() => {
     const resources = new ResourceRegistry(store, () => { throw new Error('Portable source capture cannot mutate resources') })
     const catalog = new DefinitionCatalog(store, resources, owner)
     const network = selection.kind === 'network' ? networkSource(store, owner, selection.id) : null
-    const workflow = selection.kind === 'workflow' ? workflowDefinitions(store).find(item => item.id === selection.id) : null
-    if (selection.kind === 'workflow' && !workflow) throw new Error('Portable workflow is unavailable')
-    const calls = new Map<string, ReturnType<typeof loadWorkflowRevision>>()
-    for (const permission of network?.calls ?? []) {
-      const id = String(permission.workflow_id); const revision = Number(permission.workflow_revision)
-      const current = store.db.prepare('SELECT group_id FROM workflows WHERE id=? AND archived=0').get(id)
-      if (!current || current.group_id !== network!.definition.groupId) throw new Error('Called workflow requires an explicit current company binding')
-      const existing = calls.get(id)
-      if (existing && existing.revision !== revision) throw new Error('Portable export cannot include two revisions of the same workflow')
-      if (!existing) {
-        const called = loadWorkflowRevision(store, id, revision)
-        if (called.published.definition.groupId !== network!.definition.groupId) throw new Error('Called workflow belongs to another company')
-        for (const pin of called.published.pins) {
-          if (!store.db.prepare('SELECT 1 FROM pod_memberships WHERE pod_id=? AND group_id=?').get(pin.podId, network!.definition.groupId)) throw new Error('Called workflow members require the same company binding')
-        }
-        calls.set(id, called)
-      }
-    }
-    const ids = [...new Set([...(network?.definition.members.map(member => member.podId) ?? workflow?.nodes.map(node => node.podId) ?? [selection.id]), ...[...calls.values()].flatMap(call => call.published.pins.map(pin => pin.podId))])]
+    const ids = network?.definition.members.map(member => member.podId) ?? [selection.id]
     if (ids.length > sharingLimits.pods) throw new Error('Portable export exceeds the Pod limit')
     const pods = ids.map(id => podSource(store, resources, catalog, id))
-    for (const call of calls.values()) {
-      for (const pin of call.published.pins) {
-        const current = pods.find(item => item.pod.id === pin.podId)!
-        if (current.pod.activeScript !== pin.scriptHash || current.pod.bindingRevision !== pin.bindingRevision || current.resourceEpoch !== pin.resourceEpoch) throw new Error('Called workflow revision no longer matches its current member bindings')
-      }
-    }
     for (const member of network?.definition.members ?? []) {
       const current = pods.find(item => item.pod.id === member.podId)!
       const definition = catalog.source(member.definitionId, member.definitionVersion)
       if (current.binding?.binding_revision !== member.bindingRevision || definition.view.contentHash !== current.pod.activeScript || definition.view.lockHash !== current.manifest.dependencyLockHash || definition.dependencyHash !== current.dependencyHash || current.binding?.definition_id !== member.definitionId || current.binding?.definition_version !== member.definitionVersion) throw new Error('Network member no longer matches its published definition')
     }
-    const source = { owner, selection: { ...selection }, pods, workflow: workflow ?? null, network, calls: [...calls.values()] }
+    const source = { owner, selection: { ...selection }, pods, network }
     const privateReferences = new Set([store.root, homedir(), owner.subject])
     const privateValues = new Set<string>()
     const remember = (value: unknown): void => {
@@ -131,7 +104,7 @@ export function capturePortableSource(store: PodDatabase, ownerValue: Owner, sel
         for (const item of Object.values(value)) remember(item)
       }
     }
-    localReferences({ pods: pods.map(({ content: _content, lock: _lock, ...pod }) => pod), network, workflow, calls: [...calls.values()] }, privateReferences)
+    localReferences({ pods: pods.map(({ content: _content, lock: _lock, ...pod }) => pod), network }, privateReferences)
     for (const pod of pods) {
       for (const variable of pod.variables) remember(variable.value)
       for (const field of [...pod.definitions.filter(field => field.kind === 'public'), ...pod.overrides]) remember(JSON.parse(String(field.value)))
@@ -155,18 +128,10 @@ export function capturePortableSource(store: PodDatabase, ownerValue: Owner, sel
         if (authentication && typeof authentication === 'object') remember(authentication)
       }
     }
-    for (const definition of [workflow, ...Array.from(calls.values(), call => call.published.definition)]) {
-      remember(definition?.mail?.mailbox); remember(definition?.mail?.telegramChatId)
-      if (definition?.mail) {
-        remember(definition.mail.protectedPartners); remember(definition.mail.rules)
-      }
-      for (const field of definition?.values ?? []) remember(field.value)
-    }
     for (const field of network?.sharedValues ?? []) remember(field.value)
     const fingerprintSource = {
       ...source,
       pods: pods.map(item => ({ ...item, pod: { ...item.pod, lifecycle: 'paused' } })),
-      workflow: workflow ? { ...workflow, nextAt: null, enabled: false, paused: false } : null,
       network: network ? { ...network, state: 'paused' } : null,
     }
     return { ...source, fingerprint: digest(canonicalNetworkJson(fingerprintSource)), privateReferences: [...privateReferences].sort(), privateValues: [...privateValues].sort() }

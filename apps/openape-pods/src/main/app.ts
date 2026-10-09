@@ -10,7 +10,6 @@ import { CentralController, offlineAlert } from './central/controller'
 import { centralObject } from '../contracts/central'
 import { RemoteController, RemoteServiceError } from './remote/controller'
 import { InboxDecisions } from './inbox/decisions'
-import { parseWorkflowCommand } from '../contracts/workflows'
 import { parseNetworkCommand } from '../contracts/networks'
 import { searchPackages } from './package-catalog'
 import { execFile } from 'node:child_process'
@@ -351,10 +350,6 @@ async function start(): Promise<void> {
   ipcMain.handle(channels.networks, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     return worker.networks(parseNetworkCommand(command))
-  })
-  ipcMain.handle(channels.workflows, (event, command: unknown, ...extra: unknown[]) => {
-    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
-    return worker.workflows(parseWorkflowCommand(command))
   })
   ipcMain.handle(channels.scheduling, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)

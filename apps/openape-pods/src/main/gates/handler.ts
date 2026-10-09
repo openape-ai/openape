@@ -1,7 +1,5 @@
-import { networkGateItemCommand, networkGateItemSummary, parseNetworkGateManifest } from '../../contracts/network-gates'
+import { gateAudience, networkGateItemCommand, networkGateItemSummary, parseNetworkGateManifest } from '../../contracts/network-gates'
 import type { NetworkGateManifest, NetworkGateRelease } from '../../contracts/network-gates'
-import { gateAudience, gateItemCommand, gateItemSummary, parseGateManifest } from '../../contracts/gates'
-import type { GateManifest } from '../../contracts/gates'
 import type { ServiceScope } from '../../contracts/services'
 import type { ConnectionManager } from '../connections/manager'
 import { createGrantAuthority } from './authority'
@@ -9,9 +7,8 @@ import type { BatchGrant, BatchMember } from './authority'
 
 interface Request { body: unknown, scope: ServiceScope, connections: ConnectionManager, check: () => Promise<unknown>, checkGate?: (manifest: NetworkGateManifest, operation: string, grants?: BatchGrant[]) => Promise<unknown>, signal: AbortSignal }
 
-/** One member per item; network inputs are keyed by delivery, workflow items by item key. */
-export function gateMembers(manifest: GateManifest | NetworkGateManifest): BatchMember[] {
-  if (manifest.version === 1) return manifest.items.map(item => ({ key: item.key, command: gateItemCommand(manifest, item), summary: gateItemSummary(item) }))
+/** One member per item, keyed by its network delivery. */
+export function gateMembers(manifest: NetworkGateManifest): BatchMember[] {
   return manifest.items.map(item => ({ key: item.deliveryId, command: networkGateItemCommand(manifest, item), summary: networkGateItemSummary(item) }))
 }
 
@@ -32,26 +29,22 @@ function parseGrants(value: unknown, members: BatchMember[]): { grant: BatchGran
 export async function handleGate(input: Request): Promise<unknown> {
   const body = input.body as { operation?: unknown, manifest?: unknown, grants?: unknown }
   if (!body || typeof body !== 'object' || Array.isArray(body) || !['create', 'status', 'consume', 'assertActive'].includes(body.operation as string) || Object.keys(body).some(key => !['operation', 'manifest', 'grants'].includes(key))) throw new Error('Invalid gate operation')
-  const network = [2, 3].includes((body.manifest as { version?: unknown } | null)?.version as number)
-  const manifest = network ? parseNetworkGateManifest(body.manifest) : parseGateManifest(body.manifest)
-  if (!network && body.operation === 'assertActive') throw new Error('Unsupported legacy gate operation')
+  const manifest = parseNetworkGateManifest(body.manifest)
   if (manifest.podId !== input.scope.podId) throw new Error('Gate batch belongs to another Pod')
   const members = gateMembers(manifest)
   const selected = body.operation === 'create' ? [] : parseGrants(body.grants, members)
   const check = async () => {
     await input.check()
-    if (manifest.version !== 1) {
-      if (!input.checkGate) throw new Error('Network approval requires a current runtime gate context')
-      await input.checkGate(manifest, body.operation as string, selected.map(item => item.grant))
-    }
+    if (!input.checkGate) throw new Error('Network approval requires a current runtime gate context')
+    await input.checkGate(manifest, body.operation as string, selected.map(item => item.grant))
   }
-  if (manifest.version !== 1) await check()
-  const connection = manifest.version !== 1 ? await input.connections.podConnection(input.scope.podId, manifest.owner, true) : await input.connections.podConnection(input.scope.podId)
-  if (manifest.version !== 1) await check()
-  // Network approve routes accept the owner's once or always decision; legacy workflow gates keep once grants until they leave (issue 1455, M4).
-  const authority = createGrantAuthority(connection, input.signal, check, gateAudience, manifest.version !== 1 ? ['once', 'always'] : ['once'])
+  await check()
+  const connection = await input.connections.podConnection(input.scope.podId, manifest.owner, true)
+  await check()
+  // Approve routes accept the owner's once or always decision.
+  const authority = createGrantAuthority(connection, input.signal, check, gateAudience, ['once', 'always'])
   if (body.operation === 'create') {
-    const reply = await authority.createBatch({ id: manifest.id, title: manifest.title, expiresAt: manifest.expiresAt, reason: manifest.version !== 1 ? `${manifest.title}: approve this item` : `${manifest.title}: diesen Eintrag freigeben`, permissions: [`graph.gate:${manifest.id}`], members })
+    const reply = await authority.createBatch({ id: manifest.id, title: manifest.title, expiresAt: manifest.expiresAt, reason: `${manifest.title}: approve this item`, permissions: [`graph.gate:${manifest.id}`], members })
     return { id: manifest.id, ...reply }
   }
   const bindings = selected.map(({ grant, member }) => ({ ...member, grantId: grant.id, expiresAt: manifest.expiresAt }))

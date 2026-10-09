@@ -1,8 +1,6 @@
 import type { PortableExportChoices } from '../../contracts/sharing'
 import { canonicalPortableJson, portableKey } from '@openape/pods-protocol'
 import type { PortableComposition } from '@openape/pods-protocol'
-import type { WorkflowDefinition } from '../../contracts/workflows'
-import type { WorkflowPorts } from '../../contracts/workflow-ports'
 import type { PortableSource } from './source'
 import { mapPortablePod, PortableInputs } from './pod'
 import type { PortableExportContent } from './export'
@@ -40,34 +38,12 @@ export async function mapPortableSource(root: string, source: PortableSource, ch
     portableKey(choice.key)
     return choice
   }
-  const workflowDocument = (workflow: WorkflowDefinition, ports: WorkflowPorts | null) => {
-    const choice = choiceFor(workflow.id); const inputs = new PortableInputs(choice.defaults)
-    const composition: PortableComposition = { key: choice.key, kind: workflow.mode, title: choice.title ?? workflow.name, document: `compositions/${choice.key}.json`, documentVersion: 1, nodes: workflow.nodes.map(node => ({ pod: podKey(node.podId), after: node.after.map(podKey), handoff: node.handoff })), calls: [], inputs: [], dataSchemas: [] }
-    const mappedPorts = ports ? { ...ports, inputs: ports.inputs.map(({ podId, ...port }) => ({ ...port, pod: podKey(podId) })), outputs: ports.outputs.map(({ podId, ...port }) => ({ ...port, pod: podKey(podId) })), requiredTerminals: ports.requiredTerminals.map(podKey) } : null
-    let mail = null
-    if (workflow.mail) {
-      const policy = workflow.mail
-      const filter = choices.pods.find(pod => pod.podId === policy.filterPodId)
-      const application = filter?.aliases.find(item => item.resourceId === policy.applicationId)?.alias
-      if (!application) throw new Error('Portable mail policy requires an explicit application alias')
-      mail = { filter: podKey(policy.filterPodId), notify: podKey(policy.notifyPodId), application, telegramCredential: policy.telegramCredential, mode: policy.mode,
-        mailbox: inputs.add('mail:mailbox', 'Mailbox', 'string', policy.mailbox), telegramChat: inputs.add('mail:telegramChat', 'Notification destination', 'string', policy.telegramChatId),
-        protectedPartners: inputs.add('mail:protectedPartners', 'Protected partners', 'string', canonicalPortableJson(policy.protectedPartners)), rules: inputs.add('mail:rules', 'Archive rules', 'string', canonicalPortableJson(policy.rules)) }
-    }
-    const values = workflow.values.map(value => ({ name: value.name, input: inputs.add(`value:${value.name}`, value.name, 'string', value.value) }))
-    composition.inputs = inputs.finish()
-    const document = workflow.mode === 'sequence' ? { version: 1, kind: 'sequence', schedule: workflow.schedule, ports: mappedPorts, mail } : { version: 1, kind: 'channels', schedule: workflow.schedule, channels: workflow.channels, gates: workflow.gates, values, ports: mappedPorts }
-    if ((workflow.mode === 'sequence' && values.length) || (workflow.mode === 'channels' && mail !== null)) throw new Error('Portable workflow contains unsupported mode-specific configuration')
-    compositions.push(composition); payloads.push(jsonPayload(composition.document, 'composition', document))
-  }
-  if (source.workflow) workflowDocument(source.workflow, null)
-  for (const call of source.calls) workflowDocument(call.published.definition, call.published.ports)
   if (source.network) {
     const network = source.network; const definition = network.definition
     const choice = choiceFor(definition.id); const inputs = new PortableInputs(choice.defaults)
     const collectionKeys = new Map(network.collections.map((collection, index) => [String(collection.id), `collection_${index + 1}`]))
     const scopeKeys = new Map(network.scopes.map((scope, index) => [String(scope.id), `artifacts_${index + 1}`]))
-    const composition: PortableComposition = { key: choice.key, kind: 'network', title: choice.title ?? definition.name, document: `compositions/${choice.key}.json`, documentVersion: 1, nodes: definition.members.map(member => ({ pod: podKey(member.podId), after: [], handoff: false })), calls: source.calls.map(call => choiceFor(call.workflowId).key), inputs: [], dataSchemas: [] }
+    const composition: PortableComposition = { key: choice.key, kind: 'network', title: choice.title ?? definition.name, document: `compositions/${choice.key}.json`, documentVersion: 1, nodes: definition.members.map(member => ({ pod: podKey(member.podId), after: [], handoff: false })), calls: [], inputs: [], dataSchemas: [] }
     const access = (rows: { pod_id: unknown, operation: unknown }[]) => Array.from(new Set(rows.map(row => String(row.pod_id))), id => ({ pod: podKey(id), operations: rows.filter(row => row.pod_id === id).map(row => String(row.operation)) }))
     const collections = network.collections.map((collection) => {
       const key = collectionKeys.get(String(collection.id))!; const schema = `data/${choice.key}/${key}.json`
@@ -101,11 +77,12 @@ export async function mapPortableSource(root: string, source: PortableSource, ch
       members: definition.members.map(member => ({ pod: podKey(member.podId), source: member.source ? { schedule: member.source.schedule } : null, serialCase: member.serialCase })),
       routes: definition.routes, joins: definition.joins.map(({ podId, ...join }) => ({ ...join, pod: podKey(podId) })),
       feedback: definition.feedback.map(({ podId, ...item }) => ({ ...item, pod: podKey(podId) })),
-      values, legacyVariables: Object.keys(network.legacyVariables).sort(), collections, artifacts, calls: network.calls.map(call => ({ pod: podKey(String(call.pod_id)), workflow: choiceFor(String(call.workflow_id)).key })) }
+      // Desktops before issue 1455 (M4) require both fields: the shared string values scripts read as variables, and no calls.
+      values, legacyVariables: network.sharedValues.filter(value => typeof value.value === 'string').map(value => value.name).sort(), collections, artifacts, calls: [] }
     composition.inputs = inputs.finish()
     compositions.push(composition); payloads.push(jsonPayload(composition.document, 'composition', document))
   }
   if (compositions.length !== choices.compositions.length) throw new Error('Portable composition choices include an unrelated source')
-  const entry = source.selection.kind === 'pod' ? { kind: 'pod' as const, key: podKey(source.selection.id) } : { kind: source.network ? 'network' as const : source.workflow!.mode, key: choiceFor(source.selection.id).key }
+  const entry = source.selection.kind === 'pod' ? { kind: 'pod' as const, key: podKey(source.selection.id) } : { kind: 'network' as const, key: choiceFor(source.selection.id).key }
   return { description: { format: 'openape-package', version: 1, package: choices.package, requiredFeatures: ['portable_aliases_v1'], entry, pods: mapped.map(item => item.pod), compositions, applications: mapped.flatMap(item => item.applications) }, payloads }
 }

@@ -203,30 +203,10 @@ it('counts runtime links without following them and clears the old inventory war
   await symlink(outside, join(workspace, 'untrusted'))
   await expect(createBackup(store, exports)).rejects.toThrow('link or unsupported file')
 })
-it('restores partial workflow history paused while retaining effect receipts and completed nodes', async () => {
-  const { store, exports, pod, runId } = await fixture()
-  const workflowId = randomUUID(); const workflowRun = randomUUID()
-  const nodes = [{ podId: pod.id, after: [], handoff: false }]
-  const definition = { id: workflowId, revision: 1, name: 'Partial synthetic workflow', nodes, enabled: true, paused: false, schedule: { kind: 'interval', seconds: 60 }, nextAt: 1000 }
-  store.db.prepare('INSERT INTO workflows(id,revision,name,nodes,schedule,enabled,paused) VALUES(?,1,?,?,?,1,0)').run(workflowId, definition.name, JSON.stringify(nodes), JSON.stringify(definition.schedule))
-  store.db.prepare('INSERT INTO workflow_runs(id,workflow_id,revision,definition,trigger,state,started_at) VALUES(?,?,1,?,\'manual\',\'blocked\',1000)').run(workflowRun, workflowId, JSON.stringify(definition))
-  store.db.prepare('INSERT INTO workflow_nodes VALUES(?,?,?,?,?,\'completed\',?,NULL,?)').run(workflowRun, pod.id, store.getPod(pod.id).activeScript, 1, 0, runId, JSON.stringify({ schema: 'synthetic/v1', data: { receipt: 'confirmed' } }))
-  store.db.prepare('INSERT INTO workflow_attempts VALUES(?,?,?)').run(runId, workflowRun, pod.id)
-  store.db.prepare('INSERT INTO effect_ledger VALUES(?,?,?,?,?,\'completed\',?)').run(pod.id, 'synthetic-effect', 'mail.telegram', digest('synthetic'), runId, JSON.stringify({ state: 'confirmed', receipt: { messageId: 42 } }))
-  store.db.prepare('INSERT INTO workflow_mail_scopes(id,mailbox,baseline_at) VALUES(?,?,?)').run('synthetic-scope', 'owner@example.invalid', 1000)
-  const backup = await createBackup(store, exports); const target = await restoreBackup(backup, exports, schemaVersion)
-  const restored = new PodDatabase(target); stores.push(restored)
-  expect(restored.db.prepare('SELECT restored FROM workflow_mail_scopes').get()!.restored).toBe(1)
-  expect(restored.db.prepare('SELECT enabled,paused FROM workflows').get()).toMatchObject({ enabled: 0, paused: 1 })
-  expect(restored.db.prepare('SELECT paused,reason FROM workflow_runs').get()).toMatchObject({ paused: 1, reason: 'Restored workflow requires review' })
-  expect(restored.db.prepare('SELECT state,output FROM workflow_nodes').get()).toMatchObject({ state: 'completed', output: JSON.stringify({ schema: 'synthetic/v1', data: { receipt: 'confirmed' } }) })
-  expect(JSON.parse(restored.db.prepare('SELECT result FROM effect_ledger').get()!.result as string)).toEqual({ state: 'confirmed', receipt: { messageId: 42 } })
-})
-
 it('retains original and shared conversations after Pod deletion with an unavailable target', async () => {
   const { store, pod } = await fixture(); const registry = new ChatRegistry(store); const conversations = new MasterConversations(store)
   const original = registry.ensure(pod.id); const id = randomUUID()
-  registry.execute({ type: 'create', id, title: 'Shared work', podIds: [pod.id], workflowId: null, workflowRevision: null })
+  registry.execute({ type: 'create', id, title: 'Shared work', podIds: [pod.id] })
   for (const chat of [original, registry.get(id)]) {
     const messageId = randomUUID()
     store.db.prepare('INSERT INTO master_messages VALUES(?,?,?,?,?)').run(messageId, 'user', 'Keep this history', 'sent', 1)
@@ -405,17 +385,12 @@ it('exports and restores detached receipts without resurrecting pruned runs', as
   expect(restored.db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
 })
 
-it('refuses Pod deletion during active work or while a workflow references it', async () => {
+it('refuses Pod deletion during active work', async () => {
   const { store, pod, runId } = await fixture()
   store.updatePod(pod.id, 1, { name: pod.name, lifecycle: 'archived' })
   const retention = new DataRetention(store, 'unused-helper')
   store.db.prepare('INSERT INTO run_leases VALUES(?,?,?,?,NULL)').run(pod.id, runId, 'synthetic-boot', Date.now())
   await expect(retention.deletePod(pod.id, 2, pod.name)).rejects.toThrow('active work')
-  store.db.prepare('DELETE FROM run_leases').run()
-  const workflowId = randomUUID()
-  store.db.prepare('INSERT INTO workflows(id,revision,name,nodes) VALUES(?,1,?,?)').run(workflowId, 'Review workflow', '[]')
-  store.db.prepare('INSERT INTO workflow_members VALUES(?,?)').run(workflowId, pod.id)
-  await expect(retention.deletePod(pod.id, 2, pod.name)).rejects.toThrow('workflow configuration or history')
   expect(store.getPod(pod.id).name).toBe(pod.name)
   expect(retention.jobs()).toEqual([])
 })
@@ -520,25 +495,16 @@ it.each(['pending', 'claimed', 'retry_wait', 'blocked', 'unknown'])('fences rest
   expect(store.db.prepare('SELECT state,claim_token,boot_nonce,generation,review_receipt FROM network_deliveries').get()).toEqual({ state: 'unknown', claim_token: null, boot_nonce: null, generation: 2, review_receipt: '{"decision":"retained"}' })
 })
 
-it('fences gate steps, blocks pending joins and calls, and preserves legacy gate decision evidence', async () => {
-  const { store, exports } = await fixture(); const f = seedNetwork(store); const gateId = randomUUID(); const workflowId = randomUUID()
+it('fences gate steps and blocks pending joins', async () => {
+  const { store } = await fixture(); const f = seedNetwork(store); const gateId = randomUUID()
   store.db.prepare('UPDATE network_invocations SET execution_kind=\'gate_maintenance\'').run()
   store.db.prepare('INSERT INTO network_gate_tasks VALUES(?,?,1,?,1,?,?,?,?,?,NULL,1)').run(gateId, f.networkId, f.pod.id, 'consuming', '{}', digest('{}'), f.restoreNonce, 99999999)
   store.db.prepare('INSERT INTO network_gate_task_attempts VALUES(?,1,?,1,\'old-step\',\'running\',1,NULL,?)').run(gateId, f.runId, f.networkId)
   store.db.prepare('INSERT INTO network_joins VALUES(?,?,?,1,1,\'{}\',99999,\'pending\',NULL)').run(f.networkId, 'join', f.caseId)
-  store.db.prepare('INSERT INTO workflows(id,revision,name,nodes) VALUES(?,1,\'Separate workflow\',\'[]\')').run(workflowId)
-  store.db.prepare('INSERT INTO workflow_revisions VALUES(?,1,?,?,1)').run(workflowId, '{}', digest('{}'))
-  store.db.prepare('INSERT INTO workflow_call_requests(id,caller_run_id,network_id,network_revision,case_id,case_revision,workflow_id,workflow_revision,request_hash,request,state,created_at) VALUES(?,?,?,1,?,1,?,1,?,\'{}\',\'pending\',1)').run(randomUUID(), f.runId, f.networkId, f.caseId, workflowId, digest('{}'))
   store.transaction(() => restoreNetworkStorage(store.db))
   expect(store.db.prepare('SELECT state,generation FROM network_gate_tasks').get()).toEqual({ state: 'unknown', generation: 2 })
   expect(store.db.prepare('SELECT state,step_token,generation FROM network_gate_task_attempts').get()).toEqual({ state: 'unknown', step_token: expect.not.stringMatching('old-step'), generation: 2 })
   expect(store.db.prepare('SELECT state FROM network_joins').get()?.state).toBe('blocked')
-  expect(store.db.prepare('SELECT state FROM workflow_call_requests').get()?.state).toBe('blocked')
-  const batchId = randomUUID()
-  store.db.prepare('INSERT INTO graph_gate_batches VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(batchId, workflowId, 'approve', f.pod.id, 'pending', 'retained-grant', null, 'Existing choice', digest('choice'), 999999, '[]', null, 1, 1)
-  const backup = await createBackup(store, exports)
-  const restored = new PodDatabase(await restoreBackup(backup, exports, schemaVersion)); stores.push(restored)
-  expect(restored.db.prepare('SELECT state,grant_id,title,digest,items FROM graph_gate_batches').get()).toEqual({ state: 'unknown', grant_id: 'retained-grant', title: 'Existing choice', digest: digest('choice'), items: '[]' })
 })
 
 it('keeps abandoned plaintext stages local and removes them before the worker resumes', async () => {

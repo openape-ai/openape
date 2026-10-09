@@ -14,8 +14,6 @@ import { capturePortableSource } from '../../src/worker/sharing/source'
 import { PortableExporter } from '../../src/worker/sharing/export'
 import { readPortableAssets } from '../../src/worker/sharing/assets'
 import { DefinitionCatalog } from '../../src/worker/workspace/definition-catalog'
-import { WorkflowEngine } from '../../src/worker/workflows/engine'
-import { publishWorkflowRevision } from '../../src/worker/workflows/revisions'
 import { mapPortableSource } from '../../src/worker/sharing/mapping'
 import type { PortableExportChoices } from '../../src/worker/sharing/mapping'
 import { createPortablePackage, exportFormatFeatures, validatePortableFiles } from '../../src/worker/sharing/package'
@@ -46,7 +44,7 @@ function mappingChoices(source: ReturnType<typeof capturePortableSource>): Porta
   return {
     package: { key: 'fixture', revision: 1, title: 'Portable fixture', description: '' },
     pods: source.pods.map((pod, index) => ({ podId: pod.pod.id, key: `pod_${index + 1}`, description: '', defaults: [], aliases: [], assets: [] })),
-    compositions: [...(source.workflow ? [source.workflow.id] : []), ...source.calls.map(call => call.workflowId), ...(source.network ? [source.network.definition.id] : [])].map((id, index) => ({ id, key: `composition_${index + 1}`, defaults: [] })),
+    compositions: (source.network ? [source.network.definition.id] : []).map((id, index) => ({ id, key: `composition_${index + 1}`, defaults: [] })),
   }
 }
 function fixture() {
@@ -256,27 +254,6 @@ it('expires reviews and refuses source changes during asynchronous preparation',
   await expect(exporter.review(f.selection, {})).rejects.toThrow('source changed')
 })
 
-it('maps a three-Pod sequence once, preserving all handoff edges without runtime cursor coupling', async () => {
-  const f = sourceFixture(); const ids = [f.pod.id]
-  for (let index = 1; index < 3; index++) {
-    const pod = f.store.createPod({ name: `Step ${index + 1}` }); ids.push(pod.id)
-    installExample(f.store, f.resources, pod.id, 'deterministic', 'a'.repeat(64))
-  }
-  const workflow = new WorkflowEngine(f.store, { start: () => { throw new Error('Export must not execute') }, cancelPod: () => {} }, { inspect: async () => {} })
-  const id = randomUUID()
-  workflow.save({ type: 'save', id, revision: 0, name: 'Three steps', nodes: ids.map((podId, index) => ({ podId, after: index ? [ids[index - 1]!] : [], handoff: index > 0 })), schedule: null, enabled: false, mode: 'sequence', groupId: null, channels: [], gates: [], values: [] })
-  const selection = { kind: 'workflow' as const, id }
-  const source = capturePortableSource(f.store, f.owner, selection)
-  f.store.db.prepare('UPDATE workflows SET next_at=123456 WHERE id=?').run(id)
-  expect(capturePortableSource(f.store, f.owner, selection).fingerprint).toBe(source.fingerprint)
-  const content = await mapPortableSource(f.store.root, source, mappingChoices(source))
-  const exported = await createPortablePackage(content.description, content.payloads, '')
-  expect(exported.manifest.pods).toHaveLength(3)
-  expect(exported.manifest.compositions[0]!.nodes).toEqual([{ pod: 'pod_1', after: [], handoff: false }, { pod: 'pod_2', after: ['pod_1'], handoff: true }, { pod: 'pod_3', after: ['pod_2'], handoff: true }])
-  const serialized = Object.values(unzipSync(exported.archive)).map(file => Buffer.from(file).toString()).join('\n')
-  for (const sourceId of [...ids, id]) expect(serialized).not.toContain(sourceId)
-})
-
 it('exports public values only after explicit default selection and leaves source state untouched', async () => {
   const f = sourceFixture()
   f.store.db.prepare('INSERT INTO schedules(pod_id,revision,spec,enabled,next_at,error) VALUES(?,1,?,1,123456,NULL)').run(f.pod.id, JSON.stringify({ kind: 'daily', time: '07:00', timezone: 'Europe/Vienna' }))
@@ -355,29 +332,6 @@ it('retains collection names, retention, artifact association and explicit share
   expect(exported.manifest.pods[1]!.inputs[0]!.sharingGroup).toBeNull()
   const serialized = Object.values(archive).map(file => Buffer.from(file).toString()).join('\n')
   for (const value of ['PRIVATE_INSTANCE_VALUE', 'PRIVATE_ARTIFACT_CANARY', collectionId, scopeId]) expect(serialized).not.toContain(value)
-})
-
-it('packages a called immutable workflow under local aliases and refuses archival after review', async () => {
-  const f = networkFixture()
-  const caller = f.pod('Caller', { takes: [], gives: ['work.ready'], summary: 'Call' }, async () => {})
-  const listener = f.pod('Listener', { takes: ['work.ready'], gives: [], summary: 'Listen' }, async () => {})
-  const callee = f.pod('Callee', { takes: [], gives: [], summary: 'Return' }, async () => {})
-  const networkId = f.create([{ podId: caller, source: { schedule: null }, serialCase: false }, { podId: listener, source: null, serialCase: false }], ['work.ready'])
-  const engine = new WorkflowEngine(f.store, { start: () => { throw new Error('Export must not execute') }, cancelPod: () => {} }, { inspect: async () => {} })
-  const workflowId = randomUUID()
-  engine.save({ type: 'save', id: workflowId, revision: 0, name: 'Finite call', nodes: [{ podId: callee, after: [], handoff: false }], schedule: null, enabled: false, mode: 'sequence', groupId: f.groupId, channels: [], gates: [], values: [] })
-  const schema = { type: 'object', properties: { subject: { type: 'string' } }, required: ['subject'], additionalProperties: false }
-  const revision = publishWorkflowRevision(f.store, engine.view().workflows[0]!, { version: 1, inputs: [{ name: 'input', version: 1, schema, podId: callee }], outputs: [{ name: 'output', version: 1, schema, podId: callee }], requiredTerminals: [callee], requiredGates: [] }, 0)
-  f.store.db.prepare('INSERT INTO workflow_call_permissions VALUES(?,?,?,?,?,?,?,1,1)').run(workflowId, revision.revision, networkId, caller, f.owner.issuer, f.owner.subject, f.groupId)
-  const selected = { kind: 'network' as const, id: networkId }; const source = capturePortableSource(f.store, f.owner, selected)
-  const content = await mapPortableSource(f.store.root, source, mappingChoices(source))
-  const exported = await createPortablePackage(content.description, content.payloads, '')
-  expect(exported.manifest.compositions.find(item => item.kind === 'network')!.calls).toEqual(['composition_1'])
-  expect(exported.manifest.pods).toHaveLength(3)
-  const serialized = Object.values(unzipSync(exported.archive)).map(file => Buffer.from(file).toString()).join('\n')
-  for (const id of [caller, listener, callee, workflowId, networkId]) expect(serialized).not.toContain(id)
-  f.store.db.prepare('UPDATE workflows SET archived=1 WHERE id=?').run(workflowId)
-  expect(() => capturePortableSource(f.store, f.owner, selected)).toThrow('current company binding')
 })
 
 it('serializes preparation and still scans selected defaults inside payloads', async () => {

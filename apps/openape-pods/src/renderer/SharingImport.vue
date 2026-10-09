@@ -26,10 +26,6 @@ const deferredOpen = computed(() => current.value?.state === 'completed' && curr
 const deferred = (key: string) => current.value?.deferred.includes(key) ?? false
 // Setup is complete when only the creation of deferred compositions is left; the worker applies the same rule.
 const completable = computed(() => current.value?.state === 'committed' && current.value.unresolved.every(item => item.scope === 'composition' && item.requirement === 'composition' && deferred(item.key)))
-function compositionGroupRequired(key: string) {
-  const composition = current.value?.manifest.compositions.find(item => item.key === key)
-  return !!composition && (composition.kind !== 'sequence' || (current.value?.manifest.compositions.some(item => item.calls.includes(key)) ?? false))
-}
 // Variable inputs live on the Pod once the copy exists; other inputs stay editable during setup.
 const variableBound = (scope: Scope, input: PortableInput) => scope.scope === 'pods' && scope.bindings.some(binding => binding.input === input.key)
 const editable = (scope: Scope, input: PortableInput) => scalar(input) && (current.value?.state === 'staged' || (current.value?.state === 'committed' && !variableBound(scope, input)))
@@ -208,10 +204,10 @@ defineExpose({ reload })
               {{ t('Created after setup is finished and every member script is approved.') }}
             </p>
             <template v-else>
-              <label v-if="compositionGroupRequired(scope.key)">{{ t('Company') }}
+              <label>{{ t('Company') }}
                 <select v-model="groups[scope.key]"><option value="">{{ t('Select company') }}</option><option v-for="group in organization.groups" :key="group.id" :value="group.id">{{ group.name }}</option></select>
               </label>
-              <button class="secondary" :disabled="dirty || (compositionGroupRequired(scope.key) && !groups[scope.key])" :title="dirty ? t('Save values first') : undefined" @click="finalize(scope.key)">
+              <button class="secondary" :disabled="dirty || !groups[scope.key]" :title="dirty ? t('Save values first') : undefined" @click="finalize(scope.key)">
                 {{ t('Create composition') }}
               </button>
             </template>

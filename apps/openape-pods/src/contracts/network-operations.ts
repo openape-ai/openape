@@ -1,5 +1,4 @@
-import { dataFields, dataKey, dataRevision, publicConfiguration } from './network-data'
-import { workflowIdentity } from './workflow-ports'
+import { dataFields, dataIdentity, dataKey, dataRevision, publicConfiguration } from './network-data'
 import type { NetworkDefinition } from './networks'
 import type { PayloadScalar } from './network-payload'
 
@@ -27,25 +26,25 @@ export function parseNetworkRead(value: unknown): NetworkReadCommand | null {
   if (input.type === 'setup') {
     dataFields(input, ['type', 'groupId', 'podIds'])
     if (!Array.isArray(input.podIds) || !input.podIds.length || input.podIds.length > 64 || new Set(input.podIds).size !== input.podIds.length) throw new Error('Invalid network setup members')
-    return { type: 'setup', groupId: workflowIdentity(input.groupId), podIds: input.podIds.map(workflowIdentity) }
+    return { type: 'setup', groupId: dataIdentity(input.groupId), podIds: input.podIds.map(dataIdentity) }
   }
   if (!['detail', 'trace', 'records'].includes(String(input.type))) return null
   const revision = dataRevision(input.revision)
   if (!revision) throw new Error('Invalid network revision')
-  const common = { id: workflowIdentity(input.id), revision }
+  const common = { id: dataIdentity(input.id), revision }
   if (input.type === 'detail') { dataFields(input, ['type', 'id', 'revision']); return { type: 'detail', ...common } }
   if (input.type === 'trace') {
     dataFields(input, ['type', 'id', 'revision', 'before', 'caseId'])
-    return { type: 'trace', ...common, before: input.before === null ? null : dataRevision(input.before), caseId: input.caseId === null ? null : workflowIdentity(input.caseId) }
+    return { type: 'trace', ...common, before: input.before === null ? null : dataRevision(input.before), caseId: input.caseId === null ? null : dataIdentity(input.caseId) }
   }
   dataFields(input, ['type', 'id', 'revision', 'collectionId', 'after'])
-  return { type: 'records', ...common, collectionId: workflowIdentity(input.collectionId), after: input.after === null ? null : dataKey(input.after) }
+  return { type: 'records', ...common, collectionId: dataIdentity(input.collectionId), after: input.after === null ? null : dataKey(input.after) }
 }
 
 export function parseNetworkMemberView(value: unknown): NetworkMemberView {
   const input = dataFields(value, ['podId', 'name', 'lifecycle', 'capabilities', 'triggers', 'values', 'resources', 'resourcesMore'], ['diagnostic'])
   if (input.diagnostic !== undefined && (typeof input.diagnostic !== 'string' || input.diagnostic.length > 10000)) throw new Error('Invalid network member view')
-  workflowIdentity(input.podId)
+  dataIdentity(input.podId)
   if (typeof input.resourcesMore !== 'boolean') throw new Error('Invalid network resource summary')
   if (typeof input.name !== 'string' || input.name.length > 120 || !['active', 'paused', 'archived'].includes(String(input.lifecycle))) throw new Error('Invalid network member view')
   for (const key of ['capabilities', 'triggers'] as const) {
