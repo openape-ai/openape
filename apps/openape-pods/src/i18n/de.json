@@ -4386,8 +4386,8 @@
   "Network members accept inspect, draft, validate, pause and resume, and application setup while paused; update their scripts with networks updateMemberScript": "Netz-Mitglieder erlauben inspect, draft, validate, pause und resume sowie im pausierten Zustand die Einrichtung von Anwendungen; Skripte werden mit networks updateMemberScript aktualisiert",
   "Unsupported program operation": "Nicht unterstützte Programmoperation",
   "Network member stopped after repeated unknown external outcomes; reconcile them first": "Netzwerkmitglied nach wiederholt unbekannten externen Ergebnissen gestoppt; gleiche sie zuerst ab",
-  "The assistant can only close failed runs whose external effects were all reconciled": "Der Assistent kann nur gescheiterte Läufe abschließen, deren externe Wirkungen alle abgeglichen sind",
   "An earlier archive attempt of this message awaits reconciliation": "Ein früherer Archivierungsversuch dieser Nachricht wartet auf den Abgleich",
   "External outcome is unknown; reconcile it": "Das externe Ergebnis ist unbekannt; gleiche es ab",
-  "A completed run holds back inputs whose external outcome is unknown; reconcile them": "Ein abgeschlossener Lauf hält Eingänge zurück, deren externes Ergebnis unbekannt ist; gleiche sie ab"
+  "A completed run holds back inputs whose external outcome is unknown; reconcile them": "Ein abgeschlossener Lauf hält Eingänge zurück, deren externes Ergebnis unbekannt ist; gleiche sie ab",
+  "The assistant can only close failed runs whose every input has a reconciled external effect": "Der Assistent kann nur gescheiterte Läufe abschließen, bei denen jeder Eingang eine abgeglichene externe Wirkung hat"
 }
