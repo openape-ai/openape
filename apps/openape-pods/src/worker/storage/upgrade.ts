@@ -67,7 +67,7 @@ const schema45Indexes = new Set([
 
 // SQLite authorizer codes. Node 24.14 (also inside Electron 40) has DatabaseSync.setAuthorizer; @types/node lacks it.
 const sqliteOk = 0; const sqliteDeny = 1; const sqliteAttach = 24
-type AuthorizedDatabase = DatabaseSync & { setAuthorizer: (callback: ((action: number) => number) | null) => void }
+type AuthorizedDatabase = DatabaseSync & { setAuthorizer?: (callback: ((action: number) => number) | null) => void }
 
 interface Column { name: string, type: string, pk: number }
 function columns(database: DatabaseSync, table: string): Column[] {
@@ -101,13 +101,24 @@ function assertSingleBinding(database: DatabaseSync): void {
  * schema 46 no longer has are dropped with their rows; the pre-upgrade backup keeps them.
  */
 export function upgradeToBaseline(database: DatabaseSync): void {
-  assertSchema45(database)
-  assertSingleBinding(database)
-  // Nothing in the rebuild attaches a database; refuse it outright while the untrusted schema is open.
+  assertUpgradable(database)
+  // Nothing in the rebuild attaches a database; refuse it outright while the untrusted schema is open. The schema
+  // allowlist above already keeps every stored name out of SQL text; the authorizer is a second fence.
   const authorized = database as AuthorizedDatabase
+  if (typeof authorized.setAuthorizer !== 'function') {
+    console.warn('SQLite authorizer unavailable; upgrading with the schema-45 allowlist only')
+    rebuild(database)
+    return
+  }
   authorized.setAuthorizer(action => action === sqliteAttach ? sqliteDeny : sqliteOk)
   try { rebuild(database) }
   finally { authorized.setAuthorizer(null) }
+}
+
+/** Read-only: refuses a database that is not exactly schema 45 or whose member bindings diverge. */
+export function assertUpgradable(database: DatabaseSync): void {
+  assertSchema45(database)
+  assertSingleBinding(database)
 }
 
 function rebuild(database: DatabaseSync): void {
@@ -131,7 +142,9 @@ function rebuild(database: DatabaseSync): void {
     const names = [...(rowidAlias ? [] : ['rowid']), ...target.map(column => `"${column.name}"`)].join(',')
     database.exec(`INSERT INTO "${table}"(${names}) SELECT ${names} FROM "${legacyPrefix}${source}" ORDER BY rowid`)
     if (count(database, table) !== count(database, `${legacyPrefix}${source}`)) throw new Error(`Upgrade of ${table} lost rows`)
-    database.prepare('UPDATE sqlite_sequence SET seq=max(seq,(SELECT seq FROM sqlite_sequence WHERE name=?)) WHERE name=?').run(`${legacyPrefix}${source}`, table)
+    const sequence = database.prepare('SELECT seq FROM sqlite_sequence WHERE name=?').get(`${legacyPrefix}${source}`)?.seq
+    // An emptied AUTOINCREMENT table keeps its counter: identifiers such as trace cursors are never reused.
+    if (sequence !== undefined && !database.prepare('UPDATE sqlite_sequence SET seq=max(seq,?) WHERE name=?').run(sequence, table).changes) database.prepare('INSERT INTO sqlite_sequence(name,seq) VALUES(?,?)').run(table, sequence)
   }
   for (const table of tables) database.exec(`DROP TABLE ${legacyPrefix}${table}`)
   if (database.prepare('PRAGMA foreign_key_check').get()) throw new Error('Upgrade to schema 46 found an inconsistent reference')

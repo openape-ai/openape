@@ -14,7 +14,7 @@ afterEach(() => { for (const run of cleanup.splice(0).reverse()) run() })
 function snapshot(): CentralSnapshot {
   const pod = { id: randomUUID(), name: 'Monitor', revision: 1, lifecycle: 'paused' as const, activeScript: null }
   return {
-    version: 1, workspace: { pods: [pod], organization: { revision: 1, groups: [] } },
+    version: 1, schema: 46, workspace: { pods: [pod], organization: { revision: 1, groups: [] } },
     pods: [{ id: pod.id, ready: true, details: { claims: [], counts: { finding: 0, question: 0, gap: 0 }, total: 0, versions: [], checkpointRevision: 0, source: null },
       scripts: { pod, resourceEpoch: 0, credentialAliases: [], versions: [], drafts: [], source: null },
       resources: { resources: [], variables: [], epoch: 0 }, scheduling: { spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 },
@@ -286,6 +286,16 @@ it('accepts and ignores the schema and table parts of desktops before issue 1455
   expect(runtime.revision).toBe(2)
   expect(JSON.stringify(runtime)).not.toContain('private')
   expect(store.read(actor.owner, actor.id, podId).pod).toEqual(state.pods[0])
+  expect(store.db.prepare('SELECT DISTINCT value FROM parts WHERE key LIKE \'table/%\'').all()).toEqual([{ value: 'null' }])
+  expect(JSON.stringify(store.db.prepare('SELECT value FROM parts').all())).not.toContain('grant-must-stay-private')
+})
+
+it('purges table rows that an older server stored and keeps their hashes', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'pods-workspace-')); cleanup.push(() => rmSync(directory, { recursive: true, force: true }))
+  const { store, actor } = setup(join(directory, 'workspace.sqlite'))
+  store.db.prepare('INSERT INTO parts VALUES(?,\'table/resources/0\',?,?)').run(actor.id, 'a'.repeat(64), JSON.stringify([{ configuration: 'private-row' }]))
+  const reopened = new WorkspaceStore(join(directory, 'workspace.sqlite'), store.now); cleanup.push(() => reopened.close())
+  expect(reopened.db.prepare('SELECT hash,value FROM parts WHERE key=\'table/resources/0\'').get()).toEqual({ hash: 'a'.repeat(64), value: 'null' })
 })
 
 it('keeps network reads owner scoped, ephemeral, bounded and separate from owner operations', () => {

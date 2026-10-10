@@ -67,7 +67,7 @@ async function desktop(email: string) {
   }
   const { lease } = await send('/api/runtime/v1/workspace', { type: 'begin' }) as { lease: string }
   const fixture = centralFixture()
-  const publication = fullPublication({ version: 1, workspace: { ...fixture.host.workspace, pods: [fixture.host.workspace.pods[0]!] }, pods: [fixture.view], artifacts: [], blobs: [] })
+  const publication = fullPublication({ version: 1, schema: 46, workspace: { ...fixture.host.workspace, pods: [fixture.host.workspace.pods[0]!] }, pods: [fixture.view], artifacts: [], blobs: [] })
   const publish = async (revision: number, completion?: unknown) => {
     await send('/api/runtime/v1/workspace', { type: 'parts', lease, parts: publication.parts })
     return send('/api/runtime/v1/workspace', { type: 'publish', format: 2, lease, id: randomUUID(), revision, changes: publication.changes, hash: publication.hash, ...(completion ? { completion } : {}) })

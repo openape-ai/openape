@@ -40,7 +40,7 @@ afterEach(async () => { for (const task of cleanup.splice(0).reverse()) await ta
 function reassemble(snapshot: CentralSnapshot) {
   const parts = splitSnapshot(snapshot); const keys = [...parts.keys()]; const read = (key: string) => parts.get(key)
   const workspace = read('workspace') as WorkspaceState
-  return { version: 1, workspace, pods: workspace.pods.map(pod => assemblePod(read, keys, pod.id)), artifacts: read('artifacts') }
+  return { version: 1, schema: read('schema'), workspace, pods: workspace.pods.map(pod => assemblePod(read, keys, pod.id)), artifacts: read('artifacts') }
 }
 function publishSnapshot(server: WorkspaceStore, actor: WorkspaceActor, lease: string, snapshot: CentralSnapshot) {
   const publication = fullPublication(snapshot)
@@ -88,8 +88,8 @@ it('adopts the workspace repeatedly as views only, without table rows, credentia
   const { store, projection, actor, pod } = fixture()
   const first = projection.snapshot(actor.owner)
   expect(first.workspace.pods[0]?.id).toBe(pod.id)
-  expect(Object.keys(first).sort()).toEqual(['artifacts', 'blobs', 'pods', 'version', 'workspace'])
-  expect([...splitSnapshot(first).keys()].filter(key => key === 'schema' || key.startsWith('table/'))).toEqual([])
+  expect(Object.keys(first).sort()).toEqual(['artifacts', 'blobs', 'pods', 'schema', 'version', 'workspace'])
+  expect([...splitSnapshot(first).keys()].filter(key => key.startsWith('table/'))).toEqual([])
   expect(first).toEqual(projection.snapshot(actor.owner))
   store.db.prepare('UPDATE remote_pods SET owner=?').run(JSON.stringify({ ...actor.owner, subject: 'other' }))
   expect(() => projection.snapshot(actor.owner)).toThrow('Every Pod must belong')
@@ -121,7 +121,7 @@ it('executes the same MCP/browser command once and exposes central results with 
   expect(await call({ type: 'read', runtimeId: actor.id, podId: pod.id })).toMatchObject({ pod: { details: { description: { text: 'Shared with both clients' } }, runs: { runs: [{ id: runId, summary: 'Synthetic result', error: 'Synthetic failure', state: 'failed' }] } } })
   expect(execute).toHaveBeenCalledOnce()
   expect(server.read(actor.owner, actor.id, pod.id).pod.details.description?.text).toBe('Shared with both clients')
-  expect(server.db.prepare('SELECT count(*) AS count FROM parts WHERE runtime_id=? AND (key=\'schema\' OR key LIKE \'table/%\')').get(actor.id)!.count).toBe(0)
+  expect(server.db.prepare('SELECT count(*) AS count FROM parts WHERE runtime_id=? AND key LIKE \'table/%\'').get(actor.id)!.count).toBe(0)
   expect(controller.status()).toMatchObject({ state: 'online', format: 2, runtimeId: actor.id, error: null })
   await controller.stop()
   expect(await call({ type: 'inventory' })).toMatchObject([{ online: false, workspace: { pods: [{ id: pod.id, online: false }] } }])
