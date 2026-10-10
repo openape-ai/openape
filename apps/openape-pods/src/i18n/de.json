@@ -3171,5 +3171,6 @@
   "Schema 45 lacks table {p0}": "Schema 45 fehlt die Tabelle {p0}",
   "Schema 45 lacks column {p0}.{p1}": "Schema 45 fehlt die Spalte {p0}.{p1}",
   "Upgrade of {p0} lost rows": "Die Aktualisierung von {p0} hat Zeilen verloren",
-  "Upgrade to schema 46 found an inconsistent reference": "Die Aktualisierung auf Schema 46 hat einen inkonsistenten Verweis gefunden"
+  "Upgrade to schema 46 found an inconsistent reference": "Die Aktualisierung auf Schema 46 hat einen inkonsistenten Verweis gefunden",
+  "This database does not have the schema 45 it declares": "Diese Datenbank hat nicht das Schema 45, das sie angibt"
 }

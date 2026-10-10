@@ -89,6 +89,16 @@ it('refuses an upgrade whose two member binding copies disagree and leaves schem
   finally { database.close() }
 })
 
+it('refuses a schema-45 database with any foreign object before executing a statement', () => {
+  for (const crafted of ['CREATE TABLE "x""; DROP TABLE pods; --"(a);', 'CREATE TRIGGER t AFTER INSERT ON runs BEGIN DELETE FROM pods; END;', 'CREATE VIEW v AS SELECT 1;']) {
+    const root = directory(); profile45(root, crafted)
+    expect(() => open(root)).toThrow('does not have the schema 45 it declares')
+    const database = new DatabaseSync(join(root, 'control.sqlite'), { readOnly: true })
+    try { expect(database.prepare('SELECT user_version, (SELECT count(*) FROM pods) AS pods, (SELECT count(*) FROM workflows) AS workflows FROM pragma_user_version').get()).toEqual({ user_version: 45, pods: 1, workflows: 1 }) }
+    finally { database.close() }
+  }
+})
+
 it('refuses a profile older than schema 45 without changing its bytes', () => {
   const root = directory(); const database = new DatabaseSync(join(root, 'control.sqlite'))
   database.exec('CREATE TABLE pods(id TEXT PRIMARY KEY); PRAGMA user_version=44;'); database.close()
