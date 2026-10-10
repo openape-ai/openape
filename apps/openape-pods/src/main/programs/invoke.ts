@@ -3,7 +3,7 @@ import type { AgentConnection, GrantObserver, GrantLedgerPort, RunGrantTokens } 
 import type { PodResource } from '../../contracts/resources'
 import { parseProgramArgv } from '../../contracts/programs'
 import type { ProgramAssignment } from '../../contracts/programs'
-import type { SandboxLevel } from '../../contracts/sandbox'
+import type { SandboxReach } from '../../contracts/sandbox'
 import { prepareProgramAuthorization } from './session'
 import type { CredentialCache } from '../connections/cache'
 import { PodToolBroker } from '../broker/tools'
@@ -22,19 +22,20 @@ export function programRequest(resources: PodResource[], podId: string, capabili
   return { id: resource.id, assignment: resource.configuration as unknown as ProgramAssignment, argv: parseProgramArgv(request.argv) }
 }
 
-/** How one call reaches the Pod identity, its grants and its sandbox level. */
-export interface ProgramCallAccess { connection: AgentConnection, ledger?: GrantLedgerPort, level: SandboxLevel, observe?: GrantObserver, tokens?: RunGrantTokens }
+/** How one call reaches the Pod identity, its grants and its sandbox reach. */
+export interface ProgramCallAccess { connection: AgentConnection, ledger?: GrantLedgerPort, reach: SandboxReach, observe?: GrantObserver, tokens?: RunGrantTokens }
 
 /** Runs one application command: the sandbox must contain the application and a grant must cover the command. */
 export async function invokeProgram(resources: PodResource[], podId: string, body: unknown, helper: string, root: string, credentials: CredentialCache, lease: BrokerLease, access: ProgramCallAccess, action?: 'move') {
   const { id, assignment, argv } = programRequest(resources, podId, lease.capabilities, body)
   // Authorization runs before any process starts; for the archive port a refusal here is evidence that nothing moved.
   const { authority, authorization } = await prepareProgramAuthorization(assignment, access.connection, argv, access.observe, access.ledger, action, access.tokens).catch((error: unknown) => { throw action ? archiveRefusal(error) : error })
-  const proxy = assignment.networkHosts.length && access.level === 'isolated' ? await startMailProxy(lease.signal, undefined, assignment.networkHosts) : undefined
+  // At the owner level the program has the owner's network reach; its network hosts and their proxy apply only when isolated.
+  const proxy = assignment.networkHosts.length && access.reach.level === 'isolated' ? await startMailProxy(lease.signal, undefined, assignment.networkHosts) : undefined
   try {
     const broker = new PodToolBroker(helper, root, authority, credentials)
     const launch = programLaunch(assignment)
-    return await broker.execute({ id, ...authorization, level: access.level, capability: assignment.capability, executable: launch.executable, executableHash: launch.executableHash, entryFiles: assignment.entryFiles, prefix: launch.prefix, programState: { id: assignment.stateId, podId, applicationId: id }, cacheArgument: assignment.cacheArgument, runtimeDirectories: launch.runtimeDirectories, runtimeEnvironment: assignment.runtime?.environment, environment: { ...assignment.environment, ...proxy?.environment }, networkPorts: proxy ? [proxy.port] : [], maxOutputBytes: 200000 }, { toolId: id, argv: [assignment.cliId, ...argv] }, lease)
+    return await broker.execute({ id, ...authorization, reach: access.reach, capability: assignment.capability, executable: launch.executable, executableHash: launch.executableHash, entryFiles: assignment.entryFiles, prefix: launch.prefix, programState: { id: assignment.stateId, podId, applicationId: id }, cacheArgument: assignment.cacheArgument, runtimeDirectories: launch.runtimeDirectories, runtimeEnvironment: assignment.runtime?.environment, environment: { ...assignment.environment, ...proxy?.environment }, networkPorts: proxy ? [proxy.port] : [], maxOutputBytes: 200000 }, { toolId: id, argv: [assignment.cliId, ...argv] }, lease)
   }
   finally { await proxy?.close() }
 }

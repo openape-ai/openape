@@ -1,10 +1,11 @@
-import type { OpenApeCliAuthorizationDetail } from '@openape/core'
+import type { OpenApeCliAuthorizationDetail, OpenApeExecutionContext } from '@openape/core'
 import { canonicalizeCliPermission, sameBrokeredGrant } from '@openape/grants'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { LoadedAdapter } from '@openape/apes'
 import { approvalURL } from '../../contracts/activity'
 import { gateAudience } from '../../contracts/gates'
-import { parsePodGrant } from '../../contracts/grants'
+import { gateActions } from '../../contracts/network-capabilities'
+import { parsePodGrant, grantTypes  } from '../../contracts/grants'
 import type { GrantOrigin, GrantState, GrantType, PodGrant } from '../../contracts/grants'
 import type { ProgramAssignment } from '../../contracts/programs'
 import { grantCoverage } from '../broker/authorization'
@@ -15,28 +16,33 @@ import type { GrantLedgerCommand } from '../../worker/resources/grants'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
 
 /** What one grant request asks for, as the Pod identity: the authorization details and the adapter they belong to. */
-export interface GrantSpec { cliId: string, details: OpenApeCliAuthorizationDetail[], executionContext: { adapter_id: string, adapter_version: string, adapter_digest: string }, display: string }
+/** A single command keeps its argv and argv hash in the execution context, so an exact-command grant can bind to it. */
+export interface GrantSpec { cliId: string, details: OpenApeCliAuthorizationDetail[], executionContext: Partial<OpenApeExecutionContext>, display: string }
 export interface PodConnection extends AgentConnection { owner: string }
 export interface GrantResult { grant: PodGrant, approval: string | null }
-/** A decision made in the owner session; `grant` is the ledger entry when the grant is a Pod grant, not a network approval item. */
-export interface GrantDecision { id: string, podId: string, state: GrantState, grantType: GrantType, approvedInSession: boolean, grant: PodGrant | null }
+/**
+ * A decision made in the owner session; `grant` is the ledger entry when the grant is a Pod grant, not a network approval
+ * item. `requestedType` is what the Pod asked for; `widened` records that the owner explicitly chose a wider type.
+ */
+export interface GrantDecision { id: string, podId: string, state: GrantState, grantType: GrantType, requestedType: GrantType, widened: boolean, approvedInSession: boolean, grant: PodGrant | null }
 
 const grantIdPattern = /^[\w-]{1,128}$/
 const riskOrder = ['low', 'medium', 'high', 'critical']
 
-function context(adapter: LoadedAdapter): GrantSpec['executionContext'] {
+function context(adapter: LoadedAdapter): Partial<OpenApeExecutionContext> {
   return { adapter_id: adapter.adapter.cli.id, adapter_version: adapter.adapter.cli.version ?? adapter.adapter.schema, adapter_digest: adapter.digest }
 }
 
 /**
  * The details of a whole-program grant: one per action and first resource, without selector, so every operation of
  * that action on that resource is covered. Operations the adapter marks as exact commands and generic execution are
- * never covered: such a group is left out and its commands need their own grant.
+ * never covered: such a group is left out and its commands need their own grant. Mail moves (gate actions) are left out
+ * as well; they run only through the archive port.
  */
 export function programCoverage(adapter: LoadedAdapter): OpenApeCliAuthorizationDetail[] {
   const groups = new Map<string, { action: string, resource: string, risk: string, exact: boolean }>()
   for (const operation of adapter.adapter.operations) {
-    if (operation.id === '_generic.exec') continue
+    if (operation.id === '_generic.exec' || gateActions.includes(operation.action)) continue
     const resource = operation.resource_chain[0]?.split(':', 1)[0]
     if (!resource) continue
     const key = `${operation.action}\n${resource}`
@@ -55,7 +61,7 @@ export function programCoverage(adapter: LoadedAdapter): OpenApeCliAuthorization
 export async function commandSpec(adapter: LoadedAdapter, argv: string[]): Promise<GrantSpec> {
   const resolved = await resolveCommand(adapter, argv)
   if (resolved.detail.operation_id === '_generic.exec') throw new Error('Generic program execution cannot be granted')
-  return { cliId: adapter.adapter.cli.id, details: [resolved.detail], executionContext: context(adapter), display: resolved.detail.display }
+  return { cliId: adapter.adapter.cli.id, details: [resolved.detail], executionContext: resolved.executionContext, display: resolved.detail.display }
 }
 
 /** A whole program, or one command when `argv` is given, of an application assigned to the Pod. */
@@ -84,6 +90,11 @@ export async function httpSpec(adapterPath: string, origin: string, methods?: st
   }
   const detail = { type: 'openape_cli' as const, cli_id: 'pod-http', operation_id: 'request', resource_chain: [{ resource: 'https-origin', selector: { url: origin } }], action: 'request', permission: '', display: `HTTP requests to ${origin}`, risk: 'high' as const }
   return { cliId: 'pod-http', details: [{ ...detail, permission: canonicalizeCliPermission(detail) }], executionContext: context(adapter), display: detail.display }
+}
+
+function typeOf(value: string): GrantType {
+  if (!grantTypes.includes(value as GrantType)) throw new Error(`Unexpected grant type ${value}`)
+  return value as GrantType
 }
 
 function stateOf(status: string): GrantState {
@@ -117,24 +128,32 @@ export class PodGrants {
     const issuer = connection.decisionIssuer ?? connection.issuer
     const existing = await this.dependencies.ledger({ type: 'same', podId, issuer, subject: connection.subject, details: spec.details }) as PodGrant | null
     if (existing) {
-      const current = await this.record(podId, connection, await this.read(connection, existing.id, signal), origin)
+      const current = await this.record(podId, connection, await this.read(connection, existing.id, signal), null)
       if (['pending', 'approved'].includes(current.state)) return this.result(current)
     }
-    const created = await connectionRequest(connection.issuer, '/api/grants', { requester: connection.subject, target_host: connection.targetHost, audience: 'shapes', grant_type: 'always', permissions: spec.details.map(detail => detail.permission), authorization_details: spec.details, execution_context: spec.executionContext, reason: `${spec.display} (Pod ${podId})`.slice(0, 4096) }, signal, await connection.accessToken())
+    const response = await fetch(`${connection.issuer}/api/grants`, { method: 'POST', redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]), headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await connection.accessToken()}` }, body: JSON.stringify({ requester: connection.subject, target_host: connection.targetHost, audience: 'shapes', grant_type: 'always', permissions: spec.details.map(detail => detail.permission), authorization_details: spec.details, execution_context: spec.executionContext, reason: `${spec.display} (Pod ${podId})`.slice(0, 4096) }) })
+    // 201 is a new request; 200 is an existing approved grant the IdP reused, which stays the Pod's own and never takes the network as origin.
+    const created = await readJSON(response)
     if (typeof created.id !== 'string' || !grantIdPattern.test(created.id)) throw new Error('Invalid grant response; inspect the Pod grants before retrying')
-    return this.result(await this.record(podId, connection, await this.read(connection, created.id, signal), origin))
+    return this.result(await this.record(podId, connection, await this.read(connection, created.id, signal), response.status === 201 ? origin : null))
   }
 
-  /** Approves as the signed-in owner. Without an active owner session this throws before any IdP call. */
+  /**
+   * Approves as the signed-in owner, as the type the Pod requested (a timed grant with its requested duration). Only an
+   * explicit `grantType` of the owner session approves a different type, like the owner choosing it on the IdP page;
+   * the decision reports it as widened. Without an active owner session this throws before any IdP call.
+   */
   async approve(owner: OwnerSession | null, podId: string, grantId: string, grantType: GrantType | undefined, signal: AbortSignal): Promise<GrantDecision> {
     const { connection, issuer, bearer, grant } = await this.decidable(owner, podId, grantId, signal)
-    if (grant.status === 'approved') return this.decided(podId, connection, grant, false)
+    const requested = typeOf(grant.request.grant_type)
+    if (grant.status === 'approved') return this.decided(podId, connection, grant, false, requested)
     if (grant.status !== 'pending') throw new Error(`This grant is ${grant.status}; request it again instead`)
-    const type = grantType ?? (grant.request.grant_type === 'once' ? 'once' : 'always')
-    const reply = await connectionRequest(issuer, `/api/grants/${encodeURIComponent(grantId)}/approve`, { grant_type: type }, signal, bearer)
+    const type = grantType ?? requested
+    if (type === 'timed' && (requested !== 'timed' || typeof grant.request.duration !== 'number')) throw new Error('A timed approval needs the duration the Pod requested')
+    const reply = await connectionRequest(issuer, `/api/grants/${encodeURIComponent(grantId)}/approve`, { grant_type: type, ...(type === 'timed' ? { duration: grant.request.duration } : {}) }, signal, bearer)
     const approved = reply.grant as Grant | undefined
     if (approved?.id !== grantId || approved.status !== 'approved') throw new Error('The identity provider did not approve this grant')
-    return this.decided(podId, connection, approved, true)
+    return this.decided(podId, connection, approved, true, requested)
   }
 
   async deny(owner: OwnerSession | null, podId: string, grantId: string, signal: AbortSignal): Promise<GrantDecision> {
@@ -142,7 +161,7 @@ export class PodGrants {
     if (grant.status !== 'pending') throw new Error(`This grant is ${grant.status}; only a pending grant can be denied`)
     const denied = await connectionRequest(issuer, `/api/grants/${encodeURIComponent(grantId)}/deny`, {}, signal, bearer) as unknown as Grant
     if (denied.id !== grantId || denied.status !== 'denied') throw new Error('The identity provider did not deny this grant')
-    return this.decided(podId, connection, denied, false)
+    return this.decided(podId, connection, denied, false, typeOf(grant.request.grant_type))
   }
 
   /** Revokes as the requesting Pod identity, which only reduces authority and needs no owner session. */
@@ -168,9 +187,10 @@ export class PodGrants {
     return { connection, issuer, bearer, grant }
   }
 
-  private async decided(podId: string, connection: PodConnection, grant: Grant, inSession: boolean): Promise<GrantDecision> {
+  private async decided(podId: string, connection: PodConnection, grant: Grant, inSession: boolean, requestedType: GrantType): Promise<GrantDecision> {
     const recorded = grant.request.audience === 'shapes' && grantCoverage(grant).length ? await this.record(podId, connection, grant, null, inSession) : null
-    return { id: grant.id, podId, state: stateOf(grant.status), grantType: grant.request.grant_type === 'once' ? 'once' : 'always', approvedInSession: inSession, grant: recorded }
+    const grantType = typeOf(grant.request.grant_type)
+    return { id: grant.id, podId, state: stateOf(grant.status), grantType, requestedType, widened: grantType !== requestedType, approvedInSession: inSession, grant: recorded }
   }
 
   private async read(connection: AgentConnection, grantId: string, signal: AbortSignal): Promise<Grant> {
@@ -184,7 +204,7 @@ export class PodGrants {
     const cliId = details[0]?.cli_id
     if (!cliId || details.some(detail => detail.cli_id !== cliId)) throw new Error('A Pod grant covers exactly one program')
     const now = Date.now()
-    const value = parsePodGrant({ id: grant.id, podId, issuer: connection.decisionIssuer ?? connection.issuer, subject: connection.subject, cliId, details, display: details.map(detail => detail.display).join('; ').slice(0, 4096), grantType: grant.request.grant_type === 'once' ? 'once' : 'always', state: stateOf(grant.status), origin, approvedInSession, createdAt: typeof grant.created_at === 'number' ? grant.created_at * 1000 : now, updatedAt: now })
+    const value = parsePodGrant({ id: grant.id, podId, issuer: connection.decisionIssuer ?? connection.issuer, subject: connection.subject, cliId, details, display: details.map(detail => detail.display).join('; ').slice(0, 4096), grantType: typeOf(grant.request.grant_type), state: stateOf(grant.status), origin, approvedInSession, createdAt: typeof grant.created_at === 'number' ? grant.created_at * 1000 : now, updatedAt: now })
     await this.dependencies.ledger({ type: 'record', grant: value })
     return value
   }

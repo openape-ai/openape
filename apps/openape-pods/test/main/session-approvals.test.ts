@@ -6,7 +6,8 @@ import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { OwnerSession } from '../../src/main/connections/owner-session'
 import { invokeProgram } from '../../src/main/programs/invoke'
-import { prepareProgramAuthorization } from '../../src/main/programs/session'
+import { prepareProgramAuthorization, resolveProgram } from '../../src/main/programs/session'
+import { programWrite } from '../../src/worker/runs/program-effects'
 import type { ProgramAssignment } from '../../src/contracts/programs'
 import { closeProfiles, deniedPodId, identityProvider, issuer, owner, ownerToken, podId, podSubject, program, workerFixture } from './idp-fixture'
 
@@ -110,13 +111,13 @@ it('fans a network sandbox and its grants out to every member with the network a
 })
 
 /** An application with its own executable and the reviewed gh fixture adapter, assigned in the Pod sandbox. */
-function ghApplication(): { resource: Record<string, unknown>, assignment: ProgramAssignment } {
-  const executable = join(root, 'gh'); writeFileSync(executable, '#!/bin/sh\nexit 0\n', { mode: 0o700 })
-  const ghAdapter = resolve('../../packages/shapes/test/fixtures/gh.toml')
+function application(cliId: string, adapter: string): { resource: Record<string, unknown>, assignment: ProgramAssignment } {
+  const executable = join(root, cliId); writeFileSync(executable, '#!/bin/sh\nexit 0\n', { mode: 0o700 })
   const id = randomUUID()
-  const assignment = { type: 'program', name: 'gh', cliId: 'gh', executable, executableHash: createHash('sha256').update(readFileSync(executable)).digest('hex'), adapterPath: ghAdapter, adapterHash: createHash('sha256').update(readFileSync(ghAdapter)).digest('hex'), stateId: randomUUID(), capability: `tool.app_${id.replaceAll('-', '')}.invoke`, networkHosts: [], entryFiles: [], environment: {} } as ProgramAssignment
-  return { resource: { id, podId, revision: 1, kind: 'tool', state: 'ready', name: 'gh', configuration: assignment }, assignment }
+  const assignment = { type: 'program', name: cliId, cliId, executable, executableHash: createHash('sha256').update(readFileSync(executable)).digest('hex'), adapterPath: adapter, adapterHash: createHash('sha256').update(readFileSync(adapter)).digest('hex'), stateId: randomUUID(), capability: `tool.app_${id.replaceAll('-', '')}.invoke`, networkHosts: [], entryFiles: [], environment: {} } as ProgramAssignment
+  return { resource: { id, podId, revision: 1, kind: 'tool', state: 'ready', name: cliId, configuration: assignment }, assignment }
 }
+const ghApplication = () => application('gh', resolve('../../packages/shapes/test/fixtures/gh.toml'))
 
 it('lets a whole-program grant cover a new command of that program but not another program', async () => {
   const gh = ghApplication()
@@ -144,7 +145,7 @@ it('runs a program only when the sandbox allows it and a grant covers it', async
   const gh = ghApplication()
   const f = await workerFixture({ resources: () => [program, gh.resource] })
   const lease = (capabilities: string[]) => ({ capabilities, signal: AbortSignal.timeout(5000), assertCurrent: () => {} })
-  const call = (resources: Record<string, unknown>[], capabilities: string[]) => invokeProgram(resources as never, podId, { application: 'gh', argv: ['issue', 'list', '--repo', 'openape/monorepo'] }, '/fixture/helper', root, {} as never, lease(capabilities), { connection: f.connection(podId), ledger: f.grants.port(podId), level: 'isolated' })
+  const call = (resources: Record<string, unknown>[], capabilities: string[]) => invokeProgram(resources as never, podId, { application: 'gh', argv: ['issue', 'list', '--repo', 'openape/monorepo'] }, '/fixture/helper', root, {} as never, lease(capabilities), { connection: f.connection(podId), ledger: f.grants.port(podId), reach: { level: 'isolated', protectedPaths: [] } })
   // Sandbox allows, no grant: the Pod requests one and is refused while nobody approves; nothing is minted.
   await expect(call([gh.resource], [gh.assignment.capability])).rejects.toThrow('owner approval')
   expect(idp.state.tokens).toEqual([])
@@ -163,4 +164,54 @@ it('approves the runtime grant ahead of the first run, so the run starts without
   await run.call('shellClose')
   expect(f.approvals.filter(item => item.state === 'pending')).toEqual([])
   expect(idp.state.creates).toHaveLength(1); expect(idp.state.tokens).toEqual(['grant-1'])
+})
+
+it('never lets a whole-program grant or a script call move mail; only the archive port runs the move', async () => {
+  const mail = application('o365-cli', resolve('examples/network-mail-archive-shapes.toml'))
+  const f = await workerFixture({ resources: () => [program, mail.resource] })
+  await mcp(f, { action: 'grants', command: { type: 'request', target: { podId }, grants: { programs: [{ application: 'o365-cli' }] } } }, session())
+  const [grant] = f.ledger.list(podId)
+  expect(grant!.details.map(detail => detail.action)).toEqual(['read', 'login'])
+  const move = ['workflow', 'move', '--account', 'owner@example.test', '--message', 'm1', '--expected-version', 'v1', '--source-folder', 'inbox', '--destination', 'archive']
+  const lease = { capabilities: [mail.assignment.capability], signal: AbortSignal.timeout(5000), assertCurrent: () => {} }
+  // A script or its agent tool call: refused by the worker before anything is recorded, and by main before any grant.
+  await expect(programWrite([mail.resource] as never, podId, lease.capabilities, { application: 'o365-cli', argv: move })).rejects.toThrow('approved archive port')
+  await expect(invokeProgram([mail.resource] as never, podId, { application: 'o365-cli', argv: move }, '/fixture/helper', root, {} as never, lease, { connection: f.connection(podId), ledger: f.grants.port(podId), reach: { level: 'isolated', protectedPaths: [] } })).rejects.toThrow('approved archive port')
+  expect(idp.state.tokens).toEqual([])
+  // The archive port names the move explicitly and passes this check; it still needs its batch approval.
+  await expect(resolveProgram(mail.assignment, move, 'move')).resolves.toMatchObject({ write: true })
+})
+
+it('approves the requested grant type unless the owner session explicitly chooses another one', async () => {
+  const f = await workerFixture(); const owner = session()
+  const request = (grantType: string, extra: Record<string, unknown> = {}) => idp.foreign({ requester: podSubject(podId), target_host: `pods:${podId}`, grant_type: grantType, ...extra })
+  const once = request('once'); const timed = request('timed', { duration: 900 }); const widened = request('once')
+  expect(await mcp(f, { action: 'grants', command: { type: 'approve', podId, grantId: once } }, owner)).toMatchObject({ grantType: 'once', requestedType: 'once', widened: false })
+  expect(await mcp(f, { action: 'grants', command: { type: 'approve', podId, grantId: timed } }, owner)).toMatchObject({ grantType: 'timed', requestedType: 'timed', widened: false })
+  expect(await mcp(f, { action: 'grants', command: { type: 'approve', podId, grantId: widened, grantType: 'always' } }, owner)).toMatchObject({ grantType: 'always', requestedType: 'once', widened: true })
+  expect(idp.state.decisions.map(decision => decision.body)).toEqual([{ grant_type: 'once' }, { grant_type: 'timed', duration: 900 }, { grant_type: 'always' }])
+})
+
+it('binds an exact-command grant to its argv so that exact command can run', async () => {
+  const gh = ghApplication()
+  const f = await workerFixture({ resources: () => [program, gh.resource] })
+  const argv = ['repo', 'create', 'example']
+  await mcp(f, { action: 'grants', command: { type: 'request', target: { podId }, grants: { programs: [{ application: 'gh', argv }] } } }, session())
+  expect(idp.state.creates[0]!.execution_context).toMatchObject({ argv: ['gh', ...argv], argv_hash: expect.any(String) })
+  const { authority, authorization } = await prepareProgramAuthorization(gh.assignment, f.connection(podId), argv, undefined, f.grants.port(podId))
+  await authority.authorize(authorization, AbortSignal.timeout(5000))
+  expect(idp.state.tokens).toEqual(['grant-1'])
+})
+
+it('keeps a Pod\'s own grant and HTTP destination when a network declares the same origin', async () => {
+  const own = { id: randomUUID(), podId, revision: 1, kind: 'tool', state: 'ready', name: 'https://chat.example.test', configuration: { type: 'http', origin: 'https://chat.example.test', methods: ['GET'], capability: 'tool.http_own.request', authentication: { type: 'ddisaAgent', credential: 'agent_key', subject: 'agent@example.test', issuer } } }
+  const f = await workerFixture({ resources: () => [program, own] }); const owner = session(); const networkId = randomUUID()
+  idp.state.reuse = true
+  await mcp(f, { action: 'grants', command: { type: 'request', target: { podId }, grants: { http: [{ origin: 'https://chat.example.test', methods: ['POST'] }] } } }, owner)
+  Object.assign(f.worker, { networks: async () => ({ networks: [{ id: networkId, revision: 1, state: 'paused', podIds: [podId] }] }) })
+  const result = await mcp(f, { action: 'sandbox', command: { type: 'apply', target: { networkId, revision: 1 }, sandbox: { http: [{ origin: 'https://chat.example.test', methods: ['POST'] }] }, grants: { http: [{ origin: 'https://chat.example.test', methods: ['POST'] }] } } }, owner) as { kept: { podId: string, entry: string }[] }
+  // The IdP returned the Pod's existing grant (200): it stays the Pod's own and is never revoked with the network.
+  expect(f.ledger.list(podId)).toEqual([expect.objectContaining({ id: 'grant-1', origin: null })])
+  expect(f.bound).toEqual([])
+  expect(result.kept).toEqual([{ podId, entry: 'https://chat.example.test keeps its existing methods GET' }])
 })

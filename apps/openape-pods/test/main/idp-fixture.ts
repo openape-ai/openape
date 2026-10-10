@@ -26,7 +26,7 @@ export interface Decision { action: 'approve' | 'deny' | 'revoke', id: string, b
 export function identityProvider() {
   const keys = generateKeyPairSync('ed25519')
   const grants = new Map<string, StubGrant>()
-  const state = { approvals: [] as string[], decisions: [] as Decision[], tokens: [] as string[], creates: [] as Record<string, unknown>[], revokedTokens: [] as string[] }
+  const state = { reuse: false, approvals: [] as string[], decisions: [] as Decision[], tokens: [] as string[], creates: [] as Record<string, unknown>[], revokedTokens: [] as string[] }
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
   const fetch = vi.fn(async (input: string | URL, init?: RequestInit) => {
     const url = new URL(String(input))
@@ -38,8 +38,12 @@ export function identityProvider() {
     if (url.pathname === '/api/grants' && init?.method === 'POST') {
       const request = JSON.parse(String(init.body)) as Record<string, unknown>
       const id = `grant-${grants.size + 1}`
-      state.creates.push(request); grants.set(id, { status: 'pending', request })
-      return json({ id, status: 'pending' })
+      state.creates.push(request)
+      // Like the IdP: an approved continuing grant covering the same details is returned again (200) instead of a new one (201).
+      const reused = [...grants.entries()].find(([, grant]) => grant.status === 'approved' && grant.request.grant_type === 'always' && request.grant_type === 'always' && grant.request.requester === request.requester && grant.request.target_host === request.target_host && JSON.stringify(grant.request.authorization_details) === JSON.stringify(request.authorization_details))
+      if (reused && state.reuse) return json({ id: reused[0], status: 'approved' })
+      grants.set(id, { status: 'pending', request })
+      return json({ id, status: 'pending' }, 201)
     }
     const [, , , id, action] = url.pathname.split('/')
     const grant = grants.get(id ?? '')
@@ -120,7 +124,7 @@ export async function workerFixture(options: { pods?: string[], resources?: () =
   const credentials = { readScriptSecret: vi.fn(async () => 'SYNTHETIC_SECRET') }
   Object.assign(worker, { root: '/fixture', connections, credentials, dispatch })
   const grants = (worker as unknown as { podGrants: () => import('../../src/main/grants/pod-grants').PodGrants }).podGrants()
-  Object.assign(worker, { programs: new ProgramManager('/fixture/authentication', '/fixture/helper', credentials as never, connections, async () => resources() as never, command => dispatch({ program: command }), grants, id => ({ connection: async () => connection(id) as never, ledger: grants.port(id), level: async () => 'isolated' as const })) })
+  Object.assign(worker, { programs: new ProgramManager('/fixture/authentication', '/fixture/helper', credentials as never, connections, async () => resources() as never, command => dispatch({ program: command }), grants, id => ({ connection: async () => connection(id) as never, ledger: grants.port(id), reach: async () => ({ level: 'isolated' as const, protectedPaths: [] }) })) })
   const service = worker as unknown as { executeService: (request: ServiceRequest) => Promise<unknown> }
   const call = (scope: ServiceRequest['scope'], kind: ServiceRequest['kind'], body: unknown = {}) => service.executeService({ id: randomUUID(), kind, scope, body })
   const start = (id: string, runId = randomUUID(), reason = 'schedule', name?: string) => {

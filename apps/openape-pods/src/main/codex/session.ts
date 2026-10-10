@@ -99,15 +99,17 @@ export class McpOwnerSessions {
   }
 
   disconnect(peer: McpPeer): void {
-    this.remove(peer)
+    void this.remove(peer)
     this.outcomes.delete(peer)
     if (this.pending?.peer === peer) this.pending.controller.abort(new Error('The MCP connection closed during sign-in'))
   }
 
-  end(): void {
-    for (const peer of [...this.sessions.keys()]) this.remove(peer)
+  /** Ends every session; the returned promise settles when the tokens Pods minted are revoked at the IdP. */
+  end(): Promise<void> {
+    const closing = Array.from(this.sessions.keys(), peer => this.remove(peer))
     this.outcomes.clear()
     this.pending?.controller.abort(new Error('The owner ended the MCP session'))
+    return Promise.all(closing).then(() => undefined)
   }
 
   view(): McpSessionView {
@@ -124,17 +126,19 @@ export class McpOwnerSessions {
 
   private expire(peer: McpPeer, session: Session): void {
     if (!this.live(session)) this.outcomes.set(peer, { state: 'expired', via: session.via })
-    this.remove(peer)
+    void this.remove(peer)
   }
 
-  private remove(peer: McpPeer): void {
-    this.sessions.get(peer)?.owner?.close()
+  // Closing never rejects: a failed revocation is logged by the session itself.
+  private remove(peer: McpPeer): Promise<void> {
+    const owner = this.sessions.get(peer)?.owner
     this.sessions.delete(peer)
+    return owner ? owner.close() : Promise.resolve()
   }
 
   private establish(peer: McpPeer, owner: OwnerSession | null, expiresAt: number, via: McpSessionVia): void {
     const secret = randomBytes(32)
-    this.remove(peer)
+    void this.remove(peer)
     this.outcomes.delete(peer)
     this.sessions.set(peer, { secret, expiresAt, owner, via })
     peer.send({ session: secret.toString('base64url'), expiresAt })
@@ -164,7 +168,7 @@ export class McpOwnerSessions {
       return reason
     }
     if (!owner) return null
-    if (peer.closed) { owner.close(); return null }
+    if (peer.closed) { void owner.close(); return null }
     if (this.pending?.peer === peer) this.pending.controller.abort(new Error('Signed in with the apes login'))
     this.establish(peer, owner, expiresAt, 'apes')
     return true
@@ -202,7 +206,7 @@ export class McpOwnerSessions {
     if (phone) {
       pending.link = phone.link; pending.expiresAt = phone.expiresAt
       finish(phone.session.then((owner) => {
-        if (peer.closed || controller.signal.aborted) { owner.close(); throw controller.signal.reason ?? new Error('The MCP connection closed during sign-in') }
+        if (peer.closed || controller.signal.aborted) { void owner.close(); throw controller.signal.reason ?? new Error('The MCP connection closed during sign-in') }
         this.establish(peer, owner, expiresAt, 'phone')
       }))
       return
@@ -233,7 +237,7 @@ export class McpOwnerSessions {
     const owner = await this.dependencies.login(expiresAt, signal)
     let accepted = false
     try { accepted = !peer.closed && !signal.aborted && await this.dependencies.confirm(signal) && !peer.closed && !signal.aborted }
-    finally { if (!accepted) owner?.close() }
+    finally { if (!accepted && owner) await owner.close() }
     if (!accepted) throw new SignInEnded('denied', 'The owner declined the MCP session in the OpenApe Pods app')
     this.establish(peer, owner, expiresAt, 'browser')
   }
