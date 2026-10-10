@@ -1833,6 +1833,8 @@
   "Invalid HTTP authentication": "Ungültige HTTP-Authentifizierung",
   "HTTP authentication needs the DDISA agent email": "Die HTTP-Authentifizierung benötigt die E-Mail-Adresse des DDISA-Agenten",
   "DDISA agent authentication failed ({p0})": "Die DDISA-Agent-Authentifizierung ist fehlgeschlagen ({p0})",
+  "HTTP authentication exchange must be \"sp\"": "Der Token-Tausch der HTTP-Authentifizierung muss \"sp\" sein",
+  "Service sign-in at {p0} failed ({p1})": "Die Anmeldung beim Dienst {p0} ist fehlgeschlagen ({p1})",
   "DDISA agent authentication returned an invalid token": "Die DDISA-Agent-Authentifizierung lieferte einen ungültigen Token",
   "This HTTP destination authenticates as its assigned DDISA agent; remove the Authorization header": "Dieses HTTP-Ziel authentifiziert sich als zugewiesener DDISA-Agent; entferne den Authorization-Header",
   "DDISA agent authentication is unavailable": "Die DDISA-Agent-Authentifizierung ist nicht verfügbar",

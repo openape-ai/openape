@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getAuthorizedBearer } from '../src/bearer'
-import { exchangeForSpToken } from '../src/exchange'
+import { exchangeForSpToken, requestSpToken } from '../src/exchange'
 import { loadSpToken, saveIdpAuth, saveSpToken } from '../src/storage'
 import { AuthError } from '../src/types'
 
@@ -70,6 +70,37 @@ describe('exchangeForSpToken', () => {
         { endpoint: 'https://plans.openape.ai', aud: 'plans.openape.ai' },
       ),
     ).rejects.toThrow(AuthError)
+  })
+
+  it('keeps the AuthError contract when the network fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('fetch failed'))
+    await expect(
+      exchangeForSpToken(
+        { idp: 'x', access_token: 't', email: 'e', expires_at: 9 },
+        { endpoint: 'https://plans.openape.ai', aud: 'plans.openape.ai' },
+      ),
+    ).rejects.toMatchObject({ name: 'AuthError', status: 0 })
+  })
+})
+
+describe('requestSpToken', () => {
+  it('exchanges through the given transport without writing the token cache', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    const signal = new AbortController().signal
+    const transport = vi.fn(async (_url: string, _init: RequestInit) => new Response(JSON.stringify({ access_token: 'sp-memory', token_type: 'Bearer', expires_at: 5000, aud: 'repos.example.test' }), { status: 201 }))
+
+    const token = await requestSpToken('idp-subject', { endpoint: 'https://repos.example.test/', aud: 'repos.example.test' }, { transport, signal }, 1000)
+
+    expect(transport).toHaveBeenCalledWith('https://repos.example.test/api/cli/exchange', expect.objectContaining({ method: 'POST', signal }))
+    expect(JSON.parse(String(transport.mock.calls[0]![1].body))).toEqual({ subject_token: 'idp-subject' })
+    expect(token).toMatchObject({ access_token: 'sp-memory', expires_at: 5000, aud: 'repos.example.test' })
+    expect(loadSpToken('repos.example.test')).toBeNull()
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('propagates transport failures unchanged so callers can classify them', async () => {
+    const failure = new Error('synthetic transport failure')
+    await expect(requestSpToken('idp-subject', { endpoint: 'https://repos.example.test', aud: 'repos.example.test' }, { transport: async () => { throw failure } })).rejects.toBe(failure)
   })
 })
 

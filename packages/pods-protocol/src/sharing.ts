@@ -16,7 +16,7 @@ export interface PortableApplication {
 }
 export interface PortableBinding { alias: string, input: string }
 export interface PortableApplicationBinding { alias: string, requirement: string, account: string, environment: PortableBinding[] }
-export interface PortableHttpAuthentication { type: 'ddisaAgent', credential: string, subject: string, issuer: string }
+export interface PortableHttpAuthentication { type: 'ddisaAgent', credential: string, subject: string, issuer: string, exchange?: 'sp' }
 export type PortableSchedule = { kind: 'interval', seconds: number } | { kind: 'daily', time: string, timezone: string }
 export type PortableAccess =
   | { kind: 'directory', alias: string, input: string, access: 'read' | 'readWrite' }
@@ -192,8 +192,8 @@ function access(value: unknown): PortableAccess {
     if (!methods.length) fail('HTTP access requires methods')
     unique(methods)
     if (item.authentication !== null) {
-      const authentication = fields(item.authentication, ['type', 'credential', 'subject', 'issuer'])
-      if (authentication.type !== 'ddisaAgent') fail('unsupported HTTP authentication')
+      const authentication = fields(item.authentication, ['type', 'credential', 'subject', 'issuer'], ['exchange'])
+      if (authentication.type !== 'ddisaAgent' || (authentication.exchange !== undefined && authentication.exchange !== 'sp')) fail('unsupported HTTP authentication')
       key(authentication.credential); key(authentication.subject); key(authentication.issuer)
     }
   }
