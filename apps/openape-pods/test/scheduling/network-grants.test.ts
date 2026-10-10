@@ -44,3 +44,33 @@ it('revokes the grants and removes the sandbox a network handed to its members w
   expect(f.resources.list(consumer).find(item => item.id === resource)?.state).toBe('revoked')
   expect(ledger.released()).toEqual({ grants: [], resources: [] })
 })
+
+it('returns a member to its own sandbox when the network that raised it to owner is archived or revised', async () => {
+  const f = networkFixture()
+  const source = f.pod('Source', { takes: [], gives: ['mail'], summary: 'Finds mail' }, async () => {})
+  const consumer = f.pod('Consumer', { takes: ['mail'], gives: [], summary: 'Posts mail' }, async () => {})
+  const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, { podId: consumer, source: null, serialCase: false }], ['mail'])
+  const ledger = new GrantLedger(f.store)
+  const own = f.resources.assignHttp(consumer, { origin: 'https://own.example.com', methods: ['GET'] }, f.resources.epoch(consumer))
+  ledger.level(consumer, 'pod', null, 'isolated')
+  const networkOrigin = f.resources.assignHttp(consumer, { origin: 'https://chat.example.com', methods: ['POST'] }, f.resources.epoch(consumer))
+  ledger.execute({ type: 'networkResource', networkId: id, revision: 1, podId: consumer, resourceId: networkOrigin })
+  const ownOnly = { level: 'isolated', sources: [{ source: 'pod', level: 'isolated' }] }
+  ledger.level(consumer, `network:${id}`, 0, 'owner')
+  expect(ledger.sandbox(consumer)).toEqual(ownOnly)
+  ledger.level(consumer, `network:${id}`, 1, 'owner')
+  expect(ledger.sandbox(consumer).level).toBe('owner')
+
+  const review = f.engine.execute({ type: 'archivePreview', id, revision: 1 }).archiveReview!
+  f.engine.execute({ type: 'archiveNetwork', id, revision: 1, expectedFingerprint: review.fingerprint })
+  // A declaration that read the network before its archive and records the level afterwards.
+  ledger.level(consumer, `network:${id}`, 1, 'owner')
+  expect(ledger.sandbox(consumer)).toEqual(ownOnly)
+
+  const state = (podId: string) => ({ resources: f.resources.list(podId), epoch: f.resources.epoch(podId) }) as ResourceState
+  await releaseArchivedNetworkGrants({ grants: {} as PodGrants, ledger: async command => ledger.execute(command), resources: async podId => state(podId), revokeResource: async (podId, resourceId, revision) => f.resources.revoke(podId, resourceId, revision) }, AbortSignal.timeout(5000))
+  expect(f.store.db.prepare('SELECT source FROM pod_sandbox WHERE pod_id=?').all(consumer).map(item => item.source)).toEqual(['pod'])
+  expect(ledger.sandbox(consumer)).toEqual(ownOnly)
+  expect(f.resources.list(consumer).find(item => item.id === networkOrigin)?.state).toBe('revoked')
+  expect(f.resources.list(consumer).find(item => item.id === own)?.state).toBe('ready')
+})

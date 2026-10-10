@@ -5,25 +5,37 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { OwnerSession } from '../../src/main/connections/owner-session'
 import type { OwnerSessionTokens } from '../../src/main/connections/owner-session'
-import { ownerProtectedPaths, sandboxPolicy } from '../../src/worker/runtime/sandbox'
+import { ownerPersistencePaths, ownerProtectedPaths, sandboxPolicy } from '../../src/worker/runtime/sandbox'
 
 const roots: string[] = []
 afterEach(() => { vi.useRealTimers(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
 const policy = { executable: '/opt/fixture/bin/tool', workspace: '/Users/owner/Library/Application Support/OpenApe Pods/profile/pods/p/workspace', readFiles: ['/opt/fixture/share/roots.pem'], runtimeDirectories: ['/opt/fixture/runtime'], readDirectories: ['/Users/owner/Documents'], writeDirectories: ['/Users/owner/Library/Application Support/OpenApe Pods/profile/credentials/temporary/state'] }
 const protectedPaths = ['/Users/owner/Library/Application Support/OpenApe Pods', '/Users/owner/.config/apes', '/Users/owner/Library/Keychains']
+const persistencePaths = ['/Users/owner/Library/LaunchAgents', '/Users/owner/.zshrc', '/Library/LaunchDaemons']
 
 it('keeps the isolated profile closed by default and the owner profile open except the protected owner paths', () => {
   expect(sandboxPolicy(policy)).toContain('(deny default)')
-  const owner = sandboxPolicy({ ...policy, reach: { level: 'owner', protectedPaths } })
+  const owner = sandboxPolicy({ ...policy, reach: { level: 'owner', protectedPaths, persistencePaths } })
   const lines = owner.trim().split('\n')
   expect(lines[1]).toBe('(allow default)')
-  // The last matching rule wins: protected paths are denied, then only the program's own paths are opened again.
+  // The last matching rule wins: protected paths are denied, then only the program's own paths are opened again,
+  // and finally writes to the persistence locations and the folders leading to them are denied, even inside an assigned folder.
   expect(lines[2]).toBe(`(deny file-read* file-write* ${protectedPaths.map(path => `(subpath ${JSON.stringify(path)})`).join(' ')})`)
   expect(lines[3]).toBe(`(allow file-read* file-write* (subpath ${JSON.stringify(policy.workspace)}) (subpath ${JSON.stringify(policy.writeDirectories[0])}))`)
   expect(lines[4]).toContain('(literal "/opt/fixture/bin/tool")')
   expect(lines[4]).toContain('(subpath "/opt/fixture/runtime")')
-  expect(lines).toHaveLength(5)
-  expect(() => sandboxPolicy({ ...policy, reach: { level: 'owner', protectedPaths: [] } })).toThrow('protected paths')
+  expect(lines[5]).toBe('(deny file-write* (subpath "/Users/owner/Library/LaunchAgents") (subpath "/Users/owner/.zshrc") (subpath "/Library/LaunchDaemons") (literal "/Users") (literal "/Users/owner") (literal "/Users/owner/Library") (literal "/Library"))')
+  expect(lines).toHaveLength(6)
+  expect(() => sandboxPolicy({ ...policy, reach: { level: 'owner', protectedPaths: [], persistencePaths } })).toThrow('protected paths')
+  expect(() => sandboxPolicy({ ...policy, reach: { level: 'owner', protectedPaths } })).toThrow('protected paths')
+})
+
+it('denies writes to the launch, login, shell, SSH, preference and Pods app locations of the owner', () => {
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'pods-reach-home-'))); roots.push(home)
+  const paths = ownerPersistencePaths(home)
+  for (const path of ['Library/LaunchAgents', 'Library/Application Support/com.apple.backgroundtaskmanagementagent', 'Library/Preferences', '.zshrc', '.zprofile', '.zshenv', '.zlogin', '.bashrc', '.bash_profile', '.profile', '.config/fish', '.ssh/authorized_keys', '.ssh/config', 'Applications/OpenApe Pods.app', 'Library/Application Support/OpenApe Pods Rollback']) expect(paths).toContain(join(home, path))
+  for (const path of ['/Library/LaunchAgents', '/Library/LaunchDaemons', '/Applications/OpenApe Pods.app']) expect(paths).toContain(path)
+  expect(paths).not.toContain(join(home, 'Library/Keychains'))
 })
 
 it('protects the Pods profile, the base of all profiles, the apes login and the keychains', () => {
