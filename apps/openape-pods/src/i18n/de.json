@@ -3489,5 +3489,20 @@
   "Moving or archiving mail runs only through the approved archive port": "E-Mails verschieben oder archivieren läuft nur über den freigegebenen Archiv-Port",
   "A timed approval needs the duration the Pod requested": "Eine befristete Freigabe braucht die Dauer, die der Pod angefragt hat",
   "The owner sandbox level needs its protected paths": "Die Sandbox-Stufe Owner braucht ihre geschützten Pfade",
-  "Unexpected grant type {p0}": "Unerwarteter Grant-Typ {p0}"
+  "Unexpected grant type {p0}": "Unerwarteter Grant-Typ {p0}",
+  "A denied path is absolute or starts with ~/, without wildcards": "Ein gesperrter Pfad ist absolut oder beginnt mit ~/, ohne Platzhalter",
+  "Declare at most 32 denied paths": "Deklariere höchstens 32 gesperrte Pfade",
+  "Invalid sandbox view": "Ungültige Sandbox-Ansicht",
+  "Sandbox": "Sandbox",
+  "Owner level: programs reach what you reach on this Mac, except the Pods data and your apes login.": "Stufe Owner: Programme erreichen, was du auf diesem Mac erreichst, außer den Pods-Daten und deinem apes-Login.",
+  "Running as owner means full trust in this pod's code, including the possibility to act as you. The remaining protections only prevent direct access.": "Als Owner ausführen bedeutet volles Vertrauen in den Code dieses Pods, einschließlich der Möglichkeit, als du zu handeln. Die verbleibenden Schutzmaßnahmen verhindern nur den direkten Zugriff.",
+  "Isolated level: programs reach only this pod and what is assigned to it.":"Stufe isoliert: Programme erreichen nur diesen Pod und was ihm zugewiesen ist.",
+  "Denied paths": "Gesperrte Pfade",
+  "Allow {path} again": "{path} wieder erlauben",
+  "Denied by a network": "Von einem Netzwerk gesperrt",
+  "No denied paths": "Keine gesperrten Pfade",
+  "Path to deny": "Zu sperrender Pfad",
+  "~/.ssh or an absolute path": "~/.ssh oder ein absoluter Pfad",
+  "Deny": "Sperren",
+  "Programs of this pod can neither read nor write a denied path, at either level.": "Programme dieses Pods können einen gesperrten Pfad auf keiner Stufe lesen oder schreiben."
 }

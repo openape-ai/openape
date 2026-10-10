@@ -1338,11 +1338,21 @@ Owner decisions October 10, 2026 (issue 1455, M6d). The sandbox decides what a
 Pod can execute and reach: assigned applications as whole programs, HTTPS origins
 with methods, folders, secrets and the level `isolated` or `owner`. Grants decide
 what it may do. They are independent; a call needs a sandbox entry and a covering
-grant. `owner` gives the Pod's programs the owner's file and network reach (a
-permissive profile under the same supervising helper) except the Pods profile and
-its base, `~/.config/apes` and `~/Library/Keychains`, which stay denied while the
-program's own workspace, state and runtime are allowed again; it is about paths
-and reach only, and the Pod's DDISA identity stays the Pod. Application network
+grant. `owner` gives the Pod's programs the owner's OS reach (a permissive
+profile under the same supervising helper) except the Pods profile and its base
+(with the MCP control socket or its `/private/tmp/openape-pods-<uid>-<hash>/`
+fallback directory) and `~/.config/apes`, which stay denied for reading,
+writing and socket connections while the program's own workspace, state and
+runtime are allowed again; it is about paths and reach only, and the Pod's DDISA
+identity stays the Pod. These protections only prevent direct access: an
+owner-level program can plant code that later runs unsandboxed as the owner
+(launch agents, shell startup files, agent hooks) and act as the owner from
+there, so "run as owner" equals full trust in the Pod's code, including the
+possibility to act as the owner. Owner decision October 10, 2026: this is the
+owner's choice and no curated persistence list applies; the owner may configure a
+`deny` list per Pod and per network (members inherit it), closed for reading and
+writing at both levels with its ancestor folders unrenamable
+(`pod_sandbox_deny`, schema 44). Application network
 hosts and their proxy apply only at the isolated level, because the owner level
 has the owner's network reach. Mail moves (adapter actions `move` and `archive`)
 are never part of a whole-program grant and run only through the archive ports.
