@@ -51,30 +51,48 @@ ${network ? `(allow network-outbound ${network})` : ''}
 }
 /**
  * The owner level: everything the owner can do, then the protected paths denied, then the program's own workspace,
- * state and runtime allowed again (the last matching rule wins). Network reach is the owner's as well, so the
- * application network hosts and their proxy only apply at the isolated level.
+ * state and runtime allowed again, then writes to the persistence locations denied (the last matching rule wins, so
+ * no assigned folder reopens them). Network reach is the owner's as well, so the application network hosts and their
+ * proxy only apply at the isolated level.
  */
 function ownerPolicy(policy: RuntimePolicy, executable: string): string {
   const protectedPaths = policy.reach?.protectedPaths ?? []
-  if (!protectedPaths.length) throw new Error('The owner sandbox level needs its protected paths')
+  const persistence = policy.reach?.persistencePaths ?? []
+  if (!protectedPaths.length || !persistence.length) throw new Error('The owner sandbox level needs its protected paths')
   const denied = protectedPaths.map(path => `(subpath ${literal(path)})`).join(' ')
   const writes = [policy.workspace, ...(policy.writeDirectories ?? [])].map(path => `(subpath ${literal(path)})`).join(' ')
   const reads = [...(policy.readDirectories ?? []), ...policy.runtimeDirectories].map(path => `(subpath ${literal(path)})`).join(' ')
   const files = [executable, ...policy.readFiles.map(literal)].map(path => `(literal ${path})`).join(' ')
+  // The folders on the way to each location stay closed as well, so a location cannot be moved aside and replaced.
+  const ancestors = [...new Set(persistence.flatMap(path => path.split('/').slice(1, -1).map((_, index, parts) => `/${parts.slice(0, index + 1).join('/')}`)))]
+  const persistent = [...persistence.map(path => `(subpath ${literal(path)})`), ...ancestors.map(path => `(literal ${literal(path)})`)].join(' ')
   return `(version 1)
 (allow default)
 (deny file-read* file-write* ${denied})
 (allow file-read* file-write* ${writes})
 (allow file-read* file-map-executable ${files} ${reads})
+(deny file-write* ${persistent})
 `
 }
 
+const canonical = (path: string) => existsSync(path) ? realpathSync(path) : path
+
 /** What the owner level never reaches: this Pods profile (and the base that holds all profiles), the owner's apes login and the keychains. */
 export function ownerProtectedPaths(profileRoot: string, home: string): string[] {
-  const canonical = (path: string) => existsSync(path) ? realpathSync(path) : path
   const root = canonical(profileRoot)
   const base = join(root, '..')
   return [root, ...(existsSync(join(base, 'selected-profile.json')) ? [canonical(base)] : []), canonical(join(home, '.config/apes')), canonical(join(home, 'Library/Keychains'))]
+}
+
+const homePersistence = ['Library/LaunchAgents', 'Library/Application Support/com.apple.backgroundtaskmanagementagent', 'Library/Preferences', '.zshrc', '.zprofile', '.zshenv', '.zlogin', '.zlogout', '.bashrc', '.bash_profile', '.bash_login', '.profile', '.config/fish', '.ssh/authorized_keys', '.ssh/config', 'Applications/OpenApe Pods.app', 'Library/Application Support/OpenApe Pods Rollback']
+const systemPersistence = ['/Library/LaunchAgents', '/Library/LaunchDaemons', '/Library/StartupItems', '/private/var/at', '/Applications/OpenApe Pods.app']
+
+/**
+ * Where an owner-level program could leave code that starts after its run: launch agents and daemons, login items,
+ * cron and at jobs, shell startup files, SSH access, preferences, the installed Pods app and its rollback copy.
+ */
+export function ownerPersistencePaths(home: string): string[] {
+  return [...homePersistence.map(path => canonical(join(canonical(home), path))), ...systemPersistence.map(canonical)]
 }
 
 export interface ProcessDomain {

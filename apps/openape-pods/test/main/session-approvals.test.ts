@@ -8,6 +8,7 @@ import { OwnerSession } from '../../src/main/connections/owner-session'
 import { invokeProgram } from '../../src/main/programs/invoke'
 import { prepareProgramAuthorization, resolveProgram } from '../../src/main/programs/session'
 import { programWrite } from '../../src/worker/runs/program-effects'
+import { PodGroups } from '../../src/worker/workspace/groups'
 import type { ProgramAssignment } from '../../src/contracts/programs'
 import { closeProfiles, deniedPodId, identityProvider, issuer, owner, ownerToken, podId, podSubject, program, workerFixture } from './idp-fixture'
 
@@ -99,6 +100,13 @@ it('approves a waiting runtime grant in the session so the run continues without
 it('fans a network sandbox and its grants out to every member with the network as origin', async () => {
   const f = await workerFixture(); const owner = session(); const networkId = randomUUID()
   Object.assign(f.worker, { networks: async () => ({ networks: [{ id: networkId, revision: 3, state: 'paused', podIds: [podId, deniedPodId] }] }) })
+  // The ledger counts a network's sandbox level only for the stored network at its current revision.
+  const groups = new PodGroups(f.store); groups.execute({ type: 'organize', action: 'create', name: 'Synthetic company', revision: groups.view().revision })
+  f.store.db.prepare('INSERT INTO network_owners VALUES(?,?)').run(issuer, 'network-owner')
+  f.store.transaction(() => {
+    f.store.db.prepare('INSERT INTO networks(id,owner_issuer,owner_subject,group_id,name,revision,restore_nonce,created_at) VALUES(?,?,?,?,?,3,?,?)').run(networkId, issuer, 'network-owner', groups.view().groups.at(-1)!.id, 'Synthetic network', randomUUID(), Date.now())
+    f.store.db.prepare('INSERT INTO network_revisions VALUES(?,3,\'{}\',?,?)').run(networkId, 'a'.repeat(64), Date.now())
+  })
   const result = await mcp(f, { action: 'sandbox', command: { type: 'apply', target: { networkId, revision: 3 }, sandbox: { level: 'owner', http: [{ origin: 'https://chat.example.test', methods: ['POST'] }] }, grants: 'sandbox' } }, owner) as { outcomes: { podId: string, display: string, state: string }[] }
   // Each member gets its runtime grant and the HTTP grant, requested as itself and approved in the session.
   expect(result.outcomes.map(item => [item.podId, item.display.split(' ')[0], item.state])).toEqual([[podId, 'Run', 'approved'], [podId, 'HTTP', 'approved'], [deniedPodId, 'Run', 'approved'], [deniedPodId, 'HTTP', 'approved']])
