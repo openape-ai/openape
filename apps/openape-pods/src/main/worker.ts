@@ -54,6 +54,7 @@ import type { Administration } from './grants/administration'
 import { archiveRefusal, assertArchiveMove } from '../contracts/network-capabilities'
 import { ProgramManager } from './programs/manager'
 import { PodGrants, commandSpec, httpSpec } from './grants/pod-grants'
+import { runtimeArgv } from './grants/execution-context'
 import type { GrantSpec } from './grants/pod-grants'
 import type { OwnerSession } from './connections/owner-session'
 import { apesLogin } from './connections/apes-login'
@@ -928,7 +929,7 @@ export class FixtureWorker {
         const adapterPath = join(dist, 'vendor/pod-runtime-shapes.toml')
         const adapter = loadAdapter('pod-runtime', adapterPath)
         const name = grantPodName(context.name)
-        const argv = ['pod-runtime', 'run', '--pod', scope.podId, '--name', name, '--script', join(this.root, 'runs', scope.runId, 'run.mjs'), '--workspace', environment.workspace, '--home', environment.home, '--environment', JSON.stringify(visibleEnvironment(environment.environment))]
+        const argv = runtimeArgv({ podId: scope.podId, name, script: join(this.root, 'runs', scope.runId, 'run.mjs'), workspace: environment.workspace, home: environment.home, environment: visibleEnvironment(environment.environment) })
         const resolved = await resolveCommand(adapter, argv)
         const assignment = { grantId: '', command: { cliId: 'pod-runtime', adapterPath, adapterDigest: adapter.digest, argv, coverage: [resolved.detail] } }
         await authority.authorize(assignment, controller.signal, `Pod: ${name} (${scope.podId})\nRun the stored script inside this Pod's managed runtime. Script changes remain within separately assigned permissions. This approval does not enable a schedule.\nScript: ${join(this.root, 'runs', scope.runId, 'run.mjs')}\nWorkspace: ${environment.workspace}\nHOME: ${environment.home}`)

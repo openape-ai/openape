@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { vi } from 'vitest'
+import { parseBrokerGrantRequest } from '../../../../modules/nuxt-auth-idp/src/runtime/server/utils/broker-grant-request'
 import type { RunApproval } from '../../src/contracts/activity'
 import type { ServiceRequest } from '../../src/contracts/services'
 import { GrantLedger } from '../../src/worker/resources/grants'
@@ -22,6 +23,18 @@ export const owner = 'owner@example.test'
 export const ownerToken = 'OWNER_SESSION_TOKEN'
 export interface StubGrant { status: string, request: Record<string, unknown>, decided_by?: string }
 export interface Decision { action: 'approve' | 'deny' | 'revoke', id: string, bearer: string, body: Record<string, unknown> }
+
+/**
+ * What the owner's IdP rejects with 400 among the recorded grant requests: Pod identities are brokered, so it validates
+ * each one with this function. Checked after a scenario, so the stub keeps its timing.
+ */
+export async function brokerRejections(requests: Record<string, unknown>[]): Promise<string[]> {
+  const errors = await Promise.all(requests.map(async (request) => {
+    try { await parseBrokerGrantRequest(structuredClone(request), String(request.requester)); return null }
+    catch (error) { return `${String(request.reason)}: ${(error as Error).message}` }
+  }))
+  return errors.filter(error => error !== null)
+}
 
 export function identityProvider() {
   const keys = generateKeyPairSync('ed25519')

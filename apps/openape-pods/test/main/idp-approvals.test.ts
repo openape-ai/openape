@@ -3,8 +3,11 @@ import { randomUUID } from 'node:crypto'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AuthorityError } from '../../src/contracts/infrastructure'
 import { resolve } from 'node:path'
-import { httpSpec, runtimeSpec } from '../../src/main/grants/pod-grants'
-import { applicationId, closeProfiles, deniedPodId, identityProvider, issuer, podId, podSubject, sources, workerFixture } from './idp-fixture'
+import { typesafeOrigin } from '../../src/contracts/jev'
+import type { ProgramAssignment } from '../../src/contracts/programs'
+import { httpArgv, runtimeArgv } from '../../src/main/grants/execution-context'
+import { httpSpec, programSpec, runtimeSpec } from '../../src/main/grants/pod-grants'
+import { applicationId, brokerRejections, closeProfiles, deniedPodId, identityProvider, issuer, podId, podSubject, program, sources, workerFixture } from './idp-fixture'
 
 // Security contract (issue 1455, owner decisions October 9 and 10, 2026): without the owner's MCP session Pods
 // requests grants as the Pod identity and waits for the owner at the IdP; it never calls an approve endpoint
@@ -26,7 +29,7 @@ vi.mock('../../src/runtime/environment', () => ({ podEnvironment: async () => ({
 let idp: ReturnType<typeof identityProvider>
 beforeEach(() => { idp = identityProvider(); vi.stubGlobal('fetch', idp.fetch) })
 // Every scenario ends with the core claim of this suite: no approve call reached the IdP.
-afterEach(() => { expect(idp.state.approvals).toEqual([]); vi.unstubAllGlobals(); vi.clearAllMocks(); closeProfiles() })
+afterEach(async () => { expect(idp.state.approvals).toEqual([]); expect(await brokerRejections(idp.state.creates)).toEqual([]); vi.unstubAllGlobals(); vi.clearAllMocks(); closeProfiles() })
 const fixture = () => workerFixture()
 
 it('requests program and HTTP assignments as continuing grants and opens the IdP page instead of approving', async () => {
@@ -196,4 +199,24 @@ it('waits on an earlier pending request instead of asking again', async () => {
   await expect(run.run).resolves.toEqual({ home: '/fixture/home', environment: {} })
   await run.call('shellClose')
   expect(idp.state.creates).toEqual([])
+})
+
+it('requests every grant kind with an execution context the owner IdP accepts for a Pod identity', async () => {
+  const f = await fixture()
+  const http = (origin: string, methods?: string[]) => httpSpec(resolve(sources, 'pod-http-shapes.toml'), origin, methods)
+  const specs = {
+    runtime: await runtimeSpec(resolve(sources, 'pod-runtime-shapes.toml'), podId, 'Synthetic Pod'),
+    oneMethod: await http('https://hooks.example.test', ['POST']),
+    methods: await http('https://hooks.example.test', ['GET', 'POST']),
+    origin: await http('https://hooks.example.test'),
+    jev: await http(typesafeOrigin, ['POST']),
+    program: await programSpec(program.configuration as unknown as ProgramAssignment),
+  }
+  for (const spec of Object.values(specs)) await f.grants.request(podId, spec, null, AbortSignal.timeout(5000))
+  expect(idp.state.creates).toHaveLength(6)
+  expect(await brokerRejections(idp.state.creates)).toEqual([])
+  // A single command carries the argv its run-time call resolves; a grant over several commands names only the program.
+  expect(specs.runtime.executionContext.argv).toEqual(runtimeArgv({ podId, name: 'Synthetic Pod', script: 'run.mjs', workspace: 'workspace' }))
+  expect(specs.jev.executionContext.argv).toEqual(httpArgv(typesafeOrigin, 'POST'))
+  expect([specs.methods, specs.origin, specs.program].map(spec => spec.executionContext.argv)).toEqual([['pod-http'], ['pod-http'], ['pod-http']])
 })
