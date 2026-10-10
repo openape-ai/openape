@@ -1,5 +1,5 @@
 import type { OpenApeCliAuthorizationDetail, OpenApeExecutionContext } from '@openape/core'
-import { canonicalizeCliPermission, sameBrokeredGrant } from '@openape/grants'
+import { canonicalizeCliPermission, cliAuthorizationDetailsCover, sameBrokeredGrant } from '@openape/grants'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { LoadedAdapter } from '@openape/apes'
 import { approvalURL } from '../../contracts/activity'
@@ -8,7 +8,7 @@ import { gateActions } from '../../contracts/network-capabilities'
 import { parsePodGrant, grantTypes  } from '../../contracts/grants'
 import type { GrantOrigin, GrantState, GrantType, PodGrant } from '../../contracts/grants'
 import type { ProgramAssignment } from '../../contracts/programs'
-import { grantCoverage } from '../broker/authorization'
+import { grantCoverage, ownGrant } from '../broker/authorization'
 import type { AgentConnection, Grant, GrantLedgerPort } from '../broker/authorization'
 import { connectionRequest, readJSON } from '../connections/http'
 import type { OwnerSession } from '../connections/owner-session'
@@ -108,12 +108,15 @@ function stateOf(status: string): GrantState {
  * its token and check before deciding that the grant was requested by this owner's Pod identity for this Pod.
  */
 export class PodGrants {
+  // Earlier grant ids already read at the IdP that this process did not adopt; they are not read again.
+  private readonly checked = new Set<string>()
   constructor(private readonly dependencies: { connection: (podId: string) => Promise<PodConnection>, ledger: (command: GrantLedgerCommand) => Promise<unknown> }) {}
 
   /** The ledger as one Pod's authority uses it. */
   port(podId: string): GrantLedgerPort {
     return {
       find: async (detail, connection) => (await this.dependencies.ledger({ type: 'find', podId, issuer: connection.decisionIssuer ?? connection.issuer, subject: connection.subject, detail }) as string | null) ?? undefined,
+      adopt: async (detail, connection, read) => await this.adopt(podId, connection, [detail], read) ?? undefined,
       record: async (grant, connection) => { if (grant.request.audience === 'shapes' && grantCoverage(grant).length) await this.record(podId, connection, grant) },
     }
   }
@@ -131,6 +134,8 @@ export class PodGrants {
       const current = await this.record(podId, connection, await this.read(connection, existing.id, signal), null)
       if (['pending', 'approved'].includes(current.state)) return this.result(current)
     }
+    const adopted = await this.adopt(podId, connection, spec.details, id => this.candidate(connection, id, signal))
+    if (adopted) return this.result(await this.record(podId, connection, adopted, null))
     const response = await fetch(`${connection.issuer}/api/grants`, { method: 'POST', redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]), headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await connection.accessToken()}` }, body: JSON.stringify({ requester: connection.subject, target_host: connection.targetHost, audience: 'shapes', grant_type: 'always', permissions: spec.details.map(detail => detail.permission), authorization_details: spec.details, execution_context: spec.executionContext, reason: `${spec.display} (Pod ${podId})`.slice(0, 4096) }) })
     // 201 is a new request; 200 is an existing approved grant the IdP reused, which stays the Pod's own and never takes the network as origin.
     const created = await readJSON(response)
@@ -191,6 +196,37 @@ export class PodGrants {
     const recorded = grant.request.audience === 'shapes' && grantCoverage(grant).length ? await this.record(podId, connection, grant, null, inSession) : null
     const grantType = typeOf(grant.request.grant_type)
     return { id: grant.id, podId, state: stateOf(grant.status), grantType, requestedType, widened: grantType !== requestedType, approvedInSession: inSession, grant: recorded }
+  }
+
+  /**
+   * Adopts an earlier grant of this Pod identity that the ledger does not hold, so the owner is not asked again: an
+   * approved continuing grant first, else a pending continuing request. Candidates are the grant ids this Pod's runs
+   * observed (their approval events); each is read at the IdP as this identity and must cover every detail. The
+   * IdP keeps no listing for brokered identities and does not return an existing grant for a new brokered request.
+   */
+  async adopt(podId: string, connection: AgentConnection, details: OpenApeCliAuthorizationDetail[], read: (id: string) => Promise<Grant | null>): Promise<Grant | null> {
+    const cliId = details[0]?.cli_id
+    if (!cliId) return null
+    const ids = await this.dependencies.ledger({ type: 'observed', podId, issuer: connection.decisionIssuer ?? connection.issuer, subject: connection.subject, cliId }) as string[]
+    let pending: Grant | null = null
+    for (const id of ids) {
+      const key = `${podId}\n${id}`
+      if (this.checked.has(key)) continue
+      const grant = await read(id)
+      const usable = !!grant && ownGrant(grant, id, connection) && grant.request.grant_type !== 'once' && cliAuthorizationDetailsCover(grantCoverage(grant), details)
+      if (usable && grant.status === 'approved') return grant
+      if (usable && grant.status === 'pending') pending ??= grant
+      else this.checked.add(key)
+    }
+    return pending
+  }
+
+  /** A grant read as the Pod identity; null when the IdP does not show it to this identity. */
+  private async candidate(connection: AgentConnection, grantId: string, signal: AbortSignal): Promise<Grant | null> {
+    if (!grantIdPattern.test(grantId)) return null
+    const response = await fetch(`${connection.issuer}/api/grants/${encodeURIComponent(grantId)}`, { redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]), headers: { Authorization: `Bearer ${await connection.accessToken()}` } })
+    if (response.status === 403 || response.status === 404) { await response.body?.cancel(); return null }
+    return await readJSON(response) as unknown as Grant
   }
 
   private async read(connection: AgentConnection, grantId: string, signal: AbortSignal): Promise<Grant> {
