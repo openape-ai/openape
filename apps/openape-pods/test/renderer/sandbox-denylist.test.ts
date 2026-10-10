@@ -25,6 +25,7 @@ it('shows the level and the denied paths and edits only the Pod\'s own entries',
   applyLanguage('de')
   wrapper = mount(SandboxDenylist, { props: { sandbox: view(['~/.ssh']), busy: false } })
   expect(wrapper.text()).toContain('Stufe Owner: Programme erreichen, was du auf diesem Mac erreichst, außer den Pods-Daten und deinem apes-Login.')
+  expect(wrapper.get('.trust-note').text()).toBe('Als Owner ausführen bedeutet volles Vertrauen in den Code dieses Pods, einschließlich der Möglichkeit, als du zu handeln. Die verbleibenden Schutzmaßnahmen verhindern nur den direkten Zugriff.')
   expect(wrapper.findAll('.deny-path').map(item => item.text())).toEqual(['~/.ssh', '~/Library/LaunchAgentsVon einem Netzwerk gesperrt'])
   // A network entry is shown but cannot be removed from the Pod.
   expect(wrapper.findAll('.deny-row button.text-button')).toHaveLength(1)
@@ -41,6 +42,7 @@ it('refuses relative, wildcard and parent paths with a translated message', asyn
   applyLanguage('de')
   wrapper = mount(SandboxDenylist, { props: { sandbox: view([], 'isolated'), busy: false } })
   expect(wrapper.text()).toContain('Stufe isoliert')
+  expect(wrapper.find('.trust-note').exists()).toBe(false)
   for (const path of ['Documents', '~/*.pem', '/Users/owner/../other']) {
     await wrapper.get('input').setValue(path)
     await wrapper.get('form').trigger('submit')
