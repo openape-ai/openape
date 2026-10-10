@@ -27,6 +27,14 @@ function literal(path: string): string {
 function subpaths(paths: string[]): string {
   return paths.map(path => `(subpath ${literal(path)})`).join(' ')
 }
+/**
+ * The folders leading to closed paths stay unwritable, so a closed path cannot be moved aside or replaced through a
+ * renamed or linked parent, even inside a writable folder. Each path arrives as written and as resolved.
+ */
+function ancestorRule(paths: string[]): string {
+  const ancestors = [...new Set(paths.flatMap(path => path.split('/').slice(1, -1).map((_, index, parts) => `/${parts.slice(0, index + 1).join('/')}`)))]
+  return ancestors.length ? `(deny file-write* ${ancestors.map(path => `(literal ${literal(path)})`).join(' ')})` : ''
+}
 export function sandboxPolicy(policy: RuntimePolicy): string {
   const executable = literal(policy.executable)
   if (policy.reach?.level === 'owner') return ownerPolicy(policy, executable)
@@ -38,7 +46,7 @@ export function sandboxPolicy(policy: RuntimePolicy): string {
     if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Invalid broker port')
     return `(remote tcp "localhost:${port}")`
   }).join(' ')
-  const denied = subpaths(policy.reach?.deny ?? [])
+  const deny = policy.reach?.deny ?? []
   return `(version 1)
 (deny default)
 (allow process-exec (literal ${executable}))
@@ -51,7 +59,7 @@ export function sandboxPolicy(policy: RuntimePolicy): string {
 (allow file-write* (literal "/dev/null"))
 (allow file-read* file-write* (subpath ${literal(policy.workspace)}) ${writes})
 ${network ? `(allow network-outbound ${network})` : ''}
-${denied ? `(deny file-read* file-write* ${denied})` : ''}
+${deny.length ? `${ancestorRule(deny)}\n(deny file-read* file-write* ${subpaths(deny)})` : ''}
 `
 }
 /**
@@ -62,6 +70,10 @@ ${denied ? `(deny file-read* file-write* ${denied})` : ''}
  * not as file access, so the sockets under these paths (such as the Pods MCP control socket) are closed separately;
  * the isolated level allows no Unix socket at all. Network reach is the owner's as well, so the application network
  * hosts and their proxy only apply at the isolated level.
+ *
+ * These rules only prevent direct access. A program at this level can leave code that later runs unsandboxed as the
+ * owner (launch agents, shell startup files, agent hooks) and act as the owner from there, so the owner level means
+ * full trust in the Pod's code; the owner accepted this (issue 1455, October 10, 2026).
  */
 function ownerPolicy(policy: RuntimePolicy, executable: string): string {
   const protectedPaths = policy.reach?.protectedPaths ?? []
@@ -71,13 +83,12 @@ function ownerPolicy(policy: RuntimePolicy, executable: string): string {
   const writes = subpaths([policy.workspace, ...(policy.writeDirectories ?? [])])
   const reads = subpaths([...(policy.readDirectories ?? []), ...policy.runtimeDirectories])
   const files = [executable, ...policy.readFiles.map(literal)].map(path => `(literal ${path})`).join(' ')
-  const ancestors = [...new Set(closed.flatMap(path => path.split('/').slice(1, -1).map((_, index, parts) => `/${parts.slice(0, index + 1).join('/')}`)))]
   return `(version 1)
 (allow default)
 (deny file-read* file-write* ${subpaths(protectedPaths)})
 (allow file-read* file-write* ${writes})
 (allow file-read* file-map-executable ${files} ${reads})
-(deny file-write* ${ancestors.map(path => `(literal ${literal(path)})`).join(' ')})
+${ancestorRule(closed)}
 (deny network-outbound ${closed.map(path => `(remote unix-socket (subpath ${literal(path)}))`).join(' ')})
 ${deny.length ? `(deny file-read* file-write* ${subpaths(deny)})` : ''}
 `

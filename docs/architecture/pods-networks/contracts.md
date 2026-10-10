@@ -1343,10 +1343,15 @@ profile under the same supervising helper) except the Pods profile and its base
 (with the MCP control socket) and `~/.config/apes`, which stay denied for reading,
 writing and socket connections while the program's own workspace, state and
 runtime are allowed again; it is about paths and reach only, and the Pod's DDISA
-identity stays the Pod. Owner decision October 10, 2026: beyond these identity
-protections no curated persistence list applies; the owner may configure a
+identity stays the Pod. These protections only prevent direct access: an
+owner-level program can plant code that later runs unsandboxed as the owner
+(launch agents, shell startup files, agent hooks) and act as the owner from
+there, so "run as owner" equals full trust in the Pod's code, including the
+possibility to act as the owner. Owner decision October 10, 2026: this is the
+owner's choice and no curated persistence list applies; the owner may configure a
 `deny` list per Pod and per network (members inherit it), closed for reading and
-writing at both levels (`pod_sandbox_deny`, schema 44). Application network
+writing at both levels with its ancestor folders unrenamable
+(`pod_sandbox_deny`, schema 44). Application network
 hosts and their proxy apply only at the isolated level, because the owner level
 has the owner's network reach. Mail moves (adapter actions `move` and `archive`)
 are never part of a whole-program grant and run only through the archive ports.
