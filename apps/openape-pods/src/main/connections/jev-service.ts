@@ -3,6 +3,7 @@ import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { JevAssignment, JevEvaluation, JevRequest } from '../../contracts/jev'
 import { typesafeOrigin } from '../../contracts/jev'
 import { AgentAuthority } from '../broker/authorization'
+import { httpArgv } from '../grants/execution-context'
 import type { GrantLedgerPort, GrantObserver, RunGrantTokens } from '../broker/authorization'
 import { PodIdentityManager } from './agent'
 import type { CredentialCache } from './cache'
@@ -23,7 +24,7 @@ export async function executeJev(assignment: JevAssignment, request: JevRequest,
   const authority = new AgentAuthority(identity.connection(assignment.authority.identity, `pods:${assignment.authority.identity.podId}`), options.observe, options.ledger, options.tokens)
   const adapterPath = join(options.vendor, 'pod-http-shapes.toml')
   const adapter = loadAdapter('pod-http', adapterPath)
-  const argv = ['pod-http', 'request', '--origin', typesafeOrigin, '--method', 'POST']
+  const argv = httpArgv(typesafeOrigin, 'POST')
   const resolved = await resolveCommand(adapter, argv)
   const authorization = { grantId: assignment.authority.grantId, command: { cliId: 'pod-http', adapterPath, adapterDigest: adapter.digest, argv, coverage: [resolved.detail] } }
   await authority.authorize(authorization, options.signal)
