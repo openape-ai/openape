@@ -32,7 +32,7 @@ it('revokes the grants and removes the sandbox a network handed to its members w
 
   const review = f.engine.execute({ type: 'archivePreview', id, revision: 1 }).archiveReview!
   f.engine.execute({ type: 'archiveNetwork', id, revision: 1, expectedFingerprint: review.fingerprint })
-  expect(ledger.sandbox(consumer)).toEqual({ level: 'isolated', sources: [] })
+  expect(ledger.sandbox(consumer)).toEqual({ level: 'isolated', sources: [], deny: [], denySources: [] })
   expect(ledger.released().grants.map(item => item.id).sort()).toEqual(['network-consumer', 'network-source'])
 
   const revoked: string[] = []
@@ -55,7 +55,7 @@ it('returns a member to its own sandbox when the network that raised it to owner
   ledger.level(consumer, 'pod', null, 'isolated')
   const networkOrigin = f.resources.assignHttp(consumer, { origin: 'https://chat.example.com', methods: ['POST'] }, f.resources.epoch(consumer))
   ledger.execute({ type: 'networkResource', networkId: id, revision: 1, podId: consumer, resourceId: networkOrigin })
-  const ownOnly = { level: 'isolated', sources: [{ source: 'pod', level: 'isolated' }] }
+  const ownOnly = { level: 'isolated', sources: [{ source: 'pod', level: 'isolated' }], deny: [], denySources: [] }
   ledger.level(consumer, `network:${id}`, 0, 'owner')
   expect(ledger.sandbox(consumer)).toEqual(ownOnly)
   ledger.level(consumer, `network:${id}`, 1, 'owner')
@@ -73,4 +73,27 @@ it('returns a member to its own sandbox when the network that raised it to owner
   expect(ledger.sandbox(consumer)).toEqual(ownOnly)
   expect(f.resources.list(consumer).find(item => item.id === networkOrigin)?.state).toBe('revoked')
   expect(f.resources.list(consumer).find(item => item.id === own)?.state).toBe('ready')
+})
+
+it('denies a member its own and its current network denylist and drops the network list with its revision or archive', () => {
+  const f = networkFixture()
+  const source = f.pod('Source', { takes: [], gives: ['mail'], summary: 'Finds mail' }, async () => {})
+  const consumer = f.pod('Consumer', { takes: ['mail'], gives: [], summary: 'Posts mail' }, async () => {})
+  const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, { podId: consumer, source: null, serialCase: false }], ['mail'])
+  const ledger = new GrantLedger(f.store)
+  ledger.execute({ type: 'deny', podId: consumer, source: 'pod', revision: null, deny: ['~/.ssh', '/Users/owner/private/'] })
+  ledger.execute({ type: 'deny', podId: consumer, source: `network:${id}`, revision: 1, deny: ['~/.ssh', '~/Library/LaunchAgents'] })
+  expect(ledger.sandbox(consumer)).toMatchObject({ deny: ['~/.ssh', '~/Library/LaunchAgents', '/Users/owner/private'], denySources: [{ source: `network:${id}`, deny: ['~/.ssh', '~/Library/LaunchAgents'] }, { source: 'pod', deny: ['~/.ssh', '/Users/owner/private'] }] })
+  // A list declared for an older revision does not count, and an empty list clears the source.
+  ledger.execute({ type: 'deny', podId: consumer, source: `network:${id}`, revision: 0, deny: ['~/Documents'] })
+  expect(ledger.sandbox(consumer).deny).toEqual(['~/.ssh', '/Users/owner/private'])
+  ledger.execute({ type: 'deny', podId: consumer, source: `network:${id}`, revision: 1, deny: ['~/Documents'] })
+  ledger.execute({ type: 'deny', podId: consumer, source: 'pod', revision: null, deny: [] })
+  expect(ledger.sandbox(consumer)).toMatchObject({ deny: ['~/Documents'], denySources: [{ source: `network:${id}` }] })
+  for (const deny of [['relative/path'], ['~/*.pem'], ['/Users/owner/../other'], ['/'], Array.from({ length: 33 }, (_, index) => `/tmp/${index}`)]) expect(() => ledger.execute({ type: 'deny', podId: consumer, source: 'pod', revision: null, deny })).toThrow()
+
+  const review = f.engine.execute({ type: 'archivePreview', id, revision: 1 }).archiveReview!
+  f.engine.execute({ type: 'archiveNetwork', id, revision: 1, expectedFingerprint: review.fingerprint })
+  expect(ledger.sandbox(consumer)).toMatchObject({ deny: [], denySources: [] })
+  expect(f.store.db.prepare('SELECT count(*) AS count FROM pod_sandbox_deny').get()?.count).toBe(0)
 })

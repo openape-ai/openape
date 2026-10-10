@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { readFile, realpath, writeFile } from 'node:fs/promises'
-import { isAbsolute, join, resolve } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import type { Duplex, Readable, Writable } from 'node:stream'
 
 export interface RuntimePolicy {
@@ -24,6 +24,9 @@ function literal(path: string): string {
   if (!isAbsolute(path) || /[\0\r\n\\"]/.test(path)) throw new Error('Unsupported sandbox path')
   return JSON.stringify(path)
 }
+function subpaths(paths: string[]): string {
+  return paths.map(path => `(subpath ${literal(path)})`).join(' ')
+}
 export function sandboxPolicy(policy: RuntimePolicy): string {
   const executable = literal(policy.executable)
   if (policy.reach?.level === 'owner') return ownerPolicy(policy, executable)
@@ -35,6 +38,7 @@ export function sandboxPolicy(policy: RuntimePolicy): string {
     if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Invalid broker port')
     return `(remote tcp "localhost:${port}")`
   }).join(' ')
+  const denied = subpaths(policy.reach?.deny ?? [])
   return `(version 1)
 (deny default)
 (allow process-exec (literal ${executable}))
@@ -47,42 +51,35 @@ export function sandboxPolicy(policy: RuntimePolicy): string {
 (allow file-write* (literal "/dev/null"))
 (allow file-read* file-write* (subpath ${literal(policy.workspace)}) ${writes})
 ${network ? `(allow network-outbound ${network})` : ''}
+${denied ? `(deny file-read* file-write* ${denied})` : ''}
 `
 }
-/** The services through which a program registers login items and background tasks. */
-const registrationServices = '(global-name "com.apple.xpc.smd") (global-name "com.apple.xpc.loginitemregisterd") (global-name-prefix "com.apple.backgroundtaskmanagement") (global-name "com.apple.coreservices.sharedfilelistd.xpc")'
 /**
- * The owner level: everything the owner can do, then the protected paths denied, then the program's own workspace,
- * state and runtime allowed again, then writes to the persistence locations denied (the last matching rule wins, so
- * no assigned folder reopens them). Seatbelt checks a Unix socket connection as network access, not as file access, so
- * the sockets under the protected paths (such as the Pods MCP control socket) are closed separately; the isolated level
- * allows no Unix socket at all. The services that register login items and background tasks stay unreachable.
- * `defaults write` reaches the preference files through cfprefsd, which refuses the write only with both the file and
- * the preference rule denied. This is best-effort protection against persistence; the isolated level is the boundary.
- * Network reach is the owner's as well, so the application network hosts and their proxy only apply at the isolated level.
+ * The owner level is the owner's reach on this Mac: everything the owner can do, then the protected paths denied, then
+ * the program's own workspace, state and runtime allowed again, then the configured denylist denied (the last matching
+ * rule wins, so no assigned folder reopens a denied path). The folders leading to a protected or denied path stay
+ * unwritable, so it cannot be moved aside and replaced. Seatbelt checks a Unix socket connection as network access,
+ * not as file access, so the sockets under these paths (such as the Pods MCP control socket) are closed separately;
+ * the isolated level allows no Unix socket at all. Network reach is the owner's as well, so the application network
+ * hosts and their proxy only apply at the isolated level.
  */
 function ownerPolicy(policy: RuntimePolicy, executable: string): string {
   const protectedPaths = policy.reach?.protectedPaths ?? []
-  const persistence = policy.reach?.persistencePaths ?? []
-  if (!protectedPaths.length || !persistence.length) throw new Error('The owner sandbox level needs its protected paths')
-  const denied = protectedPaths.map(path => `(subpath ${literal(path)})`).join(' ')
-  const sockets = protectedPaths.map(path => `(remote unix-socket (subpath ${literal(path)}))`).join(' ')
-  const writes = [policy.workspace, ...(policy.writeDirectories ?? [])].map(path => `(subpath ${literal(path)})`).join(' ')
-  const reads = [...(policy.readDirectories ?? []), ...policy.runtimeDirectories].map(path => `(subpath ${literal(path)})`).join(' ')
+  const deny = policy.reach?.deny ?? []
+  if (!protectedPaths.length) throw new Error('The owner sandbox level needs its protected paths')
+  const closed = [...protectedPaths, ...deny]
+  const writes = subpaths([policy.workspace, ...(policy.writeDirectories ?? [])])
+  const reads = subpaths([...(policy.readDirectories ?? []), ...policy.runtimeDirectories])
   const files = [executable, ...policy.readFiles.map(literal)].map(path => `(literal ${path})`).join(' ')
-  // The folders on the way to each location stay closed as well, so a location cannot be moved aside and replaced.
-  const ancestors = [...new Set([...protectedPaths, ...persistence].flatMap(path => path.split('/').slice(1, -1).map((_, index, parts) => `/${parts.slice(0, index + 1).join('/')}`)))]
-  const persistent = [...persistence.map(path => `(subpath ${literal(path)})`), ...ancestors.map(path => `(literal ${literal(path)})`)].join(' ')
+  const ancestors = [...new Set(closed.flatMap(path => path.split('/').slice(1, -1).map((_, index, parts) => `/${parts.slice(0, index + 1).join('/')}`)))]
   return `(version 1)
 (allow default)
-(deny file-read* file-write* ${denied})
+(deny file-read* file-write* ${subpaths(protectedPaths)})
 (allow file-read* file-write* ${writes})
 (allow file-read* file-map-executable ${files} ${reads})
-(deny file-write* ${persistent})
-(deny network-outbound ${sockets})
-(deny mach-lookup ${registrationServices})
-(deny job-creation)
-(deny user-preference-write)
+(deny file-write* ${ancestors.map(path => `(literal ${literal(path)})`).join(' ')})
+(deny network-outbound ${closed.map(path => `(remote unix-socket (subpath ${literal(path)}))`).join(' ')})
+${deny.length ? `(deny file-read* file-write* ${subpaths(deny)})` : ''}
 `
 }
 
@@ -91,35 +88,17 @@ const canonical = (path: string) => existsSync(path) ? realpathSync(path) : path
 const forms = (path: string) => [...new Set([path, canonical(path)])]
 
 /**
- * What the owner level never reaches: the Pods base folder that holds every profile, the profile selection and the
- * MCP control socket, this Pods profile, the owner's apes login and the keychains.
+ * What the owner level never reaches, because the Pod identity must never become the owner's: the Pods base folder
+ * that holds every profile, the profile selection and the MCP control socket, this Pods profile and the owner's apes login.
  */
 export function ownerProtectedPaths(profileRoot: string, profileBase: string, home: string): string[] {
-  const paths = [profileBase, profileRoot, join(home, '.config/apes'), join(home, 'Library/Keychains')]
+  const paths = [profileBase, profileRoot, join(home, '.config/apes')]
   return [...new Set(paths.flatMap(forms))]
 }
 
-const homePersistence = [
-  'Library/LaunchAgents', 'Library/Application Support/com.apple.backgroundtaskmanagementagent', 'Library/Preferences',
-  '.zshrc', '.zprofile', '.zshenv', '.zlogin', '.zlogout', '.bashrc', '.bash_profile', '.bash_login', '.profile', '.config/fish', '.zsh_shared',
-  '.ssh', '.gitconfig', '.config/git', '.npmrc', '.local/bin', 'Library/pnpm', 'Library/Pnpm', '.codex', '.claude', '.claude.json',
-  'Applications/OpenApe Pods.app', 'Library/Application Support/OpenApe Pods Rollback',
-]
-const systemPersistence = ['/Library/LaunchAgents', '/Library/LaunchDaemons', '/Library/StartupItems', '/private/var/at', '/Applications/OpenApe Pods.app', '/opt/homebrew', '/usr/local']
-
-/** Where the owner moved the Codex and Claude Code configuration away from their home defaults. */
-export interface AgentConfiguration { CODEX_HOME?: string, CLAUDE_CONFIG_DIR?: string }
-
-/**
- * Where an owner-level program could leave code that starts after its run: launch agents and daemons, login items,
- * cron and at jobs, shell startup files, SSH, Git and npm configuration, program folders on the owner's PATH (Homebrew,
- * /usr/local, ~/.local/bin, pnpm), the Codex and Claude Code configuration with their hooks and MCP servers,
- * preferences, the installed Pods app and its rollback copy. Each location is listed as written and as resolved.
- */
-export function ownerPersistencePaths(home: string, configuration: AgentConfiguration = {}): string[] {
-  const configured = [configuration.CODEX_HOME, configuration.CLAUDE_CONFIG_DIR].filter((path): path is string => !!path).map(path => resolve(path))
-  const paths = [...forms(home).flatMap(base => homePersistence.map(path => join(base, path))), ...configured, ...systemPersistence]
-  return [...new Set(paths.flatMap(forms))]
+/** The configured denylist as absolute paths: `~/` is the owner's home, and each path is listed as written and as resolved. */
+export function deniedPaths(entries: string[], home: string): string[] {
+  return [...new Set(entries.map(entry => entry.startsWith('~/') ? join(home, entry.slice(2)) : entry).flatMap(forms))]
 }
 
 export interface ProcessDomain {

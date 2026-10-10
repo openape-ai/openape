@@ -60,7 +60,7 @@ import { apesLogin } from './connections/apes-login'
 import type { ApesLogin } from './connections/apes-login'
 import type { GrantLedgerCommand } from '../worker/resources/grants'
 import type { SandboxReach, SandboxView } from '../contracts/sandbox'
-import { ownerPersistencePaths, ownerProtectedPaths } from '../worker/runtime/sandbox'
+import { deniedPaths, ownerProtectedPaths } from '../worker/runtime/sandbox'
 import { homedir } from 'node:os'
 import type { ProgramDefinition, ProgramCommand } from '../contracts/programs'
 import type { ProgramInternal } from '../worker/resources/programs'
@@ -370,9 +370,20 @@ export class FixtureWorker {
     return this.grants
   }
 
-  /** The effective sandbox reach of a Pod: its own level and, for a network member, the network's (the more permissive wins). */
+  /**
+   * The effective sandbox reach of a Pod: its own level and, for a network member, the network's (the more permissive
+   * wins), with the denylists of both.
+   */
   async sandboxReach(podId: string): Promise<SandboxReach> {
-    return { level: (await this.dispatch({ grants: { type: 'sandbox', podId } }) as SandboxView).level, protectedPaths: ownerProtectedPaths(this.root, this.profileBase, homedir()), persistencePaths: ownerPersistencePaths(homedir(), process.env) }
+    const view = await this.dispatch({ grants: { type: 'sandbox', podId } }) as SandboxView
+    return { level: view.level, protectedPaths: ownerProtectedPaths(this.root, this.profileBase, homedir()), deny: deniedPaths(view.deny, homedir()) }
+  }
+
+  /** The Pod's resources with its sandbox; a saved denylist replaces the Pod's own entries, never a network's. */
+  private async sandboxState(podId: string, deny?: string[]): Promise<ResourceState> {
+    if (deny) await this.dispatch({ grants: { type: 'deny', podId, source: 'pod', revision: null, deny } })
+    const [state, sandbox] = await Promise.all([this.dispatch({ resource: { type: 'list', podId } }), this.dispatch({ grants: { type: 'sandbox', podId } })])
+    return { ...parseResourceState(state), sandbox: sandbox as SandboxView }
   }
 
   async onboarding(command: OnboardingCommand): Promise<OnboardingView> {
@@ -582,8 +593,9 @@ export class FixtureWorker {
   async request(command: WorkspaceCommand): Promise<WorkspaceState> { const central = this.centralAction(command.type); if (central) return central.local(() => this.request(command)); return parseWorkspace(await this.dispatch(command)) }
 
   async resources(command: InternalResourceCommand): Promise<ResourceState> {
-    const central = this.centralAction(command.type); if (central) return central.local(() => this.resources(command))
+    const central = this.centralAction(command.type === 'sandbox' ? 'list' : command.type); if (central) return central.local(() => this.resources(command))
     await this.setupReady
+    if (command.type === 'sandbox' || command.type === 'saveSandboxDeny') return this.sandboxState(command.podId, command.type === 'saveSandboxDeny' ? command.deny : undefined)
     if (command.type === 'assignJev' || command.type === 'assignSsh' || command.type === 'assignHttp') return (await this.assign(command, null)).view
     if (command.type === 'saveCredential') {
       if (!this.credentials) throw new Error('Credential store is unavailable')
