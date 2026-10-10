@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { randomUUID } from 'node:crypto'
 import { parseNetworkView, parseNetworkDefinition } from '../../src/contracts/networks'
 import { fenceNetworkBoot } from '../../src/worker/scheduling/network-boot'
-import { assertNetworkStorage } from '../../src/worker/storage/network-schema'
+import { assertIntegrity } from '../../src/worker/storage/integrity'
 import { restoreNetworkStorage } from '../../src/worker/storage/network-restore'
 import { closeNetworks, networkFixture } from './network-fixture'
 
@@ -112,15 +112,15 @@ it('retains pending choices over a worker restart and fences them after restore'
 it('rejects restored choice records whose gate or selected output differs from the pinned route', async () => {
   const f = fixture()
   await f.emit()
-  expect(() => assertNetworkStorage(f.store.db, true)).not.toThrow()
+  expect(() => assertIntegrity(f.store.db, true)).not.toThrow()
   const choice = f.engine.view().choices![0]!
   f.store.db.prepare('UPDATE network_choices SET gate_key=?').run('foreign-gate')
-  expect(() => assertNetworkStorage(f.store.db, true)).toThrow('choice scope')
+  expect(() => assertIntegrity(f.store.db, true)).toThrow('choice scope')
   f.store.db.prepare('UPDATE network_choices SET gate_key=?').run(choice.gate)
   f.engine.execute({ type: 'choose', id: f.id, revision: 1, eventId: choice.eventId, gate: choice.gate, option: 'keep' })
-  expect(() => assertNetworkStorage(f.store.db, true)).not.toThrow()
+  expect(() => assertIntegrity(f.store.db, true)).not.toThrow()
   f.store.db.prepare('UPDATE network_choices SET result_event_id=event_id').run()
-  expect(() => assertNetworkStorage(f.store.db, true)).toThrow('choice scope')
+  expect(() => assertIntegrity(f.store.db, true)).toThrow('choice scope')
 })
 
 it('refuses incompatible choice schemas before admitting work', () => {

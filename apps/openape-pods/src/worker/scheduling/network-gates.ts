@@ -419,7 +419,6 @@ export class NetworkGates {
         this.store.db.prepare('DELETE FROM run_inputs WHERE run_id=?').run(attempt.run_id!)
         this.store.db.prepare('DELETE FROM runs WHERE id=?').run(attempt.run_id!)
       }
-      if (old.length) this.store.db.prepare('UPDATE network_gate_controls SET pruned_status_count=pruned_status_count+? WHERE task_id=?').run(old.length, taskId)
     })
   }
 

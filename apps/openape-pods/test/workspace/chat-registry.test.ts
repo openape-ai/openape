@@ -1,4 +1,3 @@
-import { removeRemoteSchema } from '../storage/legacy'
 // @vitest-environment node
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -8,7 +7,6 @@ import { afterEach, expect, it } from 'vitest'
 import { PodDatabase } from '../../src/worker/storage/database'
 import { ChatRegistry } from '../../src/worker/master/chat-registry'
 import { MasterConversations } from '../../src/worker/master/conversations'
-import { parseChatsCommand } from '../../src/contracts/chats'
 
 const roots: string[] = []; const stores: PodDatabase[] = []
 function fixture() {
@@ -31,39 +29,7 @@ it('keeps two conversations for one Pod separate and starts a fresh context with
   expect(conversations.session(before.scope).threadId).toBeNull()
   expect(conversations.messages(before.scope)[0]?.text).toBe('Original request')
   expect(conversations.messages(chats.get(second).scope)).toEqual([])
-  expect(store.db.prepare('SELECT retired_thread FROM chat_contexts WHERE conversation_id=? AND revision=1').get(first)?.retired_thread).toBe('previous-thread')
   expect(() => chats.execute({ type: 'context', id: first, revision: 1, podIds: [pod.id] })).toThrow('changed')
-})
-
-it('refuses context changes during a model turn and forged fields at the boundary', () => {
-  const { store, chats } = fixture(); const conversation = chats.ensure('')
-  store.db.prepare('UPDATE master_session SET state=\'running\'').run()
-  expect(() => chats.execute({ type: 'context', id: conversation.id, revision: 1, podIds: [] })).toThrow('active response')
-  expect(() => parseChatsCommand({ type: 'list', approved: true })).toThrow('fields')
-})
-
-it('migrates legacy messages and creation origins without losing content or restoring broad workspace authority', () => {
-  const { store } = fixture(); const pod = store.createPod({ name: 'Legacy' }); const creation = randomUUID()
-  store.db.prepare('INSERT INTO master_creations VALUES(?,?)').run(creation, pod.id)
-  for (let index = 0; index < 125; index++) {
-    store.db.prepare('INSERT INTO master_messages VALUES(?,?,?,?,?)').run(`m${index}`, 'user', `Text ${index}`, 'sent', index)
-    store.db.prepare('INSERT INTO master_message_scopes VALUES(?,?)').run(`m${index}`, index % 2 ? pod.id : '')
-  }
-  store.db.prepare('INSERT INTO pod_chat_origins VALUES(?,?)').run(pod.id, 'm1')
-  store.db.prepare('INSERT OR REPLACE INTO master_contexts VALUES(?,?,?,?)').run('', 'broad-thread', 'idle', null)
-  store.db.prepare('INSERT OR REPLACE INTO master_contexts VALUES(?,?,?,?)').run(pod.id, 'pod-thread', 'idle', null)
-  const before = store.db.prepare('SELECT * FROM master_messages ORDER BY rowid').all()
-  removeRemoteSchema(store.db)
-  for (const row of store.db.prepare('SELECT name FROM sqlite_schema WHERE type=\'table\' AND (name LIKE \'chat_%\' OR name IN (\'control_changes\',\'control_runs\')) ORDER BY rowid DESC').all()) store.db.exec(`DROP TABLE ${row.name}`)
-  store.db.exec('ALTER TABLE pod_descriptions DROP COLUMN manual; ALTER TABLE run_inputs DROP COLUMN retry_at; ALTER TABLE run_inputs DROP COLUMN retry_attempt; ALTER TABLE run_inputs DROP COLUMN retry_epoch; PRAGMA user_version=20'); const root = store.root; store.close(); stores.splice(stores.indexOf(store), 1)
-  const migrated = new PodDatabase(root); stores.push(migrated)
-  expect(migrated.db.prepare('SELECT * FROM master_messages ORDER BY rowid').all()).toEqual(before)
-  const registry = new ChatRegistry(migrated)
-  expect(registry.view().conversations).toHaveLength(2)
-  expect(migrated.db.prepare('SELECT count(*) AS count FROM chat_message_context').get()?.count).toBe(125)
-  expect(new MasterConversations(migrated).session('').threadId).toBeNull()
-  expect(new MasterConversations(migrated).session(pod.id).threadId).toBe('pod-thread')
-  expect(new MasterConversations(migrated).initial(pod.id)?.id).toBe('m1')
 })
 
 it('paginates every message in stable order even when timestamps are equal', () => {

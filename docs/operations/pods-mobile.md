@@ -28,9 +28,9 @@ A revoked registration, different owner/generation, missing local registration o
 
 For an incident, set relay enrollment closed and the service disabled, then recreate only `pods-relay`. Keep provider routes available. Local Pods continue to use their existing execution and grant system.
 
-Do not restore an old relay database over a newer revocation history. Sessions expire after 7 idle days or 30 days; audit rows after 30 days. Losing relay state requires a fresh desktop registration; original desktop Pods and identities remain local. Inspect database/schema compatibility before changing the image tag.
+Do not restore an old relay database over a newer revocation history. Sessions expire after 7 idle days or 30 days; the relay keeps no audit log. Losing relay state requires a fresh desktop registration; original desktop Pods and identities remain local. Inspect database/schema compatibility before changing the image tag.
 
-The desktop keeps its `remote_*` tables until the consolidation baseline migration (M8). Restoring a backup pauses execution, removes the desktop registration and marks in-flight work unknown. Owner/agent identity references remain unchanged, but credentials are intentionally excluded from backups: recovered Pods require explicit desktop credential recovery and cannot silently provision a replacement identity.
+Since the baseline schema 46 (issue 1455, M8) the desktop keeps only `remote_registration` and `remote_pods`; the mobile tables are gone. Restoring a backup (schema 45 or 46) pauses execution, removes the desktop registration and marks in-flight work unknown. Owner/agent identity references remain unchanged, but credentials are intentionally excluded from backups: recovered Pods require explicit desktop credential recovery and cannot silently provision a replacement identity.
 
 ## Installed inbox app (M4, issue 1446)
 

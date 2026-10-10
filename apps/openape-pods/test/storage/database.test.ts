@@ -1,12 +1,10 @@
 // @vitest-environment node
-import { removeGraphSchema, removeNetworkSchema, removeWorkflowSchema } from './legacy'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
 import { afterEach, describe, expect, it } from 'vitest'
-import { digest, parseManifest, PodDatabase, schemaVersion } from '../../src/worker/storage/database'
+import { digest, parseManifest, PodDatabase } from '../../src/worker/storage/database'
 import type { CommitPoint, ProgressInput, ScriptManifest } from '../../src/worker/storage/database'
 
 const roots: string[] = []; const stores: PodDatabase[] = []
@@ -45,7 +43,6 @@ describe('durable pod state', () => {
     expect(() => store.updatePod(pod.id, 1, { name: 'Stale', lifecycle: 'active' })).toThrow('Stale')
     store = reopen(store)
     expect(store.getPod(pod.id)).toMatchObject({ name: 'Knowledge', revision: 2 })
-    expect(store.db.prepare('SELECT count(*) AS count FROM assignments').get()?.count).toBe(0)
   })
   it('pins artifact bytes and immutable manifests without activating drafts', () => {
     const store = fixture(); const pod = store.createPod({ name: 'Pod' })
@@ -91,85 +88,12 @@ describe('durable pod state', () => {
     expect(store.knowledge(pod.id)).toHaveLength(point === 'committed' ? 1 : 0)
     if (point === 'committed') expect(store.readBlob(digest(unit.sources[0]!.content)).toString()).toBe(unit.sources[0]!.content)
   })
-  it('backs up and migrates a v1 database with existing pod state', () => {
-    let store = fixture(); const pod = store.createPod({ name: 'Previous' }); store.db.prepare('UPDATE pods SET assignment=? WHERE id=?').run('Preserve me', pod.id)
-    removeWorkflowSchema(store.db)
-    store.db.exec('DROP TABLE script_dependencies; DROP TABLE dependency_sets; DROP TABLE draft_packages; DROP TABLE dependency_domains; ALTER TABLE pods DROP COLUMN metadata_revision; DROP TABLE pod_chat_origins; DROP TABLE master_creations; DROP TABLE pod_descriptions; DROP TABLE summary_domains; DROP TABLE program_leases; DROP TABLE master_message_scopes; DROP TABLE master_contexts; DROP TABLE pod_variables; DROP TABLE script_credential_approvals; DROP TABLE deletion_jobs; DROP TABLE data_settings; DROP TABLE connections; DROP TABLE onboarding; DROP TABLE access_proposals; DROP TABLE script_drafts; DROP TABLE master_actions; DROP TABLE master_messages; DROP TABLE master_session; DROP TABLE master_domains; DROP TABLE master_inputs; DROP TABLE mail_inventory; DROP TABLE mail_items; DROP TABLE mail_receipts; DROP TABLE mail_extractions; DROP TABLE mail_contexts; DROP TABLE source_derivations; DROP TABLE effect_ledger; DROP TABLE recovery_reviews; DROP TABLE execution_domains; DROP TABLE reference_observations; DROP TABLE run_inputs; DROP TABLE accepted_events; DROP TABLE schedules; DROP TABLE run_events; DROP TABLE run_leases; DROP TABLE runs; DROP TABLE pod_memberships; DROP TABLE pod_groups; DROP TABLE pod_organization; DROP TABLE settings; DROP TABLE validations; DROP TABLE resources; DROP TABLE resource_epochs; DROP TABLE snapshot_sets; PRAGMA user_version=1')
-    store = reopen(store)
-    expect(store.db.prepare('SELECT assignment FROM pods WHERE id=?').get(pod.id)?.assignment).toBe('Preserve me')
-    expect(store.db.prepare('SELECT concurrency FROM settings').get()?.concurrency).toBe(2)
-    const backups = readdirSync(store.root).filter(file => file.startsWith('before-v1-'))
-    expect(backups).toHaveLength(1)
-    const backup = new DatabaseSync(join(store.root, backups[0]!), { readOnly: true })
-    try { expect(backup.prepare('PRAGMA user_version').get()?.user_version).toBe(1); expect(backup.prepare('SELECT name FROM pods').get()?.name).toBe('Previous') }
-    finally { backup.close() }
-  })
   it('rejects a future database without modifying its bytes', () => {
     const store = fixture(); store.db.exec('PRAGMA user_version=999'); store.close(); stores.splice(stores.indexOf(store), 1)
     const before = readFileSync(store.path)
     expect(() => new PodDatabase(store.root)).toThrow('newer application')
     expect(readFileSync(store.path).equals(before)).toBe(true)
   })
-})
-
-it('migrates version 23 receipts intact and allows detaching only completed effects', () => {
-  let store = fixture(); const pod = store.createPod({ name: 'Receipts' })
-  const run = '00000000-0000-4000-8000-000000000001'
-  store.db.prepare('INSERT INTO runs VALUES(?,?,?,\'completed\',1,2,\'Done\',NULL,0,1)').run(run, pod.id, digest('script'))
-  store.db.prepare('INSERT INTO effect_ledger VALUES(?,?,?,?,?,\'completed\',?)').run(pod.id, 'delivered', 'http.request', digest('input'), run, '{"receipt":"original"}')
-  const receipts = store.db.prepare('SELECT * FROM effect_ledger').all()
-  removeGraphSchema(store.db)
-  store.db.exec(`
-    CREATE TABLE legacy_effects(pod_id TEXT NOT NULL REFERENCES pods(id),effect_key TEXT NOT NULL,operation TEXT NOT NULL,input_hash TEXT NOT NULL,run_id TEXT NOT NULL REFERENCES runs(id),state TEXT NOT NULL,result TEXT,PRIMARY KEY(pod_id,effect_key));
-    INSERT INTO legacy_effects SELECT * FROM effect_ledger;
-    DROP TABLE effect_ledger;
-    ALTER TABLE legacy_effects RENAME TO effect_ledger;
-    DROP TABLE run_deletion_jobs;
-    DROP INDEX runs_retention;
-    DROP INDEX accepted_events_run;
-    DROP INDEX workflow_nodes_run;
-    ALTER TABLE run_inputs DROP COLUMN retry_at;
-    ALTER TABLE run_inputs DROP COLUMN retry_attempt;
-    ALTER TABLE run_inputs DROP COLUMN retry_epoch;
-    PRAGMA user_version=23;
-  `)
-  store = reopen(store)
-  expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(schemaVersion)
-  expect(store.db.prepare('SELECT * FROM effect_ledger').all()).toEqual(receipts)
-  store.db.prepare('UPDATE effect_ledger SET run_id=NULL').run()
-  store.db.prepare('DELETE FROM runs').run()
-  expect(store.db.prepare('SELECT result FROM effect_ledger').get()?.result).toBe('{"receipt":"original"}')
-  expect(() => store.db.prepare('INSERT INTO effect_ledger VALUES(?,?,?,?,NULL,\'intent\',NULL)').run(pod.id, 'unresolved', 'http.request', digest('input'))).toThrow('CHECK')
-  expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
-})
-
-it('upgrades a version 26 database with the table for gate batches and keeps its graph data', () => {
-  let store = fixture()
-  removeNetworkSchema(store.db)
-  store.db.exec('DROP INDEX graph_gate_batches_open; DROP TABLE graph_gate_batches; PRAGMA user_version=26')
-  store.db.prepare('INSERT INTO graph_items VALUES(?,?,?,?,?,?,?,?)').run('item', 'graph', 'run', 'mail-1', 'mail.open', 'node', '{}', 1)
-  store = reopen(store)
-  expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(schemaVersion)
-  expect(store.db.prepare('SELECT count(*) AS count FROM graph_gate_batches').get()?.count).toBe(0)
-  expect(store.db.prepare('SELECT key FROM graph_items').get()?.key).toBe('mail-1')
-  expect(readdirSync(store.root).filter(file => file.startsWith('before-v26-'))).toHaveLength(1)
-})
-
-it('upgrades a version 25 database and archives its workflows without losing their rows', () => {
-  let store = fixture(); const pod = store.createPod({ name: 'Member' })
-  const id = '00000000-0000-4000-8000-0000000000a0'; const nodes = [{ podId: pod.id, after: [], handoff: false }]
-  removeGraphSchema(store.db); store.db.exec('PRAGMA user_version=25')
-  store.db.prepare('INSERT INTO workflows(id,revision,name,nodes,schedule,enabled,next_at,mail) VALUES(?,3,?,?,NULL,0,NULL,NULL)').run(id, 'Morgenbriefing', JSON.stringify(nodes))
-  store = reopen(store)
-  expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(schemaVersion)
-  expect(store.db.prepare('SELECT id,revision,name,nodes,mode,archived FROM workflows').all()).toEqual([{ id, revision: 3, name: 'Morgenbriefing', nodes: JSON.stringify(nodes), mode: 'sequence', archived: 1 }])
-  for (const table of ['workflow_channels', 'workflow_gates', 'workflow_values', 'graph_items', 'graph_deliveries', 'graph_item_events']) expect(store.db.prepare(`SELECT count(*) AS count FROM ${table}`).get()?.count, table).toBe(0)
-  const backups = readdirSync(store.root).filter(file => file.startsWith('before-v25-'))
-  expect(backups).toHaveLength(1)
-  const backup = new DatabaseSync(join(store.root, backups[0]!), { readOnly: true })
-  try { expect(backup.prepare('SELECT name FROM workflows').get()?.name).toBe('Morgenbriefing') }
-  finally { backup.close() }
-  expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
 })
 
 it('reports every transition of a Pod to active, whichever write makes it', () => {

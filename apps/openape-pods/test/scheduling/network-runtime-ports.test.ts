@@ -60,7 +60,8 @@ it('executes assigned program reads through the standalone tool path without a n
   validateCapabilities(f, source, [capability])
   const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, { podId: consumer, source: null, serialCase: false }], ['input'])
   f.process(id, [source], [source], 1); f.engine.tick()
-  await expect.poll(() => f.store.db.prepare('SELECT state FROM network_invocations WHERE pod_id=?').get(source)?.state).toBe('completed')
+  // 101 sequential tool reads take far longer than expect.poll's default second when every workspace tests at once.
+  await expect.poll(() => f.store.db.prepare('SELECT state FROM network_invocations WHERE pod_id=?').get(source)?.state, { timeout: 15000 }).toBe('completed')
   expect(checked).toBe(true)
   expect(calls).toHaveLength(101)
   expect(f.engine.view().networks[0]!.state).toBe('paused')

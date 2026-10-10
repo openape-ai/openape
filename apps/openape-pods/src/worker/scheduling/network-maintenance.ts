@@ -22,15 +22,10 @@ export function pruneNetworkTraces(store: PodDatabase, now: number): number {
   for (const network of store.db.prepare('SELECT id FROM networks ORDER BY id LIMIT 64').all()) {
     store.transaction(() => {
       const limit = store.db.prepare(`SELECT t.id FROM network_trace_events t WHERE t.network_id=? AND ${completedTrace} ORDER BY t.id DESC LIMIT 1 OFFSET 9999`).get(network.id!)?.id ?? 0
-      const expired = store.db.prepare(`SELECT t.id,t.kind,t.created_at FROM network_trace_events t WHERE t.network_id=? AND ${completedTrace}
+      const expired = store.db.prepare(`SELECT t.id FROM network_trace_events t WHERE t.network_id=? AND ${completedTrace}
         AND (t.created_at<? OR t.id<?) ORDER BY t.id LIMIT 500`).all(network.id!, now - 7 * 86400000, limit)
-      for (const trace of expired) {
-        const day = Math.floor(Number(trace.created_at) / 86400000)
-        store.db.prepare('INSERT INTO network_trace_history VALUES(?,?,?,1) ON CONFLICT(network_id,day,kind) DO UPDATE SET count=count+1').run(network.id!, day, trace.kind!)
-        store.db.prepare('DELETE FROM network_trace_events WHERE id=?').run(trace.id!)
-      }
+      for (const trace of expired) store.db.prepare('DELETE FROM network_trace_events WHERE id=?').run(trace.id!)
       removed += expired.length
-      store.db.prepare('DELETE FROM network_trace_history WHERE network_id=? AND day<?').run(network.id!, Math.floor(now / 86400000) - 90)
     })
   }
   return removed

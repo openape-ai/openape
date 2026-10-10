@@ -41,8 +41,7 @@ async function fixture() {
     const lease = String(body.lease)
     if (body.type === 'begin') return server.begin(actor)
     if (body.type === 'parts') return server.stage(actor, lease, body.parts as Record<string, unknown>)
-    if (body.type === 'publish' && body.format === 2) return server.publishParts(actor, lease, String(body.id), Number(body.revision), body.changes as Record<string, string | null>, String(body.hash), body.completion as Parameters<WorkspaceStore['publish']>[5])
-    if (body.type === 'publish') return server.publish(actor, lease, String(body.id), Number(body.revision), body.snapshot, body.completion as Parameters<WorkspaceStore['publish']>[5])
+    if (body.type === 'publish') return server.publishParts(actor, lease, String(body.id), Number(body.revision), body.changes as Record<string, string | null>, String(body.hash), body.completion as Parameters<WorkspaceStore['publishParts']>[6])
     if (body.type === 'heartbeat') return server.heartbeat(actor, lease, String(body.hash))
     if (body.type === 'claim') return server.claim(actor, lease)
     if (body.type === 'disconnect') return server.disconnect(actor, lease)
@@ -86,9 +85,8 @@ it('adopts a real script and schedule, runs from browser and desktop, and resume
   expect(current.runs.runs).toHaveLength(2)
   expect(current.scheduling.spec).toEqual(initial.pods[0]!.scheduling.spec)
   expect(current.scheduling.revision).toBe(initial.pods[0]!.scheduling.revision)
-  const snapshot = f.server.archive(f.actor, String(f.server.db.prepare('SELECT lease FROM runtimes').get()!.lease))!
-  expect(snapshot.archive.tables.remote_pods![0]!.identity).toContain('synthetic-public-reference')
-  expect(Object.keys(snapshot.archive.tables)).not.toContain('remote_registration')
+  // Views only: no table rows, so neither Pod identities nor the desktop registration reach the service.
+  expect(JSON.stringify(f.server.db.prepare('SELECT key,value FROM parts').all())).not.toContain('synthetic-public-reference')
   const script = initial.workspace.pods[0]!.activeScript!
   expect(Buffer.from(f.server.artifact(f.owner, f.actor.id, f.pod.id, `blobs/${script}`))).toEqual(await readFile(join(f.root, 'blobs', script)))
 })

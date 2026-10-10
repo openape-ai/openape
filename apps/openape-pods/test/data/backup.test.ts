@@ -1,4 +1,3 @@
-import { removeNetworkControls } from '../storage/legacy'
 import { seedNetwork } from '../storage/network-fixture'
 // @vitest-environment node
 import { appendFile, chmod, mkdtemp, mkdir, lstat, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
@@ -72,24 +71,16 @@ it('leaves the last good backup and checkpoint intact after a simulated disk-ful
   await expect(createBackup(store, exports, () => { throw Object.assign(new Error('Disk full'), { code: 'ENOSPC' }) })).rejects.toThrow('Disk full')
   expect(store.checkpoint(pod.id)).toEqual(before); expect(await readdir(exports)).toEqual([good.split('/').at(-1)])
 })
-it('preserves remote ownership but fences transport and reviews after restoring without credentials', async () => {
+it('preserves remote ownership but drops the desktop registration after restoring without credentials', async () => {
   const { store, exports, pod } = await fixture()
   const owner = JSON.stringify({ issuer: 'https://id.example', subject: 'owner@example.test' })
   const identity = JSON.stringify({ subject: 'existing-agent@example.test', keyId: 'original-key' })
   store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,?,?,NULL)').run(pod.id, owner, randomUUID(), randomUUID(), 'ready', identity)
   store.db.prepare('INSERT INTO remote_registration VALUES(1,?,1)').run('{}')
-  store.db.prepare('INSERT INTO remote_devices VALUES(?,?,?,?,0)').run(randomUUID(), owner, '{}', 1)
-  store.db.prepare('INSERT INTO remote_program_catalog VALUES(?,?,?,?,0)').run(randomUUID(), owner, '{}', 'synthetic-hash')
-  store.db.prepare('INSERT INTO remote_program_reviews VALUES(?,?,?)').run(randomUUID(), pod.id, '{}')
-  const operation = randomUUID()
-  store.db.prepare('INSERT INTO remote_inbox VALUES(?,?,?,?,?,NULL,NULL,?)').run(operation, 'synthetic-hash', randomUUID(), '{}', 'received', Date.now())
-  store.db.prepare('INSERT INTO remote_outbox(id,operation_id,device_id,route,body) VALUES(?,?,?,?,?)').run(operation, operation, randomUUID(), '{}', '{}')
   const backup = await createBackup(store, exports)
   const restored = new PodDatabase(await restoreBackup(backup, exports, schemaVersion)); stores.push(restored)
   expect(restored.db.prepare('SELECT owner,identity,phase FROM remote_pods').get()).toMatchObject({ owner, identity, phase: 'needs_desktop_action' })
-  for (const table of ['remote_registration', 'remote_devices', 'remote_outbox', 'remote_program_reviews']) expect(restored.db.prepare(`SELECT * FROM ${table}`).all()).toEqual([])
-  expect(restored.db.prepare('SELECT revoked FROM remote_program_catalog').get()?.revoked).toBe(1)
-  expect(restored.db.prepare('SELECT state FROM remote_inbox').get()?.state).toBe('unknown')
+  expect(restored.db.prepare('SELECT * FROM remote_registration').all()).toEqual([])
 })
 it('rejects corrupted evidence and traversal without publishing a partial restored profile', async () => {
   const { store, exports } = await fixture(); const backup = await createBackup(store, exports)
@@ -270,11 +261,8 @@ it('keeps the newest 50 rows and folders while preserving Pod data and processed
   f.store.db.prepare('INSERT INTO execution_domains VALUES(?,?,1)').run(join(f.root, 'runs', f.runId, 'domain'), f.runId)
   const operation = randomUUID()
   f.store.db.prepare('INSERT INTO control_runs VALUES(?,?,\'pod\')').run(operation, f.runId)
-  f.store.db.prepare('INSERT INTO control_changes VALUES(?,?,?)').run(operation, randomUUID(), JSON.stringify({ id: operation, kind: 'run', state: 'applied', results: [{ podId: f.pod.id, action: 'run', result: { runId: f.runId } }] }))
   await f.retention.runs.prune()
   expect(f.store.db.prepare('SELECT * FROM control_runs').all()).toEqual([])
-  const decision = JSON.parse(String(f.store.db.prepare('SELECT body FROM control_changes WHERE id=?').get(operation)!.body))
-  expect(decision.state).toBe('applied'); expect(JSON.stringify(decision)).not.toContain(f.runId)
   expect(f.store.db.prepare('SELECT id FROM runs ORDER BY started_at,rowid').all().map(row => row.id)).toEqual(f.ids.slice(5))
   expect((await readdir(join(f.root, 'runs'))).sort()).toEqual(f.ids.slice(5).sort())
   expect({ pods: f.store.listPods(), checkpoint: f.store.checkpoint(f.pod.id), knowledge: f.store.knowledge(f.pod.id), schedules: f.store.db.prepare('SELECT * FROM schedules').all() }).toEqual(before)
@@ -478,8 +466,8 @@ async function alterBackup(backup: string, sql: string) {
 }
 
 it.each([
-  ['DROP INDEX network_effect_execution_guard', 'altered network storage'],
-  ['DROP TABLE network_trace_events', 'altered network storage'],
+  ['DROP INDEX network_effect_execution_guard', 'altered storage'],
+  ['DROP TABLE network_trace_events', 'altered storage'],
   ['CREATE TRIGGER malicious AFTER UPDATE ON networks BEGIN SELECT 1; END', 'unsupported database programs'],
   ['UPDATE network_events SET payload=\'{}\'', 'content digest'],
   ['DELETE FROM pod_memberships', 'Invalid network'],
@@ -555,11 +543,10 @@ it('preserves pinned historical events and record authors after a current defini
     store.db.prepare('INSERT INTO data_record_revisions VALUES(?,?,1,1,?,?,1,?,0,1)').run(collection, 'record', f.runId, f.definitionId, '{"value":"retained"}')
     store.db.prepare('INSERT INTO pod_definition_versions VALUES(?,2,?,?,?,2)').run(f.definitionId, f.hash, digest('new lock'), '{}')
     store.db.prepare('UPDATE instance_definition_bindings SET definition_version=2,binding_revision=2').run()
-    store.db.prepare('UPDATE network_members SET definition_version=2,binding_revision=2').run()
   })
   const backup = await createBackup(store, exports)
   const restored = new PodDatabase(await restoreBackup(backup, exports, schemaVersion)); stores.push(restored)
-  expect(restored.db.prepare('SELECT definition_version FROM network_members').get()?.definition_version).toBe(2)
+  expect(restored.db.prepare('SELECT definition_version FROM instance_definition_bindings').get()?.definition_version).toBe(2)
   expect(restored.db.prepare('SELECT definition_version FROM network_events').get()?.definition_version).toBe(1)
   expect(restored.db.prepare('SELECT definition_version,body FROM data_record_revisions').get()).toEqual({ definition_version: 1, body: '{"value":"retained"}' })
 })
@@ -582,19 +569,4 @@ it('preserves unknown invocation authority even when recorded effects have been 
   store.transaction(() => restoreNetworkStorage(store.db))
   expect(store.db.prepare('SELECT state FROM network_invocations').get()?.state).toBe('unknown')
   expect(store.db.prepare('SELECT state FROM network_deliveries').get()?.state).toBe('unknown')
-})
-
-it('restores a schema-28 archive through its historical boundary before adding current controls', async () => {
-  const { store, exports } = await fixture(); const f = seedNetwork(store)
-  removeNetworkControls(store.db)
-  store.db.exec('PRAGMA user_version=28')
-  const archive = await createBackup(store, exports)
-  const target = await restoreBackup(archive, exports, schemaVersion)
-  const restored = new PodDatabase(target); stores.push(restored)
-  expect(restored.db.prepare('PRAGMA user_version').get()?.user_version).toBe(schemaVersion)
-  expect(restored.db.prepare('SELECT baseline_state,state FROM networks WHERE id=?').get(f.networkId)).toEqual({ baseline_state: 'review_required', state: 'paused' })
-  expect(restored.db.prepare('SELECT body FROM network_checkpoints WHERE network_id=?').get(f.networkId)?.body).toBe('{"cursor":"retained"}')
-  expect(restored.db.prepare('SELECT event_id FROM network_event_identities WHERE network_id=?').get(f.networkId)?.event_id).toBe(f.eventId)
-  expect(restored.db.prepare('SELECT outcome FROM network_effect_receipts ORDER BY sequence DESC LIMIT 1').get()?.outcome).toBe('unknown')
-  expect(restored.db.prepare('SELECT count(*) AS count FROM network_source_clocks').get()?.count).toBe(0)
 })

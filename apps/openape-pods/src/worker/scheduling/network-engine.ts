@@ -222,7 +222,7 @@ export class NetworkEngine {
         if (!runId) continue
         batch.remaining--; started = true; active = true
         if (member.source) batch.startedSources.add(member.podId)
-        this.store.db.prepare('UPDATE network_process_previews SET remaining=?,started_sources=? WHERE id=?').run(batch.remaining, canonicalNetworkJson([...batch.startedSources]), id)
+        this.store.db.prepare('UPDATE network_process_previews SET remaining=? WHERE id=?').run(batch.remaining, id)
       }
       if ((!active && !started) || batch.preview.expiresAt < Date.now()) {
         this.trace(definition.id, 'process-now-finished', { previewId: id, admitted: batch.preview.budget - batch.remaining, expired: batch.preview.expiresAt < Date.now(), activeInvocationsMaySettle: active })
@@ -333,7 +333,6 @@ export class NetworkEngine {
       new DefinitionCatalog(this.store, this.resources, parseOwner(this.currentOwner())).appendScriptVersion(podId, next)
       const binding = this.binding(podId, parseOwner(this.currentOwner()), definition.groupId)
       const version = binding.definition_version as number
-      this.store.db.prepare('UPDATE network_members SET definition_id=?,definition_version=?,binding_revision=? WHERE network_id=? AND pod_id=?').run(binding.definition_id!, version, binding.binding_revision!, networkId, podId)
       const amended = parseNetworkDefinition({ ...definition, members: definition.members.map(item => item.podId === podId ? { ...item, definitionId: binding.definition_id, definitionVersion: version, bindingRevision: binding.binding_revision } : item) })
       this.validate(amended)
       const body = canonicalNetworkJson(amended)
@@ -390,7 +389,6 @@ export class NetworkEngine {
       if (issues.length) throw new Error(`Definition update blocked: ${issues.join('; ')}. The current version remains pinned.`)
       update()
       const binding = this.binding(podId, parseOwner(this.currentOwner()), definition.groupId)
-      this.store.db.prepare('UPDATE network_members SET definition_id=?,definition_version=?,binding_revision=? WHERE pod_id=?').run(binding.definition_id!, binding.definition_version!, binding.binding_revision!, podId)
       const next = parseNetworkDefinition({ ...definition, revision: definition.revision + 1, members: definition.members.map(member => member.podId === podId ? { ...member, definitionId: binding.definition_id, definitionVersion: binding.definition_version, bindingRevision: binding.binding_revision, contract: parseGraphContract(JSON.parse(binding.contract as string)) } : member) })
       this.validate(next)
       const body = canonicalNetworkJson(next)
@@ -455,7 +453,7 @@ export class NetworkEngine {
       this.store.db.prepare('INSERT INTO networks(id,owner_issuer,owner_subject,group_id,name,revision,restore_nonce,created_at) VALUES(?,?,?,?,?,1,?,?)').run(id, owner.issuer, owner.subject, draft.groupId, draft.name, randomUUID(), now)
       this.store.db.prepare('INSERT INTO network_revisions VALUES(?,1,?,?,?)').run(id, body, digest(body), now)
       for (const member of members) {
-        this.store.db.prepare('INSERT INTO network_members VALUES(?,?,?,?,?,?)').run(id, member.podId, member.bindingRevision, member.definitionId, member.definitionVersion, member.source?.bindingId ?? null)
+        this.store.db.prepare('INSERT INTO network_members VALUES(?,?,?)').run(id, member.podId, member.source?.bindingId ?? null)
         this.store.db.prepare('INSERT INTO network_checkpoints VALUES(?,?,0,\'{}\')').run(id, member.podId)
         for (const declaredChannel of member.contract.takes) {
           const channel = networkSubscriptionChannel(definition, member.podId, declaredChannel)
@@ -538,7 +536,7 @@ export class NetworkEngine {
     catch (failure) {
       if (failure instanceof NetworkQuotaError) {
         this.store.db.prepare('UPDATE networks SET state=\'paused\' WHERE id=?').run(definition.id)
-        this.store.db.prepare('INSERT INTO network_runtime_status(network_id,intake_error,inspected_at) VALUES(?,?,?) ON CONFLICT(network_id) DO UPDATE SET intake_error=excluded.intake_error,inspected_at=excluded.inspected_at').run(definition.id, failure.message, Date.now())
+        this.store.db.prepare('INSERT INTO network_runtime_status(network_id,intake_error) VALUES(?,?) ON CONFLICT(network_id) DO UPDATE SET intake_error=excluded.intake_error').run(definition.id, failure.message)
       }
       const message = (failure instanceof Error ? failure.message : 'Network admission failed').slice(0, 10000)
       const previous = this.store.db.prepare('SELECT body FROM network_trace_events WHERE network_id=? AND kind=\'instance-attention\' AND json_extract(body,\'$.podId\')=? ORDER BY id DESC LIMIT 1').get(definition.id, podId)

@@ -148,7 +148,6 @@ function networkOwner() {
 const networks = new NetworkEngine(store, dispatcher, registry, runtime.helper, networkOwner, false)
 if (process.env.PODS_FIXTURE_GATE_COLLECT === '0') networks.gates.collect = { quietMs: 0, maxMs: 0 }
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
-let centralNetworkReads = false
 let centralUntil = process.env.PODS_CENTRAL_ENABLED === '1' ? 0 : Infinity
 let scanAt = 0
 let storageAt = 0
@@ -177,10 +176,8 @@ async function executeCodexNetwork(command: CodexNetworkCommand): Promise<Networ
 }
 async function executeNetwork(command: NetworkCommand, ownerOperation: boolean): Promise<NetworkView> {
   if (command.type === 'create' && !command.draft.expectedSetup) throw new Error('Network creation requires a reviewed setup fingerprint')
-  if (command.type === 'create' && process.env.PODS_CENTRAL_ENABLED === '1' && !centralNetworkReads) throw new Error('Network creation requires bounded central publication support')
   if ((command.type === 'activate' || command.type === 'process') && (!startupReady || (Date.now() >= centralUntil && !ownerOperation) || suspended || maintenance)) throw new Error('Network execution requires a ready local runtime')
   const result = command.type === 'inspect' || command.type === 'retry' || command.type === 'reconcileEffect' || command.type === 'resolveConflict' || command.type === 'discardFailure' ? await networks.recover(command) : networks.execute(command)
-  if (process.env.PODS_CENTRAL_ENABLED === '1' && !centralNetworkReads) result.unavailableReason = 'Network creation requires bounded central publication support'
   if (command.type === 'process' && Date.now() < centralUntil) scheduleDomains(store, [() => scheduler.tick(), () => networks.tick()])
   return result
 }
@@ -239,7 +236,7 @@ port.on('message', async (event) => {
   if (!request || typeof request.id !== 'string') throw new Error('Invalid worker request')
   try {
     if (request.command && typeof request.command === 'object' && 'central' in request.command) {
-      const command = request.command.central as { type: string, until?: number, owner?: unknown, networkReads?: boolean, command?: unknown }
+      const command = request.command.central as { type: string, until?: number, owner?: unknown, command?: unknown }
       if (command.type === 'gate') {
         if (typeof command.until !== 'number' || !Number.isFinite(command.until) || command.until < 0 || command.until > Date.now() + 30000) throw new Error('Invalid central lease')
         centralUntil = command.until
@@ -264,8 +261,7 @@ port.on('message', async (event) => {
         port.postMessage({ id: request.id, state: result }); return
       }
       if (command.type !== 'snapshot') throw new Error('Unsupported central worker command')
-      centralNetworkReads = command.networkReads === true
-      port.postMessage({ id: request.id, state: new CentralProjection(store, registry, scripts, dispatcher, scheduler).snapshot(parseOwner(command.owner), command.networkReads === true) }); return
+      port.postMessage({ id: request.id, state: new CentralProjection(store, registry, scripts, dispatcher, scheduler).snapshot(parseOwner(command.owner)) }); return
     }
     if (request.command && typeof request.command === 'object' && 'data' in request.command) {
       const command = request.command.data as DataInternal
@@ -325,7 +321,7 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'definitions' in request.command) {
       const command = parseDefinitionCommand(request.command.definitions)
       const registered = store.db.prepare('SELECT 1 FROM remote_registration WHERE id=1').get()
-      const unavailableReason = !registered ? 'Finish desktop identity setup before using reusable definitions.' : process.env.PODS_CENTRAL_ENABLED === '1' && !centralNetworkReads ? 'Definition editing is not available for this connected workspace yet.' : undefined
+      const unavailableReason = registered ? undefined : 'Finish desktop identity setup before using reusable definitions.'
       if (command.type === 'list') {
         const state = registered ? new DefinitionWorkspace(store, registry, networkOwner()).view() : { definitions: [], instances: [], provisioning: [] }
         port.postMessage({ id: request.id, state: { ...state, ...(unavailableReason ? { unavailableReason } : {}) } }); return
@@ -346,8 +342,6 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'sharing' in request.command) {
       const command = parseSharingCommand(request.command.sharing)
       if (!store.db.prepare('SELECT 1 FROM remote_registration WHERE id=1').get()) throw new Error('Finish desktop identity setup before sharing packages')
-      // Imported compositions follow the native network creation guard for connected workspaces.
-      if (command.scope === 'import' && command.type === 'finalize' && process.env.PODS_CENTRAL_ENABLED === '1' && !centralNetworkReads) throw new Error('Network creation requires bounded central publication support')
       sharing ??= new SharingService(store, registry, networkOwner(), join(dirname(runtime.entry), '../vendor/npm'), { networks, catalog: new DefinitionCatalog(store, registry, networkOwner()) })
       const slow = (command.scope === 'export' && (command.type === 'review' || command.type === 'download')) || (command.scope === 'import' && command.type === 'prepareDependencies')
       if (!slow) { port.postMessage({ id: request.id, state: await sharing.execute(command, runtime, scriptController.signal) }); return }

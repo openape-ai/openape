@@ -5,13 +5,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, expect, it } from 'vitest'
 import { parseCommand, parseWorkspace } from '../../src/contracts/control'
-import { PodDatabase, schemaVersion } from '../../src/worker/storage/database'
+import { PodDatabase } from '../../src/worker/storage/database'
 import { AutomationDescriptions } from '../../src/worker/workspace/automation-descriptions'
 import { seedNetwork } from '../storage/network-fixture'
 
 const root = mkdtempSync(join(tmpdir(), 'pods-automation-descriptions-'))
-let store = new PodDatabase(root)
-afterEach(() => { store.db.prepare('DELETE FROM collection_descriptions').run() })
+const store = new PodDatabase(root)
+afterEach(() => { store.db.prepare('DELETE FROM automation_descriptions').run() })
 afterAll(() => { store.close(); rmSync(root, { recursive: true, force: true }) })
 let seeded: string | undefined
 const network = (): string => seeded ??= seedNetwork(store).networkId
@@ -53,13 +53,4 @@ it('validates the command and the listed descriptions', () => {
   expect(parseWorkspace(state([{ id, text: 'Purpose', revision: 1 }])).descriptions).toEqual([{ id, text: 'Purpose', revision: 1 }])
   expect(() => parseWorkspace(state([{ id, text: 'x'.repeat(1001), revision: 1 }]))).toThrow('Invalid workspace descriptions')
   expect(() => parseWorkspace(state('none'))).toThrow('Invalid workspace descriptions')
-})
-
-it('adds description storage to an existing schema-37 profile without touching its data', () => {
-  const id = store.createPod({ name: 'Morning briefing' }).id
-  store.db.exec('DROP TABLE network_gate_item_grants; DROP TABLE secret_requests; DROP TABLE collection_descriptions; PRAGMA user_version=37')
-  store.close(); store = new PodDatabase(root)
-  expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(schemaVersion)
-  expect(store.getPod(id).name).toBe('Morning briefing')
-  expect(new AutomationDescriptions(store).view()).toEqual([])
 })
