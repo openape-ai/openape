@@ -12,7 +12,11 @@ const pausedDetail = computed(() => {
   return parts.length ? t('of which {parts}', { parts: parts.join(', ') }) : t('nothing paused')
 })
 const degradedDetail = computed(() => facts.value.degraded.name ? `${facts.value.degraded.name} · ${diagnostic(facts.value.degraded.reason)}` : t('nothing degraded'))
-const decisionDetail = computed(() => facts.value.decisions.gates.length ? facts.value.decisions.gates.map(gate => gate.group ? `${gate.title} · ${gate.group}` : gate.title).join(', ') : t('nothing waiting'))
+const decisionDetail = computed(() => {
+  const { gates, approvals } = facts.value.decisions
+  const parts = [...gates.map(gate => gate.group ? `${gate.title} · ${gate.group}` : gate.title), ...(approvals ? [t('{count} runtime requests', { count: approvals })] : [])]
+  return parts.length ? parts.join(', ') : t('nothing waiting')
+})
 </script>
 
 <template>

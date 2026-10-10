@@ -13,7 +13,7 @@ export function parseServiceScope(value: unknown): ServiceScope {
   return scope
 }
 
-export interface RunContextRequest extends ServiceCheck { grant?: { permission: string, issuer: string, subject: string } }
+export type RunContextRequest = ServiceCheck
 
 /** Interval at which a running Pod's runtime grant, owner, identity and key are re-checked at the IdP. */
 export const runAuthorityWatchMs = 60 * 1000

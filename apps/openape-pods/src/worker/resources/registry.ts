@@ -108,21 +108,23 @@ export class ResourceRegistry {
     this.revokeActive(podId)
   }
 
-  assignHttp(podId: string, permission: unknown, authority: ProgramAuthority, expectedEpoch: number, authentication?: HttpAuthentication): void {
+  /** The HTTP sandbox: which origin and methods the Pod can reach. Its grant is requested separately. */
+  assignHttp(podId: string, permission: unknown, expectedEpoch: number, authentication?: HttpAuthentication): string {
     const scope = parseHttpPermission(permission)
+    const id = randomUUID()
     this.store.transaction(() => {
       const pod = this.store.getPod(podId)
-      if (pod.lifecycle === 'archived' || this.epoch(podId) !== expectedEpoch || authority.identity.podId !== podId) throw new Error('Pod or HTTP permissions changed; reload before assigning access')
+      if (pod.lifecycle === 'archived' || this.epoch(podId) !== expectedEpoch) throw new Error('Pod or HTTP permissions changed; reload before assigning access')
       const current = this.list(podId).filter(item => item.kind === 'tool' && item.state === 'ready')
       if (!current.some(item => item.configuration.type === 'http' && item.configuration.origin === scope.origin) && current.length >= 16) throw new Error('This pod already has 16 tools')
       for (const item of this.list(podId).filter(item => item.kind === 'tool' && item.configuration.type === 'http' && item.configuration.origin === scope.origin && item.state !== 'revoked')) this.store.db.prepare('UPDATE resources SET state=\'revoked\',revision=revision+1 WHERE id=?').run(item.id)
-      const id = randomUUID()
-      const configuration = { type: 'http', ...scope, authority, capability: `tool.http_${id.replaceAll('-', '')}.request`, ...(authentication ? { authentication } : {}) }
+      const configuration = { type: 'http', ...scope, capability: `tool.http_${id.replaceAll('-', '')}.request`, ...(authentication ? { authentication } : {}) }
       this.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(id, podId, 'tool', 'ready', scope.origin, JSON.stringify(configuration))
       this.advance(podId)
       this.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(podId)
     })
     this.revokeActive(podId)
+    return id
   }
 
   assignJev(podId: string, connectionId: string, model: string, maxAttempts: number, authority: ProgramAuthority, expectedEpoch: number): void {

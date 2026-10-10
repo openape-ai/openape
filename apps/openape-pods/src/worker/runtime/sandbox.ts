@@ -1,4 +1,6 @@
 import { quoteShell } from '../../runtime/environment'
+import type { SandboxReach } from '../../contracts/sandbox'
+import { existsSync, realpathSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
@@ -7,6 +9,8 @@ import { isAbsolute, join } from 'node:path'
 import type { Duplex, Readable, Writable } from 'node:stream'
 
 export interface RuntimePolicy {
+  /** `owner` keeps supervision but gives the program the owner's file and network reach except its protected paths; the Pod identity is unchanged. */
+  reach?: SandboxReach
   executable: string
   workspace: string
   readFiles: string[]
@@ -20,8 +24,20 @@ function literal(path: string): string {
   if (!isAbsolute(path) || /[\0\r\n\\"]/.test(path)) throw new Error('Unsupported sandbox path')
   return JSON.stringify(path)
 }
+function subpaths(paths: string[]): string {
+  return paths.map(path => `(subpath ${literal(path)})`).join(' ')
+}
+/**
+ * The folders leading to closed paths stay unwritable, so a closed path cannot be moved aside or replaced through a
+ * renamed or linked parent, even inside a writable folder. Each path arrives as written and as resolved.
+ */
+function ancestorRule(paths: string[]): string {
+  const ancestors = [...new Set(paths.flatMap(path => path.split('/').slice(1, -1).map((_, index, parts) => `/${parts.slice(0, index + 1).join('/')}`)))]
+  return ancestors.length ? `(deny file-write* ${ancestors.map(path => `(literal ${literal(path)})`).join(' ')})` : ''
+}
 export function sandboxPolicy(policy: RuntimePolicy): string {
   const executable = literal(policy.executable)
+  if (policy.reach?.level === 'owner') return ownerPolicy(policy, executable)
   const readFiles = policy.readFiles.map(path => `(literal ${literal(path)})`).join(' ')
   const runtime = policy.runtimeDirectories.map(path => `(subpath ${literal(path)})`).join(' ')
   const reads = (policy.readDirectories ?? []).map(path => `(subpath ${literal(path)})`).join(' ')
@@ -30,6 +46,7 @@ export function sandboxPolicy(policy: RuntimePolicy): string {
     if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Invalid broker port')
     return `(remote tcp "localhost:${port}")`
   }).join(' ')
+  const deny = policy.reach?.deny ?? []
   return `(version 1)
 (deny default)
 (allow process-exec (literal ${executable}))
@@ -42,8 +59,60 @@ export function sandboxPolicy(policy: RuntimePolicy): string {
 (allow file-write* (literal "/dev/null"))
 (allow file-read* file-write* (subpath ${literal(policy.workspace)}) ${writes})
 ${network ? `(allow network-outbound ${network})` : ''}
+${deny.length ? `${ancestorRule(deny)}\n(deny file-read* file-write* ${subpaths(deny)})` : ''}
 `
 }
+/**
+ * The owner level is the owner's reach on this Mac: everything the owner can do, then the protected paths denied, then
+ * the program's own workspace, state and runtime allowed again, then the configured denylist denied (the last matching
+ * rule wins, so no assigned folder reopens a denied path). The folders leading to a protected or denied path stay
+ * unwritable, so it cannot be moved aside and replaced. Seatbelt checks a Unix socket connection as network access,
+ * not as file access, so the sockets under these paths (such as the Pods MCP control socket) are closed separately;
+ * the isolated level allows no Unix socket at all. Network reach is the owner's as well, so the application network
+ * hosts and their proxy only apply at the isolated level.
+ *
+ * These rules only prevent direct access. A program at this level can leave code that later runs unsandboxed as the
+ * owner (launch agents, shell startup files, agent hooks) and act as the owner from there, so the owner level means
+ * full trust in the Pod's code; the owner accepted this (issue 1455, October 10, 2026).
+ */
+function ownerPolicy(policy: RuntimePolicy, executable: string): string {
+  const protectedPaths = policy.reach?.protectedPaths ?? []
+  const deny = policy.reach?.deny ?? []
+  if (!protectedPaths.length) throw new Error('The owner sandbox level needs its protected paths')
+  const closed = [...protectedPaths, ...deny]
+  const writes = subpaths([policy.workspace, ...(policy.writeDirectories ?? [])])
+  const reads = subpaths([...(policy.readDirectories ?? []), ...policy.runtimeDirectories])
+  const files = [executable, ...policy.readFiles.map(literal)].map(path => `(literal ${path})`).join(' ')
+  return `(version 1)
+(allow default)
+(deny file-read* file-write* ${subpaths(protectedPaths)})
+(allow file-read* file-write* ${writes})
+(allow file-read* file-map-executable ${files} ${reads})
+${ancestorRule(closed)}
+(deny network-outbound ${closed.map(path => `(remote unix-socket (subpath ${literal(path)}))`).join(' ')})
+${deny.length ? `(deny file-read* file-write* ${subpaths(deny)})` : ''}
+`
+}
+
+// The native form returns the letter case on disk; the sandbox compares paths case-sensitively on a case-insensitive volume.
+const canonical = (path: string) => existsSync(path) ? realpathSync.native(path) : path
+/** A path as written and as resolved: the resolved form closes access through links, the written form closes replacing a link. */
+const forms = (path: string) => [...new Set([path, canonical(path)])]
+
+/**
+ * What the owner level never reaches, because the Pod identity must never become the owner's: the Pods base folder
+ * that holds every profile, the profile selection and the MCP control socket, this Pods profile and the owner's apes login.
+ */
+export function ownerProtectedPaths(profileRoot: string, profileBase: string, home: string): string[] {
+  const paths = [profileBase, profileRoot, join(home, '.config/apes')]
+  return [...new Set(paths.flatMap(forms))]
+}
+
+/** The configured denylist as absolute paths: `~/` is the owner's home, and each path is listed as written and as resolved. */
+export function deniedPaths(entries: string[], home: string): string[] {
+  return [...new Set(entries.map(entry => entry.startsWith('~/') ? join(home, entry.slice(2)) : entry).flatMap(forms))]
+}
+
 export interface ProcessDomain {
   recordPath: string
   guardian: ChildProcess

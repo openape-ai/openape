@@ -281,7 +281,7 @@ it('exports two application bindings as distinct recipient accounts without path
   writeFileSync(adapterPath, 'schema="openape-shapes/v1"\n[cli]\nid="fixture"\nexecutable="fixture"\nversion="1"\n[[operation]]\nid="read"\ncommand=["read"]\ndisplay="Read fixture"\naction="read"\nrisk="low"\nresource_chain=["fixture:*"]\n')
   const definition = await programDefinition(executable, adapterPath)
   const applicationIds = [randomUUID(), randomUUID()]; const stateIds = [randomUUID(), randomUUID()]
-  for (const [index, id] of applicationIds.entries()) f.resources.assignProgram(f.pod.id, id, { ...definition, type: 'program', stateId: stateIds[index]!, capability: `tool.app_${id.replaceAll('-', '')}.invoke`, environment: { PROFILE: 'PRIVATE_ENV_CANARY' }, grants: [] }, f.resources.epoch(f.pod.id))
+  for (const [index, id] of applicationIds.entries()) f.resources.assignProgram(f.pod.id, id, { ...definition, type: 'program', stateId: stateIds[index]!, capability: `tool.app_${id.replaceAll('-', '')}.invoke`, environment: { PROFILE: 'PRIVATE_ENV_CANARY' } }, f.resources.epoch(f.pod.id))
   installExample(f.store, f.resources, f.pod.id, 'deterministic', 'a'.repeat(64))
   const source = capturePortableSource(f.store, f.owner, f.selection); const choices = mappingChoices(source)
   choices.pods[0]!.aliases = applicationIds.map((resourceId, index) => ({ resourceId, alias: `account_${index + 1}` }))

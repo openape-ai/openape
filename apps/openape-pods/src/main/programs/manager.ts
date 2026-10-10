@@ -8,6 +8,7 @@ import { dirname, basename, join  } from 'node:path'
 import { constants } from 'node:fs'
 import { open, writeFile } from 'node:fs/promises'
 import { loadAdapter, resolveCommand } from '@openape/apes'
+import { cliAuthorizationDetailsCover } from '@openape/grants'
 import type { ProgramAssignment, ProgramCommand, ProgramDefinition, TerminalView } from '../../contracts/programs'
 import type { PodResource, ResourceState } from '../../contracts/resources'
 import type { ProgramInternal } from '../../worker/resources/programs'
@@ -15,6 +16,9 @@ import type { ConnectionManager } from '../connections/manager'
 import type { CredentialCache } from '../connections/cache'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
 import { ProgramSession } from './session'
+import type { ProgramAccess } from './session'
+import { programSpec } from '../grants/pod-grants'
+import type { PodGrants } from '../grants/pod-grants'
 import { ProgramState } from './state'
 import { prepareConsole, podWorkspace } from './console'
 
@@ -22,7 +26,7 @@ export class ProgramManager {
   private launches = new Map<string, ApplicationLaunch>()
   private shells = new Map<string, ExternalShell>()
   private sessions = new Map<string, ProgramSession>()
-  constructor(private readonly root: string, private readonly helper: string, private readonly credentials: CredentialCache, private readonly connections: ConnectionManager, private readonly resources: (podId: string) => Promise<ResourceState>, private readonly dispatch: (command: ProgramInternal) => Promise<unknown>) {}
+  constructor(private readonly root: string, private readonly helper: string, private readonly credentials: CredentialCache, private readonly connections: ConnectionManager, private readonly resources: (podId: string) => Promise<ResourceState>, private readonly dispatch: (command: ProgramInternal) => Promise<unknown>, private readonly grants: PodGrants, private readonly access: (podId: string) => ProgramAccess) {}
   private async assignment(podId: string, id: string, epoch: number): Promise<ProgramAssignment> {
     const state = await this.resources(podId)
     const resource = state.resources.find(item => item.id === id && item.podId === podId && item.state === 'ready' && item.configuration.type === 'program')
@@ -33,13 +37,13 @@ export class ProgramManager {
   async add(podId: string, epoch: number, definition: ProgramDefinition): Promise<void> {
     const id = randomUUID()
     const stateId = await new ProgramState(this.credentials).create({ podId, applicationId: id })
-    try { await this.dispatch({ type: 'save', podId, id, epoch, configuration: { ...definition, type: 'program', stateId, capability: `tool.app_${id.replaceAll('-', '')}.invoke`, grants: [] } }) }
+    try { await this.dispatch({ type: 'save', podId, id, epoch, configuration: { ...definition, type: 'program', stateId, capability: `tool.app_${id.replaceAll('-', '')}.invoke` } }) }
     catch (error) { await this.credentials.erasePodKey(stateId, podId); throw error }
   }
 
   async replace(podId: string, id: string, epoch: number, definition: ProgramDefinition): Promise<void> {
     const current = await this.assignment(podId, id, epoch)
-    await this.dispatch({ type: 'save', podId, id, epoch, configuration: { ...definition, type: 'program', stateId: current.stateId, capability: current.capability, grants: [] } })
+    await this.dispatch({ type: 'save', podId, id, epoch, configuration: { ...definition, type: 'program', stateId: current.stateId, capability: current.capability } })
   }
 
   async network(podId: string, id: string, epoch: number, hosts: string[]): Promise<void> {
@@ -48,7 +52,8 @@ export class ProgramManager {
   }
 
   async prepare(podId: string, line: string) {
-    return prepareConsole(dirname(this.root), podId, await this.resources(podId), line)
+    const grants = (await this.grants.list({ podId })).filter(grant => grant.state === 'approved')
+    return prepareConsole(dirname(this.root), podId, await this.resources(podId), line, async detail => grants.some(grant => cliAuthorizationDetailsCover(grant.details, [detail])))
   }
 
   async preview(podId: string, id: string, epoch: number, argv: string[]) {
@@ -58,15 +63,9 @@ export class ProgramManager {
     return resolveCommand(adapter, [assignment.cliId, ...argv])
   }
 
-  /** Requests the command at the IdP and assigns it; returns the IdP approval page while the owner has not decided. */
-  async grant(command: Extract<ProgramCommand, { type: 'grant' | 'start' }>): Promise<string | null> {
-    const assignment = await this.assignment(command.podId, command.applicationId, command.epoch)
-    const resolved = await this.preview(command.podId, command.applicationId, command.epoch, command.argv)
-    if (!assignment.grants.some(item => item.permission === resolved.permission) && assignment.grants.length >= 32) throw new Error('This application already has 32 command permissions')
-    const { authority, approval } = await this.connections.request(command.podId, assignment.adapterPath, [[assignment.cliId, ...command.argv]])
-    const grants = [...assignment.grants.filter(item => item.permission !== resolved.permission), { permission: resolved.permission, display: resolved.detail.display, authority }]
-    await this.dispatch({ type: 'save', podId: command.podId, id: command.applicationId, epoch: command.epoch, configuration: { ...assignment, grants } })
-    return approval
+  /** What a grant for one command of an assigned application asks for; the grant is recorded apart from the application. */
+  async grantSpec(command: Extract<ProgramCommand, { type: 'grant' }>) {
+    return programSpec(await this.assignment(command.podId, command.applicationId, command.epoch), command.argv)
   }
 
   async importFile(podId: string, applicationId: string, epoch: number, source: string): Promise<void> {
@@ -96,7 +95,7 @@ export class ProgramManager {
       const resource = await this.dispatch({ type: 'reserve', podId: command.podId, applicationId: command.applicationId, epoch: command.epoch, sessionId: id }) as PodResource
       const check = async () => { await this.dispatch({ type: 'check', podId: command.podId, sessionId: id }) }
       const release = async () => { await this.dispatch({ type: 'release', podId: command.podId, sessionId: id }) }
-      const session = new ProgramSession(id, command.podId, command.applicationId, resource.configuration as unknown as ProgramAssignment, command.argv, this.helper, this.root, this.credentials, check, release, workspace, directories)
+      const session = new ProgramSession(id, command.podId, command.applicationId, resource.configuration as unknown as ProgramAssignment, command.argv, this.helper, this.root, this.credentials, check, release, workspace, directories, this.access(command.podId))
       this.sessions.set(id, session); return session.view()
     }
     const launch = this.launches.get(command.podId)

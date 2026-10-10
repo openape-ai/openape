@@ -1,6 +1,6 @@
 import { AuthorityError, transientNetwork, transientResponse  } from '../../contracts/infrastructure'
-import type { BrokeredGrant } from '@openape/core'
-import { sameBrokeredGrant } from '@openape/grants'
+import type { BrokeredGrant, OpenApeCliAuthorizationDetail } from '@openape/core'
+import { cliAuthorizationDetailsCover, sameBrokeredGrant } from '@openape/grants'
 import type { VerifyAuthzOptions } from '@openape/grants'
 import { authorizeAssignedCommand } from '@openape/apes/assigned'
 import type { AssignedCommand } from '@openape/apes/assigned'
@@ -10,8 +10,29 @@ import { setTimeout as delay } from 'node:timers/promises'
 
 export type GrantProgress = RunApproval
 export type GrantObserver = (progress: GrantProgress) => Promise<void>
-export type GrantLookup = (permission: string, connection: AgentConnection) => Promise<string | undefined>
-interface Grant { brokered?: BrokeredGrant, id: string, status: string, request: { requester: string, audience: string, target_host: string, grant_type: string, waits_until?: number }, created_at?: number }
+export interface Grant { brokered?: BrokeredGrant, id: string, status: string, decided_by?: string, request: { requester: string, audience: string, target_host: string, grant_type: string, duration?: number, waits_until?: number, authorization_details?: { type: string }[] }, created_at?: number }
+/**
+ * The Pod grant ledger as the authority sees it: `find` selects the newest recorded grant whose details cover a call,
+ * `record` keeps every grant this Pod requested or observed, so a pending request is reused instead of asked again.
+ */
+export interface GrantLedgerPort {
+  find: (detail: OpenApeCliAuthorizationDetail, connection: AgentConnection) => Promise<string | undefined>
+  /** An earlier grant of this Pod identity that is not in the ledger yet, read at the IdP with `read` and covering the call. */
+  adopt: (detail: OpenApeCliAuthorizationDetail, connection: AgentConnection, read: (id: string) => Promise<Grant | null>) => Promise<Grant | undefined>
+  record: (grant: Grant, connection: AgentConnection) => Promise<void>
+}
+/** The CLI details a grant authorizes; a call is covered when one of them covers its resolved detail. */
+export function grantCoverage(grant: Pick<Grant, 'request'>): OpenApeCliAuthorizationDetail[] {
+  return (grant.request.authorization_details ?? []).filter((detail): detail is OpenApeCliAuthorizationDetail => detail?.type === 'openape_cli')
+}
+/** A grant this Pod identity requested for its execution target, through the same broker connection. */
+export function ownGrant(grant: Grant, id: string, connection: AgentConnection): boolean {
+  return grant?.id === id && ['pending', 'approved', 'used', 'expired', 'denied', 'revoked'].includes(grant.status) && grant.request?.requester === connection.subject && grant.request.audience === 'shapes' && grant.request.target_host === connection.targetHost && sameBrokeredGrant(grant.brokered, connection.brokered)
+}
+function covers(grant: Grant, detail: OpenApeCliAuthorizationDetail): boolean {
+  const coverage = grantCoverage(grant)
+  return coverage.length > 0 && cliAuthorizationDetailsCover(coverage, [detail])
+}
 
 export interface AgentConnection {
   decisionIssuer?: string
@@ -86,12 +107,13 @@ function tokenClaims(token: string): { exp: number, grantType: string } {
 }
 
 export class AgentAuthority {
-  constructor(private readonly connection: AgentConnection, private readonly observe?: GrantObserver, private readonly previous?: GrantLookup, private readonly tokens?: RunGrantTokens) {
+  constructor(private readonly connection: AgentConnection, private readonly observe?: GrantObserver, private readonly ledger?: GrantLedgerPort, private readonly tokens?: RunGrantTokens) {
     const url = new URL(connection.issuer)
     if ((url.protocol !== 'https:' && !(url.protocol === 'http:' && url.hostname === '127.0.0.1')) || url.pathname !== '/' || url.search || url.hash || url.username || url.password) throw new Error('Invalid assigned identity origin')
   }
 
-  private async request(path: string, method: 'GET' | 'POST', signal: AbortSignal, body?: unknown): Promise<unknown> {
+  /** With `missing`, a grant the IdP does not show this identity (403, 404) reads as null instead of failing the call. */
+  private async request(path: string, method: 'GET' | 'POST', signal: AbortSignal, body?: unknown, missing = false): Promise<unknown> {
     const token = await this.connection.accessToken()
     signal.throwIfAborted()
     const safe = method === 'GET' || path.endsWith('/token')
@@ -113,6 +135,7 @@ export class AgentAuthority {
     finally { await reader.cancel(); reader.releaseLock() }
     const text = Buffer.concat(chunks).toString('utf8')
     if (!response.ok) {
+      if (missing && (response.status === 403 || response.status === 404)) return null
       let category = ''
       try { const problem = JSON.parse(text); const type = problem.type ?? problem.data?.type; category = type === 'https://openape.org/errors/grant_not_approved' ? 'grant_not_approved' : '' }
       catch { category = '' }
@@ -127,45 +150,70 @@ export class AgentAuthority {
   private async grant(id: string, signal: AbortSignal): Promise<Grant> {
     if (!/^[\w-]{1,128}$/.test(id)) throw new Error('Invalid assigned grant')
     const grant = await this.request(`/api/grants/${encodeURIComponent(id)}`, 'GET', signal) as Grant
-    if (!grant || grant.id !== id || !['pending', 'approved', 'used', 'expired', 'denied', 'revoked'].includes(grant.status) || grant.request?.requester !== this.connection.subject || grant.request.audience !== 'shapes' || grant.request.target_host !== this.connection.targetHost) throw new Error('Grant does not belong to this Pod and execution target')
-    if (!sameBrokeredGrant(grant.brokered, this.connection.brokered)) throw new Error('Grant broker binding differs from the assigned identity')
+    if (grant && !sameBrokeredGrant(grant.brokered, this.connection.brokered)) throw new Error('Grant broker binding differs from the assigned identity')
+    if (!ownGrant(grant, id, this.connection)) throw new Error('Grant does not belong to this Pod and execution target')
     return grant
   }
 
-  async acquire(assignment: AssignedAuthorization, signal: AbortSignal, summary?: string): Promise<string> {
+  /** A grant id this Pod identity used before; null when the IdP no longer shows it to this identity. */
+  private async candidate(id: string, signal: AbortSignal): Promise<Grant | null> {
+    if (!/^[\w-]{1,128}$/.test(id)) return null
+    return await this.request(`/api/grants/${encodeURIComponent(id)}`, 'GET', signal, undefined, true) as Grant | null
+  }
+
+  /** Resolves the command with its pinned adapter; it must lie inside the requested coverage and never be a generic execution. */
+  private async resolve(assignment: AssignedAuthorization) {
     const adapter = loadAdapter(assignment.command.cliId, assignment.command.adapterPath)
     if (adapter.digest !== assignment.command.adapterDigest) throw new Error('Assigned adapter integrity mismatch')
     const resolved = await resolveCommand(adapter, assignment.command.argv)
-    if (resolved.permission !== assignment.command.permission || resolved.detail.operation_id === '_generic.exec') throw new Error('Command is outside the assigned operation')
+    if (resolved.detail.operation_id === '_generic.exec' || !cliAuthorizationDetailsCover(assignment.command.coverage, [resolved.detail])) throw new Error('Command is outside the assigned operation')
+    return resolved
+  }
+
+  async acquire(assignment: AssignedAuthorization, signal: AbortSignal, summary?: string): Promise<string> {
+    const resolved = await this.resolve(assignment)
     let grant = assignment.grantId ? await this.grant(assignment.grantId, signal) : undefined
+    if (grant && !covers(grant, resolved.detail)) throw new AuthorityError('The assigned grant does not cover this command')
     if (!grant || ['used', 'expired'].includes(grant.status)) {
-      const previousId = await this.previous?.(resolved.permission, this.connection)
-      if (previousId && previousId !== grant?.id) grant = await this.grant(previousId, signal)
+      const recorded = await this.ledger?.find(resolved.detail, this.connection)
+      if (recorded && recorded !== grant?.id) {
+        const candidate = await this.grant(recorded, signal)
+        if (covers(candidate, resolved.detail)) grant = candidate
+      }
     }
+    // A grant this identity received before the ledger recorded it (schema 43 moved them out of the resources) is
+    // adopted instead of asking the owner again; the IdP does not return it for a new brokered request.
+    if (!grant || ['used', 'expired'].includes(grant.status)) grant = await this.ledger?.adopt(resolved.detail, this.connection, id => this.candidate(id, signal)) ?? grant
     // A pending request is reused, so an interrupted wait never asks again; a single-use request whose caller
     // stopped waiting can no longer run anything (DDISA grants §3.4) and is replaced.
     if (grant?.status === 'pending' && grant.request.grant_type === 'once' && (grant.request.waits_until ?? 0) * 1000 <= Date.now()) grant = undefined
+    if (grant) await this.ledger?.record(grant, this.connection)
     if (grant && ['denied', 'revoked'].includes(grant.status)) throw new AuthorityError(`Permission ${grant.status}; review this Pod's permissions before retrying`)
     if (!grant || grant.status === 'used' || grant.status === 'expired') {
-      // The runtime and owner assignments ask for a continuing grant; the owner chooses its scope at the IdP.
-      const grantType = assignment.command.cliId === 'pod-runtime' || assignment.grantId ? 'always' : 'once'
-      const create = async () => await this.request('/api/grants', 'POST', signal, { requester: this.connection.subject, target_host: this.connection.targetHost, audience: 'shapes', grant_type: grantType, ...(grantType === 'once' ? { waits_until: Math.floor((Date.now() + onceWaitMs) / 1000) } : {}), command: assignment.command.argv, permissions: [resolved.permission], authorization_details: [resolved.detail], execution_context: resolved.executionContext, reason: resolved.detail.display, ...(summary ? { summary: { text: summary } } : {}) }) as { id?: unknown }
-      // Parallel calls of one run ask once for a continuing grant; each single-use call has its own request.
-      const created = grantType === 'always' ? await this.share(`request:${resolved.permission}`, create, signal) : await create()
+      // Every Pod grant is a continuing grant (owner decision October 10, 2026); per-item approvals are gate batches.
+      const create = async () => await this.request('/api/grants', 'POST', signal, { requester: this.connection.subject, target_host: this.connection.targetHost, audience: 'shapes', grant_type: 'always', command: assignment.command.argv, permissions: [resolved.permission], authorization_details: [resolved.detail], execution_context: resolved.executionContext, reason: resolved.detail.display, ...(summary ? { summary: { text: summary } } : {}) }) as { id?: unknown }
+      // Parallel calls of one run ask once.
+      const created = await this.share(`request:${resolved.permission}`, create, signal)
       if (typeof created?.id !== 'string') throw new Error('Permission service returned an invalid grant')
       grant = await this.grant(created.id, signal)
+      await this.ledger?.record(grant, this.connection)
     }
     const current = grant
     const publish = async (state: GrantProgress['state']) => this.observe?.({ grantId: current.id, issuer: this.connection.decisionIssuer ?? this.connection.issuer, title: resolved.detail.display, permission: resolved.permission, subject: this.connection.subject, state })
-    if (grant.status === 'pending') grant = await this.decision(grant, publish, signal)
+    if (grant.status === 'pending') {
+      grant = await this.decision(grant, publish, signal)
+      await this.ledger?.record(grant, this.connection)
+    }
     if (grant.status !== 'approved') throw new AuthorityError(grant.status === 'pending' ? 'Permission was not decided while this command waited; start it again and approve at the IdP' : grant.status === 'expired' ? 'Permission request expired at the IdP; start a new run to request it again' : `Permission ${grant.status}; review this Pod's permissions before retrying`)
+    if (!covers(grant, resolved.detail)) throw new AuthorityError('The approved grant no longer covers this command; request it again')
     await publish('approved')
+    assignment.command.coverage = grantCoverage(grant)
     return grant.id
   }
 
   /**
-   * Waits for the owner's decision at the IdP; Pods never decides itself. The run shows the pending approval
-   * (desktop, inbox and MCP open the IdP page). A continuing grant is awaited until the owner decides or the
+   * Waits for the owner's decision; the run never decides itself. The run shows the pending approval (desktop,
+   * inbox and MCP open the IdP page; an MCP owner session may approve it). A continuing grant is awaited until the owner decides or the
    * IdP expires the request; a single-use request only while its caller waits.
    */
   private async decision(pending: Grant, publish: (state: GrantProgress['state']) => Promise<void>, signal: AbortSignal): Promise<Grant> {
@@ -202,6 +250,7 @@ export class AgentAuthority {
   }
 
   async authorize(assignment: AssignedAuthorization, signal: AbortSignal, summary?: string): Promise<void> {
+    if (!assignment.grantId && this.ledger) assignment.grantId = await this.ledger.find((await this.resolve(assignment)).detail, this.connection) ?? ''
     if (await this.reuse(assignment, signal)) return
     assignment.grantId = await this.acquire(assignment, signal, summary)
     await this.mint(assignment, signal)
@@ -220,7 +269,7 @@ export class AgentAuthority {
 
   // The key includes the grant, so a token is only reused for the very grant it was minted for.
   private tokenKey(assignment: AssignedAuthorization): string {
-    return [this.connection.subject, this.connection.targetHost, this.connection.keyId, assignment.grantId, assignment.command.cliId, assignment.command.adapterDigest, assignment.command.permission].join('\n')
+    return [this.connection.subject, this.connection.targetHost, this.connection.keyId, assignment.grantId, assignment.command.cliId, assignment.command.adapterDigest].join('\n')
   }
 
   private async reuse(assignment: AssignedAuthorization, signal: AbortSignal): Promise<boolean> {

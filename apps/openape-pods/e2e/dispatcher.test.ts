@@ -143,8 +143,7 @@ it('HTTP boundary: sandboxed Node sends a granted request, retains a receipt and
   const { Scheduler } = await import('../src/worker/scheduling/scheduler')
   let sends = 0; let uncertain = false
   const f = await setup({ http: async (request) => { sends++; expect(request.method).toBe('POST'); if (uncertain) throw new Error('Synthetic uncertain delivery'); return { status: 200, headers: {}, body: '{"ok":true}' } } })
-  const authority = { identity: { podId: f.pod.id, connectionId: randomUUID(), issuer: 'https://id.example.invalid', owner: 'owner@example.invalid', subject: 'pod@example.invalid', keyId: 'key' }, ownerConnection: randomUUID(), grantId: 'synthetic-http' }
-  f.resources.assignHttp(f.pod.id, { origin: 'https://api.example.com', methods: ['POST'] }, authority, 0)
+  f.resources.assignHttp(f.pod.id, { origin: 'https://api.example.com', methods: ['POST'] }, 0)
   await f.dispatcher.install(f.pod.id, 'deterministic')
   const original = JSON.parse(f.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=?').get(f.pod.id)!.manifest as string)
   const capability = f.resources.list(f.pod.id)[0]!.configuration.capability as string

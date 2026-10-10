@@ -43,6 +43,8 @@ getAuthorizedBearer(opts: {
 // Lower-level building blocks.
 ensureFreshIdpAuth(now?: number): Promise<IdpAuth>
 exchangeForSpToken(idpAuth: IdpAuth, request: ExchangeRequest, now?: number): Promise<SpToken>
+// Same exchange without the on-disk cache, for callers that keep tokens in memory.
+requestSpToken(subjectToken: string, request: ExchangeRequest, options?: { transport?, signal? }, now?: number): Promise<SpToken>
 
 // Storage primitives.
 loadIdpAuth(): IdpAuth | null

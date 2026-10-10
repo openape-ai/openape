@@ -10,7 +10,7 @@ definition. The complete contract, storage and recovery model is in the
 Workflows (sequence chains and bounded channel graphs) and their conversion to
 networks were removed with
 [issue 1455](https://repos.openape.ai/patrick/monorepo/issues/1455) (M4).
-Schema 43 archives every remaining workflow and every Pod that only workflows
+Schema 45 archives every remaining workflow and every Pod that only workflows
 used; a Pod that is a network member or keeps its own enabled schedule stays as
 it is. The workflow tables stay unread until the baseline schema; the verified
 pre-upgrade copy of the profile keeps every row.

@@ -12,7 +12,7 @@ const keys = generateKeyPairSync('ed25519')
 const adapterPath = resolve('../shapes/test/fixtures/gh.toml')
 const adapter = loadAdapter('gh', adapterPath)
 const resolved = await resolveCommand(adapter, ['gh', 'repo', 'list', 'openape'])
-const command = { cliId: 'gh', adapterPath, adapterDigest: adapter.digest, argv: resolved.executionContext.argv!, permission: resolved.permission }
+const command = { cliId: 'gh', adapterPath, adapterDigest: adapter.digest, argv: resolved.executionContext.argv!, coverage: [resolved.detail] }
 let server: Server
 let scope: AssignedGrantScope
 let consumeStatus = 'valid'
@@ -38,7 +38,7 @@ beforeEach(async () => {
 afterEach(async () => { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())) })
 describe('assigned ape-shell authorization with signed grants', () => {
   it('uses only the pinned adapter and assigned grant without discovery, grant creation or shell execution', async () => {
-    expect((await authorizeAssignedCommand(command, await token(), scope)).permission).toBe(command.permission)
+    expect((await authorizeAssignedCommand(command, await token(), scope)).permission).toBe(resolved.permission)
     expect(requests).toEqual(['GET /jwks', 'POST /grants/assigned-grant/consume'])
   })
   it('rejects forged signatures and substitutions of identity, host, grant, issuer, audience and adapter', async () => {
@@ -55,6 +55,16 @@ describe('assigned ape-shell authorization with signed grants', () => {
     await expect(authorizeAssignedCommand({ ...command, argv: ['gh', 'repo', 'list', 'foreign'] }, await token(), scope)).rejects.toThrow('assigned operation')
     await expect(authorizeAssignedCommand({ ...command, adapterDigest: `SHA-256:${'0'.repeat(64)}` }, await token(), scope)).rejects.toThrow('integrity')
     await expect(authorizeAssignedCommand(command, await token(), { ...scope, grantsEndpoint: 'https://foreign.test/grants' })).rejects.toThrow('origin')
+    expect(requests.filter(request => request.startsWith('POST'))).toHaveLength(1)
+  })
+  it('accepts a command covered by a wider grant and refuses one outside it', async () => {
+    const wide = { ...resolved.detail, operation_id: '*', resource_chain: [{ resource: 'owner' }], permission: 'gh.owner[*]#list', display: 'gh: list on owner' }
+    const covered = await resolveCommand(adapter, ['gh', 'repo', 'list', 'another'])
+    const grant = { authorization_details: [wide], execution_context: { adapter_digest: adapter.digest } }
+    expect((await authorizeAssignedCommand({ ...command, argv: covered.executionContext.argv!, coverage: [wide] }, await token(grant), scope)).permission).toBe(covered.permission)
+    const outside = await resolveCommand(adapter, ['gh', 'repo', 'view', 'openape/monorepo'])
+    await expect(authorizeAssignedCommand({ ...command, argv: outside.executionContext.argv!, coverage: [wide] }, await token(grant), scope)).rejects.toThrow('assigned operation')
+    await expect(authorizeAssignedCommand({ ...command, coverage: [] }, await token(grant), scope)).rejects.toThrow('coverage')
     expect(requests.filter(request => request.startsWith('POST'))).toHaveLength(1)
   })
   it('re-verifies a consumed reusable token locally but always consumes a single-use grant', async () => {

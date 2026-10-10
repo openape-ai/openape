@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 /**
- * Schema 43 (issue 1455, M4): networks are the only orchestration model. Every remaining workflow is archived,
+ * Schema 45 (issue 1455, M4): networks are the only orchestration model. Every remaining workflow is archived,
  * and so is every Pod that only workflows used: no network member and no own enabled schedule. Workflow history
  * is detached from Pods, runs and networks, so retention and deletion never need the workflow tables again.
  * The tables themselves stay until the baseline schema (M8); the pre-upgrade backup keeps every row.

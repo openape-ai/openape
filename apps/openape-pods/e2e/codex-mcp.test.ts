@@ -33,7 +33,7 @@ it('serves the packaged MCP outside the checkout and reports a stopped app (pack
   const socket = join(root, 'codex', 'control.sock'); const launcher = join(root, 'codex', 'openape-pods-mcp')
   const execute = vi.fn(async (request: { action: unknown }) => ({ pods: [], received: request.action }))
   const confirm = vi.fn(async () => true)
-  server = new CodexControlServer(socket, execute, new McpOwnerSessions({ login: async () => {}, confirm })); await server.start()
+  server = new CodexControlServer(socket, execute, new McpOwnerSessions({ login: async () => null, confirm })); await server.start()
   const script = join(root, 'codex-mcp.mjs')
   await copyFile(join(bundle, 'Resources/app.asar.unpacked/dist/runtime/codex-mcp.mjs'), script)
   await writeLauncher(launcher, { executable: join(bundle, 'MacOS/OpenApe Pods Fixture'), script, socket })

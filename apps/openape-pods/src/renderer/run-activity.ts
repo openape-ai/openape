@@ -15,8 +15,9 @@ export function runActivity(events: RunEvent[]): ActivityItem[] {
     }
     if (event.type === 'approval') {
       const key = `grant:${String(data.grantId)}`; const item = active.get(key)
-      if (item) { item.state = data.state === 'approved' ? 'completed' : String(data.state); continue }
-      const next = { sequence: event.sequence, at: event.at, title: 'Permission review', state: data.state === 'approved' ? 'completed' : String(data.state) }
+      const title = data.approvedInSession === true ? 'Permission approved in Codex session' : 'Permission review'
+      if (item) { item.state = data.state === 'approved' ? 'completed' : String(data.state); item.title = title; continue }
+      const next = { sequence: event.sequence, at: event.at, title, state: data.state === 'approved' ? 'completed' : String(data.state) }
       items.push(next); active.set(key, next); continue
     }
     if (event.type === 'infrastructure') { items.push({ sequence: event.sequence, at: event.at, title: data.state === 'restored' ? 'Service available again' : 'Waiting for service recovery', state: data.state === 'restored' ? 'completed' : 'waiting' }); continue }

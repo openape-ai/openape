@@ -3,18 +3,20 @@ import { usePodAccess } from './pod-access'
 import SshPermissions from './SshPermissions.vue'
 import ProgramPermissions from './ProgramPermissions.vue'
 import DirectoryPermissions from './DirectoryPermissions.vue'
+import SandboxDenylist from './SandboxDenylist.vue'
 import { t, diagnostic, label } from './i18n'
 import { defineComponent } from 'vue'
 import type { PropType } from 'vue'
 import type { StoredPod } from '../contracts/control'
 import type { ResourceCommand, ResourceState } from '../contracts/resources'
+import type { SandboxView } from '../contracts/sandbox'
 
 export default defineComponent({
-  components: { ProgramPermissions, DirectoryPermissions, SshPermissions },
+  components: { ProgramPermissions, DirectoryPermissions, SshPermissions, SandboxDenylist },
   props: { requestedSecret: { type: String, default: '' }, requiredAliases: { type: Array as PropType<string[]>, default: () => [] }, mode: { type: String, default: 'permissions' }, selectedPodId: { type: String, default: '' } },
   emits: ['selected', 'discuss'],
   setup() { const access = usePodAccess(); return { access, remoteRevision: access.revision } },
-  data() { return { pods: [] as StoredPod[], podId: '', state: { resources: [], epoch: 0 } as ResourceState, busy: false, error: '', credentialAlias: this.requestedSecret, credentialValue: '' } },
+  data() { return { pods: [] as StoredPod[], podId: '', state: { resources: [], epoch: 0 } as ResourceState, sandbox: null as SandboxView | null, busy: false, error: '', credentialAlias: this.requestedSecret, credentialValue: '' } },
   computed: { missingAliases(): string[] { return this.requiredAliases.filter(alias => !this.visibleResources.some(resource => resource.name === alias && resource.state === 'ready')) }, visibleResources() { return this.state.resources.filter(resource => this.mode === 'values' ? resource.kind === 'credential' : this.access.remote && !['reference', 'directory', 'credential'].includes(resource.kind) && !['program', 'http', 'jev', 'sshInventory'].includes(String(resource.configuration.type))) } },
   watch: { remoteRevision() { if (!this.busy && !this.error && this.podId) void this.load() } },
   async mounted() {
@@ -25,7 +27,7 @@ export default defineComponent({
     t, diagnostic, label,
     async act(command: ResourceCommand) {
       this.busy = true; this.error = ''
-      try { this.state = await this.access.api.resources(command) }
+      try { this.state = await this.access.api.resources(command); if (this.state.sandbox) this.sandbox = this.state.sandbox }
       catch (error) { this.error = error instanceof Error ? error.message : 'Resource operation failed' }
       finally { this.busy = false }
     },
@@ -33,7 +35,7 @@ export default defineComponent({
       const value = this.credentialValue; this.credentialValue = ''
       await this.act({ type: 'saveCredential', podId: this.podId, alias: this.credentialAlias, value, epoch: this.state.epoch })
     },
-    async load() { this.credentialValue = ''; await this.act({ type: 'list', podId: this.podId }) },
+    async load() { this.credentialValue = ''; this.sandbox = null; await this.act({ type: this.mode !== 'values' && !this.access.remote ? 'sandbox' : 'list', podId: this.podId }) },
   },
 })
 </script>
@@ -52,6 +54,7 @@ export default defineComponent({
     <template v-else>
       <label v-if="!selectedPodId">{{ t("Pod") }}<select v-model="podId" :disabled="busy" @change="load"><option v-for="pod in pods" :key="pod.id" :value="pod.id">{{ pod.name }}</option></select></label>
       <DirectoryPermissions v-if="mode !== 'values'" :state="state" :busy="busy" :readonly="access.remote" @add="act({ type: 'pickDirectory', podId, epoch: state.epoch })" @access="(resource, access) => act({ type: 'changeDirectory', podId, id: resource.id, revision: resource.revision, epoch: state.epoch, access })" @revoke="resource => act({ type: 'revoke', podId, id: resource.id, revision: resource.revision })" />
+      <SandboxDenylist v-if="mode !== 'values' && sandbox" :sandbox="sandbox" :busy="busy" @save="deny => act({ type: 'saveSandboxDeny', podId, deny })" />
       <p v-if="mode === 'values' && access.remote" class="muted">
         {{ t('Manage secrets on the desktop.') }}
       </p>

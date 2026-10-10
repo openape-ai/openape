@@ -12,6 +12,15 @@ import type { ResourceRegistry } from '../resources/registry'
 import { DefinitionCatalog } from './definition-catalog'
 import { WorkspaceDetails } from './details'
 
+// A definition change binds one Pod. The scheduler is held in maintenance meanwhile, network members are
+// settled by the network engine, and work of unrelated Pods neither reads nor changes this binding.
+function assertPodIdle(store: PodDatabase, podId: string): void {
+  if (store.db.prepare('SELECT 1 FROM dependency_domains LIMIT 1').get()) throw new Error('Finish dependency preparation before changing application data')
+  const run = store.db.prepare('SELECT run_id FROM run_leases WHERE pod_id=?').get(podId)
+  if (run) throw new Error(`Run ${String(run.run_id)} of this Pod is still active. Wait until it ends, or cancel or recover it (recovery list, then recover or cancel), before changing its definition.`)
+  if (store.db.prepare('SELECT 1 FROM program_leases WHERE pod_id=?').get(podId)) throw new Error('Close the application terminal of this Pod before changing its definition')
+}
+
 export class DefinitionWorkspace {
   private readonly catalog: DefinitionCatalog
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, owner: Owner, private readonly updateNetworkInstance?: (podId: string, update: () => void) => void) { this.catalog = new DefinitionCatalog(store, resources, owner) }
@@ -19,7 +28,9 @@ export class DefinitionWorkspace {
   async execute(input: unknown, signal: AbortSignal): Promise<DefinitionsView> {
     const command = parseDefinitionCommand(input)
     if (command.type === 'list') return this.view()
-    assertDataIdle(this.store); signal.throwIfAborted()
+    if ('podId' in command) assertPodIdle(this.store, command.podId)
+    else assertDataIdle(this.store)
+    signal.throwIfAborted()
     if (command.type === 'adopt') this.catalog.adopt()
     if (command.type === 'publish') await this.catalog.publish(command.podId, command.expectedScript, command.name, command.defaults)
     if (command.type === 'prepareLocal') {
