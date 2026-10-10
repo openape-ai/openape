@@ -74,6 +74,47 @@ it('mints a DDISA agent token from the assigned key, caches it per credential an
   await expect(refused.bearer('pod-a', authentication, 'credential-2', readKey, signal)).rejects.toThrow('authentication failed (401)')
 })
 
+it('exchanges the agent token at the destination origin, caches the service token in memory and never outlives the agent token', async () => {
+  const authentication = parseHttpAuthentication({ type: 'ddisaAgent', credential: 'agent_key', subject: 'agent@id.example.com', issuer: 'https://id.example.com', exchange: 'sp' })
+  expect(() => parseHttpAuthentication({ ...authentication, exchange: 'idp' })).toThrow('exchange')
+  const pem = generateKeyPairSync('ed25519').privateKey.export({ type: 'pkcs8', format: 'pem' }).toString()
+  let now = 1_000_000_000
+  let agents = 0; let services = 0; let spReply: () => Response = () => new Response(JSON.stringify({ access_token: `service-${++services}`, token_type: 'Bearer', expires_at: Math.floor(now / 1000) + 600, aud: 'repos.example.com' }), { status: 201 })
+  const transport = vi.fn(async (url: string, options: RequestInit) => {
+    expect(options.redirect).toBe('error')
+    if (url === 'https://id.example.com/token') return new Response(JSON.stringify({ access_token: `agent-${++agents}`, expires_in: 3600 }), { status: 200 })
+    expect([url, options.method]).toEqual(['https://repos.example.com/api/cli/exchange', 'POST'])
+    expect(JSON.parse(String(options.body))).toEqual({ subject_token: `agent-${agents}` })
+    return spReply()
+  })
+  const tokens = new DdisaAgentTokens(transport, () => now)
+  const destination = () => tokens.destination('pod-a', authentication, 'https://repos.example.com', 'credential-1', async () => pem, new AbortController().signal)
+  expect(await destination()).toBe('service-1')
+  expect(await destination()).toBe('service-1')
+  now += 600_000 - 30_000
+  expect(await destination()).toBe('service-2')
+  expect(agents).toBe(1)
+  // A service token valid for 30 days is still renewed with the hourly agent token.
+  spReply = () => new Response(JSON.stringify({ access_token: `service-${++services}`, expires_at: Math.floor(now / 1000) + 30 * 86400 }), { status: 201 })
+  tokens.reject('pod-a', authentication)
+  expect(await destination()).toBe('service-3')
+  now += 3600_000 - 30_000
+  expect(await destination()).toBe('service-4')
+  expect(agents).toBe(3)
+  const plain = parseHttpAuthentication({ type: 'ddisaAgent', credential: 'agent_key', subject: 'agent@id.example.com', issuer: 'https://id.example.com' })
+  expect(await tokens.destination('pod-a', plain, 'https://repos.example.com', 'credential-1', async () => pem, new AbortController().signal)).toBe('agent-3')
+
+  spReply = () => new Response(JSON.stringify({ title: 'Invalid subject_token', detail: `rejected agent-${agents}` }), { status: 401 })
+  tokens.reject('pod-a', authentication)
+  const refusal = await destination().catch((error: Error) => error)
+  expect(refusal).toBeInstanceOf(Error)
+  expect((refusal as Error).message).toBe('Service sign-in at https://repos.example.com failed (401)')
+  expect((refusal as Error).message).not.toContain('agent-')
+  spReply = () => new Response(null, { status: 503 })
+  await expect(destination()).rejects.toBeInstanceOf(InfrastructureError)
+  expect(agents).toBe(5)
+})
+
 it('retries only safe reads on temporary HTTP responses and transport failures', async () => {
   const signal = new AbortController().signal
   const read = parseHttpRequest({ url: 'https://api.example.invalid/items', method: 'GET' })

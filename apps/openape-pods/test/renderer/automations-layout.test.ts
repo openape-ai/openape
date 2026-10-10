@@ -81,7 +81,8 @@ it('derives KPI subtitles from the data only', () => {
     active: 5,
     paused: { total: 6, networks: 2, drafts: 1, archived: 1 },
     degraded: { count: 1, name: 'IURIO PR monitor', reason: 'completedWithGaps' },
-    decisions: { count: 17, gates: [{ title: 'Review uncertain mail', group: 'Delta Mind' }] },
+    // The fixture's run waiting for an IdP approval counts as a decision.
+    decisions: { count: 18, gates: [{ title: 'Review uncertain mail', group: 'Delta Mind' }], approvals: 1 },
     unknownDeliveries: 1,
   })
 })

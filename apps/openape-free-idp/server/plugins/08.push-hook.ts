@@ -1,15 +1,12 @@
-// Wire the Web Push notifier into the IdP's grant-pending-hook
-// surface. Fires AFTER pre-approval hooks (YOLO etc.) have had a
-// chance to auto-approve — so auto-approved grants don't push, and
-// pending grants that actually need a human do.
+// Web Push leg of the grant-pending fan-out. The delivery plugin (11) calls
+// it only for grants that still await a human after the quiet window, so
+// auto-approved and promptly decided grants don't push.
 
 import { notifyApproverOfPendingGrant } from '../utils/push'
-import { isFollowUpBatchMember } from '../utils/grant-approval-link'
+import { defineGrantNotificationChannel } from '../utils/grant-notifications'
 
 export default defineNitroPlugin(() => {
-  defineGrantPendingHook(async (grant) => {
-    if (grant.status !== 'pending' || grant.auto_approval_kind) return
-    if (await isFollowUpBatchMember(grant, useGrantStores().grantStore)) return
-    await notifyApproverOfPendingGrant(grant)
+  defineGrantNotificationChannel(async (grant, waiting) => {
+    await notifyApproverOfPendingGrant(grant, waiting)
   })
 })

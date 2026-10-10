@@ -790,7 +790,7 @@ Schema 16 adds `pods.metadata_revision` for optimistic metadata updates. The his
 
 Networks are the only way to connect Pods: members declare the channels they take
 and give, routes hold items for owner decisions and approvals stay at the identity
-provider. Workflows and their conversion were removed in issue 1455 (M4); schema 43
+provider. Workflows and their conversion were removed in issue 1455 (M4); schema 45
 archives the remaining workflows and the Pods only they used. See
 [networks](docs/networks.md) and the network chapter in the shared handbook.
 

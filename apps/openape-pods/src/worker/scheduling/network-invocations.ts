@@ -9,12 +9,17 @@ import { assertNetworkQuota, NetworkQuotaError } from './network-quota'
 import { randomUUID } from 'node:crypto'
 import { networkApprovals, parseNetworkDefinition, networkLimits } from '../../contracts/networks'
 import type { RunState } from '../../contracts/runs'
+import { scriptTimeLimitMs } from '../../contracts/runs'
+import { maxAgentPauseMs } from '../../contracts/agent'
 import type { RunStore } from '../runs/store'
 import { parseProgress } from '../runs/progress'
 import { confirmDomainsStopped } from '../recovery/domains'
 import type { PodDatabase } from '../storage/database'
 import { NetworkEvents, NetworkEventConflict, canonicalNetworkJson } from './network-events'
 import type { NetworkAuthority, NetworkEmission } from './network-events'
+
+/** A member script gets the standalone script time limit and agent allowance; one more minute covers launch and settlement. */
+const networkScriptDeadlineMs = scriptTimeLimitMs + maxAgentPauseMs + 60000
 
 /** Unresolved unknown effects of one member that stop it, even when each holds back only its own input. */
 const memberStopThreshold = 2
@@ -114,7 +119,7 @@ export class NetworkInvocations {
       const manifest = { resourceEpoch, assignmentRevision: pod.bindingRevision, definitionId: member.definitionId, definitionVersion: member.definitionVersion, bindingRevision: member.bindingRevision, reason, checkpointRevision: checkpoint.revision, dataPin: networkDataPin(this.store, networkId, podId), gateBindings, inputClaims: ready.map(input => ({ id: input.id, generation: Number(input.generation) + 1 })) }
       this.store.db.prepare(`INSERT INTO network_invocations(run_id,network_id,network_revision,pod_id,boot_nonce,restore_nonce,activation_epoch,claim_token,generation,state,manifest)
         VALUES(?,?,?,?,?,?,?,?,1,'running',?)`).run(runId, networkId, definition.revision, podId, this.runs.bootId, network.restore_nonce!, network.activation_epoch!, token, canonicalNetworkJson(manifest))
-      this.store.db.prepare('INSERT INTO network_invocation_controls(run_id,deadline,retry_of,attempt,creator_pid,process_preview_id) VALUES(?,?,?,?,?,?)').run(runId, Date.now() + 360000, originalRunId, attempt, process.pid, processPreviewId)
+      this.store.db.prepare('INSERT INTO network_invocation_controls(run_id,deadline,retry_of,attempt,creator_pid,process_preview_id) VALUES(?,?,?,?,?,?)').run(runId, Date.now() + networkScriptDeadlineMs, originalRunId, attempt, process.pid, processPreviewId)
       if (originalRunId) this.store.db.prepare('UPDATE network_invocation_controls SET retry_at=NULL,retry_consumed_at=? WHERE run_id=?').run(Date.now(), originalRunId)
       for (const input of ready) {
         const claimed = this.store.db.prepare(`UPDATE network_deliveries SET state='claimed',attempt=attempt+1,generation=generation+1,claim_token=?,boot_nonce=?,restore_nonce=?,activation_epoch=?,run_id=?

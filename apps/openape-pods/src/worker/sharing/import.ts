@@ -77,7 +77,7 @@ function satisfies(manifest: PortableManifest, pod: PortablePod, alias: string, 
     return configuration.capability === 'mail.read' && configuration.attachments === access.attachments && (configuration.since ?? '') === value(access.since) && typeof folders === 'string' && canonicalPortableJson(configuration.folders) === canonicalPortableJson(JSON.parse(folders))
   }
   if (access?.kind !== 'http' || configuration.type !== 'http' || configuration.origin !== value(access.origin) || access.methods.some(method => !(configuration.methods as string[]).includes(method))) return false
-  const expected = access.authentication ? { type: 'ddisaAgent', credential: access.authentication.credential, subject: value(access.authentication.subject), issuer: value(access.authentication.issuer) } : undefined
+  const expected = access.authentication ? { type: 'ddisaAgent', credential: access.authentication.credential, subject: value(access.authentication.subject), issuer: value(access.authentication.issuer), exchange: access.authentication.exchange } : undefined
   const actual = configuration.authentication as Record<string, unknown> | undefined
   return expected ? !!actual && Object.entries(expected).every(([name, item]) => actual[name] === item) : actual === undefined
 }

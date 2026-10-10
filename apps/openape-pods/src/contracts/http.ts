@@ -4,7 +4,8 @@ export interface HttpPermission { origin: string, methods: string[] }
 export interface HttpRequest { url: string, method: string, headers: Record<string, string>, body?: string, key?: string, receipt?: 'digest' }
 export interface HttpReply { status: number, headers: Record<string, string>, body: string, receipt?: HttpDigest }
 export interface HttpDigest { sha256: string, bytes: number }
-export interface HttpAuthentication { type: 'ddisaAgent', credential: string, subject: string, issuer: string }
+/** exchange 'sp': the destination accepts only its own tokens, minted at its /api/cli/exchange for the agent's IdP token. */
+export interface HttpAuthentication { type: 'ddisaAgent', credential: string, subject: string, issuer: string, exchange?: 'sp' }
 export const httpRequestBodyChars = 64 * 1024
 export const httpResponseBodyBytes = 128 * 1024
 const httpRequestBytes = 96 * 1024
@@ -46,9 +47,10 @@ export function parseHttpReply(value: unknown): HttpReply {
 
 export function parseHttpAuthentication(value: unknown): HttpAuthentication {
   const authentication = value as HttpAuthentication
-  if (!authentication || typeof authentication !== 'object' || Array.isArray(authentication) || Object.keys(authentication).some(key => !['type', 'credential', 'subject', 'issuer'].includes(key)) || authentication.type !== 'ddisaAgent') throw new Error('Invalid HTTP authentication')
+  if (!authentication || typeof authentication !== 'object' || Array.isArray(authentication) || Object.keys(authentication).some(key => !['type', 'credential', 'subject', 'issuer', 'exchange'].includes(key)) || authentication.type !== 'ddisaAgent') throw new Error('Invalid HTTP authentication')
   parseCredentialAlias(authentication.credential)
   if (typeof authentication.subject !== 'string' || authentication.subject.length > 320 || !/^[^\s@]+@[^\s@]+$/.test(authentication.subject)) throw new Error('HTTP authentication needs the DDISA agent email')
+  if (authentication.exchange !== undefined && authentication.exchange !== 'sp') throw new Error('HTTP authentication exchange must be "sp"')
   const issuer = parseHttpPermission({ origin: authentication.issuer, methods: ['POST'] }).origin
-  return { type: 'ddisaAgent', credential: authentication.credential, subject: authentication.subject, issuer }
+  return { type: 'ddisaAgent', credential: authentication.credential, subject: authentication.subject, issuer, ...(authentication.exchange ? { exchange: authentication.exchange } : {}) }
 }

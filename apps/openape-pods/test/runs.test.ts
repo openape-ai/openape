@@ -48,6 +48,9 @@ it('derives elapsed time and activity from observed events without inventing mod
   ]
   expect(runTiming(events, 1000, 10000)).toEqual({ active: '0:06', waiting: '0:03' })
   expect(runActivity(events).map(item => item.title)).toEqual(['Run prepared', 'Permission review', 'Application call'])
+  // An approval made in the owner's MCP session is marked as such in the activity.
+  const session = events.map(event => event.sequence === 4 ? { ...event, data: { ...event.data, approvedInSession: true } } : event)
+  expect(runActivity(session).find(item => item.sequence === 2)).toMatchObject({ title: 'Permission approved in Codex session', state: 'completed' })
   expect(runFailure('Script failed: {"message":"Identity authorization failed (400)"}')?.help).toContain('does not mean')
 })
 

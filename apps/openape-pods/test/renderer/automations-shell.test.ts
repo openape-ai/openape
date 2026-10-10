@@ -31,7 +31,8 @@ describe('Automatisierungen', () => {
       ['5', 'aktiv', 'Pods und Netze mit laufendem Zeitplan'],
       ['6', 'pausiert', 'davon 2 Netze, 1 Entwürfe, 1 archiviert'],
       ['1', 'gestört', 'IURIO PR monitor · mit Lücken abgeschlossen'],
-      ['17', 'Entscheidungen warten auf dich', 'Review uncertain mail · Delta Mind'],
+      // A run waiting for its grant at the IdP is a decision as well.
+      ['18', 'Entscheidungen warten auf dich', 'Review uncertain mail · Delta Mind, 1 Laufzeit-Anfragen'],
       ['1', 'unklare Zustellungen', '1 Zustellungen abzugleichen'],
     ])
     expect(wrapper!.find('.kpi.alert').text()).toContain('gestört')

@@ -87,7 +87,8 @@ reviews and run correlations are not deleted or replayed.
 
 The legacy change review (`changes`, `retireChange`, Apply changes and the
 pending-owner-review receipts) is removed (issue 1455). Every action applies
-directly; grants are decided only at the identity provider. Stored
+directly; grants are decided by the owner at the identity provider or in the
+owner's MCP session (see [claude-code.md](claude-code.md)). Stored
 `control_changes` rows are no longer read or applied and remain until the
 baseline schema drops them. Access proposals are gone as well: `requestAccess`
 is refused, and Codex configures access directly through resources, program,

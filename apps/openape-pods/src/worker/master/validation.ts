@@ -101,7 +101,7 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
       }
       if (operation === 'tools.invoke' && payload && typeof payload === 'object' && ('applicationId' in payload || 'application' in payload)) {
         const { assignment, argv } = programRequest(resources.list(pod.id), pod.id, capabilities, payload)
-        await resolveProgram(assignment, pod.id, argv, true)
+        await resolveProgram(assignment, argv)
         const argument = (name: string) => argv[argv.indexOf(name) + 1]
         const output = assignment.cliId === 'o365-cli' && argv[0] === 'mail' && argv[1] === 'list' ? [] : assignment.cliId === 'o365-cli' ? { account: argument('--account'), operation: argument('--operation'), items: [], complete: true, nextCursor: null } : {}
         return { exitCode: 0, stdout: JSON.stringify(output), stderr: '' }

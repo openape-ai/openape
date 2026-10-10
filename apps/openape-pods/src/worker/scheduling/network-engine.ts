@@ -1,5 +1,4 @@
 import { occupiedRunSlots } from '../runs/slots'
-import { supportedNetworkCapability, networkSourceCapability, networkArchiveMember } from '../../contracts/network-capabilities'
 import { memberScriptIssues, networkSettlementIssues, previewNetworkArchive } from './network-retirement'
 import { DefinitionCatalog } from '../workspace/definition-catalog'
 import { DependencyStore } from '../dependencies/store'
@@ -424,6 +423,9 @@ export class NetworkEngine {
       if (preview.issues.length) throw new Error(preview.issues.join('; '))
       assertNetworkQuota(this.store, 16384)
       this.store.db.prepare('UPDATE networks SET state=\'archived\',activation_epoch=activation_epoch+1 WHERE id=?').run(definition.id)
+      // The sandbox level and denylist the network gave its members end with it; its grants and resources are released by main.
+      this.store.db.prepare('DELETE FROM pod_sandbox WHERE source=?').run(`network:${definition.id}`)
+      this.store.db.prepare('DELETE FROM pod_sandbox_deny WHERE source=?').run(`network:${definition.id}`)
       this.store.db.prepare('UPDATE network_process_previews SET consumed_at=coalesce(consumed_at,?),state=\'stopped\' WHERE network_id=? AND state=\'preview\'').run(Date.now(), definition.id)
       this.trace(definition.id, 'network-archived-reviewed', { fingerprint: expectedFingerprint, revision: definition.revision, message: 'Network archived after settlement review. Identities, history and effect evidence remain preserved; no execution can resume.' })
     })
@@ -490,8 +492,6 @@ export class NetworkEngine {
       if (!script) throw new Error('Network pinned script is missing')
       const manifest = parseManifest(JSON.parse(script.manifest as string))
       if (manifest.contract === undefined || canonicalNetworkJson(parseGraphContract(manifest.contract)) !== canonicalNetworkJson(member.contract) || manifest.dependencyLockHash !== binding.lock_hash) throw new Error('Network script contract or dependency lock differs from its definition')
-      if (manifest.capabilities.some(capability => !supportedNetworkCapability(capability))) throw new Error('Network capabilities require declared runtime ports')
-      if (!member.source && manifest.capabilities.some(networkSourceCapability) && !networkArchiveMember(definition, member, manifest.capabilities)) throw new Error('Network mail reads require a declared source')
       if (!member.source && !manifest.triggers.includes('event')) throw new Error('Network consumer script must allow event triggers')
       if (member.source?.schedule && !manifest.triggers.includes('schedule')) throw new Error('Scheduled network source script must allow schedule triggers')
       if (!this.store.db.prepare('SELECT 1 FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(member.podId, pod.activeScript!, pod.bindingRevision, this.resources.epoch(member.podId))) throw new Error('Network instance needs validation for its current resources')

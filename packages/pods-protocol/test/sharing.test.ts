@@ -184,6 +184,11 @@ it('carries requested file, HTTP and AI scope through typed recipient inputs onl
   http.authentication.issuer = 'origin'
   expect(() => parsePortableManifest(manifest)).toThrow('duplicate')
   http.authentication.issuer = 'issuer'
+  http.authentication.exchange = 'sp'
+  expect(parsePortableManifest(manifest).pods[0]!.access[1]).toEqual(http)
+  Object.assign(http.authentication, { exchange: 'token' })
+  expect(() => parsePortableManifest(manifest)).toThrow('unsupported HTTP authentication')
+  delete http.authentication.exchange
   pod.inputs.push({ key: 'wrong_folder', kind: 'string', label: 'Wrong folder', description: '', required: true, sharingGroup: null })
   pod.access[0] = { kind: 'directory', alias: 'files', input: 'wrong_folder', access: 'read' }
   expect(() => parsePortableManifest(manifest)).toThrow('mistyped access input')

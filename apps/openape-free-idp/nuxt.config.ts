@@ -74,6 +74,10 @@ export default defineNuxtConfig({
     telegramApprover: process.env.NUXT_TELEGRAM_APPROVER || '',
     vapidPrivateKey: process.env.NUXT_VAPID_PRIVATE_KEY || '',
     vapidSubject: process.env.NUXT_VAPID_SUBJECT || 'mailto:patrick@hofmann.eco',
+    // Seconds a grant must stay pending before push, mail and Telegram announce
+    // it (#1455): an owner session that approves at once notifies nobody.
+    // NUXT_GRANT_NOTIFICATION_DELAY_SECONDS=0 announces immediately.
+    grantNotificationDelaySeconds: 60,
     public: {
       issueReportingEnabled: false,
       maxAgentsPerUser: Number(process.env.NUXT_PUBLIC_MAX_AGENTS_PER_USER || 100),

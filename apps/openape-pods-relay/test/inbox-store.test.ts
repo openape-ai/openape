@@ -101,6 +101,17 @@ it('syncs a runtime decision set: new ones push once, changed ones update, vanis
   expect(() => store.openDecision(other, b!.id)).toThrow('not_found')
 })
 
+it('holds the push of an IdP approval until it stayed open for the delay and drops it when decided meanwhile', () => {
+  const { store, advance } = setup()
+  const approval = (sourceId: string) => ({ ...decision(sourceId), type: 'approval' as const, authority: 'idp' as const, options: [], link: { title: 'Am IdP entscheiden', url: 'https://id.example/grant-approval?grant_id=g' } })
+  store.syncDecisions(owner, runtime, [approval('approval:quick'), approval('approval:slow')])
+  expect(store.claimOutbox()).toEqual([])
+  // The owner's session approved one at once: the desktop's next set no longer contains it.
+  store.syncDecisions(owner, runtime, [approval('approval:slow')])
+  advance(inboxLimits.idpPushDelayMs)
+  expect(store.claimOutbox().map(entry => store.item(owner, entry.itemId).decision?.sourceId)).toEqual(['approval:slow'])
+})
+
 it('keeps a deleted open decision deleted beyond tombstone purge and resolves decisions even with a full inbox', () => {
   const { store, advance } = setup()
   store.syncDecisions(owner, runtime, [decision('effect:a')])

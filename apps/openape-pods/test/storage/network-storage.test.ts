@@ -35,7 +35,7 @@ it('adds empty network storage to schema 27 without converting any legacy identi
   store = reopen(store)
   expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(schemaVersion)
   expect(store.getPod(pod.id).name).toBe('Original identity')
-  // Schema 43 archives the remaining workflow and keeps its rows (issue 1455).
+  // Schema 45 archives the remaining workflow and keeps its rows (issue 1455).
   expect({ pods: store.db.prepare('SELECT * FROM pods').all(), workflows: store.db.prepare('SELECT * FROM workflows').all(), items: store.db.prepare('SELECT * FROM graph_items').all() }).toEqual({ ...before, workflows: before.workflows.map(row => ({ ...row, archived: 1, enabled: 0, paused: 1 })) })
   for (const table of networkTables) expect(store.db.prepare(`SELECT count(*) AS count FROM ${table}`).get()?.count, table).toBe(0)
 })
