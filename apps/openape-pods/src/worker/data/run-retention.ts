@@ -81,7 +81,6 @@ export class RunRetention {
         this.store.db.prepare('INSERT INTO run_deletion_jobs VALUES(?,NULL)').run(id)
         this.store.db.prepare('UPDATE effect_ledger SET run_id=NULL WHERE run_id=? AND state=\'completed\'').run(id)
         this.store.db.prepare('UPDATE accepted_events SET run_id=NULL WHERE run_id=? AND state IN (\'processed\',\'failed\')').run(id)
-        this.store.db.prepare('UPDATE control_changes SET body=json_remove(body,\'$.results[0].result.runId\',\'$.execution\') WHERE id IN (SELECT id FROM control_runs WHERE kind=\'pod\' AND run_id=?)').run(id)
         this.store.db.prepare('DELETE FROM control_runs WHERE kind=\'pod\' AND run_id=?').run(id)
         for (const table of ['run_events', 'run_inputs', 'execution_domains', 'recovery_reviews']) {
           this.store.db.prepare(`DELETE FROM ${table} WHERE run_id=?`).run(id)

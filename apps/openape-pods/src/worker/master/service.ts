@@ -19,7 +19,6 @@ export class MasterService {
     this.descriptions = new PodDescriptions(store, (input, signal) => summarizeConversation(store, runtime, this.provider, input, signal))
     store.transaction(() => {
       store.db.prepare('UPDATE master_contexts SET state=\'interrupted\',error=\'Previous chat was interrupted.\' WHERE state=\'running\'').run()
-      store.db.prepare('UPDATE master_session SET state=\'interrupted\',error=\'Previous chat was interrupted. Inspect its actions before continuing.\',active_turn=NULL WHERE state=\'running\'').run()
       store.db.prepare('UPDATE master_messages SET state=\'interrupted\' WHERE state=\'streaming\'').run()
       store.db.prepare('UPDATE master_actions SET state=\'interrupted\',error=\'Action interrupted; inspect the current pod and draft before retrying\' WHERE state=\'running\'').run()
     })

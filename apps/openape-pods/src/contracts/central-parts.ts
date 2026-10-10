@@ -8,19 +8,22 @@ import type { RunEvent, RunRecord, RunView } from './runs'
 import { parseScheduleView } from './scheduling'
 import { parseScriptView } from './scripts'
 import type { ScriptView } from './scripts'
-import { acceptedCentralTables, centralId, centralMaxBytes, centralObject, centralRevision } from './central'
+import { centralId, centralMaxBytes, centralObject, centralRevision, legacyCentralTables } from './central'
 import type { CentralPod, CentralSnapshot } from './central'
 
 // Format 2 publishes a snapshot as content-addressed parts. Only parts whose hash
-// changed travel; the manifest digest replaces the full-snapshot hash.
+// changed travel; the manifest digest replaces the full-snapshot hash. Nothing reads the
+// `schema` part; relays before issue 1455 (M8) require it. `table/` parts come only from
+// desktops before M8.
 export const centralFormat = 2
+/** Rows per legacy `table/` part (desktops before issue 1455, M8). */
 export const centralChunkRows = 16
 export type CentralManifest = Record<string, string>
 export type CentralParts = Map<string, unknown>
 type PodPart = Omit<CentralPod, 'runs' | 'versions' | 'history'> & { runs: Omit<RunView, 'runs' | 'events'> & { runIds: string[] } }
 
 const uuid = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'
-const keyPattern = new RegExp(`^(?:workspace|artifacts|schema|pod/(${uuid})(?:/(version|run|events)/([a-f0-9-]{36}|[a-f0-9]{64}))?|table/([a-z_]{1,64})/(\\d{1,7}))$`)
+const keyPattern = new RegExp(`^(?:workspace|artifacts|schema|pod/(${uuid})(?:/(version|run|events)/([a-f0-9-]{36}|[a-f0-9]{64}))?|table/([a-z_]{1,64})/\\d{1,7})$`)
 export const partHash = (text: string): string => createHash('sha256').update(text).digest('hex')
 
 export function manifestDigest(manifest: CentralManifest): string {
@@ -28,7 +31,7 @@ export function manifestDigest(manifest: CentralManifest): string {
 }
 
 export function splitSnapshot(snapshot: CentralSnapshot): CentralParts {
-  const parts: CentralParts = new Map<string, unknown>([['workspace', snapshot.workspace], ['artifacts', snapshot.artifacts], ['schema', snapshot.archive.schema]])
+  const parts: CentralParts = new Map<string, unknown>([['workspace', snapshot.workspace], ['artifacts', snapshot.artifacts], ['schema', snapshot.schema]])
   for (const pod of snapshot.pods) {
     const { versions, history, runs: { runs, events: _events, ...view }, ...rest } = pod
     parts.set(`pod/${pod.id}`, { ...rest, runs: { ...view, runIds: runs.map(run => run.id) } } satisfies PodPart)
@@ -37,9 +40,6 @@ export function splitSnapshot(snapshot: CentralSnapshot): CentralParts {
       parts.set(`pod/${pod.id}/run/${run.id}`, run)
       parts.set(`pod/${pod.id}/events/${run.id}`, history[run.id]?.events ?? [])
     }
-  }
-  for (const [table, rows] of Object.entries(snapshot.archive.tables)) {
-    for (let index = 0; index === 0 || index * centralChunkRows < rows.length; index++) parts.set(`table/${table}/${index}`, rows.slice(index * centralChunkRows, (index + 1) * centralChunkRows))
   }
   return parts
 }
@@ -65,17 +65,9 @@ export function assemblePod(read: (key: string) => unknown, keys: string[], podI
   }
 }
 
-export function assembleSnapshot(read: (key: string) => unknown, keys: string[]): CentralSnapshot {
-  const workspace = read('workspace') as WorkspaceState
-  const tables: Record<string, Record<string, unknown>[]> = {}
-  const chunks = keys.map(key => keyPattern.exec(key)).filter(match => match?.[4]).map(match => ({ key: match![0], table: match![4]!, index: Number(match![5]) }))
-  for (const chunk of chunks.sort((a, b) => a.index - b.index)) (tables[chunk.table] ??= []).push(...read(chunk.key) as Record<string, unknown>[])
-  return { version: 1, workspace, pods: workspace.pods.map(pod => assemblePod(read, keys, pod.id)), archive: { schema: read('schema') as number, tables }, artifacts: read('artifacts') as CentralSnapshot['artifacts'] }
-}
-
 export function parsePartKey(key: string): { podId?: string, kind?: string, id?: string, table?: string } {
   const match = keyPattern.exec(key)
-  if (!match || (match[4] && !acceptedCentralTables.includes(match[4]))) throw new Error('Invalid workspace part key')
+  if (!match || (match[4] && !legacyCentralTables.includes(match[4]))) throw new Error('Invalid workspace part key')
   return { podId: match[1], kind: match[2] ?? (match[1] ? 'pod' : undefined), id: match[3], table: match[4] }
 }
 
@@ -125,7 +117,7 @@ export function validatePart(key: string, value: unknown): void {
 // and every run a Pod lists exists with its events.
 export function validateManifest(keys: string[], read: (key: string) => unknown): void {
   const present = new Set(keys)
-  for (const key of ['workspace', 'artifacts', 'schema']) {
+  for (const key of ['workspace', 'artifacts']) {
     if (!present.has(key)) throw new Error('Invalid workspace inventory')
   }
   const pods = new Set((read('workspace') as WorkspaceState).pods.map(pod => pod.id))

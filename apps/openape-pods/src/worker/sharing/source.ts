@@ -35,9 +35,8 @@ function podSource(store: PodDatabase, resources: ResourceRegistry, catalog: Def
   const packages = dependency ? parsePackages(JSON.parse(String(dependency.manifest))) : emptyPackages()
   const binding = store.db.prepare('SELECT definition_id,definition_version,binding_revision FROM instance_definition_bindings WHERE pod_id=?').get(id) ?? null
   const definitions = binding ? store.db.prepare('SELECT name,kind,value FROM definition_config WHERE definition_id=? AND definition_version=? ORDER BY name').all(binding.definition_id!, binding.definition_version!) : []
-  const overrides = store.db.prepare('SELECT name,value FROM instance_config WHERE pod_id=? ORDER BY name').all(id)
   const schedule = store.db.prepare('SELECT revision,spec FROM schedules WHERE pod_id=?').get(id)
-  return { pod, manifest, content, resourceEpoch, resources: resources.list(id), variables: new PodVariables(store).list(id), binding, definitions, overrides, schedule: schedule ? { revision: Number(schedule.revision), spec: parseSchedule(JSON.parse(String(schedule.spec))) } : null, packages, dependencyHash: dependency ? String(dependency.dependency_hash) : null, lock: dependency ? String(dependency.lockfile) : null }
+  return { pod, manifest, content, resourceEpoch, resources: resources.list(id), variables: new PodVariables(store).list(id), binding, definitions, schedule: schedule ? { revision: Number(schedule.revision), spec: parseSchedule(JSON.parse(String(schedule.spec))) } : null, packages, dependencyHash: dependency ? String(dependency.dependency_hash) : null, lock: dependency ? String(dependency.lockfile) : null }
 }
 export type PortablePodSource = ReturnType<typeof podSource>
 
@@ -107,7 +106,7 @@ export function capturePortableSource(store: PodDatabase, ownerValue: Owner, sel
     localReferences({ pods: pods.map(({ content: _content, lock: _lock, ...pod }) => pod), network }, privateReferences)
     for (const pod of pods) {
       for (const variable of pod.variables) remember(variable.value)
-      for (const field of [...pod.definitions.filter(field => field.kind === 'public'), ...pod.overrides]) remember(JSON.parse(String(field.value)))
+      for (const field of [...pod.definitions.filter(field => field.kind === 'public')]) remember(JSON.parse(String(field.value)))
       for (const resource of pod.resources) {
         const paths = resource.kind === 'reference' || resource.kind === 'directory' ? [resource.configuration.path] : resource.configuration.type === 'program' ? [resource.configuration.executable, resource.configuration.adapterPath, resource.configuration.bundlePath] : []
         for (const path of paths) {

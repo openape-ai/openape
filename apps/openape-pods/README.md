@@ -127,6 +127,20 @@ Uncommitted blobs remain unreachable; retries cannot silently change a source
 version or claim. Future-schema databases are rejected before modification;
 migration preserves a pre-upgrade SQLite backup.
 
+Schema 46 (issue 1455, M8) is one baseline, `src/worker/storage/schema.ts`: a new
+profile is created from it directly, and a schema-45 profile or backup is rebuilt
+into exactly that schema after its verified pre-upgrade copy (`upgrade.ts`).
+Profiles and backups below schema 45 are refused unchanged; open or restore them
+with the Pods release that wrote them first. To roll the app back from schema 46,
+stop it, replace `control.sqlite` with the verified `before-v45-*.sqlite` copy in the
+profile (remove `control.sqlite-wal` and `-shm` first) and install the previous
+bundle; work after the upgrade is not in that copy. Schema 46 drops what nothing read
+anymore: the workflow and graph tables, the mobile relay tables, legacy chat
+session state, unused journals and write-only columns. The definition binding of a
+network member is stored once, in `instance_definition_bindings`; the upgrade
+refuses a profile whose two copies disagree. Schema numbers in the sections below
+are history; every retained table is part of the baseline.
+
 Verification: 19 unit/component tests, including four actual subprocess SIGKILL
 points around blob/transaction publication, source conflicts, revision conflicts,
 and v1 migration. Five Electron cases include save/restart/reopen and packaged
@@ -555,7 +569,7 @@ file-deletion journal. Database deletion and journal insertion commit atomically
 startup resumes interrupted cleanup. The existing scheduler processes at most 25
 runs per pass with a bounded tick step and no overlapping cleanup. Local deletion
 is published through the existing central manifest protocol, which removes stale
-run parts and replaces the archive tables; account Pods are preserved.
+run parts; account Pods are preserved.
 
 Retention does not change Pod workspaces, configuration, scripts, schedules,
 checkpoints or knowledge. Durable work belongs in the Pod workspace/checkpoints,
@@ -681,12 +695,13 @@ Script and ordinary form edits survive tab navigation within the session.
 Stale script conflicts offer reload with discard confirmation or explicit saving
 of local edits as the current artifact. No editor dependency is introduced.
 
-Schema 13 adds per-pod ordinary variables. Variables are bounded plain strings, captured and frozen
+Per-pod ordinary variables are bounded plain strings, captured and frozen
 as `context.variables` per run. They are included in backups; managed secrets
 remain encrypted and excluded. Neither variables nor secret values are added to
 model prompts automatically. A script can explicitly include values in a prompt.
-Restore clears chat continuation IDs and requires explicit recovery. Older apps
-must not open the migrated profile; use the matching pre-migration backup.
+Restore clears retained chat continuation IDs. Restore accepts backups of schema 45
+and 46 (a schema-45 backup is rebuilt as the schema-46 baseline first) and refuses
+older ones; restore those with the release that wrote them first.
 
 ## Pod groups
 
@@ -695,13 +710,12 @@ collapse and remove groups, or move pods by dragging onto a group heading or
 using Settings → Group. Removing a group keeps its pods under
 Ungrouped. New pods are ungrouped; groups and pods retain creation order.
 
-Schema 11 stores organization separately from pod assignment revisions. Group
+Organization is stored separately from pod assignment revisions. Group
 changes preserve script validation, active versions, permissions and schedules.
 A separate revision rejects stale organization writes. Group membership and
 collapsed state survive restart and backup/restore; deleting a pod removes its
-membership. Migration retains existing pods and creates a pre-migration SQLite
-copy. Older binaries reject the newer schema; rollback requires a compatible
-backup. See the handbook's grouping chapter for the owner workflow.
+membership. Older binaries reject the newer schema; see "Durable local state" for
+the rollback through the pre-upgrade copy. See the handbook's grouping chapter for the owner workflow.
 
 ## Languages and handbooks
 
@@ -720,13 +734,11 @@ Pod's assigned value; every ready secret assigned to the Pod is available to its
 scripts without a declaration or approval. Each read verifies the pinned run
 lease, Pod binding and resource epoch.
 
-Schema 12 extends resource kinds and records version approvals. Migration retains
-existing resources and creates a pre-migration database copy. Rotation pauses the
-pod and invalidates validation/approval; revocation cancels affected work and
-removes the encrypted value. Startup reconciles interrupted saves using durable
-metadata-only credential records. Pod deletion uses the existing deletion journal.
-Backups exclude the credential store; restore clears approvals and requires values
-to be assigned again. Roll back using a compatible pre-migration backup.
+Rotation pauses the pod and invalidates validation/approval; revocation cancels
+affected work and removes the encrypted value. Startup reconciles interrupted saves
+using durable metadata-only credential records. Pod deletion uses the existing
+deletion journal. Backups exclude the credential store; restore clears credential
+approvals and requires values to be assigned again.
 
 The credential broker uses a separate private script operation, verifies the pinned
 run lease and assigned alias before and after decryption, and never automatically
@@ -744,13 +756,13 @@ Overview shows the Pod's description. The owner edits it directly and Codex writ
 
 The Pod inventory and the standalone cards of Networks show a one-line summary of that description (first full sentence, at most 160 characters), published with the workspace Pod list. The Pod overview states the last run's own summary below its headline. The description explains a Pod; saving it never changes the script, its validation or its hash.
 
-Networks have their own owner-written description (schema 38, local table `collection_descriptions`, at most 1000 characters). The desktop owner adds or edits it under the title of the network; the overview card shows its one-line summary and the browser workspace shows it read-only. It is published with the workspace state, not as a table and not inside any definition, so it never changes a network revision, pin or hash, and an older relay passes it through. MCP clients and the central workspace write it with the workspace command `describeAutomation`; `details describe` also works for network member Pods. The browser workspace offers no edit control for it.
+Networks have their own owner-written description (local table `automation_descriptions`, at most 1000 characters). The desktop owner adds or edits it under the title of the network; the overview card shows its one-line summary and the browser workspace shows it read-only. It is published with the workspace state, not as a table and not inside any definition, so it never changes a network revision, pin or hash, and an older relay passes it through. MCP clients and the central workspace write it with the workspace command `describeAutomation`; `details describe` also works for network member Pods. The browser workspace offers no edit control for it.
 
 ## Script authority and compatibility
 
 Pod creation requires a name. The script and its explicit AI prompts control execution. Settings has no separate execution assignment. Names are metadata: renaming preserves lifecycle, running work and script validation. Overview descriptions remain informational.
 
-Schema 16 adds `pods.metadata_revision` for optimistic metadata updates. The historical `pods.revision` is retained as an immutable execution binding, exposed internally as `bindingRevision`. Existing manifest, run, validation and credential-approval fields named `assignmentRevision` or `assignment_revision` remain byte-compatible with their original bindings. They are not instructions and do not follow name edits. Old assignment text is retained only in historical storage, excluded from current Pod/tool responses and the legacy mail-knowledge analysis context. Permission epochs, exact-source validation, lease checks and revocation still apply. Migration does not revive artifacts invalidated before upgrade or rewrite script hashes.
+Schema 16 adds `pods.metadata_revision` for optimistic metadata updates. The historical `pods.revision` is retained as an immutable execution binding, exposed internally as `bindingRevision`. Existing manifest, run, validation and credential-approval fields named `assignmentRevision` or `assignment_revision` remain byte-compatible with their original bindings. They are not instructions and do not follow name edits. Schema 46 removed the old assignment text. Permission epochs, exact-source validation, lease checks and revocation still apply. Migration does not revive artifacts invalidated before upgrade or rewrite script hashes.
 
 ## Networks
 
@@ -765,7 +777,7 @@ Claude Code and Codex share the desktop executor and central data.
 
 ## Morning mail protection and Jev evaluation
 
-`examples/mail-triage.mjs` uses `jev.evaluate` for structured mail disposition and priority. Uncertain archival judgments remain in the Inbox; `agent.run` only summarizes selected important messages. Assign the pinned Jev connection and a sufficient per-run attempt budget (100 for the initial two-mailbox review). Provider or parsing errors remain explicit coverage gaps, never an LLM classification fallback.
+Mail scripts use `jev.evaluate` for structured mail disposition and priority; uncertain archival judgments remain in the Inbox. Assign the pinned Jev connection and a sufficient per-run attempt budget. Provider or parsing errors remain explicit coverage gaps, never an LLM classification fallback.
 
 The reviewed `examples/microsoft-mail.mjs` companion requires `PODS_MAIL_POLICY` to point to an owner-maintained, Pod-read-only JSON policy; `examples/mail-protection-policy.json` documents the format. Domain entries match the exact domain and its subdomains, never a substring. The `protection --account ...` read operation incrementally collects all available Sent Items To/Cc/Bcc recipients through Microsoft Graph delta queries. Its private per-mailbox recipient union never shrinks when sent messages disappear. Already deleted historical Sent Items cannot be reconstructed. Continue bounded pages until `ready:true`; incomplete metadata, an unavailable source or an incomplete conversation prohibits archival. The companion independently refreshes protection when preparing and immediately before executing a move. Policy changes do not require trusting a cached model decision.
 

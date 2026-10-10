@@ -1,18 +1,6 @@
-import { inboxOutboxSchema } from './inbox-outbox-schema.ts'
-import { grantLedgerSchema, separateStoredGrants } from './grant-ledger-schema.ts'
-import { sandboxDenySchema } from './sandbox-deny-schema.ts'
-import { upgradeStoredNetworkDefinitions } from './network-format-migration.ts'
-import { networkRoutingSchema } from './network-routing-schema.ts'
-import { definitionSchema } from './definition-schema.ts'
-import { aliasSchema, sharingSchema } from './sharing-schema.ts'
-import { networkDataSchema } from './network-data-schema.ts'
-import { networkWorkflowSchema } from './network-workflow-schema.ts'
-import { retireWorkflows } from './workflow-retirement.ts'
-import { migrateNetworkGateGrants, networkGateGrantSchema, networkGateSchema } from './network-gate-schema.ts'
-import { assertNetworkStorage, networkSchema } from './network-schema.ts'
-import { migrateNetworkControls, migrateNetworkSettlements, networkControlSchema } from './network-control-schema.ts'
-import { migrateRemote } from '../remote/migration.ts'
-import { migrateChats } from '../master/chat-migration.ts'
+import { assertIntegrity } from './integrity.ts'
+import { baselineRows, baselineSchema, schemaVersion } from './schema.ts'
+import { assertSupportedSchema, assertUpgradable, upgradeToBaseline } from './upgrade.ts'
 import type { GraphContract } from '../../contracts/graphs.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, statfsSync, writeFileSync } from 'node:fs'
@@ -52,7 +40,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 45
+export { schemaVersion }
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -97,8 +85,7 @@ export class PodDatabase {
     if (existsSync(this.path)) {
       const probe = new DatabaseSync(this.path, { readOnly: true })
       try {
-        const version = probe.prepare('PRAGMA user_version').get()?.user_version as number
-        if (version > schemaVersion) throw new Error(`Database schema ${version} needs a newer application`)
+        assertSupportedSchema(probe.prepare('PRAGMA user_version').get()?.user_version as number)
         if (probe.prepare('PRAGMA quick_check').get()?.quick_check !== 'ok') throw new Error('Database integrity check failed')
       }
       finally { probe.close() }
@@ -109,7 +96,7 @@ export class PodDatabase {
     try {
       this.db.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;')
       this.migrate()
-      assertNetworkStorage(this.db)
+      assertIntegrity(this.db)
       this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;')
       this.db.function('pod_activated', (podId) => { this.onActivated(String(podId)); return null })
       this.db.exec('CREATE TEMP TRIGGER pod_activated AFTER UPDATE OF lifecycle ON pods WHEN NEW.lifecycle=\'active\' AND OLD.lifecycle<>\'active\' BEGIN SELECT pod_activated(NEW.id); END')
@@ -121,252 +108,28 @@ export class PodDatabase {
   private migrate(): void {
     const version = this.db.prepare('PRAGMA user_version').get()?.user_version as number
     if (version === schemaVersion) return
-    if (version > 0) {
-      const backup = join(this.root, `before-v${version}-${randomUUID()}.sqlite`)
-      this.db.prepare('VACUUM INTO ?').run(backup); chmodSync(backup, 0o600)
-      const saved = new DatabaseSync(backup, { readOnly: true })
-      try {
-        if (saved.prepare('PRAGMA quick_check').get()?.quick_check !== 'ok' || saved.prepare('PRAGMA user_version').get()?.user_version !== version) throw new Error('Pre-upgrade database backup failed verification')
-      }
-      finally { saved.close() }
+    if (version === 0) {
+      this.transaction(() => this.db.exec(`${baselineSchema}${baselineRows}PRAGMA user_version=${schemaVersion};`))
+      return
     }
-    this.transaction(() => {
-      if (version < 1) {
-        this.db.exec(`
-        CREATE TABLE pods(id TEXT PRIMARY KEY, name TEXT NOT NULL, assignment TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1, lifecycle TEXT NOT NULL DEFAULT 'paused' CHECK(lifecycle IN ('active','paused','archived')), active_script TEXT);
-        CREATE TABLE assignments(pod_id TEXT NOT NULL REFERENCES pods(id), revision INTEGER NOT NULL, body TEXT NOT NULL, PRIMARY KEY(pod_id,revision));
-        CREATE TABLE scripts(pod_id TEXT NOT NULL REFERENCES pods(id), hash TEXT NOT NULL, manifest TEXT NOT NULL, PRIMARY KEY(pod_id,hash));
-        CREATE TABLE checkpoints(pod_id TEXT PRIMARY KEY REFERENCES pods(id), revision INTEGER NOT NULL, body TEXT NOT NULL);
-        CREATE TABLE sources(pod_id TEXT NOT NULL REFERENCES pods(id), id TEXT NOT NULL, version TEXT NOT NULL, locator TEXT NOT NULL, hash TEXT NOT NULL, PRIMARY KEY(pod_id,id,version));
-        CREATE TABLE claims(pod_id TEXT NOT NULL REFERENCES pods(id), id TEXT NOT NULL, matter TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('finding','question','gap')), body TEXT NOT NULL, citations TEXT NOT NULL, supersedes TEXT, revision INTEGER NOT NULL, PRIMARY KEY(pod_id,id));
-      `)
-      }
-      if (version < 2) {
-        this.db.exec(`
-        CREATE TABLE settings(id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL, concurrency INTEGER NOT NULL CHECK(concurrency BETWEEN 1 AND 8));
-        INSERT INTO settings VALUES(1,1,2);
-        CREATE TABLE validations(pod_id TEXT NOT NULL, script_hash TEXT NOT NULL, assignment_revision INTEGER NOT NULL, resource_epoch INTEGER NOT NULL, evidence TEXT NOT NULL, PRIMARY KEY(pod_id,script_hash,assignment_revision,resource_epoch), FOREIGN KEY(pod_id,script_hash) REFERENCES scripts(pod_id,hash));
-        PRAGMA user_version=2;
-      `)
-      }
-      if (version < 3) {
-        this.db.exec(`
-        CREATE TABLE resources(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), revision INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('reference','tool','connection')), state TEXT NOT NULL CHECK(state IN ('ready','missing','expired','revoked','refreshRequired')), name TEXT NOT NULL, configuration TEXT NOT NULL);
-        CREATE TABLE resource_epochs(pod_id TEXT PRIMARY KEY REFERENCES pods(id), epoch INTEGER NOT NULL);
-        CREATE TABLE snapshot_sets(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), epoch INTEGER NOT NULL, manifest TEXT NOT NULL);
-        PRAGMA user_version=3;
-      `)
-      }
-      if (version < 4) {
-        this.db.exec(`
-        CREATE TABLE runs(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), script_hash TEXT NOT NULL, state TEXT NOT NULL, started_at INTEGER NOT NULL, finished_at INTEGER, summary TEXT NOT NULL, error TEXT, checkpoint_revision INTEGER NOT NULL, assignment_revision INTEGER NOT NULL);
-        CREATE TABLE run_leases(pod_id TEXT PRIMARY KEY REFERENCES pods(id), run_id TEXT NOT NULL UNIQUE REFERENCES runs(id), boot_id TEXT NOT NULL, heartbeat INTEGER NOT NULL, process_id INTEGER);
-        CREATE TABLE run_events(run_id TEXT NOT NULL REFERENCES runs(id), sequence INTEGER NOT NULL, type TEXT NOT NULL, data TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(run_id,sequence));
-        PRAGMA user_version=4;
-        `)
-      }
-      if (version < 5) {
-        this.db.exec(`
-          CREATE TABLE schedules(pod_id TEXT PRIMARY KEY REFERENCES pods(id),revision INTEGER NOT NULL,spec TEXT NOT NULL,enabled INTEGER NOT NULL DEFAULT 0,next_at INTEGER,error TEXT);
-          CREATE TABLE accepted_events(sequence INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL UNIQUE,pod_id TEXT NOT NULL REFERENCES pods(id),source TEXT NOT NULL,dedupe_key TEXT NOT NULL,payload TEXT NOT NULL,accepted_at INTEGER NOT NULL,state TEXT NOT NULL DEFAULT 'pending',run_id TEXT,error TEXT,UNIQUE(pod_id,source,dedupe_key));
-          CREATE INDEX ready_events ON accepted_events(state,pod_id,sequence);
-          CREATE TABLE run_inputs(run_id TEXT PRIMARY KEY REFERENCES runs(id),reason TEXT NOT NULL,event_ids TEXT NOT NULL);
-          CREATE TABLE reference_observations(pod_id TEXT NOT NULL REFERENCES pods(id),resource_id TEXT NOT NULL,revision INTEGER NOT NULL,hash TEXT NOT NULL,generation INTEGER NOT NULL,error TEXT,PRIMARY KEY(pod_id,resource_id));
-          PRAGMA user_version=5;
-        `)
-      }
-      if (version < 6) {
-        this.db.exec(`
-          CREATE TABLE execution_domains(path TEXT PRIMARY KEY,run_id TEXT NOT NULL REFERENCES runs(id),owner_pid INTEGER NOT NULL);
-          CREATE TABLE recovery_reviews(run_id TEXT PRIMARY KEY REFERENCES runs(id),state TEXT NOT NULL,error TEXT,checked_at INTEGER NOT NULL,request_event_id TEXT);
-          CREATE TABLE effect_ledger(pod_id TEXT NOT NULL REFERENCES pods(id),effect_key TEXT NOT NULL,operation TEXT NOT NULL,input_hash TEXT NOT NULL,run_id TEXT NOT NULL REFERENCES runs(id),state TEXT NOT NULL,result TEXT,PRIMARY KEY(pod_id,effect_key));
-          PRAGMA user_version=6;
-        `)
-      }
-      if (version < 7) {
-        this.db.exec(`
-CREATE TABLE mail_inventory(pod_id TEXT PRIMARY KEY REFERENCES pods(id), scope TEXT NOT NULL, phase TEXT NOT NULL, folder_index INTEGER NOT NULL, cursor TEXT, completed_at INTEGER);
-CREATE TABLE mail_items(pod_id TEXT NOT NULL REFERENCES pods(id), account TEXT NOT NULL, id TEXT NOT NULL, folder TEXT NOT NULL, source_id TEXT NOT NULL, conversation TEXT NOT NULL, metadata TEXT NOT NULL, PRIMARY KEY(pod_id,account,id));
-CREATE INDEX mail_conversation ON mail_items(pod_id,conversation);
-CREATE TABLE mail_receipts(pod_id TEXT NOT NULL REFERENCES pods(id), source_id TEXT NOT NULL, recipe TEXT NOT NULL, context_hash TEXT NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY(pod_id,source_id,recipe));
-CREATE TABLE mail_extractions(pod_id TEXT NOT NULL REFERENCES pods(id), source_id TEXT NOT NULL, parser TEXT NOT NULL, text_source_id TEXT NOT NULL, gap TEXT, PRIMARY KEY(pod_id,source_id,parser));
-CREATE TABLE mail_contexts(pod_id TEXT NOT NULL REFERENCES pods(id), hash TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(pod_id,hash));
-CREATE TABLE source_derivations(pod_id TEXT NOT NULL REFERENCES pods(id), source_id TEXT NOT NULL, original_id TEXT NOT NULL, operation TEXT NOT NULL, PRIMARY KEY(pod_id,source_id));
-PRAGMA user_version=7;
-`)
-      }
-      if (version < 8) {
-        this.db.exec(`
-CREATE TABLE master_inputs(id TEXT PRIMARY KEY,request_hash TEXT NOT NULL);
-CREATE TABLE master_domains(path TEXT PRIMARY KEY, owner_pid INTEGER NOT NULL);
-CREATE TABLE master_session(id INTEGER PRIMARY KEY CHECK(id=1),thread_id TEXT,active_turn TEXT,state TEXT NOT NULL,error TEXT);
-INSERT INTO master_session VALUES(1,NULL,NULL,'idle',NULL);
-CREATE TABLE master_messages(id TEXT PRIMARY KEY,role TEXT NOT NULL,body TEXT NOT NULL,state TEXT NOT NULL,created_at INTEGER NOT NULL);
-CREATE TABLE master_actions(id TEXT PRIMARY KEY,request_hash TEXT NOT NULL,request TEXT NOT NULL,state TEXT NOT NULL,result TEXT,error TEXT);
-CREATE TABLE script_drafts(id TEXT PRIMARY KEY,pod_id TEXT NOT NULL REFERENCES pods(id),revision INTEGER NOT NULL,assignment_revision INTEGER NOT NULL,code TEXT NOT NULL,capabilities TEXT NOT NULL,validation TEXT,script_hash TEXT);
-CREATE TABLE access_proposals(id TEXT PRIMARY KEY,pod_id TEXT NOT NULL REFERENCES pods(id),body TEXT NOT NULL,state TEXT NOT NULL);
-PRAGMA user_version=8;
-`)
-      }
-
-      if (version < 9) {
-        this.db.exec(`CREATE TABLE connections(id TEXT PRIMARY KEY,provider TEXT NOT NULL,account TEXT NOT NULL,state TEXT NOT NULL,error TEXT,metadata TEXT NOT NULL);
-CREATE TABLE onboarding(id INTEGER PRIMARY KEY CHECK(id=1),complete INTEGER NOT NULL);
-INSERT INTO onboarding VALUES(1,0);
-PRAGMA user_version=9;`)
-      }
-
-      if (version < 10) {
-        this.db.exec(`
-CREATE TABLE data_settings(id INTEGER PRIMARY KEY CHECK(id=1),limit_bytes INTEGER NOT NULL,used_bytes INTEGER NOT NULL,error TEXT);
-INSERT INTO data_settings VALUES(1,10737418240,0,NULL);
-CREATE TABLE deletion_jobs(pod_id TEXT PRIMARY KEY,payload TEXT NOT NULL,error TEXT);
-PRAGMA user_version=10;
-`)
-      }
-
-      if (version < 11) {
-        this.db.exec(`
-CREATE TABLE pod_organization(id INTEGER PRIMARY KEY CHECK(id=1),revision INTEGER NOT NULL);
-INSERT INTO pod_organization VALUES(1,1);
-CREATE TABLE pod_groups(id TEXT PRIMARY KEY,name TEXT NOT NULL,collapsed INTEGER NOT NULL CHECK(collapsed IN (0,1)));
-CREATE TABLE pod_memberships(pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DELETE CASCADE,group_id TEXT NOT NULL REFERENCES pod_groups(id) ON DELETE CASCADE);
-CREATE INDEX group_members ON pod_memberships(group_id);
-PRAGMA user_version=11;
-`)
-      }
-
-      if (version < 12) {
-        this.db.exec(`
-CREATE TABLE resources_v12(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), revision INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('reference','tool','connection','credential')), state TEXT NOT NULL CHECK(state IN ('ready','missing','expired','revoked','refreshRequired')), name TEXT NOT NULL, configuration TEXT NOT NULL);
-INSERT INTO resources_v12 SELECT * FROM resources;
-DROP TABLE resources;
-ALTER TABLE resources_v12 RENAME TO resources;
-CREATE TABLE script_credential_approvals(pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE,script_hash TEXT NOT NULL,assignment_revision INTEGER NOT NULL,resource_epoch INTEGER NOT NULL,PRIMARY KEY(pod_id,script_hash)); PRAGMA user_version=12;`)
-      }
-
-      if (version < 13) {
-        this.db.exec(`
-CREATE TABLE pod_variables(pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE,name TEXT NOT NULL,value TEXT NOT NULL,revision INTEGER NOT NULL,PRIMARY KEY(pod_id,name));
-CREATE TABLE master_contexts(scope TEXT PRIMARY KEY,thread_id TEXT,state TEXT NOT NULL,error TEXT);
-INSERT INTO master_contexts SELECT '',thread_id,state,error FROM master_session WHERE id=1;
-CREATE TABLE master_message_scopes(message_id TEXT PRIMARY KEY REFERENCES master_messages(id) ON DELETE CASCADE,scope TEXT NOT NULL);
-INSERT INTO master_message_scopes SELECT id,'' FROM master_messages;
-PRAGMA user_version=13;`)
-      }
-      if (version < 14) {
-        this.db.exec(`CREATE TABLE program_leases(pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DELETE CASCADE,session_id TEXT NOT NULL UNIQUE,application_id TEXT NOT NULL,epoch INTEGER NOT NULL,assignment_revision INTEGER NOT NULL); PRAGMA user_version=14;`)
-      }
-
-      if (version < 15) {
-        this.db.exec(`
-CREATE TABLE master_creations(id TEXT PRIMARY KEY,pod_id TEXT UNIQUE REFERENCES pods(id) ON DELETE CASCADE);
-CREATE TABLE pod_chat_origins(pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DELETE CASCADE,message_id TEXT NOT NULL REFERENCES master_messages(id) ON DELETE CASCADE);
-CREATE TABLE pod_descriptions(pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DELETE CASCADE,body TEXT NOT NULL DEFAULT '',revision INTEGER NOT NULL DEFAULT 0,covered_row INTEGER NOT NULL DEFAULT 0,requested_row INTEGER NOT NULL DEFAULT 0,state TEXT NOT NULL DEFAULT 'pending',error TEXT,updated_at INTEGER,work_body TEXT NOT NULL DEFAULT '',work_row INTEGER NOT NULL DEFAULT 0,work_offset INTEGER NOT NULL DEFAULT 0);
-CREATE TABLE summary_domains(path TEXT PRIMARY KEY,owner_pid INTEGER NOT NULL);
-PRAGMA user_version=15;`)
-      }
-      if (version < 16) this.db.exec('ALTER TABLE pods ADD COLUMN metadata_revision INTEGER NOT NULL DEFAULT 1; UPDATE pods SET metadata_revision=revision; PRAGMA user_version=16;')
-      if (version < 17) {
-        this.db.exec(`
-CREATE TABLE resources_v17(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), revision INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('reference','directory','tool','connection','credential')), state TEXT NOT NULL CHECK(state IN ('ready','missing','expired','revoked','refreshRequired')), name TEXT NOT NULL, configuration TEXT NOT NULL);
-INSERT INTO resources_v17 SELECT * FROM resources ORDER BY rowid;
-DROP TABLE resources;
-ALTER TABLE resources_v17 RENAME TO resources;
-PRAGMA user_version=17;`)
-      }
-
-      if (version < 18) {
-        this.db.exec(`
-CREATE TABLE draft_packages(draft_id TEXT PRIMARY KEY REFERENCES script_drafts(id) ON DELETE CASCADE, manifest TEXT NOT NULL);
-CREATE TABLE dependency_sets(pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE,hash TEXT NOT NULL,manifest TEXT NOT NULL,lockfile TEXT NOT NULL,files TEXT NOT NULL,PRIMARY KEY(pod_id,hash),UNIQUE(pod_id,manifest));
-CREATE TABLE script_dependencies(pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE,script_hash TEXT NOT NULL,dependency_hash TEXT NOT NULL,PRIMARY KEY(pod_id,script_hash),FOREIGN KEY(pod_id,dependency_hash) REFERENCES dependency_sets(pod_id,hash));
-CREATE TABLE dependency_domains(path TEXT PRIMARY KEY,owner_pid INTEGER NOT NULL);
-PRAGMA user_version=18;`)
-      }
-
-      if (version < 19) this.db.exec('ALTER TABLE onboarding ADD COLUMN default_owner TEXT REFERENCES connections(id); PRAGMA user_version=19;')
-      if (version < 20) {
-        this.db.exec(`
-CREATE TABLE workflows(id TEXT PRIMARY KEY, revision INTEGER NOT NULL, name TEXT NOT NULL, nodes TEXT NOT NULL, schedule TEXT, enabled INTEGER NOT NULL DEFAULT 0, next_at INTEGER, paused INTEGER NOT NULL DEFAULT 1, mail TEXT, archived INTEGER NOT NULL DEFAULT 0);
-CREATE TABLE workflow_members(workflow_id TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE, pod_id TEXT NOT NULL REFERENCES pods(id), PRIMARY KEY(workflow_id,pod_id));
-CREATE TABLE workflow_runs(id TEXT PRIMARY KEY, workflow_id TEXT NOT NULL REFERENCES workflows(id), revision INTEGER NOT NULL, definition TEXT NOT NULL, trigger TEXT NOT NULL, state TEXT NOT NULL, reason TEXT, started_at INTEGER NOT NULL, finished_at INTEGER, paused INTEGER NOT NULL DEFAULT 0);
-CREATE UNIQUE INDEX workflow_active ON workflow_runs(workflow_id) WHERE finished_at IS NULL;
-CREATE TABLE workflow_nodes(workflow_run_id TEXT NOT NULL REFERENCES workflow_runs(id), pod_id TEXT NOT NULL REFERENCES pods(id), script_hash TEXT, assignment_revision INTEGER NOT NULL, resource_epoch INTEGER NOT NULL, state TEXT NOT NULL, run_id TEXT REFERENCES runs(id), reason TEXT, output TEXT, PRIMARY KEY(workflow_run_id,pod_id));
-CREATE TABLE workflow_reservations(pod_id TEXT PRIMARY KEY REFERENCES pods(id), workflow_run_id TEXT NOT NULL REFERENCES workflow_runs(id));
-CREATE TABLE workflow_attempts(run_id TEXT PRIMARY KEY REFERENCES runs(id), workflow_run_id TEXT NOT NULL REFERENCES workflow_runs(id), pod_id TEXT NOT NULL REFERENCES pods(id));
-CREATE TABLE workflow_mail_scopes(id TEXT PRIMARY KEY, mailbox TEXT NOT NULL, cursor TEXT, baseline_at INTEGER NOT NULL, initialized INTEGER NOT NULL DEFAULT 0, restored INTEGER NOT NULL DEFAULT 0);
-CREATE TABLE workflow_mail_pending(scope_id TEXT NOT NULL REFERENCES workflow_mail_scopes(id), message_id TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(scope_id,message_id));
-CREATE TABLE workflow_mail_processed(scope_id TEXT NOT NULL REFERENCES workflow_mail_scopes(id), message_id TEXT NOT NULL, PRIMARY KEY(scope_id,message_id));
-CREATE TABLE workflow_mail_participants(scope_id TEXT NOT NULL REFERENCES workflow_mail_scopes(id), conversation TEXT NOT NULL, address TEXT NOT NULL, PRIMARY KEY(scope_id,conversation,address));
-CREATE TABLE workflow_mail_batches(id TEXT PRIMARY KEY REFERENCES workflow_runs(id), scope_id TEXT NOT NULL REFERENCES workflow_mail_scopes(id), configuration TEXT NOT NULL, state TEXT NOT NULL);
-CREATE TABLE workflow_mail_audit(sequence INTEGER PRIMARY KEY AUTOINCREMENT, batch_id TEXT NOT NULL REFERENCES workflow_mail_batches(id), effect_key TEXT NOT NULL, kind TEXT NOT NULL, body TEXT NOT NULL, at INTEGER NOT NULL);
-PRAGMA user_version=20;`)
-      }
-
-      if (version < 21) { migrateChats(this.db); this.db.exec('PRAGMA user_version=21;') }
-      if (version < 22) { migrateRemote(this.db); this.db.exec('PRAGMA user_version=22;') }
-      if (version < 23) this.db.exec('ALTER TABLE pod_descriptions ADD COLUMN manual INTEGER NOT NULL DEFAULT 0; PRAGMA user_version=23;')
-      if (version < 24) {
-        this.db.exec(`
-CREATE TABLE effect_ledger_v24(pod_id TEXT NOT NULL REFERENCES pods(id),effect_key TEXT NOT NULL,operation TEXT NOT NULL,input_hash TEXT NOT NULL,run_id TEXT REFERENCES runs(id),state TEXT NOT NULL,result TEXT,PRIMARY KEY(pod_id,effect_key),CHECK(run_id IS NOT NULL OR state='completed'));
-INSERT INTO effect_ledger_v24 SELECT * FROM effect_ledger ORDER BY rowid;
-DROP TABLE effect_ledger;
-ALTER TABLE effect_ledger_v24 RENAME TO effect_ledger;
-CREATE INDEX effects_run ON effect_ledger(run_id);
-CREATE INDEX runs_retention ON runs(pod_id,started_at DESC);
-CREATE INDEX accepted_events_run ON accepted_events(run_id);
-CREATE INDEX workflow_nodes_run ON workflow_nodes(run_id);
-CREATE TABLE run_deletion_jobs(run_id TEXT PRIMARY KEY,error TEXT);
-PRAGMA user_version=24;`)
-      }
-      if (version < 25) {
-        this.db.exec(`
-ALTER TABLE run_inputs ADD COLUMN retry_at INTEGER;
-ALTER TABLE run_inputs ADD COLUMN retry_attempt INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE run_inputs ADD COLUMN retry_epoch INTEGER;
-PRAGMA user_version=25;`)
-      }
-      if (version < 26) {
-        this.db.exec(`
-ALTER TABLE workflows ADD COLUMN mode TEXT NOT NULL DEFAULT 'sequence';
-ALTER TABLE workflows ADD COLUMN group_id TEXT;
-CREATE TABLE workflow_channels(workflow_id TEXT NOT NULL, name TEXT NOT NULL, title TEXT NOT NULL, fields TEXT NOT NULL, PRIMARY KEY(workflow_id, name));
-CREATE TABLE workflow_gates(workflow_id TEXT NOT NULL, key TEXT NOT NULL, definition TEXT NOT NULL, PRIMARY KEY(workflow_id, key));
-CREATE TABLE workflow_values(workflow_id TEXT NOT NULL, name TEXT NOT NULL, value TEXT NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY(workflow_id, name));
-CREATE TABLE graph_items(id TEXT PRIMARY KEY, workflow_id TEXT NOT NULL, workflow_run_id TEXT NOT NULL, key TEXT NOT NULL, channel TEXT NOT NULL, node TEXT NOT NULL, payload TEXT NOT NULL, created_at INTEGER NOT NULL);
-CREATE INDEX graph_items_key ON graph_items(workflow_id, key);
-CREATE TABLE graph_deliveries(item_id TEXT NOT NULL, node TEXT NOT NULL, state TEXT NOT NULL, workflow_run_id TEXT, updated_at INTEGER NOT NULL, PRIMARY KEY(item_id, node));
-CREATE INDEX graph_deliveries_pending ON graph_deliveries(node, state);
-CREATE TABLE graph_item_events(id INTEGER PRIMARY KEY AUTOINCREMENT, workflow_id TEXT NOT NULL, workflow_run_id TEXT NOT NULL, key TEXT NOT NULL, node TEXT NOT NULL, outcome TEXT NOT NULL, channel TEXT, reason TEXT, confidence REAL, at INTEGER NOT NULL);
-CREATE INDEX graph_item_events_key ON graph_item_events(workflow_id, key, id);
-PRAGMA user_version=26;`)
-      }
-      if (version < 27) {
-        this.db.exec(`
-CREATE TABLE graph_gate_batches(id TEXT PRIMARY KEY, workflow_id TEXT NOT NULL, gate TEXT NOT NULL, pod_id TEXT NOT NULL, state TEXT NOT NULL, grant_id TEXT, url TEXT, title TEXT NOT NULL, digest TEXT NOT NULL, expires_at INTEGER NOT NULL, items TEXT NOT NULL, error TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
-CREATE INDEX graph_gate_batches_open ON graph_gate_batches(workflow_id, gate, state);
-PRAGMA user_version=27;`)
-      }
-      if (version < 28) this.db.exec(`${networkSchema} PRAGMA user_version=28;`)
-      if (version < 29) this.db.exec(`${networkControlSchema} INSERT INTO network_scheduler_state(id) VALUES(1); ${migrateNetworkControls} ${migrateNetworkSettlements} PRAGMA user_version=29;`)
-      if (version < 30) this.db.exec(`${networkGateSchema} PRAGMA user_version=30;`)
-      if (version < 31) this.db.exec(`${networkDataSchema} PRAGMA user_version=31;`)
-      if (version < 32) this.db.exec(`${networkWorkflowSchema} PRAGMA user_version=32;`)
-      if (version < 33) this.db.exec(`${definitionSchema} PRAGMA user_version=33;`)
-      if (version < 34) this.db.exec(`${sharingSchema} PRAGMA user_version=34;`)
-      if (version < 35) this.db.exec(`${aliasSchema} PRAGMA user_version=35;`)
-      if (version < 36) this.db.exec(`${networkRoutingSchema} PRAGMA user_version=36;`)
-      if (version < 37) this.db.exec('PRAGMA user_version=37;')
-      if (version < 38) this.db.exec('CREATE TABLE collection_descriptions(id TEXT PRIMARY KEY, body TEXT NOT NULL, revision INTEGER NOT NULL, updated_at INTEGER NOT NULL); PRAGMA user_version=38;')
-      if (version < 39) this.db.exec('CREATE TABLE secret_requests(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE, alias TEXT NOT NULL, purpose TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN (\'requested\',\'filled\',\'collected\',\'expired\',\'failed\')), expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, error TEXT); PRAGMA user_version=39;')
-      if (version < 40) this.db.exec(`${networkGateGrantSchema} ${migrateNetworkGateGrants} PRAGMA user_version=40;`)
-      if (version < 41) this.db.exec(`${inboxOutboxSchema} PRAGMA user_version=41;`)
-      if (version < 42) { upgradeStoredNetworkDefinitions(this.db); this.db.exec('PRAGMA user_version=42;') }
-      if (version < 43) { this.db.exec(grantLedgerSchema); separateStoredGrants(this.db); this.db.exec('PRAGMA user_version=43;') }
-      if (version < 44) this.db.exec(`${sandboxDenySchema} PRAGMA user_version=44;`)
-      if (version < 45) { retireWorkflows(this.db, Date.now()); this.db.exec('PRAGMA user_version=45;') }
-    })
+    // Refuse an unsupported database before writing a full copy of it on every start.
+    assertUpgradable(this.db)
+    const backup = join(this.root, `before-v${version}-${randomUUID()}.sqlite`)
+    this.db.prepare('VACUUM INTO ?').run(backup); chmodSync(backup, 0o600)
+    const copy = openSync(backup, 'r')
+    try { fsyncSync(copy) }
+    finally { closeSync(copy) }
+    syncDirectory(this.root)
+    const saved = new DatabaseSync(backup, { readOnly: true })
+    try {
+      if (saved.prepare('PRAGMA quick_check').get()?.quick_check !== 'ok' || saved.prepare('PRAGMA user_version').get()?.user_version !== version) throw new Error('Pre-upgrade database backup failed verification')
+    }
+    finally { saved.close() }
+    // Foreign keys stay off while the tables are rebuilt; upgradeToBaseline checks every reference afterwards.
+    this.db.exec('PRAGMA foreign_keys=OFF')
+    try { this.transaction(() => { upgradeToBaseline(this.db); this.db.exec(`PRAGMA user_version=${schemaVersion}`) }) }
+    finally { this.db.exec('PRAGMA foreign_keys=ON') }
+    this.db.exec('VACUUM')
   }
 
   transaction<T>(operation: () => T): T {
@@ -398,7 +161,7 @@ PRAGMA user_version=27;`)
     record(input, ['name']); text(input.name, 'name', 100)
     const { name } = input
     this.transaction(() => {
-      this.db.prepare('INSERT INTO pods(id,name,assignment) VALUES(?,?,?)').run(id, name, '')
+      this.db.prepare('INSERT INTO pods(id,name) VALUES(?,?)').run(id, name)
       this.db.prepare('INSERT INTO checkpoints VALUES(?,?,?)').run(id, 0, '{}')
     })
     return this.getPod(id)

@@ -2,7 +2,7 @@ import type { InboxOutboxCommand } from '../worker/inbox/outbox'
 import type { DecisionSources, InboxDecisions } from './inbox/decisions'
 import { parseInboxDecide } from '../contracts/inbox'
 import { readOnlyAction } from './codex/routing'
-import { boundedCodexNetworkResult, codexNetworkRead, parseCodexNetworkAction } from '../contracts/codex-networks'
+import { boundedCodexNetworkResult, parseCodexNetworkAction } from '../contracts/codex-networks'
 import { applicationBundle, applicationDefinition } from './programs/application'
 import { parseSharingCommand } from '../contracts/sharing'
 import type { PortableImportCommand, SharingCommand, SharingState } from '../contracts/sharing'
@@ -473,7 +473,6 @@ export class FixtureWorker {
       const command = parseCodexNetworkAction(request.action)
       // Opens the approval page in the owner's browser like the desktop button; the owner decides there.
       if (command.type === 'gateOpen') return boundedCodexNetworkResult(command, await this.networks(command))
-      if (!codexNetworkRead(command) && this.central && !this.central.networkReads) throw new Error('Network actions require bounded relay publication support')
     }
     if (!reading && this.central && !this.central.executing) return this.central.local(() => this.codex(request, owner))
     if (request.action.action === 'desktop') {
@@ -763,7 +762,6 @@ export class FixtureWorker {
 
   async networks(command: NetworkCommand): Promise<NetworkView> {
     const parsed = parseNetworkCommand(command)
-    if (this.central && !this.central.networkReads && !['list', 'detail', 'trace', 'records', 'archivePreview'].includes(parsed.type)) throw new Error('Network actions require bounded relay publication support')
     const central = this.centralAction(['detail', 'setup', 'trace', 'records', 'archivePreview'].includes(parsed.type) ? 'list' : parsed.type)
     if (central) return central.local(() => this.networks(parsed))
     const view = parseNetworkView(await this.dispatch({ networks: parsed, ownerOperation: this.central?.executing === true }))
@@ -792,7 +790,7 @@ export class FixtureWorker {
     catch (error) { throw new Error(`Pod ${podId} exists and is awaiting its identity. Do not create it again. ${String(error)}`) }
   }
 
-  async centralSnapshot(networkReads = false): Promise<CentralSnapshot> {
+  async centralSnapshot(): Promise<CentralSnapshot> {
     const { owner } = await this.remoteOwner()
     await mkdir(join(this.root, 'central'), { recursive: true, mode: 0o700 })
     for (const name of await readdir(join(this.root, 'central'))) {
@@ -800,7 +798,7 @@ export class FixtureWorker {
       if (match) await this.centralProvision(match[1]!, owner)
     }
     await this.indexRemotePods(owner)
-    return await this.dispatch({ central: { type: 'snapshot', owner, networkReads } }) as CentralSnapshot
+    return await this.dispatch({ central: { type: 'snapshot', owner } }) as CentralSnapshot
   }
 
   async centralNetworkRead(command: unknown): Promise<NetworkView> {
@@ -842,7 +840,7 @@ export class FixtureWorker {
     throw new Error('Unsupported central execution')
   }
 
-  private dispatch(command: { definitions: DefinitionCommand } | { networkGateRelease: { type: 'list' } | { type: 'released', taskId: string } } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { networkGateCheck: { scope: ServiceScope, manifest: NetworkGateManifest, operation: string, grants?: { key: string, id: string }[] } } | { networks: NetworkCommand, ownerOperation?: boolean } | { central: { type: 'snapshot', owner: Owner, networkReads?: boolean } | { type: 'networkRead', owner: Owner, command: NetworkCommand } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { grants: GrantLedgerCommand } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { definitions: DefinitionCommand } | { networkGateRelease: { type: 'list' } | { type: 'released', taskId: string } } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { networkGateCheck: { scope: ServiceScope, manifest: NetworkGateManifest, operation: string, grants?: { key: string, id: string }[] } } | { networks: NetworkCommand, ownerOperation?: boolean } | { central: { type: 'snapshot', owner: Owner } | { type: 'networkRead', owner: Owner, command: NetworkCommand } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { grants: GrantLedgerCommand } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     if (this.updateFrozen && !('data' in command && ['prepareUpdate', 'releaseUpdate'].includes(command.data.type))) return Promise.reject(new Error('Pods is preparing an update; retry after restart'))
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))

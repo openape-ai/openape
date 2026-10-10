@@ -17,13 +17,11 @@ export class NetworkViews {
     const manifest = script ? parseManifest(JSON.parse(script.manifest as string)) : null
     const declarations = this.store.db.prepare(`SELECT c.name,c.kind,c.value FROM instance_definition_bindings b JOIN definition_config c
       ON c.definition_id=b.definition_id AND c.definition_version=b.definition_version WHERE b.pod_id=? ORDER BY c.name`).all(podId)
-    const overrides = this.store.db.prepare('SELECT name,value FROM instance_config WHERE pod_id=?').all(podId)
     const config = networkId ? networkConfiguration(this.store, networkId, podId) : null
     const values = (config ? Object.entries(config).map(([name, field]) => ({ name, kind: field.kind, value: JSON.stringify(field.value) })) : declarations).map((row) => {
-      const override = overrides.find(item => item.name === row.name)
-      const effective = config?.[row.name as string] ?? (override ? { origin: 'pod', value: JSON.parse(override.value as string) } : null)
+      const effective = config?.[row.name as string] ?? null
       const kind = row.kind as 'public' | 'secret-reference'
-      return { name: row.name as string, kind, origin: effective?.origin as 'pod' | 'composition' | 'definition' ?? 'definition', value: kind === 'secret-reference' ? null : publicConfiguration(effective ? effective.value : JSON.parse(row.value as string)) }
+      return { name: row.name as string, kind, origin: effective?.origin ?? 'definition', value: kind === 'secret-reference' ? null : publicConfiguration(effective ? effective.value : JSON.parse(row.value as string)) }
     })
     const resources = this.resources.list(podId)
     return { resourcesMore: resources.length > 256, podId, name: pod.name, lifecycle: pod.lifecycle, capabilities: manifest?.capabilities ?? [], triggers: manifest?.triggers ?? [], values, resources: resources.slice(0, 256).map(({ name, kind, state }) => ({ name, kind, state })) }
@@ -45,7 +43,7 @@ export class NetworkViews {
     }
     const selected = [...podIds].sort()
     const members = selected.map(id => this.member(id))
-    const authority = selected.map(podId => ({ configuration: this.store.db.prepare('SELECT name,value FROM instance_config WHERE pod_id=? ORDER BY name').all(podId), pod: this.store.getPod(podId), epoch: this.resources.epoch(podId), binding: this.store.db.prepare('SELECT * FROM instance_definition_bindings WHERE pod_id=?').get(podId) }))
+    const authority = selected.map(podId => ({ pod: this.store.getPod(podId), epoch: this.resources.epoch(podId), binding: this.store.db.prepare('SELECT * FROM instance_definition_bindings WHERE pod_id=?').get(podId) }))
     return { groupId, members, fingerprint: digest(canonicalNetworkJson({ groupId, members, authority })) }
   }
 

@@ -82,14 +82,12 @@ export async function mapPortablePod(root: string, source: PortablePodSource, ch
   for (const declaration of source.definitions) {
     const name = portableKey(declaration.name)
     if (pod.bindings.some(binding => binding.alias === name)) throw new Error('Portable configuration and variable aliases must be distinct')
-    const override = source.overrides.find(item => item.name === name)
-    const field = networkFields?.[name] ?? { kind: String(declaration.kind), value: JSON.parse(String((override ?? declaration).value)), origin: override ? 'pod' : 'definition' }
+    const field = networkFields?.[name] ?? { kind: String(declaration.kind), value: JSON.parse(String(declaration.value)), origin: 'definition' }
     if (field.origin === 'composition' && choices.defaults.includes(`configuration:${name}`)) throw new Error('Choose shared configuration defaults on the composition')
     const kind = field.kind === 'secret-reference' ? 'secret' : typeof field.value
     if (!['secret', 'string', 'number', 'boolean'].includes(kind)) throw new Error('Portable configuration requires public scalars or secret declarations')
     pod.bindings.push({ alias: name, input: inputs.add(`configuration:${name}`, name, kind as PortableInputKind, kind === 'secret' ? undefined : field.value) })
   }
-  if (source.overrides.some(item => !source.definitions.some(declaration => declaration.name === item.name))) throw new Error('Portable configuration contains an undeclared override')
   for (const resource of source.resources) {
     if (resource.state === 'revoked' || resource.kind === 'reference' || resource.kind === 'connection') continue
     if (resource.state !== 'ready') throw new Error('Resolve unavailable resource assignments before exporting')

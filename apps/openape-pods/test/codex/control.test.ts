@@ -32,7 +32,6 @@ function fixture() {
   const current = () => store.getPod(pod.id)
   return { store, pod, resources, master, codex, send, current, dispatcher }
 }
-const count = (store: PodDatabase, sql: string) => Number(store.db.prepare(sql).get()!.count)
 
 it('administers network members as the owner while the shared engine keeps their execution in the network', async () => {
   const { store, send, codex, pod } = fixture()
@@ -63,7 +62,6 @@ it('applies variables directly, preserves scope and validation checks, and creat
   const draft = await send({ action: 'draft', podId: pod.id, revision: pod.revision, draftId: null, draftRevision: 0, code: 'export default async () => {}', capabilities: [] }) as { draftId: string, draftRevision: number }
   await expect(send({ action: 'activate', podId: pod.id, revision: pod.revision, draftId: draft.draftId, draftRevision: draft.draftRevision })).rejects.toThrow('Validate')
   await expect(send({ action: 'resume', podId: pod.id, revision: pod.revision })).rejects.toThrow('Validate')
-  expect(count(store, 'SELECT count(*) AS count FROM control_changes')).toBe(0)
 })
 
 it('applies grouping and enabled schedules with revision checks, without changing other Pods', async () => {
@@ -77,7 +75,6 @@ it('applies grouping and enabled schedules with revision checks, without changin
   await expect(send(action)).rejects.toThrow('Stale schedule')
   expect(await send({ ...action, scheduleRevision: 1, enabled: false })).toMatchObject({ schedule: { enabled: false, revision: 2 } })
   expect(store.getPod(other.id)).toEqual(other)
-  expect(count(store, 'SELECT count(*) AS count FROM control_changes')).toBe(0)
 })
 
 it('returns the actual run identity and does not start again for a repeated request', async () => {
@@ -170,15 +167,13 @@ it('activates a validated retained version and resumes without creating a review
   await send({ action: 'select', podIds: [pod.id] })
   expect(await send({ action: 'rollback', podId: pod.id, revision: current().revision, hash: first, expectedActive: current().activeScript })).toMatchObject({ activeScript: first })
   expect(await send({ action: 'resume', podId: pod.id, revision: current().revision })).toMatchObject({ lifecycle: 'active' })
-  expect(count(store, 'SELECT count(*) AS count FROM control_changes')).toBe(0)
 })
 
 it('offers no legacy change review actions', async () => {
-  const { store, pod, send } = fixture()
+  const { pod, send } = fixture()
   await send({ action: 'select', podIds: [pod.id] })
   await expect(send({ action: 'changes' })).rejects.toThrow()
   await expect(send({ action: 'retireChange', id: randomUUID(), revision: 1 })).rejects.toThrow()
-  expect(count(store, 'SELECT count(*) AS count FROM control_changes')).toBe(0)
 })
 
 it('offers CLI setup help and resolves only metadata for assigned commands', async () => {
