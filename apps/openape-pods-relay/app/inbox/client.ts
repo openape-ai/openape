@@ -280,6 +280,9 @@ export function createInbox(environment: InboxEnvironment) {
     if (deviceId === state.session?.device) expire('revoked')
   }
 
+  const pushSubscribe = (subscription: PushSubscriptionJSON) => api('push/subscribe', { method: 'POST', body: { subscription } })
+  const pushUnsubscribe = () => api('push/unsubscribe', { method: 'POST' })
+
   const list = computed(() => Object.values(state.items))
   const openDecisions = computed(() => list.value.filter(item => item.kind === 'decision' && item.state === 'open' && !item.archived).sort((a, b) => b.created - a.created))
   const completedDecisions = computed(() => list.value.filter(item => item.kind === 'decision' && item.state !== 'open').sort((a, b) => b.sequence - a.sequence).slice(0, 30))
@@ -290,7 +293,7 @@ export function createInbox(environment: InboxEnvironment) {
   // Only answers to decisions that are still open hold back an app update; resolved ones need no reconciliation.
   const deciding = computed(() => Object.keys(state.pending).length > 0 || Object.entries(state.receipts).some(([itemId, receipt]) => running(receipt) && state.items[itemId]?.state === 'open'))
 
-  return { state, start, sync, load, mark, decide, answer, undo, check, login, logout, devices, revoke, openDecisions, completedDecisions, messages, archivedMessages, unread, badgeCount, deciding }
+  return { state, start, sync, load, mark, decide, answer, undo, check, login, logout, devices, revoke, pushSubscribe, pushUnsubscribe, openDecisions, completedDecisions, messages, archivedMessages, unread, badgeCount, deciding }
 }
 export type Inbox = ReturnType<typeof createInbox>
 

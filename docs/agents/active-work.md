@@ -1,5 +1,12 @@
 # Active work
 
+## Pods inbox web push (M5) — issue 1446
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1446 (approved plan revision 2, milestone M5). Owner request October 10: "Implementiere das hier", including the count badge on the app icon.
+- Finding before the change: Pod notifications reached the relay inbox and the iPhone PWA (verified with Pod "Inbox-Testmitteilung" 08f8283b), but the relay had 0 push subscriptions and nothing consumed the push outbox.
+- Change: Settings opt-in (`app/inbox/push.ts`, `InboxPushSetting.vue`), renewal on start, relay dispatcher (`server/utils/inbox-push.ts`, plugin every 5 s, backoff, 404/410 cleanup, `NUXT_INBOX_PUSH_ENABLED`), Declarative Web Push payload with `app_badge`.
+- Next: merge, relay deploy, owner opt-in on the iPhone, test notification, Test Run evidence.
+
 ## IURIO PR monitor stays disturbed — issue 1456
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1456. Worktree `.claude/worktrees/iurio-pr-monitor-pod-fix-d3a96d`, branch `bugfix/issue-1456-seal-unstarted-domain`, base `8f4e157d`.
