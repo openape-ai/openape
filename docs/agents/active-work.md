@@ -1,5 +1,12 @@
 # Active work
 
+## Mail network learns newsletter senders — issue 1457
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1457. Plan (owner "Du hast mein Go!"): https://report.openape.ai/d/01M4KHHB6FEV9SCHFRXX44D3V9; source `.claude/plans/2026-10-10-mail-newsletter-learning/plan.json`.
+- M1 in this PR: read-only `context.network.choices({gate,limit})` port (declared feedback is not allowed with routing gates).
+- M2 (Categorisation member script, live via updateMemberScript after the desktop release): a sender with ≥ 2 newsletter choices and no other choice skips the choose gate. With the live history this learns 13 senders.
+- Next: merge, signed desktop build, re-pin Categorisation, observe Intake runs, Test Run.
+
 ## Pods inbox web push (M5) — issue 1446
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1446 (approved plan revision 2, milestone M5). Owner request October 10: "Implementiere das hier", including the count badge on the app icon.

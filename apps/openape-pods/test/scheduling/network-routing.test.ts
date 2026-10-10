@@ -58,6 +58,25 @@ it('retains a paused owner choice, routes once with its original case and preser
   expect(f.store.db.prepare('SELECT count(*) AS n FROM network_events').get()!.n).toBe(2)
 })
 
+it('lets a member read the decided owner choices of its own network only', async () => {
+  const f = fixture()
+  await f.emit()
+  const choice = parseNetworkView(f.engine.execute({ type: 'list' })).choices![0]!
+  f.engine.execute({ type: 'choose', id: f.id, revision: 1, eventId: choice.eventId, gate: 'review', option: 'keep' })
+  // A decided choice of another network in the same store must never be visible.
+  const other = randomUUID()
+  f.store.db.exec('PRAGMA foreign_keys=OFF')
+  f.store.db.prepare('INSERT INTO network_events(id,network_id,network_revision,producer_pod_id,definition_id,definition_version,case_id,case_revision,channel,item_key,origin,schema_hash,payload,payload_hash,accepted_at) SELECT ?,?,network_revision,producer_pod_id,definition_id,definition_version,case_id,case_revision,channel,item_key,origin,schema_hash,\'{"subject":"Foreign"}\',payload_hash,accepted_at FROM network_events WHERE id=?').run(other, other, choice.eventId)
+  f.store.db.prepare('INSERT INTO network_choices VALUES(?,1,?,\'review\',\'other\',?,?)').run(other, other, other, Date.now() + 1000)
+  f.store.db.exec('PRAGMA foreign_keys=ON')
+  const authority = f.engine.invocations.reserve(f.id, f.consumer, f.resources.epoch(f.consumer), 'manual', true)!
+  const events = f.engine.invocations.events
+  expect(events.ownerChoices(authority, {})).toEqual([{ gate: 'review', option: 'keep', decidedAt: expect.any(Number), data: { subject: 'One' } }])
+  expect(events.ownerChoices(authority, { gate: 'another-gate' })).toEqual([])
+  expect(() => events.ownerChoices(authority, { limit: 0 })).toThrow('limit must be 1 to 1000')
+  expect(() => events.ownerChoices(authority, { network: other })).toThrow('only gate and limit')
+})
+
 it('answers older waiting revisions of a case with one owner decision and keeps newer input open', async () => {
   const f = fixture()
   await f.emit('provider-v1')
