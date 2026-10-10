@@ -123,6 +123,17 @@ Uncommitted blobs remain unreachable; retries cannot silently change a source
 version or claim. Future-schema databases are rejected before modification;
 migration preserves a pre-upgrade SQLite backup.
 
+Schema 46 (issue 1455, M8) is one baseline, `src/worker/storage/schema.ts`: a new
+profile is created from it directly, and a schema-45 profile or backup is rebuilt
+into exactly that schema after its verified pre-upgrade copy (`upgrade.ts`).
+Profiles and backups below schema 45 are refused unchanged; open or restore them
+with the Pods release that wrote them first. Schema 46 drops what nothing read
+anymore: the workflow and graph tables, the mobile relay tables, legacy chat
+session state, unused journals and write-only columns. The definition binding of a
+network member is stored once, in `instance_definition_bindings`; the upgrade
+refuses a profile whose two copies disagree. Schema numbers in the sections below
+are history; every retained table is part of the baseline.
+
 Verification: 19 unit/component tests, including four actual subprocess SIGKILL
 points around blob/transaction publication, source conflicts, revision conflicts,
 and v1 migration. Five Electron cases include save/restart/reopen and packaged
@@ -774,7 +785,7 @@ Overview's description is derived from completed owner/assistant exchanges by a 
 
 The Pod inventory and the standalone cards of Networks show a one-line summary of that description (first full sentence, at most 160 characters), published with the workspace Pod list. The Pod overview states the last run's own summary below its headline. The description explains a Pod; saving it never changes the script, its validation or its hash.
 
-Networks have their own owner-written description (schema 38, local table `collection_descriptions`, at most 1000 characters). The desktop owner adds or edits it under the title of the network; the overview card shows its one-line summary and the browser workspace shows it read-only. It is published with the workspace state, not as a table and not inside any definition, so it never changes a network revision, pin or hash, and an older relay passes it through. MCP clients and the central workspace can write it with the workspace command `describeAutomation` (`describeCollection` before issue 1455: networks are automations, and collection names network data only), and `details describe` is accepted for network member Pods as well; these two are the only network member changes that do not need desktop review. The browser workspace offers no edit control for it.
+Networks have their own owner-written description (local table `automation_descriptions`, at most 1000 characters). The desktop owner adds or edits it under the title of the network; the overview card shows its one-line summary and the browser workspace shows it read-only. It is published with the workspace state, not as a table and not inside any definition, so it never changes a network revision, pin or hash, and an older relay passes it through. MCP clients and the central workspace can write it with the workspace command `describeAutomation` (`describeCollection` before issue 1455: networks are automations, and collection names network data only), and `details describe` is accepted for network member Pods as well; these two are the only network member changes that do not need desktop review. The browser workspace offers no edit control for it.
 
 Schema 15 preserves existing data and adds creation bindings, original-request provenance, description progress and summary process ownership. Older unlinked creation history has an explicit, fingerprint-checked recovery preview. Recovery verifies the stored create result and rejects mixed-Pod, changed or active history. A recovered original request retains its identity and timestamp. Do not hand-edit the profile database to migrate a conversation.
 
@@ -784,14 +795,15 @@ Verification covers scoped creation/replay, preservation of the original request
 
 Pod creation requires a name. Chat and the original request guide script creation; the script and its explicit AI prompts control execution. Settings has no separate execution assignment. Names are metadata: renaming preserves lifecycle, running work, script validation and credential approval. Overview descriptions remain informational. Pods without a conversation description link to Chat.
 
-Schema 16 adds `pods.metadata_revision` for optimistic metadata updates. The historical `pods.revision` is retained as an immutable execution binding, exposed internally as `bindingRevision`. Existing manifest, run, validation and credential-approval fields named `assignmentRevision` or `assignment_revision` remain byte-compatible with their original bindings. They are not instructions and do not follow name edits. Old assignment text is retained only in historical storage, excluded from current Pod/tool responses and the legacy mail-knowledge analysis context. Permission epochs, exact-source validation, lease checks and revocation still apply. Migration does not revive artifacts invalidated before upgrade or rewrite script hashes.
+Schema 16 adds `pods.metadata_revision` for optimistic metadata updates. The historical `pods.revision` is retained as an immutable execution binding, exposed internally as `bindingRevision`. Existing manifest, run, validation and credential-approval fields named `assignmentRevision` or `assignment_revision` remain byte-compatible with their original bindings. They are not instructions and do not follow name edits. Schema 46 removed the old assignment text. Permission epochs, exact-source validation, lease checks and revocation still apply. Migration does not revive artifacts invalidated before upgrade or rewrite script hashes.
 
 ## Networks
 
 Networks are the only way to connect Pods: members declare the channels they take
 and give, routes hold items for owner decisions and approvals stay at the identity
 provider. Workflows and their conversion were removed in issue 1455 (M4); schema 45
-archives the remaining workflows and the Pods only they used. See
+archived the remaining workflows and the Pods only they used, and schema 46 dropped
+their tables. See
 [networks](docs/networks.md) and the network chapter in the shared handbook.
 
 ## Claude Code

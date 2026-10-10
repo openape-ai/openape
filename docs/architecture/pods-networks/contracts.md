@@ -514,8 +514,8 @@ and retained legacy inspection are removed; the sections on them below are histo
 Archival (`archivePreview`, `archiveNetwork`) stays. Schema 45 archives every
 remaining workflow and every Pod that only workflows used (no network member, no
 own enabled schedule), cancels unfinished workflow runs and deletes the rows that
-tied workflow history to Pods, runs and networks; the workflow tables stay unread
-until the baseline schema, and the verified pre-upgrade copy keeps every row.
+tied workflow history to Pods, runs and networks; the baseline schema 46 (M8) drops
+the workflow tables, and the verified pre-upgrade copy keeps every row.
 Members read every shared string value of their network in `context.variables`,
 which keeps the scripts of converted networks working; the data pin keeps its
 `legacyVariables` key, so pins and open approvals of converted networks do not

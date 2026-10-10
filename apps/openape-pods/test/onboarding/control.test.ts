@@ -1,11 +1,10 @@
 // @vitest-environment node
-import { removeWorkflowSchema } from '../storage/legacy'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
-import { PodDatabase, schemaVersion } from '../../src/worker/storage/database'
+import { PodDatabase } from '../../src/worker/storage/database'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { SetupControl } from '../../src/worker/onboarding/control'
 import { assertMailHistory } from '../../src/worker/mail/authorization'
@@ -63,15 +62,4 @@ it('keeps exactly one account per provider and reports it as the owner', () => {
   expect(() => control.execute({ type: 'save', connection: { ...owner, id: randomUUID(), account: 'second@example.invalid' }, metadata: {} })).toThrow('Only one account')
   control.execute({ type: 'save', connection: { ...owner, state: 'revoked' }, metadata: {} })
   expect(control.connections.owner()).toBe(owner.id)
-})
-it('upgrades existing profiles without choosing an owner or changing pod data', () => {
-  const { store, owner, pod } = fixture(); const root = store.root
-  removeWorkflowSchema(store.db)
-  store.db.exec('ALTER TABLE onboarding DROP COLUMN default_owner; ALTER TABLE pod_descriptions DROP COLUMN manual; ALTER TABLE run_inputs DROP COLUMN retry_at; ALTER TABLE run_inputs DROP COLUMN retry_attempt; ALTER TABLE run_inputs DROP COLUMN retry_epoch; PRAGMA user_version=18')
-  store.close(); stores.splice(stores.indexOf(store), 1)
-  const reopened = new PodDatabase(root); stores.push(reopened)
-  const control = new SetupControl(reopened, new ResourceRegistry(reopened, () => {}))
-  expect(control.connections.connections()[0]).toMatchObject(owner)
-  expect(reopened.getPod(pod.id)).toEqual(pod)
-  expect(reopened.db.prepare('PRAGMA user_version').get()?.user_version).toBe(schemaVersion)
 })

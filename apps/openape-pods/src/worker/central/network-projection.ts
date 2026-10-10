@@ -8,12 +8,12 @@ export { privatePods }
 
 type Policy = 'pod' | 'podId' | 'run' | 'public' | 'omit'
 const policies = {
-  pods: 'podId', remote_pods: 'pod', master_creations: 'pod', script_credential_approvals: 'pod', assignments: 'pod', scripts: 'pod', checkpoints: 'pod', sources: 'pod', claims: 'pod', settings: 'omit', validations: 'pod', resources: 'pod', resource_epochs: 'pod',
+  pods: 'podId', remote_pods: 'pod', master_creations: 'pod', script_credential_approvals: 'pod', scripts: 'pod', checkpoints: 'pod', sources: 'pod', claims: 'pod', settings: 'omit', validations: 'pod', resources: 'pod', resource_epochs: 'pod',
   runs: 'pod', run_events: 'run', schedules: 'pod', accepted_events: 'pod', run_inputs: 'run', recovery_reviews: 'run', effect_ledger: 'pod',
-  mail_inventory: 'pod', mail_items: 'pod', mail_receipts: 'pod', mail_extractions: 'pod', mail_contexts: 'pod', source_derivations: 'pod',
-  master_messages: 'omit', script_drafts: 'pod', access_proposals: 'pod', pod_organization: 'public', pod_groups: 'public', pod_memberships: 'public',
+  mail_inventory: 'pod', mail_items: 'pod', mail_receipts: 'pod', mail_contexts: 'pod', source_derivations: 'pod',
+  master_messages: 'omit', script_drafts: 'pod', pod_organization: 'public', pod_groups: 'public', pod_memberships: 'public',
   pod_variables: 'pod', master_message_scopes: 'omit', pod_chat_origins: 'pod', pod_descriptions: 'pod', draft_packages: 'omit', dependency_sets: 'pod', script_dependencies: 'pod',
-  chat_conversations: 'omit', chat_contexts: 'omit', chat_members: 'omit', chat_message_context: 'omit', control_runs: 'omit', control_changes: 'omit',
+  chat_conversations: 'omit', chat_contexts: 'omit', chat_members: 'omit', chat_message_context: 'omit', control_runs: 'omit',
 } as const satisfies Record<typeof centralTables[number], Policy>
 
 const publicRuns = `SELECT id FROM runs WHERE pod_id NOT IN (${privatePods})`
