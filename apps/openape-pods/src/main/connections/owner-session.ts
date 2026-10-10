@@ -3,6 +3,8 @@ export interface OwnerSessionTokens { issuer: string, account: string, subject: 
 export interface OwnerSessionAuthority {
   refresh: (tokens: OwnerSessionTokens, signal: AbortSignal) => Promise<OwnerSessionTokens>
   revoke: (tokens: OwnerSessionTokens) => Promise<void>
+  /** Whether the login the session was derived from still holds; false ends the session (an `apes logout`). */
+  alive?: () => boolean
 }
 
 export class OwnerSessionEnded extends Error {
@@ -27,7 +29,7 @@ export class OwnerSession {
     this.issuer = tokens.issuer; this.subject = tokens.subject; this.account = tokens.account
   }
 
-  get active(): boolean { return this.#tokens !== null && this.now() < this.endsAt }
+  get active(): boolean { return this.#tokens !== null && this.now() < this.endsAt && (this.authority.alive?.() ?? true) }
 
   /** A current owner access token, or OwnerSessionEnded once the session is closed or past its hard end. */
   async bearer(signal: AbortSignal): Promise<string> {
@@ -49,7 +51,12 @@ export class OwnerSession {
 
   private current(): OwnerSessionTokens {
     if (!this.#tokens) throw new OwnerSessionEnded()
-    if (this.now() >= this.endsAt) { this.close(); throw new OwnerSessionEnded() }
+    if (this.now() >= this.endsAt || !(this.authority.alive?.() ?? true)) { this.close(); throw new OwnerSessionEnded() }
     return this.#tokens
   }
+}
+
+/** A sign-in that ended without a session: the owner denied it, or it ran out before the owner confirmed it. */
+export class SignInEnded extends Error {
+  constructor(readonly outcome: 'denied' | 'expired', message: string) { super(message) }
 }

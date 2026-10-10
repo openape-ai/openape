@@ -13,7 +13,10 @@ import type { SetupInternal } from '../../worker/onboarding/control'
 import type { CredentialCache } from './cache'
 import { CodexConnection } from './codex'
 import { OwnerConnection } from './owner'
+import type { PhoneSignIn } from './owner'
+import { SignInEnded } from './owner-session'
 import type { OwnerSession } from './owner-session'
+import { apesLogin } from './apes-login'
 import { PodIdentityManager } from './agent'
 import type { PodIdentityReference } from './agent'
 import { recoverAuthDomains } from './ledger'
@@ -116,6 +119,25 @@ export class ConnectionManager {
     const { owner, metadata } = selected
     if (typeof metadata.issuer !== 'string' || typeof metadata.subject !== 'string') throw new Error('Sign in with your DDISA account again to verify its identity')
     return { owner: { issuer: metadata.issuer, subject: metadata.subject }, email: owner.account }
+  }
+
+  /** An MCP owner session proven by the owner's logged-in apes CLI; null when apes has no usable login. */
+  async apesOwnerSession(endsAt: number, signal: AbortSignal): Promise<OwnerSession | null> {
+    const { owner, email } = await this.remoteOwner()
+    const session = await this.owner.apesSession(owner.issuer, email, endsAt, signal, apesLogin)
+    if (session && session.subject !== owner.subject) { session.close(); throw new Error('The apes login is not the registered owner') }
+    return session
+  }
+
+  /** An MCP owner session the owner confirms on the phone; the session settles once the owner approved the link. */
+  async phoneOwnerSession(endsAt: number, signal: AbortSignal, requester: string): Promise<PhoneSignIn> {
+    const { owner, email } = await this.remoteOwner()
+    const phone = await this.owner.phoneSession(owner.issuer, email, endsAt, signal, requester)
+    const session = phone.session.then((value) => {
+      if (value.subject === owner.subject) return value
+      value.close(); throw new SignInEnded('denied', 'The confirmed account is not the registered owner')
+    })
+    return { ...phone, session }
   }
 
   /** Signs the registered owner in again in the browser for an MCP session; its tokens stay in the returned session only. */
