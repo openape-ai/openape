@@ -6,7 +6,7 @@ import { StringDecoder } from 'node:string_decoder'
 import { setTimeout as delay } from 'node:timers/promises'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { ProgramAssignment, TerminalView } from '../../contracts/programs'
-import type { SandboxLevel } from '../../contracts/sandbox'
+import type { SandboxReach } from '../../contracts/sandbox'
 import { launchTerminal } from '../../worker/runtime/terminal'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
 import type { AgentConnection, GrantObserver, GrantLedgerPort, RunGrantTokens } from '../broker/authorization'
@@ -16,6 +16,7 @@ import { registerAuthDomain } from '../connections/ledger'
 import { startMailProxy } from '../mail/proxy'
 import { inspectDomainRecords } from '../../worker/recovery/domains'
 import { ProgramState } from './state'
+import { assertGateOperation } from '../../contracts/network-capabilities'
 
 /** Read operations of an adapter; any other action is a write whose run is never replayed automatically. */
 export const readActions = ['read', 'list', 'get']
@@ -34,6 +35,7 @@ export async function resolveProgram(assignment: ProgramAssignment, argv: string
   const command = [assignment.cliId, ...argv]
   const resolved = await resolveCommand(adapter, command)
   if (action && resolved.detail.action !== action) throw new Error('The archive port may only run the granted move operation')
+  assertGateOperation(resolved.detail.action, action)
   return { write: !readActions.includes(resolved.detail.action), authorization: { grantId: '', command: { cliId: assignment.cliId, adapterPath: assignment.adapterPath, adapterDigest: adapter.digest, argv: command, coverage: [resolved.detail] } } }
 }
 export async function prepareProgramAuthorization(assignment: ProgramAssignment, connection: AgentConnection, argv: string[], observe?: GrantObserver, ledger?: GrantLedgerPort, action?: 'move', tokens?: RunGrantTokens) {
@@ -41,8 +43,8 @@ export async function prepareProgramAuthorization(assignment: ProgramAssignment,
   return { authority: new AgentAuthority(connection, observe, ledger, tokens), authorization, write }
 }
 
-/** How a terminal reaches the Pod identity, its grant ledger and its sandbox level. */
-export interface ProgramAccess { connection: () => Promise<AgentConnection>, ledger: GrantLedgerPort, level: () => Promise<SandboxLevel> }
+/** How a terminal reaches the Pod identity, its grant ledger and its sandbox reach. */
+export interface ProgramAccess { connection: () => Promise<AgentConnection>, ledger: GrantLedgerPort, reach: () => Promise<SandboxReach> }
 
 export class ProgramSession {
   private controller = new AbortController()
@@ -81,13 +83,14 @@ export class ProgramSession {
       const { authority, authorization } = await prepareProgramAuthorization(assignment, await access.connection(), argv, undefined, access.ledger)
       await authority.authorize(authorization, signal)
       await check(); signal.throwIfAborted()
-      const proxy = assignment.networkHosts.length ? await startMailProxy(signal, undefined, assignment.networkHosts) : undefined
+      const proxy = assignment.networkHosts.length && (await access.reach()).level === 'isolated' ? await startMailProxy(signal, undefined, assignment.networkHosts) : undefined
       try {
         await new ProgramState(credentials).use(assignment.stateId, { podId: this.podId, applicationId }, async (workspace) => {
           await check(); signal.throwIfAborted()
           const launch = programLaunch(assignment)
           const args = [...launch.prefix, ...argv, ...(assignment.cacheArgument ? [assignment.cacheArgument, workspace] : [])]
-          const domain = await launchTerminal(helper, directory, { level: await access.level(), executable: launch.executable, workspace: podWorkspace, readDirectories: directories.readDirectories, writeDirectories: [workspace, ...directories.writeDirectories], readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: launch.runtimeDirectories, networkPorts: proxy ? [proxy.port] : [], systemTrust: Boolean(proxy) }, args, { ...launch.environment, ...proxy?.environment, HOME: workspace, TMPDIR: workspace }, (path, ownerPid) => registerAuthDomain(root, path, ownerPid))
+          const reach = await access.reach()
+          const domain = await launchTerminal(helper, directory, { reach, executable: launch.executable, workspace: podWorkspace, readDirectories: directories.readDirectories, writeDirectories: [workspace, ...directories.writeDirectories], readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: launch.runtimeDirectories, networkPorts: proxy ? [proxy.port] : [], systemTrust: Boolean(proxy) }, args, { ...launch.environment, ...proxy?.environment, HOME: workspace, TMPDIR: workspace }, (path, ownerPid) => registerAuthDomain(root, path, ownerPid))
           this.domain = domain; verifiedClosed = false
           const decoder = new StringDecoder('utf8')
           domain.stdout.on('data', (bytes: Buffer) => this.append(decoder.write(bytes)))

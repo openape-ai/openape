@@ -1340,8 +1340,13 @@ Pod can execute and reach: assigned applications as whole programs, HTTPS origin
 with methods, folders, secrets and the level `isolated` or `owner`. Grants decide
 what it may do. They are independent; a call needs a sandbox entry and a covering
 grant. `owner` gives the Pod's programs the owner's file and network reach (a
-permissive profile under the same supervising helper); it is about paths and
-reach only, and the Pod's DDISA identity stays the Pod.
+permissive profile under the same supervising helper) except the Pods profile and
+its base, `~/.config/apes` and `~/Library/Keychains`, which stay denied while the
+program's own workspace, state and runtime are allowed again; it is about paths
+and reach only, and the Pod's DDISA identity stays the Pod. Application network
+hosts and their proxy apply only at the isolated level, because the owner level
+has the owner's network reach. Mail moves (adapter actions `move` and `archive`)
+are never part of a whole-program grant and run only through the archive ports.
 
 Every grant is requested by the Pod identity and recorded in the worker's
 `pod_grants` ledger with its authorization details, state, origin and whether it
@@ -1361,7 +1366,9 @@ entries it added recorded in `network_sandbox_resources`; the network's level is
 sandbox plus its own. Archiving the network deletes its level rows in the archive
 transaction; the desktop then revokes, as each member Pod, the grants with that
 origin and removes the sandbox resources it added. A grant keeps the origin of its
-first record, so a network never adopts a member's own grant.
+first record, and only a request the IdP newly created (201) takes the network as
+origin; an existing grant it returns again stays the member's own. A network
+declaration never replaces a member's own HTTP destination; it reports it as kept.
 
 The MCP owner session keeps the owner's tokens only in main-process memory and
 renews the five-minute access token there, never past the session's hard end;
@@ -1369,7 +1376,10 @@ ending the session revokes its refresh token. `grants` `approve` and `deny` are
 the only decision path: they refuse without an active session, read the grant
 with the owner's token and require that a Pod of this owner requested it for
 itself (requester, `pods:<podId>` target and broker binding) before calling the
-IdP with the owner bearer. The persisted setup login is never used for it. The
+IdP with the owner bearer. Without an explicit choice it approves the type the
+Pod requested (a timed grant with its duration); an explicit `grantType` is the
+owner's choice and is reported as `widened`. A timer closes the session at its
+end. The persisted setup login is never used for it. The
 conveniences `grants` `request` and `sandbox` `apply` request each grant as the
 Pod and approve it as `always` in the same call (no IdP standing-grant policy, no
 protocol change); without a session they only request and return the IdP pages.

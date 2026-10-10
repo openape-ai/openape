@@ -12,6 +12,16 @@ export function networkArchiveMember(definition: NetworkDefinition, member: Netw
     && member.contract.takes.every(channel => networkApprovals(definition).some(approval => approval.podId === member.podId && approval.gives === channel))
 }
 
+/**
+ * Mail moves belong to the owner's approval gates: an adapter operation with one of these actions runs only through
+ * the archive port, bound to an approved batch item. A whole-program grant never covers it, and scripts, agents and
+ * terminals cannot call it, whatever grant the Pod holds.
+ */
+export const gateActions: readonly string[] = ['move', 'archive']
+export function assertGateOperation(action: string, port?: string): void {
+  if (gateActions.includes(action) && port !== action) throw new Error('Moving or archiving mail runs only through the approved archive port')
+}
+
 /** The archive port's only write: one approved message from its current folder into the mailbox Archive folder. */
 export function assertArchiveMove(argv: string[]): void {
   const values = ['--account', '--message', '--expected-version', '--source-folder'].map((flag, index) => argv[2 + index * 2] === flag ? argv[3 + index * 2] : undefined)

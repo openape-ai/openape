@@ -3490,5 +3490,9 @@
   "An assigned grant coverage is required": "Die Abdeckung eines zugewiesenen Grants ist erforderlich",
   "Permission approved in Codex session": "In der Codex-Sitzung freigegeben",
   "runtime must be a boolean": "runtime muss ein Wahrheitswert sein",
-  "Declare the runtime or at least one program or HTTP grant": "Deklariere die Laufzeit oder mindestens einen Programm- oder HTTP-Grant"
+  "Declare the runtime or at least one program or HTTP grant": "Deklariere die Laufzeit oder mindestens einen Programm- oder HTTP-Grant",
+  "Moving or archiving mail runs only through the approved archive port": "E-Mails verschieben oder archivieren läuft nur über den freigegebenen Archiv-Port",
+  "A timed approval needs the duration the Pod requested": "Eine befristete Freigabe braucht die Dauer, die der Pod angefragt hat",
+  "The owner sandbox level needs its protected paths": "Die Sandbox-Stufe Owner braucht ihre geschützten Pfade",
+  "Unexpected grant type {p0}": "Unerwarteter Grant-Typ {p0}"
 }

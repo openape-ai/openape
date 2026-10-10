@@ -1,5 +1,6 @@
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import { AuthorityError } from '../../contracts/infrastructure'
+import { assertGateOperation } from '../../contracts/network-capabilities'
 import type { PodResource } from '../../contracts/resources'
 import { programRequest } from '../../main/programs/invoke'
 import { readActions } from '../../main/programs/session'
@@ -10,6 +11,8 @@ export async function programWrite(resources: PodResource[], podId: string, capa
   if (!body || typeof body !== 'object' || !('applicationId' in body || 'application' in body)) return false
   const { assignment, argv } = programRequest(resources, podId, capabilities, body)
   const resolved = await resolveCommand(loadAdapter(assignment.cliId, assignment.adapterPath), [assignment.cliId, ...argv])
+  // Refused before anything is recorded or sent: a mail move only runs through the archive port.
+  assertGateOperation(resolved.detail.action)
   return !readActions.includes(resolved.detail.action)
 }
 
