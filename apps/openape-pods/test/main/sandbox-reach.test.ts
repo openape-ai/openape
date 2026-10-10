@@ -1,5 +1,7 @@
 // @vitest-environment node
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { execFile } from 'node:child_process'
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -25,18 +27,77 @@ it('keeps the isolated profile closed by default and the owner profile open exce
   expect(lines[4]).toContain('(literal "/opt/fixture/bin/tool")')
   expect(lines[4]).toContain('(subpath "/opt/fixture/runtime")')
   expect(lines[5]).toBe('(deny file-write* (subpath "/Users/owner/Library/LaunchAgents") (subpath "/Users/owner/.zshrc") (subpath "/Library/LaunchDaemons") (literal "/Users") (literal "/Users/owner") (literal "/Users/owner/Library") (literal "/Library"))')
-  expect(lines).toHaveLength(6)
+  // Seatbelt checks a Unix socket connection as network access, so the sockets under the protected paths are closed separately.
+  expect(lines[6]).toBe(`(deny network-outbound ${protectedPaths.map(path => `(remote unix-socket (subpath ${JSON.stringify(path)}))`).join(' ')})`)
+  expect(lines[7]).toContain('(global-name "com.apple.xpc.smd")')
+  expect(lines[8]).toBe('(deny job-creation)')
+  expect(lines).toHaveLength(9)
   expect(() => sandboxPolicy({ ...policy, reach: { level: 'owner', protectedPaths: [], persistencePaths } })).toThrow('protected paths')
   expect(() => sandboxPolicy({ ...policy, reach: { level: 'owner', protectedPaths } })).toThrow('protected paths')
 })
 
-it('denies writes to the launch, login, shell, SSH, preference and Pods app locations of the owner', () => {
+const ownerConfiguration = ['.codex', '.claude', '.claude.json', '.ssh', '.gitconfig', '.config/git', '.npmrc', '.config/fish', '.local/bin', 'Library/pnpm', 'Library/Pnpm', '.zsh_shared']
+
+it('denies writes to the launch, login, shell, SSH, Git, agent, PATH, preference and Pods app locations of the owner', () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'pods-reach-home-'))); roots.push(home)
-  const paths = ownerPersistencePaths(home)
-  for (const path of ['Library/LaunchAgents', 'Library/Application Support/com.apple.backgroundtaskmanagementagent', 'Library/Preferences', '.zshrc', '.zprofile', '.zshenv', '.zlogin', '.bashrc', '.bash_profile', '.profile', '.config/fish', '.ssh/authorized_keys', '.ssh/config', 'Applications/OpenApe Pods.app', 'Library/Application Support/OpenApe Pods Rollback']) expect(paths).toContain(join(home, path))
-  for (const path of ['/Library/LaunchAgents', '/Library/LaunchDaemons', '/Applications/OpenApe Pods.app']) expect(paths).toContain(path)
+  const paths = ownerPersistencePaths(home, { CODEX_HOME: '/Users/owner/codex-home', CLAUDE_CONFIG_DIR: '/Users/owner/claude-home/' })
+  for (const path of ['Library/LaunchAgents', 'Library/Application Support/com.apple.backgroundtaskmanagementagent', 'Library/Preferences', '.zshrc', '.zprofile', '.zshenv', '.zlogin', '.bashrc', '.bash_profile', '.profile', 'Applications/OpenApe Pods.app', 'Library/Application Support/OpenApe Pods Rollback', ...ownerConfiguration]) expect(paths).toContain(join(home, path))
+  for (const path of ['/Library/LaunchAgents', '/Library/LaunchDaemons', '/Applications/OpenApe Pods.app', '/opt/homebrew', '/usr/local', '/Users/owner/codex-home', '/Users/owner/claude-home']) expect(paths).toContain(path)
   expect(paths).not.toContain(join(home, 'Library/Keychains'))
 })
+
+it('lists every location both as written and as resolved through links', () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'pods-reach-forms-'))); roots.push(root)
+  const real = join(root, 'real'); const home = join(root, 'home'); const dotfiles = join(root, 'dotfiles/claude')
+  mkdirSync(real); mkdirSync(dotfiles, { recursive: true }); symlinkSync(real, home); symlinkSync(dotfiles, join(real, '.claude'))
+  const paths = ownerPersistencePaths(home)
+  for (const path of [join(home, '.claude'), join(real, '.claude'), dotfiles, join(home, '.codex'), join(real, '.codex')]) expect(paths).toContain(path)
+  const profile = join(real, 'profile'); mkdirSync(join(real, '.config/apes'), { recursive: true }); mkdirSync(profile)
+  expect(ownerProtectedPaths(join(home, 'profile'), home)).toEqual(expect.arrayContaining([join(home, 'profile'), profile, join(home, '.config/apes'), join(real, '.config/apes')]))
+})
+
+/** Runs a command under a sandbox profile and returns its exit code and output; asynchronous so a socket server in this process can answer. */
+function sandboxed(profile: string, command: string[]): Promise<{ code: number, output: string }> {
+  return new Promise((resolve) => {
+    execFile('/usr/bin/sandbox-exec', ['-f', profile, ...command], { encoding: 'utf8', timeout: 20000 }, (error, stdout, stderr) => resolve({ code: error ? Number(error.code ?? 1) : 0, output: `${stdout}${stderr}` }))
+  })
+}
+
+it.runIf(process.platform === 'darwin')('blocks writes to persistence locations, as written and through a linked home, and the Pods sockets under the real macOS sandbox', async () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'pr-'))); roots.push(root)
+  const real = join(root, 'real'); const home = join(root, 'home'); const workspace = join(root, 'w'); const profileRoot = join(root, 'p')
+  for (const path of ['.codex', '.ssh', '.config/git', '.local/bin', 'Library/pnpm', '.zsh_shared', 'notes']) mkdirSync(join(real, path), { recursive: true })
+  mkdirSync(join(root, 'dotfiles/claude'), { recursive: true }); symlinkSync(join(root, 'dotfiles/claude'), join(real, '.claude'))
+  mkdirSync(join(profileRoot, 'codex'), { recursive: true }); mkdirSync(workspace); symlinkSync(real, home)
+  const reach = { level: 'owner' as const, protectedPaths: ownerProtectedPaths(profileRoot, home), persistencePaths: ownerPersistencePaths(home, { CODEX_HOME: join(root, 'codex-home') }) }
+  const owner = join(root, 'owner.sb'); writeFileSync(owner, sandboxPolicy({ executable: '/bin/sh', workspace, readFiles: [], runtimeDirectories: [], reach }))
+  const isolated = join(root, 'isolated.sb'); writeFileSync(isolated, sandboxPolicy({ executable: process.execPath, workspace, readFiles: [], runtimeDirectories: [] }))
+
+  const targets = ['.codex/config.toml', '.claude/settings.json', '.claude.json', '.ssh/id_planted', '.gitconfig', '.config/git/config', '.npmrc', '.local/bin/tool', 'Library/pnpm/tool', '.zsh_shared/planted.zsh']
+  for (const base of [home, real]) {
+    for (const target of targets) expect((await sandboxed(owner, ['/bin/sh', '-c', 'echo planted > "$1"', '-', join(base, target)])).code, join(base, target)).not.toBe(0)
+  }
+  expect((await sandboxed(owner, ['/bin/sh', '-c', 'echo planted > "$1"', '-', join(root, 'codex-home/config.toml')])).code).not.toBe(0)
+  // The link itself cannot be replaced by a folder the run controls.
+  expect((await sandboxed(owner, ['/bin/rm', join(real, '.claude')])).code).not.toBe(0)
+  expect(existsSync(join(real, '.claude/'))).toBe(true)
+  // The rest of the owner's home and ordinary programs keep working.
+  expect(await sandboxed(owner, ['/bin/sh', '-c', 'echo note > "$1" && cat "$1"', '-', join(home, 'notes/today.txt')])).toEqual({ code: 0, output: 'note\n' })
+  expect((await sandboxed(owner, ['/usr/bin/git', '--version'])).code).toBe(0)
+  expect(await sandboxed(owner, [process.execPath, '-p', '1 + 1'])).toEqual({ code: 0, output: '2\n' })
+
+  const socket = join(profileRoot, 'codex/control.sock')
+  const server = createServer(connection => connection.end('owner-session\n'))
+  await new Promise<void>(resolve => server.listen(socket, resolve))
+  try {
+    const client = 'const s=require("net").connect(process.argv[1]);s.on("data",d=>{console.log("CONNECTED");process.exit(0)});s.on("error",e=>{console.log("REFUSED "+e.code);process.exit(0)})'
+    expect((await sandboxed(owner, [process.execPath, '-e', client, socket])).output).toBe('REFUSED EPERM\n')
+    expect((await sandboxed(isolated, [process.execPath, '-e', client, socket])).output).toBe('REFUSED EPERM\n')
+    const open = join(root, 'open.sb'); writeFileSync(open, '(version 1)\n(allow default)\n')
+    expect((await sandboxed(open, [process.execPath, '-e', client, socket])).output).toBe('CONNECTED\n')
+  }
+  finally { server.close() }
+}, 60000)
 
 it('protects the Pods profile, the base of all profiles, the apes login and the keychains', () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'pods-reach-home-'))); roots.push(home)
