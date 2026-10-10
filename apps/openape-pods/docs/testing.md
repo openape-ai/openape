@@ -43,15 +43,17 @@ These are the questions no lower level can answer. `handbook.test.ts` also stays
 | `crash-recovery*.test.ts`, `fixtures/crash.ts` | Real SIGKILL/quit of worker, app and script, relaunch and domain inspection without duplicate work; the storage limit stopping an actually running script. Split into files so the cases run on separate workers |
 | `recovery.test.ts`, `domains.test.ts` | Supervisor lease, PID identity and PID reuse of real processes |
 | `resources.test.ts`, `script-runner.test.ts`, `terminal.test.ts` | Sandbox denial (files, fork, network, shell), real TTY, time limits |
-| `agent.test.ts`, `master.test.ts`, `master-chat.test.ts`, `onboarding.test.ts`, `mail-knowledge.test.ts` | Pinned Codex binary and app-server confined by the sandbox; native draft validation; chat repair loop, model choice and context reset as the provider actually receives them |
+| `agent.test.ts`, `master.test.ts`, `onboarding.test.ts`, `mail-knowledge.test.ts` | Pinned Codex binary and app-server confined by the sandbox; native draft validation as the provider actually receives it |
 | `external-shell.test.ts`, `external-session.test.ts`, `installed-applications.test.ts` | `ape-shell` from the package reaches real child processes; grant denial blocks the side effect |
 | `o365.test.ts`, `broker.test.ts` | TLS against a real socket with the packaged helper; credential isolation between sandboxes |
 | `credentials.test.ts` | `safeStorage` with the mock keychain (login keychain only with `OPENAPE_PODS_TEST_REAL_KEYCHAIN=1`): ciphertext never contains the value, decrypts after a restart, key files erased on rotation and revocation, other Pods' keys kept |
 | `programs.test.ts` (packaged case) | safeStorage-backed program state, the folder dialog path and a saved script reaching the application through worker, main broker and `ape-shell`; a read-only folder refuses writes |
 | `dependencies.test.ts` | A bare import resolves from the prepared, read-only library inside the sandbox (Node, no Electron) |
-| `codex-mcp.test.ts`, `codex-registration.test.ts`, `codex-acceptance.test.ts` | Issue 1375: the launcher starts the packaged shim without global Node; the bundled Codex CLI reads the appended entry and the owner's `config.toml` is restored byte for byte; a real `codex app-server` reaches the running app, and a prepared change lands only through **Prepared by Codex**. The refusals themselves are measured one level lower in `test/codex/control.test.ts` and `test/main/codex-*.test.ts` |
+| `codex-mcp.test.ts`, `codex-registration.test.ts`, `codex-acceptance.test.ts` | Issue 1375: the launcher starts the packaged shim without global Node; the bundled Codex CLI reads the appended entry and the owner's `config.toml` is restored byte for byte; a real `codex app-server` is refused with `login_required` until the owner session exists, then administers the running app directly with no review queue. The refusals themselves are measured one level lower in `test/codex/control.test.ts` and `test/main/codex-*.test.ts` |
 
 ## Moved in issue 1374
+
+Historical mapping; replacements for removed features (chat, master UI) were deleted with them.
 
 | Former E2E | Replacement |
 |---|---|
@@ -108,7 +110,7 @@ runs are explicitly labelled. Open the returned report and verify its images
 and **Test Runs** category before sharing it. Live sign-in, native execution,
 installed distribution and release signing are separate acceptance boundaries.
 
-Retained feature tests cover MCP mode/expiry/IPC denial, socket revocation,
+Retained feature tests cover the MCP owner session, its expiry and IPC denial, socket revocation,
 standalone/archive navigation, editor routing by runtime,
 script validation before execution, and the production UI at desktop/narrow
 widths. They protect consequential behavior rather than matching markup.

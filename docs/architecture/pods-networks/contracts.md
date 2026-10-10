@@ -1,5 +1,11 @@
 # Pods persistent networks: frozen M0 contract
 
+> Historical design record of issue 1417 and its milestones. Sections on
+> workflows, sequences, bounded graphs, conversion, earlier gate formats, change review,
+> access proposals and network-only limits describe removed behavior (issue 1455).
+> The current model: [Pods model](../../../apps/openape-pods/docs/model.md) and
+> [networks](../../../apps/openape-pods/docs/networks.md).
+
 Status: implementation contract approved through the October 1 plan. M0–M8
 are accepted and merged; M9 implementation and acceptance are in progress. The original M0
 increment froze these contracts; milestone evidence below records actual delivery. [Development issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417)

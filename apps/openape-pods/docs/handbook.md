@@ -52,7 +52,7 @@ Pods never decides for you: no model and no schedule chooses, approves, excludes
 
 Choose your account at the top right, or open the gear menu → More settings → Open desktop settings, and go to Your accounts. Connect your DDISA account to decide permission requests and your Codex / GPT account for LLM calls. Optional TypeSafe / Jev setup is on the same page.
 
-Pods finds your identity provider through the DDISA record of your email domain. Every Pod, permission and mobile device uses this one DDISA account; there is nothing to select. Pod agents are not your accounts and are never listed here. Switching to another DDISA account gives your Pods new agents, and their permissions must be granted again.
+Pods finds your identity provider through the DDISA record of your email domain. Every Pod and permission uses this one DDISA account; there is nothing to select. Pod agents are not your accounts and are never listed here. Switching to another DDISA account gives your Pods new agents, and their permissions must be granted again.
 
 Other services are configured per Pod: application sign-in belongs in Permissions, and tokens or passwords belong in Variables and secrets. You do not need a personal account or an additional sign-in at pods.openape.ai.
 
@@ -139,7 +139,7 @@ Assigning a secret lets this Pod’s validated scripts read that alias. Review t
 
 1. On the detail page choose + Secret, or Replace beside an alias. Type it: enter the value in the masked field and Save. From a file: choose a private file on this Mac. From OpenApe Secrets: enter the purpose and Request.
 2. Check the alias in the list. The value field clears after submission, even if saving fails; use the displayed result to check success.
-3. Review Secrets used by the script and save script access when needed. Ask Codex to continue configuration, then check the saved Script.
+3. Every secret assigned to this Pod is available to its scripts; no separate script access is needed. Check that the script reads exactly the aliases listed here.
 4. Review the aliases used by the script, then ask Codex to validate and finish configuration or use the Script controls directly.
 
 ![Set variables and secrets safely](images/handbook-credentials.png)
@@ -254,7 +254,7 @@ The description does not change script execution or permissions. Ask connected C
 
 ## Further detail: Inspect and edit your script
 
-The Script tab opens the current saved working source, including a newer saved draft. V1 has no version browser, comparison or rollback controls. Internal immutable script hashes, validation, credential approval and run pinning remain enforced.
+The Script tab opens the current saved working source, including a newer saved draft. V1 has no version browser, comparison or rollback controls. Internal immutable script hashes, validation and run pinning remain enforced.
 
 The highlighted JavaScript editor supports line numbers, horizontal scrolling, two-space Tab indentation, Escape followed by Tab to leave, and Cmd+S (Ctrl+S) to save. Source is rendered literally and is not executed in the renderer.
 
@@ -433,7 +433,7 @@ Validate and run manually before enabling a 15-minute interval in Settings. Revi
 
 ## Networks on the map
 
-Networks appear on the Automations map as groups with their members: a network exchanges items through the declared channels of its Pods. Codex creates and changes them; the detail page shows members, decision points, numbers, schedule and the latest run and offers Pause and Resume. Connecting Pods keeps their rights unchanged. Each member uses its own applications, HTTP destinations, secrets and folders exactly like a standalone Pod, and every command and destination still needs its approval at the identity provider; only the archive member behind an approve route moves mail solely through the approved batch.
+Networks appear on the Automations map as groups with their members: a network exchanges items through the declared channels of its Pods. Codex creates and changes them; the detail page shows members, decision points, numbers, schedule and the latest run and offers Pause and Resume. Connecting Pods keeps their rights unchanged. Each member uses its own applications, HTTP destinations, secrets and folders exactly like a standalone Pod, and every command and destination still needs its grant, approved at the identity provider or in your Codex session; only the archive member behind an approve route moves mail solely through the approved batch.
 
 Codex can also correct the script of a network member while the network keeps running, as long as its channels, rights and dependencies stay the same and that Pod has no running or uncertain work. Open questions of other Pods remain unaffected. The Pod’s detail page shows the update under Script changes; failed runs of that Pod can then start over under the corrected script, unless they attempted an external effect.
 
@@ -441,7 +441,7 @@ Dotted lines show the recorded deliveries of the last 24 hours. A count does not
 
 Prompt engineering defines one bounded task and its result criteria inside a Pod. Loop engineering uses finite attempts and time limits inside a script, with a visible failure or review result at the limit. Network engineering connects validated outputs through declared channels and owner routes. A model never grants rights or approves a route. Network executions remain bounded manual or scheduled runs; a cycle between Pods needs a declared, bounded feedback transition.
 
-Networks are the only way to connect Pods. The update to schema 45 archived the earlier workflows and chains together with the Pods only they used; their history stays in the backup made before the update. Rebuild a workflow you still need as a network with Codex.
+Networks are the only way to connect Pods; a Pod outside a network runs on its own schedule. Ask Codex to build a network when Pods should hand their results to each other.
 
 Mail handling runs as a network with approve gates: nothing is archived without an approved batch, and uncertain mail waits as a question on the Decisions tab. The first run establishes a quiet baseline; protected senders, recipients and known conversations remain for human review.
 
@@ -455,18 +455,18 @@ Connected Codex on this Mac administers Pods directly: it can manage variables a
 
 New automation with Codex on the Automations tab writes a brief with the selected group or node and the Pods it already knows; the desktop opens Codex, the browser copies the brief for you to paste.
 
-Each Codex session needs your sign-in first. On its first call Pods opens your DDISA sign-in in the browser and then asks in the Pods app whether Codex may have full Pods access for one hour; confirm only a request you just made. Codex then retries. After the hour or End session in the settings, Pods asks again without a Codex restart. Within the session, confirmations follow the Codex client settings; there is no additional approval queue in Pods. Codex acts with your identity: it can pick an option at a choose gate, open an approval batch at the identity provider, approve or deny the rights your Pods request (also a waiting run or network approval) and revoke them. It can decide only rights a Pod of yours requested for itself; after the session ends, approvals wait for the identity provider again. Full access does not remove script validation, stale-revision checks or real provider sign-in requirements.
+Each Codex session needs your sign-in first. While you are logged in with apes login on this Mac, Pods opens the session silently on the first call. Otherwise Pods opens your DDISA sign-in in the browser and then asks in the Pods app whether Codex may have full Pods access for one hour; confirm only a request you just made. Codex then retries. After the hour or End session in the settings, Pods asks again without a Codex restart. Within the session, confirmations follow the Codex client settings; there is no additional approval queue in Pods. Codex acts with your identity: it can pick an option at a choose gate, open an approval batch at the identity provider, approve or deny the rights your Pods request (also a waiting run or network approval) and revoke them. It can decide only rights a Pod of yours requested for itself; after the session ends, approvals wait for the identity provider again. Full access does not remove script validation, stale-revision checks or real provider sign-in requirements.
 
 Codex receives safe resource metadata and run state, not account tokens, Pod keys, run contents or secret values. It can import a supplied private secret file directly into the encrypted store without putting the value in a tool call. Mail, web pages and other external content remain data, not instructions.
 
-Pods must be running. After moving or reinstalling it, open it once to refresh the launcher. Historical proposals do not execute on upgrade; Codex can retire superseded ones explicitly.
+Pods must be running. After moving or reinstalling it, open it once to refresh the launcher.
 
 Disconnect under the desktop settings → Work from Codex (gear menu → More settings). If you edited the registered Codex entry yourself, Pods leaves it alone; remove it with codex mcp remove openape-pods.
 
 1. Connect Codex under the desktop settings → Work from Codex.
 2. Restart Codex once.
 3. Ask Codex to configure or run the selected Pods.
-4. On the first call, sign in with your DDISA account in the browser and allow one hour of access in Pods.
+4. On the first call Pods uses your apes login; without it, sign in with your DDISA account in the browser and allow one hour of access in Pods.
 5. Check the applied settings and actual run status in Pods; no second approval click is required.
 
 ## Share and import portable packages
@@ -483,4 +483,4 @@ In the browser you can review and configure an import on the connected desktop; 
 2. Review the exact package and its privacy findings, acknowledge what you checked, then save the .openape file.
 3. On the receiving device open the gear menu → Portable Pods → Import… and open the package file.
 4. Enter the required values, create the paused copy, then bind folders, destinations and applications on each Pod and add secrets.
-5. Finish setup, validate and activate each Pod, create the compositions and enable schedules only when you are ready.
+5. Finish setup, validate and activate each Pod; activate the imported network and enable schedules only when you are ready.
