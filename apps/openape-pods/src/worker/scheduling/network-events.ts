@@ -84,10 +84,10 @@ export class NetworkEvents {
     const member = definition.members.find(item => item.podId === row.pod_id)
     if (!member) throw new Error('Network invocation has no pinned member')
     if (definition.id !== row.network_id || definition.revision !== row.network_revision || definition.groupId !== row.group_id) throw new Error('Network invocation revision does not match its stored scope')
-    const binding = this.store.db.prepare(`SELECT m.*,b.definition_id AS current_definition,b.definition_version AS current_version,b.binding_revision AS current_binding
+    const binding = this.store.db.prepare(`SELECT m.source_binding_id,b.definition_id,b.definition_version,b.binding_revision
       FROM network_members m JOIN instance_definition_bindings b ON b.pod_id=m.pod_id
       WHERE m.network_id=? AND m.pod_id=?`).get(definition.id, member.podId)
-    if (!binding || binding.definition_id !== member.definitionId || binding.definition_version !== member.definitionVersion || binding.binding_revision !== member.bindingRevision || binding.source_binding_id !== (member.source?.bindingId ?? null) || binding.current_definition !== member.definitionId || binding.current_version !== member.definitionVersion || binding.current_binding !== member.bindingRevision) throw new Error('Network member binding changed during execution')
+    if (!binding || binding.definition_id !== member.definitionId || binding.definition_version !== member.definitionVersion || binding.binding_revision !== member.bindingRevision || binding.source_binding_id !== (member.source?.bindingId ?? null)) throw new Error('Network member binding changed during execution')
     const claimed = this.store.db.prepare('SELECT id,generation,claim_token,boot_nonce,restore_nonce,activation_epoch FROM network_deliveries WHERE run_id=? AND state=\'claimed\'').all(authority.runId)
     const manifest = JSON.parse(row.manifest as string) as { assignmentRevision: number, resourceEpoch: number, inputClaims?: { id: string, generation: number }[] }
     if (manifest.assignmentRevision !== row.assignment_revision || this.store.getPod(member.podId).bindingRevision !== manifest.assignmentRevision) throw new Error('Network resource assignment changed during execution')
@@ -144,7 +144,7 @@ export class NetworkEvents {
         ? { kind: 'source', sourceBindingId: member.source.bindingId, sourceItemId: sourceItem, sourceVersion }
         : { kind: 'derived', inputEventIds: inputIds, producerPodId: member.podId, emitKey: key, feedbackTransitionId: plan!.transitionId }
       this.store.db.prepare('INSERT INTO network_events VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(eventId, definition.id, definition.revision, member.podId, member.definitionId, member.definitionVersion, caseRef.caseId, caseRef.caseRevision, channel.name, key, canonicalNetworkJson({ ...origin, invocationId: authority.runId, schemaVersion: channel.schemaVersion, occurredAt: now, feedbackHop: plan?.hop ?? 0 }), schemaHash, payload, payloadHash, now)
-      this.store.db.prepare('INSERT INTO network_event_identities VALUES(?,?,?,?,?,?,?,?,?,NULL)').run(definition.id, namespace, identityHash, eventId, payloadHash, schemaHash, now, now + 90 * 86400000, canonicalNetworkJson(inputIds))
+      this.store.db.prepare('INSERT INTO network_event_identities VALUES(?,?,?,?,?,?,?)').run(definition.id, namespace, identityHash, eventId, payloadHash, schemaHash, now)
       for (const reference of references) this.artifacts!.retain(reference, 'event', eventId)
       this.deliver(definition, eventId, channel, schemaHash, caseRef, now, plan, authority.runId)
       return { eventId, duplicate: false, ...caseRef }
@@ -216,7 +216,7 @@ export class NetworkEvents {
     const priorOrigin = JSON.parse(input.origin as string)
     const origin = { kind: 'derived', inputEventIds: [eventId], producerPodId: input.producer_pod_id, emitKey: `gate:${gate.key}:${decision}`, feedbackTransitionId: null, schemaVersion: channel.schemaVersion, occurredAt: now, feedbackHop: priorOrigin.feedbackHop ?? 0, gate: gate.key, decision }
     this.store.db.prepare('INSERT INTO network_events VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id, definition.id, definition.revision, input.producer_pod_id!, input.definition_id!, input.definition_version!, input.case_id!, input.case_revision!, channel.name, input.item_key!, canonicalNetworkJson(origin), schemaHash, payload, digest(payload), now)
-    this.store.db.prepare('INSERT INTO network_event_identities VALUES(?,\'derived\',?,?,?,?,?,?,?,NULL)').run(definition.id, identityHash, id, digest(payload), schemaHash, now, now + 90 * 86400000, canonicalNetworkJson([eventId]))
+    this.store.db.prepare('INSERT INTO network_event_identities VALUES(?,\'derived\',?,?,?,?,?)').run(definition.id, identityHash, id, digest(payload), schemaHash, now)
     for (const reference of this.references(eventId)) this.artifacts!.retain(reference, 'event', id)
     this.deliver(definition, id, channel, schemaHash, { caseId: input.case_id as string, caseRevision: Number(input.case_revision) }, now, null, null)
     this.store.db.prepare('INSERT INTO network_trace_events(network_id,case_id,event_id,kind,body,created_at) VALUES(?,?,?,\'gate-routed\',?,?)').run(definition.id, input.case_id!, id, canonicalNetworkJson({ gate: gate.key, decision, inputEventId: eventId, channel: channel.name }), now)
@@ -299,9 +299,9 @@ export class NetworkEvents {
     const current = this.store.db.prepare('SELECT s.case_id,c.current_revision FROM network_case_sources s JOIN network_cases c ON c.id=s.case_id WHERE s.network_id=? AND s.source_binding_id=? AND s.source_item=? LIMIT 1').get(networkId, binding, item)
     const caseId = current?.case_id as string ?? randomUUID()
     const caseRevision = current ? (current.current_revision as number) + 1 : 1
-    if (!current) this.store.db.prepare('INSERT INTO network_cases VALUES(?,?,?,1,NULL,NULL,?)').run(caseId, networkId, groupId, now)
+    if (!current) this.store.db.prepare('INSERT INTO network_cases VALUES(?,?,?,1,?)').run(caseId, networkId, groupId, now)
     const mapping = canonicalNetworkJson({ sourceBindingId: binding, sourceItemId: item, sourceVersion: version })
-    this.store.db.prepare('INSERT INTO network_case_revisions VALUES(?,?,?,?, \'open\',?)').run(caseId, caseRevision, mapping, current ? current.current_revision! : null, now)
+    this.store.db.prepare('INSERT INTO network_case_revisions VALUES(?,?,?,\'open\',?)').run(caseId, caseRevision, mapping, now)
     this.store.db.prepare('UPDATE network_cases SET current_revision=? WHERE id=? AND network_id=?').run(caseRevision, caseId, networkId)
     this.store.db.prepare('INSERT INTO network_case_sources VALUES(?,?,?,?,?,?)').run(networkId, binding, item, version, caseId, caseRevision)
     return { caseId, caseRevision }

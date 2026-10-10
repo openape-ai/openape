@@ -45,7 +45,7 @@ export class ChatRegistry {
   }
 
   private saveContext(id: string, revision: number, context: ChatContext): void {
-    this.store.db.prepare('INSERT INTO chat_contexts VALUES(?,?,?,NULL,?)').run(id, revision, JSON.stringify(context), Date.now())
+    this.store.db.prepare('INSERT INTO chat_contexts VALUES(?,?,?,?)').run(id, revision, JSON.stringify(context), Date.now())
     for (const pod of context.pods) this.store.db.prepare('INSERT INTO chat_members VALUES(?,?,?) ON CONFLICT(conversation_id,pod_id) DO UPDATE SET name=excluded.name').run(id, pod.id, pod.name)
   }
 
@@ -66,8 +66,7 @@ export class ChatRegistry {
     this.ensure('')
     for (const pod of this.store.listPods()) this.ensure(pod.id)
     for (const row of this.store.db.prepare('SELECT DISTINCT scope FROM master_message_scopes UNION SELECT scope FROM master_contexts').all()) this.ensure(row.scope as string)
-    const active = this.store.db.prepare('SELECT c.conversation_id FROM chat_active c JOIN master_session s ON s.id=c.id WHERE s.state=\'running\'').get()
-    return { conversations: this.store.db.prepare('SELECT id FROM chat_conversations WHERE id!=? ORDER BY updated_at DESC,rowid DESC LIMIT 1000').all(codexConversationId).map(row => this.get(row.id as string)), activeConversationId: active?.conversation_id as string | null ?? null }
+    return { conversations: this.store.db.prepare('SELECT id FROM chat_conversations WHERE id!=? ORDER BY updated_at DESC,rowid DESC LIMIT 1000').all(codexConversationId).map(row => this.get(row.id as string)), activeConversationId: null }
   }
 
   execute(value: ChatsCommand): ChatsView {
@@ -93,9 +92,7 @@ export class ChatRegistry {
         this.store.db.prepare('UPDATE chat_conversations SET title=?,updated_at=? WHERE id=?').run(command.title.trim(), Date.now(), command.id)
         return
       }
-      if (this.store.db.prepare('SELECT 1 FROM master_session WHERE state=\'running\'').get()) throw new Error('Finish or stop the active response before changing context')
       const context = this.snapshot(command.podIds)
-      this.store.db.prepare('UPDATE chat_contexts SET retired_thread=(SELECT thread_id FROM master_contexts WHERE scope=?) WHERE conversation_id=? AND revision=?').run(conversation.scope, command.id, command.revision)
       this.saveContext(command.id, command.revision + 1, context)
       const eventId = `context:${command.id}:${command.revision + 1}`
       this.store.db.prepare('INSERT INTO master_messages VALUES(?,\'assistant\',?,\'completed\',?)').run(eventId, `Context changed. A new model context starts here. Selected Pods: ${context.pods.map(pod => pod.name).join(', ') || 'workspace only'}. Earlier messages remain local history.`, Date.now())

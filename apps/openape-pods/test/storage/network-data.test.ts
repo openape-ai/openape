@@ -237,17 +237,14 @@ describe('scoped shared collection transactions', () => {
 
   it('keeps configuration separate with explicit origins and typed protected secret references', () => {
     const f = fixture()
-    const binding = f.store.db.prepare('SELECT definition_id FROM network_members WHERE pod_id=?').get(f.first)!
+    const binding = f.store.db.prepare('SELECT definition_id FROM instance_definition_bindings WHERE pod_id=?').get(f.first)!
     f.store.db.prepare('INSERT INTO definition_config VALUES(?,1,\'region\',\'public\',?)').run(binding.definition_id!, JSON.stringify('default'))
     f.store.db.prepare('INSERT INTO composition_config VALUES(?,\'region\',?)').run(f.networkId, JSON.stringify('composition'))
-    f.store.db.prepare('INSERT INTO instance_config VALUES(?,\'region\',?)').run(f.first, JSON.stringify('instance'))
-    expect(networkConfiguration(f.store, f.networkId, f.first)).toMatchObject({ region: { value: 'instance', origin: 'pod', kind: 'public' } })
-    f.store.db.prepare('DELETE FROM instance_config').run()
     expect(networkConfiguration(f.store, f.networkId, f.first).region).toMatchObject({ value: 'composition', origin: 'composition' })
     const secret = { kind: 'secret-reference', id: randomUUID() }
     f.store.db.prepare('INSERT INTO definition_config VALUES(?,1,\'api-key\',\'secret-reference\',?)').run(binding.definition_id!, JSON.stringify(secret))
     expect(networkConfiguration(f.store, f.networkId, f.first)['api-key']).toMatchObject({ value: secret, origin: 'definition' })
-    f.store.db.prepare('INSERT INTO instance_config VALUES(?,\'api-key\',?)').run(f.first, JSON.stringify('secret bytes'))
+    f.store.db.prepare('UPDATE definition_config SET value=? WHERE name=\'api-key\'').run(JSON.stringify('secret bytes'))
     expect(() => f.reserve()).toThrow('protected-store reference')
   })
 
@@ -271,7 +268,7 @@ describe('scoped shared collection transactions', () => {
 
   it('refuses changed configuration before script launch even without a data operation', () => {
     const f = fixture(); const authority = f.reserve()
-    const binding = f.store.db.prepare('SELECT definition_id FROM network_members WHERE pod_id=?').get(f.first)!
+    const binding = f.store.db.prepare('SELECT definition_id FROM instance_definition_bindings WHERE pod_id=?').get(f.first)!
     f.store.db.prepare('INSERT INTO definition_config VALUES(?,1,\'region\',\'public\',?)').run(binding.definition_id!, JSON.stringify('new default'))
     expect(() => f.invocations.input(authority)).toThrow('bindings or configuration changed')
   })

@@ -93,7 +93,7 @@ export function mapFixture() {
   resource(pods.Triage!, 'tool', 'TypeSafe / Jev', jev)
   resource(pods.Triage!, 'directory', 'delta', directory('/Users/fixture/Pods/delta', 'readWrite'))
   resource(pods['Archive preview']!, 'tool', 'o365-cli', o365('phofmann@delta-mind.at', ['Move approved mail for phofmann@delta-mind.at']))
-  const member = (podId: string) => store.db.prepare('SELECT definition_id,definition_version FROM network_members WHERE pod_id=?').get(podId)!
+  const member = (podId: string) => store.db.prepare('SELECT definition_id,definition_version FROM instance_definition_bindings WHERE pod_id=?').get(podId)!
   const event = (producer: string, channel: string, at: number, payload: Record<string, unknown>, id = uuid()) => store.transaction(() => {
     const caseId = uuid()
     store.db.prepare('INSERT INTO network_cases(id,network_id,group_id,current_revision,created_at) VALUES(?,?,?,1,?)').run(caseId, network, deltaMind, at)

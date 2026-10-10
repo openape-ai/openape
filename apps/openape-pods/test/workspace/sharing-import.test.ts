@@ -22,7 +22,6 @@ import { digest, PodDatabase, schemaVersion  } from '../../src/worker/storage/da
 import { createPortablePackage } from '../../src/worker/sharing/package'
 import type { PortableDescription, PortablePayload } from '../../src/worker/sharing/package'
 import { PodGroups } from '../../src/worker/workspace/groups'
-import { aliasTables, sharingTables } from '../../src/worker/storage/sharing-schema'
 import { WorkspaceDetails } from '../../src/worker/workspace/details'
 
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
@@ -345,15 +344,8 @@ it('cancels only pending imports and forgets journals whose Pods were deleted', 
   expect(store.listPods().map(pod => pod.id)).toEqual([existing.id])
 })
 
-it('migrates schema 33 with a verified copy and restores unfinished imports closed', async () => {
-  const { root, store } = workspace(); const exported = await packageFixture()
-  for (const table of [...aliasTables, ...sharingTables].reverse()) store.db.exec(`DROP TABLE ${table}`)
-  store.db.exec('DROP TABLE network_gate_item_grants; DROP TABLE secret_requests; DROP TABLE collection_descriptions; DROP TABLE network_choices; PRAGMA user_version=33'); store.close(); stores.splice(stores.indexOf(store), 1)
-  const migrated = new PodDatabase(store.root); stores.push(migrated)
-  expect(migrated.db.prepare('PRAGMA user_version').get()!.user_version).toBe(schemaVersion)
-  expect(readdirSync(store.root).filter(file => file.startsWith('before-v33-'))).toHaveLength(1)
-  migrated.close(); stores.splice(stores.indexOf(migrated), 1)
-  const reopened = new PodDatabase(store.root); stores.push(reopened)
+it('restores unfinished imports closed', async () => {
+  const { root, store: reopened } = workspace(); const exported = await packageFixture()
   const current = new PortableImporter(reopened, new ResourceRegistry(reopened, () => {}), owner, '')
   const pending = randomUUID(); await current.stage(pending, exported.archive)
   const id = randomUUID(); await current.stage(id, exported.archive); current.configure(id, 1, { pods: { fixture: { input_2: 5 } }, compositions: {} }); await current.commit(id, 2)

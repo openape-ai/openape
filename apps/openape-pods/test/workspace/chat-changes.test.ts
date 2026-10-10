@@ -33,7 +33,6 @@ it('applies a change in the selected context directly and records no change revi
   const { store, pods, control, context } = fixture()
   for (const pod of pods) await control.execute(randomUUID(), { action: 'setVariable', podId: pod.id, revision: pod.revision, name: 'mode', value: 'preview', variableRevision: 0 }, new AbortController().signal, context)
   expect(pods.map(pod => new PodVariables(store).list(pod.id).map(item => item.value))).toEqual([['preview'], ['preview']])
-  expect(store.db.prepare('SELECT count(*) AS count FROM control_changes').get()?.count).toBe(0)
 })
 
 it('enforces model context on reads and writes and offers no change decision', async () => {
