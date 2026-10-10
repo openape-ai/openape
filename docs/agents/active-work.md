@@ -1,5 +1,13 @@
 # Active work
 
+## IURIO PR monitor stays disturbed — issue 1456
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1456. Worktree `.claude/worktrees/iurio-pr-monitor-pod-fix-d3a96d`, branch `bugfix/issue-1456-seal-unstarted-domain`, base `8f4e157d`.
+- Cause 1 (product): an `az` call registered its execution domain while run `3535d415` hit the time limit; the main-process callback threw after the worker stored the row, so no guardian wrote the record and recovery saw `registration-missing` with a live owner until the app restarted. `superviseProcess` now seals such a domain with a closed-lease guardian (closed record, exit 125, no fork). Regression: `test/worker/sandbox-domain.test.ts`; the installed native helper was checked to write `confirmed-closed` without executing the command.
+- Cause 2 (Pod script): 41 PRs exceed 128 execution domains per daily full scan, and the failed scan repeated every run. Owner recipe `~/Downloads/IURIO-PR-monitor/pod-script.mjs` now refreshes PRs on a rolling daily basis within a run budget; active script `b4d0b497`.
+- Live recovery: `recover retry` on runs `3535d415` and `ae07203b` released the blocked inputs.
+- Next: merge, signed desktop rollout with paired backup, observe a completed scheduled run, Test Run evidence.
+
 ## Pods consolidation — issue 1455
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1455. Owner-approved plan: https://report.openape.ai/d/01M4GPV3M6H73QA4PTCEHTR0DN; source `.claude/plans/2026-10-09-pods-consolidation/plan.json`.

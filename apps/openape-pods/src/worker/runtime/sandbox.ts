@@ -138,7 +138,11 @@ export async function launchSandbox(helper: string, privateDirectory: string, po
 export async function superviseProcess(helper: string, executable: string, args: string[], workspace: string, environment: Record<string, string>, privateDirectory: string, register?: (path: string, ownerPid: number) => void | Promise<void>, terminal = false): Promise<ProcessDomain> {
   literal(executable); literal(workspace)
   const recordPath = join(privateDirectory, `domain-${randomUUID()}.record`)
-  await register?.(recordPath, process.pid)
+  try { await register?.(recordPath, process.pid) }
+  catch (error) {
+    await sealDomain(helper, recordPath, executable, workspace)
+    throw error
+  }
   const guardian = spawn(helper, [terminal ? 'supervise-terminal-record' : 'supervise-record', recordPath, executable, ...args], { cwd: workspace, env: { HOME: workspace, TMPDIR: workspace, PATH: '/usr/bin:/bin', ...environment }, stdio: terminal ? ['pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe', 'pipe', 'pipe'] })
   const lease = guardian.stdin as Writable
   const channel = guardian.stdio[3] as Duplex
@@ -171,6 +175,14 @@ export async function superviseProcess(helper: string, executable: string, args:
     })
   })
   return { recordPath, guardian, channel, stdout: guardian.stdout as Readable, stderr: guardian.stderr as Readable, processId, completed, cancel: () => { if (!lease.destroyed && !lease.writableEnded) lease.end('X') } }
+}
+// A registration callback can fail after the worker stored the domain, for example when the run is
+// aborted meanwhile. Recovery waits for every stored domain to report quiescence, so the guardian
+// still writes the record: with a closed lease it records the domain as closed before fork and exits.
+async function sealDomain(helper: string, recordPath: string, executable: string, workspace: string): Promise<void> {
+  const guardian = spawn(helper, ['supervise-record', recordPath, executable], { cwd: workspace, env: { PATH: '/usr/bin:/bin' }, stdio: 'ignore' })
+  const code = await new Promise<number | Error>((resolve) => { guardian.once('error', resolve); guardian.once('close', code => resolve(code ?? 128)) })
+  if (code !== 125) console.error('Pod execution domain could not be sealed', code instanceof Error ? code.message : `exit ${code}`)
 }
 export async function verifyExecutable(path: string, expectedHash: string): Promise<void> {
   if (!/^[a-f0-9]{64}$/.test(expectedHash)) throw new Error('Missing executable digest')
