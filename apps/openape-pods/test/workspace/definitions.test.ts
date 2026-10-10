@@ -314,3 +314,18 @@ it('prepares a local definition without renaming or changing the shared publishe
   expect(prepared.definitions.find(item => item.id === local.definitionId)).toMatchObject({ name: 'Local only', versions: [{ version: 1, state: 'legacy' }] })
   expect(prepared.instances.find(item => item.podId !== f.pod.id)).toMatchObject({ definitionId: publishedDefinition.id, version: 2 })
 })
+
+it('prepares a local definition while an unrelated Pod runs and names the own blocking run', async () => {
+  const f = fixture()
+  const lease = (podId: string) => {
+    const runId = randomUUID()
+    f.store.db.prepare('INSERT INTO runs(id,pod_id,script_hash,state,started_at,finished_at,summary,error,checkpoint_revision,assignment_revision) VALUES(?,?,?,?,?,NULL,?,NULL,0,1)').run(runId, podId, f.store.getPod(f.pod.id).activeScript, 'running', Date.now(), 'Running')
+    f.store.db.prepare('INSERT INTO run_leases VALUES(?,?,?,?,NULL)').run(podId, runId, 'synthetic-boot', Date.now())
+    return runId
+  }
+  const command = { type: 'prepareLocal', podId: f.pod.id, expectedScript: f.store.getPod(f.pod.id).activeScript, name: 'Local member', defaults: {} }
+  lease(f.store.createPod({ name: 'Unrelated stuck Pod' }).id)
+  expect((await f.execute(command)).instances.find(item => item.podId === f.pod.id)?.definitionId).toBeTruthy()
+  const own = lease(f.pod.id)
+  await expect(f.execute(command)).rejects.toThrow(`Run ${own} of this Pod is still active`)
+})
