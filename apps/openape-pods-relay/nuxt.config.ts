@@ -20,6 +20,8 @@ export default defineNuxtConfig({
     inboxEnabled: false,
     inboxDatabase: './.data/inbox.sqlite',
     inboxVapidPublicKey: '',
+    inboxVapidPrivateKey: '',
+    inboxPushEnabled: true,
   },
   nitro: { preset: 'node-server' },
 })

@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import InboxShell from '../../components/InboxShell.vue'
+import InboxPushSetting from '../../components/InboxPushSetting.vue'
 import { useInbox } from '../../inbox/client'
+import { disablePush, enablePush, pushState } from '../../inbox/push'
+import type { PushState } from '../../inbox/push'
 import type { InboxDevice } from '../../inbox/client'
 import { chooseLanguage, formatTime, languageChoice, t } from '../../inbox/i18n'
 import type { Language } from '../../inbox/i18n'
@@ -13,10 +16,10 @@ const devices = ref<InboxDevice[]>([])
 const error = ref('')
 const busy = ref(false)
 const version = useRuntimeConfig().app.buildId
-const permission = ref<'granted' | 'denied' | 'default' | 'unavailable'>('unavailable')
+const push = ref<PushState>('unavailable')
+const pushBusy = ref(false)
 const installed = ref(false)
 const language = computed({ get: () => languageChoice.value ?? 'auto', set: (value: Language | 'auto') => chooseLanguage(value === 'auto' ? null : value) })
-const permissionText = computed(() => ({ granted: t('settingsPushGranted'), denied: t('settingsPushDenied'), default: t('settingsPushDefault'), unavailable: t('settingsPushUnavailable') })[permission.value])
 
 // Browsers show only coarse agent strings; the last-use time tells devices apart.
 function deviceName(device: InboxDevice): string {
@@ -37,6 +40,14 @@ async function revoke(device: InboxDevice) {
   catch (cause) { error.value = cause instanceof Error ? cause.message : String(cause) }
   finally { busy.value = false }
 }
+// enablePush asks for permission first, still inside the tap that Safari requires.
+async function togglePush() {
+  if (pushBusy.value || !state.session) return
+  pushBusy.value = true; error.value = ''
+  try { push.value = push.value === 'on' ? await disablePush(inbox) : await enablePush(inbox, state.session.vapidPublicKey) }
+  catch (cause) { error.value = t('settingsPushFailed', { error: cause instanceof Error ? cause.message : String(cause) }) }
+  finally { pushBusy.value = false; await loadDevices() }
+}
 async function logout() {
   busy.value = true; error.value = ''
   try { await inbox.logout() }
@@ -46,7 +57,7 @@ async function logout() {
 
 watch(online, loadDevices)
 onMounted(async () => {
-  permission.value = typeof Notification === 'undefined' || !('PushManager' in window) ? 'unavailable' : Notification.permission
+  push.value = await pushState().catch(() => 'unavailable' as const)
   installed.value = window.matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true
   await loadDevices()
 })
@@ -68,7 +79,7 @@ onMounted(async () => {
       <dt>{{ t('settingsInstalled') }}</dt>
       <dd>{{ installed ? t('settingsInstalledYes') : t('settingsInstalledNo') }}</dd>
       <dt>{{ t('settingsPush') }}</dt>
-      <dd>{{ permissionText }}</dd>
+      <dd><InboxPushSetting :state="push" :busy="pushBusy" :online="online" @toggle="togglePush" /></dd>
       <dt>{{ t('settingsVersion') }}</dt>
       <dd>{{ version }}</dd>
     </dl>
