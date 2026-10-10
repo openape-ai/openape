@@ -1,5 +1,6 @@
 import { inboxOutboxSchema } from './inbox-outbox-schema.ts'
 import { grantLedgerSchema, separateStoredGrants } from './grant-ledger-schema.ts'
+import { sandboxDenySchema } from './sandbox-deny-schema.ts'
 import { upgradeStoredNetworkDefinitions } from './network-format-migration.ts'
 import { networkRoutingSchema } from './network-routing-schema.ts'
 import { definitionSchema } from './definition-schema.ts'
@@ -50,7 +51,7 @@ export interface ProgressInput {
   claims: ClaimInput[]
 }
 export type CommitPoint = 'staged' | 'renamed' | 'beforeCommit' | 'committed'
-export const schemaVersion = 43
+export const schemaVersion = 44
 export const digest = (content: string | Buffer): string => createHash('sha256').update(content).digest('hex')
 
 function record(value: unknown, keys: string[]): asserts value is Record<string, unknown> {
@@ -362,6 +363,7 @@ PRAGMA user_version=27;`)
       if (version < 41) this.db.exec(`${inboxOutboxSchema} PRAGMA user_version=41;`)
       if (version < 42) { upgradeStoredNetworkDefinitions(this.db); this.db.exec('PRAGMA user_version=42;') }
       if (version < 43) { this.db.exec(grantLedgerSchema); separateStoredGrants(this.db); this.db.exec('PRAGMA user_version=43;') }
+      if (version < 44) this.db.exec(`${sandboxDenySchema} PRAGMA user_version=44;`)
     })
   }
 

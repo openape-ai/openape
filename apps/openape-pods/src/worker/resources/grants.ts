@@ -2,7 +2,7 @@ import type { OpenApeCliAuthorizationDetail } from '@openape/core'
 import { cliAuthorizationDetailsCover } from '@openape/grants'
 import { parsePodGrant } from '../../contracts/grants'
 import type { GrantState, PodGrant } from '../../contracts/grants'
-import { effectiveSandboxLevel, parseSandboxLevel } from '../../contracts/sandbox'
+import { effectiveSandboxLevel, parseSandboxDeny, parseSandboxLevel } from '../../contracts/sandbox'
 import type { SandboxLevel, SandboxView } from '../../contracts/sandbox'
 import type { PodDatabase } from '../storage/database'
 
@@ -15,12 +15,16 @@ export type GrantLedgerCommand
     | { type: 'state', podId: string, id: string, state: GrantState, approvedInSession?: boolean }
     | { type: 'released' }
     | { type: 'level', podId: string, source: string, revision: number | null, level: SandboxLevel }
+    | { type: 'deny', podId: string, source: string, revision: number | null, deny: string[] }
     | { type: 'sandbox', podId: string }
     | { type: 'networkResource', networkId: string, revision: number, podId: string, resourceId: string }
     | { type: 'resourceReleased', networkId: string, resourceId: string }
 
 function row(value: Record<string, unknown>): PodGrant {
   return parsePodGrant({ id: value.id, podId: value.pod_id, issuer: value.issuer, subject: value.subject, cliId: value.cli_id, details: JSON.parse(value.details as string), display: value.display, grantType: value.grant_type, state: value.state, origin: value.network_id ? { networkId: value.network_id, revision: value.network_revision } : null, approvedInSession: value.approved_in_session === 1, createdAt: value.created_at, updatedAt: value.updated_at })
+}
+function assertSource(source: string): void {
+  if (source !== 'pod' && !/^network:[a-f0-9-]{36}$/.test(source)) throw new Error('Invalid sandbox source')
 }
 function canonical(details: OpenApeCliAuthorizationDetail[]): string {
   return JSON.stringify(details.map(detail => detail.permission).sort())
@@ -43,6 +47,7 @@ export class GrantLedger {
     if (command.type === 'state') { this.state(command.podId, command.id, command.state, command.approvedInSession); return true }
     if (command.type === 'released') return this.released()
     if (command.type === 'level') { this.level(command.podId, command.source, command.revision, command.level); return this.sandbox(command.podId) }
+    if (command.type === 'deny') { this.deny(command.podId, command.source, command.revision, command.deny); return this.sandbox(command.podId) }
     if (command.type === 'sandbox') return this.sandbox(command.podId)
     if (command.type === 'networkResource') { this.store.getPod(command.podId); this.store.db.prepare('INSERT INTO network_sandbox_resources VALUES(?,?,?,?) ON CONFLICT(network_id,resource_id) DO NOTHING').run(command.networkId, command.revision, command.podId, command.resourceId); return true }
     this.store.db.prepare('DELETE FROM network_sandbox_resources WHERE network_id=? AND resource_id=?').run(command.networkId, command.resourceId)
@@ -107,6 +112,7 @@ export class GrantLedger {
   released(): { grants: PodGrant[], resources: { networkId: string, podId: string, resourceId: string }[] } {
     const archived = 'SELECT id FROM networks WHERE state=\'archived\''
     this.store.db.prepare(`DELETE FROM pod_sandbox WHERE source IN (SELECT 'network:' || id FROM networks WHERE state='archived')`).run()
+    this.store.db.prepare(`DELETE FROM pod_sandbox_deny WHERE source IN (SELECT 'network:' || id FROM networks WHERE state='archived')`).run()
     const grants = this.store.db.prepare(`SELECT * FROM pod_grants WHERE network_id IN (${archived}) AND state IN ('pending','approved') ORDER BY rowid LIMIT 64`).all().map(row)
     const resources = this.store.db.prepare(`SELECT network_id,pod_id,resource_id FROM network_sandbox_resources WHERE network_id IN (${archived}) ORDER BY rowid LIMIT 64`).all().map(item => ({ networkId: item.network_id as string, podId: item.pod_id as string, resourceId: item.resource_id as string }))
     return { grants, resources }
@@ -114,16 +120,27 @@ export class GrantLedger {
 
   level(podId: string, source: string, revision: number | null, level: SandboxLevel): void {
     this.store.getPod(podId)
-    if (source !== 'pod' && !/^network:[a-f0-9-]{36}$/.test(source)) throw new Error('Invalid sandbox source')
+    assertSource(source)
     parseSandboxLevel(level)
     this.store.db.prepare('INSERT INTO pod_sandbox VALUES(?,?,?,?) ON CONFLICT(pod_id,source) DO UPDATE SET level=excluded.level,network_revision=excluded.network_revision').run(podId, source, revision, level)
   }
 
-  /** A network's level counts only while that network is not archived and still at the revision that declared it. */
+  /** Replaces the denylist of one source; an empty list removes it. */
+  deny(podId: string, source: string, revision: number | null, deny: string[]): void {
+    this.store.getPod(podId)
+    assertSource(source)
+    const paths = parseSandboxDeny(deny)
+    if (!paths.length) { this.store.db.prepare('DELETE FROM pod_sandbox_deny WHERE pod_id=? AND source=?').run(podId, source); return }
+    this.store.db.prepare('INSERT INTO pod_sandbox_deny VALUES(?,?,?,?) ON CONFLICT(pod_id,source) DO UPDATE SET paths=excluded.paths,network_revision=excluded.network_revision').run(podId, source, revision, JSON.stringify(paths))
+  }
+
+  /** A network's level and denylist count only while that network is not archived and still at the revision that declared them. */
   sandbox(podId: string): SandboxView {
     this.store.getPod(podId)
-    const sources = this.store.db.prepare(`SELECT s.source,s.level FROM pod_sandbox s LEFT JOIN networks n ON n.id=substr(s.source,9) AND s.source LIKE 'network:%'
-      WHERE s.pod_id=? AND (s.source='pod' OR (n.state!='archived' AND n.revision=s.network_revision)) ORDER BY s.source`).all(podId).map(item => ({ source: item.source as string, level: parseSandboxLevel(item.level) }))
-    return { level: effectiveSandboxLevel(sources.map(item => item.level)), sources }
+    const current = (table: string, column: string) => this.store.db.prepare(`SELECT s.source,s.${column} AS value FROM ${table} s LEFT JOIN networks n ON n.id=substr(s.source,9) AND s.source LIKE 'network:%'
+      WHERE s.pod_id=? AND (s.source='pod' OR (n.state!='archived' AND n.revision=s.network_revision)) ORDER BY s.source`).all(podId)
+    const sources = current('pod_sandbox', 'level').map(item => ({ source: item.source as string, level: parseSandboxLevel(item.value) }))
+    const denySources = current('pod_sandbox_deny', 'paths').map(item => ({ source: item.source as string, deny: parseSandboxDeny(JSON.parse(item.value as string)) }))
+    return { level: effectiveSandboxLevel(sources.map(item => item.level)), sources, deny: [...new Set(denySources.flatMap(item => item.deny))], denySources }
   }
 }

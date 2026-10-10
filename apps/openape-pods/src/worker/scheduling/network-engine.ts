@@ -442,8 +442,9 @@ export class NetworkEngine {
       if (preview.issues.length) throw new Error(preview.issues.join('; '))
       assertNetworkQuota(this.store, 16384)
       this.store.db.prepare('UPDATE networks SET state=\'archived\',activation_epoch=activation_epoch+1 WHERE id=?').run(definition.id)
-      // The sandbox level the network gave its members ends with it; its grants and resources are released by main.
+      // The sandbox level and denylist the network gave its members end with it; its grants and resources are released by main.
       this.store.db.prepare('DELETE FROM pod_sandbox WHERE source=?').run(`network:${definition.id}`)
+      this.store.db.prepare('DELETE FROM pod_sandbox_deny WHERE source=?').run(`network:${definition.id}`)
       this.store.db.prepare('UPDATE network_process_previews SET consumed_at=coalesce(consumed_at,?),state=\'stopped\' WHERE network_id=? AND state=\'preview\'').run(Date.now(), definition.id)
       this.trace(definition.id, 'network-archived-reviewed', { fingerprint: expectedFingerprint, revision: definition.revision, message: 'Network archived after settlement review. Identities, history, retained legacy items and effect evidence remain preserved; no execution can resume.' })
     })
