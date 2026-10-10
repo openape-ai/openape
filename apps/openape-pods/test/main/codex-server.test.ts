@@ -9,7 +9,6 @@ import type { CodexRequest } from '../../src/contracts/codex'
 import { CodexControlServer } from '../../src/main/codex/server'
 import type { McpSessionGate } from '../../src/main/codex/server'
 import { McpOwnerSessions } from '../../src/main/codex/session'
-import { SignInEnded } from '../../src/main/connections/owner-session'
 
 // The socket the Codex MCP shim talks to: private to the user, one
 // pods_control request per line, and nothing reaches the worker without the
@@ -235,25 +234,19 @@ it('hands the owner identity only to calls of its own session and discards it wh
   expect(declined.owner(other)).toBeNull()
 })
 
-// The three sign-in paths share one session model: the apes CLI proof opens it silently, the phone confirmation
-// without the app dialog, and the browser sign-in keeps the native confirmation as the last fallback.
-function paths(options: { apes?: () => Promise<unknown>, phone?: boolean } = {}) {
+// Both sign-in paths share one session model: the apes CLI proof opens it silently, the browser sign-in with
+// the native confirmation is the fallback, and the session action reports either to the polling tool user.
+function paths(options: { apes?: () => Promise<unknown> } = {}) {
   let now = 1_000_000
   const issued: { active: boolean, close: ReturnType<typeof vi.fn> }[] = []
-  const owner = () => { const value = { active: true, close: vi.fn(() => { value.active = false }) }; issued.push(value); return value }
+  const owner = () => { const value = { active: true, close: vi.fn(async () => { value.active = false }) }; issued.push(value); return value }
   let loggedIn = true
   const apes = vi.fn(async () => options.apes ? options.apes() : loggedIn ? owner() : null)
-  let answer: { resolve: (value: unknown) => void, reject: (error: Error) => void } = { resolve: () => {}, reject: () => {} }
-  const phone = vi.fn(async (_endsAt: number, signal: AbortSignal) => ({
-    link: `https://identity.example.invalid/link?c=${'a'.repeat(64)}`,
-    expiresAt: now + 120000,
-    session: new Promise((resolve, reject) => { answer = { resolve, reject }; signal.addEventListener('abort', () => reject(new Error('Sign-in aborted')), { once: true }) }),
-  }))
   const login = vi.fn(async () => owner())
-  let allow: () => void = () => {}
-  const confirm = vi.fn(() => new Promise<boolean>((resolve) => { allow = () => resolve(true) }))
-  const sessions = new McpOwnerSessions({ apes: apes as never, ...(options.phone ? { phone: phone as never } : {}), login: login as never, confirm, now: () => now })
-  return { sessions, apes, phone, login, confirm, issued, allow: () => allow(), approve: () => answer.resolve(owner()), refuse: (error: Error) => answer.reject(error), advance: (ms: number) => { now += ms }, logout: () => { loggedIn = false } }
+  let answer: (value: boolean) => void = () => {}
+  const confirm = vi.fn(() => new Promise<boolean>((resolve) => { answer = resolve }))
+  const sessions = new McpOwnerSessions({ apes: apes as never, login: login as never, confirm, now: () => now, loginTimeout: 60000 })
+  return { sessions, apes, login, confirm, issued, answer: (value: boolean) => answer(value), advance: (ms: number) => { now += ms }, logout: () => { loggedIn = false } }
 }
 
 it('opens a session from a valid apes login without any dialog and lets the call through', async () => {
@@ -310,46 +303,32 @@ it('falls back when the apes login is refused and never opens a session from it'
   await shim.end()
 })
 
-it('signs in through the phone link without the app dialog and reports pending, signed_in, denied and expired', async () => {
-  const fixture = paths({ phone: true }); fixture.logout()
+it('reports the browser sign-in as pending, signed_in, denied and expired to the polling tool user', async () => {
+  const fixture = paths(); fixture.logout()
   const { endpoint, execute } = await start(undefined, fixture.sessions)
   const shim = client(endpoint)
-  const link = `https://identity.example.invalid/link?c=${'a'.repeat(64)}`
   const refused = await shim.call({ action: 'list' })
-  expect(refused).toMatchObject({ code: 'login_required', status: { state: 'pending', via: 'phone', link, expiresAt: 1_000_000 + 120000 }, error: expect.stringContaining(link) })
-  expect(refused.error).toContain('{"action":"session"} about every 5 seconds')
-  expect(fixture.sessions.phoneRequest()).toEqual({ link, expiresAt: 1_000_000 + 120000 })
-  // An unapproved channel opens nothing, however often the tool user retries or polls.
-  expect(await shim.call({ action: 'list' })).toMatchObject({ code: 'login_required', status: { state: 'pending', link } })
-  expect(await shim.call({ action: 'session' })).toMatchObject({ result: { state: 'pending', via: 'phone', link } })
-  expect(fixture.phone).toHaveBeenCalledOnce()
-  fixture.approve()
-  const secret = await shim.session()
-  expect(await shim.call({ action: 'session' })).toMatchObject({ result: { state: 'signed_in', via: 'phone' } })
-  expect(await shim.call({ action: 'list' }, secret)).toMatchObject({ result: expect.anything() })
-  expect(fixture.confirm).not.toHaveBeenCalled(); expect(fixture.login).not.toHaveBeenCalled()
-  expect(fixture.sessions.phoneRequest()).toBeNull()
-  // A denied and an expired channel leave no session; the next call asks with a new link.
-  for (const outcome of ['denied', 'expired'] as const) {
-    fixture.sessions.end()
-    expect(await shim.call({ action: 'list' })).toMatchObject({ code: 'login_required', status: { state: 'pending' } })
-    fixture.refuse(new SignInEnded(outcome, `The phone confirmation was ${outcome}`))
-    await vi.waitFor(async () => expect(await shim.call({ action: 'session' })).toMatchObject({ result: { state: outcome, via: 'phone', message: `The phone confirmation was ${outcome}` } }))
-    expect(shim.frames.some(frame => frame.id === undefined && 'session' in frame)).toBe(false)
-  }
-  expect(execute).toHaveBeenCalledOnce()
-  await shim.end()
-})
-
-it('uses the browser sign-in with its confirmation when the phone channel cannot be opened', async () => {
-  const fixture = paths({ phone: true }); fixture.logout()
-  fixture.phone.mockRejectedValueOnce(new Error('Connection service rejected the request (429)'))
-  const { endpoint } = await start(undefined, fixture.sessions)
-  const shim = client(endpoint)
-  expect(await shim.call({ action: 'list' })).toMatchObject({ code: 'login_required', status: { state: 'pending', via: 'browser' }, error: expect.stringContaining('confirm the request in the OpenApe Pods app') })
+  expect(refused).toMatchObject({ code: 'login_required', status: { state: 'pending', via: 'browser', expiresAt: 1_000_000 + 60000 } })
+  expect(refused.error).toContain('{"action":"session"} about every 5 seconds until its state is signed_in')
+  expect(await shim.call({ action: 'session' })).toMatchObject({ result: { state: 'pending', via: 'browser' } })
   await vi.waitFor(() => expect(fixture.confirm).toHaveBeenCalledOnce())
-  fixture.allow()
-  await shim.session()
-  expect(await shim.call({ action: 'session' })).toMatchObject({ result: { state: 'signed_in', via: 'browser' } })
+  fixture.answer(true)
+  const secret = await shim.session()
+  expect(await shim.call({ action: 'session' })).toMatchObject({ result: { state: 'signed_in', via: 'browser', expiresAt: 1_000_000 + 3600000 } })
+  expect(await shim.call({ action: 'list' }, secret)).toMatchObject({ result: expect.anything() })
+  // A declined confirmation is denied and leaves no session; the next call asks again.
+  await fixture.sessions.end()
+  expect(await shim.call({ action: 'list' })).toMatchObject({ code: 'login_required', status: { state: 'pending' } })
+  await vi.waitFor(() => expect(fixture.confirm).toHaveBeenCalledTimes(2))
+  fixture.answer(false)
+  await vi.waitFor(async () => expect(await shim.call({ action: 'session' })).toMatchObject({ result: { state: 'denied', via: 'browser', message: expect.stringContaining('declined') } }))
+  // The hour of a session ends as expired.
+  expect(await shim.call({ action: 'list' })).toMatchObject({ code: 'login_required' })
+  await vi.waitFor(() => expect(fixture.confirm).toHaveBeenCalledTimes(3))
+  fixture.answer(true); const next = await shim.session()
+  fixture.advance(3600000)
+  expect(await shim.call({ action: 'session' })).toMatchObject({ result: { state: 'expired', via: 'browser' } })
+  expect(await shim.call({ action: 'list' }, next)).toMatchObject({ code: 'login_required' })
+  expect(execute).toHaveBeenCalledOnce()
   await shim.end()
 })
