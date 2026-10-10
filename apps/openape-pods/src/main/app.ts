@@ -447,7 +447,7 @@ async function start(): Promise<void> {
   updateMenus()
   powerMonitor.on('suspend', () => worker.lifecycle('suspend'))
   powerMonitor.on('resume', () => worker.lifecycle('resume'))
-  worker.start(root)
+  worker.start(root, profileBase)
   if (central) watchCentral(central)
   // Pod notifications wait in the worker outbox until the account inbox acknowledges them.
   setInterval(() => { remote.deliverInbox().catch((error: unknown) => console.error('Could not deliver Pod notifications', error)) }, 15000).unref()

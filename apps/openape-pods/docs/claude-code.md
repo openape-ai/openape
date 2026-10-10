@@ -126,16 +126,25 @@ reachable plus the runtime grant. A network target applies to every member of
 that revision with the network as origin; archiving the network revokes those
 grants and removes what it added. Level `owner` runs the Pod's programs with the
 owner's file and network reach instead of the isolated profile, except the Pods
-profile, `~/.config/apes` and `~/Library/Keychains`, so a Pod program never gets
+folder with every profile and its MCP control socket, `~/.config/apes` and
+`~/Library/Keychains`, so a Pod program never gets
 the owner identity or Pods state; application network hosts and their proxy apply
 only at the isolated level. The Pod's DDISA identity does not change. Places that
 would start code after the run stay read-only at this level, even inside an
 assigned folder: `~/Library/LaunchAgents`, `/Library/LaunchAgents`,
 `/Library/LaunchDaemons`, `/Library/StartupItems`, login items, cron and at jobs,
-shell startup files (zsh, bash, `.profile`, fish), `~/.ssh/authorized_keys`,
-`~/.ssh/config`, `~/Library/Preferences`, the installed `OpenApe Pods.app` in
+shell startup files (zsh, bash, `.profile`, fish, `~/.zsh_shared`), `~/.ssh`,
+`~/.gitconfig`, `~/.config/git`, `~/.npmrc`, `~/.codex` (or `$CODEX_HOME`),
+`~/.claude`, `~/.claude.json` (or `$CLAUDE_CONFIG_DIR`), program folders on the
+owner's PATH (`/opt/homebrew`, `/usr/local`, `~/.local/bin`, `~/Library/pnpm`),
+`~/Library/Preferences`, the installed `OpenApe Pods.app` in
 `/Applications` or `~/Applications` and the Pods rollback copy, together with the
-folders leading to them. The macOS security service stays reachable on purpose:
+folders leading to them, both as written and as resolved through links. Programs
+cannot connect to Unix sockets under the protected paths, such as the Pods MCP
+control socket, nor reach the macOS services that register login items and
+background tasks, nor write preferences through `defaults`. This is best-effort
+protection against persistence, not a complete boundary; the isolated level is
+the security boundary. The macOS security service stays reachable on purpose:
 programs such as `gh` read their own tokens from the login keychain through it, so
 an owner-level program can read keychain items the owner's keychain access rules
 release to it; only the keychain files themselves are closed. Use the owner level
