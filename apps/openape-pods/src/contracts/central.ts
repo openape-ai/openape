@@ -52,9 +52,12 @@ export interface CentralPod {
 /**
  * What the desktop publishes: the workspace and Pod views plus the managed files they reference. `blobs` names the
  * stored scripts and sources of published Pods; the desktop mirrors them as `artifacts` and never publishes the list.
+ * `schema` is the desktop's storage schema, published as the `schema` part that relays before issue 1455 (M8)
+ * require; it keeps a relay rollback working until that window closes.
  */
 export interface CentralSnapshot {
   version: 1
+  schema: number
   workspace: WorkspaceState
   pods: CentralPod[]
   artifacts: { podId: string, path: string, hash: string, size: number }[]
@@ -168,7 +171,8 @@ export function commandPodIds(command: CentralCommand, snapshot: { workspace: { 
 
 export function parseCentralSnapshot(value: unknown): CentralSnapshot {
   const item = centralObject(value)
-  if (item.version !== 1 || Object.keys(item).some(key => !['version', 'workspace', 'pods', 'artifacts', 'blobs'].includes(key))) throw new Error('Unsupported workspace snapshot')
+  if (item.version !== 1 || Object.keys(item).some(key => !['version', 'schema', 'workspace', 'pods', 'artifacts', 'blobs'].includes(key))) throw new Error('Unsupported workspace snapshot')
+  centralRevision(item.schema)
   const workspace = parseWorkspace(item.workspace)
   if (workspace.pods.length > 100 || !Array.isArray(item.pods) || item.pods.length !== workspace.pods.length) throw new Error('Invalid workspace inventory')
   const seen = new Set<string>()

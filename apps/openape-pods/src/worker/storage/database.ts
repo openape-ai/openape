@@ -1,6 +1,6 @@
 import { assertIntegrity } from './integrity.ts'
 import { baselineRows, baselineSchema, schemaVersion } from './schema.ts'
-import { assertSupportedSchema, upgradeToBaseline } from './upgrade.ts'
+import { assertSupportedSchema, assertUpgradable, upgradeToBaseline } from './upgrade.ts'
 import type { GraphContract } from '../../contracts/graphs.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, statfsSync, writeFileSync } from 'node:fs'
@@ -112,8 +112,14 @@ export class PodDatabase {
       this.transaction(() => this.db.exec(`${baselineSchema}${baselineRows}PRAGMA user_version=${schemaVersion};`))
       return
     }
+    // Refuse an unsupported database before writing a full copy of it on every start.
+    assertUpgradable(this.db)
     const backup = join(this.root, `before-v${version}-${randomUUID()}.sqlite`)
     this.db.prepare('VACUUM INTO ?').run(backup); chmodSync(backup, 0o600)
+    const copy = openSync(backup, 'r')
+    try { fsyncSync(copy) }
+    finally { closeSync(copy) }
+    syncDirectory(this.root)
     const saved = new DatabaseSync(backup, { readOnly: true })
     try {
       if (saved.prepare('PRAGMA quick_check').get()?.quick_check !== 'ok' || saved.prepare('PRAGMA user_version').get()?.user_version !== version) throw new Error('Pre-upgrade database backup failed verification')

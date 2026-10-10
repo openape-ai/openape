@@ -12,8 +12,9 @@ import { centralId, centralMaxBytes, centralObject, centralRevision, legacyCentr
 import type { CentralPod, CentralSnapshot } from './central'
 
 // Format 2 publishes a snapshot as content-addressed parts. Only parts whose hash
-// changed travel; the manifest digest replaces the full-snapshot hash. `schema` and
-// `table/` parts come only from desktops before issue 1455 (M8); nothing reads them.
+// changed travel; the manifest digest replaces the full-snapshot hash. Nothing reads the
+// `schema` part; relays before issue 1455 (M8) require it. `table/` parts come only from
+// desktops before M8.
 export const centralFormat = 2
 /** Rows per legacy `table/` part (desktops before issue 1455, M8). */
 export const centralChunkRows = 16
@@ -30,7 +31,7 @@ export function manifestDigest(manifest: CentralManifest): string {
 }
 
 export function splitSnapshot(snapshot: CentralSnapshot): CentralParts {
-  const parts: CentralParts = new Map<string, unknown>([['workspace', snapshot.workspace], ['artifacts', snapshot.artifacts]])
+  const parts: CentralParts = new Map<string, unknown>([['workspace', snapshot.workspace], ['artifacts', snapshot.artifacts], ['schema', snapshot.schema]])
   for (const pod of snapshot.pods) {
     const { versions, history, runs: { runs, events: _events, ...view }, ...rest } = pod
     parts.set(`pod/${pod.id}`, { ...rest, runs: { ...view, runIds: runs.map(run => run.id) } } satisfies PodPart)
