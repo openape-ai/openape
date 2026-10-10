@@ -56,8 +56,10 @@ const registrationServices = '(global-name "com.apple.xpc.smd") (global-name "co
  * state and runtime allowed again, then writes to the persistence locations denied (the last matching rule wins, so
  * no assigned folder reopens them). Seatbelt checks a Unix socket connection as network access, not as file access, so
  * the sockets under the protected paths (such as the Pods MCP control socket) are closed separately; the isolated level
- * allows no Unix socket at all. The services that register login items and background tasks stay unreachable. Network
- * reach is the owner's as well, so the application network hosts and their proxy only apply at the isolated level.
+ * allows no Unix socket at all. The services that register login items and background tasks stay unreachable.
+ * `defaults write` reaches the preference files through cfprefsd, which refuses the write only with both the file and
+ * the preference rule denied. This is best-effort protection against persistence; the isolated level is the boundary.
+ * Network reach is the owner's as well, so the application network hosts and their proxy only apply at the isolated level.
  */
 function ownerPolicy(policy: RuntimePolicy, executable: string): string {
   const protectedPaths = policy.reach?.protectedPaths ?? []
@@ -69,7 +71,7 @@ function ownerPolicy(policy: RuntimePolicy, executable: string): string {
   const reads = [...(policy.readDirectories ?? []), ...policy.runtimeDirectories].map(path => `(subpath ${literal(path)})`).join(' ')
   const files = [executable, ...policy.readFiles.map(literal)].map(path => `(literal ${path})`).join(' ')
   // The folders on the way to each location stay closed as well, so a location cannot be moved aside and replaced.
-  const ancestors = [...new Set(persistence.flatMap(path => path.split('/').slice(1, -1).map((_, index, parts) => `/${parts.slice(0, index + 1).join('/')}`)))]
+  const ancestors = [...new Set([...protectedPaths, ...persistence].flatMap(path => path.split('/').slice(1, -1).map((_, index, parts) => `/${parts.slice(0, index + 1).join('/')}`)))]
   const persistent = [...persistence.map(path => `(subpath ${literal(path)})`), ...ancestors.map(path => `(literal ${literal(path)})`)].join(' ')
   return `(version 1)
 (allow default)
@@ -80,6 +82,7 @@ function ownerPolicy(policy: RuntimePolicy, executable: string): string {
 (deny network-outbound ${sockets})
 (deny mach-lookup ${registrationServices})
 (deny job-creation)
+(deny user-preference-write)
 `
 }
 
@@ -87,10 +90,12 @@ const canonical = (path: string) => existsSync(path) ? realpathSync(path) : path
 /** A path as written and as resolved: the resolved form closes access through links, the written form closes replacing a link. */
 const forms = (path: string) => [...new Set([path, canonical(path)])]
 
-/** What the owner level never reaches: this Pods profile (and the base that holds all profiles), the owner's apes login and the keychains. */
-export function ownerProtectedPaths(profileRoot: string, home: string): string[] {
-  const base = join(canonical(profileRoot), '..')
-  const paths = [profileRoot, ...(existsSync(join(base, 'selected-profile.json')) ? [base] : []), join(home, '.config/apes'), join(home, 'Library/Keychains')]
+/**
+ * What the owner level never reaches: the Pods base folder that holds every profile, the profile selection and the
+ * MCP control socket, this Pods profile, the owner's apes login and the keychains.
+ */
+export function ownerProtectedPaths(profileRoot: string, profileBase: string, home: string): string[] {
+  const paths = [profileBase, profileRoot, join(home, '.config/apes'), join(home, 'Library/Keychains')]
   return [...new Set(paths.flatMap(forms))]
 }
 
