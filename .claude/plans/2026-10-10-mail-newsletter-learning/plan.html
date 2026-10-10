@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>Newsletter-Absender aus deinen Entscheidungen lernen</title><script id="openape-report" type="application/json">{"category":"Plans","tags":[],"metadata":{"plans.status":"active"}}</script><script id="openape-plan-source" type="application/json">{"schema":"openape.plan/2","language":"en","title":"Learn newsletter senders from owner choices","goal":"Stop asking about senders the owner has repeatedly marked as newsletters.","summary":"Pods gives a network member read access to its network's owner choices. Categorisation routes a sender to the newsletter batch after two consistent newsletter choices; any other choice cancels the rule. Archiving still needs the IdP approval.","problem":{"statement":"Categorisation never sees the owner's gate choices, so the same senders are asked about again and again (117 newsletter choices for 35 senders).","impact":"The owner repeats the same decision many times, and the decision list stays noisy.","approach":"Add a read-only network port for owner choices and derive per-sender rules in Categorisation; declared feedback is not allowed with routing gates.","outcome":"Mail from learned senders goes straight to the newsletter batch; the owner only confirms the archive approval."},"status":"active","revision":1,"milestones":[{"id":"port","title":"Read owner choices from a network member","goal":"Expose the network's own owner choices to its member scripts without changing the network definition.","status":"planned","acceptance":["context.network.choices({gate, limit}) returns the newest owner choices of the caller's network with option, time and the item data; it is read-only and limited to 1000 entries.","A test shows that another network's choices are never returned."],"rollback":"Remove the port; members that do not call it are unaffected."},{"id":"rules","title":"Learn newsletter senders in Categorisation","goal":"Route learned senders directly to the newsletter batch.","status":"planned","acceptance":["A sender with at least two newsletter choices and no other choice is routed to mail.newsletter with a visible reason.","Any keep, invoice or reply choice for the sender cancels the rule; security alerts and protected contacts are never learned.","The run summary lists how many messages were routed by learned rules."],"rollback":"Re-pin the previous Categorisation script with updateMemberScript."},{"id":"rollout","title":"Release and verify","goal":"Install the signed desktop build and observe the live network.","status":"planned","acceptance":["Signed desktop build with paired backup; Categorisation is re-pinned without a new network revision.","Live Intake runs route mail from learned senders without a choice; the archive approval batch is unchanged.","Evidence is published as a Test Run."],"rollback":"Restore the paired backup and the previous member script."}],"approval":{"by":"Patrick Hofmann","date":"2026-10-10","reference":"Owner in chat: \"Du hast mein Go!\" on the proposal (threshold 2, exact sender addresses, archive approval unchanged).","target":{"revision":1},"scope":"Learning newsletter senders in the Delta Mind mail network. The mechanism changed from a feedback channel to a read-only choices port because feedback transitions are not allowed with routing gates; the owner-facing behaviour is unchanged."},"decisions":[{"title":"Read port instead of feedback","description":"Networks with routing gates reject feedback transitions, so Categorisation reads the owner choices of its own network instead.","status":"accepted","reference":"apps/openape-pods/src/contracts/networks.ts validateNetworkRoutes"},{"title":"Threshold and scope","description":"Two consistent newsletter choices per exact sender address; any other choice cancels the rule.","status":"accepted","reference":"Owner approval in chat on October 10, 2026."}],"risks":[{"title":"A sender sometimes sends important mail","mitigation":"One keep choice cancels the rule; archiving still needs the IdP approval, so nothing is moved without the owner."}],"sections":[{"id":"issue","title":"Issue","body":"[Issue 1457](https://repos.openape.ai/patrick/monorepo/issues/1457)","placement":"before-details"}],"translations":{"defaultLanguage":"de","entries":[{"path":"title","source":"Learn newsletter senders from owner choices","text":"Newsletter-Absender aus deinen Entscheidungen lernen"},{"path":"goal","source":"Stop asking about senders the owner has repeatedly marked as newsletters.","text":"Nicht mehr nach Absendern fragen, die du wiederholt als Newsletter markiert hast."},{"path":"summary","source":"Pods gives a network member read access to its network's owner choices. Categorisation routes a sender to the newsletter batch after two consistent newsletter choices; any other choice cancels the rule. Archiving still needs the IdP approval.","text":"Pods gibt einem Netzmitglied Lesezugriff auf deine Entscheidungen in seinem Netz. Die Kategorisierung leitet einen Absender nach zwei übereinstimmenden Newsletter-Entscheidungen direkt in den Newsletter-Stapel; jede andere Wahl hebt die Regel auf. Archivieren braucht weiter die IdP-Freigabe."},{"path":"problem.statement","source":"Categorisation never sees the owner's gate choices, so the same senders are asked about again and again (117 newsletter choices for 35 senders).","text":"Die Kategorisierung sieht deine Entscheidungen nie, deshalb wird immer wieder nach denselben Absendern gefragt (117 Newsletter-Entscheidungen für 35 Absender)."},{"path":"problem.impact","source":"The owner repeats the same decision many times, and the decision list stays noisy.","text":"Du triffst dieselbe Entscheidung viele Male, und die Entscheidungsliste bleibt unübersichtlich."},{"path":"problem.approach","source":"Add a read-only network port for owner choices and derive per-sender rules in Categorisation; declared feedback is not allowed with routing gates.","text":"Eine Lese-Schnittstelle für deine Entscheidungen im Netz ergänzen und daraus Regeln pro Absender ableiten; eine deklarierte Rückmeldung ist mit Entscheidungsfeldern nicht erlaubt."},{"path":"problem.outcome","source":"Mail from learned senders goes straight to the newsletter batch; the owner only confirms the archive approval.","text":"Mail gelernter Absender landet direkt im Newsletter-Stapel; du bestätigst nur noch die Archiv-Freigabe."},{"path":"milestones.0.title","source":"Read owner choices from a network member","text":"Entscheidungen aus einem Netzmitglied lesen"},{"path":"milestones.0.goal","source":"Expose the network's own owner choices to its member scripts without changing the network definition.","text":"Die Entscheidungen des eigenen Netzes für Mitglieds-Scripts lesbar machen, ohne die Netzdefinition zu ändern."},{"path":"milestones.0.acceptance.0","source":"context.network.choices({gate, limit}) returns the newest owner choices of the caller's network with option, time and the item data; it is read-only and limited to 1000 entries.","text":"context.network.choices({gate, limit}) liefert die neuesten Entscheidungen des eigenen Netzes mit Option, Zeitpunkt und Eintragsdaten; nur lesend und auf 1000 Einträge begrenzt."},{"path":"milestones.0.acceptance.1","source":"A test shows that another network's choices are never returned.","text":"Ein Test zeigt, dass Entscheidungen anderer Netze nie geliefert werden."},{"path":"milestones.0.rollback","source":"Remove the port; members that do not call it are unaffected.","text":"Schnittstelle entfernen; Mitglieder, die sie nicht nutzen, sind nicht betroffen."},{"path":"milestones.1.title","source":"Learn newsletter senders in Categorisation","text":"Newsletter-Absender in der Kategorisierung lernen"},{"path":"milestones.1.goal","source":"Route learned senders directly to the newsletter batch.","text":"Gelernte Absender direkt in den Newsletter-Stapel leiten."},{"path":"milestones.1.acceptance.0","source":"A sender with at least two newsletter choices and no other choice is routed to mail.newsletter with a visible reason.","text":"Ein Absender mit mindestens zwei Newsletter-Entscheidungen und keiner anderen Wahl geht mit sichtbarer Begründung nach mail.newsletter."},{"path":"milestones.1.acceptance.1","source":"Any keep, invoice or reply choice for the sender cancels the rule; security alerts and protected contacts are never learned.","text":"Jede Wahl „Behalten“, „Rechnung“ oder „Antwort“ für den Absender hebt die Regel auf; Sicherheitsmeldungen und geschützte Kontakte werden nie gelernt."},{"path":"milestones.1.acceptance.2","source":"The run summary lists how many messages were routed by learned rules.","text":"Die Run-Zusammenfassung zeigt, wie viele Mails über gelernte Regeln geleitet wurden."},{"path":"milestones.1.rollback","source":"Re-pin the previous Categorisation script with updateMemberScript.","text":"Das vorherige Kategorisierungs-Script mit updateMemberScript wieder anheften."},{"path":"milestones.2.title","source":"Release and verify","text":"Ausliefern und prüfen"},{"path":"milestones.2.goal","source":"Install the signed desktop build and observe the live network.","text":"Signierten Desktop-Build installieren und das Live-Netz beobachten."},{"path":"milestones.2.acceptance.0","source":"Signed desktop build with paired backup; Categorisation is re-pinned without a new network revision.","text":"Signierter Desktop-Build mit gepaartem Backup; die Kategorisierung wird ohne neue Netzrevision neu angeheftet."},{"path":"milestones.2.acceptance.1","source":"Live Intake runs route mail from learned senders without a choice; the archive approval batch is unchanged.","text":"Live-Intake-Runs leiten Mail gelernter Absender ohne Rückfrage weiter; der Archiv-Freigabestapel bleibt unverändert."},{"path":"milestones.2.acceptance.2","source":"Evidence is published as a Test Run.","text":"Nachweise werden als Test Run veröffentlicht."},{"path":"milestones.2.rollback","source":"Restore the paired backup and the previous member script.","text":"Gepaartes Backup und vorheriges Mitglieds-Script wiederherstellen."},{"path":"decisions.0.title","source":"Read port instead of feedback","text":"Lese-Schnittstelle statt Rückmeldung"},{"path":"decisions.0.description","source":"Networks with routing gates reject feedback transitions, so Categorisation reads the owner choices of its own network instead.","text":"Netze mit Entscheidungsfeldern lehnen Rückmeldungen ab, deshalb liest die Kategorisierung die Entscheidungen ihres eigenen Netzes."},{"path":"decisions.1.title","source":"Threshold and scope","text":"Schwelle und Umfang"},{"path":"decisions.1.description","source":"Two consistent newsletter choices per exact sender address; any other choice cancels the rule.","text":"Zwei übereinstimmende Newsletter-Entscheidungen pro exakter Absenderadresse; jede andere Wahl hebt die Regel auf."},{"path":"risks.0.title","source":"A sender sometimes sends important mail","text":"Ein Absender schickt manchmal Wichtiges"},{"path":"risks.0.mitigation","source":"One keep choice cancels the rule; archiving still needs the IdP approval, so nothing is moved without the owner.","text":"Eine Wahl „Behalten“ hebt die Regel auf; Archivieren braucht weiter die IdP-Freigabe, ohne dich wird nichts verschoben."},{"path":"sections.0.title","source":"Issue","text":"Issue"},{"path":"sections.0.body","source":"[Issue 1457](https://repos.openape.ai/patrick/monorepo/issues/1457)","text":"[Issue 1457](https://repos.openape.ai/patrick/monorepo/issues/1457)"}]}}</script><style>
+#report-document{--paper:light-dark(#fbfaf7,#171b1b);--ink:light-dark(#202b29,#e7eeea);--quiet:light-dark(#64716a,#a4b2a9);--line:light-dark(#d9dfd7,#35413c);--surface:light-dark(#fff,#202723);--wash:light-dark(#f0f3ed,#28332c);--forest:light-dark(#235943,#9cc7ac);--alert:light-dark(#a3452a,#f3af8f);--alert-bg:light-dark(#fbede5,#39291f);--good-bg:light-dark(#e9f1e8,#20372a);font:14px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--ink);overflow-wrap:anywhere}
+#report-document *{box-sizing:border-box}
+#report-document button,#report-document summary{font:inherit;cursor:pointer}
+#report-document button{color:inherit}
+#report-document button:focus-visible,#report-document summary:focus-visible{outline:3px solid var(--forest);outline-offset:4px}
+#report-document .document{background:var(--paper);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+#report-document [hidden]{display:none!important}
+#report-document .masthead{padding:15px 30px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:12px;color:var(--quiet)}
+#report-document .brand{font-weight:600;color:var(--ink);display:flex;align-items:center;gap:9px;letter-spacing:-.2px}
+#report-document .brand-mark{width:9px;height:9px;background:var(--forest);border-radius:50%}
+#report-document .page{padding:var(--page-space,36px);max-width:980px;margin:auto}
+#report-document .eyebrow{color:var(--forest);font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:600;margin:0 0 12px;display:flex;align-items:center;gap:10px}
+#report-document .eyebrow:before{content:'';width:24px;height:1px;background:var(--forest)}
+#report-document h1{font-family:Georgia,'Times New Roman',serif;font-size:clamp(30px,4.5vw,42px);line-height:1.12;font-weight:400;letter-spacing:-1.2px;margin:0 0 15px;max-width:650px}
+#report-document h2{font-size:17px;line-height:1.3;font-weight:600;letter-spacing:-.25px;margin:0 0 15px}
+#report-document h3{font-size:14px;font-weight:600;margin:0 0 6px}
+#report-document p{margin:0 0 12px}
+#report-document .lead{font-size:15px;line-height:1.65;color:var(--quiet);max-width:620px;margin-bottom:23px}
+#report-document .meta{display:flex;flex-wrap:wrap;gap:7px 20px;color:var(--quiet);font-size:12px;margin-bottom:27px}
+#report-document code{font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere}
+#report-document .verdict{display:flex;gap:14px;align-items:flex-start;padding:18px 20px;border-radius:6px;background:var(--alert-bg);color:var(--alert);margin-bottom:27px}
+#report-document .verdict i{flex-shrink:0;margin-top:3px}
+#report-document .verdict strong{display:block;font-weight:600;margin-bottom:3px}
+#report-document .verdict p{font-size:13px;margin:0}
+#report-document .numbers{display:flex;gap:28px;flex-wrap:wrap;margin:0 0 28px;padding-bottom:23px;border-bottom:1px solid var(--line)}
+#report-document .number{font-size:25px;font-weight:400;letter-spacing:-1px;display:block;line-height:1.3}
+#report-document .metric-label{font-size:12px;color:var(--quiet)}
+#report-document .good{color:var(--forest)}
+#report-document .bad{color:var(--alert)}
+#report-document .columns{display:grid;grid-template-columns:minmax(0,1fr) 225px;gap:34px}
+#report-document .section-heading{display:flex;justify-content:space-between;gap:15px;align-items:baseline;margin-bottom:12px}
+#report-document .section-heading h2{margin:0}
+#report-document .small{font-size:12px;color:var(--quiet)}
+#report-document .test{border-top:1px solid var(--line)}
+#report-document .test:last-child{border-bottom:1px solid var(--line)}
+#report-document summary{padding:14px 0;list-style:none;display:flex;gap:12px;align-items:center}
+#report-document summary::-webkit-details-marker{display:none}
+#report-document .test-name{flex:1;min-width:0;font-weight:500}
+#report-document .indicator{font-size:14px;width:17px;flex-shrink:0}
+#report-document .chevron{color:var(--quiet);transition:transform .15s}
+#report-document details[open]>summary .chevron{transform:rotate(90deg)}
+#report-document .test-body{padding:0 0 20px 29px;font-size:13px}
+#report-document .error{background:var(--surface);padding:12px 14px;border-left:2px solid var(--alert);margin:8px 0 14px;color:var(--ink)}
+#report-document .error span{display:block}
+#report-document .step{display:flex;gap:10px;margin:8px 0;color:var(--quiet)}
+#report-document .sample-window{border:1px solid var(--line);border-radius:5px;overflow:hidden;background:var(--surface);margin-top:15px}
+#report-document .sample-toolbar{font-size:11px;padding:9px 12px;background:var(--wash);display:flex;gap:5px;align-items:center}
+#report-document .sample-toolbar span{margin-left:auto;color:var(--quiet)}
+#report-document aside{border-left:1px solid var(--line);padding-left:24px}
+#report-document aside section+section{margin-top:27px;padding-top:23px;border-top:1px solid var(--line)}
+#report-document dl{margin:0;font-size:12px}
+#report-document dt{color:var(--quiet);margin-top:12px}
+#report-document dd{margin:2px 0 0}
+#report-document .foot{margin-top:32px;padding-top:15px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--quiet)}
+#report-document .decision{padding:21px;background:var(--wash);margin-bottom:28px;border-radius:6px}
+#report-document .decision-label{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--forest);margin-bottom:8px}
+#report-document .decision h2{font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:23px;margin-bottom:10px}
+#report-document .decision p{font-size:13px;margin-bottom:10px}
+#report-document .decisions{margin:15px 0 0;border-top:1px solid var(--line);padding-top:14px;font-size:12px}
+#report-document .milestone{border-top:1px solid var(--line)}
+#report-document .milestone:last-child{border-bottom:1px solid var(--line)}
+#report-document .milestone-number{color:var(--quiet);font:12px ui-monospace,monospace;width:25px}
+#report-document .milestone-body{padding:0 0 18px 37px;font-size:13px;color:var(--quiet)}
+#report-document ul{padding-left:17px;margin:8px 0 14px}
+#report-document li{margin-bottom:5px}
+#report-document .proof{padding:10px 12px;background:var(--surface);border-radius:4px;font-size:12px;color:var(--ink)}
+#report-document .status{font-size:11px;border:1px solid var(--line);border-radius:4px;padding:3px 8px;white-space:nowrap;font-weight:400;color:var(--quiet)}
+#report-document .scope{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:24px 0}
+#report-document .scope p{font-size:13px;color:var(--quiet)}
+#report-document .progress-line{height:3px;background:var(--line);margin:12px 0 8px}
+#report-document .risk{padding-top:14px;margin-top:15px;border-top:1px solid var(--line);font-size:12px}
+#report-document .risk p{color:var(--quiet);margin:6px 0 0}
+#report-document .approval-note{color:var(--quiet);font-size:12px;padding-top:14px;border-top:1px solid var(--line);margin-top:15px}
+@media(max-width:630px){#report-document .page{padding:24px 18px}#report-document .masthead{padding:13px 18px}#report-document .columns{grid-template-columns:1fr;gap:25px}#report-document aside{border-left:0;padding:22px 0 0;border-top:1px solid var(--line)}#report-document .numbers{gap:22px}#report-document .preview-bar{padding-right:0}#report-document .scope{grid-template-columns:1fr;gap:8px}#report-document .test-body{padding-left:0}#report-document .prototype-label{width:100%}#report-document h1{font-size:32px}#report-document .meta{gap:6px 14px}}
+@media print{#report-document .preview-bar{display:none}#report-document .document{border:0}#report-document .columns{grid-template-columns:1fr}#report-document details{break-inside:avoid}}
+
+html{color-scheme:light dark;background:light-dark(#f3f3ef,#101513)}body{margin:0;padding:clamp(12px,3vw,32px);max-width:1120px;margin-inline:auto}#report-document img{display:block;max-width:100%;height:auto}#report-document a{color:var(--forest)}#report-document pre{white-space:pre-wrap;overflow-wrap:anywhere}#report-document .markdown>:last-child{margin-bottom:0}#report-document summary{min-height:44px}#report-document .screenshot{margin:14px 0}#report-document .screenshot figcaption{margin-top:8px;font-size:12px;color:var(--quiet)}@media print{body{padding:0}#report-document details>div,#report-document details>section{display:block!important}#report-document summary{list-style:none}#report-document .document{overflow:visible}#report-document .page{max-width:none;padding:0}#report-document .masthead{padding-left:0}#report-document img{max-height:80vh;object-fit:contain}}
+@media print{html{color-scheme:light}#report-document details::details-content{content-visibility:visible;height:auto}#report-document aside{border-left:0;padding-left:0}#report-document .chevron{display:none}}
+
+#report-document .verdict.good{background:var(--good-bg);color:var(--forest)}
+
+#report-document .changelog{margin-top:32px;padding-top:20px;border-top:1px solid var(--line);font-size:12px;color:var(--quiet)}
+/* Draft additions on top of templates/document.css */
+#report-document{--warn:light-dark(#7a5a00,#f0d27a);--warn-bg:light-dark(#fdf5dc,#332b14);--warn-line:light-dark(#e5c35e,#6b5a24);--sample-a:light-dark(#fff4cc,#2f2915);--sample-b:light-dark(#fbe9a8,#3a3218)}
+#report-document .page{max-width:880px}
+#report-document .sample-banner{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;padding:10px 30px;font-size:12px;color:var(--warn);background:repeating-linear-gradient(135deg,var(--sample-a) 0 12px,var(--sample-b) 12px 24px);border-bottom:1px solid var(--warn-line)}
+#report-document .sample-banner strong{letter-spacing:.12em;text-transform:uppercase;font-size:11px}
+#report-document .masthead-meta{display:flex;gap:14px;flex-wrap:wrap;justify-content:flex-end}
+#report-document .block{margin:0 0 44px}
+#report-document .block>h2,#report-document .block>.section-heading{padding-bottom:10px;border-bottom:1px solid var(--line);margin-bottom:0}
+#report-document .block>h2+*,#report-document .block>.section-heading+*{margin-top:16px}
+#report-document .label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:var(--forest);margin:0 0 8px}
+#report-document .pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;border-radius:999px;padding:2px 9px;white-space:nowrap;border:1px solid var(--line);color:var(--quiet)}
+#report-document .pill.pass{border-color:transparent;background:var(--good-bg);color:var(--forest)}
+#report-document .pill.fail{border-color:transparent;background:var(--alert-bg);color:var(--alert)}
+#report-document .pill.warn{border-color:transparent;background:var(--warn-bg);color:var(--warn)}
+
+/* Status card (result / approval) */
+#report-document .state{border:1px solid var(--line);border-radius:8px;background:var(--surface);margin:0 0 44px;overflow:hidden}
+#report-document .state-head{display:flex;gap:14px;align-items:flex-start;padding:18px 20px;background:var(--alert-bg);color:var(--alert)}
+#report-document .state.ok .state-head{background:var(--good-bg);color:var(--forest)}
+#report-document .state.warn .state-head{background:var(--warn-bg);color:var(--warn)}
+#report-document .state-icon{flex-shrink:0;width:26px;height:26px;border-radius:50%;border:1.5px solid currentColor;display:grid;place-items:center;font-size:14px;font-weight:700;margin-top:1px}
+#report-document .state-head strong{display:block;font-size:16px;font-weight:600;margin-bottom:2px}
+#report-document .state-head p{margin:0;font-size:13px}
+#report-document .tally{display:flex;gap:3px;height:6px;margin:16px 20px 8px}
+#report-document .tally span{border-radius:3px}
+#report-document .tally .t-pass{background:var(--forest)}
+#report-document .tally .t-fail{background:var(--alert)}
+#report-document .tally .t-skip{background:var(--line)}
+#report-document .counts{display:flex;flex-wrap:wrap;gap:4px 18px;padding:14px 20px 16px;font-size:13px;color:var(--quiet)}
+#report-document .counts b{color:var(--ink);font-weight:600}
+#report-document .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px 24px;padding:16px 20px;border-top:1px solid var(--line);margin:0}
+#report-document .facts dt{margin:0;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+#report-document .facts dd{margin:3px 0 0;font-size:13px}
+#report-document .state-note{padding:12px 20px;border-top:1px solid var(--line);font-size:12px;color:var(--quiet);margin:0}
+
+/* Two-up cards */
+#report-document .pair{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+#report-document .card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px 18px}
+#report-document .card ul{margin-bottom:0}
+#report-document .card p:last-child{margin-bottom:0}
+
+/* Commands */
+#report-document .command{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;padding:14px 0;border-bottom:1px solid var(--line)}
+#report-document .command pre{margin:0;background:var(--wash);padding:9px 12px;border-radius:5px}
+#report-document .command-side{display:flex;flex-direction:column;align-items:flex-end;gap:4px;font-size:12px;color:var(--quiet)}
+#report-document .command-note{grid-column:1/-1;font-size:13px;color:var(--quiet);margin:0}
+
+/* Checks */
+#report-document .chip{font-size:11px;color:var(--quiet);white-space:nowrap}
+
+/* Screenshots and mockups */
+#report-document .shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:28px 24px}
+#report-document .shot{margin:0}
+#report-document .shot .sample-window{margin:0}
+#report-document .shot .sample-toolbar{justify-content:space-between;gap:10px}
+#report-document .shot .sample-toolbar span{margin-left:0}
+#report-document .shot figcaption{margin-top:9px;font-size:13px;color:var(--ink)}
+#report-document .shot figcaption .small{display:block;margin-top:3px}
+#report-document .mockup .sample-window{position:relative}
+#report-document .mockup-label{position:absolute;top:44px;left:12px;background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line);border-radius:4px;font-size:11px;font-weight:600;padding:3px 8px}
+#report-document .shots.single{grid-template-columns:1fr}
+
+/* Limitations */
+#report-document .limits{border-left:3px solid var(--warn-line);background:var(--warn-bg);padding:14px 18px;border-radius:0 6px 6px 0;color:var(--ink)}
+#report-document .limits ul{margin:0}
+
+/* Plan milestones */
+#report-document .milestone summary{gap:14px}
+#report-document .milestone-number{width:26px;height:26px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;flex-shrink:0;color:var(--quiet)}
+#report-document .milestone.done .milestone-number{background:var(--forest);border-color:var(--forest);color:var(--paper)}
+#report-document .milestone.active .milestone-number{border-color:var(--forest);color:var(--forest);font-weight:700}
+#report-document .milestone-body{padding:0 0 20px 40px;color:var(--ink)}
+#report-document .milestone-body>p:first-child{color:var(--quiet)}
+#report-document .criteria{list-style:none;padding:0;margin:6px 0 0}
+#report-document .criteria li{padding-left:22px;position:relative}
+#report-document .criteria li:before{content:'○';position:absolute;left:2px;color:var(--forest)}
+#report-document .milestone-meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;font-size:12px}
+#report-document .milestone-meta p{margin:2px 0 0;color:var(--quiet)}
+
+/* Risks */
+#report-document .risk-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:6px 20px;padding:12px 0;border-bottom:1px solid var(--line);font-size:13px}
+#report-document .risk-row p{margin:0;color:var(--quiet)}
+#report-document .rollback{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 14px;font-size:13px;margin:12px 0 0}
+#report-document .rollback dt{margin:0;font-family:ui-monospace,monospace;font-size:12px}
+#report-document .rollback dd{margin:0;color:var(--quiet)}
+
+/* Decisions */
+#report-document .decision-row{display:flex;gap:14px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--line)}
+#report-document .decision-row div{flex:1;min-width:0}
+#report-document .decision-row p{margin:4px 0 0;font-size:13px;color:var(--quiet)}
+
+#report-document .history p{font-size:12px;color:var(--quiet);margin:0 0 6px}
+#report-document .refs a{display:block;margin-bottom:6px}
+
+@media(max-width:630px){
+  #report-document .sample-banner{padding:10px 18px}
+  #report-document .pair,#report-document .milestone-meta,#report-document .risk-row{grid-template-columns:1fr}
+  #report-document .shots{grid-template-columns:1fr}
+  #report-document .command{grid-template-columns:1fr}
+  #report-document .command-side{flex-direction:row;align-items:center;justify-content:flex-start;gap:10px}
+  #report-document .milestone-body{padding-left:0}
+  #report-document .masthead{flex-wrap:wrap}
+  #report-document .masthead-meta{justify-content:flex-start}
+}
+@media print{#report-document .sample-banner{-webkit-print-color-adjust:exact;print-color-adjust:exact}#report-document .shot,#report-document .state{break-inside:avoid}}
+#report-document .section-heading{flex-wrap:wrap;row-gap:2px}
+#report-document h1,#report-document h2,#report-document h3{overflow-wrap:normal;word-break:normal}
+#report-document .block>.section-heading+details{margin-top:0;border-top:0}
+@media(max-width:630px){#report-document .chip{display:none}}
+
+#report-document table{display:block;max-width:100%;overflow:auto;border-collapse:collapse}#report-document td,#report-document th{padding:8px;border:1px solid var(--line);text-align:left}#report-document .block{min-width:0}#report-document .state.neutral .state-head{background:var(--wash);color:var(--ink)}#report-document .evidence-item{margin:24px 0}#report-document .evidence-item pre{max-height:32rem;overflow:auto}#report-document :target{scroll-margin:24px}#report-document h1,#report-document h2,#report-document h3{overflow-wrap:anywhere}
+
+#report-document .detail{margin:14px 0}#report-document .detail h3{font-size:13px}#report-document .status{display:inline-block}
+@media print{#report-document summary:focus-visible{outline:none}#report-document .decision-row,#report-document .risk-row,#report-document .rollback{break-inside:avoid}#report-document h2,#report-document h3{break-after:avoid}#report-document .evidence-item pre{max-height:none;overflow:visible}}
+
+#report-document .plan-language-controls{margin:20px auto 0;padding:12px 20px;max-width:816px;border:1px solid var(--line);border-radius:10px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--surface)}
+#report-document .plan-language-controls legend{font-size:12px;color:var(--quiet);padding:0 6px}
+#report-document .plan-language-controls input{accent-color:var(--forest);width:18px;height:18px;margin:0}
+#report-document .plan-language-controls label{display:inline-flex;align-items:center;gap:7px;padding:6px 8px 6px 0;font-size:14px;cursor:pointer;white-space:nowrap}
+#report-document .plan-language-controls input:focus-visible{outline:3px solid var(--forest);outline-offset:3px}
+#report-document .plan-language-controls p{flex-basis:100%;margin:2px 0 0;font-size:12px;color:var(--quiet)}
+#report-document .document:has(#plan-language-de:checked) .plan-en,#report-document .document:has(#plan-language-en:checked) .plan-de{display:none}
+#report-document .document:has(#plan-language-both:checked) .plan-language + .plan-language{border-top:2px solid var(--forest)}
+#report-document .plan-tldr{margin:24px 0 20px;padding:20px 24px;border-left:4px solid var(--forest);border-radius:0 10px 10px 0;background:var(--wash)}
+#report-document .plan-tldr h2{font-size:12px;letter-spacing:.1em;margin:0 0 8px}
+#report-document .plan-tldr p{font-size:18px;line-height:1.55;margin:0}
+#report-document .problem-overview{margin:24px 0 32px}
+#report-document .problem-overview h2{font-size:17px;margin:0 0 14px}
+#report-document .problem-overview ol{list-style:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;padding:0;margin:0}
+#report-document .problem-overview li{position:relative;border:1px solid var(--line);border-radius:10px;padding:16px;background:var(--surface);min-width:0}
+#report-document .problem-overview li + li:before{content:'→';position:absolute;left:-13px;top:17px;color:var(--forest);font-size:14px}
+#report-document .problem-stage{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--forest);margin-bottom:8px}
+#report-document .problem-overview p{font-size:14px;line-height:1.5;margin:0;overflow-wrap:anywhere}
+#report-document .shared-records{border-top:1px solid var(--line)}
+@media(max-width:700px){#report-document .plan-language-controls{margin:12px 16px 0;padding:10px 12px}#report-document .problem-overview ol{grid-template-columns:1fr 1fr}#report-document .problem-overview li:nth-child(3):before{display:none}#report-document .plan-tldr{padding:16px}#report-document .plan-tldr p{font-size:16px}}
+@media(max-width:420px){#report-document .problem-overview ol{grid-template-columns:1fr}#report-document .problem-overview li + li:before{content:'↓';display:block;left:50%;top:-15px}}
+@media print{#report-document .plan-language-controls{display:none}#report-document .document:has(#plan-language-both:checked) .plan-language + .plan-language{break-before:page}#report-document .plan-tldr,#report-document .problem-overview li{break-inside:avoid}#report-document .problem-overview ol{grid-template-columns:1fr 1fr}}
+
+#report-document .plan-language .page{padding-top:28px}
+#report-document .plan-language h1{font-size:clamp(26px,3.2vw,38px);line-height:1.15}
+@media print{#report-document .plan-language .page{padding-top:0}#report-document .problem-overview li:nth-child(3):before{display:none}}
+
+@media(max-width:420px){#report-document .problem-overview li:nth-child(3):before{display:block}}
+@media print{#report-document .problem-overview li:nth-child(3):before{display:none}}
+</style></head><body><div id="report-document"><article class="document"><div class="masthead"><span class="brand"><span class="brand-mark"></span>OpenApe <span>Plans</span></span></div>
+<fieldset class="plan-language-controls"><legend>Sprache / Language</legend><label><input type="radio" name="plan-language" id="plan-language-de" value="de" checked>Deutsch</label><label><input type="radio" name="plan-language" id="plan-language-en" value="en">English</label><label><input type="radio" name="plan-language" id="plan-language-both" value="both">DE + EN</label><p>Ansicht und Druck / View and print</p></fieldset>
+<section class="plan-language plan-de" lang="de">
+<main class="page">
+<div class="eyebrow">Umsetzungsplan</div><h1>Newsletter-Absender aus deinen Entscheidungen lernen</h1><section class="plan-tldr" aria-label="TL;DR"><h2>TL;DR</h2><p>Pods gibt einem Netzmitglied Lesezugriff auf deine Entscheidungen in seinem Netz. Die Kategorisierung leitet einen Absender nach zwei &#xfc;bereinstimmenden Newsletter-Entscheidungen direkt in den Newsletter-Stapel; jede andere Wahl hebt die Regel auf. Archivieren braucht weiter die IdP-Freigabe.</p>
+</section><section class="problem-overview" aria-labelledby="de-problem-heading"><h2 id="de-problem-heading">Das Problem auf einen Blick</h2><ol><li><span class="problem-stage">1 &#xb7; Problem</span><p>Die Kategorisierung sieht deine Entscheidungen nie, deshalb wird immer wieder nach denselben Absendern gefragt (117 Newsletter-Entscheidungen f&#xfc;r 35 Absender).</p>
+</li><li><span class="problem-stage">2 &#xb7; Auswirkung</span><p>Du triffst dieselbe Entscheidung viele Male, und die Entscheidungsliste bleibt un&#xfc;bersichtlich.</p>
+</li><li><span class="problem-stage">3 &#xb7; Ansatz</span><p>Eine Lese-Schnittstelle f&#xfc;r deine Entscheidungen im Netz erg&#xe4;nzen und daraus Regeln pro Absender ableiten; eine deklarierte R&#xfc;ckmeldung ist mit Entscheidungsfeldern nicht erlaubt.</p>
+</li><li><span class="problem-stage">4 &#xb7; Ziel</span><p>Mail gelernter Absender landet direkt im Newsletter-Stapel; du best&#xe4;tigst nur noch die Archiv-Freigabe.</p>
+</li></ol></section><div class="lead markdown"><p>Nicht mehr nach Absendern fragen, die du wiederholt als Newsletter markiert hast.</p>
+</div><div class="meta"><span>Status: In Arbeit</span><span>Planrevision 1</span></div>
+<section class="state neutral"><div class="state-head"><div><strong>Freigabe f&#xfc;r diese Planrevision dokumentiert</strong><p>Ein Bearbeitungsstatus stellt keine Freigabe dar.</p></div></div><div class="card"><p>Patrick Hofmann &#xb7; 2026-10-10</p><h3>Freigabe im Originalwortlaut</h3><div lang="en"><p>Owner in chat: &quot;Du hast mein Go!&quot; on the proposal (threshold 2, exact sender addresses, archive approval unchanged).</p>
+</div><section class="detail"><h3>Umfang der Freigabe (Originalwortlaut)</h3><div lang="en"><p>Learning newsletter senders in the Delta Mind mail network. The mechanism changed from a feedback channel to a read-only choices port because feedback transitions are not allowed with routing gates; the owner-facing behaviour is unchanged.</p>
+</div></section><dl><dt>Freigegebene Planrevision</dt><dd>1</dd></dl></div></section>
+<section class="block"><h2>Entscheidungen</h2><section class="decision-row"><span class="status">Angenommen</span><div><h3>Lese-Schnittstelle statt R&#xfc;ckmeldung</h3><p>Netze mit Entscheidungsfeldern lehnen R&#xfc;ckmeldungen ab, deshalb liest die Kategorisierung die Entscheidungen ihres eigenen Netzes.</p>
+<section class="detail"><h3>Entscheidungsbezug (Originalwortlaut)</h3><div lang="en"><p>apps/openape-pods/src/contracts/networks.ts validateNetworkRoutes</p>
+</div></section></div></section><section class="decision-row"><span class="status">Angenommen</span><div><h3>Schwelle und Umfang</h3><p>Zwei &#xfc;bereinstimmende Newsletter-Entscheidungen pro exakter Absenderadresse; jede andere Wahl hebt die Regel auf.</p>
+<section class="detail"><h3>Entscheidungsbezug (Originalwortlaut)</h3><div lang="en"><p>Owner approval in chat on October 10, 2026.</p>
+</div></section></div></section></section><section id="de-section-issue" class="block"><h2>Issue</h2><p><a href="https://repos.openape.ai/patrick/monorepo/issues/1457" rel="noopener noreferrer">Issue 1457</a></p>
+</section><section class="block"><div class="section-heading"><h2>Meilensteine</h2><span class="small">0 von 3 abgeschlossen</span></div><details class="milestone planned" id="de-milestone-port" open><summary><span class="milestone-number">1</span><span class="test-name">Entscheidungen aus einem Netzmitglied lesen</span><span class="status">Geplant</span><span class="chevron">&#x203a;</span></summary><div class="milestone-body"><p>Die Entscheidungen des eigenen Netzes f&#xfc;r Mitglieds-Scripts lesbar machen, ohne die Netzdefinition zu &#xe4;ndern.</p>
+<div class="proof"><strong>Erf&#xfc;llt, wenn</strong><ul><li>context.network.choices({gate, limit}) liefert die neuesten Entscheidungen des eigenen Netzes mit Option, Zeitpunkt und Eintragsdaten; nur lesend und auf 1000 Eintr&#xe4;ge begrenzt.</li><li>Ein Test zeigt, dass Entscheidungen anderer Netze nie geliefert werden.</li></ul></div><section class="detail"><h3>R&#xfc;cknahme</h3><p>Schnittstelle entfernen; Mitglieder, die sie nicht nutzen, sind nicht betroffen.</p>
+</section></div></details><details class="milestone planned" id="de-milestone-rules"><summary><span class="milestone-number">2</span><span class="test-name">Newsletter-Absender in der Kategorisierung lernen</span><span class="status">Geplant</span><span class="chevron">&#x203a;</span></summary><div class="milestone-body"><p>Gelernte Absender direkt in den Newsletter-Stapel leiten.</p>
+<div class="proof"><strong>Erf&#xfc;llt, wenn</strong><ul><li>Ein Absender mit mindestens zwei Newsletter-Entscheidungen und keiner anderen Wahl geht mit sichtbarer Begr&#xfc;ndung nach mail.newsletter.</li><li>Jede Wahl &#x201e;Behalten&#x201c;, &#x201e;Rechnung&#x201c; oder &#x201e;Antwort&#x201c; f&#xfc;r den Absender hebt die Regel auf; Sicherheitsmeldungen und gesch&#xfc;tzte Kontakte werden nie gelernt.</li><li>Die Run-Zusammenfassung zeigt, wie viele Mails &#xfc;ber gelernte Regeln geleitet wurden.</li></ul></div><section class="detail"><h3>R&#xfc;cknahme</h3><p>Das vorherige Kategorisierungs-Script mit updateMemberScript wieder anheften.</p>
+</section></div></details><details class="milestone planned" id="de-milestone-rollout"><summary><span class="milestone-number">3</span><span class="test-name">Ausliefern und pr&#xfc;fen</span><span class="status">Geplant</span><span class="chevron">&#x203a;</span></summary><div class="milestone-body"><p>Signierten Desktop-Build installieren und das Live-Netz beobachten.</p>
+<div class="proof"><strong>Erf&#xfc;llt, wenn</strong><ul><li>Signierter Desktop-Build mit gepaartem Backup; die Kategorisierung wird ohne neue Netzrevision neu angeheftet.</li><li>Live-Intake-Runs leiten Mail gelernter Absender ohne R&#xfc;ckfrage weiter; der Archiv-Freigabestapel bleibt unver&#xe4;ndert.</li><li>Nachweise werden als Test Run ver&#xf6;ffentlicht.</li></ul></div><section class="detail"><h3>R&#xfc;cknahme</h3><p>Gepaartes Backup und vorheriges Mitglieds-Script wiederherstellen.</p>
+</section></div></details></section><section class="block"><h2>Risiken und Abw&#xe4;gungen</h2><div class="risk-row"><strong>Ein Absender schickt manchmal Wichtiges</strong><p>Eine Wahl &#x201e;Behalten&#x201c; hebt die Regel auf; Archivieren braucht weiter die IdP-Freigabe, ohne dich wird nichts verschoben.</p>
+</div></section><section class="block"><h2>R&#xfc;cknahme im &#xdc;berblick</h2><dl class="rollback"><dt>port</dt><dd><p>Schnittstelle entfernen; Mitglieder, die sie nicht nutzen, sind nicht betroffen.</p>
+</dd><dt>rules</dt><dd><p>Das vorherige Kategorisierungs-Script mit updateMemberScript wieder anheften.</p>
+</dd><dt>rollout</dt><dd><p>Gepaartes Backup und vorheriges Mitglieds-Script wiederherstellen.</p>
+</dd></dl></section>
+<div class="foot">Inhalte und Pr&#xfc;fbest&#xe4;tigungen stammen vom Autor. Der Renderer f&#xfc;hrt keine Tests aus und &#xfc;berpr&#xfc;ft die Identit&#xe4;t des Autors nicht.</div>
+</main>
+
+</section><section class="plan-language plan-en" lang="en">
+<main class="page">
+<div class="eyebrow">Implementation plan</div><h1>Learn newsletter senders from owner choices</h1><section class="plan-tldr" aria-label="TL;DR"><h2>TL;DR</h2><p>Pods gives a network member read access to its network&apos;s owner choices. Categorisation routes a sender to the newsletter batch after two consistent newsletter choices; any other choice cancels the rule. Archiving still needs the IdP approval.</p>
+</section><section class="problem-overview" aria-labelledby="en-problem-heading"><h2 id="en-problem-heading">Problem at a glance</h2><ol><li><span class="problem-stage">1 &#xb7; Problem</span><p>Categorisation never sees the owner&apos;s gate choices, so the same senders are asked about again and again (117 newsletter choices for 35 senders).</p>
+</li><li><span class="problem-stage">2 &#xb7; Impact</span><p>The owner repeats the same decision many times, and the decision list stays noisy.</p>
+</li><li><span class="problem-stage">3 &#xb7; Approach</span><p>Add a read-only network port for owner choices and derive per-sender rules in Categorisation; declared feedback is not allowed with routing gates.</p>
+</li><li><span class="problem-stage">4 &#xb7; Outcome</span><p>Mail from learned senders goes straight to the newsletter batch; the owner only confirms the archive approval.</p>
+</li></ol></section><div class="lead markdown"><p>Stop asking about senders the owner has repeatedly marked as newsletters.</p>
+</div><div class="meta"><span>Status: active</span><span>Proposal revision 1</span></div>
+<section class="state neutral"><div class="state-head"><div><strong>Approval recorded for this proposal revision</strong><p>A lifecycle status does not grant approval.</p></div></div><div class="card"><p>Patrick Hofmann &#xb7; 2026-10-10</p><h3>Original approval statement</h3><div lang="en"><p>Owner in chat: &quot;Du hast mein Go!&quot; on the proposal (threshold 2, exact sender addresses, archive approval unchanged).</p>
+</div><section class="detail"><h3>Approval scope (original wording)</h3><div lang="en"><p>Learning newsletter senders in the Delta Mind mail network. The mechanism changed from a feedback channel to a read-only choices port because feedback transitions are not allowed with routing gates; the owner-facing behaviour is unchanged.</p>
+</div></section><dl><dt>Approved proposal revision</dt><dd>1</dd></dl></div></section>
+<section class="block"><h2>Decisions</h2><section class="decision-row"><span class="status">accepted</span><div><h3>Read port instead of feedback</h3><p>Networks with routing gates reject feedback transitions, so Categorisation reads the owner choices of its own network instead.</p>
+<section class="detail"><h3>Decision reference (original wording)</h3><div lang="en"><p>apps/openape-pods/src/contracts/networks.ts validateNetworkRoutes</p>
+</div></section></div></section><section class="decision-row"><span class="status">accepted</span><div><h3>Threshold and scope</h3><p>Two consistent newsletter choices per exact sender address; any other choice cancels the rule.</p>
+<section class="detail"><h3>Decision reference (original wording)</h3><div lang="en"><p>Owner approval in chat on October 10, 2026.</p>
+</div></section></div></section></section><section id="en-section-issue" class="block"><h2>Issue</h2><p><a href="https://repos.openape.ai/patrick/monorepo/issues/1457" rel="noopener noreferrer">Issue 1457</a></p>
+</section><section class="block"><div class="section-heading"><h2>Milestones</h2><span class="small">0 of 3 complete</span></div><details class="milestone planned" id="en-milestone-port" open><summary><span class="milestone-number">1</span><span class="test-name">Read owner choices from a network member</span><span class="status">planned</span><span class="chevron">&#x203a;</span></summary><div class="milestone-body"><p>Expose the network&apos;s own owner choices to its member scripts without changing the network definition.</p>
+<div class="proof"><strong>Accepted when</strong><ul><li>context.network.choices({gate, limit}) returns the newest owner choices of the caller&apos;s network with option, time and the item data; it is read-only and limited to 1000 entries.</li><li>A test shows that another network&apos;s choices are never returned.</li></ul></div><section class="detail"><h3>Rollback</h3><p>Remove the port; members that do not call it are unaffected.</p>
+</section></div></details><details class="milestone planned" id="en-milestone-rules"><summary><span class="milestone-number">2</span><span class="test-name">Learn newsletter senders in Categorisation</span><span class="status">planned</span><span class="chevron">&#x203a;</span></summary><div class="milestone-body"><p>Route learned senders directly to the newsletter batch.</p>
+<div class="proof"><strong>Accepted when</strong><ul><li>A sender with at least two newsletter choices and no other choice is routed to mail.newsletter with a visible reason.</li><li>Any keep, invoice or reply choice for the sender cancels the rule; security alerts and protected contacts are never learned.</li><li>The run summary lists how many messages were routed by learned rules.</li></ul></div><section class="detail"><h3>Rollback</h3><p>Re-pin the previous Categorisation script with updateMemberScript.</p>
+</section></div></details><details class="milestone planned" id="en-milestone-rollout"><summary><span class="milestone-number">3</span><span class="test-name">Release and verify</span><span class="status">planned</span><span class="chevron">&#x203a;</span></summary><div class="milestone-body"><p>Install the signed desktop build and observe the live network.</p>
+<div class="proof"><strong>Accepted when</strong><ul><li>Signed desktop build with paired backup; Categorisation is re-pinned without a new network revision.</li><li>Live Intake runs route mail from learned senders without a choice; the archive approval batch is unchanged.</li><li>Evidence is published as a Test Run.</li></ul></div><section class="detail"><h3>Rollback</h3><p>Restore the paired backup and the previous member script.</p>
+</section></div></details></section><section class="block"><h2>Risks &amp; tradeoffs</h2><div class="risk-row"><strong>A sender sometimes sends important mail</strong><p>One keep choice cancels the rule; archiving still needs the IdP approval, so nothing is moved without the owner.</p>
+</div></section><section class="block"><h2>Rollback summary</h2><dl class="rollback"><dt>port</dt><dd><p>Remove the port; members that do not call it are unaffected.</p>
+</dd><dt>rules</dt><dd><p>Re-pin the previous Categorisation script with updateMemberScript.</p>
+</dd><dt>rollout</dt><dd><p>Restore the paired backup and the previous member script.</p>
+</dd></dl></section>
+<div class="foot">Content and inspection attestations are supplied by the author. The renderer does not execute checks or verify the author&apos;s identity.</div>
+</main>
+
+</section></article></div></body></html>

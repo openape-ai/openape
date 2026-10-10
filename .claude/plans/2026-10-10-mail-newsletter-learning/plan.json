@@ -1,0 +1,254 @@
+{
+  "schema": "openape.plan/2",
+  "language": "en",
+  "title": "Learn newsletter senders from owner choices",
+  "goal": "Stop asking about senders the owner has repeatedly marked as newsletters.",
+  "summary": "Pods gives a network member read access to its network's owner choices. Categorisation routes a sender to the newsletter batch after two consistent newsletter choices; any other choice cancels the rule. Archiving still needs the IdP approval.",
+  "problem": {
+    "statement": "Categorisation never sees the owner's gate choices, so the same senders are asked about again and again (117 newsletter choices for 35 senders).",
+    "impact": "The owner repeats the same decision many times, and the decision list stays noisy.",
+    "approach": "Add a read-only network port for owner choices and derive per-sender rules in Categorisation; declared feedback is not allowed with routing gates.",
+    "outcome": "Mail from learned senders goes straight to the newsletter batch; the owner only confirms the archive approval."
+  },
+  "status": "active",
+  "revision": 1,
+  "milestones": [
+    {
+      "id": "port",
+      "title": "Read owner choices from a network member",
+      "goal": "Expose the network's own owner choices to its member scripts without changing the network definition.",
+      "status": "planned",
+      "acceptance": [
+        "context.network.choices({gate, limit}) returns the newest owner choices of the caller's network with option, time and the item data; it is read-only and limited to 1000 entries.",
+        "A test shows that another network's choices are never returned."
+      ],
+      "rollback": "Remove the port; members that do not call it are unaffected."
+    },
+    {
+      "id": "rules",
+      "title": "Learn newsletter senders in Categorisation",
+      "goal": "Route learned senders directly to the newsletter batch.",
+      "status": "planned",
+      "acceptance": [
+        "A sender with at least two newsletter choices and no other choice is routed to mail.newsletter with a visible reason.",
+        "Any keep, invoice or reply choice for the sender cancels the rule; security alerts and protected contacts are never learned.",
+        "The run summary lists how many messages were routed by learned rules."
+      ],
+      "rollback": "Re-pin the previous Categorisation script with updateMemberScript."
+    },
+    {
+      "id": "rollout",
+      "title": "Release and verify",
+      "goal": "Install the signed desktop build and observe the live network.",
+      "status": "planned",
+      "acceptance": [
+        "Signed desktop build with paired backup; Categorisation is re-pinned without a new network revision.",
+        "Live Intake runs route mail from learned senders without a choice; the archive approval batch is unchanged.",
+        "Evidence is published as a Test Run."
+      ],
+      "rollback": "Restore the paired backup and the previous member script."
+    }
+  ],
+  "approval": {
+    "by": "Patrick Hofmann",
+    "date": "2026-10-10",
+    "reference": "Owner in chat: \"Du hast mein Go!\" on the proposal (threshold 2, exact sender addresses, archive approval unchanged).",
+    "target": {
+      "revision": 1
+    },
+    "scope": "Learning newsletter senders in the Delta Mind mail network. The mechanism changed from a feedback channel to a read-only choices port because feedback transitions are not allowed with routing gates; the owner-facing behaviour is unchanged."
+  },
+  "decisions": [
+    {
+      "title": "Read port instead of feedback",
+      "description": "Networks with routing gates reject feedback transitions, so Categorisation reads the owner choices of its own network instead.",
+      "status": "accepted",
+      "reference": "apps/openape-pods/src/contracts/networks.ts validateNetworkRoutes"
+    },
+    {
+      "title": "Threshold and scope",
+      "description": "Two consistent newsletter choices per exact sender address; any other choice cancels the rule.",
+      "status": "accepted",
+      "reference": "Owner approval in chat on October 10, 2026."
+    }
+  ],
+  "risks": [
+    {
+      "title": "A sender sometimes sends important mail",
+      "mitigation": "One keep choice cancels the rule; archiving still needs the IdP approval, so nothing is moved without the owner."
+    }
+  ],
+  "sections": [
+    {
+      "id": "issue",
+      "title": "Issue",
+      "body": "[Issue 1457](https://repos.openape.ai/patrick/monorepo/issues/1457)",
+      "placement": "before-details"
+    }
+  ],
+  "translations": {
+    "defaultLanguage": "de",
+    "entries": [
+      {
+        "path": "title",
+        "source": "Learn newsletter senders from owner choices",
+        "text": "Newsletter-Absender aus deinen Entscheidungen lernen"
+      },
+      {
+        "path": "goal",
+        "source": "Stop asking about senders the owner has repeatedly marked as newsletters.",
+        "text": "Nicht mehr nach Absendern fragen, die du wiederholt als Newsletter markiert hast."
+      },
+      {
+        "path": "summary",
+        "source": "Pods gives a network member read access to its network's owner choices. Categorisation routes a sender to the newsletter batch after two consistent newsletter choices; any other choice cancels the rule. Archiving still needs the IdP approval.",
+        "text": "Pods gibt einem Netzmitglied Lesezugriff auf deine Entscheidungen in seinem Netz. Die Kategorisierung leitet einen Absender nach zwei übereinstimmenden Newsletter-Entscheidungen direkt in den Newsletter-Stapel; jede andere Wahl hebt die Regel auf. Archivieren braucht weiter die IdP-Freigabe."
+      },
+      {
+        "path": "problem.statement",
+        "source": "Categorisation never sees the owner's gate choices, so the same senders are asked about again and again (117 newsletter choices for 35 senders).",
+        "text": "Die Kategorisierung sieht deine Entscheidungen nie, deshalb wird immer wieder nach denselben Absendern gefragt (117 Newsletter-Entscheidungen für 35 Absender)."
+      },
+      {
+        "path": "problem.impact",
+        "source": "The owner repeats the same decision many times, and the decision list stays noisy.",
+        "text": "Du triffst dieselbe Entscheidung viele Male, und die Entscheidungsliste bleibt unübersichtlich."
+      },
+      {
+        "path": "problem.approach",
+        "source": "Add a read-only network port for owner choices and derive per-sender rules in Categorisation; declared feedback is not allowed with routing gates.",
+        "text": "Eine Lese-Schnittstelle für deine Entscheidungen im Netz ergänzen und daraus Regeln pro Absender ableiten; eine deklarierte Rückmeldung ist mit Entscheidungsfeldern nicht erlaubt."
+      },
+      {
+        "path": "problem.outcome",
+        "source": "Mail from learned senders goes straight to the newsletter batch; the owner only confirms the archive approval.",
+        "text": "Mail gelernter Absender landet direkt im Newsletter-Stapel; du bestätigst nur noch die Archiv-Freigabe."
+      },
+      {
+        "path": "milestones.0.title",
+        "source": "Read owner choices from a network member",
+        "text": "Entscheidungen aus einem Netzmitglied lesen"
+      },
+      {
+        "path": "milestones.0.goal",
+        "source": "Expose the network's own owner choices to its member scripts without changing the network definition.",
+        "text": "Die Entscheidungen des eigenen Netzes für Mitglieds-Scripts lesbar machen, ohne die Netzdefinition zu ändern."
+      },
+      {
+        "path": "milestones.0.acceptance.0",
+        "source": "context.network.choices({gate, limit}) returns the newest owner choices of the caller's network with option, time and the item data; it is read-only and limited to 1000 entries.",
+        "text": "context.network.choices({gate, limit}) liefert die neuesten Entscheidungen des eigenen Netzes mit Option, Zeitpunkt und Eintragsdaten; nur lesend und auf 1000 Einträge begrenzt."
+      },
+      {
+        "path": "milestones.0.acceptance.1",
+        "source": "A test shows that another network's choices are never returned.",
+        "text": "Ein Test zeigt, dass Entscheidungen anderer Netze nie geliefert werden."
+      },
+      {
+        "path": "milestones.0.rollback",
+        "source": "Remove the port; members that do not call it are unaffected.",
+        "text": "Schnittstelle entfernen; Mitglieder, die sie nicht nutzen, sind nicht betroffen."
+      },
+      {
+        "path": "milestones.1.title",
+        "source": "Learn newsletter senders in Categorisation",
+        "text": "Newsletter-Absender in der Kategorisierung lernen"
+      },
+      {
+        "path": "milestones.1.goal",
+        "source": "Route learned senders directly to the newsletter batch.",
+        "text": "Gelernte Absender direkt in den Newsletter-Stapel leiten."
+      },
+      {
+        "path": "milestones.1.acceptance.0",
+        "source": "A sender with at least two newsletter choices and no other choice is routed to mail.newsletter with a visible reason.",
+        "text": "Ein Absender mit mindestens zwei Newsletter-Entscheidungen und keiner anderen Wahl geht mit sichtbarer Begründung nach mail.newsletter."
+      },
+      {
+        "path": "milestones.1.acceptance.1",
+        "source": "Any keep, invoice or reply choice for the sender cancels the rule; security alerts and protected contacts are never learned.",
+        "text": "Jede Wahl „Behalten“, „Rechnung“ oder „Antwort“ für den Absender hebt die Regel auf; Sicherheitsmeldungen und geschützte Kontakte werden nie gelernt."
+      },
+      {
+        "path": "milestones.1.acceptance.2",
+        "source": "The run summary lists how many messages were routed by learned rules.",
+        "text": "Die Run-Zusammenfassung zeigt, wie viele Mails über gelernte Regeln geleitet wurden."
+      },
+      {
+        "path": "milestones.1.rollback",
+        "source": "Re-pin the previous Categorisation script with updateMemberScript.",
+        "text": "Das vorherige Kategorisierungs-Script mit updateMemberScript wieder anheften."
+      },
+      {
+        "path": "milestones.2.title",
+        "source": "Release and verify",
+        "text": "Ausliefern und prüfen"
+      },
+      {
+        "path": "milestones.2.goal",
+        "source": "Install the signed desktop build and observe the live network.",
+        "text": "Signierten Desktop-Build installieren und das Live-Netz beobachten."
+      },
+      {
+        "path": "milestones.2.acceptance.0",
+        "source": "Signed desktop build with paired backup; Categorisation is re-pinned without a new network revision.",
+        "text": "Signierter Desktop-Build mit gepaartem Backup; die Kategorisierung wird ohne neue Netzrevision neu angeheftet."
+      },
+      {
+        "path": "milestones.2.acceptance.1",
+        "source": "Live Intake runs route mail from learned senders without a choice; the archive approval batch is unchanged.",
+        "text": "Live-Intake-Runs leiten Mail gelernter Absender ohne Rückfrage weiter; der Archiv-Freigabestapel bleibt unverändert."
+      },
+      {
+        "path": "milestones.2.acceptance.2",
+        "source": "Evidence is published as a Test Run.",
+        "text": "Nachweise werden als Test Run veröffentlicht."
+      },
+      {
+        "path": "milestones.2.rollback",
+        "source": "Restore the paired backup and the previous member script.",
+        "text": "Gepaartes Backup und vorheriges Mitglieds-Script wiederherstellen."
+      },
+      {
+        "path": "decisions.0.title",
+        "source": "Read port instead of feedback",
+        "text": "Lese-Schnittstelle statt Rückmeldung"
+      },
+      {
+        "path": "decisions.0.description",
+        "source": "Networks with routing gates reject feedback transitions, so Categorisation reads the owner choices of its own network instead.",
+        "text": "Netze mit Entscheidungsfeldern lehnen Rückmeldungen ab, deshalb liest die Kategorisierung die Entscheidungen ihres eigenen Netzes."
+      },
+      {
+        "path": "decisions.1.title",
+        "source": "Threshold and scope",
+        "text": "Schwelle und Umfang"
+      },
+      {
+        "path": "decisions.1.description",
+        "source": "Two consistent newsletter choices per exact sender address; any other choice cancels the rule.",
+        "text": "Zwei übereinstimmende Newsletter-Entscheidungen pro exakter Absenderadresse; jede andere Wahl hebt die Regel auf."
+      },
+      {
+        "path": "risks.0.title",
+        "source": "A sender sometimes sends important mail",
+        "text": "Ein Absender schickt manchmal Wichtiges"
+      },
+      {
+        "path": "risks.0.mitigation",
+        "source": "One keep choice cancels the rule; archiving still needs the IdP approval, so nothing is moved without the owner.",
+        "text": "Eine Wahl „Behalten“ hebt die Regel auf; Archivieren braucht weiter die IdP-Freigabe, ohne dich wird nichts verschoben."
+      },
+      {
+        "path": "sections.0.title",
+        "source": "Issue",
+        "text": "Issue"
+      },
+      {
+        "path": "sections.0.body",
+        "source": "[Issue 1457](https://repos.openape.ai/patrick/monorepo/issues/1457)",
+        "text": "[Issue 1457](https://repos.openape.ai/patrick/monorepo/issues/1457)"
+      }
+    ]
+  }
+}
