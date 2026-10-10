@@ -67,6 +67,21 @@ export class NetworkEvents {
     return result
   }
 
+  /** The owner's decided route choices of the caller's own network, newest first. Read-only; payloads are the network's own item data. */
+  ownerChoices(authority: NetworkAuthority, query: unknown): { gate: string, option: string, decidedAt: number, data: unknown }[] {
+    const { row } = this.authority(authority)
+    const input = (query ?? {}) as Record<string, unknown>
+    if (typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !['gate', 'limit'].includes(key))) throw new Error('network.choices accepts only gate and limit')
+    if (input.gate !== undefined && (typeof input.gate !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(input.gate))) throw new Error('network.choices gate must be a route key')
+    const limit = input.limit ?? 500
+    if (!Number.isSafeInteger(limit) || (limit as number) < 1 || (limit as number) > 1000) throw new Error('network.choices limit must be 1 to 1000')
+    const gate = (input.gate as string | undefined) ?? null
+    return this.store.db.prepare(`SELECT c.gate_key,c.option_key,c.decided_at,e.payload FROM network_choices c
+      JOIN network_events e ON e.network_id=c.network_id AND e.id=c.event_id
+      WHERE c.network_id=? AND c.decided_at IS NOT NULL AND (? IS NULL OR c.gate_key=?)
+      ORDER BY c.decided_at DESC LIMIT ?`).all(row.network_id!, gate, gate, limit as number).map(choice => ({ gate: String(choice.gate_key), option: String(choice.option_key), decidedAt: Number(choice.decided_at), data: JSON.parse(String(choice.payload)) as unknown }))
+  }
+
   authority(authority: NetworkAuthority, finishing = false) {
     const row = this.store.db.prepare(`SELECT i.*,r.assignment_revision,n.owner_issuer,n.owner_subject,n.group_id,n.state AS network_state
       FROM network_invocations i JOIN networks n ON n.id=i.network_id

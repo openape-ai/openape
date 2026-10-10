@@ -80,3 +80,12 @@ counted on the **Entscheidungen** tab.
 A network exports as a package of kind `network`; a single Pod exports as kind
 `pod`. Import refuses every other kind. Format version 1 keeps the composition
 fields `calls` and node `after`/`handoff`, which are always empty.
+
+## Owner choices as input
+
+A member reads the owner's decided choose-route choices of its own network with
+`await context.network.choices({ gate, limit })`. It returns `{ gate, option, decidedAt, data }`
+newest first (at most 1000, default 500), where `data` is the item the owner decided on.
+The call is read-only and never returns another network's choices. Declared feedback
+transitions cannot combine with routing gates, so this port is how a member learns from
+repeated owner decisions, for example the Delta Mind Categorisation learning newsletter senders.
