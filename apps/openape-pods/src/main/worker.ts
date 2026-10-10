@@ -157,6 +157,7 @@ export class FixtureWorker {
   private child: UtilityProcess | null = null
   private stopping = false
   private root = ''
+  private profileBase = ''
   private credentials: CredentialCache | null = null
   private readonly agentTokens = new DdisaAgentTokens()
   private services = new Map<string, AbortController>()
@@ -171,10 +172,11 @@ export class FixtureWorker {
   }
 
   constructor(private readonly publish: (status: WorkerStatus) => void) {}
-  start(root: string): void {
+  start(root: string, profileBase: string): void {
     try { assertPilotRuntime() }
     catch (error) { this.state = { state: 'error', pid: null, error: error instanceof Error ? error.message : 'Unsupported Mac' }; this.publish(this.state); return }
     this.root = realpathSync(root)
+    this.profileBase = profileBase
     this.credentials = createMacOSCredentialCache(join(this.root, 'credentials'))
     const fixturePort = process.env.NODE_ENV === 'test' ? process.env.OPENAPE_PODS_FIXTURE_MODEL_PORT : undefined
     if (fixturePort && (!/^\d+$/.test(fixturePort) || Number(fixturePort) < 1024 || Number(fixturePort) > 65535)) throw new Error('Invalid synthetic model port')
@@ -370,7 +372,7 @@ export class FixtureWorker {
 
   /** The effective sandbox reach of a Pod: its own level and, for a network member, the network's (the more permissive wins). */
   async sandboxReach(podId: string): Promise<SandboxReach> {
-    return { level: (await this.dispatch({ grants: { type: 'sandbox', podId } }) as SandboxView).level, protectedPaths: ownerProtectedPaths(this.root, homedir()), persistencePaths: ownerPersistencePaths(homedir()) }
+    return { level: (await this.dispatch({ grants: { type: 'sandbox', podId } }) as SandboxView).level, protectedPaths: ownerProtectedPaths(this.root, this.profileBase, homedir()), persistencePaths: ownerPersistencePaths(homedir(), process.env) }
   }
 
   async onboarding(command: OnboardingCommand): Promise<OnboardingView> {
