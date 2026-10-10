@@ -19,6 +19,7 @@ import { cleanupEncryptedBackupStaging, encryptedBackupStaging } from '../../src
 import { restoreNetworkStorage } from '../../src/worker/storage/network-restore'
 import { RunRetention } from '../../src/worker/data/run-retention'
 import { DataRetention } from '../../src/worker/data/retention'
+import { DataControl } from '../../src/worker/data/control'
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const files = await importOriginal<typeof import('node:fs/promises')>()
@@ -108,6 +109,19 @@ it('rejects workspace links, newer schemas and backups while work is active', as
   await expect(restoreBackup(backup, exports, schemaVersion - 1)).rejects.toThrow('newer')
   store.db.prepare('INSERT INTO run_leases VALUES(?,?,?,?,NULL)').run(pod.id, runId, 'synthetic-boot', Date.now())
   await expect(createBackup(store, exports)).rejects.toThrow('active work')
+})
+it('blocks cleanup and restore during a running script validation but not for running MCP journal entries', async () => {
+  const { store, exports } = await fixture()
+  const backup = await createBackup(store, exports)
+  const data = new DataControl(store, 'unused-helper')
+  const journal = (id: string, action: string) => store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'running\',NULL,NULL)').run(id, 'hash', JSON.stringify({ action }))
+  journal(`codex-admin:${randomUUID()}`, 'desktop'); journal(`codex-network:${randomUUID()}`, 'networks')
+  expect(await data.execute({ type: 'status' })).toMatchObject({ busy: false })
+  await data.execute({ type: 'cleanup' })
+  journal(`owner-script:${randomUUID()}`, 'validate')
+  expect(await data.execute({ type: 'status' })).toMatchObject({ busy: true })
+  await expect(data.execute({ type: 'cleanup' })).rejects.toThrow('active work')
+  await expect(data.execute({ type: 'restore', source: backup, parent: exports })).rejects.toThrow('active work')
 })
 it('retains referenced evidence and pending events while deleting only orphan blobs', async () => {
   const { store, pod } = await fixture(); const orphan = store.putBlob('uncommitted orphan')
