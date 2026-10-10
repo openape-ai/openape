@@ -1005,10 +1005,10 @@ export class FixtureWorker {
         const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
         const credentials = this.credentials
         const bearer: AgentBearer = {
-          token: async (authentication) => {
+          token: async (authentication, origin) => {
             const id = await this.dispatch({ credentialCheck: { scope, alias: authentication.credential } })
             if (typeof id !== 'string') throw new Error('Invalid credential broker binding')
-            return this.agentTokens.bearer(scope.podId, authentication, id, () => credentials.readScriptSecret(id, scope.podId, authentication.credential), controller.signal)
+            return this.agentTokens.destination(scope.podId, authentication, origin, id, () => credentials.readScriptSecret(id, scope.podId, authentication.credential), controller.signal)
           },
           reject: authentication => this.agentTokens.reject(scope.podId, authentication),
         }
