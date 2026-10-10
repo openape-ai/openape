@@ -7,6 +7,16 @@ import { defaultJevModel, parseJevRequest, syntheticJevResult } from '../../src/
 import { SetupControl } from '../../src/worker/onboarding/control'
 import type { ProgramAssignment } from '../../src/contracts/programs'
 import { programRequest } from '../../src/main/programs/invoke'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+/** An adapter with one read operation; the worker classifies each call by its adapter action before it runs. */
+function readAdapter(cliId: string): string {
+  const path = join(mkdtempSync(join(tmpdir(), 'pods-ports-adapter-')), `${cliId}.toml`)
+  writeFileSync(path, `schema="openape-shapes/v1"\n[cli]\nid="${cliId}"\nexecutable="${cliId}"\naudience="shapes"\n[[operation]]\nid="list"\ncommand=["list"]\ndisplay="List"\naction="list"\nrisk="low"\nresource_chain=["item:*"]\n`)
+  return path
+}
 
 vi.mock('../../src/worker/agent/executor', () => ({ executeAgent: vi.fn() }))
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
@@ -46,7 +56,7 @@ it('executes assigned program reads through the standalone tool path without a n
     checked = true
   })
   const consumer = f.pod('Consumer', { takes: ['input'], gives: [], summary: 'Consume' }, async () => {})
-  f.resources.assignProgram(source, applicationId, { type: 'program', name: 'mail', capability } as ProgramAssignment, f.resources.epoch(source))
+  f.resources.assignProgram(source, applicationId, { type: 'program', name: 'mail', cliId: 'mail', adapterPath: readAdapter('mail'), capability } as ProgramAssignment, f.resources.epoch(source))
   validateCapabilities(f, source, [capability])
   const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, { podId: consumer, source: null, serialCase: false }], ['input'])
   f.process(id, [source], [source], 1); f.engine.tick()
@@ -111,7 +121,7 @@ it('applies the standalone agent rules and agent tool path in networks', async (
     checked = true
   })
   const consumer = f.pod('Consumer', { takes: ['input'], gives: [], summary: 'Consumer' }, async () => {})
-  f.resources.assignProgram(source, applicationId, { type: 'program', name: 'mail', capability } as ProgramAssignment, f.resources.epoch(source))
+  f.resources.assignProgram(source, applicationId, { type: 'program', name: 'mail', cliId: 'mail', adapterPath: readAdapter('mail'), capability } as ProgramAssignment, f.resources.epoch(source))
   validateCapabilities(f, source, [capability])
   const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, { podId: consumer, source: null, serialCase: false }], ['input'])
   f.process(id, [source], [source], 1); f.engine.tick()
@@ -120,6 +130,6 @@ it('applies the standalone agent rules and agent tool path in networks', async (
   expect(executeAgent).toHaveBeenCalledTimes(50)
   expect(vi.mocked(executeAgent).mock.calls[0]?.slice(7)).toEqual([['ape_shell'], 600])
   expect(agentReads).toEqual([{ stdout: '[]', stderr: '', exitCode: 0 }, expect.stringContaining('not declared and assigned')])
-  // The foreign application reaches the worker tool service, which refuses it before anything runs.
-  expect(tool).toHaveBeenCalledTimes(2)
+  // The worker refuses the foreign application while classifying the call; it never reaches the tool service.
+  expect(tool).toHaveBeenCalledTimes(1)
 })

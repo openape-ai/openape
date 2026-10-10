@@ -190,8 +190,9 @@ it('routes a choose gate decision through MCP exactly once', async () => {
   expect(JSON.parse(routed.origin as string)).toMatchObject({ gate: 'review', decision: 'keep' })
 })
 
-it('leaves every grant decision of an approval batch to the identity provider', async () => {
-  expect(codexTool.inputSchema.properties.action.enum.filter(action => /approv|deny|grant/i.test(action))).toEqual([])
+it('decides approval batch grants only through the owner-session grants action, never through network commands', async () => {
+  // Owner decision October 10, 2026 (issue 1455): grant decisions go through the one grants action of the owner session.
+  expect(codexTool.inputSchema.properties.action.enum.filter(action => /approv|deny|grant/i.test(action))).toEqual(['grants'])
   const unknown = randomUUID()
   for (const type of ['approve', 'deny', 'approveGate', 'denyGate', 'gateApprove', 'gateDeny', 'gateExclude', 'grant']) expect(() => parseCodexNetworkAction({ action: 'networks', command: { type, id: unknown, revision: 1, taskId: unknown, generation: 1 } })).toThrow('Unsupported network command')
 

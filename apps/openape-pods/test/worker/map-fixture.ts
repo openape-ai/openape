@@ -36,9 +36,9 @@ export const mailContracts: Record<string, GraphContract> = {
 }
 export const mailChannels = ['mail.open', 'mail.sent-raw', 'mail.filtered', 'mail.triaged', 'mail.useful', 'mail.newsletter', 'mail.invoice', 'mail.reply', 'mail.unsure', 'mail.batch', 'mail.approved', 'mail.reviewed', 'invoice.candidate', 'draft.candidate', 'mail.sent', 'mail.excluded']
 
-const o365 = (account: string, displays: string[]) => ({ type: 'program', stateId: uuid(), capability: `tool.app_${uuid().replaceAll('-', '')}.invoke`, cliId: 'o365-cli', name: 'o365-cli', executable: 'o365-cli', executableHash: hash, adapterPath: '/unused', adapterHash: hash, networkHosts: [], entryFiles: [], environment: {}, grants: displays.map(display => ({ permission: `o365.account[email=${account}].mail[*]#${display.startsWith('Move') ? 'move' : 'list'}`, display, authority: {} })) })
-const program = (cliId: string, grants: { permission: string, display: string }[]) => ({ type: 'program', stateId: uuid(), capability: `tool.app_${uuid().replaceAll('-', '')}.invoke`, cliId, name: cliId, executable: cliId, executableHash: hash, adapterPath: '/unused', adapterHash: hash, networkHosts: [], entryFiles: [], environment: {}, grants: grants.map(grant => ({ ...grant, authority: {} })) })
-const http = (origin: string, methods: string[]) => ({ type: 'http', origin, methods, authority: {}, capability: `tool.http_${uuid().replaceAll('-', '')}.request` })
+const o365 = (account: string, displays: string[]) => ({ type: 'program', stateId: uuid(), capability: `tool.app_${uuid().replaceAll('-', '')}.invoke`, cliId: 'o365-cli', name: 'o365-cli', executable: 'o365-cli', executableHash: hash, adapterPath: '/unused', adapterHash: hash, networkHosts: [], entryFiles: [], environment: {}, grants: displays.map(display => ({ permission: `o365.account[email=${account}].mail[*]#${display.startsWith('Move') ? 'move' : 'list'}`, display })) })
+const program = (cliId: string, grants: { permission: string, display: string }[]) => ({ type: 'program', stateId: uuid(), capability: `tool.app_${uuid().replaceAll('-', '')}.invoke`, cliId, name: cliId, executable: cliId, executableHash: hash, adapterPath: '/unused', adapterHash: hash, networkHosts: [], entryFiles: [], environment: {}, grants })
+const http = (origin: string, methods: string[]) => ({ type: 'http', origin, methods, capability: `tool.http_${uuid().replaceAll('-', '')}.request` })
 const directory = (path: string, access: 'read' | 'readWrite') => ({ path, access, device: '1', inode: '1' })
 const credential = (alias: string) => ({ alias, credentialId: uuid() })
 const jev = { type: 'jev', capability: 'jev.evaluate', connectionId: uuid(), model: 'jev-1.13.0', maxAttempts: 20, authority: {} }
@@ -53,7 +53,11 @@ export function mapFixture() {
   const iurio = group('iurio'); const linde = group('Linde')
   const pods: Record<string, string> = {}
 
-  const resource = (podId: string, kind: string, name: string, configuration: Record<string, unknown>) => store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,\'ready\',?,?)').run(uuid(), podId, kind, name, JSON.stringify(configuration))
+  // Program grants are Pod grants in the ledger, apart from the sandbox entry of the application.
+  const resource = (podId: string, kind: string, name: string, { grants, ...configuration }: Record<string, unknown>) => {
+    store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,\'ready\',?,?)').run(uuid(), podId, kind, name, JSON.stringify(configuration))
+    for (const grant of (grants ?? []) as { permission: string, display: string }[]) store.db.prepare('INSERT INTO pod_grants VALUES(?,?,?,?,?,?,?,\'always\',\'approved\',NULL,NULL,0,?,?)').run(uuid(), podId, 'https://id.example.invalid', `pod-${podId}`, String(configuration.cliId), JSON.stringify([{ type: 'openape_cli', cli_id: configuration.cliId, operation_id: '*', resource_chain: [], action: grant.permission.split('#')[1], permission: grant.permission, display: grant.display, risk: 'low' }]), grant.display, NOW, NOW)
+  }
   const scripted = (name: string, groupId: string | null, options: { contract?: GraphContract, capabilities?: string[], lifecycle?: 'active' | 'paused' | 'archived', draft?: boolean } = {}) => {
     const pod = store.createPod({ name })
     if (groupId) groups.execute({ type: 'organize', action: 'move', podId: pod.id, groupId, revision: groups.view().revision })
