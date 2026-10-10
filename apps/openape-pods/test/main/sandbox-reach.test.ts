@@ -1,8 +1,9 @@
 // @vitest-environment node
-import { execFile } from 'node:child_process'
+import { execFile, spawnSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
-import { tmpdir } from 'node:os'
+import { tmpdir, userInfo } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { OwnerSession } from '../../src/main/connections/owner-session'
@@ -26,12 +27,13 @@ it('keeps the isolated profile closed by default and the owner profile open exce
   expect(lines[3]).toBe(`(allow file-read* file-write* (subpath ${JSON.stringify(policy.workspace)}) (subpath ${JSON.stringify(policy.writeDirectories[0])}))`)
   expect(lines[4]).toContain('(literal "/opt/fixture/bin/tool")')
   expect(lines[4]).toContain('(subpath "/opt/fixture/runtime")')
-  expect(lines[5]).toBe('(deny file-write* (subpath "/Users/owner/Library/LaunchAgents") (subpath "/Users/owner/.zshrc") (subpath "/Library/LaunchDaemons") (literal "/Users") (literal "/Users/owner") (literal "/Users/owner/Library") (literal "/Library"))')
+  expect(lines[5]).toBe('(deny file-write* (subpath "/Users/owner/Library/LaunchAgents") (subpath "/Users/owner/.zshrc") (subpath "/Library/LaunchDaemons") (literal "/Users") (literal "/Users/owner") (literal "/Users/owner/Library") (literal "/Users/owner/Library/Application Support") (literal "/Users/owner/.config") (literal "/Library"))')
   // Seatbelt checks a Unix socket connection as network access, so the sockets under the protected paths are closed separately.
   expect(lines[6]).toBe(`(deny network-outbound ${protectedPaths.map(path => `(remote unix-socket (subpath ${JSON.stringify(path)}))`).join(' ')})`)
   expect(lines[7]).toContain('(global-name "com.apple.xpc.smd")')
   expect(lines[8]).toBe('(deny job-creation)')
-  expect(lines).toHaveLength(9)
+  expect(lines[9]).toBe('(deny user-preference-write)')
+  expect(lines).toHaveLength(10)
   expect(() => sandboxPolicy({ ...policy, reach: { level: 'owner', protectedPaths: [], persistencePaths } })).toThrow('protected paths')
   expect(() => sandboxPolicy({ ...policy, reach: { level: 'owner', protectedPaths } })).toThrow('protected paths')
 })
@@ -52,8 +54,8 @@ it('lists every location both as written and as resolved through links', () => {
   mkdirSync(real); mkdirSync(dotfiles, { recursive: true }); symlinkSync(real, home); symlinkSync(dotfiles, join(real, '.claude'))
   const paths = ownerPersistencePaths(home)
   for (const path of [join(home, '.claude'), join(real, '.claude'), dotfiles, join(home, '.codex'), join(real, '.codex')]) expect(paths).toContain(path)
-  const profile = join(real, 'profile'); mkdirSync(join(real, '.config/apes'), { recursive: true }); mkdirSync(profile)
-  expect(ownerProtectedPaths(join(home, 'profile'), home)).toEqual(expect.arrayContaining([join(home, 'profile'), profile, join(home, '.config/apes'), join(real, '.config/apes')]))
+  const profile = join(real, 'base/profiles/a'); mkdirSync(join(real, '.config/apes'), { recursive: true }); mkdirSync(profile, { recursive: true })
+  expect(ownerProtectedPaths(join(home, 'base/profiles/a'), join(home, 'base'), home)).toEqual(expect.arrayContaining([join(home, 'base'), join(real, 'base'), join(home, 'base/profiles/a'), profile, join(home, '.config/apes'), join(real, '.config/apes')]))
 })
 
 /** Runs a command under a sandbox profile and returns its exit code and output; asynchronous so a socket server in this process can answer. */
@@ -65,11 +67,14 @@ function sandboxed(profile: string, command: string[]): Promise<{ code: number, 
 
 it.runIf(process.platform === 'darwin')('blocks writes to persistence locations, as written and through a linked home, and the Pods sockets under the real macOS sandbox', async () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'pr-'))); roots.push(root)
-  const real = join(root, 'real'); const home = join(root, 'home'); const workspace = join(root, 'w'); const profileRoot = join(root, 'p')
+  const real = join(root, 'real'); const home = join(root, 'home'); const workspace = join(root, 'w')
+  // The real layout: the base holds the profile selection, the MCP control socket and every profile; it is reached through a link here.
+  const base = join(root, 'b'); const linkedBase = join(root, 'base'); const profileRoot = join(base, 'profiles/0b7c3b8e-5f8e-4a51-9b3c-2f1d6c7a9e10')
   for (const path of ['.codex', '.ssh', '.config/git', '.local/bin', 'Library/pnpm', '.zsh_shared', 'notes']) mkdirSync(join(real, path), { recursive: true })
   mkdirSync(join(root, 'dotfiles/claude'), { recursive: true }); symlinkSync(join(root, 'dotfiles/claude'), join(real, '.claude'))
-  mkdirSync(join(profileRoot, 'codex'), { recursive: true }); mkdirSync(workspace); symlinkSync(real, home)
-  const reach = { level: 'owner' as const, protectedPaths: ownerProtectedPaths(profileRoot, home), persistencePaths: ownerPersistencePaths(home, { CODEX_HOME: join(root, 'codex-home') }) }
+  mkdirSync(profileRoot, { recursive: true }); mkdirSync(join(base, 'codex')); writeFileSync(join(base, 'selected-profile.json'), '{}')
+  mkdirSync(workspace); symlinkSync(real, home); symlinkSync(base, linkedBase)
+  const reach = { level: 'owner' as const, protectedPaths: ownerProtectedPaths(profileRoot, linkedBase, home), persistencePaths: ownerPersistencePaths(home, { CODEX_HOME: join(root, 'codex-home') }) }
   const owner = join(root, 'owner.sb'); writeFileSync(owner, sandboxPolicy({ executable: '/bin/sh', workspace, readFiles: [], runtimeDirectories: [], reach }))
   const isolated = join(root, 'isolated.sb'); writeFileSync(isolated, sandboxPolicy({ executable: process.execPath, workspace, readFiles: [], runtimeDirectories: [] }))
 
@@ -85,27 +90,46 @@ it.runIf(process.platform === 'darwin')('blocks writes to persistence locations,
   expect(await sandboxed(owner, ['/bin/sh', '-c', 'echo note > "$1" && cat "$1"', '-', join(home, 'notes/today.txt')])).toEqual({ code: 0, output: 'note\n' })
   expect((await sandboxed(owner, ['/usr/bin/git', '--version'])).code).toBe(0)
   expect(await sandboxed(owner, [process.execPath, '-p', '1 + 1'])).toEqual({ code: 0, output: '2\n' })
+  for (const path of [join(base, 'selected-profile.json'), join(linkedBase, 'selected-profile.json')]) expect((await sandboxed(owner, ['/bin/cat', path])).code, path).not.toBe(0)
+  expect((await sandboxed(owner, ['/bin/mv', linkedBase, join(root, 'moved')])).code).not.toBe(0)
 
-  const socket = join(profileRoot, 'codex/control.sock')
+  const socket = join(base, 'codex/control.sock')
   const server = createServer(connection => connection.end('owner-session\n'))
   await new Promise<void>(resolve => server.listen(socket, resolve))
   try {
     const client = 'const s=require("net").connect(process.argv[1]);s.on("data",d=>{console.log("CONNECTED");process.exit(0)});s.on("error",e=>{console.log("REFUSED "+e.code);process.exit(0)})'
-    expect((await sandboxed(owner, [process.execPath, '-e', client, socket])).output).toBe('REFUSED EPERM\n')
-    expect((await sandboxed(isolated, [process.execPath, '-e', client, socket])).output).toBe('REFUSED EPERM\n')
+    for (const path of [socket, join(linkedBase, 'codex/control.sock')]) {
+      expect((await sandboxed(owner, [process.execPath, '-e', client, path])).output, path).toBe('REFUSED EPERM\n')
+      expect((await sandboxed(isolated, [process.execPath, '-e', client, path])).output, path).toBe('REFUSED EPERM\n')
+    }
     const open = join(root, 'open.sb'); writeFileSync(open, '(version 1)\n(allow default)\n')
     expect((await sandboxed(open, [process.execPath, '-e', client, socket])).output).toBe('CONNECTED\n')
   }
   finally { server.close() }
 }, 60000)
 
-it('protects the Pods profile, the base of all profiles, the apes login and the keychains', () => {
+// cfprefsd writes named preference domains into the real ~/Library/Preferences whatever HOME says, so only the actual home
+// shows whether `defaults write` is refused. A random domain is removed again in case the write ever gets through.
+it.runIf(process.platform === 'darwin')('refuses defaults write through cfprefsd under the real macOS sandbox', async () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'pods-reach-defaults-'))); roots.push(root)
+  const workspace = join(root, 'w'); mkdirSync(workspace)
+  const reach = { level: 'owner' as const, protectedPaths: ownerProtectedPaths(join(root, 'p/profiles/a'), join(root, 'p'), userInfo().homedir), persistencePaths: ownerPersistencePaths(userInfo().homedir) }
+  const owner = join(root, 'owner.sb'); writeFileSync(owner, sandboxPolicy({ executable: '/bin/sh', workspace, readFiles: [], runtimeDirectories: [], reach }))
+  const domain = `ai.openape.pods-test-${randomUUID()}`
+  const written = await sandboxed(owner, ['/usr/bin/defaults', 'write', domain, 'planted', 'value'])
+  if (written.code === 0) {
+    spawnSync('/usr/bin/defaults', ['delete', domain])
+    rmSync(join(userInfo().homedir, 'Library/Preferences', `${domain}.plist`), { force: true })
+  }
+  expect(written.code).not.toBe(0)
+}, 60000)
+
+it('always protects the base of all profiles, the selected profile, the apes login and the keychains', () => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'pods-reach-home-'))); roots.push(home)
-  const base = join(home, 'Library/Application Support/OpenApe Pods'); const profile = join(base, 'profile-1')
+  const base = join(home, 'Library/Application Support/OpenApe Pods'); const profile = join(base, 'profiles/0b7c3b8e-5f8e-4a51-9b3c-2f1d6c7a9e10')
   mkdirSync(profile, { recursive: true }); mkdirSync(join(home, '.config/apes'), { recursive: true })
-  expect(ownerProtectedPaths(profile, home)).toEqual([profile, join(home, '.config/apes'), join(home, 'Library/Keychains')])
-  writeFileSync(join(base, 'selected-profile.json'), '{}')
-  expect(ownerProtectedPaths(profile, home)).toEqual([profile, base, join(home, '.config/apes'), join(home, 'Library/Keychains')])
+  expect(ownerProtectedPaths(profile, base, home)).toEqual([base, profile, join(home, '.config/apes'), join(home, 'Library/Keychains')])
+  expect(ownerProtectedPaths(base, base, home)).toEqual([base, join(home, '.config/apes'), join(home, 'Library/Keychains')])
 })
 
 function tokens(overrides: Partial<OwnerSessionTokens> = {}): OwnerSessionTokens {

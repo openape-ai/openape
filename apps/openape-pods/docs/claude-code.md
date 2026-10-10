@@ -126,7 +126,8 @@ reachable plus the runtime grant. A network target applies to every member of
 that revision with the network as origin; archiving the network revokes those
 grants and removes what it added. Level `owner` runs the Pod's programs with the
 owner's file and network reach instead of the isolated profile, except the Pods
-profile, `~/.config/apes` and `~/Library/Keychains`, so a Pod program never gets
+folder with every profile and its MCP control socket, `~/.config/apes` and
+`~/Library/Keychains`, so a Pod program never gets
 the owner identity or Pods state; application network hosts and their proxy apply
 only at the isolated level. The Pod's DDISA identity does not change. Places that
 would start code after the run stay read-only at this level, even inside an
@@ -141,9 +142,9 @@ owner's PATH (`/opt/homebrew`, `/usr/local`, `~/.local/bin`, `~/Library/pnpm`),
 folders leading to them, both as written and as resolved through links. Programs
 cannot connect to Unix sockets under the protected paths, such as the Pods MCP
 control socket, nor reach the macOS services that register login items and
-background tasks. This closes known autostart and persistence locations but is not
-a complete boundary against persistence; the isolated level is the security
-boundary. The macOS security service stays reachable on purpose:
+background tasks, nor write preferences through `defaults`. This is best-effort
+protection against persistence, not a complete boundary; the isolated level is
+the security boundary. The macOS security service stays reachable on purpose:
 programs such as `gh` read their own tokens from the login keychain through it, so
 an owner-level program can read keychain items the owner's keychain access rules
 release to it; only the keychain files themselves are closed. Use the owner level
