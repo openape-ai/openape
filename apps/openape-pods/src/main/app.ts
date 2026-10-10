@@ -82,20 +82,28 @@ const worker = new FixtureWorker((next) => {
   if (window && !window.isDestroyed()) window.webContents.send(channels.changed, status)
 })
 const remote = new RemoteController(root, worker)
-if (process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1') {
-  central = new CentralController(root, body => remote.workspaceRequest(body), { snapshot: format => worker.centralSnapshot(format), networkRead: command => worker.centralNetworkRead(command), version: () => worker.centralVersion(), execute: command => worker.centralExecute(command), gate: until => worker.centralGate(until) }, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/'))
-  worker.central = central
-  worker.inbox = new InboxDecisions(worker, t)
-}
 const codexDirectory = join(profileBase, 'codex')
 const codexTarget = { executable: process.execPath, script: join(__dirname, '../runtime/codex-mcp.mjs').replace('/app.asar/', '/app.asar.unpacked/'), socket: join(codexDirectory, 'control.sock') }
 // Acceptance runs of the fixture app have no reachable identity provider; they
 // replace only the browser sign-in and still need the native confirmation.
+// Fixture runs never read the developer's apes login or open IdP channels.
 const syntheticMcpOwner = fixture && process.env.NODE_ENV === 'test' && process.env.OPENAPE_PODS_FIXTURE_MCP_OWNER === 'synthetic'
 const mcpSessions = new McpOwnerSessions({
+  ...(fixture
+    ? {}
+    : {
+        apes: (endsAt: number, signal: AbortSignal) => worker.mcpApesSession(endsAt, signal),
+        // The IdP shows this as the requester on its confirmation page.
+        phone: (endsAt: number, signal: AbortSignal) => worker.mcpPhoneSession(endsAt, signal, `OpenApe Pods/${app.getVersion()} (Codex MCP sign-in on the owner's Mac)`),
+      }),
   login: (endsAt, signal) => syntheticMcpOwner ? Promise.resolve(null) : worker.mcpOwnerSession(endsAt, signal, ({ url }) => { void shell.openExternal(url).catch((error: unknown) => console.error('Could not open the MCP sign-in', error)) }),
   confirm: confirmMcpSession,
 })
+if (process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1') {
+  central = new CentralController(root, body => remote.workspaceRequest(body), { snapshot: format => worker.centralSnapshot(format), networkRead: command => worker.centralNetworkRead(command), version: () => worker.centralVersion(), execute: command => worker.centralExecute(command), gate: until => worker.centralGate(until) }, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/'))
+  worker.central = central
+  worker.inbox = new InboxDecisions(worker, t, () => mcpSessions.phoneRequest())
+}
 const codexServer = new CodexControlServer(codexTarget.socket, (request, owner) => worker.codex(request, owner), mcpSessions)
 // The IdP answers a signed-in browser without a prompt, so the owner confirms here
 // that this sign-in belongs to a request he just made.
