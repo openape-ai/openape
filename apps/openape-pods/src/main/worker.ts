@@ -56,6 +56,8 @@ import { ProgramManager } from './programs/manager'
 import { PodGrants, commandSpec, httpSpec } from './grants/pod-grants'
 import type { GrantSpec } from './grants/pod-grants'
 import type { OwnerSession } from './connections/owner-session'
+import { apesLogin } from './connections/apes-login'
+import type { ApesLogin } from './connections/apes-login'
 import type { GrantLedgerCommand } from '../worker/resources/grants'
 import type { SandboxReach, SandboxView } from '../contracts/sandbox'
 import { ownerProtectedPaths } from '../worker/runtime/sandbox'
@@ -136,6 +138,7 @@ function redactTerminalView(result: unknown): unknown {
 export class FixtureWorker {
   central: CentralController | null = null
   inbox: InboxDecisions | null = null
+  private apesLogin: ApesLogin | null = null
   // The runtime grant is checked at run start, watched at a low frequency, and re-verified before each service call.
   private shellIdentities = new Map<string, { refresh: (signal: AbortSignal) => Promise<void>, close: () => Promise<void> }>()
   private runTokens = new Map<string, RunGrantTokens>()
@@ -418,7 +421,10 @@ export class FixtureWorker {
   async mcpApesSession(endsAt: number, signal: AbortSignal): Promise<OwnerSession | null> {
     await this.setupReady
     if (!this.connections) throw new Error('Connection service unavailable')
-    return this.connections.apesOwnerSession(endsAt, signal)
+    const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
+    // The bundled apes CLI renews an expired key login under its own lock; Pods only reads the login.
+    this.apesLogin ??= apesLogin({ executable: process.execPath, script: app.isPackaged ? join(process.resourcesPath, 'apes/ape-shell.mjs') : join(dist, 'vendor/apes/ape-shell.mjs') })
+    return this.connections.apesOwnerSession(endsAt, signal, this.apesLogin)
   }
 
   async indexRemotePods(owner: Owner): Promise<void> {
