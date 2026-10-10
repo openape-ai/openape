@@ -77,7 +77,7 @@ export interface RunServices {
 const maxAgentCallsPerRun = 50
 /** Resource ports a network member uses through the standalone code path below. */
 const standalonePorts = new Set(['http.request', 'credentials.get', 'tools.invoke'])
-const networkPorts = new Set(['graph.contract', 'graph.emit', 'network.emit', 'network.gateCoverage', 'data.get', 'data.put', 'data.delete', 'data.query', 'artifacts.create', 'artifacts.read', 'progress.commit'])
+const networkPorts = new Set(['graph.contract', 'graph.emit', 'network.emit', 'network.gateCoverage', 'network.choices', 'data.get', 'data.put', 'data.delete', 'data.query', 'artifacts.create', 'artifacts.read', 'progress.commit'])
 
 export class RunDispatcher {
   readonly runs: RunStore
@@ -381,6 +381,7 @@ export class RunDispatcher {
             if (operation === 'artifacts.create') return network.invocations.data.artifacts.create(network.authority, payload)
             if (operation === 'artifacts.read') return network.invocations.data.artifacts.read(network.authority, payload)
             if (operation === 'network.gateCoverage') return network.invocations.gates!.scriptCoverage(network.authority)
+            if (operation === 'network.choices') return network.invocations.events.ownerChoices(network.authority, payload)
             if (operation === 'progress.commit') return network.invocations.stageProgress(network.authority, payload)
             if (operation === 'graph.contract') {
               const pinned = network.invocations.events.authority(network.authority).member.contract
