@@ -37,49 +37,44 @@ exact allow rule. The Codex connection can remain enabled.
 ## Sign in per session
 
 Every MCP server process (one per Claude or Codex session) starts without access.
-Pods opens a one-hour session for that MCP connection in one of three ways (owner
+Pods opens a one-hour session for that MCP connection in one of two ways (owner
 decisions October 10, 2026, issue 1455), each accepting only a human token of the
 registered owner (signature, issuer, `apes-cli` audience, `act: human`, account):
 
 1. **apes CLI login.** While the owner is logged in with `apes login` on this Mac,
    the first call opens the session silently and runs. Pods reads the apes access
    token through `@openape/cli-auth` and renews it the way apes does, under apes'
-   own lock file; it never logs in or out and never revokes the apes tokens. Each
-   renewal reads the apes login again, so `apes logout` ends the session; after
-   the hour the next call derives a new session while apes stays logged in. An
-   agent identity or another account is refused and the next path is used.
-2. **Phone confirmation.** Otherwise the call returns
-   `{"error":"login_required","message":…,"session":{"state":"pending","via":"phone","expiresAt":…,"link":"https://<issuer>/link?c=…"}}`.
-   The link is a channel of the identity provider's QR sign-in; the claim secret
-   stays in Pods. The same request appears in the account inbox as
-   **Codex-Anmeldung bestätigen**. The owner opens it on the phone (or any browser
-   signed in at the identity provider), checks that the requester is OpenApe Pods
-   and approves; no dialog in the app is needed. Pods then runs the browser
-   sign-in's PKCE authorization with the transferred IdP session, ends that IdP
-   session at once and keeps only the tokens it minted. The IdP channel expires
-   after two minutes; a denied or expired link opens nothing.
-3. **Browser sign-in.** When the phone channel cannot be opened, Pods opens the
-   owner's DDISA sign-in in the browser on this Mac and asks in a native dialog
-   whether this client may have full Pods access for one hour. Confirm only a
-   request you just made: the identity provider can complete the sign-in silently
-   while its browser session lasts.
+   own lock file; it never logs in or out and never revokes or writes the apes
+   tokens itself. Each renewal reads the apes login again, so `apes logout` ends
+   the session; after the hour the next call derives a new session while apes
+   stays logged in. An agent identity, a delegated token or another account is
+   refused and the browser sign-in is used.
+2. **Browser sign-in.** Otherwise the call returns
+   `{"error":"login_required","message":…,"session":{"state":"pending","via":"browser","expiresAt":…}}`
+   and Pods opens the owner's DDISA sign-in in the browser on this Mac (the same
+   PKCE login as the desktop owner account). After the sign-in, Pods asks in a
+   native dialog whether this client may have full Pods access for one hour.
+   Confirm only a request you just made: the identity provider can complete the
+   sign-in silently while its browser session lasts.
 
-The tool user never waits inside one call. It tells the owner the link, then calls
-`{"action":"session"}` (allowed without a session) about every five seconds until
-it returns `{"state":"signed_in","via":…,"expiresAt":…}`, and retries the original
-call. `expired` or `denied` (with a `message`) ends that sign-in; the next ordinary
-call asks again. `signed_out` means nothing is waiting.
+The tool user never waits inside one call. It asks the owner to finish the
+sign-in, then calls `{"action":"session"}` (allowed without a session) about every
+five seconds until it returns `{"state":"signed_in","via":…,"expiresAt":…}`, and
+retries the original call. `expired` or `denied` (with a `message`) ends that
+sign-in; the next ordinary call asks again. `signed_out` means nothing is waiting.
+A confirmation from a phone is planned as a separate follow-up with an initiator
+binding the identity provider verifies.
 
 The session is bound to that one MCP connection and ends after one hour, with
 **End session** in App settings, when the app quits or when the client
 disconnects; the next call signs in again without a client restart. The session
 secret and the owner's tokens stay in main-process memory, are never written to
 disk or handed to the worker, and are discarded when the session ends; a timer
-ends it at the hour. A refresh token Pods minted itself (phone and browser paths)
-is revoked at the identity provider, also one a racing renewal returned; the apes
-CLI's own tokens are never revoked. The identity provider issues five-minute access tokens; the session
-renews them in memory, never past its one-hour end. The persisted owner login
-used for Pod setup is a different login and never decides a grant.
+ends it at the hour. The refresh token of a browser sign-in is revoked at the
+identity provider, also one a racing renewal returned; the apes CLI's own tokens
+are never revoked. The identity provider issues five-minute access tokens; the
+session renews them in memory, never past its one-hour end. The persisted owner
+login used for Pod setup is a different login and never decides a grant.
 
 Within a session MCP acts as the owner and may use every action the tool offers,
 including network creation, activation, pause, archive, member changes and

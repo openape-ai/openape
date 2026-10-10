@@ -1294,9 +1294,8 @@ paused, settled compatibility transaction as other definition updates.
 ## Local owner MCP access
 
 Local MCP requires the owner's one-hour MCP session and acts as the current
-network owner. The session is proven by the owner's logged-in apes CLI, a phone
-confirmation through the IdP QR channel, or the browser sign-in with the app's
-confirmation dialog; the tool user polls the always-allowed `session` action while
+network owner. The session is proven by the owner's logged-in apes CLI or by the
+browser sign-in with the app's confirmation dialog; the tool user polls the always-allowed `session` action while
 the owner confirms (see `apps/openape-pods/docs/claude-code.md`). The session is the owner's own DDISA login (owner decision October
 10, 2026, superseding the October 9 rule that approvals stay at the IdP): it may
 decide grants with the owner's identity, see [Sandbox and grants](#sandbox-and-grants). The `networks` action accepts every network command the
