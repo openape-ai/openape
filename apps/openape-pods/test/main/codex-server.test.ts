@@ -15,7 +15,7 @@ import { McpOwnerSessions } from '../../src/main/codex/session'
 // owner's session secret that was sent on that same connection.
 let server: CodexControlServer | undefined; let root = ''
 afterEach(async () => { await server?.stop(); server = undefined; if (root) await rm(root, { recursive: true, force: true }) })
-const open: McpSessionGate = { authorize: () => {}, owner: () => null, disconnect: () => {} }
+const open: McpSessionGate = { authorize: async () => {}, status: () => ({ state: 'signed_out', via: null, expiresAt: null }), owner: () => null, disconnect: () => {} }
 async function start(execute: (request: CodexRequest) => Promise<unknown> = vi.fn(async request => ({ echoed: request.id })), sessions: McpSessionGate = open) {
   root = await mkdtemp(join(tmpdir(), 'pods-codex-socket-'))
   const endpoint = join(root, 'codex', 'control.sock')
@@ -123,7 +123,7 @@ it('answers concurrent calls by id, reports worker refusals and closes a connect
 it('refuses every call without the owner session with login_required and starts one browser sign-in', async () => {
   const fixture = owner(); const { endpoint, execute } = await start(undefined, fixture.sessions)
   const shim = client(endpoint)
-  for (const action of [{ action: 'runtime' }, { action: 'list' }, { action: 'run' }]) expect(await shim.call(action)).toMatchObject({ code: 'login_required', error: expect.stringContaining('confirm the request in the OpenApe Pods app, then retry') })
+  for (const action of [{ action: 'runtime' }, { action: 'list' }, { action: 'run' }]) expect(await shim.call(action)).toMatchObject({ code: 'login_required', error: expect.stringContaining('confirm the request in the OpenApe Pods app') })
   expect(await shim.call({ action: 'list' }, 'forged-secret')).toMatchObject({ code: 'login_required' })
   expect(fixture.login).toHaveBeenCalledOnce()
   expect(fixture.sessions.view()).toEqual({ expiresAt: null, pending: true })
@@ -213,23 +213,122 @@ it('hands the owner identity only to calls of its own session and discards it wh
   const login = async () => { const owner = tokens(); issued.push(owner); return owner as never }
   const sessions = new McpOwnerSessions({ login, confirm: vi.fn(async () => true), now: () => now })
   const peer = { closed: false, send: vi.fn() }; const other = { closed: false, send: vi.fn() }
-  expect(() => sessions.authorize(peer, undefined)).toThrow('login_required')
+  await expect(sessions.authorize(peer, undefined)).rejects.toThrow('login_required')
   await vi.waitFor(() => expect(peer.send).toHaveBeenCalledOnce())
   const secret = (peer.send.mock.calls[0]![0] as { session: string }).session
-  sessions.authorize(peer, secret)
+  await sessions.authorize(peer, secret)
   expect(sessions.owner(peer)).toBe(issued[0])
   expect(sessions.owner(other)).toBeNull()
   // The hard end of the hour ends the session and discards the owner tokens.
   now += 3600000
   expect(sessions.owner(peer)).toBeNull()
-  expect(() => sessions.authorize(peer, secret)).toThrow('login_required')
+  await expect(sessions.authorize(peer, secret)).rejects.toThrow('login_required')
   expect(issued[0]!.close).toHaveBeenCalledOnce()
   await vi.waitFor(() => expect(peer.send).toHaveBeenCalledTimes(2))
   sessions.disconnect(peer)
   expect(issued[1]!.close).toHaveBeenCalledOnce()
   // A declined confirmation discards the tokens of that sign-in at once.
   const declined = new McpOwnerSessions({ login, confirm: async () => false })
-  expect(() => declined.authorize(other, undefined)).toThrow('login_required')
+  await expect(declined.authorize(other, undefined)).rejects.toThrow('login_required')
   await vi.waitFor(() => expect(issued[2]?.close).toHaveBeenCalledOnce())
   expect(declined.owner(other)).toBeNull()
+})
+
+// Both sign-in paths share one session model: the apes CLI proof opens it silently, the browser sign-in with
+// the native confirmation is the fallback, and the session action reports either to the polling tool user.
+function paths(options: { apes?: () => Promise<unknown> } = {}) {
+  let now = 1_000_000
+  const issued: { active: boolean, close: ReturnType<typeof vi.fn> }[] = []
+  const owner = () => { const value = { active: true, close: vi.fn(async () => { value.active = false }) }; issued.push(value); return value }
+  let loggedIn = true
+  const apes = vi.fn(async () => options.apes ? options.apes() : loggedIn ? owner() : null)
+  const login = vi.fn(async () => owner())
+  let answer: (value: boolean) => void = () => {}
+  const confirm = vi.fn(() => new Promise<boolean>((resolve) => { answer = resolve }))
+  const sessions = new McpOwnerSessions({ apes: apes as never, login: login as never, confirm, now: () => now, loginTimeout: 60000 })
+  return { sessions, apes, login, confirm, issued, answer: (value: boolean) => answer(value), advance: (ms: number) => { now += ms }, logout: () => { loggedIn = false } }
+}
+
+it('opens a session from a valid apes login without any dialog and lets the call through', async () => {
+  const fixture = paths(); const { endpoint, execute } = await start(undefined, fixture.sessions)
+  const shim = client(endpoint)
+  expect(await shim.call({ action: 'session' })).toMatchObject({ result: { state: 'signed_out', via: null, expiresAt: null } })
+  expect(fixture.apes).not.toHaveBeenCalled()
+  expect(await shim.call({ action: 'list' })).toMatchObject({ result: { echoed: expect.any(String) } })
+  const secret = await shim.session()
+  expect(await shim.call({ action: 'session' })).toMatchObject({ result: { state: 'signed_in', via: 'apes', expiresAt: 1_000_000 + 3600000 } })
+  expect(await shim.call({ action: 'list' }, secret)).toMatchObject({ result: expect.anything() })
+  expect(fixture.apes).toHaveBeenCalledOnce()
+  expect(fixture.login).not.toHaveBeenCalled(); expect(fixture.confirm).not.toHaveBeenCalled()
+  expect(execute).toHaveBeenCalledTimes(2)
+  expect(await shim.call({ action: 'session', podId: 'x' })).toMatchObject({ error: expect.stringContaining('no other fields') })
+  await shim.end()
+})
+
+it('gives a second connection its own session and never the first one\'s', async () => {
+  const fixture = paths(); const { endpoint } = await start(undefined, fixture.sessions)
+  const first = client(endpoint); const second = client(endpoint)
+  await first.call({ action: 'list' }); const secret = await first.session()
+  fixture.logout()
+  // The first connection's secret does not open the second connection, and without an apes login it must sign in.
+  expect(await second.call({ action: 'list' }, secret)).toMatchObject({ code: 'login_required', status: { state: 'pending', via: 'browser' } })
+  expect(second.frames.some(frame => frame.id === undefined && 'session' in frame)).toBe(false)
+  expect(await first.call({ action: 'list' }, secret)).toMatchObject({ result: expect.anything() })
+  await first.end(); await second.end()
+})
+
+it('re-derives the session from a still valid apes login after the hour and asks the owner once apes is logged out', async () => {
+  const fixture = paths(); const { endpoint } = await start(undefined, fixture.sessions)
+  const shim = client(endpoint)
+  await shim.call({ action: 'list' }); const secret = await shim.session()
+  fixture.advance(3600000)
+  expect(await shim.call({ action: 'session' })).toMatchObject({ result: { state: 'expired', via: 'apes' } })
+  expect(fixture.issued[0]!.close).toHaveBeenCalledOnce()
+  expect(await shim.call({ action: 'list' }, secret)).toMatchObject({ result: expect.anything() })
+  const renewed = await shim.session()
+  expect(renewed).not.toBe(secret)
+  fixture.advance(3600000); fixture.logout()
+  expect(await shim.call({ action: 'list' }, renewed)).toMatchObject({ code: 'login_required', status: { state: 'pending', via: 'browser' } })
+  expect(fixture.apes).toHaveBeenCalledTimes(3)
+  await shim.end()
+})
+
+it('falls back when the apes login is refused and never opens a session from it', async () => {
+  const fixture = paths({ apes: async () => { throw new Error('Owner identity does not match the requested account') } })
+  const { endpoint, execute } = await start(undefined, fixture.sessions)
+  const shim = client(endpoint)
+  expect(await shim.call({ action: 'list' })).toMatchObject({ code: 'login_required', error: expect.stringContaining('The apes login on this Mac was not accepted: Owner identity does not match') })
+  expect(fixture.login).toHaveBeenCalledOnce()
+  expect(execute).not.toHaveBeenCalled()
+  await shim.end()
+})
+
+it('reports the browser sign-in as pending, signed_in, denied and expired to the polling tool user', async () => {
+  const fixture = paths(); fixture.logout()
+  const { endpoint, execute } = await start(undefined, fixture.sessions)
+  const shim = client(endpoint)
+  const refused = await shim.call({ action: 'list' })
+  expect(refused).toMatchObject({ code: 'login_required', status: { state: 'pending', via: 'browser', expiresAt: 1_000_000 + 60000 } })
+  expect(refused.error).toContain('{"action":"session"} about every 5 seconds until its state is signed_in')
+  expect(await shim.call({ action: 'session' })).toMatchObject({ result: { state: 'pending', via: 'browser' } })
+  await vi.waitFor(() => expect(fixture.confirm).toHaveBeenCalledOnce())
+  fixture.answer(true)
+  const secret = await shim.session()
+  expect(await shim.call({ action: 'session' })).toMatchObject({ result: { state: 'signed_in', via: 'browser', expiresAt: 1_000_000 + 3600000 } })
+  expect(await shim.call({ action: 'list' }, secret)).toMatchObject({ result: expect.anything() })
+  // A declined confirmation is denied and leaves no session; the next call asks again.
+  await fixture.sessions.end()
+  expect(await shim.call({ action: 'list' })).toMatchObject({ code: 'login_required', status: { state: 'pending' } })
+  await vi.waitFor(() => expect(fixture.confirm).toHaveBeenCalledTimes(2))
+  fixture.answer(false)
+  await vi.waitFor(async () => expect(await shim.call({ action: 'session' })).toMatchObject({ result: { state: 'denied', via: 'browser', message: expect.stringContaining('declined') } }))
+  // The hour of a session ends as expired.
+  expect(await shim.call({ action: 'list' })).toMatchObject({ code: 'login_required' })
+  await vi.waitFor(() => expect(fixture.confirm).toHaveBeenCalledTimes(3))
+  fixture.answer(true); const next = await shim.session()
+  fixture.advance(3600000)
+  expect(await shim.call({ action: 'session' })).toMatchObject({ result: { state: 'expired', via: 'browser' } })
+  expect(await shim.call({ action: 'list' }, next)).toMatchObject({ code: 'login_required' })
+  expect(execute).toHaveBeenCalledOnce()
+  await shim.end()
 })

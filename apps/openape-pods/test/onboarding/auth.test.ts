@@ -66,6 +66,62 @@ it('signs the MCP owner in only for a human token of the registered account, kee
   }
   expect(connect).not.toHaveBeenCalled()
 })
+function identityProvider() {
+  const keys = generateKeyPairSync('ed25519'); const jwk = { ...keys.publicKey.export({ format: 'jwk' }), kid: 'owner-key' }
+  const issuer = 'https://identity.example.invalid'; const account = 'owner@example.invalid'
+  const token = (body: Record<string, unknown>) => { const data = [Buffer.from(JSON.stringify({ alg: 'EdDSA', kid: jwk.kid })).toString('base64url'), Buffer.from(JSON.stringify(body)).toString('base64url')].join('.'); return `${data}.${sign(null, Buffer.from(data), keys.privateKey).toString('base64url')}` }
+  const human = (extra: Record<string, unknown> = {}) => ({ iss: issuer, aud: 'apes-cli', act: 'human', sub: 'owner-subject', email: account, exp: Math.floor(Date.now() / 1000) + 300, ...extra })
+  return { jwk, issuer, account, token, human }
+}
+
+// The apes CLI proof: the owner's logged-in apes access token is checked like a browser sign-in and is never revoked by Pods.
+it('opens an apes session only for a human token of the registered owner and ends it with apes logout', async () => {
+  const { jwk, issuer, account, token, human } = identityProvider()
+  const requests: string[] = []
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    requests.push(String(url))
+    if (url === `${issuer}/.well-known/jwks.json`) return new Response(JSON.stringify({ keys: [jwk] }))
+    throw new Error(`Unexpected request ${url}`)
+  }))
+  let current: { issuer: string, accessToken: string } | null = { issuer, accessToken: token(human()) }; let loggedIn = true
+  const login = { token: vi.fn(async () => current), signedIn: vi.fn(() => loggedIn) }
+  const owner = new OwnerConnection({} as CredentialCache)
+  const open = () => owner.apesSession(issuer, account, Date.now() + 3600000, new AbortController().signal, login)
+  const session = (await open())!
+  expect(session.subject).toBe('owner-subject')
+  expect(await session.bearer(new AbortController().signal)).toBe(current.accessToken)
+  for (const [name, proof] of [
+    ['agent identity', token(human({ act: 'agent' }))],
+    ['delegated identity', token(human({ act: { sub: 'agent@example.invalid' } }))],
+    ['foreign account', token(human({ email: 'foreign@example.invalid' }))],
+    ['foreign audience', token(human({ aud: 'another-client' }))],
+    ['expired token', token(human({ exp: Math.floor(Date.now() / 1000) - 1 }))],
+    ['bad signature', `${token(human()).slice(0, -8)}AAAAAAAA`],
+  ] as const) {
+    current = { issuer, accessToken: proof }
+    await expect(open(), name).rejects.toThrow(/Owner identity|signature/)
+  }
+  current = { issuer: 'https://foreign.example.invalid', accessToken: token(human()) }
+  await expect(open()).rejects.toThrow('another identity provider')
+  current = null
+  expect(await open()).toBeNull()
+  // A token near its end is re-derived from the still valid apes login; apes logout ends the session.
+  current = { issuer, accessToken: token(human({ exp: Math.floor(Date.now() / 1000) + 10 })) }
+  const short = (await open())!
+  current = { issuer, accessToken: token(human()) }
+  expect(await short.bearer(new AbortController().signal)).toBe(current.accessToken)
+  loggedIn = false
+  expect(short.active).toBe(false)
+  await expect(short.bearer(new AbortController().signal)).rejects.toThrow('owner session ended')
+  loggedIn = true
+  current = { issuer, accessToken: token(human({ exp: Math.floor(Date.now() / 1000) + 10 })) }
+  const renewing = (await open())!
+  current = null
+  await expect(renewing.bearer(new AbortController().signal)).rejects.toThrow('apes login ended')
+  session.close(); renewing.close()
+  expect(requests.every(url => url.endsWith('/.well-known/jwks.json'))).toBe(true)
+})
+
 it('rejects privilege-bearing setup input and invalid historical boundaries', () => {
   for (const value of [{ type: 'connect', provider: 'microsoft', account: 'a@example.invalid', issuer: 'https://foreign.invalid' }, { type: 'connect', provider: 'openape', account: 'a@example.invalid', issuer: 'http://localhost' }, { type: 'connect', provider: 'chatgpt', account: '', token: 'forbidden' }, { type: 'save', connection: {} }]) expect(() => parseOnboardingCommand(value)).toThrow()
   expect(parseSince(null)).toBeNull(); expect(parseSince('2026-06-01T00:00:00Z')).toBe('2026-06-01T00:00:00Z')
