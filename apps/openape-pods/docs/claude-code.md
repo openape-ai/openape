@@ -98,7 +98,18 @@ grants and removes what it added. Level `owner` runs the Pod's programs with the
 owner's file and network reach instead of the isolated profile, except the Pods
 profile, `~/.config/apes` and `~/Library/Keychains`, so a Pod program never gets
 the owner identity or Pods state; application network hosts and their proxy apply
-only at the isolated level. The Pod's DDISA identity does not change. A network
+only at the isolated level. The Pod's DDISA identity does not change. Places that
+would start code after the run stay read-only at this level, even inside an
+assigned folder: `~/Library/LaunchAgents`, `/Library/LaunchAgents`,
+`/Library/LaunchDaemons`, `/Library/StartupItems`, login items, cron and at jobs,
+shell startup files (zsh, bash, `.profile`, fish), `~/.ssh/authorized_keys`,
+`~/.ssh/config`, `~/Library/Preferences`, the installed `OpenApe Pods.app` in
+`/Applications` or `~/Applications` and the Pods rollback copy, together with the
+folders leading to them. The macOS security service stays reachable on purpose:
+programs such as `gh` read their own tokens from the login keychain through it, so
+an owner-level program can read keychain items the owner's keychain access rules
+release to it; only the keychain files themselves are closed. Use the owner level
+only for programs the owner trusts with that. A network
 declaration never replaces a member's own HTTP destination, and a grant the
 identity provider returns as already existing stays the member's own. `{ "type": "show", "target": … }` reads both.
 
