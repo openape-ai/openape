@@ -101,9 +101,9 @@ it('preserves admission diagnostics and keeps recovery readable when member conf
   const trace = f.engine.execute({ type: 'trace', id, revision: 1, before: null, caseId: null }).trace!
   expect(trace.events[0]!.body).toContain('needs validation')
   expect(trace.events[0]!.body).not.toContain('private')
-  f.store.db.prepare('INSERT INTO instance_config VALUES(?,?,?)').run(f.source, 'undeclared', 'true')
+  f.store.db.prepare('INSERT INTO definition_config SELECT definition_id,definition_version,\'token\',\'secret-reference\',\'"plain"\' FROM instance_definition_bindings WHERE pod_id=?').run(f.source)
   const detail = parseNetworkView(f.engine.execute({ type: 'detail', id, revision: 1 })).details!
-  expect(detail.members.find(member => member.podId === f.source)!.diagnostic).toContain('undeclared override')
+  expect(detail.members.find(member => member.podId === f.source)!.diagnostic).toContain('protected-store reference')
   expect(detail.members.find(member => member.podId === f.other)!.diagnostic).toBeUndefined()
   expect(detail.failures).toEqual([])
   expect(f.engine.execute({ type: 'pause', id, revision: 1 }).networks[0]!.state).toBe('paused')

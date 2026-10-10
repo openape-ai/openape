@@ -203,8 +203,8 @@ it('retains old version processing when an open join blocks a network update', (
   const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, { podId: sink, source: null, serialCase: true }], ['input'])
   const caseId = randomUUID()
   f.store.transaction(() => {
-    f.store.db.prepare('INSERT INTO network_cases VALUES(?,?,?,1,NULL,NULL,?)').run(caseId, id, f.groupId, Date.now())
-    f.store.db.prepare('INSERT INTO network_case_revisions VALUES(?,1,\'{}\',NULL,\'open\',?)').run(caseId, Date.now())
+    f.store.db.prepare('INSERT INTO network_cases VALUES(?,?,?,1,?)').run(caseId, id, f.groupId, Date.now())
+    f.store.db.prepare('INSERT INTO network_case_revisions VALUES(?,1,\'{}\',\'open\',?)').run(caseId, Date.now())
     f.store.db.prepare('INSERT INTO network_joins VALUES(?,?,?,1,1,?, ?,\'pending\',NULL)').run(id, 'waiting', caseId, '{}', Date.now() + 10000)
   })
   const update = vi.fn()
@@ -265,7 +265,7 @@ it('validates and activates a network definition through the workspace and rejec
   const local = await execute({ type: 'prepareLocal', podId: sink, expectedScript: f.store.getPod(sink).activeScript, name: 'Local network sink', defaults: { label: 'Local' } })
   const binding = local.instances.find(instance => instance.podId === sink)!
   expect(binding.definitionId).not.toBe(definitionId)
-  expect(f.store.db.prepare('SELECT definition_id,definition_version,binding_revision FROM network_members WHERE pod_id=?').get(sink)).toEqual({ definition_id: binding.definitionId, definition_version: 1, binding_revision: 3 })
+  expect(f.store.db.prepare('SELECT definition_id,definition_version,binding_revision FROM instance_definition_bindings WHERE pod_id=?').get(sink)).toEqual({ definition_id: binding.definitionId, definition_version: 1, binding_revision: 3 })
   expect(f.store.db.prepare('SELECT state,revision FROM networks WHERE id=?').get(id)).toEqual({ state: 'paused', revision: 3 })
   expect(local.instances.find(instance => instance.podId === shared.createdPodId)).toMatchObject({ definitionId, version: 2 })
 })

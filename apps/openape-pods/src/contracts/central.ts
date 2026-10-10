@@ -17,15 +17,16 @@ import type { ResourceState } from './resources'
 import type { MapView } from './map-view'
 
 export const centralTables = [
-  'pods', 'remote_pods', 'master_creations', 'script_credential_approvals', 'assignments', 'scripts', 'checkpoints', 'sources', 'claims', 'settings', 'validations', 'resources', 'resource_epochs',
+  'pods', 'remote_pods', 'master_creations', 'script_credential_approvals', 'scripts', 'checkpoints', 'sources', 'claims', 'settings', 'validations', 'resources', 'resource_epochs',
   'runs', 'run_events', 'schedules', 'accepted_events', 'run_inputs', 'recovery_reviews', 'effect_ledger',
-  'mail_inventory', 'mail_items', 'mail_receipts', 'mail_extractions', 'mail_contexts', 'source_derivations',
-  'master_messages', 'script_drafts', 'access_proposals', 'pod_organization', 'pod_groups', 'pod_memberships',
+  'mail_inventory', 'mail_items', 'mail_receipts', 'mail_contexts', 'source_derivations',
+  'master_messages', 'script_drafts', 'pod_organization', 'pod_groups', 'pod_memberships',
   'pod_variables', 'master_message_scopes', 'pod_chat_origins', 'pod_descriptions', 'draft_packages', 'dependency_sets', 'script_dependencies',
-  'chat_conversations', 'chat_contexts', 'chat_members', 'chat_message_context', 'control_runs', 'control_changes',
+  'chat_conversations', 'chat_contexts', 'chat_members', 'chat_message_context', 'control_runs',
 ] as const
-/** Workflow and graph tables that desktops before issue 1455 (M4) still publish; the relay accepts and ignores them. */
+/** Tables that desktops before issue 1455 (M8) still publish; the relay accepts and ignores them. */
 export const retiredCentralTables = [
+  'assignments', 'mail_extractions', 'access_proposals', 'control_changes',
   'workflow_channels', 'workflow_gates', 'workflow_values', 'graph_items', 'graph_deliveries', 'graph_item_events', 'graph_gate_batches',
   'workflows', 'workflow_members', 'workflow_runs', 'workflow_nodes', 'workflow_attempts', 'workflow_mail_scopes',
   'workflow_mail_pending', 'workflow_mail_processed', 'workflow_mail_participants', 'workflow_mail_batches', 'workflow_mail_audit',

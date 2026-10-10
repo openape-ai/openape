@@ -58,7 +58,6 @@ export class MailKnowledge {
     this.store.transaction(() => {
       this.store.db.prepare('INSERT OR IGNORE INTO sources VALUES(?,?,?,?,?)').run(this.podId, id, result.parser, `${raw.locator as string}#extracted`, hash)
       this.store.db.prepare('INSERT OR IGNORE INTO source_derivations VALUES(?,?,?,?)').run(this.podId, id, sourceId, result.parser)
-      this.store.db.prepare('INSERT OR REPLACE INTO mail_extractions VALUES(?,?,?,?,?)').run(this.podId, sourceId, result.parser, id, result.gap)
     })
     return { id, originalId: sourceId, text, gap: result.gap }
   }

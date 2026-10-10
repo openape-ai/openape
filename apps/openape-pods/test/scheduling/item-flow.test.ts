@@ -66,7 +66,6 @@ it('settles persistent consumer A while B is held, deduplicates source versions 
     await vi.waitFor(() => expect(releaseB).toBeTypeOf('function'))
     await vi.waitFor(() => expect(f.store.db.prepare('SELECT state FROM network_deliveries d JOIN network_subscriptions s ON s.id=d.subscription_id WHERE s.pod_id=?').get(a)!.state).toBe('done'))
     expect(f.store.db.prepare('SELECT d.state FROM network_deliveries d JOIN network_subscriptions s ON s.id=d.subscription_id WHERE s.pod_id=?').get(b)!.state).toBe('claimed')
-    expect(f.store.db.prepare('SELECT count(*) AS count FROM workflow_runs').get()!.count).toBe(0)
     f.engine.execute({ type: 'pause', id, revision: 1 })
   }
   finally { releaseB?.() }

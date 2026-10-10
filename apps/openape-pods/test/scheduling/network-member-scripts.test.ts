@@ -39,7 +39,7 @@ function fixture() {
     return hash
   }
   const update = (hash: string) => f.engine.updateMemberScript({ type: 'updateMemberScript', id, revision: 1, podId: consumer, hash })
-  const pin = () => f.store.db.prepare('SELECT v.content_hash FROM network_members m JOIN pod_definition_versions v ON v.definition_id=m.definition_id AND v.version=m.definition_version WHERE m.pod_id=?').get(consumer)!.content_hash
+  const pin = () => f.store.db.prepare('SELECT v.content_hash FROM instance_definition_bindings m JOIN pod_definition_versions v ON v.definition_id=m.definition_id AND v.version=m.definition_version WHERE m.pod_id=?').get(consumer)!.content_hash
   return { ...f, id, source, consumer, received, emit, choose, validated, update, pin }
 }
 
@@ -57,7 +57,7 @@ it('updates one member script while another decision stays open and runs the new
   expect(network).toMatchObject({ revision: 1, state: 'paused' })
   const revision = f.store.db.prepare('SELECT contract,content_hash FROM network_revisions WHERE network_id=?').get(f.id)!
   expect(revision.content_hash).toBe(digest(revision.contract as string))
-  const pinned = f.store.db.prepare('SELECT definition_id,definition_version FROM network_members WHERE pod_id=?').get(f.consumer)!
+  const pinned = f.store.db.prepare('SELECT definition_id,definition_version FROM instance_definition_bindings WHERE pod_id=?').get(f.consumer)!
   expect(JSON.parse(revision.contract as string).members.find((member: { podId: string }) => member.podId === f.consumer)).toMatchObject({ definitionId: pinned.definition_id, definitionVersion: pinned.definition_version })
   expect(JSON.parse(f.store.db.prepare('SELECT body FROM network_trace_events WHERE kind=\'member-script-updated\'').get()!.body as string)).toMatchObject({ podId: f.consumer, script: hash, definitionVersion: pinned.definition_version, via: 'mcp' })
   expect(parseNetworkView(f.engine.execute({ type: 'list' })).choices).toHaveLength(1)
@@ -149,7 +149,7 @@ it('keeps an active network active and forks a definition shared with another in
   f.update(f.validated(selected, 'fixed'))
 
   expect(f.store.db.prepare('SELECT state,revision FROM networks WHERE id=?').get(f.id)).toMatchObject({ state: 'active', revision: 1 })
-  const member = f.store.db.prepare('SELECT definition_id,definition_version FROM network_members WHERE pod_id=?').get(f.consumer)!
+  const member = f.store.db.prepare('SELECT definition_id,definition_version FROM instance_definition_bindings WHERE pod_id=?').get(f.consumer)!
   expect(member.definition_id).not.toBe(shared)
   expect(member.definition_version).toBe(1)
   expect(f.store.db.prepare('SELECT max(version) AS version FROM pod_definition_versions WHERE definition_id=?').get(shared)!.version).toBe(1)
@@ -181,7 +181,7 @@ it('appends an unpublished version to a definition owned only by this member', a
   f.store.db.prepare('INSERT INTO pod_definition_sources VALUES(?,1,\'published\',?,?,?,NULL)').run(binding.definition_id!, f.consumer, f.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(f.consumer, active)!.manifest as string, JSON.stringify(emptyPackages()))
   const hash = f.validated(selected, 'fixed')
   f.update(hash)
-  expect(f.store.db.prepare('SELECT definition_id,definition_version FROM network_members WHERE pod_id=?').get(f.consumer)).toEqual({ definition_id: binding.definition_id, definition_version: 2 })
+  expect(f.store.db.prepare('SELECT definition_id,definition_version FROM instance_definition_bindings WHERE pod_id=?').get(f.consumer)).toEqual({ definition_id: binding.definition_id, definition_version: 2 })
   expect(f.store.db.prepare('SELECT state FROM pod_definition_sources WHERE definition_id=? AND version=2').get(binding.definition_id!)!.state).toBe('legacy')
   expect(f.pin()).toBe(hash)
 })
