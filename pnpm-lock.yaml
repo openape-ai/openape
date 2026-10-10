@@ -877,6 +877,9 @@ importers:
       '@openape/apes':
         specifier: workspace:*
         version: link:../../packages/apes
+      '@openape/cli-auth':
+        specifier: workspace:*
+        version: link:../../packages/cli-auth
       '@openape/core':
         specifier: workspace:*
         version: link:../../packages/core

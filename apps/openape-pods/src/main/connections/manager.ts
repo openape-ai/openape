@@ -14,6 +14,7 @@ import type { CredentialCache } from './cache'
 import { CodexConnection } from './codex'
 import { OwnerConnection } from './owner'
 import type { OwnerSession } from './owner-session'
+import type { ApesLogin } from './apes-login'
 import { PodIdentityManager } from './agent'
 import type { PodIdentityReference } from './agent'
 import { recoverAuthDomains } from './ledger'
@@ -116,6 +117,14 @@ export class ConnectionManager {
     const { owner, metadata } = selected
     if (typeof metadata.issuer !== 'string' || typeof metadata.subject !== 'string') throw new Error('Sign in with your DDISA account again to verify its identity')
     return { owner: { issuer: metadata.issuer, subject: metadata.subject }, email: owner.account }
+  }
+
+  /** An MCP owner session proven by the owner's logged-in apes CLI; null when apes has no usable login. */
+  async apesOwnerSession(endsAt: number, signal: AbortSignal, login: ApesLogin): Promise<OwnerSession | null> {
+    const { owner, email } = await this.remoteOwner()
+    const session = await this.owner.apesSession(owner.issuer, email, endsAt, signal, login)
+    if (session && session.subject !== owner.subject) { await session.close(); throw new Error('The apes login is not the registered owner') }
+    return session
   }
 
   /** Signs the registered owner in again in the browser for an MCP session; its tokens stay in the returned session only. */
