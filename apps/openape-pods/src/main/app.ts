@@ -46,6 +46,7 @@ import { assertStatusRequest, assetPath, contentSecurityPolicy, rendererURL, ren
 import { FixtureWorker } from './worker'
 import { CodexControlServer } from './codex/server'
 import { refreshLauncher } from './codex/launcher'
+import { controlSocketPath } from './codex/socket-path'
 import { CodexRegistration } from './codex/registration'
 import { parseCodexCommand } from '../contracts/codex'
 import { homedir } from 'node:os'
@@ -88,7 +89,7 @@ if (process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1') {
   worker.inbox = new InboxDecisions(worker, t)
 }
 const codexDirectory = join(profileBase, 'codex')
-const codexTarget = { executable: process.execPath, script: join(__dirname, '../runtime/codex-mcp.mjs').replace('/app.asar/', '/app.asar.unpacked/'), socket: join(codexDirectory, 'control.sock') }
+const codexTarget = { executable: process.execPath, script: join(__dirname, '../runtime/codex-mcp.mjs').replace('/app.asar/', '/app.asar.unpacked/'), socket: controlSocketPath(profileBase) }
 // Acceptance runs of the fixture app have no reachable identity provider; they
 // replace only the browser sign-in and still need the native confirmation.
 // Fixture runs never read the developer's apes login.

@@ -11,8 +11,9 @@ CREATE TABLE IF NOT EXISTS network_sandbox_resources(network_id TEXT NOT NULL, n
 
 /**
  * Application and HTTP resources stored their grant inside the sandbox assignment until schema 43. The grant stays
- * at the IdP: the next call requests the same details as the Pod identity, and the IdP returns the existing approved
- * continuing grant instead of asking again. Only the copy inside the sandbox resource is removed.
+ * at the IdP, and the runs that used it recorded its id in their approval events: the next call that finds no ledger
+ * entry adopts it from there (PodGrants.adopt), because a brokered request never returns an existing grant. Only the
+ * copy inside the sandbox resource is removed.
  */
 export function separateStoredGrants(database: DatabaseSync): number {
   const rows = database.prepare('SELECT id,configuration FROM resources WHERE json_extract(configuration,\'$.type\') IN (\'program\',\'http\')').all()

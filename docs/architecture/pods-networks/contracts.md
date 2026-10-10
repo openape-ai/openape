@@ -1356,6 +1356,14 @@ grant must cover it as well, and so must the minted token
 whole-program grant has one detail per action and first resource without
 selector; groups that contain an adapter operation marked `exact_command` are
 left out. An origin grant without methods covers every method.
+Every runtime, program and HTTP request asks for an `always` grant (owner
+decision October 10, 2026, issue 1455); single-use grants remain only for gate
+and archive batches. Before a new request, a call or declaration without a
+covering ledger entry adopts an earlier grant of the same identity: the ids its
+runs' approval events name, read at the IdP as the Pod identity, approved before
+pending, `once` and foreign grants skipped. This recovers the grants schema 43
+removed from the resources, because the brokered IdP neither lists them for the
+Pod identity nor returns them for a new request.
 
 A network-level declaration (`sandbox` or `grants` with target `{networkId,
 revision}`) is fanned out to every member of that revision: one request per
