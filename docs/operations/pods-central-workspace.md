@@ -49,11 +49,21 @@ reports a change counter, so an idle desktop builds no snapshot at all.
 Compatibility (issue 1455, M8): format 2 is the only format. The service refuses a
 full snapshot (`unsupported_workspace_format`), has no `archive` request and empties
 the `runtimes.snapshot` column at start; the column itself stays, so the previous
-service can open the database after a rollback. It accepts and ignores the `schema`
-and `table/` parts that desktops before M8 still publish, and `begin` still announces
-`networkReads: 1`, which those desktops need to publish their networks. A desktop
-refuses a service whose `begin` names no format. Parts live in additive tables;
-`user_version` stays 1.
+service can open the database after a rollback. Desktops before M8 still publish
+`table/` parts with raw rows: the service accepts them unread and keeps only their key
+and hash (needed for the manifest digest); rows stored earlier are emptied at start.
+`begin` still announces `networkReads: 1`, which those desktops need to publish their
+networks. A desktop refuses a service whose `begin` names no format. Parts live in
+additive tables; `user_version` stays 1.
+
+Rollback window: an M8 desktop still publishes the `schema` part (its storage schema),
+which services before M8 require, so a service rollback keeps current desktops online.
+Remove it once no service before M8 can return. Rolling the desktop back from schema 46
+is not an in-place downgrade: a release before M8 refuses a schema-46 profile ("needs a
+newer application"). Stop the app, replace `control.sqlite` with the verified
+`before-v45-*.sqlite` copy the upgrade left in the profile (delete `control.sqlite-wal`
+and `-shm` first), then install the previous app bundle. Work done after the upgrade
+is not in that copy.
 
 Heartbeats run every 10 seconds on their own and never wait for a publication; the
 service accepts the current or the just-replaced hash. Request timeouts are 15 s

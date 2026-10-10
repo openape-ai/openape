@@ -116,7 +116,7 @@ it('registers a desktop through real DDISA callbacks and rejects replayed handof
   const invalidArtifact = JSON.stringify({ type: 'artifact', lease: session.lease, podId: fixture.view.id, hash: artifactHash, content: 'not base64' })
   const invalidUpload = await fetch(`${relay.url}${runtimePath}`, { method: 'POST', headers: { ...headers(desktop, runtimePath, 'POST', invalidArtifact), 'content-type': 'application/json' }, body: invalidArtifact })
   expect(invalidUpload.status).toBe(400)
-  const state = { version: 1 as const, workspace: { ...fixture.host.workspace, pods: [fixture.host.workspace.pods[0]!] }, pods: [fixture.view], artifacts: [{ podId: fixture.view.id, path: 'workspace/example.bin', hash: artifactHash, size: artifact.length }], blobs: [] }
+  const state = { version: 1 as const, schema: 46, workspace: { ...fixture.host.workspace, pods: [fixture.host.workspace.pods[0]!] }, pods: [fixture.view], artifacts: [{ podId: fixture.view.id, path: 'workspace/example.bin', hash: artifactHash, size: artifact.length }], blobs: [] }
   const workspacePublication = fullPublication(state)
   const publish = async (revision: number, completion?: unknown) => {
     await central({ type: 'parts', lease: session.lease, parts: workspacePublication.parts })

@@ -57,6 +57,8 @@ export class WorkspaceStore {
     // Full format-1 snapshots are no longer read (issue 1455, M8); every runtime publishes parts. The column stays
     // empty rather than dropped, so the previous server can still open this database after a rollback.
     this.db.exec('UPDATE runtimes SET snapshot=NULL WHERE snapshot IS NOT NULL')
+    // Table rows of desktops before M8 are never read: only their key and hash stay, for the manifest digest.
+    this.db.exec(`UPDATE parts SET value='null' WHERE key LIKE 'table/%' AND value!='null'`)
   }
 
   close(): void { this.db.close() }
@@ -215,11 +217,13 @@ export class WorkspaceStore {
       if (prior) return { revision: prior.revision, hash }
       const current = this.manifest(row.id)
       const staged = this.db.prepare('SELECT value FROM staged_parts WHERE runtime_id=? AND hash=?')
-      const committed = this.db.prepare('SELECT value FROM parts WHERE runtime_id=? AND hash=? LIMIT 1')
+      const committed = this.db.prepare('SELECT value FROM parts WHERE runtime_id=? AND hash=? AND key NOT LIKE \'table/%\' LIMIT 1')
       const upsert = this.db.prepare('INSERT INTO parts VALUES(?,?,?,?) ON CONFLICT(runtime_id,key) DO UPDATE SET hash=excluded.hash,value=excluded.value')
       for (const [key, partHashValue] of entries) {
         if (partHashValue === null) { this.db.prepare('DELETE FROM parts WHERE runtime_id=? AND key=?').run(row.id, key); continue }
         if (current[key] === partHashValue) continue
+        // A desktop before M8 also sends table rows; they are accepted unread and only their hash is kept.
+        if (parsePartKey(key).table) { upsert.run(row.id, key, partHashValue, 'null'); continue }
         const text = (staged.get(row.id, partHashValue) ?? committed.get(row.id, partHashValue))?.value
         if (typeof text !== 'string') throw new ProtocolError('workspace_part_missing', 409)
         validatePart(key, JSON.parse(text))

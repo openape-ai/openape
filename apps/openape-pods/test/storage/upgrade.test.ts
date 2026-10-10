@@ -81,9 +81,17 @@ it('upgrades schema 45 keeping every retained row, rowid and sequence and only t
   expect(store.db.prepare('SELECT id FROM network_trace_events ORDER BY id').all()).toEqual([{ id: 7 }, { id: 42 }])
 })
 
+it('keeps the counter of an AUTOINCREMENT table that is empty at the upgrade', () => {
+  const root = directory(); const ids = profile45(root, 'DELETE FROM network_trace_events;')
+  const store = open(root)
+  store.db.prepare('INSERT INTO network_trace_events(network_id,kind,body,created_at) VALUES(?,\'next\',\'{}\',2)').run(ids.network)
+  expect(store.db.prepare('SELECT id FROM network_trace_events').all()).toEqual([{ id: 42 }])
+})
+
 it('refuses an upgrade whose two member binding copies disagree and leaves schema 45 untouched', () => {
   const root = directory(); profile45(root, 'UPDATE network_members SET binding_revision=3;')
   expect(() => open(root)).toThrow('binding that differs')
+  expect(readdirSync(root).filter(file => file.startsWith('before-v45-'))).toEqual([])
   const database = new DatabaseSync(join(root, 'control.sqlite'), { readOnly: true })
   try { expect(database.prepare('SELECT user_version, (SELECT count(*) FROM workflows) AS workflows FROM pragma_user_version').get()).toEqual({ user_version: 45, workflows: 1 }) }
   finally { database.close() }
@@ -93,6 +101,7 @@ it('refuses a schema-45 database with any foreign object before executing a stat
   for (const crafted of ['CREATE TABLE "x""; DROP TABLE pods; --"(a);', 'CREATE TRIGGER t AFTER INSERT ON runs BEGIN DELETE FROM pods; END;', 'CREATE VIEW v AS SELECT 1;']) {
     const root = directory(); profile45(root, crafted)
     expect(() => open(root)).toThrow('does not have the schema 45 it declares')
+    expect(readdirSync(root).filter(file => file.startsWith('before-v45-'))).toEqual([])
     const database = new DatabaseSync(join(root, 'control.sqlite'), { readOnly: true })
     try { expect(database.prepare('SELECT user_version, (SELECT count(*) FROM pods) AS pods, (SELECT count(*) FROM workflows) AS workflows FROM pragma_user_version').get()).toEqual({ user_version: 45, pods: 1, workflows: 1 }) }
     finally { database.close() }
