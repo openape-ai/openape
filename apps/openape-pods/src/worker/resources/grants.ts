@@ -10,6 +10,7 @@ export type GrantLedgerCommand
   = | { type: 'list', podId?: string, networkId?: string }
     | { type: 'find', podId: string, issuer: string, subject: string, detail: OpenApeCliAuthorizationDetail }
     | { type: 'same', podId: string, issuer: string, subject: string, details: OpenApeCliAuthorizationDetail[] }
+    | { type: 'observed', podId: string, issuer: string, subject: string, cliId: string }
     | { type: 'record', grant: PodGrant }
     | { type: 'state', podId: string, id: string, state: GrantState, approvedInSession?: boolean }
     | { type: 'released' }
@@ -41,6 +42,7 @@ export class GrantLedger {
     if (command.type === 'list') return this.list(command.podId, command.networkId)
     if (command.type === 'find') return this.find(command.podId, command.issuer, command.subject, command.detail)
     if (command.type === 'same') return this.same(command.podId, command.issuer, command.subject, command.details)
+    if (command.type === 'observed') return this.observed(command.podId, command.issuer, command.subject, command.cliId)
     if (command.type === 'record') { this.record(command.grant); return true }
     if (command.type === 'state') { this.state(command.podId, command.id, command.state, command.approvedInSession); return true }
     if (command.type === 'released') return this.released()
@@ -71,6 +73,19 @@ export class GrantLedger {
   same(podId: string, issuer: string, subject: string, details: OpenApeCliAuthorizationDetail[]): PodGrant | null {
     const wanted = canonical(details)
     return this.list(podId).find(grant => grant.issuer === issuer && grant.subject === subject && grant.grantType === 'always' && ['pending', 'approved'].includes(grant.state) && canonical(grant.details) === wanted) ?? null
+  }
+
+  /**
+   * Grant ids of one program that this Pod identity's runs waited for or used (their approval events) and that the
+   * ledger does not hold, newest first. Grants kept before schema 43 are known only here; the IdP decides whether one is
+   * still usable.
+   */
+  observed(podId: string, issuer: string, subject: string, cliId: string): string[] {
+    return this.store.db.prepare(`SELECT json_extract(e.data,'$.grantId') AS grant_id,max(e.at) AS seen FROM run_events e JOIN runs r ON r.id=e.run_id
+      WHERE r.pod_id=? AND e.type='approval' AND json_extract(e.data,'$.issuer')=? AND json_extract(e.data,'$.subject')=? AND substr(json_extract(e.data,'$.permission'),1,?)=?
+      AND json_extract(e.data,'$.grantId') NOT IN (SELECT id FROM pod_grants WHERE pod_id=?) GROUP BY grant_id ORDER BY seen DESC LIMIT 16`)
+      .all(podId, issuer, subject, cliId.length + 1, `${cliId}.`, podId)
+      .map(row => String(row.grant_id))
   }
 
   /** Records a grant or its new state; the origin is kept from the first record, so a network never adopts a Pod's own grant. */

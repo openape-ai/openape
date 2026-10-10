@@ -1340,7 +1340,8 @@ with methods, folders, secrets and the level `isolated` or `owner`. Grants decid
 what it may do. They are independent; a call needs a sandbox entry and a covering
 grant. `owner` gives the Pod's programs the owner's OS reach (a permissive
 profile under the same supervising helper) except the Pods profile and its base
-(with the MCP control socket) and `~/.config/apes`, which stay denied for reading,
+(with the MCP control socket or its `/private/tmp/openape-pods-<uid>-<hash>/`
+fallback directory) and `~/.config/apes`, which stay denied for reading,
 writing and socket connections while the program's own workspace, state and
 runtime are allowed again; it is about paths and reach only, and the Pod's DDISA
 identity stays the Pod. These protections only prevent direct access: an
@@ -1365,6 +1366,14 @@ grant must cover it as well, and so must the minted token
 whole-program grant has one detail per action and first resource without
 selector; groups that contain an adapter operation marked `exact_command` are
 left out. An origin grant without methods covers every method.
+Every runtime, program and HTTP request asks for an `always` grant (owner
+decision October 10, 2026, issue 1455); single-use grants remain only for gate
+and archive batches. Before a new request, a call or declaration without a
+covering ledger entry adopts an earlier grant of the same identity: the ids its
+runs' approval events name, read at the IdP as the Pod identity, approved before
+pending, `once` and foreign grants skipped. This recovers the grants schema 43
+removed from the resources, because the brokered IdP neither lists them for the
+Pod identity nor returns them for a new request.
 
 A network-level declaration (`sandbox` or `grants` with target `{networkId,
 revision}`) is fanned out to every member of that revision: one request per

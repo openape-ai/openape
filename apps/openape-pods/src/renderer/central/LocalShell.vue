@@ -10,6 +10,7 @@ import type { MapView } from '../../contracts/map-view'
 import type { SecretsCommand, SecretsView } from '../../contracts/secrets'
 import type { PortableSourceSelection } from '../../contracts/sharing'
 import AutomationsShell from './AutomationsShell.vue'
+import { kpiFacts } from '../utils/kpis'
 import type { NetworkControl, WorkflowControl } from './AutomationDetail.vue'
 
 /**
@@ -70,5 +71,5 @@ const secretSave = (podId: string, alias: string, value: string) => void run(asy
   <p v-if="actionError" role="alert" class="error-message" data-action-error>
     {{ diagnostic(actionError) }}
   </p>
-  <AutomationsShell :view="map" :live="true" :now="now" :decisions="map?.kpis.decisions.reduce((sum, item) => sum + item.count, 0)" desktop :sharing="sharing" :codex="codexConnected === null ? undefined : codexConnected ? 'connected' : 'disconnected'" :tab="tab" :inbox="{ choices: networks.choices ?? [], gates: networks.gates ?? [], graphGates: workflows.gates ?? null }" :secrets="secrets" @update:tab="tab = $event" @network-command="networkCommand" @workflow-command="workflowCommand" @command="localCommand" @network="networkControl" @workflow="workflowControl" @folder="openFolder" @secrets="secretsCommand" @secret-save="secretSave" @open-pod="emit('openPod', $event)" @share="emit('share', $event)" @advanced="emit('advanced')" @import="emit('import')" />
+  <AutomationsShell :view="map" :live="true" :now="now" :decisions="map ? kpiFacts(map).decisions.count : undefined" desktop :sharing="sharing" :codex="codexConnected === null ? undefined : codexConnected ? 'connected' : 'disconnected'" :tab="tab" :inbox="{ choices: networks.choices ?? [], gates: networks.gates ?? [], graphGates: workflows.gates ?? null }" :secrets="secrets" @update:tab="tab = $event" @network-command="networkCommand" @workflow-command="workflowCommand" @command="localCommand" @network="networkControl" @workflow="workflowControl" @folder="openFolder" @secrets="secretsCommand" @secret-save="secretSave" @open-pod="emit('openPod', $event)" @share="emit('share', $event)" @advanced="emit('advanced')" @import="emit('import')" />
 </template>

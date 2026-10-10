@@ -521,6 +521,7 @@
   "Oversized owner identity": "Eigentümeridentität zu groß",
   "Owner identity signature rejected": "Signatur der Eigentümeridentität abgelehnt",
   "Owner identity does not match the requested account": "Die Eigentümeridentität passt nicht zum angeforderten Konto",
+  "The Codex socket directory is not a private directory of this user": "Das Codex-Socket-Verzeichnis ist kein privates Verzeichnis dieses Benutzers",
   "Owner sign-in did not provide a renewable connection": "Die Eigentümeranmeldung hat keine erneuerbare Verbindung bereitgestellt",
   "Owner issuer must be an HTTPS origin": "Der Aussteller des Eigentümers muss ein HTTPS-Ursprung sein",
   "Owner sign-in was declined": "Eigentümeranmeldung wurde abgelehnt",
