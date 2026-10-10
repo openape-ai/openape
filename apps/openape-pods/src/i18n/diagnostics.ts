@@ -48,6 +48,7 @@ export const diagnosticPatterns = [
   'This Pod has a run in progress since {p0}; wait for it to finish or cancel it before changing its applications',
   'Agent timeoutSeconds must be an integer from 30 to {p0}',
   'DDISA agent authentication failed ({p0})',
+  'Service sign-in at {p0} failed ({p1})',
   'Desktop registration failed ({p0})',
   'Broker revocation failed ({p0}); review the connection at your identity provider',
   'The permission service rejected the request ({p0}); inspect the grant before retrying',
