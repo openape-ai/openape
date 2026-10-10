@@ -5,7 +5,7 @@ import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { PodDatabase } from '../storage/database'
 import type { DataView } from '../../contracts/data'
-import { assertDataIdle, networkDataBusy } from './backup'
+import { activeMasterAction, assertDataIdle, networkDataBusy } from './backup'
 import { confirmDomainsStopped } from '../recovery/domains'
 import { storageBytes } from './files'
 
@@ -25,7 +25,7 @@ export class DataRetention {
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
     }
     const disk = await statfs(this.store.root); const limitBytes = this.store.db.prepare('SELECT limit_bytes FROM data_settings WHERE id=1').get()!.limit_bytes as number
-    const view: DataView = { usedBytes, freeBytes: disk.bavail * disk.bsize, limitBytes, pendingDeletion: this.jobs().length + Number(this.store.db.prepare('SELECT count(*) AS count FROM run_deletion_jobs').get()!.count), busy: networkDataBusy(this.store) || !!this.store.db.prepare('SELECT 1 FROM program_leases UNION ALL SELECT 1 FROM run_leases UNION ALL SELECT 1 FROM master_session WHERE state=\'running\' LIMIT 1').get(), error: usedBytes >= limitBytes ? 'Storage limit reached. Export a backup and remove unused data before continuing.' : disk.bavail * disk.bsize < 256 * 1024 * 1024 ? 'Less than 256 MiB free disk space remains. Free space before continuing.' : this.store.db.prepare('SELECT error FROM deletion_jobs WHERE error IS NOT NULL UNION ALL SELECT error FROM run_deletion_jobs WHERE error IS NOT NULL LIMIT 1').get()?.error as string | null ?? null }
+    const view: DataView = { usedBytes, freeBytes: disk.bavail * disk.bsize, limitBytes, pendingDeletion: this.jobs().length + Number(this.store.db.prepare('SELECT count(*) AS count FROM run_deletion_jobs').get()!.count), busy: networkDataBusy(this.store) || !!this.store.db.prepare(`SELECT 1 FROM program_leases UNION ALL SELECT 1 FROM run_leases UNION ALL SELECT 1 FROM master_session WHERE state='running' UNION ALL SELECT 1 FROM master_actions WHERE state='running' AND ${activeMasterAction} LIMIT 1`).get(), error: usedBytes >= limitBytes ? 'Storage limit reached. Export a backup and remove unused data before continuing.' : disk.bavail * disk.bsize < 256 * 1024 * 1024 ? 'Less than 256 MiB free disk space remains. Free space before continuing.' : this.store.db.prepare('SELECT error FROM deletion_jobs WHERE error IS NOT NULL UNION ALL SELECT error FROM run_deletion_jobs WHERE error IS NOT NULL LIMIT 1').get()?.error as string | null ?? null }
     const error = usedBytes >= limitBytes || view.freeBytes < 256 * 1024 * 1024 ? view.error : null
     // Every write grows the WAL by a page, which this measurement includes; a byte-exact rewrite would change the database every five seconds forever.
     this.store.db.prepare('UPDATE data_settings SET used_bytes=?,error=? WHERE id=1 AND (abs(used_bytes-?)>=1048576 OR error IS NOT ?)').run(usedBytes, error, usedBytes, error)
