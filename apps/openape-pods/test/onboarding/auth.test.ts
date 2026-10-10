@@ -19,12 +19,15 @@ it('verifies owner signature, audience, human role, expiry, nonce and expected i
 afterEach(() => { vi.unstubAllGlobals() })
 // The MCP session re-runs the owner's browser sign-in: the real loopback callback,
 // code exchange and token checks, with only the identity provider replaced.
-it('proves the MCP owner sign-in only for a human token of the registered account and stores nothing', async () => {
+it('signs the MCP owner in only for a human token of the registered account, keeps its tokens in memory and stores nothing', async () => {
   const keys = generateKeyPairSync('ed25519'); const jwk = { ...keys.publicKey.export({ format: 'jwk' }), kid: 'owner-key' }
   const issuer = 'https://identity.example.invalid'; const account = 'owner@example.invalid'
   const token = (body: Record<string, unknown>) => { const data = [Buffer.from(JSON.stringify({ alg: 'EdDSA', kid: jwk.kid })).toString('base64url'), Buffer.from(JSON.stringify(body)).toString('base64url')].join('.'); return `${data}.${sign(null, Buffer.from(data), keys.privateKey).toString('base64url')}` }
   let claims: (nonce: string) => Record<string, unknown> = () => ({}); let nonce = ''
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+  const revoked: string[] = []; let refreshes = 0
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+    if (url === `${issuer}/revoke`) { revoked.push(JSON.parse(String(init?.body)).token as string); return new Response('{"status":"ok"}') }
+    if (url === `${issuer}/token` && JSON.parse(String(init?.body)).grant_type === 'refresh_token') { refreshes++; return new Response(JSON.stringify({ access_token: token({ ...claims(nonce), nonce: undefined, exp: Math.floor(Date.now() / 1000) + 300 }), refresh_token: `synthetic-refresh-${refreshes}` })) }
     if (url === `${issuer}/token`) return new Response(JSON.stringify({ access_token: token(claims(nonce)), refresh_token: 'synthetic-refresh' }))
     if (url === `${issuer}/.well-known/jwks.json`) return new Response(JSON.stringify({ keys: [jwk] }))
     throw new Error(`Unexpected request ${url}`)
@@ -38,13 +41,25 @@ it('proves the MCP owner sign-in only for a human token of the registered accoun
   // Like a browser, the callback is answered while the sign-in continues; its delivery is awaited, never dropped.
   const verify = async () => {
     let delivered = Promise.resolve()
-    const result = owner.verify(issuer, account, new AbortController().signal, ({ url }) => { delivered = callback(url) })
+    const result = owner.session(issuer, account, Date.now() + 3600000, new AbortController().signal, ({ url }) => { delivered = callback(url) })
     try { return await result }
     finally { await delivered }
   }
   const human = (value: string) => ({ iss: issuer, aud: 'apes-cli', act: 'human', sub: 'owner-subject', email: account, nonce: value, exp: Math.floor(Date.now() / 1000) + 300 })
   claims = human
-  expect(await verify()).toEqual({ subject: 'owner-subject' })
+  const session = await verify()
+  expect(session.subject).toBe('owner-subject')
+  // A token close to its five-minute expiry is renewed in memory with this sign-in's refresh token only.
+  expect(await session.bearer(new AbortController().signal)).toMatch(/\./)
+  claims = value => ({ ...human(value), exp: Math.floor(Date.now() / 1000) + 10 })
+  const short = await verify()
+  await short.bearer(new AbortController().signal)
+  expect(refreshes).toBe(1)
+  // Ending the session discards the tokens and revokes the current refresh token at the IdP.
+  short.close(); session.close()
+  await vi.waitFor(() => expect(revoked.sort()).toEqual(['synthetic-refresh', 'synthetic-refresh-1']))
+  await expect(short.bearer(new AbortController().signal)).rejects.toThrow('owner session ended')
+  claims = human
   for (const change of [{ act: 'agent' }, { email: 'foreign@example.invalid' }, { aud: 'another-client' }, { nonce: 'replayed-nonce' }]) {
     claims = value => ({ ...human(value), ...change })
     await expect(verify(), JSON.stringify(change)).rejects.toThrow('Owner identity does not match the requested account')

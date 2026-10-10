@@ -6,18 +6,27 @@ import { StringDecoder } from 'node:string_decoder'
 import { setTimeout as delay } from 'node:timers/promises'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { ProgramAssignment, TerminalView } from '../../contracts/programs'
+import type { SandboxReach } from '../../contracts/sandbox'
 import { launchTerminal } from '../../worker/runtime/terminal'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
-import type { GrantObserver, GrantLookup, RunGrantTokens } from '../broker/authorization'
+import type { AgentConnection, GrantObserver, GrantLedgerPort, RunGrantTokens } from '../broker/authorization'
 import { AgentAuthority } from '../broker/authorization'
-import { PodIdentityManager } from '../connections/agent'
 import type { CredentialCache } from '../connections/cache'
 import { registerAuthDomain } from '../connections/ledger'
 import { startMailProxy } from '../mail/proxy'
 import { inspectDomainRecords } from '../../worker/recovery/domains'
 import { ProgramState } from './state'
+import { assertGateOperation } from '../../contracts/network-capabilities'
 
-export async function resolveProgram(assignment: ProgramAssignment, podId: string, argv: string[], readOnly = false, action?: 'move') {
+/** Read operations of an adapter; any other action is a write whose run is never replayed automatically. */
+export const readActions = ['read', 'list', 'get']
+
+/**
+ * Resolves one application command inside the Pod sandbox: the assigned executable, runtime and adapter are
+ * verified and the command must match an adapter operation. It does not decide the grant: the run's authority
+ * matches the command to any recorded grant that covers it, and the IdP token must cover it as well.
+ */
+export async function resolveProgram(assignment: ProgramAssignment, argv: string[], action?: 'move') {
   await verifyExecutable(assignment.executable, assignment.executableHash)
   await verifyProgramRuntime(assignment)
   await verifyExecutable(assignment.adapterPath, assignment.adapterHash)
@@ -25,17 +34,17 @@ export async function resolveProgram(assignment: ProgramAssignment, podId: strin
   const adapter = loadAdapter(assignment.cliId, assignment.adapterPath)
   const command = [assignment.cliId, ...argv]
   const resolved = await resolveCommand(adapter, command)
-  const grant = assignment.grants.find(item => item.permission === resolved.permission)
-  if (!grant || grant.authority.identity.podId !== podId) throw new Error('Approve this application command in Permissions first')
-  if (readOnly && !['read', 'list', 'get'].includes(resolved.detail.action)) throw new Error('Only granted read operations are available to scripts; use the owner terminal for setup')
   if (action && resolved.detail.action !== action) throw new Error('The archive port may only run the granted move operation')
-  return { grant, authorization: { grantId: grant.authority.grantId, command: { cliId: assignment.cliId, adapterPath: assignment.adapterPath, adapterDigest: adapter.digest, argv: command, permission: resolved.permission } } }
+  assertGateOperation(resolved.detail.action, action)
+  return { write: !readActions.includes(resolved.detail.action), authorization: { grantId: '', command: { cliId: assignment.cliId, adapterPath: assignment.adapterPath, adapterDigest: adapter.digest, argv: command, coverage: [resolved.detail] } } }
 }
-export async function prepareProgramAuthorization(assignment: ProgramAssignment, podId: string, argv: string[], credentials: CredentialCache, readOnly = false, observe?: GrantObserver, previous?: GrantLookup, action?: 'move', tokens?: RunGrantTokens) {
-  const { grant, authorization } = await resolveProgram(assignment, podId, argv, readOnly, action)
-  const authority = new AgentAuthority(new PodIdentityManager(credentials).connection(grant.authority.identity, `pods:${podId}`), observe, previous, tokens)
-  return { authority, authorization }
+export async function prepareProgramAuthorization(assignment: ProgramAssignment, connection: AgentConnection, argv: string[], observe?: GrantObserver, ledger?: GrantLedgerPort, action?: 'move', tokens?: RunGrantTokens) {
+  const { authorization, write } = await resolveProgram(assignment, argv, action)
+  return { authority: new AgentAuthority(connection, observe, ledger, tokens), authorization, write }
 }
+
+/** How a terminal reaches the Pod identity, its grant ledger and its sandbox reach. */
+export interface ProgramAccess { connection: () => Promise<AgentConnection>, ledger: GrantLedgerPort, reach: () => Promise<SandboxReach> }
 
 export class ProgramSession {
   private controller = new AbortController()
@@ -47,8 +56,8 @@ export class ProgramSession {
   private exitCode: number | null = null
   private error: string | null = null
   readonly completed: Promise<void>
-  constructor(readonly id: string, readonly podId: string, applicationId: string, assignment: ProgramAssignment, argv: string[], helper: string, root: string, credentials: CredentialCache, check: () => Promise<void>, release: () => Promise<void>, workspace: string, directories: DirectoryPolicy = { readDirectories: [], writeDirectories: [] }) {
-    this.completed = this.run(applicationId, assignment, argv, helper, root, credentials, check, release, workspace, directories)
+  constructor(readonly id: string, readonly podId: string, applicationId: string, assignment: ProgramAssignment, argv: string[], helper: string, root: string, credentials: CredentialCache, check: () => Promise<void>, release: () => Promise<void>, workspace: string, directories: DirectoryPolicy, access: ProgramAccess) {
+    this.completed = this.run(applicationId, assignment, argv, helper, root, credentials, check, release, workspace, directories, access)
   }
 
   view(after = 0): TerminalView { return { sessionId: this.id, podId: this.podId, state: this.state, sequence: this.sequence, output: this.chunks.filter(item => item.sequence > after).map(item => item.text).join(''), exitCode: this.exitCode, error: this.error } }
@@ -65,22 +74,23 @@ export class ProgramSession {
     this.chunks.push({ sequence: ++this.sequence, text })
   }
 
-  private async run(applicationId: string, assignment: ProgramAssignment, argv: string[], helper: string, root: string, credentials: CredentialCache, check: () => Promise<void>, release: () => Promise<void>, podWorkspace: string, directories: DirectoryPolicy): Promise<void> {
+  private async run(applicationId: string, assignment: ProgramAssignment, argv: string[], helper: string, root: string, credentials: CredentialCache, check: () => Promise<void>, release: () => Promise<void>, podWorkspace: string, directories: DirectoryPolicy, access: ProgramAccess): Promise<void> {
     const signal = this.controller.signal
     const deadline = setTimeout(() => this.controller.abort(new Error('Terminal session expired')), 15 * 60 * 1000)
     const directory = join(root, this.id); let verifiedClosed = true
     try {
       await mkdir(directory, { recursive: true, mode: 0o700 })
-      const { authority, authorization } = await prepareProgramAuthorization(assignment, this.podId, argv, credentials)
+      const { authority, authorization } = await prepareProgramAuthorization(assignment, await access.connection(), argv, undefined, access.ledger)
       await authority.authorize(authorization, signal)
       await check(); signal.throwIfAborted()
-      const proxy = assignment.networkHosts.length ? await startMailProxy(signal, undefined, assignment.networkHosts) : undefined
+      const proxy = assignment.networkHosts.length && (await access.reach()).level === 'isolated' ? await startMailProxy(signal, undefined, assignment.networkHosts) : undefined
       try {
         await new ProgramState(credentials).use(assignment.stateId, { podId: this.podId, applicationId }, async (workspace) => {
           await check(); signal.throwIfAborted()
           const launch = programLaunch(assignment)
           const args = [...launch.prefix, ...argv, ...(assignment.cacheArgument ? [assignment.cacheArgument, workspace] : [])]
-          const domain = await launchTerminal(helper, directory, { executable: launch.executable, workspace: podWorkspace, readDirectories: directories.readDirectories, writeDirectories: [workspace, ...directories.writeDirectories], readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: launch.runtimeDirectories, networkPorts: proxy ? [proxy.port] : [], systemTrust: Boolean(proxy) }, args, { ...launch.environment, ...proxy?.environment, HOME: workspace, TMPDIR: workspace }, (path, ownerPid) => registerAuthDomain(root, path, ownerPid))
+          const reach = await access.reach()
+          const domain = await launchTerminal(helper, directory, { reach, executable: launch.executable, workspace: podWorkspace, readDirectories: directories.readDirectories, writeDirectories: [workspace, ...directories.writeDirectories], readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: launch.runtimeDirectories, networkPorts: proxy ? [proxy.port] : [], systemTrust: Boolean(proxy) }, args, { ...launch.environment, ...proxy?.environment, HOME: workspace, TMPDIR: workspace }, (path, ownerPid) => registerAuthDomain(root, path, ownerPid))
           this.domain = domain; verifiedClosed = false
           const decoder = new StringDecoder('utf8')
           domain.stdout.on('data', (bytes: Buffer) => this.append(decoder.write(bytes)))

@@ -130,7 +130,7 @@ it('returns no owner connection, grant, credential record or run content', async
   store.db.prepare('INSERT INTO runs VALUES(?,?,?,\'failed\',1,2,?,?,0,0)').run(randomUUID(), pod.id, 'b'.repeat(64), `${markers.summary} ${injected}`, markers.error)
   store.db.prepare('UPDATE checkpoints SET body=? WHERE pod_id=?').run(JSON.stringify({ note: markers.checkpoint }), pod.id)
   resources.assignCredential(pod.id, 'mail_token', markers.credential, resources.epoch(pod.id))
-  resources.assignHttp(pod.id, { origin: 'https://api.example.com', methods: ['POST'] }, { identity: { podId: pod.id, connectionId: markers.connection, issuer: 'https://id.example.invalid', owner: 'owner@example.invalid', subject: 'pod@example.invalid', keyId: markers.key }, ownerConnection: markers.connection, grantId: markers.grant } as never, resources.epoch(pod.id))
+  resources.assignHttp(pod.id, { origin: 'https://api.example.com', methods: ['POST'] }, resources.epoch(pod.id))
   await send({ action: 'select', podIds: [pod.id] })
   const revision = (await send({ action: 'list' }) as { pods: { revision: number }[] }).pods[0]!.revision
   const output = JSON.stringify(await Promise.all([send({ action: 'list' }), send({ action: 'runtime' }), send({ action: 'inspect', podId: pod.id, revision })]))

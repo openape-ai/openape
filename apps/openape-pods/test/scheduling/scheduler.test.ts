@@ -185,12 +185,22 @@ it('keeps delayed retries paused and blocks them when their resource binding cha
   expect(f.scheduler.view(pod)).toMatchObject({ blocked: 1, pending: 0, error: expect.stringContaining('permissions changed') })
 })
 
-it.each(['process', 'effect', 'checkpoint'])('recovers from %s work after verified settlement without losing committed progress', (kind) => {
+it('holds a failed run that already wrote externally instead of replaying it', () => {
+  const f = fixture(); const pod = f.pod()
+  f.scheduler.acceptEvent(pod, 'fixture', 'unsafe', {}); f.scheduler.tick()
+  const id = f.started[0]!.id
+  f.store.db.prepare('INSERT INTO effect_ledger VALUES(?,\'sent\',\'http.request\',\'hash\',?,\'completed\',\'{}\')').run(pod, id)
+  f.runs.finish(id, 'failed', 'Run failed', 'Permission service temporarily unavailable', [], 0)
+  expect(f.scheduler.view(pod)).toMatchObject({ blocked: 1, pending: 0, error: expect.stringContaining('already wrote externally') })
+  f.scheduler.tick()
+  expect(f.started).toHaveLength(1)
+})
+
+it.each(['process', 'checkpoint'])('recovers from %s work after verified settlement without losing committed progress', (kind) => {
   const f = fixture(); const pod = f.pod()
   f.scheduler.acceptEvent(pod, 'fixture', 'unsafe', {}); f.scheduler.tick()
   const id = f.started[0]!.id
   if (kind === 'process') f.runs.append(id, 'process', { pid: 123 })
-  if (kind === 'effect') f.store.db.prepare('INSERT INTO effect_ledger VALUES(?,\'sent\',\'http.request\',\'hash\',?,\'completed\',\'{}\')').run(pod, id)
   if (kind === 'checkpoint') f.store.commitProgress({ podId: pod, expectedRevision: 0, checkpoint: { saved: true }, sources: [], claims: [] })
   f.runs.finish(id, 'failed', 'Run failed', 'Permission service temporarily unavailable', [], 0)
   expect(f.scheduler.view(pod)).toMatchObject({ blocked: 0, pending: 1, retry: { attempt: 1 } })

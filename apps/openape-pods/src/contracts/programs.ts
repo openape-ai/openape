@@ -1,5 +1,4 @@
 import { parseHttpPermission } from './http'
-import type { ProgramAuthority } from '../main/programs/grants'
 
 export interface ProgramRuntime {
   executable: string
@@ -25,11 +24,11 @@ export interface ProgramDefinition {
   entryFiles: { path: string, hash: string }[]
   environment: Record<string, string>
 }
+/** An application in the Pod sandbox. What it may run is decided by Pod grants, recorded apart from it. */
 export interface ProgramAssignment extends ProgramDefinition {
   type: 'program'
   stateId: string
   capability: string
-  grants: { permission: string, display: string, authority: ProgramAuthority }[]
 }
 export type ProgramCommand =
   | { type: 'network', podId: string, applicationId: string, epoch: number, hosts: string[] }
