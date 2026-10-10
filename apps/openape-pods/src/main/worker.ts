@@ -61,6 +61,7 @@ import type { ApesLogin } from './connections/apes-login'
 import type { GrantLedgerCommand } from '../worker/resources/grants'
 import type { SandboxReach, SandboxView } from '../contracts/sandbox'
 import { deniedPaths, ownerProtectedPaths } from '../worker/runtime/sandbox'
+import { controlSocketProtection } from './codex/socket-path'
 import { homedir } from 'node:os'
 import type { ProgramDefinition, ProgramCommand } from '../contracts/programs'
 import type { ProgramInternal } from '../worker/resources/programs'
@@ -376,7 +377,7 @@ export class FixtureWorker {
    */
   async sandboxReach(podId: string): Promise<SandboxReach> {
     const view = await this.dispatch({ grants: { type: 'sandbox', podId } }) as SandboxView
-    return { level: view.level, protectedPaths: ownerProtectedPaths(this.root, this.profileBase, homedir()), deny: deniedPaths(view.deny, homedir()) }
+    return { level: view.level, protectedPaths: [...ownerProtectedPaths(this.root, this.profileBase, homedir()), ...controlSocketProtection(this.profileBase)], deny: deniedPaths(view.deny, homedir()) }
   }
 
   /** The Pod's resources with its sandbox; a saved denylist replaces the Pod's own entries, never a network's. */

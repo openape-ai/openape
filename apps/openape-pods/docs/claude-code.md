@@ -129,7 +129,9 @@ grants and removes what it added. Level `owner` runs the Pod's programs with the
 owner's OS reach (files, network, sockets, preferences and the keychain items the
 owner's keychain access rules release) instead of the isolated profile, except the
 Pods data and the owner's apes login: the Pods folder with every profile, the
-profile selection and its MCP control socket, and `~/.config/apes` stay
+profile selection and its MCP control socket (or its fallback directory
+`/private/tmp/openape-pods-<uid>-<hash>/` when the profile path is too long for a
+socket), and `~/.config/apes` stay
 unreadable, unwritable and unconnectable, together with the folders leading to
 them, both as written and as resolved through links. These protections only
 prevent direct access; they are not a boundary. An owner-level program can leave
@@ -164,8 +166,11 @@ Likewise, `mcp-runtime-approval.json` held the removed runtime auto-approval
 setting; current versions ignore it. Grants that Pods approved before remain
 valid at the identity provider until the owner revokes them there. Until schema
 43 an application or HTTP assignment stored its grant inside the assignment;
-the upgrade removes that copy, and the next call requests the same details as
-the Pod, which the identity provider answers with the existing approved grant.
+the upgrade removes that copy. A brokered identity provider never returns an
+existing grant for a new request, so before requesting, Pods adopts an earlier
+grant of the same Pod identity that its runs used (named in their approval
+events) when the identity provider still shows it approved, or pending, and it
+covers the call. Only a grant no retained run used is requested again.
 
 ## Work with Pods
 

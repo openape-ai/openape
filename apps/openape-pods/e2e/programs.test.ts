@@ -96,7 +96,7 @@ int main(int argc, char **argv) {
   const assignment: ProgramAssignment = { type: 'program', name: 'Synthetic application', executable, executableHash: sha(await readFile(executable)), adapterPath, adapterHash: sha(await readFile(adapterPath)), cliId: 'fixture', networkHosts: [], entryFiles: [], environment: {}, stateId, capability: `tool.app_${applicationId.replaceAll('-', '')}.invoke` }
   // The Pod grants: one per command, recorded apart from the sandboxed application and matched by coverage.
   const connection = new PodIdentityManager(cache).connection(identity, `pods:${podId}`)
-  const ledger: GrantLedgerPort = { find: async detail => detail.cli_id === 'pod-http' ? 'http' : detail.action === 'write' ? 'setup' : 'read', record: async () => {} }
+  const ledger: GrantLedgerPort = { find: async detail => detail.cli_id === 'pod-http' ? 'http' : detail.action === 'write' ? 'setup' : 'read', adopt: async () => undefined, record: async () => {} }
   const resource: PodResource = { id: applicationId, podId, revision: 1, kind: 'tool', state: 'ready', name: assignment.name, configuration: { ...assignment } }
   const helper = resolve('dist/native/pods-helper'); let releases = 0
   const workspace = await podWorkspace(root, podId)

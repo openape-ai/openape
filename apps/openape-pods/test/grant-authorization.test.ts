@@ -69,6 +69,21 @@ it('renews consumed once grants and verifies/consumes two independently authoriz
   expect(f.state.bodies[0]).not.toHaveProperty('waits_until')
   expect(f.resolved.executionContext.context_bindings).toMatchObject({ name: 'Synthetic Pod', script: '/fixture/run.mjs', environment: '{"HOME":"/fixture/home"}' })
 })
+// Owner decision October 10, 2026 (issue 1455): a program or HTTP command without a recorded grant asks for a
+// continuing grant like the runtime; single-use approvals remain only for gate batches.
+it('requests a continuing grant for a program command that has no recorded grant', async () => {
+  const f = await fixture('used', 'pending')
+  const adapterPath = resolve('runtime-sources/pod-http-shapes.toml'); const adapter = loadAdapter('pod-http', adapterPath)
+  const argv = ['pod-http', 'request', '--origin', 'https://api.example.test', '--method', 'GET']
+  const resolved = await resolveCommand(adapter, argv)
+  const controller = new AbortController()
+  const work = f.authority.authorize({ command: { cliId: 'pod-http', adapterPath, adapterDigest: adapter.digest, argv, coverage: [resolved.detail] }, grantId: '' }, controller.signal)
+  const cancelled = expect(work).rejects.toThrow()
+  await expect.poll(() => f.state.creates).toBe(1)
+  expect(f.state.bodies[0]).toMatchObject({ grant_type: 'always', permissions: [resolved.permission] })
+  expect(f.state.bodies[0]).not.toHaveProperty('waits_until')
+  controller.abort(); await cancelled
+})
 it('shows a pending approval and resumes only after its decision', async () => {
   const f = await fixture('used', 'pending')
   const work = f.authority.authorize({ command: f.command, grantId: 'old' }, new AbortController().signal)
@@ -114,7 +129,7 @@ it('reuses Pod-scoped continuing permission across script paths, but rejects ano
 it('uses the current owner assignment instead of a historical grant for a replaced adapter', async () => {
   const f = await fixture('approved'); f.state.grantType = 'always'
   f.state.grants.set('historical', 'approved'); f.state.staleAdapters.add('historical')
-  const authority = new AgentAuthority(f.connection, undefined, { find: async () => 'historical', record: async () => {} })
+  const authority = new AgentAuthority(f.connection, undefined, { find: async () => 'historical', adopt: async () => undefined, record: async () => {} })
   await authority.authorize({ command: f.command, grantId: 'old' }, new AbortController().signal)
   expect(f.state.tokens).toEqual(['old']); expect(f.state.consumes).toEqual(['old'])
   expect(f.state.creates).toBe(0)
@@ -122,7 +137,7 @@ it('uses the current owner assignment instead of a historical grant for a replac
 
 it('retains a renewed continuing grant when the original assignment was consumed', async () => {
   const f = await fixture(); f.state.grantType = 'always'; f.state.grants.set('renewed', 'approved')
-  const authority = new AgentAuthority(f.connection, undefined, { find: async () => 'renewed', record: async () => {} })
+  const authority = new AgentAuthority(f.connection, undefined, { find: async () => 'renewed', adopt: async () => undefined, record: async () => {} })
   await authority.authorize({ command: f.command, grantId: 'old' }, new AbortController().signal)
   expect(f.state.tokens).toEqual(['renewed']); expect(f.state.consumes).toEqual(['renewed'])
   expect(f.state.creates).toBe(0)
@@ -166,7 +181,7 @@ it('polls quickly while the owner is likely deciding and slowly during a long wa
 
 it.each(['denied', 'revoked'])('never replaces a previously %s runtime decision', async (decision) => {
   const f = await fixture(decision)
-  const authority = new AgentAuthority(f.connection, undefined, { find: async () => 'old', record: async () => {} })
+  const authority = new AgentAuthority(f.connection, undefined, { find: async () => 'old', adopt: async () => undefined, record: async () => {} })
   await expect(authority.authorize({ command: f.command, grantId: '' }, new AbortController().signal)).rejects.toThrow(decision)
   expect(f.state.approvals).toEqual([]); expect(f.state.creates).toBe(0)
 })
@@ -299,7 +314,7 @@ it('rejects a reused token for another Pod without contacting the identity servi
 it('refreshes a runtime grant mid-run only while it stays approved and never creates or approves a replacement', async () => {
   vi.useFakeTimers({ toFake: ['Date'] })
   const f = await fixture('used', 'approved'); f.state.grantType = 'always'; f.state.lifetime = 3600
-  const run = new AgentAuthority(f.connection, undefined, { find: async () => undefined, record: async () => {} }, new RunGrantTokens())
+  const run = new AgentAuthority(f.connection, undefined, { find: async () => undefined, adopt: async () => undefined, record: async () => {} }, new RunGrantTokens())
   const assignment = { command: f.command, grantId: '' }
   await run.authorize(assignment, signal())
   expect(assignment.grantId).toBe('fresh-1'); expect(f.state.creates).toBe(1)
