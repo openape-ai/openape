@@ -37,6 +37,7 @@
     "@openai/codex": "0.153.4",
     "@openai/codex-sdk": "0.153.4",
     "@openape/apes": "workspace:*",
+    "@openape/cli-auth": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
     "@openape/pods-protocol": "workspace:*",
