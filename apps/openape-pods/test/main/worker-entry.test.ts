@@ -32,7 +32,7 @@ vi.mock('../../src/worker/master/control', async (importOriginal) => {
   const original = await importOriginal<typeof import('../../src/worker/master/control')>()
   return { ...original, MasterControl: class extends original.MasterControl {
     constructor(...args: ConstructorParameters<typeof original.MasterControl>) {
-      super(...args); captured.startControlled = args[6]
+      super(...args); captured.startControlled = args[5]
     }
   } }
 })
@@ -139,7 +139,7 @@ it('lists descriptions with the workspace and routes a description command throu
   await send({ id: 'workspace-list', command: { type: 'list' } })
   expect(replies).toHaveBeenCalledWith({ id: 'workspace-list', state: expect.objectContaining({ descriptions: [], pods: expect.arrayContaining([expect.objectContaining({ name: 'Scheduled example' })]) }) })
   await send({ id: 'describe-unknown', command: { type: 'describeAutomation', id: randomUUID(), revision: 0, text: 'Nothing to describe' } })
-  expect(replies).toHaveBeenCalledWith({ id: 'describe-unknown', error: 'Network or workflow not found' })
+  expect(replies).toHaveBeenCalledWith({ id: 'describe-unknown', error: 'Network not found' })
   await send({ id: 'describe-forged', command: { type: 'describeAutomation', id: randomUUID(), revision: 0, text: 'Purpose', owner: 'forged' } })
   expect(replies).toHaveBeenCalledWith({ id: 'describe-forged', error: 'Unsupported workspace command' })
 })

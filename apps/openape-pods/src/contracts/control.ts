@@ -6,7 +6,7 @@ import { parseMapView } from './map-view'
 import type { MapView } from './map-view'
 
 export interface StoredPod { id: string, name: string, revision: number, lifecycle: 'active' | 'paused' | 'archived', activeScript: string | null, description?: string }
-/** What a network or workflow is for, written by the owner. Informational: never part of a definition, pin or hash. */
+/** What a network is for, written by the owner. Informational: never part of a definition, pin or hash. */
 export interface AutomationDescription { id: string, text: string, revision: number }
 export interface WorkspaceState { jev?: JevAvailability | null, pods: StoredPod[], organization: Organization, descriptions?: AutomationDescription[], map?: MapView }
 export type WorkspaceCommand = GroupCommand | { type: 'list' } | { type: 'map' } | { type: 'pauseAll' } | { type: 'create', name: string } | { type: 'update', id: string, revision: number, name: string, lifecycle: StoredPod['lifecycle'] } | { type: 'describeAutomation', id: string, revision: number, text: string }

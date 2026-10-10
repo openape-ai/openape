@@ -103,7 +103,7 @@ defineExpose({ openPod })
     <p v-if="subject && loaded && !runtime && page === 'Automations'" class="muted">
       {{ t('Connect your desktop to bring your Pods online.') }}
     </p>
-    <AutomationsShell v-if="subject && page === 'Automations'" :view="runtime?.workspace.map ?? null" :live="!!runtime?.online" :now="now" :decisions="runtime?.workspace.map ? kpiFacts(runtime.workspace.map).decisions.count : undefined" :tab="tab" :inbox="{ choices: inbox.choices, gates: inbox.gates, graphGates: runtime?.workflows?.gates ?? null }" :subject="subject" :sharing="!!runtime?.online" @update:tab="tab = $event" @logout="logout" @command="remoteCommand" @open-pod="openPod" @import="page = 'Import'" />
+    <AutomationsShell v-if="subject && page === 'Automations'" :view="runtime?.workspace.map ?? null" :live="!!runtime?.online" :now="now" :decisions="runtime?.workspace.map ? kpiFacts(runtime.workspace.map).decisions.count : undefined" :tab="tab" :inbox="{ choices: inbox.choices, gates: inbox.gates }" :subject="subject" :sharing="!!runtime?.online" @update:tab="tab = $event" @logout="logout" @command="remoteCommand" @open-pod="openPod" @import="page = 'Import'" />
     <SharingImport v-if="subject && page === 'Import' && runtime" :api="sharingApi" :organization="runtime.workspace.organization" :desktop="false" @open-pod="openPod" />
     <CentralWorkspace v-if="subject" v-show="page === 'Pods'" ref="workspace" :client="client" embedded shared-editor @inventory="inventory" @connection="connectionError = $event" @network="back" @login="expired" @logout="logout" />
   </WorkspaceFrame>

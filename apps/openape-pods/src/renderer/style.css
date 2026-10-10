@@ -563,8 +563,6 @@ input:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-vi
 
 .sidebar-collapsed .sidebar-bottom .account-status .account-avatar { display:grid; }
 
-.workflow-navigation { border-top:1px solid var(--border); margin-top:18px; padding-top:14px; }
-.sidebar-collapsed .workflow-navigation { display:none; }
 
 /* Variant A workspace */
 :root{--bg:light-dark(#f7f8f5,#161c19);--surface:light-dark(#ffffff,#202823);--sidebar:var(--surface);--text:light-dark(#1f3027,#e7eee8);--muted:light-dark(#647369,#a7b5ab);--border:light-dark(#dce3dc,#3a483e);--accent:light-dark(#315e45,#9ac7a7);--on-accent:light-dark(#fff,#132a1d);--tint:light-dark(#e7efe7,#2a3d2f)}

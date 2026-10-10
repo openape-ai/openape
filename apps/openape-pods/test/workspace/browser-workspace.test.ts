@@ -60,7 +60,7 @@ it('returns an expired browser session to login without rendering private conten
   fixture.client.session = async () => { throw new WorkspaceRequestError(401, 'authentication_required') }
   wrapper = mount(BrowserWorkspace, { props: { client: fixture.client } }); await flushPromises()
   expect(wrapper.emitted('login')).toHaveLength(1)
-  expect(wrapper.text()).not.toContain('Morning review')
+  expect(wrapper.text()).not.toContain('Mail knowledge')
 })
 
 it('retains an offline draft and stops rendering private content after session expiry', async () => {

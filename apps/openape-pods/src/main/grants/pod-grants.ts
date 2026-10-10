@@ -3,7 +3,7 @@ import { canonicalizeCliPermission, cliAuthorizationDetailsCover, sameBrokeredGr
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { LoadedAdapter } from '@openape/apes'
 import { approvalURL } from '../../contracts/activity'
-import { gateAudience } from '../../contracts/gates'
+import { gateAudience } from '../../contracts/network-gates'
 import { gateActions } from '../../contracts/network-capabilities'
 import { parsePodGrant, grantTypes  } from '../../contracts/grants'
 import type { GrantOrigin, GrantState, GrantType, PodGrant } from '../../contracts/grants'

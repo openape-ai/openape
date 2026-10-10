@@ -13,7 +13,7 @@ const row = (podId: string) => ({ id: '01REQ0', podId, alias: 'telegram_bot_toke
 
 it('records request rows per Pod at schema 39, updates their state and never holds a value', () => {
   const store = fixture(); const pod = store.createPod({ name: 'Reporter' })
-  expect(schemaVersion).toBe(44)
+  expect(schemaVersion).toBe(45)
   const rows = new SecretRequests(store)
   expect(rows.execute({ type: 'record', row: row(pod.id) })).toEqual([row(pod.id)])
   expect(rows.execute({ type: 'update', id: '01REQ0', patch: { status: 'collected', updatedAt: 1500 } })[0]).toMatchObject({ status: 'collected', updatedAt: 1500 })

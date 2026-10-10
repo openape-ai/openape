@@ -1,13 +1,9 @@
 import { canonicalPortableJson, portableKey } from '@openape/pods-protocol'
-import type { PortableComposition, PortableManifest, PortableNode, PortablePod } from '@openape/pods-protocol'
+import type { PortableComposition, PortableManifest, PortablePod } from '@openape/pods-protocol'
 import { collectionContract, dataFields, dataKey } from './network-data'
 import { networkDataObject } from './network-payload'
-import { diagnoseGraph, parseGraphChannels, parseGraphGates, parseGraphValues } from './graphs'
 import { diagnoseNetwork, networkFormatVersion, parseNetworkDefinition } from './networks'
 import type { NetworkDefinition } from './networks'
-import { parseWorkflowNodes, parseWorkflowSchedule, sequenceParts } from './workflows'
-import type { WorkflowDefinition } from './workflows'
-import { parseWorkflowPorts, validateWorkflowGraphPorts, validateWorkflowPorts } from './workflow-ports'
 import { parseSchedule } from './scheduling'
 import { parseHttpPermission } from './http'
 import { parseJevModel } from './jev'
@@ -33,9 +29,6 @@ function memberReference(value: unknown, composition: PortableComposition, ids: 
   if (!composition.nodes.some(node => node.pod === key)) throw new Error('Portable reference is not a composition member')
   return ids.get(key)!
 }
-function nodes(source: PortableNode[], ids: Map<string, string>) {
-  return parseWorkflowNodes(source.map(node => ({ podId: ids.get(node.pod), after: node.after.map(key => ids.get(key)), handoff: node.handoff })))
-}
 function values(value: unknown, composition: PortableComposition): PortableValueBinding[] {
   const result = bounded(value, 32).map((value) => {
     const item = dataFields(value, ['name', 'input']); const name = localKey(item.name); const input = localKey(item.input)
@@ -43,34 +36,6 @@ function values(value: unknown, composition: PortableComposition): PortableValue
     return { name, input }
   })
   unique(result.map(item => item.name)); return result
-}
-function ports(value: unknown, composition: PortableComposition, ids: Map<string, string>, definition: WorkflowDefinition) {
-  if (value === null) return null
-  const item = dataFields(value, ['version', 'inputs', 'outputs', 'requiredTerminals', 'requiredGates'])
-  const parse = (value: unknown) => bounded(value, 16).map((value) => {
-    const port = dataFields(value, ['name', 'version', 'schema', 'pod'], ['legacySchema'])
-    const { pod, ...fields } = port
-    return { ...fields, podId: memberReference(pod, composition, ids) }
-  })
-  const mapped = parseWorkflowPorts({ ...item, inputs: parse(item.inputs), outputs: parse(item.outputs), requiredTerminals: bounded(item.requiredTerminals, 32).map(key => memberReference(key, composition, ids)) })
-  validateWorkflowPorts(definition, mapped)
-  return mapped
-}
-function mail(value: unknown, composition: PortableComposition, manifest: PortableManifest): void {
-  if (value === null) return
-  const item = dataFields(value, ['filter', 'notify', 'application', 'mailbox', 'telegramCredential', 'telegramChat', 'protectedPartners', 'rules', 'mode'])
-  const filter = manifest.pods.find(pod => pod.key === item.filter && composition.nodes.some(node => node.pod === pod.key))
-  const notify = manifest.pods.find(pod => pod.key === item.notify && composition.nodes.some(node => node.pod === pod.key))
-  if (!filter || !notify || filter === notify || !filter.applications.some(application => application.alias === item.application) || (item.mode !== 'preview' && item.mode !== 'archive')) throw new Error('Invalid portable mail member or application binding')
-  const ancestors = new Set<string>(); const pending = [...composition.nodes.find(node => node.pod === notify.key)!.after]
-  while (pending.length) { const key = pending.pop()!; if (ancestors.has(key)) continue; ancestors.add(key); pending.push(...composition.nodes.find(node => node.pod === key)!.after) }
-  if (!ancestors.has(filter.key)) throw new Error('Mail notification must depend on the configured filter pod')
-  for (const key of ['mailbox', 'telegramChat', 'protectedPartners', 'rules']) {
-    if (!composition.inputs.some(input => input.key === item[key] && input.kind === 'string')) throw new Error('Portable mail configuration requires explicit string inputs')
-  }
-  unique(['mailbox', 'telegramChat', 'protectedPartners', 'rules'].map(key => String(item[key])))
-  const binding = notify.bindings.find(binding => binding.alias === item.telegramCredential)
-  if (typeof item.telegramCredential !== 'string' || !/^[a-z][a-z0-9_]{0,63}$/.test(item.telegramCredential) || !binding || !notify.inputs.some(input => input.key === binding.input && input.kind === 'secret')) throw new Error('Portable notification requires a recipient secret input')
 }
 function requestedData(value: unknown, composition: PortableComposition, ids: Map<string, string>, operations: string[], allowEmpty = false): PortableDataAccess[] {
   const access = bounded(value, 32).map((value) => {
@@ -98,13 +63,8 @@ function dataDeclarations(document: Record<string, unknown>, composition: Portab
     requestedData(item.access, composition, ids, ['read', 'create']); return item
   })
   unique(artifacts.map(item => String(item.key)))
-  const calls = bounded(document.calls, 32).map((value) => {
-    const item = dataFields(value, ['pod', 'workflow']); memberReference(item.pod, composition, ids)
-    if (typeof item.workflow !== 'string' || !composition.calls.includes(item.workflow)) throw new Error('Undeclared portable workflow call')
-    return item
-  })
-  unique(calls.map(item => `${item.pod}:${item.workflow}`))
-  if (composition.calls.some(key => !calls.some(call => call.workflow === key))) throw new Error('Unreferenced portable workflow call')
+  // Documents exported before issue 1455 (M4) carry an empty calls list.
+  if (document.calls !== undefined && (!Array.isArray(document.calls) || document.calls.length)) throw new Error('Portable networks no longer call workflows')
 }
 
 function networkValues(value: unknown, composition: PortableComposition, manifest: PortableManifest): void {
@@ -121,9 +81,7 @@ function networkValues(value: unknown, composition: PortableComposition, manifes
 }
 
 function inputUsage(document: Record<string, unknown>, composition: PortableComposition): void {
-  const references = composition.kind === 'sequence'
-    ? document.mail === null ? [] : ['mailbox', 'telegramChat', 'protectedPartners', 'rules'].map(key => (document.mail as Record<string, unknown>)[key])
-    : values(document.values, composition).map(binding => binding.input)
+  const references = values(document.values, composition).map(binding => binding.input)
   if (composition.inputs.some(input => !references.includes(input.key))) throw new Error('Unreferenced portable composition input')
 }
 
@@ -140,56 +98,32 @@ export function validatePortableAccessDefaults(pod: PortablePod): void {
 
 export function validatePortableCompositionDocument(value: unknown, composition: PortableComposition, manifest: PortableManifest): Record<string, unknown> {
   const source = JSON.parse(canonicalPortableJson(value))
-  const document = dataFields(source, composition.kind === 'network'
-    ? ['version', 'kind', 'formatVersion', 'channels', 'members', 'routes', 'joins', 'feedback', 'values', 'legacyVariables', 'collections', 'artifacts', 'calls']
-    : composition.kind === 'channels' ? ['version', 'kind', 'schedule', 'channels', 'gates', 'values', 'ports'] : ['version', 'kind', 'schedule', 'ports', 'mail'])
-  if (document.version !== 1 || document.kind !== composition.kind) throw new Error('Unsupported portable composition document version')
+  const document = dataFields(source, ['version', 'kind', 'formatVersion', 'channels', 'members', 'routes', 'joins', 'feedback', 'values', 'collections', 'artifacts'], ['legacyVariables', 'calls'])
+  if (document.version !== 1 || document.kind !== 'network' || composition.kind !== 'network') throw new Error('Unsupported portable composition document version')
   for (const pod of manifest.pods) validatePortableAccessDefaults(pod)
   const ids = aliasMap(manifest)
   const definitionId = '00000000-0000-4000-8000-000000000100'
-  if (composition.kind === 'network') {
-    const members = bounded(document.members, 32).map((value) => {
-      const item = dataFields(value, ['pod', 'source', 'serialCase']); const podId = memberReference(item.pod, composition, ids)
-      const pod = manifest.pods.find(pod => pod.key === item.pod)!
-      if (pod.requestedCapabilities.some(right => right !== 'mail.read')) throw new Error('Portable network member requests unsupported runtime capabilities')
-      let source = null
-      if (item.source !== null) { const timer = dataFields(item.source, ['schedule']); source = { bindingId: podId, schedule: timer.schedule === null ? null : parseSchedule(timer.schedule) } }
-      return { podId, definitionId: podId, definitionVersion: 1, bindingRevision: 1, contract: pod.contract, source, serialCase: item.serialCase }
-    })
-    if (members.length !== composition.nodes.length) throw new Error('Portable document membership differs from its index')
-    if (document.formatVersion !== networkFormatVersion) throw new Error('Portable network document uses an older format; export it again from the current version')
-    const joins = bounded(document.joins, 32).map((value) => { const item = dataFields(value, ['id', 'pod', 'channels', 'deadlineMs', 'reviewDestination']); const { pod, ...fields } = item; return { ...fields, podId: memberReference(pod, composition, ids) } })
-    const feedback = bounded(document.feedback, 32).map((value) => { const item = dataFields(value, ['id', 'pod', 'channel', 'delayMs', 'maxHops', 'maxCaseAgeMs']); const { pod, ...fields } = item; return { ...fields, podId: memberReference(pod, composition, ids) } })
-    const definition: NetworkDefinition = parseNetworkDefinition({ formatVersion: networkFormatVersion, kind: 'network', semantics: 'persistent-network-v1', id: definitionId, revision: 1, groupId: definitionId, name: composition.title, members, channels: document.channels, routes: document.routes, joins, feedback })
-    const diagnostics = diagnoseNetwork(definition)
-    if (diagnostics.length) throw new Error(`Portable network diagnostics: ${diagnostics.map(item => item.code).join(', ')}`)
-    networkValues(document.values, composition, manifest); dataDeclarations(document, composition, ids)
-    const legacyVariables = bounded(document.legacyVariables, 32).map(localKey)
-    unique(legacyVariables)
-    const shared = values(document.values, composition)
-    if (legacyVariables.some(name => !shared.some(binding => binding.name === name && composition.inputs.some(input => input.key === binding.input && input.kind === 'string')))) throw new Error('Portable legacy variables require declared shared string inputs')
-    inputUsage(document, composition)
-    return document
-  }
-  if (composition.calls.length || composition.dataSchemas.length) throw new Error('Only persistent networks declare scoped data and workflow calls')
-  const definition: WorkflowDefinition = { ...sequenceParts, id: definitionId, revision: 1, name: composition.title, nodes: nodes(composition.nodes, ids), schedule: document.schedule === null ? null : parseWorkflowSchedule(document.schedule), enabled: false, paused: true, nextAt: null }
-  if (composition.kind === 'sequence') {
-    mail(document.mail, composition, manifest)
-  }
-  else {
-    definition.mode = 'channels'; definition.groupId = definitionId
-    definition.channels = parseGraphChannels(document.channels); definition.gates = parseGraphGates(document.gates)
-    definition.values = parseGraphValues(values(document.values, composition).map(binding => ({ name: binding.name, value: '', revision: 0 })))
-    const contracts = Object.fromEntries(composition.nodes.map(node => [ids.get(node.pod)!, manifest.pods.find(pod => pod.key === node.pod)!.contract]))
-    const facts = Object.fromEntries(composition.nodes.map(node => [ids.get(node.pod)!, { variables: manifest.pods.find(pod => pod.key === node.pod)!.bindings.filter(binding => manifest.pods.find(pod => pod.key === node.pod)!.inputs.some(input => input.key === binding.input && ['string', 'number', 'boolean', 'enum'].includes(input.kind))).map(binding => binding.alias) }]))
-    const diagnostics = diagnoseGraph(definition, contracts, facts)
-    if (diagnostics.length) throw new Error(`Portable graph diagnostics: ${diagnostics.map(item => item.code).join(', ')}`)
-  }
-  const declaredPorts = ports(document.ports, composition, ids, definition)
-  if (declaredPorts && composition.kind === 'channels') {
-    validateWorkflowGraphPorts(definition, declaredPorts, composition.nodes.map(node => ({ id: ids.get(node.pod)!, ...manifest.pods.find(pod => pod.key === node.pod)!.contract! })))
-  }
-  if (manifest.compositions.some(item => item.calls.includes(composition.key)) && document.ports === null) throw new Error('Called portable workflows require declared ports')
+  const members = bounded(document.members, 32).map((value) => {
+    const item = dataFields(value, ['pod', 'source', 'serialCase']); const podId = memberReference(item.pod, composition, ids)
+    const pod = manifest.pods.find(pod => pod.key === item.pod)!
+    if (pod.requestedCapabilities.some(right => right !== 'mail.read')) throw new Error('Portable network member requests unsupported runtime capabilities')
+    let source = null
+    if (item.source !== null) { const timer = dataFields(item.source, ['schedule']); source = { bindingId: podId, schedule: timer.schedule === null ? null : parseSchedule(timer.schedule) } }
+    return { podId, definitionId: podId, definitionVersion: 1, bindingRevision: 1, contract: pod.contract, source, serialCase: item.serialCase }
+  })
+  if (members.length !== composition.nodes.length) throw new Error('Portable document membership differs from its index')
+  if (document.formatVersion !== networkFormatVersion) throw new Error('Portable network document uses an older format; export it again from the current version')
+  const joins = bounded(document.joins, 32).map((value) => { const item = dataFields(value, ['id', 'pod', 'channels', 'deadlineMs', 'reviewDestination']); const { pod, ...fields } = item; return { ...fields, podId: memberReference(pod, composition, ids) } })
+  const feedback = bounded(document.feedback, 32).map((value) => { const item = dataFields(value, ['id', 'pod', 'channel', 'delayMs', 'maxHops', 'maxCaseAgeMs']); const { pod, ...fields } = item; return { ...fields, podId: memberReference(pod, composition, ids) } })
+  const definition: NetworkDefinition = parseNetworkDefinition({ formatVersion: networkFormatVersion, kind: 'network', semantics: 'persistent-network-v1', id: definitionId, revision: 1, groupId: definitionId, name: composition.title, members, channels: document.channels, routes: document.routes, joins, feedback })
+  const diagnostics = diagnoseNetwork(definition)
+  if (diagnostics.length) throw new Error(`Portable network diagnostics: ${diagnostics.map(item => item.code).join(', ')}`)
+  networkValues(document.values, composition, manifest); dataDeclarations(document, composition, ids)
+  // Older documents list the shared string values scripts read as variables; every shared string value is one now.
+  const variables = document.legacyVariables === undefined ? [] : bounded(document.legacyVariables, 32).map(localKey)
+  unique(variables)
+  const shared = values(document.values, composition)
+  if (variables.some(name => !shared.some(binding => binding.name === name && composition.inputs.some(input => input.key === binding.input && input.kind === 'string')))) throw new Error('Portable legacy variables require declared shared string inputs')
   inputUsage(document, composition)
   return document
 }

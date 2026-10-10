@@ -1,6 +1,6 @@
 import type { PodDatabase } from '../storage/database'
 
-export function scheduleDomains(store: PodDatabase, domains: [() => void, () => void, () => void]): void {
+export function scheduleDomains(store: PodDatabase, domains: readonly (() => void)[]): void {
   const first = Number(store.db.prepare('SELECT next_domain FROM network_scheduler_state WHERE id=1').get()!.next_domain)
   for (let offset = 0; offset < domains.length; offset++) {
     const index = (first + offset) % domains.length

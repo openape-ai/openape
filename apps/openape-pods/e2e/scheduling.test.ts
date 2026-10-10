@@ -123,7 +123,6 @@ it('runs persistent source and independent consumers through the native sandbox 
   expect(f.store.db.prepare('SELECT count(*) AS count FROM network_events').get()!.count).toBe(2)
   expect(f.store.db.prepare('SELECT count(*) AS count FROM network_deliveries WHERE state=\'done\'').get()!.count).toBe(2)
   expect(f.store.db.prepare('SELECT count(*) AS count FROM network_invocations WHERE pod_id=?').get(a)!.count).toBe(1)
-  expect(f.store.db.prepare('SELECT count(*) AS count FROM workflow_runs').get()!.count).toBe(0)
   for (const podId of [source, a, b]) expect(f.store.checkpoint(podId)).toMatchObject({ revision: 0, body: {} })
   expect(engine.view().networks[0]!.state).toBe('paused')
   await engine.stop()
