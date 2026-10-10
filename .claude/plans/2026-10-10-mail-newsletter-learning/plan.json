@@ -10,14 +10,14 @@
     "approach": "Add a read-only network port for owner choices and derive per-sender rules in Categorisation; declared feedback is not allowed with routing gates.",
     "outcome": "Mail from learned senders goes straight to the newsletter batch; the owner only confirms the archive approval."
   },
-  "status": "active",
+  "status": "done",
   "revision": 1,
   "milestones": [
     {
       "id": "port",
       "title": "Read owner choices from a network member",
       "goal": "Expose the network's own owner choices to its member scripts without changing the network definition.",
-      "status": "planned",
+      "status": "done",
       "acceptance": [
         "context.network.choices({gate, limit}) returns the newest owner choices of the caller's network with option, time and the item data; it is read-only and limited to 1000 entries.",
         "A test shows that another network's choices are never returned."
@@ -28,7 +28,7 @@
       "id": "rules",
       "title": "Learn newsletter senders in Categorisation",
       "goal": "Route learned senders directly to the newsletter batch.",
-      "status": "planned",
+      "status": "done",
       "acceptance": [
         "A sender with at least two newsletter choices and no other choice is routed to mail.newsletter with a visible reason.",
         "Any keep, invoice or reply choice for the sender cancels the rule; security alerts and protected contacts are never learned.",
@@ -40,7 +40,7 @@
       "id": "rollout",
       "title": "Release and verify",
       "goal": "Install the signed desktop build and observe the live network.",
-      "status": "planned",
+      "status": "done",
       "acceptance": [
         "Signed desktop build with paired backup; Categorisation is re-pinned without a new network revision.",
         "Live Intake runs route mail from learned senders without a choice; the archive approval batch is unchanged.",
@@ -248,7 +248,16 @@
         "path": "sections.0.body",
         "source": "[Issue 1457](https://repos.openape.ai/patrick/monorepo/issues/1457)",
         "text": "[Issue 1457](https://repos.openape.ai/patrick/monorepo/issues/1457)"
+      },
+      {
+        "path": "completion.summary",
+        "source": "Delivered on October 10, 2026: PR 351 merged as 06353f7a, signed desktop 0.1.3 installed with paired backup, Categorisation re-pinned to script 1ed7399a. Live run c147a6ae read 13 learned senders and routed one learned sender to the archive batch without a choice. Open observation: a learned sender with low confidence has only been verified in the harness so far. Evidence: https://report.openape.ai/d/01M4KKDF7GBSQ5B03H88VQ3CD4",
+        "text": "Ausgeliefert am 10. Oktober 2026: PR 351 als 06353f7a gemergt, signierter Desktop 0.1.3 mit gepaartem Backup installiert, Kategorisierung auf Script 1ed7399a neu angeheftet. Live-Lauf c147a6ae las 13 gelernte Absender und leitete einen gelernten Absender ohne Rückfrage in den Archiv-Stapel. Offene Beobachtung: Ein gelernter Absender mit niedriger Sicherheit ist bisher nur im Harness geprüft. Nachweis: https://report.openape.ai/d/01M4KKDF7GBSQ5B03H88VQ3CD4"
       }
     ]
+  },
+  "completion": {
+    "result": "achieved",
+    "summary": "Delivered on October 10, 2026: PR 351 merged as 06353f7a, signed desktop 0.1.3 installed with paired backup, Categorisation re-pinned to script 1ed7399a. Live run c147a6ae read 13 learned senders and routed one learned sender to the archive batch without a choice. Open observation: a learned sender with low confidence has only been verified in the harness so far. Evidence: https://report.openape.ai/d/01M4KKDF7GBSQ5B03H88VQ3CD4"
   }
 }
