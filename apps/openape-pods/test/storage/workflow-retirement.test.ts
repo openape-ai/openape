@@ -12,8 +12,8 @@ import { seedNetwork } from './network-fixture'
 const roots: string[] = []; const stores: PodDatabase[] = []
 afterEach(() => { for (const store of stores.splice(0)) store.close(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
 
-// A schema-42 profile as the last build with workflows left it: two remaining workflows (sequence and channels), an earlier converted one, a network and standalone Pods.
-function schema42() {
+// A schema-44 profile as the last build with workflows left it: two remaining workflows (sequence and channels), an earlier converted one, a network and standalone Pods.
+function schema44() {
   const root = mkdtempSync(join(tmpdir(), 'pods-workflow-retirement-')); roots.push(root)
   const store = new PodDatabase(root)
   const network = seedNetwork(store)
@@ -40,14 +40,14 @@ function schema42() {
   store.db.prepare('INSERT INTO workflow_attempts VALUES(?,?,?)').run(runId, workflowRun, briefing)
   store.db.prepare('INSERT INTO workflow_reservations VALUES(?,?)').run(editorial, workflowRun)
   store.db.prepare('UPDATE network_scheduler_state SET next_domain=2,last_error_domain=1,last_error=\'Workflow tick failed\'').run()
-  store.db.exec('PRAGMA user_version=42')
+  store.db.exec('PRAGMA user_version=44')
   return { store, root, network, morning, workflowRun, runId, pods: { scheduled, briefing, editorial, intake, triage, standalone, converted } }
 }
 
 const table = (database: PodDatabase | DatabaseSync, sql: string) => ('db' in database ? database.db : database).prepare(sql).all()
 
 it('archives every remaining workflow and only the Pods that just workflows used, and detaches their history', () => {
-  const f = schema42()
+  const f = schema44()
   const untouched = ['SELECT * FROM networks', 'SELECT * FROM network_members', 'SELECT * FROM network_checkpoints', 'SELECT * FROM schedules', 'SELECT * FROM runs', 'SELECT * FROM graph_items']
   const before = untouched.map(sql => table(f.store, sql))
   const pods = new Map(f.store.listPods().map(pod => [pod.id, pod]))
@@ -72,7 +72,7 @@ it('archives every remaining workflow and only the Pods that just workflows used
   expect(table(store, 'PRAGMA foreign_key_check')).toEqual([])
 
   // The verified pre-upgrade copy keeps every workflow row for M8 and for a rollback.
-  const [backup] = readdirSync(f.root).filter(file => file.startsWith('before-v42-'))
+  const [backup] = readdirSync(f.root).filter(file => file.startsWith('before-v44-'))
   const saved = new DatabaseSync(join(f.root, backup!), { readOnly: true })
   try {
     expect(table(saved, 'SELECT count(*) AS count FROM workflow_members')).toEqual([{ count: 7 }])
@@ -82,7 +82,7 @@ it('archives every remaining workflow and only the Pods that just workflows used
 })
 
 it('keeps Pods out of central publication that were private through a network workflow call', () => {
-  const f = schema42()
+  const f = schema44()
   // A network called a workflow; one member keeps its own enabled schedule and stays active after the upgrade.
   const called = f.store.createPod({ name: 'Called with schedule' }).id; const helper = f.store.createPod({ name: 'Called only' }).id
   f.store.db.prepare('UPDATE pods SET lifecycle=\'active\' WHERE id IN (?,?)').run(called, helper)
@@ -92,8 +92,8 @@ it('keeps Pods out of central publication that were private through a network wo
   for (const podId of [called, helper]) f.store.db.prepare('INSERT INTO workflow_members VALUES(?,?)').run(workflowId, podId)
   f.store.db.prepare('INSERT INTO workflow_revisions VALUES(?,2,\'{}\',?,1)').run(workflowId, hash)
   f.store.db.prepare('INSERT INTO workflow_call_requests(id,caller_run_id,network_id,network_revision,case_id,case_revision,workflow_id,workflow_revision,request_hash,request,state,created_at) VALUES(?,?,?,1,?,1,?,2,?,\'{}\',\'completed\',1)').run(randomUUID(), f.network.runId, f.network.networkId, f.network.caseId, workflowId, hash)
-  const schema42Private = `SELECT pod_id FROM network_members UNION SELECT pod_id FROM network_invocations UNION SELECT m.pod_id FROM workflow_members m JOIN workflow_call_requests c ON c.workflow_id=m.workflow_id`
-  const privateBefore = new Set(table(f.store, schema42Private).map(row => String(row.pod_id)))
+  const schema44Private = `SELECT pod_id FROM network_members UNION SELECT pod_id FROM network_invocations UNION SELECT m.pod_id FROM workflow_members m JOIN workflow_call_requests c ON c.workflow_id=m.workflow_id`
+  const privateBefore = new Set(table(f.store, schema44Private).map(row => String(row.pod_id)))
   expect([called, helper].every(id => privateBefore.has(id))).toBe(true)
   f.store.close()
 

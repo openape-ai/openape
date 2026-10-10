@@ -66,7 +66,7 @@ ${slow ? 'setInterval(()=>{},1000);' : ''}`)
   const bundle = resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents')
   const executable = packaged ? join(bundle, 'MacOS/OpenApe Pods Fixture') : process.execPath
   const helper = packaged ? join(bundle, 'Resources/app.asar.unpacked/dist/native/pods-helper') : resolve('dist/native/pods-helper')
-  const assignment: ToolAssignment = { id: 'fixture', capability: 'fixture.read', executable, executableHash: sha(await readFile(executable)), entryFiles: [{ path: toolFile, hash: sha(await readFile(toolFile)) }], prefix: [toolFile], connectionId, runtimeDirectories: packaged ? [bundle] : [], environment: packaged ? { ELECTRON_RUN_AS_NODE: '1' } : {}, networkPorts: [], grantId: 'assigned', command: { cliId: 'fixture', adapterPath, adapterDigest: loaded.digest, argv: ['fixture', 'read'], permission: command.permission } }
+  const assignment: ToolAssignment = { id: 'fixture', capability: 'fixture.read', executable, executableHash: sha(await readFile(executable)), entryFiles: [{ path: toolFile, hash: sha(await readFile(toolFile)) }], prefix: [toolFile], connectionId, runtimeDirectories: packaged ? [bundle] : [], environment: packaged ? { ELECTRON_RUN_AS_NODE: '1' } : {}, networkPorts: [], grantId: 'assigned', command: { cliId: 'fixture', adapterPath, adapterDigest: loaded.digest, argv: ['fixture', 'read'], coverage: [command.detail] } }
   const broker = new PodToolBroker(helper, privateRoot, authority, cache)
   return { assignment, broker, cache, connectionId, credentialRoot, state, authority, helper, privateRoot, lease: { capabilities: ['fixture.read'], assertCurrent: () => {}, signal: new AbortController().signal }, request: { toolId: 'fixture', argv: ['fixture', 'read'] } }
 }

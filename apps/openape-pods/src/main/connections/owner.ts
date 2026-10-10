@@ -3,6 +3,8 @@ import { createServer } from 'node:http'
 import { readFile, writeFile } from 'node:fs/promises'
 import type { CredentialCache } from './cache'
 import { connectionRequest, readJSON } from './http'
+import { OwnerSession } from './owner-session'
+import type { ApesLogin } from './apes-login'
 
 const clientId = 'apes-cli'
 const redirectURI = 'http://localhost:9876/callback'
@@ -18,17 +20,66 @@ export function ownerClaims(token: string, jwks: Record<string, unknown>, issuer
   if (keys.length !== 1 || !verify(null, Buffer.from(`${parts[0]}.${parts[1]}`), createPublicKey({ key: keys[0], format: 'jwk' }), Buffer.from(parts[2], 'base64url'))) throw new Error('Owner identity signature rejected')
   const claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString()) as Record<string, unknown>
   const now = Date.now() / 1000
-  if (claims.iss !== issuer || claims.aud !== clientId || claims.act !== 'human' || claims.email !== account || typeof claims.sub !== 'string' || !claims.sub || typeof claims.exp !== 'number' || claims.exp <= now || (claims.nbf !== undefined && (typeof claims.nbf !== 'number' || claims.nbf > now)) || (nonce !== undefined && claims.nonce !== nonce)) throw new Error('Owner identity does not match the requested account')
+  // An apes login token names the human by `sub` alone (claims sub, act, iss, aud, iat, exp); a browser sign-in adds `email`.
+  const named = claims.email === undefined ? claims.sub === account : claims.email === account
+  if (claims.iss !== issuer || claims.aud !== clientId || claims.act !== 'human' || !named || typeof claims.sub !== 'string' || !claims.sub || typeof claims.exp !== 'number' || claims.exp <= now || (claims.nbf !== undefined && (typeof claims.nbf !== 'number' || claims.nbf > now)) || (nonce !== undefined && claims.nonce !== nonce)) throw new Error('Owner identity does not match the requested account')
   return { sub: claims.sub, exp: claims.exp }
+}
+function httpsOrigin(issuer: string): void {
+  const origin = new URL(issuer)
+  if (origin.protocol !== 'https:' || origin.origin !== issuer) throw new Error('Owner issuer must be an HTTPS origin')
 }
 export class OwnerConnection {
   constructor(private readonly credentials: CredentialCache) {}
   private async exchange(issuer: string, account: string, body: unknown, signal: AbortSignal, nonce?: string): Promise<OwnerTokens> {
     const reply = await connectionRequest(issuer, '/token', body, signal)
     if (typeof reply.access_token !== 'string' || typeof reply.refresh_token !== 'string' || !reply.refresh_token) throw new Error('Owner sign-in did not provide a renewable connection')
-    const jwks = await readJSON(await fetch(`${issuer}/.well-known/jwks.json`, { redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]) }))
-    const claims = ownerClaims(reply.access_token, jwks, issuer, account, nonce)
+    const claims = await this.verify(issuer, account, reply.access_token, signal, nonce)
     return { issuer, account, subject: claims.sub, expiresAt: claims.exp, accessToken: reply.access_token, refreshToken: reply.refresh_token }
+  }
+
+  private async verify(issuer: string, account: string, token: string, signal: AbortSignal, nonce?: string): Promise<{ sub: string, exp: number }> {
+    const jwks = await readJSON(await fetch(`${issuer}/.well-known/jwks.json`, { redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]) }))
+    return ownerClaims(token, jwks, issuer, account, nonce)
+  }
+
+  /** The session of one sign-in that Pods itself made: renewed with its own refresh token and revoked at the IdP when it ends. */
+  private ownSession(issuer: string, account: string, tokens: OwnerTokens, endsAt: number): OwnerSession {
+    return new OwnerSession(tokens, endsAt, {
+      refresh: async (current, renewal) => {
+        const refreshed = await this.exchange(issuer, account, { grant_type: 'refresh_token', refresh_token: current.refreshToken, client_id: clientId }, renewal)
+        if (refreshed.subject !== current.subject) throw new Error('Refreshed owner identity changed; sign in again')
+        return refreshed
+      },
+      revoke: async (current) => { await connectionRequest(issuer, '/revoke', { token: current.refreshToken }, AbortSignal.timeout(10000)) },
+    })
+  }
+
+  /**
+   * Opens a session from the owner's logged-in apes CLI (owner decision October 10, 2026): its access token is
+   * checked like a browser sign-in (signature, issuer, apes-cli audience, human, registered account) and used as the
+   * session's owner token. Renewal reads the apes login again, so `apes logout` ends the session; the apes tokens
+   * belong to apes and are never revoked or written by Pods. Null when apes has no usable login.
+   */
+  async apesSession(issuer: string, account: string, endsAt: number, signal: AbortSignal, login: ApesLogin): Promise<OwnerSession | null> {
+    const derive = async (renewal: AbortSignal): Promise<OwnerTokens | null> => {
+      const proof = await login.token(renewal)
+      if (!proof) return null
+      if (proof.issuer !== issuer) throw new Error('The apes login belongs to another identity provider than the registered owner')
+      const claims = await this.verify(issuer, account, proof.accessToken, renewal)
+      return { issuer, account, subject: claims.sub, expiresAt: claims.exp, accessToken: proof.accessToken, refreshToken: '' }
+    }
+    const tokens = await derive(signal)
+    if (!tokens) return null
+    return new OwnerSession(tokens, endsAt, {
+      refresh: async (_current, renewal) => {
+        const renewed = await derive(renewal)
+        if (!renewed) throw new Error('The apes login ended; ask the owner to sign in again')
+        return renewed
+      },
+      revoke: async () => {},
+      alive: () => login.signedIn(issuer, account),
+    })
   }
 
   async login(id: string, issuer: string, account: string, signal: AbortSignal, present: (value: { url: string }) => void): Promise<{ issuer: string, subject: string }> {
@@ -37,14 +88,16 @@ export class OwnerConnection {
     return { issuer, subject: value.subject }
   }
 
-  /** Proves that the owner signs in now, without touching the stored connection; the tokens are discarded. */
-  async verify(issuer: string, account: string, signal: AbortSignal, present: (value: { url: string }) => void): Promise<{ subject: string }> {
-    return { subject: (await this.authorize(issuer, account, signal, present)).subject }
+  /**
+   * Signs the owner in now for one MCP session without touching the stored connection. The tokens stay in the
+   * returned session in memory and end with it at `endsAt` at the latest.
+   */
+  async session(issuer: string, account: string, endsAt: number, signal: AbortSignal, present: (value: { url: string }) => void): Promise<OwnerSession> {
+    return this.ownSession(issuer, account, await this.authorize(issuer, account, signal, present), endsAt)
   }
 
   private async authorize(issuer: string, account: string, signal: AbortSignal, present: (value: { url: string }) => void): Promise<OwnerTokens> {
-    const origin = new URL(issuer)
-    if (origin.protocol !== 'https:' || origin.origin !== issuer) throw new Error('Owner issuer must be an HTTPS origin')
+    httpsOrigin(issuer)
     const state = randomBytes(32).toString('base64url'); const nonce = randomBytes(32).toString('base64url'); const verifier = randomBytes(48).toString('base64url')
     let accept: (code: string) => void = () => {}; let reject: (error: Error) => void = () => {}
     const code = new Promise<string>((resolve, fail) => { accept = resolve; reject = fail })
