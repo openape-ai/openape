@@ -100,7 +100,9 @@ export async function administerGrants(command: GrantsCommand, owner: OwnerSessi
 /** Applies a sandbox declaration to one Pod; entries it already has are kept, so a repeated declaration changes nothing. */
 async function applySandbox(podId: string, declaration: SandboxDeclaration, origin: GrantOrigin | null, admin: Administration): Promise<{ applications: string[], kept: string[] }> {
   const kept: string[] = []
-  if (declaration.level) await admin.ledger({ type: 'level', podId, source: origin ? `network:${origin.networkId}` : 'pod', revision: origin?.revision ?? null, level: declaration.level })
+  const source = origin ? `network:${origin.networkId}` : 'pod'
+  if (declaration.level) await admin.ledger({ type: 'level', podId, source, revision: origin?.revision ?? null, level: declaration.level })
+  if (declaration.deny) await admin.ledger({ type: 'deny', podId, source, revision: origin?.revision ?? null, deny: declaration.deny })
   const applications: string[] = []
   const track = async (change: () => Promise<void>) => {
     const before = new Set((await admin.resources(podId)).resources.map(item => item.id))

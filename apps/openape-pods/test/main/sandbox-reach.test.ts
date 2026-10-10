@@ -1,61 +1,62 @@
 // @vitest-environment node
 import { execFile, spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir, userInfo } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { OwnerSession } from '../../src/main/connections/owner-session'
 import type { OwnerSessionTokens } from '../../src/main/connections/owner-session'
-import { ownerPersistencePaths, ownerProtectedPaths, sandboxPolicy } from '../../src/worker/runtime/sandbox'
+import { deniedPaths, ownerProtectedPaths, sandboxPolicy } from '../../src/worker/runtime/sandbox'
 
 const roots: string[] = []
 afterEach(() => { vi.useRealTimers(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
 const policy = { executable: '/opt/fixture/bin/tool', workspace: '/Users/owner/Library/Application Support/OpenApe Pods/profile/pods/p/workspace', readFiles: ['/opt/fixture/share/roots.pem'], runtimeDirectories: ['/opt/fixture/runtime'], readDirectories: ['/Users/owner/Documents'], writeDirectories: ['/Users/owner/Library/Application Support/OpenApe Pods/profile/credentials/temporary/state'] }
-const protectedPaths = ['/Users/owner/Library/Application Support/OpenApe Pods', '/Users/owner/.config/apes', '/Users/owner/Library/Keychains']
-const persistencePaths = ['/Users/owner/Library/LaunchAgents', '/Users/owner/.zshrc', '/Library/LaunchDaemons']
+const protectedPaths = ['/Users/owner/Library/Application Support/OpenApe Pods', '/Users/owner/.config/apes']
+const subpaths = (paths: string[]) => paths.map(path => `(subpath ${JSON.stringify(path)})`).join(' ')
 
-it('keeps the isolated profile closed by default and the owner profile open except the protected owner paths', () => {
+it('gives the owner level the owner reach except the protected paths and the configured denylist', () => {
   expect(sandboxPolicy(policy)).toContain('(deny default)')
-  const owner = sandboxPolicy({ ...policy, reach: { level: 'owner', protectedPaths, persistencePaths } })
+  const deny = ['/Users/owner/.ssh']
+  const owner = sandboxPolicy({ ...policy, reach: { level: 'owner', protectedPaths, deny } })
   const lines = owner.trim().split('\n')
   expect(lines[1]).toBe('(allow default)')
   // The last matching rule wins: protected paths are denied, then only the program's own paths are opened again,
-  // and finally writes to the persistence locations and the folders leading to them are denied, even inside an assigned folder.
-  expect(lines[2]).toBe(`(deny file-read* file-write* ${protectedPaths.map(path => `(subpath ${JSON.stringify(path)})`).join(' ')})`)
-  expect(lines[3]).toBe(`(allow file-read* file-write* (subpath ${JSON.stringify(policy.workspace)}) (subpath ${JSON.stringify(policy.writeDirectories[0])}))`)
+  // the folders leading to protected and denied paths stay unwritable, and the denylist closes even an assigned folder.
+  expect(lines[2]).toBe(`(deny file-read* file-write* ${subpaths(protectedPaths)})`)
+  expect(lines[3]).toBe(`(allow file-read* file-write* ${subpaths([policy.workspace, policy.writeDirectories[0]!])})`)
   expect(lines[4]).toContain('(literal "/opt/fixture/bin/tool")')
   expect(lines[4]).toContain('(subpath "/opt/fixture/runtime")')
-  expect(lines[5]).toBe('(deny file-write* (subpath "/Users/owner/Library/LaunchAgents") (subpath "/Users/owner/.zshrc") (subpath "/Library/LaunchDaemons") (literal "/Users") (literal "/Users/owner") (literal "/Users/owner/Library") (literal "/Users/owner/Library/Application Support") (literal "/Users/owner/.config") (literal "/Library"))')
-  // Seatbelt checks a Unix socket connection as network access, so the sockets under the protected paths are closed separately.
-  expect(lines[6]).toBe(`(deny network-outbound ${protectedPaths.map(path => `(remote unix-socket (subpath ${JSON.stringify(path)}))`).join(' ')})`)
-  expect(lines[7]).toContain('(global-name "com.apple.xpc.smd")')
-  expect(lines[8]).toBe('(deny job-creation)')
-  expect(lines[9]).toBe('(deny user-preference-write)')
-  expect(lines).toHaveLength(10)
-  expect(() => sandboxPolicy({ ...policy, reach: { level: 'owner', protectedPaths: [], persistencePaths } })).toThrow('protected paths')
-  expect(() => sandboxPolicy({ ...policy, reach: { level: 'owner', protectedPaths } })).toThrow('protected paths')
+  expect(lines[5]).toBe('(deny file-write* (literal "/Users") (literal "/Users/owner") (literal "/Users/owner/Library") (literal "/Users/owner/Library/Application Support") (literal "/Users/owner/.config"))')
+  // Seatbelt checks a Unix socket connection as network access, so the sockets under these paths are closed separately.
+  expect(lines[6]).toBe(`(deny network-outbound ${[...protectedPaths, ...deny].map(path => `(remote unix-socket (subpath ${JSON.stringify(path)}))`).join(' ')})`)
+  expect(lines[7]).toBe(`(deny file-read* file-write* ${subpaths(deny)})`)
+  expect(lines).toHaveLength(8)
+  // No curated persistence list: launch agents, preferences, keychains and login item services stay the owner's.
+  for (const removed of ['LaunchAgents', 'Keychains', 'Preferences', 'mach-lookup', 'job-creation', 'user-preference-write']) expect(owner).not.toContain(removed)
+  expect(sandboxPolicy({ ...policy, reach: { level: 'owner', protectedPaths } }).trim().split('\n')).toHaveLength(7)
+  expect(() => sandboxPolicy({ ...policy, reach: { level: 'owner', protectedPaths: [] } })).toThrow('protected paths')
 })
 
-const ownerConfiguration = ['.codex', '.claude', '.claude.json', '.ssh', '.gitconfig', '.config/git', '.npmrc', '.config/fish', '.local/bin', 'Library/pnpm', 'Library/Pnpm', '.zsh_shared']
-
-it('denies writes to the launch, login, shell, SSH, Git, agent, PATH, preference and Pods app locations of the owner', () => {
-  const home = realpathSync(mkdtempSync(join(tmpdir(), 'pods-reach-home-'))); roots.push(home)
-  const paths = ownerPersistencePaths(home, { CODEX_HOME: '/Users/owner/codex-home', CLAUDE_CONFIG_DIR: '/Users/owner/claude-home/' })
-  for (const path of ['Library/LaunchAgents', 'Library/Application Support/com.apple.backgroundtaskmanagementagent', 'Library/Preferences', '.zshrc', '.zprofile', '.zshenv', '.zlogin', '.bashrc', '.bash_profile', '.profile', 'Applications/OpenApe Pods.app', 'Library/Application Support/OpenApe Pods Rollback', ...ownerConfiguration]) expect(paths).toContain(join(home, path))
-  for (const path of ['/Library/LaunchAgents', '/Library/LaunchDaemons', '/Applications/OpenApe Pods.app', '/opt/homebrew', '/usr/local', '/Users/owner/codex-home', '/Users/owner/claude-home']) expect(paths).toContain(path)
-  expect(paths).not.toContain(join(home, 'Library/Keychains'))
+it('closes the denylist and the folders leading to it last at the isolated level, so not even the workspace reopens it', () => {
+  const deny = ['/w/sub/private']
+  const lines = sandboxPolicy({ ...policy, workspace: '/w', reach: { level: 'isolated', protectedPaths: [], deny } }).trim().split('\n')
+  expect(lines[0]).toBe('(version 1)')
+  expect(lines[1]).toBe('(deny default)')
+  expect(lines.at(-2)).toBe('(deny file-write* (literal "/w") (literal "/w/sub"))')
+  expect(lines.at(-1)).toBe(`(deny file-read* file-write* ${subpaths(deny)})`)
+  expect(sandboxPolicy(policy)).not.toContain('(deny file-read*')
 })
 
-it('lists every location both as written and as resolved through links', () => {
+it('resolves denied paths below the owner home and through links, and always protects the Pods base, profile and apes login', () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'pods-reach-forms-'))); roots.push(root)
-  const real = join(root, 'real'); const home = join(root, 'home'); const dotfiles = join(root, 'dotfiles/claude')
-  mkdirSync(real); mkdirSync(dotfiles, { recursive: true }); symlinkSync(real, home); symlinkSync(dotfiles, join(real, '.claude'))
-  const paths = ownerPersistencePaths(home)
-  for (const path of [join(home, '.claude'), join(real, '.claude'), dotfiles, join(home, '.codex'), join(real, '.codex')]) expect(paths).toContain(path)
-  const profile = join(real, 'base/profiles/a'); mkdirSync(join(real, '.config/apes'), { recursive: true }); mkdirSync(profile, { recursive: true })
-  expect(ownerProtectedPaths(join(home, 'base/profiles/a'), join(home, 'base'), home)).toEqual(expect.arrayContaining([join(home, 'base'), join(real, 'base'), join(home, 'base/profiles/a'), profile, join(home, '.config/apes'), join(real, '.config/apes')]))
+  const real = join(root, 'real'); const home = join(root, 'home'); const vault = join(root, 'vault')
+  mkdirSync(real); mkdirSync(vault); symlinkSync(real, home); symlinkSync(vault, join(real, 'notes'))
+  expect(deniedPaths(['~/notes', '/srv/data'], home)).toEqual([join(home, 'notes'), vault, '/srv/data'])
+  const base = join(real, 'base'); const profile = join(base, 'profiles/a'); mkdirSync(join(real, '.config/apes'), { recursive: true }); mkdirSync(profile, { recursive: true })
+  expect(ownerProtectedPaths(join(home, 'base/profiles/a'), join(home, 'base'), home)).toEqual([join(home, 'base'), base, join(home, 'base/profiles/a'), profile, join(home, '.config/apes'), join(real, '.config/apes')])
+  expect(ownerProtectedPaths(base, base, real)).toEqual([base, join(real, '.config/apes')])
 })
 
 /** Runs a command under a sandbox profile and returns its exit code and output; asynchronous so a socket server in this process can answer. */
@@ -64,34 +65,62 @@ function sandboxed(profile: string, command: string[]): Promise<{ code: number, 
     execFile('/usr/bin/sandbox-exec', ['-f', profile, ...command], { encoding: 'utf8', timeout: 20000 }, (error, stdout, stderr) => resolve({ code: error ? Number(error.code ?? 1) : 0, output: `${stdout}${stderr}` }))
   })
 }
+const write = (profile: string, path: string) => sandboxed(profile, ['/bin/sh', '-c', 'echo planted > "$1"', '-', path])
 
-it.runIf(process.platform === 'darwin')('blocks writes to persistence locations, as written and through a linked home, and the Pods sockets under the real macOS sandbox', async () => {
+it.runIf(process.platform === 'darwin')('lets the owner level write SSH and launch agent files but never the Pods data, the apes login or a denied path under the real macOS sandbox', async () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'pr-'))); roots.push(root)
   const real = join(root, 'real'); const home = join(root, 'home'); const workspace = join(root, 'w')
   // The real layout: the base holds the profile selection, the MCP control socket and every profile; it is reached through a link here.
   const base = join(root, 'b'); const linkedBase = join(root, 'base'); const profileRoot = join(base, 'profiles/0b7c3b8e-5f8e-4a51-9b3c-2f1d6c7a9e10')
-  for (const path of ['.codex', '.ssh', '.config/git', '.local/bin', 'Library/pnpm', '.zsh_shared', 'notes']) mkdirSync(join(real, path), { recursive: true })
-  mkdirSync(join(root, 'dotfiles/claude'), { recursive: true }); symlinkSync(join(root, 'dotfiles/claude'), join(real, '.claude'))
+  for (const path of ['.ssh', 'Library/LaunchAgents', '.config/apes', 'private', 'notes', 'projects/secret', 'other']) mkdirSync(join(real, path), { recursive: true })
+  writeFileSync(join(real, '.config/apes/auth.json'), '{}'); writeFileSync(join(real, 'private/secret.txt'), 'secret'); writeFileSync(join(real, 'projects/secret/key.txt'), 'secret')
   mkdirSync(profileRoot, { recursive: true }); mkdirSync(join(base, 'codex')); writeFileSync(join(base, 'selected-profile.json'), '{}')
-  mkdirSync(workspace); symlinkSync(real, home); symlinkSync(base, linkedBase)
-  const reach = { level: 'owner' as const, protectedPaths: ownerProtectedPaths(profileRoot, linkedBase, home), persistencePaths: ownerPersistencePaths(home, { CODEX_HOME: join(root, 'codex-home') }) }
-  const owner = join(root, 'owner.sb'); writeFileSync(owner, sandboxPolicy({ executable: '/bin/sh', workspace, readFiles: [], runtimeDirectories: [], reach }))
-  const isolated = join(root, 'isolated.sb'); writeFileSync(isolated, sandboxPolicy({ executable: process.execPath, workspace, readFiles: [], runtimeDirectories: [] }))
+  mkdirSync(join(workspace, 'sub/closed'), { recursive: true }); writeFileSync(join(workspace, 'sub/closed/key.txt'), 'secret'); mkdirSync(join(workspace, 'other'))
+  symlinkSync(real, home); symlinkSync(base, linkedBase)
+  const reach = { level: 'owner' as const, protectedPaths: ownerProtectedPaths(profileRoot, linkedBase, home), deny: deniedPaths(['~/private', '~/projects/secret'], home) }
+  // The denied folders are also inside folders assigned for writing: the denylist wins over the assignment.
+  const owner = join(root, 'owner.sb'); writeFileSync(owner, sandboxPolicy({ executable: '/bin/sh', workspace, readFiles: [], runtimeDirectories: [], writeDirectories: [join(real, 'private'), join(real, 'projects')], reach }))
+  const isolated = join(root, 'isolated.sb'); writeFileSync(isolated, sandboxPolicy({ executable: process.execPath, workspace, readFiles: [], runtimeDirectories: [], reach: { level: 'isolated', protectedPaths: [], deny: deniedPaths([join(workspace, 'sub/closed')], home) } }))
 
-  const targets = ['.codex/config.toml', '.claude/settings.json', '.claude.json', '.ssh/id_planted', '.gitconfig', '.config/git/config', '.npmrc', '.local/bin/tool', 'Library/pnpm/tool', '.zsh_shared/planted.zsh']
   for (const base of [home, real]) {
-    for (const target of targets) expect((await sandboxed(owner, ['/bin/sh', '-c', 'echo planted > "$1"', '-', join(base, target)])).code, join(base, target)).not.toBe(0)
+    for (const target of ['.ssh/x', 'Library/LaunchAgents/ai.openape.pods-test.plist']) {
+      expect((await write(owner, join(base, target))).code, join(base, target)).toBe(0)
+      expect(readFileSync(join(real, target), 'utf8')).toBe('planted\n')
+      rmSync(join(real, target))
+    }
+    expect((await sandboxed(owner, ['/bin/cat', join(base, '.config/apes/auth.json')])).code).not.toBe(0)
+    expect((await write(owner, join(base, '.config/apes/planted.json'))).code).not.toBe(0)
+    expect((await sandboxed(owner, ['/bin/cat', join(base, 'private/secret.txt')])).code).not.toBe(0)
+    expect((await write(owner, join(base, 'private/planted.txt'))).code).not.toBe(0)
   }
-  expect((await sandboxed(owner, ['/bin/sh', '-c', 'echo planted > "$1"', '-', join(root, 'codex-home/config.toml')])).code).not.toBe(0)
-  // The link itself cannot be replaced by a folder the run controls.
-  expect((await sandboxed(owner, ['/bin/rm', join(real, '.claude')])).code).not.toBe(0)
-  expect(existsSync(join(real, '.claude/'))).toBe(true)
+  expect(existsSync(join(real, 'private/planted.txt'))).toBe(false)
+  // The folders leading to the apes login and to a denied path cannot be moved aside.
+  expect((await sandboxed(owner, ['/bin/mv', join(real, '.config'), join(real, 'moved')])).code).not.toBe(0)
+  expect((await sandboxed(owner, ['/bin/mv', join(real, 'private'), join(real, 'moved')])).code).not.toBe(0)
+  // Renaming the parent of a denied path inside a writable folder would expose it under a new name; it stays refused.
+  for (const parent of [join(home, 'projects'), join(real, 'projects')]) expect((await sandboxed(owner, ['/bin/mv', parent, join(real, 'moved')])).code, parent).not.toBe(0)
+  expect((await sandboxed(owner, ['/bin/cat', join(real, 'projects/secret/key.txt')])).code).not.toBe(0)
+  expect((await sandboxed(owner, ['/bin/mv', join(real, 'other'), join(real, 'other-renamed')])).code).toBe(0)
+  for (const path of [join(base, 'selected-profile.json'), join(linkedBase, 'selected-profile.json')]) {
+    expect((await sandboxed(owner, ['/bin/cat', path])).code, path).not.toBe(0)
+    expect((await write(owner, `${path}.planted`)).code, path).not.toBe(0)
+  }
+  expect((await sandboxed(owner, ['/bin/mv', linkedBase, join(root, 'moved')])).code).not.toBe(0)
   // The rest of the owner's home and ordinary programs keep working.
   expect(await sandboxed(owner, ['/bin/sh', '-c', 'echo note > "$1" && cat "$1"', '-', join(home, 'notes/today.txt')])).toEqual({ code: 0, output: 'note\n' })
   expect((await sandboxed(owner, ['/usr/bin/git', '--version'])).code).toBe(0)
   expect(await sandboxed(owner, [process.execPath, '-p', '1 + 1'])).toEqual({ code: 0, output: '2\n' })
-  for (const path of [join(base, 'selected-profile.json'), join(linkedBase, 'selected-profile.json')]) expect((await sandboxed(owner, ['/bin/cat', path])).code, path).not.toBe(0)
-  expect((await sandboxed(owner, ['/bin/mv', linkedBase, join(root, 'moved')])).code).not.toBe(0)
+  // The isolated level is unchanged: nothing outside its workspace, and a denied folder inside it stays closed.
+  const nodeWrite = (path: string) => sandboxed(isolated, [process.execPath, '-e', 'try{require("fs").writeFileSync(process.argv[1],"ok");console.log("written")}catch(e){console.log(e.code)}', path])
+  expect(await nodeWrite(join(workspace, 'open.txt'))).toEqual({ code: 0, output: 'written\n' })
+  expect(await nodeWrite(join(workspace, 'sub/closed/planted.txt'))).toEqual({ code: 0, output: 'EPERM\n' })
+  expect(await nodeWrite(join(real, '.ssh/x'))).toEqual({ code: 0, output: 'EPERM\n' })
+  // Renaming the parent of the denied folder inside the writable workspace is refused, so it never reappears readable.
+  const rename = (from: string, to: string) => sandboxed(isolated, [process.execPath, '-e', 'try{require("fs").renameSync(process.argv[1],process.argv[2]);console.log("renamed")}catch(e){console.log(e.code)}', from, to])
+  expect(await rename(join(workspace, 'sub'), join(workspace, 'moved'))).toEqual({ code: 0, output: 'EPERM\n' })
+  expect(existsSync(join(workspace, 'moved'))).toBe(false)
+  expect(await sandboxed(isolated, [process.execPath, '-e', 'try{console.log(require("fs").readFileSync(process.argv[1],"utf8"))}catch(e){console.log(e.code)}', join(workspace, 'sub/closed/key.txt')])).toEqual({ code: 0, output: 'EPERM\n' })
+  expect(await rename(join(workspace, 'other'), join(workspace, 'other-renamed'))).toEqual({ code: 0, output: 'renamed\n' })
 
   const socket = join(base, 'codex/control.sock')
   const server = createServer(connection => connection.end('owner-session\n'))
@@ -109,28 +138,19 @@ it.runIf(process.platform === 'darwin')('blocks writes to persistence locations,
 }, 60000)
 
 // cfprefsd writes named preference domains into the real ~/Library/Preferences whatever HOME says, so only the actual home
-// shows whether `defaults write` is refused. A random domain is removed again in case the write ever gets through.
-it.runIf(process.platform === 'darwin')('refuses defaults write through cfprefsd under the real macOS sandbox', async () => {
+// shows whether `defaults write` works. Only a random test domain is written, and it is removed again.
+it.runIf(process.platform === 'darwin')('lets the owner level write preferences through cfprefsd under the real macOS sandbox', async () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'pods-reach-defaults-'))); roots.push(root)
   const workspace = join(root, 'w'); mkdirSync(workspace)
-  const reach = { level: 'owner' as const, protectedPaths: ownerProtectedPaths(join(root, 'p/profiles/a'), join(root, 'p'), userInfo().homedir), persistencePaths: ownerPersistencePaths(userInfo().homedir) }
+  const reach = { level: 'owner' as const, protectedPaths: ownerProtectedPaths(join(root, 'p/profiles/a'), join(root, 'p'), userInfo().homedir) }
   const owner = join(root, 'owner.sb'); writeFileSync(owner, sandboxPolicy({ executable: '/bin/sh', workspace, readFiles: [], runtimeDirectories: [], reach }))
   const domain = `ai.openape.pods-test-${randomUUID()}`
-  const written = await sandboxed(owner, ['/usr/bin/defaults', 'write', domain, 'planted', 'value'])
-  if (written.code === 0) {
+  try { expect((await sandboxed(owner, ['/usr/bin/defaults', 'write', domain, 'planted', 'value'])).code).toBe(0) }
+  finally {
     spawnSync('/usr/bin/defaults', ['delete', domain])
     rmSync(join(userInfo().homedir, 'Library/Preferences', `${domain}.plist`), { force: true })
   }
-  expect(written.code).not.toBe(0)
 }, 60000)
-
-it('always protects the base of all profiles, the selected profile, the apes login and the keychains', () => {
-  const home = realpathSync(mkdtempSync(join(tmpdir(), 'pods-reach-home-'))); roots.push(home)
-  const base = join(home, 'Library/Application Support/OpenApe Pods'); const profile = join(base, 'profiles/0b7c3b8e-5f8e-4a51-9b3c-2f1d6c7a9e10')
-  mkdirSync(profile, { recursive: true }); mkdirSync(join(home, '.config/apes'), { recursive: true })
-  expect(ownerProtectedPaths(profile, base, home)).toEqual([base, profile, join(home, '.config/apes'), join(home, 'Library/Keychains')])
-  expect(ownerProtectedPaths(base, base, home)).toEqual([base, join(home, '.config/apes'), join(home, 'Library/Keychains')])
-})
 
 function tokens(overrides: Partial<OwnerSessionTokens> = {}): OwnerSessionTokens {
   return { issuer: 'https://id.example.test', account: 'owner@example.test', subject: 'owner@example.test', accessToken: 'ACCESS', refreshToken: 'REFRESH', expiresAt: Math.floor(Date.now() / 1000) + 300, ...overrides }
