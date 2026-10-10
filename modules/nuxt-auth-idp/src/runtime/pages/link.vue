@@ -2,11 +2,9 @@
 import { onMounted, ref } from 'vue'
 import { navigateTo, useHead, useRoute } from '#imports'
 
-// The phone half of QR sign-in: scanned from the kiosk's screen, or opened
-// from a link the owner's own Pods inbox or Codex session shows when the
-// signing-in machine is not in front of them. Shows who is asking before
-// anything happens — this context (and the human reading it) is the only
-// defense against a relayed code (QRLjacking).
+// The phone half of QR sign-in: scanned from the kiosk's screen. Shows who
+// is asking before anything happens — this context (and the human reading
+// it) is the only defense against a relayed code (QRLjacking).
 
 useHead({ title: 'Approve sign-in' })
 
@@ -81,7 +79,7 @@ async function respond(action: 'approve' | 'deny') {
 
       <div v-else-if="outcome === 'approved'" class="text-center space-y-2">
         <UIcon name="i-lucide-check-circle" class="size-8 text-success" />
-        <p>The requester is now signed in as you.</p>
+        <p>The other browser is now signed in as you.</p>
         <p class="text-xs text-muted">
           It stays signed in for one hour. You can end it early under Account &amp; security.
         </p>
@@ -93,19 +91,15 @@ async function respond(action: 'approve' | 'deny') {
       </div>
 
       <div v-else-if="context" class="space-y-4">
-        <p>This requester wants to sign in <strong>as you</strong>:</p>
-        <div class="rounded-md border border-default p-3 space-y-1" data-testid="link-requester">
-          <p class="text-lg font-semibold break-words">
-            {{ context.requester.userAgent }}
-          </p>
-          <p class="text-sm">
-            <span class="text-muted">IP address:</span> {{ context.requester.ip }}
-          </p>
-        </div>
+        <p>A browser wants to sign in <strong>as you</strong>:</p>
+        <ul class="text-sm space-y-1">
+          <li><span class="text-muted">IP address:</span> {{ context.requester.ip }}</li>
+          <li><span class="text-muted">Browser:</span> {{ context.requester.userAgent }}</li>
+        </ul>
         <UAlert
           color="warning"
-          title="Only approve a request you started yourself."
-          description="Approve if this code is on a screen in front of you, or if the link came from your own Pods inbox or your own Codex session, for example to sign in your Mac while you are away. If anyone else sent you this link, it is an attempt to take over your account — deny it."
+          title="Only approve if this code is on a screen directly in front of you."
+          description="If someone sent you this code, it is an attempt to take over your account — deny it."
         />
         <div class="flex gap-2">
           <UButton
