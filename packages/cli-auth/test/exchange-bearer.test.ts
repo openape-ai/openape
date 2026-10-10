@@ -26,6 +26,7 @@ describe('exchangeForSpToken', () => {
   it('POSTs subject_token + scopes and persists the response', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
       expect(String(url)).toBe('https://plans.openape.ai/api/cli/exchange')
+      expect(init?.redirect).toBe('error')
       const body = JSON.parse(String((init?.body as string) ?? '{}'))
       expect(body.subject_token).toBe('idp-eyJ...')
       expect(body.scopes).toEqual(['plans:rw'])

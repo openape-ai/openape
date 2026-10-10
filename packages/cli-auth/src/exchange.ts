@@ -45,7 +45,8 @@ export async function requestSpToken(
   now: number = Math.floor(Date.now() / 1000),
 ): Promise<SpToken> {
   const url = `${request.endpoint.replace(/\/$/, '')}/api/cli/exchange`
-  const transport = options.transport ?? ((target: string, init: RequestInit) => fetch(target, init))
+  // A followed 307/308 would resend the subject token to the redirect target.
+  const transport = options.transport ?? ((target: string, init: RequestInit) => fetch(target, { ...init, redirect: 'error' }))
   const response = await transport(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'accept': 'application/json' },
