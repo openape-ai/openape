@@ -28,10 +28,11 @@ export type SandboxCommand
 export interface SandboxView { level: SandboxLevel, sources: { source: string, level: SandboxLevel }[] }
 /**
  * How far a Pod's programs reach on this Mac. At `owner` level they reach what the owner reaches, except
- * `protectedPaths`: the Pods profile, the owner's apes login and the keychains stay closed, so a Pod program can never
- * take the owner identity or change Pods state.
+ * `protectedPaths`: the Pods profile, the owner's apes login and the keychain files stay closed, so a Pod program can
+ * never take the owner identity or change Pods state. `persistencePaths` are readable but never writable, so nothing
+ * a run leaves behind starts again after it. Both are required at `owner` level.
  */
-export interface SandboxReach { level: SandboxLevel, protectedPaths: string[] }
+export interface SandboxReach { level: SandboxLevel, protectedPaths: string[], persistencePaths?: string[] }
 
 const limit = 16
 function object(value: unknown, keys: string[], message: string): Record<string, unknown> {
