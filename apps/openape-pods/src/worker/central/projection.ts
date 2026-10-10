@@ -1,8 +1,8 @@
-import { networkPublicationTables, podNetwork } from './network-projection'
+import { podNetwork, privatePods } from './network-projection'
 import { jevAvailability } from '../onboarding/store'
 import type { Owner } from '@openape/pods-protocol'
 import { sameOwner } from '@openape/pods-protocol'
-import { centralMaxBytes, centralTables, parseCentralSnapshot } from '../../contracts/central'
+import { centralMaxBytes, parseCentralSnapshot } from '../../contracts/central'
 import type { CentralSnapshot } from '../../contracts/central'
 import type { PodDatabase } from '../storage/database'
 import { schemaVersion } from '../storage/database'
@@ -27,18 +27,16 @@ export class CentralProjection {
     }
   }
 
-  snapshot(owner: Owner, networkReads = false): CentralSnapshot {
-    if (!networkReads && this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()) throw new Error('Persistent networks require bounded publication support before this workspace can connect')
+  snapshot(owner: Owner): CentralSnapshot {
     const result = this.store.transaction(() => {
       const pods = listedPods(this.store)
       this.assertOwner(owner)
-      const hasNetworks = networkReads && !!this.store.db.prepare('SELECT 1 FROM networks LIMIT 1').get()
-      const tables = hasNetworks ? networkPublicationTables(this.store) : Object.fromEntries(centralTables.map(table => [table, this.store.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()]))
       const details = new WorkspaceDetails(this.store, this.resources)
+      const blobs = this.store.db.prepare(`SELECT pod_id AS podId,hash FROM scripts WHERE pod_id NOT IN (${privatePods}) UNION SELECT pod_id,hash FROM sources WHERE pod_id NOT IN (${privatePods}) ORDER BY 1,2`).all() as { podId: string, hash: string }[]
       return {
-        version: 1 as const, workspace: { jev: jevAvailability(this.store), pods, organization: new PodGroups(this.store).view(), descriptions: new AutomationDescriptions(this.store).view(), map: mapView(this.store, Date.now(), true) }, archive: { schema: schemaVersion, tables }, artifacts: [],
+        version: 1 as const, schema: schemaVersion, workspace: { jev: jevAvailability(this.store), pods, organization: new PodGroups(this.store).view(), descriptions: new AutomationDescriptions(this.store).view(), map: mapView(this.store, Date.now(), true) }, artifacts: [], blobs,
         pods: pods.map((pod) => {
-          const networkId = hasNetworks ? podNetwork(this.store, pod.id) : null
+          const networkId = podNetwork(this.store, pod.id)
           if (networkId) {
             return {
               id: pod.id, networkId, ready: true,

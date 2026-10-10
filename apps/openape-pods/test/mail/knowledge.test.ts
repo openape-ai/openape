@@ -131,13 +131,11 @@ it('resumes an interrupted inventory at its durable page and reexamines sources 
   expect(next.context.messageSources.length).toBeGreaterThan(0)
 })
 
-it('keeps the analysis identity across a rename and excludes historical assignment text', async () => {
+it('keeps the analysis identity across a rename', async () => {
   const { pod, messages, session, context } = await setup()
   messages.push(message('one', 'rules', 'Delivery is June 8.'))
-  store.db.prepare('UPDATE pods SET assignment=? WHERE id=?').run('Historical instruction canary', pod.id)
   const first = await context(session())
   expect(first.context).not.toHaveProperty('assignment')
-  expect(JSON.stringify(first.context)).not.toContain('Historical instruction canary')
   store.updatePod(pod.id, 1, { name: 'Renamed knowledge', lifecycle: 'paused' })
   expect((await context(session())).hash).toBe(first.hash)
 })

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import type { CentralSnapshot } from '../../openape-pods/src/contracts/central'
-import { parseCentralCommand, parseCentralSnapshot } from '../../openape-pods/src/contracts/central'
+import { parseCentralCommand } from '../../openape-pods/src/contracts/central'
 import { encodeParts, manifestDigest, splitSnapshot } from '../../openape-pods/src/contracts/central-parts'
 import { WorkspaceStore } from '../server/utils/workspace-store'
 
@@ -14,13 +14,28 @@ afterEach(() => { for (const run of cleanup.splice(0).reverse()) run() })
 function snapshot(): CentralSnapshot {
   const pod = { id: randomUUID(), name: 'Monitor', revision: 1, lifecycle: 'paused' as const, activeScript: null }
   return {
-    version: 1, workspace: { pods: [pod], organization: { revision: 1, groups: [] } },
+    version: 1, schema: 46, workspace: { pods: [pod], organization: { revision: 1, groups: [] } },
     pods: [{ id: pod.id, ready: true, details: { claims: [], counts: { finding: 0, question: 0, gap: 0 }, total: 0, versions: [], checkpointRevision: 0, source: null },
       scripts: { pod, resourceEpoch: 0, credentialAliases: [], versions: [], drafts: [], source: null },
       resources: { resources: [], variables: [], epoch: 0 }, scheduling: { spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 },
       runs: { runs: [], events: [] }, versions: {}, history: {} }],
-    archive: { schema: 23, tables: {} }, artifacts: [],
+    artifacts: [], blobs: [],
   }
+}
+type Actor = Parameters<WorkspaceStore['begin']>[0]
+interface Completion { id: string, result: unknown, error: string | null }
+/** Publishes a complete snapshot as parts against what the relay already holds, like a desktop does. */
+function publish(store: WorkspaceStore, actor: Actor, lease: string, id: string, revision: number, state: CentralSnapshot, completion?: Completion, extra: [string, unknown][] = []) {
+  const parts = encodeParts(new Map([...splitSnapshot(state), ...extra]))
+  const manifest = Object.fromEntries(Array.from(parts, ([key, part]) => [key, part.hash]))
+  const known = Object.fromEntries(store.db.prepare('SELECT key,hash FROM parts WHERE runtime_id=?').all(actor.id).map(row => [String(row.key), String(row.hash)]))
+  const changes: Record<string, string | null> = Object.fromEntries(Object.keys(known).filter(key => !(key in manifest)).map(key => [key, null]))
+  const staged: Record<string, unknown> = {}
+  for (const [key, part] of parts) {
+    if (known[key] !== part.hash) { changes[key] = part.hash; staged[part.hash] = JSON.parse(part.text) }
+  }
+  store.stage(actor, lease, staged)
+  return store.publishParts(actor, lease, id, revision, changes, manifestDigest(manifest), completion)
 }
 function setup(path = ':memory:') {
   let now = 100000
@@ -28,7 +43,7 @@ function setup(path = ':memory:') {
   const actor = { id: randomUUID(), generation: randomUUID(), owner: { issuer: 'https://owner.example', subject: 'opaque-owner' } }
   const other = { ...actor.owner, subject: 'another-owner' }
   const state = snapshot(); const session = store.begin(actor)
-  const publication = store.publish(actor, session.lease, randomUUID(), 0, state)
+  const publication = publish(store, actor, session.lease, randomUUID(), 0, state)
   store.heartbeat(actor, session.lease, publication.hash)
   return { store, actor, other, state, lease: session.lease, publication, advance: (ms: number) => { now += ms } }
 }
@@ -61,10 +76,10 @@ it('commits the command result and updated data atomically, deduplicating retrie
   expect(store.claim(actor, lease)).toBeNull()
   state.pods[0]!.details.description = { text: 'Saved centrally', revision: 1, state: 'ready', error: null, updatedAt: 100000 }
   const publication = randomUUID(); const completion = { id, result: { saved: true }, error: null }
-  const result = store.publish(actor, lease, publication, 1, state, completion)
+  const result = publish(store, actor, lease, publication, 1, state, completion)
   expect(result.revision).toBe(2)
   expect(store.operation(actor.owner, id)).toMatchObject({ state: 'applied', revision: 2, result: { saved: true } })
-  expect(store.publish(actor, lease, publication, 1, state, completion)).toEqual(result)
+  expect(publish(store, actor, lease, publication, 1, state, completion)).toEqual(result)
   expect(() => store.submit(actor.owner, actor.id, 1, command, randomUUID())).toThrow('workspace_revision_conflict')
   expect(store.read(actor.owner, actor.id, state.pods[0]!.id).pod.details.description?.text).toBe('Saved centrally')
 })
@@ -79,11 +94,11 @@ it('fences a second executor, expires undelivered commands and never replays unc
   const next = store.begin(actor)
   expect(next.pending).toMatchObject([{ id, state: 'unknown' }])
   expect(() => store.heartbeat(actor, lease, publication.hash)).toThrow('stale_workspace_runtime')
-  expect(() => store.publish(actor, next.lease, randomUUID(), 1, state)).toThrow('workspace_operation_unresolved')
+  expect(() => publish(store, actor, next.lease, randomUUID(), 1, state)).toThrow('workspace_operation_unresolved')
   const second = randomUUID(); store.db.prepare('INSERT INTO operations SELECT ?,owner,runtime_id,request_hash,command,\'unknown\',result,error,revision,expires FROM operations WHERE id=?').run(second, id)
-  store.publish(actor, next.lease, randomUUID(), 1, state, { id, result: null, error: 'Interrupted; inspect the actual run before another request' })
+  publish(store, actor, next.lease, randomUUID(), 1, state, { id, result: null, error: 'Interrupted; inspect the actual run before another request' })
   expect(() => store.heartbeat(actor, next.lease, publication.hash)).toThrow('workspace_operation_unresolved')
-  store.publish(actor, next.lease, randomUUID(), 1, state, { id: second, result: null, error: 'Interrupted' })
+  publish(store, actor, next.lease, randomUUID(), 1, state, { id: second, result: null, error: 'Interrupted' })
   store.heartbeat(actor, next.lease, publication.hash)
   const expires = randomUUID(); store.submit(actor.owner, actor.id, 1, command, expires)
   advance(30001); store.heartbeat(actor, next.lease, publication.hash)
@@ -96,22 +111,22 @@ it('checks managed artifact hashes and membership before committing or returning
   const podId = state.pods[0]!.id; const bytes = Buffer.from('A managed work file')
   const hash = createHash('sha256').update(bytes).digest('hex')
   state.artifacts.push({ podId, path: 'workspace/result.txt', hash, size: bytes.length })
-  expect(() => store.publish(actor, lease, randomUUID(), 1, state)).toThrow('workspace_artifact_missing')
+  expect(() => publish(store, actor, lease, randomUUID(), 1, state)).toThrow('workspace_artifact_missing')
   expect(() => store.putArtifact(actor, lease, podId, '0'.repeat(64), bytes)).toThrow('artifact_hash_mismatch')
   store.putArtifact(actor, lease, podId, hash, bytes)
-  store.publish(actor, lease, randomUUID(), 1, state)
+  publish(store, actor, lease, randomUUID(), 1, state)
   expect(Buffer.from(store.artifact(actor.owner, actor.id, podId, 'workspace/result.txt')).toString()).toBe(bytes.toString())
   expect(() => store.artifact(other, actor.id, podId, 'workspace/result.txt')).toThrow('workspace_not_found')
   expect(() => store.artifact(actor.owner, actor.id, podId, '../credentials/key')).toThrow('artifact_not_found')
   state.artifacts[0]!.path = 'workspace/../credentials/key'
-  expect(() => store.publish(actor, lease, randomUUID(), 2, state)).toThrow('Invalid managed artifact')
+  expect(() => publish(store, actor, lease, randomUUID(), 2, state)).toThrow('Invalid managed artifact')
 })
 
 it('allows an online paused Pod but refuses a Pod whose own worker is unavailable', () => {
   const { store, actor, lease, state } = setup()
   expect(store.read(actor.owner, actor.id, state.pods[0]!.id).pod.ready).toBe(true)
   state.pods[0]!.ready = false
-  store.publish(actor, lease, randomUUID(), 1, state)
+  publish(store, actor, lease, randomUUID(), 1, state)
   expect(() => store.read(actor.owner, actor.id, state.pods[0]!.id)).toThrow('pod_offline')
 })
 
@@ -129,18 +144,17 @@ it('keeps an accepted edit through an unrelated runtime progress publication', (
   const id = randomUUID()
   store.submit(actor.owner, actor.id, 1, { channel: 'details', body: { type: 'describe', podId: state.pods[0]!.id, text: 'Owner edit', revision: 0 } }, id)
   state.pods[0]!.details.checkpointRevision++
-  store.publish(actor, lease, randomUUID(), 1, state)
+  publish(store, actor, lease, randomUUID(), 1, state)
   expect(store.claim(actor, lease)).toMatchObject({ id, state: 'started' })
 })
 
-it('denies offline operation payloads and rejects local credential tables in publications', () => {
+it('denies offline operation payloads and rejects local credential tables from older desktops', () => {
   const { store, actor, state, lease, advance } = setup()
   const id = randomUUID()
   store.submit(actor.owner, actor.id, 1, { channel: 'details', body: { type: 'describe', podId: state.pods[0]!.id, text: 'Private edit', revision: 0 } }, id)
   advance(30001)
   expect(() => store.visibleOperation(actor.owner, id)).toThrow('pod_offline')
-  state.archive.tables.connections = [{ token: 'must-never-be-uploaded' }]
-  expect(() => store.publish(actor, lease, randomUUID(), 1, state)).toThrow('Invalid workspace archive')
+  expect(() => publish(store, actor, lease, randomUUID(), 1, state, undefined, [['table/connections/0', [{ token: 'must-never-be-uploaded' }]]])).toThrow('Invalid workspace part key')
 })
 
 function withRuns(state: CentralSnapshot, count: number): CentralSnapshot {
@@ -149,7 +163,6 @@ function withRuns(state: CentralSnapshot, count: number): CentralSnapshot {
   const events = (index: number) => [{ sequence: 1, type: 'log', data: { line: `event ${index}` }, at: index }]
   pod.runs = { runs, events: runs.length ? events(0) : [] }
   pod.history = Object.fromEntries(runs.map((run, index) => [run.id, { runs: [run], events: events(index) }]))
-  state.archive.tables.run_events = Array.from({ length: 40 }, (_, index) => ({ id: index }))
   return state
 }
 function publishV2(store: WorkspaceStore, actor: Parameters<WorkspaceStore['begin']>[0], lease: string, known: Record<string, string>, state: CentralSnapshot, revision: number) {
@@ -164,7 +177,7 @@ function publishV2(store: WorkspaceStore, actor: Parameters<WorkspaceStore['begi
   return { changes, staged, manifest, result: store.publishParts(actor, lease, randomUUID(), revision, changes, manifestDigest(manifest)) }
 }
 
-it('publishes format 2 as a small delta and serves summaries, pages, single runs and the legacy Pod', () => {
+it('publishes a small delta and serves summaries, pages, single runs and the complete Pod', () => {
   const { store, actor, lease, state } = setup()
   withRuns(state, 30)
   const first = publishV2(store, actor, lease, {}, state, 1)
@@ -185,12 +198,10 @@ it('publishes format 2 as a small delta and serves summaries, pages, single runs
   const run = { ...pod.runs.runs[0]!, id: randomUUID(), summary: 'Newest' }
   pod.runs.runs.unshift(run); pod.history[run.id] = { runs: [run], events: [] }
   pod.runs.events = []
-  state.archive.tables.run_events!.push({ id: 40 })
   const second = publishV2(store, actor, lease, first.manifest, state, 2)
-  expect(Object.keys(second.changes).sort()).toEqual([`pod/${podId}`, `pod/${podId}/events/${run.id}`, `pod/${podId}/run/${run.id}`, 'table/run_events/2'].sort())
+  expect(Object.keys(second.changes).sort()).toEqual([`pod/${podId}`, `pod/${podId}/events/${run.id}`, `pod/${podId}/run/${run.id}`].sort())
   expect(JSON.stringify(second.staged).length).toBeLessThan(3000)
   expect(store.read(actor.owner, actor.id, podId).pod).toEqual(pod)
-  expect(store.archive(actor, lease)).toEqual(parseCentralSnapshot(state))
 })
 
 it('refuses stale, incomplete, tampered or mismatching format-2 publications without committing', () => {
@@ -214,31 +225,30 @@ it('refuses stale, incomplete, tampered or mismatching format-2 publications wit
 it('accepts a heartbeat that raced the replacing publication but not an older hash', () => {
   const { store, actor, lease, state, publication } = setup()
   state.pods[0]!.details.checkpointRevision++
-  const second = store.publish(actor, lease, randomUUID(), 1, state)
+  const second = publish(store, actor, lease, randomUUID(), 1, state)
   store.heartbeat(actor, lease, publication.hash)
   store.heartbeat(actor, lease, second.hash)
   state.pods[0]!.details.checkpointRevision++
-  store.publish(actor, lease, randomUUID(), 2, state)
+  publish(store, actor, lease, randomUUID(), 2, state)
   expect(() => store.heartbeat(actor, lease, publication.hash)).toThrow('workspace_reconciliation_required')
 })
 
-it('splits snapshots stored by an older server once, keeping the hash the desktop holds', () => {
+it('empties full snapshots an older server stored and keeps serving the published parts', () => {
   const directory = mkdtempSync(join(tmpdir(), 'pods-workspace-')); cleanup.push(() => rmSync(directory, { recursive: true, force: true }))
   const { store, actor, state, publication } = setup(join(directory, 'workspace.sqlite'))
-  store.db.exec('DELETE FROM parts; UPDATE runtimes SET parts_hash=\'\'')
+  store.db.prepare('UPDATE runtimes SET snapshot=?').run(JSON.stringify(state))
   const reopened = new WorkspaceStore(join(directory, 'workspace.sqlite'), store.now); cleanup.push(() => reopened.close())
-  expect(reopened.inventory(actor.owner)[0]).toMatchObject({ online: true, revision: 1 })
+  expect(reopened.db.prepare('SELECT hash, snapshot FROM runtimes').get()).toEqual({ hash: publication.hash, snapshot: null })
   expect(reopened.read(actor.owner, actor.id, state.pods[0]!.id).pod).toEqual(state.pods[0])
-  expect(reopened.db.prepare('SELECT hash, snapshot IS NOT NULL AS kept FROM runtimes').get()).toMatchObject({ hash: publication.hash, kept: 1 })
 })
 
 it('shows when a runtime was last seen, keeps archived Pods archived offline and exposes a blocked queue', () => {
   const { store, actor, lease, state, advance } = setup()
   state.pods[0]!.scheduling = { ...state.pods[0]!.scheduling, blocked: 1, blockedSince: 5000, error: 'Pod execution permission is no longer active' }
-  store.publish(actor, lease, randomUUID(), 1, state)
+  publish(store, actor, lease, randomUUID(), 1, state)
   expect(store.inventory(actor.owner)[0]).toMatchObject({ lastSeenAt: 100000, workspace: { pods: [{ online: true, queue: { blocked: 1, since: 5000, error: 'Pod execution permission is no longer active' } }] } })
   state.workspace.pods[0]!.lifecycle = 'archived'; state.pods[0]!.scripts.pod.lifecycle = 'archived'
-  store.publish(actor, lease, randomUUID(), 2, state)
+  publish(store, actor, lease, randomUUID(), 2, state)
   advance(30001)
   expect(store.inventory(actor.owner)[0]).toMatchObject({ online: false, lastSeenAt: 100000, workspace: { pods: [{ online: false, lifecycle: 'archived' }] } })
 })
@@ -255,7 +265,7 @@ it('removes deleted Pod artifacts and keeps its owner receipt available without 
   const id = randomUUID()
   store.submit(actor.owner, actor.id, 1, command, id); store.claim(actor, lease)
   state.workspace.pods = []; state.pods = []
-  const result = store.publish(actor, lease, randomUUID(), 1, state, { id, result: { pendingDeletion: 0 }, error: null })
+  const result = publish(store, actor, lease, randomUUID(), 1, state, { id, result: { pendingDeletion: 0 }, error: null })
   store.heartbeat(actor, lease, result.hash)
   expect(store.visibleOperation(actor.owner, id)).toMatchObject({ state: 'applied', result: { pendingDeletion: 0 } })
   expect(store.submit(actor.owner, actor.id, 1, command, id).state).toBe('applied')
@@ -264,18 +274,28 @@ it('removes deleted Pod artifacts and keeps its owner receipt available without 
   expect(() => store.read(actor.owner, actor.id, pod.id)).toThrow('pod_not_found')
 })
 
-it('accepts and ignores the workflow tables of desktops before issue 1455 (M4)', () => {
+it('accepts and ignores the schema and table parts of desktops before issue 1455 (M8)', () => {
   const { store, actor, state, lease } = setup()
   const id = randomUUID(); const podId = state.pods[0]!.id
-  state.archive.tables = {
-    workflows: [{ id, revision: 2, name: 'Morning review', nodes: 'not-json', schedule: null, enabled: 1, paused: 0, next_at: null, archived: 0, mail: '{"private":"must not be projected"}' }],
-    workflow_members: [{ workflow_id: id, pod_id: podId }],
-    graph_gate_batches: [{ id: randomUUID(), workflow_id: id, gate: 'batch', pod_id: podId, state: 'pending', grant_id: 'grant-must-stay-private' }],
-  }
-  store.publish(actor, lease, randomUUID(), 1, state)
+  publish(store, actor, lease, randomUUID(), 1, state, undefined, [
+    ['schema', 45],
+    ['table/workflows/0', [{ id, revision: 2, name: 'Morning review', mail: '{"private":"must not be projected"}' }]],
+    ['table/graph_gate_batches/0', [{ id: randomUUID(), workflow_id: id, pod_id: podId, grant_id: 'grant-must-stay-private' }]],
+  ])
   const runtime = store.inventory(actor.owner)[0]!
-  expect(runtime).not.toHaveProperty('workflows')
+  expect(runtime.revision).toBe(2)
   expect(JSON.stringify(runtime)).not.toContain('private')
+  expect(store.read(actor.owner, actor.id, podId).pod).toEqual(state.pods[0])
+  expect(store.db.prepare('SELECT DISTINCT value FROM parts WHERE key LIKE \'table/%\'').all()).toEqual([{ value: 'null' }])
+  expect(JSON.stringify(store.db.prepare('SELECT value FROM parts').all())).not.toContain('grant-must-stay-private')
+})
+
+it('purges table rows that an older server stored and keeps their hashes', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'pods-workspace-')); cleanup.push(() => rmSync(directory, { recursive: true, force: true }))
+  const { store, actor } = setup(join(directory, 'workspace.sqlite'))
+  store.db.prepare('INSERT INTO parts VALUES(?,\'table/resources/0\',?,?)').run(actor.id, 'a'.repeat(64), JSON.stringify([{ configuration: 'private-row' }]))
+  const reopened = new WorkspaceStore(join(directory, 'workspace.sqlite'), store.now); cleanup.push(() => reopened.close())
+  expect(reopened.db.prepare('SELECT hash,value FROM parts WHERE key=\'table/resources/0\'').get()).toEqual({ hash: 'a'.repeat(64), value: 'null' })
 })
 
 it('keeps network reads owner scoped, ephemeral, bounded and separate from owner operations', () => {

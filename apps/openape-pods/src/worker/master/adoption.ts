@@ -31,7 +31,6 @@ export class LegacyChatAdoption {
 
   adopt(podId: string, hash: string): void {
     this.store.transaction(() => {
-      if (this.store.db.prepare('SELECT 1 FROM master_session WHERE state=\'running\'').get()) throw new Error('Finish the active chat before recovering history')
       const preview = this.preview(podId)
       if (!preview || preview.hash !== hash) throw new Error('Creation history changed or is ambiguous; review it again')
       const first = this.store.db.prepare('SELECT rowid AS sequence FROM master_messages WHERE id=?').get(preview.firstMessageId)!

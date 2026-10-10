@@ -144,22 +144,13 @@ it('lists descriptions with the workspace and routes a description command throu
   expect(replies).toHaveBeenCalledWith({ id: 'describe-forged', error: 'Unsupported workspace command' })
 })
 
-it('validates the local network route and refuses creation on a central-connected runtime before mutation', async () => {
+it('validates the local network route before mutation', async () => {
   await send({ id: 'networks-list', command: { networks: { type: 'list' } } })
   expect(replies).toHaveBeenCalledWith({ id: 'networks-list', state: { networks: [] } })
   await send({ id: 'networks-invalid', command: { networks: { type: 'list', owner: 'forged' } } })
   expect(replies).toHaveBeenCalledWith(expect.objectContaining({ id: 'networks-invalid', error: expect.any(String) }))
   await send({ id: 'networks-unreviewed', command: { networks: { type: 'create', draft: { name: 'Unreviewed', groupId: randomUUID(), channels: [], members: [{ podId: randomUUID(), source: { schedule: null }, serialCase: false }] } } } })
   expect(replies).toHaveBeenCalledWith({ id: 'networks-unreviewed', error: 'Network creation requires a reviewed setup fingerprint' })
-  vi.stubEnv('PODS_CENTRAL_ENABLED', '1')
-  try {
-    await send({ id: 'networks-create', command: { networks: { type: 'create', draft: { name: 'Synthetic network', expectedSetup: 'a'.repeat(64), groupId: randomUUID(), channels: [], members: [{ podId: randomUUID(), source: { schedule: null }, serialCase: false }] } } } })
-    expect(replies).toHaveBeenCalledWith({ id: 'networks-create', error: 'Network creation requires bounded central publication support' })
-    const store = new PodDatabase(root)
-    try { expect(store.db.prepare('SELECT count(*) AS count FROM networks').get()!.count).toBe(0) }
-    finally { store.close() }
-  }
-  finally { vi.stubEnv('PODS_CENTRAL_ENABLED', '') }
 })
 
 it('prevents reviewed master and browser starts from bypassing the suspended production runtime', async () => {

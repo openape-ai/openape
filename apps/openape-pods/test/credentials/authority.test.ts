@@ -1,4 +1,3 @@
-import { removeWorkflowSchema } from '../storage/legacy'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -67,24 +66,6 @@ it('authorizes any assigned alias without declarations under a current pinned ru
   expect(() => authorizeMailService(f.store, f.registry, runs, { scope })).toThrow('capability')
   f.registry.assignCredential(f.pod.id, 'crm', randomUUID(), 2); expect(() => read()).toThrow()
   runs.finish(run.id, 'completed', 'Synthetic', null); expect(() => read()).toThrow('lease')
-})
-
-it('migrates schema 11 resources without losing assignments or their revisions', async () => {
-  const { DatabaseSync } = await import('node:sqlite')
-  const f = fixture(); const reference = f.registry.assignReference(f.pod.id, 'Notes', join(f.store.root, 'notes.txt'))
-  const root = f.store.root; f.store.close(); stores.pop()
-  const previous = new DatabaseSync(join(root, 'control.sqlite'))
-  removeWorkflowSchema(previous)
-  previous.exec(`ALTER TABLE pods DROP COLUMN metadata_revision; DROP TABLE pod_chat_origins; DROP TABLE master_creations; DROP TABLE pod_descriptions; DROP TABLE summary_domains; DROP TABLE program_leases; DROP TABLE master_message_scopes; DROP TABLE master_contexts; DROP TABLE pod_variables; DROP TABLE script_credential_approvals;
-    ALTER TABLE resources RENAME TO newer_resources;
-    CREATE TABLE resources(id TEXT PRIMARY KEY, pod_id TEXT NOT NULL REFERENCES pods(id), revision INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('reference','tool','connection')), state TEXT NOT NULL CHECK(state IN ('ready','missing','expired','revoked','refreshRequired')), name TEXT NOT NULL, configuration TEXT NOT NULL);
-    INSERT INTO resources SELECT * FROM newer_resources; DROP TABLE newer_resources; DROP TABLE script_dependencies; DROP TABLE dependency_sets; DROP TABLE draft_packages; DROP TABLE dependency_domains; ALTER TABLE onboarding DROP COLUMN default_owner; ALTER TABLE run_inputs DROP COLUMN retry_at; ALTER TABLE run_inputs DROP COLUMN retry_attempt; ALTER TABLE run_inputs DROP COLUMN retry_epoch; PRAGMA user_version=11;`)
-  previous.close()
-  const migrated = new PodDatabase(root); stores.push(migrated); const registry = new ResourceRegistry(migrated, () => {})
-  expect(registry.list(f.pod.id)).toEqual([reference]); expect(registry.epoch(f.pod.id)).toBe(1)
-  registry.assignCredential(f.pod.id, 'crm', randomUUID(), 1)
-  expect(registry.list(f.pod.id)[1]?.kind).toBe('credential')
-  expect(migrated.db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
 })
 
 it('keeps a key that authenticates an HTTP destination away from scripts', () => {

@@ -148,7 +148,7 @@ export class NetworkInvocations {
       this.store.transaction(() => {
         this.store.db.prepare('UPDATE networks SET state=\'paused\' WHERE id=?').run(definition.id)
         this.store.db.prepare('UPDATE network_invocation_controls SET failure_kind=\'quota\' WHERE run_id=?').run(authority.runId)
-        this.store.db.prepare('INSERT INTO network_runtime_status(network_id,intake_error,inspected_at) VALUES(?,?,?) ON CONFLICT(network_id) DO UPDATE SET intake_error=excluded.intake_error,inspected_at=excluded.inspected_at').run(definition.id, failure.message, Date.now())
+        this.store.db.prepare('INSERT INTO network_runtime_status(network_id,intake_error) VALUES(?,?) ON CONFLICT(network_id) DO UPDATE SET intake_error=excluded.intake_error').run(definition.id, failure.message)
       })
       return
     }

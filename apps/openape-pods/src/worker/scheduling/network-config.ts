@@ -9,15 +9,15 @@ import { dataKey, publicConfiguration, secretReference } from '../../contracts/n
 export const emptyNetworkDataPin = digest(canonicalNetworkJson({ data: [], artifacts: [], config: {} }))
 
 export function networkConfiguration(store: PodDatabase, networkId: string, podId: string) {
-  const binding = store.db.prepare('SELECT definition_id,definition_version FROM network_members WHERE network_id=? AND pod_id=?').get(networkId, podId)
+  const binding = store.db.prepare('SELECT b.definition_id,b.definition_version FROM network_members m JOIN instance_definition_bindings b ON b.pod_id=m.pod_id WHERE m.network_id=? AND m.pod_id=?').get(networkId, podId)
   if (!binding) throw new Error('Network configuration requires an explicit member')
   const declarations = store.db.prepare('SELECT name,kind,value FROM definition_config WHERE definition_id=? AND definition_version=? ORDER BY name').all(binding.definition_id!, binding.definition_version!)
   if (declarations.length > 32) throw new Error('Network configuration exceeds 32 fields')
   const composition = store.db.prepare('SELECT name,value FROM composition_config WHERE network_id=?').all(networkId)
   for (const item of composition) {
-    if (!store.db.prepare(`SELECT 1 FROM network_members m JOIN definition_config c ON c.definition_id=m.definition_id AND c.definition_version=m.definition_version WHERE m.network_id=? AND c.name=?`).get(networkId, item.name!)) throw new Error('Network configuration contains an undeclared override')
+    if (!store.db.prepare(`SELECT 1 FROM network_members m JOIN instance_definition_bindings b ON b.pod_id=m.pod_id JOIN definition_config c ON c.definition_id=b.definition_id AND c.definition_version=b.definition_version WHERE m.network_id=? AND c.name=?`).get(networkId, item.name!)) throw new Error('Network configuration contains an undeclared override')
   }
-  return resolveConfiguration(store, podId, declarations.map(configurationRow), composition.map(configurationRow))
+  return resolveConfiguration(declarations.map(configurationRow), composition.map(configurationRow))
 }
 
 interface ConfigurationRow { name: string, value: string, kind?: string }
@@ -25,19 +25,16 @@ function configurationRow(row: Record<string, SQLOutputValue>): ConfigurationRow
   return { name: row.name as string, value: row.value as string, kind: row.kind as string | undefined }
 }
 
-function resolveConfiguration(store: PodDatabase, podId: string, declarations: ConfigurationRow[], composition: ConfigurationRow[]) {
+function resolveConfiguration(declarations: ConfigurationRow[], composition: ConfigurationRow[]) {
   if (declarations.length > 32) throw new Error('Network configuration exceeds 32 fields')
-  const instance = store.db.prepare('SELECT name,value FROM instance_config WHERE pod_id=?').all(podId).map(configurationRow)
   const values = declarations.map((declaration) => {
     const name = dataKey(declaration.name)
-    const override = instance.find(item => item.name === name)
     const composed = composition.find(item => item.name === name)
-    const raw = JSON.parse((override ?? composed ?? declaration).value)
-    const origin = override ? 'pod' : composed ? 'composition' : 'definition'
+    const raw = JSON.parse((composed ?? declaration).value)
+    const origin = composed ? 'composition' : 'definition'
     const value = declaration.kind === 'secret-reference' ? secretReference(raw) : publicConfiguration(raw)
     return [name, { value, origin, kind: declaration.kind }] as const
   })
-  if (instance.some(item => !declarations.some(declaration => declaration.name === item.name))) throw new Error('Network configuration contains an undeclared override')
   return Object.fromEntries(values)
 }
 
@@ -53,7 +50,7 @@ export function validateNetworkCompositionValues(store: PodDatabase, definition:
     if (declarations.some((row) => { const declared = JSON.parse(row.value); return (declared === null) !== (value === null) || typeof declared !== typeof value })) throw new Error('Shared value types must match every declaring definition')
     return { name, value: JSON.stringify(value) }
   })
-  for (const member of members) resolveConfiguration(store, member.podId, member.declarations, composition)
+  for (const member of members) resolveConfiguration(member.declarations, composition)
   return shared
 }
 

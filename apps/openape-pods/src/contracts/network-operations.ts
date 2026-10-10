@@ -2,7 +2,7 @@ import { dataFields, dataIdentity, dataKey, dataRevision, publicConfiguration } 
 import type { NetworkDefinition } from './networks'
 import type { PayloadScalar } from './network-payload'
 
-export interface NetworkValue { name: string, kind: 'public' | 'secret-reference', origin: 'definition' | 'composition' | 'pod', value: PayloadScalar }
+export interface NetworkValue { name: string, kind: 'public' | 'secret-reference', origin: 'definition' | 'composition', value: PayloadScalar }
 export interface NetworkMemberView { diagnostic?: string, podId: string, name: string, lifecycle: 'active' | 'paused' | 'archived', capabilities: string[], triggers: string[], values: NetworkValue[], resourcesMore: boolean, resources: { name: string, kind: string, state: string }[] }
 export interface NetworkFailure { runId: string, generation: number, podId: string, kind: 'transient' | 'invalid' | 'uncertain' | 'exhausted' | 'timeout' | 'quota' | 'recovery', reason: string, inspectedAt: number | null, conflict: string | null, effects: { key: string, attempt: number, sequence: number, state: string }[], effectsMore: boolean }
 export interface NetworkDetails { definition: NetworkDefinition, members: NetworkMemberView[], failures: NetworkFailure[], collectionsMore: boolean, collections: { id: string, name: string, version: number }[] }
@@ -53,7 +53,7 @@ export function parseNetworkMemberView(value: unknown): NetworkMemberView {
   if (!Array.isArray(input.values) || input.values.length > 32 || !Array.isArray(input.resources) || input.resources.length > 256) throw new Error('Invalid network member view')
   for (const value of input.values) {
     const field = dataFields(value, ['name', 'kind', 'origin', 'value']); dataKey(field.name)
-    if (!['public', 'secret-reference'].includes(String(field.kind)) || !['definition', 'composition', 'pod'].includes(String(field.origin)) || (field.kind === 'secret-reference' && field.value !== null)) throw new Error('Invalid network configuration view')
+    if (!['public', 'secret-reference'].includes(String(field.kind)) || !['definition', 'composition'].includes(String(field.origin)) || (field.kind === 'secret-reference' && field.value !== null)) throw new Error('Invalid network configuration view')
     publicConfiguration(field.value)
   }
   for (const value of input.resources) {

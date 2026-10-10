@@ -306,7 +306,6 @@ it('retains collection names, retention, artifact association and explicit share
     f.store.db.prepare('INSERT INTO definition_config VALUES(?,1,?,?,?)').run(binding.definition_id!, 'label', 'public', JSON.stringify('Base label'))
   }
   f.store.db.prepare('INSERT INTO composition_config VALUES(?,?,?)').run(id, 'label', JSON.stringify('Shared label'))
-  f.store.db.prepare('INSERT INTO instance_config VALUES(?,?,?)').run(consumer, 'label', JSON.stringify('PRIVATE_INSTANCE_VALUE'))
   const collectionId = randomUUID(); const scopeId = randomUUID()
   f.store.transaction(() => {
     f.store.db.prepare('INSERT INTO data_collections VALUES(?,?,?,?,?,1,?)').run(collectionId, f.owner.issuer, f.owner.subject, f.groupId, 'invoices', JSON.stringify({ days: 30 }))
@@ -317,7 +316,7 @@ it('retains collection names, retention, artifact association and explicit share
     f.store.db.prepare('INSERT INTO artifacts VALUES(?,?,?,?,?,?,0)').run(randomUUID(), scopeId, 'b'.repeat(64), 0, 'text/plain', 'PRIVATE_ARTIFACT_CANARY')
   })
   const source = capturePortableSource(f.store, f.owner, { kind: 'network', id }); const choices = mappingChoices(source)
-  expect(source.privateValues).toEqual(expect.arrayContaining(['Base label', 'Shared label', 'PRIVATE_INSTANCE_VALUE']))
+  expect(source.privateValues).toEqual(expect.arrayContaining(['Base label', 'Shared label']))
   choices.compositions[0]!.defaults = ['value:label']
   const content = await mapPortableSource(f.store.root, source, choices)
   const exported = await createPortablePackage(content.description, content.payloads, '')
@@ -329,9 +328,9 @@ it('retains collection names, retention, artifact association and explicit share
   expect(shared.default).toBe('Shared label')
   expect(exported.manifest.pods[0]!.inputs[0]!.sharingGroup).toBe(shared.sharingGroup)
   expect(shared.sharingGroup).not.toBeNull()
-  expect(exported.manifest.pods[1]!.inputs[0]!.sharingGroup).toBeNull()
+  expect(exported.manifest.pods[1]!.inputs[0]!.sharingGroup).toBe(shared.sharingGroup)
   const serialized = Object.values(archive).map(file => Buffer.from(file).toString()).join('\n')
-  for (const value of ['PRIVATE_INSTANCE_VALUE', 'PRIVATE_ARTIFACT_CANARY', collectionId, scopeId]) expect(serialized).not.toContain(value)
+  for (const value of ['PRIVATE_ARTIFACT_CANARY', collectionId, scopeId]) expect(serialized).not.toContain(value)
 })
 
 it('serializes preparation and still scans selected defaults inside payloads', async () => {

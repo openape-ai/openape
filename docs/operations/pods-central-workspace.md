@@ -35,8 +35,9 @@ separate from availability: a paused, connected Pod remains editable.
 
 Issue: https://repos.openape.ai/patrick/monorepo/issues/1384.
 Format 2 splits the snapshot into content-addressed parts: `workspace`, `artifacts`,
-`schema`, one part per Pod, per script version, per run record and per run's events,
-and archive tables in chunks of 16 rows (`contracts/central-parts.ts`). The desktop
+one part per Pod, per script version, per run record and per run's events
+(`contracts/central-parts.ts`). Since issue 1455 (M8) the desktop publishes these views
+only, no table rows. The desktop
 uploads only parts the service does not hold (`parts`, batches of at most 2 MiB),
 journals the manifest delta in `publication.json` and commits it with `publish`
 (`format: 2`). The service verifies every part hash and the manifest digest, validates
@@ -45,10 +46,24 @@ is rebuilt from the current state. The first format-2 publication uploads about
 20 MB once; afterwards a scheduled run changes a few parts (tens of KB). The worker
 reports a change counter, so an idle desktop builds no snapshot at all.
 
-Compatibility: the service still accepts full format-1 snapshots from older desktops
-and keeps their `snapshot` column for rollback. A desktop that sees no `format` on
-`begin` publishes full snapshots. Parts live in additive tables; `user_version`
-stays 1, so an older service can open the database again.
+Compatibility (issue 1455, M8): format 2 is the only format. The service refuses a
+full snapshot (`unsupported_workspace_format`), has no `archive` request and empties
+the `runtimes.snapshot` column at start; the column itself stays, so the previous
+service can open the database after a rollback. Desktops before M8 still publish
+`table/` parts with raw rows: the service accepts them unread and keeps only their key
+and hash (needed for the manifest digest); rows stored earlier are emptied at start.
+`begin` still announces `networkReads: 1`, which those desktops need to publish their
+networks. A desktop refuses a service whose `begin` names no format. Parts live in
+additive tables; `user_version` stays 1.
+
+Rollback window: an M8 desktop still publishes the `schema` part (its storage schema),
+which services before M8 require, so a service rollback keeps current desktops online.
+Remove it once no service before M8 can return. Rolling the desktop back from schema 46
+is not an in-place downgrade: a release before M8 refuses a schema-46 profile ("needs a
+newer application"). Stop the app, replace `control.sqlite` with the verified
+`before-v45-*.sqlite` copy the upgrade left in the profile (delete `control.sqlite-wal`
+and `-shm` first), then install the previous app bundle. Work done after the upgrade
+is not in that copy.
 
 Heartbeats run every 10 seconds on their own and never wait for a publication; the
 service accepts the current or the just-replaced hash. Request timeouts are 15 s
@@ -83,17 +98,17 @@ timeout cannot finish on a slow uplink (observed September 25, 13:33–14:00).
 
 ## Stored data and local exclusions
 
-The explicit `centralTables` allowlist in `src/contracts/central.ts` covers:
+Since issue 1455 (M8) the desktop publishes views, never table rows
+(`CentralProjection` in `src/worker/central/projection.ts`):
 
 | Domain | Central data |
 | --- | --- |
-| Pods and identity | Stable Pod IDs, names, assignments, public identity references and current owner/runtime binding |
-| Organization | Groups, membership and organization revision |
-| Scripts | Drafts, versions, validation receipts, package manifests and dependency locks |
-| Work | Schedules, accepted events, run inputs/history/events, checkpoints, recovery reviews and effect receipts |
-| Knowledge | Sources, claims, mail extraction/context and workflow state/history |
-| Administration | Description, ordinary variables, resource metadata and existing conversation/control history |
+| Workspace | Pod list with names and one-line descriptions, groups, automation descriptions, Jev availability, map |
+| Pod views | Details and claims, script versions and drafts, resources (metadata only) and variables, schedule, runs and run events |
 | Managed artifacts | Referenced script/source blobs and regular files under each Pod's managed workspace |
+
+Network members, their invocations and archived Pods publish an empty view; their
+data stays local.
 
 Credential stores, private keys, access/refresh tokens, native login files,
 execution-domain records, process leases, remote device tokens, local HOME,

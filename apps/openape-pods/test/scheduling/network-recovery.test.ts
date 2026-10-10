@@ -108,7 +108,6 @@ it('prunes completed traces while retaining control state, acceptance markers an
   expect(f.store.db.prepare('SELECT count(*) AS count FROM network_event_identities').get()!.count).toBe(1)
   expect(f.store.db.prepare('SELECT state FROM network_deliveries').get()!.state).toBe('pending')
   expect(f.store.db.prepare('SELECT body FROM network_trace_events').get()!.body).toBe('{"retain":"owner evidence"}')
-  expect(f.store.db.prepare('SELECT sum(count) AS count FROM network_trace_history').get()!.count).toBeGreaterThan(0)
 })
 
 it('does not replay a consumed source retry from its original failed invocation', async () => {

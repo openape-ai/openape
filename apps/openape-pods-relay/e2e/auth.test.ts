@@ -2,6 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { operationalFixture } from '../../openape-pods/test/layout/network-fixture'
 import { verifyBrowserWorkspace } from '../../openape-pods/test/workspace/browser-acceptance'
 import { centralFixture } from '../../openape-pods/test/workspace/central-fixture'
+import { fullPublication } from '../../openape-pods/test/workspace/central-publication'
 import { generateKeyPairSync, randomBytes, randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import { keyObjectToSshString } from 'openape-e2e/constants'
@@ -115,8 +116,13 @@ it('registers a desktop through real DDISA callbacks and rejects replayed handof
   const invalidArtifact = JSON.stringify({ type: 'artifact', lease: session.lease, podId: fixture.view.id, hash: artifactHash, content: 'not base64' })
   const invalidUpload = await fetch(`${relay.url}${runtimePath}`, { method: 'POST', headers: { ...headers(desktop, runtimePath, 'POST', invalidArtifact), 'content-type': 'application/json' }, body: invalidArtifact })
   expect(invalidUpload.status).toBe(400)
-  const state = { version: 1, workspace: { ...fixture.host.workspace, pods: [fixture.host.workspace.pods[0]] }, pods: [fixture.view], archive: { schema: 23, tables: {} }, artifacts: [{ podId: fixture.view.id, path: 'workspace/example.bin', hash: artifactHash, size: artifact.length }] }
-  const published = await central({ type: 'publish', lease: session.lease, id: randomUUID(), revision: 0, snapshot: state }) as { hash: string }
+  const state = { version: 1 as const, schema: 46, workspace: { ...fixture.host.workspace, pods: [fixture.host.workspace.pods[0]!] }, pods: [fixture.view], artifacts: [{ podId: fixture.view.id, path: 'workspace/example.bin', hash: artifactHash, size: artifact.length }], blobs: [] }
+  const workspacePublication = fullPublication(state)
+  const publish = async (revision: number, completion?: unknown) => {
+    await central({ type: 'parts', lease: session.lease, parts: workspacePublication.parts })
+    return central({ type: 'publish', format: 2, lease: session.lease, id: randomUUID(), revision, changes: workspacePublication.changes, hash: workspacePublication.hash, ...(completion ? { completion } : {}) })
+  }
+  const published = await publish(0) as { hash: string }
   await central({ type: 'heartbeat', lease: session.lease, hash: published.hash })
   expect(await central({ type: 'claim', lease: session.lease })).toBeNull()
   await central({ type: 'heartbeat', lease: session.lease, hash: published.hash })
@@ -137,7 +143,7 @@ it('registers a desktop through real DDISA callbacks and rejects replayed handof
     expect(await decided.json()).toMatchObject({ operation: { id: requestId, state: 'accepted', command: { channel: 'inbox', body: { type: 'decide', sourceId: 'effect:e2e', digest: 'a'.repeat(64), option: 'delivered', input: 'Gesehen' } } } })
   }
   expect(await central({ type: 'claim', lease: session.lease })).toMatchObject({ id: requestId, state: 'started' })
-  const decidedState = await central({ type: 'publish', lease: session.lease, id: randomUUID(), revision: 1, snapshot: state, completion: { id: requestId, result: { status: 'applied', sourceId: 'effect:e2e' }, error: null } }) as { revision: number }
+  const decidedState = await publish(1, { id: requestId, result: { status: 'applied', sourceId: 'effect:e2e' }, error: null }) as { revision: number }
   expect(await (await fetch(`${relay.url}/inbox/api/v1/operations/${requestId}`, { headers: { cookie: inboxCookie } })).json()).toMatchObject({ operation: { id: requestId, state: 'applied' } })
   // Any later sign-in in this browser that is not started by the inbox ends its inbox session (account switch).
   const switched = await fetch(`${relay.url}/workspace-auth/login`, { method: 'POST', headers: { origin: relay.url, 'content-type': 'application/json' }, body: JSON.stringify({ email }) })
