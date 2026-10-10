@@ -50,7 +50,7 @@
   "packages/ape-troop": "Kommandozeile und Client für troop.",
   "packages/ape-pr": "Kommandozeile und Client für pr.",
   "packages/ape-crm": "Kommandozeile und Client für crm.",
-  "packages/pods-protocol": "Versioned native Pods envelopes, validation and cross-language encryption contracts.",
-  "apps/openape-pods-relay": "Owner-authenticated central Pods workspace, browser UI and existing encrypted native delivery.",
+  "packages/pods-protocol": "Shared Pods owner identity, request-proof, portable sharing and release contracts.",
+  "apps/openape-pods-relay": "Owner-authenticated central Pods workspace, browser UI, phone inbox and desktop release downloads.",
   "packages/report-contracts": "Single-HTML validation, isolation policy and legacy Plans compatibility shared by Reports, Plans and the publishing CLI."
 }

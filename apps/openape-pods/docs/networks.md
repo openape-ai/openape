@@ -4,16 +4,9 @@ Networks are the only way to connect Pods. A network is a persistent, owner-boun
 definition over Pods of one group: each member declares which channels it takes
 and gives, and the network routes every item between them. Connections are never
 drawn or stored; they follow from the member contracts and the network
-definition. The complete contract, storage and recovery model is in the
-[network contract](../../../docs/architecture/pods-networks/contracts.md).
-
-Workflows (sequence chains and bounded channel graphs) and their conversion to
-networks were removed with
-[issue 1455](https://repos.openape.ai/patrick/monorepo/issues/1455) (M4).
-Schema 45 archives every remaining workflow and every Pod that only workflows
-used; a Pod that is a network member or keeps its own enabled schedule stays as
-it is. The workflow tables stay unread until the baseline schema; the verified
-pre-upgrade copy of the profile keeps every row.
+definition. A Pod outside a network runs on its own schedule. The overall model
+is summarized in [Pods model](model.md); the design record of the networks plan
+is the [network contract](../../../docs/architecture/pods-networks/contracts.md).
 
 ## Member contract
 
@@ -65,9 +58,9 @@ Code create and change networks through the `networks` MCP action; see
 
 ## Runtime ports
 
-A network member uses the same rules as a standalone Pod for assigned mail
-reads, read-only CLI operations on sources (100 reads per invocation), Jev and
-`agent.run`. Scoped data (`context.data`) and artifacts (`context.artifacts`)
+A network member uses the same sandbox, grants and limits as a standalone Pod
+for programs, mail reads, HTTP destinations, secrets, folders, Jev and
+`agent.run`; see [Pods model](model.md#sandbox-and-grants). Scoped data (`context.data`) and artifacts (`context.artifacts`)
 require explicit permissions. A consumer whose every input comes from an approve
 route may archive the approved mail with
 `context.network.archive({ application, mailbox })`; each move is bound to the
@@ -84,6 +77,6 @@ counted on the **Entscheidungen** tab.
 
 ## Portable packages
 
-A network exports as a package of kind `network`. Format version 1 keeps the
-composition fields `calls` and node `after`/`handoff`, which are always empty;
-packages of the removed kinds `sequence` and `channels` are refused on import.
+A network exports as a package of kind `network`; a single Pod exports as kind
+`pod`. Import refuses every other kind. Format version 1 keeps the composition
+fields `calls` and node `after`/`handoff`, which are always empty.
