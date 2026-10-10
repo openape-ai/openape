@@ -21,10 +21,12 @@
     "jose": "catalog:",
     "nuxt": "catalog:",
     "@openape/nuxt-auth-sp": "workspace:*",
-    "vue": "catalog:"
+    "vue": "catalog:",
+    "web-push": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "@types/web-push": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "openape-e2e": "workspace:*",

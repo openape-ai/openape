@@ -236,11 +236,19 @@ export class InboxStore {
     })
   }
 
-  badgeCount(owner: Owner): number {
+  badgeCount(owner: Owner): number { return this.badge(key(owner)) }
+  private badge(ownerKey: string): number {
     const row = this.db.prepare(`SELECT count(*) AS count FROM items
       WHERE owner=? AND deleted IS NULL AND archived IS NULL
-      AND ((kind='decision' AND state='open') OR (kind='message' AND read IS NULL))`).get(key(owner))
+      AND ((kind='decision' AND state='open') OR (kind='message' AND read IS NULL))`).get(ownerKey)
     return Number(row!.count)
+  }
+
+  /** What a due push announces, with the account's current badge; null once the item is gone or its decision resolved. */
+  pushContent(entry: OutboxEntry): { item: InboxItem, badge: number } | null {
+    const found = this.db.prepare('SELECT * FROM items WHERE id=? AND owner=? AND deleted IS NULL').get(entry.itemId, entry.owner) as Record<string, unknown> | undefined
+    if (!found || (found.kind === 'decision' && found.state !== 'open')) return null
+    return { item: item(found), badge: this.badge(entry.owner) }
   }
 
   claimOutbox(limit = 20): OutboxEntry[] {
