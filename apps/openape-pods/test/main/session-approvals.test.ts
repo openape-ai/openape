@@ -107,13 +107,13 @@ it('fans a network sandbox and its grants out to every member with the network a
     f.store.db.prepare('INSERT INTO networks(id,owner_issuer,owner_subject,group_id,name,revision,restore_nonce,created_at) VALUES(?,?,?,?,?,3,?,?)').run(networkId, issuer, 'network-owner', groups.view().groups.at(-1)!.id, 'Synthetic network', randomUUID(), Date.now())
     f.store.db.prepare('INSERT INTO network_revisions VALUES(?,3,\'{}\',?,?)').run(networkId, 'a'.repeat(64), Date.now())
   })
-  const result = await mcp(f, { action: 'sandbox', command: { type: 'apply', target: { networkId, revision: 3 }, sandbox: { level: 'owner', http: [{ origin: 'https://chat.example.test', methods: ['POST'] }] }, grants: 'sandbox' } }, owner) as { outcomes: { podId: string, display: string, state: string }[] }
+  const result = await mcp(f, { action: 'sandbox', command: { type: 'apply', target: { networkId, revision: 3 }, sandbox: { level: 'owner', http: [{ origin: 'https://chat.example.test', methods: ['POST'] }], deny: ['~/.ssh'] }, grants: 'sandbox' } }, owner) as { outcomes: { podId: string, display: string, state: string }[] }
   // Each member gets its runtime grant and the HTTP grant, requested as itself and approved in the session.
   expect(result.outcomes.map(item => [item.podId, item.display.split(' ')[0], item.state])).toEqual([[podId, 'Run', 'approved'], [podId, 'HTTP', 'approved'], [deniedPodId, 'Run', 'approved'], [deniedPodId, 'HTTP', 'approved']])
   expect(idp.state.creates.map(request => request.requester)).toEqual([podSubject(podId), podSubject(podId), podSubject(deniedPodId), podSubject(deniedPodId)])
   for (const id of [podId, deniedPodId]) {
     expect(f.ledger.list(id)).toEqual([expect.objectContaining({ cliId: 'pod-http', origin: { networkId, revision: 3 }, approvedInSession: true }), expect.objectContaining({ cliId: 'pod-runtime', origin: { networkId, revision: 3 }, approvedInSession: true })])
-    expect(f.ledger.sandbox(id)).toEqual({ level: 'owner', sources: [{ source: `network:${networkId}`, level: 'owner' }] })
+    expect(f.ledger.sandbox(id)).toEqual({ level: 'owner', sources: [{ source: `network:${networkId}`, level: 'owner' }], deny: ['~/.ssh'], denySources: [{ source: `network:${networkId}`, deny: ['~/.ssh'] }] })
   }
   await expect(mcp(f, { action: 'sandbox', command: { type: 'apply', target: { networkId, revision: 2 }, sandbox: {} } }, owner)).rejects.toThrow('revision 3')
 })
