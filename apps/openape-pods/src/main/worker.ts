@@ -367,7 +367,7 @@ export class FixtureWorker {
 
   /** The effective sandbox reach of a Pod: its own level and, for a network member, the network's (the more permissive wins). */
   async sandboxReach(podId: string): Promise<SandboxReach> {
-    return { level: (await this.dispatch({ grants: { type: 'sandbox', podId } }) as SandboxView).level, protectedPaths: ownerProtectedPaths(this.root, homedir()), persistencePaths: ownerPersistencePaths(homedir()) }
+    return { level: (await this.dispatch({ grants: { type: 'sandbox', podId } }) as SandboxView).level, protectedPaths: ownerProtectedPaths(this.root, homedir()), persistencePaths: ownerPersistencePaths(homedir(), process.env) }
   }
 
   async onboarding(command: OnboardingCommand): Promise<OnboardingView> {
