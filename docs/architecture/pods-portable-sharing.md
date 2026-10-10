@@ -1,5 +1,11 @@
 # Portable Pods: package boundary and implementation inventory
 
+> Historical design record of issue 1419 and its milestones. Sections on
+> workflows, sequences, bounded graphs, conversion, earlier gate formats, change review,
+> access proposals and network-only limits describe removed behavior (issue 1455).
+> The current model: [Pods model](../../apps/openape-pods/docs/model.md) and
+> [networks](../../apps/openape-pods/docs/networks.md).
+
 Approved plans: [sharing](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3NA5X47W7HAV5SE10D0EN1G)
 and [networks M11](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3VDB1S72E4EQQW58T97C617).
 Implementation: [issue 1419](https://repos.openape.ai/patrick/monorepo/issues/1419),
