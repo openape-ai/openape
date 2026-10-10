@@ -91,8 +91,10 @@ const codexDirectory = join(profileBase, 'codex')
 const codexTarget = { executable: process.execPath, script: join(__dirname, '../runtime/codex-mcp.mjs').replace('/app.asar/', '/app.asar.unpacked/'), socket: join(codexDirectory, 'control.sock') }
 // Acceptance runs of the fixture app have no reachable identity provider; they
 // replace only the browser sign-in and still need the native confirmation.
+// Fixture runs never read the developer's apes login.
 const syntheticMcpOwner = fixture && process.env.NODE_ENV === 'test' && process.env.OPENAPE_PODS_FIXTURE_MCP_OWNER === 'synthetic'
 const mcpSessions = new McpOwnerSessions({
+  ...(fixture ? {} : { apes: (endsAt: number, signal: AbortSignal) => worker.mcpApesSession(endsAt, signal) }),
   login: (endsAt, signal) => syntheticMcpOwner ? Promise.resolve(null) : worker.mcpOwnerSession(endsAt, signal, ({ url }) => { void shell.openExternal(url).catch((error: unknown) => console.error('Could not open the MCP sign-in', error)) }),
   confirm: confirmMcpSession,
 })
