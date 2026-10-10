@@ -119,6 +119,18 @@ it('keeps IdP-only decisions at the IdP: a waiting approval batch has no Pods ac
   expect(worker.workflows).not.toHaveBeenCalled()
 })
 
+it('shows a waiting Codex phone sign-in as an IdP approval with its link and nothing to decide in Pods', async () => {
+  const worker = { inboxSources: vi.fn(async () => sources()), approvalLink: vi.fn(async () => 'https://id.example.test/grant-approval?grant_id=grant-1'), networks: vi.fn(), workflows: vi.fn(), runs: vi.fn(), secrets: vi.fn() } satisfies DecisionWorker
+  let request: { link: string, expiresAt: number } | null = { link: `https://id.example.test/link?c=${'e'.repeat(64)}`, expiresAt: Date.UTC(2026, 9, 10, 12, 2) }
+  const decisions = new InboxDecisions(worker, (key, parameters) => translate('de', key, parameters), () => request)
+  const entry = (await decisions.collect()).find(item => item.sourceId === `approval:mcp-sign-in:${'e'.repeat(64)}`)!
+  expect(parseInboxDecision(entry)).toEqual(entry)
+  expect(entry).toMatchObject({ title: 'Codex-Anmeldung bestätigen', authority: 'idp', options: [], link: { title: 'Beim IdP bestätigen', url: request.link }, body: expect.stringContaining('2026-10-10T12:02:00.000Z') })
+  await expect(decisions.decide({ type: 'decide', sourceId: entry.sourceId, digest: entry.digest, option: 'approve' })).rejects.toThrow('This option is not available')
+  request = null
+  expect((await decisions.collect()).some(item => item.sourceId.startsWith('approval:mcp-sign-in:'))).toBe(false)
+})
+
 it('fails clearly for a changed or vanished source and for missing evidence, without running a command', async () => {
   const { decisions, worker, current } = fixture()
   const list = await decisions.collect()

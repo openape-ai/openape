@@ -53,7 +53,7 @@ const show = (value: unknown) => (typeof value === 'string' ? value : JSON.strin
  * compared by digest at execution time, so a changed or vanished source fails instead of guessing.
  */
 export class InboxDecisions {
-  constructor(private readonly worker: DecisionWorker, private readonly t: Translate) {}
+  constructor(private readonly worker: DecisionWorker, private readonly t: Translate, private readonly signIn: () => { link: string, expiresAt: number } | null = () => null) {}
 
   async collect(): Promise<InboxDecision[]> { return (await this.entries()).map(entry => entry.decision) }
 
@@ -72,7 +72,7 @@ export class InboxDecisions {
   private async entries(): Promise<DecisionEntry[]> {
     const sources = await this.worker.inboxSources()
     const projection: DecisionProjection = { entry: (type, parts, draft, act) => this.entry(type, parts, draft, act), t: this.t, podName: podId => this.podName(sources, podId), openBatch }
-    const entries = [...this.networkRoutes(sources), ...workflowDecisions(sources.workflows, sources.map, this.worker.workflows, projection), ...await this.approvals(sources), ...this.effects(sources), ...this.secrets(sources)]
+    const entries = [...this.mcpSignIn(), ...this.networkRoutes(sources), ...workflowDecisions(sources.workflows, sources.map, this.worker.workflows, projection), ...await this.approvals(sources), ...this.effects(sources), ...this.secrets(sources)]
     // One malformed source (for example a non-HTTPS issuer) must not block every other decision.
     const valid = entries.filter((entry) => {
       try { parseInboxDecision(entry.decision); return true }
@@ -126,6 +126,15 @@ export class InboxDecisions {
     if (!options.length && !link) return []
     return [this.entry('network-batch', [batch.id, String(batch.generation)], { podId: batch.podId, podName: this.podName(sources, batch.podId), title: `${this.t('Approval batch')} · ${batch.gate}`, body: lines.join('\n'), authority: 'idp', options, link },
       async (option, evidence) => this.worker.networks({ type: option === 'review' ? 'gateReview' : 'gateDiscard', id: batch.networkId, revision, taskId: batch.id, generation: batch.generation, evidence }))]
+  }
+
+  // A waiting MCP phone sign-in: the owner approves it at the IdP like an approval, so it needs no relay change.
+  private mcpSignIn(): DecisionEntry[] {
+    const request = this.signIn()
+    if (!request) return []
+    const channel = new URL(request.link).searchParams.get('c') ?? request.link
+    return [this.entry('approval', ['mcp-sign-in', channel], { podId: null, podName: null, title: this.t('Confirm Codex sign-in'), body: this.t('Codex asks for one hour of owner access to Pods on this Mac. Confirm only if you or your own Codex session asked for it; the link expires at {time}.', { time: new Date(request.expiresAt).toISOString() }), authority: 'idp', options: [], link: { title: this.t('Confirm at the IdP'), url: request.link } },
+      async () => { throw new Error('The Codex sign-in is confirmed at the IdP') })]
   }
 
   // The link is rebuilt from the Pod's own identity issuer; an approval that cannot be verified is not published.
