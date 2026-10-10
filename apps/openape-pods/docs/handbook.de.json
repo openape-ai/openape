@@ -51,7 +51,7 @@
       "title": "Persönliche Konten verbinden",
       "paragraphs": [
         "Wähle oben rechts dein Konto oder öffne das Zahnradmenü → Weitere Einstellungen → Desktop-Einstellungen öffnen und gehe zu Deine Konten. Verbinde dein DDISA-Konto für Berechtigungen und dein Codex-/GPT-Konto für LLM-Aufrufe. Die optionale Einrichtung von TypeSafe / Jev findest du auf derselben Seite.",
-        "Pods findet deinen Identitätsanbieter über den DDISA-Eintrag der Domain deiner E-Mail-Adresse. Alle Pods, Berechtigungen und mobilen Geräte verwenden dieses eine DDISA-Konto; es gibt nichts auszuwählen. Pod-Agenten sind nicht deine Konten und erscheinen hier nie. Ein Wechsel zu einem anderen DDISA-Konto gibt deinen Pods neue Agenten, deren Berechtigungen neu erteilt werden müssen.",
+        "Pods findet deinen Identitätsanbieter über den DDISA-Eintrag der Domain deiner E-Mail-Adresse. Alle Pods und Berechtigungen verwenden dieses eine DDISA-Konto; es gibt nichts auszuwählen. Pod-Agenten sind nicht deine Konten und erscheinen hier nie. Ein Wechsel zu einem anderen DDISA-Konto gibt deinen Pods neue Agenten, deren Berechtigungen neu erteilt werden müssen.",
         "Weitere Dienste richtest du pro Pod ein: Programmanmeldungen unter Berechtigungen, Tokens und Passwörter unter Variablen und Geheimnisse. Du benötigst weder ein persönliches Konto noch eine zusätzliche Anmeldung bei pods.openape.ai."
       ],
       "steps": [
@@ -135,7 +135,7 @@
       "steps": [
         "Wähle auf der Detailseite + Geheimnis oder Ersetzen neben einem Alias. Eintippen: Gib den Wert im maskierten Feld ein und wähle Speichern. Aus Datei: Wähle eine private Datei auf diesem Mac. Aus OpenApe Secrets: Gib den Zweck ein und wähle Anfragen.",
         "Prüfe den Alias in der Liste. Das Wertefeld wird nach dem Absenden auch bei einem Fehler geleert; beachte deshalb die angezeigte Erfolgsmeldung oder Fehlermeldung.",
-        "Prüfe Vom Skript verwendete Geheimnisse und speichere bei Bedarf den Skriptzugriff. Lass Codex die Einrichtung fortsetzen und kontrolliere danach das gespeicherte Skript.",
+        "Jedes diesem Pod zugewiesene Geheimnis steht seinen Skripten zur Verfügung; ein eigener Skriptzugriff ist nicht nötig. Prüfe, dass das Skript genau die hier aufgeführten Aliase liest.",
         "Prüfe die vom Skript verwendeten Aliase. Lass Codex anschließend validieren und die Einrichtung abschließen oder nutze die Skript-Steuerung direkt."
       ],
       "image": "handbook-credentials-de.png"
@@ -258,7 +258,7 @@
       "id": "script",
       "title": "Vertiefung: Dein Skript ansehen und bearbeiten",
       "paragraphs": [
-        "Der Tab Skript öffnet den aktuell gespeicherten Arbeitsstand, auch einen neueren gespeicherten Entwurf. V1 bietet keine Versionsauswahl, Vergleiche oder Rücksetzfunktionen. Unveränderliche Skript-Hashes, Validierung, Freigabe von Geheimnissen und die Zuordnung jedes Laufs zu einer Fassung bleiben intern bestehen.",
+        "Der Tab Skript öffnet den aktuell gespeicherten Arbeitsstand, auch einen neueren gespeicherten Entwurf. V1 bietet keine Versionsauswahl, Vergleiche oder Rücksetzfunktionen. Unveränderliche Skript-Hashes, Validierung und die Zuordnung jedes Laufs zu einer Fassung bleiben intern bestehen.",
         "Der JavaScript-Editor bietet Syntaxhervorhebung, Zeilennummern, horizontales Scrollen, Einrückung mit Tab, Escape gefolgt von Tab zum Verlassen und Cmd+S (Ctrl+S) zum Speichern. Quelltext wird wörtlich angezeigt und nicht in der Oberfläche ausgeführt.",
         "Ungespeicherte Skripte, normale Variablen, und Einstellungen bleiben beim Navigieren innerhalb derselben Sitzung erhalten. Speichern Sie vor dem Beenden. Skript neu laden fragt vor dem Verwerfen von Änderungen. Bei einem Konflikt können Sie den aktuellen Stand laden oder Ihre Änderungen ausdrücklich als aktuelles Skript speichern.",
         "Verfügbare Variablen und Geheimnisse zeigt aufklappbar kopierbare Zugriffsausdrücke. Geheimniswerte bleiben verborgen. Variablen und Geheimnisse verwalten öffnet den eigenen Tab. Verwalte Skript-Geheimnisse unter Variablen und Geheimnisse und Skript-Anwendungen unter Berechtigungen. Die Auswahl erteilt noch keine Ressourcenfreigabe.",
@@ -392,11 +392,11 @@
       "id": "networks",
       "title": "Netze auf der Karte",
       "paragraphs": [
-        "Netze erscheinen auf der Karte der Automatisierungen als Gruppen mit ihren Mitgliedern: Ein Netz tauscht Einträge über die deklarierten Kanäle seiner Pods aus. Codex legt sie an und ändert sie; die Detailseite zeigt Mitglieder, Entscheidungsstellen, Zahlen, Zeitplan und den letzten Lauf und bietet Pausieren und Fortsetzen. Die Rechte der Pods bleiben erhalten. Jedes Mitglied nutzt seine eigenen Anwendungen, HTTP-Ziele, Geheimnisse und Ordner genau wie ein einzelner Pod, und jeder Befehl und jedes Ziel braucht weiterhin seine Freigabe beim Identity Provider; nur das Archiv-Mitglied hinter einer Freigaberoute verschiebt Mail ausschließlich über das freigegebene Bündel.",
+        "Netze erscheinen auf der Karte der Automatisierungen als Gruppen mit ihren Mitgliedern: Ein Netz tauscht Einträge über die deklarierten Kanäle seiner Pods aus. Codex legt sie an und ändert sie; die Detailseite zeigt Mitglieder, Entscheidungsstellen, Zahlen, Zeitplan und den letzten Lauf und bietet Pausieren und Fortsetzen. Die Rechte der Pods bleiben erhalten. Jedes Mitglied nutzt seine eigenen Anwendungen, HTTP-Ziele, Geheimnisse und Ordner genau wie ein einzelner Pod, und jeder Befehl und jedes Ziel braucht weiterhin seinen Grant, freigegeben beim Identity Provider oder in deiner Codex-Sitzung; nur das Archiv-Mitglied hinter einer Freigaberoute verschiebt Mail ausschließlich über das freigegebene Bündel.",
         "Codex kann außerdem das Skript eines Netzwerk-Pods korrigieren, während das Netzwerk weiterläuft – solange Kanäle, Rechte und Abhängigkeiten gleich bleiben und dieser Pod keine laufende oder unsichere Arbeit hat. Offene Fragen anderer Pods bleiben davon unberührt. Die Detailseite des Pods zeigt die Änderung unter Skriptänderungen; fehlgeschlagene Läufe dieses Pods können danach mit dem korrigierten Skript neu starten, sofern sie keine externe Wirkung versucht haben.",
         "Gepunktete Linien zeigen die aufgezeichneten Übergaben der letzten 24 Stunden. Ein Zähler bestätigt keine erfolgreiche externe Aktion: Prüfe die Historie des Pods und das tatsächliche Ergebnis. Kanalbezeichnungen behalten ihre genauen technischen Namen. Offene Rückfragen und wartende Freigaben eines Netzes zählt der Tab Entscheidungen.",
         "Prompt-Engineering beschreibt eine begrenzte Aufgabe und ihre Ergebniskriterien innerhalb eines Pods. Loop-Engineering verwendet endliche Versuchs- und Zeitlimits im Script und ein sichtbares Fehler- oder Prüfergebnis beim Erreichen des Limits. Netz-Engineering verbindet validierte Ergebnisse über deklarierte Kanäle und Entscheidungen des Owners. Ein Modell vergibt keine Rechte und genehmigt keine Freigabe. Netze laufen weiterhin in begrenzten manuellen oder geplanten Ausführungen; ein Kreislauf zwischen Pods braucht einen deklarierten, begrenzten Rückkopplungsschritt.",
-        "Netze sind der einzige Weg, Pods zu verbinden. Das Update auf Schema 45 hat die bisherigen Workflows und Ketten zusammen mit den Pods archiviert, die nur sie genutzt haben; ihre Historie bleibt in der Sicherung vor dem Update erhalten. Einen noch benötigten Workflow baust du mit Codex als Netz neu auf.",
+        "Netze sind der einzige Weg, Pods zu verbinden; ein Pod außerhalb eines Netzes läuft nach seinem eigenen Zeitplan. Lass Codex ein Netz bauen, wenn Pods ihre Ergebnisse aneinander weitergeben sollen.",
         "Mail-Bearbeitung läuft als Netz mit Freigabe-Gates: Ohne freigegebenes Bündel wird nichts archiviert, und unsichere Mail wartet als Rückfrage im Tab Entscheidungen. Der erste Lauf setzt einen stillen Ausgangspunkt; geschützte Absender, Empfänger und bekannte Unterhaltungen bleiben zur menschlichen Prüfung."
       ],
       "steps": [
@@ -411,16 +411,16 @@
       "paragraphs": [
         "Der verbundene Codex auf diesem Mac verwaltet Pods direkt: Variablen und Ressourcen, Skriptvalidierung und Aktivierung, Zeitpläne, Start und Wiederherstellung von Läufen sowie Anlegen, Aktivieren, Pausieren, Ändern und Archivieren von Netzwerken. Eine globale Node-Installation ist nicht nötig; Pods liefert seine Laufzeit mit.",
         "Neue Automatisierung mit Codex im Tab Automatisierungen schreibt einen Auftrag mit der gewählten Gruppe oder dem gewählten Knoten und den Pods, die es schon kennt; der Desktop öffnet Codex, der Browser kopiert den Auftrag zum Einfügen.",
-        "Jede Codex-Sitzung braucht zuerst deine Anmeldung. Beim ersten Aufruf öffnet Pods die DDISA-Anmeldung im Browser und fragt danach in der Pods-App, ob Codex für eine Stunde vollen Zugriff auf Pods erhält; bestätige nur eine Anfrage, die du gerade selbst gestellt hast. Codex wiederholt dann den Aufruf. Nach der Stunde oder nach Sitzung beenden in den Einstellungen fragt Pods erneut, ohne dass Codex neu starten muss. Innerhalb der Sitzung richten sich Rückfragen nach den Einstellungen des Codex-Clients; Pods hat keine zusätzliche Freigabewarteschlange. Codex handelt mit deiner Identität: Es kann eine Option an einem Auswahl-Gate wählen, einen Freigabe-Batch beim Identity Provider öffnen, Rechte, die deine Pods anfragen, genehmigen oder ablehnen (auch eine wartende Lauf- oder Netzfreigabe) und sie widerrufen. Es kann nur Rechte entscheiden, die ein Pod von dir für sich selbst angefragt hat; nach dem Ende der Sitzung warten Freigaben wieder auf den Identity Provider. Voller Zugriff hebt Skriptvalidierung, Revisionsprüfungen und echte Anmeldungen bei Anbietern nicht auf.",
+        "Jede Codex-Sitzung braucht zuerst deine Anmeldung. Solange du auf diesem Mac mit apes login angemeldet bist, öffnet Pods die Sitzung beim ersten Aufruf ohne Rückfrage. Andernfalls öffnet Pods die DDISA-Anmeldung im Browser und fragt danach in der Pods-App, ob Codex für eine Stunde vollen Zugriff auf Pods erhält; bestätige nur eine Anfrage, die du gerade selbst gestellt hast. Codex wiederholt dann den Aufruf. Nach der Stunde oder nach Sitzung beenden in den Einstellungen fragt Pods erneut, ohne dass Codex neu starten muss. Innerhalb der Sitzung richten sich Rückfragen nach den Einstellungen des Codex-Clients; Pods hat keine zusätzliche Freigabewarteschlange. Codex handelt mit deiner Identität: Es kann eine Option an einem Auswahl-Gate wählen, einen Freigabe-Batch beim Identity Provider öffnen, Rechte, die deine Pods anfragen, genehmigen oder ablehnen (auch eine wartende Lauf- oder Netzfreigabe) und sie widerrufen. Es kann nur Rechte entscheiden, die ein Pod von dir für sich selbst angefragt hat; nach dem Ende der Sitzung warten Freigaben wieder auf den Identity Provider. Voller Zugriff hebt Skriptvalidierung, Revisionsprüfungen und echte Anmeldungen bei Anbietern nicht auf.",
         "Codex erhält Ressourcenmetadaten und Laufstatus, keine Kontotokens, Pod-Schlüssel, Laufinhalte oder Geheimniswerte. Eine bereitgestellte private Geheimnisdatei kann direkt in den verschlüsselten Speicher importiert werden, ohne ihren Wert im Tool-Aufruf zu übertragen. E-Mails, Webseiten und andere externe Inhalte bleiben Daten, keine Anweisungen.",
-        "Pods muss laufen. Öffne es nach Verschieben oder Neuinstallation einmal, damit der Launcher aktualisiert wird. Alte Vorschläge werden beim Upgrade nicht ausgeführt; Codex kann überholte Vorschläge ausdrücklich verwerfen.",
+        "Pods muss laufen. Öffne es nach Verschieben oder Neuinstallation einmal, damit der Launcher aktualisiert wird.",
         "Trenne die Verbindung unter Desktop-Einstellungen → Work from Codex (Zahnradmenü → Weitere Einstellungen). Selbst bearbeitete Codex-Einträge lässt Pods unverändert; entferne sie mit codex mcp remove openape-pods."
       ],
       "steps": [
         "Verbinde Codex unter Desktop-Einstellungen → Work from Codex.",
         "Starte Codex einmal neu.",
         "Bitte Codex, die ausgewählten Pods einzurichten oder auszuführen.",
-        "Melde dich beim ersten Aufruf im Browser mit deinem DDISA-Konto an und erlaube in Pods den Zugriff für eine Stunde.",
+        "Beim ersten Aufruf verwendet Pods deine apes-Anmeldung; ohne sie meldest du dich im Browser mit deinem DDISA-Konto an und erlaubst in Pods den Zugriff für eine Stunde.",
         "Prüfe angewendete Einstellungen und tatsächlichen Laufstatus in Pods; ein zweiter Freigabeklick ist nicht nötig."
       ]
     },
@@ -438,7 +438,7 @@
         "Prüfe das exakte Paket und seine Datenschutzfunde, bestätige, was du geprüft hast, und speichere die .openape-Datei.",
         "Öffne auf dem empfangenden Gerät das Zahnradmenü → Portable Pods → Importieren… und öffne die Paketdatei.",
         "Gib die erforderlichen Werte ein, erstelle die pausierte Kopie, binde dann auf jedem Pod Ordner, Ziele und Anwendungen und lege Geheimnisse an.",
-        "Schließe die Einrichtung ab, validiere und aktiviere jeden Pod, erstelle die Kompositionen und aktiviere Zeitpläne erst, wenn du bereit bist."
+        "Schließe die Einrichtung ab, validiere und aktiviere jeden Pod; aktiviere das importierte Netz und Zeitpläne erst, wenn du bereit bist."
       ]
     }
   ]
