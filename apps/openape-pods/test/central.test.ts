@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { RunRetention } from '../src/worker/data/run-retention'
-import { PodDatabase, schemaVersion } from '../src/worker/storage/database'
+import { PodDatabase } from '../src/worker/storage/database'
 import { ResourceRegistry } from '../src/worker/resources/registry'
 import { RunDispatcher } from '../src/worker/runs/dispatcher'
 import { Scheduler } from '../src/worker/scheduling/scheduler'
@@ -20,7 +20,9 @@ import { WorkspaceDetails } from '../src/worker/workspace/details'
 import { CentralProjection } from '../src/worker/central/projection'
 import { CentralController, centralState, offlineAlert, partBatches } from '../src/main/central/controller'
 import type { CentralExecutor } from '../src/main/central/controller'
-import { assembleSnapshot, splitSnapshot } from '../src/contracts/central-parts'
+import { assemblePod, splitSnapshot } from '../src/contracts/central-parts'
+import { fullPublication } from './workspace/central-fixture'
+import type { WorkspaceState } from '../src/contracts/control'
 import { WorkspaceStore } from '../../openape-pods-relay/server/utils/workspace-store'
 import type { WorkspaceActor } from '../../openape-pods-relay/server/utils/workspace-store'
 import type { AgentRuntime } from '../src/worker/agent/executor'
@@ -34,6 +36,17 @@ vi.mock('electron', () => ({ utilityProcess: { fork: vi.fn() }, safeStorage: {},
 
 const cleanup: (() => Promise<void> | void)[] = []
 afterEach(async () => { for (const task of cleanup.splice(0).reverse()) await task() })
+/** The snapshot as the relay serves it back from its parts; `blobs` stays on the desktop. */
+function reassemble(snapshot: CentralSnapshot) {
+  const parts = splitSnapshot(snapshot); const keys = [...parts.keys()]; const read = (key: string) => parts.get(key)
+  const workspace = read('workspace') as WorkspaceState
+  return { version: 1, workspace, pods: workspace.pods.map(pod => assemblePod(read, keys, pod.id)), artifacts: read('artifacts') }
+}
+function publishSnapshot(server: WorkspaceStore, actor: WorkspaceActor, lease: string, snapshot: CentralSnapshot) {
+  const publication = fullPublication(snapshot)
+  server.stage(actor, lease, publication.parts)
+  return server.publishParts(actor, lease, randomUUID(), 0, publication.changes, publication.hash)
+}
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'pods-central-'))
   const store = new PodDatabase(root)
@@ -51,7 +64,7 @@ function fixture() {
   store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,?,?,NULL)').run(pod.id, JSON.stringify(owner), actor.id, actor.generation, 'ready', '{}')
   return { store, root, projection, actor, pod, details: new WorkspaceDetails(store, resources) }
 }
-type Completion = Parameters<WorkspaceStore['publish']>[5]
+type Completion = Parameters<WorkspaceStore['publishParts']>[6]
 function relay(server: WorkspaceStore, actor: WorkspaceActor) {
   return async (body: Record<string, unknown>): Promise<unknown> => {
     const lease = String(body.lease)
@@ -65,20 +78,18 @@ function relay(server: WorkspaceStore, actor: WorkspaceActor) {
     if (body.type === 'begin') return server.begin(actor)
     if (body.type === 'parts') return server.stage(actor, lease, body.parts as Record<string, unknown>)
     if (body.type === 'publish' && body.format === 2) return server.publishParts(actor, lease, String(body.id), Number(body.revision), body.changes as Record<string, string | null>, String(body.hash), body.completion as Completion)
-    if (body.type === 'publish') return server.publish(actor, lease, String(body.id), Number(body.revision), body.snapshot, body.completion as Completion)
     if (body.type === 'heartbeat') return server.heartbeat(actor, lease, String(body.hash))
     if (body.type === 'claim') return server.claim(actor, lease)
     if (body.type === 'disconnect') return server.disconnect(actor, lease)
     throw new Error(`Unexpected request ${String(body.type)}`)
   }
 }
-it('adopts the current schema repeatedly without credentials or local process leases', () => {
+it('adopts the workspace repeatedly as views only, without table rows, credentials or local process leases', () => {
   const { store, projection, actor, pod } = fixture()
   const first = projection.snapshot(actor.owner)
   expect(first.workspace.pods[0]?.id).toBe(pod.id)
-  expect(first.archive.schema).toBe(schemaVersion)
-  expect(Object.keys(first.archive.tables)).not.toContain('connections')
-  expect(Object.keys(first.archive.tables)).not.toContain('run_leases')
+  expect(Object.keys(first).sort()).toEqual(['artifacts', 'blobs', 'pods', 'version', 'workspace'])
+  expect([...splitSnapshot(first).keys()].filter(key => key === 'schema' || key.startsWith('table/'))).toEqual([])
   expect(first).toEqual(projection.snapshot(actor.owner))
   store.db.prepare('UPDATE remote_pods SET owner=?').run(JSON.stringify({ ...actor.owner, subject: 'other' }))
   expect(() => projection.snapshot(actor.owner)).toThrow('Every Pod must belong')
@@ -110,8 +121,7 @@ it('executes the same MCP/browser command once and exposes central results with 
   expect(await call({ type: 'read', runtimeId: actor.id, podId: pod.id })).toMatchObject({ pod: { details: { description: { text: 'Shared with both clients' } }, runs: { runs: [{ id: runId, summary: 'Synthetic result', error: 'Synthetic failure', state: 'failed' }] } } })
   expect(execute).toHaveBeenCalledOnce()
   expect(server.read(actor.owner, actor.id, pod.id).pod.details.description?.text).toBe('Shared with both clients')
-  const archived = server.db.prepare('SELECT value FROM parts WHERE runtime_id=? AND key=\'table/pod_descriptions/0\'').get(actor.id)!.value as string
-  expect(JSON.parse(archived) as CentralSnapshot['archive']['tables'][string]).toHaveLength(1)
+  expect(server.db.prepare('SELECT count(*) AS count FROM parts WHERE runtime_id=? AND (key=\'schema\' OR key LIKE \'table/%\')').get(actor.id)!.count).toBe(0)
   expect(controller.status()).toMatchObject({ state: 'online', format: 2, runtimeId: actor.id, error: null })
   await controller.stop()
   expect(await call({ type: 'inventory' })).toMatchObject([{ online: false, workspace: { pods: [{ id: pod.id, online: false }] } }])
@@ -222,18 +232,16 @@ it('keeps heartbeats and the scheduling lease alive while a large publication is
   await vi.waitFor(() => expect(controller.status().lastPublication).not.toBeNull())
 })
 
-it('publishes complete snapshots to an older service that has no part format', async () => {
-  const { controller, server, actor, requests } = connected({ request: async (forward, body) => {
-    if (body.type === 'parts' || (body.type === 'publish' && body.format === 2)) throw new Error('Unsupported by an older service')
+it('refuses a service without the part format instead of publishing complete snapshots', async () => {
+  const { controller, requests } = connected({ request: async (forward, body) => {
     const result = await forward(body)
     if (body.type === 'begin') { const { format: _format, manifest: _manifest, runtimeId: _runtimeId, ...legacy } = result as Record<string, unknown>; return legacy }
     return result
   } })
   controller.start()
-  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
-  expect(controller.status().format).toBe(1)
-  expect(requests.some(item => item.type === 'publish' && 'snapshot' in item)).toBe(true)
-  expect(server.inventory(actor.owner)[0]?.online).toBe(true)
+  await vi.waitFor(() => expect(controller.error).toContain('predates this desktop'))
+  expect(controller.available).toBe(false)
+  expect(requests.some(item => item.type === 'publish' || item.type === 'parts')).toBe(false)
 })
 
 it('runs concurrent owner actions one at a time and resubmits busy or moved-revision refusals', async () => {
@@ -321,9 +329,8 @@ it('reassembles the projected snapshot exactly from parts and keeps each run his
     store.db.prepare('INSERT INTO runs VALUES(?,?,?,\'completed\',?,?,?,NULL,0,0)').run(id, pod.id, 'b'.repeat(64), index, index + 1, `Run ${index}`)
     store.db.prepare('INSERT INTO run_events VALUES(?,1,\'log\',?,?)').run(id, JSON.stringify({ index }), index)
   }
-  const snapshot = projection.snapshot(actor.owner)
-  const parts = splitSnapshot(snapshot)
-  expect(assembleSnapshot(key => parts.get(key), [...parts.keys()])).toEqual(snapshot)
+  const { blobs: _blobs, ...snapshot } = projection.snapshot(actor.owner)
+  expect(reassemble({ ...snapshot, blobs: [] })).toEqual(snapshot)
   const view = snapshot.pods[0]!
   for (const entry of Object.values(view.history)) expect(entry.runs).toHaveLength(1)
   expect(view.runs.events).toEqual(view.history[view.runs.runs[0]!.id]!.events)
@@ -332,8 +339,7 @@ it('reassembles the projected snapshot exactly from parts and keeps each run his
 it('publishes the description summary with the workspace inventory', () => {
   const { projection, actor, pod, details } = fixture()
   details.execute({ type: 'describe', podId: pod.id, revision: 0, text: 'Watches the task board and reports changes by Telegram. Runs every five minutes.' })
-  const parts = splitSnapshot(projection.snapshot(actor.owner))
-  const restored = assembleSnapshot(key => parts.get(key), [...parts.keys()])
+  const restored = reassemble(projection.snapshot(actor.owner))
   expect(restored.workspace.pods.find(item => item.id === pod.id)?.description).toBe('Watches the task board and reports changes by Telegram.')
 })
 
@@ -343,8 +349,7 @@ it('publishes network descriptions with the workspace inventory', async () => {
   const { networkId: id, pod } = seedNetwork(store)
   store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,?,?,NULL)').run(pod.id, JSON.stringify(actor.owner), actor.id, actor.generation, 'ready', '{}')
   new AutomationDescriptions(store).execute({ type: 'describeAutomation', id, revision: 0, text: 'Sends one morning briefing by Telegram.' })
-  const parts = splitSnapshot(projection.snapshot(actor.owner, true))
-  expect(assembleSnapshot(key => parts.get(key), [...parts.keys()]).workspace.descriptions).toEqual([{ id, text: 'Sends one morning briefing by Telegram.', revision: 1 }])
+  expect(reassemble(projection.snapshot(actor.owner)).workspace.descriptions).toEqual([{ id, text: 'Sends one morning briefing by Telegram.', revision: 1 }])
 })
 
 it('publishes only TypeSafe availability through both full and partitioned central snapshots', async () => {
@@ -352,9 +357,7 @@ it('publishes only TypeSafe availability through both full and partitioned centr
   const { SetupControl } = await import('../src/worker/onboarding/control')
   const setup = new SetupControl(store, new ResourceRegistry(store, () => {})); const id = randomUUID()
   setup.execute({ type: 'save', connection: { id, provider: 'typesafe', account: 'TypeSafe / Jev', state: 'ready', error: null }, metadata: { verifiedAt: 12, private: 'not-for-central' } })
-  const snapshot = projection.snapshot(actor.owner)
-  const parts = splitSnapshot(snapshot)
-  const restored = assembleSnapshot(key => parts.get(key), [...parts.keys()])
+  const restored = reassemble(projection.snapshot(actor.owner))
   expect(restored.workspace.jev).toEqual({ id, state: 'ready', verifiedAt: 12 })
   expect(restored.pods.find(item => item.id === pod.id)?.resources.jev).toEqual(restored.workspace.jev)
   expect(JSON.stringify(restored)).not.toContain('not-for-central')
@@ -362,7 +365,7 @@ it('publishes only TypeSafe availability through both full and partitioned centr
   expect(projection.snapshot(actor.owner).workspace.jev?.state).toBe('expired')
 })
 
-it('publishes retention to central list, detail and archive while preserving account Pods and detached receipts', async () => {
+it('publishes retention to central list and detail while preserving account Pods', async () => {
   const f = connected()
   const ids = Array.from({ length: 55 }, () => randomUUID())
   for (const [index, id] of ids.entries()) f.store.db.prepare('INSERT INTO runs VALUES(?,?,?,\'completed\',?,?,\'Done\',NULL,0,1)').run(id, f.pod.id, 'a'.repeat(64), index, index + 1)
@@ -374,11 +377,7 @@ it('publishes retention to central list, detail and archive while preserving acc
   await vi.waitFor(() => expect(f.server.view(f.actor.owner, f.actor.id, f.pod.id, { view: 'runs', offset: 0 })).toMatchObject({ total: 50 }), { timeout: 5000 })
   expect(() => f.server.view(f.actor.owner, f.actor.id, f.pod.id, { view: 'run', runId: ids[0]! })).toThrow('run_not_found')
   expect(f.server.inventory(f.actor.owner)[0]?.workspace.pods.map(pod => pod.id)).toEqual([f.pod.id])
-  const session = f.server.db.prepare('SELECT lease FROM runtimes WHERE id=?').get(f.actor.id)!
-  const snapshot = f.server.archive(f.actor, String(session.lease))!
-  expect(snapshot.archive.tables.runs).toHaveLength(50)
-  expect(snapshot.archive.tables.effect_ledger).toMatchObject([{ run_id: null, result: '{"receipt":"once"}' }])
-  expect(JSON.stringify(snapshot)).not.toContain(ids[0])
+  expect(JSON.stringify(f.server.db.prepare('SELECT value FROM parts').all())).not.toContain(ids[0])
   expect(f.server.db.prepare('SELECT * FROM staged_parts').all()).toEqual([])
   expect(f.server.db.prepare('SELECT snapshot FROM runtimes').get()?.snapshot).toBeNull()
 })
@@ -437,38 +436,31 @@ it('allows only reviewed deletion through the central data channel', () => {
   }
 })
 
-it('fails closed before publishing any legacy table or projection from a network workspace', () => {
-  const f = fixture(); seedNetwork(f.store)
-  expect(() => f.projection.snapshot(f.actor.owner)).toThrow('bounded publication support')
-})
-
-it('connects network volume with stable legacy parts and leaves complete data local', () => {
+it('connects network volume with stable parts and leaves complete data local', () => {
   const f = fixture(); const network = seedNetwork(f.store)
   f.store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,?,?,NULL)').run(network.pod.id, JSON.stringify(f.actor.owner), f.actor.id, f.actor.generation, 'ready', '{}')
   f.store.transaction(() => {
     f.store.db.prepare(`WITH RECURSIVE sequence(value) AS (SELECT 0 UNION ALL SELECT value+1 FROM sequence WHERE value<11999)
       INSERT INTO run_events SELECT ?,value,'log',?,1 FROM sequence`).run(network.runId, JSON.stringify({ message: 'x'.repeat(4096) }))
   })
-  const snapshot = f.projection.snapshot(f.actor.owner, true)
+  const snapshot = f.projection.snapshot(f.actor.owner)
   expect(Buffer.byteLength(JSON.stringify(snapshot))).toBeLessThan(1024 * 1024)
-  expect(snapshot.archive.tables.run_events).toEqual([])
   expect(snapshot.pods.find(pod => pod.id === network.pod.id)!.runs.runs).toEqual([])
   expect(f.store.db.prepare('SELECT count(*) AS count FROM run_events').get()!.count).toBe(12000)
   const before = splitSnapshot(snapshot)
   f.store.db.prepare('DELETE FROM run_events WHERE sequence<1000').run()
-  expect(splitSnapshot(f.projection.snapshot(f.actor.owner, true))).toEqual(before)
+  expect(splitSnapshot(f.projection.snapshot(f.actor.owner))).toEqual(before)
   const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
   const { lease } = server.begin(f.actor)
-  const published = server.publish(f.actor, lease, randomUUID(), 0, snapshot)
+  const published = publishSnapshot(server, f.actor, lease, snapshot)
   server.heartbeat(f.actor, lease, published.hash)
   expect(server.inventory(f.actor.owner)[0]!.online).toBe(true)
-  expect(() => f.projection.snapshot(f.actor.owner)).toThrow('bounded publication support')
 }, 15000)
 
 it('serves runtime reads without executing owner commands or changing the publication revision', async () => {
   const f = fixture(); const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
   const execute = vi.fn(); const networkRead = vi.fn(async () => ({ networks: [] }))
-  const controller = new CentralController(f.root, relay(server, f.actor), { snapshot: async enabled => f.projection.snapshot(f.actor.owner, enabled), networkRead, execute, gate: async () => {} }, '/unused-no-artifacts')
+  const controller = new CentralController(f.root, relay(server, f.actor), { snapshot: async () => f.projection.snapshot(f.actor.owner), networkRead, execute, gate: async () => {} }, '/unused-no-artifacts')
   cleanup.push(() => controller.stop()); controller.start()
   await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
   expect(controller.networkReads).toBe(true)
@@ -485,7 +477,7 @@ it('keeps the runtime online when the optional network read service fails', asyn
   const f = fixture(); const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
   const log = vi.spyOn(console, 'error').mockImplementation(() => {})
   const networkRead = vi.fn(async () => { throw new Error('Synthetic network read is too large') })
-  const controller = new CentralController(f.root, relay(server, f.actor), { snapshot: async enabled => f.projection.snapshot(f.actor.owner, enabled), networkRead, execute: vi.fn(), gate: async () => {} }, '/unused-no-artifacts')
+  const controller = new CentralController(f.root, relay(server, f.actor), { snapshot: async () => f.projection.snapshot(f.actor.owner), networkRead, execute: vi.fn(), gate: async () => {} }, '/unused-no-artifacts')
   cleanup.push(() => log.mockRestore()); cleanup.push(() => controller.stop()); controller.start()
   await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
   expect(controller.status().networkReadError).toContain('too large')
@@ -499,13 +491,13 @@ it('keeps private network configuration local and rejects legacy mutation bypass
   f.store.db.prepare('INSERT INTO pod_variables VALUES(?,?,?,1)').run(network.pod.id, 'business', 'private-network-variable')
   f.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), network.pod.id, 'reference', 'ready', 'private-network-resource', '{}')
   f.store.db.prepare('INSERT INTO pod_variables VALUES(?,?,?,1)').run(f.pod.id, 'legacy', 'retained-legacy-variable')
-  const snapshot = f.projection.snapshot(f.actor.owner, true)
+  const snapshot = f.projection.snapshot(f.actor.owner)
   expect(JSON.stringify(snapshot)).not.toContain('private-network-')
   expect(JSON.stringify(snapshot)).toContain('retained-legacy-variable')
   expect(snapshot.pods.find(pod => pod.id === network.pod.id)).toMatchObject({ networkId: network.networkId, resources: { resources: [], variables: [] } })
   const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
   const { lease } = server.begin(f.actor)
-  const published = server.publish(f.actor, lease, randomUUID(), 0, snapshot)
+  const published = publishSnapshot(server, f.actor, lease, snapshot)
   server.heartbeat(f.actor, lease, published.hash)
   expect(() => server.submit(f.actor.owner, f.actor.id, published.revision, { channel: 'runs', body: { type: 'start', podId: network.pod.id } }, randomUUID())).toThrow('network_member_requires_desktop_review')
   expect(() => server.submit(f.actor.owner, f.actor.id, published.revision, { channel: 'runs', body: { type: 'start', podId: f.pod.id } }, randomUUID())).not.toThrow()

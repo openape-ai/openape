@@ -16,22 +16,21 @@ import { parseResourceCommand, parseResourceState } from './resources'
 import type { ResourceState } from './resources'
 import type { MapView } from './map-view'
 
-export const centralTables = [
-  'pods', 'remote_pods', 'master_creations', 'script_credential_approvals', 'scripts', 'checkpoints', 'sources', 'claims', 'settings', 'validations', 'resources', 'resource_epochs',
+/**
+ * Tables that desktops before issue 1455 (M8) publish as `table/<name>/<chunk>` parts beside the views. No reader
+ * uses them; the relay accepts them unread until those desktops are updated, and current desktops publish views only.
+ */
+export const legacyCentralTables: readonly string[] = [
+  'pods', 'remote_pods', 'master_creations', 'script_credential_approvals', 'assignments', 'scripts', 'checkpoints', 'sources', 'claims', 'settings', 'validations', 'resources', 'resource_epochs',
   'runs', 'run_events', 'schedules', 'accepted_events', 'run_inputs', 'recovery_reviews', 'effect_ledger',
-  'mail_inventory', 'mail_items', 'mail_receipts', 'mail_contexts', 'source_derivations',
-  'master_messages', 'script_drafts', 'pod_organization', 'pod_groups', 'pod_memberships',
+  'mail_inventory', 'mail_items', 'mail_receipts', 'mail_extractions', 'mail_contexts', 'source_derivations',
+  'master_messages', 'script_drafts', 'access_proposals', 'pod_organization', 'pod_groups', 'pod_memberships',
   'pod_variables', 'master_message_scopes', 'pod_chat_origins', 'pod_descriptions', 'draft_packages', 'dependency_sets', 'script_dependencies',
-  'chat_conversations', 'chat_contexts', 'chat_members', 'chat_message_context', 'control_runs',
-] as const
-/** Tables that desktops before issue 1455 (M8) still publish; the relay accepts and ignores them. */
-export const retiredCentralTables = [
-  'assignments', 'mail_extractions', 'access_proposals', 'control_changes',
+  'chat_conversations', 'chat_contexts', 'chat_members', 'chat_message_context', 'control_runs', 'control_changes',
   'workflow_channels', 'workflow_gates', 'workflow_values', 'graph_items', 'graph_deliveries', 'graph_item_events', 'graph_gate_batches',
   'workflows', 'workflow_members', 'workflow_runs', 'workflow_nodes', 'workflow_attempts', 'workflow_mail_scopes',
   'workflow_mail_pending', 'workflow_mail_processed', 'workflow_mail_participants', 'workflow_mail_batches', 'workflow_mail_audit',
-] as const
-export const acceptedCentralTables: readonly string[] = [...centralTables, ...retiredCentralTables]
+]
 
 export const centralHeartbeatMs = 10000
 export const centralLeaseMs = 30000
@@ -50,12 +49,16 @@ export interface CentralPod {
   versions: Record<string, ScriptView>
   history: Record<string, RunView>
 }
+/**
+ * What the desktop publishes: the workspace and Pod views plus the managed files they reference. `blobs` names the
+ * stored scripts and sources of published Pods; the desktop mirrors them as `artifacts` and never publishes the list.
+ */
 export interface CentralSnapshot {
   version: 1
   workspace: WorkspaceState
   pods: CentralPod[]
-  archive: { schema: number, tables: Record<string, Record<string, unknown>[]> }
   artifacts: { podId: string, path: string, hash: string, size: number }[]
+  blobs: { podId: string, hash: string }[]
 }
 export type CentralState = 'connecting' | 'online' | 'reconnecting' | 'offline'
 export interface CentralStatus {
@@ -69,7 +72,7 @@ export interface CentralStatus {
   tickingSince: number | null
   tickPhase: string | null
   tickTimeout: { phase: string, at: number } | null
-  format: 1 | 2 | null
+  format: 2 | null
   runtimeId: string | null
   lastPublication: { at: number, bytes: number } | null
   uncertain: UncertainOperation[]
@@ -165,7 +168,7 @@ export function commandPodIds(command: CentralCommand, snapshot: { workspace: { 
 
 export function parseCentralSnapshot(value: unknown): CentralSnapshot {
   const item = centralObject(value)
-  if (item.version !== 1 || Object.keys(item).some(key => !['version', 'workspace', 'pods', 'archive', 'artifacts'].includes(key))) throw new Error('Unsupported workspace snapshot')
+  if (item.version !== 1 || Object.keys(item).some(key => !['version', 'workspace', 'pods', 'artifacts', 'blobs'].includes(key))) throw new Error('Unsupported workspace snapshot')
   const workspace = parseWorkspace(item.workspace)
   if (workspace.pods.length > 100 || !Array.isArray(item.pods) || item.pods.length !== workspace.pods.length) throw new Error('Invalid workspace inventory')
   const seen = new Set<string>()
@@ -186,11 +189,7 @@ export function parseCentralSnapshot(value: unknown): CentralSnapshot {
       if (parseRunView(view).runs.some(run => run.podId !== id)) throw new Error('Invalid history Pod binding')
     }
   }
-  const archive = centralObject(item.archive)
-  centralRevision(archive.schema)
-  for (const [name, rows] of Object.entries(centralObject(archive.tables))) {
-    if (!acceptedCentralTables.includes(name) || !Array.isArray(rows) || rows.some(row => !row || typeof row !== 'object' || Array.isArray(row))) throw new Error('Invalid workspace archive')
-  }
+  if (!Array.isArray(item.blobs) || item.blobs.some(blob => !seen.has(centralId(centralObject(blob).podId)) || typeof blob.hash !== 'string' || !/^[a-f0-9]{64}$/.test(blob.hash))) throw new Error('Invalid stored artifact hash')
   if (!Array.isArray(item.artifacts) || item.artifacts.length > 100000) throw new Error('Invalid workspace artifacts')
   const paths = new Set<string>()
   for (const value of item.artifacts) {

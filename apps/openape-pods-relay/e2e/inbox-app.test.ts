@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { chromium } from 'playwright'
 import type { Browser, BrowserContext, Page } from 'playwright'
 import { afterAll, beforeAll, expect, it } from 'vitest'
-import { centralFixture } from '../../openape-pods/test/workspace/central-fixture'
+import { centralFixture, fullPublication } from '../../openape-pods/test/workspace/central-fixture'
 import { keyObjectToSshString } from 'openape-e2e/constants'
 import { startIdp } from 'openape-e2e/idp-fixture'
 import { loginWithSshKey } from 'openape-e2e/key-auth'
@@ -66,16 +66,20 @@ async function desktop(email: string) {
   }
   const { lease } = await send('/api/runtime/v1/workspace', { type: 'begin' }) as { lease: string }
   const fixture = centralFixture()
-  const snapshot = { version: 1, workspace: { ...fixture.host.workspace, pods: [fixture.host.workspace.pods[0]] }, pods: [fixture.view], archive: { schema: 23, tables: {} }, artifacts: [] }
+  const publication = fullPublication({ version: 1, workspace: { ...fixture.host.workspace, pods: [fixture.host.workspace.pods[0]!] }, pods: [fixture.view], artifacts: [], blobs: [] })
+  const publish = async (revision: number, completion?: unknown) => {
+    await send('/api/runtime/v1/workspace', { type: 'parts', lease, parts: publication.parts })
+    return send('/api/runtime/v1/workspace', { type: 'publish', format: 2, lease, id: randomUUID(), revision, changes: publication.changes, hash: publication.hash, ...(completion ? { completion } : {}) })
+  }
   let revision = 0
-  const published = await send('/api/runtime/v1/workspace', { type: 'publish', lease, id: randomUUID(), revision, snapshot }) as { hash: string }
+  const published = await publish(revision) as { hash: string }
   await send('/api/runtime/v1/workspace', { type: 'heartbeat', lease, hash: published.hash })
   return {
     podId: fixture.view.id,
     message: (eventId: string, title: string, body: string, links: { title: string, url: string }[] = []) => send('/api/runtime/v1/inbox', { eventId, kind: 'message', title, body, podId: fixture.view.id, podName: 'Belege', links }),
     decisions: (decisions: unknown[]) => send('/api/runtime/v1/inbox/decisions', { decisions }),
     claim: () => send('/api/runtime/v1/workspace', { type: 'claim', lease }) as Promise<{ id: string, command: { body: Record<string, unknown> } } | null>,
-    complete: (id: string) => send('/api/runtime/v1/workspace', { type: 'publish', lease, id: randomUUID(), revision: ++revision, snapshot, completion: { id, result: { status: 'applied' }, error: null } }),
+    complete: (id: string) => publish(++revision, { id, result: { status: 'applied' }, error: null }),
   }
 }
 

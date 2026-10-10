@@ -1,7 +1,7 @@
 import { parseCentralNetworkRead, parseCentralNetworkResult } from '../../contracts/central-networks'
 import type { CentralNetworkRead } from '../../contracts/central-networks'
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -15,11 +15,11 @@ import { managedArtifacts } from './artifacts'
 
 interface State { revision: number, hash: string }
 interface Completion { id: string, result: unknown, error: string | null }
-type Pending = { id: string, revision: number, completion?: Completion } & ({ format?: 1, snapshot: CentralSnapshot } | { format: 2, hash: string, changes: Record<string, string | null>, parts: Record<string, unknown> })
-interface Session extends State { networkReads?: number, lease: string, pending: CentralOperation[], format?: number, runtimeId?: string, manifest?: CentralManifest }
+interface Pending { id: string, revision: number, completion?: Completion, format: 2, hash: string, changes: Record<string, string | null>, parts: Record<string, unknown> }
+interface Session extends State { lease: string, pending: CentralOperation[], format?: number, runtimeId?: string, manifest?: CentralManifest }
 export interface CentralGate { lastTickAt: number, tickingSince: number | null, tickPhase?: string | null, tickTimeout?: { phase: string, at: number } | null }
 export interface CentralExecutor {
-  snapshot: (networkReads?: boolean) => Promise<CentralSnapshot>
+  snapshot: () => Promise<CentralSnapshot>
   networkRead?: (command: CentralNetworkRead) => Promise<unknown>
   version?: () => Promise<number>
   execute: (command: CentralCommand, operationId: string) => Promise<unknown>
@@ -81,7 +81,7 @@ export class CentralController {
   private uploaded = new Set<string>()
   private artifactCache: ArtifactCache = new Map()
   private publishing: Promise<void> | null = null
-  private format: 1 | 2 | null = null
+  private format: 2 | null = null
   private manifest: CentralManifest = {}
   private runtimeId: string | null = null
   private phase = 'worker gate'
@@ -142,9 +142,10 @@ export class CentralController {
     this.phase = 'begin'
     const session = await this.request({ type: 'begin' }) as Session
     this.lease = session.lease
-    this.supportsNetworks = session.networkReads === 1 && !!this.executor.networkRead
+    this.supportsNetworks = !!this.executor.networkRead
     this.networkSummary = ''; this.networkPublishedAt = 0; this.cached = null; this.publishedAt = 0
-    this.format = session.format === 2 ? 2 : 1
+    if (session.format !== 2) throw new Error('The central service predates this desktop; update the service before connecting')
+    this.format = 2
     this.manifest = session.manifest ?? {}
     this.runtimeId = session.runtimeId ?? null
     this.phase = 'reconcile'
@@ -153,8 +154,8 @@ export class CentralController {
     if (saved && session.hash !== saved.hash && !pending) throw new Error('Central state differs from the local receipt; explicit reconciliation is required')
     this.state = { revision: session.revision, hash: session.hash }
     const completion = await this.read<Completion>('completion.json')
-    if (pending?.format === 2 && this.format !== 2) {
-      // The service was rolled back: a format-2 journal cannot apply, so republish its outcome in full.
+    if (pending && pending.format !== 2) {
+      // A full-snapshot journal of a desktop before issue 1455 (M8) cannot apply; publish its outcome again.
       await rm(join(this.root, 'central/publication.json'))
       if (pending.completion) await this.synchronize(pending.completion)
     }
@@ -162,7 +163,7 @@ export class CentralController {
       try { await this.publish(pending) }
       catch (error) {
         // A refused format-2 delta never committed; rebuild it from the current state instead of retrying forever.
-        if (pending.format !== 2 || (error as { status?: number }).status !== 409) throw error
+        if ((error as { status?: number }).status !== 409) throw error
         await rm(join(this.root, 'central/publication.json'))
         this.manifest = session.manifest ?? {}
         await this.synchronize(pending.completion)
@@ -188,9 +189,8 @@ export class CentralController {
     await this.heartbeat()
   }
 
-  // Never waits for a publication against a format-2 service, which accepts the replaced hash.
+  // Never waits for a publication: the service accepts the replaced hash.
   private async heartbeat(): Promise<void> {
-    if (this.format !== 2) await this.publishing
     await this.call({ type: 'heartbeat', hash: this.state.hash })
     await this.gate(this.operating ? 0 : Date.now() + 25000)
     if (!this.online) this.since = Date.now()
@@ -202,14 +202,14 @@ export class CentralController {
     this.phase = 'worker snapshot'
     const version = await this.executor.version?.()
     const reuse = !completion && version !== undefined && this.cached?.version === version
-    const base = reuse ? this.cached!.snapshot : parseCentralSnapshot(await this.executor.snapshot(this.supportsNetworks))
+    const base = reuse ? this.cached!.snapshot : parseCentralSnapshot(await this.executor.snapshot())
     this.phase = 'artifacts'
     const files = await managedArtifacts(this.root, base, this.helper, this.artifactCache)
     const snapshot = { ...base, artifacts: files.map(({ content: _content, ...file }) => file) }
     if (reuse && this.cached!.hash === this.state.hash && JSON.stringify(snapshot.artifacts) === JSON.stringify(base.artifacts)) return
-    const parts = this.format === 2 ? encodeParts(splitSnapshot(snapshot)) : null
-    const manifest = parts ? Object.fromEntries(Array.from(parts, ([key, part]) => [key, part.hash])) : null
-    const hash = manifest ? manifestDigest(manifest) : createHash('sha256').update(JSON.stringify(snapshot)).digest('hex')
+    const parts = encodeParts(splitSnapshot(snapshot))
+    const manifest = Object.fromEntries(Array.from(parts, ([key, part]) => [key, part.hash]))
+    const hash = manifestDigest(manifest)
     if (version !== undefined) this.cached = { version, snapshot, hash }
     if (hash === this.state.hash && !completion) return
     this.phase = 'artifact upload'
@@ -222,17 +222,13 @@ export class CentralController {
         delete file.content
       }
     }
-    const common = { id: randomUUID(), revision: this.state.revision, ...(completion ? { completion } : {}) }
-    let pending: Pending = { ...common, snapshot }
-    if (parts && manifest) {
-      const changes: Record<string, string | null> = Object.fromEntries(Object.keys(this.manifest).filter(key => !(key in manifest)).map(key => [key, null]))
-      const uploads: Record<string, unknown> = {}
-      for (const [key, part] of parts) {
-        if (this.manifest[key] === part.hash) continue
-        changes[key] = part.hash; uploads[part.hash] = JSON.parse(part.text)
-      }
-      pending = { ...common, format: 2, hash, changes, parts: uploads }
+    const changes: Record<string, string | null> = Object.fromEntries(Object.keys(this.manifest).filter(key => !(key in manifest)).map(key => [key, null]))
+    const uploads: Record<string, unknown> = {}
+    for (const [key, part] of parts) {
+      if (this.manifest[key] === part.hash) continue
+      changes[key] = part.hash; uploads[part.hash] = JSON.parse(part.text)
     }
+    const pending: Pending = { id: randomUUID(), revision: this.state.revision, ...(completion ? { completion } : {}), format: 2, hash, changes, parts: uploads }
     await this.save('publication.json', pending)
     await this.publish(pending)
   }
@@ -240,23 +236,15 @@ export class CentralController {
   private async publish(pending: Pending): Promise<void> {
     this.publishing = (async () => {
       const at = Date.now()
-      let bytes: number
-      if (pending.format === 2) {
-        this.phase = 'part upload'
-        const batches = partBatches(pending.parts)
-        for (const parts of batches) await this.call({ type: 'parts', parts })
-        this.phase = 'publish'
-        const { parts: _parts, format: _format, ...publication } = pending
-        this.state = await this.call({ type: 'publish', format: 2, ...publication }) as State
-        this.manifest = { ...this.manifest }
-        for (const [key, hash] of Object.entries(pending.changes)) { if (hash === null) delete this.manifest[key]; else this.manifest[key] = hash }
-        bytes = batches.reduce((total, batch) => total + JSON.stringify(batch).length, JSON.stringify(publication).length)
-      }
-      else {
-        this.phase = 'publish'
-        this.state = await this.call({ type: 'publish', ...pending }) as State
-        bytes = JSON.stringify(pending).length
-      }
+      this.phase = 'part upload'
+      const batches = partBatches(pending.parts)
+      for (const parts of batches) await this.call({ type: 'parts', parts })
+      this.phase = 'publish'
+      const { parts: _parts, format: _format, ...publication } = pending
+      this.state = await this.call({ type: 'publish', format: 2, ...publication }) as State
+      this.manifest = { ...this.manifest }
+      for (const [key, hash] of Object.entries(pending.changes)) { if (hash === null) delete this.manifest[key]; else this.manifest[key] = hash }
+      const bytes = batches.reduce((total, batch) => total + JSON.stringify(batch).length, JSON.stringify(publication).length)
       await this.save('state.json', this.state)
       await rm(join(this.root, 'central/publication.json'))
       this.lastPublication = { at, bytes }; this.publishedAt = Date.now()

@@ -35,8 +35,9 @@ separate from availability: a paused, connected Pod remains editable.
 
 Issue: https://repos.openape.ai/patrick/monorepo/issues/1384.
 Format 2 splits the snapshot into content-addressed parts: `workspace`, `artifacts`,
-`schema`, one part per Pod, per script version, per run record and per run's events,
-and archive tables in chunks of 16 rows (`contracts/central-parts.ts`). The desktop
+one part per Pod, per script version, per run record and per run's events
+(`contracts/central-parts.ts`). Since issue 1455 (M8) the desktop publishes these views
+only, no table rows. The desktop
 uploads only parts the service does not hold (`parts`, batches of at most 2 MiB),
 journals the manifest delta in `publication.json` and commits it with `publish`
 (`format: 2`). The service verifies every part hash and the manifest digest, validates
@@ -45,10 +46,14 @@ is rebuilt from the current state. The first format-2 publication uploads about
 20 MB once; afterwards a scheduled run changes a few parts (tens of KB). The worker
 reports a change counter, so an idle desktop builds no snapshot at all.
 
-Compatibility: the service still accepts full format-1 snapshots from older desktops
-and keeps their `snapshot` column for rollback. A desktop that sees no `format` on
-`begin` publishes full snapshots. Parts live in additive tables; `user_version`
-stays 1, so an older service can open the database again.
+Compatibility (issue 1455, M8): format 2 is the only format. The service refuses a
+full snapshot (`unsupported_workspace_format`), has no `archive` request and empties
+the `runtimes.snapshot` column at start; the column itself stays, so the previous
+service can open the database after a rollback. It accepts and ignores the `schema`
+and `table/` parts that desktops before M8 still publish, and `begin` still announces
+`networkReads: 1`, which those desktops need to publish their networks. A desktop
+refuses a service whose `begin` names no format. Parts live in additive tables;
+`user_version` stays 1.
 
 Heartbeats run every 10 seconds on their own and never wait for a publication; the
 service accepts the current or the just-replaced hash. Request timeouts are 15 s

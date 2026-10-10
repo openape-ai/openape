@@ -1093,7 +1093,8 @@ that M9 provides editing or that an existing network can be silently converted.
 
 Central format 2 and its existing part keys remain unchanged. A relay advertises
 `networkReads: 1` before the desktop can publish a network profile or create network
-work while connected. Network summaries use a separate additive `runtimes.networks`
+work while connected (until issue 1455, M8; since then every relay supports it and
+the desktop no longer waits for the flag). Network summaries use a separate additive `runtimes.networks`
 column and do not increment the workspace operation revision. Publication runs at
 most every five seconds; scheduler progress alone changes its signature at minute
 resolution. The relay retains a bounded change cursor history.
