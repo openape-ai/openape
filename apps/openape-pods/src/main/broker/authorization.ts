@@ -10,7 +10,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 
 export type GrantProgress = RunApproval
 export type GrantObserver = (progress: GrantProgress) => Promise<void>
-export interface Grant { brokered?: BrokeredGrant, id: string, status: string, decided_by?: string, request: { requester: string, audience: string, target_host: string, grant_type: string, waits_until?: number, authorization_details?: { type: string }[] }, created_at?: number }
+export interface Grant { brokered?: BrokeredGrant, id: string, status: string, decided_by?: string, request: { requester: string, audience: string, target_host: string, grant_type: string, duration?: number, waits_until?: number, authorization_details?: { type: string }[] }, created_at?: number }
 /**
  * The Pod grant ledger as the authority sees it: `find` selects the newest recorded grant whose details cover a call,
  * `record` keeps every grant this Pod requested or observed, so a pending request is reused instead of asked again.

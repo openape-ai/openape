@@ -100,9 +100,9 @@ int main(int argc, char **argv) {
   const resource: PodResource = { id: applicationId, podId, revision: 1, kind: 'tool', state: 'ready', name: assignment.name, configuration: { ...assignment } }
   const helper = resolve('dist/native/pods-helper'); let releases = 0
   const workspace = await podWorkspace(root, podId)
-  const terminal = () => new ProgramSession(randomUUID(), podId, applicationId, assignment, ['setup'], helper, privateRoot, cache, async () => {}, async () => { releases++ }, workspace, { readDirectories: [], writeDirectories: [] }, { connection: async () => connection, ledger, level: async () => 'isolated' })
+  const terminal = () => new ProgramSession(randomUUID(), podId, applicationId, assignment, ['setup'], helper, privateRoot, cache, async () => {}, async () => { releases++ }, workspace, { readDirectories: [], writeDirectories: [] }, { connection: async () => connection, ledger, reach: async () => ({ level: 'isolated', protectedPaths: [] }) })
   const lease = { signal: new AbortController().signal, capabilities: [assignment.capability], assertCurrent: () => {} }
-  const invoke = (argv: string[], capabilities = lease.capabilities) => invokeProgram([resource], podId, { application: assignment.name, argv }, helper, privateRoot, cache, { ...lease, capabilities }, { connection, ledger, level: 'isolated' })
+  const invoke = (argv: string[], capabilities = lease.capabilities) => invokeProgram([resource], podId, { application: assignment.name, argv }, helper, privateRoot, cache, { ...lease, capabilities }, { connection, ledger, reach: { level: 'isolated', protectedPaths: [] } })
   return { root, privateRoot, cache, assignment, resource, podId, applicationId, state, identity, connection, ledger, terminal, invoke, releases: () => releases, close: async () => { server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) } }
 }
 
