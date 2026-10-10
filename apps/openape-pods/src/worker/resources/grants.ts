@@ -85,9 +85,13 @@ export class GrantLedger {
     this.store.db.prepare('UPDATE pod_grants SET state=?,updated_at=?,approved_in_session=max(approved_in_session,?) WHERE pod_id=? AND id=?').run(state, Date.now(), approvedInSession ? 1 : 0, podId, id)
   }
 
-  /** What an archived network handed to its members: grants to revoke at the IdP and sandbox resources to remove. */
+  /**
+   * What an archived network handed to its members: grants to revoke at the IdP and sandbox resources to remove.
+   * Its sandbox levels need no IdP call and end here, including a level recorded after the archive.
+   */
   released(): { grants: PodGrant[], resources: { networkId: string, podId: string, resourceId: string }[] } {
     const archived = 'SELECT id FROM networks WHERE state=\'archived\''
+    this.store.db.prepare(`DELETE FROM pod_sandbox WHERE source IN (SELECT 'network:' || id FROM networks WHERE state='archived')`).run()
     const grants = this.store.db.prepare(`SELECT * FROM pod_grants WHERE network_id IN (${archived}) AND state IN ('pending','approved') ORDER BY rowid LIMIT 64`).all().map(row)
     const resources = this.store.db.prepare(`SELECT network_id,pod_id,resource_id FROM network_sandbox_resources WHERE network_id IN (${archived}) ORDER BY rowid LIMIT 64`).all().map(item => ({ networkId: item.network_id as string, podId: item.pod_id as string, resourceId: item.resource_id as string }))
     return { grants, resources }
@@ -100,9 +104,11 @@ export class GrantLedger {
     this.store.db.prepare('INSERT INTO pod_sandbox VALUES(?,?,?,?) ON CONFLICT(pod_id,source) DO UPDATE SET level=excluded.level,network_revision=excluded.network_revision').run(podId, source, revision, level)
   }
 
+  /** A network's level counts only while that network is not archived and still at the revision that declared it. */
   sandbox(podId: string): SandboxView {
     this.store.getPod(podId)
-    const sources = this.store.db.prepare('SELECT source,level FROM pod_sandbox WHERE pod_id=? ORDER BY source').all(podId).map(item => ({ source: item.source as string, level: parseSandboxLevel(item.level) }))
+    const sources = this.store.db.prepare(`SELECT s.source,s.level FROM pod_sandbox s LEFT JOIN networks n ON n.id=substr(s.source,9) AND s.source LIKE 'network:%'
+      WHERE s.pod_id=? AND (s.source='pod' OR (n.state!='archived' AND n.revision=s.network_revision)) ORDER BY s.source`).all(podId).map(item => ({ source: item.source as string, level: parseSandboxLevel(item.level) }))
     return { level: effectiveSandboxLevel(sources.map(item => item.level)), sources }
   }
 }
