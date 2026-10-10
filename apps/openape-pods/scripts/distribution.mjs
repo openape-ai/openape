@@ -39,12 +39,13 @@ export function inventory() {
 }
 export function writeDistribution(releaseReady = false, review = null) {
   const { bom, notices } = inventory(); const version = JSON.parse(readFileSync('package.json', 'utf8')).version
-  const schema = Number(/export const schemaVersion = (\d+)/.exec(readFileSync('src/worker/storage/database.ts', 'utf8'))?.[1])
-  if (!Number.isSafeInteger(schema)) throw new Error('Cannot determine database schema')
+  const schema = Number(/export const schemaVersion = (\d+)/.exec(readFileSync('src/worker/storage/schema.ts', 'utf8'))?.[1])
+  const minimum = Number(/export const upgradableSchema = (\d+)/.exec(readFileSync('src/worker/storage/upgrade.ts', 'utf8'))?.[1])
+  if (!Number.isSafeInteger(schema) || !Number.isSafeInteger(minimum) || minimum > schema) throw new Error('Cannot determine database schema')
   mkdirSync('dist/distribution', { recursive: true })
   if (review) { bom.licenseReview = review.gates.licenses; bom.supplementalNoticesHash = review.supplementalNoticesSha256; bom.distributionReview = { gates: review.gates, authorizationEvidence: review.ownerAuthorization?.evidence ?? null } }
   writeFileSync('dist/distribution/bom.json', JSON.stringify(bom, null, 2)); writeFileSync('dist/distribution/THIRD-PARTY-NOTICES.txt', notices + (review ? `\n===== Reviewed native and supplemental notices =====\n${readFileSync('runtime-sources/licenses/REVIEWED-NOTICES.txt', 'utf8')}` : ''))
-  writeFileSync('dist/distribution/pods-distribution.json', JSON.stringify({ format: 'openape-pods-distribution', version, platform: 'darwin', architecture: process.arch, schema: { minimum: 1, current: schema }, releaseReady, ...(review ? { sourceRevision: review.sourceRevision, dependencyLockHash: review.dependencyLockHash } : {}), bomHash: sha256('dist/distribution/bom.json') }, null, 2))
+  writeFileSync('dist/distribution/pods-distribution.json', JSON.stringify({ format: 'openape-pods-distribution', version, platform: 'darwin', architecture: process.arch, schema: { minimum, current: schema }, releaseReady, ...(review ? { sourceRevision: review.sourceRevision, dependencyLockHash: review.dependencyLockHash } : {}), bomHash: sha256('dist/distribution/bom.json') }, null, 2))
   return bom
 }
 export function requireCleanBuild() {
