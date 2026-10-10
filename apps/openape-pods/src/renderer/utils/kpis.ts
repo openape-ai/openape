@@ -8,7 +8,8 @@ export interface KpiFacts {
   active: number
   paused: { total: number, networks: number, drafts: number, archived: number }
   degraded: { count: number, name: string | null, reason: string | null }
-  decisions: { count: number, gates: { title: string, group: string | null }[] }
+  /** Open route decisions of networks and runs waiting for an approval at the IdP. */
+  decisions: { count: number, gates: { title: string, group: string | null }[], approvals: number }
   unknownDeliveries: number
 }
 
@@ -16,6 +17,7 @@ export function kpiFacts(view: MapView): KpiFacts {
   const { kpis } = view
   const standalone = view.pods.filter(pod => !pod.automation)
   const first = kpis.degraded[0]
+  const approvals = view.pods.reduce((sum, pod) => sum + pod.approvals.length, 0)
   return {
     active: kpis.active,
     paused: {
@@ -26,7 +28,8 @@ export function kpiFacts(view: MapView): KpiFacts {
     },
     degraded: { count: kpis.degraded.length, name: first ? view.pods.find(pod => pod.id === first.podId)?.name ?? null : null, reason: first?.reason ?? null },
     decisions: {
-      count: kpis.decisions.reduce((sum, item) => sum + item.count, 0),
+      count: kpis.decisions.reduce((sum, item) => sum + item.count, 0) + approvals,
+      approvals,
       gates: kpis.decisions.map(item => ({ title: item.title, group: view.automations.find(automation => automation.id === item.networkId)?.group ?? null })),
     },
     unknownDeliveries: kpis.unknownDeliveries,

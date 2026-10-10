@@ -2,7 +2,9 @@
 import { randomUUID } from 'node:crypto'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AuthorityError } from '../../src/contracts/infrastructure'
-import { applicationId, closeProfiles, deniedPodId, identityProvider, issuer, podId, workerFixture } from './idp-fixture'
+import { resolve } from 'node:path'
+import { httpSpec, runtimeSpec } from '../../src/main/grants/pod-grants'
+import { applicationId, closeProfiles, deniedPodId, identityProvider, issuer, podId, podSubject, sources, workerFixture } from './idp-fixture'
 
 // Security contract (issue 1455, owner decisions October 9 and 10, 2026): without the owner's MCP session Pods
 // requests grants as the Pod identity and waits for the owner at the IdP; it never calls an approve endpoint
@@ -140,4 +142,58 @@ it('shows the Pod name as one bounded line in the runtime grant and keeps the Po
   expect(context.context_bindings.name).toHaveLength(100)
   expect(context.context_bindings.name).not.toMatch(/[\n‮]/)
   expect(context.context_bindings.pod).toBe(podId)
+})
+
+// Issue 1455 rehearsal: schema 43 removed the grant ids kept inside the resources and the brokered IdP never returns an
+// existing grant for a new request. The runs' approval events still name every grant a Pod used; Pods adopts them.
+function previousRun(f: Awaited<ReturnType<typeof fixture>>, events: { grantId: string, permission: string, state: string, subject?: string }[]) {
+  const runId = randomUUID(); const at = Date.now() - 3600000
+  f.store.db.prepare('INSERT INTO runs(id,pod_id,script_hash,state,started_at,finished_at,summary,error,checkpoint_revision,assignment_revision) VALUES(?,?,?,?,?,?,?,?,?,?)').run(runId, podId, 'hash', 'completed', at, at + 1000, '', null, 0, 1)
+  events.forEach((event, index) => f.store.db.prepare('INSERT INTO run_events VALUES(?,?,?,?,?)').run(runId, index + 1, 'approval', JSON.stringify({ grantId: event.grantId, issuer, title: 'Earlier grant', permission: event.permission, subject: event.subject ?? podSubject(podId), state: event.state }), at + index))
+}
+
+it('adopts the grants a Pod used before schema 43 instead of asking the owner again', async () => {
+  const f = await fixture()
+  const runtime = await runtimeSpec(resolve(sources, 'pod-runtime-shapes.toml'), podId, 'Synthetic Pod')
+  const http = await httpSpec(resolve(sources, 'pod-http-shapes.toml'), 'https://hooks.example.test', ['POST'])
+  const target = { requester: podSubject(podId), target_host: `pods:${podId}` }
+  const runtimeGrant = idp.foreign({ ...target, authorization_details: runtime.details, execution_context: runtime.executionContext }); idp.decide(runtimeGrant, 'approved')
+  const httpGrant = idp.foreign({ ...target, authorization_details: http.details, execution_context: http.executionContext }); idp.decide(httpGrant, 'approved')
+  // Skipped without failing the run: another target, a grant the IdP no longer shows, a single-use grant and another identity.
+  const otherTarget = idp.foreign({ ...target, target_host: 'pods:another', authorization_details: runtime.details, execution_context: runtime.executionContext }); idp.decide(otherTarget, 'approved')
+  const single = idp.foreign({ ...target, grant_type: 'once', authorization_details: runtime.details, execution_context: runtime.executionContext }); idp.decide(single, 'approved')
+  previousRun(f, [
+    { grantId: runtimeGrant, permission: runtime.details[0]!.permission, state: 'approved' },
+    { grantId: httpGrant, permission: http.details[0]!.permission, state: 'approved' },
+    { grantId: otherTarget, permission: runtime.details[0]!.permission, state: 'approved' },
+    { grantId: 'grant-404', permission: runtime.details[0]!.permission, state: 'approved' },
+    { grantId: single, permission: runtime.details[0]!.permission, state: 'approved' },
+    { grantId: 'grant-foreign', permission: runtime.details[0]!.permission, state: 'approved', subject: 'pod-other@example.test' },
+  ])
+  const run = f.start(podId)
+  await expect(run.run).resolves.toEqual({ home: '/fixture/home', environment: {} })
+  await run.call('shellClose')
+  await f.worker.resources({ type: 'assignHttp', podId, epoch: 1, permission: { origin: 'https://hooks.example.test', methods: ['POST'] } })
+  expect(idp.state.creates).toEqual([])
+  expect(f.openExternal).not.toHaveBeenCalled()
+  expect(f.ledger.list(podId).map(grant => [grant.id, grant.state, grant.grantType, grant.origin]).sort()).toEqual([[runtimeGrant, 'approved', 'always', null], [httpGrant, 'approved', 'always', null]].sort())
+  expect(idp.state.tokens).toEqual([runtimeGrant])
+  // Recorded once, a later run finds it in the ledger without reading the earlier events again.
+  const next = f.start(podId)
+  await expect(next.run).resolves.toEqual({ home: '/fixture/home', environment: {} })
+  await next.call('shellClose')
+  expect(idp.state.creates).toEqual([])
+})
+
+it('waits on an earlier pending request instead of asking again', async () => {
+  const f = await fixture()
+  const runtime = await runtimeSpec(resolve(sources, 'pod-runtime-shapes.toml'), podId, 'Synthetic Pod')
+  const pending = idp.foreign({ requester: podSubject(podId), target_host: `pods:${podId}`, authorization_details: runtime.details, execution_context: runtime.executionContext })
+  previousRun(f, [{ grantId: pending, permission: runtime.details[0]!.permission, state: 'pending' }])
+  const run = f.start(podId)
+  await expect.poll(() => f.approvals.find(item => item.state === 'pending')?.grantId).toBe(pending)
+  idp.decide(pending, 'approved')
+  await expect(run.run).resolves.toEqual({ home: '/fixture/home', environment: {} })
+  await run.call('shellClose')
+  expect(idp.state.creates).toEqual([])
 })

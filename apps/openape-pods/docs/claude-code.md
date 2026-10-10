@@ -166,8 +166,11 @@ Likewise, `mcp-runtime-approval.json` held the removed runtime auto-approval
 setting; current versions ignore it. Grants that Pods approved before remain
 valid at the identity provider until the owner revokes them there. Until schema
 43 an application or HTTP assignment stored its grant inside the assignment;
-the upgrade removes that copy, and the next call requests the same details as
-the Pod, which the identity provider answers with the existing approved grant.
+the upgrade removes that copy. A brokered identity provider never returns an
+existing grant for a new request, so before requesting, Pods adopts an earlier
+grant of the same Pod identity that its runs used (named in their approval
+events) when the identity provider still shows it approved, or pending, and it
+covers the call. Only a grant no retained run used is requested again.
 
 ## Work with Pods
 
