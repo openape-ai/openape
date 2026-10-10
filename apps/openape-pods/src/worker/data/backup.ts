@@ -14,6 +14,9 @@ import type { FileRecord } from './files'
 
 export interface BackupManifest { format: 'openape-pods-backup', version: 1, schema: number, createdAt: string, sourceRoot: string, files: FileRecord[] }
 const uuid = (value: string) => /^[a-f0-9-]{36}$/.test(value)
+// MCP journal entries (including the command calling here) are receipts, not work: their real work holds
+// leases. Other running actions, such as a script validation on the dependency tree, are real work.
+export const activeMasterAction = 'id NOT LIKE \'codex-admin:%\' AND id NOT LIKE \'codex-network:%\''
 export function networkDataBusy(store: PodDatabase): boolean {
   return !!store.db.prepare('SELECT 1 FROM network_invocations WHERE state IN (\'running\',\'stopping\') UNION ALL SELECT 1 FROM network_gate_task_attempts WHERE state=\'running\' UNION ALL SELECT 1 FROM network_deliveries WHERE state=\'claimed\' UNION ALL SELECT 1 FROM network_gate_tasks WHERE state=\'consuming\' UNION ALL SELECT 1 FROM workflow_call_requests WHERE state=\'running\' LIMIT 1').get()
 }
@@ -21,7 +24,7 @@ export function assertDataIdle(store: PodDatabase): void {
   if (networkDataBusy(store)) throw new Error('Finish or recover network work before changing application data')
   if (store.db.prepare('SELECT 1 FROM dependency_domains LIMIT 1').get()) throw new Error('Finish dependency preparation before changing application data')
   if (store.db.prepare('SELECT 1 FROM pod_descriptions WHERE state=\'running\'').get()) throw new Error('Wait for the description update before changing stored data')
-  if (store.db.prepare('SELECT 1 FROM program_leases LIMIT 1').get() || store.db.prepare('SELECT 1 FROM run_leases LIMIT 1').get() || store.db.prepare('SELECT 1 FROM master_session WHERE state=\'running\'').get() || store.db.prepare('SELECT 1 FROM master_actions WHERE state=\'running\' LIMIT 1').get()) throw new Error('Finish or recover active work before changing application data')
+  if (store.db.prepare('SELECT 1 FROM program_leases LIMIT 1').get() || store.db.prepare('SELECT 1 FROM run_leases LIMIT 1').get() || store.db.prepare('SELECT 1 FROM master_session WHERE state=\'running\'').get() || store.db.prepare(`SELECT 1 FROM master_actions WHERE state='running' AND ${activeMasterAction} LIMIT 1`).get()) throw new Error('Finish or recover active work before changing application data')
 }
 function allowed(path: string): boolean {
   relativePath(path)

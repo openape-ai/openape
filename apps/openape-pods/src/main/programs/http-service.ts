@@ -10,7 +10,7 @@ import { httpArgv } from '../grants/execution-context'
 import { requestHttp } from './http'
 
 export interface AgentBearer {
-  token: (authentication: HttpAuthentication) => Promise<string>
+  token: (authentication: HttpAuthentication, origin: string) => Promise<string>
   reject: (authentication: HttpAuthentication) => void
 }
 
@@ -40,7 +40,7 @@ export async function executeHttp(resources: PodResource[], scope: ServiceScope,
   const resolved = await resolveCommand(adapter, argv)
   const authorization = { grantId: '', command: { cliId: 'pod-http', adapterPath, adapterDigest: adapter.digest, argv, coverage: [resolved.detail] } }
   await authority.authorize(authorization, signal)
-  const token = authentication ? await bearer!.token(authentication) : undefined
+  const token = authentication ? await bearer!.token(authentication, new URL(request.url).origin) : undefined
   const outgoing = token ? { ...request, headers: { ...request.headers, authorization: `Bearer ${token}` } } : request
   signal.throwIfAborted()
   let reply = await requestHttp(outgoing, signal)
