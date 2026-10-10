@@ -137,7 +137,7 @@ it('keeps bounded local reads outside central mutation serialization and attests
   const worker = new FixtureWorker(() => {})
   const id = '00000000-0000-4000-8000-000000000001'
   const dispatch = vi.fn(async () => ({}))
-  const central = { executing: false, networkReads: true, local: vi.fn(async (action: () => Promise<unknown>) => {
+  const central = { executing: false, local: vi.fn(async (action: () => Promise<unknown>) => {
     central.executing = true
     try { return await action() }
     finally { central.executing = false }
@@ -151,8 +151,6 @@ it('keeps bounded local reads outside central mutation serialization and attests
   await worker.codex(request)
   expect(central.local).toHaveBeenCalledTimes(1)
   expect(dispatch).toHaveBeenLastCalledWith({ codex: request, ownerOperation: true })
-  central.networkReads = false
-  await expect(worker.codex({ id, action: { action: 'networks', command: { type: 'pause', id, revision: 1 } } })).rejects.toThrow('bounded relay')
 })
 
 it('sends desktop commands and approval page opening through the producers of the desktop window', async () => {

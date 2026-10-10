@@ -12,7 +12,6 @@ export default defineEventHandler(event => boundary(event, () => workspaceBounda
   store.assertLease(runtime, lease)
   if (body.type === 'heartbeat') { store.heartbeat(runtime, lease, text(body.hash, 64)); return { ok: true } }
   if (body.type === 'disconnect') { store.disconnect(runtime, lease); return { ok: true } }
-  if (body.type === 'archive') return store.archive(runtime, lease)
   if (body.type === 'networks') { store.publishNetworks(runtime, lease, body.view); return { ok: true } }
   if (body.type === 'readClaim') return new Response(JSON.stringify(store.claimNetworkRead(runtime, lease)), { headers: { 'content-type': 'application/json' } })
   if (body.type === 'readComplete') { store.completeNetworkRead(runtime, lease, centralId(body.id), body.value, body.error === null ? null : text(body.error, 2000)); return { ok: true } }
@@ -24,8 +23,9 @@ export default defineEventHandler(event => boundary(event, () => workspaceBounda
       const value = centralObject(body.completion)
       completion = { id: centralId(value.id), result: value.result ?? null, error: value.error === null ? null : text(value.error, 4096) }
     }
-    if (body.format === 2) return store.publishParts(runtime, lease, centralId(body.id), centralRevision(body.revision), centralObject(body.changes) as Record<string, string | null>, text(body.hash, 64), completion)
-    return store.publish(runtime, lease, centralId(body.id), centralRevision(body.revision), body.snapshot, completion)
+    // Full format-1 snapshots ended with issue 1455 (M8); every supported desktop publishes parts.
+    if (body.format !== 2) throw new ProtocolError('unsupported_workspace_format')
+    return store.publishParts(runtime, lease, centralId(body.id), centralRevision(body.revision), centralObject(body.changes) as Record<string, string | null>, text(body.hash, 64), completion)
   }
   if (body.type === 'changes') return waitForChange(runtime.owner, centralRevision(body.cursor), () => event.node.res.destroyed)
   if (body.type === 'artifact') {

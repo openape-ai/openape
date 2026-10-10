@@ -1,4 +1,12 @@
-import type { CentralClient, CentralPod, CentralRuntime } from '../../src/contracts/central'
+import type { CentralClient, CentralPod, CentralRuntime, CentralSnapshot } from '../../src/contracts/central'
+import { encodeParts, manifestDigest, splitSnapshot } from '../../src/contracts/central-parts'
+
+/** The parts and manifest of a complete publication, as a desktop sends them with `parts` and `publish` (format 2). */
+export function fullPublication(snapshot: CentralSnapshot) {
+  const parts = encodeParts(splitSnapshot(snapshot))
+  const changes = Object.fromEntries(Array.from(parts, ([key, part]) => [key, part.hash]))
+  return { parts: Object.fromEntries(Array.from(parts.values(), part => [part.hash, JSON.parse(part.text)])), changes, hash: manifestDigest(changes) }
+}
 
 export const podId = '00000000-0000-4000-8000-000000000137'
 export const runtimeId = '00000000-0000-4000-8000-000000000138'
