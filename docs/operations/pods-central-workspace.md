@@ -98,17 +98,17 @@ timeout cannot finish on a slow uplink (observed September 25, 13:33–14:00).
 
 ## Stored data and local exclusions
 
-The explicit `centralTables` allowlist in `src/contracts/central.ts` covers:
+Since issue 1455 (M8) the desktop publishes views, never table rows
+(`CentralProjection` in `src/worker/central/projection.ts`):
 
 | Domain | Central data |
 | --- | --- |
-| Pods and identity | Stable Pod IDs, names, assignments, public identity references and current owner/runtime binding |
-| Organization | Groups, membership and organization revision |
-| Scripts | Drafts, versions, validation receipts, package manifests and dependency locks |
-| Work | Schedules, accepted events, run inputs/history/events, checkpoints, recovery reviews and effect receipts |
-| Knowledge | Sources, claims, mail extraction/context and workflow state/history |
-| Administration | Description, ordinary variables, resource metadata and existing conversation/control history |
+| Workspace | Pod list with names and one-line descriptions, groups, automation descriptions, Jev availability, map |
+| Pod views | Details and claims, script versions and drafts, resources (metadata only) and variables, schedule, runs and run events |
 | Managed artifacts | Referenced script/source blobs and regular files under each Pod's managed workspace |
+
+Network members, their invocations and archived Pods publish an empty view; their
+data stays local.
 
 Credential stores, private keys, access/refresh tokens, native login files,
 execution-domain records, process leases, remote device tokens, local HOME,
