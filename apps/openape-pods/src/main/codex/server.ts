@@ -1,10 +1,11 @@
 import { createServer } from 'node:net'
 import type { Server, Socket } from 'node:net'
-import { chmod, mkdir, rm } from 'node:fs/promises'
+import { chmod, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { assistantProvenance, parseCodexRequest } from '../../contracts/codex'
 import type { CodexRequest } from '../../contracts/codex'
 import { LoginRequiredError } from './session'
+import { privateSocketDirectory } from './socket-path'
 import type { McpPeer } from './session'
 import type { OwnerSession } from '../connections/owner-session'
 import type { McpSessionStatus } from '../../contracts/mcp-session'
@@ -38,7 +39,7 @@ export class CodexControlServer {
 
   async start(): Promise<void> {
     if (this.server) return
-    await mkdir(dirname(this.endpoint), { recursive: true, mode: 0o700 }); await chmod(dirname(this.endpoint), 0o700)
+    await privateSocketDirectory(dirname(this.endpoint))
     await rm(this.endpoint, { force: true })
     const server = createServer(socket => this.accept(socket))
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(this.endpoint, resolve) })

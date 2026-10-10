@@ -20,7 +20,9 @@ export function ownerClaims(token: string, jwks: Record<string, unknown>, issuer
   if (keys.length !== 1 || !verify(null, Buffer.from(`${parts[0]}.${parts[1]}`), createPublicKey({ key: keys[0], format: 'jwk' }), Buffer.from(parts[2], 'base64url'))) throw new Error('Owner identity signature rejected')
   const claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString()) as Record<string, unknown>
   const now = Date.now() / 1000
-  if (claims.iss !== issuer || claims.aud !== clientId || claims.act !== 'human' || claims.email !== account || typeof claims.sub !== 'string' || !claims.sub || typeof claims.exp !== 'number' || claims.exp <= now || (claims.nbf !== undefined && (typeof claims.nbf !== 'number' || claims.nbf > now)) || (nonce !== undefined && claims.nonce !== nonce)) throw new Error('Owner identity does not match the requested account')
+  // An apes login token names the human by `sub` alone (claims sub, act, iss, aud, iat, exp); a browser sign-in adds `email`.
+  const named = claims.email === undefined ? claims.sub === account : claims.email === account
+  if (claims.iss !== issuer || claims.aud !== clientId || claims.act !== 'human' || !named || typeof claims.sub !== 'string' || !claims.sub || typeof claims.exp !== 'number' || claims.exp <= now || (claims.nbf !== undefined && (typeof claims.nbf !== 'number' || claims.nbf > now)) || (nonce !== undefined && claims.nonce !== nonce)) throw new Error('Owner identity does not match the requested account')
   return { sub: claims.sub, exp: claims.exp }
 }
 function httpsOrigin(issuer: string): void {
