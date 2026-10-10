@@ -14,6 +14,7 @@ import { Scheduler } from '../../src/worker/scheduling/scheduler'
 import type { AgentRuntime } from '../../src/worker/agent/executor'
 import { ChatRegistry } from '../../src/worker/master/chat-registry'
 import { CodexControl } from '../../src/worker/codex/control'
+import { DefinitionWorkspace } from '../../src/worker/workspace/definitions'
 import { codexConversationId, parseCodexRequest } from '../../src/contracts/codex'
 
 import { seedNetwork } from '../storage/network-fixture'
@@ -115,6 +116,32 @@ it('journals desktop commands by request id without Pod selection', () => {
   expect(codex.administration({ type: 'begin', request })).toEqual({ completed: true, result: { pods: [] } })
   expect(() => codex.administration({ type: 'begin', request: { ...request, action: { ...request.action, command: { type: 'list' } } } })).toThrow('reused with different arguments')
   expect(() => codex.administration({ type: 'begin', request: { id: randomUUID(), action: { ...request.action, channel: 'runtimeApproval' } } })).toThrow('Unsupported desktop MCP channel')
+})
+
+it('applies journaled desktop definition commands despite their own running entry and refuses a real run of the same Pod', async () => {
+  const { store, codex, resources, pod } = fixture()
+  installExample(store, resources, pod.id, 'deterministic', 'a'.repeat(64))
+  const workspace = new DefinitionWorkspace(store, resources, { issuer: 'https://id.example.test', subject: 'owner' })
+  // The MCP server journals the desktop command first, then the worker executes it, then the journal completes.
+  const journaled = async (command: Record<string, unknown>) => {
+    const request = { id: randomUUID(), action: { action: 'desktop', channel: 'definitions', command } }
+    expect(codex.administration({ type: 'begin', request })).toEqual({ completed: false })
+    expect(store.db.prepare('SELECT state FROM master_actions WHERE id=?').get(`codex-admin:${request.id}`)!.state).toBe('running')
+    try {
+      const view = await workspace.execute(command, new AbortController().signal)
+      codex.administration({ type: 'complete', request, result: {} })
+      return view
+    }
+    catch (error) { codex.administration({ type: 'failed', request }); throw error }
+  }
+  const prepareLocal = () => journaled({ type: 'prepareLocal', podId: pod.id, expectedScript: store.getPod(pod.id).activeScript, name: 'Local briefing', defaults: {} })
+  await journaled({ type: 'adopt' })
+  expect((await prepareLocal()).instances.find(instance => instance.podId === pod.id)?.definitionId).toBeTruthy()
+
+  const runId = randomUUID()
+  store.db.prepare('INSERT INTO runs(id,pod_id,script_hash,state,started_at,finished_at,summary,error,checkpoint_revision,assignment_revision) VALUES(?,?,?,\'running\',?,NULL,\'Running\',NULL,0,1)').run(runId, pod.id, store.getPod(pod.id).activeScript, Date.now())
+  store.db.prepare('INSERT INTO run_leases VALUES(?,?,?,?,NULL)').run(pod.id, runId, 'synthetic-boot', Date.now())
+  await expect(prepareLocal()).rejects.toThrow(`Run ${runId} of this Pod is still active`)
 })
 
 it('keeps the Codex scope out of the chat list', async () => {

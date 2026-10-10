@@ -7,7 +7,9 @@
  *   returns a valid `Bearer …` header for the given SP, handling IdP-token
  *   refresh + SP-token exchange + caching transparently.
  * - `ensureFreshIdpAuth()` — refresh the IdP-issued OAuth token if needed.
- * - `exchangeForSpToken(idpAuth, request)` — manual SP-token mint.
+ * - `exchangeForSpToken(idpAuth, request)` — manual SP-token mint (persisted).
+ * - `requestSpToken(subjectToken, request, options?)` — the same exchange,
+ *   memory only, with an optional caller-provided transport.
  * - `loadIdpAuth()` / `saveIdpAuth()` / `clearIdpAuth()` — IdP token store.
  * - `loadSpToken(aud)` / `saveSpToken(token)` / `clearSpToken(aud)` /
  *   `clearAllSpTokens()` — SP token cache.
@@ -28,7 +30,7 @@ export {
   type SpClientState,
 } from './sp-client.js'
 export { exchangeWithDelegation, type DelegationExchangeRequest, type DelegationExchangeResponse } from './delegation-exchange.js'
-export { exchangeForSpToken, type ExchangeRequest } from './exchange.js'
+export { exchangeForSpToken, requestSpToken, type ExchangeRequest, type ExchangeTransport, type SpTokenRequestOptions } from './exchange.js'
 export { refreshAgentToken } from './agent-refresh.js'
 export { ensureFreshIdpAuth } from './refresh.js'
 export {

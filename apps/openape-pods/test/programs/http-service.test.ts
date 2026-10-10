@@ -45,3 +45,22 @@ it('does not send a POST when the destination agent token cannot be minted', asy
   await expect(work).rejects.toBeInstanceOf(InfrastructureError)
   expect(mocks.send).not.toHaveBeenCalled()
 })
+
+it('obtains the exchanged token only for the authorized assigned origin and hides it from the script', async () => {
+  const authentication = { type: 'ddisaAgent', credential: 'agent_key', subject: 'agent@example.com', issuer: 'https://id.example.com', exchange: 'sp' }
+  const assigned = resources.map(resource => ({ ...resource, configuration: { ...resource.configuration, authentication } }))
+  const bearer = { token: vi.fn(async () => 'sp-SYNTHETIC-TOKEN'), reject: vi.fn() }
+  const run = (url: string) => executeHttp(assigned, scope, { url, method: 'GET', headers: {} }, '/unused', {} as AgentConnection, new AbortController().signal, undefined, undefined, bearer)
+
+  await expect(run('https://foreign.example.com/issues')).rejects.toThrow('not assigned')
+  mocks.authorize.mockRejectedValueOnce(new AuthorityError('Permission revoked; review this Pod\'s permissions before retrying'))
+  await expect(run('https://example.com/issues')).rejects.toThrow('revoked')
+  expect(bearer.token).not.toHaveBeenCalled()
+
+  mocks.send.mockImplementation(async (request: { headers: Record<string, string> }) => ({ status: 200, headers: { echo: request.headers.authorization! }, body: JSON.stringify({ seen: request.headers.authorization }) }))
+  const reply = await run('https://example.com/issues')
+  expect(bearer.token).toHaveBeenCalledWith(authentication, 'https://example.com')
+  expect(mocks.send.mock.calls[0]![0].headers.authorization).toBe('Bearer sp-SYNTHETIC-TOKEN')
+  expect(JSON.stringify(reply)).not.toContain('sp-SYNTHETIC-TOKEN')
+  expect(reply.headers.echo).toBe('Bearer [redacted]')
+})

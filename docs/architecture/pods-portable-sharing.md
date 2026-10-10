@@ -83,7 +83,8 @@ actual binding; requested capabilities alone cannot establish those facts.
 
 Requested access is explicit: directory input plus `read`/`readWrite`, HTTP origin
 input plus methods and an optional DDISA agent declaration referencing a secret
-alias, recipient agent identity and issuer inputs, Jev
+alias, recipient agent identity and issuer inputs (plus `exchange: "sp"` when the
+destination accepts only its own exchanged tokens), Jev
 connection/model inputs plus a bounded attempt count, or read-only mail scope with
 a recipient connection, selected folders, start-date input and attachment choice.
 Mail folder IDs have no sender default; their input encodes recipient-selected
