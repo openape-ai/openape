@@ -59,6 +59,13 @@ it('resolves denied paths below the owner home and through links, and always pro
   expect(ownerProtectedPaths(base, base, real)).toEqual([base, join(real, '.config/apes')])
 })
 
+it('also lists a denied path in the letter case of the existing folder, so ~/.SSH closes ~/.ssh on a case-insensitive volume', (context) => {
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'pods-reach-case-'))); roots.push(home)
+  mkdirSync(join(home, '.ssh'))
+  if (!existsSync(join(home, '.SSH'))) context.skip()
+  expect(deniedPaths(['~/.SSH'], home)).toEqual([join(home, '.SSH'), join(home, '.ssh')])
+})
+
 /** Runs a command under a sandbox profile and returns its exit code and output; asynchronous so a socket server in this process can answer. */
 function sandboxed(profile: string, command: string[]): Promise<{ code: number, output: string }> {
   return new Promise((resolve) => {

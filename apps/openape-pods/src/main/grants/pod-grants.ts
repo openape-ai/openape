@@ -14,10 +14,14 @@ import { connectionRequest, readJSON } from '../connections/http'
 import type { OwnerSession } from '../connections/owner-session'
 import type { GrantLedgerCommand } from '../../worker/resources/grants'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
+import { httpArgv, programContext, runtimeArgv } from './execution-context'
 
 /** What one grant request asks for, as the Pod identity: the authorization details and the adapter they belong to. */
-/** A single command keeps its argv and argv hash in the execution context, so an exact-command grant can bind to it. */
-export interface GrantSpec { cliId: string, details: OpenApeCliAuthorizationDetail[], executionContext: Partial<OpenApeExecutionContext>, display: string }
+/**
+ * A single command carries the context the run-time path resolves for it, so an exact-command grant can bind to it;
+ * a grant covering several commands carries the program context. The IdP rejects a Pod request without argv.
+ */
+export interface GrantSpec { cliId: string, details: OpenApeCliAuthorizationDetail[], executionContext: OpenApeExecutionContext, display: string }
 export interface PodConnection extends AgentConnection { owner: string }
 export interface GrantResult { grant: PodGrant, approval: string | null }
 /**
@@ -28,10 +32,6 @@ export interface GrantDecision { id: string, podId: string, state: GrantState, g
 
 const grantIdPattern = /^[\w-]{1,128}$/
 const riskOrder = ['low', 'medium', 'high', 'critical']
-
-function context(adapter: LoadedAdapter): Partial<OpenApeExecutionContext> {
-  return { adapter_id: adapter.adapter.cli.id, adapter_version: adapter.adapter.cli.version ?? adapter.adapter.schema, adapter_digest: adapter.digest }
-}
 
 /**
  * The details of a whole-program grant: one per action and first resource, without selector, so every operation of
@@ -71,25 +71,27 @@ export async function programSpec(assignment: Pick<ProgramAssignment, 'cliId' | 
   if (argv) return commandSpec(adapter, [assignment.cliId, ...argv])
   const details = programCoverage(adapter)
   if (!details.length) throw new Error(`${assignment.cliId} has no operations a whole-program grant can cover; grant single commands`)
-  return { cliId: assignment.cliId, details, executionContext: context(adapter), display: `All ${assignment.cliId} operations: ${details.map(detail => `${detail.action} on ${detail.resource_chain[0]!.resource}`).join(', ')}` }
+  return { cliId: assignment.cliId, details, executionContext: await programContext(adapter), display: `All ${assignment.cliId} operations: ${details.map(detail => `${detail.action} on ${detail.resource_chain[0]!.resource}`).join(', ')}` }
 }
 
 /** The grant to run the Pod's stored script; it covers every run of this Pod whatever its script, workspace or name. */
 export async function runtimeSpec(adapterPath: string, podId: string, name: string): Promise<GrantSpec> {
   const adapter = loadAdapter('pod-runtime', adapterPath)
-  const resolved = await resolveCommand(adapter, ['pod-runtime', 'run', '--pod', podId, '--name', name, '--script', 'run.mjs', '--workspace', 'workspace'])
-  return { cliId: 'pod-runtime', details: [resolved.detail], executionContext: context(adapter), display: resolved.detail.display }
+  const resolved = await resolveCommand(adapter, runtimeArgv({ podId, name, script: 'run.mjs', workspace: 'workspace' }))
+  return { cliId: 'pod-runtime', details: [resolved.detail], executionContext: resolved.executionContext, display: resolved.detail.display }
 }
 
-/** An HTTPS origin; with methods, one detail per method, otherwise every method of that origin. */
+/** An HTTPS origin; with methods, one detail per method (one method carries its request's context), otherwise every method of that origin. */
 export async function httpSpec(adapterPath: string, origin: string, methods?: string[]): Promise<GrantSpec> {
   const adapter = loadAdapter('pod-http', adapterPath)
   if (methods) {
-    const details = await Promise.all(methods.map(async method => (await resolveCommand(adapter, ['pod-http', 'request', '--origin', origin, '--method', method])).detail))
-    return { cliId: 'pod-http', details, executionContext: context(adapter), display: details.map(detail => detail.display).join('; ') }
+    const resolved = await Promise.all(methods.map(async method => await resolveCommand(adapter, httpArgv(origin, method))))
+    const details = resolved.map(item => item.detail)
+    const executionContext = resolved.length === 1 ? resolved[0]!.executionContext : await programContext(adapter)
+    return { cliId: 'pod-http', details, executionContext, display: details.map(detail => detail.display).join('; ') }
   }
   const detail = { type: 'openape_cli' as const, cli_id: 'pod-http', operation_id: 'request', resource_chain: [{ resource: 'https-origin', selector: { url: origin } }], action: 'request', permission: '', display: `HTTP requests to ${origin}`, risk: 'high' as const }
-  return { cliId: 'pod-http', details: [{ ...detail, permission: canonicalizeCliPermission(detail) }], executionContext: context(adapter), display: detail.display }
+  return { cliId: 'pod-http', details: [{ ...detail, permission: canonicalizeCliPermission(detail) }], executionContext: await programContext(adapter), display: detail.display }
 }
 
 function typeOf(value: string): GrantType {

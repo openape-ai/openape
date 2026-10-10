@@ -6,6 +6,7 @@ import type { ServiceScope } from '../../contracts/services'
 import type { HttpAuthentication, HttpRequest, HttpReply } from '../../contracts/http'
 import { parseHttpAuthentication, parseHttpPermission, parseHttpRequest } from '../../contracts/http'
 import { AgentAuthority } from '../broker/authorization'
+import { httpArgv } from '../grants/execution-context'
 import { requestHttp } from './http'
 
 export interface AgentBearer {
@@ -35,7 +36,7 @@ export async function executeHttp(resources: PodResource[], scope: ServiceScope,
   const authority = new AgentAuthority(connection, observe, ledger, tokens)
   const adapterPath = join(vendor, 'pod-http-shapes.toml')
   const adapter = loadAdapter('pod-http', adapterPath)
-  const argv = ['pod-http', 'request', '--origin', new URL(request.url).origin, '--method', request.method]
+  const argv = httpArgv(new URL(request.url).origin, request.method)
   const resolved = await resolveCommand(adapter, argv)
   const authorization = { grantId: '', command: { cliId: 'pod-http', adapterPath, adapterDigest: adapter.digest, argv, coverage: [resolved.detail] } }
   await authority.authorize(authorization, signal)
