@@ -28,9 +28,9 @@ export type SandboxCommand
 export interface SandboxView { level: SandboxLevel, sources: { source: string, level: SandboxLevel }[] }
 /**
  * How far a Pod's programs reach on this Mac. At `owner` level they reach what the owner reaches, except
- * `protectedPaths`: the Pods profile, the owner's apes login and the keychain files stay closed, so a Pod program can
+ * `protectedPaths`: the Pods folder with every profile and its control socket, the owner's apes login and the keychain files stay closed, so a Pod program can
  * never take the owner identity or change Pods state. `persistencePaths` are readable but never writable, which closes
- * the known autostart locations; it is no complete persistence boundary, the isolated level is. Both are required at
+ * the known autostart locations as best-effort protection; the isolated level is the boundary. Both are required at
  * `owner` level.
  */
 export interface SandboxReach { level: SandboxLevel, protectedPaths: string[], persistencePaths?: string[] }
