@@ -32,7 +32,8 @@ export type SandboxCommand
 export interface SandboxView { level: SandboxLevel, sources: { source: string, level: SandboxLevel }[], deny: string[], denySources: { source: string, deny: string[] }[] }
 /**
  * How far a Pod's programs reach on this Mac. At `owner` level they reach what the owner reaches, except
- * `protectedPaths`: the Pods folder with every profile and its control socket and the owner's apes login stay closed
+ * `protectedPaths`: the Pods folder with every profile and its control socket (or the socket's fallback directory)
+ * and the owner's apes login stay closed
  * against direct access; they are required at `owner` level. They are not a boundary: an owner-level program can leave
  * code that later runs unsandboxed as the owner and act as the owner from there, so the owner level equals full trust
  * in the Pod's code, including the possibility to act as the owner (owner decision, issue 1455).

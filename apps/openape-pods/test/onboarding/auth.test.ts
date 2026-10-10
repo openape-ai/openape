@@ -15,6 +15,10 @@ it('verifies owner signature, audience, human role, expiry, nonce and expected i
   for (const delta of [{ aud: 'another-client' }, { act: 'agent' }, { email: 'foreign@example.invalid' }, { exp: 1 }, { nonce: 'foreign' }, { nbf: Date.now() / 1000 + 100 }, { iss: 'https://foreign.invalid' }]) expect(() => ownerClaims(token({ ...claims, ...delta }), { keys: [jwk] }, claims.iss, claims.email, claims.nonce)).toThrow()
   expect(() => ownerClaims(`${token(claims).slice(0, -8)}AAAAAAAA`, { keys: [jwk] }, claims.iss, claims.email)).toThrow('signature')
   expect(() => ownerClaims(token(claims), { keys: [jwk, jwk] }, claims.iss, claims.email)).toThrow('signature')
+  // The apes login token carries exactly sub, act, iss, aud, iat and exp; its subject is the owner's email.
+  const apes = { sub: claims.email, act: 'human', iss: claims.iss, aud: 'apes-cli', iat: Math.floor(Date.now() / 1000), exp: claims.exp }
+  expect(ownerClaims(token(apes), { keys: [jwk] }, claims.iss, claims.email).sub).toBe(claims.email)
+  for (const delta of [{ sub: 'foreign@example.invalid' }, { act: 'agent' }, { iss: 'https://foreign.invalid' }, { aud: 'another-client' }, { email: 'foreign@example.invalid' }]) expect(() => ownerClaims(token({ ...apes, ...delta }), { keys: [jwk] }, claims.iss, claims.email)).toThrow('does not match')
 })
 afterEach(() => { vi.unstubAllGlobals() })
 // The MCP session re-runs the owner's browser sign-in: the real loopback callback,

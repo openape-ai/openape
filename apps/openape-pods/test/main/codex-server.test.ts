@@ -1,7 +1,7 @@
 // @vitest-environment node
-import { mkdtemp, rm, stat } from 'node:fs/promises'
+import { lstat, mkdtemp, rm, stat, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { connect } from 'node:net'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -9,6 +9,7 @@ import type { CodexRequest } from '../../src/contracts/codex'
 import { CodexControlServer } from '../../src/main/codex/server'
 import type { McpSessionGate } from '../../src/main/codex/server'
 import { McpOwnerSessions } from '../../src/main/codex/session'
+import { controlSocketPath, controlSocketProtection } from '../../src/main/codex/socket-path'
 
 // The socket the Codex MCP shim talks to: private to the user, one
 // pods_control request per line, and nothing reaches the worker without the
@@ -69,6 +70,32 @@ it('is reachable only by the owner account', async () => {
   const { endpoint } = await start()
   expect((await stat(endpoint)).mode & 0o777).toBe(0o600)
   expect((await stat(join(root, 'codex'))).mode & 0o777).toBe(0o700)
+})
+
+// A profile under a long path (the signed DMG acceptance fixture) exceeds macOS's 104-byte socket address.
+it('keeps the socket in the profile when it fits and otherwise in a short private directory of this user', async () => {
+  const installed = '/Users/owner/Library/Application Support/OpenApe Pods'
+  expect(controlSocketPath(installed)).toBe(join(installed, 'codex', 'control.sock'))
+  expect(controlSocketProtection(installed)).toEqual([])
+  root = await mkdtemp(join(tmpdir(), 'pods-codex-socket-'))
+  const profile = join(root, 'distribution-acceptance-fixture', 'x'.repeat(48), 'profile')
+  const endpoint = controlSocketPath(profile)
+  expect(Buffer.byteLength(join(profile, 'codex', 'control.sock'))).toBeGreaterThan(103)
+  expect(endpoint).toMatch(new RegExp(`^/private/tmp/openape-pods-${process.getuid!()}-[a-f0-9]{16}/control\\.sock$`))
+  expect(controlSocketProtection(profile)).toEqual([dirname(endpoint), dirname(endpoint).replace('/private', '')])
+  await rm(dirname(endpoint), { recursive: true, force: true })
+  try {
+    server = new CodexControlServer(endpoint, async request => ({ echoed: request.id }), open); await server.start()
+    expect((await lstat(dirname(endpoint))).mode & 0o777).toBe(0o700)
+    expect((await stat(endpoint)).mode & 0o777).toBe(0o600)
+    const id = randomUUID()
+    expect((await exchange(endpoint, `${JSON.stringify({ id, action: { action: 'list' } })}\n`)).lines).toEqual([{ id, result: { echoed: id } }])
+    await server.stop(); server = undefined
+    // A link planted at the fallback location is never used.
+    await rm(dirname(endpoint), { recursive: true, force: true }); await symlink(root, dirname(endpoint))
+    await expect(new CodexControlServer(endpoint, async () => null, open).start()).rejects.toThrow('not a private directory of this user')
+  }
+  finally { await rm(dirname(endpoint), { recursive: true, force: true }) }
 })
 
 it('forwards exactly one pods_control request and returns its result', async () => {
