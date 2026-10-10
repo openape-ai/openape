@@ -3,8 +3,6 @@ import { typesafeJSON, verifyTypesafe } from './typesafe'
 import type { Owner } from '@openape/pods-protocol'
 import { enablePodBroker, revokePodBroker, podBrokerReceipt } from './broker'
 import type { PodBrokerConnection } from './broker'
-import { loadAdapter, resolveCommand } from '@openape/apes'
-import type { ProgramAssignment } from '../../contracts/programs'
 import { randomUUID } from 'node:crypto'
 import { rm, readFile } from 'node:fs/promises'
 import { extractDomain, resolveIdP } from '@openape/core'
@@ -15,13 +13,12 @@ import type { SetupInternal } from '../../worker/onboarding/control'
 import type { CredentialCache } from './cache'
 import { CodexConnection } from './codex'
 import { OwnerConnection } from './owner'
+import type { OwnerSession } from './owner-session'
 import { PodIdentityManager } from './agent'
 import type { PodIdentityReference } from './agent'
 import { recoverAuthDomains } from './ledger'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
-import { requestCommands } from '../programs/grants'
 import type { AccountCleanup } from '../../worker/onboarding/reconcile'
-import type { GrantRequest } from '../programs/grants'
 
 interface SetupState { connections: ConnectionView[], owner: string | null, complete: boolean }
 interface PodEntry { connectionId: string, prepared: boolean, broker?: PodBrokerConnection, identity?: PodIdentityReference }
@@ -121,11 +118,12 @@ export class ConnectionManager {
     return { owner: { issuer: metadata.issuer, subject: metadata.subject }, email: owner.account }
   }
 
-  /** Signs the registered owner in again in the browser for an MCP session; nothing is stored. */
-  async verifyOwner(signal: AbortSignal, present: (value: { url: string }) => void): Promise<void> {
+  /** Signs the registered owner in again in the browser for an MCP session; its tokens stay in the returned session only. */
+  async ownerSession(endsAt: number, signal: AbortSignal, present: (value: { url: string }) => void): Promise<OwnerSession> {
     const { owner, email } = await this.remoteOwner()
-    const verified = await this.owner.verify(owner.issuer, email, signal, present)
-    if (verified.subject !== owner.subject) throw new Error('The signed-in account is not the registered owner')
+    const session = await this.owner.session(owner.issuer, email, endsAt, signal, present)
+    if (session.subject !== owner.subject) { session.close(); throw new Error('The signed-in account is not the registered owner') }
+    return session
   }
 
   async view(podId?: string): Promise<OnboardingView> {
@@ -272,21 +270,6 @@ export class ConnectionManager {
       entry.identity = await identities.provision(entry.connectionId, `Pod ${podId}`, bearer, receipt); await this.save(owner, metadata)
     }
     return { ...identities.connection(entry.identity, `pods:${podId}`), identity: entry.identity, ownerConnection: owner.id }
-  }
-
-  async existingProgramGrant(podId: string, assignment: ProgramAssignment, argv: string[]) {
-    await verifyExecutable(assignment.adapterPath, assignment.adapterHash)
-    const resolved = await resolveCommand(loadAdapter(assignment.cliId, assignment.adapterPath), [assignment.cliId, ...argv])
-    const existing = assignment.grants.find(grant => grant.permission === resolved.permission)
-    if (existing) return existing
-    const connection = await this.podConnection(podId)
-    return { permission: resolved.permission, display: resolved.detail.display, authority: { identity: connection.identity, ownerConnection: connection.ownerConnection, grantId: '' } }
-  }
-
-  /** Requests the assigned commands as the Pod identity; the owner approves at the IdP. */
-  async request(podId: string, adapterPath: string, commands: string[][]): Promise<GrantRequest> {
-    const connection = await this.podConnection(podId)
-    return requestCommands(connection, adapterPath, commands, AbortSignal.timeout(120000))
   }
 
   busy(): boolean { return this.jobs.size > 0 || this.assigning || this.typesafeChanging }

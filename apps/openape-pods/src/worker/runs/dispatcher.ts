@@ -23,6 +23,7 @@ import type { HttpRequest, HttpReply } from '../../contracts/http'
 import { assignedHttp } from '../../main/programs/http-service'
 import { EffectLedger } from '../recovery/effects'
 import { executeHttpEffect } from './http'
+import { executeProgramEffect, programWrite } from './program-effects'
 import { PodVariables } from '../resources/variables'
 import { parseCredentialRead } from '../../contracts/credentials'
 import { ScriptCredentials } from '../resources/script-credentials'
@@ -115,7 +116,7 @@ export class RunDispatcher {
       runs.unshift(selected)
     }
     const selectedId = id ?? runs[0]?.id
-    const effects = this.store.db.prepare('SELECT effect_key AS key,run_id AS runId FROM effect_ledger WHERE pod_id=? AND operation=\'http.request\' AND state=\'unknown\' LIMIT 100').all(podId) as { key: string, runId: string }[]
+    const effects = this.store.db.prepare('SELECT effect_key AS key,run_id AS runId FROM effect_ledger WHERE pod_id=? AND operation IN (\'http.request\',\'program.call\') AND state=\'unknown\' LIMIT 100').all(podId) as { key: string, runId: string }[]
     return { ...(selectedId ? { timing: this.runs.timing(podId, selectedId) } : {}), approvals: this.runs.approvals(podId), effects, runs, events: selectedId ? (after ? this.runs.events(podId, selectedId, after) : this.runs.recentEvents(podId, selectedId)) : [] }
   }
 
@@ -318,11 +319,15 @@ export class RunDispatcher {
           if (reply !== true) throw new Error('Network approval is no longer active')
         }
       }
+      let programWrites = 0
       const invokeTool = async (body: unknown, toolSignal: AbortSignal) => {
         assertCurrent()
-        appendEvent('recovery-boundary', { kind: 'read', operation: 'tools.invoke' })
         if (!manifest.capabilities.some(capability => capability === 'mail.read' || capability.startsWith('tool.app_') || capability.startsWith('tool.ssh_')) || !this.services?.tool) throw new Error('No tool capability is assigned to this pod')
-        const operation = retryService('tool authorization', async () => { assertCurrent(); return this.services!.tool!(body, toolSignal, scope) }, toolSignal)
+        const call = async () => retryService('tool authorization', async () => { assertCurrent(); return this.services!.tool!(body, toolSignal, scope) }, toolSignal)
+        // A read can be replayed; an application write is recorded like an HTTP effect and keeps the run from automatic replay.
+        const write = await programWrite(this.resources.list(pod.id), pod.id, scope.capabilities, body)
+        if (!write) appendEvent('recovery-boundary', { kind: 'read', operation: 'tools.invoke' })
+        const operation = write ? executeProgramEffect(new EffectLedger(this.store), pod.id, id, `program:${id}:${programWrites++}`, body, call) : call()
         pendingAgents.add(operation)
         try { const reply = await operation; assertCurrent(); return reply }
         finally { pendingAgents.delete(operation) }

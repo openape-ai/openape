@@ -1,6 +1,18 @@
 import type { MessageKey } from './index'
 
 export const diagnosticPatterns = [
+  'Unexpected grant type {p0}',
+  'Invalid {p0} action fields; send action and command only',
+  'Declare at most {p0} program grants',
+  'Declare at most {p0} HTTP grants',
+  'Declare at most {p0} sandbox {p1}',
+  'The network is at revision {p0}; read it again before declaring its sandbox or grants',
+  '{p0} has no operations a whole-program grant can cover; grant single commands',
+  'Unexpected grant status {p0}',
+  'This grant is {p0}; request it again instead',
+  'This grant is {p0}; only a pending grant can be denied',
+  'Application {p0} is ambiguous; use its resource ID',
+  'Application {p0} is not in this Pod\'s sandbox; a program grant needs its adapter',
   'Cannot back up profile entry: {p0}',
   'Update server returned HTTP {p0}',
   'notify key "{p0}" was already used with different content',

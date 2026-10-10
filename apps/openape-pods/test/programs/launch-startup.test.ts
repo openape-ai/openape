@@ -18,7 +18,7 @@ it('tracks a preparing application so quitting can cancel it before launch', asy
   const connections = { podConnection: async () => { connecting = true; await pending; throw new Error('Synthetic preparation interrupted') } } as unknown as ConnectionManager
   const manager = new ProgramManager(join(root, 'authentication'), '/unused', credentials, connections,
     async () => ({ epoch: 1, resources: [{ id: applicationId, podId, name: 'Fixture', kind: 'tool', state: 'ready', revision: 1, configuration: { type: 'program' } }] }),
-    async (command) => { if (command.type === 'release') released = true; return command.type === 'reserveShell' ? 'Fixture' : true })
+    async (command) => { if (command.type === 'release') released = true; return command.type === 'reserveShell' ? 'Fixture' : true }, {} as never, () => ({}) as never)
   const launch = manager.launch({ type: 'launch', podId, applicationId, epoch: 1 }, { executable: process.execPath, cli: '/unused', client: '/unused' })
   const rejected = expect(launch).rejects.toThrow('Synthetic preparation interrupted')
   try {

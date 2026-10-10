@@ -1294,8 +1294,9 @@ paused, settled compatibility transaction as other definition updates.
 ## Local owner MCP access
 
 Local MCP requires the owner's one-hour MCP session and acts as the current
-network owner (owner decision October 9, 2026: approvals stay at the IdP, MCP may
-do everything else). The `networks` action accepts every network command the
+network owner. The session is the owner's own DDISA login (owner decision October
+10, 2026, superseding the October 9 rule that approvals stay at the IdP): it may
+decide grants with the owner's identity, see [Sandbox and grants](#sandbox-and-grants). The `networks` action accepts every network command the
 desktop uses except workflow conversion and composition replacement
 (`conversionPreview`, `convert`, `replacementSetup`, `replacementPreview`,
 `replaceComposition`), which leave with the workflow model. It runs them through
@@ -1304,8 +1305,8 @@ setup fingerprint), activate, pause, archive, preview/process, member script
 updates, recovery (`inspect`, `retry`, `reconcileEffect`, `resolveConflict`,
 `discardFailure`, `discardFeedback`) and owner routing (`choose`, `gateReview`,
 `gateDiscard`). `gateOpen` opens the IdP approval page in the owner's browser
-through the desktop producer. No MCP action approves or denies a grant; the
-identity provider decides every grant. The `desktop` action forwards the
+through the desktop producer; an item grant of such a batch can also be decided
+with `grants` `approve` or `deny` in the session. The `desktop` action forwards the
 dialog-free desktop `definitions`, `scheduling` and `workspace` commands to the
 producers of the desktop window.
 Reads reuse existing bounded views (2 MiB total); explicit network reads filter
@@ -1328,6 +1329,64 @@ the main process. The closed automatic scheduler gate does not reject that one
 explicit run, and no unrelated scheduler domain advances under its authority.
 Startup, suspend, maintenance, global concurrency, membership and grant checks
 remain required. Client-supplied authority fields are rejected.
+
+## Sandbox and grants
+
+Owner decisions October 10, 2026 (issue 1455, M6d). The sandbox decides what a
+Pod can execute and reach: assigned applications as whole programs, HTTPS origins
+with methods, folders, secrets and the level `isolated` or `owner`. Grants decide
+what it may do. They are independent; a call needs a sandbox entry and a covering
+grant. `owner` gives the Pod's programs the owner's file and network reach (a
+permissive profile under the same supervising helper) except the Pods profile and
+its base, `~/.config/apes` and `~/Library/Keychains`, which stay denied while the
+program's own workspace, state and runtime are allowed again; it is about paths
+and reach only, and the Pod's DDISA identity stays the Pod. Application network
+hosts and their proxy apply only at the isolated level, because the owner level
+has the owner's network reach. Mail moves (adapter actions `move` and `archive`)
+are never part of a whole-program grant and run only through the archive ports.
+
+Every grant is requested by the Pod identity and recorded in the worker's
+`pod_grants` ledger with its authorization details, state, origin and whether it
+was approved in an owner session. A call is matched to the newest recorded grant
+whose details cover it (`cliAuthorizationDetailsCover`); the IdP reading of that
+grant must cover it as well, and so must the minted token
+(`authorizeAssignedCommand` checks coverage and refuses `_generic.exec`). A
+whole-program grant has one detail per action and first resource without
+selector; groups that contain an adapter operation marked `exact_command` are
+left out. An origin grant without methods covers every method.
+
+A network-level declaration (`sandbox` or `grants` with target `{networkId,
+revision}`) is fanned out to every member of that revision: one request per
+member Pod, recorded with the network id and revision as origin, and the sandbox
+entries it added recorded in `network_sandbox_resources`; the network's level is a
+`pod_sandbox` row with source `network:<id>`. A member therefore has the network
+sandbox plus its own. Archiving the network deletes its level rows in the archive
+transaction; the desktop then revokes, as each member Pod, the grants with that
+origin and removes the sandbox resources it added. A grant keeps the origin of its
+first record, and only a request the IdP newly created (201) takes the network as
+origin; an existing grant it returns again stays the member's own. A network
+declaration never replaces a member's own HTTP destination; it reports it as kept.
+
+The MCP owner session keeps the owner's tokens only in main-process memory and
+renews the five-minute access token there, never past the session's hard end;
+ending the session revokes its refresh token. `grants` `approve` and `deny` are
+the only decision path: they refuse without an active session, read the grant
+with the owner's token and require that a Pod of this owner requested it for
+itself (requester, `pods:<podId>` target and broker binding) before calling the
+IdP with the owner bearer. Without an explicit choice it approves the type the
+Pod requested (a timed grant with its duration); an explicit `grantType` is the
+owner's choice and is reported as `widened`. A timer closes the session at its
+end. The persisted setup login is never used for it. The
+conveniences `grants` `request` and `sandbox` `apply` request each grant as the
+Pod and approve it as `always` in the same call (no IdP standing-grant policy, no
+protocol change); without a session they only request and return the IdP pages.
+
+A run that executed an application command whose adapter action is not `read`,
+`list` or `get`, or an HTTP write, is never replayed automatically: application
+writes are recorded in the effect ledger as `program.call` effects, and a failed
+run with any effect goes to owner review; an interrupted or failed application
+write stays `unknown` until `resolveHttp` reconciles it, like an unknown HTTP
+delivery.
 
 ## Mail archive port
 

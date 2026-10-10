@@ -19,8 +19,7 @@ export function archiveApplication(resources: PodResource[], podId: string, capa
   return selected
 }
 export function archiveApplicationHash(assignment: ProgramAssignment): string {
-  const { grants: _grants, ...definition } = assignment
-  return createHash('sha256').update(JSON.stringify(definition)).digest('hex')
+  return createHash('sha256').update(JSON.stringify(assignment)).digest('hex')
 }
 interface ProviderServices {
   read: (argv: string[]) => Promise<unknown>
@@ -66,7 +65,7 @@ export async function moveApprovedMail(input: { resources: PodResource[], manife
     const authority = { authorize: async () => input.assertAuthority(), assertActive: async () => input.assertAuthority() }
     const broker = new PodToolBroker(input.helper, input.root, authority, input.credentials)
     const launch = programLaunch(assignment)
-    return await broker.execute({ id: selected.id, capability: assignment.capability, grantId: manifest.id, command: { cliId: assignment.cliId, adapterPath: assignment.adapterPath, adapterDigest: adapter.digest, argv: command, permission: resolved.permission }, executable: launch.executable, executableHash: launch.executableHash, entryFiles: assignment.entryFiles, prefix: launch.prefix, programState: { id: assignment.stateId, podId: manifest.podId, applicationId: selected.id }, runtimeDirectories: launch.runtimeDirectories, runtimeEnvironment: assignment.runtime?.environment, environment: { ...assignment.environment, ...proxy.environment }, networkPorts: [proxy.port], maxOutputBytes: 200000 }, { toolId: selected.id, argv: command }, lease)
+    return await broker.execute({ id: selected.id, capability: assignment.capability, grantId: manifest.id, command: { cliId: assignment.cliId, adapterPath: assignment.adapterPath, adapterDigest: adapter.digest, argv: command, coverage: [resolved.detail] }, executable: launch.executable, executableHash: launch.executableHash, entryFiles: assignment.entryFiles, prefix: launch.prefix, programState: { id: assignment.stateId, podId: manifest.podId, applicationId: selected.id }, runtimeDirectories: launch.runtimeDirectories, runtimeEnvironment: assignment.runtime?.environment, environment: { ...assignment.environment, ...proxy.environment }, networkPorts: [proxy.port], maxOutputBytes: 200000 }, { toolId: selected.id, argv: command }, lease)
   }
   finally { await proxy.close() }
 }

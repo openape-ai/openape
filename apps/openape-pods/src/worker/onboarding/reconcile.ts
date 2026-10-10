@@ -13,8 +13,7 @@ function identity(row: Row): string | null {
 
 export function usesConnection(configuration: Record<string, unknown>, id: string): boolean {
   const authority = configuration.authority as { ownerConnection?: string } | undefined
-  const grants = Array.isArray(configuration.grants) ? configuration.grants as { authority?: { ownerConnection?: string } }[] : []
-  return [configuration.connectionId, configuration.ownerConnection, authority?.ownerConnection].includes(id) || grants.some(grant => grant.authority?.ownerConnection === id)
+  return [configuration.connectionId, configuration.ownerConnection, authority?.ownerConnection].includes(id)
 }
 
 export function revokeConnectionUse(store: PodDatabase, resources: ResourceRegistry, id: string): void {

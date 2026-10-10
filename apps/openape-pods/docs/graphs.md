@@ -359,9 +359,10 @@ Consequences:
 
 ## Reply drafts
 
-Reply drafts are not part of the v1 contract. Scripts can invoke only granted
-commands whose adapter action is `read`, `list` or `get`, so no draft can be
-created today. Two write paths were compared on 29 September 2026.
+Reply drafts are not part of the v1 contract. Since issue 1455 (M6d) scripts can
+invoke any command a Pod grant covers; a command whose adapter action is not
+`read`, `list` or `get` is recorded as an effect and keeps its run from automatic
+replay. Two write paths were compared on 29 September 2026.
 
 | | Provider request from the script | Granted draft command |
 | --- | --- | --- |

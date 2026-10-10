@@ -18,7 +18,6 @@ export function modelResources(resources: PodResource[], includeCommands = false
       visible.commands = adapter.adapter.operations
       visible.runtimeConfigured = Boolean(configuration.runtime)
     }
-    if (Array.isArray(configuration.grants)) visible.permissions = configuration.grants.map(grant => (grant as { permission: string }).permission)
     return { id, revision, kind, state, name, configuration: visible }
   })
 }

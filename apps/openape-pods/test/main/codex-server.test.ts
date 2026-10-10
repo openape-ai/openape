@@ -15,7 +15,7 @@ import { McpOwnerSessions } from '../../src/main/codex/session'
 // owner's session secret that was sent on that same connection.
 let server: CodexControlServer | undefined; let root = ''
 afterEach(async () => { await server?.stop(); server = undefined; if (root) await rm(root, { recursive: true, force: true }) })
-const open: McpSessionGate = { authorize: () => {}, disconnect: () => {} }
+const open: McpSessionGate = { authorize: () => {}, owner: () => null, disconnect: () => {} }
 async function start(execute: (request: CodexRequest) => Promise<unknown> = vi.fn(async request => ({ echoed: request.id })), sessions: McpSessionGate = open) {
   root = await mkdtemp(join(tmpdir(), 'pods-codex-socket-'))
   const endpoint = join(root, 'codex', 'control.sock')
@@ -59,7 +59,7 @@ function owner(confirmations: boolean[] = []) {
   let now = 1_000_000
   const logins: AbortSignal[] = []
   let finish: () => void = () => {}
-  const login = vi.fn((signal: AbortSignal) => { logins.push(signal); return new Promise<void>((resolve, reject) => { finish = resolve; signal.addEventListener('abort', () => reject(new Error('Sign-in aborted')), { once: true }) }) })
+  const login = vi.fn((_endsAt: number, signal: AbortSignal) => { logins.push(signal); return new Promise<null>((resolve, reject) => { finish = () => resolve(null); signal.addEventListener('abort', () => reject(new Error('Sign-in aborted')), { once: true }) }) })
   const confirm = vi.fn(async () => confirmations.shift() ?? true)
   const sessions = new McpOwnerSessions({ login, confirm, now: () => now })
   return { sessions, login, confirm, logins, signIn: () => finish(), advance: (ms: number) => { now += ms } }
@@ -74,7 +74,7 @@ it('is reachable only by the owner account', async () => {
 it('forwards exactly one pods_control request and returns its result', async () => {
   const { endpoint, execute } = await start(); const id = randomUUID()
   expect((await exchange(endpoint, `${JSON.stringify({ id, action: { action: 'list' } })}\n`)).lines).toEqual([{ id, result: { echoed: id } }])
-  expect(execute).toHaveBeenCalledWith({ id, action: { action: 'list' } })
+  expect(execute).toHaveBeenCalledWith({ id, action: { action: 'list' } }, null)
 })
 
 it('records owner evidence of every MCP call as an assistant request without refusing it', async () => {
@@ -204,4 +204,32 @@ it('ends every session and a waiting sign-in immediately on End session', async 
   expect(fixture.confirm).toHaveBeenCalledOnce()
   expect(execute).toHaveBeenCalledOnce()
   await shim.end()
+})
+
+it('hands the owner identity only to calls of its own session and discards it when the session ends', async () => {
+  let now = 1_000_000
+  const tokens = () => ({ active: true, close: vi.fn() })
+  const issued: ReturnType<typeof tokens>[] = []
+  const login = async () => { const owner = tokens(); issued.push(owner); return owner as never }
+  const sessions = new McpOwnerSessions({ login, confirm: vi.fn(async () => true), now: () => now })
+  const peer = { closed: false, send: vi.fn() }; const other = { closed: false, send: vi.fn() }
+  expect(() => sessions.authorize(peer, undefined)).toThrow('login_required')
+  await vi.waitFor(() => expect(peer.send).toHaveBeenCalledOnce())
+  const secret = (peer.send.mock.calls[0]![0] as { session: string }).session
+  sessions.authorize(peer, secret)
+  expect(sessions.owner(peer)).toBe(issued[0])
+  expect(sessions.owner(other)).toBeNull()
+  // The hard end of the hour ends the session and discards the owner tokens.
+  now += 3600000
+  expect(sessions.owner(peer)).toBeNull()
+  expect(() => sessions.authorize(peer, secret)).toThrow('login_required')
+  expect(issued[0]!.close).toHaveBeenCalledOnce()
+  await vi.waitFor(() => expect(peer.send).toHaveBeenCalledTimes(2))
+  sessions.disconnect(peer)
+  expect(issued[1]!.close).toHaveBeenCalledOnce()
+  // A declined confirmation discards the tokens of that sign-in at once.
+  const declined = new McpOwnerSessions({ login, confirm: async () => false })
+  expect(() => declined.authorize(other, undefined)).toThrow('login_required')
+  await vi.waitFor(() => expect(issued[2]?.close).toHaveBeenCalledOnce())
+  expect(declined.owner(other)).toBeNull()
 })
