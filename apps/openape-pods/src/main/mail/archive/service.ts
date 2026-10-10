@@ -15,7 +15,6 @@ export interface ArchiveAuthority {
   consume: (record: ArchiveRecord, id: string) => Promise<void>
   assertActive: (record: ArchiveRecord, id: string) => Promise<void>
 }
-export interface CoveredBatch { id: string, grantId: string, expiresAt: number, mailbox: string, items: { id: string, version: string, reason: string }[] }
 function view(record: ArchiveRecord): ArchiveView { return { id: record.manifest.id, mailbox: record.manifest.mailbox, count: record.manifest.items.length, state: record.state, url: record.url, outcomes: record.outcomes, error: record.error } }
 export class MailArchiveService {
   private busy = new Set<string>()
@@ -102,37 +101,6 @@ export class MailArchiveService {
       if (record.state === 'unknown') break
     }
     return output
-  }
-
-  /**
-   * Channel mode: moves the messages of one gate batch whose grant the owner approved and the gate
-   * consumed. A batch is executed at most once; without it nothing moves.
-   */
-  async processCovered(podId: string, batch: CoveredBatch, provider: ArchiveProvider, assertActive: () => Promise<void>): Promise<ArchiveView> {
-    const records = await this.store.list(podId)
-    for (const record of records.filter(record => ['preparing', 'executing'].includes(record.state))) {
-      record.state = 'unknown'; record.error = 'Interrupted archive operation; inspect grant and provider receipts before proceeding'
-      await this.store.save(record)
-    }
-    const unresolved = records.find(record => record.state === 'unknown')
-    if (unresolved) return view(unresolved)
-    const known = records.find(record => record.manifest.id === batch.id)
-    if (known) return view(known)
-    // A refused, expired or unconsumed grant ends here: no record, no message read, nothing moved.
-    await assertActive()
-    const record: ArchiveRecord = { manifest: { version: 1, id: batch.id, podId, applicationId: provider.applicationId, applicationHash: provider.applicationHash, mailbox: batch.mailbox, expiresAt: batch.expiresAt, items: [] }, state: 'executing', grantId: batch.grantId, outcomes: [] }
-    await this.store.save(record)
-    try {
-      for (const approved of batch.items) {
-        const mail = await provider.read(approved.id)
-        if (!mail || mail.id !== approved.id || mail.version !== approved.version) { record.outcomes.push({ id: approved.id, state: 'skipped', reason: 'Message changed or is no longer in the Inbox' }); continue }
-        record.manifest.items.push({ ...parseArchiveMail(mail), reason: approved.reason })
-      }
-      await this.store.save(record)
-      await this.move(record, provider, async () => assertActive())
-    }
-    catch (error) { record.state = 'unknown'; record.error = String(error); await this.store.save(record) }
-    return view(record)
   }
 
   /** Moves the approved messages one by one; a message without approval is recorded as skipped. */

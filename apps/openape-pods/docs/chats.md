@@ -27,7 +27,7 @@ checkout so development dependencies cannot hide a missing runtime dependency.
 
 `worker/codex/control.ts` keeps a hidden selection context and passes owner
 commands to `MasterControl.execute`. Rename, group, variables, validated script
-activation/rollback, pause/resume, enabled schedules, workflow saves and runs
+activation/rollback, pause/resume, enabled schedules and runs
 apply directly through existing domain operations. Run receipts contain real
 run IDs. Validation, selected context, revision checks, resource epochs and
 recovery constraints remain enforced. Ordinary conversation/remote callers do

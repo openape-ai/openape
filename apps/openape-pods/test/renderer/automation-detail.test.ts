@@ -110,23 +110,6 @@ describe('AutomationDetail', () => {
     expect(button('Pausieren').attributes('title')).toBe('Nur am Desktop')
   })
 
-  it('controls a chain and a bounded graph through workflow commands', async () => {
-    const chain = automation('Morgenbriefing')
-    await mountDetail(chain.id)
-    expect(wrapper!.findAll('.row .pill').map(item => item.text())).toEqual(['aktiv', 'Kette', 'ohne Gruppe'])
-    expect(section('Zeitplan').text()).toBe('Zeitplantäglich 07:00')
-    await button('Jetzt ausführen').trigger('click')
-    expect(wrapper!.emitted('workflow')).toEqual([[{ type: 'start', id: chain.id, revision: chain.revision }]])
-    await button('Pausieren').trigger('click')
-    expect(wrapper!.emitted('workflow')!.at(-1)).toEqual([{ type: 'pause', id: chain.id, revision: chain.revision, paused: true }])
-    wrapper!.unmount()
-    const graph = automation('IURIO · DOCPIT mail management')
-    await mountDetail(graph.id)
-    expect(wrapper!.findAll('.row .pill').map(item => item.text())).toEqual(['pausiert', 'Netzwerk', 'iurio'])
-    await button('Fortsetzen').trigger('click')
-    expect(wrapper!.emitted('workflow')).toEqual([[{ type: 'pause', id: graph.id, revision: graph.revision, paused: false }]])
-  })
-
   it('opens from the shell by list row or info panel and closes again', async () => {
     applyLanguage('de')
     wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, desktop: true } })

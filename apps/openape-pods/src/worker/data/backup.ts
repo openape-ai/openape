@@ -18,7 +18,7 @@ const uuid = (value: string) => /^[a-f0-9-]{36}$/.test(value)
 // leases. Other running actions, such as a script validation on the dependency tree, are real work.
 export const activeMasterAction = 'id NOT LIKE \'codex-admin:%\' AND id NOT LIKE \'codex-network:%\''
 export function networkDataBusy(store: PodDatabase): boolean {
-  return !!store.db.prepare('SELECT 1 FROM network_invocations WHERE state IN (\'running\',\'stopping\') UNION ALL SELECT 1 FROM network_gate_task_attempts WHERE state=\'running\' UNION ALL SELECT 1 FROM network_deliveries WHERE state=\'claimed\' UNION ALL SELECT 1 FROM network_gate_tasks WHERE state=\'consuming\' UNION ALL SELECT 1 FROM workflow_call_requests WHERE state=\'running\' LIMIT 1').get()
+  return !!store.db.prepare('SELECT 1 FROM network_invocations WHERE state IN (\'running\',\'stopping\') UNION ALL SELECT 1 FROM network_gate_task_attempts WHERE state=\'running\' UNION ALL SELECT 1 FROM network_deliveries WHERE state=\'claimed\' UNION ALL SELECT 1 FROM network_gate_tasks WHERE state=\'consuming\' LIMIT 1').get()
 }
 export function assertDataIdle(store: PodDatabase): void {
   if (networkDataBusy(store)) throw new Error('Finish or recover network work before changing application data')
@@ -168,8 +168,6 @@ export async function restoreBackup(backup: string, parent: string, maximumSchem
       if (manifest.schema >= 33) database.exec('UPDATE definition_instance_requests SET state=\'failed\',error=\'Restored instance: recover its existing identity on desktop before retrying\';')
       if (manifest.schema >= 24) database.exec('DELETE FROM run_deletion_jobs;')
       if (manifest.schema >= 22) database.exec('UPDATE remote_pods SET phase=\'needs_desktop_action\',error=\'Restored profile: original agent credentials must be recovered on desktop\'; DELETE FROM remote_program_reviews; UPDATE remote_program_catalog SET revoked=1; DELETE FROM remote_registration; DELETE FROM remote_devices; DELETE FROM remote_outbox; UPDATE remote_inbox SET state=\'unknown\' WHERE state=\'received\';')
-      if (manifest.schema >= 27) database.exec('UPDATE graph_gate_batches SET state=\'unknown\',error=\'Restored gate decision requires reconciliation\' WHERE state IN (\'pending\',\'consuming\');')
-      if (manifest.schema >= 20) database.exec('UPDATE workflow_mail_scopes SET restored=1; UPDATE workflows SET enabled=0,paused=1; UPDATE workflow_runs SET paused=1,reason=\'Restored workflow requires review\' WHERE finished_at IS NULL;')
       if (manifest.schema >= 18) {
         database.exec('DELETE FROM dependency_domains;')
         for (const row of database.prepare('SELECT * FROM dependency_sets').all()) {

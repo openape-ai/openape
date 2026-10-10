@@ -1,25 +1,17 @@
 import { randomUUID } from 'node:crypto'
 import { canonicalPortableJson } from '@openape/pods-protocol'
 import type { Owner, PortableComposition, PortableInput, PortableManifest, PortablePod } from '@openape/pods-protocol'
-import { parseMailWorkflowConfiguration } from '../../contracts/mail-workflow'
 import type { NetworkDraft } from '../../contracts/networks'
-import { parseWorkflowCommand } from '../../contracts/workflows'
-import type { WorkflowCommand, WorkflowSchedule } from '../../contracts/workflows'
 import type { ScheduleSpec } from '../../contracts/scheduling'
 import type { ResourceRegistry } from '../resources/registry'
 import { PodVariables } from '../resources/variables'
 import type { NetworkEngine } from '../scheduling/network-engine'
 import type { PodDatabase } from '../storage/database'
 import type { DefinitionCatalog } from '../workspace/definition-catalog'
-import type { WorkflowEngine } from '../workflows/engine'
 
 export type PortableValue = string | number | boolean
 export interface CompositionDocument {
-  schedule: WorkflowSchedule | null
-  ports?: unknown
-  mail?: { filter: string, notify: string, application: string, telegramCredential: string, mode: 'preview' | 'archive', mailbox: string, telegramChat: string, protectedPartners: string, rules: string } | null
   channels?: unknown
-  gates?: unknown[]
   routes?: unknown[]
   joins?: unknown[]
   feedback?: unknown[]
@@ -28,9 +20,8 @@ export interface CompositionDocument {
   formatVersion?: number
   collections?: { key: string, name: string, schema: string, retention: Record<string, unknown>, access: { pod: string, operations: string[] }[] }[]
   artifacts?: { key: string, collection: string | null, access: { pod: string, operations: string[] }[] }[]
-  calls?: { pod: string, workflow: string }[]
 }
-// What finalization needs from the import: fresh Pod identities, declared values, bound aliases and already created workflows.
+// What finalization needs from the import: fresh Pod identities, declared values and bound aliases.
 export interface CompositionContext {
   store: PodDatabase
   resources: ResourceRegistry
@@ -38,16 +29,10 @@ export interface CompositionContext {
   manifest: PortableManifest
   podId: (key: string) => string
   value: (compositionKey: string, input: string) => PortableValue
-  workflowId: (compositionKey: string) => string | undefined
 }
 
 // Native names allow 100 UTF-16 units; never cut a surrogate pair in half.
 export const clip = (title: string): string => title.slice(0, 100).replace(/[\uD800-\uDBFF]$/, '')
-
-// Networks, called workflows and mail policies need approved member scripts and are created after Pod setup completes.
-export function needsApprovedMembers(manifest: PortableManifest, composition: PortableComposition, document: CompositionDocument): boolean {
-  return composition.kind === 'network' || document.ports !== null || document.mail != null || manifest.compositions.some(item => item.calls.includes(composition.key))
-}
 
 // Whether a Pod variable, always a string, is a valid value of its declared input.
 export function variableMatches(input: PortableInput, text: string | undefined): boolean {
@@ -64,29 +49,12 @@ export function typedValue(input: PortableInput, text: string): PortableValue {
   return text
 }
 
-// Member Pods of a composition must still be fresh instances: no network, workflow or run history that a group or binding change would disturb.
+// Member Pods of a composition must still be fresh instances: no network or run history that a group or binding change would disturb.
 export function assertFreshMembers(context: CompositionContext, composition: PortableComposition): void {
   for (const node of composition.nodes) {
     const podId = context.podId(node.pod)
-    if (context.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=?1 UNION ALL SELECT 1 FROM workflow_members WHERE pod_id=?1 UNION ALL SELECT 1 FROM runs WHERE pod_id=?1 UNION ALL SELECT 1 FROM schedules WHERE pod_id=?1 LIMIT 1').get(podId)) throw new Error('A member Pod already belongs to a network or workflow or has run history')
+    if (context.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=?1 UNION ALL SELECT 1 FROM runs WHERE pod_id=?1 UNION ALL SELECT 1 FROM schedules WHERE pod_id=?1 LIMIT 1').get(podId)) throw new Error('A member Pod already belongs to a network or has run history')
   }
-}
-
-function mailConfiguration(context: CompositionContext, composition: PortableComposition, document: CompositionDocument) {
-  const mail = document.mail
-  if (!mail) return null
-  const filter = context.manifest.pods.find(pod => pod.key === mail.filter)!
-  const application = context.resources.aliases(context.podId(filter.key)).find(item => item.alias === mail.application)
-  if (application?.resource.state !== 'ready' || application.resource.configuration.type !== 'program') throw new Error('Bind the mail filter application before creating this workflow')
-  const text = (input: string) => String(context.value(composition.key, input))
-  return parseMailWorkflowConfiguration({ mailbox: text(mail.mailbox), filterPodId: context.podId(mail.filter), notifyPodId: context.podId(mail.notify), applicationId: application.resource.id, telegramCredential: mail.telegramCredential, telegramChatId: text(mail.telegramChat), protectedPartners: JSON.parse(text(mail.protectedPartners)), rules: JSON.parse(text(mail.rules)), mode: mail.mode })
-}
-
-// The native definition of a sequence or channel graph from its package document.
-export function workflowCommand(context: CompositionContext, composition: PortableComposition, document: CompositionDocument, id: string, groupId: string | null) {
-  const values = (document.values ?? []).map(binding => ({ name: binding.name, value: String(context.value(composition.key, binding.input)), revision: 0 }))
-  return parseWorkflowCommand({ type: 'save', id, revision: 0, name: clip(composition.title), nodes: composition.nodes.map(node => ({ podId: context.podId(node.pod), after: node.after.map(context.podId), handoff: node.handoff })), schedule: document.schedule, enabled: false, mail: mailConfiguration(context, composition, document),
-    ...(composition.kind === 'channels' ? { mode: 'channels', groupId, channels: document.channels, gates: document.gates, values } : {}) }) as Extract<WorkflowCommand, { type: 'save' }>
 }
 
 export function assertApproved(context: CompositionContext, pod: PortablePod): { podId: string, hash: string } {
@@ -130,28 +98,6 @@ export function joinGroup(store: PodDatabase, podIds: string[], groupId: string)
   if (joined) store.db.prepare('UPDATE pod_organization SET revision=revision+1 WHERE id=1').run()
 }
 
-// Publishes a called workflow's ports as an immutable revision and grants the declared network members their call.
-function grantCalls(context: CompositionContext, workflows: WorkflowEngine, networkId: string, groupId: string, calls: { pod: string, workflow: string }[], files: ReadonlyMap<string, Uint8Array>): void {
-  const decoder = new TextDecoder('utf-8', { fatal: true })
-  for (const key of new Set(calls.map(call => call.workflow))) {
-    const composition = context.manifest.compositions.find(item => item.key === key)!; const workflowId = context.workflowId(key)
-    if (!workflowId) throw new Error('Create the called workflow before the network that calls it')
-    for (const node of composition.nodes) assertApproved(context, context.manifest.pods.find(item => item.key === node.pod)!)
-    const document = JSON.parse(decoder.decode(files.get(composition.document)!)) as CompositionDocument & { ports: { inputs: { pod: string }[], outputs: { pod: string }[], requiredTerminals: string[] } | null }
-    if (!document.ports) throw new Error('A called workflow needs declared ports')
-    // A call is only honored for a workflow of the network's own group whose members belong to that group.
-    const current = context.store.db.prepare('SELECT group_id FROM workflows WHERE id=? AND archived=0').get(workflowId)
-    if (current?.group_id !== groupId || composition.nodes.some(node => context.store.db.prepare('SELECT group_id FROM pod_memberships WHERE pod_id=?').get(context.podId(node.pod))?.group_id !== groupId)) throw new Error('The called workflow must belong to the group of the network that calls it')
-    const ports = { ...document.ports, inputs: document.ports.inputs.map(({ pod, ...port }) => ({ ...port, podId: context.podId(pod) })), outputs: document.ports.outputs.map(({ pod, ...port }) => ({ ...port, podId: context.podId(pod) })), requiredTerminals: document.ports.requiredTerminals.map(context.podId) }
-    const definition = workflows.view().workflows.find(item => item.id === workflowId)
-    if (!definition) throw new Error('The called workflow no longer exists')
-    const revision = workflows.publishRevision(workflowId, definition.revision, ports).revision
-    for (const call of calls.filter(call => call.workflow === key)) {
-      context.store.db.prepare('INSERT INTO workflow_call_permissions VALUES(?,?,?,?,?,?,?,1,1)').run(workflowId, revision, networkId, context.podId(call.pod), context.owner.issuer, context.owner.subject, groupId)
-    }
-  }
-}
-
 // Collections and artifact scopes are new owner records in the recipient's group; a name already in use is an explicit reuse decision, never an implicit attachment.
 function grantData(context: CompositionContext, networkId: string, groupId: string, document: CompositionDocument, files: ReadonlyMap<string, Uint8Array>, reuse: Record<string, string>): void {
   const decoder = new TextDecoder('utf-8', { fatal: true }); const now = Date.now(); const collectionIds = new Map<string, string>()
@@ -184,10 +130,10 @@ function grantData(context: CompositionContext, networkId: string, groupId: stri
   }
 }
 
-// Creates the imported persistent network paused with its shared values, data access and workflow calls. Activation stays a separate owner step.
+// Creates the imported persistent network paused with its shared values and data access. Activation stays a separate owner step.
 // The native setup fingerprint cannot exist for fresh Pods that join their group and definition binding only here; the import review
 // of the package's declared members, channels, values and access is the owner's reviewed setup instead.
-export async function finalizeNetwork(context: CompositionContext, engines: { networks: NetworkEngine, workflows: WorkflowEngine, catalog: DefinitionCatalog }, composition: PortableComposition, document: CompositionDocument, files: ReadonlyMap<string, Uint8Array>, groupId: string, reuse: Record<string, string>, record: (networkId: string) => void): Promise<void> {
+export async function finalizeNetwork(context: CompositionContext, engines: { networks: NetworkEngine, catalog: DefinitionCatalog }, composition: PortableComposition, document: CompositionDocument, files: ReadonlyMap<string, Uint8Array>, groupId: string, reuse: Record<string, string>, record: (networkId: string) => void): Promise<void> {
   const members = document.members ?? []
   if (!context.store.db.prepare('SELECT 1 FROM pod_groups WHERE id=?').get(groupId)) throw new Error('A persistent network needs an existing group')
   for (const node of composition.nodes) assertApproved(context, context.manifest.pods.find(item => item.key === node.pod)!)
@@ -207,7 +153,6 @@ export async function finalizeNetwork(context: CompositionContext, engines: { ne
     const networkId = engines.networks.execute({ type: 'create', draft }).createdId
     if (!networkId) throw new Error('Network creation returned no identity')
     grantData(context, networkId, groupId, document, files, reuse)
-    grantCalls(context, engines.workflows, networkId, groupId, document.calls ?? [], files)
     record(networkId)
   })
 }

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import RemotePodEditor from './RemotePodEditor.vue'
 import ScriptCode from '../ScriptCode.vue'
-import type { WorkflowView } from '../../contracts/workflows'
 import PodLifecycle from './PodLifecycle.vue'
 import { t, diagnostic, label } from '../i18n'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
@@ -12,7 +11,7 @@ import type { ScriptSource } from '../../contracts/scripts'
 import { WorkspaceRequestError } from './client'
 import { connected, connectionAfter, connectionLevel } from './status'
 
-const props = defineProps<{ client: CentralClient, desktop?: boolean, desktopStatus?: CentralStatus | null, embedded?: boolean, workflows?: WorkflowView, sharedEditor?: boolean }>()
+const props = defineProps<{ client: CentralClient, desktop?: boolean, desktopStatus?: CentralStatus | null, embedded?: boolean, sharedEditor?: boolean }>()
 const emit = defineEmits<{ network: [runtimeId: string, networkId: string], settings: [], login: [], logout: [], inventory: [value: CentralRuntime[]], connection: [error: string] }>()
 const runtimes = ref<CentralRuntime[]>([])
 const selected = ref<{ runtimeId: string, podId: string } | null>(null)
@@ -61,8 +60,7 @@ const localEditor = computed(() => props.desktop && !!props.desktopStatus?.runti
 function visiblePods(host: CentralRuntime) { return host.workspace.pods.filter(pod => (pod.lifecycle === 'archived') === archived.value && pod.name.toLowerCase().includes(search.value.toLowerCase())) }
 function memberships(runtimeId: string, id: string) {
   const host = runtimes.value.find(item => item.id === runtimeId)
-  const view = runtimeId === props.desktopStatus?.runtimeId ? props.workflows : host?.workflows
-  return [...view?.workflows.filter(item => item.nodes.some(node => node.podId === id)).map(item => item.name) ?? [], ...host?.networks?.networks.filter(network => network.podIds?.includes(id)).map(network => network.name) ?? []].join(' · ')
+  return (host?.networks?.networks.filter(network => network.podIds?.includes(id)).map(network => network.name) ?? []).join(' · ')
 }
 
 function editorState() {
@@ -354,7 +352,7 @@ onBeforeUnmount(() => { generation++; abort.abort() })
             {{ t('This Pod belongs to network work. Read its network details; review changes on the desktop.') }}
           </p>
           <button v-if="sharedEditor && runtime" class="text-button" @click="emit('network', runtime.id, current.pod.networkId)">
-            {{ t('Networks & workflows') }}
+            {{ t('Networks') }}
           </button>
         </section>
         <RemotePodEditor v-else-if="sharedEditor && current && runtime" :key="`${runtime.id}:${current.pod.id}`" :client="client" :runtime="runtime" :summary="current" :online="available" @dirty="remoteDirty = $event" @busy="remoteBusy = $event" @settings="emit('settings')" />

@@ -56,7 +56,6 @@ export class Recovery {
   }
 
   async retry(podId: string, runId: string): Promise<void> {
-    if (this.store.db.prepare('SELECT 1 FROM workflow_attempts WHERE run_id=?').get(runId)) throw new Error('Retry this node from its workflow to preserve dependency order')
     await this.inspect(podId, runId); this.validate(podId)
     this.store.transaction(() => {
       const previous = this.store.db.prepare('SELECT request_event_id FROM recovery_reviews WHERE run_id=?').get(runId)?.request_event_id
@@ -69,7 +68,6 @@ export class Recovery {
   }
 
   retryQueue(podId: string): void {
-    if (this.store.db.prepare('SELECT 1 FROM workflow_reservations WHERE pod_id=?').get(podId)) throw new Error('Pod is reserved by an unfinished workflow')
     this.validate(podId)
     if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=?').get(podId)) throw new Error('Recover or finish the active run first')
     if (this.store.db.prepare('SELECT 1 FROM accepted_events WHERE pod_id=? AND state IN (\'blocked\',\'failed\') AND run_id IS NOT NULL').get(podId)) throw new Error('Recover the failed run before retrying queued input')

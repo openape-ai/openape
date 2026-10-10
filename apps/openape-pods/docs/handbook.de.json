@@ -19,14 +19,14 @@
       "image": "handbook-automations-de.png",
       "paragraphs": [
         "Automatisierungen ist der Starttab. Die fünf Kennzahlen oben sind Systemzähler: aktiv, pausiert, gestört, Entscheidungen warten auf dich und unklare Zustellungen. Ihre Untertitel kommen aus deinen Daten, etwa der Name eines gestörten Pods und sein Grund.",
-        "Die Karte zeigt deine Pods in der Mitte, links die Services, Applikationen und Verzeichnisse, die sie lesen, rechts reine Ziele und oben die Autoritäten: deine Entscheidungen, den Identity Provider und die KI. Gepunktete Linien tragen die aufgezeichneten Lese- und Schreibzugriffe der letzten 24 Stunden; Netze und Ketten erscheinen als Gruppen mit ihren Mitgliedern. Liste zeigt dieselben Pods als Tabelle. Filtere nach Gruppe und blende Ebenen mit den Chips Kanäle, Lesen, Schreiben, Freigaben und Pausierte aus.",
+        "Die Karte zeigt deine Pods in der Mitte, links die Services, Applikationen und Verzeichnisse, die sie lesen, rechts reine Ziele und oben die Autoritäten: deine Entscheidungen, den Identity Provider und die KI. Gepunktete Linien tragen die aufgezeichneten Lese- und Schreibzugriffe der letzten 24 Stunden; Netze erscheinen als Gruppen mit ihren Mitgliedern. Liste zeigt dieselben Pods als Tabelle. Filtere nach Gruppe und blende Ebenen mit den Chips Kanäle, Lesen, Schreiben, Freigaben und Pausierte aus.",
         "Wähle einen Knoten, um seine Fakten im Infofeld zu lesen. Details öffnen führt zur Detailseite mit Zeitplan, Mitgliedern, Entscheidungsstellen, Zahlen, Zugriffen nach Art, Geheimnissen als Aliase, Kanälen, dem Entwicklerabschnitt und dem letzten Lauf. Pausieren, Fortsetzen und Jetzt ausführen sind die Owner-Befehle auf dieser Seite; nichts hier schreibt in deine Konten.",
         "Stand HH:MM kennzeichnet im Browser einen veröffentlichten Schnappschuss; Live · HH:MM bedeutet, der Desktop antwortet direkt. Der Browser zeigt denselben Tab aus dem Schnappschuss des gewählten Desktops. Native Bedienelemente wie das Öffnen des Script-Ordners oder die Wahl einer privaten Datei bleiben am Desktop und sind im Browser deaktiviert."
       ],
       "steps": [
         "Öffne Pods; Automatisierungen ist die Startseite.",
         "Wechsle zwischen Karte und Liste, wähle eine Gruppe und schalte die Ebenen um.",
-        "Wähle einen Pod, eine Kette oder ein Netz und wähle Details öffnen.",
+        "Wähle einen Pod oder ein Netz und wähle Details öffnen.",
         "Nutze Pausieren, Fortsetzen oder Jetzt ausführen auf der Detailseite. Details öffnen im Entwicklerabschnitt öffnet den Pod-Editor für Berechtigungen, Variablen und Geheimnisse, Historie und Identität."
       ]
     },
@@ -389,14 +389,14 @@
       "steps": []
     },
     {
-      "id": "workflows",
-      "title": "Netze und Ketten auf der Karte",
+      "id": "networks",
+      "title": "Netze auf der Karte",
       "paragraphs": [
-        "Netze und Ketten erscheinen auf der Karte der Automatisierungen als Gruppen mit ihren Mitgliedern: Ein Netz tauscht Einträge über die deklarierten Kanäle seiner Pods aus, eine Kette führt ihre Pods der Reihe nach aus. Codex legt sie an und ändert sie; die Detailseite zeigt Mitglieder, Entscheidungsstellen, Zahlen, Zeitplan und den letzten Lauf und bietet Pausieren, Fortsetzen und Jetzt ausführen. Die Rechte und unabhängigen Zeitpläne der Pods bleiben erhalten. Jedes Mitglied nutzt seine eigenen Anwendungen, HTTP-Ziele, Geheimnisse und Ordner genau wie ein einzelner Pod, und jeder Befehl und jedes Ziel braucht weiterhin seine Freigabe beim Identity Provider; nur das Archiv-Mitglied hinter einer Freigaberoute verschiebt Mail ausschließlich über das freigegebene Bündel.",
+        "Netze erscheinen auf der Karte der Automatisierungen als Gruppen mit ihren Mitgliedern: Ein Netz tauscht Einträge über die deklarierten Kanäle seiner Pods aus. Codex legt sie an und ändert sie; die Detailseite zeigt Mitglieder, Entscheidungsstellen, Zahlen, Zeitplan und den letzten Lauf und bietet Pausieren und Fortsetzen. Die Rechte der Pods bleiben erhalten. Jedes Mitglied nutzt seine eigenen Anwendungen, HTTP-Ziele, Geheimnisse und Ordner genau wie ein einzelner Pod, und jeder Befehl und jedes Ziel braucht weiterhin seine Freigabe beim Identity Provider; nur das Archiv-Mitglied hinter einer Freigaberoute verschiebt Mail ausschließlich über das freigegebene Bündel.",
         "Codex kann außerdem das Skript eines Netzwerk-Pods korrigieren, während das Netzwerk weiterläuft – solange Kanäle, Rechte und Abhängigkeiten gleich bleiben und dieser Pod keine laufende oder unsichere Arbeit hat. Offene Fragen anderer Pods bleiben davon unberührt. Die Detailseite des Pods zeigt die Änderung unter Skriptänderungen; fehlgeschlagene Läufe dieses Pods können danach mit dem korrigierten Skript neu starten, sofern sie keine externe Wirkung versucht haben.",
         "Gepunktete Linien zeigen die aufgezeichneten Übergaben der letzten 24 Stunden. Ein Zähler bestätigt keine erfolgreiche externe Aktion: Prüfe die Historie des Pods und das tatsächliche Ergebnis. Kanalbezeichnungen behalten ihre genauen technischen Namen. Offene Rückfragen und wartende Freigaben eines Netzes zählt der Tab Entscheidungen.",
-        "Prompt-Engineering beschreibt eine begrenzte Aufgabe und ihre Ergebniskriterien innerhalb eines Pods. Loop-Engineering verwendet endliche Versuchs- und Zeitlimits im Script und ein sichtbares Fehler- oder Prüfergebnis beim Erreichen des Limits. Graph-Engineering koordiniert validierte Übergaben und menschliche Freigaben. Ein Modell vergibt keine Rechte und genehmigt keine Freigabe. Netzwerke laufen weiterhin in begrenzten manuellen oder geplanten Ausführungen; Rückkopplungen zwischen Pods werden nicht unterstützt.",
-        "Eine Kette besitzt einen eigenen Intervall-, Tages-, Einmal- oder Cron-Zeitplan. Neue Zeitpläne sind ausgeschaltet. Jetzt ausführen funktioniert auch bei pausierter Kette und pausierten Pods. Pausieren verhindert neue Starts; bereits laufende Pods können abschließen. Die Historie zeigt Warte- und Sperrgründe. Wiederholen erhält fertige Schritte; unklare externe Ergebnisse müssen zuerst geklärt werden.",
+        "Prompt-Engineering beschreibt eine begrenzte Aufgabe und ihre Ergebniskriterien innerhalb eines Pods. Loop-Engineering verwendet endliche Versuchs- und Zeitlimits im Script und ein sichtbares Fehler- oder Prüfergebnis beim Erreichen des Limits. Netz-Engineering verbindet validierte Ergebnisse über deklarierte Kanäle und Entscheidungen des Owners. Ein Modell vergibt keine Rechte und genehmigt keine Freigabe. Netze laufen weiterhin in begrenzten manuellen oder geplanten Ausführungen; ein Kreislauf zwischen Pods braucht einen deklarierten, begrenzten Rückkopplungsschritt.",
+        "Netze sind der einzige Weg, Pods zu verbinden. Das Update auf Schema 45 hat die bisherigen Workflows und Ketten zusammen mit den Pods archiviert, die nur sie genutzt haben; ihre Historie bleibt in der Sicherung vor dem Update erhalten. Einen noch benötigten Workflow baust du mit Codex als Netz neu auf.",
         "Mail-Bearbeitung läuft als Netz mit Freigabe-Gates: Ohne freigegebenes Bündel wird nichts archiviert, und unsichere Mail wartet als Rückfrage im Tab Entscheidungen. Der erste Lauf setzt einen stillen Ausgangspunkt; geschützte Absender, Empfänger und bekannte Unterhaltungen bleiben zur menschlichen Prüfung."
       ],
       "steps": [
@@ -428,13 +428,13 @@
       "id": "sharing",
       "title": "Portable Pakete teilen und importieren",
       "paragraphs": [
-        "Teilen packt einen Pod oder einen vollständigen Workflow bzw. ein Netzwerk in eine .openape-Datei: die gewählten Skripte, ihre Abhängigkeits-Locks, deklarierte Eingaben und Zugriffe sowie die Dateien, die du ausdrücklich aufnimmst. Zugangsdaten, Lauf-Historie, private Ordner, Kontozustände und lokale Identitäten verlassen dein Gerät nie, und die Prüfung zeigt die exakten Dateien, bevor etwas geschrieben wird.",
+        "Teilen packt einen Pod oder ein vollständiges Netzwerk in eine .openape-Datei: die gewählten Skripte, ihre Abhängigkeits-Locks, deklarierte Eingaben und Zugriffe sowie die Dateien, die du ausdrücklich aufnimmst. Zugangsdaten, Lauf-Historie, private Ordner, Kontozustände und lokale Identitäten verlassen dein Gerät nie, und die Prüfung zeigt die exakten Dateien, bevor etwas geschrieben wird.",
         "Jede Dateireferenz braucht eine Entscheidung (aufnehmen oder weglassen), jeder zugewiesene Ordner, jedes HTTP-Ziel und jede Anwendung bekommt einen portablen Alias, und deine Werte bleiben privat, sofern du einen nicht als öffentliche Vorgabe aufnimmst. Eine Datenschutzprüfung markiert lokale Identitäten, Pfade und wahrscheinliche Zugangsdaten; blockierende Funde müssen parametrisiert, Prüffunde bestätigt werden. Die Prüfung ist eine Heuristik, lies deinen Quelltext vor dem Teilen.",
-        "Importieren erzeugt pausierte Kopien mit neuen Identitäten. Nichts läuft, bevor du auf jedem Pod eigene Ordner, Ziele, Anwendungen und Geheimnisse zuweist, die Einrichtung abschließt und die Skripte selbst validierst und aktivierst. Workflows werden deaktiviert angelegt; Netzwerke, aufgerufene Workflows und Mail-Richtlinien erst, nachdem ihre Mitglieds-Skripte freigegeben sind.",
+        "Importieren erzeugt pausierte Kopien mit neuen Identitäten. Nichts läuft, bevor du auf jedem Pod eigene Ordner, Ziele, Anwendungen und Geheimnisse zuweist, die Einrichtung abschließt und die Skripte selbst validierst und aktivierst. Netzwerke werden pausiert angelegt, und erst, nachdem ihre Mitglieds-Skripte freigegeben sind.",
         "Im Browser kannst du einen Import auf dem verbundenen Desktop prüfen und einrichten; das Öffnen der Paketdatei und das Speichern eines Exports passieren auf dem Desktop. Ein Abbruch vor der pausierten Kopie verwirft alles; danach gehören die Pods dir und werden einzeln gelöscht."
       ],
       "steps": [
-        "Öffne die Detailseite eines Pods, einer Kette oder eines Netzes und wähle Exportieren…; lege Pakettitel, Schlüssel, Aliase, aufgenommene Dateien und öffentliche Vorgaben fest.",
+        "Öffne die Detailseite eines Pods oder eines Netzes und wähle Exportieren…; lege Pakettitel, Schlüssel, Aliase, aufgenommene Dateien und öffentliche Vorgaben fest.",
         "Prüfe das exakte Paket und seine Datenschutzfunde, bestätige, was du geprüft hast, und speichere die .openape-Datei.",
         "Öffne auf dem empfangenden Gerät das Zahnradmenü → Portable Pods → Importieren… und öffne die Paketdatei.",
         "Gib die erforderlichen Werte ein, erstelle die pausierte Kopie, binde dann auf jedem Pod Ordner, Ziele und Anwendungen und lege Geheimnisse an.",

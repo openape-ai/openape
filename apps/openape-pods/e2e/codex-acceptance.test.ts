@@ -174,7 +174,7 @@ it.each([false, true])('lets connected Codex configure and run an unrelated Pod 
   expect(await page.getByRole('button', { name: /Prepared by Codex/ }).count()).toBe(0)
 
   if (network) {
-    await page.getByRole('button', { name: 'Networks & workflows', exact: true }).first().click()
+    await page.getByRole('button', { name: 'Networks', exact: true }).first().click()
     await page.getByRole('button', { name: /MCP paused network/ }).click()
     await page.getByRole('heading', { name: 'MCP paused network', exact: true }).waitFor()
     await mkdir(resolve('.artifacts'), { recursive: true })

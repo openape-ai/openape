@@ -9,15 +9,14 @@ import { cadence, stamp } from '../utils/cadence'
 import { nodeFacts } from '../utils/automation-layout'
 
 /**
- * The detail page of one Pod, chain, network or system: state and lifecycle, schedule, membership,
+ * The detail page of one Pod, network or system: state and lifecycle, schedule, membership,
  * access grouped by kind, channels with counters, the active script and the last run. Owner
- * commands leave as the existing central commands; network and workflow controls and the editor
+ * commands leave as the existing central commands; network controls and the editor
  * are native and only enabled where the host is the desktop.
  */
 export interface NetworkControl { type: 'pause' | 'activate', id: string, revision: number }
-export type WorkflowControl = { type: 'pause', id: string, revision: number, paused: boolean } | { type: 'start', id: string, revision: number }
 const props = defineProps<{ view: MapView, id: string, now: number, desktop: boolean, requests?: SecretRequestRow[], sharing?: boolean }>()
-const emit = defineEmits<{ close: [], open: [id: string], command: [command: CentralCommand], network: [control: NetworkControl], workflow: [control: WorkflowControl], secret: [podId: string, alias: string | null], folder: [podId: string], editor: [podId: string], share: [selection: PortableSourceSelection] }>()
+const emit = defineEmits<{ close: [], open: [id: string], command: [command: CentralCommand], network: [control: NetworkControl], secret: [podId: string, alias: string | null], folder: [podId: string], editor: [podId: string], share: [selection: PortableSourceSelection] }>()
 const pod = computed(() => props.view.pods.find(item => item.id === props.id) ?? null)
 const automation = computed(() => props.view.automations.find(item => item.id === props.id) ?? null)
 const system = computed(() => props.view.systems.find(item => item.id === props.id) ?? null)
@@ -27,7 +26,7 @@ const facts = computed(() => nodeFacts(props.view, props.id))
 const degraded = computed(() => !!pod.value && props.view.kpis.degraded.some(item => item.podId === pod.value!.id))
 const paused = computed(() => automation.value ? automation.value.state !== 'active' : pod.value?.lifecycle === 'paused')
 const title = computed(() => pod.value?.name ?? automation.value?.name ?? system.value?.name ?? props.id)
-const kind = computed(() => automation.value ? t(automation.value.kind === 'network' ? 'Network' : 'Chain') : pod.value ? t('Pod') : system.value ? t('System') : '')
+const kind = computed(() => automation.value ? t('Network') : pod.value ? t('Pod') : system.value ? t('System') : '')
 const group = computed(() => pod.value?.group ?? automation.value?.group ?? null)
 const byKind = (kind: MapResource['kind']) => pod.value?.resources.filter(resource => resource.kind === kind) ?? []
 const secrets = computed(() => pod.value?.secrets ?? [])
@@ -40,13 +39,10 @@ const scriptPath = computed(() => pod.value ? `pods/${pod.value.id}/pod-script.m
 const canControlAutomation = computed(() => !!automation.value && props.desktop)
 function toggle() {
   if (pod.value) { emit('command', { channel: 'scheduling', body: { type: 'lifecycle', podId: pod.value.id, revision: pod.value.revision, lifecycle: paused.value ? 'active' : 'paused' } }); return }
-  if (!automation.value) return
-  if (automation.value.kind === 'network' && !automation.value.bounded) emit('network', { type: paused.value ? 'activate' : 'pause', id: automation.value.id, revision: automation.value.revision })
-  else emit('workflow', { type: 'pause', id: automation.value.id, revision: automation.value.revision, paused: !paused.value })
+  if (automation.value) emit('network', { type: paused.value ? 'activate' : 'pause', id: automation.value.id, revision: automation.value.revision })
 }
 function runNow() {
   if (pod.value?.script) emit('command', { channel: 'runs', body: { type: 'start', podId: pod.value.id, expectedScript: pod.value.script } })
-  else if (automation.value) emit('workflow', { type: 'start', id: automation.value.id, revision: automation.value.revision })
 }
 </script>
 
@@ -63,7 +59,7 @@ function runNow() {
       <button v-if="pod || automation" class="secondary" type="button" :disabled="!!automation && !canControlAutomation" :title="automation && !canControlAutomation ? t('Only on the desktop') : undefined" @click="toggle">
         {{ paused ? t('Resume') : t('Pause') }}
       </button>
-      <button v-if="(pod && !paused) || (automation?.kind === 'chain' && !paused)" class="secondary" type="button" :disabled="pod ? !pod.script : !canControlAutomation" :title="pod && !pod.script ? t('no active script') : undefined" @click="runNow">
+      <button v-if="pod && !paused" class="secondary" type="button" :disabled="!pod.script" :title="!pod.script ? t('no active script') : undefined" @click="runNow">
         {{ t('Run now') }}
       </button>
     </div>
@@ -112,7 +108,7 @@ function runNow() {
     </div>
     <div v-if="automation && sharing" class="sec">
       <div class="opts">
-        <button class="secondary" type="button" @click="emit('share', { kind: automation.kind === 'network' ? 'network' : 'workflow', id: automation.id })">
+        <button class="secondary" type="button" @click="emit('share', { kind: 'network', id: automation.id })">
           {{ t('Export…') }}
         </button>
       </div>

@@ -2,7 +2,7 @@ import { occupiedRunSlots } from '../runs/slots'
 import { recoveryDecision, recoveryHold } from '../recovery/policy'
 import type { RecoveryFailure } from '../recovery/policy'
 import { NetworkData } from './network-data'
-import { emptyNetworkDataPin, networkConfiguration, networkDataPin, networkLegacyVariables } from './network-config'
+import { emptyNetworkDataPin, networkConfiguration, networkDataPin, networkVariables } from './network-config'
 import type { NetworkGates } from './network-gates'
 import type { NetworkGateManifest } from '../../contracts/network-gates'
 import { assertNetworkQuota, NetworkQuotaError } from './network-quota'
@@ -17,7 +17,6 @@ import { confirmDomainsStopped } from '../recovery/domains'
 import type { PodDatabase } from '../storage/database'
 import { NetworkEvents, NetworkEventConflict, canonicalNetworkJson } from './network-events'
 import type { NetworkAuthority, NetworkEmission } from './network-events'
-import type { WorkflowCalls } from '../workflows/calls'
 
 /** A member script gets the standalone script time limit and agent allowance; one more minute covers launch and settlement. */
 const networkScriptDeadlineMs = scriptTimeLimitMs + maxAgentPauseMs + 60000
@@ -37,7 +36,6 @@ export function memberEffectHold(store: PodDatabase, podId: string): string | nu
 
 export class NetworkInvocations {
   gates?: NetworkGates
-  calls?: WorkflowCalls
   readonly events: NetworkEvents
   readonly data: NetworkData
   constructor(private readonly store: PodDatabase, private readonly runs: RunStore, private readonly helper: string) {
@@ -141,7 +139,7 @@ export class NetworkInvocations {
     const checkpoint = this.store.db.prepare('SELECT revision,body FROM network_checkpoints WHERE network_id=? AND pod_id=?').get(definition.id, member.podId)!
     const items = this.store.db.prepare(`SELECT e.id,e.item_key,e.channel,e.payload,e.case_id,e.case_revision FROM network_deliveries d JOIN network_events e ON e.id=d.event_id
       WHERE d.run_id=? AND d.state='claimed' ORDER BY d.accepted_at,d.id`).all(authority.runId).map(item => ({ eventId: item.id as string, key: item.item_key as string, channel: networkApprovals(definition).find(approval => approval.podId === member.podId && approval.takes === item.channel)?.gives ?? item.channel as string, data: JSON.parse(item.payload as string) as Record<string, unknown>, artifacts: this.events.references(item.id as string), caseId: item.case_id as string, caseRevision: item.case_revision as number }))
-    return { variables: networkLegacyVariables(this.store, definition.id), config: networkConfiguration(this.store, definition.id, member.podId), network: { id: definition.id, revision: definition.revision, source: member.source !== null }, items, checkpoint: { revision: checkpoint.revision as number, body: JSON.parse(checkpoint.body as string) as Record<string, unknown> }, resourceEpoch: (JSON.parse(row.manifest as string) as { resourceEpoch: number }).resourceEpoch }
+    return { variables: networkVariables(this.store, definition.id), config: networkConfiguration(this.store, definition.id, member.podId), network: { id: definition.id, revision: definition.revision, source: member.source !== null }, items, checkpoint: { revision: checkpoint.revision as number, body: JSON.parse(checkpoint.body as string) as Record<string, unknown> }, resourceEpoch: (JSON.parse(row.manifest as string) as { resourceEpoch: number }).resourceEpoch }
   }
 
   recordConflict(authority: NetworkAuthority, failure: unknown): void {
@@ -278,7 +276,6 @@ export class NetworkInvocations {
       if (emissions.length > 500) throw new Error('Network invocation exceeds 500 emissions')
       if (completed) {
         this.data.commit(authority)
-        this.calls?.commit(authority)
         for (const emission of emissions) this.events.accept(authority, emission, true)
         if (row.staged_checkpoint !== null) {
           const staged = JSON.parse(row.staged_checkpoint as string) as { revision: number, body: Record<string, unknown> }
@@ -297,7 +294,6 @@ export class NetworkInvocations {
       const requiresFreshGate = Boolean(JSON.parse(row.manifest as string).gateBindings?.length)
       const decision = recoveryDecision(failure, Number(control.attempt) - 1, unsafe ? 'External outcome requires reconciliation' : control.review_required ? 'Source identity conflict requires owner review' : control.failure_kind === 'quota' ? 'Capacity requires owner review' : requiresFreshGate ? 'A fresh approval is required' : recoveryHold(this.store, member.podId, authority.runId), Date.now(), 3)
       const retry = !completed && decision.disposition === 'retry'
-      if (retry) this.calls?.abandonUnacceptedRetry(authority.runId)
       const retryAt = retry ? decision.nextAt : null
       const nextState = unsafe ? 'unknown' : completed ? 'done' : retry ? 'retry_wait' : 'blocked'
       this.store.db.prepare('UPDATE network_invocation_controls SET deadline=NULL,retry_at=?,failure_kind=?,diagnostic=?,stopped_receipt=? WHERE run_id=?').run(retryAt, completed ? null : unsafe ? 'uncertain' : control.failure_kind === 'quota' ? 'quota' : requiresFreshGate ? 'recovery' : decision.disposition === 'hold' ? 'recovery' : retry ? 'transient' : 'exhausted', error, canonicalNetworkJson({ processesStopped: true, generation: row.generation, inspectedAt: Date.now() }), authority.runId)

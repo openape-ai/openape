@@ -13,7 +13,7 @@ import fixture from './map-view.json'
 const view = parseMapView(fixture) as MapView
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; vi.unstubAllGlobals(); applyLanguage('en') })
-const order = 'Zeig mir zuerst Bauform (Pod, Kette oder Netz), Karte, benötigte Zugriffe und die Beispiele, die du als Prüfung verwendest. Lege erst danach an, aktiviere nur als Vorschau, und fordere Rechte ausschließlich über Permissions und den IdP an.'
+const order = 'Zeig mir zuerst Bauform (Pod oder Netz), Karte, benötigte Zugriffe und die Beispiele, die du als Prüfung verwendest. Lege erst danach an, aktiviere nur als Vorschau, und fordere Rechte ausschließlich über Permissions und den IdP an.'
 
 describe('Codex handoff', () => {
   it('builds the brief from the group and the pinned node', () => {

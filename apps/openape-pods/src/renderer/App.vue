@@ -8,7 +8,6 @@ import LocalShell from './central/LocalShell.vue'
 import SharingImport from './SharingImport.vue'
 import SharingExport from './SharingExport.vue'
 import type { PortableSourceSelection, SharingCommand } from '../contracts/sharing'
-import type { WorkflowView } from '../contracts/workflows'
 import type { Organization } from '../contracts/groups'
 import AccountStatus from './AccountStatus.vue'
 import PodDescription from './PodDescription.vue'
@@ -33,7 +32,7 @@ export default defineComponent({
   emits: ['settings'],
   setup() { return { access: usePodAccess() } },
   data() {
-    return { sharing: typeof window.pods?.sharing === 'function', shareSelection: null as PortableSourceSelection | null, requestedRun: '', workflowId: '', workflows: { workflows: [], runs: [] } as WorkflowView, descriptions: [] as AutomationDescription[], requestedSecret: '', approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: this.initialPodId ? 'Overview' : 'Pods', tabs: ['Overview', 'Script', 'Values', 'Permissions', 'Settings', 'History'], pods: [] as StoredPod[], podId: this.initialPodId, creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
+    return { sharing: typeof window.pods?.sharing === 'function', shareSelection: null as PortableSourceSelection | null, requestedRun: '', descriptions: [] as AutomationDescription[], requestedSecret: '', approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: this.initialPodId ? 'Overview' : 'Pods', tabs: ['Overview', 'Script', 'Values', 'Permissions', 'Settings', 'History'], pods: [] as StoredPod[], podId: this.initialPodId, creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
   computed: {
     activeTab(): string { return this.selected === 'Knowledge' ? 'Overview' : this.selected },
@@ -66,8 +65,7 @@ export default defineComponent({
       if (this.busy || (!this.access.remote && this.status?.worker.state !== 'ready')) return
       this.busy = true
       try {
-        const [workspace, workflows] = await Promise.all([this.access.api.workspace({ type: 'list' }), this.access.api.workflows({ type: 'list' })])
-        this.workspaceChanged(workspace); this.workflows = workflows
+        this.workspaceChanged(await this.access.api.workspace({ type: 'list' }))
         if (!this.pods.some(pod => pod.id === this.podId)) this.podId = this.creating || this.embedded ? '' : this.pods[0]?.id ?? ''
         const id = this.podId
         if (!id) { this.details = null; this.runs = []; this.schedule = null; this.resourceCount = 0; return }
@@ -165,13 +163,6 @@ export default defineComponent({
         <section v-else id="panel-Overview" role="tabpanel" aria-labelledby="tab-Overview">
           <template v-if="pod">
             <PodDescription :key="pod.id" :pod-id="pod.id" />
-            <article v-if="workflows.contracts?.[pod.id]" class="card pod-contract">
-              <div class="card-heading">
-                <h2>{{ t('Contract') }}</h2><span class="badge">{{ workflows.contracts[pod.id]!.summary }}</span>
-              </div>
-              <p><strong>{{ t('Receives') }}</strong> {{ workflows.contracts[pod.id]!.takes.join(', ') || t('Nothing, starts with the network') }}</p>
-              <p><strong>{{ t('Produces') }}</strong> {{ workflows.contracts[pod.id]!.gives.join(', ') || t('Nothing') }}</p>
-            </article>
             <article class="card">
               <div class="card-heading">
                 <h2>{{ t('Last run') }}</h2><span class="badge">{{ label(runs[0]?.state ?? 'Not run yet') }}</span>

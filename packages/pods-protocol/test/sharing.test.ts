@@ -22,8 +22,8 @@ function fixture(): PortableManifest {
   }))
   return {
     format: 'openape-package', version: 1, package: { key: 'morning_briefing', revision: 1, title: 'Morning briefing', description: 'Synthetic only' }, requiredFeatures: ['portable_aliases_v1'],
-    entry: { kind: 'sequence', key: 'briefing' }, pods,
-    compositions: [{ key: 'briefing', kind: 'sequence', title: 'Briefing', document: 'compositions/briefing.json', documentVersion: 1, nodes: pods.map((pod, index) => ({ pod: pod.key, after: index ? [pods[index - 1]!.key] : [], handoff: index > 0 })), calls: [], inputs: [], dataSchemas: [] }],
+    entry: { kind: 'network', key: 'briefing' }, pods,
+    compositions: [{ key: 'briefing', kind: 'network', title: 'Briefing', document: 'compositions/briefing.json', documentVersion: 1, nodes: pods.map(pod => ({ pod: pod.key, after: [], handoff: false })), calls: [], inputs: [], dataSchemas: [] }],
     applications: ['mail_app', 'missing_app'].map(key => ({ key, application: `org.example.${key.replaceAll('_', '-')}`, adapter: { identity: 'org.example.fixture', version: 1, operations: ['invoke'] }, testedVersions: ['1.0.0'], platforms: [{ os: 'darwin', architecture: 'arm64' }], distribution: null, instructions: 'Select the compatible fixture application on the recipient desktop.' })),
     files: [
       ...pods.map(pod => ({ path: pod.script, kind: 'script' as const, bytes: 100, sha256: hash, mediaType: 'text/javascript' })),
@@ -34,9 +34,9 @@ function fixture(): PortableManifest {
 }
 
 describe('portable package boundary', () => {
-  it('preserves three-Pod topology, typed declarations and distinct account roles without authority', () => {
+  it('preserves three network members, typed declarations and distinct account roles without authority', () => {
     const manifest = parsePortableManifest(fixture())
-    expect(manifest.compositions[0]!.nodes).toEqual([{ pod: 'read', after: [], handoff: false }, { pod: 'summarize', after: ['read'], handoff: true }, { pod: 'send', after: ['summarize'], handoff: true }])
+    expect(manifest.compositions[0]!.nodes).toEqual([{ pod: 'read', after: [], handoff: false }, { pod: 'summarize', after: [], handoff: false }, { pod: 'send', after: [], handoff: false }])
     expect(manifest.pods[0]!.applications[0]!.requirement).toBe(manifest.pods[1]!.applications[0]!.requirement)
     expect(manifest.pods.slice(0, 2).map(pod => pod.inputs[0]!.sharingGroup)).toEqual([null, null])
     expect(manifest.pods[2]!.requestedCapabilities).toContain('tool.mail.invoke')
@@ -55,15 +55,16 @@ describe('portable package boundary', () => {
     expect(() => portablePath(path)).toThrow()
   })
 
-  it('rejects dangling references, cycles, duplicate Pods and invented sequence edges on networks', () => {
+  it('rejects dangling references, duplicate Pods, sequence edges, calls and the retired workflow kinds', () => {
     for (const change of [
-      (manifest: PortableManifest) => { manifest.compositions[0]!.nodes[1]!.after = ['missing'] },
-      (manifest: PortableManifest) => { manifest.compositions[0]!.nodes[0]!.after = ['send'] },
+      (manifest: PortableManifest) => { (manifest.compositions[0]!.nodes[1]! as { after: string[] }).after = ['read'] },
+      (manifest: PortableManifest) => { (manifest.compositions[0]!.nodes[1]! as { handoff: boolean }).handoff = true },
       (manifest: PortableManifest) => { manifest.pods[1]!.key = manifest.pods[0]!.key },
-      (manifest: PortableManifest) => { manifest.compositions[0]!.kind = 'network'; manifest.entry.kind = 'network' },
+      (manifest: PortableManifest) => { Object.assign(manifest.compositions[0]!, { kind: 'sequence' }); Object.assign(manifest.entry, { kind: 'sequence' }) },
+      (manifest: PortableManifest) => { Object.assign(manifest.compositions[0]!, { kind: 'channels' }); Object.assign(manifest.entry, { kind: 'channels' }) },
       (manifest: PortableManifest) => { manifest.pods[0]!.script = 'missing.mjs' },
       (manifest: PortableManifest) => { manifest.pods[0]!.applications[0]!.account = 'destination' },
-      (manifest: PortableManifest) => { manifest.compositions[0]!.calls = ['absent'] },
+      (manifest: PortableManifest) => { (manifest.compositions[0]! as { calls: string[] }).calls = ['briefing'] },
     ]) { const manifest = fixture(); change(manifest); expect(() => parsePortableManifest(manifest)).toThrow() }
   })
 
