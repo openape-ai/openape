@@ -218,7 +218,7 @@ it('describes networks as the only way to connect Pods and offers no workflow or
   const { send } = fixture()
   const reference = await send({ action: 'runtime' }) as { contractVersion: number, channels: Record<string, string>, actions: Record<string, unknown> }
   expect(reference.contractVersion).toBe(3)
-  expect(Object.keys(reference.channels)).toEqual(['purpose', 'persistentRuntime', 'engineering', 'presentation', 'contract', 'items', 'emit', 'routes', 'archive', 'values', 'example'])
+  expect(Object.keys(reference.channels)).toEqual(['purpose', 'persistentRuntime', 'engineering', 'presentation', 'contract', 'items', 'emit', 'routes', 'archive', 'choices', 'values', 'example'])
   expect(Object.keys(reference.actions).filter(action => /workflow|graph|gate|approve/i.test(action))).toEqual([])
   await expect(send({ action: 'saveWorkflow', definition: {} })).rejects.toThrow()
 })
