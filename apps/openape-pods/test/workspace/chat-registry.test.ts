@@ -8,7 +8,6 @@ import { afterEach, expect, it } from 'vitest'
 import { PodDatabase } from '../../src/worker/storage/database'
 import { ChatRegistry } from '../../src/worker/master/chat-registry'
 import { MasterConversations } from '../../src/worker/master/conversations'
-import { WorkflowEngine } from '../../src/worker/workflows/engine'
 import { parseChatsCommand } from '../../src/contracts/chats'
 
 const roots: string[] = []; const stores: PodDatabase[] = []
@@ -22,37 +21,24 @@ afterEach(() => { for (const store of stores.splice(0)) store.close(); for (cons
 it('keeps two conversations for one Pod separate and starts a fresh context without deleting history', () => {
   const { store, chats } = fixture(); const pod = store.createPod({ name: 'Filter' })
   const first = randomUUID(); const second = randomUUID()
-  for (const id of [first, second]) chats.execute({ type: 'create', id, title: 'Review', podIds: [pod.id], workflowId: null, workflowRevision: null })
+  for (const id of [first, second]) chats.execute({ type: 'create', id, title: 'Review', podIds: [pod.id] })
   const before = chats.get(first); const conversations = new MasterConversations(store)
   store.db.prepare('INSERT INTO master_messages VALUES(?,?,?,?,?)').run('message', 'user', 'Original request', 'sent', 1)
   conversations.assign('message', before.scope)
   store.db.prepare('INSERT INTO master_contexts VALUES(?,\'previous-thread\',\'idle\',NULL)').run(before.scope)
-  chats.execute({ type: 'context', id: first, revision: 1, podIds: [], workflowId: null, workflowRevision: null })
+  chats.execute({ type: 'context', id: first, revision: 1, podIds: [] })
   expect(chats.get(first)).toMatchObject({ revision: 2, context: { pods: [] }, relatedPodIds: [pod.id] })
   expect(conversations.session(before.scope).threadId).toBeNull()
   expect(conversations.messages(before.scope)[0]?.text).toBe('Original request')
   expect(conversations.messages(chats.get(second).scope)).toEqual([])
   expect(store.db.prepare('SELECT retired_thread FROM chat_contexts WHERE conversation_id=? AND revision=1').get(first)?.retired_thread).toBe('previous-thread')
-  expect(() => chats.execute({ type: 'context', id: first, revision: 1, podIds: [pod.id], workflowId: null, workflowRevision: null })).toThrow('changed')
-})
-
-it('pins workflow membership without modifying Pods and requires deliberate refresh', () => {
-  const { store, chats } = fixture(); const one = store.createPod({ name: 'Filter' }); const two = store.createPod({ name: 'Report' })
-  const engine = new WorkflowEngine(store, { start: () => 'unused', cancelPod: () => {} }, { inspect: async () => {} })
-  const workflowId = randomUUID(); const nodes = [{ podId: one.id, after: [], handoff: false }]
-  engine.save({ type: 'save', id: workflowId, revision: 0, name: 'Mail', nodes, schedule: null, enabled: false })
-  const id = randomUUID(); chats.execute({ type: 'create', id, title: 'Mail', podIds: [], workflowId, workflowRevision: 1 })
-  engine.save({ type: 'save', id: workflowId, revision: 1, name: 'Mail', nodes: [...nodes, { podId: two.id, after: [one.id], handoff: false }], schedule: null, enabled: false })
-  expect(chats.get(id)).toMatchObject({ workflowChanged: true, context: { pods: [{ id: one.id }] } })
-  chats.execute({ type: 'context', id, revision: 1, podIds: [], workflowId, workflowRevision: 2 })
-  expect(chats.get(id).context.pods.map(pod => pod.id)).toEqual([one.id, two.id])
-  expect(store.getPod(one.id)).toEqual(one); expect(store.getPod(two.id)).toEqual(two)
+  expect(() => chats.execute({ type: 'context', id: first, revision: 1, podIds: [pod.id] })).toThrow('changed')
 })
 
 it('refuses context changes during a model turn and forged fields at the boundary', () => {
   const { store, chats } = fixture(); const conversation = chats.ensure('')
   store.db.prepare('UPDATE master_session SET state=\'running\'').run()
-  expect(() => chats.execute({ type: 'context', id: conversation.id, revision: 1, podIds: [], workflowId: null, workflowRevision: null })).toThrow('active response')
+  expect(() => chats.execute({ type: 'context', id: conversation.id, revision: 1, podIds: [] })).toThrow('active response')
   expect(() => parseChatsCommand({ type: 'list', approved: true })).toThrow('fields')
 })
 

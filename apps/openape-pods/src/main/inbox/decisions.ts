@@ -6,17 +6,14 @@ import type { NetworkChoiceView, NetworkCommand, NetworkView } from '../../contr
 import type { NetworkGateView } from '../../contracts/network-gate-view'
 import type { RunCommand } from '../../contracts/runs'
 import type { SecretsCommand, SecretsView } from '../../contracts/secrets'
-import type { WorkflowCommand, WorkflowView } from '../../contracts/workflows'
 import type { MessageKey, Parameters } from '../../i18n'
-import { workflowDecisions } from './workflow-decisions'
 
-export interface DecisionSources { map: MapView | null, networks: NetworkView, workflows: WorkflowView, secrets: SecretsView | null }
+export interface DecisionSources { map: MapView | null, networks: NetworkView, secrets: SecretsView | null }
 /** The worker calls the projection needs; owner commands run inside the claimed workspace operation. */
 export interface DecisionWorker {
   inboxSources: () => Promise<DecisionSources>
   approvalLink: (podId: string, runId: string, grantId: string) => Promise<string>
   networks: (command: NetworkCommand) => Promise<unknown>
-  workflows: (command: WorkflowCommand) => Promise<unknown>
   runs: (command: RunCommand) => Promise<unknown>
   secrets: (command: SecretsCommand) => Promise<unknown>
 }
@@ -24,8 +21,6 @@ type Translate = (key: MessageKey, parameters?: Parameters) => string
 type Act = (option: string, input: string) => Promise<unknown>
 export interface DecisionEntry { decision: InboxDecision, act: Act }
 type Draft = Omit<InboxDecision, 'sourceId' | 'type' | 'digest'>
-/** What a source projection needs from the inbox: entry building, translation and Pod names. */
-export interface DecisionProjection { entry: (type: InboxDecisionType, parts: string[], draft: Draft, act: Act) => DecisionEntry, t: Translate, podName: (podId: string) => string | null, openBatch: readonly string[] }
 
 // Batch states the desktop Decisions view lists as open.
 const openBatch = ['preparing', 'pending', 'consuming', 'unknown', 'superseded'] as const
@@ -71,8 +66,7 @@ export class InboxDecisions {
 
   private async entries(): Promise<DecisionEntry[]> {
     const sources = await this.worker.inboxSources()
-    const projection: DecisionProjection = { entry: (type, parts, draft, act) => this.entry(type, parts, draft, act), t: this.t, podName: podId => this.podName(sources, podId), openBatch }
-    const entries = [...this.networkRoutes(sources), ...workflowDecisions(sources.workflows, sources.map, this.worker.workflows, projection), ...await this.approvals(sources), ...this.effects(sources), ...this.secrets(sources)]
+    const entries = [...this.networkRoutes(sources), ...await this.approvals(sources), ...this.effects(sources), ...this.secrets(sources)]
     // One malformed source (for example a non-HTTPS issuer) must not block every other decision.
     const valid = entries.filter((entry) => {
       try { parseInboxDecision(entry.decision); return true }

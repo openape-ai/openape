@@ -9,9 +9,9 @@ import { applyLanguage } from '../../src/renderer/i18n'
 
 afterEach(() => applyLanguage('en'))
 const manifest = {
-  format: 'openape-package', version: 1, package: { key: 'fixture', revision: 2, title: 'Morning briefing', description: 'Reads mail and summarizes it' }, requiredFeatures: ['portable_aliases_v1'], entry: { kind: 'sequence', key: 'flow' }, applications: [], files: [], contentSha256: 'a'.repeat(64),
+  format: 'openape-package', version: 1, package: { key: 'fixture', revision: 2, title: 'Morning briefing', description: 'Reads mail and summarizes it' }, requiredFeatures: ['portable_aliases_v1'], entry: { kind: 'network', key: 'flow' }, applications: [], files: [], contentSha256: 'a'.repeat(64),
   pods: [{ key: 'reader', title: 'Reader', description: '', script: 'pods/reader/run.mjs', packages: null, contract: null, requestedCapabilities: ['tool.api.request'], access: [{ kind: 'http', alias: 'api', origin: 'input_2', methods: ['GET'], authentication: null }], inputs: [{ key: 'input_1', label: 'greeting', description: 'Shown first', kind: 'string', required: true, sharingGroup: null }, { key: 'input_2', label: 'api origin', description: '', kind: 'string', required: true, sharingGroup: null, default: 'https://api.example.test' }], bindings: [{ alias: 'greeting', input: 'input_1' }], applications: [], assets: [] }],
-  compositions: [{ key: 'flow', kind: 'sequence', title: 'Briefing flow', document: 'compositions/flow.json', documentVersion: 1, nodes: [{ pod: 'reader', after: [], handoff: false }], calls: [], inputs: [], dataSchemas: [] }],
+  compositions: [{ key: 'flow', kind: 'network', title: 'Briefing flow', document: 'compositions/flow.json', documentVersion: 1, nodes: [{ pod: 'reader', after: [], handoff: false }], calls: [], inputs: [], dataSchemas: [] }],
 } as unknown as PortableImportView['manifest']
 function importView(state: PortableImportView['state'], unresolved: PortableImportView['unresolved'], revision = 1): PortableImportView {
   return { id: '11111111-1111-4111-8111-111111111111', state, revision, transferSha256: 'b'.repeat(64), manifest, pods: state === 'staged' ? [] : [{ key: 'reader', podId: '22222222-2222-4222-8222-222222222222' }], compositions: [], deferred: [], values: { pods: {}, compositions: {} }, unresolved, error: null }
@@ -27,7 +27,7 @@ it('drives an import from the opened file through values, the paused copy, bindi
     if (command.scope === 'import' && command.type === 'configure') { current = { ...current, revision: 2, values: command.values, unresolved: current.unresolved.filter(item => item.requirement !== 'value') }; return { imports: [current], current } }
     if (command.scope === 'import' && command.type === 'commit') { current = { ...importView('committed', current.unresolved, 3), values: current.values }; return { imports: [current], current } }
     if (command.scope === 'import' && command.type === 'bind') { current = { ...current, revision: 4, unresolved: current.unresolved.filter(item => item.requirement !== 'access') }; return { imports: [current], current } }
-    if (command.scope === 'import' && command.type === 'finalize') { current = { ...current, revision: 5, compositions: [{ key: 'flow', workflowId: '44444444-4444-4444-8444-444444444444', networkId: null }], unresolved: [] }; return { imports: [current], current } }
+    if (command.scope === 'import' && command.type === 'finalize') { current = { ...current, revision: 5, compositions: [{ key: 'flow', networkId: '44444444-4444-4444-8444-444444444444' }], unresolved: [] }; return { imports: [current], current } }
     if (command.scope === 'import' && command.type === 'complete') { current = { ...current, state: 'completed', revision: 6 }; return { imports: [], current } }
     throw new Error(`Unexpected ${command.scope} ${command.type}`)
   })
@@ -51,8 +51,10 @@ it('drives an import from the opened file through values, the paused copy, bindi
   expect((select.element as HTMLSelectElement).selectedOptions[0]?.text.trim()).toBe('Choose an assignment')
   await select.setValue('55555555-5555-4555-8555-555555555555'); await button('Bind').trigger('click'); await flushPromises()
   expect(api).toHaveBeenCalledWith({ scope: 'import', type: 'bind', id: current.id, revision: 3, pod: 'reader', alias: 'api', resourceId: '55555555-5555-4555-8555-555555555555', bundle: null })
+  expect(button('Create composition').attributes('disabled')).toBeDefined()
+  await wrapper.findAll('select').at(-1)!.setValue(organization.groups[0]!.id)
   await button('Create composition').trigger('click'); await flushPromises()
-  expect(api).toHaveBeenCalledWith({ scope: 'import', type: 'finalize', id: current.id, revision: 4, composition: 'flow', groupId: null, reuse: {} })
+  expect(api).toHaveBeenCalledWith({ scope: 'import', type: 'finalize', id: current.id, revision: 4, composition: 'flow', groupId: organization.groups[0]!.id, reuse: {} })
   expect(wrapper.text()).toContain('Created and disabled')
   await button('Finish setup').trigger('click'); await flushPromises()
   expect(api).toHaveBeenCalledWith(expect.objectContaining({ type: 'complete', revision: 5 }))

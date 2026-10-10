@@ -20,7 +20,7 @@ INSERT INTO chat_active VALUES(1,NULL);
     const scope = row.scope as string
     const pod = db.prepare('SELECT id,name FROM pods WHERE id=?').get(scope)
     const id = randomUUID(); const now = Date.now()
-    const context: ChatContext = { podIds: pod ? [scope] : [], pods: pod ? [{ id: scope, name: pod.name as string }] : [], workflow: null }
+    const context: ChatContext = { podIds: pod ? [scope] : [], pods: pod ? [{ id: scope, name: pod.name as string }] : [] }
     db.prepare('INSERT INTO chat_conversations VALUES(?,?,?,?,1,?,?)').run(id, scope, pod ? `${pod.name} conversation` : scope.startsWith('creation:') ? 'New Pod' : 'Workspace chat', pod ? scope : null, now, now)
     db.prepare('INSERT INTO chat_contexts VALUES(?,1,?,NULL,?)').run(id, JSON.stringify(context), now)
     if (pod) db.prepare('INSERT INTO chat_members VALUES(?,?,?)').run(id, scope, pod.name)

@@ -105,10 +105,6 @@ export function remotePodAccess(client: CentralClient, host: () => CentralRuntim
         return { ...summary.value.pod.runs, runs, events: detail?.events ?? [] }
       },
       data: async body => parseDataView(await command('data', body)),
-      workflows: async (body) => {
-        if (body.type !== 'list') throw new Error('Manage workflows on the desktop.')
-        return host().workflows ?? { workflows: [], runs: [] }
-      },
     },
   }
   return { access, state, summary, reconcile, update(value: CentralSummary) { summary.value = value } }

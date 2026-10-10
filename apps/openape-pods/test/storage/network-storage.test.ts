@@ -2,7 +2,6 @@ import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { RunDispatcher } from '../../src/worker/runs/dispatcher'
 import type { AgentRuntime } from '../../src/worker/agent/executor'
 import { Scheduler } from '../../src/worker/scheduling/scheduler'
-import { WorkflowEngine } from '../../src/worker/workflows/engine'
 import { PodGroups } from '../../src/worker/workspace/groups'
 // @vitest-environment node
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
@@ -36,7 +35,8 @@ it('adds empty network storage to schema 27 without converting any legacy identi
   store = reopen(store)
   expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(schemaVersion)
   expect(store.getPod(pod.id).name).toBe('Original identity')
-  expect({ pods: store.db.prepare('SELECT * FROM pods').all(), workflows: store.db.prepare('SELECT * FROM workflows').all(), items: store.db.prepare('SELECT * FROM graph_items').all() }).toEqual(before)
+  // Schema 45 archives the remaining workflow and keeps its rows (issue 1455).
+  expect({ pods: store.db.prepare('SELECT * FROM pods').all(), workflows: store.db.prepare('SELECT * FROM workflows').all(), items: store.db.prepare('SELECT * FROM graph_items').all() }).toEqual({ ...before, workflows: before.workflows.map(row => ({ ...row, archived: 1, enabled: 0, paused: 1 })) })
   for (const table of networkTables) expect(store.db.prepare(`SELECT count(*) AS count FROM ${table}`).get()?.count, table).toBe(0)
 })
 
@@ -107,20 +107,17 @@ it('rejects effect authority crossing a network even when both networks exist', 
   expect(store.db.prepare('SELECT network_id FROM network_effect_attempts').get()?.network_id).toBe(f.networkId)
 })
 
-it('refuses direct legacy dispatch, intake and workflow membership without reserving a network instance', () => {
+it('refuses direct legacy dispatch and intake without reserving a network instance', () => {
   const store = fixture(); const resources = new ResourceRegistry(store, () => {})
   const dispatcher = new RunDispatcher(store, resources, {} as AgentRuntime)
   const f = seedNetwork(store); const beforeRuns = store.db.prepare('SELECT * FROM runs').all()
   const scheduler = new Scheduler(store, dispatcher)
-  const engine = new WorkflowEngine(store, dispatcher, { inspect: async () => {} })
   expect(() => dispatcher.start(f.pod.id)).toThrow('Network instances require')
   expect(() => scheduler.requestManual(f.pod.id)).toThrow('Network instances require')
   expect(() => scheduler.acceptEvent(f.pod.id, 'manual', 'source', {})).toThrow('Network instances require')
-  expect(() => engine.save({ type: 'save', id: randomUUID(), revision: 0, name: 'Legacy workflow', nodes: [{ podId: f.pod.id, after: [], handoff: false }], schedule: null, enabled: false })).toThrow('Network instances cannot join')
   expect(store.db.prepare('SELECT * FROM runs').all()).toEqual(beforeRuns)
   expect(store.db.prepare('SELECT * FROM run_leases').all()).toEqual([])
   expect(store.db.prepare('SELECT * FROM accepted_events').all()).toEqual([])
-  expect(store.db.prepare('SELECT * FROM workflow_members').all()).toEqual([])
 })
 
 it('migrates schema-28 operational authority without changing legacy pins or replaying consumed previews', () => {

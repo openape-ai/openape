@@ -157,11 +157,6 @@ export class NetworkEvents {
     return Number(this.store.db.prepare(`SELECT coalesce(max(json_extract(origin,'$.feedbackHop')),0) AS hop FROM network_events WHERE id IN (SELECT value FROM json_each(?))`).get(JSON.stringify(inputIds))!.hop)
   }
 
-  // Workflow results have no claimed inputs; they inherit the highest hop their case has reached so a call inside a loop cannot reset the count.
-  caseHop(networkId: string, caseId: string, caseRevision: number): number {
-    return Number(this.store.db.prepare(`SELECT coalesce(max(json_extract(origin,'$.feedbackHop')),0) AS hop FROM network_events WHERE network_id=? AND case_id=? AND case_revision=?`).get(networkId, caseId, caseRevision)!.hop)
-  }
-
   // The runtime, not the script, decides whether an emission is a declared feedback transition, how it is identified and how many hops it has.
   feedbackPlan(definition: NetworkDefinition, podId: string, channel: string, inputIds: string[], key: string, inputHop: number): FeedbackPlan {
     const transition = definition.feedback.find(item => item.podId === podId && item.channel === channel) ?? null

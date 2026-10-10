@@ -68,32 +68,8 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
       if (member.source?.schedule) sourceSchedules.set(member.podId, { spec: member.source.schedule, enabled: row.state === 'active' })
     }
     const latest = db.prepare('SELECT r.state,r.started_at,r.finished_at,r.summary FROM network_invocations i JOIN runs r ON r.id=i.run_id WHERE i.network_id=? ORDER BY r.started_at DESC LIMIT 1').get(row.id!)
-    automations.push({ id: row.id as string, revision: Number(row.revision), kind: 'network', bounded: false, name: row.name as string, group: groupName(row.group_id), groupId: row.group_id as string, state: row.state as MapAutomation['state'], members, schedule: source ? { spec: source.source!.schedule, enabled: row.state === 'active' } : null, counts: counter(db.prepare('SELECT state,count FROM network_queue_counts WHERE network_id=?').all(row.id!), 'state', 'count'), flows, gates, lastRun: latest && !published ? run(latest) : null })
+    automations.push({ id: row.id as string, revision: Number(row.revision), kind: 'network', name: row.name as string, group: groupName(row.group_id), groupId: row.group_id as string, state: row.state as MapAutomation['state'], members, schedule: source ? { spec: source.source!.schedule, enabled: row.state === 'active' } : null, counts: counter(db.prepare('SELECT state,count FROM network_queue_counts WHERE network_id=?').all(row.id!), 'state', 'count'), flows, gates, lastRun: latest && !published ? run(latest) : null })
     for (const edge of deriveEdges(definition.members.map(member => ({ podId: member.podId, contract: member.contract })), definition.routes)) edges.push({ from: edge.from, to: edge.to, type: 'channel', channel: edge.channel, flow: flows[edge.channel] ?? 0 })
-  }
-
-  // Workflows: sequence chains hand off along `after`; bounded channel graphs emit along contracts.
-  for (const row of db.prepare('SELECT id,revision,name,nodes,schedule,enabled,paused,mode,group_id FROM workflows WHERE archived=0 ORDER BY rowid').all()) {
-    const nodes = JSON.parse(row.nodes as string) as { podId: string, after: string[] }[]
-    const members = nodes.map(node => node.podId)
-    for (const member of members) automationOf.set(member, row.id as string)
-    const bounded = row.mode === 'channels'
-    const runs = db.prepare('SELECT count(*) AS count FROM workflow_runs WHERE workflow_id=? AND started_at>=?').get(row.id!, from)!.count as number
-    const latest = db.prepare('SELECT state,started_at,finished_at,reason AS summary FROM workflow_runs WHERE workflow_id=? ORDER BY started_at DESC LIMIT 1').get(row.id!)
-    const flows = bounded ? counter(db.prepare('SELECT channel,count(*) AS count FROM graph_item_events WHERE workflow_id=? AND outcome=\'emitted\' AND at>=? GROUP BY channel').all(row.id!, from), 'channel') : {}
-    const gateRows = db.prepare('SELECT definition FROM workflow_gates WHERE workflow_id=? ORDER BY rowid').all(row.id!).map(gate => JSON.parse(gate.definition as string) as GraphGate)
-    const gates = gateRows.map(gate => mapGate(gate, Number(db.prepare('SELECT count(*) AS count FROM graph_deliveries d JOIN graph_items i ON i.id=d.item_id WHERE i.workflow_id=? AND d.node=? AND d.state=\'pending\'').get(row.id!, `gate:${gate.key}`)!.count), counter(db.prepare('SELECT state,count(*) AS count FROM graph_gate_batches WHERE workflow_id=? AND gate=? GROUP BY state').all(row.id!, gate.key), 'state')))
-    const active = row.enabled === 1 && row.paused === 0
-    automations.push({ id: row.id as string, revision: Number(row.revision), kind: bounded ? 'network' : 'chain', bounded, name: row.name as string, group: groupName(row.group_id), groupId: row.group_id as string | null, state: active ? 'active' : 'paused', members, schedule: row.schedule ? { spec: JSON.parse(row.schedule as string), enabled: active } : null, counts: {}, flows, gates, lastRun: latest ? run(latest) : null })
-    if (bounded) {
-      const contracts = members.flatMap(podId => contractOf(podId) ? [{ podId, contract: contractOf(podId)! }] : [])
-      for (const edge of deriveEdges(contracts, gateRows)) edges.push({ from: edge.from, to: edge.to, type: 'channel', channel: edge.channel, flow: flows[edge.channel] ?? 0 })
-    }
-    else {
-      for (const node of nodes) {
-        for (const previous of node.after) edges.push({ from: previous, to: node.podId, type: 'channel', channel: 'handoff', flow: runs })
-      }
-    }
   }
 
   const scriptUpdates = new Map<string, { at: number, previous: string, script: string }>()

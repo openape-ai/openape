@@ -1,6 +1,6 @@
-export const sharingLimits = { transferBytes: 25 * 1024 * 1024, expandedBytes: 100 * 1024 * 1024, manifestBytes: 1024 * 1024, files: 500, pods: 32, inputs: 32, channels: 32, gates: 8, values: 32, valueCharacters: 16384 } as const
+export const sharingLimits = { transferBytes: 25 * 1024 * 1024, expandedBytes: 100 * 1024 * 1024, manifestBytes: 1024 * 1024, files: 500, pods: 32, inputs: 32, valueCharacters: 16384 } as const
 export const portableFileLimits = { script: 800000, 'package-manifest': 16384, 'package-lock': 1024 * 1024, asset: 32 * 1024 * 1024, composition: 1024 * 1024, 'data-schema': 16384 } as const
-export type PortableKind = 'pod' | 'sequence' | 'channels' | 'network'
+export type PortableKind = 'pod' | 'network'
 export type PortableFileKind = 'script' | 'package-manifest' | 'package-lock' | 'asset' | 'composition' | 'data-schema'
 export interface PortableFile { path: string, kind: PortableFileKind, bytes: number, sha256: string, mediaType: string }
 export type PortableInputKind = 'string' | 'number' | 'boolean' | 'enum' | 'directory' | 'account' | 'connection' | 'secret'
@@ -38,7 +38,8 @@ export interface PortablePod {
   assets: string[]
   schedule?: PortableSchedule | null
 }
-export interface PortableNode { pod: string, after: string[], handoff: boolean }
+/** `after` and `handoff` stay in format version 1 but are always empty: networks connect members through channels. */
+export interface PortableNode { pod: string, after: [], handoff: false }
 export interface PortableComposition {
   key: string
   kind: Exclude<PortableKind, 'pod'>
@@ -46,7 +47,8 @@ export interface PortableComposition {
   document: string
   documentVersion: 1
   nodes: PortableNode[]
-  calls: string[]
+  /** Always empty in format version 1: compositions no longer call each other. */
+  calls: []
   inputs: PortableInput[]
   dataSchemas: string[]
 }
@@ -247,25 +249,18 @@ function pod(value: unknown): PortablePod {
 function composition(value: unknown): PortableComposition {
   const item = fields(value, ['key', 'kind', 'title', 'document', 'documentVersion', 'nodes', 'calls', 'inputs', 'dataSchemas'])
   key(item.key); lineText(item.title, 100); portablePath(item.document)
-  oneOf(item.kind, ['sequence', 'channels', 'network'])
+  oneOf(item.kind, ['network'])
   if (item.documentVersion !== 1) fail('unsupported composition format')
-  item.nodes = list(item.nodes, sharingLimits.pods, (value) => { const node = fields(value, ['pod', 'after', 'handoff']); return { pod: key(node.pod), after: names(node.after, 31), handoff: boolean(node.handoff) } })
+  item.nodes = list(item.nodes, sharingLimits.pods, (value) => {
+    const node = fields(value, ['pod', 'after', 'handoff'])
+    if (names(node.after, 31).length || boolean(node.handoff)) fail('network compositions do not use sequence edges')
+    return { pod: key(node.pod), after: [], handoff: false }
+  })
   const nodes = item.nodes as PortableNode[]
   if (!nodes.length) fail('empty composition')
   unique(nodes.map(node => node.pod))
-  for (const node of nodes) {
-    if (node.handoff && !node.after.length) fail('handoff requires a predecessor')
-    if (node.after.some(previous => previous === node.pod || !nodes.some(member => member.pod === previous))) fail('dangling predecessor')
-    if (item.kind !== 'sequence' && (node.after.length || node.handoff)) fail('channel compositions do not use sequence edges')
-  }
-  const visited = new Set<string>()
-  for (let pass = 0; pass < nodes.length; pass++) {
-    for (const node of nodes) {
-      if (node.after.every(previous => visited.has(previous))) visited.add(node.pod)
-    }
-  }
-  if (visited.size !== nodes.length) fail('cyclic sequence')
-  item.calls = names(item.calls); item.inputs = inputs(item.inputs, item.kind === 'channels' ? sharingLimits.valueCharacters : 1024); unique(list(item.dataSchemas, 32, portablePath))
+  if (names(item.calls).length) fail('compositions do not call other compositions')
+  item.calls = []; item.inputs = inputs(item.inputs, 1024); unique(list(item.dataSchemas, 32, portablePath))
   if ((item.inputs as PortableInput[]).some(input => !['string', 'number', 'boolean', 'enum'].includes(input.kind))) fail('composition inputs must be public values')
   return item as unknown as PortableComposition
 }
@@ -399,25 +394,15 @@ export function parsePortableManifest(value: unknown, supportedFeatures: readonl
   for (const composition of compositions) {
     fileReference(composition.document, 'composition'); for (const schema of composition.dataSchemas) fileReference(schema, 'data-schema')
     if (composition.nodes.some(node => !pods.some(pod => pod.key === node.pod))) fail('dangling Pod reference')
-    if (composition.calls.some(key => key === composition.key || !compositions.some(target => target.key === key && target.kind !== 'network'))) fail('dangling workflow call')
   }
   if (entry.kind === 'pod') { if (!pods.some(pod => pod.key === entry.key) || pods.length !== 1 || compositions.length) fail('invalid single Pod entry') }
   else if (!compositions.some(composition => composition.key === entry.key && composition.kind === entry.kind)) {
     fail('invalid composition entry')
   }
   if (entry.kind !== 'pod') {
-    const reached = new Set<string>(); const visiting = new Set<string>(); const members = new Set<string>()
-    const visit = (key: string) => {
-      if (visiting.has(key)) fail('cyclic workflow calls')
-      if (reached.has(key)) return
-      visiting.add(key)
-      const composition = compositions.find(item => item.key === key)!
-      for (const node of composition.nodes) { if (members.has(node.pod)) fail('Pod instance belongs to multiple compositions'); members.add(node.pod) }
-      for (const target of composition.calls) visit(target)
-      visiting.delete(key); reached.add(key)
-    }
-    visit(entry.key as string)
-    if (reached.size !== compositions.length || members.size !== pods.length) fail('unreachable composition or Pod')
+    const members = new Set<string>()
+    for (const node of compositions[0]!.nodes) members.add(node.pod)
+    if (compositions.length !== 1 || members.size !== pods.length) fail('unreachable composition or Pod')
   }
   for (const application of applications) {
     if (!pods.some(pod => pod.applications.some(binding => binding.requirement === application.key))) fail('unused application requirement')

@@ -506,6 +506,22 @@ grants as the requesting Pod (`/api/grants/:id/revoke`, a few batches per minute
 and records `gate-grants-released`. A failed revocation is logged and retried with
 backoff and never blocks processing.
 
+### Networks only (issue 1455, M4)
+
+Networks are the only orchestration model. Workflows, bounded graphs, gates v1,
+workflow mail, finite workflow calls, reviewed conversion, composition replacement
+and retained legacy inspection are removed; the sections on them below are history.
+Archival (`archivePreview`, `archiveNetwork`) stays. Schema 45 archives every
+remaining workflow and every Pod that only workflows used (no network member, no
+own enabled schedule), cancels unfinished workflow runs and deletes the rows that
+tied workflow history to Pods, runs and networks; the workflow tables stay unread
+until the baseline schema, and the verified pre-upgrade copy keeps every row.
+Members read every shared string value of their network in `context.variables`,
+which keeps the scripts of converted networks working; the data pin keeps its
+`legacyVariables` key, so pins and open approvals of converted networks do not
+change. The relay accepts and ignores the workflow tables, chains and bounded
+networks that older desktops still publish.
+
 ## Diagnostic changes and UI review
 
 Current GraphOverview/Panel/Inspector, WorkspaceFrame and shared desktop/browser
@@ -1442,6 +1458,6 @@ message as `skipped`, without any provider call, while any earlier attempt of an
 version of that message in the same mailbox (case-insensitive) is unresolved, in
 any network. Microsoft Graph
 offers no atomic conditional move, so this port is the owner-confirmed operation
-`docs/workflows.md` requires: every move is bound to one owner once-grant and to a
+the former workflow mail policy required: every move is bound to one owner once-grant and to a
 fresh read immediately before it.
 

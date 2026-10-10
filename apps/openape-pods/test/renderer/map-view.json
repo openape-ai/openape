@@ -601,7 +601,7 @@
     "summary": "No pending mail archive decisions"
    },
    "runs": 50,
-   "automation": "b7b6df51-5651-4d82-a79f-960dc84f5087",
+   "automation": null,
    "queue": {
     "blocked": 0,
     "error": null
@@ -647,7 +647,7 @@
     "summary": "Calendar and issue sources collected for 2026-10-06"
    },
    "runs": 1,
-   "automation": "b7b6df51-5651-4d82-a79f-960dc84f5087",
+   "automation": null,
    "queue": {
     "blocked": 0,
     "error": null
@@ -687,7 +687,7 @@
     "summary": "German editorial report ready for 2026-10-06"
    },
    "runs": 1,
-   "automation": "b7b6df51-5651-4d82-a79f-960dc84f5087",
+   "automation": null,
    "queue": {
     "blocked": 0,
     "error": null
@@ -748,7 +748,7 @@
     "summary": "Telegram delivery confirmed for 2026-10-06; message 245"
    },
    "runs": 1,
-   "automation": "b7b6df51-5651-4d82-a79f-960dc84f5087",
+   "automation": null,
    "queue": {
     "blocked": 0,
     "error": null
@@ -1472,7 +1472,7 @@
    "schedule": null,
    "lastRun": null,
    "runs": 0,
-   "automation": "2742bcf6-0606-414a-975f-e71e3cf4d9ad",
+   "automation": null,
    "queue": {
     "blocked": 0,
     "error": null
@@ -1643,7 +1643,6 @@
    "id": "8cf907a0-890a-4386-9ded-d84fcf18a2ae",
    "revision": 1,
    "kind": "network",
-   "bounded": false,
    "name": "Delta Mind · Mail-Netzwerk",
    "group": "Delta Mind",
    "groupId": "54409449-72b5-43aa-8a91-31fa8a6b365f",
@@ -1731,42 +1730,9 @@
    "lastRun": null
   },
   {
-   "id": "b7b6df51-5651-4d82-a79f-960dc84f5087",
-   "revision": 3,
-   "kind": "chain",
-   "bounded": false,
-   "name": "Morgenbriefing",
-   "group": null,
-   "groupId": null,
-   "state": "active",
-   "members": [
-    "1877cb16-5b68-4d8c-a912-255ebbeb5304",
-    "1ecc59bf-7edc-41a9-be15-4516dd01d65c",
-    "7f7ab1fb-26df-4126-a500-56a332bc6de6",
-    "dee919b7-a409-4698-b09d-d4adfae82101"
-   ],
-   "schedule": {
-    "spec": {
-     "kind": "daily",
-     "time": "07:00",
-     "timezone": "Europe/Vienna"
-    },
-    "enabled": true
-   },
-   "counts": {},
-   "flows": {},
-   "gates": [],
-   "lastRun": {
-    "at": 1791263188000,
-    "state": "completed",
-    "summary": ""
-   }
-  },
-  {
    "id": "5acfc0fe-f6bf-4a2d-be14-595afde43269",
    "revision": 1,
    "kind": "network",
-   "bounded": true,
    "name": "IURIO · DOCPIT mail management",
    "group": "iurio",
    "groupId": "f834d786-6f8e-4166-8fb2-5fef459519ed",
@@ -1837,35 +1803,9 @@
    "lastRun": null
   },
   {
-   "id": "2742bcf6-0606-414a-975f-e71e3cf4d9ad",
-   "revision": 1,
-   "kind": "chain",
-   "bounded": false,
-   "name": "Linde · Server report",
-   "group": "Linde",
-   "groupId": "f82ec262-d4ad-42a9-af73-e8a5964f2c1b",
-   "state": "paused",
-   "members": [
-    "7b82dd36-2df3-4bbd-874f-4b22cb88c60b"
-   ],
-   "schedule": {
-    "spec": {
-     "kind": "cron",
-     "expression": "0 8 * * 1,4",
-     "timezone": "Europe/Vienna"
-    },
-    "enabled": false
-   },
-   "counts": {},
-   "flows": {},
-   "gates": [],
-   "lastRun": null
-  },
-  {
    "id": "1dba7a24-54ec-4c55-aef1-3a94696d19d3",
    "revision": 1,
    "kind": "network",
-   "bounded": true,
    "name": "Linde · Portal development and systems",
    "group": "Linde",
    "groupId": "f82ec262-d4ad-42a9-af73-e8a5964f2c1b",

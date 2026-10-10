@@ -5,8 +5,6 @@ import { page } from 'vitest/browser'
 import DesktopWorkspace from '../../src/renderer/central/DesktopWorkspace.vue'
 import type { CentralStatus } from '../../src/contracts/central'
 import type { McpSessionView } from '../../src/contracts/mcp-session'
-import type { WorkflowView } from '../../src/contracts/workflows'
-import { sequenceParts } from '../../src/contracts/workflows'
 import { applyLanguage } from '../../src/renderer/i18n'
 import { scriptBuffer } from '../../src/renderer/script-buffer'
 import { installWorkspace, pods, podId } from './workspace-fixture'
@@ -21,12 +19,10 @@ function fixture() {
   const standalone = { ...pods[0]!, id: '00000000-0000-4000-8000-000000000003', name: 'Release notes' }
   const inventory = [...structuredClone(pods), standalone]
   central.host.workspace.pods = inventory.map(pod => ({ ...pod, online: true }))
-  const workflows: WorkflowView = { workflows: [{ ...sequenceParts, id: '00000000-0000-4000-8000-000000000004', revision: 1, name: 'Morning review', nodes: [{ podId, after: [], handoff: false }], schedule: { kind: 'daily', time: '09:00', timezone: 'Europe/Vienna' }, enabled: true, paused: false, nextAt: 1790665200000 }], runs: [] }
   const status: CentralStatus = { state: 'online', runtimeId: central.host.id, error: null, since: 1790000000000, lastOnlineAt: 1790000000000, gateUntil: 0, lastTickAt: null, tickingSince: null, tickPhase: null, tickTimeout: null, format: 2, lastPublication: null, uncertain: [] }
   let session: McpSessionView = { expiresAt: 1790614800000, pending: false }
   const bridge = installWorkspace({
     workspace: async () => ({ organization: { revision: 1, groups: [] }, pods: structuredClone(inventory) }),
-    workflows: async () => structuredClone(workflows),
     programs: async (command) => { if (command.type === 'launchStatus') return null; throw new Error(`Unexpected program command: ${command.type}`) },
     onboarding: async () => ({ owner: 'owner', complete: true, podIdentity: { podId, bound: true, ownerConnection: 'owner', issuer: 'https://pods.example.invalid', decisionIssuer: 'https://identity.example.invalid', subject: 'mail-knowledge@pods.example.invalid', brokerConnectionId: null }, runtime: { ready: true, error: null }, connections: [{ id: 'owner', provider: 'openape', state: 'ready', account: 'owner@example.invalid', error: null, login: null }, { id: 'codex', provider: 'chatgpt', state: 'ready', account: 'AI account', error: null, login: null }] }),
     mcpSession: async (command) => { if (command.type === 'end') session = { expiresAt: null, pending: false }; return { ...session } },

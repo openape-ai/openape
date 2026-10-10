@@ -2,7 +2,6 @@
 import { t, diagnostic } from '../i18n'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { CentralStatus } from '../../contracts/central'
-import type { WorkflowView } from '../../contracts/workflows'
 import type { Organization } from '../../contracts/groups'
 import CentralWorkspace from './CentralWorkspace.vue'
 import LocalShell from './LocalShell.vue'
@@ -23,7 +22,6 @@ const invoke = window.pods.central!
 const client = desktopWorkspaceClient(invoke)
 const page = ref<'Automations' | 'Pods' | 'App settings' | 'Sharing'>('Automations')
 const workspace = ref<InstanceType<typeof CentralWorkspace> | null>(null)
-const workflows = ref<WorkflowView>({ workflows: [], runs: [] })
 const organization = ref<Organization>({ revision: 1, groups: [] })
 const sharing = ref<{ mode: 'import' } | { mode: 'export', selection: PortableSourceSelection } | null>(null)
 const sharingApi = (command: SharingCommand) => window.pods.sharing!(command)
@@ -35,8 +33,8 @@ let timer: ReturnType<typeof setTimeout> | undefined
 let closed = false
 async function poll() {
   try {
-    const [value, view, state] = await Promise.all([invoke({ type: 'status' }), window.pods.workflows({ type: 'list' }), window.pods.workspace({ type: 'list' })])
-    status.value = (value as CentralStatus & { enabled?: boolean }).enabled === false ? null : value as CentralStatus; workflows.value = view; error.value = ''
+    const [value, state] = await Promise.all([invoke({ type: 'status' }), window.pods.workspace({ type: 'list' })])
+    status.value = (value as CentralStatus & { enabled?: boolean }).enabled === false ? null : value as CentralStatus; error.value = ''
     if (state.organization.revision >= organization.value.revision) organization.value = state.organization
   }
   catch (cause) { error.value = String(cause) }
@@ -93,7 +91,7 @@ defineExpose({ openPod })
         </section>
       </template>
     </AppSettings>
-    <CentralWorkspace v-show="page === 'Pods'" ref="workspace" :client="client" :desktop-status="status" :workflows="workflows" desktop embedded @settings="page = 'App settings'">
+    <CentralWorkspace v-show="page === 'Pods'" ref="workspace" :client="client" :desktop-status="status" desktop embedded @settings="page = 'App settings'">
       <template #local-editor="{ podId }">
         <App :key="podId" embedded :initial-pod-id="podId" @settings="page = 'App settings'" />
       </template>
