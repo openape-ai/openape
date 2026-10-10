@@ -592,7 +592,7 @@ file-deletion journal. Database deletion and journal insertion commit atomically
 startup resumes interrupted cleanup. The existing scheduler processes at most 25
 runs per pass with a bounded tick step and no overlapping cleanup. Local deletion
 is published through the existing central manifest protocol, which removes stale
-run parts and replaces the archive tables; account Pods are preserved.
+run parts; account Pods are preserved.
 
 Retention does not change Pod workspaces, configuration, scripts, schedules,
 checkpoints or knowledge. Durable work belongs in the Pod workspace/checkpoints,

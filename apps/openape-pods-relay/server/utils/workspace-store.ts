@@ -7,9 +7,9 @@ import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import type { Owner } from '@openape/pods-protocol'
 import { ProtocolError } from '@openape/pods-protocol'
-import { centralId, centralLeaseMs, centralMaxBytes, centralRevision, commandPodIds, parseCentralCommand, parseCentralSnapshot, parseInboxCentralCommand, parseRuntimeCentralCommand } from '../../../openape-pods/src/contracts/central'
+import { centralId, centralLeaseMs, centralMaxBytes, centralRevision, commandPodIds, parseCentralCommand, parseInboxCentralCommand, parseRuntimeCentralCommand } from '../../../openape-pods/src/contracts/central'
 import type { CentralCommand, CentralOperation, CentralPod, CentralRuntime, CentralSnapshot } from '../../../openape-pods/src/contracts/central'
-import { assemblePod, assembleSnapshot, centralFormat, encodeParts, manifestDigest, parsePartKey, partHash, podRuns, splitSnapshot, validateManifest, validatePart } from '../../../openape-pods/src/contracts/central-parts'
+import { assemblePod, centralFormat, manifestDigest, parsePartKey, partHash, podRuns, validateManifest, validatePart } from '../../../openape-pods/src/contracts/central-parts'
 import type { CentralManifest } from '../../../openape-pods/src/contracts/central-parts'
 import type { WorkspaceState } from '../../../openape-pods/src/contracts/control'
 import { parseMapView } from '../../../openape-pods/src/contracts/map-view'
@@ -21,7 +21,7 @@ import type { ScriptView } from '../../../openape-pods/src/contracts/scripts'
 const currentMap = (map: unknown) => map === undefined ? null : parseMapView(map)
 
 export interface WorkspaceActor { id: string, generation: string, owner: Owner }
-interface RuntimeRow { id: string, owner: string, generation: string, lease: string, heartbeat: number, revision: number, hash: string, snapshot: string | null, previous_hash: string, seen_at: number, parts_hash: string, networks: string | null }
+interface RuntimeRow { id: string, owner: string, generation: string, lease: string, heartbeat: number, revision: number, hash: string, previous_hash: string, seen_at: number, parts_hash: string, networks: string | null }
 interface Completion { id: string, result: unknown, error: string | null }
 interface PodView { id: string, ready: boolean, scheduling: ScheduleView, runs: { runIds: string[] } }
 export type WorkspaceView = { view: 'summary' } | { view: 'map' } | { view: 'runs', offset: number } | { view: 'run', runId: string } | { view: 'version', selection: string }
@@ -54,11 +54,9 @@ export class WorkspaceStore {
     for (const [name, definition] of [['networks', 'TEXT'], ['previous_hash', 'TEXT NOT NULL DEFAULT \'\''], ['seen_at', 'INTEGER NOT NULL DEFAULT 0'], ['parts_hash', 'TEXT NOT NULL DEFAULT \'\'']]) {
       if (!columns.has(name!)) this.db.exec(`ALTER TABLE runtimes ADD COLUMN ${name} ${definition}`)
     }
-    // Snapshots written by an older server (or before this upgrade) are split once.
-    for (const raw of this.db.prepare('SELECT * FROM runtimes WHERE snapshot IS NOT NULL AND parts_hash!=hash').all()) {
-      const row = raw as unknown as RuntimeRow
-      this.transaction(() => this.storeSnapshot(row.id, JSON.parse(row.snapshot!) as CentralSnapshot, row.hash))
-    }
+    // Full format-1 snapshots are no longer read (issue 1455, M8); every runtime publishes parts. The column stays
+    // empty rather than dropped, so the previous server can still open this database after a rollback.
+    this.db.exec('UPDATE runtimes SET snapshot=NULL WHERE snapshot IS NOT NULL')
   }
 
   close(): void { this.db.close() }
@@ -93,20 +91,6 @@ export class WorkspaceStore {
     }
   }
 
-  // Applies a complete part set by diffing hashes, so unchanged rows are not rewritten.
-  private storeSnapshot(runtimeId: string, snapshot: CentralSnapshot, hash: string): void {
-    const current = this.manifest(runtimeId)
-    const next = encodeParts(splitSnapshot(snapshot))
-    for (const key of Object.keys(current)) {
-      if (!next.has(key)) this.db.prepare('DELETE FROM parts WHERE runtime_id=? AND key=?').run(runtimeId, key)
-    }
-    const upsert = this.db.prepare('INSERT INTO parts VALUES(?,?,?,?) ON CONFLICT(runtime_id,key) DO UPDATE SET hash=excluded.hash,value=excluded.value')
-    for (const [key, part] of next) {
-      if (current[key] !== part.hash) upsert.run(runtimeId, key, part.hash, part.text)
-    }
-    this.db.prepare('UPDATE runtimes SET parts_hash=? WHERE id=?').run(hash, runtimeId)
-  }
-
   private online(row: RuntimeRow): boolean { return row.heartbeat > 0 && row.heartbeat + centralLeaseMs > this.now() }
   private ready(owner: Owner, id: string, podIds: string[] = []): RuntimeRow {
     const row = this.row(owner, id)
@@ -130,6 +114,7 @@ export class WorkspaceStore {
 
   assertLease(actor: WorkspaceActor, lease: string): void { this.runtime(actor, lease) }
 
+  // `networkReads: 1` is still announced: desktops before issue 1455 (M8) publish their networks only when it is.
   begin(actor: WorkspaceActor): { lease: string, revision: number, hash: string, pending: CentralOperation[], format: number, runtimeId: string, manifest: CentralManifest, networkReads: 1 } {
     return this.transaction(() => {
       const previous = this.db.prepare('SELECT * FROM runtimes WHERE id=?').get(actor.id) as unknown as RuntimeRow | undefined
@@ -174,13 +159,13 @@ export class WorkspaceStore {
     return null
   }
 
-  private commitPublication(actor: WorkspaceActor, row: RuntimeRow, id: string, hash: string, requestHash: string, snapshot: string | null, completion?: Completion): { revision: number, hash: string } {
+  private commitPublication(actor: WorkspaceActor, row: RuntimeRow, id: string, hash: string, requestHash: string, completion?: Completion): { revision: number, hash: string } {
     const artifacts = this.reader(row.id)('artifacts') as CentralSnapshot['artifacts']
     for (const file of artifacts) {
       const stored = this.db.prepare('SELECT length(content) AS size FROM artifacts WHERE runtime_id=? AND pod_id=? AND hash=?').get(row.id, file.podId, file.hash)
       if (!stored || stored.size !== file.size) throw new ProtocolError('workspace_artifact_missing', 409)
     }
-    if (row.hash !== hash) this.db.prepare('UPDATE runtimes SET snapshot=?,previous_hash=hash,hash=?,parts_hash=?,revision=revision+1 WHERE id=?').run(snapshot, hash, hash, row.id)
+    if (row.hash !== hash) this.db.prepare('UPDATE runtimes SET previous_hash=hash,hash=?,parts_hash=?,revision=revision+1 WHERE id=?').run(hash, hash, row.id)
     else this.db.prepare('UPDATE runtimes SET parts_hash=? WHERE id=?').run(hash, row.id)
     const revision = this.row(actor.owner, actor.id).revision
     if (completion) {
@@ -200,24 +185,6 @@ export class WorkspaceStore {
     return { revision, hash }
   }
 
-  // Format 1: a complete snapshot from a desktop that predates format 2.
-  publish(actor: WorkspaceActor, lease: string, id: string, expected: number, value: unknown, completion?: Completion): { revision: number, hash: string } {
-    centralId(id); centralRevision(expected)
-    const snapshot = parseCentralSnapshot(value)
-    const encoded = JSON.stringify(snapshot)
-    if (Buffer.byteLength(encoded) > centralMaxBytes) throw new ProtocolError('workspace_too_large', 413)
-    const hash = digest(encoded)
-    const requestHash = digest(JSON.stringify([expected, hash, completion ?? null]))
-    return this.transaction(() => {
-      const row = this.runtime(actor, lease)
-      const prior = this.begunPublication(row, id, expected, requestHash, completion)
-      if (prior) return { revision: prior.revision, hash }
-      this.storeSnapshot(row.id, snapshot, hash)
-      // An older server reads this column, so format 1 keeps it current for rollback.
-      return this.commitPublication(actor, row, id, hash, requestHash, encoded, completion)
-    })
-  }
-
   stage(actor: WorkspaceActor, lease: string, parts: Record<string, unknown>): void {
     const row = this.runtime(actor, lease)
     const entries = Object.entries(parts).map(([hash, value]) => {
@@ -234,7 +201,7 @@ export class WorkspaceStore {
     })
   }
 
-  // Format 2: applies a manifest delta whose parts were staged or are already committed.
+  // Applies a manifest delta whose parts were staged or are already committed (format 2, the only format).
   publishParts(actor: WorkspaceActor, lease: string, id: string, expected: number, changes: Record<string, string | null>, hash: string, completion?: Completion): { revision: number, hash: string } {
     centralId(id); centralRevision(expected)
     if (!/^[a-f0-9]{64}$/.test(hash)) throw new ProtocolError('invalid_workspace_request')
@@ -260,7 +227,7 @@ export class WorkspaceStore {
       }
       if (manifestDigest(this.manifest(row.id)) !== hash) throw new ProtocolError('workspace_manifest_mismatch', 409)
       validateManifest(Object.keys(this.manifest(row.id)), this.reader(row.id))
-      return this.commitPublication(actor, row, id, hash, requestHash, null, completion)
+      return this.commitPublication(actor, row, id, hash, requestHash, completion)
     })
   }
 
@@ -358,11 +325,6 @@ export class WorkspaceStore {
     parsePartKey(key)
     if (!this.db.prepare('SELECT 1 FROM parts WHERE runtime_id=? AND key=?').get(row.id, key)) throw new ProtocolError('version_not_found', 404)
     return { revision: row.revision, version: read(key) as ScriptView }
-  }
-
-  archive(actor: WorkspaceActor, lease: string): CentralSnapshot | null {
-    const row = this.runtime(actor, lease)
-    return this.hasData(row) ? assembleSnapshot(this.reader(row.id), Object.keys(this.manifest(row.id))) : null
   }
 
   submit(owner: Owner, runtimeId: string, revision: number, command: CentralCommand, id: string, trustedRuntime = false): CentralOperation {

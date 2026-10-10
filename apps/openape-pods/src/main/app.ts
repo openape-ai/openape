@@ -83,7 +83,7 @@ const worker = new FixtureWorker((next) => {
 })
 const remote = new RemoteController(root, worker)
 if (process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1') {
-  central = new CentralController(root, body => remote.workspaceRequest(body), { snapshot: format => worker.centralSnapshot(format), networkRead: command => worker.centralNetworkRead(command), version: () => worker.centralVersion(), execute: command => worker.centralExecute(command), gate: until => worker.centralGate(until) }, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/'))
+  central = new CentralController(root, body => remote.workspaceRequest(body), { snapshot: () => worker.centralSnapshot(), networkRead: command => worker.centralNetworkRead(command), version: () => worker.centralVersion(), execute: command => worker.centralExecute(command), gate: until => worker.centralGate(until) }, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/'))
   worker.central = central
   worker.inbox = new InboxDecisions(worker, t)
 }

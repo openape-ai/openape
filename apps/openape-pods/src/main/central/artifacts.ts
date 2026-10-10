@@ -48,12 +48,7 @@ export async function managedArtifacts(root: string, snapshot: CentralSnapshot, 
   }
   for (const pod of snapshot.pods) {
     if (pod.networkId) continue
-    const hashes = new Set<string>()
-    for (const table of ['scripts', 'sources']) {
-      for (const row of snapshot.archive.tables[table] ?? []) {
-        if (row.pod_id === pod.id && typeof row.hash === 'string') hashes.add(row.hash)
-      }
-    }
+    const hashes = new Set(snapshot.blobs.filter(blob => blob.podId === pod.id).map(blob => blob.hash))
     for (const hash of [...hashes].sort()) {
       if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error('Invalid stored artifact hash')
       await add(pod.id, `blobs/${hash}`, `blobs/${hash}`, hash)
