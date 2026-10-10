@@ -6,6 +6,20 @@ export type McpSessionCommand = { type: 'get' } | { type: 'end' }
 export const mcpSessionLifetime = 3600000
 export const loginRequired = 'login_required'
 
+/** How a session was proven: the owner's logged-in apes CLI, or the browser sign-in with the app dialog. */
+export type McpSessionVia = 'apes' | 'browser'
+/**
+ * The state of one MCP connection's session as the `session` action reports it to the tool user. `pending` waits for
+ * the owner's browser sign-in until `expiresAt`; `expired` and `denied` end a sign-in or session, after
+ * which the next ordinary call starts a new one.
+ */
+export interface McpSessionStatus {
+  state: 'signed_in' | 'pending' | 'signed_out' | 'expired' | 'denied'
+  via: McpSessionVia | null
+  expiresAt: number | null
+  message?: string
+}
+
 export function parseMcpSessionCommand(value: unknown): McpSessionCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid MCP session command')
   const item = value as Record<string, unknown>
