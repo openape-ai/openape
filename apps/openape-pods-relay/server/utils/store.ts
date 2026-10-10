@@ -17,13 +17,14 @@ export class RelayStore {
     this.db = new DatabaseSync(path)
     const version = Number(this.db.prepare('PRAGMA user_version').get()?.user_version)
     if (version > 1) { this.db.close(); throw new Error('Relay database requires a newer server') }
+    // Nothing read the audit log; it ended with issue 1455 (M8), and an older server recreates it after a rollback.
     this.db.exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS registrations(id TEXT PRIMARY KEY,owner TEXT NOT NULL,kind TEXT NOT NULL,keys TEXT NOT NULL,generation TEXT NOT NULL,epoch INTEGER NOT NULL,revoked INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS sessions(family TEXT PRIMARY KEY,device_id TEXT NOT NULL REFERENCES registrations(id),access_hash TEXT UNIQUE NOT NULL,refresh_hash TEXT UNIQUE NOT NULL,access_until INTEGER NOT NULL,refresh_until INTEGER NOT NULL,idle_until INTEGER NOT NULL,revoked INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS request_proofs(id TEXT PRIMARY KEY,expires INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS used_refresh(hash TEXT PRIMARY KEY,family TEXT NOT NULL REFERENCES sessions(family));
       CREATE TABLE IF NOT EXISTS auth_flows(id TEXT PRIMARY KEY,state TEXT UNIQUE,body TEXT NOT NULL,expires INTEGER NOT NULL,code_hash TEXT UNIQUE);
-      CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,device_id TEXT NOT NULL,action TEXT NOT NULL,at INTEGER NOT NULL);
+      DROP TABLE IF EXISTS audit;
       PRAGMA user_version=1;`)
   }
 
@@ -47,11 +48,9 @@ export class RelayStore {
       return this.registration(id)
     }
     this.db.prepare('INSERT INTO registrations VALUES(?,?,\'runtime\',?,?,1,0)').run(id, JSON.stringify(owner), JSON.stringify(keys), randomUUID())
-    this.audit(id, 'registered')
     return this.registration(id)
   }
 
-  audit(id: string, action: string): void { this.db.prepare('INSERT INTO audit(device_id,action,at) VALUES(?,?,?)').run(id, action, this.now()) }
   private tokens(deviceId: string, family: string = randomUUID(), refreshUntil = this.now() + sessionMs) {
     const accessToken = randomBytes(32).toString('base64url'); const refreshToken = randomBytes(32).toString('base64url')
     const expiresAt = this.now() + 300000
@@ -101,7 +100,6 @@ export class RelayStore {
 
   purge(): void {
     this.transaction(() => {
-      this.db.prepare('DELETE FROM audit WHERE at<?').run(this.now() - sessionMs)
       this.db.prepare('DELETE FROM used_refresh WHERE family IN (SELECT family FROM sessions WHERE refresh_until<=? OR idle_until<=?)').run(this.now(), this.now())
       this.db.prepare('DELETE FROM sessions WHERE refresh_until<=? OR idle_until<=?').run(this.now(), this.now())
       this.db.prepare('DELETE FROM request_proofs WHERE expires<=?').run(this.now())
