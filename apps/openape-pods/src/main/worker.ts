@@ -56,7 +56,6 @@ import { ProgramManager } from './programs/manager'
 import { PodGrants, commandSpec, httpSpec } from './grants/pod-grants'
 import type { GrantSpec } from './grants/pod-grants'
 import type { OwnerSession } from './connections/owner-session'
-import type { PhoneSignIn } from './connections/owner'
 import type { GrantLedgerCommand } from '../worker/resources/grants'
 import type { SandboxReach, SandboxView } from '../contracts/sandbox'
 import { ownerProtectedPaths } from '../worker/runtime/sandbox'
@@ -420,12 +419,6 @@ export class FixtureWorker {
     await this.setupReady
     if (!this.connections) throw new Error('Connection service unavailable')
     return this.connections.apesOwnerSession(endsAt, signal)
-  }
-
-  async mcpPhoneSession(endsAt: number, signal: AbortSignal, requester: string): Promise<PhoneSignIn> {
-    await this.setupReady
-    if (!this.connections) throw new Error('Connection service unavailable')
-    return this.connections.phoneOwnerSession(endsAt, signal, requester)
   }
 
   async indexRemotePods(owner: Owner): Promise<void> {

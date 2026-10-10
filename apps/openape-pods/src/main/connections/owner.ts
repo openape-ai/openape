@@ -3,16 +3,12 @@ import { createServer } from 'node:http'
 import { readFile, writeFile } from 'node:fs/promises'
 import type { CredentialCache } from './cache'
 import { connectionRequest, readJSON } from './http'
-import { OwnerSession, SignInEnded } from './owner-session'
+import { OwnerSession } from './owner-session'
 import type { ApesLogin } from './apes-login'
 
 const clientId = 'apes-cli'
 const redirectURI = 'http://localhost:9876/callback'
 interface OwnerTokens { accessToken: string, refreshToken: string, issuer: string, account: string, subject: string, expiresAt: number }
-/** A phone confirmation at the IdP: the link the owner opens and the owner session it yields once approved. */
-export interface PhoneSignIn { link: string, expiresAt: number, session: Promise<OwnerSession> }
-const channelToken = /^[a-f0-9]{64}$/
-const claimInterval = 3000
 function equal(a: string, b: string): boolean { const left = Buffer.from(a); const right = Buffer.from(b); return left.length === right.length && timingSafeEqual(left, right) }
 export function ownerClaims(token: string, jwks: Record<string, unknown>, issuer: string, account: string, nonce?: string): { sub: string, exp: number } {
   if (token.length > 32768) throw new Error('Oversized owner identity')
@@ -82,69 +78,6 @@ export class OwnerConnection {
       revoke: async () => {},
       alive: () => login.signedIn(issuer, account),
     })
-  }
-
-  /**
-   * Asks the owner to confirm this sign-in on the phone through the IdP's QR channel: the link goes to the owner,
-   * the claim secret stays here. After approval the transferred IdP browser session runs the same PKCE authorization
-   * as the browser sign-in and is ended right after; the session then holds only the tokens Pods minted.
-   */
-  async phoneSession(issuer: string, account: string, endsAt: number, signal: AbortSignal, requester: string): Promise<PhoneSignIn> {
-    httpsOrigin(issuer)
-    const reply = await readJSON(await fetch(`${issuer}/api/session/qr`, { method: 'POST', redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]), headers: { 'Content-Type': 'application/json', 'User-Agent': requester }, body: '{}' }))
-    const { channelId, claimSecret, expiresIn } = reply
-    if (typeof channelId !== 'string' || !channelToken.test(channelId) || typeof claimSecret !== 'string' || !channelToken.test(claimSecret) || typeof expiresIn !== 'number' || !(expiresIn > 0)) throw new Error('Invalid phone sign-in channel')
-    const expiresAt = Date.now() + Math.min(expiresIn, 3600) * 1000
-    const session = (async () => {
-      const cookie = await this.claim(issuer, channelId, claimSecret, expiresAt, signal)
-      try { return this.ownSession(issuer, account, await this.cookieAuthorization(issuer, account, cookie, signal), endsAt) }
-      finally {
-        // The IdP session copy is only the vehicle for this authorization; ending it leaves Pods only its own tokens.
-        await fetch(`${issuer}/api/session/qr/sessions/${channelId}`, { method: 'DELETE', redirect: 'error', signal: AbortSignal.timeout(10000), headers: { Cookie: cookie } })
-          .then((response) => { if (!response.ok) throw new Error('The identity provider did not end the transferred session') })
-          .catch((error: unknown) => console.error('Could not end the transferred IdP session of the phone sign-in:', error instanceof Error ? error.message : 'unknown error'))
-      }
-    })()
-    return { link: `${issuer}/link?c=${channelId}`, expiresAt, session }
-  }
-
-  /** Polls the channel until the owner approved it; deny removes the channel, so a vanished channel before its end means denied. */
-  private async claim(issuer: string, channelId: string, claimSecret: string, expiresAt: number, signal: AbortSignal): Promise<string> {
-    for (;;) {
-      signal.throwIfAborted()
-      const response = await fetch(`${issuer}/api/session/qr/${channelId}/claim`, { method: 'POST', redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]), headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ claimSecret }) })
-      if (response.status === 401 || response.status === 404) {
-        await response.body?.cancel()
-        if (Date.now() >= expiresAt) throw new SignInEnded('expired', 'The phone confirmation link expired before the owner approved it')
-        throw new SignInEnded('denied', 'The owner denied the phone confirmation')
-      }
-      const cookies = response.headers.getSetCookie().map(value => value.split(';')[0]!.trim()).filter(Boolean)
-      const body = await readJSON(response)
-      if (body.status === 'ok') {
-        if (!cookies.length) throw new Error('The identity provider confirmed the phone sign-in without a session')
-        return cookies.join('; ')
-      }
-      if (body.status !== 'pending') throw new Error('Invalid phone sign-in claim')
-      if (Date.now() + claimInterval >= expiresAt) throw new SignInEnded('expired', 'The phone confirmation link expired before the owner approved it')
-      await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => { signal.removeEventListener('abort', stop); resolve() }, claimInterval)
-        function stop() { clearTimeout(timer); reject(signal.reason) }
-        signal.addEventListener('abort', stop, { once: true })
-      })
-    }
-  }
-
-  /** The browser sign-in's PKCE authorization, answered by the transferred IdP session instead of a browser. */
-  private async cookieAuthorization(issuer: string, account: string, cookie: string, signal: AbortSignal): Promise<OwnerTokens> {
-    const state = randomBytes(32).toString('base64url'); const nonce = randomBytes(32).toString('base64url'); const verifier = randomBytes(48).toString('base64url')
-    const url = new URL('/authorize', issuer)
-    url.search = new URLSearchParams({ client_id: clientId, redirect_uri: redirectURI, response_type: 'code', scope: 'openid email profile offline_access', state, nonce, login_hint: account, code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256' }).toString()
-    const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]), headers: { Cookie: cookie } })
-    await response.body?.cancel()
-    const location = response.status >= 300 && response.status < 400 ? URL.parse(response.headers.get('location') ?? '', issuer) : null
-    const code = location?.searchParams.get('code')
-    if (!location || `${location.origin}${location.pathname}` !== redirectURI || location.searchParams.has('error') || !code || code.length > 4096 || !equal(location.searchParams.get('state') ?? '', state)) throw new Error('The identity provider did not authorize the phone sign-in for this client')
-    return this.exchange(issuer, account, { grant_type: 'authorization_code', code, client_id: clientId, redirect_uri: redirectURI, code_verifier: verifier }, signal, nonce)
   }
 
   async login(id: string, issuer: string, account: string, signal: AbortSignal, present: (value: { url: string }) => void): Promise<{ issuer: string, subject: string }> {
