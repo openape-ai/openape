@@ -1,12 +1,19 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useInbox } from '../inbox/client'
 import { watchInboxBadge } from '../inbox/badge'
+import { renewPush } from '../inbox/push'
 import { formatTime, language, t } from '../inbox/i18n'
 
 const inbox = useInbox()
 const { state } = inbox
 watchInboxBadge(inbox, navigator)
+// Push is only an alert, so a failed renewal leaves the inbox untouched.
+const stopRenew = watch(() => state.session?.device, (device) => {
+  if (!device) return
+  stopRenew()
+  renewPush(inbox).catch(error => console.error('Push renewal failed', error))
+})
 const route = useRoute()
 const router = useRouter()
 const email = ref('')
