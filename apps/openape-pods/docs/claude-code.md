@@ -42,13 +42,20 @@ decisions October 10, 2026, issue 1455), each accepting only a human token of th
 registered owner (signature, issuer, `apes-cli` audience, `act: human`, account):
 
 1. **apes CLI login.** While the owner is logged in with `apes login` on this Mac,
-   the first call opens the session silently and runs. Pods reads the apes access
-   token through `@openape/cli-auth` and renews it the way apes does, under apes'
-   own lock file; it never logs in or out and never revokes or writes the apes
-   tokens itself. Each renewal reads the apes login again, so `apes logout` ends
-   the session; after the hour the next call derives a new session while apes
-   stays logged in. An agent identity, a delegated token or another account is
-   refused and the browser sign-in is used.
+   the first call opens the session silently and runs. Pods only reads the apes
+   login (`~/.config/apes/auth.json`, through `@openape/cli-auth`); it never logs
+   in or out, never refreshes, revokes or writes the apes tokens and never touches
+   the apes directory. When the stored access token has less than a minute left,
+   a key login is renewed by running the bundled apes CLI (`apes whoami`, no
+   shell, 15-second limit), which renews under its own lock; Pods then reads the
+   login again. A login with a refresh token is not renewed from Pods, because
+   the apes refresh rewrites the login without its refresh token when the
+   identity provider refuses it; the owner renews it by using apes. Each renewal
+   of the owner token reads the apes login again, so `apes logout` ends the
+   session; after the hour the next call derives a new session while apes stays
+   logged in. An agent identity, a delegated token, another account or a login
+   that cannot be renewed falls back to the browser sign-in, and the reason is
+   part of the `login_required` message.
 2. **Browser sign-in.** Otherwise the call returns
    `{"error":"login_required","message":…,"session":{"state":"pending","via":"browser","expiresAt":…}}`
    and Pods opens the owner's DDISA sign-in in the browser on this Mac (the same

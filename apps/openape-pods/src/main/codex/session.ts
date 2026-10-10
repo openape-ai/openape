@@ -49,7 +49,7 @@ export class McpOwnerSessions {
   constructor(private readonly dependencies: McpSessionDependencies) {
     this.now = dependencies.now ?? Date.now
     this.loginTimeout = dependencies.loginTimeout ?? 300000
-    this.proofTimeout = dependencies.proofTimeout ?? 15000
+    this.proofTimeout = dependencies.proofTimeout ?? 22000
   }
 
   /**
