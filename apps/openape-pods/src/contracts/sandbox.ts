@@ -7,8 +7,9 @@ import type { DirectoryAccess } from './resources'
 
 /**
  * The sandbox decides what a Pod CAN execute and reach; grants decide what it MAY do. `owner` runs the Pod's
- * programs with the owner's file and network reach instead of the isolated profile. It never changes the Pod's
- * DDISA identity: requests and grants stay those of the Pod.
+ * programs with the owner's OS reach instead of the isolated profile; that equals full trust in the Pod's code,
+ * including the possibility to act as the owner. It never changes the Pod's DDISA identity: requests and grants stay
+ * those of the Pod.
  */
 export type SandboxLevel = 'isolated' | 'owner'
 export const sandboxLevels: readonly SandboxLevel[] = ['isolated', 'owner']
@@ -31,9 +32,12 @@ export type SandboxCommand
 export interface SandboxView { level: SandboxLevel, sources: { source: string, level: SandboxLevel }[], deny: string[], denySources: { source: string, deny: string[] }[] }
 /**
  * How far a Pod's programs reach on this Mac. At `owner` level they reach what the owner reaches, except
- * `protectedPaths`: the Pods folder with every profile and its control socket and the owner's apes login stay closed,
- * so a Pod program can never take the owner identity or change Pods state; they are required at `owner` level.
- * `deny` holds the configured denylist as absolute paths, closed for reading and writing at both levels.
+ * `protectedPaths`: the Pods folder with every profile and its control socket and the owner's apes login stay closed
+ * against direct access; they are required at `owner` level. They are not a boundary: an owner-level program can leave
+ * code that later runs unsandboxed as the owner and act as the owner from there, so the owner level equals full trust
+ * in the Pod's code, including the possibility to act as the owner (owner decision, issue 1455).
+ * `deny` holds the configured denylist as absolute paths, closed for reading and writing at both levels; the folders
+ * leading to it cannot be renamed or replaced.
  */
 export interface SandboxReach { level: SandboxLevel, protectedPaths: string[], deny?: string[] }
 

@@ -39,11 +39,12 @@ it('gives the owner level the owner reach except the protected paths and the con
   expect(() => sandboxPolicy({ ...policy, reach: { level: 'owner', protectedPaths: [] } })).toThrow('protected paths')
 })
 
-it('closes the denylist last at the isolated level, so not even the workspace reopens it', () => {
-  const deny = [`${policy.workspace}/private`]
-  const lines = sandboxPolicy({ ...policy, reach: { level: 'isolated', protectedPaths: [], deny } }).trim().split('\n')
+it('closes the denylist and the folders leading to it last at the isolated level, so not even the workspace reopens it', () => {
+  const deny = ['/w/sub/private']
+  const lines = sandboxPolicy({ ...policy, workspace: '/w', reach: { level: 'isolated', protectedPaths: [], deny } }).trim().split('\n')
   expect(lines[0]).toBe('(version 1)')
   expect(lines[1]).toBe('(deny default)')
+  expect(lines.at(-2)).toBe('(deny file-write* (literal "/w") (literal "/w/sub"))')
   expect(lines.at(-1)).toBe(`(deny file-read* file-write* ${subpaths(deny)})`)
   expect(sandboxPolicy(policy)).not.toContain('(deny file-read*')
 })
@@ -71,14 +72,15 @@ it.runIf(process.platform === 'darwin')('lets the owner level write SSH and laun
   const real = join(root, 'real'); const home = join(root, 'home'); const workspace = join(root, 'w')
   // The real layout: the base holds the profile selection, the MCP control socket and every profile; it is reached through a link here.
   const base = join(root, 'b'); const linkedBase = join(root, 'base'); const profileRoot = join(base, 'profiles/0b7c3b8e-5f8e-4a51-9b3c-2f1d6c7a9e10')
-  for (const path of ['.ssh', 'Library/LaunchAgents', '.config/apes', 'private', 'notes']) mkdirSync(join(real, path), { recursive: true })
-  writeFileSync(join(real, '.config/apes/auth.json'), '{}'); writeFileSync(join(real, 'private/secret.txt'), 'secret')
+  for (const path of ['.ssh', 'Library/LaunchAgents', '.config/apes', 'private', 'notes', 'projects/secret', 'other']) mkdirSync(join(real, path), { recursive: true })
+  writeFileSync(join(real, '.config/apes/auth.json'), '{}'); writeFileSync(join(real, 'private/secret.txt'), 'secret'); writeFileSync(join(real, 'projects/secret/key.txt'), 'secret')
   mkdirSync(profileRoot, { recursive: true }); mkdirSync(join(base, 'codex')); writeFileSync(join(base, 'selected-profile.json'), '{}')
-  mkdirSync(workspace); mkdirSync(join(workspace, 'closed')); symlinkSync(real, home); symlinkSync(base, linkedBase)
-  const reach = { level: 'owner' as const, protectedPaths: ownerProtectedPaths(profileRoot, linkedBase, home), deny: deniedPaths(['~/private'], home) }
-  // The denied folder is also assigned for writing: the denylist wins over the assignment.
-  const owner = join(root, 'owner.sb'); writeFileSync(owner, sandboxPolicy({ executable: '/bin/sh', workspace, readFiles: [], runtimeDirectories: [], writeDirectories: [join(real, 'private')], reach }))
-  const isolated = join(root, 'isolated.sb'); writeFileSync(isolated, sandboxPolicy({ executable: process.execPath, workspace, readFiles: [], runtimeDirectories: [], reach: { level: 'isolated', protectedPaths: [], deny: [join(workspace, 'closed')] } }))
+  mkdirSync(join(workspace, 'sub/closed'), { recursive: true }); writeFileSync(join(workspace, 'sub/closed/key.txt'), 'secret'); mkdirSync(join(workspace, 'other'))
+  symlinkSync(real, home); symlinkSync(base, linkedBase)
+  const reach = { level: 'owner' as const, protectedPaths: ownerProtectedPaths(profileRoot, linkedBase, home), deny: deniedPaths(['~/private', '~/projects/secret'], home) }
+  // The denied folders are also inside folders assigned for writing: the denylist wins over the assignment.
+  const owner = join(root, 'owner.sb'); writeFileSync(owner, sandboxPolicy({ executable: '/bin/sh', workspace, readFiles: [], runtimeDirectories: [], writeDirectories: [join(real, 'private'), join(real, 'projects')], reach }))
+  const isolated = join(root, 'isolated.sb'); writeFileSync(isolated, sandboxPolicy({ executable: process.execPath, workspace, readFiles: [], runtimeDirectories: [], reach: { level: 'isolated', protectedPaths: [], deny: deniedPaths([join(workspace, 'sub/closed')], home) } }))
 
   for (const base of [home, real]) {
     for (const target of ['.ssh/x', 'Library/LaunchAgents/ai.openape.pods-test.plist']) {
@@ -95,6 +97,10 @@ it.runIf(process.platform === 'darwin')('lets the owner level write SSH and laun
   // The folders leading to the apes login and to a denied path cannot be moved aside.
   expect((await sandboxed(owner, ['/bin/mv', join(real, '.config'), join(real, 'moved')])).code).not.toBe(0)
   expect((await sandboxed(owner, ['/bin/mv', join(real, 'private'), join(real, 'moved')])).code).not.toBe(0)
+  // Renaming the parent of a denied path inside a writable folder would expose it under a new name; it stays refused.
+  for (const parent of [join(home, 'projects'), join(real, 'projects')]) expect((await sandboxed(owner, ['/bin/mv', parent, join(real, 'moved')])).code, parent).not.toBe(0)
+  expect((await sandboxed(owner, ['/bin/cat', join(real, 'projects/secret/key.txt')])).code).not.toBe(0)
+  expect((await sandboxed(owner, ['/bin/mv', join(real, 'other'), join(real, 'other-renamed')])).code).toBe(0)
   for (const path of [join(base, 'selected-profile.json'), join(linkedBase, 'selected-profile.json')]) {
     expect((await sandboxed(owner, ['/bin/cat', path])).code, path).not.toBe(0)
     expect((await write(owner, `${path}.planted`)).code, path).not.toBe(0)
@@ -107,8 +113,14 @@ it.runIf(process.platform === 'darwin')('lets the owner level write SSH and laun
   // The isolated level is unchanged: nothing outside its workspace, and a denied folder inside it stays closed.
   const nodeWrite = (path: string) => sandboxed(isolated, [process.execPath, '-e', 'try{require("fs").writeFileSync(process.argv[1],"ok");console.log("written")}catch(e){console.log(e.code)}', path])
   expect(await nodeWrite(join(workspace, 'open.txt'))).toEqual({ code: 0, output: 'written\n' })
-  expect(await nodeWrite(join(workspace, 'closed/planted.txt'))).toEqual({ code: 0, output: 'EPERM\n' })
+  expect(await nodeWrite(join(workspace, 'sub/closed/planted.txt'))).toEqual({ code: 0, output: 'EPERM\n' })
   expect(await nodeWrite(join(real, '.ssh/x'))).toEqual({ code: 0, output: 'EPERM\n' })
+  // Renaming the parent of the denied folder inside the writable workspace is refused, so it never reappears readable.
+  const rename = (from: string, to: string) => sandboxed(isolated, [process.execPath, '-e', 'try{require("fs").renameSync(process.argv[1],process.argv[2]);console.log("renamed")}catch(e){console.log(e.code)}', from, to])
+  expect(await rename(join(workspace, 'sub'), join(workspace, 'moved'))).toEqual({ code: 0, output: 'EPERM\n' })
+  expect(existsSync(join(workspace, 'moved'))).toBe(false)
+  expect(await sandboxed(isolated, [process.execPath, '-e', 'try{console.log(require("fs").readFileSync(process.argv[1],"utf8"))}catch(e){console.log(e.code)}', join(workspace, 'sub/closed/key.txt')])).toEqual({ code: 0, output: 'EPERM\n' })
+  expect(await rename(join(workspace, 'other'), join(workspace, 'other-renamed'))).toEqual({ code: 0, output: 'renamed\n' })
 
   const socket = join(base, 'codex/control.sock')
   const server = createServer(connection => connection.end('owner-session\n'))

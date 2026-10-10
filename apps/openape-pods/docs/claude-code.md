@@ -131,16 +131,22 @@ owner's keychain access rules release) instead of the isolated profile, except t
 Pods data and the owner's apes login: the Pods folder with every profile, the
 profile selection and its MCP control socket, and `~/.config/apes` stay
 unreadable, unwritable and unconnectable, together with the folders leading to
-them, both as written and as resolved through links, so a Pod program never gets
-the owner identity or changes Pods state. Application network hosts and their
-proxy apply only at the isolated level. The Pod's DDISA identity does not change.
+them, both as written and as resolved through links. These protections only
+prevent direct access; they are not a boundary. An owner-level program can leave
+code that later runs unsandboxed as the owner (launch agents, shell startup
+files, Codex or Claude Code hooks and MCP configuration) and act as the owner from
+there, including reading the apes login. Running as owner therefore equals full
+trust in the Pod's code, including the possibility to act as the owner; the owner
+accepted this (October 10, 2026). Application network hosts and their proxy apply
+only at the isolated level. The Pod's DDISA identity does not change.
 What else a trusted owner-level program may touch is the owner's decision: the
 optional `deny` list (at most 32 absolute or `~/` paths, no wildcards) closes
 paths for reading and writing at both levels, also inside assigned folders and
-for Unix sockets at the owner level. `deny` replaces the list of its source (the
+for Unix sockets at the owner level; the folders leading to a denied path cannot
+be renamed or replaced, so it never reappears under another name. `deny` replaces the list of its source (the
 Pod, or the network for every member) and `[]` clears it; a member is denied its
-own and its networks' entries. The desktop shows and edits the Pod's own list in
-its permissions. A network
+own and its networks' entries. The desktop shows the level with this trust
+statement and edits the Pod's own list in its permissions. A network
 declaration never replaces a member's own HTTP destination, and a grant the
 identity provider returns as already existing stays the member's own. `{ "type": "show", "target": … }` reads both.
 

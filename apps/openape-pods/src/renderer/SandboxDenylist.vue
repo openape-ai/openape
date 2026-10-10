@@ -28,6 +28,9 @@ function add(): void {
     <p class="muted">
       {{ sandbox.level === 'owner' ? t('Owner level: programs reach what you reach on this Mac, except the Pods data and your apes login.') : t('Isolated level: programs reach only this pod and what is assigned to it.') }}
     </p>
+    <p v-if="sandbox.level === 'owner'" class="trust-note">
+      <strong>{{ t('Running as owner means full trust in this pod\'s code, including the possibility to act as you. The remaining protections only prevent direct access.') }}</strong>
+    </p>
     <div class="deny-list" role="group" :aria-label="t('Denied paths')">
       <article v-for="path in own" :key="path" class="deny-row">
         <span class="deny-path">{{ path }}</span>
