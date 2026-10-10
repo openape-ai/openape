@@ -94,7 +94,8 @@ ${deny.length ? `(deny file-read* file-write* ${subpaths(deny)})` : ''}
 `
 }
 
-const canonical = (path: string) => existsSync(path) ? realpathSync(path) : path
+// The native form returns the letter case on disk; the sandbox compares paths case-sensitively on a case-insensitive volume.
+const canonical = (path: string) => existsSync(path) ? realpathSync.native(path) : path
 /** A path as written and as resolved: the resolved form closes access through links, the written form closes replacing a link. */
 const forms = (path: string) => [...new Set([path, canonical(path)])]
 

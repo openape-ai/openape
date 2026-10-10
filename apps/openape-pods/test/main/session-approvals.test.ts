@@ -10,7 +10,7 @@ import { prepareProgramAuthorization, resolveProgram } from '../../src/main/prog
 import { programWrite } from '../../src/worker/runs/program-effects'
 import { PodGroups } from '../../src/worker/workspace/groups'
 import type { ProgramAssignment } from '../../src/contracts/programs'
-import { closeProfiles, deniedPodId, identityProvider, issuer, owner, ownerToken, podId, podSubject, program, workerFixture } from './idp-fixture'
+import { brokerRejections, closeProfiles, deniedPodId, identityProvider, issuer, owner, ownerToken, podId, podSubject, program, workerFixture } from './idp-fixture'
 
 // Owner decisions October 10, 2026 (issue 1455): the MCP session acts with the owner's identity, so grants a Pod
 // requests can be approved in that session without the human. Outside an active owner session no code path
@@ -31,7 +31,7 @@ vi.mock('../../src/runtime/environment', () => ({ podEnvironment: async () => ({
 let idp: ReturnType<typeof identityProvider>
 let root = ''
 beforeEach(() => { idp = identityProvider(); vi.stubGlobal('fetch', idp.fetch); root = mkdtempSync(join(tmpdir(), 'pods-session-approvals-')) })
-afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); closeProfiles(); rmSync(root, { recursive: true, force: true }) })
+afterEach(async () => { expect(await brokerRejections(idp.state.creates)).toEqual([]); vi.unstubAllGlobals(); vi.clearAllMocks(); closeProfiles(); rmSync(root, { recursive: true, force: true }) })
 
 /** The owner identity of one MCP session; its clock is the test's, and its tokens never leave this object. */
 function session(clock = { now: Date.now() }) {
