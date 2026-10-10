@@ -2,6 +2,10 @@
 
 OpenApe Pods is the macOS desktop implementation of workspace concept B, using Electron 40.9.3, Vue 3, TypeScript, Vite and SQLite. This development build supports local pods, reference snapshots and manual example scripts. Codex execution uses the pinned TypeScript SDK and native CLI with a synthetic transport in acceptance tests. Owner-driven ChatGPT and OpenApe connection flows are implemented; third-party accounts are configured in assigned applications; live provider and tenant acceptance remain unverified. Schedules default to disabled, and new pods are paused.
 
+Start with the [Pods model](docs/model.md): Pods, networks, sandbox and grants,
+owner decisions and the MCP owner session. The sections below record the
+implementation boundaries milestone by milestone.
+
 
 ## Installed applications and owner setup
 
@@ -101,7 +105,7 @@ The worker receives an explicitly constructed environment with a fixture HOME/TM
 
 Electron supplies desktop APIs and Node. electron-builder supplies the macOS development bundle; both versions passed the repository's seven-day publication quarantine at introduction. Vue/Vite/TypeScript are confirmed product dependencies; tsup bundles sandbox-compatible CommonJS main/preload/worker entrypoints. Vitest/Vue Test Utils verify state/contracts; Playwright drives actual Electron and captures light/dark/compact/error evidence. The established catalog supplies shared dependencies. No Bootstrap-Vue Vue 2 dependency is introduced into the confirmed Vue 3 application.
 
-Storage, resource boundaries, scheduling, recovery, mail knowledge and master chat are implemented. Connection setup, explicit local deletion, backup/restore and manual update checks are implemented and verified with synthetic cases. Actual provider, tenant and signed distribution acceptance remain release gates.
+Storage, resource boundaries, scheduling, recovery, networks and mail knowledge are implemented. Connection setup, explicit local deletion, backup/restore and manual update checks are implemented and verified with synthetic cases. Actual provider, tenant and signed distribution acceptance remain release gates.
 
 - Issue: https://git.openape.ai/openape-ai/openape/issues/1349
 - Plan: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A2ZV0AAPDW75YMD4TVG8Q5
@@ -128,9 +132,6 @@ points around blob/transaction publication, source conflicts, revision conflicts
 and v1 migration. Five Electron cases include save/restart/reopen and packaged
 worker startup. The initial packaged worker failure exposed tsup stripping the
 mandatory `node:sqlite` prefix; `removeNodeProtocol: false` fixes that path.
-
-Mail and connected master chat remain later implementation milestones. M2's local pod editor is a development
-surface inside the selected workspace, not the completed onboarding flow.
 
 ## Native resources increment (M3A)
 
@@ -300,19 +301,14 @@ gates and are not implied by these tests.
 
 ## M7: concept B with persisted state
 
-The current workspace uses Overview, Chat, Script, Permissions, Settings and
-History. Overview shows the description, last execution and Run now. Results
-and sources opens retained knowledge within Overview. The sidebar supports
-pointer/keyboard resizing (176–360 px), persisted width and collapse.
+The Pod editor uses Overview, Script, Variables and secrets, Permissions,
+Settings and History; conversations happen in the owner's Codex or Claude Code
+(see [MCP administration](docs/chats.md)). Overview shows the description, last
+execution and Run now. Results and sources opens retained knowledge within
+Overview. Regular pod runs start fresh contexts.
 
-Each pod has separate chat history and Codex continuation state. The workspace
-chat retains legacy messages. Only one master turn runs across the app at a
-time; regular pod runs still start fresh contexts. The existing master control
-authority is retained; conversation separation does not add arbitrary host tools.
-
-Permissions lists assigned file/tool resources; Settings owns ordinary variables
-and managed secrets. General app/terminal launch remains blocked by the separate
-G0 containment gate. No security boundary was relaxed for this UI change.
+Permissions lists assigned file/tool resources; Variables and secrets owns
+ordinary variables and managed secrets.
 
 
 Component/SQLite tests cover hostile source text, exact historical citations,
@@ -423,38 +419,16 @@ outputs. UI tests follow extracted citations to original bytes. This is syntheti
 fixture evidence, not a live mailbox or real-model quality claim.
 
 
-## M10: confined master chat and reviewed actions
-
-The master uses the pinned Codex 0.153.4 app-server over stdio. Build-time hashes
-verify the nine experimental protocol schemas in
-`runtime-sources/master-protocol.json`. The trusted relay belongs to the same
-native guardian domain as its sandboxed Codex child. Codex can access only its
-private conversation home, the pinned model catalog and the capability-bound
-provider gateway. Built-in execution and unrelated tools remain disabled.
-Only the typed `pods_control` dynamic tool reaches the control database.
-
-SQLite schema 8 retains independent chat history, input identities, action
-receipts, drafts and pending access proposals. Repeated completed actions return
-their stored result; uncertain actions require inspection. Each new chat process
-resumes its retained thread only after prior process domains are verified stopped.
-Cancellation and provider failure remain visible, and availability is published
-after process cleanup. The default limits are 20 actions and two minutes per turn,
-1 MiB transport frames, 256 KiB action results and 100 visible recent messages.
-Steering binds the expected active turn. The fixture provider is available only
-through an explicit test-mode loopback port in a private fixture profile.
+## M10: draft validation and activation
 
 Draft validation executes the real native script boundary with empty synthetic
 services and a five-second limit. Assignment, resource epoch, dependency lock and
 draft revision bind its evidence and immutable artifact. Validation establishes a
 bounded contract check; it does not prove arbitrary program semantics or real
 model quality. Activation and rollback retain the previous version; permission
-changes invalidate activation and automatic resumption. New resource access is
-an exact owner-review proposal and cannot be approved by the model.
-
-The workspace shows contextual input, action results, script code, validation
-facts and readable account/folder/attachment proposals. ChatGPT/OpenApe/Microsoft
-onboarding is described below. No real account or provider was used for
-these tests.
+changes invalidate activation and automatic resumption. New access is requested
+as a grant by the Pod identity and decided by the owner at the identity provider
+or in the owner's MCP session; a model never approves it.
 
 
 ## M11: account onboarding and exact mail scope
@@ -462,7 +436,7 @@ these tests.
 The sidebar account button opens central account management. It shows exactly
 two accounts: Codex / GPT and the owner's DDISA account. The DDISA identity
 provider is discovered from the DDISA TXT record of the entered email's domain.
-Every Pod, grant and mobile registration uses that single owner implicitly.
+Every Pod and grant uses that single owner implicitly.
 Signing in again with the same email keeps the connection and its Pod bindings;
 switching to another email requires confirmation, revokes the previous owner's
 Pod bindings and permissions, and new agents are provisioned on first use. New
@@ -703,12 +677,11 @@ activates the exact hash and requests that same hash for immediate execution.
 An occupied slot or pending inputs returns an error instead of queuing a later,
 potentially different script. Failed validation preserves the active script.
 
-Script, chat and ordinary form edits survive tab navigation within the session.
+Script and ordinary form edits survive tab navigation within the session.
 Stale script conflicts offer reload with discard confirmation or explicit saving
 of local edits as the current artifact. No editor dependency is introduced.
 
-Schema 13 adds per-pod ordinary variables and scoped chat metadata while retaining
-legacy workspace chat. Variables are bounded plain strings, captured and frozen
+Schema 13 adds per-pod ordinary variables. Variables are bounded plain strings, captured and frozen
 as `context.variables` per run. They are included in backups; managed secrets
 remain encrypted and excluded. Neither variables nor secret values are added to
 model prompts automatically. A script can explicitly include values in a prompt.
@@ -736,17 +709,16 @@ Open App settings in the sidebar and use Language / Sprache for immediate Englis
 
 The English source keys and German translations live in `src/i18n/de.json`; parameterized diagnostics are explicitly listed in `src/i18n/diagnostics.ts`. Add complete translations and identical placeholders when changing copy. Coverage tests check every static thrown diagnostic, visible template copy and handbook chapter parity. No translation network service or new runtime dependency is used.
 
-Read the [English handbook](docs/handbook.md) or [German handbook](docs/handbook.de.md). Both have twenty-six chapters and eleven locale-specific packaged-app screenshots. Run `pnpm --filter @openape/pods handbook` from the repository root to generate standalone `.artifacts/openape-pods-handbook.html` and `.artifacts/openape-pods-handbook.de.html`. Keep both files together for the edition links; images are embedded for offline use. To refresh images, run `pnpm --filter @openape/pods handbook:capture` (packaged app, outside the test gate) and then `pnpm --filter @openape/pods handbook --refresh-images`.
+Read the [English handbook](docs/handbook.md) or [German handbook](docs/handbook.de.md). Both have thirty chapters and twelve locale-specific packaged-app screenshots. Run `pnpm --filter @openape/pods handbook` from the repository root to generate standalone `.artifacts/openape-pods-handbook.html` and `.artifacts/openape-pods-handbook.de.html`. Keep both files together for the edition links; images are embedded for offline use. To refresh images, run `pnpm --filter @openape/pods handbook:capture` (packaged app, outside the test gate) and then `pnpm --filter @openape/pods handbook --refresh-images`.
 
 
 ## Named script credentials
 
 Resources stores named string secrets separately for each pod using the existing
-macOS safeStorage encryption. `await context.credentials.get('crm')` reads the
-pod's assigned value only when the script declares `credential.crm` and the owner
-has approved its exact validated hash, current assignment and resource epoch.
-The native review names the pod, aliases and full SHA-256. Master actions cannot
-approve this access. The script editor preserves and edits these declarations.
+macOS safeStorage encryption. `await context.credentials.get('crm')` returns the
+Pod's assigned value; every ready secret assigned to the Pod is available to its
+scripts without a declaration or approval. Each read verifies the pinned run
+lease, Pod binding and resource epoch.
 
 Schema 12 extends resource kinds and records version approvals. Migration retains
 existing resources and creates a pre-migration database copy. Rotation pauses the
@@ -757,42 +729,34 @@ Backups exclude the credential store; restore clears approvals and requires valu
 to be assigned again. Roll back using a compatible pre-migration backup.
 
 The credential broker uses a separate private script operation, verifies the pinned
-run lease and declared alias before and after decryption, and never automatically
+run lease and assigned alias before and after decryption, and never automatically
 places values in inputs, environment, prompts, metadata or audit messages. Codex
 still has only the assigned ape-shell gateway and cannot call credentials.get.
 Existing shared provider OAuth tokens cannot be extracted through this API.
-An approved script can explicitly include its readable secret in a prompt, log,
+A script can explicitly include its readable secret in a prompt, log,
 checkpoint or file. Synthetic validation uses fake values and is not a proof of
 non-disclosure. Direct networking and process creation remain sandbox-restricted.
-See the credential chapter in both handbooks for the workflow and complete example.
+See the credential chapter in both handbooks for the steps and a complete example.
 
-## Pod creation history and generated descriptions
+## Pod descriptions
 
-A creation conversation has its own persisted identity. Its first successful create action binds it atomically to one Pod, including the initial request, streamed responses and subsequent actions. The UI follows that Pod, and later model actions are confined to it. A new creation session starts a separate conversation. Chat presents the immutable initial request separately from the recent timeline.
-
-Overview's description is derived from completed owner/assistant exchanges by a separate, tool-free Codex app-server request. SQLite stores source boundaries, partial progress and the last successful description. Long histories and oversized messages are processed in ordered, bounded segments; interrupted updates can retry. Stale results cannot replace a newer requested description. Generation failures remain visible and preserve the last successful text. The description does not change script execution, invalidate scripts, grant access or enable schedules. Script execution and AI prompts are defined by the script; there is no separate execution assignment.
+Overview shows the Pod's description. The owner edits it directly and Codex writes it through the MCP `description` action; both carry a revision check, and a stale write is refused. The description does not change script execution, invalidate scripts, grant access or enable schedules. Script execution and AI prompts are defined by the script; there is no separate execution assignment.
 
 The Pod inventory and the standalone cards of Networks show a one-line summary of that description (first full sentence, at most 160 characters), published with the workspace Pod list. The Pod overview states the last run's own summary below its headline. The description explains a Pod; saving it never changes the script, its validation or its hash.
 
-Networks have their own owner-written description (schema 38, local table `collection_descriptions`, at most 1000 characters). The desktop owner adds or edits it under the title of the network; the overview card shows its one-line summary and the browser workspace shows it read-only. It is published with the workspace state, not as a table and not inside any definition, so it never changes a network revision, pin or hash, and an older relay passes it through. MCP clients and the central workspace can write it with the workspace command `describeAutomation` (`describeCollection` before issue 1455: networks are automations, and collection names network data only), and `details describe` is accepted for network member Pods as well; these two are the only network member changes that do not need desktop review. The browser workspace offers no edit control for it.
-
-Schema 15 preserves existing data and adds creation bindings, original-request provenance, description progress and summary process ownership. Older unlinked creation history has an explicit, fingerprint-checked recovery preview. Recovery verifies the stored create result and rejects mixed-Pod, changed or active history. A recovered original request retains its identity and timestamp. Do not hand-edit the profile database to migrate a conversation.
-
-Verification covers scoped creation/replay, preservation of the original request, stale summaries, long-message continuation, failure/retry, legacy adoption and actual packaged UI/App Server execution with recorded model responses. Real model quality and provider execution remain separately observable acceptance steps.
+Networks have their own owner-written description (schema 38, local table `collection_descriptions`, at most 1000 characters). The desktop owner adds or edits it under the title of the network; the overview card shows its one-line summary and the browser workspace shows it read-only. It is published with the workspace state, not as a table and not inside any definition, so it never changes a network revision, pin or hash, and an older relay passes it through. MCP clients and the central workspace write it with the workspace command `describeAutomation`; `details describe` also works for network member Pods. The browser workspace offers no edit control for it.
 
 ## Script authority and compatibility
 
-Pod creation requires a name. Chat and the original request guide script creation; the script and its explicit AI prompts control execution. Settings has no separate execution assignment. Names are metadata: renaming preserves lifecycle, running work, script validation and credential approval. Overview descriptions remain informational. Pods without a conversation description link to Chat.
+Pod creation requires a name. The script and its explicit AI prompts control execution. Settings has no separate execution assignment. Names are metadata: renaming preserves lifecycle, running work and script validation. Overview descriptions remain informational.
 
 Schema 16 adds `pods.metadata_revision` for optimistic metadata updates. The historical `pods.revision` is retained as an immutable execution binding, exposed internally as `bindingRevision`. Existing manifest, run, validation and credential-approval fields named `assignmentRevision` or `assignment_revision` remain byte-compatible with their original bindings. They are not instructions and do not follow name edits. Old assignment text is retained only in historical storage, excluded from current Pod/tool responses and the legacy mail-knowledge analysis context. Permission epochs, exact-source validation, lease checks and revocation still apply. Migration does not revive artifacts invalidated before upgrade or rewrite script hashes.
 
 ## Networks
 
 Networks are the only way to connect Pods: members declare the channels they take
-and give, routes hold items for owner decisions and approvals stay at the identity
-provider. Workflows and their conversion were removed in issue 1455 (M4); schema 45
-archives the remaining workflows and the Pods only they used. See
-[networks](docs/networks.md) and the network chapter in the shared handbook.
+and give, and routes hold items for owner decisions. See [networks](docs/networks.md)
+and the network chapter in the shared handbook.
 
 ## Claude Code
 

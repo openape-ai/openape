@@ -57,7 +57,5 @@ Healthy and partially observed runs both produce German technical prose reports.
 Confirmed report and notification delivery completes the run even when the
 report records observation gaps. Those gaps remain committed claims. Delivery
 failure still blocks completion and requires recovery before another attempt.
-The former one-node sequence workflow with `0 8 * * 1,4` in `Europe/Vienna` was
-archived with the other workflows (issue 1455, M4); rebuild the schedule as a
-network source or the Pod's own schedule. Only enable it after an installed live
-report and notification have been verified.
+Run it on the Pod's own schedule or as a network source. Only enable it after an
+installed live report and notification have been verified.

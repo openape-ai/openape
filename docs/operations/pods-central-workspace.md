@@ -163,7 +163,7 @@ same workspace database. The existing agent IdP remains a separate service.
 
 Creating a Pod from the central UI provisions its existing Pod identity through
 the desktop. Native program/credential/folder setup remains available in the
-shared desktop Permissions and Values sections. Embedded chat is not restored.
+shared desktop Permissions and Values sections.
 Moving to another computer is outside this change.
 
 ## Recovery and rollout boundary
@@ -183,7 +183,7 @@ support for operator-assisted recovery and retention remains a rollout concern;
 central mode disables uncoordinated local restore/deletion/cleanup to prevent competing state.
 Pod Settings exposes archive and confirmed deletion. MCP submits the reviewed archived
 Pod through `channel: data`, `type: deletePod` with its current `podId`, `revision`
-and `name`. The executor retains the idle and workflow-reference guards, purges local
+and `name`. The executor retains the idle and network/data-reference guards, purges local
 keys, and publishes removal through the normal completion transaction. That transaction
 also removes the deleted Pod’s stored artifacts. Owner-scoped operation receipts remain
 readable after removal; retry the same operation ID after a lost response. Shared chat

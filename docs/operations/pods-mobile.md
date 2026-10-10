@@ -1,6 +1,6 @@
 # Pods relay and phone inbox
 
-The installed inbox web app at `/inbox/` on `pods.openape.ai` is the only phone surface for OpenApe Pods. The native iOS app, device pairing, the end-to-end encrypted mobile command channel and APNs were removed by owner decision on October 9, 2026 ([issue 1455](https://repos.openape.ai/patrick/monorepo/issues/1455), M2 of the [consolidation plan](https://report.openape.ai/d/01M4GPV3M6H73QA4PTCEHTR0DN)). The relay now carries desktop registration, the central browser workspace and the account inbox.
+The installed inbox web app at `/inbox/` on `pods.openape.ai` is the only phone surface for OpenApe Pods. The relay carries desktop registration, the central browser workspace and the account inbox. The overall model: [Pods model](../../apps/openape-pods/docs/model.md).
 
 ## Independent service
 
