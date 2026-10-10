@@ -48,7 +48,10 @@ describe('qr approve page', () => {
 
     expect(page.text()).toContain('203.0.113.7')
     expect(page.text()).toContain('KioskBrowser/1.0')
-    expect(page.text()).toContain('Only approve if this code is on a screen directly in front of you.')
+    expect(page.find('[data-testid="link-requester"]').text()).toContain('KioskBrowser/1.0')
+    expect(page.text()).toContain('Only approve a request you started yourself.')
+    expect(page.text()).toContain('your own Pods inbox or your own Codex session')
+    expect(page.text()).toContain('If anyone else sent you this link, it is an attempt to take over your account')
     expect(page.text()).toContain('Approve')
     expect(page.text()).toContain('Deny')
   })
@@ -80,7 +83,7 @@ describe('qr approve page', () => {
     await flushPromises()
 
     expect(calls).toEqual([`/api/session/qr/${CHANNEL}/approve`])
-    expect(page.text()).toContain('The other browser is now signed in as you.')
+    expect(page.text()).toContain('The requester is now signed in as you.')
     expect(page.text()).toContain('one hour')
   })
 
