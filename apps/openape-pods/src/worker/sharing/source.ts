@@ -10,6 +10,7 @@ import { parseSchedule } from '../../contracts/scheduling'
 import { ResourceRegistry } from '../resources/registry'
 import { PodVariables } from '../resources/variables'
 import { DefinitionCatalog } from '../workspace/definition-catalog'
+import { ItemTagStore } from '../workspace/item-tags'
 import { digest, parseManifest } from '../storage/database'
 import type { PodDatabase } from '../storage/database'
 import { networkConfiguration } from '../scheduling/network-config'
@@ -36,7 +37,7 @@ function podSource(store: PodDatabase, resources: ResourceRegistry, catalog: Def
   const binding = store.db.prepare('SELECT definition_id,definition_version,binding_revision FROM instance_definition_bindings WHERE pod_id=?').get(id) ?? null
   const definitions = binding ? store.db.prepare('SELECT name,kind,value FROM definition_config WHERE definition_id=? AND definition_version=? ORDER BY name').all(binding.definition_id!, binding.definition_version!) : []
   const schedule = store.db.prepare('SELECT revision,spec FROM schedules WHERE pod_id=?').get(id)
-  return { pod, manifest, content, resourceEpoch, resources: resources.list(id), variables: new PodVariables(store).list(id), binding, definitions, schedule: schedule ? { revision: Number(schedule.revision), spec: parseSchedule(JSON.parse(String(schedule.spec))) } : null, packages, dependencyHash: dependency ? String(dependency.dependency_hash) : null, lock: dependency ? String(dependency.lockfile) : null }
+  return { pod, manifest, content, tags: new ItemTagStore(store).own(id), resourceEpoch, resources: resources.list(id), variables: new PodVariables(store).list(id), binding, definitions, schedule: schedule ? { revision: Number(schedule.revision), spec: parseSchedule(JSON.parse(String(schedule.spec))) } : null, packages, dependencyHash: dependency ? String(dependency.dependency_hash) : null, lock: dependency ? String(dependency.lockfile) : null }
 }
 export type PortablePodSource = ReturnType<typeof podSource>
 
@@ -57,7 +58,7 @@ function networkSource(store: PodDatabase, owner: Owner, id: string) {
   const artifactPermissions = store.db.prepare('SELECT pod_id,scope_id,operation,revision FROM artifact_permissions WHERE network_id=? ORDER BY pod_id,scope_id,operation').all(id)
   const configuration = definition.members.map(member => ({ podId: member.podId, fields: networkConfiguration(store, id, member.podId) }))
   const sharedValues = store.db.prepare('SELECT name,value FROM composition_config WHERE network_id=? ORDER BY name').all(id).map(row => ({ name: String(row.name), value: JSON.parse(String(row.value)) as unknown }))
-  return { definition, state: String(row.state), collections, dataPermissions, scopes, artifactPermissions, configuration, sharedValues }
+  return { definition, state: String(row.state), tags: new ItemTagStore(store).own(id), collections, dataPermissions, scopes, artifactPermissions, configuration, sharedValues }
 }
 
 function localReferences(value: unknown, references: Set<string>): void {

@@ -14,6 +14,7 @@ import { capturePortableSource } from '../../src/worker/sharing/source'
 import { PortableExporter } from '../../src/worker/sharing/export'
 import { readPortableAssets } from '../../src/worker/sharing/assets'
 import { DefinitionCatalog } from '../../src/worker/workspace/definition-catalog'
+import { ItemTagStore } from '../../src/worker/workspace/item-tags'
 import { mapPortableSource } from '../../src/worker/sharing/mapping'
 import type { PortableExportChoices } from '../../src/worker/sharing/mapping'
 import { createPortablePackage, exportFormatFeatures, validatePortableFiles } from '../../src/worker/sharing/package'
@@ -239,6 +240,19 @@ it('captures and maps an owned persistent network without source identities or r
   expect(exported.manifest.entry).toEqual({ kind: 'network', key: 'composition_1' })
   const serialized = Object.values(unzipSync(exported.archive)).map(file => Buffer.from(file).toString()).join('\n')
   for (const id of [source, target, first.network!.definition.id, f.groupId]) expect(serialized).not.toContain(id)
+  // Untagged packages do not require the tag feature, so older desktops still import them.
+  expect(exported.manifest.requiredFeatures).toEqual(['portable_aliases_v1'])
+  expect(JSON.stringify(exported.manifest)).not.toContain('"tags"')
+  const tags = new ItemTagStore(f.store)
+  tags.execute({ type: 'tag', id, revision: 0, tags: ['delta-mind'] }); tags.execute({ type: 'tag', id: source, revision: 0, tags: ['intake', 'mail'] })
+  const tagged = capturePortableSource(f.store, f.owner, selected)
+  expect(tagged.fingerprint).not.toBe(first.fingerprint)
+  const taggedContent = await mapPortableSource(f.store.root, tagged, mappingChoices(tagged))
+  const manifest = (await createPortablePackage(taggedContent.description, taggedContent.payloads, '')).manifest
+  expect(manifest.requiredFeatures).toEqual(['portable_aliases_v1', 'portable_tags_v1'])
+  expect(manifest.compositions[0]!.tags).toEqual(['delta-mind'])
+  // Only own tags travel: the target inherits the network tag in the view, but the package does not copy it.
+  expect(manifest.pods.map(pod => pod.tags)).toEqual([['intake', 'mail'], undefined])
 })
 
 it('expires reviews and refuses source changes during asynchronous preparation', async () => {

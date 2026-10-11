@@ -1,5 +1,5 @@
 import type { PortableExportChoices } from '../../contracts/sharing'
-import { canonicalPortableJson, portableKey } from '@openape/pods-protocol'
+import { canonicalPortableJson, portableKey, portableTagsFeature } from '@openape/pods-protocol'
 import type { PortableComposition } from '@openape/pods-protocol'
 import type { PortableSource } from './source'
 import { mapPortablePod, PortableInputs } from './pod'
@@ -44,6 +44,7 @@ export async function mapPortableSource(root: string, source: PortableSource, ch
     const collectionKeys = new Map(network.collections.map((collection, index) => [String(collection.id), `collection_${index + 1}`]))
     const scopeKeys = new Map(network.scopes.map((scope, index) => [String(scope.id), `artifacts_${index + 1}`]))
     const composition: PortableComposition = { key: choice.key, kind: 'network', title: choice.title ?? definition.name, document: `compositions/${choice.key}.json`, documentVersion: 1, nodes: definition.members.map(member => ({ pod: podKey(member.podId), after: [], handoff: false })), calls: [], inputs: [], dataSchemas: [] }
+    if (network.tags.length) composition.tags = [...network.tags]
     const access = (rows: { pod_id: unknown, operation: unknown }[]) => Array.from(new Set(rows.map(row => String(row.pod_id))), id => ({ pod: podKey(id), operations: rows.filter(row => row.pod_id === id).map(row => String(row.operation)) }))
     const collections = network.collections.map((collection) => {
       const key = collectionKeys.get(String(collection.id))!; const schema = `data/${choice.key}/${key}.json`
@@ -84,5 +85,7 @@ export async function mapPortableSource(root: string, source: PortableSource, ch
   }
   if (compositions.length !== choices.compositions.length) throw new Error('Portable composition choices include an unrelated source')
   const entry = source.selection.kind === 'pod' ? { kind: 'pod' as const, key: podKey(source.selection.id) } : { kind: 'network' as const, key: choiceFor(source.selection.id).key }
-  return { description: { format: 'openape-package', version: 1, package: choices.package, requiredFeatures: ['portable_aliases_v1'], entry, pods: mapped.map(item => item.pod), compositions, applications: mapped.flatMap(item => item.applications) }, payloads }
+  // Only a package that carries tags requires the tag feature, so packages without tags stay importable by older desktops.
+  const tagged = [...mapped.map(item => item.pod), ...compositions].some(item => item.tags)
+  return { description: { format: 'openape-package', version: 1, package: choices.package, requiredFeatures: ['portable_aliases_v1', ...(tagged ? [portableTagsFeature] : [])], entry, pods: mapped.map(item => item.pod), compositions, applications: mapped.flatMap(item => item.applications) }, payloads }
 }
