@@ -229,14 +229,15 @@ export class NetworkGates {
   }
 
   /**
-   * Finished batches whose item grants the desktop may release at the IdP: every input is settled (done or
-   * discarded), or the batch was refused, expired or superseded. An uncertain batch waits for the owner.
+   * Finished batches whose item grants the desktop may release at the IdP: an approved batch once every input is
+   * settled (done or discarded), a refused, expired or superseded batch at once, since its grants are never used
+   * again (issue 1458: an unanswered request must not stay open at the IdP). An uncertain batch waits for the owner.
    */
   releasable(limit = 4): NetworkGateRelease[] {
     return this.store.db.prepare(`SELECT task.id,task.pod_id,task.manifest,network.owner_issuer,network.owner_subject FROM network_gate_tasks task JOIN networks network ON network.id=task.network_id
       WHERE task.state IN ('approved','denied','expired','superseded') AND EXISTS(SELECT 1 FROM network_gate_item_grants WHERE task_id=task.id)
         AND NOT EXISTS(SELECT 1 FROM network_trace_events WHERE network_id=task.network_id AND kind='gate-grants-released' AND json_extract(body,'$.taskId')=task.id)
-        AND NOT EXISTS(SELECT 1 FROM network_gate_items item JOIN network_deliveries delivery ON delivery.id=item.delivery_id WHERE item.task_id=task.id AND delivery.state NOT IN ('done','discarded'))
+        AND (task.state!='approved' OR NOT EXISTS(SELECT 1 FROM network_gate_items item JOIN network_deliveries delivery ON delivery.id=item.delivery_id WHERE item.task_id=task.id AND delivery.state NOT IN ('done','discarded')))
       ORDER BY task.created_at,task.id LIMIT ?`).all(limit).map((row) => {
       const manifest = parseNetworkGateManifest(JSON.parse(row.manifest as string))
       return { taskId: row.id as string, podId: row.pod_id as string, owner: { issuer: row.owner_issuer as string, subject: row.owner_subject as string }, manifest, grants: this.itemGrants(manifest.id, manifest) }

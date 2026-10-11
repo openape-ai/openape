@@ -29,7 +29,7 @@ async function fixture(type: 'once' | 'always' | 'timed') {
     if (path === '/.well-known/openid-configuration') return Response.json({ openape_grant_batch_supported: false })
     if (path === '/api/grants/grant-1') return Response.json(grant)
     if (path === '/api/grants/grant-1/token') return Response.json({ authz_jwt: 'synthetic.jwt' })
-    if (path === '/api/grants/grant-1/revoke') { if (grant.status !== 'approved') return Response.json({ title: 'Grant cannot be revoked' }, { status: 400 }); revoked.push(grant.id); grant.status = 'revoked'; return Response.json(grant) }
+    if (path === '/api/grants/grant-1/revoke') { if (!['approved', 'pending'].includes(grant.status)) return Response.json({ title: 'Grant cannot be revoked' }, { status: 400 }); revoked.push(grant.id); grant.status = 'revoked'; return Response.json(grant) }
     if (path === '/api/grants/grant-1/consume') {
       if (grant.status !== 'approved') return Response.json({ error: grant.status, status: grant.status })
       consumed.push(grant.request.grant_type)
@@ -93,5 +93,10 @@ describe('approve-route grants decided as once or always', () => {
     await once.authority.consume(once.binding)
     expect(await once.authority.release('batch', [once.binding])).toBe(0)
     expect(once.revoked).toEqual([])
+    // An unanswered request of a finished batch is withdrawn, so it leaves the owner's IdP list (issue 1458).
+    const unanswered = await fixture('once')
+    unanswered.grant.status = 'pending'
+    expect(await unanswered.authority.release('batch', [unanswered.binding])).toBe(1)
+    expect(unanswered.grant.status).toBe('revoked')
   })
 })

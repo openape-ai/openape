@@ -9,14 +9,16 @@ const cacheMs = 60000
  * Counts what `apes grants inbox` lists: pending grants that others requested from the owner.
  * A batch is one approval on the IdP page, so its members count once.
  */
-export function countPendingGrants(page: unknown, account: string): number {
+export function countPendingGrants(page: unknown, account: string, nowSec = Math.floor(Date.now() / 1000)): number {
   const data = (page as { data?: unknown } | null)?.data
   if (!Array.isArray(data)) throw new Error('Invalid IdP grant listing')
   const own = account.trim().toLowerCase()
   const approvals = new Set<string>()
-  for (const grant of data as { id?: unknown, status?: unknown, requester?: unknown, request?: { requester?: unknown, batch?: { id?: unknown } } }[]) {
+  for (const grant of data as { id?: unknown, status?: unknown, requester?: unknown, request?: { requester?: unknown, waits_until?: unknown, batch?: { id?: unknown } } }[]) {
     const requester = grant.request?.requester ?? grant.requester
     if (grant.status !== 'pending' || typeof grant.id !== 'string' || typeof requester !== 'string' || requester.toLowerCase() === own) continue
+    // Nobody waits for a request past its waits_until (grants.md isCallerWaiting); a decision would have no effect.
+    if (typeof grant.request?.waits_until === 'number' && grant.request.waits_until <= nowSec) continue
     const batch = grant.request?.batch?.id
     approvals.add(typeof batch === 'string' ? `batch:${requester}:${batch}` : `grant:${grant.id}`)
   }

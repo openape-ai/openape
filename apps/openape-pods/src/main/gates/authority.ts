@@ -18,7 +18,7 @@ export type GrantDecision = 'once' | 'always'
 export interface GrantAuthority {
   createBatch: (request: BatchRequest) => Promise<{ url: string, grants: BatchGrant[] }>
   statuses: (batchId: string, members: (GrantBinding & { key: string })[]) => Promise<Record<string, MemberState>>
-  /** Revokes the grants of a finished batch that the owner approved as always; once grants are already used up. Returns how many were revoked. */
+  /** Withdraws the unanswered grants of a finished batch and revokes those the owner approved as always; once grants are already used up. Returns how many were revoked. */
   release: (batchId: string, members: (GrantBinding & { key: string })[]) => Promise<number>
   consume: (binding: GrantBinding) => Promise<void>
   assertActive: (binding: GrantBinding) => Promise<void>
@@ -94,7 +94,8 @@ export function createGrantAuthority(connection: AgentConnection, signal: AbortS
     async release(batchId, bindings) {
       let revoked = 0
       for (const { grant } of await members(batchId, bindings)) {
-        if (grant.request.grant_type !== 'always' || grant.status !== 'approved') continue
+        // An approved always grant would stay active; an unanswered request would stay on the owner's IdP list.
+        if (grant.status !== 'pending' && (grant.request.grant_type !== 'always' || grant.status !== 'approved')) continue
         await check(); signal.throwIfAborted()
         const reply = await connectionRequest(connection.issuer, `/api/grants/${grant.id}/revoke`, {}, signal, await connection.accessToken())
         if (reply.status !== 'revoked') throw new Error('Approval grant was not revoked')
