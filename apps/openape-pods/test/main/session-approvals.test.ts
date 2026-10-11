@@ -10,7 +10,7 @@ import { prepareProgramAuthorization, resolveProgram } from '../../src/main/prog
 import { programWrite } from '../../src/worker/runs/program-effects'
 import { PodGroups } from '../../src/worker/workspace/groups'
 import type { ProgramAssignment } from '../../src/contracts/programs'
-import { brokerRejections, closeProfiles, deniedPodId, identityProvider, issuer, owner, ownerToken, podId, podSubject, program, workerFixture } from './idp-fixture'
+import { brokered, brokerRejections, closeProfiles, deniedPodId, identityProvider, issuer, owner, ownerToken, podId, podSubject, program, workerFixture } from './idp-fixture'
 
 // Owner decisions October 10, 2026 (issue 1455): the MCP session acts with the owner's identity, so grants a Pod
 // requests can be approved in that session without the human. Outside an active owner session no code path
@@ -222,4 +222,30 @@ it('keeps a Pod\'s own grant and HTTP destination when a network declares the sa
   expect(f.ledger.list(podId)).toEqual([expect.objectContaining({ id: 'grant-1', origin: null })])
   expect(f.bound).toEqual([])
   expect(result.kept).toEqual([{ podId, entry: 'https://chat.example.test keeps its existing methods GET' }])
+})
+
+// Issue 1462: a revoke of a brokered Pod grant went to the agent provider with the Pod token and failed with 404.
+it('revokes a brokered Pod grant as the owner in the session and records the state the IdP shows', async () => {
+  idp = identityProvider({ brokered }); vi.stubGlobal('fetch', idp.fetch)
+  const f = await workerFixture({ brokered }); const owner = session()
+  const revoke = (grantId: string) => ({ action: 'grants', command: { type: 'revoke', podId, grantId } })
+  await mcp(f, httpGrant(), owner)
+  await mcp(f, { action: 'grants', command: { type: 'request', target: { podId }, grants: { http: [{ origin: 'https://api.example.test', methods: ['GET'] }] } } }, owner)
+  await expect(mcp(f, revoke('grant-1'), null)).rejects.toThrow('active owner session')
+  expect(f.ledger.list(podId).map(grant => [grant.id, grant.state]).sort()).toEqual([['grant-1', 'approved'], ['grant-2', 'approved']])
+  expect(await mcp(f, revoke('grant-1'), owner)).toMatchObject({ grant: { id: 'grant-1', state: 'revoked' } })
+  expect(idp.state.decisions.filter(decision => decision.action === 'revoke')).toEqual([{ action: 'revoke', id: 'grant-1', bearer: ownerToken, body: {} }])
+  // A grant the owner already revoked at the IdP only updates the ledger, also without a session; a retry changes nothing.
+  idp.decide('grant-2', 'revoked')
+  expect(await mcp(f, revoke('grant-2'), null)).toMatchObject({ grant: { id: 'grant-2', state: 'revoked' } })
+  expect(await mcp(f, revoke('grant-1'), owner)).toMatchObject({ grant: { id: 'grant-1', state: 'revoked' } })
+  expect(idp.state.decisions.filter(decision => decision.action === 'revoke')).toHaveLength(1)
+  expect(f.ledger.list(podId).map(grant => [grant.id, grant.state]).sort()).toEqual([['grant-1', 'revoked'], ['grant-2', 'revoked']])
+})
+
+it('revokes a direct Pod grant as the requesting Pod without an owner session', async () => {
+  const f = await workerFixture()
+  await mcp(f, httpGrant(), session())
+  expect(await mcp(f, { action: 'grants', command: { type: 'revoke', podId, grantId: 'grant-1' } }, null)).toMatchObject({ grant: { id: 'grant-1', state: 'revoked' } })
+  expect(idp.state.decisions.filter(decision => decision.action === 'revoke')).toEqual([{ action: 'revoke', id: 'grant-1', bearer: 'SYNTHETIC_POD_AGENT', body: {} }])
 })
