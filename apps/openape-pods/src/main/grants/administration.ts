@@ -94,7 +94,7 @@ export async function administerGrants(command: GrantsCommand, owner: OwnerSessi
   }
   if (command.type === 'approve') return admin.grants.approve(owner, command.podId, command.grantId, command.grantType, signal)
   if (command.type === 'deny') return admin.grants.deny(owner, command.podId, command.grantId, signal)
-  return admin.grants.revoke(command.podId, command.grantId, signal)
+  return admin.grants.revoke(owner, command.podId, command.grantId, signal)
 }
 
 /** Applies a sandbox declaration to one Pod; entries it already has are kept, so a repeated declaration changes nothing. */
@@ -176,7 +176,7 @@ export async function releaseArchivedNetworkGrants(dependencies: { grants: PodGr
   // One failing item must not hold back the others; every failure is reported and retried on the next pass.
   const failures: unknown[] = []
   for (const grant of released.grants) {
-    try { await dependencies.grants.revoke(grant.podId, grant.id, signal) }
+    try { await dependencies.grants.revoke(null, grant.podId, grant.id, signal) }
     catch (error) { failures.push(error) }
   }
   for (const item of released.resources) {

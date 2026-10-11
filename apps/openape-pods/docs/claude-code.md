@@ -103,7 +103,7 @@ the session ends approvals fail and pending grants wait for the IdP page.
 | `{ "type": "list", "podId": "…" }` or `{ "networkId": "…" }` | Recorded grants with state, origin network and `approvedInSession` |
 | `{ "type": "request", "target": { "podId": "…" } \| { "networkId": "…", "revision": 3 }, "grants": { "runtime": true, "programs": [{ "application": "gh" }], "http": [{ "origin": "https://api.example.com", "methods": ["POST"] }] } }` | Requests each grant as the Pod and approves it as `always`; `"approve": false` only requests |
 | `{ "type": "approve", "podId": "…", "grantId": "…" }` | Approves one pending grant as the type the Pod requested (a timed grant with its duration), also a waiting runtime, network or mail archive approval item; an explicit `"grantType": "once"` or `"always"` is your choice and the result reports `widened` |
-| `{ "type": "deny", … }`, `{ "type": "revoke", … }` | Denies a pending grant or revokes a grant as the requesting Pod |
+| `{ "type": "deny", … }`, `{ "type": "revoke", … }` | Denies a pending grant, or revokes a grant: a brokered Pod grant (the usual case) as you in this session, a direct one as the requesting Pod. A grant already ended at the IdP only updates the recorded state |
 
 A program without `argv` is the whole program: one detail per action and first
 resource, so a new command of that program is covered without another request;

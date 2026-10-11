@@ -36,7 +36,7 @@ it('revokes the grants and removes the sandbox a network handed to its members w
   expect(ledger.released().grants.map(item => item.id).sort()).toEqual(['network-consumer', 'network-source'])
 
   const revoked: string[] = []
-  const grants = { revoke: async (podId: string, grantId: string) => { revoked.push(grantId); ledger.state(podId, grantId, 'revoked'); return {} } } as unknown as PodGrants
+  const grants = { revoke: async (_owner: unknown, podId: string, grantId: string) => { revoked.push(grantId); ledger.state(podId, grantId, 'revoked'); return {} } } as unknown as PodGrants
   const state = (podId: string) => ({ resources: f.resources.list(podId), epoch: f.resources.epoch(podId) }) as ResourceState
   await releaseArchivedNetworkGrants({ grants, ledger: async command => ledger.execute(command), resources: async podId => state(podId), revokeResource: async (podId, resourceId, revision) => f.resources.revoke(podId, resourceId, revision) }, AbortSignal.timeout(5000))
   expect(revoked.sort()).toEqual(['network-consumer', 'network-source'])
