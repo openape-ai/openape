@@ -171,12 +171,12 @@ export async function administerSandbox(command: SandboxCommand, owner: OwnerSes
 }
 
 /** Revokes, as each member Pod, the grants an archived network handed out and removes the sandbox resources it added. */
-export async function releaseArchivedNetworkGrants(dependencies: { grants: PodGrants, ledger: (command: GrantLedgerCommand) => Promise<unknown>, resources: (podId: string) => Promise<ResourceState>, revokeResource: (podId: string, id: string, revision: number) => Promise<void> }, signal: AbortSignal): Promise<void> {
+export async function releaseArchivedNetworkGrants(dependencies: { grants: PodGrants, owner: () => Promise<OwnerSession | null>, ledger: (command: GrantLedgerCommand) => Promise<unknown>, resources: (podId: string) => Promise<ResourceState>, revokeResource: (podId: string, id: string, revision: number) => Promise<void> }, signal: AbortSignal): Promise<void> {
   const released = await dependencies.ledger({ type: 'released' }) as { grants: PodGrant[], resources: { networkId: string, podId: string, resourceId: string }[] }
   // One failing item must not hold back the others; every failure is reported and retried on the next pass.
   const failures: unknown[] = []
   for (const grant of released.grants) {
-    try { await dependencies.grants.revoke(null, grant.podId, grant.id, signal) }
+    try { await dependencies.grants.revoke(await dependencies.owner(), grant.podId, grant.id, signal) }
     catch (error) { failures.push(error) }
   }
   for (const item of released.resources) {

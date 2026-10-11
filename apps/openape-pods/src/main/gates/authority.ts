@@ -19,7 +19,8 @@ export interface GrantAuthority {
   createBatch: (request: BatchRequest) => Promise<{ url: string, grants: BatchGrant[] }>
   statuses: (batchId: string, members: (GrantBinding & { key: string })[]) => Promise<Record<string, MemberState>>
   /** Withdraws the unanswered grants of a finished batch and revokes those the owner approved as always; once grants are already used up. Returns how many were revoked. */
-  release: (batchId: string, members: (GrantBinding & { key: string })[]) => Promise<number>
+  /** `revoke` replaces the Pod's own revoke, for a brokered Pod whose grants only the owner can revoke. */
+  release: (batchId: string, members: (GrantBinding & { key: string })[], revoke?: (grantId: string) => Promise<Record<string, unknown>>) => Promise<number>
   consume: (binding: GrantBinding) => Promise<void>
   assertActive: (binding: GrantBinding) => Promise<void>
 }
@@ -91,13 +92,13 @@ export function createGrantAuthority(connection: AgentConnection, signal: AbortS
     async statuses(batchId, bindings) {
       return Object.fromEntries((await members(batchId, bindings)).map(({ key, grant }) => [key, state(grant)]))
     },
-    async release(batchId, bindings) {
+    async release(batchId, bindings, revoke) {
       let revoked = 0
       for (const { grant } of await members(batchId, bindings)) {
         // An approved always grant would stay active; an unanswered request would stay on the owner's IdP list.
         if (grant.status !== 'pending' && (grant.request.grant_type !== 'always' || grant.status !== 'approved')) continue
         await check(); signal.throwIfAborted()
-        const reply = await connectionRequest(connection.issuer, `/api/grants/${grant.id}/revoke`, {}, signal, await connection.accessToken())
+        const reply = revoke ? await revoke(grant.id) : await connectionRequest(connection.issuer, `/api/grants/${grant.id}/revoke`, {}, signal, await connection.accessToken())
         if (reply.status !== 'revoked') throw new Error('Approval grant was not revoked')
         revoked++
       }
