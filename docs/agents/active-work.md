@@ -5,7 +5,7 @@
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1459. Plan (owner "Passt Go"): https://report.openape.ai/d/01M4NC05HHAEYQ29AG60ZDJ4JX; source `.claude/plans/2026-10-11-pods-tags/plan.json`.
 - Change: schema 47 adds `item_tags` (46→47 additive, 45 rebuilt then extended); workspace commands `tag` and `renameNetwork`; tags in the workspace view and map (`MapTags`, inherited network tags computed, never copied); tag filter, chips and `TagEditor` in Automatisierungen.
 - Deferred with the owner informed: tags in portable export/import (needs a `pods-protocol` format feature) and in the phone inbox.
-- Next: relay first, signed desktop with a paired backup, apply the plan's renaming table and tags, inspected screenshots, Test Run.
+- Delivered October 11: relay prod-8f01fc21, desktop 8f01fc21 (schema 47), 7 items tagged, 19 renames applied. Evidence: https://report.openape.ai/d/01M4NE1E1GW2DKT50SZ0VA0N66
 
 ## Approvals badge and growing approval batches — issue 1458
 
