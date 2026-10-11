@@ -10,14 +10,14 @@
     "approach": "Store free tags like automation descriptions, inherit network tags in the view, filter by tag, add network renaming and shorten the existing names.",
     "outcome": "Short names, one filter per company or topic, and the same tags in the desktop, browser, Codex and inbox."
   },
-  "status": "active",
+  "status": "done",
   "revision": 2,
   "milestones": [
     {
       "id": "model",
       "title": "Tags in the workspace",
       "goal": "Store and publish free tags for Pods and networks.",
-      "status": "planned",
+      "status": "done",
       "acceptance": [
         "A Pod or network has 0–8 tags; a tag is trimmed, lowercased, 1–32 characters of letters, digits and hyphens, unique per item.",
         "Tags are set with one revisioned workspace command, like descriptions, locally and through the central workspace; a stale revision is refused.",
@@ -29,7 +29,7 @@
       "id": "surfaces",
       "title": "Show, edit and filter",
       "goal": "Tags appear wherever Pods and networks are listed.",
-      "status": "planned",
+      "status": "done",
       "acceptance": [
         "Automatisierungen (desktop and browser) shows tags as chips and has a tag filter with suggestions from existing tags; a network filter includes its members.",
         "Tags are edited in the settings of a Pod or network with suggestions; the filter choice is remembered per device.",
@@ -41,7 +41,7 @@
       "id": "rename",
       "title": "Rename networks and shorten names",
       "goal": "Remove repeated context from the existing names.",
-      "status": "planned",
+      "status": "done",
       "acceptance": [
         "A network can be renamed without a new network revision; members, history and decisions keep their identity.",
         "Where two items share a short name, lists show the network beside it.",
@@ -53,7 +53,7 @@
       "id": "rollout",
       "title": "Release and verify",
       "goal": "Roll out relay first, then the signed desktop, then apply the renaming.",
-      "status": "planned",
+      "status": "done",
       "acceptance": [
         "Relay and signed desktop installed with a paired backup; all Pods keep running.",
         "Screenshots of Automatisierungen with chips and an active filter are inspected; the owner checks names and tags.",
@@ -348,6 +348,11 @@
         "path": "sections.2.body",
         "source": "Deferred during implementation on October 11, 2026, and reported to the owner: tags in portable export and import (the package format in pods-protocol needs its own versioned feature) and tags on inbox items in the phone app. The desktop and browser show tags everywhere Pods and networks are listed.",
         "text": "Bei der Umsetzung am 11. Oktober 2026 zurückgestellt und dir gemeldet: Tags beim portablen Export und Import (das Paketformat in pods-protocol braucht ein eigenes versioniertes Feature) und Tags an Einträgen im Handy-Posteingang. Desktop und Browser zeigen Tags überall, wo Pods und Netzwerke gelistet sind."
+      },
+      {
+        "path": "completion.summary",
+        "source": "Delivered on October 11, 2026: PR 356 merged, relay prod-8f01fc21 and signed desktop 8f01fc21 installed with a paired backup, schema 47 live. Seven items tagged, nineteen names shortened from the table, all Pods keep running. Deferred: tags in portable export/import and in the phone inbox. Evidence: https://report.openape.ai/d/01M4NE1E1GW2DKT50SZ0VA0N66",
+        "text": "Ausgeliefert am 11. Oktober 2026: PR 356 gemergt, Relay prod-8f01fc21 und signierter Desktop 8f01fc21 mit gepaartem Backup installiert, Schema 47 live. Sieben Einträge getaggt, neunzehn Namen laut Tabelle gekürzt, alle Pods laufen weiter. Zurückgestellt: Tags beim portablen Export/Import und im Handy-Posteingang. Nachweis: https://report.openape.ai/d/01M4NE1E1GW2DKT50SZ0VA0N66"
       }
     ]
   },
@@ -359,5 +364,9 @@
       "revision": 1
     },
     "scope": "Free tags for Pods and networks, filter and chips, network rename, renaming of the existing Pods and networks."
+  },
+  "completion": {
+    "result": "partial",
+    "summary": "Delivered on October 11, 2026: PR 356 merged, relay prod-8f01fc21 and signed desktop 8f01fc21 installed with a paired backup, schema 47 live. Seven items tagged, nineteen names shortened from the table, all Pods keep running. Deferred: tags in portable export/import and in the phone inbox. Evidence: https://report.openape.ai/d/01M4NE1E1GW2DKT50SZ0VA0N66"
   }
 }
