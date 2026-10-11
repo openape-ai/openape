@@ -1,5 +1,5 @@
 import type { InboxPublication } from '../../worker/inbox/outbox'
-import type { InboxDecision } from '../../contracts/inbox'
+import type { InboxApprovals, InboxDecision } from '../../contracts/inbox'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -178,19 +178,20 @@ export class RemoteController {
    * Publishes the complete decision set whenever it changes, and at least every ten minutes so a
    * restarted relay or a lost response converges. The relay resolves decisions missing from the set.
    */
-  async publishDecisions(collect: () => Promise<InboxDecision[]>): Promise<void> {
+  async publishDecisions(collect: () => Promise<InboxDecision[]>, approvals?: (signal: AbortSignal) => Promise<InboxApprovals>): Promise<void> {
     if (this.publishingDecisions) return
     this.publishingDecisions = true
     try {
       await this.load()
       if (!this.saved?.enabled || !this.saved.tokens) return
-      const decisions = await collect()
-      const digest = createHash('sha256').update(JSON.stringify(decisions)).digest('hex')
+      const [decisions, waiting] = await Promise.all([collect(), approvals?.(AbortSignal.timeout(15000))])
+      const publication = { decisions, ...(waiting ? { approvals: waiting } : {}) }
+      const digest = createHash('sha256').update(JSON.stringify(publication)).digest('hex')
       if (this.decisions?.digest === digest && Date.now() - this.decisions.at < 600000) return
       const identity = await this.worker.remoteOwner()
       if (!sameOwner(identity.owner, this.saved.tokens.registration.owner)) return
       await this.refresh()
-      const receipt = await this.signed('POST', '/api/runtime/v1/inbox/decisions', { decisions }) as { skipped?: number }
+      const receipt = await this.signed('POST', '/api/runtime/v1/inbox/decisions', publication) as { skipped?: number }
       if (receipt.skipped) console.error(`The account inbox is full; ${receipt.skipped} new decisions were not added`)
       this.decisions = { digest, at: Date.now() }
     }

@@ -35,6 +35,7 @@ function sources(): DecisionSources {
     gates: [
       { id: batch, networkId: network, gate: 'send', podId: pod, generation: 2, state: 'unknown', expiresAt: 0, url: 'https://id.example.test/grant-batch?id=1', error: null, items: [{ deliveryId: 'd1', title: 'Antwort an A', outcome: 'unknown' }] },
       { id: '88888888-8888-4888-8888-888888888888', networkId: network, gate: 'send', podId: pod, generation: 1, state: 'superseded', expiresAt: 0, url: 'https://id.example.test/old', error: null, items: [{ deliveryId: 'd0', title: 'Erledigt', outcome: 'sent' }] },
+      { id: '99999999-9999-4999-8999-999999999999', networkId: network, gate: 'send', podId: pod, generation: 1, state: 'pending', expiresAt: 0, url: 'https://id.example.test/grant-batch?id=9', error: null, items: [{ deliveryId: 'd9', title: 'Wartet', outcome: 'held' }] },
     ],
   } as unknown as NetworkView
   const secrets = { consumer: null, origin: 'https://secrets.openape.ai', requests: [
@@ -47,7 +48,6 @@ function sources(): DecisionSources {
 function fixture(current = sources()) {
   const worker = {
     inboxSources: vi.fn(async () => current),
-    approvalLink: vi.fn(async () => 'https://id.example.test/grant-approval?grant_id=grant-1'),
     networks: vi.fn(async () => ({})), runs: vi.fn(async () => ({})), secrets: vi.fn(async () => ({})),
   } satisfies DecisionWorker
   const decisions = new InboxDecisions(worker, (key, parameters) => translate('en', key, parameters))
@@ -55,33 +55,33 @@ function fixture(current = sources()) {
 }
 const byType = (list: InboxDecision[], type: string, title?: string) => list.find(item => item.type === type && (!title || item.title.includes(title)))!
 
-it('projects every open desktop decision with its authority and a verified handoff', async () => {
+it('projects every open Pods decision with its authority and a verified handoff', async () => {
   const { decisions } = fixture()
   const list = await decisions.collect()
-  expect(new Set(list.map(item => item.type))).toEqual(new Set(['approval', 'effect', 'network-batch', 'network-choice', 'secret']))
-  // Network route and secret decisions keep the identity and digest they had before access proposals left (issue 1455).
+  expect(new Set(list.map(item => item.type))).toEqual(new Set(['effect', 'network-batch', 'network-choice', 'secret']))
+  // Network choices and secrets keep their identity and digest; batches changed when IdP links left the inbox (issue 1458).
   expect(list.filter(item => ['network-choice', 'network-batch', 'secret'].includes(item.type)).map(item => [item.sourceId, item.digest])).toEqual([
     [`network-choice:${event}`, '5b9d23d0129d207abe2fbad940a0e316f59b768e3834e4a8de47155cf1539184'],
-    [`network-batch:${batch}:2`, '5837810d1e39e5b15b18e9d39c3e7f46f79d41ba0989118532960880cc77ae7c'],
-    ['network-batch:88888888-8888-4888-8888-888888888888:1', '8d7602d8ac7c23f580aa171bc95f3812163ab98cac8f3d348d155b804fa0d474'],
+    [`network-batch:${batch}:2`, '1ceacf735de27d9fe84ff32e86acba6424e7ce85e8881daa967b2e857d989c12'],
+    ['network-batch:88888888-8888-4888-8888-888888888888:1', '6cec0c2345445728e523df3447f25f13f14b0ec0f0c1d9fe74746a214717bae8'],
     ['secret:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'c41b2a20c938daa149d65aa0f1dd80ec4fd7e24d392c033129d24c60307e3ab1'],
   ])
   for (const item of list) expect(parseInboxDecision(item)).toEqual(item)
   // Only the latest event of a case is open, as in the desktop view.
   expect(byType(list, 'network-choice')).toMatchObject({ sourceId: `network-choice:${event}`, title: 'Rechnung Mai', body: 'Sortieren · Mailnetz\nfrom: a@b.at\nnote: Hallo ⏎ sender: chef@example.com', authority: 'pods', link: null })
-  expect(byType(list, 'network-batch', '')).toMatchObject({ authority: 'idp', podName: 'Belege', options: [{ key: 'discard', input: 'evidence' }, { key: 'review', input: 'evidence' }], link: { url: 'https://id.example.test/grant-batch?id=1' } })
-  expect(byType(list, 'approval')).toMatchObject({ authority: 'idp', options: [], link: { title: 'Decide at the IdP', url: 'https://id.example.test/grant-approval?grant_id=grant-1' } })
+  expect(byType(list, 'network-batch', '')).toMatchObject({ authority: 'pods', podName: 'Belege', options: [{ key: 'discard', input: 'evidence' }, { key: 'review', input: 'evidence' }], link: null })
   expect(byType(list, 'secret')).toMatchObject({ authority: 'secrets', title: 'Secret imap for Belege', link: { url: 'https://secrets.openape.ai/' } })
   expect(byType(list, 'effect', 'invoice-7').options).toEqual([{ key: 'delivered', title: 'Delivered', input: 'evidence' }, { key: 'resend', title: 'Not delivered, send again', input: 'evidence' }])
   // Network members keep their network recovery: visible, but an explicit desktop step.
   expect(byType(list, 'effect', 'reply-1')).toMatchObject({ options: [], link: null, body: expect.stringContaining('Only on the desktop') })
-  expect(list).toHaveLength(7)
+  expect(list).toHaveLength(6)
 })
 
-it('publishes no runtime approval whose link cannot be verified against the Pod identity', async () => {
-  const { decisions, worker } = fixture()
-  worker.approvalLink.mockRejectedValue(new Error('Approval belongs to a different Pod identity'))
-  expect((await decisions.collect()).map(item => item.type)).not.toContain('approval')
+it('leaves grants to the IdP: neither a pending batch nor a run approval becomes an inbox decision', async () => {
+  const list = await fixture().decisions.collect()
+  expect(list.map(item => item.type)).not.toContain('approval')
+  expect(list.some(item => item.sourceId.includes('99999999-9999-4999-8999-999999999999'))).toBe(false)
+  expect(list.filter(item => item.authority === 'idp')).toEqual([])
 })
 
 it.each([
@@ -97,13 +97,6 @@ it.each([
   const decision = byType(await decisions.collect(), type, title ?? (type === 'effect' ? 'invoice-7' : undefined))
   await expect(decisions.decide({ type: 'decide', sourceId: decision.sourceId, digest: decision.digest, option, ...(input ? { input } : {}) })).resolves.toEqual({ status: 'applied', sourceId: decision.sourceId })
   expect(worker[target]).toHaveBeenCalledExactlyOnceWith(expected)
-})
-
-it('keeps IdP-only decisions at the IdP: a waiting approval batch has no Pods action', async () => {
-  const { decisions, worker } = fixture()
-  const decision = byType(await decisions.collect(), 'approval')
-  await expect(decisions.decide({ type: 'decide', sourceId: decision.sourceId, digest: decision.digest, option: 'approve' })).rejects.toThrow('This option is not available')
-  for (const call of [worker.networks, worker.runs, worker.secrets]) expect(call).not.toHaveBeenCalled()
 })
 
 it('fails clearly for a changed or vanished source and for missing evidence, without running a command', async () => {

@@ -26,11 +26,21 @@ onMounted(() => window.addEventListener('scroll', freeze, { passive: true, once:
 onUnmounted(() => window.removeEventListener('scroll', freeze))
 async function decide(item: InboxItem, option: string) { await inbox.answer(item, option) }
 function undo(item: InboxItem) { inbox.undo(item.id) }
+// Grants are decided at the IdP (issue 1458); the inbox only says how many wait and opens the IdP grants page.
+const approvals = computed(() => {
+  const value = inbox.state.approvals
+  if (!value || value.pending === 0) return null
+  const text = value.pending === null ? t('approvalsUnknown') : value.pending === 1 ? t('approvalsOne') : t('approvalsOpen', { count: value.pending })
+  return { text, url: value.url }
+})
 </script>
 
 <template>
   <InboxShell>
     <h1>{{ t('tabDecisions') }}</h1>
+    <a v-if="approvals" class="approvals" :href="approvals.url" target="_blank" rel="noopener">
+      <span>{{ approvals.text }}</span><strong>{{ t('approvalsAction') }} →</strong>
+    </a>
     <button v-if="fresh" type="button" class="fresh" @click="showFresh">
       {{ t('newDecisions', { count: fresh }) }}
     </button>
@@ -41,5 +51,7 @@ function undo(item: InboxItem) { inbox.undo(item.id) }
 </template>
 
 <style scoped>
+.approvals { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; margin: 0 0 16px; padding: 10px 14px; border: 1px solid var(--accent); border-radius: 12px; background: var(--card); color: var(--text); text-decoration: none; }
+.approvals strong { color: var(--accent); white-space: nowrap; }
 .fresh { position: fixed; top: calc(env(safe-area-inset-top) + 8px); left: 50%; transform: translateX(-50%); z-index: 4; border-radius: 999px; box-shadow: 0 2px 10px rgb(0 0 0 / 25%); }
 </style>

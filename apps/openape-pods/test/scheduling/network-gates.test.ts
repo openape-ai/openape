@@ -95,7 +95,7 @@ it.each([false, true])('runs a stored historical v2 grant only while its data/co
   const definition = parseNetworkDefinition(JSON.parse(f.store.db.prepare('SELECT contract FROM network_revisions WHERE network_id=?').get(f.id)!.contract as string))
   f.engine.gates.prepare(definition, f.consumer)
   const current = JSON.parse(f.store.db.prepare('SELECT manifest FROM network_gate_tasks').get()!.manifest as string) as NetworkGateManifest
-  const { dataPin: _dataPin, digest: _digest, actionHash: _actionHash, ...previous } = current
+  const { dataPin: _dataPin, batchId: _batchId, digest: _digest, actionHash: _actionHash, ...previous } = current
   const base = { ...previous, version: 2 as const }
   const action = { ...base, actionHash: networkGateActionHash(base) }
   const historical = parseNetworkGateManifest({ ...action, digest: networkGateDigest(action) })
@@ -142,7 +142,8 @@ it('consumes once before release and verifies the consumed grant before the scri
   expect(f.calls.filter(operation => operation === 'consume')).toHaveLength(1)
 })
 
-it.each(['denied', 'expired'])('does not release an owner decision with outcome %s', async (status) => {
+it('does not release an owner decision with outcome denied', async () => {
+  const status = 'denied'
   const f = runtimeFixture(() => status)
   await f.emit('test.input')
   f.engine.tick(); await f.settle()
@@ -152,6 +153,58 @@ it.each(['denied', 'expired'])('does not release an owner decision with outcome 
   expect(f.started).not.toContain(f.consumer)
   expect(f.store.db.prepare('SELECT state FROM network_gate_tasks').get()!.state).toBe(status)
   expect(f.store.db.prepare('SELECT outcome FROM network_gate_items').get()!.outcome).toBe(status)
+})
+
+it('asks again for a batch that expired unanswered instead of ending its inputs (issue 1458)', async () => {
+  const f = runtimeFixture(() => 'expired')
+  await f.emit('test.input')
+  f.engine.tick(); await f.settle()
+  f.due(); f.engine.tick(); await f.settle()
+  f.engine.tick(); await f.settle()
+  expect(f.calls).toEqual(['create', 'status', 'create'])
+  expect(f.started).not.toContain(f.consumer)
+  expect(f.store.db.prepare('SELECT state FROM network_gate_tasks ORDER BY created_at,rowid').all().map(row => row.state)).toEqual(['superseded', 'pending'])
+  expect(f.store.db.prepare('SELECT outcome FROM network_gate_items ORDER BY rowid').all().map(row => row.outcome)).toEqual(['obsolete', 'held'])
+  expect(f.store.db.prepare('SELECT body FROM network_trace_events WHERE kind=\'gate-fresh-approval\'').get()!.body).toContain('requested again automatically')
+})
+
+it('lets later inputs join the open IdP batch of their gate with its expiry (issue 1458)', async () => {
+  const f = runtimeFixture()
+  await f.emit('test.input')
+  f.engine.tick(); await f.settle()
+  // `emit` keys items by position, so a later input needs a later position.
+  await f.emit('test.other', 'test.input')
+  f.engine.tick(); await f.settle()
+  const manifests = f.store.db.prepare('SELECT manifest FROM network_gate_tasks ORDER BY created_at,rowid').all().map(row => JSON.parse(row.manifest as string) as NetworkGateManifest)
+  expect(manifests).toHaveLength(2)
+  expect(manifests[1]!.id).not.toBe(manifests[0]!.id)
+  expect(manifests[1]).toMatchObject({ version: 4, batchId: manifests[0]!.id, expiresAt: manifests[0]!.expiresAt })
+  // A batch close to its expiry takes no new members; the next input opens a new batch.
+  f.store.db.prepare('UPDATE network_gate_tasks SET expires_at=?').run(Date.now() + 1000)
+  await f.emit('test.other', 'test.other', 'test.input')
+  f.engine.tick(); await f.settle()
+  const last = JSON.parse(f.store.db.prepare('SELECT manifest FROM network_gate_tasks ORDER BY created_at DESC,rowid DESC').get()!.manifest as string) as NetworkGateManifest
+  expect(last.batchId).toBe(last.id)
+})
+
+it('asks once again for a batch that an older runtime blocked on expiry', async () => {
+  const f = runtimeFixture()
+  await f.emit('test.input')
+  f.engine.tick(); await f.settle()
+  const task = f.store.db.prepare('SELECT id FROM network_gate_tasks').get()!.id as string
+  // The pre-1458 outcome: superseded, its input blocked for owner review.
+  f.store.db.prepare('UPDATE network_gate_tasks SET state=\'superseded\',generation=generation+1 WHERE id=?').run(task)
+  f.store.db.prepare('UPDATE network_gate_controls SET error=\'Network approval expired before dispatch\',resolution=json_object(\'decision\',json_object(\'priorTaskState\',\'pending\')) WHERE task_id=?').run(task)
+  f.store.db.prepare('UPDATE network_queue_counts SET count=count-1 WHERE network_id=? AND state=\'pending\'').run(f.id)
+  f.store.db.prepare('INSERT INTO network_queue_counts VALUES(?,\'blocked\',1) ON CONFLICT(network_id,state) DO UPDATE SET count=count+1').run(f.id)
+  f.store.db.prepare('UPDATE network_deliveries SET state=\'blocked\' WHERE id=(SELECT delivery_id FROM network_gate_items WHERE task_id=?)').run(task)
+  f.store.db.prepare('UPDATE network_gate_items SET outcome=\'obsolete\' WHERE task_id=?').run(task)
+  f.engine.tick(); await f.settle()
+  f.engine.tick(); await f.settle()
+  expect(f.store.db.prepare('SELECT state FROM network_gate_tasks ORDER BY created_at,rowid').all().map(row => row.state)).toEqual(['superseded', 'pending'])
+  expect(f.calls).toEqual(['create', 'create'])
+  f.engine.tick(); await f.settle()
+  expect(f.calls).toEqual(['create', 'create'])
 })
 
 it('holds an uncertain consume without repeating it and lets unrelated consumers finish', async () => {
@@ -179,12 +232,12 @@ it('never releases a frozen approval after the consumer permissions change', asy
   expect(f.started).not.toContain(f.consumer)
 })
 
-it('invalidates a frozen v3 approval after configuration changes without releasing work', async () => {
+it('invalidates a frozen approval after configuration changes without releasing work', async () => {
   const f = runtimeFixture(() => 'approved')
   await f.emit('test.input')
   f.engine.tick(); await f.settle()
   const original = JSON.parse(f.store.db.prepare('SELECT manifest FROM network_gate_tasks').get()!.manifest as string)
-  expect(original.version).toBe(3)
+  expect(original.version).toBe(4)
   const binding = f.store.db.prepare('SELECT definition_id FROM instance_definition_bindings WHERE pod_id=?').get(f.consumer)!
   f.store.db.prepare('INSERT INTO definition_config VALUES(?,1,\'region\',\'public\',?)').run(binding.definition_id!, JSON.stringify('changed region'))
   f.due(); f.engine.tick(); await f.settle()
