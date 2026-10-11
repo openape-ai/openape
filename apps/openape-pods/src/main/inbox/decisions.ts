@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { InboxDecide, InboxDecision, InboxDecisionOption, InboxDecisionType } from '../../contracts/inbox'
-import { inboxDecisionLimits, inboxSourceId, parseInboxDecision } from '../../contracts/inbox'
+import { inboxDecisionLimits, inboxSourceId, inboxTags, parseInboxDecision } from '../../contracts/inbox'
 import type { MapView } from '../../contracts/map-view'
 import type { NetworkChoiceView, NetworkCommand, NetworkView } from '../../contracts/networks'
 import type { NetworkGateView } from '../../contracts/network-gate-view'
@@ -88,6 +88,12 @@ export class InboxDecisions {
   // Network members change only through desktop review; the phone may still take route decisions for the network.
   private members(sources: DecisionSources): Set<string> { return new Set((sources.map?.automations ?? []).filter(automation => automation.kind === 'network').flatMap(automation => automation.members)) }
   private podName(sources: DecisionSources, podId: string): string | null { return sources.map?.pods.find(pod => pod.id === podId)?.name ?? null }
+  // Tags appear only when the Pod has any, so decisions of untagged Pods keep their digest.
+  private pod(sources: DecisionSources, podId: string): Pick<InboxDecision, 'podId' | 'podName' | 'podTags'> {
+    const tags = sources.map?.pods.find(pod => pod.id === podId)?.tags
+    const podTags = tags ? inboxTags(tags.own, tags.inherited) : []
+    return { podId, podName: this.podName(sources, podId), ...(podTags.length ? { podTags } : {}) }
+  }
 
   /** Owner decisions of network routes: an open item of a choose route, or an approve-route batch that Pods must settle. */
   private networkRoutes(sources: DecisionSources): DecisionEntry[] {
@@ -116,7 +122,7 @@ export class InboxDecisions {
     const lines = [this.t('{count} items', { count: batch.items.length }), ...batch.items.map(item => `- ${item.title} (${item.outcome})`), ...(batch.error ? [batch.error] : [])]
     // An uncertain or superseded batch can ask the IdP again with the owner's reason; the runtime checks that no item is in use.
     const options: InboxDecisionOption[] = [...(unknown ? [{ key: 'discard', title: this.t('Discard batch'), input: 'evidence' as const }] : []), { key: 'review', title: this.t('Request fresh approval'), input: 'evidence' as const }]
-    return [this.entry('network-batch', [batch.id, String(batch.generation)], { podId: batch.podId, podName: this.podName(sources, batch.podId), title: `${this.t('Approval batch')} · ${batch.gate}`, body: lines.join('\n'), authority: 'pods', options, link: null },
+    return [this.entry('network-batch', [batch.id, String(batch.generation)], { ...this.pod(sources, batch.podId), title: `${this.t('Approval batch')} · ${batch.gate}`, body: lines.join('\n'), authority: 'pods', options, link: null },
       async (option, evidence) => this.worker.networks({ type: option === 'review' ? 'gateReview' : 'gateDiscard', id: batch.networkId, revision, taskId: batch.id, generation: batch.generation, evidence }))]
   }
 
@@ -128,7 +134,7 @@ export class InboxDecisions {
       const desktop = members.has(pod.id)
       const options: InboxDecisionOption[] = desktop ? [] : [{ key: 'delivered', title: this.t('Delivered'), input: 'evidence' }, { key: 'resend', title: this.t('Not delivered, send again'), input: 'evidence' }]
       return this.entry('effect', [pod.id, item.runId, item.key], {
-        podId: pod.id, podName: pod.name, title: `${this.t('unknown deliveries')} · ${item.key}`, body: desktop ? `${item.runId}\n${this.t('Only on the desktop')}` : item.runId, authority: 'pods', options, link: null,
+        ...this.pod(sources, pod.id), title: `${this.t('unknown deliveries')} · ${item.key}`, body: desktop ? `${item.runId}\n${this.t('Only on the desktop')}` : item.runId, authority: 'pods', options, link: null,
       }, async (option, evidence) => this.worker.runs({ type: 'resolveHttp', podId: pod.id, runId: item.runId, key: item.key, applied: option === 'delivered', evidence }))
     }))
   }
@@ -137,7 +143,7 @@ export class InboxDecisions {
     const view = sources.secrets
     if (!view) return []
     return view.requests.filter(row => row.status !== 'collected' && row.status !== 'expired').map(row => this.entry('secret', [row.id], {
-      podId: row.podId, podName: this.podName(sources, row.podId), title: this.t('Secret {alias} for {pod}', { alias: row.alias, pod: this.podName(sources, row.podId) ?? row.podId }),
+      ...this.pod(sources, row.podId), title: this.t('Secret {alias} for {pod}', { alias: row.alias, pod: this.podName(sources, row.podId) ?? row.podId }),
       body: [row.purpose || this.t('no purpose given'), ...(row.error ? [row.error] : [])].join('\n'), authority: 'secrets',
       options: [{ key: 'cancel', title: this.t('Cancel'), input: null }], link: row.status === 'requested' ? { title: this.t('Fill in at secrets.openape.ai'), url: view.origin } : null,
     }, async () => this.worker.secrets({ type: 'cancel', id: row.id })))

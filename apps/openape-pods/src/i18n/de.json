@@ -3187,6 +3187,7 @@
   "Save tags": "Tags speichern",
   "from network": "vom Netzwerk",
   "Remove tag {tag}": "Tag {tag} entfernen",
+  "Invalid inbox tags": "Ungültige Tags in der Inbox",
   "Invalid tag": "Ungültiger Tag: nur Buchstaben, Ziffern und Bindestriche, höchstens 32 Zeichen",
   "Too many tags": "Höchstens 8 Tags",
   "Invalid tags": "Ungültige Tags",

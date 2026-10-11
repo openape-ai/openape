@@ -4,6 +4,7 @@ import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { ProtocolError } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
+import { parseInboxTags } from '../../../openape-pods/src/contracts/inbox'
 import type { InboxApprovals, InboxDecision } from '../../../openape-pods/src/contracts/inbox'
 import type { InboxApprovalCount, InboxDecisionData, InboxDevice, InboxItem, InboxPublication, InboxSubscription, OutboxEntry } from '../../shared/inbox-types'
 
@@ -34,7 +35,7 @@ export function parsePublication(input: unknown): InboxPublication {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new ProtocolError('invalid_inbox_item')
   const value = input as Record<string, unknown>
   for (const field of Object.keys(value)) {
-    if (!['eventId', 'kind', 'title', 'body', 'podId', 'podName', 'runId', 'links'].includes(field)) throw new ProtocolError('invalid_inbox_item')
+    if (!['eventId', 'kind', 'title', 'body', 'podId', 'podName', 'podTags', 'runId', 'links'].includes(field)) throw new ProtocolError('invalid_inbox_item')
   }
   const text = (field: string, maximum: number, required = true): string | null => {
     const raw = value[field]
@@ -56,8 +57,16 @@ export function parsePublication(input: unknown): InboxPublication {
   const podId = value.podId === undefined ? null : value.podId
   const runId = value.runId === undefined ? null : value.runId
   if ((podId !== null && (typeof podId !== 'string' || !id.test(podId))) || (runId !== null && (typeof runId !== 'string' || !id.test(runId)))) throw new ProtocolError('invalid_inbox_item')
-  return { eventId: value.eventId, kind: 'message', title: text('title', 300) as string, body: text('body', inboxLimits.bodyBytes) as string, podId, podName: text('podName', 200, false), runId, links: parsedLinks }
+  // Desktops before issue 1461 send no tags; their publications keep the same digest.
+  let podTags: { podTags?: string[] } = {}
+  if (value.podTags !== undefined) {
+    try { podTags = { podTags: parseInboxTags(value.podTags) } }
+    catch { throw new ProtocolError('invalid_inbox_item') }
+  }
+  return { eventId: value.eventId, kind: 'message', title: text('title', 300) as string, body: text('body', inboxLimits.bodyBytes) as string, podId, podName: text('podName', 200, false), ...podTags, runId, links: parsedLinks }
 }
+
+const storedTags = (tags: string[] | undefined) => tags?.length ? JSON.stringify(tags) : null
 
 export class InboxStore {
   readonly db: DatabaseSync
@@ -81,6 +90,8 @@ export class InboxStore {
       PRAGMA user_version=1;`)
     // Added for decisions (M2); an older server ignores the column, so the version stays 1.
     if (!this.db.prepare('PRAGMA table_info(items)').all().some(column => column.name === 'decision')) this.db.exec('ALTER TABLE items ADD COLUMN decision TEXT')
+    // Added for Pod tags (issue 1461), likewise additive.
+    if (!this.db.prepare('PRAGMA table_info(items)').all().some(column => column.name === 'pod_tags')) this.db.exec('ALTER TABLE items ADD COLUMN pod_tags TEXT')
   }
 
   close(): void { this.db.close() }
@@ -144,8 +155,8 @@ export class InboxStore {
       const count = Number(this.db.prepare('SELECT count(*) AS n FROM items WHERE owner=? AND deleted IS NULL').get(key(owner))?.n)
       if (count >= inboxLimits.itemsPerOwner) throw new ProtocolError('inbox_quota', 507)
       const itemId = randomUUID()
-      this.db.prepare('INSERT INTO items(id,owner,runtime_id,event_id,digest,kind,state,title,body,pod_id,pod_name,run_id,links,created,sequence) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-        .run(itemId, key(owner), runtimeId, publication.eventId, digest, publication.kind, 'open', publication.title, publication.body, publication.podId, publication.podName, publication.runId, JSON.stringify(publication.links), this.now(), this.nextSequence())
+      this.db.prepare('INSERT INTO items(id,owner,runtime_id,event_id,digest,kind,state,title,body,pod_id,pod_name,pod_tags,run_id,links,created,sequence) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+        .run(itemId, key(owner), runtimeId, publication.eventId, digest, publication.kind, 'open', publication.title, publication.body, publication.podId, publication.podName, storedTags(publication.podTags), publication.runId, JSON.stringify(publication.links), this.now(), this.nextSequence())
       this.db.prepare('INSERT INTO outbox(id,owner,item_id,created,state,next) VALUES(?,?,?,?,?,?)').run(randomUUID(), key(owner), itemId, this.now(), 'pending', this.now())
       return { id: itemId, created: true }
     })
@@ -165,16 +176,16 @@ export class InboxStore {
         if (existing?.deleted) continue
         if (existing) {
           if (existing.digest === decision.digest && existing.state === 'open') continue
-          this.db.prepare('UPDATE items SET digest=?,state=\'open\',title=?,body=?,pod_id=?,pod_name=?,links=?,decision=?,sequence=? WHERE id=?')
-            .run(decision.digest, decision.title, decision.body, decision.podId, decision.podName, links, JSON.stringify(data), this.nextSequence(), existing.id)
+          this.db.prepare('UPDATE items SET digest=?,state=\'open\',title=?,body=?,pod_id=?,pod_name=?,pod_tags=?,links=?,decision=?,sequence=? WHERE id=?')
+            .run(decision.digest, decision.title, decision.body, decision.podId, decision.podName, storedTags(decision.podTags), links, JSON.stringify(data), this.nextSequence(), existing.id)
           counts.updated++
           continue
         }
         const count = Number(this.db.prepare('SELECT count(*) AS n FROM items WHERE owner=? AND deleted IS NULL').get(key(owner))?.n)
         if (count >= inboxLimits.itemsPerOwner) { counts.skipped++; continue }
         const itemId = randomUUID()
-        this.db.prepare('INSERT INTO items(id,owner,runtime_id,event_id,digest,kind,state,title,body,pod_id,pod_name,run_id,links,created,sequence,decision) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-          .run(itemId, key(owner), runtimeId, decision.sourceId, decision.digest, 'decision', 'open', decision.title, decision.body, decision.podId, decision.podName, null, links, this.now(), this.nextSequence(), JSON.stringify(data))
+        this.db.prepare('INSERT INTO items(id,owner,runtime_id,event_id,digest,kind,state,title,body,pod_id,pod_name,pod_tags,run_id,links,created,sequence,decision) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+          .run(itemId, key(owner), runtimeId, decision.sourceId, decision.digest, 'decision', 'open', decision.title, decision.body, decision.podId, decision.podName, storedTags(decision.podTags), null, links, this.now(), this.nextSequence(), JSON.stringify(data))
         const due = this.now() + (decision.authority === 'idp' ? inboxLimits.idpPushDelayMs : 0)
         this.db.prepare('INSERT INTO outbox(id,owner,item_id,created,state,next) VALUES(?,?,?,?,?,?)').run(randomUUID(), key(owner), itemId, this.now(), 'pending', due)
         counts.created++
@@ -291,7 +302,7 @@ export class InboxStore {
 function item(row: Record<string, unknown>): InboxItem {
   return {
     id: String(row.id), kind: row.kind as InboxItem['kind'], state: String(row.state), decision: typeof row.decision === 'string' ? JSON.parse(row.decision) as InboxDecisionData : null, title: String(row.title), body: String(row.body),
-    pod: row.pod_id ? { id: String(row.pod_id), name: row.pod_name === null ? null : String(row.pod_name) } : null, runId: row.run_id === null ? null : String(row.run_id),
+    pod: row.pod_id ? { id: String(row.pod_id), name: row.pod_name === null ? null : String(row.pod_name), ...(typeof row.pod_tags === 'string' ? { tags: JSON.parse(row.pod_tags) as string[] } : {}) } : null, runId: row.run_id === null ? null : String(row.run_id),
     links: JSON.parse(String(row.links)) as InboxItem['links'], created: Number(row.created), sequence: Number(row.sequence),
     read: row.read === null ? null : Number(row.read), archived: row.archived === null ? null : Number(row.archived), deleted: row.deleted === null ? null : Number(row.deleted),
   }
