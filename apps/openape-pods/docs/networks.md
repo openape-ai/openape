@@ -40,7 +40,10 @@ serialization), routes, joins and bounded feedback:
 
 - **Routes** sit between members. `approve` holds items until the owner decided
   the batch at the identity provider, which approves or denies each item;
-  denied items go to `excluded`. `choose` holds items until the owner picked one
+  denied items go to `excluded`. Items of one approve route share one open IdP
+  batch for up to seven days and 100 items; a batch that expires unanswered asks
+  again. The account inbox only counts these grants and links to the IdP.
+  `choose` holds items until the owner picked one
   option per item on the Entscheidungen tab. No Pod or model approves, denies or
   chooses.
 - **Joins** let a member wait for all inputs of one case.

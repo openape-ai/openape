@@ -32,7 +32,7 @@ function setup(storage = memoryStorage(), shared?: InboxStore) {
     const owner = server.owner
     if (!owner) return json(401, { code: 'authentication_required' })
     if (path === 'session') return json(200, { ...owner, device: server.device, vapidPublicKey: '' })
-    if (path === 'changes') return json(200, { ...store.changes(owner, Number(url.searchParams.get('after'))), device: server.device })
+    if (path === 'changes') return json(200, { ...store.changes(owner, Number(url.searchParams.get('after'))), device: server.device, approvals: store.approvals(owner) })
     if (path === 'logout') throw new TypeError('Failed to fetch')
     if (/^items\/.+\/decide$/.test(path)) {
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>
@@ -237,6 +237,19 @@ it('sends a tapped answer only after the undo window, with the version that was 
   // The desktop checks the digest the owner saw, so a change during the window is refused instead of applied.
   expect(server.decide).toHaveLength(1)
   expect(server.decide[0]).toMatchObject({ option: 'yes', digest })
+})
+
+it('adds the grants waiting at the IdP to the badge, as the server does (issue 1458)', async () => {
+  const { inbox, store, message } = setup()
+  message(alice, 'unread')
+  store.setApprovals(alice, runtime, { pending: 2, url: 'https://id.example/grants' })
+  await inbox.start()
+  expect(inbox.state.approvals).toMatchObject({ pending: 2, url: 'https://id.example/grants' })
+  expect(inbox.badgeCount.value).toBe(3)
+  expect(inbox.badgeCount.value).toBe(store.badgeCount(alice))
+  store.setApprovals(alice, runtime, { pending: null, url: 'https://id.example/grants' })
+  await inbox.sync()
+  expect(inbox.badgeCount.value).toBe(1)
 })
 
 it('badges open decisions plus unread messages and clears on resolution or sign-out', async () => {

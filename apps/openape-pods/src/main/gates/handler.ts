@@ -1,4 +1,4 @@
-import { gateAudience, networkGateItemCommand, networkGateItemSummary, parseNetworkGateManifest } from '../../contracts/network-gates'
+import { gateAudience, networkGateBatchId, networkGateItemCommand, networkGateItemSummary, parseNetworkGateManifest } from '../../contracts/network-gates'
 import type { NetworkGateManifest, NetworkGateRelease } from '../../contracts/network-gates'
 import type { ServiceScope } from '../../contracts/services'
 import type { ConnectionManager } from '../connections/manager'
@@ -44,11 +44,11 @@ export async function handleGate(input: Request): Promise<unknown> {
   // Approve routes accept the owner's once or always decision.
   const authority = createGrantAuthority(connection, input.signal, check, gateAudience, ['once', 'always'])
   if (body.operation === 'create') {
-    const reply = await authority.createBatch({ id: manifest.id, title: manifest.title, expiresAt: manifest.expiresAt, reason: `${manifest.title}: approve this item`, permissions: [`graph.gate:${manifest.id}`], members })
+    const reply = await authority.createBatch({ id: networkGateBatchId(manifest), open: manifest.version === 4, title: manifest.title, expiresAt: manifest.expiresAt, reason: `${manifest.title}: approve this item`, permissions: [`graph.gate:${manifest.id}`], members })
     return { id: manifest.id, ...reply }
   }
   const bindings = selected.map(({ grant, member }) => ({ ...member, grantId: grant.id, expiresAt: manifest.expiresAt }))
-  if (body.operation === 'status') return authority.statuses(manifest.id, bindings)
+  if (body.operation === 'status') return authority.statuses(networkGateBatchId(manifest), bindings)
   for (const binding of bindings) {
     if (body.operation === 'assertActive') await authority.assertActive(binding)
     else await authority.consume(binding)
@@ -65,5 +65,5 @@ export async function releaseNetworkGrants(release: NetworkGateRelease, connecti
   const authority = createGrantAuthority(connection, signal, async () => {}, gateAudience, ['once', 'always'])
   const members = gateMembers(release.manifest)
   const bindings = release.grants.map(grant => ({ ...members.find(member => member.key === grant.key)!, grantId: grant.id, expiresAt: release.manifest.expiresAt }))
-  return authority.release(release.manifest.id, bindings)
+  return authority.release(networkGateBatchId(release.manifest), bindings)
 }

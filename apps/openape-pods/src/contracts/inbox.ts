@@ -70,8 +70,25 @@ export function parseInboxDecision(value: unknown): InboxDecision {
   }
 }
 
+/**
+ * Grants waiting for the owner at the IdP (issue 1458): the count and the IdP grants page, never the grants themselves.
+ * `pending` is null when the desktop cannot read them now, for example without an apes login.
+ */
+export interface InboxApprovals { pending: number | null, url: string }
+
+/** The optional approvals of a decision publication; desktops before issue 1458 send none. */
+export function parseInboxApprovals(value: unknown): InboxApprovals | null {
+  const publication = record(value, ['decisions', 'approvals'])
+  if (publication.approvals === undefined) return null
+  const item = record(publication.approvals, ['pending', 'url'])
+  const url = typeof item.url === 'string' && item.url.length <= 2048 ? URL.parse(item.url) : null
+  if (!url || url.protocol !== 'https:' || url.username || url.password) throw new Error('Invalid inbox approvals link')
+  if (item.pending !== null && (!Number.isSafeInteger(item.pending) || Number(item.pending) < 0 || Number(item.pending) > 10000)) throw new Error('Invalid inbox approvals count')
+  return { pending: item.pending as number | null, url: url.href }
+}
+
 export function parseInboxDecisions(value: unknown): InboxDecision[] {
-  const item = record(value, ['decisions'])
+  const item = record(value, ['decisions', 'approvals'])
   if (!Array.isArray(item.decisions) || item.decisions.length > inboxDecisionLimits.decisions) throw new Error('Invalid inbox decision set')
   const decisions = item.decisions.map(parseInboxDecision)
   if (new Set(decisions.map(decision => decision.sourceId)).size !== decisions.length) throw new Error('Duplicate inbox decision source')

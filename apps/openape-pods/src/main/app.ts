@@ -453,7 +453,7 @@ async function start(): Promise<void> {
   setInterval(() => {
     const inbox = worker.inbox
     if (!central?.available || !inbox) return
-    remote.publishDecisions(() => inbox.collect()).catch((error: unknown) => console.error('Could not publish owner decisions', error))
+    remote.publishDecisions(() => inbox.collect(), fixture ? undefined : signal => worker.inboxApprovals(signal)).catch((error: unknown) => console.error('Could not publish owner decisions', error))
   }, 10000).unref()
   await refreshLauncher(join(codexDirectory, 'openape-pods-mcp'), codexTarget)
   await codexServer.start()
