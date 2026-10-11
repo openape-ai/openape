@@ -5,7 +5,7 @@
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1458. Plan revision 2 (owner "Go das passt"): https://report.openape.ai/d/01M4N5D05KHCMXY9DNMPTSSDET; source `.claude/plans/2026-10-11-pods-approvals-badge/plan.json`.
 - Cause: approval batches expired after 12 hours unanswered; the desktop blocked their inputs and the inbox kept an "Am IdP entscheiden" link to the expired grant (tasks `7552ebfa`, `2ae211d1`, October 11).
 - Change: gate manifests version 4 carry `batchId`; frozen tasks of one gate join one open IdP batch (no announced size, grants.md §3.4) for up to seven days and 100 grants; an unanswered expired batch reopens its untouched inputs; pre-1458 expiry blocks reopen once; waiting batches are read once a minute after the first ten minutes. The inbox lists no IdP items; the desktop reads the owner's pending grants with the apes login (read only) and the relay shows them as one Approvals entry and in the badge.
-- Next: relay deploy first (accepts the approvals field), then the signed desktop with a paired backup; verify on the iPhone; Test Run.
+- Delivered October 11: PR 353 + PR 354 (finished batches withdraw unanswered IdP requests; the IdP keeps pending grants past `waits_until`). Relay prod-49b3b01a, desktop b28a8080. Evidence: https://report.openape.ai/d/01M4N92EK0RSJEJBR9FV1V7TMP. Open: owner check on the iPhone.
 
 ## Mail network learns newsletter senders — issue 1457
 
