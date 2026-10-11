@@ -21,6 +21,15 @@ sources, routes, joins and bounded feedback. Connections follow from these
 declarations and are never drawn. A Pod that is not in a network runs on its own
 schedule. Details: [networks](networks.md).
 
+## Tags
+
+A Pod or network can carry up to eight free tags (letters, digits and hyphens,
+stored lowercase), for example a company or topic. Network members show the
+network's tags as inherited; they are never copied. Tags label only: no
+definition, pin or hash includes them. The Automatisierungen view filters by
+tag, and Codex sets them with the workspace command `tag`. A network's display
+name changes with `renameNetwork` without a new revision.
+
 ## Sandbox and grants
 
 Two independent questions decide every call, and a call needs both:

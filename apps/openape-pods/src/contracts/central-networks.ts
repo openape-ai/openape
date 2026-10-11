@@ -21,8 +21,8 @@ export function parseCentralNetworkResult(value: unknown): NetworkView {
 }
 
 export function networkBrowserMutationAllowed(command: CentralCommand): boolean {
-  // Descriptions explain; they are outside every definition, pin and hash.
-  if (command.channel === 'workspace') return command.body.type === 'create' || command.body.type === 'describeAutomation'
+  // Descriptions, tags and network names explain; they are outside every definition, pin and hash.
+  if (command.channel === 'workspace') return ['create', 'describeAutomation', 'tag', 'renameNetwork'].includes(String(command.body.type))
   if (command.channel === 'details') return command.body.type === 'describe'
   if (command.channel === 'runs') return command.body.type === 'cancel'
   return command.channel === 'scheduling' && command.body.type === 'lifecycle' && command.body.lifecycle === 'paused'

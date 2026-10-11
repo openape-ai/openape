@@ -3180,5 +3180,20 @@
   "Invalid inbox approvals link": "Ungültiger Link zu den Freigaben",
   "Invalid inbox approvals count": "Ungültige Anzahl offener Freigaben",
   "Invalid IdP grant listing": "Ungültige Freigabenliste vom IdP",
-  "Approval expired unanswered; requested again automatically": "Freigabe unbeantwortet abgelaufen; automatisch neu angefragt"
+  "Approval expired unanswered; requested again automatically": "Freigabe unbeantwortet abgelaufen; automatisch neu angefragt",
+  "Tags": "Tags",
+  "All tags": "Alle Tags",
+  "Add tag": "Tag hinzufügen",
+  "Save tags": "Tags speichern",
+  "from network": "vom Netzwerk",
+  "Remove tag {tag}": "Tag {tag} entfernen",
+  "Invalid tag": "Ungültiger Tag: nur Buchstaben, Ziffern und Bindestriche, höchstens 32 Zeichen",
+  "Too many tags": "Höchstens 8 Tags",
+  "Invalid tags": "Ungültige Tags",
+  "Tags changed; reload before saving": "Die Tags wurden inzwischen geändert; bitte neu laden und erneut speichern",
+  "Pod or network not found": "Pod oder Netzwerk nicht gefunden",
+  "Invalid network name": "Ungültiger Netzwerkname",
+  "Invalid workspace tags": "Ungültige Tags im Workspace",
+  "Invalid map tags": "Ungültige Tags in der Übersicht",
+  "Database schema {p0} cannot be upgraded": "Datenbankschema {p0} kann nicht aktualisiert werden"
 }

@@ -1,6 +1,6 @@
 import { assertIntegrity } from '../storage/integrity'
 import { restoreNetworkStorage } from '../storage/network-restore'
-import { assertSupportedSchema, upgradeToBaseline } from '../storage/upgrade'
+import { assertSupportedSchema, upgradeToCurrent } from '../storage/upgrade'
 import { DependencyStore, removePackageTree } from '../dependencies/store'
 import { checkLock, packageDigest, packageFiles } from '../dependencies/tree'
 import { parsePackages } from '../../contracts/dependencies'
@@ -63,11 +63,11 @@ function retainedArtifacts(database: DatabaseSync): { path: string, hash: string
     return { path, hash, size }
   })
 }
-/** A schema-45 backup is rebuilt as the current baseline before anything else reads it. */
+/** A schema-45 or schema-46 backup is brought to the current schema before anything else reads it. */
 function upgradeRestored(database: DatabaseSync, schema: number): void {
   if (schema === schemaVersion) return
   database.exec('PRAGMA foreign_keys=OFF; BEGIN IMMEDIATE;')
-  try { upgradeToBaseline(database); database.exec(`PRAGMA user_version=${schemaVersion}; COMMIT;`) }
+  try { upgradeToCurrent(database, schema); database.exec(`PRAGMA user_version=${schemaVersion}; COMMIT;`) }
   catch (error) { database.exec('ROLLBACK'); throw error }
 }
 

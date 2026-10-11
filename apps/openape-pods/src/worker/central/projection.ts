@@ -6,6 +6,7 @@ import { centralMaxBytes, parseCentralSnapshot } from '../../contracts/central'
 import type { CentralSnapshot } from '../../contracts/central'
 import type { PodDatabase } from '../storage/database'
 import { schemaVersion } from '../storage/database'
+import { ItemTagStore } from '../workspace/item-tags'
 import type { ResourceRegistry } from '../resources/registry'
 import type { ScriptWorkspace } from '../workspace/scripts'
 import type { RunDispatcher } from '../runs/dispatcher'
@@ -34,7 +35,7 @@ export class CentralProjection {
       const details = new WorkspaceDetails(this.store, this.resources)
       const blobs = this.store.db.prepare(`SELECT pod_id AS podId,hash FROM scripts WHERE pod_id NOT IN (${privatePods}) UNION SELECT pod_id,hash FROM sources WHERE pod_id NOT IN (${privatePods}) ORDER BY 1,2`).all() as { podId: string, hash: string }[]
       return {
-        version: 1 as const, schema: schemaVersion, workspace: { jev: jevAvailability(this.store), pods, organization: new PodGroups(this.store).view(), descriptions: new AutomationDescriptions(this.store).view(), map: mapView(this.store, Date.now(), true) }, artifacts: [], blobs,
+        version: 1 as const, schema: schemaVersion, workspace: { jev: jevAvailability(this.store), pods, organization: new PodGroups(this.store).view(), descriptions: new AutomationDescriptions(this.store).view(), tags: new ItemTagStore(this.store).view(), map: mapView(this.store, Date.now(), true) }, artifacts: [], blobs,
         pods: pods.map((pod) => {
           const networkId = podNetwork(this.store, pod.id)
           if (networkId) {

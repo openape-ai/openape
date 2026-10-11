@@ -75,6 +75,7 @@ export const diagnosticPatterns = [
   'Script failed: {p0}',
   'Script exited with code {p0}',
   'Database schema {p0} needs a newer application',
+  'Database schema {p0} cannot be upgraded',
   'Retained artifact size mismatch: {p0}',
   'Incomplete or altered storage: {p0}',
   'Invalid network references: {p0}',
