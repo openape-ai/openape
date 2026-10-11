@@ -57,8 +57,8 @@ export async function handleGate(input: Request): Promise<unknown> {
 }
 
 /**
- * Revokes, as the requesting Pod, the grants of a finished network batch that the owner approved as always,
- * so they do not stay active at the IdP. It only reduces authority; once grants are already used up.
+ * Revokes, as the requesting Pod, the grants of a finished network batch that the owner approved as always or never
+ * answered, so they neither stay active nor wait on the owner's IdP list. It only reduces authority.
  */
 export async function releaseNetworkGrants(release: NetworkGateRelease, connections: ConnectionManager, signal: AbortSignal): Promise<number> {
   const connection = await connections.podConnection(release.podId, release.owner, true)

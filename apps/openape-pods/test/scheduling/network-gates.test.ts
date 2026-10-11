@@ -166,6 +166,9 @@ it('asks again for a batch that expired unanswered instead of ending its inputs 
   expect(f.store.db.prepare('SELECT state FROM network_gate_tasks ORDER BY created_at,rowid').all().map(row => row.state)).toEqual(['superseded', 'pending'])
   expect(f.store.db.prepare('SELECT outcome FROM network_gate_items ORDER BY rowid').all().map(row => row.outcome)).toEqual(['obsolete', 'held'])
   expect(f.store.db.prepare('SELECT body FROM network_trace_events WHERE kind=\'gate-fresh-approval\'').get()!.body).toContain('requested again automatically')
+  // The superseded batch withdraws its unanswered requests at once, while its inputs wait in the new batch.
+  const superseded = f.store.db.prepare('SELECT id FROM network_gate_tasks WHERE state=\'superseded\'').get()!.id
+  expect(f.engine.gates.releasable().map(release => release.taskId)).toEqual([superseded])
 })
 
 it('lets later inputs join the open IdP batch of their gate with its expiry (issue 1458)', async () => {
