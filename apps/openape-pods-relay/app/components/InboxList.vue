@@ -32,6 +32,7 @@ function cover(item: InboxItem): string | null {
         <strong v-if="summary.sender" class="sender"><span class="visually-hidden">{{ t('cardSender') }}: </span>{{ summary.sender }}</strong>
         <strong class="title">{{ item.title }}</strong>
         <span v-if="summary.excerpt" class="excerpt">{{ summary.excerpt }}</span>
+        <span v-if="item.pod?.tags?.length" class="tags"><span class="visually-hidden">{{ t('itemTags') }}: </span><template v-for="tag in item.pod.tags" :key="tag"><span class="tag">{{ tag }}</span>{{ ' ' }}</template></span>
         <small>
           <template v-for="hint in summary.hints" :key="hint">{{ hint }} · </template><template v-if="item.pod?.name">{{ t('itemPod', { name: item.pod.name }) }} · </template>{{ formatTime(item.created) }}
           <template v-if="receipts?.[item.id]?.state === 'applied' && item.state !== 'open'"> · {{ t('receiptAppliedShort', { option: receipts[item.id]!.title }) }}</template>
@@ -68,6 +69,8 @@ function cover(item: InboxItem): string | null {
 .card-link .sender { font-size: 1.05em; }
 .has-sender .title { font-weight: 400; }
 .excerpt { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 2px 0; }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0; }
+.tag { padding: 0 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .85em; line-height: 1.6; }
 .unread .card-link > strong:first-of-type::before { content: '●'; color: var(--accent); margin-right: 6px; }
 .status { margin: 8px 0 0; color: var(--muted); }
 /* The cover lies over the choices and never takes space of its own; the minimum fits two status lines. */
